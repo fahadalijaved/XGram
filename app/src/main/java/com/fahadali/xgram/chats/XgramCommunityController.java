@@ -91,20 +91,30 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     tdlib.send(new TdApi.LoadCommunityFullInfo(communityId()), (ok, error) -> {
       if (error != null) {
         android.util.Log.w("XGram", "LoadCommunityFullInfo " + communityId() + ": " + error.code + " " + error.message);
-        runOnUiThreadOptional(() -> {
+      }
+      runOnUiThreadOptional(() -> {
+        if (error != null) {
           loadError = error.message;
           useKnownChats = true;
-          buildItems();
-        });
-      }
+        }
+        buildItems(); // the full info is cached by now, whether or not its update reached this page
+      });
     });
     tdlib.ui().postDelayed(() -> {
-      if (!isDestroyed() && tdlib.cache().communityFull(communityId()) == null) {
-        useKnownChats = true;
+      if (!isDestroyed()) {
+        if (tdlib.cache().communityFull(communityId()) == null) {
+          useKnownChats = true;
+        }
         buildItems();
       }
     }, 2500);
     buildItems();
+  }
+
+  // Like chats and topic lists: slide in once the chats are there, not on "Loading" swapped out mid-slide.
+  @Override
+  public boolean needAsynchronousAnimation () {
+    return tdlib.cache().communityFull(communityId()) == null && !useKnownChats;
   }
 
   @Override
@@ -181,6 +191,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loadError != null ? Lang.getString(R.string.XgramCommunityPartialError, loadError) : Lang.getString(R.string.XgramCommunityPartial)));
     }
     adapter.setItems(items, false);
+    executeScheduledAnimation(); // the chats are in: start the slide if it was waiting for them
   }
 
   private static void addSection (List<ListItem> items, int title, List<ListItem> rows) {

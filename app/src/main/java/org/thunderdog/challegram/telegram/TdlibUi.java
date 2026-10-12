@@ -2200,7 +2200,7 @@ public class TdlibUi extends Handler {
     final boolean isSelfChat = tdlib.isSelfChat(chat.id);
 
     boolean doneOpen = false;
-    if (context instanceof MessagesController && !((MessagesController) context).inPreviewMode() && ((MessagesController) context).compareChat(chat.id, messageThread, onlyScheduled)) {
+    if (context instanceof MessagesController && !((MessagesController) context).inPreviewMode() && ((MessagesController) context).compareChat(chat.id, messageThread, onlyScheduled) && xgramSameTopic((MessagesController) context, messageTopicId)) {
       boolean doneSomething = false;
       if (highlightMode == MessagesManager.HIGHLIGHT_MODE_NORMAL && highlightMessageId != null) {
         ((MessagesController) context).highlightMessage(highlightMessageId, urlOpenParameters);
@@ -2232,7 +2232,7 @@ public class TdlibUi extends Handler {
     }
     if (!doneOpen && highlightMode == MessagesManager.HIGHLIGHT_MODE_NORMAL && highlightMessageId != null) {
       ViewController<?> c = context.context().navigation().getCurrentStackItem();
-      if (c != null && c != context && c.tdlib() == context.tdlib() && c instanceof MessagesController && !((MessagesController) c).inPreviewMode() && ((MessagesController) c).compareChat(chat.id, messageThread, onlyScheduled)) {
+      if (c != null && c != context && c.tdlib() == context.tdlib() && c instanceof MessagesController && !((MessagesController) c).inPreviewMode() && ((MessagesController) c).compareChat(chat.id, messageThread, onlyScheduled) && xgramSameTopic((MessagesController) c, messageTopicId)) {
         ((MessagesController) c).highlightMessage(highlightMessageId, urlOpenParameters);
         doneOpen = true;
       }
@@ -2518,6 +2518,19 @@ public class TdlibUi extends Handler {
 
   public void openMessage (final TdlibDelegate context, final long chatId, final MessageId messageId, final @Nullable ThreadInfo messageThread, final @Nullable UrlOpenParameters openParameters) {
     openChat(context, chatId, new ChatOpenParameters().keepStack().highlightMessage(messageId).ensureHighlightAvailable().messageThread(messageThread).urlOpenParameters(openParameters));
+  }
+
+  /**
+   * XGram: an open chat only handles a link itself (highlighting the message in place) when it shows the same forum
+   * topic. A link from one topic to a message in another topic must open that topic, or the message is looked up in
+   * the wrong topic's history.
+   */
+  private static boolean xgramSameTopic (MessagesController c, @Nullable TdApi.MessageTopic topicId) {
+    TdApi.MessageTopic current = c.getMessageTopicId();
+    if (topicId == null || current == null) {
+      return topicId == null && current == null;
+    }
+    return Td.equalsTo(topicId, current);
   }
 
   public void openMessage (final TdlibDelegate context, final TdApi.MessageLinkInfo messageLink, final @Nullable UrlOpenParameters openParameters) {

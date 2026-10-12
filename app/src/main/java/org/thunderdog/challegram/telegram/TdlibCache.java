@@ -572,34 +572,25 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
 
   // Community
 
+  // XGram: listeners hear about the first arrival too. A community page asks for the full info and waits for this
+  // update; skipping the first one left it on "Loading" until it was opened again.
+
   @TdlibThread
   void onUpdateCommunity (TdApi.UpdateCommunity update) {
-    boolean updated;
     synchronized (dataLock) {
-      TdApi.Community community = update.community;
-      TdApi.Community oldCommunity = communities.get(update.community.id);
-      communities.put(community.id, community);
-      updated = oldCommunity != null;
+      communities.put(update.community.id, update.community);
     }
-    if (updated) {
-      notifyListeners(communityGlobalListeners.iterator(), update.community);
-      notifyListeners(communityListeners.iterator(update.community.id), update.community);
-    }
+    notifyListeners(communityGlobalListeners.iterator(), update.community);
+    notifyListeners(communityListeners.iterator(update.community.id), update.community);
   }
 
   @TdlibThread
   void onUpdateCommunityFull (TdApi.UpdateCommunityFullInfo update) {
-    boolean updated;
     synchronized (dataLock) {
-      TdApi.CommunityFullInfo community = update.communityFullInfo;
-      TdApi.CommunityFullInfo oldCommunity = communitiesFull.get(update.communityId);
-      communitiesFull.put(update.communityId, community);
-      updated = oldCommunity != null;
+      communitiesFull.put(update.communityId, update.communityFullInfo);
     }
-    if (updated) {
-      notifyListeners(communityGlobalListeners.iterator(), update.communityId, update.communityFullInfo);
-      notifyListeners(communityListeners.iterator(update.communityId), update.communityId, update.communityFullInfo);
-    }
+    notifyListeners(communityGlobalListeners.iterator(), update.communityId, update.communityFullInfo);
+    notifyListeners(communityListeners.iterator(update.communityId), update.communityId, update.communityFullInfo);
   }
 
   // User Blacklist

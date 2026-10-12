@@ -20,7 +20,6 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -249,10 +248,9 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     adapter = new TopicsAdapter();
     adapter.setHasStableIds(true);
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
-    // Rows are redrawn in place on updates; only moves, insertions and removals animate.
-    DefaultItemAnimator itemAnimator = new DefaultItemAnimator();
-    itemAnimator.setSupportsChangeAnimations(false);
-    recyclerView.setItemAnimator(itemAnimator);
+    // As Telegram X's chat list: rows change in place with no item animator, so counter and order updates never
+    // animate on top of a slide in or out; the animator only runs while a pinned topic is dragged.
+    recyclerView.setItemAnimator(null);
     recyclerView.setAdapter(adapter);
     new ItemTouchHelper(new ReorderCallback()).attachToRecyclerView(recyclerView);
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -283,12 +281,34 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     return list;
   }
 
+  private boolean xgramFocusedOnce;
+
   @Override
   public void onFocus () {
     super.onFocus();
-    // Counters may have changed while a topic was open (TDLib doesn't report every topic's unread count).
-    if (list != null && list.isLoaded()) {
+    // Counters may have changed while a topic was open (TDLib doesn't report every topic's unread count). The list
+    // was just loaded on the first focus, so that refresh would only add work right after the slide in.
+    if (xgramFocusedOnce && list != null && list.isLoaded()) {
       list.refreshUnreadTopics();
+    }
+    xgramFocusedOnce = true;
+  }
+
+  private org.thunderdog.challegram.component.attach.CustomItemAnimator dragAnimator;
+
+  /** Telegram X's chat list animator, only while a pinned topic is dragged. */
+  private void setDragging (boolean dragging) {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return;
+    }
+    if (dragging) {
+      if (dragAnimator == null) {
+        dragAnimator = new org.thunderdog.challegram.component.attach.CustomItemAnimator(me.vkryl.android.AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
+      }
+      recyclerView.setItemAnimator(dragAnimator);
+    } else {
+      recyclerView.setItemAnimator(null);
     }
   }
 
@@ -501,8 +521,17 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     public void onSwiped (@NonNull RecyclerView.ViewHolder viewHolder, int direction) { }
 
     @Override
+    public void onSelectedChanged (@androidx.annotation.Nullable RecyclerView.ViewHolder viewHolder, int actionState) {
+      super.onSelectedChanged(viewHolder, actionState);
+      if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
+        setDragging(true);
+      }
+    }
+
+    @Override
     public void clearView (@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
       super.clearView(recyclerView, viewHolder);
+      recyclerView.post(() -> setDragging(false)); // after the dropped row settles
       if (reorderChanged && list != null) {
         reorderChanged = false;
         final ForumTopicList targetList = list;
