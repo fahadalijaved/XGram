@@ -193,6 +193,8 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     }
     IntList ids = new IntList(2);
     StringList titles = new StringList(2);
+    ids.append(R.id.btn_xgramCommunitySettings);
+    titles.append(R.string.Settings);
     ids.append(R.id.btn_xgramCommunityMerge);
     titles.append(XgramCommunities.isMergeEnabled(tdlib, communityId) ? R.string.XgramCommunityShowSeparate : R.string.XgramCommunityShowOne);
     showMore(ids.get(), titles.get(), 0);
@@ -201,10 +203,19 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   @Override
   public void onMoreItemPressed (int id) {
     long communityId = communityId();
-    if (id == R.id.btn_xgramCommunityMerge && communityId != 0) {
+    if (id == R.id.btn_xgramCommunitySettings) {
+      openSettings();
+    } else if (id == R.id.btn_xgramCommunityMerge && communityId != 0) {
       boolean merged = XgramCommunities.isMergeEnabled(tdlib, communityId);
       XgramCommunities.setMergeMode(tdlib, communityId, merged ? XgramCommunities.MODE_SEPARATE : XgramCommunities.MODE_ONE_CHAT);
       UI.showToast(R.string.XgramCommunityMergeLocal, android.widget.Toast.LENGTH_SHORT);
+    }
+  }
+
+  /** The settings page: from the 3-dot menu and a tap on the header (not from a preview). */
+  private void openSettings () {
+    if (!isInForceTouchMode()) {
+      XgramCommunitySettingsController.open(this, communityId());
     }
   }
 
@@ -244,6 +255,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     headerCell.setPhotoOpenDisabled(true);
     headerCell.initWithController(this, true);
     headerCell.setInnerMargins(Screen.dp(56f), Screen.dp(49f) * 2);
+    headerCell.setOnClickListener(v -> openSettings());
     updateHeader(0);
     topics = new XgramCommunityTopics(tdlib, this::markDirty);
 
@@ -641,7 +653,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     }
     List<TextEntity> topicsEntities = new ArrayList<>();
     String topicsLine = forum ? topics.line(this, chat.id, topicsEntities) : null;
-    String forcedText = XgramCommunityData.isMember(tdlib, chat) ? null : subtitleFor(chat);
+    String forcedText = XgramCommunityData.isMember(tdlib, chat) ? null : subtitleFor(tdlib, chat);
     row = new TGChat(this, listFor(chat), chat, false);
     // Before the first layout: the row keeps three lines (topics, then "sender: message") whatever the chat list's mode.
     row.xgramSetCommunityRow(rowMode(), topicsLine, topicsEntities.toArray(new TextEntity[0]), forcedText);
@@ -654,9 +666,8 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     return mode == Settings.CHAT_MODE_2LINE ? Settings.CHAT_MODE_3LINE : mode;
   }
 
-  /** For a chat you are not in: "@username, 1,234 subscribers" (members, or monthly users for a bot). */
-  @Nullable
-  private String subtitleFor (TdApi.Chat chat) {
+  /** "@username, 1,234 subscribers" (members, or monthly users for a bot): rows for chats you are not in, and the settings page. */
+  static String subtitleFor (Tdlib tdlib, TdApi.Chat chat) {
     List<String> parts = new ArrayList<>(2);
     String username = tdlib.chatUsername(chat);
     if (!StringUtils.isEmpty(username)) {

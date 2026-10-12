@@ -73,6 +73,13 @@
   <string name="XgramCommunityShowOne">Show as one chat</string>
   <string name="XgramCommunityShowSeparate">Show as separate chats</string>
   <string name="XgramCommunityMergeLocal">Changes the chat list on this device only.</string>
+  <string name="XgramCommunityChangePhoto">Change community photo</string>
+  <string name="XgramCommunityName">Community name</string>
+  <string name="XgramCommunityWhoCanAdd">Who can add chats</string>
+  <string name="XgramCommunityAdmins">Administrators</string>
+  <string name="XgramCommunityRequests">Pending requests</string>
+  <string name="XgramCommunityRemoved">Removed users</string>
+  <string name="XgramCommunityCountsInfo">XGram can\'t show these lists yet. Use another Telegram app to manage them.</string>
   <string name="XgramAddedToCommunity">Added to a community</string>
   <string name="XgramAddedToCommunityNamed">Added to the %1$s community</string>
   <string name="XgramRemovedFromCommunity">Removed from the community</string>

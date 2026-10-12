@@ -25,6 +25,15 @@
   <item type="id" name="menu_xgramCommunity" />
   <item type="id" name="btn_xgramCommunitySettings" />
   <item type="id" name="btn_xgramCommunityMerge" />
+  <item type="id" name="controller_xgramCommunitySettings" />
+  <item type="id" name="btn_xgramCommunityPhoto" />
+  <item type="id" name="btn_xgramCommunityName" />
+  <item type="id" name="btn_xgramCommunityWho" />
+  <item type="id" name="btn_xgramCommunityWhoAll" />
+  <item type="id" name="btn_xgramCommunityWhoAdmins" />
+  <item type="id" name="btn_xgramCommunityAdmins" />
+  <item type="id" name="btn_xgramCommunityRequests" />
+  <item type="id" name="btn_xgramCommunityRemoved" />
   <item type="id" name="btn_xgramOpenCommunity" />
   <item type="id" name="btn_xgramMessageMenu" />
   <item type="id" name="btn_xgramMenuItem" />
