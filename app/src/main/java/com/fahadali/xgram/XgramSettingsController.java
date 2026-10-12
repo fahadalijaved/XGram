@@ -681,7 +681,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramMergeCommunities) {
       settings.setMergeCommunities(adapter.toggleView(v));
-      com.fahadali.xgram.chats.XgramCommunities.notifyAllChanged(tdlib);
+      com.fahadali.xgram.chats.XgramCommunities.notifyAllAccounts(); // the setting is shared by every account
       return;
     } else if (id == R.id.btn_xgramHideBlocked) {
       settings.setHideBlocked(adapter.toggleView(v));

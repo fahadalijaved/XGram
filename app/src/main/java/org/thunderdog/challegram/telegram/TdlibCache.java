@@ -345,6 +345,10 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
     replaceOutputLocationList(null);
     myUserId = 0;
     downloadUrl = null;
+    synchronized (dataLock) { // XGram: communities belong to the session too
+      communities.clear();
+      communitiesFull.clear();
+    }
   }
 
   // Other

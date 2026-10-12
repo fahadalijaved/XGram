@@ -49,6 +49,11 @@ public final class XgramCommunities {
   private static final List<Listener> listeners = new CopyOnWriteArrayList<>();
   /** account id → (chat id → community id) */
   private static final Map<Integer, Map<Long, Long>> memberships = new ConcurrentHashMap<>();
+  /**
+   * account id → (chat id → community id, 0 for none) learned this session from the chat's own full info or a live
+   * service message. These win over TDLib's cached community chat list and over old last messages.
+   */
+  private static final Map<Integer, Map<Long, Long>> confirmed = new ConcurrentHashMap<>();
 
   public static void addListener (Listener listener) {
     listeners.add(listener);
@@ -107,6 +112,51 @@ public final class XgramCommunities {
       }
       if (communityId != 0) {
         listener.onCommunityMembersChanged(tdlib, communityId, chatId);
+      }
+    }
+  }
+
+  private static Map<Long, Long> confirmedMap (Tdlib tdlib) {
+    Map<Long, Long> map = confirmed.get(tdlib.id());
+    if (map == null) {
+      map = new ConcurrentHashMap<>();
+      Map<Long, Long> existing = confirmed.putIfAbsent(tdlib.id(), map);
+      if (existing != null) {
+        map = existing;
+      }
+    }
+    return map;
+  }
+
+  private static void confirm (Tdlib tdlib, long chatId, long communityId) {
+    if (chatId != 0) {
+      confirmedMap(tdlib).put(chatId, communityId);
+      remember(tdlib, chatId, communityId);
+    }
+  }
+
+  /** The community the chat's own info says it is in (0: none), or null when not known this session. */
+  @Nullable
+  public static Long confirmedCommunity (Tdlib tdlib, long chatId) {
+    return confirmedMap(tdlib).get(chatId);
+  }
+
+  public static boolean isConfirmed (Tdlib tdlib, long chatId) {
+    return confirmedMap(tdlib).containsKey(chatId);
+  }
+
+  /** The account in this slot logged out (its stored keys are removed by XgramAccountData). */
+  public static void forgetAccount (int accountId) {
+    memberships.remove(accountId);
+    confirmed.remove(accountId);
+  }
+
+  /** Merging was switched on or off: every account's lists check their communities again. */
+  public static void notifyAllAccounts () {
+    for (org.thunderdog.challegram.telegram.TdlibAccount account : org.thunderdog.challegram.telegram.TdlibManager.instance()) {
+      Tdlib tdlib = account.activeTdlib();
+      if (tdlib != null) {
+        notifyAllChanged(tdlib);
       }
     }
   }
@@ -216,25 +266,42 @@ public final class XgramCommunities {
   /** TdlibCache, on every supergroup full info. */
   public static void onSupergroupFull (Tdlib tdlib, long supergroupId, @Nullable TdApi.SupergroupFullInfo full) {
     if (full != null) {
-      remember(tdlib, ChatId.fromSupergroupId(supergroupId), full.communityId);
+      confirm(tdlib, ChatId.fromSupergroupId(supergroupId), full.communityId);
     }
   }
 
-  /** A message: "added to / joined from the community" tells which community the chat is in. */
+  /** A new message (live): "added to / joined from / removed from the community" tells which community the chat is in. */
   public static void onMessage (Tdlib tdlib, @Nullable TdApi.Message message) {
+    long communityId = communityFromMessage(message);
+    if (communityId != -1) {
+      confirm(tdlib, message.chatId, communityId);
+    }
+  }
+
+  /**
+   * A chat's last message, when its row is built. It can be old (an admin may have deleted the later "removed"
+   * message), so it never overrides what this session learned from the chat itself.
+   */
+  public static void onLastMessage (Tdlib tdlib, @Nullable TdApi.Message message) {
+    long communityId = communityFromMessage(message);
+    if (communityId != -1 && !isConfirmed(tdlib, message.chatId)) {
+      remember(tdlib, message.chatId, communityId);
+    }
+  }
+
+  /** The community a service message puts its chat in, 0 for "removed", -1 for any other message. */
+  private static long communityFromMessage (@Nullable TdApi.Message message) {
     if (message == null || message.content == null) {
-      return;
+      return -1;
     }
     switch (message.content.getConstructor()) {
       case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
-        remember(tdlib, message.chatId, ((TdApi.MessageChatAddedToCommunity) message.content).communityId);
-        break;
+        return ((TdApi.MessageChatAddedToCommunity) message.content).communityId;
       case TdApi.MessageChatJoinFromCommunity.CONSTRUCTOR:
-        remember(tdlib, message.chatId, ((TdApi.MessageChatJoinFromCommunity) message.content).communityId);
-        break;
+        return ((TdApi.MessageChatJoinFromCommunity) message.content).communityId;
       case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
-        remember(tdlib, message.chatId, 0);
-        break;
+        return 0;
     }
+    return -1;
   }
 }

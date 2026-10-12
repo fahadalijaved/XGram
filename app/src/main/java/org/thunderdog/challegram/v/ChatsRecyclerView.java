@@ -179,7 +179,12 @@ public class ChatsRecyclerView extends CustomRecyclerView implements ClickHelper
   public void xgramRefreshCommunityRow (long chatId) {
     int updated = adapter.xgramRefreshCommunityRow(chatId);
     if (updated != -1) {
-      invalidateViewAt(updated);
+      View view = manager.findViewByPosition(updated);
+      if (view instanceof ChatView) {
+        ((ChatView) view).xgramRebind();
+      } else {
+        adapter.notifyItemChanged(updated);
+      }
     }
   }
 

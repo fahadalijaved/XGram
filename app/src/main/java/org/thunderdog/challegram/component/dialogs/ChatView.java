@@ -377,59 +377,72 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
           this.tdlib.settings().addUserPreferenceChangeListener(this);
         }
       }
-      if (chat != null && chat.xgramCommunityId() == 0) {
-        setPreviewChatId(chat.getChatList(), chat.getChatId(), null);
-      } else {
-        setPreviewChatId(null, 0, null);
-      }
-      if (chat != null && chat.xgramCommunityId() != 0) {
-        // XGram: holding a community row previews the community, not one of its chats.
-        final long communityId = chat.xgramCommunityId();
-        setCustomControllerProvider(new CustomControllerProvider() {
-          @Override
-          public boolean needsForceTouch (BaseView v, float x, float y) {
-            return Settings.instance().needPreviewChatOnHold();
-          }
-
-          @Override
-          public boolean onSlideOff (BaseView v, float x, float y, @Nullable ViewController<?> openPreview) {
-            return false;
-          }
-
-          @Override
-          public ViewController<?> createForceTouchPreview (BaseView v, float x, float y) {
-            com.fahadali.xgram.chats.XgramCommunityController c = new com.fahadali.xgram.chats.XgramCommunityController(getContext(), tdlib);
-            c.setArguments(communityId);
-            return c;
-          }
-        });
-      } else if (chat != null && chat.isArchive()) {
-        setCustomControllerProvider(new CustomControllerProvider() {
-          @Override
-          public boolean needsForceTouch (BaseView v, float x, float y) {
-            return Settings.instance().needPreviewChatOnHold();
-          }
-
-          @Override
-          public boolean onSlideOff (BaseView v, float x, float y, @Nullable ViewController<?> openPreview) {
-            return false;
-          }
-
-          @Override
-          public ViewController<?> createForceTouchPreview (BaseView v, float x, float y) {
-            ChatsController c = new ChatsController(getContext(), tdlib);
-            c.setArguments(new ChatsController.Arguments(ChatPosition.CHAT_LIST_ARCHIVE).setNeedMessagesSearch(true));
-            return c;
-          }
-        });
-      } else {
-        setCustomControllerProvider(null);
-      }
       if (chat != null) {
         chat.onAttachToView();
       }
     }
+    // XGram: every time, not only for another chat: a row can become (or stop being) its community's row in place.
+    updatePreviewProvider();
     requestContent();
+  }
+
+  /** XGram: the row became or stopped being its community's row; preview, avatar and texts follow. */
+  public void xgramRebind () {
+    updatePreviewProvider();
+    requestContent();
+    invalidate();
+  }
+
+  private void updatePreviewProvider () {
+    TGChat chat = this.chat;
+    if (chat != null && chat.xgramCommunityId() == 0) {
+      setPreviewChatId(chat.getChatList(), chat.getChatId(), null);
+    } else {
+      setPreviewChatId(null, 0, null);
+    }
+    if (chat != null && chat.xgramCommunityId() != 0) {
+      // XGram: holding a community row previews the community, not one of its chats.
+      final long communityId = chat.xgramCommunityId();
+      setCustomControllerProvider(new CustomControllerProvider() {
+        @Override
+        public boolean needsForceTouch (BaseView v, float x, float y) {
+          return Settings.instance().needPreviewChatOnHold();
+        }
+
+        @Override
+        public boolean onSlideOff (BaseView v, float x, float y, @Nullable ViewController<?> openPreview) {
+          return false;
+        }
+
+        @Override
+        public ViewController<?> createForceTouchPreview (BaseView v, float x, float y) {
+          com.fahadali.xgram.chats.XgramCommunityController c = new com.fahadali.xgram.chats.XgramCommunityController(getContext(), tdlib);
+          c.setArguments(communityId);
+          return c;
+        }
+      });
+    } else if (chat != null && chat.isArchive()) {
+      setCustomControllerProvider(new CustomControllerProvider() {
+        @Override
+        public boolean needsForceTouch (BaseView v, float x, float y) {
+          return Settings.instance().needPreviewChatOnHold();
+        }
+
+        @Override
+        public boolean onSlideOff (BaseView v, float x, float y, @Nullable ViewController<?> openPreview) {
+          return false;
+        }
+
+        @Override
+        public ViewController<?> createForceTouchPreview (BaseView v, float x, float y) {
+          ChatsController c = new ChatsController(getContext(), tdlib);
+          c.setArguments(new ChatsController.Arguments(ChatPosition.CHAT_LIST_ARCHIVE).setNeedMessagesSearch(true));
+          return c;
+        }
+      });
+    } else {
+      setCustomControllerProvider(null);
+    }
   }
 
   @Override

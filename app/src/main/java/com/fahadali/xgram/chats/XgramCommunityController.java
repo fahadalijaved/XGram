@@ -166,8 +166,15 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       // Every chat, is_hidden included: TDLib reports it as true whenever the server leaves the flag out, which it does
       // for members who aren't admins, so filtering on it emptied the page. Admins are meant to see hidden chats anyway.
       for (TdApi.CommunityChat communityChat : full.chats) {
+        // TDLib's copy can be old: a chat whose own (fresher) info says it left, or moved, is not listed or re-added.
+        Long confirmed = XgramCommunities.confirmedCommunity(tdlib, communityChat.chatId);
+        if (confirmed != null && confirmed != communityId()) {
+          continue;
+        }
         chatIds.add(communityChat.chatId);
-        XgramCommunities.remember(tdlib, communityChat.chatId, communityId());
+        if (confirmed == null) {
+          XgramCommunities.remember(tdlib, communityChat.chatId, communityId());
+        }
       }
       // TDLib never reloads a cached community, so its list can miss chats added since: add the ones this device knows.
       for (long chatId : XgramCommunities.chatsOf(tdlib, communityId())) {

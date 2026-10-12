@@ -154,7 +154,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     this.chatList = chatList;
     this.chat = Td.copyOf(chat);
     com.fahadali.xgram.topics.XgramForumUnread.requestIfNeeded(tdlib, chat); // XGram: badge of groups with topics
-    com.fahadali.xgram.chats.XgramCommunities.onMessage(tdlib, chat.lastMessage); // XGram: which community it's in
+    com.fahadali.xgram.chats.XgramCommunities.onLastMessage(tdlib, chat.lastMessage); // XGram: which community it's in
     this.xgramCommunityId = xgramComputeCommunity();
     this.archive = null;
     this.listMode = Settings.instance().getChatListMode();

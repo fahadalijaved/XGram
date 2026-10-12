@@ -34,7 +34,8 @@ public final class XgramAccountData {
   private XgramAccountData () { }
 
   private static final String[] PREFIXES = {
-    "xgram_bm_", "xgram_sb_", "xgram_ln_", "xgram_ghost_ex_", "xgram_ls_", "xgram_lr_", "xgram_tab_", "xgram_tabs_side_"
+    "xgram_bm_", "xgram_sb_", "xgram_ln_", "xgram_ghost_ex_", "xgram_ls_", "xgram_lr_", "xgram_tab_", "xgram_tabs_side_",
+    "xgram_cm_"
   };
 
   /** TDLib thread: the account in this slot logged out. */
@@ -53,6 +54,7 @@ public final class XgramAccountData {
       XgramLocalRead.forgetAccount(accountId);
       com.fahadali.xgram.topics.XgramForumUnread.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramAiTools.forgetAccount(accountId);
+      com.fahadali.xgram.chats.XgramCommunities.forgetAccount(accountId);
       XgramHistory.instance().clearAccount(accountId);
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Cannot erase account data", t);
