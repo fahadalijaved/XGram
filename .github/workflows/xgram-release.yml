@@ -24,7 +24,7 @@ on:
           - both
           - arm64
           - universal
-        default: both
+        default: arm64
       publish:
         description: Post the APKs to the XGram CI channel (main or a tag only)
         type: boolean
@@ -156,7 +156,7 @@ jobs:
       flavors: ${{ needs.plan.outputs.flavors }}
       build_type: release
       app_version: ${{ needs.plan.outputs.app_version }}
-      artifact_retention_days: 90
+      artifact_retention_days: 7
     secrets:
       XGRAM_KEYSTORE_BASE64: ${{ secrets.XGRAM_KEYSTORE_BASE64 }}
       XGRAM_KEYSTORE_PASSWORD: ${{ secrets.XGRAM_KEYSTORE_PASSWORD }}

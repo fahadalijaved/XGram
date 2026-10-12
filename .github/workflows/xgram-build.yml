@@ -132,8 +132,15 @@ jobs:
           restore-keys: |
             ${{ steps.ccache.outputs.key_prefix }}
 
+      # Telegram X's wrapper jar (committed in 2021) is a Gradle 1.6 nightly that isn't on Gradle's list of official
+      # wrapper jars, so setup-gradle's own wrapper check would fail. This pins that exact jar instead.
+      - name: Check the Gradle wrapper jar
+        run: echo "e2b82129ab64751fd40437007bd2f7f2afb3c6e41a9198e628650b22d5824a14  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
+
       - name: Set up Gradle (wrapper, dependency and build caches)
         uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: false
 
       - name: Gradle settings for this runner
         run: bash scripts/ci/write-gradle-properties.sh
@@ -201,9 +208,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: xgram-symbols-${{ matrix.flavor }}-${{ inputs.build_type }}
+          # Only what's needed to read crash stack traces: the R8 mapping and the native symbols. The mapping folder
+          # also holds a second copy of mapping.txt and R8's reports, which would fill the Actions storage quota.
           path: |
-            app/build/outputs/mapping/
-            app/build/outputs/native-debug-symbols/
+            app/build/outputs/mapping/*/mapping.txt
+            app/build/outputs/native-debug-symbols/*/native-debug-symbols.zip
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: ${{ inputs.artifact_retention_days }}
           overwrite: true

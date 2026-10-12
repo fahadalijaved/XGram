@@ -125,7 +125,7 @@ jobs:
       build_type: ${{ needs.plan.outputs.build_type }}
       app_version: ${{ needs.plan.outputs.app_version }}
       # Each nightly APK is 50-73 MB; on a private repo, artifact storage counts against your plan.
-      artifact_retention_days: ${{ fromJSON(vars.XGRAM_ARTIFACT_RETENTION_DAYS || '14') }}
+      artifact_retention_days: ${{ fromJSON(vars.XGRAM_ARTIFACT_RETENTION_DAYS || '3') }}
     secrets:
       XGRAM_KEYSTORE_BASE64: ${{ secrets.XGRAM_KEYSTORE_BASE64 }}
       XGRAM_KEYSTORE_PASSWORD: ${{ secrets.XGRAM_KEYSTORE_PASSWORD }}

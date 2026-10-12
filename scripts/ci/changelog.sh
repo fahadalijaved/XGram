@@ -136,8 +136,13 @@ if [[ -n "$commits" ]]; then
   done <<< "$commits"
 fi
 
-more=$((total - shown))
-md_more=$((total - ${#md_lines[@]}))
+if [[ -n "$since_sha" ]]; then
+  more=$((total - shown))
+  md_more=$((total - ${#md_lines[@]}))
+else
+  more=0   # first build: "...and N more" would only count part of the history
+  md_more=0
+fi
 
 {
   if [[ -n "$title" ]]; then
