@@ -46,6 +46,9 @@ AUTHORS = ('deproko_', 'templarian_', 'dotvhs_', 'dot_', 'ivanliana_', 'mrgrigri
 NEVER = re.compile(r'(logo|github|telegram|tdlib|webrtc|ffmpeg|webp|device_web|device_windows|device_macbook|device_imac|'
                    r'device_iphone|playback_speed|time_30m|time_2h|time_8h|time_1y|link_preview|lock_top|lock_base|'
                    r'xgram_|premium_star|acc_anon|acc_personal|currency_bitcoin|youtube|vimeo|dailymotion|foursquare)')
+# Message status marks (sent / read ticks, sending clock) are drawn to line up with the time text: every pack keeps
+# Telegram X's, a library's boxed check would cover the time.
+STATUS = re.compile(r'^deproko_baseline_(check_single|check_double|clock)_\d+')
 
 
 def concept(name):
@@ -157,6 +160,8 @@ def res_name(prefix, key, size, white):
 def build_own(pack, icons, mapping, written):
     table, cache = [], {}
     for tgx in sorted(mapping):
+        if STATUS.match(tgx):
+            continue
         info = tgx_info(tgx)
         if not info:
             raise SystemExit('no Telegram X vector drawable ' + tgx)
@@ -190,6 +195,8 @@ def build_library(pack, tgx_concept, written):
     icons = library.library(p['lib'])
     table, cache, missing = [], {}, set()
     for tgx in sorted(tgx_concept):
+        if STATUS.match(tgx):
+            continue
         c = tgx_concept[tgx]
         base = mapping.get(c)
         full = library.resolve(pack, base) if base else None

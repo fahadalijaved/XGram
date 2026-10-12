@@ -10,11 +10,10 @@ messages, and plenty of small tools and looks.
 XGram is not affiliated with Telegram or with the Telegram X team.
 
 <p align="center">
-  <img src=".github/assets/screens/icon-packs.png" width="30%" alt="Icon packs">
-  &nbsp;
-  <img src=".github/assets/screens/chat-look.png" width="30%" alt="Chat look">
-  &nbsp;
-  <img src=".github/assets/screens/whats-new.png" width="30%" alt="What's new in XGram">
+  <img src=".github/assets/screens/xgram-settings.png" width="23%" alt="XGram settings">
+  <img src=".github/assets/screens/topics.png" width="23%" alt="Forum topics">
+  <img src=".github/assets/screens/icon-packs.png" width="23%" alt="Icon packs">
+  <img src=".github/assets/screens/app-icons.png" width="23%" alt="App icons">
 </p>
 
 ## Download
