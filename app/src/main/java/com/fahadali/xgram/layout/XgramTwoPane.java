@@ -465,8 +465,10 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     if (twoPane == null || !twoPane.isActive) {
       return false;
     }
-    NavigationController own = context.navigationController();
-    return twoPane.isLeftNavigation(own) || twoPane.isHiddenRoot(context);
+    // A chat list inside the main screen's pager has no navigation of its own: its parent (the MainController) does.
+    ViewController<?> owner = context.getParentOrSelf();
+    NavigationController own = owner.navigationController();
+    return twoPane.isLeftNavigation(own) || twoPane.isHiddenRoot(owner);
   }
 
   /** Puts {@code c} on the right pane, replacing anything above the chat list there. */
