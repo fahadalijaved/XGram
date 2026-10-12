@@ -70,6 +70,10 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     }
     XgramCommunityController c = new XgramCommunityController(context.context(), context.tdlib());
     c.setArguments(communityId);
+    if (com.fahadali.xgram.layout.XgramTwoPane.replacesRightPane(context)) {
+      com.fahadali.xgram.layout.XgramTwoPane.showOnRight(context, c); // two panes: replace, don't stack
+      return;
+    }
     // Chat lists live in the main screen's pager, where navigateTo() does nothing: use the activity's navigation.
     org.thunderdog.challegram.navigation.NavigationController navigation = context.navigationController();
     if (navigation == null) {
