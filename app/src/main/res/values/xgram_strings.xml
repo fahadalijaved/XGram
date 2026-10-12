@@ -80,6 +80,9 @@
   <string name="XgramCommunityRequests">Pending requests</string>
   <string name="XgramCommunityRemoved">Removed users</string>
   <string name="XgramCommunityCountsInfo">XGram can\'t show these lists yet. Use another Telegram app to manage them.</string>
+  <string name="XgramCommunityNameHint">Name</string>
+  <string name="XgramCommunityDelete">Delete community</string>
+  <string name="XgramCommunityDeleteConfirm">Delete the %1$s community for everyone?</string>
   <string name="XgramAddedToCommunity">Added to a community</string>
   <string name="XgramAddedToCommunityNamed">Added to the %1$s community</string>
   <string name="XgramRemovedFromCommunity">Removed from the community</string>

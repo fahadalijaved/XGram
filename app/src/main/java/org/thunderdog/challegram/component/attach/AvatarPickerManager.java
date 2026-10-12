@@ -58,6 +58,7 @@ public class AvatarPickerManager extends MediaLayoutManager {
   public static final int MODE_PROFILE_PUBLIC = 1;
   public static final int MODE_CHAT = 2;
   public static final int MODE_NON_CREATED = 3;
+  public static final int MODE_COMMUNITY = 4; // XGram: a community's photo
 
   public AvatarPickerManager (ViewController<?> context) {
     super(context);
@@ -149,6 +150,27 @@ public class AvatarPickerManager extends MediaLayoutManager {
     });
   }
 
+  // XGram: a community has no chat, so its photo is picked by community id
+  public void xgramShowMenuForCommunity (long communityId, boolean hasPhoto) {
+    openMediaView(AvatarPickerMode.GROUP, f -> xgramOnCommunityPhotoReceived(f, communityId),
+      hasPhoto ? Lang.getString(R.string.DeletePhoto) : null, ColorId.textNegative, () -> showDeletePhotoConfirm(() -> xgramSetCommunityPhoto(communityId, null)));
+  }
+
+  private void xgramOnCommunityPhotoReceived (ImageGalleryFile file, long communityId) {
+    Media.instance().post(() -> {
+      final TdApi.InputFileGenerated inputFile = PhotoGenerationInfo.newFile(file);
+      UI.post(() -> xgramSetCommunityPhoto(communityId, inputFile));
+    });
+  }
+
+  private void xgramSetCommunityPhoto (long communityId, @Nullable TdApi.InputFileGenerated inputFile) {
+    if (inputFile != null) {
+      UI.showToast(R.string.UploadingPhotoWait, Toast.LENGTH_SHORT);
+    }
+    TdApi.InputChatPhoto photo = inputFile != null ? new TdApi.InputChatPhotoStatic(inputFile) : null;
+    tdlib.send(new TdApi.SetCommunityPhoto(communityId, photo), tdlib.typedOkHandler());
+  }
+
   private void showDeletePhotoConfirm (Runnable onConfirm) {
     context.showConfirm(Lang.getString(R.string.RemovePhotoConfirm), Lang.getString(R.string.Delete), R.drawable.baseline_delete_24, ViewController.OptionColor.RED, () -> {
       onConfirm.run();
@@ -233,6 +255,11 @@ public class AvatarPickerManager extends MediaLayoutManager {
   /* Activity Result */   // TODO: show editor
 
   public boolean handleActivityResult (int requestCode, int resultCode, Intent data, int mode, @Nullable TdApi.Chat chat, @Nullable EditHeaderView headerView) {
+    return handleActivityResult(requestCode, resultCode, data, mode, chat, headerView, 0); // XGram: no community
+  }
+
+  // XGram: communityId is used by MODE_COMMUNITY only
+  public boolean handleActivityResult (int requestCode, int resultCode, Intent data, int mode, @Nullable TdApi.Chat chat, @Nullable EditHeaderView headerView, long communityId) {
     if (resultCode != Activity.RESULT_OK) {
       return false;
     }
@@ -241,7 +268,7 @@ public class AvatarPickerManager extends MediaLayoutManager {
       File image = Intents.takeLastOutputMedia();
       if (image != null) {
         U.addToGallery(image);
-        handleActivitySetPhoto(image.getPath(), mode, chat, headerView);
+        handleActivitySetPhoto(image.getPath(), mode, chat, headerView, communityId); // XGram
       }
       return true;
     } else if (requestCode == Intents.ACTIVITY_RESULT_GALLERY) {
@@ -258,7 +285,7 @@ public class AvatarPickerManager extends MediaLayoutManager {
             UI.showToast("Webp is not supported for profile photos", Toast.LENGTH_LONG);
             return false;
           }
-          handleActivitySetPhoto(imagePath, mode, chat, headerView);
+          handleActivitySetPhoto(imagePath, mode, chat, headerView, communityId); // XGram
         }
       }
       return true;
@@ -266,8 +293,12 @@ public class AvatarPickerManager extends MediaLayoutManager {
     return false;
   }
 
-  private void handleActivitySetPhoto (String path, int mode, @Nullable TdApi.Chat chat, @Nullable EditHeaderView headerView) {
-    if (mode == MODE_PROFILE || mode == MODE_PROFILE_PUBLIC) {
+  private void handleActivitySetPhoto (String path, int mode, @Nullable TdApi.Chat chat, @Nullable EditHeaderView headerView, long communityId) { // XGram: communityId
+    if (mode == MODE_COMMUNITY) { // XGram
+      if (communityId != 0) {
+        xgramSetCommunityPhoto(communityId, new TdApi.InputFileGenerated(path, SimpleGenerationInfo.makeConversion(path), 0));
+      }
+    } else if (mode == MODE_PROFILE || mode == MODE_PROFILE_PUBLIC) {
       setProfilePhoto(new TdApi.InputFileGenerated(path, SimpleGenerationInfo.makeConversion(path), 0), mode == MODE_PROFILE_PUBLIC);
     } else if (mode == MODE_CHAT && chat != null) {
       setChatPhoto(chat.id, new TdApi.InputFileGenerated(path, SimpleGenerationInfo.makeConversion(path), 0));

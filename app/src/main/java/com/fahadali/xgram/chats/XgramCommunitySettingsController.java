@@ -12,18 +12,21 @@
 package com.fahadali.xgram.chats;
 
 import android.content.Context;
+import android.content.Intent;
 import android.view.View;
 
 import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.attach.AvatarPickerManager;
 import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.AvatarPlaceholder;
 import org.thunderdog.challegram.data.DoubleTextWrapper;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.loader.AvatarReceiver;
+import org.thunderdog.challegram.navigation.ActivityResultHandler;
 import org.thunderdog.challegram.navigation.ComplexHeaderView;
 import org.thunderdog.challegram.navigation.NavigationController;
 import org.thunderdog.challegram.navigation.ViewController;
@@ -31,7 +34,9 @@ import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.telegram.TdlibCache;
 import org.thunderdog.challegram.telegram.TdlibUi;
+import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.RecyclerViewController;
 import org.thunderdog.challegram.ui.SettingsAdapter;
@@ -44,13 +49,15 @@ import java.util.Set;
 
 /**
  * A community's settings, like the official apps: photo, name, who can add chats, the admins' counts and the
- * community's chats. What is shown as editable depends on your status in the community.
+ * community's chats. What is shown as editable depends on your status in the community. Edits go straight to
+ * TDLib; the page, the community page and the merged rows refresh from the updateCommunity that comes back.
  */
-public final class XgramCommunitySettingsController extends RecyclerViewController<Long> implements View.OnClickListener, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener {
+public final class XgramCommunitySettingsController extends RecyclerViewController<Long> implements View.OnClickListener, ActivityResultHandler, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener {
   private static final long REBUILD_DELAY_MS = 200;
 
   private SettingsAdapter adapter;
   private ComplexHeaderView headerCell;
+  private AvatarPickerManager avatarPickerManager;
   /** TDLib's answer to GetCommunityFullInfo, for when its update didn't reach the cache. */
   @Nullable private TdApi.CommunityFullInfo fetchedFull;
   /** Chats asked from TDLib (GetChat), once each. */
@@ -137,6 +144,11 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
     return rights != null && rights.canBanMembers;
   }
 
+  private boolean isCreator () {
+    TdApi.Community community = tdlib.cache().community(communityId());
+    return community != null && community.status != null && community.status.getConstructor() == TdApi.CommunityMemberStatusCreator.CONSTRUCTOR;
+  }
+
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
     headerCell = new ComplexHeaderView(context, tdlib, this);
@@ -145,6 +157,7 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
     headerCell.initWithController(this, true);
     headerCell.setInnerMargins(Screen.dp(56f), Screen.dp(49f));
     updateHeader();
+    avatarPickerManager = new AvatarPickerManager(this);
 
     adapter = new SettingsAdapter(this) {
       @Override
@@ -288,6 +301,13 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityCountsInfo));
     }
 
+    // Delete, for the creator
+    if (isCreator()) {
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramCommunityDelete, R.drawable.baseline_delete_24, R.string.XgramCommunityDelete).setTextColorId(ColorId.textNegative));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    }
+
     // Chats
     List<ListItem> chatRows = new ArrayList<>();
     Set<Long> chatIds = XgramCommunityData.chatIds(tdlib, communityId(), communityFull());
@@ -321,11 +341,98 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
 
   @Override
   public void onClick (View v) {
-    if (v.getId() == R.id.btn_xgramCommunityChat && v.getTag() instanceof ListItem) {
+    int id = v.getId();
+    if (id == R.id.btn_xgramCommunityChat && v.getTag() instanceof ListItem) {
       long chatId = ((ListItem) v.getTag()).getLongId();
       if (chatId != 0) {
         tdlib.ui().openChat(this, chatId, new TdlibUi.ChatOpenParameters().keepStack());
       }
+    } else if (id == R.id.btn_xgramCommunityPhoto) {
+      changePhoto();
+    } else if (id == R.id.btn_xgramCommunityName) {
+      changeName();
+    } else if (id == R.id.btn_xgramCommunityWhoAll || id == R.id.btn_xgramCommunityWhoAdmins) {
+      changeWhoCanAdd(v, id == R.id.btn_xgramCommunityWhoAll);
+    } else if (id == R.id.btn_xgramCommunityDelete) {
+      confirmDelete();
     }
+  }
+
+  // Edits
+
+  private void changePhoto () {
+    TdApi.Community community = tdlib.cache().community(communityId());
+    if (community == null || !canChangeInfo() || avatarPickerManager == null) {
+      return;
+    }
+    avatarPickerManager.xgramShowMenuForCommunity(communityId(), community.photo != null);
+  }
+
+  @Override
+  public void onActivityResult (int requestCode, int resultCode, Intent data) {
+    if (avatarPickerManager != null) { // the camera and the system gallery come back here
+      avatarPickerManager.handleActivityResult(requestCode, resultCode, data, AvatarPickerManager.MODE_COMMUNITY, null, null, communityId());
+    }
+  }
+
+  private void changeName () {
+    TdApi.Community community = tdlib.cache().community(communityId());
+    if (community == null || !canChangeInfo()) {
+      return;
+    }
+    long communityId = communityId();
+    openInputAlert(Lang.getString(R.string.XgramCommunityName), Lang.getString(R.string.XgramCommunityNameHint), R.string.Save, R.string.Cancel, community.name, (inputView, result) -> {
+      String name = result.trim();
+      if (name.isEmpty()) {
+        return false;
+      }
+      if (!name.equals(community.name)) {
+        tdlib.send(new TdApi.SetCommunityName(communityId, name), (ok, error) -> {
+          if (error != null) {
+            UI.showError(error);
+          }
+        });
+      }
+      return true;
+    }, true);
+  }
+
+  private void changeWhoCanAdd (View v, boolean allMembers) {
+    if (!canChangePermissions() || !adapter.processToggle(v)) {
+      return;
+    }
+    tdlib.send(new TdApi.SetCommunityPermissions(communityId(), new TdApi.CommunityPermissions(allMembers)), (ok, error) -> {
+      if (error != null) {
+        UI.showError(error);
+        runOnUiThreadOptional(this::buildItems); // back to what the community really allows
+      }
+    });
+  }
+
+  private void confirmDelete () {
+    TdApi.Community community = tdlib.cache().community(communityId());
+    if (community == null || !isCreator()) {
+      return;
+    }
+    String name = !community.name.isEmpty() ? community.name : Lang.getString(R.string.XgramCommunity);
+    showConfirm(Lang.getString(R.string.XgramCommunityDeleteConfirm, name), Lang.getString(R.string.Delete), R.drawable.baseline_delete_24, OptionColor.RED, this::deleteCommunity);
+  }
+
+  private void deleteCommunity () {
+    long communityId = communityId();
+    tdlib.send(new TdApi.DeleteCommunity(communityId), (ok, error) -> {
+      if (error != null) {
+        UI.showError(error);
+        return;
+      }
+      runOnUiThreadOptional(() -> {
+        XgramCommunities.forgetCommunity(tdlib, communityId); // its merged row splits at once
+        NavigationController navigation = navigationController();
+        if (navigation != null) {
+          navigation.getStack().destroyAllById(R.id.controller_xgramCommunity); // the community page under this one
+        }
+        navigateBack();
+      });
+    });
   }
 }

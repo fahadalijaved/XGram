@@ -34,6 +34,7 @@
   <item type="id" name="btn_xgramCommunityAdmins" />
   <item type="id" name="btn_xgramCommunityRequests" />
   <item type="id" name="btn_xgramCommunityRemoved" />
+  <item type="id" name="btn_xgramCommunityDelete" />
   <item type="id" name="btn_xgramOpenCommunity" />
   <item type="id" name="btn_xgramMessageMenu" />
   <item type="id" name="btn_xgramMenuItem" />

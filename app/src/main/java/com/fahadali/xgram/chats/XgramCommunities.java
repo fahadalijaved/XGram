@@ -150,6 +150,16 @@ public final class XgramCommunities {
     return confirmedMap(tdlib).containsKey(chatId);
   }
 
+  /** The community was deleted: its chats are no longer in any community on this device. */
+  public static void forgetCommunity (Tdlib tdlib, long communityId) {
+    if (communityId == 0) {
+      return;
+    }
+    for (long chatId : chatsOf(tdlib, communityId)) {
+      remember(tdlib, chatId, 0);
+    }
+  }
+
   /** The account in this slot logged out (its stored keys are removed by XgramAccountData). */
   public static void forgetAccount (int accountId) {
     memberships.remove(accountId);
