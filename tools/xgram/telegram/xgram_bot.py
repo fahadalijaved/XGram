@@ -680,8 +680,15 @@ def cmd_topic_create(args, cfg, api):
     print("new topic id (message_thread_id): %s" % topic.get("message_thread_id"))
     return 0
 
-def apk_caption(info, version, commit, source_url):
-    lines = ["📦 <b>XGram %s</b>%s" % (esc(version), " · " + esc(info["abi"]) if info["abi"] else ""),
+# Stable releases are tested builds posted in Updates; CI builds are every new build in the CI channel.
+KINDS = {"stable": ("📦", "Stable"), "ci": ("⚙️", "CI build")}
+
+def build_heading(version, kind):
+    emoji, label = KINDS[kind]
+    return "%s <b>XGram %s</b> · %s" % (emoji, esc(version), label)
+
+def apk_caption(info, version, commit, source_url, kind="stable"):
+    lines = [build_heading(version, kind) + (" · " + esc(info["abi"]) if info["abi"] else ""),
              "<code>%s</code>" % esc(info["name"]), "",
              "Size: " + human_size(info["size"]) + (" (%s bytes)" % format(info["size"], ",")
                                                     if info["size"] >= 1024 else ""),
@@ -693,7 +700,8 @@ def apk_caption(info, version, commit, source_url):
 def cmd_publish(args, cfg, api):
     target = resolve_target(cfg, args.to, api.send)
     announce = resolve_target(cfg, args.announce, api.send) if args.announce else None
-    notes, heading = read_notes(args.notes, cfg, api.send), "📦 <b>XGram %s</b>" % esc(args.version)
+    kind = getattr(args, "kind", None) or ("ci" if target.name == "channel" else "stable")
+    notes, heading = read_notes(args.notes, cfg, api.send), build_heading(args.version, kind)
     if notes:
         check_html(heading + ": what's new\n\n" + notes, TEXT_LIMIT, "--notes " + args.notes)
     infos, notes_in_caption, sent = [file_info(p) for p in args.apk], False, []
@@ -707,7 +715,7 @@ def cmd_publish(args, cfg, api):
                          format(api.upload_limit, ","), problem))
     plan = []   # build and check every caption before sending any
     for info in infos:
-        caption = apk_caption(info, args.version, args.commit, cfg.get("XGRAM_SOURCE_URL"))
+        caption = apk_caption(info, args.version, args.commit, cfg.get("XGRAM_SOURCE_URL"), kind)
         big = info["size"] > api.upload_limit
         # Notes go into the caption only for one file sent via the Bot API, if it fits in 1024.
         if len(infos) == 1 and notes and not big and visible_len(caption + "\n\n" + notes) <= CAPTION_LIMIT:
@@ -739,7 +747,7 @@ def cmd_publish(args, cfg, api):
             log("warning: the notes are too long for the announcement; announcing without them")
             text = heading + " is out." + tail
         announce_link = message_link(announce, send_text(api, announce, text, args.silent)["message_id"])
-    latest = {"version": args.version, "commit": args.commit, "chat_id": target.chat_id,
+    latest = {"version": args.version, "kind": kind, "commit": args.commit, "chat_id": target.chat_id,
               "date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "message_id": main_id,
               "link": link, "announce_link": announce_link,
               "files": [{k: f[k] for k in ("name", "size", "sha256", "abi", "message_id", "link")} for f in sent]}
@@ -769,7 +777,7 @@ def reply_text(cmd, args, cfg, send):
     latest = state.get("latest")
     if not latest:
         return "No XGram build has been published yet."
-    lines = ["📦 <b>XGram %s</b>" % esc(latest["version"]),
+    lines = [build_heading(latest["version"], latest.get("kind") if latest.get("kind") in KINDS else "stable"),
              "Commit <code>%s</code>, %s" % (esc(latest["commit"][:12]), esc(latest["date"][:10]))]
     if latest.get("link"):
         lines.append('<a href="%s">Release post</a>' % esc(latest["link"]))
@@ -888,6 +896,11 @@ def selftest(args=None, cfg=None, api=None):
     ok(parse_tme_link("https://t.me/c/123/9?thread=4") == (-1000000000123, 4, 9), "?thread= form")
     ok(parse_chat("https://t.me/c/123/4") == -1000000000123 and parse_topic("t.me/c/123/4/5") == 4, "links in config")
     ok(Target("general", -1001, 1).kw() == {"chat_id": -1001}, "General has no message_thread_id")
+    apk = {"name": "XGram-1.2.3.4-arm64-v8a.apk", "size": 2048, "sha256": "ab" * 32, "abi": "arm64-v8a"}
+    ok(apk_caption(apk, "1.2.3.4", "0123456789abcdef", None, "stable").startswith(
+        "📦 <b>XGram 1.2.3.4</b> · Stable · arm64-v8a\n"), "stable caption label")
+    ok(apk_caption(apk, "1.2.3.4", "0123456789abcdef", None, "ci").startswith(
+        "⚙️ <b>XGram 1.2.3.4</b> · CI build · arm64-v8a\n"), "CI caption label")
     ok(Target("updates", -1001, 12).kw() == {"chat_id": -1001, "message_thread_id": 12}, "topic thread id")
     ok(message_link(Target("u", -1000000000123, 4), 99) == "https://t.me/c/123/4/99", "message link")
     token = "1234567890:" + "fake" * 9   # token-shaped, obviously not real
@@ -958,6 +971,8 @@ def build_parser():
         ("--notes", {"help": "release notes: .html = Telegram HTML, other files = plain text, - = stdin"}),
         ("--to", {"default": "channel", "help": TARGET_HELP + " (default: channel)"}),
         ("--announce", {"metavar": "TOPIC", "help": "also announce in this topic, e.g. updates"}),
+        ("--kind", {"choices": sorted(KINDS), "help": "label the build Stable or CI build "
+                                                     "(default: ci when posting to the channel, stable elsewhere)"}),
         ("--pin", dict(flag, help="pin the release post (the notes, or the first APK)")), ("--silent", flag))
     add("serve", cmd_serve, "answer /start /help /latest (long polling)",
         ("--once", dict(flag, help="handle one batch of updates, then exit")))

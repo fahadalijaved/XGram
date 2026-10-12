@@ -222,7 +222,7 @@ jobs:
           ANNOUNCE: ${{ needs.plan.outputs.announce }}
         run: |
           mkdir -p telegram-state
-          args=(--dir publish --version "$VERSION" --commit "$COMMIT" --notes notes/notes.html --send)
+          args=(--dir publish --version "$VERSION" --commit "$COMMIT" --notes notes/notes.html --kind stable --send)
           if [ "$ANNOUNCE" = true ]; then
             args+=(--announce)
           fi

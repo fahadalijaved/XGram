@@ -2,10 +2,11 @@
 # Posts the APKs to the XGram CI channel through XGram Build Bot (tools/xgram/telegram/xgram_bot.py) and,
 # with --announce, announces the build in the Updates topic of the XGram group.
 #
-#   publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--announce] [--send]
+#   publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--announce] [--send]
 #
 # Runs:  xgram_bot.py publish --apk A [--apk B] --version V --commit SHA --notes FILE --to channel
-#                             [--announce updates] [--send]
+#                             [--kind ci|stable] [--announce updates] [--send]
+# --kind labels the posts "CI build" or "Stable" (the bot's default in the channel is ci).
 # Without --send nothing is sent: the bot prints what it would send (its default dry run).
 #
 # Env (secrets / variables):
@@ -30,6 +31,7 @@ dir=""
 version=""
 commit=""
 notes=""
+kind=""
 announce=false
 send=false
 while (($# > 0)); do
@@ -38,13 +40,15 @@ while (($# > 0)); do
     --version) version=${2:?}; shift 2 ;;
     --commit) commit=${2:?}; shift 2 ;;
     --notes) notes=${2:?}; shift 2 ;;
+    --kind) kind=${2:?}; shift 2 ;;
     --announce) announce=true; shift ;;
     --send) send=true; shift ;;
     *) die "Unknown argument: $1" ;;
   esac
 done
 [[ -n "$dir" && -n "$version" && -n "$commit" && -n "$notes" ]] ||
-  die "usage: publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--announce] [--send]"
+  die "usage: publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--announce] [--send]"
+[[ -z "$kind" || "$kind" == ci || "$kind" == stable ]] || die "--kind must be ci or stable, got: $kind"
 [[ -d "$dir" ]] || die "Not a folder: $dir"
 [[ -f "$notes" ]] || die "Notes file not found: $notes"
 
@@ -111,6 +115,9 @@ for apk in "${apks[@]}"; do
   args+=(--apk "$apk")
 done
 args+=(--version "$version" --commit "$commit" --notes "$notes" --to channel)
+if [[ -n "$kind" ]]; then
+  args+=(--kind "$kind")
+fi
 if [[ "$announce" == true ]]; then
   args+=(--announce updates)
 fi
