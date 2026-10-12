@@ -159,7 +159,7 @@ public final class XgramPullToNext implements FactorAnimator.Target {
           return false;
         }
         pulling = false;
-        boolean open = e.getActionMasked() == MotionEvent.ACTION_UP && offset >= threshold() && target != null;
+        boolean open = e.getActionMasked() == MotionEvent.ACTION_UP && offset >= threshold() && target != null && targetIsForHere();
         animateBack();
         if (open) {
           Target t = target;
@@ -219,16 +219,29 @@ public final class XgramPullToNext implements FactorAnimator.Target {
 
   // Target
 
+  /** Where the current target was looked up: Telegram X reuses chat screens, so it can belong to an earlier chat. */
+  private long targetChatId;
+  private int targetTopicId;
+
+  private boolean targetIsForHere () {
+    return targetChatId == host.xgramPullChatId() && targetTopicId == host.xgramPullTopicId();
+  }
+
+  /** Looks the next unread chat or topic up again on every pull: unread counts change while reading. */
   private void prepareTarget () {
-    if (loading || target != null) {
+    long chatId = host.xgramPullChatId();
+    int topicId = host.xgramPullTopicId();
+    if (!targetIsForHere()) {
+      reset(); // found for another chat: never show or open it here
+    }
+    if (loading) {
       return;
     }
-    noTarget = false;
+    targetChatId = chatId;
+    targetTopicId = topicId;
     loading = true;
     final int gen = ++generation;
     Tdlib tdlib = host.tdlib();
-    long chatId = host.xgramPullChatId();
-    int topicId = host.xgramPullTopicId();
     if (topicId != 0) {
       tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> tdlib.ui().post(() -> {
         if (gen != generation) {
@@ -295,6 +308,8 @@ public final class XgramPullToNext implements FactorAnimator.Target {
     loading = false;
     target = null;
     noTarget = false;
+    targetChatId = 0;
+    targetTopicId = 0;
   }
 
   // Drawing
