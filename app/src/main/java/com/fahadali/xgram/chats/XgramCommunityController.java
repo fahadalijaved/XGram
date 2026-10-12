@@ -42,6 +42,8 @@ import java.util.Set;
 public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, TdlibCache.CommunityDataChangeListener {
   private SettingsAdapter adapter;
   private final Set<Long> requestedChats = new HashSet<>();
+  /** Chats asked from TDLib (GetChat) that haven't answered yet. */
+  private final Set<Long> pendingChats = new HashSet<>();
   /** TDLib's answer to GetCommunityFullInfo, when it is an error. */
   @Nullable private String loadError;
   /** TDLib's answer to GetCommunityFullInfo, for when its update didn't reach the cache. */
@@ -91,6 +93,9 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     recyclerView.setAdapter(adapter);
     tdlib.cache().subscribeToCommunityUpdates(communityId(), this);
     tdlib.send(new TdApi.GetCommunityFullInfo(communityId()), (full, error) -> {
+      if (full != null) {
+        tdlib.cache().xgramOnCommunityFullLoaded(communityId(), full);
+      }
       if (error != null) {
         android.util.Log.w("XGram", "GetCommunityFullInfo " + communityId() + ": " + error.code + " " + error.message);
       }
@@ -184,10 +189,13 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       if (chat == null) {
         // Not known to TDLib yet: fetch it, the list is built again once it's there.
         if (requestedChats.add(chatId)) {
+          pendingChats.add(chatId);
           tdlib.send(new TdApi.GetChat(chatId), (result, error) -> runOnUiThreadOptional(() -> {
-            if (result != null) {
-              buildItems();
+            pendingChats.remove(chatId);
+            if (result == null) {
+              requestedChats.remove(chatId); // a later build asks once more
             }
+            buildItems();
           }));
         }
         continue;
@@ -199,7 +207,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     addSection(items, R.string.XgramCommunityChatsIn, joined);
     addSection(items, R.string.XgramCommunityOtherChats, others);
     if (items.isEmpty()) {
-      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityEmpty));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, pendingChats.isEmpty() ? R.string.XgramCommunityEmpty : R.string.XgramCommunityLoading));
     }
     if (full == null) {
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loadError != null ? Lang.getString(R.string.XgramCommunityPartialError, loadError) : Lang.getString(R.string.XgramCommunityPartial)));

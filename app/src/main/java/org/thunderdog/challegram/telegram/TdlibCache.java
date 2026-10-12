@@ -593,6 +593,15 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
     notifyListeners(communityListeners.iterator(update.communityId), update.communityId, update.communityFullInfo);
   }
 
+  /**
+   * XGram: GetCommunityFullInfo answers directly and sends no update when TDLib already had the full info, so the
+   * answer is stored here like an update, for every screen that reads the cache.
+   */
+  @TdlibThread
+  public void xgramOnCommunityFullLoaded (long communityId, TdApi.CommunityFullInfo full) {
+    onUpdateCommunityFull(new TdApi.UpdateCommunityFullInfo(communityId, full));
+  }
+
   // User Blacklist
 
   @TdlibThread
