@@ -16,7 +16,6 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
-import androidx.recyclerview.widget.RecyclerView;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
@@ -49,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -70,6 +70,8 @@ import tgx.td.ChatPosition;
 public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, View.OnLongClickListener, BaseView.ActionListProvider, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener {
   private static final int TYPE_CHAT_ROW = 1;
   private static final long REBUILD_DELAY_MS = 200;
+  /** notifyItemChanged payload: the item animator keeps the bound view instead of fading a new one in. */
+  private static final Object REBIND = new Object();
 
   private SettingsAdapter adapter;
   private ComplexHeaderView headerCell;
@@ -520,7 +522,8 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   /** The chat's row, a new one when the chat changed since it was built. */
   private TGChat rowFor (TdApi.Chat chat, boolean rebuildAll, List<TGChat> retired) {
     TGChat row = rows.get(chat.id);
-    if (row != null && !rebuildAll && !dirtyChats.contains(chat.id)) {
+    boolean dirty = dirtyChats.remove(chat.id); // taken, not cleared: a mark set during this build is kept for the next
+    if (row != null && !rebuildAll && !dirty) {
       return row;
     }
     if (row != null) {
@@ -599,7 +602,11 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
         (XgramCommunityData.isMember(tdlib, chat) ? joined : others).add(row);
       }
     }
-    dirtyChats.clear();
+    for (Iterator<Long> it = dirtyChats.iterator(); it.hasNext(); ) { // marks for chats not on the page
+      if (!present.contains(it.next())) {
+        it.remove();
+      }
+    }
     // Chats that left the community: their rows go.
     for (long chatId : new ArrayList<>(rows.keySet())) {
       if (!present.contains(chatId)) {
@@ -618,7 +625,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     updateHeader(chatIds.size());
     if (sameStructure(adapter.getItems(), items)) {
       // The same rows in the same order: only the changed ones are bound again, in place, with no list animation.
-      rebindVisibleRows(retired);
+      rebindRows(retired);
     } else {
       adapter.setItems(items, false);
     }
@@ -641,21 +648,23 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     return true;
   }
 
-  /** Rows whose chat was replaced and that are on screen get the new one; the rest pick it up when bound. */
-  private void rebindVisibleRows (List<TGChat> retired) {
-    RecyclerView recyclerView = getRecyclerView();
-    if (recyclerView == null || retired.isEmpty()) {
+  /**
+   * Rows whose chat was replaced are bound again: the ones on screen and the ones the list keeps detached in its cache,
+   * which would otherwise come back showing the retired chat. The payload keeps the same view, so there is no fade.
+   */
+  private void rebindRows (List<TGChat> retired) {
+    if (retired.isEmpty()) {
       return;
     }
-    for (int i = 0; i < recyclerView.getChildCount(); i++) {
-      View child = recyclerView.getChildAt(i);
-      if (child instanceof XgramCommunityChatView) {
-        XgramCommunityChatView view = (XgramCommunityChatView) child;
-        TGChat shown = view.getChat();
-        if (shown != null && retired.contains(shown)) {
-          view.setChat(rows.get(shown.getChatId()));
-          view.invalidate();
-        }
+    Set<Long> changed = new HashSet<>();
+    for (TGChat row : retired) {
+      changed.add(row.getChatId());
+    }
+    List<ListItem> items = adapter.getItems();
+    for (int i = 0; i < items.size(); i++) {
+      ListItem item = items.get(i);
+      if (item.getViewType() == ListItem.TYPE_CUSTOM - TYPE_CHAT_ROW && changed.contains(item.getLongId())) {
+        adapter.notifyItemChanged(i, REBIND);
       }
     }
   }
