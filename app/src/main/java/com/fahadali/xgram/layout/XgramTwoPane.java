@@ -452,6 +452,36 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     return navigation != null && navigation == leftNavigation;
   }
 
+  /**
+   * Whether a screen opened from {@code context} should replace what the right pane shows instead of stacking on
+   * it: in two panes the chat list stays on the left, so Back never needs to return to an earlier chat or topic
+   * list opened from there. True for the left pane's screens and for the right pane's own chat list.
+   */
+  public static boolean replacesRightPane (@Nullable ViewController<?> context) {
+    if (context == null) {
+      return false;
+    }
+    XgramTwoPane twoPane = context.context().xgramTwoPane();
+    if (twoPane == null || !twoPane.isActive) {
+      return false;
+    }
+    NavigationController own = context.navigationController();
+    return twoPane.isLeftNavigation(own) || twoPane.isHiddenRoot(context);
+  }
+
+  /** Puts {@code c} on the right pane, replacing anything above the chat list there. */
+  public static void showOnRight (ViewController<?> context, ViewController<?> c) {
+    NavigationController navigation = context.context().navigation();
+    if (navigation == null) {
+      return;
+    }
+    if (navigation.getStackSize() > 1) {
+      navigation.setControllerAnimated(c, true, true);
+    } else {
+      navigation.navigateTo(c);
+    }
+  }
+
   public void destroy () {
     navigation.getStack().removeChangeListener(this);
     org.thunderdog.challegram.theme.ThemeManager.instance().removeThemeListener(themeListener);

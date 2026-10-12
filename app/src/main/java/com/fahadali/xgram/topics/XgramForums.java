@@ -72,6 +72,10 @@ public final class XgramForums {
   public static void openTopicList (TdlibDelegate context, TdApi.Chat chat) {
     ForumTopicsController c = new ForumTopicsController(context.context(), context.tdlib());
     c.setArguments(new ForumTopicsController.Arguments(chat));
+    if (context instanceof ViewController<?> && com.fahadali.xgram.layout.XgramTwoPane.replacesRightPane((ViewController<?>) context)) {
+      com.fahadali.xgram.layout.XgramTwoPane.showOnRight((ViewController<?>) context, c); // two panes: replace, don't stack
+      return;
+    }
     NavigationController navigation = context.context().navigation();
     if (navigation != null) {
       navigation.navigateTo(c);

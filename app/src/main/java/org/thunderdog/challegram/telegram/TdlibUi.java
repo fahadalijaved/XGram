@@ -2329,7 +2329,9 @@ public class TdlibUi extends Handler {
       MainController c = new MainController(context.context(), context.tdlib());
       c.getValue();
       navigation.getStack().insert(c, 0);
-    } else if (navigation.getStackSize() > 1 && (options & CHAT_OPTION_KEEP_STACK) == 0) {
+    } else if (navigation.getStackSize() > 1 && ((options & CHAT_OPTION_KEEP_STACK) == 0 ||
+      (context instanceof ViewController<?> && com.fahadali.xgram.layout.XgramTwoPane.replacesRightPane((ViewController<?>) context)))) {
+      // XGram: in two panes, a chat or topic opened from the left pane replaces the right pane (nothing to go back to).
       navigation.setControllerAnimated(controller, true, true);
     } else {
       navigation.navigateTo(controller);
