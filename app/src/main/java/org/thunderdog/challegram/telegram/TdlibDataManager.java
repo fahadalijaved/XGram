@@ -226,6 +226,16 @@ public abstract class TdlibDataManager<Key, Value extends TdApi.Object, Result e
   @UiThread
   protected abstract void requestData (int contextId, Collection<Key> keysToRequest);
 
+  /** XGram: forgets a failed entry, so the next request asks TDLib again (failures were kept until restart). */
+  protected final void xgramForget (Key key) {
+    synchronized (dataLock) {
+      Result entry = entries.get(key);
+      if (entry != null && entry.value == null) {
+        entries.remove(key);
+      }
+    }
+  }
+
   @TdlibThread
   protected final void processData (int contextId, @NonNull Key key, @Nullable Value value) {
     if (value != null) {

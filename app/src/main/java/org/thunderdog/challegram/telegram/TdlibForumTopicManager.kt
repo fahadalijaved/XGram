@@ -35,6 +35,10 @@ class TdlibForumTopicManager(
         if (!isCancelled(contextId)) {
           if (error != null) {
             processError(contextId, key, error)
+            if (!com.fahadali.xgram.topics.XgramForums.isTopicGone(error)) {
+              // XGram: a network or flood error is not remembered for good: ask again after a minute.
+              tdlib.ui().postDelayed({ xgramForget(key) }, 60_000)
+            }
           } else {
             processData(contextId, key, forumTopic)
           }

@@ -11310,7 +11310,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private void xgramScheduleTopicRefresh () {
     tdlib.ui().removeCallbacks(xgramTopicRefresh);
-    tdlib.ui().postDelayed(xgramTopicRefresh, 300);
+    tdlib.ui().postDelayed(xgramTopicRefresh, 1500); // every incoming message in the forum lands here: one fetch per burst
   }
 
   private void xgramLoadTopic () {
@@ -11336,13 +11336,29 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (xgramInForumTopic() && update.chatId == chat.id && ((TdApi.MessageTopicForum) messageTopicId).forumTopicId == update.forumTopicId) {
         xgramApplyTopicReadOutbox(); // someone read the topic: two ticks
         TdApi.ForumTopic topic = xgramForumTopic;
-        // Fetching the topic can emit this update again, so only refetch when something actually changed.
-        if (topic == null || topic.lastReadInboxMessageId != update.lastReadInboxMessageId) {
+        if (topic == null) {
           xgramScheduleTopicRefresh();
-        } else if (topic.unreadMentionCount != com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(tdlib, chat.id, update.forumTopicId, update.unreadMentionCount) ||
-          topic.unreadReactionCount != update.unreadReactionCount) {
-          topic.unreadMentionCount = com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(tdlib, chat.id, update.forumTopicId, update.unreadMentionCount);
-          topic.unreadReactionCount = update.unreadReactionCount;
+          return;
+        }
+        // XGram: apply the update to the topic first; only a partial read needs the exact unread count from the server
+        // (fetching the topic can emit this update again, and fetching after every read caused request storms).
+        int mentions = com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(tdlib, chat.id, update.forumTopicId, update.unreadMentionCount);
+        boolean readChanged = topic.lastReadInboxMessageId != update.lastReadInboxMessageId;
+        boolean countersChanged = topic.unreadMentionCount != mentions || topic.unreadReactionCount != update.unreadReactionCount;
+        topic.isPinned = update.isPinned;
+        topic.lastReadInboxMessageId = update.lastReadInboxMessageId;
+        topic.lastReadOutboxMessageId = update.lastReadOutboxMessageId;
+        topic.unreadMentionCount = mentions;
+        topic.unreadReactionCount = update.unreadReactionCount;
+        topic.notificationSettings = update.notificationSettings;
+        boolean readFully = topic.lastMessage != null && topic.lastReadInboxMessageId >= topic.lastMessage.id;
+        if (readFully && topic.unreadCount != 0) {
+          topic.unreadCount = 0;
+          countersChanged = true;
+        }
+        if (readChanged && !readFully) {
+          xgramScheduleTopicRefresh();
+        } else if (readChanged || countersChanged) {
           xgramApplyTopicCounters(true);
         }
       }

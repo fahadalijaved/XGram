@@ -50,6 +50,10 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   private static final int FIRST_PAGE_SIZE = 20;
   private static final int NEXT_PAGE_SIZE = 100;
   private static final long REFRESH_DELAY_MS = 300;
+  /** More pending topics than this are refreshed with one page request. */
+  private static final int BATCH_THRESHOLD = 5;
+  /** At most this many single-topic requests after a page request. */
+  private static final int MAX_SINGLE_FETCHES = 10;
 
   private static final Comparator<TdApi.ForumTopic> COMPARATOR = (a, b) -> {
     // Hidden General goes first, like the official app's pull-down row.
@@ -115,6 +119,10 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
 
   private final IntSet pendingRefresh = new IntSet();
   private boolean refreshScheduled;
+  /** A page that failed to load isn't asked again before this (uptime ms), so scrolling can't hammer an offline server. */
+  private long loadRetryAfter;
+  /** Topics whose fetch failed once (not as deleted): they get one more try. */
+  private final java.util.Set<Integer> retriedOnce = new java.util.HashSet<>();
 
   public ForumTopicList (Tdlib tdlib, long chatId) {
     this.tdlib = tdlib;
@@ -122,6 +130,11 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     tdlib.listeners().subscribeToChatUpdates(chatId, this);
     tdlib.listeners().subscribeToMessageUpdates(chatId, this);
     com.fahadali.xgram.ghost.XgramLocalRead.addListener(this);
+    TdApi.Chat chat = tdlib.chat(chatId);
+    if (chat != null) {
+      // The chat's read state when the list was made: the first read update compares with it (refreshing every unread topic otherwise).
+      lastChatReadInboxMessageId = chat.lastReadInboxMessageId;
+    }
   }
 
   public long chatId () {
@@ -153,7 +166,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   }
 
   public boolean canLoadMore () {
-    return !endReached && !isLoading && !isDestroyed;
+    return !endReached && !isLoading && !isDestroyed && android.os.SystemClock.uptimeMillis() >= loadRetryAfter;
   }
 
   public int indexOf (int forumTopicId) {
@@ -186,8 +199,13 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       }
       isLoading = false;
       if (error != null) {
-        endReached = true;
-        loadFailed = topics.isEmpty();
+        if (topics.isEmpty()) {
+          endReached = true;
+          loadFailed = true;
+        } else {
+          // Keep what's loaded and allow scrolling to try the next page again a bit later.
+          loadRetryAfter = android.os.SystemClock.uptimeMillis() + XgramForums.retryAfterMs(error, 5000);
+        }
       } else {
         for (TdApi.ForumTopic topic : result.topics) {
           XgramTopicReadOutbox.set(tdlib, chatId, topic);
@@ -231,18 +249,68 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     }
     int[] forumTopicIds = pendingRefresh.toArray();
     pendingRefresh.clear();
-    for (int forumTopicId : forumTopicIds) {
-      tdlib.send(new TdApi.GetForumTopic(chatId, forumTopicId), (topic, error) -> tdlib.ui().post(() -> {
-        if (isDestroyed) {
-          return;
-        }
-        if (error != null) {
-          removeTopic(forumTopicId);
-        } else {
-          putTopic(topic);
-        }
-      }));
+    if (forumTopicIds.length <= BATCH_THRESHOLD) {
+      for (int forumTopicId : forumTopicIds) {
+        fetchTopic(forumTopicId);
+      }
+      return;
     }
+    // Many topics at once (a read in "All", a burst of messages): one page instead of one request per topic, which
+    // ends in FLOOD_WAIT. Topics not on that page are fetched one by one, a few at a time.
+    int limit = Math.min(100, Math.max(20, topics.size()));
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, limit), (result, error) -> tdlib.ui().post(() -> {
+      if (isDestroyed) {
+        return;
+      }
+      java.util.Set<Integer> left = new java.util.LinkedHashSet<>();
+      for (int forumTopicId : forumTopicIds) {
+        left.add(forumTopicId);
+      }
+      if (result != null) {
+        for (TdApi.ForumTopic topic : result.topics) {
+          putTopicImpl(topic);
+          left.remove(topic.info.forumTopicId);
+        }
+        publishUnread();
+      }
+      int fetched = 0;
+      List<Integer> later = new ArrayList<>();
+      for (int forumTopicId : left) {
+        if (fetched < MAX_SINGLE_FETCHES) {
+          fetchTopic(forumTopicId);
+          fetched++;
+        } else {
+          later.add(forumTopicId);
+        }
+      }
+      if (!later.isEmpty()) {
+        tdlib.ui().postDelayed(() -> {
+          for (int forumTopicId : later) {
+            scheduleRefresh(forumTopicId);
+          }
+        }, 1000);
+      }
+    }));
+  }
+
+  private void fetchTopic (int forumTopicId) {
+    tdlib.send(new TdApi.GetForumTopic(chatId, forumTopicId), (topic, error) -> tdlib.ui().post(() -> {
+      if (isDestroyed) {
+        return;
+      }
+      if (error == null) {
+        retriedOnce.remove(forumTopicId);
+        putTopic(topic);
+      } else if (XgramForums.isTopicGone(error)) {
+        retriedOnce.remove(forumTopicId);
+        removeTopic(forumTopicId);
+      } else if (retriedOnce.add(forumTopicId)) {
+        // Offline, flood wait, a server hiccup: the topic still exists. Try once more, later.
+        tdlib.ui().postDelayed(() -> scheduleRefresh(forumTopicId), XgramForums.retryAfterMs(error, 5000));
+      } else {
+        retriedOnce.remove(forumTopicId); // gave up for now; the next update of this topic tries again
+      }
+    }));
   }
 
   /** The chat list badge of the forum: the unread messages of its topics (see {@link XgramForumUnread}). */
@@ -430,7 +498,6 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   // ChatListener (TDLib thread)
 
   private long lastChatReadInboxMessageId = -1;
-  private int lastChatUnreadCount = -1;
 
   @Override
   public void onChatReadInbox (long chatId, long lastReadInboxMessageId, int unreadCount, boolean availabilityChanged) {
@@ -438,11 +505,11 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     // an update for each topic: fetch the topics that still look unread. Only when the chat's state changed, so a
     // refresh that makes TDLib resend the same state can't loop.
     tdlib.ui().post(() -> {
-      if (lastChatReadInboxMessageId == lastReadInboxMessageId && lastChatUnreadCount == unreadCount) {
+      // Only a moved read position: new messages change unreadCount too, and they arrive through onNewMessage.
+      if (lastChatReadInboxMessageId == lastReadInboxMessageId) {
         return;
       }
       lastChatReadInboxMessageId = lastReadInboxMessageId;
-      lastChatUnreadCount = unreadCount;
       refreshUnreadTopics();
     });
   }
@@ -468,8 +535,8 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       }
       int index = indexOf(info.forumTopicId);
       if (index == -1) {
-        // Most likely a just created topic.
-        scheduleRefresh(info.forumTopicId);
+        // Not loaded (yet). A new topic arrives with its "topic created" message through onNewMessage; fetching here
+        // too would request every topic TDLib tells about while pages are loading.
         return;
       }
       TdApi.ForumTopic topic = topics.get(index);

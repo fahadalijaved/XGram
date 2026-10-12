@@ -126,6 +126,24 @@ public final class XgramForums {
    * TDLib can report a topic's unread count from before the latest read; a topic whose last message is read
    * (or is your own, which reads everything before it) has nothing unread.
    */
+  /** The topic was deleted (or never existed), as opposed to a network, flood or access error. */
+  public static boolean isTopicGone (TdApi.Error error) {
+    return error.code == 404 || (error.code == 400 && error.message != null && error.message.contains("TOPIC_ID_INVALID"));
+  }
+
+  /** How long to wait before asking again: the "retry after N" of a flood wait (at most a minute), else fallbackMs. */
+  public static long retryAfterMs (TdApi.Error error, long fallbackMs) {
+    if (error.code == 429 && error.message != null) {
+      java.util.regex.Matcher m = java.util.regex.Pattern.compile("retry after (\\d+)").matcher(error.message);
+      if (m.find()) {
+        try {
+          return Math.min(60_000L, Math.max(fallbackMs, Long.parseLong(m.group(1)) * 1000L));
+        } catch (NumberFormatException ignored) { }
+      }
+    }
+    return fallbackMs;
+  }
+
   public static TdApi.ForumTopic normalizeUnread (Tdlib tdlib, TdApi.ForumTopic topic) {
     // Ghost mode: messages viewed without reading them count as read on this device.
     com.fahadali.xgram.ghost.XgramLocalRead.rewriteTopic(tdlib, topic.info.chatId, topic);
