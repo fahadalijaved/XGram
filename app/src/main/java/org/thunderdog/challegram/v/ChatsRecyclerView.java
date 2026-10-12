@@ -163,6 +163,26 @@ public class ChatsRecyclerView extends CustomRecyclerView implements ClickHelper
     }
   }
 
+  /** XGram: a community's name or photo changed. */
+  public void xgramRefreshCommunityLook (long chatId) {
+    int updated = adapter.xgramRefreshCommunityRow(chatId);
+    if (updated != -1) {
+      View view = manager.findViewByPosition(updated);
+      if (view instanceof ChatView) {
+        ((ChatView) view).invalidateAvatarReceiver();
+      } else {
+        adapter.notifyItemChanged(updated);
+      }
+    }
+  }
+
+  public void xgramRefreshCommunityRow (long chatId) {
+    int updated = adapter.xgramRefreshCommunityRow(chatId);
+    if (updated != -1) {
+      invalidateViewAt(updated);
+    }
+  }
+
   public void updateChatReadInbox (long chatId, final long lastReadInboxMessageId, final int unreadCount) {
     int updated = adapter.updateChatReadInbox(chatId, lastReadInboxMessageId, unreadCount);
     if (updated != -1) {

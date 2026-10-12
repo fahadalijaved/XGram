@@ -1,0 +1,326 @@
+{
+ "broom": {
+  "tgx": [
+   "templarian_baseline_broom_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/chats/XgramMessageMenu.java",
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java"
+  ]
+ },
+ "brush": {
+  "tgx": [
+   "baseline_brush_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/chats/XgramAiTools.java",
+   "java/org/thunderdog/challegram/component/chat/ReplyBarView.java",
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "dice": {
+  "tgx": [
+   "belledeboheme_baseline_dice_1_16",
+   "belledeboheme_baseline_dice_2_16",
+   "belledeboheme_baseline_dice_3_16",
+   "belledeboheme_baseline_dice_4_16",
+   "belledeboheme_baseline_dice_5_16",
+   "belledeboheme_baseline_dice_6_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "restaurant_menu": {
+  "tgx": [
+   "baseline_restaurant_menu_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/ThemeListController.java",
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java",
+   "java/org/thunderdog/challegram/widget/emoji/header/EmojiHeaderViewNonPremium.java"
+  ]
+ },
+ "cake_variant": {
+  "tgx": [
+   "baseline_cake_variant_24",
+   "baseline_cake_variant_14"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/BaseActivity.java",
+   "java/org/thunderdog/challegram/ui/ProfileController.java",
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "cloud_download": {
+  "tgx": [
+   "baseline_cloud_download_24",
+   "baseline_cloud_download_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/component/sharedmedia/MediaSmallView.java",
+   "java/org/thunderdog/challegram/data/MediaWrapper.java"
+  ]
+ },
+ "lamp_filled": {
+  "tgx": [
+   "deproko_baseline_lamp_filled_24",
+   "deproko_baseline_lamp_filled_22"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java",
+   "java/org/thunderdog/challegram/data/TGMessagePoll.java",
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java"
+  ]
+ },
+ "party_popper": {
+  "tgx": [
+   "baseline_party_popper_24",
+   "baseline_party_popper_16",
+   "baseline_party_popper_72"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/data/TD.java",
+   "java/org/thunderdog/challegram/data/TGMessageGiveawayBase.java"
+  ]
+ },
+ "clock": {
+  "tgx": [
+   "deproko_baseline_clock_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/tool/Icons.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "casino": {
+  "tgx": [
+   "baseline_casino_24",
+   "baseline_casino_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "lamp": {
+  "tgx": [
+   "deproko_baseline_lamp_24",
+   "deproko_baseline_lamp_22"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TGMessagePoll.java",
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java",
+   "java/org/thunderdog/challegram/widget/emoji/header/EmojiHeaderViewNonPremium.java"
+  ]
+ },
+ "animals_outline": {
+  "tgx": [
+   "deproko_baseline_animals_outline_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java",
+   "java/org/thunderdog/challegram/widget/emoji/header/EmojiHeaderViewNonPremium.java"
+  ]
+ },
+ "animals": {
+  "tgx": [
+   "deproko_baseline_animals_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java",
+   "java/org/thunderdog/challegram/widget/emoji/header/EmojiHeaderViewNonPremium.java"
+  ]
+ },
+ "flag_outline": {
+  "tgx": [
+   "deproko_baseline_flag_outline_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java",
+   "java/org/thunderdog/challegram/widget/emoji/header/EmojiHeaderViewNonPremium.java"
+  ]
+ },
+ "flag_filled": {
+  "tgx": [
+   "deproko_baseline_flag_filled_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java",
+   "java/org/thunderdog/challegram/widget/emoji/header/EmojiHeaderViewNonPremium.java"
+  ]
+ },
+ "giveaway_particle": {
+  "tgx": [
+   "giveaway_particle_1",
+   "giveaway_particle_2"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/util/GiftParticlesDrawable.java"
+  ]
+ },
+ "file_replace": {
+  "tgx": [
+   "dot_baseline_file_replace_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/ReplyBarView.java"
+  ]
+ },
+ "file_media_replace": {
+  "tgx": [
+   "dot_baseline_file_media_replace_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/ReplyBarView.java"
+  ]
+ },
+ "videogame_asset": {
+  "tgx": [
+   "baseline_videogame_asset_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "redeem": {
+  "tgx": [
+   "baseline_redeem_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "bolt": {
+  "tgx": [
+   "baseline_bolt_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "cat": {
+  "tgx": [
+   "templarian_baseline_cat_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "local_florist": {
+  "tgx": [
+   "baseline_local_florist_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "sports_esports": {
+  "tgx": [
+   "baseline_sports_esports_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "home": {
+  "tgx": [
+   "baseline_home_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "sports_soccer": {
+  "tgx": [
+   "baseline_sports_soccer_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "school": {
+  "tgx": [
+   "baseline_school_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "work": {
+  "tgx": [
+   "baseline_work_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "book": {
+  "tgx": [
+   "baseline_book_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "thumb_up": {
+  "tgx": [
+   "baseline_thumb_up_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "airplane": {
+  "tgx": [
+   "baseline_airplane_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "finance": {
+  "tgx": [
+   "baseline_finance_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "bubble_chart": {
+  "tgx": [
+   "baseline_bubble_chart_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "gamepad_variant": {
+  "tgx": [
+   "templarian_baseline_gamepad_variant_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/tool/Drawables.java"
+  ]
+ },
+ "stickers_filled": {
+  "tgx": [
+   "deproko_baseline_stickers_filled_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "live_help": {
+  "tgx": [
+   "baseline_live_help_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ }
+}

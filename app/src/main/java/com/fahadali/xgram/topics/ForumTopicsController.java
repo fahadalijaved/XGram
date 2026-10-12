@@ -1,0 +1,655 @@
+/*
+ * This file is a part of XGram, a fork of Telegram X
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.fahadali.xgram.topics;
+
+import android.content.Context;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DefaultItemAnimator;
+import androidx.recyclerview.widget.ItemTouchHelper;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.chat.ChatHeaderView;
+import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.navigation.MoreDelegate;
+import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibUi;
+import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.ui.RecyclerViewController;
+import org.thunderdog.challegram.util.StringList;
+import org.thunderdog.challegram.v.CustomRecyclerView;
+import org.thunderdog.challegram.widget.ProgressComponentView;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import me.vkryl.core.collection.IntList;
+
+/**
+ * Topic list of a forum supergroup, shown when the forum is opened in "view as topics" mode.
+ */
+public final class ForumTopicsController extends RecyclerViewController<ForumTopicsController.Arguments> implements
+  ForumTopicList.Listener, ChatHeaderView.Callback, MoreDelegate, View.OnClickListener, View.OnLongClickListener {
+
+  public static class Arguments {
+    public final TdApi.Chat chat;
+
+    public Arguments (TdApi.Chat chat) {
+      this.chat = chat;
+    }
+  }
+
+  private TdApi.Chat chat;
+  private ForumTopicList list;
+  private ChatHeaderView headerCell;
+  private TopicsAdapter adapter;
+  private final Map<Integer, TGForumTopic> rows = new HashMap<>();
+
+  public ForumTopicsController (Context context, Tdlib tdlib) {
+    super(context, tdlib);
+  }
+
+  @Override
+  public int getId () {
+    return R.id.controller_xgramForumTopics;
+  }
+
+  @Override
+  public long getChatId () {
+    return getArgumentsStrict().chat.id;
+  }
+
+  @Override
+  public CharSequence getName () {
+    return chat != null ? tdlib.chatTitle(chat) : Lang.getString(R.string.XgramTopics);
+  }
+
+  @Override
+  public View getCustomHeaderCell () {
+    return headerCell;
+  }
+
+  @Override
+  protected int getMenuId () {
+    return R.id.menu_xgramTopics;
+  }
+
+  @Override
+  protected int getSearchMenuId () {
+    return R.id.menu_clear;
+  }
+
+  @Override
+  public void fillMenuItems (int id, org.thunderdog.challegram.navigation.HeaderView header, android.widget.LinearLayout menu) {
+    if (id == R.id.menu_xgramTopics) {
+      header.addSearchButton(menu, this);
+      header.addMoreButton(menu, this);
+    } else {
+      super.fillMenuItems(id, header, menu);
+    }
+  }
+
+  // Search: topics matching the query, from the server. List updates pause meanwhile.
+
+  private @androidx.annotation.Nullable List<TdApi.ForumTopic> searchResults;
+  private String searchQuery = "";
+
+  @Override
+  protected void onSearchInputChanged (String query) {
+    super.onSearchInputChanged(query);
+    String trimmed = query.trim();
+    if (trimmed.equals(searchQuery)) {
+      return;
+    }
+    searchQuery = trimmed;
+    if (trimmed.isEmpty()) {
+      setSearchResults(null);
+      return;
+    }
+    tdlib.send(new TdApi.GetForumTopics(chat.id, trimmed, 0, 0, 0, 100), (topics, error) -> runOnUiThreadOptional(() -> {
+      if (!trimmed.equals(searchQuery) || !inSearchMode()) {
+        return;
+      }
+      List<TdApi.ForumTopic> results = new ArrayList<>();
+      if (topics != null) {
+        for (TdApi.ForumTopic topic : topics.topics) {
+          results.add(XgramForums.normalizeUnread(tdlib, topic));
+        }
+      }
+      setSearchResults(results);
+    }));
+  }
+
+  @Override
+  protected void onLeaveSearchMode () {
+    super.onLeaveSearchMode();
+    searchQuery = "";
+    setSearchResults(null);
+  }
+
+  private void setSearchResults (@androidx.annotation.Nullable List<TdApi.ForumTopic> results) {
+    if (searchResults == null && results == null) {
+      return;
+    }
+    searchResults = results;
+    if (adapter != null) {
+      adapter.notifyDataSetChanged();
+    }
+  }
+
+  private int visibleCount () {
+    return searchResults != null ? searchResults.size() : list != null ? list.size() : 0;
+  }
+
+  private TdApi.ForumTopic visibleTopic (int position) {
+    return searchResults != null ? searchResults.get(position) : list.get(position);
+  }
+
+  // Mentions: like the official app, an @ button jumps to the topic with the next unread mention.
+
+  private org.thunderdog.challegram.widget.CircleButton mentionButton;
+  private org.thunderdog.challegram.component.chat.CounterBadgeView mentionCountView;
+  private FrameLayout mentionWrap;
+
+  private final org.thunderdog.challegram.telegram.ChatListener mentionListener = new org.thunderdog.challegram.telegram.ChatListener() {
+    @Override
+    public void onChatUnreadMentionCount (long chatId, int unreadMentionCount, boolean availabilityChanged) {
+      runOnUiThreadOptional(() -> updateMentionButton(true));
+    }
+  };
+
+  @Override
+  protected View onCreateView (Context context) {
+    View view = super.onCreateView(context);
+    if (view instanceof ViewGroup) {
+      int padding = Screen.dp(4f);
+      mentionWrap = new FrameLayout(context);
+      FrameLayout.LayoutParams wrapParams = new FrameLayout.LayoutParams(Screen.dp(48f) + padding * 2 + Screen.dp(24f), Screen.dp(48f) + padding * 2 + Screen.dp(14f), Gravity.RIGHT | Gravity.BOTTOM);
+      wrapParams.rightMargin = wrapParams.bottomMargin = Screen.dp(16f) - padding;
+      mentionWrap.setLayoutParams(wrapParams);
+
+      mentionButton = new org.thunderdog.challegram.widget.CircleButton(context);
+      mentionButton.init(R.drawable.baseline_alternate_email_24, 48f, 4f, ColorId.circleButtonChat, ColorId.circleButtonChatIcon);
+      mentionButton.setLayoutParams(new FrameLayout.LayoutParams(Screen.dp(48f) + padding * 2, Screen.dp(48f) + padding * 2, Gravity.RIGHT | Gravity.BOTTOM));
+      mentionButton.setOnClickListener(v -> openNextMention());
+      addThemeInvalidateListener(mentionButton);
+      mentionWrap.addView(mentionButton);
+
+      mentionCountView = new org.thunderdog.challegram.component.chat.CounterBadgeView(context);
+      mentionCountView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP));
+      addThemeInvalidateListener(mentionCountView);
+      mentionWrap.addView(mentionCountView);
+
+      ((ViewGroup) view).addView(mentionWrap);
+      tdlib.listeners().subscribeToChatUpdates(getArgumentsStrict().chat.id, mentionListener);
+      updateMentionButton(false);
+    }
+    return view;
+  }
+
+  private void updateMentionButton (boolean animated) {
+    if (mentionWrap == null || chat == null) {
+      return;
+    }
+    TdApi.Chat current = tdlib.chat(chat.id);
+    int count = current != null ? current.unreadMentionCount : 0;
+    mentionCountView.setCounter(count, false, animated);
+    mentionWrap.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
+  }
+
+  private void openNextMention () {
+    long chatId = chat.id;
+    tdlib.send(new TdApi.SearchChatMessages(chatId, null, "", null, 0, 0, 1, new TdApi.SearchMessagesFilterUnreadMention()), (found, error) -> runOnUiThreadOptional(() -> {
+      if (found != null && found.messages.length > 0) {
+        TdApi.Message message = found.messages[0];
+        if (message.topicId instanceof TdApi.MessageTopicForum) {
+          XgramForums.openTopicLink(this, chatId, (TdApi.MessageTopicForum) message.topicId, message, null);
+        } else {
+          XgramForums.openTopicLink(this, chatId, new TdApi.MessageTopicForum(XgramForums.GENERAL_TOPIC_ID), message, null);
+        }
+      } else if (!com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(tdlib, chatId)) {
+        // The counter is stale (the mention was deleted): clear it, as the official app does.
+        tdlib.send(new TdApi.ReadAllChatMentions(chatId), tdlib.typedOkHandler());
+      }
+    }));
+  }
+
+  @Override
+  protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
+    chat = getArgumentsStrict().chat;
+
+    headerCell = new ChatHeaderView(context, tdlib, this);
+    headerCell.setCallback(this);
+    headerCell.initWithController(this, true);
+    headerCell.xgramHideChatActions(); // as in Telegram: who is typing shows in the topic rows, not over the whole list
+    headerCell.setChat(tdlib, chat, null);
+
+    adapter = new TopicsAdapter();
+    adapter.setHasStableIds(true);
+    recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
+    // Rows are redrawn in place on updates; only moves, insertions and removals animate.
+    DefaultItemAnimator itemAnimator = new DefaultItemAnimator();
+    itemAnimator.setSupportsChangeAnimations(false);
+    recyclerView.setItemAnimator(itemAnimator);
+    recyclerView.setAdapter(adapter);
+    new ItemTouchHelper(new ReorderCallback()).attachToRecyclerView(recyclerView);
+    recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+      @Override
+      public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
+        checkLoadMore();
+      }
+    });
+
+    ensureList();
+    // Right before the slide starts: lay the rows out now, not on its first frames (that made the slide stutter).
+    postOnAnimationReady(() -> {
+      org.thunderdog.challegram.navigation.NavigationController navigation = context().navigation();
+      if (navigation != null && !isDestroyed()) {
+        navigation.xgramPrelayout(this);
+      }
+    });
+  }
+
+  private ForumTopicList ensureList () {
+    if (list == null) {
+      list = ForumTopicList.obtain(tdlib, getArgumentsStrict().chat.id);
+      list.addListener(this);
+      if (!list.isLoaded()) {
+        list.loadMore();
+      }
+    }
+    return list;
+  }
+
+  @Override
+  public void onFocus () {
+    super.onFocus();
+    // Counters may have changed while a topic was open (TDLib doesn't report every topic's unread count).
+    if (list != null && list.isLoaded()) {
+      list.refreshUnreadTopics();
+    }
+  }
+
+  // Slide in once the first page is there (like chats do), unless the forum is already cached.
+  @Override
+  public boolean needAsynchronousAnimation () {
+    return !ensureList().isLoaded();
+  }
+
+  private void checkLoadMore () {
+    if (list != null && list.canLoadMore() && list.isLoaded()) {
+      int lastVisible = findLastVisiblePosition();
+      if (lastVisible >= adapter.getItemCount() - 5) {
+        list.loadMore();
+      }
+    }
+  }
+
+  private TGForumTopic rowFor (TdApi.ForumTopic topic) {
+    TGForumTopic row = rows.get(topic.info.forumTopicId);
+    if (row == null) {
+      row = new TGForumTopic(this, chat.id, topic);
+      rows.put(topic.info.forumTopicId, row);
+    } else if (row.getTopic() != topic) {
+      row.setTopic(topic);
+    }
+    return row;
+  }
+
+  // ForumTopicList.Listener
+
+  @Override
+  public void onTopicsLoaded (ForumTopicList list) {
+    if (adapter != null && searchResults == null) {
+      adapter.notifyDataSetChanged();
+      getRecyclerView().post(this::checkLoadMore);
+    }
+    executeScheduledAnimation();
+  }
+
+  @Override
+  public void onTopicInserted (ForumTopicList list, int index) {
+    if (adapter == null || searchResults != null) {
+      return;
+    }
+    if (list.size() == 1) {
+      adapter.notifyDataSetChanged();
+    } else {
+      adapter.notifyItemInserted(index);
+    }
+  }
+
+  @Override
+  public void onTopicRemoved (ForumTopicList list, int index) {
+    if (adapter == null || searchResults != null) {
+      return;
+    }
+    if (list.size() == 0) {
+      adapter.notifyDataSetChanged();
+    } else {
+      adapter.notifyItemRemoved(index);
+    }
+  }
+
+  @Override
+  public void onTopicMoved (ForumTopicList list, int fromIndex, int toIndex) {
+    if (adapter == null || searchResults != null) {
+      return;
+    }
+    adapter.notifyItemMoved(fromIndex, toIndex);
+  }
+
+  @Override
+  public void onTopicChanged (ForumTopicList list, int index) {
+    if (adapter == null || searchResults != null) {
+      return;
+    }
+    TdApi.ForumTopic topic = list.get(index);
+    TGForumTopic row = rows.get(topic.info.forumTopicId);
+    if (row != null) {
+      row.setTopic(topic);
+    }
+    View view = getRecyclerView().getLayoutManager() != null ? getRecyclerView().getLayoutManager().findViewByPosition(index) : null;
+    if (view instanceof ForumTopicView) {
+      ((ForumTopicView) view).onTopicChanged();
+    } else {
+      adapter.notifyItemChanged(index);
+    }
+  }
+
+  // Header
+
+  @Override
+  public void onChatHeaderClick () {
+    tdlib.ui().openChatProfile(this, chat, null, null);
+  }
+
+  @Override
+  protected void openMoreMenu () {
+    IntList ids = new IntList(2);
+    StringList titles = new StringList(2);
+    if (XgramForums.canCreateTopics(tdlib, chat)) {
+      ids.append(R.id.btn_xgramCreateTopic);
+      titles.append(R.string.XgramCreateTopic);
+    }
+    if (reorderMode || (XgramForums.canManageTopics(tdlib, chat.id) && list != null && list.pinnedTopicIds().length > 1)) {
+      ids.append(R.id.btn_xgramReorderTopics);
+      titles.append(reorderMode ? R.string.XgramReorderTopicsDone : R.string.XgramReorderTopics);
+    }
+    TdApi.Chat current = tdlib.chat(chat.id);
+    if (current != null && (current.unreadCount > 0 || current.unreadMentionCount > 0 || current.unreadReactionCount > 0)) {
+      ids.append(R.id.btn_xgramMarkAllTopicsRead);
+      titles.append(R.string.XgramMarkAllTopicsRead);
+    }
+    if (com.fahadali.xgram.chats.XgramCommunityController.communityOf(tdlib, chat) != 0) {
+      ids.append(R.id.btn_xgramOpenCommunity);
+      titles.append(R.string.XgramOpenCommunity);
+    }
+    ids.append(R.id.btn_xgramViewAsMessages);
+    titles.append(R.string.XgramViewAsMessages);
+    showMore(ids.get(), titles.get(), 0);
+  }
+
+  @Override
+  public void onMoreItemPressed (int id) {
+    if (id == R.id.btn_xgramCreateTopic) {
+      XgramForums.openTopicEditor(this, chat, null);
+    } else if (id == R.id.btn_xgramOpenCommunity) {
+      com.fahadali.xgram.chats.XgramCommunityController.open(this, com.fahadali.xgram.chats.XgramCommunityController.communityOf(tdlib, chat));
+    } else if (id == R.id.btn_xgramMarkAllTopicsRead) {
+      XgramForums.markAllTopicsAsRead(tdlib, chat.id);
+    } else if (id == R.id.btn_xgramReorderTopics) {
+      reorderMode = !reorderMode;
+      if (reorderMode) {
+        org.thunderdog.challegram.tool.UI.showToast(R.string.XgramReorderTopicsHint, android.widget.Toast.LENGTH_LONG);
+      }
+    } else if (id == R.id.btn_xgramViewAsMessages) {
+      tdlib.send(new TdApi.ToggleChatViewAsTopics(chat.id, false), tdlib.typedOkHandler());
+      tdlib.ui().openChat(this, chat, new TdlibUi.ChatOpenParameters().keepStack().xgramSkipForumRouting().after(chatId -> {
+        if (!isDestroyed()) {
+          destroyStackItemById(getId());
+        }
+      }));
+    }
+  }
+
+  // Rows
+
+  @Override
+  public void onClick (View v) {
+    if (!(v instanceof ForumTopicView)) {
+      return;
+    }
+    TdApi.ForumTopic topic = ((ForumTopicView) v).getForumTopic();
+    if (topic != null) {
+      XgramForums.openTopic(this, chat, topic);
+    }
+  }
+
+  @Override
+  public boolean onLongClick (View v) {
+    if (!(v instanceof ForumTopicView)) {
+      return false;
+    }
+    TdApi.ForumTopic topic = ((ForumTopicView) v).getForumTopic();
+    if (topic == null || (reorderMode && topic.isPinned)) {
+      // In reorder mode a long press on a pinned topic starts dragging it.
+      return false;
+    }
+    showTopicOptions(topic);
+    return true;
+  }
+
+  // Pinned topics reordering
+
+  private boolean reorderMode, reorderChanged;
+
+  private class ReorderCallback extends ItemTouchHelper.Callback {
+    private boolean isPinnedRow (RecyclerView.ViewHolder holder) {
+      int position = holder.getBindingAdapterPosition();
+      return list != null && position >= 0 && position < list.size() && list.get(position).isPinned;
+    }
+
+    @Override
+    public boolean isLongPressDragEnabled () {
+      return reorderMode;
+    }
+
+    @Override
+    public boolean isItemViewSwipeEnabled () {
+      return false;
+    }
+
+    @Override
+    public int getMovementFlags (@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
+      return reorderMode && searchResults == null && isPinnedRow(viewHolder) ? makeMovementFlags(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) : 0;
+    }
+
+    @Override
+    public boolean onMove (@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
+      if (!isPinnedRow(target)) {
+        return false;
+      }
+      boolean moved = list.movePinnedLocally(viewHolder.getBindingAdapterPosition(), target.getBindingAdapterPosition());
+      reorderChanged |= moved;
+      return moved;
+    }
+
+    @Override
+    public void onSwiped (@NonNull RecyclerView.ViewHolder viewHolder, int direction) { }
+
+    @Override
+    public void clearView (@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
+      super.clearView(recyclerView, viewHolder);
+      if (reorderChanged && list != null) {
+        reorderChanged = false;
+        final ForumTopicList targetList = list;
+        final int[] pinnedIds = targetList.pinnedTopicIds();
+        tdlib.send(new TdApi.SetPinnedForumTopics(chat.id, pinnedIds), (ok, error) -> runOnUiThreadOptional(() -> {
+          if (error != null) {
+            org.thunderdog.challegram.tool.UI.showError(error);
+          }
+          // The server's orders replace the local ones (or undo the move after an error).
+          targetList.refreshTopics(pinnedIds);
+        }));
+      }
+    }
+  }
+
+  private void showTopicOptions (TdApi.ForumTopic topic) {
+    XgramForums.showTopicOptions(this, chat, topic);
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    for (TGForumTopic row : rows.values()) {
+      row.statusHelper().detachFromAnyChat();
+    }
+    tdlib.listeners().unsubscribeFromChatUpdates(getArgumentsStrict().chat.id, mentionListener);
+    if (list != null) {
+      // The list stays cached for the next visit.
+      list.removeListener(this);
+      list = null;
+    }
+    if (headerCell != null) {
+      headerCell.performDestroy();
+    }
+  }
+
+  // Adapter
+
+  private static final int VIEW_TYPE_TOPIC = 0;
+  private static final int VIEW_TYPE_LOADING = 1;
+  private static final int VIEW_TYPE_EMPTY = 2;
+
+  private static class Holder extends RecyclerView.ViewHolder {
+    Holder (View itemView) {
+      super(itemView);
+    }
+  }
+
+  private class TopicsAdapter extends RecyclerView.Adapter<Holder> {
+    private boolean showLoading () {
+      if (searchResults != null) {
+        return false;
+      }
+      return list == null || !list.isLoaded() || !list.isEndReached();
+    }
+
+    @Override
+    public int getItemCount () {
+      if (list == null) {
+        return 0;
+      }
+      int count = visibleCount();
+      if (showLoading()) {
+        count++;
+      } else if (count == 0) {
+        count = 1;
+      }
+      return count;
+    }
+
+    @Override
+    public long getItemId (int position) {
+      if (list != null && position < visibleCount()) {
+        return visibleTopic(position).info.forumTopicId;
+      }
+      // Footer rows (loading or empty state) never collide with topic ids, which are positive.
+      return -1 - getItemViewType(position);
+    }
+
+    @Override
+    public int getItemViewType (int position) {
+      if (list != null && position < visibleCount()) {
+        return VIEW_TYPE_TOPIC;
+      }
+      return showLoading() ? VIEW_TYPE_LOADING : VIEW_TYPE_EMPTY;
+    }
+
+    @NonNull
+    @Override
+    public Holder onCreateViewHolder (@NonNull ViewGroup parent, int viewType) {
+      Context context = parent.getContext();
+      switch (viewType) {
+        case VIEW_TYPE_TOPIC: {
+          ForumTopicView view = new ForumTopicView(context, tdlib);
+          view.setOnClickListener(ForumTopicsController.this);
+          view.setOnLongClickListener(ForumTopicsController.this);
+          addThemeInvalidateListener(view);
+          return new Holder(view);
+        }
+        case VIEW_TYPE_LOADING: {
+          FrameLayout frame = new FrameLayout(context);
+          frame.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f)));
+          ProgressComponentView progress = new ProgressComponentView(context);
+          progress.initMedium(1f);
+          frame.addView(progress, new FrameLayout.LayoutParams(Screen.dp(40f), Screen.dp(40f), Gravity.CENTER));
+          return new Holder(frame);
+        }
+        case VIEW_TYPE_EMPTY:
+        default: {
+          TextView text = new TextView(context);
+          text.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(120f)));
+          text.setGravity(Gravity.CENTER);
+          text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
+          text.setTextColor(Theme.textDecentColor());
+          addThemeTextDecentColorListener(text);
+          text.setText(Lang.getString(R.string.XgramNoTopics));
+          return new Holder(text);
+        }
+      }
+    }
+
+    @Override
+    public void onBindViewHolder (@NonNull Holder holder, int position) {
+      if (holder.itemView instanceof ForumTopicView) {
+        ((ForumTopicView) holder.itemView).setTopic(rowFor(visibleTopic(position)));
+      }
+    }
+
+    @Override
+    public void onViewAttachedToWindow (@NonNull Holder holder) {
+      if (holder.itemView instanceof ForumTopicView) {
+        ((ForumTopicView) holder.itemView).attach();
+      }
+    }
+
+    @Override
+    public void onViewDetachedFromWindow (@NonNull Holder holder) {
+      if (holder.itemView instanceof ForumTopicView) {
+        ((ForumTopicView) holder.itemView).detach();
+      }
+    }
+
+    @Override
+    public void onViewRecycled (@NonNull Holder holder) {
+      if (holder.itemView instanceof ForumTopicView) {
+        ((ForumTopicView) holder.itemView).setTopic(null);
+      }
+    }
+  }
+}

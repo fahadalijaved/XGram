@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram icon style "Pixel": background -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:aapt="http://schemas.android.com/aapt"
+  android:width="108dp"
+  android:height="108dp"
+  android:viewportWidth="108"
+  android:viewportHeight="108">
+  <path android:pathData="M0,0 L108,0 L108,108 L0,108 Z">
+    <aapt:attr name="android:fillColor">
+      <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108">
+        <item android:offset="0" android:color="#FF2A1450" />
+        <item android:offset="1" android:color="#FF120A26" />
+      </gradient>
+    </aapt:attr>
+  </path>
+  <path android:pathData="M25,27 h2.2 v2.2 h-2.2 z M82,24 h2.2 v2.2 h-2.2 z M86,66 h2.2 v2.2 h-2.2 z M22,80 h2.2 v2.2 h-2.2 z M62,87 h2.2 v2.2 h-2.2 z M47,21 h2.2 v2.2 h-2.2 z" android:fillAlpha="0.55" android:fillColor="#FFFFFFFF" />
+</vector>

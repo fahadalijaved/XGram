@@ -247,6 +247,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   // counters
 
   private final Counter viewCounter, replyCounter, shareCounter, isPinned, isEdited, isRestricted, isUnsupported;
+  private final Counter xgramDeletedIcon; // XGram: trash icon on messages deleted by others
   private Counter shrinkedReactionsCounter, reactionsCounter;
   private final ReactionsCounterDrawable reactionsCounterDrawable;
   private final Counter isChannelHeaderCounter;
@@ -261,6 +262,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private final RectF isTranslatedCounterLastDrawRect = new RectF();
   private final RectF isRestrictedCounterLastDrawRect = new RectF();
   private final RectF isEditedCounterLastDrawRect = new RectF();
+  private final RectF xgramTimeLastDrawRect = new RectF(); // XGram: tap the time for details
+  private final RectF xgramForwardTimeLastDrawRect = new RectF(); // XGram: tap the forward date for details
 
 
   // forward values
@@ -302,6 +305,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private int lastDrawReactionsX, lastDrawReactionsY;
 
   private final Path bubblePath, bubbleClipPath;
+  /** XGram: the bubble has a tail, which only its path has (Telegram X fills bubbles from their corner radii). */
+  private boolean xgramTail;
   private float topRightRadius, topLeftRadius, bottomLeftRadius, bottomRightRadius;
   protected final RectF bubblePathRect, bubbleClipPathRect;
 
@@ -447,6 +452,12 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       .allBold(false)
       .callback(this)
       .drawable(R.drawable.deproko_baseline_pin_14, 14f, 0f, Gravity.CENTER_HORIZONTAL)
+      .build();
+    this.xgramDeletedIcon = new Counter.Builder()
+      .noBackground()
+      .allBold(false)
+      .callback(this)
+      .drawable(R.drawable.xgram_deleted_14, 14f, 0f, Gravity.CENTER_HORIZONTAL)
       .build();
     this.isEdited = new Counter.Builder()
       .noBackground()
@@ -686,11 +697,33 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     } else {
       int date = replaceTimeWithEditTime() ? msg.editDate : msg.date;
       if (date != 0) {
-        b.append(Lang.time(date, TimeUnit.SECONDS));
+        b.append(xgramTime(date)); // XGram: optional seconds
       }
     }
 
     return b.toString();
+  }
+
+  private static java.text.SimpleDateFormat xgramSecondsFormat;
+  private static boolean xgramSecondsAmPm;
+  private static String xgramSecondsZone;
+  private static java.util.Locale xgramSecondsLocale;
+
+  private static synchronized String xgramTime (int date) {
+    if (!com.fahadali.xgram.XgramSettings.instance().showSeconds()) {
+      return Lang.time(date, TimeUnit.SECONDS);
+    }
+    boolean amPm = UI.needAmPm();
+    // Rebuilt after travelling (time zone) or switching the app language, like the rest of the times.
+    String zone = java.util.TimeZone.getDefault().getID();
+    java.util.Locale locale = Lang.locale();
+    if (xgramSecondsFormat == null || xgramSecondsAmPm != amPm || !zone.equals(xgramSecondsZone) || !locale.equals(xgramSecondsLocale)) {
+      xgramSecondsFormat = new java.text.SimpleDateFormat(amPm ? "h:mm:ss a" : "H:mm:ss", locale);
+      xgramSecondsAmPm = amPm;
+      xgramSecondsZone = zone;
+      xgramSecondsLocale = locale;
+    }
+    return xgramSecondsFormat.format(new java.util.Date(date * 1000L));
   }
 
   private String genForwardTime () {
@@ -762,21 +795,30 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
     setIsBottom(true);
 
-    if (top == null || top.isThreadHeader() != isThreadHeader() || !(isEventLog() ? needHideEventDate() || (DateUtils.isSameHour(top.getComparingDate(), getComparingDate()) /*|| !(msg.content instanceof TdApiExt.MessageChatEvent)*/) : DateUtils.isSameDay(top.getComparingDate(), getComparingDate()))) {
+    // XGram: in forums viewed as messages, a new run of messages from another topic starts a section
+    // labeled with the topic name (in the date pill), like official Telegram's topic separators.
+    final boolean xgramTopicChanged = xgramIsMergedForumView() && (top == null || top.forumTopicId() != forumTopicId());
+    final boolean sameDay = top != null && !isEventLog() && DateUtils.isSameDay(top.getComparingDate(), getComparingDate());
+
+    if (xgramTopicChanged || top == null || top.isThreadHeader() != isThreadHeader() || !(isEventLog() ? needHideEventDate() || (DateUtils.isSameHour(top.getComparingDate(), getComparingDate()) /*|| !(msg.content instanceof TdApiExt.MessageChatEvent)*/) : DateUtils.isSameDay(top.getComparingDate(), getComparingDate()))) {
       if (top != null) {
         top.setIsBottom(true);
       }
       setHeaderEnabled(!headerDisabled());
       if ((top != null || getDate() != 0 || isScheduled()) && !isSponsoredMessage() && (!isBelowHeader || messagesController().areScheduledOnly())) {
         flags |= FLAG_SHOW_DATE;
-        setDate(genDate());
+        xgramTopicHeader = xgramTopicChanged;
+        xgramTopicHeaderSameDay = sameDay;
+        setDate(xgramTopicChanged ? xgramTopicHeaderText() : genDate());
       } else {
         flags &= ~FLAG_SHOW_DATE;
+        xgramTopicHeader = false;
       }
       return false;
     }
 
     flags &= ~FLAG_SHOW_DATE;
+    xgramTopicHeader = false;
 
     boolean useBubbles = useBubbles();
     boolean isChannel = isChannel();
@@ -1239,6 +1281,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         pContentY += getPsaTitleHeight();
       }
     }
+    // XGram: readable line length on wide screens (unfolded foldables, tablets).
+    if (com.fahadali.xgram.XgramSettings.instance().limitMessageWidth()) {
+      pRealContentMaxWidth = Math.min(pRealContentMaxWidth, Screen.dp(600f));
+    }
 
     updateContentPositions(true);
     if (allowMessageHorizontalExtend()) {
@@ -1622,6 +1668,14 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       return;
     }
 
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P && com.fahadali.xgram.appearance.XgramChatLook.hasCustomShape(xgramTail)) {
+      // XGram: the shadow follows the bubble's own shape (custom corners, tail); the bitmaps below only fit the theme's.
+      synchronized (bubblePath) {
+        com.fahadali.xgram.appearance.XgramChatLook.drawShadow(c, bubblePath, factor);
+      }
+      return;
+    }
+
     int offset = Screen.dp(2f);
 
     float left = bubblePathRect.left - offset;
@@ -1746,6 +1800,12 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   protected void drawBubble (Canvas c, Paint paint, boolean stroke, int padding) {
     if (paint.getAlpha() == 0) {
+      return;
+    }
+    if (xgramTail && padding == 0) {
+      synchronized (bubblePath) {
+        c.drawPath(bubblePath, paint); // XGram: the tail is part of the path only
+      }
       return;
     }
 
@@ -2139,6 +2199,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       // Time
       if (needMetadata) {
         c.drawText(time, pTimeLeft, xTimeTop + getHeaderPadding(), mTime(true));
+        xgramTimeLastDrawRect.set(pTimeLeft, getHeaderPadding() + xTimeTop - Screen.dp(13f), pTimeLeft + pTimeWidth, getHeaderPadding() + xTimeTop + Screen.dp(4f)); // XGram: tap the time for details
       }
 
       int clockX = pClockLeft - Icons.getClockIconWidth() - Screen.dp(Icons.CLOCK_SHIFT_X);
@@ -2189,6 +2250,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
       isPinned.draw(c, right, top, Gravity.RIGHT, 1f, view, getTimePartIconColorId());
       right -= isPinned.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN));
+      xgramDeletedIcon.draw(c, right, top, Gravity.RIGHT, 1f, view, getTimePartIconColorId());
+      right -= xgramDeletedIcon.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN));
       if (needMetadata) {
         right -= Screen.dp(COUNTER_ADD_MARGIN);
         if (replyCounter.getVisibility() > 0f) {
@@ -2356,6 +2419,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       TextPaint mTimePaint = useBubbles ? Paints.colorPaint(mTimeBubble(), getDecentColor()) : mTime(true);
       if (fTime != null) {
         c.drawText(fTime, forwardX, forwardTextTop, mTimePaint);
+        xgramForwardTimeLastDrawRect.set(forwardX, forwardTextTop - Screen.dp(13f), forwardX + fTimeWidth, forwardTextTop + Screen.dp(4f)); // XGram: tap the original date for details
       }
       if (getViewCountMode() == VIEW_COUNT_FORWARD) {
         forwardX += Screen.dp(2f) + fTimeWidth + Screen.dp(COUNTER_ADD_MARGIN);
@@ -2907,6 +2971,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
     }
 
+    // XGram: tap the time, or the original date of a forward, for exact dates and the message ID (NagramX)
+    if (xgramIsTimeClick(x, y)) {
+      return CLICK_TYPE_XGRAM_TIME;
+    }
+
     if (replyData != null && replyData.isInside(x, y, useBubbles() && !useBubble())) {
       return CLICK_TYPE_REPLY;
     }
@@ -2916,10 +2985,19 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     return CLICK_TYPE_NONE;
   }
 
+  // XGram: the time and the forward date open the time details
+  private boolean xgramIsTimeClick (float x, float y) {
+    boolean timeVisible = !StringUtils.isEmpty(time) && (useBubbles() ? useBubbleTime() : BitwiseUtils.hasFlag(flags, FLAG_HEADER_ENABLED));
+    boolean onTime = timeVisible && !xgramTimeLastDrawRect.isEmpty() && checkClickOnRect(xgramTimeLastDrawRect, x, y, Screen.dp(6f));
+    boolean onForwardTime = !onTime && useForward() && fTime != null && !xgramForwardTimeLastDrawRect.isEmpty() && checkClickOnRect(xgramForwardTimeLastDrawRect, x, y, Screen.dp(6f));
+    return (onTime || onForwardTime) && com.fahadali.xgram.chats.XgramMessageTime.canShow(this);
+  }
+
   private final ClickHelper clickHelper = new ClickHelper(new ClickHelper.Delegate() {
     @Override
     public boolean needClickAt (View view, float x, float y) {
       clickType = getClickType((MessageView) view, x, y);
+      xgramTimeGesture = clickType == CLICK_TYPE_XGRAM_TIME; // XGram
       return clickType != CLICK_TYPE_NONE;
     }
 
@@ -2981,6 +3059,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           onAvatarClick(view);
           break;
         }
+        case CLICK_TYPE_XGRAM_TIME: { // XGram: exact dates and message ID
+          com.fahadali.xgram.chats.XgramMessageTime.show(TGMessage.this);
+          break;
+        }
       }
       clickType = CLICK_TYPE_NONE;
     }
@@ -3004,6 +3086,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (e.getAction() == MotionEvent.ACTION_DOWN) {
       mInitialTouchX = e.getX();
       mInitialTouchY = e.getY();
+      xgramTimeGesture = false; // XGram
     }
 
     if (hasHeader() && needName(true)) {
@@ -3036,6 +3119,14 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     return clickHelper.onTouchEvent(view, e);
   }
 
+  // XGram: true for the whole gesture (down to up) when its touch down landed on the time. Subclasses that
+  // also feed events to their own content handlers (files, polls) skip them then, so one tap never does two things.
+  private boolean xgramTimeGesture;
+
+  protected final boolean xgramTimeTouchCaught () {
+    return xgramTimeGesture;
+  }
+
   private static final int CLICK_TYPE_NONE = 0;
   private static final int CLICK_TYPE_REPLY = 1;
   private static final int CLICK_TYPE_AVATAR = 2;
@@ -3044,6 +3135,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   private static final int CLICK_TYPE_MESSAGE_RESTRICTED_ICON = 5;
   private static final int CLICK_TYPE_MESSAGE_EDITED_ICON = 6;
   private static final int CLICK_TYPE_CHANNEL_MESSAGE_SENDER_ICON = 7;
+  private static final int CLICK_TYPE_XGRAM_TIME = 100; // XGram
 
   private int clickType = CLICK_TYPE_NONE;
 
@@ -3435,6 +3527,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
 
     max -= isPinned.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN)) + Screen.dp(COUNTER_ADD_MARGIN);
+    max -= xgramDeletedIcon.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN));
     if (shouldShowMessageRestrictedWarning()) {
       if (isRestrictedByTelegram()) {
         max -= isRestricted.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN)) + Screen.dp(COUNTER_ADD_MARGIN);
@@ -3858,6 +3951,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           final boolean alignContentRight = alignBubbleRight();
 
           if (circleBubble) {
+            xgramTail = false;
             bottomRightRadius = bottomLeftRadius = topLeftRadius = topRightRadius = dr;
             float centerX = (leftContentEdge + rightContentEdge) * .5f;
             float centerY = bottomContentEdge - dr;
@@ -3867,7 +3961,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
             bubbleClipPathRect.set(bubblePathRect);
           } else {
             bubblePathRect.set(leftContentEdge, topContentEdge, rightContentEdge, bottomContentEdge);
-            DrawAlgorithms.buildPath(bubblePath, bubblePathRect, topLeftRadius = (mergeTop && !alignContentRight ? mr : dr), topRightRadius = (mergeTop && alignContentRight ? mr : dr), bottomRightRadius = (mergeBottom && alignContentRight ? mr : dr), bottomLeftRadius = (mergeBottom && !alignContentRight ? mr : dr));
+            xgramTail = !mergeBottom && !centerBubble() && com.fahadali.xgram.XgramSettings.instance().bubbleTail(); // XGram: Telegram-style tail
+            DrawAlgorithms.buildPath(bubblePath, bubblePathRect, topLeftRadius = (mergeTop && !alignContentRight ? mr : dr), topRightRadius = (mergeTop && alignContentRight ? mr : dr), bottomRightRadius = (xgramTail && alignContentRight ? 0 : mergeBottom && alignContentRight ? mr : dr), bottomLeftRadius = (xgramTail && !alignContentRight ? 0 : mergeBottom && !alignContentRight ? mr : dr));
+            if (xgramTail) {
+              com.fahadali.xgram.appearance.XgramChatLook.addTail(bubblePath, bubblePathRect, alignContentRight);
+            }
             bubbleClipPathRect.set(leftContentEdge + bubblePaddingLeft, topContentEdge + bubblePaddingTop - getBubbleSpecialPaddingTop(), rightContentEdge - bubblePaddingRight, bottomContentEdge - bubblePaddingBottom);
             dr /= 1.5;
             mr /= 1.5;
@@ -4043,6 +4141,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
     isPinned.draw(c, startX, counterY, Gravity.LEFT, 1f, view, iconColorId);
     startX += isPinned.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN));
+    xgramDeletedIcon.draw(c, startX, counterY, Gravity.LEFT, 1f, view, iconColorId);
+    startX += xgramDeletedIcon.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN));
 
     if (shouldShowMessageRestrictedWarning()) {
       if (isRestrictedByTelegram()) {
@@ -4069,6 +4169,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       startX += isTranslatedCounter.getScaledWidth(Screen.dp(COUNTER_ICON_MARGIN + COUNTER_ADD_MARGIN));
     }
 
+    final int xgramTimeLeft = startX; // XGram: tap the time for details
     if (time != null) {
       c.drawText(time, startX, startY + Screen.dp(15.5f), Paints.colorPaint(mTimeBubble(), textColor));
       startX += pTimeWidth;
@@ -4096,6 +4197,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
       startX += Icons.getSingleTickWidth();
     }
+    xgramTimeLastDrawRect.set(xgramTimeLeft, startY, startX, startY + Screen.dp(20f)); // XGram: tap the time for details
   }
 
   protected final int computeBubbleTimePartWidth (boolean includePadding) {
@@ -4140,6 +4242,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       width += replyCounter.getScaledOrTargetWidth(Screen.dp(COUNTER_ICON_MARGIN + COUNTER_ADD_MARGIN), isTarget);
     }
     width += isPinned.getScaledOrTargetWidth(Screen.dp(COUNTER_ICON_MARGIN), isTarget);
+    width += xgramDeletedIcon.getScaledOrTargetWidth(Screen.dp(COUNTER_ICON_MARGIN), isTarget);
     if (shouldShowMessageRestrictedWarning()) {
       if (isRestrictedByTelegram()) {
         width += isRestricted.getScaledOrTargetWidth(Screen.dp(COUNTER_ICON_MARGIN), isTarget);
@@ -5159,7 +5262,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public boolean canBeSelected () {
-    return (!isNotSent() || canResend()) && (flags & FLAG_UNSUPPORTED) == 0 && allowInteraction() && !isSponsoredMessage() && !messagesController().inSearchMode();
+    return (!isNotSent() || canResend()) && (flags & FLAG_UNSUPPORTED) == 0 && allowInteraction() && !isSponsoredMessage() && !messagesController().inSearchMode() && !xgramIsDeleted();
   }
 
   public boolean canBePinned () {
@@ -5173,15 +5276,21 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   public boolean canBeForwarded () {
     TdApi.MessageProperties properties = lastMessageProperties();
-    return properties.canBeForwarded && !isEventLog();
+    return properties.canBeForwarded && !isEventLog() && !xgramIsDeleted();
+  }
+
+  /** XGram: the message can be sent again as a copy. */
+  public boolean xgramCanBeCopied () {
+    TdApi.MessageProperties properties = lastMessageProperties();
+    return properties.canBeCopied && !isEventLog() && !xgramIsDeleted();
   }
 
   public boolean canBeReacted () {
-    return !isSponsoredMessage() && !isEventLog() && !Td.isEmpty(messageAvailableReactions) && (tdlib.hasPremium() || Td.hasNonPremiumReactions(messageAvailableReactions));
+    return !isSponsoredMessage() && !isEventLog() && !xgramIsDeleted() && !Td.isEmpty(messageAvailableReactions) && (tdlib.hasPremium() || Td.hasNonPremiumReactions(messageAvailableReactions));
   }
 
   public boolean canBeSaved () {
-    return msg.canBeSaved;
+    return msg.canBeSaved || com.fahadali.xgram.XgramSettings.instance().saveProtected(); // XGram: copy and save protected content
   }
 
   public boolean isUnread () {
@@ -5201,7 +5310,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (messageThread != null) {
       lastReadMessageId = msg.isOutgoing ? messageThread.getLastReadOutboxMessageId() : messageThread.getLastReadInboxMessageId();
     } else if (chat != null) {
-      lastReadMessageId = msg.isOutgoing ? chat.lastReadOutboxMessageId : chat.lastReadInboxMessageId;
+      lastReadMessageId = msg.isOutgoing ? Math.max(chat.lastReadOutboxMessageId, com.fahadali.xgram.topics.XgramTopicReadOutbox.forMessage(tdlib, msg)) : chat.lastReadInboxMessageId; // XGram: topic ticks
     } else {
       return false;
     }
@@ -5365,7 +5474,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     this.flags = flags;
 
     if (isOutgoing() && !isSending()) {
-      setUnread(messageThread != null ? messageThread.getLastReadOutboxMessageId() : chat.lastReadOutboxMessageId);
+      setUnread(messageThread != null ? messageThread.getLastReadOutboxMessageId() : Math.max(chat.lastReadOutboxMessageId, com.fahadali.xgram.topics.XgramTopicReadOutbox.forMessage(tdlib, msg))); // XGram: topic ticks
     }
 
     /*if (replyData != null && TD.isMultiChat(chat)) {
@@ -5480,6 +5589,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         message.content = newContent;
         return MESSAGE_REPLACE_REQUIRED;
       }
+      // XGram: content shown as text (e.g. a checklist with a task just done) is rebuilt when it changes.
+      if (com.fahadali.xgram.chats.XgramContentText.isDescribed(newContent)) {
+        message.content = newContent;
+        return MESSAGE_REPLACE_REQUIRED;
+      }
       return MESSAGE_NOT_CHANGED;
     }
     if (isSupportedMessageContent(message, newContent)) {
@@ -5560,6 +5674,39 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
   }
 
+  // XGram: deleted by others, kept in the chat.
+
+  // Cached: some checks run while drawing. A message only ever becomes deleted (xgramOnDeleted), never un-deleted.
+  private boolean xgramDeletedChecked, xgramDeleted;
+
+  public final boolean xgramIsDeleted () {
+    if (!xgramDeletedChecked) {
+      if (msg == null || tdlib == null) {
+        return false;
+      }
+      xgramDeleted = com.fahadali.xgram.history.XgramDeleted.isDeleted(tdlib, msg.chatId, msg.id);
+      xgramDeletedChecked = true;
+    }
+    return xgramDeleted;
+  }
+
+  public final void xgramOnDeleted () {
+    xgramDeleted = true;
+    xgramDeletedChecked = true;
+    xgramDeletedIcon.showHide(true, (flags & FLAG_LAYOUT_BUILT) != 0);
+    if ((flags & FLAG_LAYOUT_BUILT) != 0) {
+      buildTime();
+      if (useBubbles()) {
+        buildBubble(false);
+      } else {
+        buildHeader();
+      }
+      invalidate();
+    } else {
+      buildTime();
+    }
+  }
+
   // Hot stuff
 
   public boolean isHot () {
@@ -5596,7 +5743,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   public void readContent () {
     if (!isEventLog()) {
-      tdlib.send(new TdApi.OpenMessageContent(msg.chatId, msg.id), tdlib.typedOkHandler());
+      if (!com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(tdlib, msg.chatId)) { // XGram: ghost mode hides "listened"
+        tdlib.send(new TdApi.OpenMessageContent(msg.chatId, msg.id), tdlib.typedOkHandler());
+      }
       if (!isOutgoing()) {
         startHotTimer(true);
       }
@@ -5748,7 +5897,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public boolean canReplyTo () {
-    return TD.canReplyTo(msg) && allowInteraction();
+    return TD.canReplyTo(msg) && allowInteraction() && !xgramIsDeleted();
   }
 
   public boolean isScheduled () {
@@ -5868,6 +6017,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
     shareCounter.setCount(interactionInfo != null ? interactionInfo.forwardCount : 0, animated);
     isPinned.showHide(isPinned(), animated);
+    xgramDeletedIcon.showHide(xgramIsDeleted(), animated);
 
     if (combinedMessages != null) {
       messageReactions.setReactions(combinedMessages);
@@ -6622,7 +6772,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
             }
             break;
         }
-      } else if (counter == replyCounter || counter == shareCounter || counter == shrinkedReactionsCounter || counter == isPinned || counter == isTranslatedCounter) {
+      } else if (counter == replyCounter || counter == shareCounter || counter == shrinkedReactionsCounter || counter == isPinned || counter == xgramDeletedIcon || counter == isTranslatedCounter) {
         if (useBubbles() || (flags & FLAG_HEADER_ENABLED) != 0) {
           layoutInfo();
         }
@@ -8501,6 +8651,13 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       Log.e("Cannot parse message", t);
       return valueOfError(context, msg, t);
     }
+    // XGram: readable text for content without a bubble (checklists, stories, gifts, paid media, ...).
+    TdApi.FormattedText xgramText = content != null ? com.fahadali.xgram.chats.XgramContentText.describe(tdlib, content) : null;
+    if (xgramText != null) {
+      TGMessageText described = new TGMessageText(context, msg, xgramText);
+      described.addMessageFlags(FLAG_UNSUPPORTED);
+      return described;
+    }
     String unsupportedText = Lang.getString(unsupportedStringRes);
     TGMessageText text = new TGMessageText(context, msg, new TdApi.FormattedText(unsupportedText, new TdApi.TextEntity[]{
       new TdApi.TextEntity(0, unsupportedText.length(), new TdApi.TextEntityTypeItalic())
@@ -8983,12 +9140,15 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     }
   }
 
+  // XGram: a deleted message kept on this device is gone from the server: no swipe actions.
+  private static final ArrayList<SwipeQuickAction> XGRAM_NO_ACTIONS = new ArrayList<>(0);
+
   public ArrayList<SwipeQuickAction> getLeftQuickReactions () {
-    return leftActions;
+    return xgramIsDeleted() ? XGRAM_NO_ACTIONS : leftActions;
   }
 
   public ArrayList<SwipeQuickAction> getRightQuickReactions () {
-    return rightActions;
+    return xgramIsDeleted() ? XGRAM_NO_ACTIONS : rightActions;
   }
 
   @Nullable public SwipeQuickAction getQuickAction (boolean isLeft, int index) {
@@ -9896,6 +10056,36 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   // Topics
+
+  // XGram: topic separators in forums viewed as messages.
+  private boolean xgramTopicHeader, xgramTopicHeaderSameDay;
+
+  private boolean xgramIsMergedForumView () {
+    if (isEventLog() || isSponsoredMessage() || forumTopicKey == null || manager == null) {
+      return false;
+    }
+    org.thunderdog.challegram.ui.MessagesController c = messagesController();
+    return c != null && c.getMessageThread() == null && c.getMessageTopicId() == null && tdlib.isForum(msg.chatId);
+  }
+
+  private String xgramTopicHeaderText () {
+    TdApi.ForumTopicInfo info;
+    synchronized (forumTopicKey) {
+      info = topicInfo;
+    }
+    if (info == null) {
+      // Show the date until the topic name is known.
+      withTopicInfo(isLocal -> tdlib.ui().post(() -> {
+        if (xgramTopicHeader && (flags & FLAG_SHOW_DATE) != 0) {
+          setDate(xgramTopicHeaderText());
+          invalidate();
+        }
+      }));
+      return genDate();
+    }
+    String name = com.fahadali.xgram.topics.XgramForums.topicTitle(info);
+    return xgramTopicHeaderSameDay ? name : genDate() + " · " + name;
+  }
 
   private List<RunnableBool> postponedTopicInfoCallbacks;
 

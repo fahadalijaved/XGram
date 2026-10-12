@@ -1,0 +1,41 @@
+!
+name: "Mono"
+time: 1760227200
+wallpaper: "f2f2f2~e5e5e5~f8f8f8~eaeaea"
+@
+parentTheme: 1
+lightStatusBar: 1
+wallpaperUsageId: 2
+#
+attachContact, attachFile, attachInlineBot, attachLocation, attachPhoto, badgeMutedText, badgeText, bubble_mediaReply_noWallpaper, bubble_unread_noWallpaper, bubbleIn_background, circleButtonActiveIcon, circleButtonChat, circleButtonOverlay, circleButtonRegularIcon, circleButtonThemeIcon, filling, headerButtonIcon, headerLightBackground, overlayFilling, unread: #FFFFFF
+background, chatBackground, chatKeyboard, iv_chatLinkBackground, iv_preBlockBackground, iv_textCodeBackground, iv_textCodeBackgroundPressed: #EFEFEF
+background_icon, background_text, background_textLight, badgeMuted, bubbleIn_blockQuoteLine, bubbleIn_blockQuoteText, bubbleIn_time, chatListIcon, chatListMute, circleButtonChatIcon, circleButtonOverlayIcon, headerBadgeMuted, headerLightIcon, headerTabInactiveText, icon, iv_caption, iv_icon, iv_pageAuthor, iv_pageFooter, iv_pageSubtitle, playerCoverIcon, textLight, textPlaceholder, togglerInactive: #777777
+badge, bubbleIn_fillingActiveContent, bubbleIn_progress, bubbleIn_text, bubbleOut_fillingActiveContent, bubbleOut_text, bubbleOut_ticksRead, chatListAction, chatListVerify, chatSendButton, checkActive, circleButtonActive, circleButtonRegular, circleButtonTheme, controlActive, fillingActiveContent, headerBadge, headerButton, headerIcon, headerLightText, headerTabActive, headerTabActiveText, headerText, iconActive, inputActive, iv_blockQuoteLine, iv_header, iv_pageTitle, iv_text, iv_textCode, iv_textMarked, iv_textReference, messageVerticalLine, playerButton, playerButtonActive, profileSectionActive, profileSectionActiveContent, progress, promo, seekDone, sliderActive, text, textNeutral, textSearchQueryHighlight, ticks, ticksRead, togglerActive, togglerPositive, unreadText: #111111
+blockQuoteLine, blockQuoteText: #4C4C4C
+bubble_chatSeparator, bubbleIn_outline, bubbleIn_separator, bubbleOut_outline, chatSeparator, inputInactive, iv_separator, separator, shareSeparator: #E7E7E7
+bubbleIn_fillingActive, fillingActive: #77777726
+bubbleIn_fillingPositive, bubbleIn_fillingPositive_overlay, bubbleIn_textLink, bubbleOut_file, bubbleOut_fillingPositive, bubbleOut_fillingPositive_overlay, bubbleOut_waveformActive, file, inlineIcon, inlineOutline, inlineText, iv_textLink, iv_textMarkedLink, messageAuthor, notificationLink, snackbarUpdate, textLink: #333333
+bubbleIn_textLinkPressHighlight, iv_textLinkPressHighlight, textLinkPressHighlight: #33333344
+bubbleOut_background, messageSwipeBackground: #E4E4E4
+bubbleOut_blockQuoteLine, bubbleOut_blockQuoteText: #505050
+bubbleOut_chatCorrectChosenFilling, bubbleOut_chatCorrectFilling, bubbleOut_chatVerticalLine, bubbleOut_inlineIcon, bubbleOut_inlineOutline, bubbleOut_inlineText, bubbleOut_messageAuthor, bubbleOut_textLink, bubbleOut_ticks, messageCorrectChosenFilling, messageCorrectFilling: #0D0D0D
+bubbleOut_fillingActive: #7A7A7A26
+bubbleOut_progress, bubbleOut_separator, bubbleOut_time: #7A7A7A
+bubbleOut_textLinkPressHighlight: #0D0D0D40
+bubbleOut_waveformInactive, waveformInactive: #9A9A9A
+chatKeyboardButton: #EEEEEE
+controlInactive, sliderInactive, togglerInactiveBackground: #C2C2C2
+fileAttach, headerBackground, notification, notificationPlayer, passcode, playerCoverPlaceholder: #F7F7F7
+fillingPressed: #ECECEC
+headerPlaceholder: #11111110
+iconLight: #ADADAD
+iv_textReferenceOutline: #11111144
+iv_textReferenceOutlinePressed: #11111120
+messageSelection: #33333310
+placeholder: #1111110C
+seekEmpty: #F4F4F4
+seekReady: #CFCFCF
+textSelectionHighlight: #B8B8B8
+togglerActiveBackground, togglerPositiveBackground: #707070
+tooltip_outline: #E4E4E420
+waveformActive: #ACACAC

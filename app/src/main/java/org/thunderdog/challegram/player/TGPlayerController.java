@@ -1119,7 +1119,7 @@ public class TGPlayerController implements GlobalMessageListener, ProximityManag
       }
       if (newState != STATE_NONE) {
         notifyTrackState(targetListeners, tdlib, message.chatId, message.id, TD.getFileId(message), newState);
-        if (message.chatId != 0 && message.id != 0) {
+        if (message.chatId != 0 && message.id != 0 && !com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(tdlib, message.chatId)) { // XGram: ghost mode
           tdlib.client().send(new TdApi.OpenMessageContent(message.chatId, message.id), tdlib.silentHandler());
         }
       }

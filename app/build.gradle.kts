@@ -784,9 +784,9 @@ android {
       val (abi, abiVariant) = Abi.VARIANTS.entries.first { it.value.flavor == abiFlavor }
       val (sdk, sdkVariant) = Sdk.VARIANTS.entries.first { it.value.flavor == sdkFlavor }
 
-      val flavorVersionCode = if (variant.debuggable) 0 else {
-        sdk * 100 + abi
-      }
+      // XGram: debug builds use the same version code as release builds, so either can be installed
+      // over the other (both are signed with the same key) without uninstalling and losing the login.
+      val flavorVersionCode = sdk * 100 + abi
       val flavorVersionNameSuffix = StringBuilder().apply {
         if (config.extension != "none") {
           append("-${config.extension}")

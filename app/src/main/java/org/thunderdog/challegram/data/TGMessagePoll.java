@@ -1449,6 +1449,7 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
   @Override
   public boolean onTouchEvent (MessageView view, MotionEvent e) {
     boolean res = super.onTouchEvent(view, e);
+    if (xgramTimeTouchCaught()) return res; // XGram: the time tap must not also vote or open results
     return (!isEventLog() && clickHelper.onTouchEvent(view, e)) || res;
   }
 
@@ -1595,6 +1596,10 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
                   tdlib.send(new TdApi.SetPollAnswer(msg.chatId, msg.id, null), handler);
                 } else {
                   tdlib.send(new TdApi.SetPollAnswer(msg.chatId, msg.id, selectedOptionIds), handler);
+                  // XGram: ghost mode, voting reads the chat up to the poll like sending does.
+                  if (com.fahadali.xgram.XgramSettings.instance().ghostReadOnSend() && com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(tdlib, msg.chatId)) {
+                    com.fahadali.xgram.ghost.XgramGhost.readUpTo(tdlib, msg, msg.id);
+                  }
                 }
               }
             } else if (itemId == R.id.btn_viewResults) {
@@ -1677,6 +1682,10 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
         tdlib.send(new TdApi.SetPollAnswer(msg.chatId, msg.id, null), handler);
       } else {
         tdlib.send(new TdApi.SetPollAnswer(msg.chatId, msg.id, new int[] {optionId}), handler);
+        // XGram: ghost mode, voting reads the chat up to the poll like sending does.
+        if (com.fahadali.xgram.XgramSettings.instance().ghostReadOnSend() && com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(tdlib, msg.chatId)) {
+          com.fahadali.xgram.ghost.XgramGhost.readUpTo(tdlib, msg, msg.id);
+        }
       }
     }
   }

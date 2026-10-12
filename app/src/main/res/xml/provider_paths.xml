@@ -6,5 +6,9 @@
   <external-path name="files" path="." />
   <external-path name="miui" path="MIUI/ringtone/" />
   <files-path name="ringtones" path="ringtones/" />
+  <!-- XGram: media of deleted messages, opened from the history viewer -->
+  <files-path name="xgram_deleted_media" path="xgram_deleted_media/" />
+  <!-- XGram: exported chats, shared from Chat → Export chat -->
+  <files-path name="xgram_exports" path="xgram_exports/" />
 
 </paths>

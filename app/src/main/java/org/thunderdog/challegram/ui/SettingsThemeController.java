@@ -155,7 +155,7 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
           if (view != null)
             view.setChecked(item.isSelected(), isUpdate);
         } else if (itemId == R.id.btn_icon) {
-          v.setData(R.string.IconsBuiltIn);
+          v.setData(com.fahadali.xgram.appearance.XgramIconPack.name(com.fahadali.xgram.appearance.XgramIconPack.current())); // XGram
         } else if (itemId == R.id.btn_reduceMotion) {
           v.getToggler().setRadioEnabled(Settings.instance().needReduceMotion(), isUpdate);
         } else if (itemId == R.id.btn_autoplayGIFs) {
@@ -385,12 +385,9 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_forcePlainChannels, 0, R.string.ChatStyleBubblesChannel, R.id.btn_forcePlainChannels, !tdlib.settings().forcePlainModeInChannels()));
 
-      if (!tdlib.account().isDebug()) {
-        if (BuildConfig.DEBUG) {
-          items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-          items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_icon, 0, R.string.Icons).setDrawModifier(new DrawableModifier(R.drawable.baseline_star_20, R.drawable.baseline_account_balance_wallet_20, R.drawable.baseline_location_on_20, R.drawable.baseline_favorite_20)));
-        }
-      }
+      // XGram: icon packs for everyone (Telegram X showed this row in debug builds only)
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_icon, 0, R.string.Icons).setDrawModifier(new DrawableModifier(R.drawable.baseline_star_20, R.drawable.baseline_account_balance_wallet_20, R.drawable.baseline_location_on_20, R.drawable.baseline_favorite_20)));
 
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_chatListStyle, 0, R.string.ChatListStyle));
@@ -527,25 +524,7 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
       }*/
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
-      if (AppInstallationUtil.isAppSideLoaded(AppContext.get())) {
-        items.addAll(Arrays.asList(
-          new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.InAppUpdates),
-          new ListItem(ListItem.TYPE_SHADOW_TOP),
-          new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_updateAutomatically, 0, R.string.AutoUpdate)
-        ));
-        if (Settings.instance().getAutoUpdateMode() != Settings.AUTO_UPDATE_MODE_NEVER) {
-          items.addAll(newAutoUpdateConfigurationItems());
-        }
-      } else {
-        items.addAll(Arrays.asList(
-          new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.AppUpdates),
-          new ListItem(ListItem.TYPE_SHADOW_TOP),
-          new ListItem(ListItem.TYPE_SETTING, R.id.btn_checkUpdates, 0, R.string.CheckForUpdates),
-          new ListItem(ListItem.TYPE_SEPARATOR_FULL),
-          new ListItem(ListItem.TYPE_SETTING, R.id.btn_subscribeToBeta, 0, R.string.SubscribeToBeta)
-        ));
-      }
-      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      // XGram: no in-app updates section. Telegram X's updater installs Telegram X builds and betas.
       context().appUpdater().addListener(this);
 
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.Chats));
@@ -954,9 +933,7 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
       Settings.instance().toggleReduceMotion();
       adapter.updateValuedSettingById(R.id.btn_reduceMotion);
     } else if (viewId == R.id.btn_icon) {
-      SettingsCloudIconController c = new SettingsCloudIconController(context, tdlib);
-      c.setArguments(new SettingsCloudController.Args<>(this));
-      navigateTo(c);
+      navigateTo(new com.fahadali.xgram.appearance.XgramIconPacksController(context, tdlib)); // XGram
     } else if (viewId == R.id.btn_earpieceMode) {
       showEarpieceOptions(false);
     } else if (viewId == R.id.btn_earpieceModeVideo) {
@@ -1074,16 +1051,21 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
         return;
       }
 
+      // XGram: fonts are loaded once at startup, so restart right away instead of asking to.
       if (Settings.instance().useSystemFonts()) {
         showWarning(Lang.getString(R.string.RestartEffect), success -> {
-          Settings.instance().setUseSystemFonts(false);
-          adapter.updateValuedSettingById(R.id.btn_systemFonts);
+          if (success) {
+            Settings.instance().setUseSystemFonts(false);
+            adapter.updateValuedSettingById(R.id.btn_systemFonts);
+            UI.post(() -> com.fahadali.xgram.XgramApp.restart(context()), 300);
+          }
         });
       } else {
         showWarning(TextUtils.concat(Lang.getMarkdownString(this, R.string.UseSystemFontsHint), "\n\n", Lang.getString(R.string.RestartEffect)), success -> {
           if (success) {
             Settings.instance().setUseSystemFonts(true);
             adapter.updateValuedSettingById(R.id.btn_systemFonts);
+            UI.post(() -> com.fahadali.xgram.XgramApp.restart(context()), 300);
           }
         });
       }

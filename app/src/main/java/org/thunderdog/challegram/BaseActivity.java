@@ -555,6 +555,10 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     }
 
     setContentView(rootView);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && com.fahadali.xgram.XgramSettings.instance().blockContentCapture()) {
+      // XGram: the system and assistants can't read the text on screen.
+      rootView.setImportantForContentCapture(View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS);
+    }
 
     ThemeManager.instance().addThemeListener(this);
     checkAutoNightMode();
@@ -570,6 +574,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     Lang.addLanguageListener(this);
 
     navigation.getStack().addChangeListener(navigationStackChangeListener);
+    xgramTwoPane = new com.fahadali.xgram.layout.XgramTwoPane(this, navigation, contentView); // XGram: foldables, tablets
+    com.fahadali.xgram.XgramProxyRules.init(this); // XGram
+    xgramTwoPane.update();
     backPressedCallback.setEnabled(isBackPressActionAvailable(handleOnBackPress(false, false)));
     getOnBackPressedDispatcher().addCallback(backPressedCallback);
   }
@@ -1151,6 +1158,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       Tracer.onUiError(t);
       throw t;
     }
+    if (!isPasscodeShowing) {
+      UI.post(() -> com.fahadali.xgram.appearance.XgramMaterialYou.checkWallpaper(this), 600); // XGram: follow wallpaper colors
+    }
     checkAutoNightMode();
     setGestureNavigationEnabled(Screen.isGesturalNavigationEnabled(getResources()));
     Intents.revokeFileReadPermissions();
@@ -1208,6 +1218,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       throw t;
     }
     setOrientationLockFlags(0);
+    if (xgramTwoPane != null) {
+      xgramTwoPane.destroy(); // XGram
+    }
     if (navigation != null) {
       navigation.getStack().removeChangeListener(navigationStackChangeListener);
       navigation.destroy();
@@ -1338,6 +1351,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     super.onConfigurationChanged(newConfig);
     boolean needRecreate = Screen.checkDensity();
     navigation.configurationChanged(newConfig);
+    if (xgramTwoPane != null) {
+      xgramTwoPane.onConfigurationChanged(newConfig); // XGram: folding / unfolding
+    }
     if (isPasscodeShowing && passcodeController != null) {
       passcodeController.onConfigurationChanged(newConfig);
     }
@@ -1484,6 +1500,13 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     @BackPressMode int navigationBackPress = navigation.performOnBackPressed(fromTop, commit);
     if (navigationBackPress != BackPressMode.SYSTEM_ACTION_REQUIRED) {
       return navigationBackPress;
+    }
+    if (xgramTwoPane != null && navigation.getStackSize() <= 1) {
+      // XGram: nothing to close on the right, go back in the chat list pane.
+      @BackPressMode int leftBackPress = xgramTwoPane.performOnBackPressed(fromTop, commit);
+      if (leftBackPress != BackPressMode.SYSTEM_ACTION_REQUIRED) {
+        return leftBackPress;
+      }
     }
     if (drawer != null && drawer.isVisible()) {
       if (commit) {
@@ -2067,6 +2090,14 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
 
   public View getContentView () {
     return contentView;
+  }
+
+  // XGram: two-pane layout on wide screens.
+  private com.fahadali.xgram.layout.XgramTwoPane xgramTwoPane;
+
+  @Nullable
+  public com.fahadali.xgram.layout.XgramTwoPane xgramTwoPane () {
+    return xgramTwoPane;
   }
 
   public RootFrameLayout getRootView () {
@@ -2869,6 +2900,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   }
 
   private void setDisallowScreenshots (boolean disallow) {
+    if (disallow && com.fahadali.xgram.XgramSettings.instance().allowScreenshots() && !Passcode.instance().shouldDisallowScreenshots()) {
+      disallow = false; // XGram: screenshots in protected and secret chats (your own passcode setting still applies)
+    }
     setWindowFlags(disallow ? WindowManager.LayoutParams.FLAG_SECURE : 0, WindowManager.LayoutParams.FLAG_SECURE);
   }
 
@@ -3529,6 +3563,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     }
     if (oldTheme.isDark() != newTheme.isDark()) {
       updateWindowContextTheme();
+    }
+    if (xgramTwoPane != null) {
+      xgramTwoPane.onThemeChanged(); // XGram
     }
   }
 

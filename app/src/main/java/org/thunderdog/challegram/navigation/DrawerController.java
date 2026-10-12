@@ -281,39 +281,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       headerView.getExpanderView().setExpanded(true, false);
     }
 
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_contacts, R.drawable.baseline_perm_contact_calendar_24, R.string.Contacts));
-    if (Settings.instance().chatFoldersEnabled()) {
-      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_calls, R.drawable.baseline_call_24, R.string.Calls));
-    }
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
-    this.settingsClickBait = getSettingsClickBait();
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_settings, R.drawable.baseline_settings_24, R.string.Settings));
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_invite, R.drawable.baseline_person_add_24, R.string.InviteFriends));
-
-    this.proxyAvailable = Settings.instance().getAvailableProxyCount() > 0;
-    if (proxyAvailable) {
-      proxyItem.setSelected(Settings.instance().getEffectiveProxyId() != Settings.PROXY_ID_NONE);
-      items.add(proxyItem);
-    }
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_help, R.drawable.baseline_help_24, R.string.Help));
-    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_night, R.drawable.baseline_brightness_2_24, R.string.NightMode, R.id.btn_night, Theme.isDark()));
-    if (Test.NEED_CLICK) {
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_reportBug, R.drawable.baseline_bug_report_24, Test.CLICK_NAME, false));
-    }
-    if (BuildConfig.EXPERIMENTAL) {
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_featureToggles, R.drawable.outline_toggle_on_24, "Feature Toggles", false));
-    }
-    if (Settings.instance().inDeveloperMode()) {
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_tdlib_clearLogs, R.drawable.baseline_bug_report_24, "Clear TDLib logs", false));
-      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_tdlib_shareLogs, R.drawable.baseline_bug_report_24, "Send TDLib log", false));
-      /*if (BuildConfig.DEBUG) {
-        items.add(new SettingItem(SettingItem.TYPE_DRAWER_ITEM, R.id.btn_submitCrash, R.drawable.baseline_bug_report_24, "Crash app", false));
-      }*/
-    }
+    addMenuItems(items); // XGram: also rebuilt when side menu items are shown or hidden
 
     adapter = new SettingsAdapter(this) {
       @Override
@@ -763,6 +731,77 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   private boolean showingAccounts;
 
+  // Everything below the accounts. XGram: built here so the side menu settings can rebuild it at once.
+  private void addMenuItems (List<ListItem> items) {
+    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_contacts, R.drawable.baseline_perm_contact_calendar_24, R.string.Contacts));
+    // XGram: side menu items can be hidden (Settings → XGram → Side menu).
+    com.fahadali.xgram.XgramSettings xgram = com.fahadali.xgram.XgramSettings.instance();
+    if (!xgram.drawerItemHidden("hub")) {
+      // XGram: its settings, one tap from the chat list
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramHub, R.drawable.baseline_stars_24, R.string.XgramHub));
+    }
+    if (Settings.instance().chatFoldersEnabled() && !xgram.drawerItemHidden("calls")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_calls, R.drawable.baseline_call_24, R.string.Calls));
+    }
+    if (!xgram.drawerItemHidden("saved")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
+    }
+    this.settingsClickBait = getSettingsClickBait();
+    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_settings, R.drawable.baseline_settings_24, R.string.Settings));
+    if (!xgram.drawerItemHidden("invite")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_invite, R.drawable.baseline_person_add_24, R.string.InviteFriends));
+    }
+
+    this.proxyAvailable = Settings.instance().getAvailableProxyCount() > 0;
+    if (proxyAvailable) {
+      proxyItem.setSelected(Settings.instance().getEffectiveProxyId() != Settings.PROXY_ID_NONE);
+      items.add(proxyItem);
+    }
+    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_help, R.drawable.baseline_help_24, R.string.Help));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    if (!xgram.drawerItemHidden("night")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_night, R.drawable.baseline_brightness_2_24, R.string.NightMode, R.id.btn_night, Theme.isDark()));
+    }
+    if (!xgram.drawerItemHidden("ghost")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_xgramGhostMode, R.drawable.baseline_ghost_24, R.string.XgramGhostMode, R.id.btn_xgramGhostMode, xgram.isAnyGhostEnabled())); // XGram
+    }
+    if (Test.NEED_CLICK) {
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_reportBug, R.drawable.baseline_bug_report_24, Test.CLICK_NAME, false));
+    }
+    if (BuildConfig.EXPERIMENTAL) {
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_featureToggles, R.drawable.outline_toggle_on_24, "Feature Toggles", false));
+    }
+    if (Settings.instance().inDeveloperMode()) {
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_tdlib_clearLogs, R.drawable.baseline_bug_report_24, "Clear TDLib logs", false));
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_tdlib_shareLogs, R.drawable.baseline_bug_report_24, "Send TDLib log", false));
+      /*if (BuildConfig.DEBUG) {
+        items.add(new SettingItem(SettingItem.TYPE_DRAWER_ITEM, R.id.btn_submitCrash, R.drawable.baseline_bug_report_24, "Crash app", false));
+      }*/
+    }
+  }
+
+  /** XGram: shows or hides side menu items right away (Settings → XGram → Appearance → Side menu). */
+  public void xgramUpdateMenuItems () {
+    if (adapter == null) {
+      return;
+    }
+    int start = adapter.indexOfViewById(R.id.btn_contacts);
+    if (start == -1) {
+      return;
+    }
+    List<ListItem> items = adapter.getItems();
+    int oldCount = items.size() - start;
+    items.subList(start, items.size()).clear();
+    List<ListItem> fresh = new ArrayList<>();
+    addMenuItems(fresh);
+    items.addAll(fresh);
+    adapter.notifyItemRangeRemoved(start, oldCount);
+    adapter.notifyItemRangeInserted(start, fresh.size());
+  }
+
   private void fillAccountItems (List<ListItem> items) {
     ArrayList<TdlibAccount> accounts = TdlibManager.instance().getActiveAccounts();
     for (TdlibAccount account : accounts) {
@@ -856,6 +895,8 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       if (Test.NEED_CLICK) {
         Test.onClick(context);
       }
+    } else if (viewId == R.id.btn_xgramHub) {
+      openController(new com.fahadali.xgram.XgramSettingsController(context, context.currentTdlib())); // XGram
     } else if (viewId == R.id.btn_savedMessages) {
       openSavedMessages();
     } else if (viewId == R.id.btn_addAccount) {
@@ -885,6 +926,16 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       });
     } else if (viewId == R.id.btn_night) {
       ThemeManager.instance().toggleNightMode();
+    } else if (viewId == R.id.btn_xgramGhostMode) {
+      // XGram: quick ghost mode switch, like AyuGram's drawer toggle. Off turns every ghost option off.
+      com.fahadali.xgram.XgramSettings settings = com.fahadali.xgram.XgramSettings.instance();
+      boolean enable = !settings.isAnyGhostEnabled();
+      settings.setGhostModeEnabled(enable);
+      com.fahadali.xgram.ghost.XgramGhost.applyOnlineState();
+      int index = adapter.indexOfViewById(R.id.btn_xgramGhostMode);
+      if (index != -1) {
+        adapter.setToggled(adapter.getItems().get(index), enable);
+      }
     } else if (viewId == R.id.btn_bubble) {
       context().currentTdlib().settings().toggleChatStyle();
     } else if (viewId == R.id.btn_featureToggles) {
@@ -1056,7 +1107,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   public void open () {
     ViewController<?> c = UI.getCurrentStackItem(context());
-    if (c != null && c.useDrawer() && !c.isIntercepted()) {
+    // XGram: with two panes the menu button of the chat list pane opens the drawer whatever is open on the right.
+    boolean twoPane = context().xgramTwoPane() != null && context().xgramTwoPane().isActive();
+    if (c != null && (c.useDrawer() || twoPane) && !c.isIntercepted()) {
       prepare();
       open(0f);
     }
@@ -1246,6 +1299,12 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
     if (!isVisible) {
       context().getOverlayView().setAlpha(0f);
+
+      // XGram: ghost mode may have been changed in Settings since the drawer was built.
+      int ghostIndex = adapter != null ? adapter.indexOfViewById(R.id.btn_xgramGhostMode) : -1;
+      if (ghostIndex != -1) {
+        adapter.setToggled(adapter.getItems().get(ghostIndex), com.fahadali.xgram.XgramSettings.instance().isAnyGhostEnabled());
+      }
 
       if (Lang.rtl()) {
         contentView.setTranslationX(getScreenWidth());

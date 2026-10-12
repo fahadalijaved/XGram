@@ -476,6 +476,11 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     controller.showHidePinnedMessage(showHeaderPreview, messageThread.getOldestMessage());
   }
 
+  /** XGram: newer messages exist below what is loaded (so this isn't the bottom of the chat). */
+  public boolean xgramCanLoadBottom () {
+    return loader.canLoadBottom();
+  }
+
   public boolean shouldShowThreadHeaderPreview () {
     return loader.getMessageThread() != null && !inSpecialMode();
   }
@@ -598,11 +603,16 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   // Search
 
   public void openSearch (TdApi.Chat chat, String query, TdApi.MessageSender sender, TdApi.SearchMessagesFilter filter) {
-    loader.setChat(chat, null, null, MessagesLoader.SPECIAL_MODE_SEARCH, filter);
+    openSearch(chat, null, query, sender, filter);
+  }
+
+  // XGram: topicId narrows the search to one topic (Saved Messages by chat).
+  public void openSearch (TdApi.Chat chat, @Nullable TdApi.MessageTopic topicId, String query, TdApi.MessageSender sender, TdApi.SearchMessagesFilter filter) {
+    loader.setChat(chat, null, topicId, MessagesLoader.SPECIAL_MODE_SEARCH, filter);
     loader.setSearchParameters(query, sender, filter);
     adapter.setChatType(chat.type);
     if (filter != null && Td.isPinnedFilter(filter)) {
-      initPinned(chat.id, 1, 1);
+      initPinned(chat.id, null, 1, 1);
     }
     if (highlightMessageId != null) {
       loadFromMessage(highlightMessageId, highlightMode, true);
@@ -693,8 +703,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     }
   }
 
-  private void initPinned (long chatId, int initialLoadCount, int loadCount) {
-    this.pinnedMessages = new MessageListManager(tdlib, initialLoadCount, loadCount, pinnedMessageListener, chatId, 0, null, null, null, new TdApi.SearchMessagesFilterPinned());
+  private void initPinned (long chatId, @Nullable TdApi.MessageTopic topicId, int initialLoadCount, int loadCount) {
+    // XGram: inside a forum topic, only the topic's pinned messages.
+    this.pinnedMessages = new MessageListManager(tdlib, initialLoadCount, loadCount, pinnedMessageListener, chatId, 0, topicId instanceof TdApi.MessageTopicForum ? topicId : null, null, null, new TdApi.SearchMessagesFilterPinned());
     this.pinnedMessages.addMaxMessageIdListener(pinnedMessageAvailabilityChangeListener);
     this.pinnedMessages.addChangeListener(new MessageListManager.ChangeListener() {
       @Override
@@ -719,7 +730,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       // readOneShot = true;
     }
     if (chat.id != 0 && messageThread == null && !areScheduled && needPinnedMessages) {
-      initPinned(chat.id, 10, 50);
+      initPinned(chat.id, topicId, 10, 50);
     } else {
       this.pinnedMessages = null;
     }
@@ -765,6 +776,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       public boolean onMessageViewed (TdlibMessageViewer.Viewport viewport, View view, TdApi.Message message, long flags, long viewId, boolean allowRequest) {
         if (inSpecialMode() || !allowRequest)
           return false;
+        if (!controller.isInForceTouchMode() && com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(tdlib, message.chatId)) {
+          // XGram: ghost mode, the chat looks read on this device only.
+          com.fahadali.xgram.ghost.XgramLocalRead.onMessageViewed(tdlib, message);
+        }
         MessageProvider provider = (MessageProvider) view;
         TGMessage msg = provider.getMessage();
         if (msg.markAsViewed() || msg.containsUnreadReactions()) {
@@ -2273,6 +2288,13 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void updateMessagesDeleted (long chatId, long[] messageIds) {
+    // XGram: messages others deleted stay in the chat, marked as deleted.
+    if (!inSpecialMode()) {
+      messageIds = com.fahadali.xgram.history.XgramDeleted.keepInChat(this, tdlib, chatId, messageIds);
+      if (messageIds.length == 0) {
+        return;
+      }
+    }
     controller.removeReply(chatId, messageIds);
     controller.onMessagesDeleted(chatId, messageIds);
 
@@ -2546,7 +2568,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public boolean readMessagesDisabled () {
-    return controller.isInForceTouchMode() || Settings.instance().dontReadMessages();
+    return controller.isInForceTouchMode() || Settings.instance().dontReadMessages() ||
+      // XGram: ghost mode. Channels have no read receipts, so they are read normally.
+      com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(tdlib, loader.getChatId());
   }
 
   private boolean canRead () {
@@ -3421,13 +3445,22 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   @Override
   public void onNewMessage (final TdApi.Message message) {
     final ThreadInfo messageThread = loader.getMessageThread();
+    // XGram: inside a forum topic only its own messages; filters and shadow-banned senders.
+    TdApi.MessageTopic openTopic = loader.getMessageTopicId();
+    if (openTopic instanceof TdApi.MessageTopicForum && message.topicId != null && !Td.matchesTopic(message.topicId, openTopic)) {
+      return;
+    }
+    if (!inSpecialMode() && com.fahadali.xgram.chats.XgramFilters.isHidden(tdlib, message)) {
+      return;
+    }
     if (TD.isScheduled(message) == areScheduled()) {
       if (indexOfSentMessage(message.chatId, message.id) != -1)
         return;
       final TdApi.Chat chat = tdlib.chatStrict(message.chatId);
       final TGMessage parsedMessage = TGMessage.valueOf(this, message, chat, messageThread, chatAdmins);
       showMessage(chat.id, parsedMessage);
-    } else if (isFocused() && TD.isScheduled(message) && messageThread == null) {
+    } else if (isFocused() && TD.isScheduled(message) && messageThread == null && !com.fahadali.xgram.ghost.XgramGhostSend.isScheduleEnabled()) {
+      // XGram: ghost mode sends messages as scheduled ones; they show up in the chat once sent.
       controller.viewScheduledMessages(true);
     }
   }

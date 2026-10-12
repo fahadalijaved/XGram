@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram icon style "Turbo": the woven X -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:aapt="http://schemas.android.com/aapt"
+  android:width="108dp"
+  android:height="108dp"
+  android:viewportWidth="108"
+  android:viewportHeight="108">
+  <path android:pathData="M43.8,34.8 L73.2,64.2" android:strokeWidth="9.24" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.7" android:strokeColor="#FFFFFFFF" />
+  <path android:pathData="M42.739,75.867 L37.79,80.817" android:strokeWidth="2.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.5" android:strokeColor="#FFFFFFFF" />
+  <path android:pathData="M33.193,74.807 L26.829,81.171" android:strokeWidth="2.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.75" android:strokeColor="#FFFFFFFF" />
+  <path android:pathData="M32.133,65.261 L27.183,70.21" android:strokeWidth="2.4" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.5" android:strokeColor="#FFFFFFFF" />
+  <path android:pathData="M40.533,74 L55.976,58.557 L70.866,37.134 L49.443,52.024 L34,67.467 L33.354,68.276 L32.906,69.208 L32.675,70.216 L32.675,71.251 L32.906,72.26 L33.354,73.192 L34,74 L34.808,74.646 L35.74,75.094 L36.749,75.325 L37.784,75.325 L38.792,75.094 L39.724,74.646 Z" android:fillAlpha="0.18" android:fillColor="#FFFFFFFF" />
+  <path android:pathData="M43.8,70.734 L59.243,55.29 L74.133,33.867 L52.71,48.757 L37.266,64.2 L36.621,65.009 L36.172,65.941 L35.942,66.95 L35.942,67.984 L36.172,68.993 L36.621,69.925 L37.266,70.734 L38.075,71.379 L39.007,71.828 L40.016,72.058 L41.05,72.058 L42.059,71.828 L42.991,71.379 Z" android:fillAlpha="0.34" android:fillColor="#FFFFFFFF" />
+  <path android:pathData="M47.067,68.811 L62.51,53.368 L77.4,31.944 L55.976,46.834 L40.533,62.277 L39.888,63.086 L39.439,64.018 L39.209,65.027 L39.209,66.061 L39.439,67.07 L39.888,68.002 L40.533,68.811 L41.342,69.456 L42.274,69.905 L43.283,70.135 L44.317,70.135 L45.326,69.905 L46.258,69.456 Z" android:fillAlpha="0.14" android:fillColor="#FF000000" />
+  <path android:pathData="M47.067,67.467 L62.51,52.024 L77.4,30.6 L55.976,45.49 L40.533,60.933 L39.888,61.742 L39.439,62.674 L39.209,63.683 L39.209,64.717 L39.439,65.726 L39.888,66.658 L40.533,67.467 L41.342,68.112 L42.274,68.561 L43.283,68.791 L44.317,68.791 L45.326,68.561 L46.258,68.112 Z" android:fillColor="#FFFFFFFF" />
+</vector>

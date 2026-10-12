@@ -1,0 +1,44 @@
+!
+name: "Stardust"
+time: 1760227200
+wallpaper: "dfe6ff~e9dcff~f8dcf0~e2d4ff"
+@
+parentTheme: 1
+wallpaperUsageId: 2
+#
+attachContact, attachFile, attachInlineBot, attachLocation, attachPhoto, badgeMutedText, badgeText, bubble_mediaReply_noWallpaper, bubble_unread_noWallpaper, bubbleIn_background, circleButtonActiveIcon, circleButtonChat, circleButtonOverlay, circleButtonRegularIcon, circleButtonThemeIcon, filling, headerBadge, headerButtonIcon, headerIcon, headerLightBackground, headerTabActive, headerTabActiveText, headerText, overlayFilling, unread: #FFFFFF
+background, chatBackground, chatKeyboard, iv_chatLinkBackground, iv_preBlockBackground, iv_textCodeBackground, iv_textCodeBackgroundPressed: #F2EFFD
+background_icon, background_text, background_textLight, badgeMuted, bubbleIn_blockQuoteLine, bubbleIn_blockQuoteText, bubbleIn_time, chatListIcon, chatListMute, circleButtonChatIcon, circleButtonOverlayIcon, headerLightIcon, icon, iv_caption, iv_icon, iv_pageAuthor, iv_pageFooter, iv_pageSubtitle, playerCoverIcon, textLight, textPlaceholder, togglerInactive: #857DA3
+badge, bubbleOut_ticksRead, chatListAction, chatListVerify, checkActive, circleButtonActive, circleButtonRegular, circleButtonTheme, headerButton, iconActive, messageVerticalLine, playerButtonActive, seekDone, sliderActive, ticks, ticksRead, unreadText: #976FFF
+blockQuoteLine, blockQuoteText: #5F5A71
+bubble_chatSeparator, bubbleIn_outline, bubbleIn_separator, bubbleOut_outline, chatSeparator, inputInactive, iv_separator, separator, shareSeparator: #EAE9EC
+bubbleIn_fillingActive, fillingActive: #857DA326
+bubbleIn_fillingActiveContent, bubbleIn_text, bubbleOut_fillingActiveContent, bubbleOut_text, fillingActiveContent, headerLightText, iv_blockQuoteLine, iv_header, iv_pageTitle, iv_text, iv_textCode, iv_textMarked, iv_textReference, playerButton, text: #2A2342
+bubbleIn_fillingPositive, bubbleIn_fillingPositive_overlay, bubbleIn_textLink, bubbleOut_file, bubbleOut_fillingPositive, bubbleOut_fillingPositive_overlay, bubbleOut_waveformActive, file, inlineIcon, inlineOutline, inlineText, iv_textLink, iv_textMarkedLink, messageAuthor, notificationLink, snackbarUpdate, textLink: #6B93FF
+bubbleIn_progress, chatSendButton, controlActive, inputActive, profileSectionActive, profileSectionActiveContent, progress, promo, textNeutral, textSearchQueryHighlight, togglerActive, togglerPositive: #E46ACE
+bubbleIn_textLinkPressHighlight, iv_textLinkPressHighlight, textLinkPressHighlight: #6B93FF44
+bubbleOut_background, messageSwipeBackground: #EADFFF
+bubbleOut_blockQuoteLine, bubbleOut_blockQuoteText: #645B7B
+bubbleOut_chatCorrectChosenFilling, bubbleOut_chatCorrectFilling, bubbleOut_chatVerticalLine, bubbleOut_inlineIcon, bubbleOut_inlineOutline, bubbleOut_inlineText, bubbleOut_messageAuthor, bubbleOut_textLink, bubbleOut_ticks, messageCorrectChosenFilling, messageCorrectFilling: #7153BF
+bubbleOut_fillingActive: #8A81A026
+bubbleOut_progress, bubbleOut_separator, bubbleOut_time: #8A81A0
+bubbleOut_textLinkPressHighlight: #7153BF40
+bubbleOut_waveformInactive, waveformInactive: #A79DBD
+chatKeyboardButton: #F0F0F2
+controlInactive, sliderInactive, togglerInactiveBackground: #C8C4D6
+fileAttach, playerCoverPlaceholder: #F8F7FE
+fillingPressed: #EEEDF0
+headerBackground, notification, notificationPlayer, passcode: #8A6CFF
+headerBadgeMuted, headerTabInactiveText: #DCD3FF
+headerPlaceholder: #FFFFFF10
+iconLight: #B6B1C8
+iv_textReferenceOutline: #2A234244
+iv_textReferenceOutlinePressed: #2A234220
+messageSelection: #6B93FF10
+placeholder: #2A23420C
+seekEmpty: #F6F4FE
+seekReady: #D4D2DF
+textSelectionHighlight: #E0D4FF
+togglerActiveBackground, togglerPositiveBackground: #C1A9FF
+tooltip_outline: #EADFFF20
+waveformActive: #DBCDFF

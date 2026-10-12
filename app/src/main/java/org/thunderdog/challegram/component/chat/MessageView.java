@@ -624,6 +624,12 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
   }
 
   public static Object fillMessageOptions (MessagesController m, TGMessage msg, @Nullable TdApi.ChatMember sender, IntList ids, IntList icons, StringList strings, boolean isMore) {
+    Object tag = fillMessageOptionsImpl(m, msg, sender, ids, icons, strings, isMore);
+    com.fahadali.xgram.chats.XgramMessageMenu.filter(ids, icons, strings); // XGram: only what the user wants
+    return tag;
+  }
+
+  private static Object fillMessageOptionsImpl (MessagesController m, TGMessage msg, @Nullable TdApi.ChatMember sender, IntList ids, IntList icons, StringList strings, boolean isMore) {
     TdApi.Message newestMessage = msg.getNewestMessage();
     TdApi.MessageContent content = newestMessage.content;
     int messageCount = msg.getMessageCount();
@@ -657,6 +663,19 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         icons.append(R.drawable.baseline_report_24);
       }
 
+      return null;
+    }
+
+    if (msg.xgramIsDeleted()) {
+      // XGram: a deleted message only exists on this device, TDLib can't reply to or forward it.
+      if (msg.canCopyText()) {
+        ids.append(R.id.btn_messageCopy);
+        strings.append(R.string.Copy);
+        icons.append(R.drawable.baseline_content_copy_24);
+      }
+      ids.append(R.id.btn_xgramMessageDetails);
+      strings.append(R.string.XgramMessageDetails);
+      icons.append(R.drawable.baseline_info_24);
       return null;
     }
 
@@ -881,6 +900,25 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       ids.append(R.id.btn_messageCopyLink);
       strings.append(R.string.CopyLink);
       icons.append(R.drawable.baseline_link_24);
+    }
+
+    // XGram: ghost mode, mark the chat read on the server up to this message.
+    if (!isMore && !msg.isSponsoredMessage() && !msg.isOutgoing() && isSent && msg.getMessage().id != 0 &&
+      com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(msg.tdlib(), msg.getChatId())) {
+      ids.append(R.id.btn_xgramReadUpToHere);
+      strings.append(R.string.XgramReadUpToHere);
+      icons.append(R.drawable.baseline_done_all_24);
+    }
+
+    // XGram: message details (IDs, exact dates, file info)
+    if (!isMore && !msg.isSponsoredMessage() && msg.getMessage().id != 0) {
+      ids.append(R.id.btn_xgramMessageDetails);
+      strings.append(R.string.XgramMessageDetails);
+      icons.append(R.drawable.baseline_info_24);
+    }
+    if (!isMore) {
+      // XGram: save to Saved Messages, repeat, edit history, messages by sender, clear from cache.
+      com.fahadali.xgram.chats.XgramMessageActions.fill(m, msg, ids, icons, strings);
     }
 
     if (!isMore && msg.canBeSaved() && msg.canCopyText()) {

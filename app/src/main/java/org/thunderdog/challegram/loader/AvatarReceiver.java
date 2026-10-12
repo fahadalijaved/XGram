@@ -527,6 +527,7 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
         break;
       }
       case DataType.SPECIFIC_FILE:
+      case DataType.SPECIFIC_PHOTO_INFO: // XGram: a community's photo, shaped like a forum's
       case DataType.PLACEHOLDER:
       case DataType.USER: {
         setIsForum(!BitwiseUtils.hasFlag(options, Options.FORCE_IGNORE_FORUM) && BitwiseUtils.hasFlag(options, Options.FORCE_FORUM), isUpdate);
@@ -1131,6 +1132,12 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
       float forumAvatarRadius = forumAvatarRadiusPropertyId != 0 ? Theme.getProperty(forumAvatarRadiusPropertyId) : -1.0f;
       if (forumAvatarRadius == -1.0f) {
         forumAvatarRadius = Theme.getProperty(PropertyId.AVATAR_RADIUS_FORUM);
+      }
+      // XGram: avatar corners setting, for every avatar including groups with topics.
+      float xgramFactor = com.fahadali.xgram.XgramSettings.instance().avatarRadiusFactor();
+      if (xgramFactor >= 0f) {
+        defaultAvatarRadius = xgramFactor;
+        forumAvatarRadius = xgramFactor;
       }
       float radiusFactor = MathUtils.clamp(
         MathUtils.fromTo(

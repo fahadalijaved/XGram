@@ -366,6 +366,7 @@ public class TdlibUi extends Handler {
           }
 
           if (deleteAll) {
+            com.fahadali.xgram.history.XgramDeleted.noteSelfClearedChat(tdlib, chatId); // XGram
             tdlib.send(new TdApi.DeleteChatMessagesBySender(chatId, senderId), tdlib.typedOkHandler());
           } else {
             tdlib.deleteMessages(chatId, messageIds, true);
@@ -516,7 +517,7 @@ public class TdlibUi extends Handler {
         noRevokeCount++;
       }
     }
-    boolean revokeByDefault = outgoingMessageCount > 0;
+    boolean revokeByDefault = outgoingMessageCount > 0 || com.fahadali.xgram.XgramSettings.instance().deleteForEveryoneByDefault(); // XGram
     if (optionalCount == 0) {
       return false;
     }
@@ -1761,6 +1762,13 @@ public class TdlibUi extends Handler {
     public TdApi.SearchMessagesFilter filter;
     public TdApi.InternalLinkTypeVideoChat videoChatOrLiveStreamInvitation;
     public TdApi.FormattedText fillDraft;
+    // XGram: open forums as merged history even when they are shown as topics.
+    public boolean xgramSkipForumRouting;
+
+    public ChatOpenParameters xgramSkipForumRouting () {
+      this.xgramSkipForumRouting = true;
+      return this;
+    }
 
     private void onDone () {
       if (onDone != null) {
@@ -2155,6 +2163,30 @@ public class TdlibUi extends Handler {
       return;
     }
 
+    // XGram: forums shown as topics open their topic list, forums with tabs open their last tab,
+    // unless something specific was requested.
+    if (messageThread == null && messageTopicId == null && filter == null && !onlyScheduled &&
+      shareItem == null && voiceChatInvitation == null && forceDraft == null &&
+      (params == null || (!params.xgramSkipForumRouting && StringUtils.isEmpty(params.searchQuery) &&
+        (!params.highlightSet || com.fahadali.xgram.topics.XgramForums.isResumePosition(params.highlightMode))))) {
+      if (com.fahadali.xgram.topics.XgramForums.hasForumTabs(tdlib, chat)) {
+        ChatOpenParameters tabParams = params != null ? params : new ChatOpenParameters();
+        com.fahadali.xgram.topics.XgramForums.prepareTabsOpen(tdlib, chat, tabParams);
+        openChat(context, chat, tabParams);
+        return;
+      }
+      if (com.fahadali.xgram.topics.XgramForums.shouldOpenTopicList(tdlib, chat)) {
+        com.fahadali.xgram.topics.XgramForums.openTopicList(context, chat);
+        if (after != null) {
+          after.runWithLong(chat.id);
+        }
+        if (params != null) {
+          params.onDone();
+        }
+        return;
+      }
+    }
+
     final int highlightMode;
     final MessageId highlightMessageId;
     if (params != null && params.highlightSet) {
@@ -2361,7 +2393,7 @@ public class TdlibUi extends Handler {
       navigation.getStack().insert(c, 0);
     } else {
       ViewController<?> c = navigation.getCurrentStackItem();
-      if (c instanceof MessagesController && !tdlib.isSelfChat(chat) && ((MessagesController) c).getHeaderChatId() == chat.id && !((MessagesController) c).inPreviewMode()) {
+      if (c instanceof MessagesController && !tdlib.isSelfChat(chat) && ((MessagesController) c).getHeaderChatId() == chat.id && !((MessagesController) c).inPreviewMode() && !((MessagesController) c).xgramShowsTopicIcon()) {
         profileController.setShareCustomHeaderView(true);
       } else if (c instanceof ProfileController && ((ProfileController) c).isSameProfile(profileController)) {
         profileController.getValue();
@@ -2523,11 +2555,18 @@ public class TdlibUi extends Handler {
             openMessage(context, messageThread.getChatId(), messageId, messageThread, openParameters);
           }
         });
+      } else if (messageLink.topicId instanceof TdApi.MessageTopicForum) {
+        // XGram: open forum topic links inside the topic.
+        com.fahadali.xgram.topics.XgramForums.openTopicLink(context, messageLink.chatId, (TdApi.MessageTopicForum) messageLink.topicId, messageLink.message, openParameters);
       } else {
-        // TODO: properly handle messageLink.topicId
         openMessage(context, messageLink.chatId, messageId, openParameters);
       }
     } else {
+      if (messageLink.topicId instanceof TdApi.MessageTopicForum) {
+        // XGram: link to a forum topic without a specific message.
+        com.fahadali.xgram.topics.XgramForums.openTopicLink(context, messageLink.chatId, (TdApi.MessageTopicForum) messageLink.topicId, null, openParameters);
+        return;
+      }
       if (tdlib.chat(messageLink.chatId) != null) {
         UI.showToast(tdlib.isChannel(messageLink.chatId) ? R.string.PostNotFound : R.string.MessageNotFound, Toast.LENGTH_SHORT);
       }
@@ -2987,7 +3026,8 @@ public class TdlibUi extends Handler {
     });
   }
 
-  private void openUrlImpl (final TdlibDelegate context, final String url, @Nullable UrlOpenParameters options, @Nullable RunnableBool after) {
+  private void openUrlImpl (final TdlibDelegate context, final String rawUrl, @Nullable UrlOpenParameters options, @Nullable RunnableBool after) {
+    final String url = com.fahadali.xgram.chats.XgramLinks.clean(rawUrl); // XGram: no tracking parameters
     if (!UI.inUiThread()) {
       tdlib.ui().post(() -> openUrlImpl(context, url, options, after));
       return;
@@ -4819,6 +4859,7 @@ public class TdlibUi extends Handler {
               switch (result.getConstructor()) {
                 case TdApi.Ok.CONSTRUCTOR: {
                   if (ChatId.isBasicGroup(chatId)) {
+                    com.fahadali.xgram.history.XgramDeleted.noteSelfClearedChat(tdlib, chatId); // XGram
                     tdlib.send(new TdApi.DeleteChatHistory(chatId, true, false), tdlib.typedOkHandler());
                   }
                   break;
@@ -4938,6 +4979,7 @@ public class TdlibUi extends Handler {
         })
         .setIntDelegate((id, result) -> {
           boolean clearHistory = result.get(R.id.btn_clearChatHistory) == R.id.btn_clearChatHistory;
+          com.fahadali.xgram.history.XgramDeleted.noteSelfClearedChat(tdlib, chatId); // XGram
           tdlib.send(new TdApi.DeleteChatHistory(chatId, false, clearHistory), tdlib.typedOkHandler());
           U.run(after);
         }));
@@ -4970,6 +5012,7 @@ public class TdlibUi extends Handler {
             if (needSecondaryConfirm && !isSecondaryConfirm) {
               showClearHistoryConfirm(context, chatId, after, true);
             } else {
+              com.fahadali.xgram.history.XgramDeleted.noteSelfClearedChat(tdlib, chatId); // XGram
               tdlib.send(new TdApi.DeleteChatHistory(chatId, false, revoke), tdlib.typedOkHandler());
               U.run(after);
             }
@@ -5107,6 +5150,7 @@ public class TdlibUi extends Handler {
               .setIntDelegate((id, result) -> {
                 boolean clearHistory = result.get(R.id.btn_clearChatHistory) == R.id.btn_clearChatHistory;
                 if (clearHistory) {
+                  com.fahadali.xgram.history.XgramDeleted.noteSelfClearedChat(tdlib, chatId); // XGram
                   tdlib.client().send(new TdApi.DeleteChatHistory(chatId, true, true), object -> {
                     if (object.getConstructor() == TdApi.Error.CONSTRUCTOR) {
                       Log.e("Cannot clear secret chat history, secretChatId:%d, error: %s", ChatId.toSecretChatId(chatId), TD.toErrorString(object));

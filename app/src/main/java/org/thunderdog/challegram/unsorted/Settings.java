@@ -7284,7 +7284,8 @@ public class Settings {
   }
 
   public boolean showPeerIds () {
-    return isExperimentEnabled(EXPERIMENT_FLAG_SHOW_PEER_IDS);
+    return isExperimentEnabled(EXPERIMENT_FLAG_SHOW_PEER_IDS) ||
+      com.fahadali.xgram.XgramSettings.instance().showPeerIds(); // XGram
   }
 
   @Nullable

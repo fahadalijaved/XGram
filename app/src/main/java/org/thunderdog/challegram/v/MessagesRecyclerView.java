@@ -21,6 +21,7 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.thunderdog.challegram.component.attach.CustomItemAnimator;
@@ -270,6 +271,41 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
       return true;
     }
     return res;
+  }
+
+  // XGram: pull up for the next unread channel / topic
+  @Nullable private com.fahadali.xgram.chats.XgramPullToNext xgramPull;
+
+  public void xgramSetPullToNext (@Nullable com.fahadali.xgram.chats.XgramPullToNext pull) {
+    this.xgramPull = pull;
+  }
+
+  @Override
+  public boolean dispatchTouchEvent (MotionEvent e) {
+    if (xgramPull != null && xgramPull.onTouchEvent(this, e)) {
+      if (xgramPull.needsCancel()) {
+        MotionEvent cancel = MotionEvent.obtain(e);
+        cancel.setAction(MotionEvent.ACTION_CANCEL);
+        super.dispatchTouchEvent(cancel); // stop scrolling, pressing and swipe-to-reply
+        cancel.recycle();
+      }
+      return true;
+    }
+    return super.dispatchTouchEvent(e);
+  }
+
+  @Override
+  public void draw (android.graphics.Canvas c) {
+    float offset = xgramPull != null ? xgramPull.getOffset() : 0f;
+    if (offset > 0f) {
+      int save = c.save();
+      c.translate(0, -offset);
+      super.draw(c);
+      c.restoreToCount(save);
+      xgramPull.draw(c, getMeasuredWidth(), getMeasuredHeight());
+    } else {
+      super.draw(c);
+    }
   }
 
   private boolean listeningClick;

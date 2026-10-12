@@ -178,6 +178,7 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   private TGChat chat;
   private final AvatarReceiver avatarReceiver;
+  private final android.graphics.RectF xgramCardRect = new android.graphics.RectF();
   private final ComplexReceiver emojiStatusReceiver;
   private final ComplexReceiver textMediaReceiver;
   private final ComplexReceiver reactionsReceiver;
@@ -376,12 +377,33 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
           this.tdlib.settings().addUserPreferenceChangeListener(this);
         }
       }
-      if (chat != null) {
+      if (chat != null && chat.xgramCommunityId() == 0) {
         setPreviewChatId(chat.getChatList(), chat.getChatId(), null);
       } else {
         setPreviewChatId(null, 0, null);
       }
-      if (chat != null && chat.isArchive()) {
+      if (chat != null && chat.xgramCommunityId() != 0) {
+        // XGram: holding a community row previews the community, not one of its chats.
+        final long communityId = chat.xgramCommunityId();
+        setCustomControllerProvider(new CustomControllerProvider() {
+          @Override
+          public boolean needsForceTouch (BaseView v, float x, float y) {
+            return Settings.instance().needPreviewChatOnHold();
+          }
+
+          @Override
+          public boolean onSlideOff (BaseView v, float x, float y, @Nullable ViewController<?> openPreview) {
+            return false;
+          }
+
+          @Override
+          public ViewController<?> createForceTouchPreview (BaseView v, float x, float y) {
+            com.fahadali.xgram.chats.XgramCommunityController c = new com.fahadali.xgram.chats.XgramCommunityController(getContext(), tdlib);
+            c.setArguments(communityId);
+            return c;
+          }
+        });
+      } else if (chat != null && chat.isArchive()) {
         setCustomControllerProvider(new CustomControllerProvider() {
           @Override
           public boolean needsForceTouch (BaseView v, float x, float y) {
@@ -449,7 +471,9 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     requestTextContent();
     requestEmojiStatus();
     requestReactionFiles();
-    if (chat != null) {
+    if (chat != null && chat.xgramCommunityId() != 0) {
+      xgramRequestCommunityAvatar();
+    } else if (chat != null) {
       AvatarPlaceholder.Metadata avatarPlaceholder = chat.getAvatarPlaceholder();
       if (avatarPlaceholder != null) {
         avatarReceiver.requestPlaceholder(tdlib, avatarPlaceholder, AvatarReceiver.Options.SHOW_ONLINE);
@@ -466,8 +490,21 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     return c == null || c.getParentOrSelf().getAttachState();
   }
 
+  // XGram: a community row shows the community's photo (or its letters) in a rounded square.
+  private void xgramRequestCommunityAvatar () {
+    TdApi.Community community = tdlib.cache().community(chat.xgramCommunityId());
+    if (community != null && community.photo != null) {
+      avatarReceiver.requestSpecific(tdlib, community.photo, AvatarReceiver.Options.FORCE_FORUM);
+    } else {
+      String name = community != null && !community.name.isEmpty() ? community.name : tdlib.chatTitle(chat.getChatId());
+      avatarReceiver.requestPlaceholder(tdlib, new AvatarPlaceholder.Metadata(tdlib.chatAccentColor(chat.getChatId()), org.thunderdog.challegram.data.TD.getLetters(name)), AvatarReceiver.Options.FORCE_FORUM);
+    }
+  }
+
   public void invalidateAvatarReceiver () {
-    if (chat != null) {
+    if (chat != null && chat.xgramCommunityId() != 0) {
+      xgramRequestCommunityAvatar();
+    } else if (chat != null) {
       avatarReceiver.requestChat(tdlib, chat.getChatId(), AvatarReceiver.Options.SHOW_ONLINE);
     } else {
       avatarReceiver.clear();
@@ -575,6 +612,8 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
     if (isDragging) {
       c.drawColor(ColorUtils.alphaColor(.8f, Theme.fillingColor()));
+    } else if (com.fahadali.xgram.layout.XgramTwoPane.isHighlighted(tdlib, chat.getChatId())) {
+      c.drawColor(ColorUtils.alphaColor(.6f, Theme.getColor(ColorId.fillingPressed))); // XGram: chat open in the right pane, the ripple stays visible
     }
 
     c.drawText(chat.getTime(), (rtl ? viewWidth - chat.getTimeLeft() - chat.getTimeWidth() : chat.getTimeLeft()), getTitleTop(chatListMode), timePaint);
@@ -729,6 +768,16 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
     avatarReceiver.forceAllowOnline(!isSelected.getValue(), 1f - isSelected.getFloatValue());
     layoutReceiver();
+    if (chat.xgramCommunityId() != 0) {
+      // XGram: two cards behind the photo, the community's other chats (as in Telegram).
+      float radius = avatarReceiver.getDisplayRadius();
+      int color = Theme.getColor(ColorId.text);
+      for (int i = 2; i >= 1; i--) {
+        float shift = Screen.dp(4f) * i * (rtl ? 1 : -1), inset = Screen.dp(3.5f) * i;
+        xgramCardRect.set(avatarReceiver.getLeft() + shift, avatarReceiver.getTop() + inset, avatarReceiver.getRight() + shift, avatarReceiver.getBottom() - inset);
+        c.drawRoundRect(xgramCardRect, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(i == 1 ? .14f : .07f, color)));
+      }
+    }
     if (avatarReceiver.needPlaceholder()) {
       avatarReceiver.drawPlaceholder(c);
     }

@@ -334,12 +334,40 @@ public class Lang {
 
   private static String getAndroidString (@StringRes int resId) throws Resources.NotFoundException {
     // TODO non-current languagePackInfo
-    return UI.getResources().getString(resId);
+    return brand(UI.getResources().getString(resId));
+  }
+
+  // XGram: built-in and cloud (translations.telegram.org) strings name Telegram X; show the app's own name.
+  private static final String UPSTREAM_APP_NAME = "Telegram X";
+
+  private static String brand (String value) {
+    if (value == null || value.indexOf(UPSTREAM_APP_NAME) == -1 || UPSTREAM_APP_NAME.equals(BuildConfig.PROJECT_NAME)) {
+      return value;
+    }
+    return value.replace(UPSTREAM_APP_NAME, BuildConfig.PROJECT_NAME);
+  }
+
+  private static TdApi.LanguagePackStringValueOrdinary brand (TdApi.LanguagePackStringValueOrdinary string) {
+    if (string == null) {
+      return null;
+    }
+    String value = brand(string.value);
+    return value == string.value ? string : new TdApi.LanguagePackStringValueOrdinary(value);
+  }
+
+  private static TdApi.LanguagePackStringValuePluralized brand (TdApi.LanguagePackStringValuePluralized string) {
+    if (string == null) {
+      return null;
+    }
+    return new TdApi.LanguagePackStringValuePluralized(
+      brand(string.zeroValue), brand(string.oneValue), brand(string.twoValue),
+      brand(string.fewValue), brand(string.manyValue), brand(string.otherValue)
+    );
   }
 
   private static String getAndroidString (@StringRes int resId, Object... formatArgs) {
     // TODO non-current languagePackInfo
-    return UI.getResources().getString(resId, formatArgs);
+    return brand(UI.getResources().getString(resId, formatArgs));
   }
 
   private static final int FLAG_LOWERCASE = 1;
@@ -3685,6 +3713,7 @@ public class Lang {
     TdApi.LanguagePackStringValueOrdinary string = queryTdlibStringValue(key, language.id);
     if (string == null && !StringUtils.isEmpty(language.baseLanguagePackId))
       string = queryTdlibStringValue(key, language.baseLanguagePackId);
+    string = brand(string); // XGram
     if (cacheKey != null) {
       putCachedString(cacheKey, string);
     }
@@ -3720,6 +3749,7 @@ public class Lang {
     TdApi.LanguagePackStringValuePluralized string = queryTdlibStringPluralized(key, language.id);
     if (string == null && !StringUtils.isEmpty(language.baseLanguagePackId))
       string = queryTdlibStringPluralized(key, language.baseLanguagePackId);
+    string = brand(string); // XGram
     if (cacheKey != null) {
       putCachedString(cacheKey, string);
     }

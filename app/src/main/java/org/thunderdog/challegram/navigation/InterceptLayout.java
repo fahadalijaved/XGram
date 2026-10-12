@@ -100,6 +100,10 @@ public class InterceptLayout extends FrameLayoutFix implements FactorAnimator.St
   @Override
   protected void onLayout (boolean changed, int left, int top, int right, int bottom) {
     super.onLayout(changed, left, top, right, bottom);
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = ((BaseActivity) getContext()).xgramTwoPane();
+    if (twoPane != null) {
+      twoPane.onLayout(this); // XGram: chat list | chat
+    }
     if (scheduledAnimator != null) {
       scheduledAnimator.animateTo(scheduledAnimationFactor);
       scheduledAnimator = null;
@@ -109,6 +113,10 @@ public class InterceptLayout extends FrameLayoutFix implements FactorAnimator.St
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = ((BaseActivity) getContext()).xgramTwoPane();
+    if (twoPane != null) {
+      twoPane.onMeasure(this); // XGram: chat list | chat
+    }
     UI.getContext(getContext()).applyContentTranslation(this);
   }
 }

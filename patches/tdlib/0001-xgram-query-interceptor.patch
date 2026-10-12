@@ -1,0 +1,31 @@
+diff --git a/src/main/java/org/drinkless/tdlib/Client.java b/src/main/java/org/drinkless/tdlib/Client.java
+index 4e74eda..04194ef 100644
+--- a/src/main/java/org/drinkless/tdlib/Client.java
++++ b/src/main/java/org/drinkless/tdlib/Client.java
+@@ -54,6 +54,15 @@ public final class Client {
+         void onLogMessage(int verbosityLevel, String message);
+     }
+ 
++    /**
++     * XGram: sees (and may adjust) every query before it is sent. Null unless a feature needs it.
++     */
++    public interface QueryInterceptor {
++        void onSend(Client client, TdApi.Function<?> query);
++    }
++
++    public static volatile QueryInterceptor queryInterceptor;
++
+     /**
+      * Exception class thrown when TDLib error occurred while performing {@link #execute(TdApi.Function)}.
+      */
+@@ -84,6 +93,10 @@ public final class Client {
+      *                         defaultExceptionHandler will be called.
+      */
+     public void send(TdApi.Function<?> query, ResultHandler resultHandler, ExceptionHandler exceptionHandler) {
++        QueryInterceptor interceptor = queryInterceptor;
++        if (interceptor != null) {
++            interceptor.onSend(this, query);
++        }
+         long queryId = currentQueryId.incrementAndGet();
+         if (resultHandler != null) {
+             handlers.put(queryId, new Handler(resultHandler, exceptionHandler));

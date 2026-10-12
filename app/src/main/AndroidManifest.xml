@@ -126,10 +126,10 @@
     android:fullBackupContent="false"
     android:dataExtractionRules="@xml/data_extraction_rules"
     android:hardwareAccelerated="true"
-    android:icon="@mipmap/app_launcher"
+    android:icon="@mipmap/xgram_icon_default"
     android:label="@string/AppName"
     android:largeHeap="true"
-    android:roundIcon="@mipmap/app_launcher_round"
+    android:roundIcon="@mipmap/xgram_icon_default"
     android:supportsRtl="true"
     android:theme="@style/AppTheme"
     android:requestLegacyExternalStorage="true"
@@ -358,10 +358,7 @@
       android:launchMode="singleTask"
       android:windowSoftInputMode="stateHidden|adjustPan"
       android:exported="true">
-      <intent-filter android:label="@string/AppName">
-        <action android:name="android.intent.action.MAIN" />
-        <category android:name="android.intent.category.LAUNCHER" />
-      </intent-filter>
+      <!-- XGram: the launcher entry is one of the activity-alias icons below. -->
 
       <!-- Share from other apps -->
       <intent-filter>
@@ -422,6 +419,244 @@
         <data android:scheme="tg" />
       </intent-filter>
     </activity>
+
+    <!-- XGram: Quick Settings tile for ghost mode. -->
+    <service
+      android:name="com.fahadali.xgram.ghost.XgramGhostTileService"
+      android:exported="true"
+      android:icon="@drawable/baseline_ghost_24"
+      android:label="@string/XgramGhostMode"
+      android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+        android:value="true" />
+    </service>
+
+    <!-- XGram: app icons. Exactly one alias is enabled (com.fahadali.xgram.appicons.XgramAppIcons). -->
+    <activity-alias
+      android:name=".XgramIconDefault"
+      android:targetActivity=".MainActivity"
+      android:enabled="true"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_default"
+      android:roundIcon="@mipmap/xgram_icon_default"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconNight"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_night"
+      android:roundIcon="@mipmap/xgram_icon_night"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconLight"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_light"
+      android:roundIcon="@mipmap/xgram_icon_light"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconAqua"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_aqua"
+      android:roundIcon="@mipmap/xgram_icon_aqua"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconViolet"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_violet"
+      android:roundIcon="@mipmap/xgram_icon_violet"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconSunset"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_sunset"
+      android:roundIcon="@mipmap/xgram_icon_sunset"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconEmerald"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_emerald"
+      android:roundIcon="@mipmap/xgram_icon_emerald"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconGold"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_gold"
+      android:roundIcon="@mipmap/xgram_icon_gold"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconMono"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_mono"
+      android:roundIcon="@mipmap/xgram_icon_mono"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconRose"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_rose"
+      android:roundIcon="@mipmap/xgram_icon_rose"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconNeon"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_neon"
+      android:roundIcon="@mipmap/xgram_icon_neon"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconTurbo"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_turbo"
+      android:roundIcon="@mipmap/xgram_icon_turbo"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconRetro"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_retro"
+      android:roundIcon="@mipmap/xgram_icon_retro"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconPixel"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_pixel"
+      android:roundIcon="@mipmap/xgram_icon_pixel"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconOrigami"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_origami"
+      android:roundIcon="@mipmap/xgram_icon_origami"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconStardust"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/xgram_icon_stardust"
+      android:roundIcon="@mipmap/xgram_icon_stardust"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
+    <activity-alias
+      android:name=".XgramIconClassic"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:icon="@mipmap/app_launcher"
+      android:roundIcon="@mipmap/app_launcher_round"
+      android:label="@string/AppName">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
 
     <provider
       android:name=".FileProvider"

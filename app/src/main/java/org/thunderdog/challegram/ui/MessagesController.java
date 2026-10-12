@@ -408,6 +408,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (canSelectSender()) {
       items.add(0, createHapticSenderItem(R.id.btn_openSendersMenu, chat.messageSenderId, false, false));
     }
+    com.fahadali.xgram.chats.XgramAiTools.addSendMenuItem(this, items); // XGram: Telegram's AI editor
     hideCursorsForInputView();
     return items;
   }
@@ -458,6 +459,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
       });
     } else if (viewId == R.id.btn_debugLtrEmoji) {
       pickDateOrProceed(Td.newSendOptions(), (sendOptions, disableMarkdown) -> send(new TdApi.InputMessageText(new TdApi.FormattedText(Text.bidiGenerateTestMessage(), new TdApi.TextEntity[0]), null, false), false, sendOptions, null));
+    } else if (viewId == R.id.btn_xgramAiEditor) { // XGram: Telegram's AI editor
+      com.fahadali.xgram.chats.XgramAiTools.openEditor(this);
     }
     return true;
   }
@@ -658,7 +661,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
         break;
       }
       case PREVIEW_MODE_SEARCH: {
-        if (previewSearchSender != null || previewSearchFilter != null) {
+        if (messageTopicId instanceof TdApi.MessageTopicSavedMessages) {
+          // XGram: Saved Messages by chat
+          headerCell.setForcedSubtitle(com.fahadali.xgram.chats.XgramSavedTopics.title(tdlib, com.fahadali.xgram.chats.XgramSavedTopics.find(tdlib, ((TdApi.MessageTopicSavedMessages) messageTopicId).savedMessagesTopicId)));
+        } else if (previewSearchSender != null || previewSearchFilter != null) {
           updateSearchSubtitle();
         } else {
           headerCell.setForcedSubtitle(Lang.getString(R.string.FoundMessagesQuery, previewSearchQuery));
@@ -725,6 +731,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     messagesView.setId(R.id.msg_list);
     messagesView.setManager(manager);
     messagesView.setController(this);
+    if (!isInForceTouchMode()) {
+      messagesView.xgramSetPullToNext(new com.fahadali.xgram.chats.XgramPullToNext(xgramPullHost, messagesView)); // XGram
+    }
     messagesView.setHasFixedSize(true);
     messagesView.setLayoutManager(messagesManager);
     messagesView.setLayoutParams(params);
@@ -934,8 +943,46 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
     };
 
+    // XGram: topic tabs of forums that use the tabs layout, above the messages or along their side.
+    com.fahadali.xgram.topics.ForumTabsView.Callback tabsCallback = new com.fahadali.xgram.topics.ForumTabsView.Callback() {
+      @Override
+      public void onTabSelected (int tab) {
+        xgramSwitchTab(tab);
+      }
+
+      @Override
+      public void onTabLongPressed (TdApi.ForumTopic topic) {
+        com.fahadali.xgram.topics.XgramForums.showTopicOptions(MessagesController.this, chat, topic);
+      }
+
+      @Override
+      public void onCreateTopicRequested () {
+        com.fahadali.xgram.topics.XgramForums.openTopicEditor(MessagesController.this, chat, null);
+      }
+
+      @Override
+      public void onTogglePlacementRequested () {
+        if (chat != null) {
+          com.fahadali.xgram.XgramSettings settings = com.fahadali.xgram.XgramSettings.instance();
+          settings.setForumTabsOnSide(tdlib.id(), chat.id, !settings.forumTabsOnSide(tdlib.id(), chat.id));
+          xgramUpdateTabs();
+        }
+      }
+    };
+    xgramTabs = new com.fahadali.xgram.topics.ForumTabsView(context, tdlib, this, false);
+    xgramTabs.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.topics.ForumTabsView.getBarHeight()));
+    xgramTabs.setCallback(tabsCallback);
+    xgramSideTabs = new com.fahadali.xgram.topics.ForumTabsView(context, tdlib, this, true);
+    RelativeLayout.LayoutParams sideParams = new RelativeLayout.LayoutParams(com.fahadali.xgram.topics.ForumTabsView.getSideWidth(), ViewGroup.LayoutParams.MATCH_PARENT);
+    sideParams.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
+    sideParams.addRule(Lang.rtl() ? RelativeLayout.ALIGN_PARENT_RIGHT : RelativeLayout.ALIGN_PARENT_LEFT);
+    xgramSideTabs.setLayoutParams(sideParams);
+    xgramSideTabs.setVisibility(View.GONE);
+    xgramSideTabs.setCallback(tabsCallback);
+
     topBar.initWithList(new CollapseListView.Item[] {
       // TODO voice chat bar
+      xgramTabsItem = new CollapseListView.ViewItem(xgramTabs, com.fahadali.xgram.topics.ForumTabsView.getBarHeight()),
       pinnedMessagesItem,
       requestsItem = new CollapseListView.ViewItem(requestsView, requestsViewHeight),
       liveLocationItem = new CollapseListView.ViewItem(liveLocationView, liveLocationHeight),
@@ -1358,6 +1405,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
           textWrap.addView(fontSliderView);
 
           bottomWrap.addView(textWrap);
+          com.fahadali.xgram.appearance.XgramChatLook.addRows(this, bottomWrap, () -> { // XGram: stickers, emoji, bubbles
+            manager.onUpdateTextSize();
+            manager.rebuildLayouts();
+          }, () -> manager.loadPreview());
           break;
         }
         case PREVIEW_MODE_NONE: {
@@ -1458,6 +1509,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     contentView.addView(bottomSpace);
     contentView.addView(bottomWrap);
     contentView.addView(messagesView);
+    contentView.addView(xgramSideTabs); // XGram
     contentView.addView(bottomShadowView);
 
     contentView.addView(topBar);
@@ -1826,6 +1878,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Nullable
   public TdApi.DraftMessage getDraftMessage () {
+    if (messageThread == null && xgramInForumTopic()) {
+      // XGram: forum topics keep their own drafts.
+      return xgramForumTopic != null ? xgramForumTopic.draftMessage : null;
+    }
     return messageThread != null ? messageThread.getDraft() : chat != null ? chat.draftMessage : null;
   }
 
@@ -1908,6 +1964,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
           } else {
             openChatProfile(messageThread.getContextChatId());
           }
+        } else if (messageTopicId instanceof TdApi.MessageTopicForum && tdlib.isForum(chat.id)) {
+          // XGram: inside a topic, its own profile (as in Telegram), not the group's.
+          ProfileController controller = new ProfileController(context, tdlib);
+          controller.setShareCustomHeaderView(true);
+          controller.setArguments(new ProfileController.Args(chat, null, false).xgramTopic(((TdApi.MessageTopicForum) messageTopicId).forumTopicId));
+          navigateTo(controller);
         } else {
           openChatProfile(chat);
         }
@@ -2234,6 +2296,61 @@ public class MessagesController extends ViewController<MessagesController.Argume
       deleteThread();
     } else if (id == R.id.btn_viewScheduled) {
       viewScheduledMessages(false);
+    } else if (id == R.id.btn_xgramChatHistory) {
+      if (chat != null) {
+        com.fahadali.xgram.history.XgramHistoryController c = new com.fahadali.xgram.history.XgramHistoryController(context, tdlib);
+        c.setArguments(new com.fahadali.xgram.history.XgramHistoryController.Args(chat.id));
+        navigateTo(c);
+      }
+    } else if (id == R.id.btn_xgramSavedByChat) {
+      navigateTo(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib)); // XGram
+    } else if (id == R.id.btn_xgramOpenCommunity) {
+      com.fahadali.xgram.chats.XgramCommunityController.open(this, com.fahadali.xgram.chats.XgramCommunityController.communityOf(tdlib, chat));
+    } else if (id == R.id.btn_xgramViewAsTopics) {
+      if (chat != null) {
+        TdApi.Chat forum = chat;
+        tdlib.send(new TdApi.ToggleChatViewAsTopics(forum.id, true), tdlib.typedOkHandler());
+        com.fahadali.xgram.topics.XgramForums.openTopicList(this, forum);
+        tdlib.ui().postDelayed(() -> {
+          if (!isDestroyed()) {
+            destroyStackItemById(getId());
+          }
+        }, 400);
+      }
+    } else if (id == R.id.btn_xgramExportChat) {
+      if (chat != null) {
+        com.fahadali.xgram.chats.XgramChatExport.prompt(this, chat.id); // XGram
+      }
+    } else if (id == R.id.btn_xgramRecentActions) {
+      if (chat != null) {
+        MessagesController c = new MessagesController(context, tdlib); // XGram
+        c.setArguments(new MessagesController.Arguments(MessagesController.PREVIEW_MODE_EVENT_LOG, null, chat));
+        navigateTo(c);
+      }
+    } else if (id == R.id.btn_xgramRenameLocally) {
+      if (chat != null) {
+        com.fahadali.xgram.chats.XgramLocalNames.promptRename(this, chat.id); // XGram
+      }
+    } else if (id == R.id.btn_xgramGoToFirstMessage) {
+      if (chat != null) {
+        // XGram: loads the history from its oldest message.
+        highlightMessage(new MessageId(chat.id, MessageId.MIN_VALID_ID));
+      }
+    } else if (id == R.id.btn_xgramDeleteMyMessages) {
+      if (chat != null) {
+        com.fahadali.xgram.chats.XgramMessageActions.confirmDeleteMyMessages(this, chat.id); // XGram
+      }
+    } else if (id == R.id.btn_xgramGhostExclude) {
+      // XGram: reading starts or stops right away, so reopen the history in place.
+      if (chat != null) {
+        boolean exclude = !com.fahadali.xgram.ghost.XgramGhost.isExcluded(tdlib, chat.id);
+        com.fahadali.xgram.ghost.XgramGhost.setExcluded(tdlib, chat.id, exclude);
+        UI.showToast(exclude ? R.string.XgramGhostExcludedHint : R.string.XgramGhostIncludedHint, Toast.LENGTH_SHORT);
+        TdApi.Chat chat = this.chat;
+        saveDraft();
+        manager.destroy(this);
+        setArguments(new Arguments(openedFromChatList, chat, messageThread, messageTopicId, null, MessagesManager.HIGHLIGHT_MODE_NONE, null));
+      }
     } else if (id == R.id.btn_sendScreenshotNotification) {
       UI.showToast("Sent screenshot notification", Toast.LENGTH_SHORT);
       tdlib.onScreenshotTaken((int) (System.currentTimeMillis() / 1000l));
@@ -2371,6 +2488,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
         break;
       }
       case 3: {
+        if (topicId instanceof TdApi.MessageTopicSavedMessages) {
+          // XGram: Saved Messages by chat
+          args = new Arguments(chatList, chat, (TdApi.MessageTopicSavedMessages) topicId);
+          break;
+        }
         String query = in.getString(keyPrefix + "query", null);
         TdApi.MessageSender sender = Td.restoreMessageSender(in, keyPrefix + "sender_");
         args = new Arguments(chatList, chat, query, sender, filter);
@@ -2512,6 +2634,23 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
       this.inPreviewMode = false;
       this.previewMode = 0;
+    }
+
+    /** XGram: one chat of Saved Messages, read-only (official "Saved Messages by chat"). */
+    public Arguments (TdApi.ChatList chatList, TdApi.Chat chat, TdApi.MessageTopicSavedMessages savedMessagesTopic) {
+      this.constructor = 3;
+      this.chat = chat;
+      this.chatList = chatList;
+      this.messageThread = null;
+      this.messageTopicId = savedMessagesTopic;
+      this.searchQuery = "";
+      this.searchSender = null;
+      this.searchFilter = null;
+
+      this.inPreviewMode = true;
+      this.previewMode = PREVIEW_MODE_SEARCH;
+      this.highlightMode = 0;
+      this.highlightMessageId = null;
     }
 
     public Arguments (TdApi.ChatList chatList, TdApi.Chat chat, @Nullable TdApi.MessageSender sender) {
@@ -2784,6 +2923,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     TdApi.Chat headerChat = messageThread != null ? tdlib.chatSync(messageThread.getContextChatId()) : null;
     headerCell.setChat(tdlib, headerChat != null ? headerChat : chat, messageThread);
+    xgramBindTopicHeader();
 
     if (inPreviewMode) {
       switch (previewMode) {
@@ -2796,7 +2936,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
           }
           break;
         case PREVIEW_MODE_SEARCH:
-          manager.openSearch(chat, previewSearchQuery, previewSearchSender, previewSearchFilter);
+          manager.openSearch(chat, messageTopicId, previewSearchQuery, previewSearchSender, previewSearchFilter); // XGram: topic for Saved Messages by chat
           updateBottomBar(false);
           break;
         default:
@@ -2961,6 +3101,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
         setUnreadCountBadge(unreadCount, animated);
         setMentionCountBadge(0);
         setReactionCountBadge(0);
+      } else if (xgramInForumTopic()) {
+        // XGram: inside a forum topic show the topic's own counters, not the whole forum's.
+        xgramApplyTopicCounters(animated);
+        xgramScheduleTopicRefresh();
       } else {
         setUnreadCountBadge(chat.unreadCount, true);
         setMentionCountBadge(chat.unreadMentionCount);
@@ -2972,9 +3116,36 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   }
 
+  private long xgramGhostUnreadChatId, xgramGhostUnreadMessageId;
+
+  /**
+   * XGram: with ghost mode's "don't read" nothing gets marked read, so the chat's first unread message never
+   * moves. Jump to it only once and only while it's still below the screen, then go to the bottom.
+   */
+  private boolean xgramGhostSkipUnread () {
+    if (chat == null || !manager.readMessagesDisabled() || isInForceTouchMode()) {
+      return false;
+    }
+    MessageId unread = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, MessagesManager.HIGHLIGHT_MODE_UNREAD);
+    if (unread == null) {
+      return true;
+    }
+    if (xgramGhostUnreadChatId == unread.getChatId() && xgramGhostUnreadMessageId == unread.getMessageId()) {
+      return true;
+    }
+    TGMessage bottom = manager.findBottomMessage();
+    if (bottom != null && bottom.getChatId() == unread.getChatId() && bottom.getBiggestId() >= unread.getMessageId()) {
+      return true;
+    }
+    xgramGhostUnreadChatId = unread.getChatId();
+    xgramGhostUnreadMessageId = unread.getMessageId();
+    return false;
+  }
+
   private void scrollToUnreadOrStartMessage () {
     int anchorMode = MessagesManager.getAnchorHighlightMode(tdlib.id(), chat, messageThread);
-    if (!manager.hasReturnMessage()) {
+    // XGram: the chat's unread position belongs to other topics; inside a topic go to its latest message.
+    if (!manager.hasReturnMessage() && !xgramInForumTopic() && !xgramGhostSkipUnread()) {
       if (!inPreviewMode && !isInForceTouchMode() && anchorMode == MessagesManager.HIGHLIGHT_MODE_UNREAD) {
         MessageId messageId = MessagesManager.getAnchorMessageId(tdlib.id(), chat, messageThread, anchorMode);
         manager.highlightMessage(messageId, MessagesManager.HIGHLIGHT_MODE_UNREAD_NEXT, null, true);
@@ -3136,7 +3307,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private void updateBottomBar (boolean isUpdate) {
-    setInputBlockFlag(FLAG_INPUT_TEXT_DISABLED, !tdlib.canSendBasicMessage(chat));
+    setInputBlockFlag(FLAG_INPUT_TEXT_DISABLED, !tdlib.canSendBasicMessage(chat) || xgramTopicClosedForMe); // XGram: closed topics
     if (sendButton != null) {
       sendButton.getSlowModeCounterController(tdlib).updateSlowModeTimer(isUpdate);
     }
@@ -3526,7 +3697,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       case PREVIEW_MODE_WALLPAPER_OBJECT:
         return Lang.getString(R.string.ChatBackgroundPreview);
       case PREVIEW_MODE_FONT_SIZE:
-        return Lang.getString(R.string.TextSize);
+        return Lang.getString(R.string.XgramChatLook);
       default:
         return Lang.getString(isSelfChat() ? R.string.SavedMessages : R.string.ChatPreview);
     }
@@ -4078,6 +4249,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       ViewController<?> c = previousStackItem();
       if (c instanceof ChatsController && ((ChatsController) c).isPicker()) {
         destroyStackItemAt(stackSize() - 2);
+      } else if (c != null && c.getId() == R.id.controller_xgramTopicEdit) {
+        // XGram: a newly created topic replaces its editor, back goes to the topic list.
+        destroyStackItemAt(stackSize() - 2);
       }
     }
     resetOnFocus();
@@ -4181,6 +4355,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onBlur () {
     saveDraft();
+    if (xgramNextChatId != 0) {
+      xgramRemoveWhenCovered(xgramNextChatId, 0); // XGram: the next unread chat replaces this one
+      xgramNextChatId = 0;
+    }
 
     super.onBlur();
 
@@ -4265,6 +4443,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void destroy () {
+    if (xgramTopicIcon != null) {
+      xgramTopicIcon.performDestroy(); // XGram
+      xgramTopicIcon = null;
+    }
     resetSelectableControl();
 
     discardAttachedFiles(false);
@@ -4280,6 +4462,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     if (searchByAvatarView != null) {
       searchByAvatarView.performDestroy();
+    }
+    if (xgramTabs != null) {
+      xgramTabs.performDestroy(); // XGram
+    }
+    if (xgramSideTabs != null) {
+      xgramSideTabs.performDestroy(); // XGram
     }
     if (searchByUserViewWrapper != null) {
       searchByUserViewWrapper.dismiss();
@@ -4463,9 +4651,58 @@ public class MessagesController extends ViewController<MessagesController.Argume
       strings.append(R.string.Search);
     }
 
+    if (messageTopicId == null && !inPreviewMode && tdlib.isForum(chat.id) && !com.fahadali.xgram.topics.XgramForums.hasForumTabs(tdlib, chat)) {
+      // XGram: back to the topic list after "View as messages" (here or in another Telegram app, it's synced).
+      ids.append(R.id.btn_xgramViewAsTopics);
+      strings.append(R.string.XgramViewAsTopics);
+    }
+
+    if (!inPreviewMode && com.fahadali.xgram.chats.XgramCommunityController.communityOf(tdlib, chat) != 0) {
+      ids.append(R.id.btn_xgramOpenCommunity); // XGram: the community this group or channel is in
+      strings.append(R.string.XgramOpenCommunity);
+    }
+
     if ((!tdlib.isChannel(chat.id) || (status != null && !TD.isLeft(status))) && !tdlib.isSelfChat(chat.id)) {
       ids.append(R.id.btn_mute);
       strings.append(tdlib.chatNotificationsEnabled(chat.id) ? R.string.Mute : R.string.Unmute);
+    }
+
+    if (com.fahadali.xgram.XgramSettings.instance().historySaveDeleted() || com.fahadali.xgram.XgramSettings.instance().historySaveEdits()) {
+      ids.append(R.id.btn_xgramChatHistory); // XGram: deleted and edited messages of this chat
+      strings.append(R.string.XgramChatHistory);
+    }
+
+    if (tdlib.isSelfChat(chat.id) && !inPreviewMode) {
+      ids.append(R.id.btn_xgramSavedByChat); // XGram: Saved Messages grouped by chat
+      strings.append(R.string.XgramSavedByChat);
+    }
+
+    if (com.fahadali.xgram.chats.XgramLocalNames.canRename(tdlib, chat.id)) {
+      ids.append(R.id.btn_xgramRenameLocally); // XGram
+      strings.append(R.string.XgramRenameLocally);
+    }
+
+    if (!manager.isTotallyEmpty() && !messagesHidden && !isSecretChat()) {
+      ids.append(R.id.btn_xgramGoToFirstMessage); // XGram
+      strings.append(R.string.XgramGoToFirstMessage);
+      ids.append(R.id.btn_xgramExportChat); // XGram: like Telegram Desktop's export
+      strings.append(R.string.XgramExportChat);
+    }
+
+    if (status != null && TD.isAdmin(status) && ChatId.isSupergroup(chat.id) && !isSecretChat()) {
+      ids.append(R.id.btn_xgramRecentActions); // XGram: admin shortcut (NagramX, exteraGram)
+      strings.append(R.string.EventLog);
+    }
+
+    if (com.fahadali.xgram.chats.XgramMessageActions.canDeleteMyMessages(tdlib, chat.id)) {
+      ids.append(R.id.btn_xgramDeleteMyMessages); // XGram
+      strings.append(R.string.XgramDeleteMyMessages);
+    }
+
+    if (com.fahadali.xgram.ghost.XgramGhost.canExclude(tdlib, chat.id)) {
+      // XGram: per-chat ghost mode exclusion.
+      ids.append(R.id.btn_xgramGhostExclude);
+      strings.append(com.fahadali.xgram.ghost.XgramGhost.isExcluded(tdlib, chat.id) ? R.string.XgramGhostIncludeChat : R.string.XgramGhostExcludeChat);
     }
 
     if (tdlib.canReportChatSpam(chat.id)) {
@@ -5499,6 +5736,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return chat != null && ChatId.isSecret(chat.id);
   }
 
+  public @Nullable InputView xgramInputView () { // XGram: the AI editor reads and replaces the typed text
+    return inputView;
+  }
+
   public boolean inPreviewSearchMode () {
     return inPreviewMode && previewMode == PREVIEW_MODE_SEARCH;
   }
@@ -5579,6 +5820,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
         return true;
       } else if (id == R.id.btn_messageCopyLink) {
         tdlib.getMessageLink(selectedMessage.getNewestMessage(), selectedMessage.getMessageCount() > 1, messageThread != null, link -> UI.copyText(link.url, link.isPublic ? R.string.CopiedLink : R.string.CopiedLinkPrivate));
+        return true;
+      } else if (com.fahadali.xgram.chats.XgramMessageActions.handle(this, selectedMessage, id)) { // XGram
+        return true;
+      } else if (id == R.id.btn_xgramReadUpToHere) { // XGram: ghost mode
+        com.fahadali.xgram.ghost.XgramGhost.readUpTo(tdlib, selectedMessage.getMessage(), selectedMessage.getBiggestId());
+        return true;
+      } else if (id == R.id.btn_xgramMessageDetails) { // XGram
+        com.fahadali.xgram.XgramMessageDetailsController c = new com.fahadali.xgram.XgramMessageDetailsController(context, tdlib);
+        c.setArguments(new com.fahadali.xgram.XgramMessageDetailsController.Args(selectedMessage.getMessage()));
+        navigateTo(c);
         return true;
       } else if (id == R.id.btn_messageRetractVote) {
         TdApi.Message message = selectedMessage.getMessage();
@@ -6970,6 +7221,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         case TdApi.MessageText.CONSTRUCTOR: {
           TdApi.MessageText oldMessageText = (TdApi.MessageText) editContext.message.content;
           TdApi.LinkPreviewOptions oldLinkPreviewOptions = oldMessageText.linkPreviewOptions;
+          newOptions = com.fahadali.xgram.chats.XgramLinkFixer.applyToEdit(editContext.message.chatId, oldMessageText, newText, newOptions, tdlib.maxMessageTextLength()); // XGram: link preview fixer
           if (!Td.equalsTo(oldMessageText.text, newText) || !Td.equalsTo(oldLinkPreviewOptions, newOptions)) {
             return true;
           }
@@ -7072,6 +7324,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       LinkPreview linkPreview = linkPreviews.get(url);
       if (linkPreview == null) {
         linkPreview = new LinkPreview(tdlib, url, message);
+        linkPreview.xgramFetchUrl = com.fahadali.xgram.chats.XgramLinkFixer.composerPreviewUrl(context.getChatId(), url); // XGram: the composer previews the mirror that will be sent
         linkPreview.addLoadCallback(loadedLinkPreview -> {
           if (loadedLinkPreview.isNotFound()) {
             context.updateReplyBarVisibility(true);
@@ -7345,6 +7598,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
           oldMessageText = (TdApi.MessageText) editContext.message.content;
         }
         TdApi.LinkPreviewOptions oldLinkPreviewOptions = oldMessageText.linkPreviewOptions;
+        newInputMessageText.linkPreviewOptions = com.fahadali.xgram.chats.XgramLinkFixer.applyToEdit(editContext.message.chatId, oldMessageText, newText, newInputMessageText.linkPreviewOptions, tdlib.maxMessageTextLength()); // XGram: link preview fixer
 
         if (!Td.equalsTo(newInputMessageText.text, oldMessageText.text) || !Td.equalsTo(newInputMessageText.linkPreviewOptions, oldLinkPreviewOptions)) {
           final int maxLength = tdlib.maxMessageTextLength();
@@ -7971,6 +8225,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private String getCustomInputPlaceholder () {
+    if (xgramTopicClosedForMe) { // XGram
+      return Lang.getString(R.string.XgramTopicClosed);
+    }
     if (!StringUtils.isEmpty(customBotPlaceholder)) {
       return customBotPlaceholder;
     } else if (!StringUtils.isEmpty(customCaptionPlaceholder)) {
@@ -9069,6 +9326,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public final void onMessagesFrameChanged () {
+    xgramUpdateSideTabsOffset(); // XGram
     context().updateHackyOverlaysPositions();
     manager.onViewportMeasure();
     if (attachedFiles != null && attachedFiles.getParent() != null) {
@@ -9797,7 +10055,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
       content = new TdApi.InputMessageDice(msg.text.trim(), clearInput);
     } else {
-      content = new TdApi.InputMessageText(msg, linkPreviewOptions, clearInput);
+      content = new TdApi.InputMessageText(msg, com.fahadali.xgram.chats.XgramLinkFixer.apply(chatId, msg, linkPreviewOptions, tdlib.maxMessageTextLength()), clearInput); // XGram: link preview fixer
     }
 
     boolean forceUpdateOrderOfInstalledStickerSets = Settings.instance().getNewSetting(Settings.SETTING_FLAG_DYNAMIC_ORDER_EMOJI_PACKS);
@@ -9914,7 +10172,23 @@ public class MessagesController extends ViewController<MessagesController.Argume
             List<TGMessage> parsedMessages = manager.parseMessages(sentMessages);
             tdlib.ui().post(() -> {
               if (isSchedule == areScheduled) {
-                manager.addSentMessages(parsedMessages);
+                // XGram: ghost mode may have turned the send into a scheduled one; it shows up once sent.
+                List<TGMessage> visibleMessages = new ArrayList<>(parsedMessages.size());
+                boolean ghostScheduled = false;
+                for (TGMessage parsedMessage : parsedMessages) {
+                  if (parsedMessage == null) {
+                    continue;
+                  }
+                  if (parsedMessage.isScheduled() == areScheduled) {
+                    visibleMessages.add(parsedMessage);
+                  } else {
+                    ghostScheduled = true;
+                  }
+                }
+                manager.addSentMessages(visibleMessages);
+                if (ghostScheduled && isFocused()) {
+                  showBottomHint(Lang.getString(R.string.XgramGhostScheduledHint), false);
+                }
               }
               onDone.runWithBool(sentFunctionsCount[0] == expectedCount);
               if (!areScheduled && isSchedule && isFocused()) {
@@ -9942,7 +10216,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
           obtainSilentMode()
         );
 
-        TdApi.InputMessageContact inputMessageContact = new TdApi.InputMessageContact(new TdApi.Contact(user.phoneNumber, user.firstName, user.lastName, null, user.id));
+        TdApi.InputMessageContact inputMessageContact = new TdApi.InputMessageContact(com.fahadali.xgram.chats.XgramLocalNames.contactOf(tdlib, user, user.id)) /* XGram: real name */;
         tdlib.sendMessage(chat.id, topicId, replyTo, sendOptions, inputMessageContact, null);
       });
     }
@@ -9965,7 +10239,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
             obtainSilentMode()
           );
 
-          TdApi.InputMessageContact inputMessageContact = new TdApi.InputMessageContact(new TdApi.Contact(user.phoneNumber, user.firstName, user.lastName, null, user.id));
+          TdApi.InputMessageContact inputMessageContact = new TdApi.InputMessageContact(com.fahadali.xgram.chats.XgramLocalNames.contactOf(tdlib, user, user.id)) /* XGram: real name */;
           tdlib.sendMessage(chat.id, topicId, replyTo, sendOptions, inputMessageContact, null);
         });
       }
@@ -10544,7 +10818,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private boolean lastActionCancelled;
 
   public void setChatAction (@TdApi.ChatAction.Constructors int action, boolean set, boolean force) {
-    if (chat == null) {
+    if (chat == null || com.fahadali.xgram.ghost.XgramGhost.dontSendTyping(tdlib, chat.id)) { // XGram: ghost mode
       return;
     }
     if (actions == null) {
@@ -10617,6 +10891,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
         case EmojiMediaType.GIF:
         default:
           return;
+      }
+      if (action == TdApi.ChatActionChoosingSticker.CONSTRUCTOR && com.fahadali.xgram.XgramSettings.instance().ghostTypingForStickers()) {
+        action = TdApi.ChatActionTyping.CONSTRUCTOR; // XGram: others see "typing", not "choosing a sticker"
       }
       setChatAction(action, isChoosingEmoji, false);
     }
@@ -10808,6 +11085,294 @@ public class MessagesController extends ViewController<MessagesController.Argume
     runOnUiThreadOptional(() -> {
       if (getHeaderChatId() == chatId) {
         headerCell.setTitle(title);
+        xgramBindTopicHeader();
+      }
+    });
+  }
+
+  // XGram: inside a forum topic the header shows the topic name and "in <group>".
+  private void xgramBindTopicHeader () {
+    if (!(messageTopicId instanceof TdApi.MessageTopicForum)) {
+      xgramTopicClosedForMe = false;
+    }
+    // The cached topic list already has the topic (draft, counters) when opened from the list or the tabs.
+    xgramForumTopic = xgramInForumTopic() ? com.fahadali.xgram.topics.ForumTopicList.peekTopic(tdlib, chat.id, xgramCurrentTab()) : null;
+    xgramLoadTopic();
+    if (headerCell != null && chat != null && messageThread == null && previewMode == PREVIEW_MODE_NONE) {
+      // XGram: inside a topic, its icon instead of the group's photo (as in Telegram; the topic profile matches).
+      if (xgramInForumTopic()) {
+        xgramTopicIcon().set(tdlib, xgramForumTopic != null ? xgramForumTopic.info : null);
+      } else if (xgramTopicIcon != null) {
+        xgramTopicIcon.clear();
+      }
+      com.fahadali.xgram.topics.XgramForums.bindTopicHeader(this, headerCell, chat, messageTopicId, this::xgramSetTopicInfo);
+    } else if (xgramTopicIcon != null) {
+      xgramTopicIcon.clear();
+    }
+    xgramUpdateTabs();
+  }
+
+  @Nullable private com.fahadali.xgram.topics.TopicHeaderIcon xgramTopicIcon;
+
+  private com.fahadali.xgram.topics.TopicHeaderIcon xgramTopicIcon () {
+    if (xgramTopicIcon == null) {
+      xgramTopicIcon = new com.fahadali.xgram.topics.TopicHeaderIcon(headerCell);
+    }
+    return xgramTopicIcon;
+  }
+
+  /** The topic's chat header shows its icon (so profiles of the whole group don't share this header). */
+  public boolean xgramShowsTopicIcon () {
+    return xgramInForumTopic() && previewMode == PREVIEW_MODE_NONE;
+  }
+
+  /** XGram: in a forum topic, how far others read it (TDLib doesn't move the chat's own read position there). */
+  private void xgramApplyTopicReadOutbox () {
+    if (manager != null && xgramInForumTopic()) {
+      long lastReadOutboxMessageId = com.fahadali.xgram.topics.XgramTopicReadOutbox.get(tdlib, chat.id, ((TdApi.MessageTopicForum) messageTopicId).forumTopicId);
+      if (lastReadOutboxMessageId > 0) {
+        manager.updateChatReadOutbox(lastReadOutboxMessageId);
+      }
+    }
+  }
+
+  // XGram: topic tabs.
+  private com.fahadali.xgram.topics.ForumTabsView xgramTabs, xgramSideTabs;
+  private CollapseListView.Item xgramTabsItem;
+  private boolean xgramTabsOnSide;
+
+  private int xgramCurrentTab () {
+    return messageTopicId instanceof TdApi.MessageTopicForum ? ((TdApi.MessageTopicForum) messageTopicId).forumTopicId : com.fahadali.xgram.topics.XgramForums.TAB_ALL;
+  }
+
+  private boolean xgramTabsMode () {
+    return chat != null && messageThread == null && !areScheduled && !inPreviewMode && !isInForceTouchMode() &&
+      previewSearchSender == null && previewSearchFilter == null && StringUtils.isEmpty(previewSearchQuery) &&
+      (messageTopicId == null || messageTopicId instanceof TdApi.MessageTopicForum) &&
+      com.fahadali.xgram.topics.XgramForums.hasForumTabs(tdlib, chat);
+  }
+
+  private void xgramUpdateTabs () {
+    if (xgramTabs == null || xgramSideTabs == null || topBar == null) {
+      return;
+    }
+    boolean show = xgramTabsMode();
+    boolean onSide = show && com.fahadali.xgram.XgramSettings.instance().forumTabsOnSide(tdlib.id(), chat.id);
+    if (show) {
+      (onSide ? xgramSideTabs : xgramTabs).setChat(chat, xgramCurrentTab());
+    }
+    topBar.setItemVisible(xgramTabsItem, show && !onSide, false);
+    xgramSideTabs.setVisibility(onSide ? View.VISIBLE : View.GONE);
+    if (xgramTabsOnSide != onSide) {
+      xgramTabsOnSide = onSide;
+      // The messages make room for the side tabs.
+      RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) messagesView.getLayoutParams();
+      int margin = onSide ? com.fahadali.xgram.topics.ForumTabsView.getSideWidth() : 0;
+      if (Lang.rtl()) {
+        params.rightMargin = margin;
+      } else {
+        params.leftMargin = margin;
+      }
+      messagesView.setLayoutParams(params);
+    }
+    xgramUpdateSideTabsOffset();
+  }
+
+  /** Side tabs start below the bars above the messages (pinned message, join requests…). */
+  private void xgramUpdateSideTabsOffset () {
+    if (xgramSideTabs != null && xgramTabsOnSide && topBar != null) {
+      RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) xgramSideTabs.getLayoutParams();
+      int top = getTopOffset();
+      if (params.topMargin != top) {
+        params.topMargin = top;
+        xgramSideTabs.setLayoutParams(params);
+      }
+    }
+  }
+
+  /** Switches the open forum to another tab in place, like Telegram X does when a group is upgraded. */
+  private void xgramSwitchTab (int tab) {
+    if (chat == null || isDestroyed()) {
+      return;
+    }
+    if (tab == xgramCurrentTab()) {
+      manager.scrollToStart(false);
+      return;
+    }
+    saveDraft();
+    com.fahadali.xgram.topics.XgramForums.setLastTab(tdlib, chat.id, tab);
+    TdApi.Chat chat = this.chat;
+    manager.destroy(this);
+    setArguments(com.fahadali.xgram.topics.XgramForums.tabArguments(tdlib, openedFromChatList, chat, tab));
+  }
+
+  // XGram: forum topic state (counters for the scroll and mention buttons).
+  private TdApi.ForumTopic xgramForumTopic;
+  private final Runnable xgramTopicRefresh = this::xgramLoadTopic;
+
+  // XGram: pull up at the bottom of a channel (or topic) for the next unread one, as in Telegram
+
+  private long xgramNextChatId;
+
+  private final com.fahadali.xgram.chats.XgramPullToNext.Host xgramPullHost = new com.fahadali.xgram.chats.XgramPullToNext.Host() {
+    @Override
+    public boolean xgramCanPullToNext () {
+      return com.fahadali.xgram.XgramSettings.instance().pullToNext() && chat != null && previewMode == PREVIEW_MODE_NONE &&
+        !isInForceTouchMode() && messageThread == null && !areScheduledOnly() && !inSelectMode() && !inSearchMode() &&
+        !manager.xgramCanLoadBottom() && (xgramInForumTopic() || tdlib.isChannel(chat.id));
+    }
+
+    @Override
+    public Tdlib tdlib () {
+      return tdlib;
+    }
+
+    @Override
+    public long xgramPullChatId () {
+      return chat != null ? chat.id : 0;
+    }
+
+    @Override
+    public int xgramPullTopicId () {
+      return xgramInForumTopic() ? ((TdApi.MessageTopicForum) messageTopicId).forumTopicId : 0;
+    }
+
+    @Override
+    public TdApi.ChatList xgramPullChatList () {
+      return openedFromChatList;
+    }
+
+    @Override
+    public void xgramOpenNext (com.fahadali.xgram.chats.XgramPullToNext.Target target) {
+      xgramOpenNextUnread(target);
+    }
+
+    @Override
+    public int xgramPullBackgroundColor () {
+      return manager.useBubbles() ? manager.getOverlayColor(ColorId.NONE, ColorId.bubble_date, ColorId.bubble_date_noWallpaper, org.thunderdog.challegram.theme.PropertyId.WALLPAPER_OVERRIDE_DATE) : Theme.fillingColor();
+    }
+
+    @Override
+    public int xgramPullTextColor () {
+      return manager.useBubbles() ? manager.getColor(ColorId.NONE, ColorId.bubble_dateText, ColorId.bubble_dateText_noWallpaper, org.thunderdog.challegram.theme.PropertyId.WALLPAPER_OVERRIDE_DATE) : Theme.textAccentColor();
+    }
+  };
+
+  private void xgramOpenNextUnread (com.fahadali.xgram.chats.XgramPullToNext.Target target) {
+    if (isDestroyed() || !isFocused() || chat == null) {
+      return;
+    }
+    TdApi.Chat next = tdlib.chat(target.chatId);
+    if (next == null) {
+      return;
+    }
+    xgramNextChatId = next.id;
+    if (target.topic != null) {
+      com.fahadali.xgram.topics.XgramForums.openTopic(this, next, target.topic);
+    } else {
+      tdlib.ui().openChat(this, next, new TdlibUi.ChatOpenParameters().keepStack().chatList(openedFromChatList));
+    }
+  }
+
+  /** Once the next chat slid in on top of this one, this one leaves the stack: back goes where it went before. */
+  private void xgramRemoveWhenCovered (long nextChatId, int attempt) {
+    UI.post(() -> {
+      NavigationController navigation = navigationController();
+      if (navigation == null || isDestroyed()) {
+        return;
+      }
+      if (navigation.isAnimating()) {
+        if (attempt < 30) {
+          xgramRemoveWhenCovered(nextChatId, attempt + 1);
+        }
+        return;
+      }
+      ViewController<?> top = navigation.getStack().getCurrent();
+      int index = navigation.getStack().indexOf(this);
+      if (top instanceof MessagesController && top != this && ((MessagesController) top).getChatId() == nextChatId &&
+        index != -1 && index < navigation.getStack().size() - 1) {
+        navigation.getStack().destroy(index);
+      }
+    }, 120);
+  }
+
+  private boolean xgramInForumTopic () {
+    return chat != null && messageThread == null && messageTopicId instanceof TdApi.MessageTopicForum;
+  }
+
+  private void xgramApplyTopicCounters (boolean animated) {
+    TdApi.ForumTopic topic = xgramForumTopic;
+    boolean known = topic != null && !areScheduledOnly();
+    setUnreadCountBadge(known ? topic.unreadCount : 0, animated);
+    setMentionCountBadge(known ? topic.unreadMentionCount : 0);
+    setReactionCountBadge(known ? topic.unreadReactionCount : 0);
+  }
+
+  private void xgramScheduleTopicRefresh () {
+    tdlib.ui().removeCallbacks(xgramTopicRefresh);
+    tdlib.ui().postDelayed(xgramTopicRefresh, 300);
+  }
+
+  private void xgramLoadTopic () {
+    if (!xgramInForumTopic()) {
+      xgramForumTopic = null;
+      return;
+    }
+    final long chatId = chat.id;
+    final int forumTopicId = ((TdApi.MessageTopicForum) messageTopicId).forumTopicId;
+    tdlib.send(new TdApi.GetForumTopic(chatId, forumTopicId), (topic, error) -> runOnUiThreadOptional(() -> {
+      if (topic != null && xgramInForumTopic() && chat.id == chatId && ((TdApi.MessageTopicForum) messageTopicId).forumTopicId == forumTopicId) {
+        xgramForumTopic = com.fahadali.xgram.topics.XgramForums.normalizeUnread(tdlib, topic);
+        xgramApplyTopicCounters(true);
+        com.fahadali.xgram.topics.XgramTopicReadOutbox.set(tdlib, chatId, topic);
+        xgramApplyTopicReadOutbox();
+      }
+    }));
+  }
+
+  @Override
+  public void onForumTopicUpdated (TdApi.UpdateForumTopic update) {
+    tdlib.ui().post(() -> {
+      if (xgramInForumTopic() && update.chatId == chat.id && ((TdApi.MessageTopicForum) messageTopicId).forumTopicId == update.forumTopicId) {
+        xgramApplyTopicReadOutbox(); // someone read the topic: two ticks
+        TdApi.ForumTopic topic = xgramForumTopic;
+        // Fetching the topic can emit this update again, so only refetch when something actually changed.
+        if (topic == null || topic.lastReadInboxMessageId != update.lastReadInboxMessageId) {
+          xgramScheduleTopicRefresh();
+        } else if (topic.unreadMentionCount != com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(tdlib, chat.id, update.forumTopicId, update.unreadMentionCount) ||
+          topic.unreadReactionCount != update.unreadReactionCount) {
+          topic.unreadMentionCount = com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(tdlib, chat.id, update.forumTopicId, update.unreadMentionCount);
+          topic.unreadReactionCount = update.unreadReactionCount;
+          xgramApplyTopicCounters(true);
+        }
+      }
+    });
+  }
+
+  // XGram: members can't write in closed topics (admins with "Manage topics" and the topic creator can).
+  private boolean xgramTopicClosedForMe;
+
+  private void xgramSetTopicInfo (TdApi.ForumTopicInfo info) {
+    if (chat != null && info.chatId == chat.id && xgramInForumTopic() && info.forumTopicId == xgramCurrentTab() &&
+      messageThread == null && previewMode == PREVIEW_MODE_NONE && headerCell != null) {
+      xgramTopicIcon().set(tdlib, info); // also after the topic's icon was edited
+    }
+    boolean closedForMe = com.fahadali.xgram.topics.XgramForums.isTopicClosedForMe(tdlib, chat, info);
+    if (xgramTopicClosedForMe != closedForMe) {
+      xgramTopicClosedForMe = closedForMe;
+      updateBottomBar(true);
+    }
+  }
+
+  @Override
+  public void onForumTopicInfoChanged (TdApi.ForumTopicInfo info) {
+    runOnUiThreadOptional(() -> {
+      if (chat != null && info.chatId == chat.id && messageThread == null &&
+        messageTopicId instanceof TdApi.MessageTopicForum && ((TdApi.MessageTopicForum) messageTopicId).forumTopicId == info.forumTopicId) {
+        if (headerCell != null && previewMode == PREVIEW_MODE_NONE) {
+          headerCell.setTitle(com.fahadali.xgram.topics.XgramForums.topicTitle(info));
+        }
+        xgramSetTopicInfo(info);
       }
     });
   }
@@ -11320,6 +11885,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       manager.rebuildLayouts();
       if (headerCell != null) {
         headerCell.setChat(tdlib, chat, messageThread);
+        xgramBindTopicHeader();
         if (messageThread != null) {
           updateMessageThreadSubtitle();
         }

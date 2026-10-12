@@ -102,36 +102,33 @@ public class Fonts {
   private static final boolean LOAD_MONO = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
   public static final boolean FORCE_BUILTIN_MONO = LOAD_MONO && Device.IS_SAMSUNG;
 
+  // XGram: system fonts are derived from Typeface.DEFAULT, like the official app. Looking fonts up by family
+  // name ("sans-serif") ignores the font style picked in the device settings (e.g. Samsung's Font style).
+
   public static Typeface getRobotoRegular () {
     return robotoRegular != null ? robotoRegular : (robotoRegular = loadFont("fonts/Roboto-Regular.ttf", () ->
-      LOAD_SANS ? loadSystemFont("sans-serif", Typeface.NORMAL, Typeface.DEFAULT) : Typeface.DEFAULT
+      Typeface.DEFAULT
     ));
   }
 
   public static Typeface getRobotoBold () {
-    return robotoBold != null ? robotoBold : (robotoBold = loadFont("fonts/Roboto-Bold.ttf", () -> {
-      if (LOAD_SANS) {
-        return loadSystemFont("sans-serif", Typeface.BOLD, Typeface.DEFAULT_BOLD);
-      } else {
-        return Typeface.DEFAULT_BOLD;
-      }
-    }));
+    return robotoBold != null ? robotoBold : (robotoBold = loadFont("fonts/Roboto-Bold.ttf", () ->
+      Typeface.DEFAULT_BOLD
+    ));
   }
 
   public static Typeface getRobotoMedium () {
     return robotoMedium != null ? robotoMedium : (robotoMedium = loadFont("fonts/Roboto-Medium.ttf", () -> {
-      if (LOAD_SANS) {
-        Typeface typeface = loadSystemFont("sans-serif-light", Typeface.BOLD, null);
-        return typeface != null ? typeface : loadSystemFont("sans-serif-medium", Typeface.NORMAL, Typeface.DEFAULT_BOLD);
-      } else {
-        return Typeface.DEFAULT_BOLD;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        return Typeface.create(Typeface.DEFAULT, 500, false);
       }
+      return Typeface.DEFAULT_BOLD;
     }));
   }
 
   public static Typeface getRobotoItalic () {
     return robotoItalic != null ? robotoItalic : (robotoItalic = loadFont("fonts/Roboto-Italic.ttf", () ->
-      LOAD_SANS ? loadSystemFont("sans-serif", Typeface.ITALIC, Typeface.defaultFromStyle(Typeface.ITALIC)) : Typeface.defaultFromStyle(Typeface.ITALIC)
+      Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
     ));
   }
 

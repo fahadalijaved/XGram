@@ -113,6 +113,7 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.navigation.HeaderButton;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.TGMimeType;
@@ -209,6 +210,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   @Override
   protected void onCreateView (Context context, FrameLayoutFix contentView, ViewPager pager) {
+    com.fahadali.xgram.XgramSettings.instance().addListener(xgramSettingsListener); // XGram
     if (BuildConfig.DEBUG) {
       Test.execute();
     }
@@ -263,6 +265,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       }, false);
     composeWrap.setCallback(this);
     contentView.addView(composeWrap);
+    xgramUpdateComposeVisibility();
 
     makeStartupChecks();
 
@@ -1122,6 +1125,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   @Override
   public void destroy () {
     super.destroy();
+    com.fahadali.xgram.XgramSettings.instance().removeListener(xgramSettingsListener); // XGram
     tdlib.listeners().removeOptionListener(this);
     context().appUpdater().removeListener(this);
     tdlib.context().global().removeCountersListener(this);
@@ -1298,6 +1302,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   @Override
   public void onFocus () {
     super.onFocus();
+    xgramUpdateGhostButton(); // XGram
+    com.fahadali.xgram.XgramWhatsNewController.showIfNeeded(this); // XGram: once after an update with new features
     // FIXME check tdlib.isUnauthorized()
     tdlib.context().changePreferredAccountId(tdlib.id(), TdlibManager.SWITCH_REASON_NAVIGATION);
     if (UI.TEST_MODE == UI.TEST_MODE_USER) {
@@ -1363,7 +1369,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   @Override
   protected int getBackButton () {
-    return BackHeaderButton.TYPE_MENU;
+    return xgramIsHiddenRoot() ? BackHeaderButton.TYPE_NONE : BackHeaderButton.TYPE_MENU;
+  }
+
+  // XGram: in the two-pane layout this chat list sits under the placeholder on the right, header included.
+  private boolean xgramIsHiddenRoot () {
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+    return twoPane != null && twoPane.isHiddenRoot(this);
   }
 
   @Override
@@ -1878,13 +1890,16 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   @Override
   protected int getMenuId () {
-    return R.id.menu_main;
+    return xgramIsHiddenRoot() ? 0 : R.id.menu_main;
   }
 
   @Override
   public void fillMenuItems (int id, HeaderView header, LinearLayout menu) {
     if (id == R.id.menu_main) {
       header.addLockButton(menu);
+      // XGram: ghost mode indicator, tap for its settings.
+      xgramGhostButton = header.addButton(menu, R.id.menu_btn_xgramGhost, R.drawable.baseline_ghost_24, getHeaderIconColorId(), this, Screen.dp(49f));
+      xgramUpdateGhostButton();
       header.addSearchButton(menu, this);
     } else if (id == R.id.menu_clear) {
       header.addClearButton(menu, getSearchHeaderIconColorId(), getSearchBackButtonResource());
@@ -1893,8 +1908,33 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
   }
 
+  private HeaderButton xgramGhostButton;
+  private final com.fahadali.xgram.XgramSettings.Listener xgramSettingsListener = key -> {
+    if (key.startsWith("xgram_ghost_")) {
+      UI.post(this::xgramUpdateGhostButton);
+    } else if (com.fahadali.xgram.XgramSettings.KEY_HIDE_FAB.equals(key)) {
+      UI.post(this::xgramUpdateComposeVisibility);
+    }
+  };
+
+  private void xgramUpdateComposeVisibility () {
+    if (composeWrap != null) {
+      composeWrap.setVisibility(com.fahadali.xgram.XgramSettings.instance().hideFab() ? View.GONE : View.VISIBLE);
+    }
+  }
+
+  private void xgramUpdateGhostButton () {
+    if (xgramGhostButton != null) {
+      xgramGhostButton.setVisibility(com.fahadali.xgram.XgramSettings.instance().isAnyGhostEnabled() ? View.VISIBLE : View.GONE);
+    }
+  }
+
   @Override
   public void onMenuItemPressed (int id, View view) {
+    if (id == R.id.menu_btn_xgramGhost) {
+      navigateTo(com.fahadali.xgram.XgramSettingsController.section(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_GHOST));
+      return;
+    }
     if (id == R.id.menu_btn_search) {
       tdlib.checkDeadlocks(() -> runOnUiThreadOptional(() -> {
         if (isFocused()) {
@@ -2316,6 +2356,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           List<TdApi.InputMessageContent> album = null;
           for (TdApi.InputMessageContent content : contents) {
             content = tdlib.filegen().createThumbnail(content, ChatId.isSecret(chatId));
+            content = com.fahadali.xgram.chats.XgramLinkFixer.applyToContent(chatId, content, tdlib.maxMessageTextLength()); // XGram: link preview fixer
             if (mergeAlbum) {
               int combineMode = TD.getCombineMode(content);
               if (combineMode == TD.COMBINE_MODE_MEDIA) {

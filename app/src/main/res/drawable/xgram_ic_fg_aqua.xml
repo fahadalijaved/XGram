@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram icon "Aurora": the woven X, its front stroke ending in a paper-plane point -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:aapt="http://schemas.android.com/aapt"
+  android:width="108dp"
+  android:height="108dp"
+  android:viewportWidth="108"
+  android:viewportHeight="108">
+  <path android:pathData="M36.5,36.5 L71.5,71.5" android:strokeWidth="11" android:strokeLineCap="round" android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.7" />
+  <group android:translateY="1.6">
+    <path android:pathData="M36.5,71.5 L54.885,53.115" android:strokeWidth="12.2" android:strokeLineCap="round" android:strokeColor="#FF000000" android:strokeAlpha="0.16" />
+    <path android:pathData="M58.774,57.004 L76.5,31.5 L50.996,49.226 Z" android:fillColor="#FF000000" android:fillAlpha="0.16" android:strokeWidth="1.2" android:strokeLineJoin="round" android:strokeColor="#FF000000" android:strokeAlpha="0.16" />
+  </group>
+  <path android:pathData="M36.5,71.5 L54.885,53.115" android:strokeWidth="11" android:strokeLineCap="round" android:strokeColor="#FFFFFFFF" />
+  <path android:pathData="M58.774,57.004 L76.5,31.5 L50.996,49.226 Z" android:fillColor="#FFFFFFFF" />
+</vector>

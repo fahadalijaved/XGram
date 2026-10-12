@@ -38,6 +38,7 @@ import tgx.td.TdExt;
 public class LinkPreview implements Destroyable {
   public final Tdlib tdlib;
   public final String url;
+  public @Nullable String xgramFetchUrl; // XGram: link preview fixer mirror, fetched instead of url
 
   public TdApi.LinkPreview linkPreview;
   public TdApi.Error error;
@@ -75,7 +76,8 @@ public class LinkPreview implements Destroyable {
         TdApi.LinkPreviewOptions existingOptions = existingText.linkPreviewOptions;
         boolean isCurrentWebPage =
           (existingText.linkPreviewOptions != null && !StringUtils.isEmpty(existingText.linkPreviewOptions.url) && FoundUrls.compareUrls(existingText.linkPreviewOptions.url, url)) ||
-          (FoundUrls.compareUrls(existingText.linkPreview.url, url));
+          (FoundUrls.compareUrls(existingText.linkPreview.url, url)) ||
+          com.fahadali.xgram.chats.XgramLinkFixer.isMirrorOf(existingOptions, url); // XGram: the message already shows this link's mirror
         if (isCurrentWebPage) {
           this.linkPreview = existingText.linkPreview;
           updateMessageText(messageText, this.linkPreview);
@@ -123,8 +125,14 @@ public class LinkPreview implements Destroyable {
 
   private void loadLinkPreview () {
     needLoadWebPagePreview = false;
-    tdlib.send(new TdApi.GetLinkPreview(new TdApi.FormattedText(url, null), null), (webPage, error) -> {
+    tdlib.send(new TdApi.GetLinkPreview(new TdApi.FormattedText(xgramFetchUrl != null ? xgramFetchUrl : url, null), null), (webPage, error) -> { // XGram: link preview fixer
       tdlib.ui().post(() -> {
+        if (webPage == null && xgramFetchUrl != null && !isDestroyed) { // XGram: the mirror has no preview, preview the link itself
+          com.fahadali.xgram.chats.XgramLinkFixer.onMirrorFailed(xgramFetchUrl);
+          xgramFetchUrl = null;
+          loadLinkPreview();
+          return;
+        }
         if (webPage != null) {
           this.linkPreview = webPage;
           updateMessageText((TdApi.MessageText) fakeMessage.content, webPage);

@@ -234,6 +234,11 @@ public class ContentPreview {
         }
       }
     }
+    // XGram: service messages Telegram X shows in chats but not in lists ("Unsupported message").
+    ContentPreview xgramPreview = com.fahadali.xgram.chats.XgramPreviews.preview(tdlib, message);
+    if (xgramPreview != null) {
+      return xgramPreview;
+    }
     @TdApi.MessageContent.Constructors int type = message.content.getConstructor();
     TdApi.FormattedText formattedText;
     if (allowContent) {
@@ -312,6 +317,9 @@ public class ContentPreview {
         arg1 = ((TdApi.MessagePoll) message.content).poll.type.getConstructor() == TdApi.PollTypeRegular.CONSTRUCTOR ? ARG_NONE : ARG_POLL_QUIZ;
         break;
       }
+      case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
+        arg1 = ((TdApi.MessageChatAddedToCommunity) message.content).communityId; // XGram: for the community's name
+        break;
       case TdApi.MessageDice.CONSTRUCTOR:
         alternativeText = ((TdApi.MessageDice) message.content).emoji;
         arg1 = ((TdApi.MessageDice) message.content).value;
@@ -783,7 +791,6 @@ public class ContentPreview {
       case TdApi.MessageManagedBotCreated.CONSTRUCTOR:
       case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
       case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
-      case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
       case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
         break;
 
@@ -1350,6 +1357,15 @@ public class ContentPreview {
         return new ContentPreview(EMOJI_GROUP, isOutgoing ? R.string.ChatContentGroupJoin_outgoing : R.string.ChatContentGroupJoin);
       case TdApi.MessageChatJoinFromCommunity.CONSTRUCTOR:
         return new ContentPreview(EMOJI_GROUP, isOutgoing ? R.string.ChatContentGroupJoinCommunity_outgoing : R.string.ChatContentGroupJoinCommunity);
+      case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR: {
+        // XGram: instead of "Unsupported message" in the chat and topic lists.
+        TdApi.Community community = arg1 != 0 ? tdlib.cache().community(arg1) : null;
+        return community != null && !community.name.isEmpty() ?
+          new ContentPreview(EMOJI_GROUP, 0, Lang.getString(R.string.XgramAddedToCommunityNamed, community.name), true) :
+          new ContentPreview(EMOJI_GROUP, R.string.XgramAddedToCommunity);
+      }
+      case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
+        return new ContentPreview(EMOJI_GROUP, R.string.XgramRemovedFromCommunity);
       case TdApi.MessageChatJoinByRequest.CONSTRUCTOR:
         return new ContentPreview(EMOJI_GROUP, isOutgoing ? R.string.ChatContentGroupAccept_outgoing : R.string.ChatContentGroupAccept);
       case TdApi.MessageChatChangePhoto.CONSTRUCTOR:
@@ -1632,8 +1648,6 @@ public class ContentPreview {
       case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
       case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
       case TdApi.MessageRichMessage.CONSTRUCTOR:
-      case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
-      case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
         // TODO support these previews
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessage);
         

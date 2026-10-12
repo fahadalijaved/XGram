@@ -463,8 +463,71 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   public TdlibChatListSlice list () {
     if (list == null) {
       this.list = tdlib.chatList(chatList()).slice(filter);
+      if (filter == null && pickerDelegate == null) {
+        // XGram: one row per Telegram community in the user's own lists (not when picking a chat).
+        list.xgramMergeCommunities();
+        xgramMerge = true;
+        com.fahadali.xgram.chats.XgramCommunities.addListener(xgramCommunityListener);
+        tdlib.cache().subscribeToCommunityGlobalUpdates(xgramCommunityLookListener);
+      }
     }
     return list;
+  }
+
+  private boolean xgramMerge;
+
+  public boolean xgramMergesCommunities () {
+    return xgramMerge;
+  }
+
+  private final com.fahadali.xgram.chats.XgramCommunities.Listener xgramCommunityListener = (tdlib, communityId, chatId) -> {
+    if (tdlib == this.tdlib) {
+      runOnUiThreadOptional(() -> {
+        xgramRefreshCommunityRows(communityId);
+        if (chatId != 0 && chatsView != null) {
+          chatsView.xgramRefreshCommunityRow(chatId); // a row that just left its community
+        }
+      });
+    }
+  };
+
+  private final org.thunderdog.challegram.telegram.TdlibCache.CommunityDataChangeListener xgramCommunityLookListener = new org.thunderdog.challegram.telegram.TdlibCache.CommunityDataChangeListener() {
+    @Override
+    public void onCommunityUpdated (TdApi.Community community) {
+      runOnUiThreadOptional(() -> {
+        if (adapter != null && chatsView != null) {
+          for (TGChat chat : new ArrayList<>(adapter.getChats())) {
+            if (chat.xgramCommunityId() == community.id) {
+              chatsView.xgramRefreshCommunityLook(chat.getChatId());
+            }
+          }
+        }
+      });
+    }
+  };
+
+  private void xgramRefreshCommunityRows (long communityId) {
+    if (adapter != null && chatsView != null && communityId != 0) {
+      for (TGChat chat : new ArrayList<>(adapter.getChats())) {
+        if (com.fahadali.xgram.chats.XgramCommunities.communityOf(tdlib, chat.getChatId()) == communityId) {
+          chatsView.xgramRefreshCommunityRow(chat.getChatId());
+        }
+      }
+    }
+  }
+
+  /** A chat changed: if it's hidden in a merged community, the community's row shows the change. */
+  private void xgramRefreshCommunityRowFor (long chatId) {
+    if (!xgramMerge || chatsView == null) {
+      return;
+    }
+    long communityId = com.fahadali.xgram.chats.XgramCommunities.communityOf(tdlib, chatId);
+    if (communityId != 0) {
+      long front = com.fahadali.xgram.chats.XgramCommunities.frontChat(tdlib, communityId, chatList());
+      if (front != 0 && front != chatId) {
+        chatsView.xgramRefreshCommunityRow(front);
+      }
+    }
   }
 
   private TdlibMessageViewer.Viewport chatsViewport;
@@ -795,7 +858,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     int initialLoadCount = chatsView.getInitialLoadCount();
     List<TGChat> parsedChats = new ArrayList<>(entries.size());
     for (TdlibChatList.Entry entry : entries) {
-      parsedChats.add(new TGChat(this, chatList(), entry.chat, initialLoadCount-- >= 0));
+      TGChat parsedChat = new TGChat(this, chatList(), entry.chat, initialLoadCount-- >= 0);
+      parsedChat.xgramSetMergeCommunities(xgramMerge); // XGram
+      parsedChats.add(parsedChat);
     }
     runOnUiThreadOptional(() -> {
       initialLoadFinished = true;
@@ -2112,6 +2177,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           ChatsController c = new ChatsController(context, tdlib);
           c.setArguments(new Arguments(new TdApi.ChatListArchive()).setNeedMessagesSearch(true));
           context.navigation().navigateTo(c);
+        } else if (chat.xgramCommunityId() != 0) {
+          com.fahadali.xgram.chats.XgramCommunityController.open(this, chat.xgramCommunityId()); // XGram
         } else {
           onClick(chat.getChat());
         }
@@ -2175,6 +2242,26 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   @Override
   public ForceTouchView.ActionListener onCreateActions (View v, ForceTouchView.ForceTouchContext context, IntList ids, IntList icons, StringList strings, ViewController<?> target) {
     TGChat chat = v instanceof ChatView ? ((ChatView) v).getChat() : null;
+
+    if (chat != null && chat.xgramCommunityId() != 0) {
+      // XGram: the community preview; tapping its header opens the community page.
+      final long communityId = chat.xgramCommunityId();
+      TdApi.Community community = tdlib.cache().community(communityId);
+      String name = community != null && !me.vkryl.core.StringUtils.isEmpty(community.name) ? community.name : tdlib.chatTitle(chat.getChatId());
+      int count = com.fahadali.xgram.chats.XgramCommunities.presentMembers(tdlib, communityId, chatList()).size();
+      context.setTdlib(tdlib);
+      context.setHeaderAvatar(null, new AvatarPlaceholder.Metadata(tdlib.chatAccentColor(chat.getChatId()), TD.getLetters(name)));
+      context.setHeader(name, Lang.plural(R.string.xChats, count));
+      context.setMaximizeListener((target1, animateToWhenReady, arg) -> {
+        com.fahadali.xgram.chats.XgramCommunityController c = new com.fahadali.xgram.chats.XgramCommunityController(context(), tdlib);
+        c.setArguments(communityId);
+        c.postOnAnimationReady(() -> target1.animateTo(animateToWhenReady));
+        c.forceFastAnimationOnce();
+        context().navigation().navigateTo(c);
+        return true;
+      });
+      return null;
+    }
 
     if (chat != null && chat.isArchive()) {
       if (tdlib.hasUnreadChats(ChatPosition.CHAT_LIST_ARCHIVE)) {
@@ -2734,6 +2821,10 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     tdlib.listeners().unsubscribeFromGlobalUpdates(this);
     tdlib.cache().unsubscribeFromGlobalUpdates(this);
     list.performDestroy();
+    if (xgramMerge) {
+      com.fahadali.xgram.chats.XgramCommunities.removeListener(xgramCommunityListener);
+      tdlib.cache().unsubscribeFromCommunityGlobalUpdates(xgramCommunityLookListener);
+    }
     TGLegacyManager.instance().removeEmojiListener(this);
     tdlib.contacts().removeListener(this);
     tdlib.context().dateManager().removeListener(this);
@@ -2765,6 +2856,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         chatsView.updateChatPosition(chatId, position, orderChanged, sourceChanged, pinStateChanged);
         if (position.order == 0) {
           checkChatSelected(chatId);
+        }
+        if (xgramMerge) {
+          xgramRefreshCommunityRows(com.fahadali.xgram.chats.XgramCommunities.communityOf(tdlib, chatId));
         }
       }
     });
@@ -2802,6 +2896,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     runOnUiThreadOptional(() -> {
       if (chatsView != null) {
         chatsView.updateChatMarkedAsUnread(chatId, isMarkedAsUnread);
+        xgramRefreshCommunityRowFor(chatId);
       }
     });
   }
@@ -2820,6 +2915,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     runOnUiThreadOptional(() -> {
       if (chatsView != null) {
         chatsView.updateChatReadInbox(chatId, lastReadInboxMessageId, unreadCount);
+        xgramRefreshCommunityRowFor(chatId);
       }
     });
   }
@@ -2838,6 +2934,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     runOnUiThreadOptional(() -> {
       if (chatsView != null) {
         chatsView.updateChatUnreadReactionCount(chatId, unreadReactionCount);
+        xgramRefreshCommunityRowFor(chatId);
       }
     });
   }
@@ -2847,6 +2944,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     runOnUiThreadOptional(() -> {
       if (chatsView != null) {
         chatsView.updateChatUnreadMentionCount(chatId, unreadMentionCount);
+        xgramRefreshCommunityRowFor(chatId);
       }
     });
   }
@@ -2923,6 +3021,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     runOnUiThreadOptional(() -> {
       if (chatsView != null) {
         chatsView.updateNotificationSettings(chatId, settings);
+        xgramRefreshCommunityRowFor(chatId);
       }
     });
   }

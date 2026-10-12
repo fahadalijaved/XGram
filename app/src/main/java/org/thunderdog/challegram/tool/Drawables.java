@@ -197,6 +197,7 @@ public class Drawables {
   public static Drawable load (Resources resources, int res) {
     if (res == 0)
       return null;
+    res = com.fahadali.xgram.appearance.XgramIconPack.map(res); // XGram: icon packs
     Drawable drawable = ResourcesCompat.getDrawable(resources, res, null);
     if (drawable == null)
       throw new Resources.NotFoundException("res == " + res);

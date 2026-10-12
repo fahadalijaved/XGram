@@ -1,0 +1,299 @@
+{
+ "bug_report": {
+  "tgx": [
+   "baseline_bug_report_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java",
+   "java/org/thunderdog/challegram/navigation/DrawerController.java"
+  ]
+ },
+ "build": {
+  "tgx": [
+   "baseline_build_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/IntroController.java",
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "system_update": {
+  "tgx": [
+   "baseline_system_update_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsBugController.java",
+   "java/org/thunderdog/challegram/ui/SettingsNotificationController.java",
+   "java/org/thunderdog/challegram/util/AppUpdater.java"
+  ]
+ },
+ "sync_problem": {
+  "tgx": [
+   "baseline_sync_problem_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsController.java",
+   "java/org/thunderdog/challegram/ui/SettingsNotificationController.java"
+  ]
+ },
+ "sd_storage": {
+  "tgx": [
+   "baseline_sd_storage_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramMessageDetailsController.java",
+   "java/org/thunderdog/challegram/component/attach/MediaBottomFilesController.java"
+  ]
+ },
+ "storage": {
+  "tgx": [
+   "baseline_storage_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/attach/MediaBottomFilesController.java"
+  ]
+ },
+ "policy": {
+  "tgx": [
+   "baseline_policy_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/popups/ModernOptions.java",
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "lock_pattern": {
+  "tgx": [
+   "itsspelledhaley_baseline_lock_pattern_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/tool/Drawables.java",
+   "java/org/thunderdog/challegram/ui/PasscodeSetupController.java"
+  ]
+ },
+ "lock_pin": {
+  "tgx": [
+   "vkryl_baseline_lock_pin_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/tool/Drawables.java",
+   "java/org/thunderdog/challegram/ui/PasscodeSetupController.java"
+  ]
+ },
+ "dangerous": {
+  "tgx": [
+   "baseline_dangerous_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/EditSessionController.java"
+  ]
+ },
+ "device_android_x": {
+  "tgx": [
+   "baseline_device_android_x_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsSessionsController.java",
+   "java/org/thunderdog/challegram/unsorted/SessionIcon.kt"
+  ]
+ },
+ "device_other": {
+  "tgx": [
+   "baseline_device_other_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/unsorted/SessionIcon.kt"
+  ]
+ },
+ "gpp_maybe": {
+  "tgx": [
+   "baseline_gpp_maybe_14",
+   "baseline_gpp_maybe_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/BaseActivity.java",
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "sim_card_alert": {
+  "tgx": [
+   "baseline_sim_card_alert_14",
+   "baseline_sim_card_alert_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/BaseActivity.java",
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "sim_card": {
+  "tgx": [
+   "baseline_sim_card_24",
+   "baseline_sim_card_96"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsLogOutController.java",
+   "java/org/thunderdog/challegram/ui/SettingsPhoneController.java"
+  ]
+ },
+ "launch": {
+  "tgx": [
+   "baseline_launch_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/PageBlockMedia.java"
+  ]
+ },
+ "sync_white": {
+  "tgx": [
+   "baseline_sync_white_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/service/BaseForegroundService.java"
+  ]
+ },
+ "feedback_white": {
+  "tgx": [
+   "baseline_feedback_white_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/sync/TemporaryNotification.java"
+  ]
+ },
+ "calculator": {
+  "tgx": [
+   "templarian_baseline_calculator_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/tool/Drawables.java"
+  ]
+ },
+ "router": {
+  "tgx": [
+   "baseline_router_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/EditSessionController.java"
+  ]
+ },
+ "exit_to_app": {
+  "tgx": [
+   "baseline_exit_to_app_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/EditSessionController.java"
+  ]
+ },
+ "android": {
+  "tgx": [
+   "baseline_android_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/IntroController.java"
+  ]
+ },
+ "fingerprint": {
+  "tgx": [
+   "baseline_fingerprint_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/PasscodeSetupController.java"
+  ]
+ },
+ "vpn_key": {
+  "tgx": [
+   "baseline_vpn_key_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/ProfileController.java"
+  ]
+ },
+ "flask": {
+  "tgx": [
+   "templarian_baseline_flask_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "signal_cellular_alt": {
+  "tgx": [
+   "baseline_signal_cellular_alt_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsDataController.java"
+  ]
+ },
+ "wifi": {
+  "tgx": [
+   "baseline_wifi_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsDataController.java"
+  ]
+ },
+ "qrcode_scan": {
+  "tgx": [
+   "xt3000_baseline_qrcode_scan_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsSessionsController.java"
+  ]
+ },
+ "gavel": {
+  "tgx": [
+   "baseline_gavel_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SharedMembersController.java"
+  ]
+ },
+ "device_android": {
+  "tgx": [
+   "baseline_device_android_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/unsorted/SessionIcon.kt"
+  ]
+ },
+ "device_ipad": {
+  "tgx": [
+   "baseline_device_ipad_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/unsorted/SessionIcon.kt"
+  ]
+ },
+ "device_xbox": {
+  "tgx": [
+   "baseline_device_xbox_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/unsorted/SessionIcon.kt"
+  ]
+ },
+ "device_ubuntu": {
+  "tgx": [
+   "templarian_baseline_device_ubuntu_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/unsorted/SessionIcon.kt"
+  ]
+ },
+ "device_linux": {
+  "tgx": [
+   "baseline_device_linux_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/unsorted/SessionIcon.kt"
+  ]
+ },
+ "bluetooth": {
+  "tgx": [
+   "baseline_bluetooth_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/voip/gui/CallSettings.java"
+  ]
+ }
+}

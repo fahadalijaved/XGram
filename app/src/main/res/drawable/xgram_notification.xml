@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram status bar icon: the woven X of the launcher icon (front stroke ending in a paper-plane point), cropped to fill 24dp -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="52"
+  android:viewportHeight="52">
+  <group android:translateX="-28" android:translateY="-28">
+    <path android:pathData="M36.5,36.5 L71.5,71.5" android:strokeWidth="11" android:strokeLineCap="round" android:strokeColor="#FFFFFFFF" android:strokeAlpha="0.6" />
+    <path android:pathData="M36.5,71.5 L54.885,53.115" android:strokeWidth="11" android:strokeLineCap="round" android:strokeColor="#FFFFFFFF" />
+    <path android:pathData="M58.774,57.004 L76.5,31.5 L50.996,49.226 Z" android:fillColor="#FFFFFFFF" />
+  </group>
+</vector>

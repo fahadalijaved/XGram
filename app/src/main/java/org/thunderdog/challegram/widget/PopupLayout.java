@@ -616,6 +616,9 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
   }
 
   public boolean shouldDisallowScreenshots () {
+    if (com.fahadali.xgram.XgramSettings.instance().allowScreenshots() && !org.thunderdog.challegram.unsorted.Passcode.instance().shouldDisallowScreenshots()) {
+      return false; // XGram
+    }
     ViewController<?> c = boundController;
     if (c != null && c.shouldDisallowScreenshots()) {
       return true;

@@ -735,6 +735,7 @@ public final class TGMessageService extends TGMessageServiceImpl {
 
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatJoinFromCommunity joinFromCommunity) {
     super(context, msg);
+    setOnClickListener(() -> com.fahadali.xgram.chats.XgramCommunityController.open(controller(), joinFromCommunity.communityId)); // XGram
     TdApi.Community community = tdlib.cache().community(joinFromCommunity.communityId);
     if (community != null) {
       setTextCreator(() -> {
@@ -1685,6 +1686,8 @@ public final class TGMessageService extends TGMessageServiceImpl {
 
   public TGMessageService (MessagesManager context, TdApi.Message msg, TdApi.MessageChatAddedToCommunity chatAddedToCommunity) {
     super(context, msg);
+    // XGram: tap to see the community's chats.
+    setOnClickListener(() -> com.fahadali.xgram.chats.XgramCommunityController.open(controller(), chatAddedToCommunity.communityId));
     setTextCreator(() -> {
       TdApi.Community community = tdlib().cache().community(chatAddedToCommunity.communityId);
       if (community != null) {

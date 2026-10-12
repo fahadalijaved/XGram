@@ -941,10 +941,18 @@ public class Theme {
   private static final boolean BUBBLE_BIG_RADIUS_AVAILABLE = Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT;
 
   public static float getBubbleDefaultRadius () {
+    int xgramRadius = com.fahadali.xgram.XgramSettings.instance().bubbleRadius();
+    if (xgramRadius >= 0) {
+      return xgramRadius; // XGram: Chat look
+    }
     return Theme.getProperty(BUBBLE_BIG_RADIUS_AVAILABLE ? PropertyId.BUBBLE_CORNER : PropertyId.BUBBLE_CORNER_LEGACY);
   }
 
   public static float getBubbleMergeRadius () {
+    int xgramRadius = com.fahadali.xgram.XgramSettings.instance().bubbleMergeRadius();
+    if (xgramRadius >= 0) {
+      return xgramRadius; // XGram: Chat look
+    }
     return Theme.getProperty(BUBBLE_BIG_RADIUS_AVAILABLE ? PropertyId.BUBBLE_CORNER_MERGED : PropertyId.BUBBLE_CORNER_LEGACY);
   }
 

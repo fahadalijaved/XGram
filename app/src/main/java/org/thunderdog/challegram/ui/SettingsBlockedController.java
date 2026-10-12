@@ -77,6 +77,7 @@ public class SettingsBlockedController extends RecyclerViewController<TdApi.Bloc
   @Override
   public void fillMenuItems (int id, HeaderView header, LinearLayout menu) {
     if (id == R.id.menu_contacts) {
+      header.addButton(menu, R.id.menu_btn_xgramUnblockMenu, R.drawable.baseline_delete_sweep_24, getHeaderIconColorId(), this, Screen.dp(49f)); // XGram
       header.addButton(menu, R.id.menu_btn_addContact, R.drawable.baseline_person_add_24, getHeaderIconColorId(), this, Screen.dp(49f));
     }
   }
@@ -85,6 +86,8 @@ public class SettingsBlockedController extends RecyclerViewController<TdApi.Bloc
   public void onMenuItemPressed (int id, View view) {
     if (id == R.id.menu_btn_addContact) {
       blockContact();
+    } else if (id == R.id.menu_btn_xgramUnblockMenu) {
+      com.fahadali.xgram.chats.XgramUnblock.showMenu(this, getArguments()); // XGram
     }
   }
 

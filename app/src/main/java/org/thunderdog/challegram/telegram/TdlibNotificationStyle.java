@@ -616,7 +616,7 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
 
     builder
       .setContentTitle(visualChatTitle)
-      .setSmallIcon(R.mipmap.app_notification)
+      .setSmallIcon(R.drawable.xgram_notification) // XGram
       .setContentText(textContent)
       .setTicker(tickerText)
       .setAutoCancel(Config.NOTIFICATION_AUTO_CANCEL)
@@ -853,6 +853,11 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
   }
 
   static Person buildPerson (TdlibNotificationManager context, boolean isSelfChat, boolean isGroupChat, boolean isChannel, TdApi.User user, @Nullable String id, boolean isScheduled, boolean isSilent, boolean allowDownload) {
+    return buildPerson(context, isSelfChat, isGroupChat, isChannel, user, id, isScheduled, isSilent, allowDownload, null);
+  }
+
+  // XGram: xgramTopic is the forum topic of the message, shown as "Name › Topic".
+  static Person buildPerson (TdlibNotificationManager context, boolean isSelfChat, boolean isGroupChat, boolean isChannel, TdApi.User user, @Nullable String id, boolean isScheduled, boolean isSilent, boolean allowDownload, @Nullable String xgramTopic) {
     if (user == null)
       return new Person.Builder().setName(Strings.ELLIPSIS).build();
     if (context.isSelfUserId(user.id))
@@ -862,6 +867,9 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     String name = TD.getUserName(user);
     if (StringUtils.isEmpty(name)) {
       name = Strings.ELLIPSIS;
+    }
+    if (xgramTopic != null) {
+      name = name + " › " + xgramTopic;
     }
     return buildPerson(context, isSelfChat, isGroupChat, isChannel, id, TD.isBot(user), name, TD.getLetters(user), context.tdlib().cache().userAccentColor(user), user.profilePhoto != null ? user.profilePhoto.small : null, isScheduled, isSilent, allowDownload);
   }
@@ -873,12 +881,16 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     if (userId == 0 && ChatId.isUserChat(senderChatId) && notification.isSynced()) {
       userId = ChatId.toUserId(senderChatId);
     }
+    final String xgramTopic = com.fahadali.xgram.topics.XgramForums.notificationTopicName(tdlib, chat, notification.findMessage()); // XGram
     if (userId != 0) {
       TdApi.User user = tdlib.cache().user(userId);
-      return buildPerson(context, notification.isSelfChat(), TD.isMultiChat(chat), tdlib.isChannelChat(chat), user, ChatId.isSecret(chat.id) ? Long.toString(chat.id) : Long.toString(ChatId.fromUserId(userId)), isScheduled, isSilent, allowDownload);
+      return buildPerson(context, notification.isSelfChat(), TD.isMultiChat(chat), tdlib.isChannelChat(chat), user, ChatId.isSecret(chat.id) ? Long.toString(chat.id) : Long.toString(ChatId.fromUserId(userId)), isScheduled, isSilent, allowDownload, xgramTopic);
     }
     if (TD.isMultiChat(chat)) {
       String senderName = notification.findSenderName();
+      if (xgramTopic != null) {
+        senderName = senderName + " › " + xgramTopic; // XGram
+      }
       TdApi.Chat senderChat = tdlib.chat(senderChatId);
       return buildPerson(context, notification.isSelfChat(), TD.isMultiChat(chat), tdlib.isChannelChat(chat), Long.toString(senderChatId), tdlib.isBotChat(senderChatId) || tdlib.isChannel(senderChatId), senderName, TD.getLetters(senderName), tdlib.chatAccentColor(senderChatId), senderChat != null && senderChat.photo != null ? senderChat.photo.small : null, isScheduled, isSilent, allowDownload);
     }
@@ -1078,7 +1090,7 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     }
 
     b.setAutoCancel(Config.NOTIFICATION_AUTO_CANCEL_SPECIFIC);
-    b.setSmallIcon(R.mipmap.app_notification);
+    b.setSmallIcon(R.drawable.xgram_notification); // XGram
     b.setWhen(timeMs);
     if (!Device.FLYME) {
       b.setNumber(badgeCount);

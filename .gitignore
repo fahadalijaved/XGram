@@ -18,3 +18,12 @@ obj
 /local.properties
 
 libc++_shared.so
+
+# XGram
+__pycache__/
+*.pyc
+# notes and plans kept locally
+/docs/xgram/
+# preview renders of the icon pack tools
+/tools/xgram/icon_packs/maps/_sheet_*
+/tools/xgram/icon_packs/batches/_preview_*

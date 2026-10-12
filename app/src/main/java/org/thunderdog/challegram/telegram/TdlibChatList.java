@@ -425,7 +425,7 @@ public final class TdlibChatList implements Comparator<TdlibChatList.Entry> {
       } else {
         existingEntry = list.get(prevIndex);
       }
-      if (changeInfo.metadataChanged()) {
+      if (changeInfo.metadataChanged() || changeInfo.orderChanged()) { // XGram: sorted slices need the new order too
         tdlib.listeners().updateChatChanged(this, existingEntry.chat, prevIndex, changeInfo);
       }
     }

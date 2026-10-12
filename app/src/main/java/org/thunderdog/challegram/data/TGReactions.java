@@ -604,6 +604,10 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
     boolean hasReaction = !hasReaction(reactionType);
     if (hasReaction) {
       tdlib.client().send(new TdApi.AddMessageReaction(parent.getChatId(), message.id, reactionType, isBig, updateRecentReactions), handler);
+      // XGram: ghost mode, reacting reads the chat up to that message like sending does.
+      if (com.fahadali.xgram.XgramSettings.instance().ghostReadOnSend() && com.fahadali.xgram.ghost.XgramGhost.dontReadMessages(tdlib, parent.getChatId())) {
+        com.fahadali.xgram.ghost.XgramGhost.readUpTo(tdlib, message, message.id);
+      }
     } else {
       tdlib.client().send(new TdApi.RemoveMessageReaction(parent.getChatId(), message.id, reactionType), handler);
     }

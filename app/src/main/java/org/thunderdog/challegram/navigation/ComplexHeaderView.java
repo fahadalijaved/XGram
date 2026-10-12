@@ -179,6 +179,20 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
     return this.subtitle != null;
   }
 
+  @androidx.annotation.Nullable
+  private android.graphics.drawable.Drawable xgramAvatarDrawable;
+
+  /** XGram: draws this instead of the avatar (null for the avatar again). */
+  public void xgramSetAvatarDrawable (@androidx.annotation.Nullable android.graphics.drawable.Drawable drawable) {
+    if (this.xgramAvatarDrawable == drawable) {
+      return;
+    }
+    int oldTextMaxWidth = getCheckTextMaxWidth();
+    this.xgramAvatarDrawable = drawable;
+    layoutTextsIfNeeded(oldTextMaxWidth); // the expand amount (so the text width) can change
+    invalidate();
+  }
+
   public void setNoExpand (boolean noExpand) {
     if (setFlags(BitwiseUtils.setFlag(flags, FLAG_NO_EXPAND, noExpand))) {
       if (noExpand) {
@@ -390,6 +404,9 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   }
 
   public float getAvatarExpandFactor () {
+    if (xgramAvatarDrawable != null) {
+      return 0f; // XGram: a topic icon never grows into a full-width photo
+    }
     return avatarAllowanceFactor * (1f - avatarCollapseFactor);
   }
 
@@ -872,10 +889,16 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       final float textScaleFactor = MathUtils.fromTo(1f + scaleFactor * .1f, avatarTextScale, avatarExpandFactor);
 
       layoutReceiver();
-      if (receiver.needPlaceholder()) {
-        receiver.drawPlaceholderRounded(c, receiver.getDisplayRadius(), Theme.headerPlaceholderColor());
+      if (xgramAvatarDrawable != null) {
+        // XGram: a forum topic's icon in its profile.
+        xgramAvatarDrawable.setBounds(receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom());
+        xgramAvatarDrawable.draw(c);
+      } else {
+        if (receiver.needPlaceholder()) {
+          receiver.drawPlaceholderRounded(c, receiver.getDisplayRadius(), Theme.headerPlaceholderColor());
+        }
+        receiver.draw(c);
       }
-      receiver.draw(c);
       if (avatarExpandFactor > 0f && receiver.getRequestedPlaceholder() == null) {
         getTopShadow().setAlpha((int) (255f * .8f * avatarExpandFactor));
         getTopShadow().draw(c);
@@ -1227,7 +1250,7 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   @Override
   public boolean needsForceTouch (BaseView v, float x, float y) {
     int bound = Screen.dp(6f);
-    return (receiver.getRequestedChatPhoto() != null || receiver.getRequestedProfilePhoto() != null || receiver.getRequestedChatPhotoInfo() != null) && x >= receiver.getLeft() - bound && x < receiver.getRight() + bound && y >= receiver.getTop() - bound && y < receiver.getBottom() + bound;
+    return xgramAvatarDrawable == null && (receiver.getRequestedChatPhoto() != null || receiver.getRequestedProfilePhoto() != null || receiver.getRequestedChatPhotoInfo() != null) && x >= receiver.getLeft() - bound && x < receiver.getRight() + bound && y >= receiver.getTop() - bound && y < receiver.getBottom() + bound;
   }
 
   public AvatarReceiver getAvatarReceiver () {

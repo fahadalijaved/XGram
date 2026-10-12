@@ -136,6 +136,9 @@ public class BackHeaderButton extends HeaderButton implements View.OnClickListen
         if (context.getDrawer() != null && !context.getDrawer().isVisible()) {
           context.getDrawer().open();
         }
+      } else if (parentHeader != null && context.xgramTwoPane() != null && context.xgramTwoPane().isLeftNavigation(parentHeader.getNavigation())) {
+        // XGram: back inside the chat list pane of the two-pane layout.
+        parentHeader.getNavigation().navigateBack();
       } else {
         context.performBackPress(true);
       }

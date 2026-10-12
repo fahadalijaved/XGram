@@ -427,6 +427,15 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
     return -1;
   }
 
+  /** XGram: the row of a merged community, after one of its chats changed. Returns its position or -1. */
+  public int xgramRefreshCommunityRow (long chatId) {
+    int index = indexOfChat(chatId);
+    if (index != -1 && chats.get(index).xgramRefreshCommunity()) {
+      return getItemPositionByChatIndex(index);
+    }
+    return -1;
+  }
+
   public int updateChatReadInbox (long chatId, final long lastReadInboxMessageId, final int unreadCount) {
     int index = indexOfChat(chatId);
     if (index != -1 && chats.get(index).updateChatReadInbox(chatId, lastReadInboxMessageId, unreadCount)) {
@@ -710,6 +719,7 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
 
   public int addChat (TdApi.Chat chat, int atIndex, Tdlib.ChatChange changeInfo) {
     TGChat newChat = new TGChat(context.getParentOrSelf(), context.chatList(), chat, false);
+    newChat.xgramSetMergeCommunities(context.xgramMergesCommunities()); // XGram
     int index = hasArchive ? atIndex + 1 : atIndex;
     newChat.makeMeasures();
     int flags = changeInfo.metadataChanged() ? ORDER_INVALIDATE_DECORATIONS : 0;

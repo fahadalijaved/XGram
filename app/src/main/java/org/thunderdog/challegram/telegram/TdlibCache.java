@@ -440,6 +440,8 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
     final boolean isContactChanged;
     final boolean isContact;
     TdApi.User newUser = update.user;
+    newUser.status = com.fahadali.xgram.ghost.XgramLastSeen.onStatus(tdlib, newUser.id, newUser.status); // XGram
+    com.fahadali.xgram.chats.XgramLocalNames.rewriteUser(tdlib, newUser); // XGram: local names
     synchronized (dataLock) {
       TdApi.User oldUser = users.get(newUser.id);
       hadUser = oldUser != null;
@@ -540,6 +542,7 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
 
   @TdlibThread
   void onUpdateUserStatus (final TdApi.UpdateUserStatus update) {
+    update.status = com.fahadali.xgram.ghost.XgramLastSeen.onStatus(tdlib, update.userId, update.status); // XGram
     synchronized (dataLock) {
       TdApi.User user = users.get(update.userId);
       if (user == null) {
@@ -664,6 +667,7 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
     synchronized (dataLock) {
       updated = putSupergroupFull(supergroupId, supergroupFullInfo);
     }
+    com.fahadali.xgram.chats.XgramCommunities.onSupergroupFull(tdlib, supergroupId, supergroupFullInfo); // XGram
     if (updated) {
       notifyListeners(supergroupsGlobalListeners.iterator(), supergroupId, supergroupFullInfo);
       notifyListeners(supergroupListeners.iterator(supergroupId), supergroupId, supergroupFullInfo);
@@ -866,6 +870,24 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
 
   public void unsubscribeFromGroupUpdates (long basicGroupId, BasicGroupDataChangeListener listener) {
     deleteGroupListener(basicGroupId, listener);
+  }
+
+  // XGram: the chat list follows every community (merged rows: name and photo).
+  public void subscribeToCommunityGlobalUpdates (CommunityDataChangeListener listener) {
+    communityGlobalListeners.add(listener);
+  }
+
+  public void unsubscribeFromCommunityGlobalUpdates (CommunityDataChangeListener listener) {
+    communityGlobalListeners.remove(listener);
+  }
+
+  // XGram: the community page follows its community.
+  public void subscribeToCommunityUpdates (long communityId, CommunityDataChangeListener listener) {
+    communityListeners.add(communityId, listener);
+  }
+
+  public void unsubscribeFromCommunityUpdates (long communityId, CommunityDataChangeListener listener) {
+    communityListeners.remove(communityId, listener);
   }
 
   public void subscribeToSupergroupUpdates (long supergroupId, SupergroupDataChangeListener listener) {

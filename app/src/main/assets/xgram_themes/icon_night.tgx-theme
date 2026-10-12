@@ -1,0 +1,60 @@
+!
+name: "Night"
+time: 1760227200
+wallpaper: "12121f~16213e~1a1a2e~1c1f45"
+@
+dark, shadowDepth: 1
+parentTheme: 10
+wallpaperUsageId: 2
+#
+attachContact, attachFile, attachInlineBot, attachLocation, attachPhoto, bubble_mediaReply_noWallpaper, bubble_unread_noWallpaper, bubbleIn_background, circleButtonChat, circleButtonOverlay, filling, overlayFilling, unread: #1A1A2E
+background, badgeMutedText, chatBackground, chatKeyboard, iv_chatLinkBackground, iv_preBlockBackground, iv_textCodeBackground, iv_textCodeBackgroundPressed: #10101C
+background_icon, background_text, background_textLight, badgeMuted, bubbleIn_blockQuoteLine, bubbleIn_blockQuoteText, bubbleIn_time, chatListIcon, chatListMute, circleButtonChatIcon, circleButtonOverlayIcon, icon, iv_caption, iv_icon, iv_pageAuthor, iv_pageFooter, iv_pageSubtitle, playerCoverIcon, textLight, textPlaceholder, togglerInactive: #8A93B8
+badge, bubbleOut_ticksRead, chatListAction, chatListVerify, checkActive, circleButtonActive, circleButtonRegular, circleButtonTheme, headerBadge, headerButton, iconActive, messageVerticalLine, playerButtonActive, seekDone, sliderActive, ticks, ticksRead: #4FC3F7
+badgeText, circleButtonActiveIcon, circleButtonRegularIcon, circleButtonThemeIcon, headerButtonIcon: #06202C
+blockQuoteLine, blockQuoteText: #B3B8CB
+bubble_button_noWallpaper, bubble_buttonRipple_noWallpaper: #00000030
+bubble_chatSeparator, bubbleIn_outline, bubbleIn_separator, bubbleOut_outline, chatSeparator, inputInactive, iv_separator, separator, shareSeparator: #0B0B14
+bubble_date, bubble_date_noWallpaper, bubble_overlay: #10101C66
+bubble_messageSelection, bubbleIn_pressed: #00000020
+bubble_messageSelectionNoWallpaper: #0000002A
+bubbleIn_fillingActive, fillingActive: #8A93B826
+bubbleIn_fillingActiveContent, bubbleIn_text, bubbleOut_fillingActiveContent, bubbleOut_text, drawerText, fillingActiveContent, headerIcon, headerLightIcon, headerLightText, headerTabActiveText, headerText, introSectionActive, iv_blockQuoteLine, iv_header, iv_pageTitle, iv_text, iv_textCode, iv_textMarked, iv_textReference, playerButton, text, unreadText: #E6ECFF
+bubbleIn_fillingPositive, bubbleIn_fillingPositive_overlay, bubbleIn_textLink, bubbleOut_file, bubbleOut_fillingPositive, bubbleOut_fillingPositive_overlay, bubbleOut_waveformActive, file, inlineIcon, inlineOutline, inlineText, iv_textLink, iv_textMarkedLink, messageAuthor, notificationLink, snackbarUpdate, textLink: #6FB8FF
+bubbleIn_progress, chatSendButton, controlActive, headerTabActive, inputActive, profileSectionActive, profileSectionActiveContent, progress, promo, textNeutral, textSearchQueryHighlight, togglerActive, togglerPositive: #7C9DFF
+bubbleIn_textLinkPressHighlight, iv_textLinkPressHighlight, textLinkPressHighlight: #6FB8FF44
+bubbleOut_background, messageSwipeBackground: #2E3570
+bubbleOut_blockQuoteLine, bubbleOut_blockQuoteText: #AFB5D4
+bubbleOut_chatCorrectChosenFilling, bubbleOut_chatCorrectFilling, bubbleOut_chatVerticalLine, bubbleOut_inlineIcon, bubbleOut_inlineOutline, bubbleOut_inlineText, bubbleOut_messageAuthor, bubbleOut_textLink, bubbleOut_ticks, messageCorrectChosenFilling, messageCorrectFilling: #AABFFF
+bubbleOut_fillingActive: #8A90B826
+bubbleOut_progress, bubbleOut_separator, bubbleOut_time: #8A90B8
+bubbleOut_textLinkPressHighlight: #AABFFF40
+bubbleOut_waveformInactive, waveformInactive: #6E75A2
+chatKeyboardButton: #28293D
+controlInactive, sliderInactive, togglerInactiveBackground: #4C506C
+drawer, statusBar: #00000040
+fileAttach, playerCoverPlaceholder: #151525
+fillingPressed: #2A2B3F
+headerBackground, headerLightBackground, notification, notificationPlayer, passcode: #16213E
+headerBadgeMuted, headerTabInactiveText: #A8AFC5
+headerPlaceholder: #E6ECFF10
+iconLight: #5D6381
+introSection: #818181
+iv_blockQuote: #FCFCFC
+iv_pullQuote: #F9F9F9
+iv_textReferenceBackground: #F2F2F22A
+iv_textReferenceBackgroundPressed: #E0E0E030
+iv_textReferenceOutline: #E6ECFF44
+iv_textReferenceOutlinePressed: #E6ECFF20
+lineInactive, nameInactive: #6A6A6A
+messageSelection: #6FB8FF10
+notificationSecure, textSecure: #78E27E
+placeholder: #E6ECFF0C
+previewBackground: #00000070
+seekEmpty: #131321
+seekReady: #41445E
+textSelectionHighlight: #2A4D6A
+togglerActiveBackground, togglerPositiveBackground: #3A7FA7
+tooltip: #000000EE
+tooltip_outline: #2E357020
+waveformActive: #2D5574

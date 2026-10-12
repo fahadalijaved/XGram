@@ -1,0 +1,362 @@
+{
+ "gps_fixed": {
+  "tgx": [
+   "baseline_gps_fixed_24",
+   "baseline_gps_fixed_16",
+   "baseline_gps_fixed_12"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/attach/MediaLocationMapView.java",
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "keyboard_arrow_down": {
+  "tgx": [
+   "baseline_keyboard_arrow_down_20",
+   "baseline_keyboard_arrow_down_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TGMessage.java",
+   "java/org/thunderdog/challegram/navigation/ToggleHeaderView2.java",
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "directions_car": {
+  "tgx": [
+   "baseline_directions_car_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java",
+   "java/org/thunderdog/challegram/widget/emoji/header/EmojiHeaderViewNonPremium.java"
+  ]
+ },
+ "keyboard_arrow_right": {
+  "tgx": [
+   "round_keyboard_arrow_right_24",
+   "round_keyboard_arrow_right_18",
+   "round_keyboard_arrow_right_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/charts/view_data/LegendSignatureView.java",
+   "java/org/thunderdog/challegram/navigation/ComplexHeaderView.java",
+   "java/org/thunderdog/challegram/navigation/TooltipOverlayView.java"
+  ]
+ },
+ "apps": {
+  "tgx": [
+   "baseline_apps_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramWhatsNewController.java",
+   "java/org/thunderdog/challegram/ui/EditSessionController.java"
+  ]
+ },
+ "directions": {
+  "tgx": [
+   "baseline_directions_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/ui/MapController.java"
+  ]
+ },
+ "filter_variant_remove": {
+  "tgx": [
+   "baseline_filter_variant_remove_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MainController.java",
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "extension": {
+  "tgx": [
+   "baseline_extension_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramMessageDetailsController.java",
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "map": {
+  "tgx": [
+   "baseline_map_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramMessageDetailsController.java",
+   "java/org/thunderdog/challegram/data/TGMessageLocation.java"
+  ]
+ },
+ "arrow_back": {
+  "tgx": [
+   "baseline_arrow_back_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "folder_plus": {
+  "tgx": [
+   "templarian_baseline_folder_plus_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/ui/ChatsController.java"
+  ]
+ },
+ "folder_remove": {
+  "tgx": [
+   "templarian_baseline_folder_remove_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/ui/ChatsController.java"
+  ]
+ },
+ "check_box_outline_blank": {
+  "tgx": [
+   "baseline_check_box_outline_blank_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/LanguageController.java"
+  ]
+ },
+ "arrow_downward": {
+  "tgx": [
+   "baseline_arrow_downward_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "source_merge": {
+  "tgx": [
+   "templarian_baseline_source_merge_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "small_arrow_down": {
+  "tgx": [
+   "baseline_small_arrow_down_18",
+   "baseline_small_arrow_down_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/emoji/MediaStickersAdapter.java",
+   "java/org/thunderdog/challegram/navigation/ViewPagerHeaderViewReactionsCompact.java"
+  ]
+ },
+ "keyboard_arrow_left": {
+  "tgx": [
+   "baseline_keyboard_arrow_left_24",
+   "round_keyboard_arrow_left_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java",
+   "java/org/thunderdog/challegram/ui/HashtagChatController.java"
+  ]
+ },
+ "ic_map_pin": {
+  "tgx": [
+   "ic_map_pin_44"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/attach/MediaLocationMapView.java"
+  ]
+ },
+ "ballot": {
+  "tgx": [
+   "baseline_ballot_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "receipt": {
+  "tgx": [
+   "baseline_receipt_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "assignment": {
+  "tgx": [
+   "baseline_assignment_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "import": {
+  "tgx": [
+   "templarian_baseline_import_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TGChat.java"
+  ]
+ },
+ "toggle_on": {
+  "tgx": [
+   "outline_toggle_on_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/navigation/DrawerController.java"
+  ]
+ },
+ "clear_all": {
+  "tgx": [
+   "baseline_clear_all_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/navigation/TelegramViewController.java"
+  ]
+ },
+ "create_new_folder": {
+  "tgx": [
+   "baseline_create_new_folder_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java"
+  ]
+ },
+ "folder_open": {
+  "tgx": [
+   "baseline_folder_open_96"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/ChatsController.java"
+  ]
+ },
+ "label": {
+  "tgx": [
+   "baseline_label_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/EditRightsController.java"
+  ]
+ },
+ "indeterminate_check_box": {
+  "tgx": [
+   "baseline_indeterminate_check_box_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/LanguageController.java"
+  ]
+ },
+ "filter_variant_user": {
+  "tgx": [
+   "baseline_filter_variant_user_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MainController.java"
+  ]
+ },
+ "filter_variant_group": {
+  "tgx": [
+   "baseline_filter_variant_group_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MainController.java"
+  ]
+ },
+ "filter_variant_channel": {
+  "tgx": [
+   "baseline_filter_variant_channel_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MainController.java"
+  ]
+ },
+ "filter_variant_bot": {
+  "tgx": [
+   "baseline_filter_variant_bot_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MainController.java"
+  ]
+ },
+ "filter_variant_unread": {
+  "tgx": [
+   "baseline_filter_variant_unread_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MainController.java"
+  ]
+ },
+ "edit_folders": {
+  "tgx": [
+   "baseline_edit_folders_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MainController.java"
+  ]
+ },
+ "layers": {
+  "tgx": [
+   "baseline_layers_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MapController.java"
+  ]
+ },
+ "explore": {
+  "tgx": [
+   "baseline_explore_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MapController.java"
+  ]
+ },
+ "keyboard_arrow_up": {
+  "tgx": [
+   "baseline_keyboard_arrow_up_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "gesture": {
+  "tgx": [
+   "baseline_gesture_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/PasscodeSetupController.java"
+  ]
+ },
+ "folder_copy": {
+  "tgx": [
+   "baseline_folder_copy_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsController.java"
+  ]
+ },
+ "folders_reorder": {
+  "tgx": [
+   "dotvhs_baseline_folders_reorder_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsFoldersController.java"
+  ]
+ },
+ "swap_horiz": {
+  "tgx": [
+   "baseline_swap_horiz_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsPrivacyKeyController.java"
+  ]
+ },
+ "recent": {
+  "tgx": [
+   "baseline_recent_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/TranslationControllerV2.java"
+  ]
+ }
+}

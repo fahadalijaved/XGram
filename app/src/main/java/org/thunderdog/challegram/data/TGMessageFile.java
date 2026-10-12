@@ -745,6 +745,7 @@ public class TGMessageFile extends TGMessage {
   @Override
   public boolean onTouchEvent (MessageView view, MotionEvent e) {
     boolean res = super.onTouchEvent(view, e);
+    if (xgramTimeTouchCaught()) return res; // XGram: the time tap must not also open or download the file
     for (CaptionedFile file : filesList) {
       for (ListAnimator.Entry<TextWrapper> caption : file.caption) {
         if (caption.item.onTouchEvent(view, e)) {

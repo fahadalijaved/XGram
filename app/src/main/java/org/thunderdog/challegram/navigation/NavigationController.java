@@ -189,6 +189,34 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     return headerView;
   }
 
+  /**
+   * XGram: measures and lays out a controller's view as the content wrapper will, before it is added and slides in.
+   * Its rows (views, text layouts) are then built before the animation starts instead of during its first frames.
+   */
+  public boolean xgramPrelayout (@NonNull ViewController<?> controller) {
+    View view = controller.getValue();
+    ViewGroup.LayoutParams params = view.getLayoutParams();
+    if (contentWrapper == null || view.getParent() != null || params == null || params.width != ViewGroup.LayoutParams.MATCH_PARENT || params.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+      return false;
+    }
+    int left = contentWrapper.getPaddingLeft(), top = contentWrapper.getPaddingTop();
+    int width = contentWrapper.getMeasuredWidth() - left - contentWrapper.getPaddingRight();
+    int height = contentWrapper.getMeasuredHeight() - top - contentWrapper.getPaddingBottom();
+    if (params instanceof ViewGroup.MarginLayoutParams) {
+      ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
+      left += margins.leftMargin;
+      top += margins.topMargin;
+      width -= margins.leftMargin + margins.rightMargin;
+      height -= margins.topMargin + margins.bottomMargin;
+    }
+    if (width <= 0 || height <= 0) {
+      return false;
+    }
+    view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+    view.layout(left, top, left + width, top + height);
+    return true;
+  }
+
   public void setShadowsVisibility (int visibility) {
     shadowTop.setVisibility(visibility);
     shadowView.setVisibility(visibility);

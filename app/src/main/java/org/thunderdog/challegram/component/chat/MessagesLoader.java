@@ -116,7 +116,8 @@ public class MessagesLoader implements Client.ResultHandler {
   private long contextId;
 
   private boolean canShowSponsoredMessage (long chatId) {
-    return tdlib.isChannel(chatId) && !manager.controller().isInForceTouchMode() && !manager.controller().inPreviewMode() && !manager.controller().areScheduledOnly() && !manager.controller().arePinnedMessages();
+    return !com.fahadali.xgram.XgramSettings.instance().hideSponsored() && // XGram
+      tdlib.isChannel(chatId) && !manager.controller().isInForceTouchMode() && !manager.controller().inPreviewMode() && !manager.controller().areScheduledOnly() && !manager.controller().arePinnedMessages();
   }
 
   public void requestSponsoredMessages (long chatId, RunnableData<TdApi.SponsoredMessages> callback) {
@@ -151,6 +152,7 @@ public class MessagesLoader implements Client.ResultHandler {
     this.chat = chat;
     this.messageThread = messageThread;
     this.topicId = topicId;
+    this.xgramTopicLocalTried = false;
     this.specialMode = mode;
     this.searchFilter = filter;
     this.messageSource = newMessageSource();
@@ -504,14 +506,14 @@ public class MessagesLoader implements Client.ResultHandler {
             mergeChunk = messages;
             Log.i(Log.TAG_MESSAGES_LOADER, "Loading more groupped messages on the top, count: %d, fromMessageId: %d", loadMoreTopCount, oldestMessage.id);
             Log.ensureReturnType(TdApi.GetChatHistory.class, TdApi.Messages.class);
-            tdlib.client().send(new TdApi.GetChatHistory(messages[0].chatId, oldestMessage.id, 0, loadMoreTopCount, true), this);
+            tdlib.client().send(albumHistoryChunk(messages[0].chatId, oldestMessage.id, 0, loadMoreTopCount), this);
             return;
           } else if (loadMoreBottomCount > 0) {
             mergeMode = MERGE_MODE_BOTTOM;
             mergeChunk = messages;
             Log.i(Log.TAG_MESSAGES_LOADER, "Loading more groupped messages on the bottom, count: %d, fromMessageId: %d", loadMoreBottomCount + 1, newestMessage.id);
             Log.ensureReturnType(TdApi.GetChatHistory.class, TdApi.Messages.class);
-            tdlib.client().send(new TdApi.GetChatHistory(messages[0].chatId, newestMessage.id, -loadMoreBottomCount, loadMoreBottomCount + 1, true), this);
+            tdlib.client().send(albumHistoryChunk(messages[0].chatId, newestMessage.id, -loadMoreBottomCount, loadMoreBottomCount + 1), this);
             return;
           }
         }
@@ -525,6 +527,22 @@ public class MessagesLoader implements Client.ResultHandler {
           lastHandler = null;
         }
 
+        if (loadingLocal && topicId instanceof TdApi.MessageTopicForum && object.getConstructor() == TdApi.Messages.CONSTRUCTOR && specialMode == SPECIAL_MODE_NONE) {
+          // XGram: a cached page of the whole group, see the request above.
+          messages = com.fahadali.xgram.topics.XgramForums.onlyTopic(messages, (TdApi.MessageTopicForum) topicId);
+        }
+        if (object.getConstructor() == TdApi.Messages.CONSTRUCTOR && specialMode == SPECIAL_MODE_NONE &&
+          messageThread == null && chat != null && (messages.length > 0 || !loadingLocal)) {
+          // XGram: deleted messages saved by XGram go back into the history, marked as deleted.
+          long fromId = lastFromMessageId != null ? lastFromMessageId.getMessageId() : 0;
+          long olderThanId = lastOffset == 0 && fromId != 0 ? fromId : 0;
+          boolean isBottom = messages.length > 0 ? chat.lastMessage == null || messages[0].id >= chat.lastMessage.id : fromId == 0;
+          messages = com.fahadali.xgram.history.XgramDeleted.merge(tdlib, chat.id, topicId, messages, isBottom, olderThanId, loadingLocal);
+        }
+        if (object.getConstructor() == TdApi.Messages.CONSTRUCTOR && specialMode == SPECIAL_MODE_NONE) {
+          // XGram: message filters and shadow-banned senders.
+          messages = com.fahadali.xgram.chats.XgramFilters.filter(tdlib, messages);
+        }
         processMessages(currentContextId,
           messages, knownTotalCount, nextSearchOffset, nextSearchFromMessageId,
           needFindUnread && object.getConstructor() == TdApi.Messages.CONSTRUCTOR, missingAlbums);
@@ -540,6 +558,14 @@ public class MessagesLoader implements Client.ResultHandler {
       lastHandler = handler;
       return handler;
     }
+  }
+
+  // XGram: completing an album at a page edge must not pull messages from other forum topics.
+  private TdApi.Function<TdApi.Messages> albumHistoryChunk (long chatId, long fromMessageId, int offset, int limit) {
+    if (topicId instanceof TdApi.MessageTopicForum) {
+      return new TdApi.GetForumTopicHistory(chatId, ((TdApi.MessageTopicForum) topicId).forumTopicId, fromMessageId, offset, limit);
+    }
+    return new TdApi.GetChatHistory(chatId, fromMessageId, offset, limit, true);
   }
 
   public void reuse () {
@@ -587,6 +613,24 @@ public class MessagesLoader implements Client.ResultHandler {
       List<TdApi.Message> messages = new ArrayList<>();
       LongSparseArray<TdApi.User> participants = new LongSparseArray<>();
       boolean isGroupChat = fillPreviewMessages(manager.controller(), messages, participants);
+      if (manager.controller().inTextSizeMode() && !messages.isEmpty()) {
+        // XGram: an emoji-only message, so Chat look's emoji size shows in the preview
+        TdApi.Message newest = messages.get(0);
+        TdApi.Message emoji = new TdApi.Message();
+        emoji.id = newest.id + 1;
+        emoji.chatId = newest.chatId;
+        emoji.date = newest.date + 30;
+        emoji.isOutgoing = true;
+        emoji.senderId = newest.senderId;
+        for (TdApi.Message message : messages) {
+          if (message.isOutgoing) {
+            emoji.senderId = message.senderId;
+            break;
+          }
+        }
+        emoji.content = new TdApi.MessageText(new TdApi.FormattedText("😎👍", new TdApi.TextEntity[0]), null, null);
+        messages.add(0, emoji);
+      }
 
       manager.setDemoParticipants(participants, isGroupChat);
 
@@ -1085,6 +1129,7 @@ public class MessagesLoader implements Client.ResultHandler {
   private long lastRequestTime;
 
   private boolean loadingLocal, loadingAllowMoreTop, loadingAllowMoreBottom;
+  private boolean xgramTopicLocalTried;
 
   private MessageId lastFromMessageId;
   private String lastSearchNextOffset;
@@ -1116,6 +1161,13 @@ public class MessagesLoader implements Client.ResultHandler {
 
       loadingMode = mode;
       loadingLocal = onlyLocal;
+      if (!onlyLocal && !xgramTopicLocalTried && topicId instanceof TdApi.MessageTopicForum && specialMode == SPECIAL_MODE_NONE &&
+        (mode == MODE_INITIAL || mode == MODE_REPEAT_INITIAL)) {
+        // XGram: opening a topic at a message (e.g. the first unread) also tries the cache first, once; topic
+        // history from the server would make the screen wait.
+        xgramTopicLocalTried = true;
+        loadingLocal = true;
+      }
       loadingAllowMoreTop = allowMoreTop;
       loadingAllowMoreBottom = allowMoreBottom;
 
@@ -1131,6 +1183,10 @@ public class MessagesLoader implements Client.ResultHandler {
           if (ChatId.isSecret(chatId)) {
             Log.ensureReturnType(TdApi.SearchSecretMessages.class, TdApi.FoundMessages.class);
             function = new TdApi.SearchSecretMessages(sourceChatId, searchQuery, lastSearchNextOffset, limit, searchFilter);
+          } else if (topicId instanceof TdApi.MessageTopicSavedMessages && StringUtils.isEmpty(searchQuery) && searchSender == null && searchFilter == null) {
+            // XGram: all messages of one Saved Messages topic (Saved Messages by chat).
+            Log.ensureReturnType(TdApi.GetSavedMessagesTopicHistory.class, TdApi.Messages.class);
+            function = new TdApi.GetSavedMessagesTopicHistory(((TdApi.MessageTopicSavedMessages) topicId).savedMessagesTopicId, (lastFromMessageId = fromMessageId).getMessageId(), lastOffset = offset, lastLimit = limit);
           } else {
             Log.ensureReturnType(TdApi.SearchChatMessages.class, TdApi.FoundChatMessages.class);
             function = new TdApi.SearchChatMessages(sourceChatId, topicId, searchQuery, searchSender, (lastFromMessageId = fromMessageId).getMessageId(), lastOffset = offset, lastLimit = limit, searchFilter);
@@ -1151,6 +1207,16 @@ public class MessagesLoader implements Client.ResultHandler {
             loadingLocal = false;
             Log.ensureReturnType(TdApi.GetMessageThreadHistory.class, TdApi.Messages.class);
             function = new TdApi.GetMessageThreadHistory(sourceChatId, messageThread.getOldestMessageId(), (lastFromMessageId = fromMessageId).getMessageId(), lastOffset = offset, lastLimit = limit);
+          } else if (topicId instanceof TdApi.MessageTopicForum && loadingLocal) {
+            // XGram: first what TDLib has cached of the group, filtered to the topic when it arrives, so a topic
+            // opens as fast as a chat (topic history always comes from the server). Nothing cached: the server.
+            Log.ensureReturnType(TdApi.GetChatHistory.class, TdApi.Messages.class);
+            function = new TdApi.GetChatHistory(sourceChatId, (lastFromMessageId = fromMessageId).getMessageId(), lastOffset = offset, lastLimit = limit, true);
+          } else if (topicId instanceof TdApi.MessageTopicForum) {
+            // XGram: load only the messages of the opened forum topic.
+            loadingLocal = false;
+            Log.ensureReturnType(TdApi.GetForumTopicHistory.class, TdApi.Messages.class);
+            function = new TdApi.GetForumTopicHistory(sourceChatId, ((TdApi.MessageTopicForum) topicId).forumTopicId, (lastFromMessageId = fromMessageId).getMessageId(), lastOffset = offset, lastLimit = limit);
           } else {
             Log.ensureReturnType(TdApi.GetChatHistory.class, TdApi.Messages.class);
             function = new TdApi.GetChatHistory(sourceChatId, (lastFromMessageId = fromMessageId).getMessageId(), lastOffset = offset, lastLimit = limit, loadingLocal);

@@ -521,6 +521,14 @@ public class TGMessageSticker extends TGMessage implements AnimatedEmojiListener
     float max = Screen.dp(useForward() ? MAX_STICKER_FORWARD_SIZE : MAX_STICKER_SIZE);
     if (specialType != SPECIAL_TYPE_NONE || (sticker != null && sticker.setId == TdConstants.TELEGRAM_ANIMATED_EMOJI_STICKER_SET_ID)) { // TODO check for dice sticker set id
       max *= tdlib.emojiesAnimatedZoom();
+      if (specialType == SPECIAL_TYPE_ANIMATED_EMOJI || (sticker != null && sticker.setId == TdConstants.TELEGRAM_ANIMATED_EMOJI_STICKER_SET_ID)) {
+        max *= com.fahadali.xgram.XgramSettings.instance().emojiScale() / 100f; // XGram: Chat look
+      }
+    } else {
+      max *= com.fahadali.xgram.XgramSettings.instance().stickerScale() / 100f; // XGram: Chat look
+    }
+    if (origMaxWidth > 0) {
+      max = Math.min(max, origMaxWidth);
     }
     if (sticker != null) {
       float ratio = Math.min(max / (float) sticker.width, max / (float) sticker.height);

@@ -283,9 +283,12 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       this.client = Client.create(this, this, this);
       tdlib.updateParameters(client);
       if (Config.NEED_ONLINE) {
-        if (tdlib.isOnline) {
+        if (tdlib.isOnline && !com.fahadali.xgram.ghost.XgramGhost.hideOnline()) { // XGram: ghost mode stays offline
           client.send(new TdApi.SetOption("online", new TdApi.OptionValueBoolean(true)), tdlib.okHandler());
         }
+      }
+      if (com.fahadali.xgram.XgramSettings.instance().preferIpv6()) {
+        client.send(new TdApi.SetOption("prefer_ipv6", new TdApi.OptionValueBoolean(true)), tdlib.okHandler()); // XGram
       }
       tdlib.context.modifyClient(tdlib, client);
       this.resources = new TdlibResourceManager(tdlib, BuildConfig.TELEGRAM_RESOURCES_CHANNEL);
@@ -543,6 +546,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     boolean needMeasure = Log.needMeasureLaunchSpeed();
     long ms = needMeasure ? SystemClock.uptimeMillis() : 0;
     this.listeners = new TdlibListeners(this);
+    com.fahadali.xgram.ghost.XgramGhost.attach(this); // XGram
     if (needMeasure) {
       Log.v("INITIALIZATION: Tdlib.listeners -> %dms", SystemClock.uptimeMillis() - ms);
       ms = SystemClock.uptimeMillis();
@@ -1226,6 +1230,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
           if (isLoggingOut) { // FIXME TDLib: AuthorizationStateLoggedOut
             setLoggingOut(false);
             forceErase = true;
+            com.fahadali.xgram.XgramAccountData.eraseAccount(accountId); // XGram: nothing of this account for the next login in the slot
 
             activeCalls.clear();
             setHaveActiveCalls(false);
@@ -1414,6 +1419,11 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       return false;
     }
     final String key = accountId + "_app_version";
+    if (!test) {
+      // XGram: Telegram X's changelogs describe Telegram X releases, don't post them into the service chat.
+      Settings.instance().putInt(key, BuildConfig.ORIGINAL_VERSION_CODE);
+      return alreadySent;
+    }
     if (status == Status.UNAUTHORIZED || alreadySent) {
       Settings.instance().putInt(key, BuildConfig.ORIGINAL_VERSION_CODE);
       return alreadySent;
@@ -1757,6 +1767,13 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     }
     for (TdApi.Function<T> function : functions) {
       send(function, actualHandler);
+    }
+  }
+
+  /** XGram: whether this account's current TDLib client is {@code c}, without creating or waiting for one. */
+  public boolean xgramOwnsClient (Client c) {
+    synchronized (clientLock) {
+      return client != null && client.client == c;
     }
   }
 
@@ -5336,6 +5353,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void deleteChat (long chatId, boolean revoke, @Nullable Runnable after) {
+    com.fahadali.xgram.history.XgramDeleted.noteSelfClearedChat(this, chatId); // XGram
     switch (ChatId.getType(chatId)) {
       case TdApi.ChatTypePrivate.CONSTRUCTOR: {
         client().send(new TdApi.DeleteChatHistory(chatId, true, revoke), okHandler(after));
@@ -5769,10 +5787,12 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void deleteMessages (long chatId, long[] messageIds, boolean revoke) {
+    com.fahadali.xgram.history.XgramDeleted.noteSelfDeleted(this, chatId, messageIds); // XGram
     send(new TdApi.DeleteMessages(chatId, messageIds, revoke), typedOkHandler());
   }
 
   public void deleteMessagesIfOk (final long chatId, final long[] messageIds, boolean revoke) {
+    com.fahadali.xgram.history.XgramDeleted.noteSelfDeleted(this, chatId, messageIds); // XGram
     send(new TdApi.DeleteMessages(chatId, messageIds, revoke), typedOkHandler());
   }
 
@@ -6581,10 +6601,45 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     if (this.isOnline != isOnline) {
       this.isOnline = isOnline;
       Log.i("SetOnline accountId:%d -> %b", accountId, isOnline);
-      if (Config.NEED_ONLINE) {
-        performOptional(client -> client.send(new TdApi.SetOption("online", new TdApi.OptionValueBoolean(isOnline)), okHandler()), null);
-      }
+      xgramApplyOnlineState();
       // cache().setPauseStatusRefreshers(!isOnline);
+    }
+  }
+
+  /** XGram: runs real read counters (from getChat) through the normal update path, where local reads apply. */
+  @TdlibThread
+  public void xgramApplyReadInbox (long chatId, long lastReadInboxMessageId, int unreadCount) {
+    updateChatReadInbox(new TdApi.UpdateChatReadInbox(chatId, lastReadInboxMessageId, unreadCount));
+  }
+
+  /** XGram: runs a user (from getUser) through the cache again, where local names apply. */
+  @TdlibThread
+  public void xgramApplyUser (TdApi.User user) {
+    cache().onUpdateUser(new TdApi.UpdateUser(user));
+  }
+
+  /** XGram: same for a chat title. */
+  @TdlibThread
+  public void xgramApplyChatTitle (long chatId, String title) {
+    updateChatTitle(new TdApi.UpdateChatTitle(chatId, title));
+  }
+
+  /** XGram: re-runs a user's hidden status through the cache, where local last seen replaces it. */
+  @TdlibThread
+  public void xgramRefreshUserStatus (long userId) {
+    cache().onUpdateUserStatus(new TdApi.UpdateUserStatus(userId, new TdApi.UserStatusRecently(false)));
+  }
+
+  @TdlibThread
+  public void xgramApplyMentionCount (long chatId, int unreadMentionCount) {
+    updateChatUnreadMentionCount(new TdApi.UpdateChatUnreadMentionCount(chatId, unreadMentionCount));
+  }
+
+  // XGram: ghost mode keeps the account offline even while the app is open.
+  public void xgramApplyOnlineState () {
+    if (Config.NEED_ONLINE) {
+      boolean online = isOnline && !com.fahadali.xgram.ghost.XgramGhost.hideOnline();
+      performOptional(client -> client.send(new TdApi.SetOption("online", new TdApi.OptionValueBoolean(online)), okHandler()), null);
     }
   }
 
@@ -7523,6 +7578,11 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     }
 
     listeners.updateNewMessage(update);
+    com.fahadali.xgram.history.XgramHistory.onNewMessage(this, update.message); // XGram
+    com.fahadali.xgram.chats.XgramCommunities.onMessage(this, update.message); // XGram
+    if (!update.message.isOutgoing) {
+      com.fahadali.xgram.ghost.XgramLastSeen.onActivity(this, update.message.senderId, update.message.date); // XGram
+    }
 
     notificationManager.onUpdateNewMessage(update);
 
@@ -7589,6 +7649,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateMessageContent (TdApi.UpdateMessageContent update) {
+    com.fahadali.xgram.history.XgramHistory.onMessageContentChanged(this, update); // XGram: edit history
     listeners.updateMessageContent(update);
     context.global().notifyUpdateMessageContent(this, update);
 
@@ -7638,6 +7699,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateMessageMentionRead (TdApi.UpdateMessageMentionRead update) {
+    // XGram: ghost mode local read
+    com.fahadali.xgram.ghost.XgramLocalRead.onMentionRead(this, update.chatId, update.messageId);
+    update.unreadMentionCount = com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(this, update.chatId, 0, update.unreadMentionCount);
     final boolean counterChanged, availabilityChanged;
     synchronized (dataLock) {
       final TdApi.Chat chat = chats.get(update.chatId);
@@ -7697,6 +7761,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     if (update.fromCache) {
       return;
     }
+    com.fahadali.xgram.history.XgramHistory.onMessagesDeleted(this, update); // XGram: keep deleted messages
 
     Arrays.sort(update.messageIds);
 
@@ -7709,6 +7774,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateSavedMessagesTopic (TdApi.UpdateSavedMessagesTopic update) {
+    com.fahadali.xgram.chats.XgramSavedTopics.onUpdate(this, update.topic); // XGram
 
   }
 
@@ -7748,6 +7814,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateNewChat (TdApi.UpdateNewChat update) {
+    com.fahadali.xgram.ghost.XgramLocalRead.rewriteChat(this, update.chat); // XGram: ghost mode local read
+    com.fahadali.xgram.chats.XgramLocalNames.rewriteChat(this, update.chat); // XGram: local names
     List<TdlibChatList> chatLists;
     synchronized (dataLock) {
       if (Config.TEST_CHAT_COUNTERS) {
@@ -7839,6 +7907,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateChatUnreadMentionCount (TdApi.UpdateChatUnreadMentionCount update) {
+    update.unreadMentionCount = com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(this, update.chatId, 0, update.unreadMentionCount); // XGram
     final boolean availabilityChanged;
     synchronized (dataLock) {
       final TdApi.Chat chat = chats.get(update.chatId);
@@ -8196,6 +8265,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateChatTitle (TdApi.UpdateChatTitle update) {
+    com.fahadali.xgram.chats.XgramLocalNames.rewriteChatTitle(this, update); // XGram: local names
     final TdApi.Chat chat;
     final TdlibChatList[] chatLists;
     synchronized (dataLock) {
@@ -8320,6 +8390,11 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateChatReadInbox (TdApi.UpdateChatReadInbox update) {
+    // XGram: groups with topics show their topics' unread messages (TDLib never lowers a forum's own count when
+    // topics are read); other chats get ghost mode's local reads.
+    if (!com.fahadali.xgram.topics.XgramForumUnread.rewrite(this, update)) {
+      com.fahadali.xgram.ghost.XgramLocalRead.rewriteReadInbox(this, update);
+    }
     final TdApi.Chat chat;
     final boolean availabilityChanged;
     final TdlibChatList[] chatLists;
@@ -8428,6 +8503,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateForumTopic (TdApi.UpdateForumTopic update) {
+    com.fahadali.xgram.topics.XgramTopicReadOutbox.set(this, update.chatId, update.forumTopicId, update.lastReadOutboxMessageId); // XGram: ticks inside topics
     topics.updateForumTopic(update);
     listeners.updateForumTopic(update);
   }
@@ -8501,6 +8577,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
       chat.blockList = update.blockList;
     }
+    com.fahadali.xgram.chats.XgramFilters.onChatBlockListChanged(this, update.chatId, update.blockList); // XGram
 
     listeners.updateChatBlockList(update);
   }
@@ -8642,6 +8719,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateChatUserAction (final TdApi.UpdateChatAction update) {
+    if (update.action != null && update.action.getConstructor() != TdApi.ChatActionCancel.CONSTRUCTOR) {
+      com.fahadali.xgram.ghost.XgramLastSeen.onActivity(this, update.senderId, (int) (System.currentTimeMillis() / 1000L)); // XGram
+    }
     if (update.chatId != myUserId()) {
       ui().sendMessage(ui().obtainMessage(MSG_ACTION_UPDATE_CHAT_ACTION, 0, 0, update));
     }
@@ -10545,7 +10625,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       case TdApi.UpdateActiveGiftAuctions.CONSTRUCTOR:
       case TdApi.UpdateStakeDiceState.CONSTRUCTOR:
       case TdApi.UpdateNewOauthRequest.CONSTRUCTOR:
-      case TdApi.UpdateTextCompositionStyles.CONSTRUCTOR:
+        break;
+      case TdApi.UpdateTextCompositionStyles.CONSTRUCTOR: // XGram: styles for the AI editor
+        com.fahadali.xgram.chats.XgramAiTools.onStylesUpdated(this, (TdApi.UpdateTextCompositionStyles) update);
         break;
 
       // for bots only.

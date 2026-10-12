@@ -1392,6 +1392,16 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         final TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().onDone(tdlib::decrementUiReferenceCount);
         if (specificMessageId != 0)
           params.highlightMessage(new MessageId(chatId, specificMessageId));
+        if (specificMessageId != 0 && tdlib.isForum(chatId)) {
+          // XGram: a forum notification opens the topic of its message.
+          tdlib.send(new TdApi.GetMessage(chatId, specificMessageId), (message, error) -> handler.post(() -> {
+            if (message != null && message.topicId instanceof TdApi.MessageTopicForum) {
+              params.messageTopicId = message.topicId;
+            }
+            tdlib.ui().openChat(context, chatId, params);
+          }));
+          return;
+        }
         tdlib.ui().openChat(context, chatId, params);
       });
     });

@@ -575,7 +575,8 @@ public class SettingsController extends ViewController<Void> implements
         } else if (itemId == R.id.btn_peer_id) {
           view.setData(Strings.buildCounter(tdlib.myUserId(true)));
         } else if (itemId == R.id.btn_phone) {
-          view.setData(myPhone);
+          // XGram: hide the number for screenshots and screen sharing.
+          view.setData(com.fahadali.xgram.XgramSettings.instance().hidePhone() ? Lang.getString(R.string.XgramPhoneHidden) : myPhone);
         } else if (itemId == R.id.btn_bio) {
           TdApi.FormattedText text;
           if (about == null) {
@@ -633,6 +634,9 @@ public class SettingsController extends ViewController<Void> implements
 
     checkErrors(false);
 
+    // XGram: XGram's own features (ghost mode, ...)
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramSettings, R.drawable.baseline_stars_24, R.string.XgramSettings));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(notificationErrorDescriptionRes != 0 ? ListItem.TYPE_VALUED_SETTING_COMPACT : ListItem.TYPE_SETTING, R.id.btn_notificationSettings, R.drawable.baseline_notifications_24, R.string.Notifications));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_chatSettings, R.drawable.baseline_data_usage_24, R.string.DataSettings));
@@ -661,52 +665,7 @@ public class SettingsController extends ViewController<Void> implements
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    AppInstallationUtil.DownloadUrl downloadUrl = AppUpdater.getDownloadUrl(null);
-    @DrawableRes int downloadIconRes;
-    @StringRes int downloadStringRes = R.string.CheckForUpdates;
-    if (tdlib.hasUrgentInAppUpdate() && tdlib.isProduction()) {
-      downloadIconRes = R.drawable.baseline_warning_24;
-      downloadUrl = new AppInstallationUtil.DownloadUrl(downloadUrl.installerId, tdlib.tMeUrl(BuildConfig.TELEGRAM_UPDATES_CHANNEL));
-    } else {
-      switch (downloadUrl.installerId) {
-        case AppInstallationUtil.InstallerId.UNKNOWN:
-        case AppInstallationUtil.InstallerId.MEMU_EMULATOR: {
-          if (!StringUtils.isEmpty(BuildConfig.GOOGLE_PLAY_URL)) {
-            downloadUrl = new AppInstallationUtil.DownloadUrl(AppInstallationUtil.InstallerId.GOOGLE_PLAY, BuildConfig.GOOGLE_PLAY_URL);
-            downloadIconRes = R.drawable.baseline_google_play_24;
-            downloadStringRes = R.string.AppOnGooglePlay;
-          } else {
-            downloadIconRes = R.drawable.baseline_update_24;
-          }
-          break;
-        }
-        case AppInstallationUtil.InstallerId.GOOGLE_PLAY: {
-          downloadIconRes = R.drawable.baseline_google_play_24;
-          break;
-        }
-        case AppInstallationUtil.InstallerId.GALAXY_STORE: {
-          downloadIconRes = R.drawable.baseline_galaxy_store_24;
-          break;
-        }
-        case AppInstallationUtil.InstallerId.HUAWEI_APPGALLERY: {
-          downloadIconRes = R.drawable.baseline_huawei_24;
-          break;
-        }
-        case AppInstallationUtil.InstallerId.AMAZON_APPSTORE: {
-          downloadIconRes = R.drawable.baseline_amazon_24;
-          break;
-        }
-        default:
-          throw new UnsupportedOperationException();
-      }
-    }
-    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_checkUpdates, downloadIconRes, downloadStringRes)
-      .setData(downloadUrl));
-    if (downloadUrl.installerId == AppInstallationUtil.InstallerId.GOOGLE_PLAY) {
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
-      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_subscribeToBeta, R.drawable.templarian_baseline_flask_24, R.string.SubscribeToBeta));
-    }
-    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    // XGram: Telegram X's "Check for updates" and "Subscribe to beta" point to Telegram X's own releases.
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_sourceCode, R.drawable.baseline_github_24, R.string.ViewSourceCode));
     this.previousBuildInfo = Settings.instance().getPreviousBuildInformation();
     if (this.previousBuildInfo != null) {
@@ -1227,6 +1186,8 @@ public class SettingsController extends ViewController<Void> implements
       SettingsThemeController c = new SettingsThemeController(context, tdlib);
       c.setArguments(new SettingsThemeController.Args(SettingsThemeController.MODE_INTERFACE_OPTIONS));
       navigateTo(c);
+    } else if (viewId == R.id.btn_xgramSettings) { // XGram
+      navigateTo(new com.fahadali.xgram.XgramSettingsController(context, tdlib));
     } else if (viewId == R.id.btn_chatSettings) {
       navigateTo(new SettingsDataController(context, tdlib));
     } else if (viewId == R.id.btn_privacySettings) {

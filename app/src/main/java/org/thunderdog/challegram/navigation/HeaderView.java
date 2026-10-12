@@ -212,6 +212,11 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     setHeaderOffset(effectiveInsets.top);
   }
 
+  @Nullable
+  public NavigationController getNavigation () {
+    return navigation; // XGram
+  }
+
   public void initWithController (NavigationController controller) {
     this.navigation = controller;
     this.needOffsets = true;

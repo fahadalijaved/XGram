@@ -1,0 +1,10 @@
+# Example batch module (copy to <batch>.py). Icon names are the concept names from _assign_<batch>.json.
+from dsl import *
+
+ICONS = {
+    'broom': [L(19.5, 4.5, 13, 11), P('M12.2 9.8l2 2a1.5 1.5 0 0 1 0 2.1L9 19.5H4.5v-4.5l5.6-5.2a1.5 1.5 0 0 1 2.1 0Z'), L(7, 17, 9.5, 14.5)],
+}
+
+MAP = {
+    'templarian_baseline_broom_24': 'broom',
+}

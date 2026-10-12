@@ -214,6 +214,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       this.threadInfo = threadInfo;
       this.isEdit = isEdit;
     }
+
+    /** XGram: the profile of one forum topic (official Telegram's topic profile). */
+    public int xgramTopicId;
+
+    public Args xgramTopic (int forumTopicId) {
+      this.xgramTopicId = forumTopicId;
+      return this;
+    }
   }
 
   @Override
@@ -227,6 +235,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         args.threadInfo.saveTo(outState, keyPrefix + "message_thread");
       }
       outState.putBoolean(keyPrefix + "is_edit", args.isEdit);
+      outState.putInt(keyPrefix + "xgram_topic", args.xgramTopicId);
       return true;
     }
     return false;
@@ -256,7 +265,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         }
       }
       super.restoreInstanceState(in, keyPrefix);
-      setArguments(new Args(chat, threadInfo, isEdit));
+      setArguments(new Args(chat, threadInfo, isEdit).xgramTopic(in.getInt(keyPrefix + "xgram_topic", 0)));
       return true;
     }
     return false;
@@ -293,6 +302,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
     this.chat = args.chat;
     this.messageThread = args.threadInfo;
+    this.xgramTopicId = args.isEdit ? 0 : args.xgramTopicId;
+    if (xgramTopicId != 0) {
+      xgramLoadTopic();
+    }
     switch (chat.type.getConstructor()) {
       case TdApi.ChatTypePrivate.CONSTRUCTOR: {
         this.user = tdlib.cache().userStrict(ChatId.toUserId(chat.id));
@@ -440,11 +453,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       }
       if (id == R.id.menu_profile || id == R.id.menu_profile_bot) {
         HeaderButton button = header.addButton(realMenu, R.id.menu_btn_manage, R.drawable.baseline_edit_24, buttonColorId, this, Screen.dp(49f));
-        button.setVisibility(canManageChat() ? View.VISIBLE : View.GONE);
+        button.setVisibility((xgramTopicId != 0 ? xgramCanEditTopic() : canManageChat()) ? View.VISIBLE : View.GONE);
       }
       if (id == R.id.menu_profile) {
         HeaderButton button = header.addButton(realMenu, R.id.menu_btn_addContact, R.drawable.baseline_person_add_24, buttonColorId, this, Screen.dp(49f));
-        button.setVisibility(canAddAnyKindOfMembers() ? View.VISIBLE : View.GONE);
+        button.setVisibility(xgramTopicId == 0 && canAddAnyKindOfMembers() ? View.VISIBLE : View.GONE);
       }
       HeaderButton moreButton = header.addMoreButton(realMenu, this, buttonColorId);
       if (id == R.id.menu_profile_manage) {
@@ -479,6 +492,17 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Override
   public void onMenuItemPressed (int id, View view) {
+    if (xgramTopicId != 0 && (id == R.id.menu_btn_more || id == R.id.menu_btn_manage)) {
+      // XGram: the topic's own options, its editor.
+      if (xgramTopic != null) {
+        if (id == R.id.menu_btn_manage) {
+          com.fahadali.xgram.topics.XgramForums.openTopicEditor(this, chat, xgramTopic);
+        } else {
+          com.fahadali.xgram.topics.XgramForums.showTopicOptions(this, chat, xgramTopic);
+        }
+      }
+      return;
+    }
     if (id == R.id.menu_btn_more) {
       showMore();
     } else if (id == R.id.menu_btn_addContact) {
@@ -1218,6 +1242,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Override
   protected int getHeaderIconColorId () {
+    if (xgramTopicId != 0) {
+      return isTransformed() && isExpanded ? ColorId.icon : ColorId.headerIcon; // XGram: a topic icon never expands
+    }
     return isTransformed() && isExpanded ? ColorId.icon : headerCell != null && !headerCell.isCollapsed() ? ColorId.white : ColorId.headerIcon;
   }
 
@@ -1595,9 +1622,17 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       headerCell.setAvatarExpandListener((headerView1, expandFactor1, byCollapse, allowanceFactor, collapseFactor) -> updateButtonsColor());
       headerCell.setInnerRightMarginStart(Screen.dp(49f));
       headerCell.setInnerMargins(Screen.dp(56f), calculateMenuWidth());
-      headerCell.setAllowEmptyClick();
+      if (xgramTopicId == 0) {
+        headerCell.setAllowEmptyClick();
+      }
       headerCell.initWithController(this, false);
-      headerCell.setPhotoOpenCallback(this);
+      if (xgramTopicId == 0) {
+        headerCell.setPhotoOpenCallback(this);
+      }
+      if (xgramTopicId != 0) {
+        headerCell.setNoExpand(true); // a topic has an icon, not photos
+        headerCell.setPhotoOpenDisabled(true);
+      }
 
       baseRecyclerView = new ComplexRecyclerView(context, this) {
         @Override
@@ -1773,6 +1808,16 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           } else {
             view.setData(R.string.PhoneNumberUnknown);
           }
+        } else if (itemId == R.id.btn_notifications && xgramTopicId != 0) {
+          boolean muted = xgramTopic != null && com.fahadali.xgram.topics.XgramForums.isTopicMuted(tdlib, chat.id, xgramTopic);
+          view.setIcon(muted ? R.drawable.baseline_notifications_off_24 : R.drawable.baseline_notifications_24);
+          view.setData(muted ? R.string.XgramTopicMuted : R.string.XgramTopicNotificationsOn);
+        } else if (itemId == R.id.btn_xgramTopicGroup) {
+          view.setName(R.string.XgramTopicGroup);
+          view.setData(tdlib.chatTitle(chat));
+        } else if (itemId == R.id.btn_xgramTopicLink) {
+          view.setName(R.string.XgramTopicLink);
+          view.setData(xgramTopicLink != null ? xgramTopicLink : "…");
         } else if (itemId == R.id.btn_notifications) {
           TdApi.Chat cachedChat = tdlib.chat(chat.id);
           view.setIcon(tdlib.ui().getIconForSetting(cachedChat));
@@ -1783,7 +1828,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           view.setData(R.string.PictureAndText);
         } else if (itemId == R.id.btn_peer_id) {
           view.setName(getPeerTypeStringResourceId());
-          view.setData(Strings.buildCounter(getPeerId()));
+          // XGram: estimated registration date next to a user's ID.
+          view.setData(user != null && secretChat == null ? Strings.buildCounter(getPeerId()) + " · " + com.fahadali.xgram.chats.XgramIdInfo.registrationLabel(user.id) : Strings.buildCounter(getPeerId()));
         } else if (itemId == R.id.btn_birthdate) {
           view.setData(R.string.Birthdate);
           TdApi.Birthdate birthdate = userFull != null ? userFull.birthdate : null;
@@ -1918,6 +1964,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
               view.setData(R.string.ChatHistoryHidden);
               break;
           }
+        } else if (itemId == R.id.btn_xgramTopicsMode) {
+          view.setData(com.fahadali.xgram.topics.XgramForums.topicsModeLabel(tdlib, chat)); // XGram
         } else if (itemId == R.id.btn_chatPermissions) {
           IntRange range = Td.count(chat.permissions, tdlib.isForum(chat.id));
           view.setData(Lang.plural(R.string.xPermissions, range.getStart(), range.getEndInclusive()));
@@ -2105,6 +2153,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   public void destroy () {
     super.destroy();
     unsubscribeFromUpdates();
+    if (xgramTopicIcon != null) {
+      xgramTopicIcon.performDestroy(); // XGram
+      xgramTopicIcon = null;
+    }
     pagerAdapter.performDestroy();
     Views.destroyRecyclerView(baseRecyclerView);
   }
@@ -2321,6 +2373,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private int baseHeaderItemCount;
 
   private void buildCells () {
+    if (xgramTopicId != 0 && !isEditing()) {
+      xgramBuildTopicCells();
+      return;
+    }
     switch (mode) {
       case Mode.USER:
       case Mode.SECRET: {
@@ -2685,6 +2741,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private void checkChannelMembers () {
+    if (xgramTopicId != 0) {
+      return;
+    }
     final boolean needMembers = supergroupFull != null && supergroupFull.canGetMembers;
     final SharedMembersController existingMembersController = getMembersController();
     final boolean hasMembers = (existingMembersController != null);
@@ -2790,7 +2849,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private void checkDescription () {
-    if (isEditing())
+    if (isEditing() || xgramTopicId != 0)
       return;
     int foundIndex = baseAdapter.indexOfViewById(R.id.btn_description);
     boolean hadDescription = foundIndex != -1;
@@ -3036,8 +3095,81 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Nullable
   public TdApi.MessageTopic getTopicId () {
-    // Ability to alter in future.
-    return null;
+    // XGram: a topic's profile shows the media of that topic.
+    return xgramTopicId != 0 ? new TdApi.MessageTopicForum(xgramTopicId) : null;
+  }
+
+  // XGram: forum topic profile
+
+  private int xgramTopicId;
+  @Nullable private TdApi.ForumTopic xgramTopic;
+  @Nullable private String xgramTopicLink;
+  @Nullable private com.fahadali.xgram.topics.TopicHeaderIcon xgramTopicIcon;
+
+  public boolean xgramIsTopic () {
+    return xgramTopicId != 0;
+  }
+
+  private void xgramLoadTopic () {
+    TdApi.ForumTopic cached = com.fahadali.xgram.topics.ForumTopicList.peekTopic(tdlib, chat.id, xgramTopicId);
+    if (cached != null) {
+      xgramTopic = cached;
+    }
+    tdlib.send(new TdApi.GetForumTopic(chat.id, xgramTopicId), (topic, error) -> runOnUiThreadOptional(() -> {
+      if (topic != null) {
+        xgramTopic = topic;
+        xgramOnTopicChanged();
+      }
+    }));
+    if (xgramTopicLink == null) {
+      tdlib.send(new TdApi.GetForumTopicLink(chat.id, xgramTopicId), (link, error) -> runOnUiThreadOptional(() -> {
+        if (link != null) {
+          xgramTopicLink = link.link;
+          if (baseAdapter != null) {
+            baseAdapter.updateValuedSettingById(R.id.btn_xgramTopicLink);
+          }
+        }
+      }));
+    }
+  }
+
+  private void xgramOnTopicChanged () {
+    updateHeader(true);
+    if (baseAdapter != null) {
+      baseAdapter.updateValuedSettingById(R.id.btn_notifications);
+    }
+    if (headerView != null) {
+      headerView.updateCustomButtons(this, getMenuId());
+    }
+  }
+
+  private boolean xgramCanEditTopic () {
+    return xgramTopic != null && (com.fahadali.xgram.topics.XgramForums.canManageTopics(tdlib, chat.id) || xgramTopic.info.isOutgoing);
+  }
+
+  private void xgramSetTopicIcon () {
+    if (headerCell == null) {
+      return;
+    }
+    if (xgramTopicIcon == null) {
+      xgramTopicIcon = new com.fahadali.xgram.topics.TopicHeaderIcon(headerCell);
+    }
+    xgramTopicIcon.set(tdlib, xgramTopic != null ? xgramTopic.info : null);
+  }
+
+  private void xgramBuildTopicCells () {
+    ArrayList<ListItem> items = new ArrayList<>(12);
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET));
+    items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_xgramTopicGroup, R.drawable.baseline_forum_24, R.string.XgramTopicGroup));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_xgramTopicLink, R.drawable.baseline_link_24, R.string.XgramTopicLink));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    baseHeaderItemCount = 2;
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(newNotificationItem());
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    addMediaItems(items);
+    baseAdapter.setItems(items, false);
   }
 
   @Override
@@ -4080,6 +4212,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.AggressiveAntiSpamDesc));
     }
 
+    if (com.fahadali.xgram.topics.XgramForums.canToggleTopics(tdlib, chat, supergroupFull)) {
+      // XGram: turn topics on or off and pick their layout, like official Telegram.
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTopicsMode, 0, R.string.XgramTopics));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTopicsDesc));
+    }
+
     if (tdlib.suggestConvertToBroadcastGroup(chat.id)) {
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_convertToBroadcastGroup, 0, R.string.ConvertToBroadcastGroup));
@@ -4782,7 +4922,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     } else if (viewId == R.id.btn_useExplicitDice) {
       Settings.instance().setNewSetting(((ListItem) v.getTag()).getLongId(), baseAdapter.toggleView(v));
     } else if (viewId == R.id.btn_peer_id) {
-      showOptions(Long.toString(getPeerId()), new int[]{R.id.btn_peer_id_copy}, new String[]{Lang.getString(R.string.Copy)}, null, new int[]{R.drawable.baseline_content_copy_24});
+      com.fahadali.xgram.chats.XgramIdInfo.show(this, getPeerId(), secretChat == null ? user : null, chat, supergroup); // XGram
     } else if (viewId == R.id.btn_username) {
       boolean canSetUsername = canSetUsername();
       boolean canInviteUsers = chat != null && tdlib.canManageInviteLinks(chat);
@@ -4859,6 +4999,16 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       } else {
         showDescriptionOptions(false, descriptionLanguage = null);
       }
+    } else if (viewId == R.id.btn_notifications && xgramTopicId != 0) {
+      if (xgramTopic != null) {
+        com.fahadali.xgram.topics.XgramForums.promptMuteTopic(this, chat, xgramTopic);
+      }
+    } else if (viewId == R.id.btn_xgramTopicGroup) {
+      com.fahadali.xgram.topics.XgramForums.openTopicList(this, chat);
+    } else if (viewId == R.id.btn_xgramTopicLink) {
+      if (xgramTopicLink != null) {
+        UI.copyText(xgramTopicLink, R.string.CopiedLink);
+      }
     } else if (viewId == R.id.btn_notifications) {
       tdlib.ui().showMuteOptions(this, chat.id, true, null);
     } else if (viewId == R.id.btn_encryptionKey) {
@@ -4882,6 +5032,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       // EDIT stuff
     } else if (viewId == R.id.btn_prehistoryMode) {
       togglePrehistoryMode();
+    } else if (viewId == R.id.btn_xgramTopicsMode) {
+      // XGram: applied right away, not on Done.
+      com.fahadali.xgram.topics.XgramForums.promptTopicsMode(this, chat, () -> {
+        if (!isDestroyed()) {
+          baseAdapter.updateValuedSettingById(R.id.btn_xgramTopicsMode);
+        }
+      });
     } else if (viewId == R.id.btn_chatPermissions) {
       openChatPermissions();
     } else if (viewId == R.id.btn_recentActions) {
@@ -5185,6 +5342,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   @Override
   public void onFocus () {
     super.onFocus();
+    if (xgramTopicId != 0) {
+      xgramLoadTopic(); // XGram: after editing or muting the topic
+    }
     if (!oneShot) {
       oneShot = true;
       pagerAdapter.notifyDataSetChanged();
@@ -5265,6 +5425,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private void setHeaderText () {
+    if (headerCell != null && chat != null && xgramTopicId != 0) {
+      headerCell.setText(xgramTopic != null ? com.fahadali.xgram.topics.XgramForums.topicTitle(xgramTopic.info) : "", makeSubtitle(false));
+      headerCell.setEmojiStatus(null);
+      headerCell.setExpandedSubtitle(makeSubtitle(true));
+      return;
+    }
     if (headerCell != null && chat != null) {
       headerCell.setUseRedHighlight(tdlib.isRedTeam(chat.id));
       headerCell.setText(tdlib.chatTitle(chat, false), makeSubtitle(false));
@@ -5275,6 +5441,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private void setHeaderPhoto (boolean update) {
+    if (headerCell != null && xgramTopicId != 0) {
+      xgramSetTopicIcon();
+      return;
+    }
     if (headerCell != null) {
       headerCell.getAvatarReceiver().requestMessageSender(tdlib, tdlib.sender(getChatId()), AvatarReceiver.Options.FULL_SIZE | AvatarReceiver.Options.FORCE_ANIMATION);
     }
@@ -5351,11 +5521,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       if (currentMenuId == R.id.menu_profile) {
         View view = realMenu.findViewById(R.id.menu_btn_manage);
         if (view != null) {
-          view.setVisibility(canManageChat() ? View.VISIBLE : View.GONE);
+          view.setVisibility((xgramTopicId != 0 ? xgramCanEditTopic() : canManageChat()) ? View.VISIBLE : View.GONE);
         }
         view = realMenu.findViewById(R.id.menu_btn_addContact);
         if (view != null) {
-          view.setVisibility(canAddAnyKindOfMembers() ? View.VISIBLE : View.GONE);
+          view.setVisibility(xgramTopicId == 0 && canAddAnyKindOfMembers() ? View.VISIBLE : View.GONE);
         }
       } else if (currentMenuId == R.id.menu_profile_manage) {
         View view = realMenu.findViewById(R.id.menu_btn_more);
@@ -5797,7 +5967,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         default: {
           String restrictionText = Lang.getRestrictionText(tdlib.chatRestriction(chat));
 
-          if (mode == Mode.GROUP) {
+          if (xgramTopicId != 0) {
+            // XGram: a topic's profile has no members tab, as in Telegram.
+          } else if (mode == Mode.GROUP) {
             controllers.add(new SharedMembersController(context, tdlib));
           } else if (mode == Mode.SUPERGROUP && TD.canAccessMembers(supergroup)) {
             TdApi.SupergroupFullInfo supergroupFull = tdlib.cache().supergroupFull(supergroup.id);
@@ -6311,6 +6483,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
 
   private CharSequence makeSubtitle (boolean isExpanded) {
+    if (xgramTopicId != 0 && !needMediaSubtitle) {
+      return Lang.getString(R.string.XgramTopicInChat, tdlib.chatTitle(chat));
+    }
     if (needMediaSubtitle) {
       if (isExpanded) {
         return null;
@@ -6661,7 +6836,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   @Override
   public void onChatPhotoChanged (final long chatId, final @Nullable TdApi.ChatPhotoInfo photo) {
     runOnUiThreadOptional(() -> {
-      if (chat.id == chatId) {
+      if (chat.id == chatId && xgramTopicId == 0) { // XGram: a topic shows its own icon
         setHeaderPhoto(true);
       }
     });

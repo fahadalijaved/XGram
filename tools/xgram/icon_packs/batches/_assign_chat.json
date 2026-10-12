@@ -1,0 +1,329 @@
+{
+ "add_link": {
+  "tgx": [
+   "baseline_add_link_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/ui/ChatLinksController.java",
+   "java/org/thunderdog/challegram/ui/EditChatFolderController.java"
+  ]
+ },
+ "call_missed": {
+  "tgx": [
+   "baseline_call_missed_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/CallItem.java",
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/data/TGMessageCall.java"
+  ]
+ },
+ "link_off": {
+  "tgx": [
+   "baseline_link_off_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/ui/ChatLinksController.java",
+   "java/org/thunderdog/challegram/ui/ProfileController.java"
+  ]
+ },
+ "check_double": {
+  "tgx": [
+   "deproko_baseline_check_double_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/tool/Icons.java",
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "bots_command": {
+  "tgx": [
+   "deproko_baseline_bots_command_26"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "incognito": {
+  "tgx": [
+   "infanf_baseline_incognito_24",
+   "infanf_baseline_incognito_20",
+   "infanf_baseline_incognito_11",
+   "infanf_baseline_incognito_14"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageSenderButton.java",
+   "java/org/thunderdog/challegram/ui/SharedMembersController.java",
+   "java/org/thunderdog/challegram/widget/SendButton.java"
+  ]
+ },
+ "translate_off": {
+  "tgx": [
+   "baseline_translate_off_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/data/TGMessage.java",
+   "java/org/thunderdog/challegram/ui/TranslationControllerV2.java"
+  ]
+ },
+ "auto_delete": {
+  "tgx": [
+   "baseline_auto_delete_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/sticker/StickerPreviewView.java",
+   "java/org/thunderdog/challegram/ui/ReactionsPickerController.java",
+   "java/org/thunderdog/challegram/widget/EmojiLayout.java"
+  ]
+ },
+ "call_made": {
+  "tgx": [
+   "baseline_call_made_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/CallItem.java",
+   "java/org/thunderdog/challegram/data/TGMessageCall.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "call_received": {
+  "tgx": [
+   "baseline_call_received_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/CallItem.java",
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "hot_once": {
+  "tgx": [
+   "baseline_hot_once_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/FileComponent.java",
+   "java/org/thunderdog/challegram/data/TGMessageVideo.java",
+   "java/org/thunderdog/challegram/mediaview/disposable/DisposableMediaViewControllerVideo.java"
+  ]
+ },
+ "delete_alert": {
+  "tgx": [
+   "baseline_delete_alert_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/ui/EditDeleteAccountReasonController.java",
+   "java/org/thunderdog/challegram/ui/SettingsLogOutController.java"
+  ]
+ },
+ "check_single": {
+  "tgx": [
+   "deproko_baseline_check_single_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/tool/Icons.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "bots_keyboard": {
+  "tgx": [
+   "deproko_baseline_bots_keyboard_26"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "call_end": {
+  "tgx": [
+   "round_call_end_24_white",
+   "baseline_call_end_16",
+   "baseline_call_end_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/navigation/HeaderFilling.java",
+   "java/org/thunderdog/challegram/service/TGCallService.java"
+  ]
+ },
+ "at": {
+  "tgx": [
+   "baseline_at_16"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/topics/TGForumTopic.java",
+   "java/org/thunderdog/challegram/data/TGChat.java"
+  ]
+ },
+ "pending": {
+  "tgx": [
+   "baseline_pending_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/ui/ProfileController.java"
+  ]
+ },
+ "phone_in_talk": {
+  "tgx": [
+   "baseline_phone_in_talk_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsController.java",
+   "java/org/thunderdog/challegram/ui/SettingsPrivacyKeyController.java",
+   "java/org/thunderdog/challegram/voip/gui/CallSettings.java"
+  ]
+ },
+ "masks": {
+  "tgx": [
+   "deproko_baseline_masks_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java",
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "link_arrow": {
+  "tgx": [
+   "deproko_baseline_link_arrow_20"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TGInlineKeyboard.java"
+  ]
+ },
+ "verify_chat": {
+  "tgx": [
+   "deproko_baseline_verify_chat_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/tool/Icons.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "contact_phone": {
+  "tgx": [
+   "baseline_contact_phone_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "incognito_off": {
+  "tgx": [
+   "nilsfast_baseline_incognito_off_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SharedMembersController.java"
+  ]
+ },
+ "notification_important": {
+  "tgx": [
+   "baseline_notification_important_14",
+   "baseline_notification_important_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/BaseActivity.java",
+   "java/org/thunderdog/challegram/ui/SettingsNotificationController.java"
+  ]
+ },
+ "message_check": {
+  "tgx": [
+   "andrejsharapov_baseline_message_check_16",
+   "andrejsharapov_baseline_message_check_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "unsubscribe": {
+  "tgx": [
+   "baseline_unsubscribe_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/config/Config.java"
+  ]
+ },
+ "timer": {
+  "tgx": [
+   "baseline_timer_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "timer_off": {
+  "tgx": [
+   "baseline_timer_off_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "incognito_circle": {
+  "tgx": [
+   "baseline_incognito_circle_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/DoubleTextWrapper.java"
+  ]
+ },
+ "instantview": {
+  "tgx": [
+   "deproko_baseline_instantview_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TGWebPage.java"
+  ]
+ },
+ "verify": {
+  "tgx": [
+   "deproko_baseline_verify_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/navigation/ComplexHeaderView.java"
+  ]
+ },
+ "send_schedule": {
+  "tgx": [
+   "dotvhs_baseline_send_schedule_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "visibility_message": {
+  "tgx": [
+   "dotvhs_baseline_visibility_message_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/PrivacyExceptionController.java"
+  ]
+ },
+ "command": {
+  "tgx": [
+   "dotvhs_baseline_command_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/ProfileController.java"
+  ]
+ },
+ "mail": {
+  "tgx": [
+   "baseline_mail_96"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingHolder.java"
+  ]
+ },
+ "animals_filled_blink": {
+  "tgx": [
+   "deproko_baseline_animals_filled_blink_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/emoji/section/EmojiSection.java"
+  ]
+ }
+}

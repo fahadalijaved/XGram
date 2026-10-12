@@ -884,7 +884,8 @@ public class ShareController extends TelegramViewController<ShareController.Args
           break;
         }
         case MODE_CONTACT: {
-          exportContact(args.contactUser.phoneNumber, args.contactUser.firstName, args.contactUser.lastName, args.contactUser.usernames, null);
+          TdApi.Contact xgramContact = com.fahadali.xgram.chats.XgramLocalNames.contactOf(tdlib, args.contactUser, args.contactUser.id); // XGram: real name
+          exportContact(args.contactUser.phoneNumber, xgramContact.firstName, xgramContact.lastName, args.contactUser.usernames, null);
           break;
         }
       }
@@ -1453,6 +1454,19 @@ public class ShareController extends TelegramViewController<ShareController.Args
       tdlib.getMessageProperties(list, properties -> {
         runOnUiThreadOptional(() -> {
           messageProperties = properties;
+          // XGram: forward without author by default (NagramX), when every message can be copied.
+          if (!xgramForwardDefaultsApplied) {
+            xgramForwardDefaultsApplied = true;
+            if (com.fahadali.xgram.XgramSettings.instance().forwardWithoutAuthor()) {
+              boolean allCanBeCopied = properties != null && properties.length > 0;
+              for (TdApi.MessageProperties messageProperties : properties != null ? properties : new TdApi.MessageProperties[0]) {
+                allCanBeCopied &= messageProperties != null && messageProperties.canBeCopied;
+              }
+              if (allCanBeCopied) {
+                needHideAuthor = true;
+              }
+            }
+          }
           if (after != null) {
             after.runWithData(properties);
           }
@@ -1810,6 +1824,8 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private boolean preventAutoScroll;
 
   private final LongSparseArray<TGFoundChat> selectedChats = new LongSparseArray<>();
+  // XGram: topic chosen for each selected forum (null topicId = General).
+  private final LongSparseArray<com.fahadali.xgram.topics.XgramForums.PickedTopic> xgramSelectedTopics = new LongSparseArray<>();
   private final LongList selectedChatIds = new LongList(10);
 
   private boolean isChecked (long chatId) {
@@ -2002,6 +2018,15 @@ public class ShareController extends TelegramViewController<ShareController.Args
       }
     }
 
+    // XGram: sharing into a forum asks which topic to send to.
+    if (result && tdlib.isForum(chatId) && xgramSelectedTopics.get(chatId) == null) {
+      com.fahadali.xgram.topics.XgramForums.pickTopic(this, chatId, picked -> {
+        xgramSelectedTopics.put(chatId, picked);
+        toggleCheckedImpl(view, chat, after, false);
+      });
+      return false;
+    }
+
     if (result) {
       selectedChats.put(chatId, chat);
       selectedChatIds.append(chatId);
@@ -2009,6 +2034,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
     } else {
       selectedChats.remove(chatId);
       selectedChatIds.remove(chatId);
+      xgramSelectedTopics.remove(chatId);
     }
     checkAbilityToSend();
     updateHeader();
@@ -2022,7 +2048,8 @@ public class ShareController extends TelegramViewController<ShareController.Args
     if (selectedChats.size() == 0) {
       headerCell.setSubtitle(Lang.lowercase(Lang.getString(R.string.SelectChats)));
     } else if (selectedChats.size() == 1) {
-      headerCell.setSubtitle(selectedChats.valueAt(0).getFullTitle());
+      com.fahadali.xgram.topics.XgramForums.PickedTopic xgramTopic = xgramSelectedTopics.get(selectedChats.keyAt(0)); // XGram
+      headerCell.setSubtitle(xgramTopic != null ? selectedChats.valueAt(0).getFullTitle() + " › " + xgramTopic.name : selectedChats.valueAt(0).getFullTitle());
     } else {
       final int size = selectedChatIds.size();
       int count = 0;
@@ -3355,6 +3382,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
 
   private boolean isSent;
   private boolean needHideAuthor, needRemoveCaptions, forceSendWithoutSound;
+  private boolean xgramForwardDefaultsApplied;
 
   private void sendMessages (boolean forceGoToChat, boolean isSingleTap, @Nullable TdApi.MessageSendOptions finalSendOptions) {
     sendMessages(forceGoToChat, isSingleTap, finalSendOptions, true);
@@ -3392,6 +3420,8 @@ public class ShareController extends TelegramViewController<ShareController.Args
 
     for (int i = 0; i < selectedChatIds.size(); i++) {
       final long chatId = selectedChatIds.get(i);
+      final com.fahadali.xgram.topics.XgramForums.PickedTopic xgramTopic = xgramSelectedTopics.get(chatId); // XGram
+      final TdApi.MessageTopic xgramTopicId = xgramTopic != null ? xgramTopic.topicId : null;
       if (showErrorMessage(null, chatId, true))
         return;
 
@@ -3438,20 +3468,20 @@ public class ShareController extends TelegramViewController<ShareController.Args
             replyTo = new TdApi.InputMessageReplyToMessage(contentfulMediaMessageId != 0 ? contentfulMediaMessageId : args.messages[0].id, null, 0, "");
           }
         }
-        functions.addAll(TD.sendMessageText(chatId, null, replyTo, sendOptions, new TdApi.InputMessageText(comment, null, false), tdlib.maxMessageTextLength()));
+        functions.addAll(TD.sendMessageText(chatId, xgramTopicId, replyTo, sendOptions, new TdApi.InputMessageText(comment, null, false), tdlib.maxMessageTextLength()));
       }
       switch (mode) {
         case MODE_TEXT: {
-          functions.addAll(TD.sendMessageText(chatId, null, null, sendOptions, new TdApi.InputMessageText(args.text, null, false), tdlib.maxMessageTextLength()));
+          functions.addAll(TD.sendMessageText(chatId, xgramTopicId, null, sendOptions, new TdApi.InputMessageText(args.text, null, false), tdlib.maxMessageTextLength()));
           break;
         }
         case MODE_MESSAGES: {
-          if (!messageReplyIncluded && !TD.forwardMessages(chatId, null, args.messages, needHideAuthor, needRemoveCaptions, sendOptions, functions))
+          if (!messageReplyIncluded && !TD.forwardMessages(chatId, xgramTopicId, args.messages, needHideAuthor, needRemoveCaptions, sendOptions, functions))
             return;
           break;
         }
         case MODE_GAME: {
-          functions.add(new TdApi.SendMessage(chatId, null, null, sendOptions, null, new TdApi.InputMessageForwarded(args.botMessage.chatId, args.botMessage.id, args.withUserScore, false, 0, null)));
+          functions.add(new TdApi.SendMessage(chatId, xgramTopicId, null, sendOptions, null, new TdApi.InputMessageForwarded(args.botMessage.chatId, args.botMessage.id, args.withUserScore, false, 0, null)));
           break;
         }
         case MODE_FILES  : {
@@ -3462,19 +3492,19 @@ public class ShareController extends TelegramViewController<ShareController.Args
           }
           TdApi.Function<?> function;
           if (contents.size() == 1) {
-            function = new TdApi.SendMessage(chatId, null, null, sendOptions, null, contents.get(0));
+            function = new TdApi.SendMessage(chatId, xgramTopicId, null, sendOptions, null, contents.get(0));
           } else {
-            function = new TdApi.SendMessageAlbum(chatId, null, null, sendOptions, contents.toArray(new TdApi.InputMessageContent[0]));
+            function = new TdApi.SendMessageAlbum(chatId, xgramTopicId, null, sendOptions, contents.toArray(new TdApi.InputMessageContent[0]));
           }
           functions.add(function);
           break;
         }
         case MODE_CONTACT: {
-          functions.add(new TdApi.SendMessage(chatId, null, null, sendOptions, null, new TdApi.InputMessageContact(new TdApi.Contact(args.contactUser.phoneNumber, args.contactUser.firstName, args.contactUser.lastName, null, args.botUserId))));
+          functions.add(new TdApi.SendMessage(chatId, xgramTopicId, null, sendOptions, null, new TdApi.InputMessageContact(com.fahadali.xgram.chats.XgramLocalNames.contactOf(tdlib, args.contactUser, args.botUserId)) /* XGram: real name */));
           break;
         }
         case MODE_STICKER: {
-          functions.add(new TdApi.SendMessage(chatId, null, null, sendOptions, null, new TdApi.InputMessageSticker(new TdApi.InputSticker(new TdApi.InputFileId(args.sticker.sticker.id), null, 0, 0), null)));
+          functions.add(new TdApi.SendMessage(chatId, xgramTopicId, null, sendOptions, null, new TdApi.InputMessageSticker(new TdApi.InputSticker(new TdApi.InputFileId(args.sticker.sticker.id), null, 0, 0), null)));
           break;
         }
         case MODE_CUSTOM: {
@@ -3482,7 +3512,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
           break;
         }
         case MODE_CUSTOM_CONTENT: {
-          functions.addAll(TD.sendMessageText(chatId, null, null, sendOptions, args.customContent, tdlib.maxMessageTextLength()));
+          functions.addAll(TD.sendMessageText(chatId, xgramTopicId, null, sendOptions, args.customContent, tdlib.maxMessageTextLength()));
           break;
         }
         case MODE_TELEGRAM_FILES: {
@@ -3490,14 +3520,14 @@ public class ShareController extends TelegramViewController<ShareController.Args
           TdApi.FormattedText messageCaption = formattedCaption != null && formattedCaption.text.codePointCount(0, formattedCaption.text.length()) <= tdlib.maxCaptionLength() ? formattedCaption : null;
           boolean showCaptionAboveMedia = false; // TODO?
           if (formattedCaption != null && messageCaption == null) {
-            functions.addAll(TD.sendMessageText(chatId, null, null, sendOptions, new TdApi.InputMessageText(formattedCaption, null, false), tdlib.maxMessageTextLength()));
+            functions.addAll(TD.sendMessageText(chatId, xgramTopicId, null, sendOptions, new TdApi.InputMessageText(formattedCaption, null, false), tdlib.maxMessageTextLength()));
           }
           for (MediaItem item : args.telegramFiles) {
             boolean last = item == args.telegramFiles[args.telegramFiles.length - 1];
             TdApi.InputMessageContent content = item.createShareContent(last ? messageCaption : null, last && showCaptionAboveMedia);
             if (content == null)
               return;
-            functions.add(new TdApi.SendMessage(chatId, null, null, sendOptions, null, content));
+            functions.add(new TdApi.SendMessage(chatId, xgramTopicId, null, sendOptions, null, content));
           }
           break;
         }

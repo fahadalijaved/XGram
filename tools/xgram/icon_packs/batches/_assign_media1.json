@@ -1,0 +1,255 @@
+{
+ "gif": {
+  "tgx": [
+   "deproko_baseline_gif_24",
+   "baseline_gif_96"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/data/MediaWrapper.java",
+   "java/org/thunderdog/challegram/ui/SharedMediaController.java"
+  ]
+ },
+ "playlist_add_check": {
+  "tgx": [
+   "baseline_playlist_add_check_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/navigation/TelegramViewController.java",
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/ui/ChatsController.java"
+  ]
+ },
+ "msg_video": {
+  "tgx": [
+   "deproko_baseline_msg_video_24",
+   "deproko_baseline_msg_video_16",
+   "deproko_baseline_msg_video_96"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/VoiceVideoButtonView.java",
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/player/RecordLockView.java"
+  ]
+ },
+ "crop_3": {
+  "tgx": [
+   "baseline_crop_3_2_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java",
+   "java/org/thunderdog/challegram/ui/SettingsThemeController.java"
+  ]
+ },
+ "add_a_photo": {
+  "tgx": [
+   "baseline_add_a_photo_56"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/Tdlib.java",
+   "java/org/thunderdog/challegram/telegram/TdlibCache.java"
+  ]
+ },
+ "notifications_paused": {
+  "tgx": [
+   "baseline_notifications_paused_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java"
+  ]
+ },
+ "stop": {
+  "tgx": [
+   "baseline_stop_24_white",
+   "baseline_stop_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/service/AudioService.java",
+   "java/org/thunderdog/challegram/service/LiveLocationService.java",
+   "java/org/thunderdog/challegram/ui/camera/CameraButton.java"
+  ]
+ },
+ "gift_outline": {
+  "tgx": [
+   "baseline_gift_outline_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/popups/GiftCodeController.java",
+   "java/org/thunderdog/challegram/data/TGMessageGiveawayBase.java",
+   "java/org/thunderdog/challegram/ui/SettingsPrivacyKeyController.java"
+  ]
+ },
+ "collections": {
+  "tgx": [
+   "baseline_collections_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "audio_collections": {
+  "tgx": [
+   "ivanliana_baseline_audio_collections_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/tool/Drawables.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "file_collections": {
+  "tgx": [
+   "ivanliana_baseline_file_collections_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/tool/Drawables.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "video_collections": {
+  "tgx": [
+   "ivanliana_baseline_video_collections_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/tool/Drawables.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "gift": {
+  "tgx": [
+   "baseline_gift_72"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TGMessageGift.java",
+   "java/org/thunderdog/challegram/data/TGMessageGiveaway.java",
+   "java/org/thunderdog/challegram/widget/GiftHeaderView.java"
+  ]
+ },
+ "rotate_90_degrees_ccw": {
+  "tgx": [
+   "baseline_rotate_90_degrees_ccw_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "crop_rotate": {
+  "tgx": [
+   "baseline_crop_rotate_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "repeat_one": {
+  "tgx": [
+   "round_repeat_one_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/PlaybackController.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "flash_off": {
+  "tgx": [
+   "baseline_flash_off_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/camera/CameraController.java"
+  ]
+ },
+ "playlist_add": {
+  "tgx": [
+   "baseline_playlist_add_24",
+   "baseline_playlist_add_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java",
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/ui/SettingHolder.java"
+  ]
+ },
+ "pause": {
+  "tgx": [
+   "baseline_pause_24",
+   "baseline_pause_36_white"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/FileComponent.java",
+   "java/org/thunderdog/challegram/service/AudioService.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "skip_previous": {
+  "tgx": [
+   "baseline_skip_previous_24_white",
+   "round_skip_previous_36"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/service/AudioService.java",
+   "java/org/thunderdog/challegram/ui/PlaybackController.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "skip_next": {
+  "tgx": [
+   "baseline_skip_next_24_white",
+   "round_skip_next_36"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/service/AudioService.java",
+   "java/org/thunderdog/challegram/ui/PlaybackController.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "gif_filled": {
+  "tgx": [
+   "deproko_baseline_gif_filled_24",
+   "deproko_baseline_gif_filled_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "java/org/thunderdog/challegram/widget/emoji/header/MediaHeaderView.java"
+  ]
+ },
+ "crop_original": {
+  "tgx": [
+   "baseline_crop_original_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramMessageDetailsController.java",
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "flash_on": {
+  "tgx": [
+   "baseline_flash_on_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramWhatsNewController.java",
+   "java/org/thunderdog/challegram/ui/camera/CameraController.java"
+  ]
+ },
+ "zoom_in": {
+  "tgx": [
+   "baseline_zoom_in_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/charts/view_data/ChartHeaderView.java",
+   "java/org/thunderdog/challegram/ui/SettingsThemeController.java"
+  ]
+ },
+ "mosaic_group": {
+  "tgx": [
+   "deproko_baseline_mosaic_group_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/attach/MediaLayout.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ }
+}

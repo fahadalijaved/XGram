@@ -438,6 +438,7 @@ public class TGInlineKeyboard {
     private boolean isCustom;
     private String currencyChar;
     private float currencyCharWidth;
+    private String rawText; // XGram: original button text for the long-press menu
 
     public Button (TGInlineKeyboard context, @NonNull TGMessage parent, TdApi.InlineKeyboardButton button, int maxWidth) {
       this.context = context;
@@ -449,6 +450,7 @@ public class TGInlineKeyboard {
       TextPaint textPaint = Paints.getBoldPaint14(needFakeBold);
       this.wrapper = new EmojiString(text, maxWidth, textPaint);
       this.type = button.type;
+      this.rawText = button.text; // XGram
       if (type.getConstructor() == TdApi.InlineKeyboardButtonTypeBuy.CONSTRUCTOR) {
         currencyChar = CurrencyUtils.getCurrencyChar(((TdApi.MessageInvoice) parent.getMessage().content).currency);
         currencyCharWidth = U.measureText(currencyChar, Paints.getBoldTextPaint(CURRENCY_TEXT_SIZE_DP));
@@ -477,6 +479,7 @@ public class TGInlineKeyboard {
 
     public void set (TdApi.InlineKeyboardButton button, int maxWidth) {
       this.type = button.type;
+      this.rawText = button.text; // XGram
       String text = uppercase(cleanButtonText(button.text));
       final boolean reset = !wrapper.getText().equals(text);
       if (reset || wrapper.getMaxWidth() != maxWidth) {
@@ -827,6 +830,11 @@ public class TGInlineKeyboard {
           if (parent.isSponsoredMessage()) {
             return false;
           } else if (type != null) {
+            // XGram: copy options for every button type (AyuGram / NagramX); falls back to Telegram X's handling below
+            ViewController<?> xgramController = parent.context().navigation().getCurrentStackItem();
+            if (xgramController != null && com.fahadali.xgram.chats.XgramBotButtons.showOptions(xgramController, this, view)) {
+              return true;
+            }
             switch (type.getConstructor()) {
               case TdApi.InlineKeyboardButtonTypeUrl.CONSTRUCTOR: {
                 ViewController<?> c = parent.context().navigation().getCurrentStackItem();
@@ -1039,6 +1047,19 @@ public class TGInlineKeyboard {
       return contextId;
     }
 
+    // XGram: used by com.fahadali.xgram.chats.XgramBotButtons (long-press options)
+    public @Nullable TdApi.InlineKeyboardButtonType getType () {
+      return type;
+    }
+
+    public @Nullable String getRawText () {
+      return rawText;
+    }
+
+    public void performOpen (View view) {
+      performAction(view, false);
+    }
+
     private ClickListener clickListener;
 
     public void setClickListener (ClickListener clickListener) {
@@ -1102,8 +1123,12 @@ public class TGInlineKeyboard {
       }
 
       switch (type.getConstructor()) {
+        case TdApi.InlineKeyboardButtonTypeCopyText.CONSTRUCTOR: {
+          // XGram: copy the text (Telegram X left this button type unhandled)
+          UI.copyText(((TdApi.InlineKeyboardButtonTypeCopyText) type).text, R.string.CopiedText);
+          break;
+        }
         case TdApi.InlineKeyboardButtonTypeBuy.CONSTRUCTOR:
-        case TdApi.InlineKeyboardButtonTypeCopyText.CONSTRUCTOR:
         case TdApi.InlineKeyboardButtonTypeWebApp.CONSTRUCTOR:
           // TODO
           break;

@@ -1,0 +1,299 @@
+"""Open-source icon libraries as XGram icon packs (Iconify JSON in vendor/<lib>/icons.json).
+
+  python tools/xgram/icon_packs/library.py search <pack> <word> [<word> ...]     names containing every word
+  python tools/xgram/icon_packs/library.py sheet <pack> [--from N] [--count N] [--png out.png]
+        renders concept | Telegram X icon | the pack's mapped icon, from maps/<pack>.json, for checking by eye
+  python tools/xgram/icon_packs/library.py check <pack>                           mapping problems
+
+maps/<pack>.json: {"<concept>": "<base name>" or null}. The base name is the library name without the pack's style
+suffix (see PACKS); null keeps Telegram X's icon for that concept.
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import xml.etree.ElementTree as ET
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+VENDOR = os.path.join(HERE, 'vendor')
+MAPS = os.path.join(HERE, 'maps')
+CONCEPTS = os.path.join(HERE, 'concepts.json')
+EDGE = r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+
+# Pack -> library and the style suffixes tried in order (the first that exists wins).
+PACKS = {
+    'solar': dict(lib='solar', title='XGram Solar', prefix='xgs', table='SOLAR', suffixes=['-bold-duotone', '-bold', '-linear'],
+                  credit='Solar Icons by 480 Design, CC BY 4.0'),
+    'phosphor': dict(lib='ph', title='XGram Phosphor', prefix='xgf', table='PHOSPHOR', suffixes=['-bold', ''],
+                     credit='Phosphor Icons, MIT'),
+    'mingcute': dict(lib='mingcute', title='XGram MingCute', prefix='xgm', table='MINGCUTE', suffixes=['-line', '-fill', ''],
+                     credit='MingCute Design, Apache 2.0'),
+    'pixel': dict(lib='pixelarticons', title='XGram Pixel', prefix='xgp', table='PIXEL', suffixes=[''],
+                  credit='Pixelarticons by Gerrit Halfmann, MIT'),
+}
+UNSUPPORTED = ('<mask', '<clipPath', '<use', 'Gradient', 'transform=', '<image', '<text', '<pattern', '<filter')
+
+_cache = {}
+
+
+def library(lib):
+    if lib not in _cache:
+        d = json.load(open(os.path.join(VENDOR, lib, 'icons.json'), encoding='utf-8'))
+        icons = {}
+        w0, h0 = d.get('width', 16), d.get('height', 16)
+        for name, v in d['icons'].items():
+            icons[name] = (v['body'], v.get('width', w0), v.get('height', h0))
+        for name, a in d.get('aliases', {}).items():
+            parent = icons.get(a.get('parent'))
+            if parent and not any(k in a for k in ('rotate', 'hFlip', 'vFlip')):
+                icons[name] = parent
+        _cache[lib] = icons
+    return _cache[lib]
+
+
+def supported(body):
+    return not any(u in body for u in UNSUPPORTED)
+
+
+def resolve(pack, base):
+    """Full library name for a mapped base name, or None."""
+    p = PACKS[pack]
+    icons = library(p['lib'])
+    for suffix in p['suffixes']:
+        name = base + suffix
+        if name in icons and supported(icons[name][0]):
+            return name
+    return None
+
+
+# -- SVG body -> vector layers ------------------------------------------------------------------------------------------
+
+def _num(v, default=0.0):
+    try:
+        return float(re.sub(r'[a-z%]+$', '', str(v)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _shape_d(el):
+    tag = el.tag.split('}')[-1]
+    g = el.attrib.get
+    if tag == 'path':
+        return g('d')
+    if tag == 'circle':
+        cx, cy, r = _num(g('cx')), _num(g('cy')), _num(g('r'))
+        return 'M%g %ga%g %g 0 1 0 %g 0a%g %g 0 1 0 %g 0Z' % (cx - r, cy, r, r, 2 * r, r, r, -2 * r)
+    if tag == 'ellipse':
+        cx, cy, rx, ry = _num(g('cx')), _num(g('cy')), _num(g('rx')), _num(g('ry'))
+        return 'M%g %ga%g %g 0 1 0 %g 0a%g %g 0 1 0 %g 0Z' % (cx - rx, cy, rx, ry, 2 * rx, rx, ry, -2 * rx)
+    if tag == 'rect':
+        x, y, w, h = _num(g('x')), _num(g('y')), _num(g('width')), _num(g('height'))
+        rx = _num(g('rx'), _num(g('ry'), 0))
+        ry = _num(g('ry'), rx)
+        if rx <= 0:
+            return 'M%g %gh%gv%gh%gZ' % (x, y, w, h, -w)
+        rx, ry = min(rx, w / 2), min(ry, h / 2)
+        return ('M%g %gh%ga%g %g 0 0 1 %g %gv%ga%g %g 0 0 1 %g %gh%ga%g %g 0 0 1 %g %gv%ga%g %g 0 0 1 %g %gZ' %
+                (x + rx, y, w - 2 * rx, rx, ry, rx, ry, h - 2 * ry, rx, ry, -rx, ry, -(w - 2 * rx), rx, ry, -rx, -ry, -(h - 2 * ry), rx, ry, rx, -ry))
+    if tag == 'line':
+        return 'M%g %gL%g %g' % (_num(g('x1')), _num(g('y1')), _num(g('x2')), _num(g('y2')))
+    if tag in ('polyline', 'polygon'):
+        nums = [float(n) for n in re.findall(r'[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?', g('points', ''))]
+        pts = list(zip(nums[0::2], nums[1::2]))
+        if not pts:
+            return None
+        return 'M' + 'L'.join('%g %g' % p for p in pts) + ('Z' if tag == 'polygon' else '')
+    return None
+
+
+def _style(el):
+    out = dict(el.attrib)
+    for part in el.attrib.get('style', '').split(';'):
+        if ':' in part:
+            k, v = part.split(':', 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def layers(body):
+    root = ET.fromstring('<svg xmlns="http://www.w3.org/2000/svg">%s</svg>' % body)
+    out = []
+
+    def walk(el, inherited):
+        st = dict(inherited)
+        a = _style(el)
+        for k in ('fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit', 'fill-rule'):
+            if k in a:
+                st[k] = a[k]
+        opacity = st.get('_opacity', 1.0) * _num(a.get('opacity', 1), 1)
+        st['_opacity'] = opacity
+        tag = el.tag.split('}')[-1]
+        if tag in ('svg', 'g'):
+            for child in el:
+                walk(child, st)
+            return
+        if tag in ('defs', 'title', 'desc'):
+            return
+        d = _shape_d(el)
+        if not d:
+            return
+        fill = st.get('fill', 'currentColor')
+        stroke = st.get('stroke', 'none')
+        fill_op = opacity * _num(a.get('fill-opacity', 1), 1)
+        stroke_op = opacity * _num(a.get('stroke-opacity', 1), 1)
+        if fill not in ('none', 'transparent'):
+            out.append(dict(kind='fill', d=d, alpha=fill_op, even_odd=st.get('fill-rule') == 'evenodd'))
+        if stroke not in ('none', 'transparent'):
+            out.append(dict(kind='stroke', d=d, alpha=stroke_op, width=_num(st.get('stroke-width', 1), 1),
+                            cap=st.get('stroke-linecap', 'butt'), join=st.get('stroke-linejoin', 'miter'),
+                            miter=_num(st.get('stroke-miterlimit', 4), 4)))
+
+    walk(root, {})
+    return out
+
+
+def vector_xml(lys, viewport, size, color, title):
+    vw, vh = viewport
+    lines = ['<?xml version="1.0" encoding="utf-8"?>', '<!-- %s icon, generated by tools/xgram/icon_packs/build.py -->' % title,
+             '<vector xmlns:android="http://schemas.android.com/apk/res/android"',
+             '  android:width="%ddp"' % size, '  android:height="%ddp"' % size,
+             '  android:viewportWidth="%g"' % vw, '  android:viewportHeight="%g">' % vh]
+    for l in lys:
+        lines += ['  <path', '    android:pathData="%s"' % l['d']]
+        if l['kind'] == 'fill':
+            lines.append('    android:fillColor="%s"' % color)
+            if l['alpha'] < 1:
+                lines.append('    android:fillAlpha="%g"' % round(l['alpha'], 3))
+            if l.get('even_odd'):
+                lines.append('    android:fillType="evenOdd"')
+        else:
+            lines += ['    android:fillColor="#00000000"', '    android:strokeColor="%s"' % color,
+                      '    android:strokeWidth="%g"' % l['width'], '    android:strokeLineCap="%s"' % l['cap'],
+                      '    android:strokeLineJoin="%s"' % l['join'], '    android:strokeMiterLimit="%g"' % l['miter']]
+            if l['alpha'] < 1:
+                lines.append('    android:strokeAlpha="%g"' % round(l['alpha'], 3))
+        lines[-1] += ' />'
+    lines.append('</vector>')
+    return '\n'.join(lines) + '\n'
+
+
+def svg_preview(body, w, h, px=36):
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %g %g" width="%d" height="%d" style="color:#2b5278">%s</svg>' % (w, h, px, px, body)
+
+
+# -- CLI ----------------------------------------------------------------------------------------------------------------
+
+def _concepts():
+    return json.load(open(CONCEPTS, encoding='utf-8'))
+
+
+def _load_map(pack):
+    p = os.path.join(MAPS, pack + '.json')
+    return json.load(open(p, encoding='utf-8')) if os.path.exists(p) else {}
+
+
+def _tgx_svg(name, px=36):
+    p = os.path.join(HERE, '..', '..', '..', 'app', 'src', 'main', 'res', 'drawable', name + '.xml')
+    if not os.path.exists(p):
+        return '?'
+    s = open(p, encoding='utf-8', errors='ignore').read()
+    vw = re.search(r'viewportWidth="([\d.]+)"', s)
+    vh = re.search(r'viewportHeight="([\d.]+)"', s)
+    paths = re.findall(r'pathData="([^"]+)"', s)
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %s %s" width="%d" height="%d" style="color:#8a949e">%s</svg>' % (
+        vw.group(1) if vw else 24, vh.group(1) if vh else 24, px, px, ''.join('<path d="%s" fill="currentColor"/>' % d for d in paths))
+
+
+def cmd_search(pack, words):
+    icons = library(PACKS[pack]['lib'])
+    words = [w.lower() for w in words]
+    bases = {}
+    style_suffixes = {
+        'solar': ['-bold-duotone', '-line-duotone', '-bold', '-linear', '-broken', '-outline'],
+        'ph': ['-bold', '-fill', '-duotone', '-light', '-thin'],
+        'mingcute': ['-line', '-fill'],
+        'pixelarticons': [],
+    }[PACKS[pack]['lib']]
+    suffixes = sorted(style_suffixes, key=len, reverse=True)
+    for name in icons:
+        if all(w in name for w in words):
+            base = name
+            for s in suffixes:
+                if name.endswith(s):
+                    base = name[:-len(s)]
+                    break
+            bases.setdefault(base, []).append(name)
+    for base in sorted(bases, key=lambda b: (len(b), b))[:80]:
+        full = resolve(pack, base)
+        print('%-40s %s' % (base, ('-> ' + full) if full else '(no usable style)'))
+    if len(bases) > 80:
+        print('... %d more' % (len(bases) - 80))
+
+
+def cmd_sheet(pack, start, count, png):
+    concepts = _concepts()
+    mapping = _load_map(pack)
+    names = list(concepts)[start:start + count]
+    icons = library(PACKS[pack]['lib'])
+    cells = []
+    for c in names:
+        tgx = concepts[c]['tgx'][0]
+        base = mapping.get(c)
+        full = resolve(pack, base) if base else None
+        if full:
+            body, w, h = icons[full]
+            ours = svg_preview(body, w, h)
+            label = full
+        else:
+            ours = '<span style="color:#c33">none</span>'
+            label = repr(base)
+        cells.append('<div class="c"><div class="r">%s<span>&rarr;</span>%s</div><div class="t"><b>%s</b><br>%s</div></div>' % (_tgx_svg(tgx), ours, c, label))
+    html = ('<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;padding:10px;font:11px system-ui,sans-serif}'
+            '.g{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}.c{border:1px solid #ddd;border-radius:8px;padding:6px;text-align:center}'
+            '.r{display:flex;justify-content:center;align-items:center;gap:10px}.t{margin-top:3px;color:#444;word-break:break-all}</style></head>'
+            '<body><b>%s: concepts %d-%d</b><div class="g">%s</div></body></html>') % (pack, start, start + len(names) - 1, ''.join(cells))
+    out_html = os.path.join(MAPS, '_sheet_%s_%d.html' % (pack, start))
+    os.makedirs(MAPS, exist_ok=True)
+    with open(out_html, 'wb') as fh:
+        fh.write(html.encode('utf-8'))
+    png = png or out_html[:-5] + '.png'
+    rows = (len(names) + 5) // 6
+    prof = os.path.join(os.environ.get('TEMP', HERE), 'xgram_lib_preview_profile_' + pack)
+    subprocess.run([EDGE, '--headless=new', '--disable-gpu', '--hide-scrollbars', '--user-data-dir=' + prof,
+                    '--window-size=1200,%d' % (40 + rows * 92), '--screenshot=' + png, 'file:///' + out_html.replace('\\', '/')],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+    print('sheet:', png)
+
+
+def cmd_check(pack):
+    concepts = _concepts()
+    mapping = _load_map(pack)
+    missing = [c for c in concepts if c not in mapping]
+    bad = [(c, b) for c, b in mapping.items() if b and not resolve(pack, b)]
+    unknown = [c for c in mapping if c not in concepts]
+    nulls = [c for c, b in mapping.items() if not b]
+    print('concepts %d, mapped %d, null %d, missing %d, unresolvable %d, unknown keys %d' % (
+        len(concepts), len(mapping) - len(nulls), len(nulls), len(missing), len(bad), len(unknown)))
+    for c in missing[:50]:
+        print('missing:', c)
+    for c, b in bad:
+        print('unresolvable:', c, b)
+    for c in unknown:
+        print('unknown key:', c)
+
+
+if __name__ == '__main__':
+    cmd, pack = sys.argv[1], sys.argv[2]
+    if pack not in PACKS:
+        raise SystemExit('pack must be one of ' + ', '.join(PACKS))
+    if cmd == 'search':
+        cmd_search(pack, sys.argv[3:])
+    elif cmd == 'sheet':
+        args = sys.argv[3:]
+        start = int(args[args.index('--from') + 1]) if '--from' in args else 0
+        count = int(args[args.index('--count') + 1]) if '--count' in args else 60
+        png = args[args.index('--png') + 1] if '--png' in args else None
+        cmd_sheet(pack, start, count, png)
+    elif cmd == 'check':
+        cmd_check(pack)

@@ -251,12 +251,18 @@ public final class ReactionsListAnimator implements Iterable<ReactionsListAnimat
     return entries.iterator();
   }
 
-  private void removeJunk (boolean applyFuture) {
+  // XGram: messages are laid out on a background thread while a service message's text update can rebuild the
+  // same message's reactions on the UI thread; these methods change the lists, so they run one at a time.
+  private synchronized void removeJunk (boolean applyFuture) {
     boolean haveRemovedEntries = false;
     for (int i = entries.size() - 1; i >= 0; i--) {
+      if (i >= entries.size()) {
+        // XGram: finishing or recycling an entry can shrink the list (seen on service messages); don't crash.
+        continue;
+      }
       Entry entry = entries.get(i);
       entry.finishAnimation(applyFuture);
-      if (entry.isJunk()) {
+      if (entry.isJunk() && i < entries.size() && entries.get(i) == entry) {
         entries.remove(i);
         entry.onRecycled();
         haveRemovedEntries = true;
@@ -268,7 +274,7 @@ public final class ReactionsListAnimator implements Iterable<ReactionsListAnimat
     metadata.finishAnimation(applyFuture);
   }
 
-  public void stopAnimation (boolean applyFuture) {
+  public synchronized void stopAnimation (boolean applyFuture) {
     if (animator != null) {
       animator.cancel();
       removeJunk(applyFuture);
@@ -338,7 +344,7 @@ public final class ReactionsListAnimator implements Iterable<ReactionsListAnimat
     return reactionsMaxWidth;
   }
 
-  public void measure (boolean animated) {
+  public synchronized void measure (boolean animated) {
     if (!animated) {
       stopAnimation(true);
     }
@@ -348,7 +354,7 @@ public final class ReactionsListAnimator implements Iterable<ReactionsListAnimat
     }
   }
 
-  public void measureImpl (boolean animated) {
+  public synchronized void measureImpl (boolean animated) {
     int totalWidth = 0, totalHeight = 0;
     int maxTop = -1;
     int lastLineWidth = 0;
@@ -457,7 +463,7 @@ public final class ReactionsListAnimator implements Iterable<ReactionsListAnimat
     }
   }
 
-  public void reset (@Nullable List<TGReactions.MessageReactionEntry> newItems, boolean animated, @Nullable ResetCallback resetCallback) {
+  public synchronized void reset (@Nullable List<TGReactions.MessageReactionEntry> newItems, boolean animated, @Nullable ResetCallback resetCallback) {
     if (!animated) {
       stopAnimation(false);
       for (int i = entries.size() - 1; i >= 0; i--) {

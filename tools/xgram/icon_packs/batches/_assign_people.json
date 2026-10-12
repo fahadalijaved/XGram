@@ -1,0 +1,106 @@
+{
+ "identifier": {
+  "tgx": [
+   "baseline_identifier_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramMessageDetailsController.java",
+   "java/com/fahadali/xgram/XgramWhatsNewController.java",
+   "java/com/fahadali/xgram/chats/XgramMessageTime.java"
+  ]
+ },
+ "group_add": {
+  "tgx": [
+   "baseline_group_add_16",
+   "baseline_group_add_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "java/org/thunderdog/challegram/ui/ProfileController.java"
+  ]
+ },
+ "account_circle": {
+  "tgx": [
+   "baseline_account_circle_16",
+   "baseline_account_circle_24",
+   "dot_baseline_account_circle_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java",
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "crown": {
+  "tgx": [
+   "baseline_crown_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
+  ]
+ },
+ "profile_accept": {
+  "tgx": [
+   "dot_baseline_profile_accept_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "group_accept": {
+  "tgx": [
+   "dot_baseline_group_accept_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "channel_accept": {
+  "tgx": [
+   "dot_baseline_channel_accept_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "bot_accept": {
+  "tgx": [
+   "dot_baseline_bot_accept_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "group_circle": {
+  "tgx": [
+   "dot_baseline_group_circle_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "channel_circle": {
+  "tgx": [
+   "dot_baseline_channel_circle_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "bot_circle": {
+  "tgx": [
+   "dot_baseline_bot_circle_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "account_switch": {
+  "tgx": [
+   "templarian_baseline_account_switch_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java"
+  ]
+ }
+}

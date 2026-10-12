@@ -172,6 +172,7 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
   public void updateGroup (TdApi.UpdateNotificationGroup update) {
     if (!accept(update.type))
       return;
+    xgramDropHiddenNotifications(update);
     boolean isSilent = update.notificationSoundId == 0;
     if (!isSilent && update.notificationSettingsChatId != 0 && ChatId.isUserChat(update.notificationSettingsChatId) && tdlib.settings().needMuteNonContacts()) {
       TdApi.User user = tdlib.chatUser(update.notificationSettingsChatId);
@@ -593,6 +594,42 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
 
   public void rebuildGroup (int groupId) {
     rebuild(null, 0, groupId);
+  }
+
+  /** XGram: messages hidden by filters or from shadow-banned people don't notify. */
+  private void xgramDropHiddenNotifications (TdApi.UpdateNotificationGroup update) {
+    if (update.addedNotifications == null || update.addedNotifications.length == 0) {
+      return;
+    }
+    List<TdApi.Notification> kept = null;
+    for (int i = 0; i < update.addedNotifications.length; i++) {
+      TdApi.Notification notification = update.addedNotifications[i];
+      boolean hidden = notification.type instanceof TdApi.NotificationTypeNewMessage &&
+        com.fahadali.xgram.chats.XgramFilters.isHidden(tdlib, ((TdApi.NotificationTypeNewMessage) notification.type).message);
+      if (hidden) {
+        if (kept == null) {
+          kept = new ArrayList<>();
+          for (int j = 0; j < i; j++) {
+            kept.add(update.addedNotifications[j]);
+          }
+        }
+        tdlib.client().send(new TdApi.RemoveNotification(update.notificationGroupId, notification.id), tdlib.silentHandler());
+      } else if (kept != null) {
+        kept.add(notification);
+      }
+    }
+    if (kept != null) {
+      update.addedNotifications = kept.toArray(new TdApi.Notification[0]);
+    }
+  }
+
+  public void xgramRemoveChatNotifications (long chatId) {
+    for (TdlibNotificationGroup group : groups.values()) {
+      if (group.getChatId() == chatId) {
+        // RemoveNotificationGroup only dismisses on this device, nothing is marked as read.
+        tdlib.client().send(new TdApi.RemoveNotificationGroup(group.getId(), group.maxNotificationId()), tdlib.silentHandler());
+      }
+    }
   }
 
   public void onChatOpened (long chatId) {

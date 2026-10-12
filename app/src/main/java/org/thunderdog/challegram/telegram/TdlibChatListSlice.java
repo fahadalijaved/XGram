@@ -149,6 +149,11 @@ public final class TdlibChatListSlice implements Destroyable {
       @Override
       public void onChatChanged (TdlibChatList chatList, TdApi.Chat chat, int index, Tdlib.ChatChange changeInfo) {
         ensureTdlibThreadAndList(chatList);
+        if (needSort() && changeInfo.orderChanged()) {
+          // The order changed without moving the chat in the full list: keep this sorted slice right.
+          onChatMoved(chatList, chat, index, index, changeInfo);
+          return;
+        }
         index = findExistingIndex(index, chat.id);
         if (index != -1) {
           if (index < displayCount) {
@@ -164,6 +169,13 @@ public final class TdlibChatListSlice implements Destroyable {
         if (filter != null) {
           if (!filter.accept(chat))
             return;
+        }
+        if (xgramMerge) {
+          // XGram: a community shows as one row; the member may already be there as its front.
+          if (indexOfChat(chat.id) != -1 || xgramHidden(chat)) {
+            xgramRefreshFor(chat.id);
+            return;
+          }
         }
         Entry entry = new Entry(chat, chatList.chatList(), changeInfo.position, keepPositions);
         final int insertIndex;
@@ -187,6 +199,7 @@ public final class TdlibChatListSlice implements Destroyable {
         } else {
           dispatchChats(0);
         }
+        xgramRefreshFor(chat.id);
       }
 
       @Override
@@ -201,6 +214,7 @@ public final class TdlibChatListSlice implements Destroyable {
             dispatchChats(ChangeFlags.ITEM_REMOVED);
           }
         }
+        xgramRefreshFor(chat.id);
       }
 
       @Override
@@ -209,8 +223,10 @@ public final class TdlibChatListSlice implements Destroyable {
         final boolean needSort = needSort();
         if (needSort) {
           fromIndex = findExistingIndex(fromIndex, chat.id);
-          if (fromIndex == -1) // chat is filtered out
+          if (fromIndex == -1) { // chat is filtered out
+            xgramRefreshFor(chat.id); // XGram: a hidden community member may now be the most recent
             return;
+          }
         }
         Entry movedEntry = filteredList.remove(fromIndex);
         if (!movedEntry.keepPosition) {
@@ -226,6 +242,7 @@ public final class TdlibChatListSlice implements Destroyable {
               subListener.onChatChanged(chatList, chat, toIndex, changeInfo);
               subListener.onChatListChanged(chatList, ChangeFlags.ITEM_METADATA_CHANGED);
             }
+            xgramRefreshFor(chat.id);
             return;
           }
         }
@@ -244,6 +261,7 @@ public final class TdlibChatListSlice implements Destroyable {
         } else {
           // Do nothing, as the chat is outside of displaying range
         }
+        xgramRefreshFor(chat.id);
       }
 
       @Override
@@ -291,10 +309,11 @@ public final class TdlibChatListSlice implements Destroyable {
     this.subCallback = subCallback;
     final RunnableData<List<TdlibChatList.Entry>> callback = (moreChats) -> {
       tdlib.ensureTdlibThread();
+      xgramReady = true;
       synchronized (filteredList) {
         List<Entry> addedEntries = new ArrayList<>(moreChats.size());
         for (TdlibChatList.Entry entry : moreChats) {
-          if ((filter == null || filter.accept(entry.chat)) && (!haveCustomModifications || indexOfChat(entry.chat.id) == -1)) {
+          if ((filter == null || filter.accept(entry.chat)) && ((!haveCustomModifications && !xgramMerge) || indexOfChat(entry.chat.id) == -1) && !xgramHidden(entry.chat)) {
             addedEntries.add(new Entry(entry.chat, entry.chatList, entry.effectivePosition, keepPositions));
           }
         }
@@ -302,9 +321,21 @@ public final class TdlibChatListSlice implements Destroyable {
           return;
         }
         boolean haveCustomModifications = modifier != null && modifier.modifySlice(this, addedEntries, filteredList.size());
-        filteredList.addAll(addedEntries);
+        if (xgramMerge) {
+          // Sorted insertion: the merge may have put a community's front in already.
+          for (Entry entry : addedEntries) {
+            filteredList.add(findInsertIndex(entry), entry);
+          }
+        } else {
+          filteredList.addAll(addedEntries);
+        }
         if (haveCustomModifications) {
           this.haveCustomModifications = true;
+        }
+        if (xgramMerge) {
+          for (Entry entry : addedEntries) {
+            xgramRefreshFor(entry.chat.id);
+          }
         }
       }
       dispatchChats(0);
@@ -313,6 +344,7 @@ public final class TdlibChatListSlice implements Destroyable {
     loadingInitialChunk = true;
     sourceList.initializeList(filter, listener, callback, this.maxSize = initialChunkSize, () -> {
       loadingInitialChunk = false;
+      xgramReady = true;
       dispatchChats(0);
       if (!isDestroyed() && onLoadInitialChunk != null) {
         onLoadInitialChunk.run();
@@ -376,13 +408,126 @@ public final class TdlibChatListSlice implements Destroyable {
     if (!isDestroyed) {
       isDestroyed = true;
       sourceList.unsubscribeFromUpdates(this.listener);
+      if (xgramMerge) {
+        com.fahadali.xgram.chats.XgramCommunities.removeListener(xgramListener);
+      }
     }
   }
 
   private boolean haveCustomModifications;
 
   private boolean needSort () {
-    return filter != null || haveCustomModifications;
+    return filter != null || haveCustomModifications || xgramMerge;
+  }
+
+  // XGram: one row per Telegram community (see XgramCommunities). Only for the user's own chat lists, not pickers.
+
+  private boolean xgramMerge;
+  /** The list has received its chats: before that, merge changes are left to the loading itself. */
+  private boolean xgramReady;
+  private com.fahadali.xgram.chats.XgramCommunities.Listener xgramListener;
+
+  /** Call before {@link #initializeList}. */
+  public void xgramMergeCommunities () {
+    if (!xgramMerge) {
+      xgramMerge = true;
+      xgramListener = (changedTdlib, communityId, chatId) -> {
+        if (changedTdlib == tdlib) {
+          tdlib.runOnTdlibThread(() -> {
+            xgramRefresh(communityId);
+            if (chatId != 0) {
+              xgramShowIfVisible(chatId); // e.g. a hidden chat that left its community
+            }
+          });
+        }
+      };
+      com.fahadali.xgram.chats.XgramCommunities.addListener(xgramListener);
+    }
+  }
+
+  private boolean xgramHidden (TdApi.Chat chat) {
+    return xgramMerge && com.fahadali.xgram.chats.XgramCommunities.isHidden(tdlib, chat, sourceList.chatList());
+  }
+
+  @TdlibThread
+  private void xgramRefreshFor (long chatId) {
+    if (xgramMerge) {
+      long communityId = com.fahadali.xgram.chats.XgramCommunities.communityOf(tdlib, chatId);
+      if (communityId != 0) {
+        xgramRefresh(communityId);
+      }
+    }
+  }
+
+  /** Brings a chat of this list back in when nothing hides it any more. */
+  @TdlibThread
+  private void xgramShowIfVisible (long chatId) {
+    if (!xgramMerge || !xgramReady || subListener == null || isDestroyed() || indexOfChat(chatId) != -1) {
+      return;
+    }
+    TdApi.Chat chat = tdlib.chat(chatId);
+    TdApi.ChatList chatList = sourceList.chatList();
+    TdApi.ChatPosition position = chat != null ? ChatPosition.findPosition(chat, chatList) : null;
+    if (position == null || position.order == 0 || xgramHidden(chat) || (filter != null && !filter.accept(chat))) {
+      return;
+    }
+    synchronized (filteredList) {
+      Entry entry = new Entry(chat, chatList, position, keepPositions);
+      int atIndex = findInsertIndex(entry);
+      filteredList.add(atIndex, entry);
+      if (atIndex < displayCount) {
+        subListener.onChatAdded(sourceList, chat, atIndex, new Tdlib.ChatChange(position, Tdlib.ChatChange.ALL));
+        displayCount++;
+        subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_ADDED);
+      }
+    }
+    dispatchChats(0);
+  }
+
+  /** Leaves out the members that aren't the community's front and brings in the ones that should show. */
+  @TdlibThread
+  private void xgramRefresh (long communityId) {
+    if (!xgramMerge || !xgramReady || communityId == 0 || subListener == null || isDestroyed()) {
+      return;
+    }
+    TdApi.ChatList chatList = sourceList.chatList();
+    long front = com.fahadali.xgram.chats.XgramCommunities.frontChat(tdlib, communityId, chatList);
+    boolean changed = false;
+    synchronized (filteredList) {
+      for (int i = filteredList.size() - 1; i >= 0; i--) {
+        Entry entry = filteredList.get(i);
+        if (front != 0 && entry.chat.id != front && !entry.keepPosition && com.fahadali.xgram.chats.XgramCommunities.communityOf(tdlib, entry.chat.id) == communityId) {
+          filteredList.remove(i);
+          if (i < displayCount) {
+            subListener.onChatRemoved(sourceList, entry.chat, i, new Tdlib.ChatChange(entry.effectivePosition, Tdlib.ChatChange.ALL));
+            displayCount--;
+            subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_REMOVED);
+          }
+          changed = true;
+        }
+      }
+      for (TdApi.Chat chat : com.fahadali.xgram.chats.XgramCommunities.presentMembers(tdlib, communityId, chatList)) {
+        if ((front != 0 && chat.id != front) || indexOfChat(chat.id) != -1 || (filter != null && !filter.accept(chat))) {
+          continue;
+        }
+        TdApi.ChatPosition position = ChatPosition.findPosition(chat, chatList);
+        if (position == null || position.order == 0) {
+          continue;
+        }
+        Entry entry = new Entry(chat, chatList, position, keepPositions);
+        int atIndex = findInsertIndex(entry);
+        filteredList.add(atIndex, entry);
+        if (atIndex < displayCount) {
+          subListener.onChatAdded(sourceList, chat, atIndex, new Tdlib.ChatChange(position, Tdlib.ChatChange.ALL));
+          displayCount++;
+          subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_ADDED);
+        }
+        changed = true;
+      }
+    }
+    if (changed) {
+      dispatchChats(0);
+    }
   }
 
   public void bringToTop (long chatId, @Nullable Future<TdApi.Function<?>> createFunction, @Nullable Runnable after) {

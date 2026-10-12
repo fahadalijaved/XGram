@@ -169,6 +169,10 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
   }
 
   public void checkForUpdates () {
+    if (true) {
+      // XGram: Telegram X's update sources (Google Play, its Telegram channel) serve Telegram X, not XGram.
+      return;
+    }
     if (state == State.NONE) {
       if (preferTelegramChannelFlow()) {
         checkForTelegramChannelUpdates();

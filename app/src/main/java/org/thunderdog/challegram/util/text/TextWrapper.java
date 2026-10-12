@@ -217,7 +217,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
       return null;
     }
 
-    int textSizePx = textStyleProvider.getTextSizeInPixels();
+    int textSizePx = textStyleProvider.getTextSizeInPixels() * 1000 + com.fahadali.xgram.XgramSettings.instance().emojiScale(); // XGram: the big emoji size is part of the layout key
 
     // In case there's already some text that did entirely fit to less or equal maxWidth,
     // then use it. Little optimisation for single-word messages, for example
@@ -250,6 +250,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
           if (emojiCount >= 1 && emojiCount <= SCALABLE_EMOJI_COUNT) {
             float textSizeDp = textStyleProvider.getTextSizeInDp();
             float maxEmojiSize = Math.min(Settings.CHAT_FONT_SIZE_DEFAULT + 4f, textSizeDp) + 12f;
+            maxEmojiSize = textSizeDp + (maxEmojiSize - textSizeDp) * com.fahadali.xgram.XgramSettings.instance().emojiScale() / 100f; // XGram: Chat look
             if (maxEmojiSize > textSizeDp) {
               float desiredEmojiSize = maxEmojiSize - (maxEmojiSize - textSizeDp) / SCALABLE_EMOJI_COUNT * (emojiCount - 1);
               if (desiredEmojiSize > textSizeDp) {

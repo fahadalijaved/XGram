@@ -1,0 +1,209 @@
+{
+ "image_replace": {
+  "tgx": [
+   "dot_baseline_image_replace_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/ReplyBarView.java"
+  ]
+ },
+ "play_circle_filled": {
+  "tgx": [
+   "baseline_play_circle_filled_24_white"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/preview/PreviewLayout.java",
+   "java/org/thunderdog/challegram/service/AudioService.java"
+  ]
+ },
+ "sound_muted": {
+  "tgx": [
+   "deproko_baseline_sound_muted_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TGMessageVideo.java",
+   "java/org/thunderdog/challegram/player/RecordAudioVideoController.java"
+  ]
+ },
+ "adjust": {
+  "tgx": [
+   "baseline_adjust_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "crop_square": {
+  "tgx": [
+   "baseline_crop_square_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java",
+   "java/org/thunderdog/challegram/ui/SettingsThemeController.java"
+  ]
+ },
+ "crop_16": {
+  "tgx": [
+   "baseline_crop_16_9_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java",
+   "java/org/thunderdog/challegram/ui/SettingsThemeController.java"
+  ]
+ },
+ "crop_free": {
+  "tgx": [
+   "baseline_crop_free_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java",
+   "java/org/thunderdog/challegram/ui/SettingsThemeController.java"
+  ]
+ },
+ "play_arrow": {
+  "tgx": [
+   "baseline_play_arrow_36_white"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/service/AudioService.java",
+   "java/org/thunderdog/challegram/widget/FileProgressComponent.java"
+  ]
+ },
+ "shuffle": {
+  "tgx": [
+   "round_shuffle_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/PlaybackController.java",
+   "java/org/thunderdog/challegram/ui/ThemeListController.java"
+  ]
+ },
+ "queue_music": {
+  "tgx": [
+   "baseline_queue_music_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java"
+  ]
+ },
+ "cloud_pause": {
+  "tgx": [
+   "baseline_cloud_pause_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessageView.java"
+  ]
+ },
+ "msg_voice": {
+  "tgx": [
+   "deproko_baseline_msg_voice_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/VoiceVideoButtonView.java"
+  ]
+ },
+ "image_aspect_ratio": {
+  "tgx": [
+   "baseline_image_aspect_ratio_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "flip_horizontal": {
+  "tgx": [
+   "dot_baseline_flip_horizontal_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "zoom_out_map": {
+  "tgx": [
+   "baseline_zoom_out_map_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "crop_5": {
+  "tgx": [
+   "baseline_crop_5_4_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "fast_forward": {
+  "tgx": [
+   "baseline_fast_forward_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/navigation/HeaderFilling.java"
+  ]
+ },
+ "volume_off": {
+  "tgx": [
+   "baseline_volume_off_24_white"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibNotificationStyle.java"
+  ]
+ },
+ "video_chat": {
+  "tgx": [
+   "baseline_video_chat_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/EditRightsController.java"
+  ]
+ },
+ "camera_enhance": {
+  "tgx": [
+   "baseline_camera_enhance_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingsThemeController.java"
+  ]
+ },
+ "camera_rear": {
+  "tgx": [
+   "baseline_camera_rear_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/camera/CameraControlButton.java"
+  ]
+ },
+ "camera_front": {
+  "tgx": [
+   "baseline_camera_front_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/camera/CameraControlButton.java"
+  ]
+ },
+ "flash_auto": {
+  "tgx": [
+   "baseline_flash_auto_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/camera/CameraController.java"
+  ]
+ },
+ "video_library": {
+  "tgx": [
+   "baseline_video_library_96"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/EmptySmartView.java"
+  ]
+ },
+ "replay": {
+  "tgx": [
+   "baseline_replay_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/FileProgressComponent.java"
+  ]
+ }
+}

@@ -26,7 +26,12 @@ abstract class GitInformationSource : ValueSource<GitInformation, GitInformation
         commitHashShort = repository.newObjectReader().use { it.abbreviate(head).name() },
         commitHashLong = commit.name,
         commitDate = commit.commitTime.toLong(),
-        remoteUrl = cleanRemoteUrl(repository.config.getString("remote", "origin", "url")),
+        // XGram: forks keep Telegram X as `upstream` and may not have an `origin` yet.
+        remoteUrl = cleanRemoteUrl(
+          repository.config.getString("remote", "origin", "url")
+            ?: repository.config.getString("remote", "upstream", "url")
+            ?: error("No `origin` or `upstream` git remote")
+        ),
         commitAuthor = commit.authorIdent.name
       )
     }

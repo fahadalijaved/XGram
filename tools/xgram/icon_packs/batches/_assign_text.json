@@ -1,0 +1,195 @@
+{
+ "format_text": {
+  "tgx": [
+   "baseline_format_text_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/chats/XgramChatExport.java",
+   "java/com/fahadali/xgram/chats/XgramMessageActions.java",
+   "java/com/fahadali/xgram/chats/XgramMessageMenu.java"
+  ]
+ },
+ "format_quote_close": {
+  "tgx": [
+   "baseline_format_quote_close_16",
+   "baseline_format_quote_close_18",
+   "baseline_format_quote_close_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/chat/MessagePreviewView.java",
+   "java/org/thunderdog/challegram/component/chat/ReplyComponent.java",
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "textbox_password": {
+  "tgx": [
+   "mrgrigri_baseline_textbox_password_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/org/thunderdog/challegram/tool/Drawables.java",
+   "java/org/thunderdog/challegram/ui/PasscodeSetupController.java"
+  ]
+ },
+ "content_paste": {
+  "tgx": [
+   "baseline_content_paste_24",
+   "baseline_content_paste_18"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramSettingsController.java",
+   "java/org/thunderdog/challegram/ui/SettingHolder.java",
+   "java/org/thunderdog/challegram/widget/TextFormattingLayout.java"
+  ]
+ },
+ "format_list_bulleted_type": {
+  "tgx": [
+   "baseline_format_list_bulleted_type_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/chats/XgramMessageActions.java",
+   "java/com/fahadali/xgram/chats/XgramMessageMenu.java",
+   "java/org/thunderdog/challegram/ui/EditRightsController.java"
+  ]
+ },
+ "format_bold": {
+  "tgx": [
+   "baseline_format_bold_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "java/org/thunderdog/challegram/widget/TextFormattingLayout.java",
+   "res/menu/text.xml"
+  ]
+ },
+ "format_italic": {
+  "tgx": [
+   "baseline_format_italic_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "java/org/thunderdog/challegram/widget/TextFormattingLayout.java",
+   "res/menu/text.xml"
+  ]
+ },
+ "format_underlined": {
+  "tgx": [
+   "baseline_format_underlined_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "java/org/thunderdog/challegram/widget/TextFormattingLayout.java",
+   "res/menu/text.xml"
+  ]
+ },
+ "strikethrough_s": {
+  "tgx": [
+   "baseline_strikethrough_s_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "java/org/thunderdog/challegram/widget/TextFormattingLayout.java",
+   "res/menu/text.xml"
+  ]
+ },
+ "text_add": {
+  "tgx": [
+   "deproko_baseline_text_add_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/XgramMessageDetailsController.java",
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "outinline": {
+  "tgx": [
+   "deproko_baseline_outinline_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "format_clear": {
+  "tgx": [
+   "baseline_format_clear_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java",
+   "res/menu/text.xml"
+  ]
+ },
+ "undo": {
+  "tgx": [
+   "baseline_undo_24",
+   "baseline_undo_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java",
+   "java/org/thunderdog/challegram/ui/SettingHolder.java"
+  ]
+ },
+ "file_caption": {
+  "tgx": [
+   "baseline_file_caption_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/component/attach/MediaBottomFilesController.java"
+  ]
+ },
+ "format_color_fill": {
+  "tgx": [
+   "baseline_format_color_fill_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/mediaview/MediaViewController.java"
+  ]
+ },
+ "toc": {
+  "tgx": [
+   "baseline_toc_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "text_search_variant": {
+  "tgx": [
+   "baseline_text_search_variant_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "redo": {
+  "tgx": [
+   "baseline_redo_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingHolder.java"
+  ]
+ },
+ "opacity": {
+  "tgx": [
+   "baseline_opacity_18"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/SettingHolder.java"
+  ]
+ },
+ "clear_formatting": {
+  "tgx": [
+   "dot_baseline_clear_formatting_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/TextFormattingLayout.java"
+  ]
+ },
+ "content_cut": {
+  "tgx": [
+   "baseline_content_cut_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/widget/TextFormattingLayout.java"
+  ]
+ }
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram icon style "Origami": the woven X -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:aapt="http://schemas.android.com/aapt"
+  android:width="108dp"
+  android:height="108dp"
+  android:viewportWidth="108"
+  android:viewportHeight="108">
+  <path android:pathData="M36.5,36.5 L71.5,71.5" android:strokeWidth="11" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.72" android:strokeColor="#FFFFFFFF" />
+  <path android:pathData="M40.389,77.189 L58.774,58.804 L76.5,33.3 L50.996,51.026 L32.611,69.411 L31.843,70.374 L31.309,71.483 L31.035,72.684 L31.035,73.916 L31.309,75.117 L31.843,76.226 L32.611,77.189 L33.574,77.957 L34.683,78.491 L35.884,78.765 L37.116,78.765 L38.317,78.491 L39.426,77.957 Z" android:fillAlpha="0.18" android:fillColor="#FF000000" />
+  <path android:pathData="M36.5,71.5 L32.611,75.389 L33.071,75.8 L33.574,76.157 L34.114,76.455 L34.683,76.691 L35.276,76.862 L35.884,76.965 L36.5,77 L37.116,76.965 L37.724,76.862 L38.317,76.691 L38.886,76.455 L39.426,76.157 L39.929,75.8 L40.389,75.389 L58.774,57.004 L76.5,31.5 L54.885,53.115 Z" android:fillColor="#FFA8C6F0" />
+  <path android:pathData="M36.5,71.5 L32.611,75.389 L32.2,74.929 L31.843,74.426 L31.545,73.886 L31.309,73.317 L31.138,72.724 L31.035,72.116 L31,71.5 L31.035,70.884 L31.138,70.276 L31.309,69.683 L31.545,69.114 L31.843,68.574 L32.2,68.071 L32.611,67.611 L50.996,49.226 L76.5,31.5 L54.885,53.115 Z" android:fillColor="#FFFFFFFF" />
+</vector>

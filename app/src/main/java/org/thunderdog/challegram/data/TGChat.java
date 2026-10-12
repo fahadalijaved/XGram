@@ -153,6 +153,9 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     this.tdlib = context.tdlib();
     this.chatList = chatList;
     this.chat = Td.copyOf(chat);
+    com.fahadali.xgram.topics.XgramForumUnread.requestIfNeeded(tdlib, chat); // XGram: badge of groups with topics
+    com.fahadali.xgram.chats.XgramCommunities.onMessage(tdlib, chat.lastMessage); // XGram: which community it's in
+    this.xgramCommunityId = xgramComputeCommunity();
     this.archive = null;
     this.listMode = Settings.instance().getChatListMode();
     this.dataType = chat.type.getConstructor();
@@ -829,6 +832,14 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       return getTotalUnreadCount();
     } else if (getSource() != null) {
       return 0;
+    } else if (xgramCommunityId != 0) {
+      int unreadCount = 0;
+      boolean markedAsUnread = false;
+      for (TdApi.Chat member : xgramMembers()) {
+        unreadCount += member.unreadCount;
+        markedAsUnread |= member.isMarkedAsUnread;
+      }
+      return unreadCount > 0 ? unreadCount : markedAsUnread ? Tdlib.CHAT_MARKED_AS_UNREAD : 0;
     } else {
       return chat.unreadCount > 0 ? chat.unreadCount : chat.isMarkedAsUnread ? Tdlib.CHAT_MARKED_AS_UNREAD : 0;
     }
@@ -837,6 +848,13 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   public boolean hasUnreadReactions () {
     if (isArchive()) {
       return archive != null && archive.hasUnreadReactions();
+    } else if (xgramCommunityId != 0) {
+      for (TdApi.Chat member : xgramMembers()) {
+        if (member.unreadReactionCount > 0) {
+          return true;
+        }
+      }
+      return false;
     } else {
       return chat != null && chat.unreadReactionCount > 0;
     }
@@ -845,6 +863,13 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   public boolean hasUnreadMentions () {
     if (isArchive()) {
       return archive.hasUnreadMentions();
+    } else if (xgramCommunityId != 0) {
+      for (TdApi.Chat member : xgramMembers()) {
+        if (member.unreadMentionCount > 0) {
+          return true;
+        }
+      }
+      return false;
     } else {
       return chat.unreadMentionCount > 0;
     }
@@ -874,6 +899,13 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     if (isArchive()) {
       TdlibCounter counter = tdlib.getCounter(ChatPosition.CHAT_LIST_ARCHIVE);
       return counter.chatUnmutedCount > 0;
+    } else if (xgramCommunityId != 0) {
+      for (TdApi.Chat member : xgramMembers()) {
+        if (tdlib.chatNotificationsEnabled(member)) {
+          return true; // the badge is muted only if every chat of the community is
+        }
+      }
+      return false;
     } else {
       return tdlib.chatNotificationsEnabled(chat);
     }
@@ -1009,8 +1041,69 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   public void setTitle () {
-    setTitleImpl(isArchive() ? Lang.getString(R.string.ArchiveTitleList) : tdlib.chatTitle(chat));
+    setTitleImpl(isArchive() ? Lang.getString(R.string.ArchiveTitleList) : xgramCommunityId != 0 ? xgramCommunityTitle() : tdlib.chatTitle(chat));
     layoutTitle(true);
+  }
+
+  // XGram: this row stands for a whole Telegram community, its chat most recently active in the list (XgramCommunities).
+
+  private long xgramCommunityId;
+  private boolean xgramMergeList;
+
+  /** Set by the chat list that owns the row (pickers don't merge). */
+  public void xgramSetMergeCommunities (boolean merge) {
+    if (xgramMergeList == merge) {
+      return;
+    }
+    xgramMergeList = merge;
+    long communityId = xgramComputeCommunity();
+    if (communityId != xgramCommunityId) {
+      xgramCommunityId = communityId;
+      if (currentWidth > 0) {
+        setTitle();
+        setText();
+      }
+      setCounter(false);
+    }
+  }
+
+  private long xgramComputeCommunity () {
+    if (!xgramMergeList || chatList == null || archive != null || chat == null) {
+      return 0;
+    }
+    return com.fahadali.xgram.chats.XgramCommunities.mergedCommunity(tdlib, chat.id, chatList);
+  }
+
+  public long xgramCommunityId () {
+    return xgramCommunityId;
+  }
+
+  private String xgramCommunityTitle () {
+    TdApi.Community community = tdlib.cache().community(xgramCommunityId);
+    return community != null && !StringUtils.isEmpty(community.name) ? community.name : tdlib.chatTitle(chat);
+  }
+
+  /** Members came or went, or one of the others changed: title, counters and preview again. */
+  public boolean xgramRefreshCommunity () {
+    long communityId = xgramComputeCommunity();
+    if (communityId == 0 && xgramCommunityId == 0) {
+      return false;
+    }
+    xgramCommunityId = communityId;
+    setTitle();
+    setText();
+    setCounter(true);
+    return true;
+  }
+
+  private List<TdApi.Chat> xgramMembers () {
+    List<TdApi.Chat> members = com.fahadali.xgram.chats.XgramCommunities.presentMembers(tdlib, xgramCommunityId, chatList);
+    for (int i = 0; i < members.size(); i++) {
+      if (members.get(i).id == chat.id) {
+        members.set(i, chat); // this row's own copy is the up to date one
+      }
+    }
+    return members;
   }
 
   public Text getTitle () {
@@ -1235,16 +1328,20 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       } else {
         prefix = null;
       }
+      // XGram: in forums, show the topic of the last message before its sender.
+      final String topicName = !showDraft() && chat.lastMessage != null ?
+        com.fahadali.xgram.topics.XgramForums.chatListTopicName(tdlib, chat, chat.lastMessage, this::onForumTopicNameLoaded) : null;
+      final String fullPrefix = topicName != null ? (StringUtils.isEmpty(prefix) ? topicName : topicName + " › " + prefix) : prefix;
 
-      if (!StringUtils.isEmpty(prefix)) {
+      if (!StringUtils.isEmpty(fullPrefix)) {
         int avail;
         if (listMode != Settings.CHAT_MODE_2LINE) {
           avail = currentWidth - ChatView.getLeftPadding(listMode) - ChatView.getRightPadding() - getCounterAddWidth();
         } else {
-          avail = Screen.dp(120f);
+          avail = Screen.dp(topicName != null ? 190f : 120f);
         }
         if (avail > 0) {
-          Text.Builder b = new Text.Builder(prefix, avail, getTextStyleProvider(listMode), BitwiseUtils.hasFlag(flags, FLAG_TEXT_DRAFT) ? TextColorSets.Regular.NEGATIVE : TextColorSets.Regular.NORMAL)
+          Text.Builder b = new Text.Builder(fullPrefix, avail, getTextStyleProvider(listMode), BitwiseUtils.hasFlag(flags, FLAG_TEXT_DRAFT) ? TextColorSets.Regular.NEGATIVE : TextColorSets.Regular.NORMAL)
             .singleLine()
             .textFlags(Text.FLAG_ELLIPSIZE_NO_FILL);
           if (needSuffix && listMode == Settings.CHAT_MODE_2LINE) {
@@ -1261,6 +1358,14 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       this.prefix = null;
     }
     layoutText();
+  }
+
+  // XGram: the topic name for the forum preview arrived after the row was laid out.
+  private void onForumTopicNameLoaded () {
+    if (!isDestroyed && currentWidth > 0) {
+      setText();
+      currentViews.invalidate();
+    }
   }
 
   private void setTextValue (@StringRes int resId) {
@@ -1306,6 +1411,29 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     String restrictionText = Lang.getRestrictionText(tdlib.chatRestriction(chat));
     if (!StringUtils.isEmpty(restrictionText)) {
       setContentPreview(new ContentPreview(ContentPreview.EMOJI_ERROR, 0, restrictionText, false));
+      return;
+    }
+
+    if (xgramCommunityId != 0) {
+      // XGram: like Telegram, a community lists its chats, the most recent first, unread ones highlighted.
+      List<TdApi.Chat> members = xgramMembers();
+      java.util.Collections.sort(members, (a, b) -> Long.compare(ChatPosition.getOrder(b, chatList), ChatPosition.getOrder(a, chatList)));
+      List<TextEntity> entities = new ArrayList<>();
+      StringBuilder b = new StringBuilder();
+      for (TdApi.Chat member : members) {
+        if (b.length() > 0) {
+          b.append(Lang.getConcatSeparator());
+        }
+        int startIndex = b.length();
+        b.append(tdlib.chatTitle(member));
+        if (member.unreadCount > 0 || member.isMarkedAsUnread) {
+          entities.add(new TextEntityCustom(context, tdlib, null, startIndex, b.length(), 0, null)
+            .setCustomColorSet(TextColorSets.Regular.NORMAL)
+          );
+        }
+      }
+      setTextValue(b.toString(), !entities.isEmpty() ? entities.toArray(new TextEntity[0]) : null, false);
+      setPrefix();
       return;
     }
 
@@ -1389,7 +1517,9 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     if (msg != null) {
       flags |= FLAG_MESSAGE;
       // No need to check tdlib.chatRestrictionReason, because it's already handled above
-      ContentPreview preview = ContentPreview.getChatListPreview(tdlib, msg.chatId, msg, false);
+      ContentPreview preview = com.fahadali.xgram.chats.XgramFilters.isHidden(tdlib, msg) ?
+        new ContentPreview(ContentPreview.EMOJI_INFO, R.string.XgramHiddenMessage) : // XGram: message filters and shadow bans
+        ContentPreview.getChatListPreview(tdlib, msg.chatId, msg, false);
       setContentPreview(preview);
       visibleMessage = msg;
     } else {
