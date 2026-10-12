@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Decides what a nightly or release run builds and publishes. Runs in the "Plan" job, which has the full
-# commit history (fetch-depth: 0, filter: tree:0) but no submodules.
+# commit history (fetch-depth: 0, filter: blob:none) but no submodules.
 #
 # Env:
 #   XGRAM_MODE                 nightly | release
@@ -8,7 +8,7 @@
 #   IN_FLAVOR, IN_BUILD_TYPE, IN_PUBLISH, IN_ANNOUNCE, IN_CHANGELOG_SINCE, IN_APP_VERSION   (workflow_dispatch inputs)
 #   XGRAM_NIGHTLY_FLAVOR (arm64), XGRAM_NIGHTLY_BUILD_TYPE (release), XGRAM_NIGHTLY_PUBLISH (true),
 #   XGRAM_NIGHTLY_ANNOUNCE (false), XGRAM_NIGHTLY_FORCE (false)                              (scheduled runs)
-#   XGRAM_VERSION_BASE (3000), XGRAM_DEFAULT_BRANCH (fallback when the API is unavailable)
+#   XGRAM_DEFAULT_BRANCH (fallback when the API is unavailable)
 #
 # Outputs: skip, flavor, flavors (JSON array), build_type, publish, announce, since, app_version, head, short,
 #          default_branch, link_base (commit link prefix, only for public repos)

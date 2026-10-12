@@ -496,7 +496,29 @@ android {
       fatal("Invalid commit time!")
     val minorVersion = monthYears(now, then)
 
-    versionCode = config.applicationVersion
+    // XGram: Telegram X's version number with the XGram build on top of it, shown as 0.29.1.1817.9:
+    // N = version.app * 1000 + the commits since Telegram X last changed version.app, counted along the first parent,
+    // so merging a new Telegram X version starts again at 0. CI passes the same N as app.version (scripts/ci/version.sh).
+    // Never rewrite the branch's history (squash, force-push): the count could drop.
+    val xgramVersion = config.applicationVersion.takeIf { it >= 1_000_000 } ?: run {
+      fun git (vararg args: String): String = providers.exec {
+        workingDir = rootDir
+        commandLine("git", *args)
+      }.standardOutput.asText.get().trim()
+      val build = runCatching {
+        val bump = git("log", "--first-parent", "-1", "--format=%H", "-G^version\\.app=", "--", "version.properties")
+        require(bump.isNotEmpty()) { "no commit sets version.app" }
+        git("rev-list", "--count", "--first-parent", "$bump..HEAD").toInt()
+      }.getOrElse {
+        logger.warn("XGram: could not count the commits since Telegram X's version bump, using build 0: ${it.message}")
+        0
+      }
+      if (build > 999) {
+        fatal("$build XGram commits since Telegram X's last version bump, more than fit: merge Telegram X's latest version")
+      }
+      config.applicationVersion * 1000 + build
+    }
+    versionCode = xgramVersion
     versionName = "${config.majorVersion}.${minorVersion}"
   }
 
@@ -812,7 +834,8 @@ android {
         output.versionCode.set(modifiedVersionCode)
 
         baseVersionName = output.versionName.get()
-        val modifiedVersionName = "$baseVersionName.$baseVersionCode$flavorVersionNameSuffix"
+        // XGram: 0.29.1 + Telegram X's 1817 + XGram build 9 -> 0.29.1.1817.9
+        val modifiedVersionName = "$baseVersionName.${baseVersionCode / 1000}.${baseVersionCode % 1000}$flavorVersionNameSuffix"
         output.versionName.set(modifiedVersionName)
 
         fileName = "${config.outputFileNamePrefix}-${modifiedVersionName.replace(Regex("-universal(?=-|$)"), "")}"
@@ -844,7 +867,7 @@ android {
           "int", baseVersionCode, null
         ))
         put("ORIGINAL_VERSION_NAME", BuildConfigField(
-          "String", "\"$baseVersionName.$baseVersionCode\"", null
+          "String", "\"$baseVersionName.${baseVersionCode / 1000}.${baseVersionCode % 1000}\"", null
         ))
 
         var openSslVersionFull = ""

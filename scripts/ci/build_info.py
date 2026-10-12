@@ -8,7 +8,7 @@
   build_info.py merge --in-dir ARTIFACTS --out-dir OUT [--github-output FILE]
       Merges ARTIFACTS/*/build-info.json (one per downloaded artifact) into OUT/build-info.json, copies the
       APKs into OUT after checking their SHA-256, and prints/sets `version_name` (the versionName without the
-      ABI/debug suffix, e.g. 0.29.1.5451) and `apk_count`.
+      ABI/debug suffix, e.g. 0.29.1.1817.9) and `apk_count`.
 """
 import argparse
 import glob
@@ -32,7 +32,7 @@ def fail(message):
 
 
 def base_version(version_name):
-    # 0.29.1.5451-arm64-v8a-debug -> 0.29.1.5451 ; 0.29.1.5451 (universal release) -> 0.29.1.5451
+    # 0.29.1.1817.9-arm64-v8a-debug -> 0.29.1.1817.9 ; 0.29.1.1817.9 (universal release) -> 0.29.1.1817.9
     return version_name.split("-", 1)[0]
 
 

@@ -76,7 +76,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          filter: tree:0
+          filter: blob:none
           submodules: false
           lfs: false
 
@@ -96,7 +96,6 @@ jobs:
           XGRAM_NIGHTLY_PUBLISH: ${{ vars.XGRAM_NIGHTLY_PUBLISH }}
           XGRAM_NIGHTLY_ANNOUNCE: ${{ vars.XGRAM_NIGHTLY_ANNOUNCE }}
           XGRAM_NIGHTLY_FORCE: ${{ vars.XGRAM_NIGHTLY_FORCE }}
-          XGRAM_VERSION_BASE: ${{ vars.XGRAM_VERSION_BASE }}
         run: bash scripts/ci/plan.sh
 
       - name: Changelog

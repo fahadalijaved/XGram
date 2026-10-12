@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # Prints the base version number N (local.properties -> app.version) for a CI build.
 #
-#   N = max(version.app, XGRAM_VERSION_BASE + number of commits reachable from HEAD)
+#   N = version.app * 1000 + XGram build
+#
+# version.app is Telegram X's version (version.properties); the XGram build is the number of commits since Telegram X
+# last changed it, counted along the first parent, so merging a new Telegram X version starts again at 0.
+# app/build.gradle.kts computes the same N for local builds and shows it as 0.29.1.1817.9 (Telegram X 1817, build 9).
 #
 # versionCode = N*1000 + 302 for arm64 and N*1000 + 300 for universal (app/build.gradle.kts), so:
-#  - every new commit on main gives a higher versionCode, in the nightly and in the release workflow alike,
-#    and a release built from the same commit as a nightly gets the same versionCode (installs over it);
+#  - every new commit on main gives a higher versionCode, in the nightly and in the release workflow alike, and a
+#    local build of the same commit gets the same one (either installs over the other);
 #  - re-running a build of the same commit gives the same number;
-#  - XGRAM_VERSION_BASE (repo variable, default 3000) keeps CI builds above the local 1817 builds.
-# Never rewrite main's history (squash/force-push): the commit count could drop. If it ever does, raise
-# XGRAM_VERSION_BASE. Android's limit is versionCode <= 2100000000, i.e. N <= 2099999.
+#  - a new Telegram X version always ends up higher than every build on the one before it.
+# Never rewrite main's history (squash/force-push): the count could drop. At most 999 builds fit on one Telegram X
+# version; Android's limit (versionCode <= 2100000000) holds up to version.app 2099.
 #
-# Needs the full commit history (actions/checkout with fetch-depth: 0; filter: tree:0 is enough).
-# Env (optional): XGRAM_VERSION_BASE, XGRAM_APP_VERSION_OVERRIDE (use exactly this N).
+# Needs the full commit history (actions/checkout with fetch-depth: 0; filter: blob:none is enough).
+# Env (optional): XGRAM_APP_VERSION_OVERRIDE (use exactly this N).
 set -euo pipefail
 # shellcheck source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -24,30 +28,29 @@ if [[ -n "${XGRAM_APP_VERSION_OVERRIDE:-}" ]]; then
   n=$XGRAM_APP_VERSION_OVERRIDE
   [[ "$n" =~ ^[0-9]+$ ]] || die "App version override must be a number, got: $n"
   n=$((10#$n))
-  if ((n < 1 || n > max)); then
-    die "App version override must be 1..$max, got: $n"
+  if ((n < 1000000 || n > max)); then
+    die "App version override must be 1000000..$max (version.app * 1000 + build), got: $n"
   fi
   log "Using app version override N=$n"
   printf '%s\n' "$n"
   exit 0
 fi
 
-base=${XGRAM_VERSION_BASE:-3000}
-[[ "$base" =~ ^[0-9]+$ ]] || die "XGRAM_VERSION_BASE must be a number, got: $base"
 if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
   die "version.sh needs the full commit history (check out with fetch-depth: 0)."
 fi
 
-count=$(git rev-list --count HEAD)
 app=$(prop version.properties version.app)
 [[ "$app" =~ ^[0-9]+$ ]] || die "version.app is not a number: $app"
-
-n=$((10#$base + count))
 app=$((10#$app))
-if ((n < app)); then
-  n=$app
-fi
-((n <= max)) || die "N=$n is above Android's limit ($max). Lower XGRAM_VERSION_BASE."
 
-log "Version: N=$n (base $base + $count commits; version.app=$app) -> versionCode arm64 ${n}302, universal ${n}300"
+bump=$(git log --first-parent -1 --format=%H -G'^version\.app=' -- version.properties)
+[[ -n "$bump" ]] || die "No commit sets version.app in version.properties."
+build=$(git rev-list --count --first-parent "$bump..HEAD")
+((build <= 999)) || die "$build commits since Telegram X's last version bump, more than fit: merge Telegram X's latest version."
+
+n=$((app * 1000 + build))
+((n <= max)) || die "N=$n is above Android's limit ($max)."
+
+log "Version: N=$n (Telegram X $app, XGram build $build since ${bump:0:8}) -> versionCode arm64 ${n}302, universal ${n}300"
 printf '%s\n' "$n"
