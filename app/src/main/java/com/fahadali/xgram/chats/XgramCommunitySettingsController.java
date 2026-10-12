@@ -425,8 +425,8 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
         UI.showError(error);
         return;
       }
+      XgramCommunities.forgetCommunity(tdlib, communityId); // its merged row splits at once, even if this page is gone
       runOnUiThreadOptional(() -> {
-        XgramCommunities.forgetCommunity(tdlib, communityId); // its merged row splits at once
         NavigationController navigation = navigationController();
         if (navigation != null) {
           navigation.getStack().destroyAllById(R.id.controller_xgramCommunity); // the community page under this one

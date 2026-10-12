@@ -156,7 +156,7 @@ public final class XgramCommunities {
       return;
     }
     for (long chatId : chatsOf(tdlib, communityId)) {
-      remember(tdlib, chatId, 0);
+      confirm(tdlib, chatId, 0); // what this session learned about the community is gone with it
     }
   }
 
