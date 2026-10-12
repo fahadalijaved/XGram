@@ -236,6 +236,9 @@ public class TGCallService extends Service implements
       }
 
       if (Intents.ACTION_ANSWER_CALL.equals(action)) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && incomingNotification != null) {
+          U.startForeground(TGCallService.this, TdlibNotificationManager.ID_FOREGROUND_INCOMING_CALL_NOTIFICATION, incomingNotification, true);
+        }
         acceptIncomingCall();
         return;
       }
@@ -996,7 +999,7 @@ public class TGCallService extends Service implements
     } else {
       ongoingCallNotification = builder.getNotification();
     }
-    U.startForeground(this, TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION, ongoingCallNotification);
+    U.startForeground(this, TdlibNotificationManager.ID_FOREGROUND_ONGOING_CALL_NOTIFICATION, ongoingCallNotification, true);
   }
 
   // Sound
@@ -1128,7 +1131,7 @@ public class TGCallService extends Service implements
     } else {
       incomingNotification = builder.getNotification();
     }
-    U.startForeground(this, TdlibNotificationManager.ID_FOREGROUND_INCOMING_CALL_NOTIFICATION, incomingNotification);
+    U.startForeground(this, TdlibNotificationManager.ID_FOREGROUND_INCOMING_CALL_NOTIFICATION, incomingNotification, false);
     return true;
   }
 
