@@ -1146,8 +1146,9 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   /** With the topics on the second line, the message's sender goes in front of the text: "Sender: message". */
-  private void xgramPrependSender () {
-    if (xgramTopicsLine == null || (flags & FLAG_MESSAGE) == 0 || chat == null || chat.lastMessage == null || showDraft() || StringUtils.isEmpty(text)) {
+  private void xgramPrependSender (ContentPreview preview) {
+    // A preview that names its author itself ("Alice pinned ...") keeps the name out of the front.
+    if (xgramTopicsLine == null || preview.hideAuthor || (flags & FLAG_MESSAGE) == 0 || chat == null || chat.lastMessage == null || showDraft() || StringUtils.isEmpty(text)) {
       return;
     }
     final String sender;
@@ -1635,7 +1636,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     if (textIconIds != null)
       textIconIds.clear();
     setTextValue(preview.buildText(true), preview.formattedText != null ? preview.formattedText.entities : null, preview.isTranslatable);
-    xgramPrependSender(); // XGram: community page, the sender's place is taken by the topics
+    xgramPrependSender(preview); // XGram: community page, the sender's place is taken by the topics
     this.currentPreview = preview;
     TdApi.Message lastMessage = chat != null ? chat.lastMessage : null;
     if (preview.parentEmoji != null) {

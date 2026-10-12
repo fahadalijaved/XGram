@@ -113,7 +113,9 @@ public final class XgramCommunityTopics {
     }
     long now = SystemClock.uptimeMillis();
     long sendAt = Math.max(now + delayMs, nextSendAt);
-    nextSendAt = sendAt + STAGGER_MS;
+    if (delayMs == 0) {
+      nextSendAt = sendAt + STAGGER_MS; // the page's first requests go out 150 ms apart; a refetch due in 2 s doesn't hold the others back
+    }
     Runnable send = () -> {
       delayedFetches.remove(chatId);
       sendNow(chatId);
