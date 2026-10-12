@@ -1,0 +1,1 @@
+Official XGram builds for Android: the newest version, its changelog and SHA-256 checksums.

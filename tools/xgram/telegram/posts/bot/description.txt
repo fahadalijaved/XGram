@@ -1,0 +1,5 @@
+XGram Build Bot posts official XGram builds for Android to the XGram CI channel and announces releases in the XGram group.
+
+Send /latest for the newest build, or /help to learn how to install it and check its SHA-256 checksum.
+
+XGram is an unofficial Telegram client built on Telegram X. It is not affiliated with Telegram.

@@ -1,0 +1,25 @@
+📣 <b>XGram Updates</b>
+
+Announcements only: new releases, feature posts and important news. Only admins post here, so you can keep this topic unmuted and never miss a release.
+
+📦 <b>Getting XGram</b>
+1. Open the newest release post here, or the newest build in <a href="https://{{CI_CHANNEL_LINK}}">XGram CI</a>.
+2. Download one APK:
+• <b>arm64</b>: most phones
+• <b>universal</b>: if you're not sure, or for older 32-bit phones
+3. Check its SHA-256 (see below), then open it to install. Android may first ask you to allow installs from your browser or file manager.
+XGram needs Android 7.0 or newer. It is a separate app, so it installs next to the official Telegram app.
+
+🧪 <b>Stable or CI build?</b>
+📦 <b>Stable</b>: tested releases, announced here. Best for everyday use.
+⚙️ <b>CI</b>: built automatically from the newest code and posted to XGram CI. You get new things first, but they can break.
+A newer build installs over your current XGram and keeps your login. Android won't install an older build over a newer one, so going back means uninstalling and logging in again.
+
+🔐 <b>Verify the SHA-256</b>
+Every build post lists the SHA-256 of each APK. Compute it for the file you downloaded (use its real file name):
+Windows: <code>certutil -hashfile XGram.apk SHA256</code>
+macOS: <code>shasum -a 256 XGram.apk</code>
+Linux or Termux: <code>sha256sum XGram.apk</code>
+Both values must match exactly (upper or lower case doesn't matter). If they don't, delete the file and download it again from the official post. Never install XGram APKs shared anywhere else.
+
+Trouble installing? Ask in 🛟 <a href="https://{{SUPPORT_TOPIC_LINK}}">Support</a>.

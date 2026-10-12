@@ -1,0 +1,209 @@
+# XGram APK build, shared by xgram-nightly.yml and xgram-release.yml (it can't be started on its own).
+#
+# One job per ABI flavor (arm64 / universal), in parallel, each on its own GitHub-hosted Ubuntu runner, so
+# a cold build stays inside the 6 h job limit. Each job uploads an artifact named
+#   xgram-apk-<flavor>-<build_type>       the APK(s), build-info.json, SHA256SUMS.txt
+#   xgram-symbols-<flavor>-release        R8 mapping and native debug symbols (release builds only)
+#
+# Setup, secrets and expected times: docs/xgram/telegram/CI.md
+name: XGram build (shared)
+
+on:
+  workflow_call:
+    inputs:
+      flavors:
+        description: 'JSON array of ABI flavors: ["arm64"], ["universal"] or ["arm64","universal"]'
+        type: string
+        required: true
+      build_type:
+        description: debug or release
+        type: string
+        required: true
+      app_version:
+        description: 'Base version number N (app.version). versionCode = N*1000 + 302 (arm64) or + 300 (universal)'
+        type: string
+        required: true
+      artifact_retention_days:
+        description: Days to keep the uploaded APK artifacts
+        type: number
+        default: 14
+    secrets:
+      XGRAM_KEYSTORE_BASE64:
+        required: false
+      XGRAM_KEYSTORE_PASSWORD:
+        required: false
+      XGRAM_KEY_ALIAS:
+        required: false
+      XGRAM_KEY_PASSWORD:
+        required: false
+      GOOGLE_SERVICES_JSON:
+        required: false
+      TELEGRAM_API_ID:
+        required: false
+      TELEGRAM_API_HASH:
+        required: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  apk:
+    name: APK (${{ matrix.flavor }}, ${{ inputs.build_type }})
+    # A bigger runner label can be set with the repository variable XGRAM_RUNNER.
+    runs-on: ${{ vars.XGRAM_RUNNER || 'ubuntu-24.04' }}
+    # 6 h is GitHub's hard limit for hosted runners. Stay below it so the cache-save steps still run.
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: ${{ fromJSON(inputs.flavors) }}
+    env:
+      XGRAM_FLAVOR: ${{ matrix.flavor }}
+      XGRAM_BUILD_TYPE: ${{ inputs.build_type }}
+      XGRAM_APP_VERSION: ${{ inputs.app_version }}
+      XGRAM_APP_ID: ${{ vars.XGRAM_APP_ID || 'com.fahadali.xgram' }}
+      GIT_TERMINAL_PROMPT: '0'
+    steps:
+      - name: Check out XGram
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+          persist-credentials: false
+
+      - name: Free disk space
+        run: bash scripts/ci/free-disk-space.sh
+
+      - name: Check out submodules (recursive, shallow)
+        run: bash scripts/ci/checkout-submodules.sh
+
+      - name: Apply XGram patches to submodules
+        run: bash scripts/ci/apply-patches.sh
+
+      - name: LFS cache key
+        id: lfs
+        run: bash scripts/ci/fetch-lfs.sh --cache-info
+
+      - name: Restore tdlib LFS objects
+        id: lfs-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.lfs.outputs.path }}
+          key: ${{ steps.lfs.outputs.key }}
+          restore-keys: |
+            lfs-tdlib-
+
+      - name: Fetch tdlib LFS files
+        run: bash scripts/ci/fetch-lfs.sh
+
+      - name: Save tdlib LFS objects
+        if: steps.lfs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.lfs.outputs.path }}
+          key: ${{ steps.lfs.outputs.key }}
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install Android SDK packages
+        id: sdk
+        run: bash scripts/ci/install-android-sdk.sh
+
+      - name: Set up ccache
+        id: ccache
+        run: bash scripts/ci/setup-ccache.sh
+        env:
+          XGRAM_CCACHE_MAXSIZE: ${{ vars.XGRAM_CCACHE_MAXSIZE || '2G' }}
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.ccache.outputs.dir }}
+          key: ${{ steps.ccache.outputs.key_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.ccache.outputs.key_prefix }}
+
+      - name: Set up Gradle (wrapper, dependency and build caches)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Gradle settings for this runner
+        run: bash scripts/ci/write-gradle-properties.sh
+
+      - name: Signing key
+        env:
+          XGRAM_KEYSTORE_BASE64: ${{ secrets.XGRAM_KEYSTORE_BASE64 }}
+          XGRAM_KEYSTORE_PASSWORD: ${{ secrets.XGRAM_KEYSTORE_PASSWORD }}
+          XGRAM_KEY_ALIAS: ${{ secrets.XGRAM_KEY_ALIAS }}
+          XGRAM_KEY_PASSWORD: ${{ secrets.XGRAM_KEY_PASSWORD }}
+        run: bash scripts/ci/write-keystore.sh
+
+      - name: google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: bash scripts/ci/write-google-services.sh
+
+      - name: local.properties
+        env:
+          XGRAM_DOWNLOAD_URL: ${{ vars.XGRAM_DOWNLOAD_URL }}
+          XGRAM_SOURCES_URL: ${{ vars.XGRAM_SOURCES_URL }}
+          # The app keeps TGX's sample API credentials unless the variable XGRAM_EMBED_API_CREDENTIALS is 'true'.
+          XGRAM_APP_API_ID: ${{ vars.XGRAM_EMBED_API_CREDENTIALS == 'true' && secrets.TELEGRAM_API_ID || '' }}
+          XGRAM_APP_API_HASH: ${{ vars.XGRAM_EMBED_API_CREDENTIALS == 'true' && secrets.TELEGRAM_API_HASH || '' }}
+        run: bash scripts/ci/write-local-properties.sh
+
+      - name: Build APK
+        id: build
+        timeout-minutes: 300
+        env:
+          XGRAM_GRADLE_ARGS: ${{ vars.XGRAM_GRADLE_ARGS }}
+        run: bash scripts/ci/gradle-build.sh
+
+      - name: ccache statistics
+        if: always() && steps.ccache.outcome == 'success'
+        run: ccache --show-stats || true
+
+      - name: Save ccache
+        if: ${{ !cancelled() && steps.ccache.outcome == 'success' && steps.build.outcome != 'skipped' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.ccache.outputs.dir }}
+          key: ${{ steps.ccache.outputs.key_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Remove signing key and generated config
+        if: always()
+        run: bash scripts/ci/cleanup-secrets.sh
+
+      - name: Collect APK, build-info.json and SHA-256
+        run: bash scripts/ci/collect-apks.sh --out dist
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgram-apk-${{ matrix.flavor }}-${{ inputs.build_type }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact_retention_days }}
+          # APKs are already compressed.
+          compression-level: 0
+          overwrite: true
+
+      - name: Upload R8 mapping and native symbols
+        if: inputs.build_type == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgram-symbols-${{ matrix.flavor }}-${{ inputs.build_type }}
+          path: |
+            app/build/outputs/mapping/
+            app/build/outputs/native-debug-symbols/
+          if-no-files-found: warn
+          retention-days: 30
+          overwrite: true

@@ -1,0 +1,3 @@
+start - What this bot does
+latest - Newest XGram build and where to get it
+help - How to install XGram and verify a build

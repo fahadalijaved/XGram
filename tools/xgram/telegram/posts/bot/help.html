@@ -1,0 +1,22 @@
+✖️ <b>XGram Build Bot</b>
+I post official XGram builds to the XGram CI channel and announce releases in the XGram group.
+
+/latest – the newest build, with its size and SHA-256
+/help – this message
+
+📲 <b>Install or update XGram</b>
+1. Send /latest, or open the newest build post in the XGram CI channel or the 📣 Updates topic of the XGram group.
+2. Download one APK:
+• <b>arm64</b>: most phones
+• <b>universal</b>: if you're not sure, or for older 32-bit phones
+3. Check its SHA-256 (see below), then open it. Android may first ask you to allow installs from your browser or file manager.
+XGram needs Android 7.0 or newer. It is a separate app, so it installs next to the official Telegram app. To update, install the new APK over the old one: your login stays.
+
+🔐 <b>Check the SHA-256</b>
+Every build post lists the SHA-256 of each APK. Compute it for the file you downloaded (use its real file name):
+Windows: <code>certutil -hashfile XGram.apk SHA256</code>
+macOS: <code>shasum -a 256 XGram.apk</code>
+Linux or Termux: <code>sha256sum XGram.apk</code>
+Both values must match exactly (upper or lower case doesn't matter). If they don't, delete the file and download it again from the official post. Never install XGram APKs shared anywhere else.
+
+<i>XGram is an unofficial Telegram client built on Telegram X. It is not affiliated with Telegram.</i>

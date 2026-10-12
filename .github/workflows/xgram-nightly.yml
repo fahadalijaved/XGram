@@ -1,0 +1,209 @@
+# XGram nightly: builds once a day when main has new commits, uploads the APKs as workflow artifacts, and
+# (when the bot secrets are set) posts them to the XGram CI channel through XGram Build Bot.
+#
+#   Scheduled: 02:37 UTC daily, default branch only. Skipped when HEAD is the commit of the last
+#              successful scheduled nightly. What it builds is set by repository variables
+#              (XGRAM_NIGHTLY_FLAVOR / _BUILD_TYPE / _PUBLISH / _ANNOUNCE / _FORCE).
+#   Manual:    Actions -> XGram nightly -> Run workflow (choose flavor, build type, publish, announce).
+#
+# Setup, secrets and limits: docs/xgram/telegram/CI.md
+name: XGram nightly
+
+on:
+  schedule:
+    # Off the full hour: GitHub delays (and under load can drop) schedules that start at :00.
+    - cron: '37 2 * * *'
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: Which APK(s) to build
+        type: choice
+        options:
+          - arm64
+          - universal
+          - both
+        default: arm64
+      build_type:
+        description: Build type (release = R8-minified, signed with the release key; debug is never posted to Telegram, only kept as an artifact)
+        type: choice
+        options:
+          - release
+          - debug
+        default: release
+      publish:
+        description: Post the APKs to the XGram CI channel (default branch only)
+        type: boolean
+        default: true
+      announce:
+        description: Also announce the build in the Updates topic of the XGram group
+        type: boolean
+        default: false
+      changelog_since:
+        description: 'Optional: commit or tag the changelog starts from (default: last successful scheduled nightly)'
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: xgram-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      skip: ${{ steps.plan.outputs.skip }}
+      flavors: ${{ steps.plan.outputs.flavors }}
+      build_type: ${{ steps.plan.outputs.build_type }}
+      publish: ${{ steps.plan.outputs.publish }}
+      announce: ${{ steps.plan.outputs.announce }}
+      app_version: ${{ steps.plan.outputs.app_version }}
+      head: ${{ steps.plan.outputs.head }}
+    steps:
+      - name: Check out XGram (full history, no file contents of old commits)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: tree:0
+          submodules: false
+          lfs: false
+
+      - name: Decide what to build
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          XGRAM_MODE: nightly
+          XGRAM_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          IN_FLAVOR: ${{ inputs.flavor }}
+          IN_BUILD_TYPE: ${{ inputs.build_type }}
+          IN_PUBLISH: ${{ inputs.publish }}
+          IN_ANNOUNCE: ${{ inputs.announce }}
+          IN_CHANGELOG_SINCE: ${{ inputs.changelog_since }}
+          XGRAM_NIGHTLY_FLAVOR: ${{ vars.XGRAM_NIGHTLY_FLAVOR }}
+          XGRAM_NIGHTLY_BUILD_TYPE: ${{ vars.XGRAM_NIGHTLY_BUILD_TYPE }}
+          XGRAM_NIGHTLY_PUBLISH: ${{ vars.XGRAM_NIGHTLY_PUBLISH }}
+          XGRAM_NIGHTLY_ANNOUNCE: ${{ vars.XGRAM_NIGHTLY_ANNOUNCE }}
+          XGRAM_NIGHTLY_FORCE: ${{ vars.XGRAM_NIGHTLY_FORCE }}
+          XGRAM_VERSION_BASE: ${{ vars.XGRAM_VERSION_BASE }}
+        run: bash scripts/ci/plan.sh
+
+      - name: Changelog
+        if: steps.plan.outputs.skip != 'true'
+        env:
+          SINCE: ${{ steps.plan.outputs.since }}
+          LINK_BASE: ${{ steps.plan.outputs.link_base }}
+        run: bash scripts/ci/changelog.sh --since "$SINCE" --link-base "$LINK_BASE" --out-dir notes
+
+      - name: Upload notes
+        if: steps.plan.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgram-notes
+          path: notes/
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  build:
+    name: Build
+    needs: plan
+    if: needs.plan.outputs.skip != 'true'
+    uses: ./.github/workflows/xgram-build.yml
+    with:
+      flavors: ${{ needs.plan.outputs.flavors }}
+      build_type: ${{ needs.plan.outputs.build_type }}
+      app_version: ${{ needs.plan.outputs.app_version }}
+      # Each nightly APK is 50-73 MB; on a private repo, artifact storage counts against your plan.
+      artifact_retention_days: ${{ fromJSON(vars.XGRAM_ARTIFACT_RETENTION_DAYS || '14') }}
+    secrets:
+      XGRAM_KEYSTORE_BASE64: ${{ secrets.XGRAM_KEYSTORE_BASE64 }}
+      XGRAM_KEYSTORE_PASSWORD: ${{ secrets.XGRAM_KEYSTORE_PASSWORD }}
+      XGRAM_KEY_ALIAS: ${{ secrets.XGRAM_KEY_ALIAS }}
+      XGRAM_KEY_PASSWORD: ${{ secrets.XGRAM_KEY_PASSWORD }}
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+
+  publish:
+    name: Publish to Telegram
+    needs: [plan, build]
+    if: needs.plan.outputs.skip != 'true' && needs.plan.outputs.publish == 'true' && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out XGram (scripts and bot only)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: xgram-apk-*
+          path: artifacts
+
+      - name: Download notes
+        uses: actions/download-artifact@v4
+        with:
+          name: xgram-notes
+          path: notes
+
+      - name: Merge APKs and checksums
+        id: collect
+        run: bash scripts/ci/collect-apks.sh --merge artifacts --out publish
+
+      - name: Post to the XGram CI channel
+        env:
+          XGRAM_BOT_TOKEN: ${{ secrets.XGRAM_BOT_TOKEN }}
+          # Chat and topic ids are variables, not secrets: they show up unmasked in other forms anyway (t.me/c/<N>
+          # links in the log and in the xgram-telegram-state artifact). See CI.md §4.
+          XGRAM_CHANNEL_ID: ${{ vars.XGRAM_CHANNEL_ID }}
+          XGRAM_GROUP_ID: ${{ vars.XGRAM_GROUP_ID }}
+          XGRAM_TOPIC_UPDATES: ${{ vars.XGRAM_TOPIC_UPDATES }}
+          # Optional: fill {{SUPPORT_TOPIC_LINK}} / {{CI_CHANNEL_LINK}} in .html notes.
+          XGRAM_TOPIC_SUPPORT: ${{ vars.XGRAM_TOPIC_SUPPORT }}
+          XGRAM_CI_CHANNEL_LINK: ${{ secrets.XGRAM_CI_CHANNEL_LINK || vars.XGRAM_CI_CHANNEL_LINK }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          XGRAM_BOT_API_URL: ${{ vars.XGRAM_BOT_API_URL }}
+          XGRAM_BOT_STATE_FILE: telegram-state/telegram_state.json
+          VERSION: ${{ steps.collect.outputs.version_name }}
+          COMMIT: ${{ needs.plan.outputs.head }}
+          ANNOUNCE: ${{ needs.plan.outputs.announce }}
+        run: |
+          mkdir -p telegram-state
+          args=(--dir publish --version "$VERSION" --commit "$COMMIT" --notes notes/notes.html --send)
+          if [ "$ANNOUNCE" = true ]; then
+            args+=(--announce)
+          fi
+          bash scripts/ci/publish-telegram.sh "${args[@]}"
+
+      - name: Keep the bot's publish record (for /latest)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgram-telegram-state
+          path: telegram-state/
+          if-no-files-found: ignore
+          retention-days: 30
+          overwrite: true

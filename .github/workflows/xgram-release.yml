@@ -1,0 +1,305 @@
+# XGram release: manual workflow for stable releases.
+#
+# Builds the release APKs (arm64 and universal by default, in parallel), writes SHA256SUMS.txt and
+# build-info.json, uploads everything as workflow artifacts (kept 90 days), posts the APKs to the XGram CI
+# channel and announces the release in the Updates topic of the XGram group. Optionally drafts a GitHub
+# Release with the same files (GPLv3: whoever gets the APK must be able to get the source of that build).
+#
+# Start it: Actions -> XGram release -> Run workflow (from main, or from a tag such as v1.0.0).
+# Setup, secrets and limits: docs/xgram/telegram/CI.md
+name: XGram release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: 'Name shown in the posts, e.g. 1.0.0 (empty = the app versionName, e.g. 0.29.1.5451)'
+        type: string
+        required: false
+        default: ''
+      flavor:
+        description: Which APK(s) to build
+        type: choice
+        options:
+          - both
+          - arm64
+          - universal
+        default: both
+      publish:
+        description: Post the APKs to the XGram CI channel (main or a tag only)
+        type: boolean
+        default: true
+      announce:
+        description: Announce the release in the Updates topic of the XGram group
+        type: boolean
+        default: true
+      notes_path:
+        description: 'Optional: repo path of hand-written notes in Telegram HTML (empty = generated from git log)'
+        type: string
+        required: false
+        default: ''
+      changelog_since:
+        description: 'Optional: commit or tag the generated changelog starts from (default: last successful release run)'
+        type: string
+        required: false
+        default: ''
+      app_version:
+        description: 'Optional: force app.version N (empty = automatic; never lower than an earlier build)'
+        type: string
+        required: false
+        default: ''
+      github_release:
+        description: Also create a DRAFT GitHub Release with the APKs and checksums
+        type: boolean
+        default: false
+      release_body_path:
+        description: 'Optional: repo path of a Markdown text for the draft GitHub Release (empty = the changelog generated from git log)'
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: xgram-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      flavors: ${{ steps.plan.outputs.flavors }}
+      publish: ${{ steps.plan.outputs.publish }}
+      announce: ${{ steps.plan.outputs.announce }}
+      app_version: ${{ steps.plan.outputs.app_version }}
+      head: ${{ steps.plan.outputs.head }}
+    steps:
+      - name: Check out XGram (full history, no file contents of old commits)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: tree:0
+          submodules: false
+          lfs: false
+
+      - name: Decide what to build
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          XGRAM_MODE: release
+          XGRAM_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          IN_FLAVOR: ${{ inputs.flavor }}
+          IN_PUBLISH: ${{ inputs.publish }}
+          IN_ANNOUNCE: ${{ inputs.announce }}
+          IN_CHANGELOG_SINCE: ${{ inputs.changelog_since }}
+          IN_APP_VERSION: ${{ inputs.app_version }}
+          XGRAM_VERSION_BASE: ${{ vars.XGRAM_VERSION_BASE }}
+        run: bash scripts/ci/plan.sh
+
+      - name: Release notes
+        env:
+          SINCE: ${{ steps.plan.outputs.since }}
+          LINK_BASE: ${{ steps.plan.outputs.link_base }}
+          NOTES_PATH: ${{ inputs.notes_path }}
+          RELEASE_BODY_PATH: ${{ inputs.release_body_path }}
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          bash scripts/ci/changelog.sh --since "$SINCE" --link-base "$LINK_BASE" --out-dir notes
+          check_path() {   # INPUT_NAME PATH: a file inside the repository, in this commit
+            case "$2" in
+              /* | *..*)
+                echo "::error::$1 must be a relative path inside the repository: $2"
+                exit 1
+                ;;
+            esac
+            if [ ! -f "$2" ]; then
+              echo "::error::$1 not found in this commit: $2"
+              exit 1
+            fi
+          }
+          if [ -n "$NOTES_PATH" ]; then
+            check_path notes_path "$NOTES_PATH"
+            mv notes/notes.html notes/generated.html
+            cp -- "$NOTES_PATH" notes/notes.html
+            echo "Using hand-written notes from $NOTES_PATH"
+          fi
+          # The draft GitHub Release uses notes/github-release.md if it exists, else the generated notes/notes.md.
+          if [ -n "$RELEASE_BODY_PATH" ]; then
+            check_path release_body_path "$RELEASE_BODY_PATH"
+            cp -- "$RELEASE_BODY_PATH" notes/github-release.md
+            echo "Using $RELEASE_BODY_PATH as the GitHub Release text"
+          fi
+
+      - name: Upload notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgram-notes
+          path: notes/
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
+
+  build:
+    name: Build
+    needs: plan
+    uses: ./.github/workflows/xgram-build.yml
+    with:
+      flavors: ${{ needs.plan.outputs.flavors }}
+      build_type: release
+      app_version: ${{ needs.plan.outputs.app_version }}
+      artifact_retention_days: 90
+    secrets:
+      XGRAM_KEYSTORE_BASE64: ${{ secrets.XGRAM_KEYSTORE_BASE64 }}
+      XGRAM_KEYSTORE_PASSWORD: ${{ secrets.XGRAM_KEYSTORE_PASSWORD }}
+      XGRAM_KEY_ALIAS: ${{ secrets.XGRAM_KEY_ALIAS }}
+      XGRAM_KEY_PASSWORD: ${{ secrets.XGRAM_KEY_PASSWORD }}
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+
+  publish:
+    name: Publish to Telegram
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true' && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out XGram (scripts and bot only)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: xgram-apk-*
+          path: artifacts
+
+      - name: Download notes
+        uses: actions/download-artifact@v4
+        with:
+          name: xgram-notes
+          path: notes
+
+      - name: Merge APKs and checksums
+        id: collect
+        run: bash scripts/ci/collect-apks.sh --merge artifacts --out publish
+
+      - name: Post to the XGram CI channel and announce in Updates
+        env:
+          XGRAM_BOT_TOKEN: ${{ secrets.XGRAM_BOT_TOKEN }}
+          # Chat and topic ids are variables, not secrets: they show up unmasked in other forms anyway (t.me/c/<N>
+          # links in the log and in the xgram-telegram-state artifact). See CI.md §4.
+          XGRAM_CHANNEL_ID: ${{ vars.XGRAM_CHANNEL_ID }}
+          XGRAM_GROUP_ID: ${{ vars.XGRAM_GROUP_ID }}
+          XGRAM_TOPIC_UPDATES: ${{ vars.XGRAM_TOPIC_UPDATES }}
+          # Optional: fill {{SUPPORT_TOPIC_LINK}} / {{CI_CHANNEL_LINK}} in hand-written notes (notes_path).
+          XGRAM_TOPIC_SUPPORT: ${{ vars.XGRAM_TOPIC_SUPPORT }}
+          XGRAM_CI_CHANNEL_LINK: ${{ secrets.XGRAM_CI_CHANNEL_LINK || vars.XGRAM_CI_CHANNEL_LINK }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          XGRAM_BOT_API_URL: ${{ vars.XGRAM_BOT_API_URL }}
+          XGRAM_BOT_STATE_FILE: telegram-state/telegram_state.json
+          VERSION: ${{ inputs.release_name || steps.collect.outputs.version_name }}
+          COMMIT: ${{ needs.plan.outputs.head }}
+          ANNOUNCE: ${{ needs.plan.outputs.announce }}
+        run: |
+          mkdir -p telegram-state
+          args=(--dir publish --version "$VERSION" --commit "$COMMIT" --notes notes/notes.html --send)
+          if [ "$ANNOUNCE" = true ]; then
+            args+=(--announce)
+          fi
+          bash scripts/ci/publish-telegram.sh "${args[@]}"
+
+      - name: Keep the bot's publish record (for /latest)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xgram-telegram-state
+          path: telegram-state/
+          if-no-files-found: ignore
+          retention-days: 90
+          overwrite: true
+
+  github-release:
+    name: Draft GitHub Release
+    needs: [plan, build]
+    if: inputs.github_release && needs.build.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out XGram (scripts only)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          submodules: false
+          lfs: false
+          persist-credentials: false
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: xgram-apk-*
+          path: artifacts
+
+      - name: Download notes
+        uses: actions/download-artifact@v4
+        with:
+          name: xgram-notes
+          path: notes
+
+      - name: Merge APKs and checksums
+        id: collect
+        run: bash scripts/ci/collect-apks.sh --merge artifacts --out publish
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NAME: ${{ inputs.release_name || steps.collect.outputs.version_name }}
+          COMMIT: ${{ needs.plan.outputs.head }}
+          NOTES_PATH: ${{ inputs.notes_path }}
+        run: |
+          tag="v${NAME// /-}"
+          if ! git check-ref-format "refs/tags/$tag"; then
+            echo "::error::'$tag' is not a valid tag name; change release_name."
+            exit 1
+          fi
+          body=notes/github-release.md
+          if [ ! -f "$body" ]; then
+            body=notes/notes.md
+            if [ -n "$NOTES_PATH" ]; then
+              msg="The draft's text is the changelog generated from git log, not notes_path (Telegram HTML). Edit the draft, or set release_body_path to a Markdown file next time."
+              echo "::notice::$msg"
+              echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          {
+            cat "$body"
+            printf '\n### SHA-256\n\n```\n'
+            cat publish/SHA256SUMS.txt
+            printf '```\n'
+          } > release-body.md
+          gh release create "$tag" --draft --target "$COMMIT" --title "XGram $NAME" \
+            --notes-file release-body.md publish/*.apk publish/SHA256SUMS.txt
+          echo "Draft release $tag created. Review it on GitHub, then publish it (that also creates the tag)." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,4 @@
+# ShellCheck settings for scripts/ci (run: shellcheck scripts/ci/*.sh)
+# Resolve `# shellcheck source=lib.sh` relative to each script's own folder.
+source-path=SCRIPTDIR
+external-sources=true
