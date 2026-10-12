@@ -573,7 +573,7 @@ public class SettingsController extends ViewController<Void> implements
             view.setData("@" + myUsernames.editableUsername + (collectibleCount != 0 ? " + " + Lang.pluralBold(R.string.xOtherUsernames, collectibleCount) : "")); // TODO multi-username support
           }
         } else if (itemId == R.id.btn_peer_id) {
-          view.setData(Strings.buildCounter(tdlib.myUserId(true)));
+          view.setData(Long.toString(tdlib.myUserId(true))); // XGram: plain digits, not a counter with separators
         } else if (itemId == R.id.btn_phone) {
           // XGram: hide the number for screenshots and screen sharing.
           view.setData(com.fahadali.xgram.XgramSettings.instance().hidePhone() ? Lang.getString(R.string.XgramPhoneHidden) : myPhone);

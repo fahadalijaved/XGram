@@ -1829,7 +1829,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         } else if (itemId == R.id.btn_peer_id) {
           view.setName(getPeerTypeStringResourceId());
           // XGram: estimated registration date next to a user's ID.
-          view.setData(user != null && secretChat == null ? Strings.buildCounter(getPeerId()) + " · " + com.fahadali.xgram.chats.XgramIdInfo.registrationLabel(user.id) : Strings.buildCounter(getPeerId()));
+          // XGram: IDs as plain digits (as copied, and as bots and links use them), not a counter with separators
+          view.setData(user != null && secretChat == null ? getPeerId() + " · " + com.fahadali.xgram.chats.XgramIdInfo.registrationLabel(user.id) : Long.toString(getPeerId()));
         } else if (itemId == R.id.btn_birthdate) {
           view.setData(R.string.Birthdate);
           TdApi.Birthdate birthdate = userFull != null ? userFull.birthdate : null;

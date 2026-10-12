@@ -42,8 +42,10 @@ import java.util.Set;
 public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, TdlibCache.CommunityDataChangeListener {
   private SettingsAdapter adapter;
   private final Set<Long> requestedChats = new HashSet<>();
-  /** TDLib's answer to LoadCommunityFullInfo, when it is an error. */
+  /** TDLib's answer to GetCommunityFullInfo, when it is an error. */
   @Nullable private String loadError;
+  /** TDLib's answer to GetCommunityFullInfo, for when its update didn't reach the cache. */
+  @Nullable private TdApi.CommunityFullInfo fetchedFull;
   /** Waited long enough for the full info: show the chats known on this device. */
   private boolean useKnownChats;
 
@@ -88,21 +90,23 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     adapter = new SettingsAdapter(this);
     recyclerView.setAdapter(adapter);
     tdlib.cache().subscribeToCommunityUpdates(communityId(), this);
-    tdlib.send(new TdApi.LoadCommunityFullInfo(communityId()), (ok, error) -> {
+    tdlib.send(new TdApi.GetCommunityFullInfo(communityId()), (full, error) -> {
       if (error != null) {
-        android.util.Log.w("XGram", "LoadCommunityFullInfo " + communityId() + ": " + error.code + " " + error.message);
+        android.util.Log.w("XGram", "GetCommunityFullInfo " + communityId() + ": " + error.code + " " + error.message);
       }
       runOnUiThreadOptional(() -> {
         if (error != null) {
           loadError = error.message;
           useKnownChats = true;
+        } else {
+          fetchedFull = full;
         }
-        buildItems(); // the full info is cached by now, whether or not its update reached this page
+        buildItems();
       });
     });
     tdlib.ui().postDelayed(() -> {
       if (!isDestroyed()) {
-        if (tdlib.cache().communityFull(communityId()) == null) {
+        if (communityFull() == null) {
           useKnownChats = true;
         }
         buildItems();
@@ -114,7 +118,13 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   // Like chats and topic lists: slide in once the chats are there, not on "Loading" swapped out mid-slide.
   @Override
   public boolean needAsynchronousAnimation () {
-    return tdlib.cache().communityFull(communityId()) == null && !useKnownChats;
+    return communityFull() == null && !useKnownChats;
+  }
+
+  @Nullable
+  private TdApi.CommunityFullInfo communityFull () {
+    TdApi.CommunityFullInfo full = tdlib.cache().communityFull(communityId());
+    return full != null ? full : fetchedFull;
   }
 
   @Override
@@ -144,17 +154,21 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   }
 
   private void buildItems () {
-    TdApi.CommunityFullInfo full = tdlib.cache().communityFull(communityId());
+    TdApi.CommunityFullInfo full = communityFull();
     List<ListItem> items = new ArrayList<>();
     List<Long> chatIds = new ArrayList<>();
     if (full != null) {
+      // Every chat, is_hidden included: TDLib reports it as true whenever the server leaves the flag out, which it does
+      // for members who aren't admins, so filtering on it emptied the page. Admins are meant to see hidden chats anyway.
       for (TdApi.CommunityChat communityChat : full.chats) {
-        if (!communityChat.isHidden) {
-          chatIds.add(communityChat.chatId);
-        }
-      }
-      for (TdApi.CommunityChat communityChat : full.chats) {
+        chatIds.add(communityChat.chatId);
         XgramCommunities.remember(tdlib, communityChat.chatId, communityId());
+      }
+      // TDLib never reloads a cached community, so its list can miss chats added since: add the ones this device knows.
+      for (long chatId : XgramCommunities.chatsOf(tdlib, communityId())) {
+        if (!chatIds.contains(chatId)) {
+          chatIds.add(chatId);
+        }
       }
     } else if (useKnownChats) {
       // TDLib didn't send the community's chat list: the chats this device saw being added to it.
