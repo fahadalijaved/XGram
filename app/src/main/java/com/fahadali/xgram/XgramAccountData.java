@@ -35,7 +35,7 @@ public final class XgramAccountData {
 
   private static final String[] PREFIXES = {
     "xgram_bm_", "xgram_sb_", "xgram_ln_", "xgram_ghost_ex_", "xgram_ls_", "xgram_lr_", "xgram_tab_", "xgram_tabs_side_",
-    "xgram_cm_"
+    "xgram_cm_", "xgram_cmode_"
   };
 
   /** TDLib thread: the account in this slot logged out. */

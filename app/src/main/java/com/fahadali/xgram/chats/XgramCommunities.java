@@ -55,6 +55,11 @@ public final class XgramCommunities {
    */
   private static final Map<Integer, Map<Long, Long>> confirmed = new ConcurrentHashMap<>();
 
+  /** Per-community merge mode: the global setting, one chat, or separate chats. */
+  public static final int MODE_DEFAULT = 0, MODE_ONE_CHAT = 1, MODE_SEPARATE = 2;
+  /** account id → (community id → mode), loaded from the store on first use. */
+  private static final Map<Integer, Map<Long, Integer>> modes = new ConcurrentHashMap<>();
+
   public static void addListener (Listener listener) {
     listeners.add(listener);
   }
@@ -149,6 +154,7 @@ public final class XgramCommunities {
   public static void forgetAccount (int accountId) {
     memberships.remove(accountId);
     confirmed.remove(accountId);
+    modes.remove(accountId);
   }
 
   /** Merging was switched on or off: every account's lists check their communities again. */
@@ -198,12 +204,73 @@ public final class XgramCommunities {
     return com.fahadali.xgram.XgramSettings.instance().mergeCommunities();
   }
 
+  /** Whether this community is shown as one row: its own mode, or the global setting when it has none. */
+  public static boolean isMergeEnabled (Tdlib tdlib, long communityId) {
+    switch (mergeMode(tdlib, communityId)) {
+      case MODE_ONE_CHAT:
+        return true;
+      case MODE_SEPARATE:
+        return false;
+      default:
+        return isMergeEnabled();
+    }
+  }
+
+  private static String modePrefix (Tdlib tdlib) {
+    return "xgram_cmode_" + tdlib.id() + "_";
+  }
+
+  private static Map<Long, Integer> modeMap (Tdlib tdlib) {
+    Map<Long, Integer> map = modes.get(tdlib.id());
+    if (map == null) {
+      map = new ConcurrentHashMap<>();
+      String prefix = modePrefix(tdlib);
+      for (LevelDB.Entry entry : Settings.instance().pmc().find(prefix)) {
+        try {
+          int mode = entry.asInt();
+          if (mode == MODE_ONE_CHAT || mode == MODE_SEPARATE) {
+            map.put(Long.parseLong(entry.key().substring(prefix.length())), mode);
+          }
+        } catch (Throwable ignored) { }
+      }
+      Map<Long, Integer> existing = modes.putIfAbsent(tdlib.id(), map);
+      if (existing != null) {
+        map = existing;
+      }
+    }
+    return map;
+  }
+
+  /** {@link #MODE_DEFAULT}, {@link #MODE_ONE_CHAT} or {@link #MODE_SEPARATE}. Any thread. */
+  public static int mergeMode (Tdlib tdlib, long communityId) {
+    Integer mode = modeMap(tdlib).get(communityId);
+    return mode != null ? mode : MODE_DEFAULT;
+  }
+
+  /** Stores the mode and makes the lists check the community again (members come back, or merge). */
+  public static void setMergeMode (Tdlib tdlib, long communityId, int mode) {
+    if (communityId == 0 || mergeMode(tdlib, communityId) == mode) {
+      return;
+    }
+    String key = modePrefix(tdlib) + communityId;
+    if (mode == MODE_DEFAULT) {
+      modeMap(tdlib).remove(communityId);
+      Settings.instance().remove(key);
+    } else {
+      modeMap(tdlib).put(communityId, mode);
+      Settings.instance().putInt(key, mode);
+    }
+    for (Listener listener : listeners) {
+      listener.onCommunityMembersChanged(tdlib, communityId, 0);
+    }
+  }
+
   /**
    * The member of the community most recently active in this list (pinned ones first), or 0 when fewer than two
    * members are in the list: then nothing is merged.
    */
   public static long frontChat (Tdlib tdlib, long communityId, TdApi.ChatList chatList) {
-    if (communityId == 0 || !isMergeEnabled()) {
+    if (communityId == 0 || !isMergeEnabled(tdlib, communityId)) {
       return 0;
     }
     long bestId = 0;

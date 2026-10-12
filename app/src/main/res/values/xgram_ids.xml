@@ -22,6 +22,9 @@
   <item type="id" name="btn_xgramTopicLink" />
   <item type="id" name="btn_xgramMergeCommunities" />
   <item type="id" name="btn_xgramCommunityChat" />
+  <item type="id" name="menu_xgramCommunity" />
+  <item type="id" name="btn_xgramCommunitySettings" />
+  <item type="id" name="btn_xgramCommunityMerge" />
   <item type="id" name="btn_xgramOpenCommunity" />
   <item type="id" name="btn_xgramMessageMenu" />
   <item type="id" name="btn_xgramMenuItem" />

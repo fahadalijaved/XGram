@@ -26,6 +26,8 @@ import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGChat;
 import org.thunderdog.challegram.loader.AvatarReceiver;
 import org.thunderdog.challegram.navigation.ComplexHeaderView;
+import org.thunderdog.challegram.navigation.HeaderView;
+import org.thunderdog.challegram.navigation.MoreDelegate;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.ChatListener;
 import org.thunderdog.challegram.telegram.MessageListener;
@@ -35,6 +37,7 @@ import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.telegram.TdlibCache;
 import org.thunderdog.challegram.telegram.TdlibUi;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.RecyclerViewController;
 import org.thunderdog.challegram.ui.SettingHolder;
@@ -69,7 +72,7 @@ import tgx.td.ChatPosition;
  * date from TDLib's chat, message and notification updates. Long-pressing a row shows the chat list's menu; holding
  * one shows the chat preview.
  */
-public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, View.OnLongClickListener, BaseView.ActionListProvider, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener {
+public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, View.OnLongClickListener, BaseView.ActionListProvider, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener, MoreDelegate {
   private static final int TYPE_CHAT_ROW = 1;
   private static final long REBUILD_DELAY_MS = 200;
   /** notifyItemChanged payload: the item animator keeps the bound view instead of fading a new one in. */
@@ -101,6 +104,8 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   private final RowListener rowListener = new RowListener();
   /** The first topics of each forum on the page, for the second line of its row. */
   private XgramCommunityTopics topics;
+  /** Search Chats: the lower-case query, empty when not searching. Rows matching it by title or username are listed flat. */
+  private String searchQuery = "";
 
   private final Runnable rebuild = () -> {
     if (!isDestroyed()) {
@@ -151,6 +156,85 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   @Override
   public View getCustomHeaderCell () {
     return headerCell;
+  }
+
+  // Header menu: Search Chats and the 3-dot menu (none in a preview)
+
+  @Override
+  protected int getMenuId () {
+    return isInForceTouchMode() ? 0 : R.id.menu_xgramCommunity;
+  }
+
+  @Override
+  protected int getSearchMenuId () {
+    return R.id.menu_clear;
+  }
+
+  @Override
+  protected int getSearchHint () {
+    return R.string.XgramCommunitySearchHint;
+  }
+
+  @Override
+  public void fillMenuItems (int id, HeaderView header, android.widget.LinearLayout menu) {
+    if (id == R.id.menu_xgramCommunity) {
+      header.addSearchButton(menu, this);
+      header.addMoreButton(menu, this);
+    } else {
+      super.fillMenuItems(id, header, menu);
+    }
+  }
+
+  @Override
+  protected void openMoreMenu () {
+    long communityId = communityId();
+    if (communityId == 0 || isInForceTouchMode()) {
+      return;
+    }
+    IntList ids = new IntList(2);
+    StringList titles = new StringList(2);
+    ids.append(R.id.btn_xgramCommunityMerge);
+    titles.append(XgramCommunities.isMergeEnabled(tdlib, communityId) ? R.string.XgramCommunityShowSeparate : R.string.XgramCommunityShowOne);
+    showMore(ids.get(), titles.get(), 0);
+  }
+
+  @Override
+  public void onMoreItemPressed (int id) {
+    long communityId = communityId();
+    if (id == R.id.btn_xgramCommunityMerge && communityId != 0) {
+      boolean merged = XgramCommunities.isMergeEnabled(tdlib, communityId);
+      XgramCommunities.setMergeMode(tdlib, communityId, merged ? XgramCommunities.MODE_SEPARATE : XgramCommunities.MODE_ONE_CHAT);
+      UI.showToast(R.string.XgramCommunityMergeLocal, android.widget.Toast.LENGTH_SHORT);
+    }
+  }
+
+  // Search Chats: the rows whose title or username contains the query, in one list
+
+  @Override
+  protected void onSearchInputChanged (String query) {
+    super.onSearchInputChanged(query);
+    String trimmed = Lang.lowercase(query.trim());
+    if (!trimmed.equals(searchQuery)) {
+      searchQuery = trimmed;
+      buildItems();
+    }
+  }
+
+  @Override
+  protected void onLeaveSearchMode () {
+    super.onLeaveSearchMode();
+    if (!searchQuery.isEmpty()) {
+      searchQuery = "";
+      buildItems();
+    }
+  }
+
+  private boolean matchesSearch (TdApi.Chat chat) {
+    if (Lang.lowercase(tdlib.chatTitle(chat)).contains(searchQuery)) {
+      return true;
+    }
+    String username = tdlib.chatUsername(chat);
+    return !StringUtils.isEmpty(username) && Lang.lowercase(username).contains(searchQuery);
   }
 
   @Override
@@ -678,13 +762,30 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
         topics.forget(chatId);
       }
     }
-    addSection(items, R.string.XgramCommunityChatsIn, joined);
-    addSection(items, R.string.XgramCommunityOtherChats, others);
-    addSection(items, R.string.XgramCommunityHiddenChats, hidden);
+    if (!searchQuery.isEmpty()) {
+      // Searching: the matching rows, in the sections' order, with no headers.
+      List<TGChat> found = new ArrayList<>();
+      for (List<TGChat> section : java.util.Arrays.asList(joined, others, hidden)) {
+        Collections.sort(section, XgramCommunityController::compareRows);
+        for (TGChat row : section) {
+          if (matchesSearch(row.getChat())) {
+            found.add(row);
+          }
+        }
+      }
+      addRows(items, found);
+      if (items.isEmpty()) {
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.NothingFound));
+      }
+    } else {
+      addSection(items, R.string.XgramCommunityChatsIn, joined);
+      addSection(items, R.string.XgramCommunityOtherChats, others);
+      addSection(items, R.string.XgramCommunityHiddenChats, hidden);
+    }
     if (items.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, pendingChats.isEmpty() ? R.string.XgramCommunityEmpty : R.string.XgramCommunityLoading));
     }
-    if (full == null) {
+    if (full == null && searchQuery.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loadError != null ? Lang.getString(R.string.XgramCommunityPartialError, loadError) : Lang.getString(R.string.XgramCommunityPartial)));
     }
     updateHeader(chatIds.size());
@@ -740,6 +841,13 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     }
     Collections.sort(sectionRows, XgramCommunityController::compareRows);
     items.add(new ListItem(items.isEmpty() ? ListItem.TYPE_HEADER_PADDED : ListItem.TYPE_HEADER, 0, 0, title));
+    addRows(items, sectionRows);
+  }
+
+  private static void addRows (List<ListItem> items, List<TGChat> sectionRows) {
+    if (sectionRows.isEmpty()) {
+      return;
+    }
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     for (int i = 0; i < sectionRows.size(); i++) {
       if (i > 0) {
