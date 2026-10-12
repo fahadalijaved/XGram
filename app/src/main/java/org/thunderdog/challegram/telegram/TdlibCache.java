@@ -502,6 +502,7 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
     if (updated) {
       notifyUserFullListeners(update.userId, update.userFullInfo);
     }
+    com.fahadali.xgram.chats.XgramCommunities.onUserFull(tdlib, update.userId, update.userFullInfo); // XGram: bots in communities
     if (myUserId != 0 && update.userId == myUserId) {
       tdlib.uiExecute(() -> notifyMyUserBioListeners(myUserListeners.iterator(), update.userFullInfo.bio));
     }

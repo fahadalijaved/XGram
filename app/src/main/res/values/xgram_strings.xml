@@ -64,6 +64,7 @@
   <string name="XgramOpenCommunity">Open community</string>
   <string name="XgramCommunityChatsIn">Chats you are in</string>
   <string name="XgramCommunityOtherChats">More chats in this community</string>
+  <string name="XgramCommunityHiddenChats">Hidden from members</string>
   <string name="XgramCommunityLoading">Loading the community…</string>
   <string name="XgramCommunityEmpty">No chats you can see in this community yet.</string>
   <string name="XgramCommunityPartial">Telegram didn\'t send this community\'s chat list, so these are the chats XGram has seen in it.</string>

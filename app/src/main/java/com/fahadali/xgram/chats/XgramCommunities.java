@@ -270,6 +270,13 @@ public final class XgramCommunities {
     }
   }
 
+  /** TdlibCache, on every user full info: a bot's community (TDLib sends 0 for everyone else). */
+  public static void onUserFull (Tdlib tdlib, long userId, @Nullable TdApi.UserFullInfo full) {
+    if (full != null && (full.communityId != 0 || full.botInfo != null)) {
+      confirm(tdlib, ChatId.fromUserId(userId), full.communityId);
+    }
+  }
+
   /** A new message (live): "added to / joined from / removed from the community" tells which community the chat is in. */
   public static void onMessage (Tdlib tdlib, @Nullable TdApi.Message message) {
     long communityId = communityFromMessage(message);

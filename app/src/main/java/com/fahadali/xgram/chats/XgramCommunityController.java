@@ -35,11 +35,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import tgx.td.ChatId;
+
 /**
  * A Telegram community (groups and channels, with or without topics, gathered under one name): its chats, those you
  * are in first, like the official apps. Opened from "added to the community" messages and the chat menu.
  */
-public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, TdlibCache.CommunityDataChangeListener {
+public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener {
   private SettingsAdapter adapter;
   private final Set<Long> requestedChats = new HashSet<>();
   /** Chats asked from TDLib (GetChat) that haven't answered yet. */
@@ -50,6 +52,13 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   @Nullable private TdApi.CommunityFullInfo fetchedFull;
   /** Waited long enough for the full info: show the chats known on this device. */
   private boolean useKnownChats;
+  /** The chats' own info was asked for (once per page, see XgramCommunityData.refresh). */
+  private boolean refreshed;
+  private final Runnable rebuild = () -> {
+    if (!isDestroyed()) {
+      buildItems();
+    }
+  };
 
   public XgramCommunityController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -92,6 +101,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     adapter = new SettingsAdapter(this);
     recyclerView.setAdapter(adapter);
     tdlib.cache().subscribeToCommunityUpdates(communityId(), this);
+    XgramCommunities.addListener(this);
     tdlib.send(new TdApi.GetCommunityFullInfo(communityId()), (full, error) -> {
       if (full != null) {
         tdlib.cache().xgramOnCommunityFullLoaded(communityId(), full);
@@ -136,6 +146,17 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   public void destroy () {
     super.destroy();
     tdlib.cache().unsubscribeFromCommunityUpdates(communityId(), this);
+    XgramCommunities.removeListener(this);
+    tdlib.ui().removeCallbacks(rebuild);
+  }
+
+  @Override
+  public void onCommunityMembersChanged (Tdlib tdlib, long communityId, long chatId) {
+    if (tdlib == this.tdlib && communityId == communityId()) {
+      // Any thread, often several in a row: rebuild once, on the UI thread.
+      this.tdlib.ui().removeCallbacks(rebuild);
+      this.tdlib.ui().postDelayed(rebuild, 150);
+    }
   }
 
   @Override
@@ -153,35 +174,21 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     runOnUiThreadOptional(this::buildItems);
   }
 
-  private boolean isMember (long chatId) {
-    TdApi.ChatMemberStatus status = tdlib.chatStatus(chatId);
-    return status != null && TD.isMember(status);
-  }
-
   private void buildItems () {
     TdApi.CommunityFullInfo full = communityFull();
     List<ListItem> items = new ArrayList<>();
     List<Long> chatIds = new ArrayList<>();
     if (full != null) {
       // Every chat, is_hidden included: TDLib reports it as true whenever the server leaves the flag out, which it does
-      // for members who aren't admins, so filtering on it emptied the page. Admins are meant to see hidden chats anyway.
+      // for members who aren't admins, so filtering on it emptied the page. Admins see hidden chats in their own section.
       for (TdApi.CommunityChat communityChat : full.chats) {
-        // TDLib's copy can be old: a chat whose own (fresher) info says it left, or moved, is not listed or re-added.
-        Long confirmed = XgramCommunities.confirmedCommunity(tdlib, communityChat.chatId);
-        if (confirmed != null && confirmed != communityId()) {
-          continue;
-        }
-        chatIds.add(communityChat.chatId);
-        if (confirmed == null) {
+        if (!XgramCommunities.isConfirmed(tdlib, communityChat.chatId)) {
           XgramCommunities.remember(tdlib, communityChat.chatId, communityId());
         }
       }
-      // TDLib never reloads a cached community, so its list can miss chats added since: add the ones this device knows.
-      for (long chatId : XgramCommunities.chatsOf(tdlib, communityId())) {
-        if (!chatIds.contains(chatId)) {
-          chatIds.add(chatId);
-        }
-      }
+      // TDLib's copy can be old: chats whose own (fresher) info says they left or moved are dropped, and chats known
+      // to have joined since are added.
+      chatIds.addAll(XgramCommunityData.chatIds(tdlib, communityId(), full));
     } else if (useKnownChats) {
       // TDLib didn't send the community's chat list: the chats this device saw being added to it.
       chatIds.addAll(XgramCommunities.chatsOf(tdlib, communityId()));
@@ -190,7 +197,12 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       adapter.setItems(items, false);
       return;
     }
-    List<ListItem> joined = new ArrayList<>(), others = new ArrayList<>();
+    if (!refreshed && !isInForceTouchMode() && !chatIds.isEmpty()) {
+      refreshed = true;
+      XgramCommunityData.refresh(tdlib, communityId(), chatIds);
+    }
+    boolean honourHidden = XgramCommunityData.honourHidden(full, XgramCommunityData.isAdmin(tdlib, communityId()));
+    List<ListItem> joined = new ArrayList<>(), others = new ArrayList<>(), hidden = new ArrayList<>();
     for (long chatId : chatIds) {
       TdApi.Chat chat = tdlib.chat(chatId);
       if (chat == null) {
@@ -209,10 +221,15 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       }
       ListItem item = new ListItem(ListItem.TYPE_CHAT_SMALL, R.id.btn_xgramCommunityChat).setData(new DoubleTextWrapper(tdlib, chat, true, false));
       item.setLongId(chat.id);
-      (isMember(chat.id) ? joined : others).add(item);
+      if (honourHidden && XgramCommunityData.isHidden(full, chat.id)) {
+        hidden.add(item);
+      } else {
+        (XgramCommunityData.isMember(tdlib, chat) ? joined : others).add(item);
+      }
     }
     addSection(items, R.string.XgramCommunityChatsIn, joined);
     addSection(items, R.string.XgramCommunityOtherChats, others);
+    addSection(items, R.string.XgramCommunityHiddenChats, hidden);
     if (items.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, pendingChats.isEmpty() ? R.string.XgramCommunityEmpty : R.string.XgramCommunityLoading));
     }
@@ -251,10 +268,22 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
 
   /** The community a group or channel belongs to, from its full info (0 if none or not loaded yet). */
   public static long communityOf (Tdlib tdlib, @Nullable TdApi.Chat chat) {
-    if (chat == null || !(chat.type instanceof TdApi.ChatTypeSupergroup)) {
+    if (chat == null) {
+      return 0;
+    }
+    if (chat.type instanceof TdApi.ChatTypePrivate) {
+      return botCommunityOf(tdlib, chat.id); // communities hold bot chats too
+    }
+    if (!(chat.type instanceof TdApi.ChatTypeSupergroup)) {
       return 0;
     }
     TdApi.SupergroupFullInfo full = tdlib.cache().supergroupFull(((TdApi.ChatTypeSupergroup) chat.type).supergroupId);
     return full != null ? full.communityId : XgramCommunities.communityOf(tdlib, chat.id);
+  }
+
+  /** The community a bot chat belongs to, from the bot's full info, else as far as this device has seen. */
+  public static long botCommunityOf (Tdlib tdlib, long chatId) {
+    TdApi.UserFullInfo full = tdlib.cache().userFull(ChatId.toUserId(chatId), false);
+    return full != null && full.communityId != 0 ? full.communityId : XgramCommunities.communityOf(tdlib, chatId);
   }
 }

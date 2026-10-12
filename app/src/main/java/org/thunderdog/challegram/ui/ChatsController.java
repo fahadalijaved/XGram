@@ -2248,7 +2248,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       final long communityId = chat.xgramCommunityId();
       TdApi.Community community = tdlib.cache().community(communityId);
       String name = community != null && !me.vkryl.core.StringUtils.isEmpty(community.name) ? community.name : tdlib.chatTitle(chat.getChatId());
-      int count = com.fahadali.xgram.chats.XgramCommunities.presentMembers(tdlib, communityId, chatList()).size();
+      int count = com.fahadali.xgram.chats.XgramCommunityData.chatIds(tdlib, communityId, tdlib.cache().communityFull(communityId)).size(); // XGram: the community's chats, not only those in this list
       context.setTdlib(tdlib);
       context.setHeaderAvatar(null, new AvatarPlaceholder.Metadata(tdlib.chatAccentColor(chat.getChatId()), TD.getLetters(name)));
       context.setHeader(name, Lang.plural(R.string.xChats, count));
