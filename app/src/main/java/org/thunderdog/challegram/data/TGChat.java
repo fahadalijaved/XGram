@@ -302,7 +302,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   public void checkChatListMode () {
-    int newMode = Settings.instance().getChatListMode();
+    int newMode = xgramForcedMode != 0 ? xgramForcedMode : Settings.instance().getChatListMode(); // XGram: the community page sets its own
     if (listMode != newMode) {
       listMode = newMode;
       currentWidth = 0;
@@ -1106,6 +1106,74 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     return members;
   }
 
+  // XGram: a row on the community page: its own row height, the forum's topics in place of the sender (who then moves
+  // into the text), and for chats you are not in a text of its own ("@username, N members").
+
+  private int xgramForcedMode;
+  @Nullable private String xgramTopicsLine, xgramForcedText;
+  @Nullable private TextEntity[] xgramTopicsEntities;
+
+  /** Call before the row is laid out (before {@link ChatView#setChat}); later calls need a requestLayout of the view. */
+  public void xgramSetCommunityRow (int forcedMode, @Nullable String topicsLine, @Nullable TextEntity[] topicsEntities, @Nullable String forcedText) {
+    this.xgramForcedMode = forcedMode;
+    this.xgramTopicsLine = topicsLine;
+    this.xgramTopicsEntities = topicsEntities != null && topicsEntities.length > 0 ? topicsEntities : null;
+    this.xgramForcedText = forcedText;
+    if (forcedMode != 0 && listMode != forcedMode) {
+      listMode = forcedMode;
+      currentWidth = 0; // the next checkLayout builds the row again
+    }
+  }
+
+  /** The topics line as the prefix (the second line). True when it took the place of the usual sender prefix. */
+  private boolean xgramSetTopicsPrefix () {
+    if (xgramTopicsLine == null || showDraft()) {
+      return false;
+    }
+    flags |= FLAG_HAS_PREFIX;
+    int avail = currentWidth - ChatView.getLeftPadding(listMode) - ChatView.getRightPadding() - getCounterAddWidth();
+    if (avail > 0) {
+      this.prefix = new Text.Builder(xgramTopicsLine, avail, getTextStyleProvider(listMode), TextColorSets.Regular.LIGHT)
+        .singleLine()
+        .textFlags(Text.FLAG_ELLIPSIZE_NO_FILL)
+        .entities(xgramTopicsEntities, null)
+        .build();
+    } else {
+      this.prefix = null;
+    }
+    layoutText();
+    return true;
+  }
+
+  /** With the topics on the second line, the message's sender goes in front of the text: "Sender: message". */
+  private void xgramPrependSender () {
+    if (xgramTopicsLine == null || (flags & FLAG_MESSAGE) == 0 || chat == null || chat.lastMessage == null || showDraft() || StringUtils.isEmpty(text)) {
+      return;
+    }
+    final String sender;
+    if (isOutgoing()) {
+      sender = Lang.getString(tdlib.isMultiChat(chat) && Td.getSenderId(chat.lastMessage) == chat.id ? R.string.FromYouAnonymous : R.string.FromYou);
+    } else if (tdlib.isMultiChat(chat) && !tdlib.isChannel(chat.id) && !Td.isProximityAlertTriggered(chat.lastMessage.content)) {
+      sender = tdlib.senderName(chat.lastMessage, false, false);
+    } else {
+      sender = null;
+    }
+    if (StringUtils.isEmpty(sender)) {
+      return;
+    }
+    String head = sender + ": ";
+    List<TextEntity> shifted = new ArrayList<>();
+    shifted.add(new TextEntityCustom(context, tdlib, null, 0, sender.length(), 0, null).setCustomColorSet(TextColorSets.Regular.NORMAL));
+    if (entities != null) {
+      for (TextEntity entity : entities) {
+        entity.offset(head.length());
+        shifted.add(entity);
+      }
+    }
+    this.text = head + text;
+    this.entities = shifted.toArray(new TextEntity[0]);
+  }
+
   public Text getTitle () {
     return trimmedTitle;
   }
@@ -1309,6 +1377,9 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   private void setPrefix () {
+    if (xgramSetTopicsPrefix()) { // XGram: the community page shows the forum's topics here
+      return;
+    }
     if ((flags & FLAG_HAS_PREFIX) != 0) {
       final String prefix;
       boolean needSuffix = true;
@@ -1411,6 +1482,12 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     String restrictionText = Lang.getRestrictionText(tdlib.chatRestriction(chat));
     if (!StringUtils.isEmpty(restrictionText)) {
       setContentPreview(new ContentPreview(ContentPreview.EMOJI_ERROR, 0, restrictionText, false));
+      return;
+    }
+
+    if (xgramForcedText != null) { // XGram: a chat you are not in, on the community page
+      setTextValue(xgramForcedText, (TextEntity[]) null, false);
+      setPrefix();
       return;
     }
 
@@ -1558,6 +1635,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     if (textIconIds != null)
       textIconIds.clear();
     setTextValue(preview.buildText(true), preview.formattedText != null ? preview.formattedText.entities : null, preview.isTranslatable);
+    xgramPrependSender(); // XGram: community page, the sender's place is taken by the topics
     this.currentPreview = preview;
     TdApi.Message lastMessage = chat != null ? chat.lastMessage : null;
     if (preview.parentEmoji != null) {

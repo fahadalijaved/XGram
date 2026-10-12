@@ -39,7 +39,9 @@ import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.RecyclerViewController;
 import org.thunderdog.challegram.ui.SettingHolder;
 import org.thunderdog.challegram.ui.SettingsAdapter;
+import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.StringList;
+import org.thunderdog.challegram.util.text.TextEntity;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.BaseView;
 import org.thunderdog.challegram.widget.ForceTouchView;
@@ -97,6 +99,8 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   private final Set<Long> subscribedChats = new HashSet<>();
   private boolean subscribedToScope;
   private final RowListener rowListener = new RowListener();
+  /** The first topics of each forum on the page, for the second line of its row. */
+  private XgramCommunityTopics topics;
 
   private final Runnable rebuild = () -> {
     if (!isDestroyed()) {
@@ -157,6 +161,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     headerCell.initWithController(this, true);
     headerCell.setInnerMargins(Screen.dp(56f), Screen.dp(49f) * 2);
     updateHeader(0);
+    topics = new XgramCommunityTopics(tdlib, this::markDirty);
 
     adapter = new SettingsAdapter(this) {
       @Override
@@ -229,6 +234,9 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     tdlib.cache().unsubscribeFromCommunityUpdates(communityId(), this);
     XgramCommunities.removeListener(this);
     tdlib.ui().removeCallbacks(rebuild);
+    if (topics != null) {
+      topics.destroy();
+    }
     for (long chatId : subscribedChats) {
       unsubscribeFromChat(chatId);
     }
@@ -300,7 +308,20 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   private final class RowListener implements ChatListener, MessageListener, NotificationSettingsListener, TdlibCache.SupergroupDataChangeListener {
     @Override
     public void onChatTopMessageChanged (long chatId, @Nullable TdApi.Message topMessage) {
+      runOnUiThreadOptional(() -> topics.onTopMessage(chatId, topMessage));
       markDirty(chatId);
+    }
+
+    // Topics: the forum row's second line.
+
+    @Override
+    public void onForumTopicInfoChanged (TdApi.ForumTopicInfo info) {
+      runOnUiThreadOptional(() -> topics.onTopicInfo(info));
+    }
+
+    @Override
+    public void onForumTopicUpdated (TdApi.UpdateForumTopic update) {
+      runOnUiThreadOptional(() -> topics.onTopicUpdated(update));
     }
 
     @Override
@@ -340,6 +361,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
 
     @Override
     public void onChatReadInbox (long chatId, long lastReadInboxMessageId, int unreadCount, boolean availabilityChanged) {
+      runOnUiThreadOptional(() -> topics.onReadInbox(chatId, lastReadInboxMessageId));
       markDirty(chatId);
     }
 
@@ -529,9 +551,51 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     if (row != null) {
       retired.add(row);
     }
+    boolean forum = tdlib.isForum(chat.id);
+    if (forum) {
+      topics.ensure(chat.id);
+    }
+    List<TextEntity> topicsEntities = new ArrayList<>();
+    String topicsLine = forum ? topics.line(this, chat.id, topicsEntities) : null;
+    String forcedText = XgramCommunityData.isMember(tdlib, chat) ? null : subtitleFor(chat);
     row = new TGChat(this, listFor(chat), chat, false);
+    // Before the first layout: the row keeps three lines (topics, then "sender: message") whatever the chat list's mode.
+    row.xgramSetCommunityRow(rowMode(), topicsLine, topicsEntities.toArray(new TextEntity[0]), forcedText);
     rows.put(chat.id, row);
     return row;
+  }
+
+  private static int rowMode () {
+    int mode = Settings.instance().getChatListMode();
+    return mode == Settings.CHAT_MODE_2LINE ? Settings.CHAT_MODE_3LINE : mode;
+  }
+
+  /** For a chat you are not in: "@username, 1,234 subscribers" (members, or monthly users for a bot). */
+  @Nullable
+  private String subtitleFor (TdApi.Chat chat) {
+    List<String> parts = new ArrayList<>(2);
+    String username = tdlib.chatUsername(chat);
+    if (!StringUtils.isEmpty(username)) {
+      parts.add("@" + username);
+    }
+    if (chat.type instanceof TdApi.ChatTypePrivate) {
+      TdApi.User user = tdlib.chatUser(chat);
+      int users = user != null && user.type instanceof TdApi.UserTypeBot ? ((TdApi.UserTypeBot) user.type).activeUserCount : 0;
+      if (users > 0) {
+        parts.add(Lang.plural(R.string.xBotUsers, users));
+      } else if (parts.isEmpty()) {
+        parts.add(Lang.getString(R.string.Bot));
+      }
+    } else {
+      boolean channel = tdlib.isChannel(chat.id);
+      int members = tdlib.chatMemberCount(chat.id);
+      if (members > 0) {
+        parts.add(Lang.plural(channel ? R.string.xSubscribers : R.string.xMembers, members));
+      } else if (parts.isEmpty()) {
+        parts.add(Lang.getString(channel ? R.string.Channel : R.string.Group));
+      }
+    }
+    return android.text.TextUtils.join(Lang.getConcatSeparator(), parts);
   }
 
   private static int compareRows (TGChat a, TGChat b) {
@@ -611,6 +675,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     for (long chatId : new ArrayList<>(rows.keySet())) {
       if (!present.contains(chatId)) {
         retired.add(rows.remove(chatId));
+        topics.forget(chatId);
       }
     }
     addSection(items, R.string.XgramCommunityChatsIn, joined);
