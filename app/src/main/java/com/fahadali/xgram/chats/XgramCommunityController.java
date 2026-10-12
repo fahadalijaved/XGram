@@ -13,36 +13,66 @@ package com.fahadali.xgram.chats;
 
 import android.content.Context;
 import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.RecyclerView;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.dialogs.ChatView;
 import org.thunderdog.challegram.core.Lang;
-import org.thunderdog.challegram.data.DoubleTextWrapper;
+import org.thunderdog.challegram.data.AvatarPlaceholder;
 import org.thunderdog.challegram.data.TD;
+import org.thunderdog.challegram.data.TGChat;
+import org.thunderdog.challegram.loader.AvatarReceiver;
+import org.thunderdog.challegram.navigation.ComplexHeaderView;
 import org.thunderdog.challegram.navigation.ViewController;
+import org.thunderdog.challegram.telegram.ChatListener;
+import org.thunderdog.challegram.telegram.MessageListener;
+import org.thunderdog.challegram.telegram.NotificationSettingsListener;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.telegram.TdlibCache;
 import org.thunderdog.challegram.telegram.TdlibUi;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.RecyclerViewController;
+import org.thunderdog.challegram.ui.SettingHolder;
 import org.thunderdog.challegram.ui.SettingsAdapter;
+import org.thunderdog.challegram.util.StringList;
 import org.thunderdog.challegram.v.CustomRecyclerView;
+import org.thunderdog.challegram.widget.BaseView;
+import org.thunderdog.challegram.widget.ForceTouchView;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+import me.vkryl.core.StringUtils;
+import me.vkryl.core.collection.IntList;
 import tgx.td.ChatId;
+import tgx.td.ChatPosition;
 
 /**
  * A Telegram community (groups and channels, with or without topics, gathered under one name): its chats, those you
  * are in first, like the official apps. Opened from "added to the community" messages and the chat menu.
+ * <p>
+ * Each chat is a full chat-list row (avatar, time, ticks, unread and mention badges, mute icon, typing) kept up to
+ * date from TDLib's chat, message and notification updates. Long-pressing a row shows the chat list's menu; holding
+ * one shows the chat preview.
  */
-public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener {
+public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, View.OnLongClickListener, BaseView.ActionListProvider, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener {
+  private static final int TYPE_CHAT_ROW = 1;
+  private static final long REBUILD_DELAY_MS = 200;
+
   private SettingsAdapter adapter;
+  private ComplexHeaderView headerCell;
   private final Set<Long> requestedChats = new HashSet<>();
   /** Chats asked from TDLib (GetChat) that haven't answered yet. */
   private final Set<Long> pendingChats = new HashSet<>();
@@ -54,6 +84,18 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   private boolean useKnownChats;
   /** The chats' own info was asked for (once per page, see XgramCommunityData.refresh). */
   private boolean refreshed;
+
+  /** One row per chat, UI thread. A row is replaced, never changed, once its chat changes. */
+  private final Map<Long, TGChat> rows = new HashMap<>();
+  /** Chats whose row is out of date (any thread); the next build makes them a new row. */
+  private final Set<Long> dirtyChats = Collections.newSetFromMap(new ConcurrentHashMap<>());
+  /** Every row is out of date (scope-wide notification settings). */
+  private volatile boolean dirtyAll;
+  /** Chats (and their supergroups) this page listens to. */
+  private final Set<Long> subscribedChats = new HashSet<>();
+  private boolean subscribedToScope;
+  private final RowListener rowListener = new RowListener();
+
   private final Runnable rebuild = () -> {
     if (!isDestroyed()) {
       buildItems();
@@ -101,8 +143,41 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   }
 
   @Override
+  public View getCustomHeaderCell () {
+    return headerCell;
+  }
+
+  @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
-    adapter = new SettingsAdapter(this);
+    headerCell = new ComplexHeaderView(context, tdlib, this);
+    headerCell.setNoExpand(true);
+    headerCell.setPhotoOpenDisabled(true);
+    headerCell.initWithController(this, true);
+    headerCell.setInnerMargins(Screen.dp(56f), Screen.dp(49f) * 2);
+    updateHeader(0);
+
+    adapter = new SettingsAdapter(this) {
+      @Override
+      protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == TYPE_CHAT_ROW) {
+          XgramCommunityChatView view = new XgramCommunityChatView(parent.getContext(), tdlib);
+          view.setNeedBackground(true);
+          view.setOnClickListener(XgramCommunityController.this);
+          view.setOnLongClickListener(XgramCommunityController.this);
+          view.setPreviewActionListProvider(XgramCommunityController.this);
+          addThemeInvalidateListener(view);
+          return new SettingHolder(view);
+        }
+        throw new IllegalArgumentException("customViewType=" + customViewType);
+      }
+
+      @Override
+      protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+        if (customViewType == TYPE_CHAT_ROW) {
+          ((XgramCommunityChatView) view).setChat(rows.get(item.getLongId()));
+        }
+      }
+    };
     recyclerView.setAdapter(adapter);
     tdlib.cache().subscribeToCommunityUpdates(communityId(), this);
     XgramCommunities.addListener(this);
@@ -152,30 +227,317 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     tdlib.cache().unsubscribeFromCommunityUpdates(communityId(), this);
     XgramCommunities.removeListener(this);
     tdlib.ui().removeCallbacks(rebuild);
+    for (long chatId : subscribedChats) {
+      unsubscribeFromChat(chatId);
+    }
+    subscribedChats.clear();
+    if (subscribedToScope) {
+      tdlib.listeners().unsubscribeFromSettingsUpdates(rowListener);
+      subscribedToScope = false;
+    }
+    for (TGChat row : rows.values()) {
+      row.performDestroy();
+    }
+    rows.clear();
+    if (headerCell != null) {
+      headerCell.performDestroy();
+    }
   }
+
+  // Header
+
+  private void updateHeader (int chatCount) {
+    if (headerCell == null) {
+      return;
+    }
+    TdApi.Community community = tdlib.cache().community(communityId());
+    String name = getName().toString();
+    headerCell.setText(name, Lang.plural(R.string.xChats, chatCount));
+    if (community != null && community.photo != null) {
+      headerCell.getAvatarReceiver().requestSpecific(tdlib, community.photo, AvatarReceiver.Options.FORCE_FORUM);
+    } else {
+      TdlibAccentColor accentColor = null;
+      for (long chatId : rows.keySet()) {
+        accentColor = tdlib.chatAccentColor(chatId);
+        break;
+      }
+      if (accentColor == null) {
+        accentColor = tdlib.accentColorForString(name);
+      }
+      headerCell.getAvatarReceiver().requestPlaceholder(tdlib, new AvatarPlaceholder.Metadata(accentColor, TD.getLetters(name)), AvatarReceiver.Options.FORCE_FORUM);
+    }
+  }
+
+  // Community updates
 
   @Override
   public void onCommunityMembersChanged (Tdlib tdlib, long communityId, long chatId) {
     if (tdlib == this.tdlib && communityId == communityId()) {
       // Any thread, often several in a row: rebuild once, on the UI thread.
-      this.tdlib.ui().removeCallbacks(rebuild);
-      this.tdlib.ui().postDelayed(rebuild, 150);
+      scheduleRebuild();
     }
   }
 
   @Override
   public void onCommunityUpdated (TdApi.Community community) {
-    runOnUiThreadOptional(() -> {
-      if (headerView != null) {
-        headerView.updateTextTitle(getId(), getName());
-      }
-      buildItems();
-    });
+    runOnUiThreadOptional(this::buildItems);
   }
 
   @Override
   public void onCommunityFullUpdated (long id, TdApi.CommunityFullInfo community) {
     runOnUiThreadOptional(this::buildItems);
+  }
+
+  private void scheduleRebuild () {
+    tdlib.ui().removeCallbacks(rebuild);
+    tdlib.ui().postDelayed(rebuild, REBUILD_DELAY_MS);
+  }
+
+  // Row updates: TDLib's chat, message and notification updates reach the rows through this one listener.
+
+  private final class RowListener implements ChatListener, MessageListener, NotificationSettingsListener, TdlibCache.SupergroupDataChangeListener {
+    @Override
+    public void onChatTopMessageChanged (long chatId, @Nullable TdApi.Message topMessage) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatPositionChanged (long chatId, TdApi.ChatPosition position, boolean orderChanged, boolean sourceChanged, boolean pinStateChanged) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatAddedToList (long chatId, TdApi.ChatList chatList) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatRemovedFromList (long chatId, TdApi.ChatList chatList) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatPermissionsChanged (long chatId, TdApi.ChatPermissions permissions) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatTitleChanged (long chatId, String title) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatEmojiStatusChanged (long chatId, @Nullable TdApi.EmojiStatus emojiStatus) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatPhotoChanged (long chatId, @Nullable TdApi.ChatPhotoInfo photo) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatReadInbox (long chatId, long lastReadInboxMessageId, int unreadCount, boolean availabilityChanged) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatHasScheduledMessagesChanged (long chatId, boolean hasScheduledMessages) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatReadOutbox (long chatId, long lastReadOutboxMessageId) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatMarkedAsUnread (long chatId, boolean isMarkedAsUnread) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatBlockListChanged (long chatId, @Nullable TdApi.BlockList blockList) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatVideoChatChanged (long chatId, TdApi.VideoChat videoChat) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatViewAsTopics (long chatId, boolean viewAsTopics) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatDraftMessageChanged (long chatId, @Nullable TdApi.DraftMessage draftMessage) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatUnreadMentionCount (long chatId, int unreadMentionCount, boolean availabilityChanged) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatUnreadReactionCount (long chatId, int unreadReactionCount, boolean availabilityChanged) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatDefaultDisableNotifications (long chatId, boolean defaultDisableNotifications) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatClientDataChanged (long chatId, @Nullable String clientData) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onChatAccentColorsChanged (long chatId, int accentColorId, long backgroundCustomEmojiId, int profileAccentColorId, long profileBackgroundCustomEmojiId) {
+      markDirty(chatId);
+    }
+
+    // Messages: an edit, a deletion, a reaction or a sent message changes the row's last line.
+
+    @Override
+    public void onMessageSendSucceeded (TdApi.Message message, long oldMessageId) {
+      markDirty(message.chatId);
+    }
+
+    @Override
+    public void onMessageSendFailed (TdApi.Message message, long oldMessageId, TdApi.Error error) {
+      markDirty(message.chatId);
+    }
+
+    @Override
+    public void onMessageContentChanged (long chatId, long messageId, TdApi.MessageContent newContent) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onMessageEdited (long chatId, long messageId, int editDate, @Nullable TdApi.ReplyMarkup replyMarkup) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onMessageInteractionInfoChanged (long chatId, long messageId, @Nullable TdApi.MessageInteractionInfo interactionInfo) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onMessagesDeleted (long chatId, long[] messageIds) {
+      markDirty(chatId);
+    }
+
+    // Notification settings: the mute icon and the badge colour.
+
+    @Override
+    public void onNotificationSettingsChanged (long chatId, TdApi.ChatNotificationSettings settings) {
+      markDirty(chatId);
+    }
+
+    @Override
+    public void onNotificationSettingsChanged (TdApi.NotificationSettingsScope scope, TdApi.ScopeNotificationSettings settings) {
+      markAllDirty();
+    }
+
+    @Override
+    public void onNotificationGlobalSettingsChanged () {
+      markAllDirty();
+    }
+
+    // Supergroups: membership decides the section, the username and counts decide the second line.
+
+    @Override
+    public void onSupergroupUpdated (TdApi.Supergroup supergroup) {
+      markDirty(ChatId.fromSupergroupId(supergroup.id));
+    }
+
+    @Override
+    public void onSupergroupFullUpdated (long supergroupId, TdApi.SupergroupFullInfo newSupergroupFull) {
+      markDirty(ChatId.fromSupergroupId(supergroupId));
+    }
+  }
+
+  private void markDirty (long chatId) {
+    dirtyChats.add(chatId);
+    scheduleRebuild();
+  }
+
+  private void markAllDirty () {
+    dirtyAll = true;
+    scheduleRebuild();
+  }
+
+  private void subscribeToChat (long chatId) {
+    tdlib.listeners().subscribeToChatUpdates(chatId, rowListener);
+    tdlib.listeners().subscribeToMessageUpdates(chatId, rowListener);
+    tdlib.listeners().subscribeToSettingsUpdates(chatId, rowListener);
+    if (ChatId.isSupergroup(chatId)) {
+      tdlib.cache().subscribeToSupergroupUpdates(ChatId.toSupergroupId(chatId), rowListener);
+    }
+  }
+
+  private void unsubscribeFromChat (long chatId) {
+    tdlib.listeners().unsubscribeFromChatUpdates(chatId, rowListener);
+    tdlib.listeners().unsubscribeFromMessageUpdates(chatId, rowListener);
+    tdlib.listeners().unsubscribeFromSettingsUpdates(chatId, rowListener);
+    if (ChatId.isSupergroup(chatId)) {
+      tdlib.cache().unsubscribeFromSupergroupUpdates(ChatId.toSupergroupId(chatId), rowListener);
+    }
+  }
+
+  /** Listens to exactly the chats on the page. */
+  private void syncSubscriptions (List<Long> chatIds) {
+    if (!subscribedToScope) {
+      tdlib.listeners().subscribeToSettingsUpdates(rowListener);
+      subscribedToScope = true;
+    }
+    Set<Long> wanted = new HashSet<>(chatIds);
+    for (long chatId : new ArrayList<>(subscribedChats)) {
+      if (!wanted.contains(chatId)) {
+        unsubscribeFromChat(chatId);
+        subscribedChats.remove(chatId);
+      }
+    }
+    for (long chatId : wanted) {
+      if (subscribedChats.add(chatId)) {
+        subscribeToChat(chatId);
+      }
+    }
+  }
+
+  // Rows
+
+  private static TdApi.ChatList listFor (TdApi.Chat chat) {
+    return chat.positions != null && chat.positions.length > 0 ? chat.positions[0].list : new TdApi.ChatListMain();
+  }
+
+  /** The chat's row, a new one when the chat changed since it was built. */
+  private TGChat rowFor (TdApi.Chat chat, boolean rebuildAll, List<TGChat> retired) {
+    TGChat row = rows.get(chat.id);
+    if (row != null && !rebuildAll && !dirtyChats.contains(chat.id)) {
+      return row;
+    }
+    if (row != null) {
+      retired.add(row);
+    }
+    row = new TGChat(this, listFor(chat), chat, false);
+    rows.put(chat.id, row);
+    return row;
+  }
+
+  private static int compareRows (TGChat a, TGChat b) {
+    int order = Long.compare(ChatPosition.getOrder(b.getChat(), b.getChatList()), ChatPosition.getOrder(a.getChat(), a.getChatList()));
+    if (order != 0) {
+      return order;
+    }
+    TdApi.Message am = a.getChat().lastMessage, bm = b.getChat().lastMessage;
+    return Integer.compare(bm != null ? bm.date : 0, am != null ? am.date : 0);
   }
 
   private void buildItems () {
@@ -205,8 +567,14 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       refreshed = true;
       XgramCommunityData.refresh(tdlib, communityId(), chatIds);
     }
+    syncSubscriptions(chatIds);
+
+    boolean rebuildAll = dirtyAll;
+    dirtyAll = false;
+    List<TGChat> retired = new ArrayList<>();
     boolean honourHidden = XgramCommunityData.honourHidden(full, XgramCommunityData.isAdmin(tdlib, communityId()));
-    List<ListItem> joined = new ArrayList<>(), others = new ArrayList<>(), hidden = new ArrayList<>();
+    List<TGChat> joined = new ArrayList<>(), others = new ArrayList<>(), hidden = new ArrayList<>();
+    Set<Long> present = new HashSet<>();
     for (long chatId : chatIds) {
       TdApi.Chat chat = tdlib.chat(chatId);
       if (chat == null) {
@@ -223,12 +591,19 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
         }
         continue;
       }
-      ListItem item = new ListItem(ListItem.TYPE_CHAT_SMALL, R.id.btn_xgramCommunityChat).setData(new DoubleTextWrapper(tdlib, chat, true, false));
-      item.setLongId(chat.id);
+      present.add(chatId);
+      TGChat row = rowFor(chat, rebuildAll, retired);
       if (honourHidden && XgramCommunityData.isHidden(full, chat.id)) {
-        hidden.add(item);
+        hidden.add(row);
       } else {
-        (XgramCommunityData.isMember(tdlib, chat) ? joined : others).add(item);
+        (XgramCommunityData.isMember(tdlib, chat) ? joined : others).add(row);
+      }
+    }
+    dirtyChats.clear();
+    // Chats that left the community: their rows go.
+    for (long chatId : new ArrayList<>(rows.keySet())) {
+      if (!present.contains(chatId)) {
+        retired.add(rows.remove(chatId));
       }
     }
     addSection(items, R.string.XgramCommunityChatsIn, joined);
@@ -240,34 +615,100 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     if (full == null) {
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loadError != null ? Lang.getString(R.string.XgramCommunityPartialError, loadError) : Lang.getString(R.string.XgramCommunityPartial)));
     }
-    adapter.setItems(items, false);
+    updateHeader(chatIds.size());
+    if (sameStructure(adapter.getItems(), items)) {
+      // The same rows in the same order: only the changed ones are bound again, in place, with no list animation.
+      rebindVisibleRows(retired);
+    } else {
+      adapter.setItems(items, false);
+    }
+    for (TGChat row : retired) {
+      row.performDestroy();
+    }
     executeScheduledAnimation(); // the chats are in: start the slide if it was waiting for them
   }
 
-  private static void addSection (List<ListItem> items, int title, List<ListItem> rows) {
-    if (rows.isEmpty()) {
+  private static boolean sameStructure (List<ListItem> current, List<ListItem> fresh) {
+    if (current.size() != fresh.size()) {
+      return false;
+    }
+    for (int i = 0; i < current.size(); i++) {
+      ListItem a = current.get(i), b = fresh.get(i);
+      if (a.getViewType() != b.getViewType() || a.getId() != b.getId() || a.getLongId() != b.getLongId() || a.getStringResource() != b.getStringResource() || !StringUtils.equalsOrBothEmpty(a.getString(), b.getString())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** Rows whose chat was replaced and that are on screen get the new one; the rest pick it up when bound. */
+  private void rebindVisibleRows (List<TGChat> retired) {
+    RecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null || retired.isEmpty()) {
       return;
     }
+    for (int i = 0; i < recyclerView.getChildCount(); i++) {
+      View child = recyclerView.getChildAt(i);
+      if (child instanceof XgramCommunityChatView) {
+        XgramCommunityChatView view = (XgramCommunityChatView) child;
+        TGChat shown = view.getChat();
+        if (shown != null && retired.contains(shown)) {
+          view.setChat(rows.get(shown.getChatId()));
+          view.invalidate();
+        }
+      }
+    }
+  }
+
+  private static void addSection (List<ListItem> items, int title, List<TGChat> sectionRows) {
+    if (sectionRows.isEmpty()) {
+      return;
+    }
+    Collections.sort(sectionRows, XgramCommunityController::compareRows);
     items.add(new ListItem(items.isEmpty() ? ListItem.TYPE_HEADER_PADDED : ListItem.TYPE_HEADER, 0, 0, title));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    for (int i = 0; i < rows.size(); i++) {
+    for (int i = 0; i < sectionRows.size(); i++) {
       if (i > 0) {
         items.add(new ListItem(ListItem.TYPE_SEPARATOR));
       }
-      items.add(rows.get(i));
+      items.add(new ListItem(ListItem.TYPE_CUSTOM - TYPE_CHAT_ROW, R.id.btn_xgramCommunityChat).setLongId(sectionRows.get(i).getChatId()));
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
   }
 
+  // Taps, long-presses and previews
+
+  @Nullable
+  private static TGChat rowOf (View v) {
+    return v instanceof ChatView ? ((ChatView) v).getChat() : null;
+  }
+
   @Override
   public void onClick (View v) {
-    Object tag = v.getTag();
-    if (v.getId() == R.id.btn_xgramCommunityChat && tag instanceof ListItem) {
-      long chatId = ((ListItem) tag).getLongId();
-      if (chatId != 0) {
-        tdlib.ui().openChat(this, chatId, new TdlibUi.ChatOpenParameters().keepStack());
-      }
+    TGChat row = rowOf(v);
+    if (row != null && row.getChatId() != 0) {
+      tdlib.ui().openChat(this, row.getChatId(), new TdlibUi.ChatOpenParameters().keepStack());
     }
+  }
+
+  @Override
+  public boolean onLongClick (View v) {
+    if (isInForceTouchMode()) {
+      return false;
+    }
+    TGChat row = rowOf(v);
+    if (row == null) {
+      return false;
+    }
+    // The chat list's menu. For chats you are not in it shows nothing, which is what the chat list does too.
+    tdlib.ui().showChatOptions(this, row.getChatList(), row.getChatId(), null, new TdApi.MessageSourceChatList(), false, false, null);
+    return true;
+  }
+
+  @Override
+  public ForceTouchView.ActionListener onCreateActions (View v, ForceTouchView.ForceTouchContext context, IntList ids, IntList icons, StringList strings, ViewController<?> target) {
+    BaseView view = (BaseView) v;
+    return tdlib.ui().createSimpleChatActions(this, view.getPreviewChatList(), view.getPreviewChatId(), null, new TdApi.MessageSourceChatList(), ids, icons, strings, true, false, false, null);
   }
 
   /** The community a group or channel belongs to, from its full info (0 if none or not loaded yet). */
