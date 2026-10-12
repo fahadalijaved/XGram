@@ -1,120 +1,100 @@
-# [Telegram X](https://play.google.com/store/apps/details?id=org.thunderdog.challegram) — a slick experimental Telegram client based on [TDLib](https://core.telegram.org/tdlib).
+<p align="center">
+  <img src=".github/assets/banner.png" alt="XGram">
+</p>
 
-![Telegram X](/images/feature.png)
+XGram is an unofficial Telegram client for Android. It starts from [Telegram X](https://github.com/TGX-Android/Telegram-X)
+and its [TDLib](https://core.telegram.org/tdlib) core, keeps what makes it quick, and adds the things people usually
+move to AyuGram or NagramX for: proper forum topics and communities, ghost mode, a history of deleted and edited
+messages, and plenty of small tools and looks.
 
-This is the complete source code and the build instructions for the official alternative Android client for the Telegram messenger, based on the [Telegram API](https://core.telegram.org/api) and the [MTProto](https://core.telegram.org/mtproto) secure protocol via [TDLib](https://github.com/TGX-Android/tdlib).
+XGram is not affiliated with Telegram or with the Telegram X team.
 
-* [**Telegram X** on Google Play](http://play.google.com/store/apps/details?id=org.thunderdog.challegram) ([subscribe to beta](https://play.google.com/apps/testing/org.thunderdog.challegram))
-* [APKs and Build Info](https://t.me/tgx_log)
-* [Bot to verify APK hash](https://t.me/tgx_bot)
+<p align="center">
+  <img src=".github/assets/screens/icon-packs.png" width="30%" alt="Icon packs">
+  &nbsp;
+  <img src=".github/assets/screens/chat-look.png" width="30%" alt="Chat look">
+  &nbsp;
+  <img src=".github/assets/screens/whats-new.png" width="30%" alt="What's new in XGram">
+</p>
 
-<details>
-<summary>Other sources</summary>
+## Download
 
-* [**Telegram X** on Huawei AppGallery](https://appgallery.huawei.com/app/C101754199)
-* [**GitHub Releases**](https://github.com/TGX-Android/Telegram-X/releases)
+Builds are posted to the **XGram CI** channel on Telegram, and the **XGram** group is the place for questions, bug
+reports and ideas. <!-- add the t.me links here -->
 
-</details>
+XGram needs Android 7.0 or newer. Every build post lists the SHA-256 of its APK, so you can check what you install.
 
-## Build instructions
+## What's inside
 
-### Prerequisites
+**Topics and communities**
+- Forums open as a topic list, or as tabs like in Telegram, with search, pinning, reordering and a jump to the next mention.
+- Unread, mention and reaction counters, read ticks and "typing…" per topic.
+- Every topic has its own profile: icon, name, link, notifications and media.
+- Create, rename, close, hide and mute topics; share or forward straight into one.
+- Telegram communities show as one row in the chat list, with the community's photo and a page listing its chats.
 
-* Repository must be fetched via `git`
-* **JDK** or **[Android Studio](https://developer.android.com/studio/)** (with compatible bundled JDK)
-* At least **8GB** of RAM
-* At least **7,32GB** of free disk space when cloning with `--shallow-submodules --depth=1`
-* At least **2-5x** times more disk space for files generated during build process.
+**Privacy**
+- Ghost mode: no read receipts, no typing, stay offline, mark as read only when you reply. There's a Quick Settings tile too.
+- Screenshots in protected chats (optional), hide your own phone number, keep Android's content capture out.
 
-#### macOS
+**Message history**
+- Deleted messages stay in the chat, marked with a bin icon, and edited messages keep their earlier versions.
+- Kept for 30 days by default (or as long as you like), media included.
 
-* [Homebrew](https://brew.sh)
-* git with LFS: `$ brew install git git-lfs && git lfs install`
-* JDK: `$ brew install openjdk@25`
+**Chats and messages**
+- Message filters, shadow bans and hiding blocked users in groups.
+- Bookmarks, Saved Messages grouped by chat, local names for people and chats.
+- A message menu you can trim, with Repeat, Save to Saved Messages, Copy photo, Reply privately and exact dates and IDs.
+- Telegram's own AI tools (summarize, fix spelling, rewrite, translate) where Telegram offers them on your account.
+- Pull up at the end of a channel for the next unread one.
+- Tracking parameters removed from links you open, and working previews for X, Instagram, TikTok, Reddit and Bluesky posts you send.
 
-#### Ubuntu
+**Looks**
+- Icon packs: XGram Duotone and XGram Line, drawn for XGram, plus Solar, Phosphor, MingCute and Pixel.
+- A theme pack, a matching theme for each of the 16 app icons, and Material You colors.
+- Chat look: sticker and emoji size, bubble corners and a bubble tail.
+- Chat list and chat side by side on unfolded foldables and tablets.
 
-* git with LFS: `# apt install git git-lfs`
-* Run `$ git lfs install` if you just installed `git-lfs`
-* JDK: `# apt install openjdk-25-jdk`
-* If multiple JDK versions are installed:<br/>`# update-java-alternatives --list`<br/>`# update-java-alternatives --set java-1.25.0-openjdk-amd64` (or other compatible version)
+**Tools**
+- Search across all XGram settings; back them up and restore them.
+- Proxy rules (off on VPN, Wi-Fi or mobile data), chat export to HTML or text, unblock everyone at once.
 
-#### Windows
+## Building
 
-* [MSYS2](https://www.msys2.org/#installation) (**UCRT64** environment)
-* Update packages: `pacman -Syu`
-* Run `pacman -S --needed git mingw-w64-ucrt-x86_64-git-lfs perl make diffutils`
-* Run `git lfs install`
-* Run `git config --global core.longpaths true`
-* Clone the repository
-* Set `msys2.dir` in `local.properties` after cloning
+1. Clone with submodules:
+   ```sh
+   git clone --recursive https://github.com/fahadalijaved/XGram.git
+   ```
+2. Apply XGram's change to the TDLib submodule:
+   ```sh
+   bash scripts/xgram-apply-patches.sh
+   ```
+3. Copy `local.properties.sample` to `local.properties` and fill in `sdk.dir`, `app.id`, `app.name`, your
+   `telegram.api_id` and `telegram.api_hash` from [my.telegram.org](https://my.telegram.org), and `keystore.file`
+   (a properties file with `keystore.file`, `keystore.password`, `key.alias` and `key.password`).
+4. Build from Android Studio, or:
+   ```sh
+   ./gradlew assembleLatestArm64Debug
+   ```
 
-### Building
+Gradle runs on JDK 25. You also need the Android SDK, NDK `30.0.16248370` and the tools listed in Telegram X's
+[build instructions](https://github.com/TGX-Android/Telegram-X#build-instructions) (MSYS2 on Windows). The first build
+compiles TDLib, FFmpeg and WebRTC from source, so give it time. For push notifications, replace
+`app/google-services.json` with one from your own Firebase project.
 
-1. `$ git clone --recursive https://github.com/TGX-Android/Telegram-X tgx`
-2. In case you forgot the `--recursive` flag, `cd` into `tgx` directory and run: `$ git submodule update --init --recursive`
-3. Open project via **[Android Studio](https://developer.android.com/studio/)** or build manually from the command line: `./gradlew assembleLatestUniversalDebug`
-4. If build fails, follow the instructions provided in the error message.
+## Credits
 
-#### Publishing
+- [Telegram X](https://github.com/TGX-Android/Telegram-X) by Vyacheslav Krylov and its contributors, which XGram is built on.
+- [TDLib](https://github.com/tdlib/td) by Telegram.
+- Ideas from [AyuGram](https://github.com/AyuGram), [NagramX](https://github.com/risin42/NagramX) and exteraGram.
+- Icon packs: [Solar](https://www.figma.com/community/file/1166831539721848736) by 480 Design (CC BY 4.0),
+  [Phosphor](https://phosphoricons.com) (MIT), [MingCute](https://www.mingcute.com) (Apache 2.0) and
+  [Pixelarticons](https://pixelarticons.com) by Gerrit Halfmann (MIT). Details in
+  [tools/xgram/icon_packs/CREDITS.md](tools/xgram/icon_packs/CREDITS.md).
 
-1. [Obtain Telegram API credentials](https://core.telegram.org/api/obtaining_api_id)
-2. Create `local.properties` file in the root project folder using any text editor:<br/><pre># Location where you have Android SDK installed
-   sdk.dir=YOUR_ANDROID_SDK_FOLDER
-   \# Telegram API credentials obtained at previous step
-   telegram.api_id=YOUR_TELEGRAM_API_ID
-   telegram.api_hash=YOUR_TELEGRAM_API_HASH</pre>
-3. [Setup Firebase](https://firebase.google.com/docs/android/setup) and replace `google-services.json` with the one that's suitable for your `app.id`
-
-## Reproducing public builds
-
-In order to verify that there is no additional source code injected inside official APKs, you must use one of the following versions of **Ubuntu**:
-
-* **21.04**: for builds published before [26th May 2023](https://github.com/TGX-Android/Telegram-X/commit/e9a054a0f469a98a13f7e0d751539687fef8759b)
-* **22.04.2 LTS**: for builds published before 27th September 2025
-* **24.04 LTS**: for builds published before 1st October 2026
-* **26.04 LTS**: for any newer releases
-
-And update its configuration:
-
-1. Create user called `vk` with the home directory located at `/home/vk`
-2. Clone `tgx` repository to `/home/vk/tgx`
-3. Check out the specific commit you want to verify
-4. In rare cases of builds that include unmerged pull requests, you must follow actions performed by [Publisher's](https://github.com/TGX-Android/Publisher/blob/main/main.js) `fetchPr` and `squashPr` tasks
-5. `cd` into `tgx` folder and install dependencies: `# apt install $(cat reproducible-builds/dependencies.txt)`
-6. Follow up the build instruction from the previous section
-7. Run `$ apkanalyzer apk compare --different-only <remote-apk> <reproduced-apk>`
-8. If only signature files and metadata differ, build reproduction is successful.
-
-## Verifying side-loaded APKs
-
-If you downloaded **Telegram X** APK from somewhere and would like to simply verify whether it's an original APK without any injected malicious source code, you need to get checksum (`SHA-256`, `SHA-1` or `MD5`) of the downloaded APK file and find whether it corresponds to any known **Telegram X** version.
-
-In order to obtain **SHA-256** of the APK:
-
-* `$ sha256sum <path-to-apk>` on **Ubuntu**
-* `$ shasum -a 256 <path-to-apk>` on **macOS**
-* `$ certutil -hashfile <path-to-apk> SHA256` on **Windows**
-
-Once obtained, there are three ways to find out the commit for the specific checksum:
-
-* Sending checksum to [`@tgx_bot`](https://t.me/tgx_bot)
-* Searching for a checksum in [`@tgx_log`](https://t.me/tgx_log). You can do so without need in installing any Telegram client by using this URL format: [`https://t.me/s/tgx_log?q={checksum}`](https://t.me/s/tgx_log?q=c541ebb0a3ae7bb6e6bd155530f375d567b8aef1761fdd942fb5d69af62e24ae) (click to see in action). Note: unpublished builds cannot be verified this way.
+Made by [Fahad Ali Javed](https://github.com/fahadalijaved).
 
 ## License
 
-`Telegram X` is licensed under the terms of the GNU General Public License v3.0.
-
-For more information, see [LICENSE](/LICENSE) file.
-
-License of components and third-party dependencies it relies on might differ, check `LICENSE` file in the corresponding folder.
-
-### Third-party dependencies
-
-List of third-party components used in **Telegram X** can be found [here](/docs/THIRDPARTY.md). Additionally you can check the specific commit of the third-party component used, for example, [here](/app/jni/thirdparty) and [here](/thirdparty).
-
-## Contributions
-
-**Telegram X** welcomes contributions. Check out [pull request template](/docs/PULL_REQUEST_TEMPLATE.md) and [guide for contributors](/docs/GUIDE.md) to learn more about Telegram X internals before creating the first pull request.
-
-If you are a regular user and experience a problem with Telegram X, the best place to look for solution is [Telegram X chat](https://t.me/tgandroidtests) — a community with over 4 thousand members. Please do not use this repository to ask questions: if you have general issue with Telegram, refer to [FAQ](http://telegram.org/faq) or contact [Telegram Support](https://telegram.org/faq#telegram-support).
+XGram is licensed under the GNU General Public License v3.0, like Telegram X. See [LICENSE](LICENSE). Bundled
+components keep their own licenses; see [docs/THIRDPARTY.md](docs/THIRDPARTY.md).
