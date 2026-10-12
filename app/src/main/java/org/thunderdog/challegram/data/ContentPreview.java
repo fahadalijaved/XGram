@@ -792,13 +792,15 @@ public class ContentPreview {
       case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
       case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
       case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
+      case TdApi.MessageTonConnectRequest.CONSTRUCTOR:
+      case TdApi.MessageTonWalletTransfer.CONSTRUCTOR:
         break;
 
       // Bots only. Unused
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
       case TdApi.MessageWebAppDataReceived.CONSTRUCTOR:
       default:
-        Td.assertMessageContent_af730a78();
+        Td.assertMessageContent_f7758f8b();
         throw Td.unsupported(message.content);
     }
     Refresher refresher = null;
@@ -1258,11 +1260,13 @@ public class ContentPreview {
       case TdApi.PushMessageContentPollOptionAdded.CONSTRUCTOR:
       case TdApi.PushMessageContentChecklist.CONSTRUCTOR:
       case TdApi.PushMessageContentChecklistTasksAdded.CONSTRUCTOR:
-      case TdApi.PushMessageContentChecklistTasksDone.CONSTRUCTOR: {
+      case TdApi.PushMessageContentChecklistTasksDone.CONSTRUCTOR:
+      case TdApi.PushMessageContentTonConnectRequest.CONSTRUCTOR:
+      case TdApi.PushMessageContentTonWalletTransfer.CONSTRUCTOR: {
         return getNotificationPreview(TdApi.MessageUnsupported.CONSTRUCTOR, tdlib, chatId, push.senderId, push.senderName, null);
       }
       default:
-        Td.assertPushMessageContent_fd03564b();
+        Td.assertPushMessageContent_497d2f0c();
         throw Td.unsupported(push.content);
     }
   }
@@ -1648,6 +1652,8 @@ public class ContentPreview {
       case TdApi.MessagePollOptionAdded.CONSTRUCTOR:
       case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
       case TdApi.MessageRichMessage.CONSTRUCTOR:
+      case TdApi.MessageTonConnectRequest.CONSTRUCTOR:
+      case TdApi.MessageTonWalletTransfer.CONSTRUCTOR:
         // TODO support these previews
         return new ContentPreview(EMOJI_QUIZ, R.string.UnsupportedMessage);
         
@@ -1658,7 +1664,7 @@ public class ContentPreview {
       case TdApi.MessagePassportDataReceived.CONSTRUCTOR:
       case TdApi.MessageWebAppDataReceived.CONSTRUCTOR:
       default:
-        Td.assertMessageContent_af730a78();
+        Td.assertMessageContent_f7758f8b();
         throw new UnsupportedOperationException(Integer.toString(type));
     }
   }

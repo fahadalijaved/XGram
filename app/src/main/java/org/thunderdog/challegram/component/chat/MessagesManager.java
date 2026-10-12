@@ -14,7 +14,6 @@
  */
 package org.thunderdog.challegram.component.chat;
 
-import android.content.Context;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -1616,6 +1615,8 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       case TdApi.InternalLinkTypeSearch.CONSTRUCTOR:
       case TdApi.InternalLinkTypeStarPurchase.CONSTRUCTOR:
       case TdApi.InternalLinkTypeTextCompositionStyle.CONSTRUCTOR:
+      case TdApi.InternalLinkTypeTonConnect.CONSTRUCTOR:
+      case TdApi.InternalLinkTypeTonWalletTransfer.CONSTRUCTOR:
         return false;
 
       case TdApi.InternalLinkTypeSettings.CONSTRUCTOR: {
@@ -1668,7 +1669,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       }
 
       default:
-        Td.assertInternalLinkType_44babac4();
+        Td.assertInternalLinkType_c232a5d5();
         break;
     }
     return true;
@@ -1889,9 +1890,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     listener.add();
   }
 
-  public void modifyRecycler (Context context, RecyclerView recyclerView, LinearLayoutManager manager) {
+  public void modifyRecycler (RecyclerView recyclerView, LinearLayoutManager manager) {
     this.manager = manager;
-    this.adapter = new MessagesAdapter(context, this, this.controller);
+    this.adapter = new MessagesAdapter(this.controller.context(), this, this.controller);
 
     recyclerView.removeOnScrollListener(listener);
     recyclerView.addOnScrollListener(listener);

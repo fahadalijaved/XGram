@@ -4850,7 +4850,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       case TdApi.MessageAnimation.CONSTRUCTOR:
         return !photoVideoOnly;
       default:
-        Td.assertMessageContent_af730a78();
+        Td.assertMessageContent_f7758f8b();
         break;
     }
 
@@ -4891,7 +4891,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       emoji().findOrRequest(customEmojiId, (entry, inPlace) -> {
         if (entry != null && !entry.isNotFound()) {
           TdApi.Sticker customEmojiSticker = entry.value;
-          TdApi.MessageAnimatedEmoji animatedEmoji = new TdApi.MessageAnimatedEmoji(new TdApi.AnimatedEmoji(customEmojiSticker, customEmojiSticker.width, customEmojiSticker.height, 0, null), content.text.text);
+          TdApi.MessageAnimatedEmoji animatedEmoji = new TdApi.MessageAnimatedEmoji(new TdApi.AnimatedEmoji(customEmojiSticker, customEmojiSticker.width, customEmojiSticker.height, 0, null, false), content.text.text);
           performEdit(chatId, messageId, animatedEmoji, new TdApi.EditMessageText(chatId, messageId, null, content), pendingMessageTexts);
         } else {
           animatedEmojiFallback.run();
@@ -4934,7 +4934,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.MessageAnimatedEmoji.CONSTRUCTOR:
           return Td.textOrCaption(messageText);
       }
-      Td.assertMessageContent_af730a78();
+      Td.assertMessageContent_f7758f8b();
       throw Td.unsupported(messageText);
     }
     MessageEditMediaPending pendingEditMedia = getPendingMessageMedia(chatId, messageId);
@@ -7664,7 +7664,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         break;
       }
       default: {
-        Td.assertMessageContent_af730a78();
+        Td.assertMessageContent_f7758f8b();
         break;
       }
     }
@@ -10625,6 +10625,11 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       case TdApi.UpdateActiveGiftAuctions.CONSTRUCTOR:
       case TdApi.UpdateStakeDiceState.CONSTRUCTOR:
       case TdApi.UpdateNewOauthRequest.CONSTRUCTOR:
+      case TdApi.UpdateAllowedBotUsernamePremiumSuffixes.CONSTRUCTOR:
+      case TdApi.UpdateTonWalletGaslessTransfersInfo.CONSTRUCTOR:
+      case TdApi.UpdateTonWalletState.CONSTRUCTOR:
+      case TdApi.UpdateTonWalletTonConnectSession.CONSTRUCTOR:
+      case TdApi.UpdateTonWalletTonConnectSessionDisconnectRequired.CONSTRUCTOR:
         break;
       case TdApi.UpdateTextCompositionStyles.CONSTRUCTOR: // XGram: styles for the AI editor
         com.fahadali.xgram.chats.XgramAiTools.onStylesUpdated(this, (TdApi.UpdateTextCompositionStyles) update);
@@ -10659,7 +10664,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         throw Td.unsupported(update);
       }
       default: {
-        Td.assertUpdate_a21b1e40();
+        Td.assertUpdate_c11d0a6d();
         throw Td.unsupported(update);
       }
     }
@@ -11684,11 +11689,13 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.MessagePollOptionDeleted.CONSTRUCTOR:
         case TdApi.MessageChatAddedToCommunity.CONSTRUCTOR:
         case TdApi.MessageChatRemovedFromCommunity.CONSTRUCTOR:
+        case TdApi.MessageTonConnectRequest.CONSTRUCTOR:
+        case TdApi.MessageTonWalletTransfer.CONSTRUCTOR:
           // None of these messages ever passed to this method,
           // assuming we want to check RightId.SEND_BASIC_MESSAGES
           return getBasicMessageRestrictionText(chat);
         default:
-          Td.assertMessageContent_af730a78();
+          Td.assertMessageContent_f7758f8b();
           throw Td.unsupported(message.content);
       }
     }
@@ -12110,7 +12117,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         return true;
       }
       default: {
-        Td.assertSuggestedAction_a78df4c9();
+        Td.assertSuggestedAction_17e8d183();
         break;
       }
     }
@@ -12207,7 +12214,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         case TdApi.SuggestedActionSetLoginEmailAddress.CONSTRUCTOR:
           return ResolvableProblem.SET_LOGIN_EMAIL;
         default:
-          Td.assertSuggestedAction_a78df4c9();
+          Td.assertSuggestedAction_17e8d183();
           throw Td.unsupported(singleAction);
       }
     }
