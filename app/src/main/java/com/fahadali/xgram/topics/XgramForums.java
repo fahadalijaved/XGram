@@ -354,6 +354,11 @@ public final class XgramForums {
         if (context.isDestroyed()) {
           return;
         }
+        if (result == null && list.size() == 0) {
+          // Nothing to choose from: say why instead of sending into General without asking.
+          UI.showError(error);
+          return;
+        }
         showTopicPicker(context, chatId, result != null ? java.util.Arrays.asList(result.topics) : loadedTopics(list), onPicked);
       }));
       return;
@@ -389,6 +394,11 @@ public final class XgramForums {
       writable.add(topic);
     }
     int count = writable.size();
+    if (count == 0 && !allTopics.isEmpty()) {
+      // Every topic is closed for the user (or is the hidden General): a share would only fail.
+      UI.showToast(R.string.XgramTopicClosed, android.widget.Toast.LENGTH_SHORT);
+      return;
+    }
     if (count == 0) {
       onPicked.runWithData(new PickedTopic(null, Lang.getString(R.string.XgramGeneralTopic)));
       return;

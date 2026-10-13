@@ -862,7 +862,8 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       if (isDestroyed) {
         return;
       }
-      if (message.sendingState != null) {
+      if (message.sendingState != null && message.schedulingState == null) {
+        // Scheduled messages also arrive here, but they aren't the topic's last message.
         int index = indexOf(forumTopicId);
         if (index != -1) {
           // A message being sent: TDLib's topic last_message only comes from the server, which doesn't know it yet, so
