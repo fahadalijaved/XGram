@@ -700,7 +700,12 @@ android {
 
   androidComponents {
     val aapt2File = sdkComponents.sdkDirectory.map {
-      it.file("build-tools/${config.build.buildToolsVersion}/aapt2").asFile.toPosixPath()
+      // XGram: on Windows the tool is aapt2.exe and must be started by its native path, not a /c/... one.
+      if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+        it.file("build-tools/${config.build.buildToolsVersion}/aapt2.exe").asFile.absolutePath
+      } else {
+        it.file("build-tools/${config.build.buildToolsVersion}/aapt2").asFile.toPosixPath()
+      }
     }
 
     onVariants(selector().withBuildType("release")) { variant ->
