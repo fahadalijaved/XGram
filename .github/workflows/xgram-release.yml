@@ -1,8 +1,8 @@
 # XGram release: manual workflow for stable releases.
 #
 # Builds the release APKs (arm64 and universal by default, in parallel), writes SHA256SUMS.txt and
-# build-info.json, uploads everything as workflow artifacts (kept 90 days), posts the APKs to the XGram CI
-# channel and announces the release in the Updates topic of the XGram group. Optionally drafts a GitHub
+# build-info.json, uploads everything as workflow artifacts, and posts the APKs as a Stable release in the Updates
+# topic of the XGram group (never the CI channel, which is for CI builds). Optionally drafts a GitHub
 # Release with the same files (GPLv3: whoever gets the APK must be able to get the source of that build).
 #
 # Start it: Actions -> XGram release -> Run workflow (from main, or from a tag such as v1.0.0).
@@ -26,11 +26,7 @@ on:
           - universal
         default: arm64
       publish:
-        description: Post the APKs to the XGram CI channel (main or a tag only)
-        type: boolean
-        default: true
-      announce:
-        description: Announce the release in the Updates topic of the XGram group
+        description: Post the APKs as a Stable release in the Updates topic of the XGram group (main or a tag only)
         type: boolean
         default: true
       notes_path:
@@ -100,7 +96,6 @@ jobs:
           XGRAM_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           IN_FLAVOR: ${{ inputs.flavor }}
           IN_PUBLISH: ${{ inputs.publish }}
-          IN_ANNOUNCE: ${{ inputs.announce }}
           IN_CHANGELOG_SINCE: ${{ inputs.changelog_since }}
           IN_APP_VERSION: ${{ inputs.app_version }}
         run: bash scripts/ci/plan.sh
@@ -202,7 +197,7 @@ jobs:
         id: collect
         run: bash scripts/ci/collect-apks.sh --merge artifacts --out publish
 
-      - name: Post to the XGram CI channel and announce in Updates
+      - name: Post the Stable release in the Updates topic
         env:
           XGRAM_BOT_TOKEN: ${{ secrets.XGRAM_BOT_TOKEN }}
           # Chat and topic ids are variables, not secrets: they show up unmasked in other forms anyway (t.me/c/<N>
@@ -219,14 +214,11 @@ jobs:
           XGRAM_BOT_STATE_FILE: telegram-state/telegram_state.json
           VERSION: ${{ inputs.release_name || steps.collect.outputs.version_name }}
           COMMIT: ${{ needs.plan.outputs.head }}
-          ANNOUNCE: ${{ needs.plan.outputs.announce }}
         run: |
           mkdir -p telegram-state
-          args=(--dir publish --version "$VERSION" --commit "$COMMIT" --notes notes/notes.html --kind stable --send)
-          if [ "$ANNOUNCE" = true ]; then
-            args+=(--announce)
-          fi
-          bash scripts/ci/publish-telegram.sh "${args[@]}"
+          # Stable releases: the Updates topic only (the CI channel is for CI builds).
+          bash scripts/ci/publish-telegram.sh --dir publish --version "$VERSION" --commit "$COMMIT" \
+            --notes notes/notes.html --kind stable --to updates --send
 
       - name: Keep the bot's publish record (for /latest)
         if: always()

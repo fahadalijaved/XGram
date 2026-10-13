@@ -32,6 +32,7 @@ version=""
 commit=""
 notes=""
 kind=""
+to=channel
 announce=false
 send=false
 while (($# > 0)); do
@@ -41,6 +42,7 @@ while (($# > 0)); do
     --commit) commit=${2:?}; shift 2 ;;
     --notes) notes=${2:?}; shift 2 ;;
     --kind) kind=${2:?}; shift 2 ;;
+    --to) to=${2:?}; shift 2 ;;
     --announce) announce=true; shift ;;
     --send) send=true; shift ;;
     *) die "Unknown argument: $1" ;;
@@ -49,6 +51,11 @@ done
 [[ -n "$dir" && -n "$version" && -n "$commit" && -n "$notes" ]] ||
   die "usage: publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--announce] [--send]"
 [[ -z "$kind" || "$kind" == ci || "$kind" == stable ]] || die "--kind must be ci or stable, got: $kind"
+[[ "$to" == channel || "$to" == updates ]] || die "--to must be channel or updates, got: $to"
+# CI builds go to the XGram CI channel only; the Updates topic is for stable releases.
+if [[ "$kind" != stable && ( "$to" != channel || "$announce" == true ) ]]; then
+  die "CI builds are posted only to the XGram CI channel (no --to updates, no --announce)."
+fi
 [[ -d "$dir" ]] || die "Not a folder: $dir"
 [[ -f "$notes" ]] || die "Notes file not found: $notes"
 
@@ -114,7 +121,7 @@ args=(publish)
 for apk in "${apks[@]}"; do
   args+=(--apk "$apk")
 done
-args+=(--version "$version" --commit "$commit" --notes "$notes" --to channel)
+args+=(--version "$version" --commit "$commit" --notes "$notes" --to "$to")
 if [[ -n "$kind" ]]; then
   args+=(--kind "$kind")
 fi

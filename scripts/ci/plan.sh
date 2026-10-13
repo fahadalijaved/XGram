@@ -61,18 +61,17 @@ if [[ "$mode" == nightly && "$event" == schedule ]]; then
   flavor=${XGRAM_NIGHTLY_FLAVOR:-arm64}
   build_type=${XGRAM_NIGHTLY_BUILD_TYPE:-release}
   publish=${XGRAM_NIGHTLY_PUBLISH:-true}
-  announce=${XGRAM_NIGHTLY_ANNOUNCE:-false}
 elif [[ "$mode" == nightly ]]; then
   flavor=${IN_FLAVOR:-arm64}
   build_type=${IN_BUILD_TYPE:-release}
   publish=${IN_PUBLISH:-false}
-  announce=${IN_ANNOUNCE:-false}
 else
-  flavor=${IN_FLAVOR:-both}
+  flavor=${IN_FLAVOR:-arm64}
   build_type=release
   publish=${IN_PUBLISH:-true}
-  announce=${IN_ANNOUNCE:-true}
 fi
+# Never an extra announcement: CI builds stay in the CI channel, stable releases are posted in Updates itself.
+announce=false
 
 case "$flavor" in
   arm64) flavors='["arm64"]' ;;

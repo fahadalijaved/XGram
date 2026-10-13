@@ -1,10 +1,11 @@
-# XGram nightly: builds once a day when main has new commits, uploads the APKs as workflow artifacts, and
+# XGram nightly: builds every other day when main has new commits, uploads the APKs as workflow artifacts, and
 # (when the bot secrets are set) posts them to the XGram CI channel through XGram Build Bot.
+# CI builds go ONLY to the XGram CI channel, never to the Updates topic: Updates is for stable releases.
 #
-#   Scheduled: 02:37 UTC daily, default branch only. Skipped when HEAD is the commit of the last
-#              successful scheduled nightly. What it builds is set by repository variables
-#              (XGRAM_NIGHTLY_FLAVOR / _BUILD_TYPE / _PUBLISH / _ANNOUNCE / _FORCE).
-#   Manual:    Actions -> XGram nightly -> Run workflow (choose flavor, build type, publish, announce).
+#   Scheduled: 02:37 UTC on odd days of the month, default branch only. Skipped when HEAD is the commit of the
+#              last successful scheduled nightly. What it builds is set by repository variables
+#              (XGRAM_NIGHTLY_FLAVOR / _BUILD_TYPE / _PUBLISH / _FORCE).
+#   Manual:    Actions -> XGram nightly -> Run workflow (choose flavor, build type, publish).
 #
 # Setup, secrets and limits: docs/xgram/telegram/CI.md
 name: XGram nightly
@@ -12,7 +13,7 @@ name: XGram nightly
 on:
   schedule:
     # Off the full hour: GitHub delays (and under load can drop) schedules that start at :00.
-    - cron: '37 2 * * *'
+    - cron: '37 2 */2 * *'
   workflow_dispatch:
     inputs:
       flavor:
@@ -34,10 +35,6 @@ on:
         description: Post the APKs to the XGram CI channel (default branch only)
         type: boolean
         default: true
-      announce:
-        description: Also announce the build in the Updates topic of the XGram group
-        type: boolean
-        default: false
       changelog_since:
         description: 'Optional: commit or tag the changelog starts from (default: last successful scheduled nightly)'
         type: string
@@ -89,12 +86,10 @@ jobs:
           IN_FLAVOR: ${{ inputs.flavor }}
           IN_BUILD_TYPE: ${{ inputs.build_type }}
           IN_PUBLISH: ${{ inputs.publish }}
-          IN_ANNOUNCE: ${{ inputs.announce }}
           IN_CHANGELOG_SINCE: ${{ inputs.changelog_since }}
           XGRAM_NIGHTLY_FLAVOR: ${{ vars.XGRAM_NIGHTLY_FLAVOR }}
           XGRAM_NIGHTLY_BUILD_TYPE: ${{ vars.XGRAM_NIGHTLY_BUILD_TYPE }}
           XGRAM_NIGHTLY_PUBLISH: ${{ vars.XGRAM_NIGHTLY_PUBLISH }}
-          XGRAM_NIGHTLY_ANNOUNCE: ${{ vars.XGRAM_NIGHTLY_ANNOUNCE }}
           XGRAM_NIGHTLY_FORCE: ${{ vars.XGRAM_NIGHTLY_FORCE }}
         run: bash scripts/ci/plan.sh
 
@@ -188,14 +183,11 @@ jobs:
           XGRAM_BOT_STATE_FILE: telegram-state/telegram_state.json
           VERSION: ${{ steps.collect.outputs.version_name }}
           COMMIT: ${{ needs.plan.outputs.head }}
-          ANNOUNCE: ${{ needs.plan.outputs.announce }}
         run: |
           mkdir -p telegram-state
-          args=(--dir publish --version "$VERSION" --commit "$COMMIT" --notes notes/notes.html --kind ci --send)
-          if [ "$ANNOUNCE" = true ]; then
-            args+=(--announce)
-          fi
-          bash scripts/ci/publish-telegram.sh "${args[@]}"
+          # CI builds: the XGram CI channel only, never the Updates topic.
+          bash scripts/ci/publish-telegram.sh --dir publish --version "$VERSION" --commit "$COMMIT" \
+            --notes notes/notes.html --kind ci --to channel --send
 
       - name: Keep the bot's publish record (for /latest)
         if: always()
