@@ -576,7 +576,10 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       case TdApi.AuthorizationStateWaitEmailCode.CONSTRUCTOR: {
         TdApi.AuthorizationStateWaitEmailCode state = (TdApi.AuthorizationStateWaitEmailCode) authState;
         PasswordController c = new PasswordController(this, tdlib);
-        c.setArguments(new PasswordController.Args(PasswordController.MODE_CODE_EMAIL, state));
+        // XGram: tell the code screen when it follows the "add a login email" screen (new-email wording, "Use a different email")
+        ViewController<?> top = navigation.isEmpty() ? null : navigation.getStack().getCurrent();
+        boolean fromEmailSetup = top instanceof PasswordController && top.isSameTdlib(tdlib) && ((PasswordController) top).getMode() == PasswordController.MODE_EMAIL_LOGIN;
+        c.setArguments(new PasswordController.Args(PasswordController.MODE_CODE_EMAIL, state).setFromEmailSetup(fromEmailSetup));
         return c;
       }
       case TdApi.AuthorizationStateWaitRegistration.CONSTRUCTOR: {

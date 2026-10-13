@@ -186,6 +186,14 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       this.confirmDelegate = confirmDelegate;
       return this;
     }
+
+    // XGram: true when the email-code screen follows the "add a login email" screen
+    public boolean fromEmailSetup;
+
+    public Args setFromEmailSetup (boolean fromEmailSetup) {
+      this.fromEmailSetup = fromEmailSetup;
+      return this;
+    }
   }
 
   private int mode;
@@ -547,11 +555,14 @@ public class PasswordController extends ViewController<PasswordController.Args> 
         break;
       }
       case MODE_CODE_EMAIL: {
-        hint = Lang.getStringBold(R.string.SentEmailCode, ((TdApi.AuthorizationStateWaitEmailCode) authState).codeInfo.emailAddressPattern);
+        // XGram: resend / reset / "use a different email" links, and a hint that tells a new login email from the account's own
+        emailCodeLinks = newEmailCodeLinks((TdApi.AuthorizationStateWaitEmailCode) authState);
+        hint = emailCodeLinks.buildHint();
+        emailCodeLinks.refresh();
         break;
       }
       case MODE_EMAIL_LOGIN: {
-        hint = Lang.getString(R.string.LoginEmailInfo);
+        hint = Lang.getString(R.string.xgram_login_SetupEmailInfo); // XGram: say why Telegram wants an email
         break;
       }
       case MODE_2FA_RECOVERY_EMAIL_CHANGE: {
@@ -793,6 +804,10 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       this.authState = authorizationState;
       this.isFirebaseSmsSent = false;
       updateAuthState(true);
+      // XGram: TDLib sends WaitEmailCode again after a resend or a reset request, and MainActivity keeps this screen, so refresh it here
+      if (emailCodeLinks != null && emailCodeLinks.onStateChanged(authorizationState)) {
+        setHintText(emailCodeLinks.buildHint(), false);
+      }
     });
   }
 
@@ -1712,7 +1727,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
             break;
           }
           case TdApi.Error.CONSTRUCTOR: {
-            setHintText(TD.toErrorString(object), true);
+            setHintText(mode == MODE_CODE_EMAIL ? com.fahadali.xgram.login.EmailLoginErrors.toString(object) : TD.toErrorString(object), true); // XGram: plain email-login errors
             break;
           }
         }
@@ -1783,7 +1798,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
             Keyboard.show(editText);
             setHintText(R.string.InvalidPasswordTryAgain, true);
           } else {
-            setHintText(TD.toErrorString(object), true);
+            setHintText(mode == MODE_EMAIL_LOGIN ? com.fahadali.xgram.login.EmailLoginErrors.toString(object) : TD.toErrorString(object), true); // XGram: plain email-login errors
           }
           break;
         }
@@ -1912,7 +1927,59 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     openAlert(R.string.Warning, R.string.YourEmailSkipWarningText, (dialog, which) -> setPassword(currentPassword, passwordHint, null));
   }
 
+  // XGram: links of the email-code login screen, see com.fahadali.xgram.login.EmailCodeLinks
+  private @Nullable com.fahadali.xgram.login.EmailCodeLinks emailCodeLinks;
+
+  private com.fahadali.xgram.login.EmailCodeLinks newEmailCodeLinks (TdApi.AuthorizationStateWaitEmailCode state) {
+    boolean fromEmailSetup = getArguments() != null && getArguments().fromEmailSetup;
+    return new com.fahadali.xgram.login.EmailCodeLinks(this, tdlib, new com.fahadali.xgram.login.EmailCodeLinks.Host() {
+      @Override
+      public void setLinkText (@Nullable CharSequence text) {
+        setForgetText(text);
+      }
+
+      @Override
+      public void setWaitText (@Nullable CharSequence text) {
+        if (StringUtils.isEmpty(text)) {
+          resetWaitView.setVisibility(View.GONE);
+        } else {
+          resetWaitView.setText(text);
+          resetWaitView.setVisibility(View.VISIBLE);
+        }
+      }
+
+      @Override
+      public void setHintText (@NonNull CharSequence text, boolean isError) {
+        PasswordController.this.setHintText(text, isError);
+      }
+
+      @Override
+      public void setLinkInProgress (boolean inProgress) {
+        setInRecoveryProgress(inProgress);
+      }
+
+      @NonNull
+      @Override
+      public View linkView () {
+        return forgotView;
+      }
+
+      @Override
+      public void useDifferentEmail () {
+        ViewController<?> previous = previousStackItem();
+        if (!inProgress && previous instanceof PasswordController && previous.isSameTdlib(tdlib) && ((PasswordController) previous).getMode() == MODE_EMAIL_LOGIN) {
+          navigateBack();
+        }
+      }
+    }, fromEmailSetup, state);
+  }
+
   private void proceedForgot () {
+    // XGram: the email-code screen has its own resend / reset menu
+    if (mode == MODE_CODE_EMAIL && emailCodeLinks != null) {
+      emailCodeLinks.onLinkClick();
+      return;
+    }
     switch (mode) {
       case MODE_EMAIL_RECOVERY: {
         openAlert(R.string.ResetPassword, R.string.RestoreEmailTroubleText2, Lang.getString(R.string.Reset), (dialog, which) -> { confirmResetPassword(); });
@@ -2003,6 +2070,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     tdlib.listeners().removeAuthorizationChangeListener(this);
     if (nextButton != null) {
       nextButton.destroy();
+    }
+    if (emailCodeLinks != null) { // XGram
+      emailCodeLinks.destroy();
     }
   }
 

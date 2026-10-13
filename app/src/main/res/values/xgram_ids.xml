@@ -202,4 +202,8 @@
   <item type="id" name="btn_xgramUpdateInstalled" />
   <item type="id" name="btn_xgramUpdateWhatsNew" />
   <item type="id" name="btn_xgramUpdateOpenPost" />
+  <item type="id" name="btn_xgramEmailResend" />
+  <item type="id" name="btn_xgramEmailReset" />
+  <item type="id" name="btn_xgramEmailResetCheck" />
+  <item type="id" name="btn_xgramEmailChange" />
 </resources>
