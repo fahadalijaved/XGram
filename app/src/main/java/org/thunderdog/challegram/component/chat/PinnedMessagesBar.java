@@ -689,7 +689,8 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
       if (isLinkPreview()) {
         return StringUtils.equalsTo(this.linkPreviewUrl, b.linkPreviewUrl) && (this.linkPreviewContext == b.linkPreviewContext);
       } else if (isMessage()) {
-        return this.message.chatId == b.message.chatId && this.message.id == b.message.id;
+        // XGram: a new quote of the same message is a different entry, else the bar keeps showing the old one
+        return this.message.chatId == b.message.chatId && this.message.id == b.message.id && tgx.td.Td.equalsTo(this.quote, b.quote);
       } else {
         throw new UnsupportedOperationException();
       }

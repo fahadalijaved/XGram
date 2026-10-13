@@ -88,7 +88,7 @@
   <string name="XgramRemovedFromCommunity">Removed from the community</string>
   <string name="XgramMessageMenu">Message menu</string>
   <string name="XgramMessageMenuInfo">Choose what shows when you long-press a message. Options for one situation only, like Send now or Stop poll, always show.</string>
-  <string name="XgramMenuTelegram">Telegram X</string>
+  <string name="XgramMenuTelegram">Telegram&#160;X</string>
   <string name="XgramMenuXgram">XGram</string>
   <string name="XgramMenuRestrict">Restrict or remove member</string>
   <string name="XgramThemes">Themes</string>
@@ -226,7 +226,7 @@
   <string name="XgramBoostMedium">Medium</string>
   <string name="XgramBoostHigh">High</string>
   <string name="XgramBoostMax">Max</string>
-  <string name="XgramDownloadBoostOff">Off: downloads work as in Telegram X.</string>
+  <string name="XgramDownloadBoostOff">Off: downloads work as in Telegram&#160;X.</string>
   <string name="XgramDownloadBoostLow">Low: files you tap download before automatic downloads. Videos you open load 20 seconds ahead (10 without boost).</string>
   <string name="XgramDownloadBoostMedium">Medium: as Low, and automatic downloads of videos, files and music wait for chat photos and avatars. Videos load 30 seconds ahead.</string>
   <string name="XgramDownloadBoostHigh">High: as Medium, and files you tap also go before music and videos that are playing. Videos load 1 minute ahead.</string>
@@ -323,8 +323,8 @@
   <!-- XGram: hub and what's new -->
   <string name="XgramHub">XGram</string>
   <string name="XgramWhatsNew">What’s new in XGram</string>
-  <string name="XgramWhatsNewInfo">Everything XGram adds to Telegram X</string>
-  <string name="XgramWhatsNewIntro">XGram brings the best of AyuGram, NagramX and exteraGram to Telegram X. Tap a row to try it.</string>
+  <string name="XgramWhatsNewInfo">Everything XGram adds to Telegram&#160;X</string>
+  <string name="XgramWhatsNewIntro">XGram brings the best of AyuGram, NagramX and exteraGram to Telegram&#160;X. Tap a row to try it.</string>
   <string name="XgramWhatsNewOutro">Find this list again in the side menu → XGram.</string>
   <string name="XgramNewGhost">Ghost mode</string>
   <string name="XgramNewGhostInfo">Read without read receipts, stay offline, no typing, send as scheduled or silently. Counters still clear on your phone.</string>
@@ -349,7 +349,7 @@
   <string name="XgramNewProfiles">Profiles</string>
   <string name="XgramNewProfilesInfo">IDs with estimated registration date, join date in groups, local names only you see.</string>
   <string name="XgramNewPrivacy">Privacy and cleanup</string>
-  <string name="XgramNewPrivacyInfo">No sponsored messages, clean links, hide your phone number, local last seen, no Telegram X update prompts.</string>
+  <string name="XgramNewPrivacyInfo">No sponsored messages, clean links, hide your phone number, local last seen, no Telegram&#160;X update prompts.</string>
   <string name="XgramIconClassic">Classic</string>
   <string name="XgramTopicsOff">Off</string>
   <string name="XgramTopicsTabs">Tabs</string>
