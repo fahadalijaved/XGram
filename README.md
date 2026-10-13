@@ -93,6 +93,11 @@ compiles TDLib, FFmpeg and WebRTC from source, so give it time. For push notific
 
 Made by [Fahad Ali Javed](https://github.com/fahadalijaved).
 
+## Support
+
+XGram is free and has no ads. If you'd like to support its development, you can
+[donate via PayPal](https://paypal.me/fahadalijaved23). Thank you! ❤️
+
 ## License
 
 XGram is licensed under the GNU General Public License v3.0, like Telegram X. See [LICENSE](LICENSE). Bundled
