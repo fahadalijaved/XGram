@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 NL = chr(10)
-RES = r'C:\Users\fahad\AndroidStudioProjects\SamX\app\src\main\res'
+RES = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'app', 'src', 'main', 'res')
 
 # ---------------------------------------------------------------- glyph geometry (108 viewport), as gen_android.py
 W = 11.0

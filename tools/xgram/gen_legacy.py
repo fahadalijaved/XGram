@@ -8,7 +8,7 @@ r3 = importlib.util.module_from_spec(spec)
 sys.argv = [sys.argv[0], os.path.join(HERE, 'sheet_tmp.png')]
 spec.loader.exec_module(r3)  # also renders a preview sheet
 
-OUT = r'C:\Users\fahad\AndroidStudioProjects\SamX\app\src\main\res\mipmap-xxxhdpi'
+OUT = os.path.join(HERE, '..', '..', 'app', 'src', 'main', 'res', 'mipmap-xxxhdpi')
 BY_NAME = {v['name']: v for v in r3.V}
 ALIASES = {
     'default': 'XGram', 'aqua': 'Aurora', 'sunset': 'Sunset', 'mono': 'Midnight', 'emerald': 'Emerald',

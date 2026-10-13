@@ -1,7 +1,7 @@
 """Writes XGram's launcher icons as Android resources (adaptive vectors, themed layer)."""
 import math, os
 
-RES = r'C:\Users\fahad\AndroidStudioProjects\SamX\app\src\main\res'
+RES = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'app', 'src', 'main', 'res')
 NL = chr(10)
 
 # Glyph geometry (108 viewport), same as render3.py
