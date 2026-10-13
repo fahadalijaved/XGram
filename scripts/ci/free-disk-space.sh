@@ -65,3 +65,16 @@ fi
 
 log "Disk after:"
 df -h / >&2 || true
+
+# Private-repo runners have 2 CPUs and 7 GB RAM. A release build runs R8, aapt2 and the native compiler at the same
+# time, which ran out of memory and got the runner killed. Extra swap lets it finish (slower, but it finishes).
+swap_gb=${XGRAM_SWAP_GB:-8}
+if ((swap_gb > 0)) && [[ ! -e /xgram-swapfile ]]; then
+  log "Adding ${swap_gb} GB of swap"
+  if sudo fallocate -l "${swap_gb}G" /xgram-swapfile && sudo chmod 600 /xgram-swapfile &&
+    sudo mkswap /xgram-swapfile > /dev/null && sudo swapon /xgram-swapfile; then
+    free -h >&2 || true
+  else
+    warn "Could not add swap; the build may run out of memory."
+  fi
+fi
