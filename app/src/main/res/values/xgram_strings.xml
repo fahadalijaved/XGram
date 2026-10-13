@@ -529,4 +529,18 @@
   <string name="xgram_login_QrEnded">The QR login ended. Try again.</string>
   <string name="xgram_login_QrInstead">Log in with phone number instead</string>
   <string name="xgram_login_QrDuplicateAccount">This account is already added. Switched to it.</string>
+  <string name="xgram_login_NextCodeSms">Get the code by SMS</string>
+  <string name="xgram_login_NextCodeCall">Get the code by phone call</string>
+  <string name="xgram_login_NextCodeMissedCall">Get the code by missed call</string>
+  <string name="xgram_login_NextCodeFragment">Get the code on Fragment</string>
+  <string name="xgram_login_NextCodeTelegram">Get the code in Telegram</string>
+  <string name="xgram_login_NextCodeOther">Get the code another way</string>
+  <string name="xgram_login_NextCodeIn">%1$s in %2$s</string>
+  <string name="xgram_login_SendNewCode">Send a new code</string>
+  <string name="xgram_login_PhoneCodeExpired">This code has expired. Tap “Send a new code” to get another one.</string>
+  <string name="xgram_login_PhoneCodeExpiredBack">This code has expired. Go back and enter your phone number again.</string>
+  <string name="xgram_login_PhoneCodeSent">New code sent.</string>
+  <string name="xgram_login_NoCodeWait">When the timer ends, you can ask for the code another way. You can also log in with a QR code from a phone where you are already logged in.</string>
+  <string name="xgram_login_NoCodeHelp">Telegram has no other way to send this code right now. Log in with a QR code from a phone where you are already logged in, or ask Telegram support for help.</string>
+  <string name="xgram_login_EmailSupport">Email Telegram support</string>
 </resources>

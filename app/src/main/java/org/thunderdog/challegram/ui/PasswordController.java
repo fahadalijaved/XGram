@@ -227,6 +227,14 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     this.authState = args.authState;
     this.formattedPhone = args.phoneNumber;
     this.confirmDelegate = args.confirmDelegate;
+    fillPhoneFromAuthState(); // XGram
+  }
+
+  // XGram: after a cold start the number typed on the phone screen is gone, so hints read "****". TDLib still knows it.
+  private void fillPhoneFromAuthState () {
+    if (mode == MODE_CODE && StringUtils.isEmpty(formattedPhone)) {
+      formattedPhone = com.fahadali.xgram.login.PhoneCodeLinks.formatPhone(authState);
+    }
   }
 
   public interface CustomConfirmDelegate {
@@ -590,7 +598,11 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       case MODE_CODE:
       case MODE_CODE_CHANGE:
       case MODE_CODE_PHONE_CONFIRM: {
-        if (hasNextCodeType()) {
+        if (mode == MODE_CODE) {
+          // XGram: the next code type with a countdown, a help sheet when there is none, and a new code after it expires
+          phoneCodeLinks = newPhoneCodeLinks((TdApi.AuthorizationStateWaitCode) authState);
+          phoneCodeLinks.refresh();
+        } else if (hasNextCodeType()) {
           forgotView.setText(Lang.getString(R.string.DidNotGetTheCode));
         }
         hint = getCodeHint(((TdApi.AuthorizationStateWaitCode) authState).codeInfo.type, formattedPhone);
@@ -845,7 +857,11 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     runOnUiThreadOptional(() -> {
       this.authState = authorizationState;
       this.isFirebaseSmsSent = false;
+      fillPhoneFromAuthState(); // XGram
       updateAuthState(true);
+      if (phoneCodeLinks != null) { // XGram: a new WaitCode after a resend restarts the countdown
+        phoneCodeLinks.onStateChanged(authorizationState);
+      }
       // XGram: TDLib sends WaitEmailCode again after a resend or a reset request, and MainActivity keeps this screen, so refresh it here
       if (emailCodeLinks != null && emailCodeLinks.onStateChanged(authorizationState)) {
         setHintText(emailCodeLinks.buildHint(), false);
@@ -883,6 +899,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
         return Strings.replaceBoldTokens(Lang.getString(R.string.SentAppCode), ColorId.textLight);
       }
       case TdApi.AuthenticationCodeTypeSms.CONSTRUCTOR:
+      case TdApi.AuthenticationCodeTypeFirebaseIos.CONSTRUCTOR: // XGram: an SMS hint instead of a crash
       case TdApi.AuthenticationCodeTypeFirebaseAndroid.CONSTRUCTOR: {
         int resId = R.string.SentSmsCode;
         if (type.getConstructor() == TdApi.AuthenticationCodeTypeFirebaseAndroid.CONSTRUCTOR && !isFirebaseSmsSent) {
@@ -928,7 +945,6 @@ public class PasswordController extends ViewController<PasswordController.Args> 
         }
         return b;
       }
-      case TdApi.AuthenticationCodeTypeFirebaseIos.CONSTRUCTOR: // unreachable
       default:
         Td.assertAuthenticationCodeType_6b7089f4();
         break;
@@ -1153,9 +1169,10 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   private void updateAuthState (boolean typeChanged) {
     TdApi.AuthenticationCodeType authenticationCodeType = authenticationCodeType();
     if (authenticationCodeType != null) {
-      hintView.setText(getCodeHint(authenticationCodeType, formattedPhone));
-      if (!hasNextCodeType()) {
-        setForgetText(null);
+      setHint(getCodeHint(authenticationCodeType, formattedPhone), false); // XGram: a new state clears the red error look
+      // XGram: on the login screen PhoneCodeLinks owns the link; elsewhere bring "Didn't get the code?" back when a next type appears
+      if (phoneCodeLinks == null) {
+        setForgetText(hasNextCodeType() ? Lang.getString(R.string.DidNotGetTheCode) : null);
       }
       if (typeChanged) {
         updateAuthInputType();
@@ -1179,12 +1196,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
           ((Spannable) message).setSpan(new NoUnderlineClickableSpan() {
             @Override
             public void onClick (@NonNull View widget) {
-              Intents.sendEmail(
-                Lang.getStringSecure(R.string.email_SmsHelp),
-                Lang.getStringSecure(R.string.email_LoginDeadEnd_subject, formattedPhone),
-                Lang.getStringSecure(R.string.email_LoginDeadEnd_text, formattedPhone, U.getUsefulMetadata(tdlib)),
-                StringUtils.isEmpty(lastVerificationError) ? "none" : lastVerificationError
-              );
+              sendLoginHelpEmail(); // XGram: shared with the "Didn't get the code?" sheet
             }
           }, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
           break;
@@ -1192,6 +1204,15 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       }
     }
     setHint(message, true);
+  }
+
+  private void sendLoginHelpEmail () {
+    Intents.sendEmail(
+      Lang.getStringSecure(R.string.email_SmsHelp),
+      Lang.getStringSecure(R.string.email_LoginDeadEnd_subject, formattedPhone),
+      Lang.getStringSecure(R.string.email_LoginDeadEnd_text, formattedPhone, U.getUsefulMetadata(tdlib)),
+      StringUtils.isEmpty(lastVerificationError) ? "none" : lastVerificationError
+    );
   }
 
   private void requestNextCodeType (TdApi.ResendCodeReason reason, boolean force) {
@@ -1231,6 +1252,10 @@ public class PasswordController extends ViewController<PasswordController.Args> 
           break;
         }
         case TdApi.AuthenticationCodeInfo.CONSTRUCTOR: {
+          // XGram: only ResendPhoneNumberCode answers with code info; a login resend answers Ok and a new state follows
+          if (mode != MODE_CODE_CHANGE && mode != MODE_CODE_PHONE_CONFIRM) {
+            break;
+          }
           ((TdApi.AuthorizationStateWaitCode) authState).codeInfo = (TdApi.AuthenticationCodeInfo) object;
           isFirebaseSmsSent = false;
           updateAuthState(true);
@@ -1769,6 +1794,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
             break;
           }
           case TdApi.Error.CONSTRUCTOR: {
+            if (mode == MODE_CODE && phoneCodeLinks != null && phoneCodeLinks.onCodeCheckError((TdApi.Error) object)) {
+              break; // XGram: expired code, the link now offers a new one
+            }
             setHintText(mode == MODE_CODE_EMAIL ? com.fahadali.xgram.login.EmailLoginErrors.toString(object) : TD.toErrorString(object), true); // XGram: plain email-login errors
             break;
           }
@@ -2016,12 +2044,65 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     }, fromEmailSetup, state);
   }
 
+  // XGram: link of the phone-code login screen, see com.fahadali.xgram.login.PhoneCodeLinks
+  private @Nullable com.fahadali.xgram.login.PhoneCodeLinks phoneCodeLinks;
+
+  private com.fahadali.xgram.login.PhoneCodeLinks newPhoneCodeLinks (TdApi.AuthorizationStateWaitCode state) {
+    return new com.fahadali.xgram.login.PhoneCodeLinks(this, tdlib, new com.fahadali.xgram.login.PhoneCodeLinks.Host() {
+      @Override
+      public void setLinkText (@Nullable CharSequence text) {
+        setForgetText(text);
+      }
+
+      @Override
+      public void setHintText (@NonNull CharSequence text, boolean isError) {
+        PasswordController.this.setHintText(text, isError);
+      }
+
+      @Override
+      public void setLinkInProgress (boolean inProgress) {
+        setInRecoveryProgress(inProgress);
+      }
+
+      @NonNull
+      @Override
+      public View linkView () {
+        return forgotView;
+      }
+
+      @Override
+      public boolean isBusy () {
+        return inProgress || inRecoveryProgress || qrLoginInProgress;
+      }
+
+      @Override
+      public void requestNextCode () {
+        requestNextCodeType(new TdApi.ResendCodeReasonUserRequest(), false);
+      }
+
+      @Override
+      public void requestQrLogin () {
+        PasswordController.this.requestQrLogin();
+      }
+
+      @Override
+      public void emailSupport () {
+        sendLoginHelpEmail();
+      }
+    }, state);
+  }
+
   private void proceedForgot () {
     // XGram: the email-code screen has its own resend / reset menu
     if (mode == MODE_CODE_EMAIL && emailCodeLinks != null) {
       if (!inProgress) { // a second auth query would make TDLib abort the code check
         emailCodeLinks.onLinkClick();
       }
+      return;
+    }
+    // XGram: the phone-code login screen sends the next code type when the timer is over, or opens a help sheet
+    if (mode == MODE_CODE && phoneCodeLinks != null) {
+      phoneCodeLinks.onLinkClick();
       return;
     }
     switch (mode) {
@@ -2117,6 +2198,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     }
     if (emailCodeLinks != null) { // XGram
       emailCodeLinks.destroy();
+    }
+    if (phoneCodeLinks != null) { // XGram
+      phoneCodeLinks.destroy();
     }
   }
 
