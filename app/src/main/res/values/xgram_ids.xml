@@ -151,6 +151,8 @@
   <item type="id" name="btn_xgramGhostScheduleSend" />
   <item type="id" name="btn_xgramGhostSilent" />
   <item type="id" name="btn_xgramCopyPhoto" />
+  <item type="id" name="btn_xgramQuote" />
+  <item type="id" name="btn_xgramQuoteReply" />
   <item type="id" name="btn_xgramForwardWithoutAuthor" />
   <item type="id" name="btn_xgramAboutVersion" />
   <item type="id" name="btn_xgramAboutBasedOn" />

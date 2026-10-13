@@ -206,6 +206,10 @@
   <string name="XgramFixLinkPreviews">Fix link previews</string>
   <string name="XgramFixLinkPreviewsInfo">Links to posts on X, Instagram, TikTok, Reddit, Bluesky and Pixiv that you send get their preview from an embed-friendly mirror, such as fixupx.com for X. The link in your message stays the same.</string>
   <string name="XgramReplyPrivately">Reply privately</string>
+  <string name="XgramQuote">Quote</string>
+  <string name="XgramQuoteSelectHint">Select the part to quote</string>
+  <string name="XgramQuoteReply">Reply with quote</string>
+  <string name="XgramQuoteTooLong">Quotes can be up to %1$d characters, so the end was cut</string>
   <string name="XgramMaterialYou">Material You theme</string>
   <string name="XgramAllowScreenshots">Allow screenshots in protected chats</string>
   <string name="XgramSaveProtected">Allow saving protected content</string>

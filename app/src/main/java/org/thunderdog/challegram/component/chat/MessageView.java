@@ -829,6 +829,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
         ids.append(R.id.btn_messageReply);
         strings.append(R.string.Reply);
         icons.append(R.drawable.baseline_reply_24);
+        com.fahadali.xgram.chats.XgramQuote.fill(msg, ids, icons, strings); // XGram: reply quoting part of the text
       }
 
       if (msg.canBeForwarded() && isSent) {

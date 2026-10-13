@@ -69,6 +69,7 @@ public final class XgramMessageMenu {
     new Option("delete", R.string.Delete, R.drawable.baseline_delete_24, false, R.id.btn_messageDelete),
     new Option("more", R.string.MoreMessageOptions, R.drawable.baseline_more_horiz_24, false, R.id.btn_messageMore),
     // XGram
+    new Option("quote", R.string.XgramQuote, R.drawable.baseline_format_quote_close_24, true, R.id.btn_xgramQuote),
     new Option("details", R.string.XgramMessageDetails, R.drawable.baseline_info_24, true, R.id.btn_xgramMessageDetails),
     new Option("read_up_to_here", R.string.XgramReadUpToHere, R.drawable.baseline_done_all_24, true, R.id.btn_xgramReadUpToHere),
     new Option("save_to_saved", R.string.XgramSaveToSaved, R.drawable.baseline_bookmark_24, true, R.id.btn_xgramSaveToSaved),

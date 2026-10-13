@@ -6023,6 +6023,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
           }
         }));
         return true;
+      } else if (id == R.id.btn_xgramQuote) { // XGram: reply quoting part of the text
+        cancelSheduledKeyboardOpeningAndHideAllKeyboards();
+        com.fahadali.xgram.chats.XgramQuote.open(this, selectedMessage);
+        return true;
       } else if (id == R.id.btn_messageReplies) {
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
         selectedMessage.openMessageThread();
