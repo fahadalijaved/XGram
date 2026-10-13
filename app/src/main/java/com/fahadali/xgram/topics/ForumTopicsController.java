@@ -242,6 +242,8 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     headerCell = new ChatHeaderView(context, tdlib, this);
     headerCell.setCallback(this);
     headerCell.initWithController(this, true);
+    // Room for both header buttons (search and more): the chat header leaves room for one, so long titles ran under search.
+    headerCell.setInnerMargins(Screen.dp(56f), Screen.dp(49f) * 2);
     headerCell.xgramHideChatActions(); // as in Telegram: who is typing shows in the topic rows, not over the whole list
     headerCell.setChat(tdlib, chat, null);
 
