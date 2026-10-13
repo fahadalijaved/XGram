@@ -135,6 +135,13 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     return list != null && !list.isDestroyed ? list.find(forumTopicId) : null;
   }
 
+  /** True while a cached, live list of the chat holds all of its topics: its sum is then the forum's badge. */
+  @UiThread
+  public static boolean isFullyLoaded (Tdlib tdlib, long chatId) {
+    ForumTopicList list = cache.get(tdlib.id() + "_" + chatId);
+    return list != null && !list.isDestroyed && list.isLoaded && list.endReached && !list.loadFailed;
+  }
+
   private static void trimCache () {
     Iterator<ForumTopicList> it = cache.values().iterator();
     while (cache.size() > CACHE_SIZE && it.hasNext()) {
@@ -367,6 +374,18 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     int sum = 0;
     for (TdApi.ForumTopic topic : topics) {
       sum += Math.max(0, topic.unreadCount);
+    }
+    if (!endReached) {
+      // Only some pages are loaded: their sum leaves out the topics further down. It may raise the badge, never lower
+      // it; a lower sum has the badge counted from a bigger page instead (throttled).
+      int current = XgramForumUnread.current(tdlib, chatId);
+      if (current == -1) {
+        return;
+      }
+      if (sum < current) {
+        XgramForumUnread.refresh(tdlib, chatId);
+        return;
+      }
     }
     XgramForumUnread.update(tdlib, chatId, sum);
   }
@@ -653,19 +672,22 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
    * {@link #RESYNC_INTERVAL_MS}): the way to follow a reorder made on another device, which TDLib doesn't report.
    */
   @UiThread
-  public void resyncFirstPage () {
-    resyncFirstPage(false);
+  public boolean resyncFirstPage () {
+    return resyncFirstPage(false);
   }
 
-  /** As {@link #resyncFirstPage()}; {@code force} skips the throttle, e.g. to undo a reorder the server refused. */
+  /**
+   * As {@link #resyncFirstPage()}; {@code force} skips the throttle, e.g. to undo a reorder the server refused.
+   * Returns whether the page was asked for.
+   */
   @UiThread
-  public void resyncFirstPage (boolean force) {
-    if (isDestroyed || !isLoaded) {
-      return;
+  public boolean resyncFirstPage (boolean force) {
+    if (isDestroyed || !isLoaded || loadFailed) {
+      return false;
     }
     long now = android.os.SystemClock.uptimeMillis();
     if (!force && lastResyncAt != 0 && now - lastResyncAt < RESYNC_INTERVAL_MS) {
-      return;
+      return false;
     }
     lastResyncAt = now;
     final int requestedReorderVersion = localReorderVersion;
@@ -675,6 +697,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       }
       applyFirstPage(result, requestedReorderVersion);
     }));
+    return true;
   }
 
   /**
@@ -743,14 +766,56 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   /** Fetches the real counters of every topic that looks unread (batched with other refreshes). */
   @UiThread
   public void refreshUnreadTopics () {
+    refreshUnreadTopics(0);
+  }
+
+  /** As {@link #refreshUnreadTopics()}, for the topics from {@code fromIndex} on. */
+  @UiThread
+  private void refreshUnreadTopics (int fromIndex) {
     if (isDestroyed) {
       return;
     }
-    for (TdApi.ForumTopic topic : topics) {
+    for (int i = Math.max(0, fromIndex); i < topics.size(); i++) {
+      TdApi.ForumTopic topic = topics.get(i);
       if (topic.unreadCount > 0 || topic.unreadMentionCount > 0 || topic.unreadReactionCount > 0) {
         scheduleRefresh(topic.info.forumTopicId);
       }
     }
+  }
+
+  /**
+   * A screen shows this list again (a cached list reused, or the topic list back in front): what changed meanwhile
+   * without an update, such as the order, last messages and counters, is fetched again. The first page comes in one
+   * request (throttled); unread topics below it are refreshed one by one.
+   */
+  @UiThread
+  public void refreshOnReturn () {
+    if (isDestroyed || !isLoaded) {
+      return;
+    }
+    int firstPage = firstPageLimit();
+    boolean resynced = resyncFirstPage();
+    refreshUnreadTopics(resynced ? firstPage : 0);
+  }
+
+  @Override
+  public void onChatTopMessageChanged (long chatId, @Nullable TdApi.Message topMessage) {
+    // The chat's last message moved without a new message for this list, e.g. after a gap was filled on reconnect,
+    // or the last message was deleted: its topic's last message and order may be stale.
+    if (topMessage == null || topMessage.sendingState != null) {
+      return; // messages being sent show at once through onNewMessage
+    }
+    int forumTopicId = forumTopicId(topMessage.topicId);
+    long messageId = topMessage.id;
+    tdlib.ui().post(() -> {
+      if (isDestroyed) {
+        return;
+      }
+      TdApi.ForumTopic topic = find(forumTopicId);
+      if (topic != null && (topic.lastMessage == null || topic.lastMessage.id < messageId)) {
+        scheduleRefresh(forumTopicId);
+      }
+    });
   }
 
   @Override

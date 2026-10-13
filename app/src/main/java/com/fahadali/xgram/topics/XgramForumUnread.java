@@ -11,6 +11,11 @@
  */
 package com.fahadali.xgram.topics;
 
+import android.os.SystemClock;
+
+import androidx.annotation.Nullable;
+import androidx.annotation.UiThread;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.telegram.Tdlib;
 
@@ -92,6 +97,81 @@ public final class XgramForumUnread {
     }
   }
 
+  /** The badge XGram shows for the forum, or TDLib's count when XGram hasn't counted it yet; -1 if the chat is unknown. */
+  public static int current (Tdlib tdlib, long chatId) {
+    Integer count = counts.get(key(tdlib, chatId));
+    if (count != null) {
+      return count;
+    }
+    TdApi.Chat chat = tdlib.chat(chatId);
+    return chat != null ? chat.unreadCount : -1;
+  }
+
+  /** {@code GetForumTopics} always asks the server, so a forum's badge is counted again at most this often. */
+  private static final long REFRESH_DELAY_MS = 5000;
+  /** Read positions of topics in forums whose badge XGram counts, by account_chat_topic. */
+  private static final Map<String, Long> readIds = new ConcurrentHashMap<>();
+  private static final Set<String> refreshPending = ConcurrentHashMap.newKeySet();
+  private static final Map<String, Long> lastRefreshAt = new ConcurrentHashMap<>();
+
+  /**
+   * TDLib thread, {@code updateForumTopic}, before TDLib's topic cache takes it ({@code previous} is the cached topic,
+   * if any): a topic read here, from a notification or on another device lowers the badge of a forum whose list isn't
+   * open. Only a moved read position counts, so the refresh's own updates can't loop.
+   */
+  public static void onTopicUpdate (Tdlib tdlib, TdApi.UpdateForumTopic update, @Nullable TdApi.ForumTopic previous) {
+    String key = key(tdlib, update.chatId);
+    if (!counts.containsKey(key)) {
+      return;
+    }
+    String topicKey = key + "_" + update.forumTopicId;
+    Long known = readIds.put(topicKey, update.lastReadInboxMessageId);
+    long previousRead = previous != null ? previous.lastReadInboxMessageId : known != null ? known : -1;
+    if (previousRead != update.lastReadInboxMessageId) {
+      long chatId = update.chatId;
+      tdlib.ui().post(() -> refresh(tdlib, chatId));
+    }
+  }
+
+  /**
+   * Counts the forum's topics again from the server, at least {@link #REFRESH_DELAY_MS} after the call and after the
+   * last count, one request for all calls in between. Skipped while a fully loaded topic list keeps the badge itself.
+   */
+  @UiThread
+  public static void refresh (Tdlib tdlib, long chatId) {
+    String key = key(tdlib, chatId);
+    if (!refreshPending.add(key)) {
+      return;
+    }
+    long now = SystemClock.uptimeMillis();
+    Long last = lastRefreshAt.get(key);
+    long delay = Math.max(REFRESH_DELAY_MS, last != null ? last + REFRESH_DELAY_MS - now : 0);
+    tdlib.ui().postDelayed(() -> {
+      refreshPending.remove(key);
+      if (ForumTopicList.isFullyLoaded(tdlib, chatId) || !tdlib.isForum(chatId)) {
+        return;
+      }
+      lastRefreshAt.put(key, SystemClock.uptimeMillis());
+      tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> {
+        if (topics == null) {
+          return;
+        }
+        int sum = 0;
+        for (TdApi.ForumTopic topic : topics.topics) {
+          readIds.put(key + "_" + topic.info.forumTopicId, topic.lastReadInboxMessageId);
+          sum += XgramForums.normalizeUnread(tdlib, topic).unreadCount;
+        }
+        final int unreadCount = sum;
+        tdlib.ui().post(() -> {
+          // A list that finished loading meanwhile knows more than these 100 topics.
+          if (!ForumTopicList.isFullyLoaded(tdlib, chatId)) {
+            update(tdlib, chatId, unreadCount);
+          }
+        });
+      });
+    }, delay);
+  }
+
   /** Chat list: counts the topics of a forum with unread messages once, so its badge is right without opening it. */
   public static void requestIfNeeded (Tdlib tdlib, TdApi.Chat chat) {
     if (chat.unreadCount <= 0) {
@@ -121,5 +201,7 @@ public final class XgramForumUnread {
     com.fahadali.xgram.XgramAccountData.removeKeys(counts.keySet(), prefix);
     com.fahadali.xgram.XgramAccountData.removeKeys(tdlibCounts.keySet(), prefix);
     com.fahadali.xgram.XgramAccountData.removeKeys(requested, prefix);
+    com.fahadali.xgram.XgramAccountData.removeKeys(readIds.keySet(), prefix);
+    com.fahadali.xgram.XgramAccountData.removeKeys(lastRefreshAt.keySet(), prefix);
   }
 }

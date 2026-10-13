@@ -276,6 +276,9 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       list.addListener(this);
       if (!list.isLoaded()) {
         list.loadMore();
+      } else {
+        // A cached list: it missed what happened while nothing showed it (e.g. the app was in the background).
+        list.resyncFirstPage();
       }
     }
     return list;
@@ -289,7 +292,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     // Counters may have changed while a topic was open (TDLib doesn't report every topic's unread count). The list
     // was just loaded on the first focus, so that refresh would only add work right after the slide in.
     if (xgramFocusedOnce && list != null && list.isLoaded()) {
-      list.refreshUnreadTopics();
+      list.refreshOnReturn();
     }
     xgramFocusedOnce = true;
   }

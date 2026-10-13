@@ -129,6 +129,9 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       list.addListener(this);
       if (!list.isLoaded()) {
         list.loadMore();
+      } else {
+        // A cached list may be stale (updates don't carry order or last messages): fetch its first page again.
+        list.resyncFirstPage();
       }
       adapter.notifyDataSetChanged();
       scrollToSelected(false);

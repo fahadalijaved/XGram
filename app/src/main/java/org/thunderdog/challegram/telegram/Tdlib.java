@@ -8505,6 +8505,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   private void updateForumTopic (TdApi.UpdateForumTopic update) {
     com.fahadali.xgram.topics.XgramTopicReadOutbox.set(this, update.chatId, update.forumTopicId, update.lastReadOutboxMessageId); // XGram: ticks inside topics
     com.fahadali.xgram.topics.XgramTopicMute.onSettings(this, update.chatId, update.forumTopicId, update.notificationSettings); // XGram: topic mute for notifications
+    TdlibForumTopicManager.Entry xgramPrevious = topics.find(new TdlibForumTopicManager.Key(update.chatId, update.forumTopicId)); // XGram: read before it is replaced
+    com.fahadali.xgram.topics.XgramForumUnread.onTopicUpdate(this, update, xgramPrevious != null ? xgramPrevious.value : null); // XGram: a read topic lowers the forum badge
     topics.updateForumTopic(update);
     listeners.updateForumTopic(update);
   }
