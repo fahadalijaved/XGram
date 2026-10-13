@@ -10,16 +10,16 @@ messages, and plenty of small tools and looks.
 XGram is not affiliated with Telegram or with the Telegram X team.
 
 <p align="center">
-  <img src=".github/assets/screens/xgram-settings.png" width="23%" alt="XGram settings">
-  <img src=".github/assets/screens/topics.png" width="23%" alt="Forum topics">
-  <img src=".github/assets/screens/icon-packs.png" width="23%" alt="Icon packs">
-  <img src=".github/assets/screens/app-icons.png" width="23%" alt="App icons">
+  <img src=".github/assets/features.png" alt="XGram features: ghost mode, message history, communities, forum topics, icon sets, 16 app icons, in-app updates, QR login, two-pane layout, bookmarks, clean links and Material You">
 </p>
 
 ## Download
 
-Builds are posted to the **XGram CI** channel on Telegram, and the **XGram** group is the place for questions, bug
-reports and ideas. <!-- add the t.me links here -->
+- **Stable:** the [Updates](https://t.me/XGramTD/3) topic of the [XGram group](https://t.me/XGramTD) on Telegram.
+- **CI builds:** the [XGram CI](https://t.me/XGramci) channel, built from the latest commits every other day.
+
+XGram can update itself: pick Stable or CI builds in Settings → XGram → Updates. The group is also the place for
+questions, bug reports and ideas.
 
 XGram needs Android 7.0 or newer. Every build post lists the SHA-256 of its APK, so you can check what you install.
 
@@ -31,6 +31,7 @@ XGram needs Android 7.0 or newer. Every build post lists the SHA-256 of its APK,
 - Every topic has its own profile: icon, name, link, notifications and media.
 - Create, rename, close, hide and mute topics; share or forward straight into one.
 - Telegram communities show as one row in the chat list, with the community's photo and a page listing its chats.
+- Pending join requests show on the topic list too, so admins of topic groups see them.
 
 **Privacy**
 - Ghost mode: no read receipts, no typing, stay offline, mark as read only when you reply. There's a Quick Settings tile too.
@@ -46,6 +47,8 @@ XGram needs Android 7.0 or newer. Every build post lists the SHA-256 of its APK,
 - A message menu you can trim, with Repeat, Save to Saved Messages, Copy photo, Reply privately and exact dates and IDs.
 - Telegram's own AI tools (summarize, fix spelling, rewrite, translate) where Telegram offers them on your account.
 - Pull up at the end of a channel for the next unread one.
+- Choose which buttons the message box shows (bot commands, scheduled, camera, voice and video), and optionally tap
+  the microphone to start recording instead of holding it.
 - Tracking parameters removed from links you open, and working previews for X, Instagram, TikTok, Reddit and Bluesky posts you send.
 
 **Looks**
@@ -54,8 +57,15 @@ XGram needs Android 7.0 or newer. Every build post lists the SHA-256 of its APK,
 - Chat look: sticker and emoji size, bubble corners and a bubble tail.
 - Chat list and chat side by side on unfolded foldables and tablets.
 
+<p align="center">
+  <img src=".github/assets/make-it-yours.png" alt="Six app icon styles, Neon, Turbo, Retro, Pixel, Origami and Stardust, each with its own chat wallpaper, plus ten color icons that each bring a theme">
+</p>
+
 **Tools**
 - Search across all XGram settings; back them up and restore them.
+- Updates inside the app, Stable or CI builds, with the changelog and a SHA-256 check.
+- Sign in with a QR code you can open, save or share, so a second device isn't needed; email login codes.
+- Download boost: files you tap jump the queue and videos load further ahead.
 - Proxy rules (off on VPN, Wi-Fi or mobile data), chat export to HTML or text, unblock everyone at once.
 
 ## Building
