@@ -63,6 +63,8 @@ public final class XgramUpdates {
 
   public static final String STABLE_GROUP = "XGramTD", CI_CHANNEL = "XGramci";
   public static final int STABLE_TOPIC_ID = 3;
+  /** The bot that posts the APKs (tools/xgram/telegram/xgram_bot.py). */
+  private static final String BOT_USERNAME = "XGramcibot";
 
   private static final String KEY_CHANNEL = "xgram_update_channel"; // a setting (exported by XgramBackup)
   private static final String KEY_LAST_CHECK = "xgram_update_last_check"; // local state, not exported
@@ -226,6 +228,11 @@ public final class XgramUpdates {
       checkedThisProcess = true;
       List<Source> sources = sources(channel);
       new Search(tdlib, sources, (found, error) -> {
+        if (channel() != channel) {
+          // The channel changed during the check: check the new one instead (nothing when it is Off).
+          find(tdlib, onDone);
+          return;
+        }
         onCheckDone(found, error);
         if (error != null) {
           Log.w("XGram update check failed: %s", error);
@@ -343,7 +350,7 @@ public final class XgramUpdates {
     }
 
     private boolean isTrustedSender (TdApi.Message message) {
-      // Channel posts come from the channel's admins. In the group, only the bot (or the group itself) counts.
+      // Channel posts come from the channel's admins. In the group, only XGram's bot (or the group itself) counts.
       if (message.isChannelPost) {
         return true;
       }
@@ -351,7 +358,11 @@ public final class XgramUpdates {
       if (sender instanceof TdApi.MessageSenderChat) {
         return ((TdApi.MessageSenderChat) sender).chatId == message.chatId;
       }
-      return tdlib.cache().senderBot(sender);
+      if (!tdlib.cache().senderBot(sender)) {
+        return false;
+      }
+      String username = tdlib.cache().userUsername(((TdApi.MessageSenderUser) sender).userId);
+      return BOT_USERNAME.equalsIgnoreCase(username);
     }
 
     private void sourceDone () {
@@ -382,17 +393,19 @@ public final class XgramUpdates {
     }
 
     private @Nullable String findChangelog (TdApi.Message[] messages, Found found) {
-      String heading = "XGram " + found.versionName + " · ";
-      for (TdApi.Message message : messages) {
-        if (message.content.getConstructor() != TdApi.MessageText.CONSTRUCTOR || !isTrustedSender(message)) {
+      TdApi.MessageDocument post = (TdApi.MessageDocument) found.message.content;
+      String heading = firstLine(post.caption != null ? post.caption.text : "");
+      // Newest come first: walk forward from the post, so the nearest notes win.
+      for (int i = messages.length - 1; i >= 0; i--) {
+        TdApi.Message message = messages[i];
+        if (message.id <= found.message.id || message.content.getConstructor() != TdApi.MessageText.CONSTRUCTOR || !isTrustedSender(message)) {
           continue;
         }
         String text = ((TdApi.MessageText) message.content).text.text;
         // The bot replies to the first APK of a release, which may be another ABI's: the heading finds that one.
         boolean isReply = message.replyTo instanceof TdApi.MessageReplyToMessage &&
           ((TdApi.MessageReplyToMessage) message.replyTo).messageId == found.message.id;
-        boolean isNotes = text.contains(heading) && text.contains("what's new");
-        if (isReply || isNotes) {
+        if (isReply || isNotesFor(firstLine(text), heading)) {
           return stripHeading(text);
         }
       }
@@ -428,6 +441,9 @@ public final class XgramUpdates {
     }
 
     boolean matchesThisBuild () {
+      if (!BuildConfig.LATEST_FLAVOR) {
+        return false; // only the latest-SDK APKs are posted; legacy builds can't take them
+      }
       if (BuildConfig.ARM64_FLAVOR) {
         return "arm64-v8a".equals(abi);
       }
@@ -470,6 +486,19 @@ public final class XgramUpdates {
 
   static boolean isStableCaption (String caption) {
     return firstLine(caption).contains("· Stable");
+  }
+
+  /**
+   * Whether "📦 XGram 1.0 · Stable: what's new" is the notes line for the caption heading "📦 XGram 1.0 · Stable · arm64-v8a"
+   * (or "… · Stable" for the universal APK). The heading carries the release name, which may differ from the file's version.
+   */
+  static boolean isNotesFor (String notesLine, String captionHeading) {
+    final String suffix = ": what's new";
+    if (!notesLine.endsWith(suffix) || StringUtils.isEmpty(captionHeading)) {
+      return false;
+    }
+    String prefix = notesLine.substring(0, notesLine.length() - suffix.length());
+    return !prefix.isEmpty() && (captionHeading.equals(prefix) || captionHeading.startsWith(prefix + " · "));
   }
 
   /** The 64 hex digits after "SHA-256:", lower case, or null. */
