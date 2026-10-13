@@ -1118,6 +1118,8 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     }
   }
 
+  private boolean authRestartRetry; // XGram: the current request is the one automatic retry after AUTH_RESTART
+
   private boolean makeRequest () {
     if (isInProgress() || inCountryMode) {
       return false;
@@ -1168,6 +1170,8 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     RunnableBool act = (tokenVerified) -> tdlib.awaitReadyOrWaitingForData(() -> {
       tdlib.client().send(function, object -> runOnUiThreadOptional(() -> {
         setInProgress(false);
+        boolean wasAuthRestartRetry = authRestartRetry; // XGram
+        authRestartRetry = false;
         switch (object.getConstructor()) {
           case TdApi.Ok.CONSTRUCTOR: {
             break;
@@ -1201,6 +1205,18 @@ public class PhoneController extends EditBaseController<Void> implements Setting
             break;
           }
           case TdApi.Error.CONSTRUCTOR: {
+            // XGram: AUTH_RESTART means the server dropped the login; send the phone number once more
+            if (mode == MODE_LOGIN && !wasAuthRestartRetry && com.fahadali.xgram.login.LoginErrors.is((TdApi.Error) object, com.fahadali.xgram.login.LoginErrors.AUTH_RESTART)) {
+              authRestartRetry = true;
+              boolean handled = makeRequest();
+              if (!isInProgress()) { // nothing was sent
+                authRestartRetry = false;
+                if (!handled) {
+                  showError(TD.toErrorString(object));
+                }
+              }
+              break;
+            }
             HelpInfo help = handleRichError(phone, (TdApi.Error) object);
             if (help != null) {
               CharSequence message = Lang.getMarkdownString(this, help.info, TD.toErrorString(help.error));
@@ -1282,7 +1298,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
         message = Lang.getString(R.string.email_BannedNumber_text, phoneNumber) + "\n\n" + tdlib.emailMetadata();
         break;
       default: {
-        if (mode != MODE_LOGIN)
+        if (mode != MODE_LOGIN || com.fahadali.xgram.login.LoginErrors.hasPlainText(error)) // XGram: these say what to do, no "contact us"
           return null;
         res = R.string.login_error;
         email = Lang.getStringSecure(R.string.email_SmsHelp);

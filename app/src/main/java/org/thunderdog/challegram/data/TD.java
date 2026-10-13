@@ -2557,6 +2557,9 @@ public class TD {
           if (error != null)
             return error;
         }
+        String loginError = com.fahadali.xgram.login.LoginErrors.translate(code, message); // XGram: plain login errors
+        if (loginError != null)
+          return loginError;
         res = 0;
         break;
       }

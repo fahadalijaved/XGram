@@ -543,4 +543,15 @@
   <string name="xgram_login_NoCodeWait">When the timer ends, you can ask for the code another way. You can also log in with a QR code from a phone where you are already logged in.</string>
   <string name="xgram_login_NoCodeHelp">Telegram has no other way to send this code right now. Log in with a QR code from a phone where you are already logged in, or ask Telegram support for help.</string>
   <string name="xgram_login_EmailSupport">Email Telegram support</string>
+  <string name="xgram_login_PhoneCodeExpiredShort">This code has expired. Ask for a new one.</string>
+  <string name="xgram_login_PhoneCodeEmpty">Enter the code.</string>
+  <string name="xgram_login_SendCodeUnavailable">Telegram can’t send the code another way right now. Try QR login.</string>
+  <string name="xgram_login_AuthRestart">The login had to start over. Try again.</string>
+  <string name="xgram_login_AuthRestartNewCode">The login had to start over. Sending a new code…</string>
+  <string name="xgram_login_PhoneNumberFlood">Too many login attempts with this number. Try again later.</string>
+  <string name="xgram_login_PhonePasswordFlood">Too many password attempts. Try again later.</string>
+  <string name="xgram_login_TaskAlreadyExists">This request was already sent. Wait for it to finish.</string>
+  <string name="xgram_login_VerificationFailed">Telegram couldn’t verify this app. Try QR login or another way to get the code.</string>
+  <string name="xgram_login_UpdateAppToLogin">Telegram has blocked logins from this app for now. Try QR login.</string>
+  <string name="xgram_login_PhoneNumberUnoccupied">No Telegram account uses this phone number.</string>
 </resources>

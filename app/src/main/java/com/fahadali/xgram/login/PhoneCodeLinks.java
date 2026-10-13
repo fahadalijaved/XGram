@@ -76,6 +76,8 @@ public final class PhoneCodeLinks implements Handler.Callback {
   private boolean resendUnavailable;
   private boolean inProgress;
   private boolean destroyed;
+  /** The phone number was already sent again after AUTH_RESTART for this state, so a second one doesn't loop. */
+  private boolean authRestartHandled;
 
   public PhoneCodeLinks (@NonNull ViewController<?> controller, @NonNull Tdlib tdlib, @NonNull Host host, @Nullable TdApi.AuthorizationStateWaitCode state) {
     this.controller = controller;
@@ -109,6 +111,7 @@ public final class PhoneCodeLinks implements Handler.Callback {
       this.stateReceivedAt = SystemClock.elapsedRealtime();
       this.codeExpired = false;
       this.resendUnavailable = false;
+      this.authRestartHandled = false;
       refresh();
       return;
     }
@@ -193,8 +196,11 @@ public final class PhoneCodeLinks implements Handler.Callback {
 
   // Actions
 
-  /** Handles a failed code check. Returns true when it was PHONE_CODE_EXPIRED and the error is already shown. */
+  /** Handles a failed code check. Returns true when it was PHONE_CODE_EXPIRED or AUTH_RESTART and the error is already shown. */
   public boolean onCodeCheckError (@Nullable TdApi.Error error) {
+    if (onAuthRestart(error)) {
+      return true;
+    }
     if (destroyed || state == null || error == null || !PHONE_CODE_EXPIRED.equals(error.message)) {
       return false;
     }
@@ -214,6 +220,9 @@ public final class PhoneCodeLinks implements Handler.Callback {
     if (destroyed || state == null || error == null) {
       return false;
     }
+    if (onAuthRestart(error)) {
+      return true;
+    }
     if (PHONE_CODE_EXPIRED.equals(error.message)) {
       codeExpired = true;
       resendUnavailable = true;
@@ -226,6 +235,28 @@ public final class PhoneCodeLinks implements Handler.Callback {
       refresh();
     }
     return false;
+  }
+
+  /**
+   * AUTH_RESTART: the server dropped this login, so the old code and the next type are gone. Sends the phone number
+   * again once, which starts a new login with a new code. A second AUTH_RESTART is shown as an error, and the link
+   * then sends the number again on tap.
+   */
+  private boolean onAuthRestart (@Nullable TdApi.Error error) {
+    if (destroyed || state == null || !LoginErrors.is(error, LoginErrors.AUTH_RESTART)) {
+      return false;
+    }
+    codeExpired = true;
+    resendUnavailable = true;
+    refresh();
+    if (authRestartHandled || inProgress) {
+      host.setHintText(Lang.getString(R.string.xgram_login_AuthRestart), true);
+      return true;
+    }
+    authRestartHandled = true;
+    host.setHintText(Lang.getString(R.string.xgram_login_AuthRestartNewCode), false);
+    sendPhoneNumberAgain();
+    return true;
   }
 
   /** The link under the code field was pressed. */
