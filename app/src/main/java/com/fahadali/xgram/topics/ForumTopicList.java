@@ -383,12 +383,22 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
         return;
       }
       if (sum < current) {
-        XgramForumUnread.refresh(tdlib, chatId);
+        // Once the badge is counted, the topics further down explain the difference until a loaded topic is read:
+        // counting again on every new message would send GetForumTopics(100) every few seconds in a busy forum.
+        // Reads elsewhere are caught by XgramForumUnread.onTopicUpdate.
+        if (!XgramForumUnread.isCounted(tdlib, chatId) || lastPartialSum == -1 || sum < lastPartialSum) {
+          XgramForumUnread.refresh(tdlib, chatId);
+        }
+        lastPartialSum = sum;
         return;
       }
     }
+    lastPartialSum = sum;
     XgramForumUnread.update(tdlib, chatId, sum);
   }
+
+  /** The last sum {@link #publishUnread()} saw, to tell a read among the loaded topics from new messages. */
+  private int lastPartialSum = -1;
 
   @UiThread
   private void putTopic (TdApi.ForumTopic topic) {
@@ -800,8 +810,8 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
 
   @Override
   public void onChatTopMessageChanged (long chatId, @Nullable TdApi.Message topMessage) {
-    // The chat's last message moved without a new message for this list, e.g. after a gap was filled on reconnect,
-    // or the last message was deleted: its topic's last message and order may be stale.
+    // The chat's last message moved without a new message for this list, e.g. after a gap was filled on reconnect:
+    // its topic's last message and order may be stale. (Deleted last messages are handled in onMessagesDeleted.)
     if (topMessage == null || topMessage.sendingState != null) {
       return; // messages being sent show at once through onNewMessage
     }

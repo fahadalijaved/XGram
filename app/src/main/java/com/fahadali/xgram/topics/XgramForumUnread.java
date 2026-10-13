@@ -107,6 +107,11 @@ public final class XgramForumUnread {
     return chat != null ? chat.unreadCount : -1;
   }
 
+  /** Whether XGram counts the forum's badge itself (TDLib's count is replaced). */
+  public static boolean isCounted (Tdlib tdlib, long chatId) {
+    return counts.containsKey(key(tdlib, chatId));
+  }
+
   /** {@code GetForumTopics} always asks the server, so a forum's badge is counted again at most this often. */
   private static final long REFRESH_DELAY_MS = 5000;
   /** Read positions of topics in forums whose badge XGram counts, by account_chat_topic. */
