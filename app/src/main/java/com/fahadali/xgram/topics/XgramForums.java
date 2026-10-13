@@ -31,6 +31,7 @@ import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.util.StringList;
 
 import me.vkryl.core.collection.IntList;
+import me.vkryl.core.lambda.FutureInt;
 import me.vkryl.core.lambda.RunnableData;
 import me.vkryl.core.lambda.RunnableLong;
 import tgx.td.MessageId;
@@ -253,8 +254,10 @@ public final class XgramForums {
   /**
    * Shows the topic name, with "in <group>" under it, when a chat screen is opened for a forum topic, and
    * passes the topic info to {@code onTopicInfo} (on the UI thread) once known.
+   * {@code currentTopic} returns the topic the screen shows now: info that arrives after the screen moved on
+   * to another chat or topic is dropped.
    */
-  public static void bindTopicHeader (ViewController<?> context, ChatHeaderView headerCell, TdApi.Chat chat, @Nullable TdApi.MessageTopic topicId, @Nullable RunnableData<TdApi.ForumTopicInfo> onTopicInfo) {
+  public static void bindTopicHeader (ViewController<?> context, ChatHeaderView headerCell, TdApi.Chat chat, @Nullable TdApi.MessageTopic topicId, FutureInt currentTopic, @Nullable RunnableData<TdApi.ForumTopicInfo> onTopicInfo) {
     if (chat == null) {
       // Telegram X builds an empty chat screen ahead of time, before any chat is opened.
       return;
@@ -276,7 +279,8 @@ public final class XgramForums {
     headerCell.xgramSetStatusTopic(chat.id, topicId);
     tdlib.topics().findOrRequest(new TdlibForumTopicManager.Key(chat.id, forumTopicId), (entry, inPlace) -> {
       Runnable act = () -> {
-        if (entry.value != null && !context.isDestroyed()) {
+        if (entry.value != null && !context.isDestroyed() &&
+          context.getChatId() == chat.id && currentTopic.getIntValue() == forumTopicId) {
           headerCell.setTitle(topicTitle(entry.value.info));
           if (onTopicInfo != null) {
             onTopicInfo.runWithData(entry.value.info);

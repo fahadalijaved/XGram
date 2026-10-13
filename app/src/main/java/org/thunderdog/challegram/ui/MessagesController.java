@@ -11092,8 +11092,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   // XGram: inside a forum topic the header shows the topic name and "in <group>".
   private void xgramBindTopicHeader () {
-    if (!(messageTopicId instanceof TdApi.MessageTopicForum)) {
+    // A new chat or tab starts open; the closed state of the previous topic must not linger when this topic's
+    // info arrives late (or never, after an error). The input bar follows once this topic's info is known.
+    if (xgramTopicClosedForMe) {
       xgramTopicClosedForMe = false;
+      if (chat != null) {
+        updateBottomBar(false);
+      }
     }
     // The cached topic list already has the topic (draft, counters) when opened from the list or the tabs.
     xgramForumTopic = xgramInForumTopic() ? com.fahadali.xgram.topics.ForumTopicList.peekTopic(tdlib, chat.id, xgramCurrentTab()) : null;
@@ -11105,7 +11110,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       } else if (xgramTopicIcon != null) {
         xgramTopicIcon.clear();
       }
-      com.fahadali.xgram.topics.XgramForums.bindTopicHeader(this, headerCell, chat, messageTopicId, this::xgramSetTopicInfo);
+      com.fahadali.xgram.topics.XgramForums.bindTopicHeader(this, headerCell, chat, messageTopicId, this::xgramCurrentTab, this::xgramSetTopicInfo);
     } else if (xgramTopicIcon != null) {
       xgramTopicIcon.clear();
     }
@@ -11394,8 +11399,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private boolean xgramTopicClosedForMe;
 
   private void xgramSetTopicInfo (TdApi.ForumTopicInfo info) {
-    if (chat != null && info.chatId == chat.id && xgramInForumTopic() && info.forumTopicId == xgramCurrentTab() &&
-      messageThread == null && previewMode == PREVIEW_MODE_NONE && headerCell != null) {
+    if (!xgramInForumTopic() || info.chatId != chat.id || info.forumTopicId != xgramCurrentTab()) {
+      return; // info for a topic this screen no longer shows (it arrived after a tab switch, or for a reused screen)
+    }
+    if (previewMode == PREVIEW_MODE_NONE && headerCell != null) {
       xgramTopicIcon().set(tdlib, info); // also after the topic's icon was edited
     }
     boolean closedForMe = com.fahadali.xgram.topics.XgramForums.isTopicClosedForMe(tdlib, chat, info);

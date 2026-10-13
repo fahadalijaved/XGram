@@ -53,6 +53,12 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
   private final MultipleViewProvider currentViews = new MultipleViewProvider();
   private final Counter counter, mentionCounter, reactionsCounter;
   private ForumTopicIconDrawable iconDrawable;
+  // What iconDrawable was built from. A rename arrives on the same ForumTopic object the row already holds,
+  // so comparing the new info with this.topic.info would never notice it.
+  private String iconName;
+  private int iconColor;
+  private long iconCustomEmojiId;
+  private boolean iconIsGeneral;
 
   private int currentWidth;
   private Text title;
@@ -81,9 +87,24 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
       .drawable(R.drawable.baseline_favorite_14, 16f, 0f, Gravity.CENTER)
       .callback(this)
       .build();
-    this.iconDrawable = new ForumTopicIconDrawable(topic.info);
+    buildIcon(topic.info);
     this.statusHelper = new TdlibStatusManager.Helper(context.context(), tdlib, this, context);
     setCounter(false);
+  }
+
+  private void buildIcon (TdApi.ForumTopicInfo info) {
+    iconDrawable = new ForumTopicIconDrawable(info);
+    iconName = info.name;
+    iconColor = info.icon != null ? info.icon.color : 0;
+    iconCustomEmojiId = info.icon != null ? info.icon.customEmojiId : 0;
+    iconIsGeneral = info.isGeneral;
+  }
+
+  private boolean iconMatches (TdApi.ForumTopicInfo info) {
+    return StringUtils.equalsOrBothEmpty(iconName, info.name) &&
+      iconColor == (info.icon != null ? info.icon.color : 0) &&
+      iconCustomEmojiId == (info.icon != null ? info.icon.customEmojiId : 0) &&
+      iconIsGeneral == info.isGeneral;
   }
 
   public long getChatId () {
@@ -100,14 +121,9 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
 
   /** Replaces the topic data; the list keeps rows for the same topic id. */
   public void setTopic (TdApi.ForumTopic topic) {
-    boolean iconChanged = this.topic.info.icon == null || topic.info.icon == null ||
-      this.topic.info.icon.color != topic.info.icon.color ||
-      this.topic.info.icon.customEmojiId != topic.info.icon.customEmojiId ||
-      !StringUtils.equalsOrBothEmpty(this.topic.info.name, topic.info.name) ||
-      this.topic.info.isGeneral != topic.info.isGeneral;
     this.topic = topic;
-    if (iconChanged) {
-      iconDrawable = new ForumTopicIconDrawable(topic.info);
+    if (!iconMatches(topic.info)) {
+      buildIcon(topic.info);
     }
     setCounter(needAnimateChanges());
     if (currentWidth > 0) {
