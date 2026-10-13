@@ -11322,12 +11322,31 @@ public class MessagesController extends ViewController<MessagesController.Argume
     final int forumTopicId = ((TdApi.MessageTopicForum) messageTopicId).forumTopicId;
     tdlib.send(new TdApi.GetForumTopic(chatId, forumTopicId), (topic, error) -> runOnUiThreadOptional(() -> {
       if (topic != null && xgramInForumTopic() && chat.id == chatId && ((TdApi.MessageTopicForum) messageTopicId).forumTopicId == forumTopicId) {
+        boolean firstLoad = xgramForumTopic == null;
         xgramForumTopic = com.fahadali.xgram.topics.XgramForums.normalizeUnread(tdlib, topic);
         xgramApplyTopicCounters(true);
         com.fahadali.xgram.topics.XgramTopicReadOutbox.set(tdlib, chatId, topic);
         xgramApplyTopicReadOutbox();
+        if (firstLoad && !Td.isEmpty(topic.draftMessage)) {
+          // XGram: opened without a cached topic (notification, link, tabs): the topic's draft was unknown when the input was filled.
+          xgramApplyTopicDraft(topic.draftMessage);
+        }
       }
     }));
+  }
+
+  // XGram: the topic's draft goes into the input only while the user hasn't typed and nothing was prefilled.
+  private void xgramApplyTopicDraft (@Nullable TdApi.DraftMessage draftMessage) {
+    if (xgramInForumTopic() && inputView != null && !inputView.textChangedSinceChatOpened() && Td.isEmpty(fillDraft)) {
+      updateDraftMessage(chat.id, draftMessage);
+    }
+  }
+
+  private static boolean xgramSameDraft (@Nullable TdApi.DraftMessage a, @Nullable TdApi.DraftMessage b) {
+    if (Td.isEmpty(a) || Td.isEmpty(b)) {
+      return Td.isEmpty(a) == Td.isEmpty(b);
+    }
+    return a.date == b.date;
   }
 
   @Override
@@ -11351,6 +11370,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
         topic.unreadMentionCount = mentions;
         topic.unreadReactionCount = update.unreadReactionCount;
         topic.notificationSettings = update.notificationSettings;
+        // XGram: the topic's draft changed elsewhere (another device, the topic list): show it while the input is untouched.
+        boolean draftChanged = !xgramSameDraft(topic.draftMessage, update.draftMessage);
+        topic.draftMessage = update.draftMessage;
+        if (draftChanged) {
+          xgramApplyTopicDraft(update.draftMessage);
+        }
         boolean readFully = topic.lastMessage != null && topic.lastReadInboxMessageId >= topic.lastMessage.id;
         if (readFully && topic.unreadCount != 0) {
           topic.unreadCount = 0;
@@ -11491,6 +11516,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onChatDraftMessageChanged (final long chatId, final @Nullable TdApi.DraftMessage draftMessage) {
     runOnUiThreadOptional(() -> {
+      if (xgramInForumTopic()) {
+        return; // XGram: a chat-level draft ("All", another device) must not replace the open topic's input; topic drafts come with updateForumTopic.
+      }
       if (getChatId() == chatId && inputView != null && !inputView.textChangedSinceChatOpened() && !isSecretChat() && messageThread == null) {
         // Applying server chat draft changes only if text wasn't changed while chat was open
         updateDraftMessage(chatId, draftMessage);
