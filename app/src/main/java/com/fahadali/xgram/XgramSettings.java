@@ -61,6 +61,7 @@ public final class XgramSettings {
   public static final String KEY_DOWNLOAD_BOOST = "xgram_download_boost_on";
   public static final String KEY_DOWNLOAD_BOOST_LEVEL = "xgram_download_boost_level";
   public static final String KEY_TAP_TO_RECORD = "xgram_tap_to_record";
+  public static final String KEY_SYSTEM_EMOJI = "xgram_system_emoji";
   /** Prefix of the message box buttons the user hid, followed by one of the {@code INPUT_BUTTON_*} names. */
   public static final String KEY_INPUT_BUTTON_HIDDEN = "xgram_input_hide_";
 
@@ -89,6 +90,7 @@ public final class XgramSettings {
   private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel;
   private volatile boolean tapTimeForDetails;
   private volatile boolean tapToRecord;
+  private volatile boolean systemEmoji;
   private volatile boolean downloadBoost;
   private volatile int downloadBoostLevel;
 
@@ -127,6 +129,7 @@ public final class XgramSettings {
     allChatsLabel = pmc.getBoolean(KEY_ALL_CHATS_LABEL, false);
     pullToNext = pmc.getBoolean(KEY_PULL_TO_NEXT, true);
     tapToRecord = pmc.getBoolean(KEY_TAP_TO_RECORD, false);
+    systemEmoji = pmc.getBoolean(KEY_SYSTEM_EMOJI, false);
     downloadBoost = pmc.getBoolean(KEY_DOWNLOAD_BOOST, false);
     downloadBoostLevel = Math.max(XgramDownloadBoost.LEVEL_LOW, Math.min(XgramDownloadBoost.LEVEL_MAX, pmc.getInt(KEY_DOWNLOAD_BOOST_LEVEL, XgramDownloadBoost.LEVEL_DEFAULT)));
     applyGhostSend();
@@ -396,6 +399,18 @@ public final class XgramSettings {
   public void setTapToRecord (boolean value) {
     tapToRecord = value;
     put(KEY_TAP_TO_RECORD, value);
+  }
+
+  // Emoji
+
+  /** Emoji drawn with the phone's own emoji font (see {@link com.fahadali.xgram.appearance.XgramSystemEmoji}). Read on every emoji draw. */
+  public boolean systemEmoji () {
+    return systemEmoji;
+  }
+
+  public void setSystemEmoji (boolean value) {
+    systemEmoji = value;
+    put(KEY_SYSTEM_EMOJI, value);
   }
 
   /** Message box buttons the user hid ({@code INPUT_BUTTON_*}). Telegram X still decides when a shown one appears. */

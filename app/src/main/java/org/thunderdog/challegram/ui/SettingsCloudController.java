@@ -93,6 +93,13 @@ public abstract class SettingsCloudController<T extends Settings.CloudSetting> e
   protected abstract void getSettings (RunnableData<List<T>> callback);
   protected abstract void applySetting (T setting);
 
+  // XGram: rows that are not downloadable sets (System emoji) describe and draw themselves
+  protected @StringRes int getSettingStatus (T setting) {
+    return 0;
+  }
+
+  protected void drawSettingPreview (Canvas c, T setting, ImageReceiver receiver) { }
+
   private SettingsAdapter adapter;
   private List<T> settings;
 
@@ -112,6 +119,8 @@ public abstract class SettingsCloudController<T extends Settings.CloudSetting> e
             view.setData(currentStringRes);
           } else if (isPending) {
             view.setData(Lang.getDownloadStatus(isInstalling ? null : setting.getFile(), installingStringRes, false));
+          } else if (getSettingStatus(setting) != 0) { // XGram
+            view.setData(getSettingStatus(setting));
           } else {
             int installState = setting.getInstallState(true);
             boolean isInstalled = installState == Settings.CloudSetting.STATE_INSTALLED;
@@ -168,6 +177,7 @@ public abstract class SettingsCloudController<T extends Settings.CloudSetting> e
           int size = Screen.dp(64f) - Screen.dp(12f) * 2;
           receiver.setBounds(view.getMeasuredWidth() - right - size, view.getMeasuredHeight() / 2 - size / 2, view.getMeasuredWidth() - right, view.getMeasuredHeight() / 2 + size / 2);
           receiver.draw(c);
+          drawSettingPreview(c, setting, receiver); // XGram
         }
       }));
     }

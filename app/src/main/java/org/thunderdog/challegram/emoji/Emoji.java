@@ -154,7 +154,16 @@ public class Emoji {
     }
   }
 
+  // XGram: System emoji draws without the set's pages; any it still falls back to load again
+  public void releasePackImages () {
+    String identifier = bitmaps.identifier;
+    bitmaps.recycle();
+    bitmaps = new EmojiBitmaps(identifier);
+  }
+
   public int getReduceSize () {
+    if (com.fahadali.xgram.appearance.XgramSystemEmoji.isEnabled())
+      return 0; // XGram: System emoji: a set's size tweak (twitter, openmoji) is not for the phone's emoji
     return bitmaps.scaleDp != 0f ? Screen.dp(Math.abs(bitmaps.scaleDp)) * (int) Math.signum(bitmaps.scaleDp) : 0;
   }
 
@@ -1042,6 +1051,8 @@ public class Emoji {
       return false;
     if (alpha == 255)
       return draw(c, info, outRect);
+    if (com.fahadali.xgram.appearance.XgramSystemEmoji.isEnabled() && com.fahadali.xgram.appearance.XgramSystemEmoji.draw(c, info, outRect, alpha))
+      return true; // XGram: System emoji
     EmojiBitmaps.Entry bitmap = bitmaps.getBitmap(info.section, info.page);
     if (bitmap != null && bitmap.isLoaded()) {
       Paint paint = Paints.getBitmapPaint();
@@ -1058,6 +1069,8 @@ public class Emoji {
     if (info == null) {
       return false;
     }
+    if (com.fahadali.xgram.appearance.XgramSystemEmoji.isEnabled() && com.fahadali.xgram.appearance.XgramSystemEmoji.draw(c, info, outRect, 255))
+      return true; // XGram: System emoji
     EmojiBitmaps.Entry bitmap = bitmaps.getBitmap(info.section, info.page);
     if (bitmap != null) {
       return bitmap.draw(c, info, outRect, Paints.getBitmapPaint());

@@ -187,6 +187,8 @@
   <string name="XgramChatLookRow">Text, bubbles, stickers and emoji</string>
   <string name="XgramStickerSize">Sticker size</string>
   <string name="XgramEmojiSize">Emoji size</string>
+  <string name="XgramEmojiSystem">System</string>
+  <string name="XgramEmojiSystemHint">Your phone\'s emoji</string>
   <string name="XgramBubbleCorners">Bubble corners</string>
   <string name="XgramBubbleMergedCorners">Corners between bubbles</string>
   <string name="XgramBubbleTail">Bubble tail</string>

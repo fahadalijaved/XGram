@@ -101,7 +101,9 @@ public class SettingsStickersAndEmojiController extends RecyclerViewController<S
           v.setData(b.toString());
         } else if (itemId == R.id.btn_emoji) {
           Settings.EmojiPack emojiPack = Settings.instance().getEmojiPack();
-          if (emojiPack.identifier.equals(BuildConfig.EMOJI_BUILTIN_ID)) {
+          if (com.fahadali.xgram.appearance.XgramSystemEmoji.isEnabled()) { // XGram: System emoji
+            v.setData(R.string.XgramEmojiSystem);
+          } else if (emojiPack.identifier.equals(BuildConfig.EMOJI_BUILTIN_ID)) {
             v.setData(R.string.EmojiBuiltIn);
           } else {
             v.setData(emojiPack.displayName);

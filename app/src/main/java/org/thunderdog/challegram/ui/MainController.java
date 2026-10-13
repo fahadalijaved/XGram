@@ -1240,7 +1240,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private boolean showEmojiUpdateSuggestion () {
     Settings.EmojiPack emojiPack = Settings.instance().getOutdatedEmojiPack();
-    if (emojiPack == null)
+    if (emojiPack == null || com.fahadali.xgram.appearance.XgramSystemEmoji.isEnabled()) // XGram: no set update prompt while System emoji is on
       return false;
     tdlib.ui().postDelayed(() -> {
       if (!isFocused() || isDestroyed() || context.isPasscodeShowing())

@@ -15,10 +15,13 @@
 package org.thunderdog.challegram.ui;
 
 import android.content.Context;
+import android.graphics.Canvas;
+
+import com.fahadali.xgram.appearance.XgramSystemEmoji;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
-import org.thunderdog.challegram.emoji.Emoji;
+import org.thunderdog.challegram.loader.ImageReceiver;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.unsorted.Settings;
 
@@ -43,19 +46,36 @@ public class SettingsCloudEmojiController extends SettingsCloudController<Settin
 
   @Override
   protected Settings.EmojiPack getCurrentSetting () {
-    return Settings.instance().getEmojiPack();
+    return XgramSystemEmoji.isEnabled() ? XgramSystemEmoji.pack() : Settings.instance().getEmojiPack(); // XGram: System emoji
   }
 
   @Override
   protected void getSettings (RunnableData<List<Settings.EmojiPack>> callback) {
-    tdlib.getEmojiPacks(callback);
+    tdlib.getEmojiPacks(packs -> callback.runWithData(XgramSystemEmoji.addTo(packs))); // XGram: System emoji next to the sets
   }
 
   @Override
   protected void applySetting (Settings.EmojiPack setting) {
-    Emoji.instance().changeEmojiPack(setting);
+    // XGram: System emoji; picking a set turns it off
+    if (XgramSystemEmoji.isSystemPack(setting)) {
+      XgramSystemEmoji.setEnabled(true);
+    } else {
+      XgramSystemEmoji.applyPack(setting);
+    }
     if (getStickersAndEmojiController() != null) {
       getStickersAndEmojiController().updateSelectedEmoji();
+    }
+  }
+
+  @Override
+  protected int getSettingStatus (Settings.EmojiPack setting) {
+    return XgramSystemEmoji.isSystemPack(setting) ? R.string.XgramEmojiSystemHint : 0; // XGram
+  }
+
+  @Override
+  protected void drawSettingPreview (Canvas c, Settings.EmojiPack setting, ImageReceiver receiver) {
+    if (XgramSystemEmoji.isSystemPack(setting)) { // XGram: the phone's emoji, drawn rather than downloaded
+      XgramSystemEmoji.drawPreview(c, receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom());
     }
   }
 }
