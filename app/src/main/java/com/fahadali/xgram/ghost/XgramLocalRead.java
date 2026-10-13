@@ -358,6 +358,22 @@ public final class XgramLocalRead {
     }
   }
 
+  /**
+   * The newest message of a chat or forum topic (forumTopicId 0 for the chat) viewed in ghost mode, 0 when none:
+   * where it is read up to on this device, past the server's read position.
+   */
+  @AnyThread
+  public static long viewedUpTo (Tdlib tdlib, long chatId, int forumTopicId) {
+    if (!isActive()) {
+      return 0;
+    }
+    synchronized (lock) {
+      ensureLoaded();
+      Entry entry = entries.get(keyOf(tdlib.id(), chatId, forumTopicId));
+      return entry != null ? entry.maxViewed() : 0;
+    }
+  }
+
   /** A mention counter TDLib reports, lowered by the mentions viewed in ghost mode. */
   @AnyThread
   public static int lowerMentions (Tdlib tdlib, long chatId, int forumTopicId, int serverCount) {

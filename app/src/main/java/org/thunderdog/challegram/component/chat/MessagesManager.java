@@ -2584,7 +2584,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   private void saveScrollPosition () {
-    if (!canRead()) {
+    // XGram: ghost mode's "don't read" keeps messages unread on the server only: where the chat was left is still
+    // saved here, or a chat left at the bottom would reopen at an old position every time.
+    if (inSpecialMode() || controller.isInForceTouchMode() || Settings.instance().dontReadMessages()) {
       return;
     }
 
@@ -2637,6 +2639,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         } else {
           TdApi.Chat chat = tdlib.chat(scrollChatId);
           readFully = chat != null && chat.lastMessage != null && chat.lastMessage.id == scrollMessageId;
+          if (!readFully && loader.xgramTopicKey() instanceof TdApi.MessageTopicForum) {
+            // XGram: in a forum topic the chat's last message may be another topic's: the topic's own bottom counts.
+            readFully = firstVisibleItemPosition == 0 && !loader.canLoadBottom();
+          }
         }
         View view = manager.findViewByPosition(firstVisibleItemPosition);
         if (view != null && view.getParent() != null) {

@@ -11324,7 +11324,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     org.thunderdog.challegram.telegram.TdlibForumTopicManager.Entry entry = tdlib.topics().find(
       new org.thunderdog.challegram.telegram.TdlibForumTopicManager.Key(chat.id, ((TdApi.MessageTopicForum) topicId).forumTopicId)
     );
-    return entry != null && !entry.isNotFound() ? entry.value : null;
+    // XGram: ghost mode's local reads applied to a copy, TDLib's cached topic stays as it is.
+    return entry != null && !entry.isNotFound() && entry.value != null ? com.fahadali.xgram.topics.XgramForums.normalizedCopy(tdlib, entry.value) : null;
   }
 
   private void xgramApplyTopicCounters (boolean animated) {

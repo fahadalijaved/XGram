@@ -161,6 +161,26 @@ public final class XgramForums {
     return fallbackMs;
   }
 
+  /**
+   * A normalized copy of a topic someone else owns (TDLib's topic cache): the original stays as TDLib reported it,
+   * as normalizing the same object twice would lower its counters twice.
+   */
+  public static TdApi.ForumTopic normalizedCopy (Tdlib tdlib, TdApi.ForumTopic topic) {
+    TdApi.ForumTopic copy = new TdApi.ForumTopic(topic.info, topic.lastMessage, topic.order, topic.isPinned,
+      topic.unreadCount, topic.lastReadInboxMessageId, topic.lastReadOutboxMessageId,
+      topic.unreadMentionCount, topic.unreadReactionCount, topic.unreadPollVoteCount,
+      topic.notificationSettings, topic.draftMessage);
+    return normalizeUnread(tdlib, copy);
+  }
+
+  /**
+   * Where the topic is read up to: the server's read position, or with ghost mode's "don't read" the newest message
+   * viewed on this device (the server's stays put, so the first unread would always be the old one).
+   */
+  public static long topicReadInboxId (Tdlib tdlib, long chatId, TdApi.ForumTopic topic) {
+    return Math.max(topic.lastReadInboxMessageId, com.fahadali.xgram.ghost.XgramLocalRead.viewedUpTo(tdlib, chatId, topic.info.forumTopicId));
+  }
+
   public static TdApi.ForumTopic normalizeUnread (Tdlib tdlib, TdApi.ForumTopic topic) {
     // Ghost mode: messages viewed without reading them count as read on this device.
     com.fahadali.xgram.ghost.XgramLocalRead.rewriteTopic(tdlib, topic.info.chatId, topic);
@@ -499,13 +519,17 @@ public final class XgramForums {
     XgramSettings.instance().setLastForumTab(tdlib.id(), chatId, tab);
   }
 
-  /** The topic's first unread message, or null when it's read (open at the bottom). */
+  /**
+   * The topic's first unread message, or null when it's read (open at the bottom). Unread mentions alone don't
+   * count: the mention button reaches them. The topic must be normalized ({@link #normalizeUnread}).
+   */
   @Nullable
-  public static MessageId topicUnreadAnchor (long chatId, @Nullable TdApi.ForumTopic topic) {
+  public static MessageId topicUnreadAnchor (Tdlib tdlib, long chatId, @Nullable TdApi.ForumTopic topic) {
     if (topic == null || topic.unreadCount <= 0) {
       return null;
     }
-    return new MessageId(chatId, topic.lastReadInboxMessageId != 0 ? topic.lastReadInboxMessageId : MessageId.MIN_VALID_ID);
+    long readId = topicReadInboxId(tdlib, chatId, topic);
+    return new MessageId(chatId, readId != 0 ? readId : MessageId.MIN_VALID_ID);
   }
 
   /** Where a topic opens: at its first unread message, else where it was left, else at the bottom. */
@@ -520,7 +544,7 @@ public final class XgramForums {
   }
 
   public static TopicResume topicResume (Tdlib tdlib, long chatId, int forumTopicId, @Nullable TdApi.ForumTopic topic) {
-    MessageId unread = topicUnreadAnchor(chatId, topic);
+    MessageId unread = topicUnreadAnchor(tdlib, chatId, topic);
     if (unread != null) {
       return new TopicResume(MessagesManager.HIGHLIGHT_MODE_UNREAD, unread);
     }
@@ -533,13 +557,16 @@ public final class XgramForums {
     return new TopicResume(MessagesManager.HIGHLIGHT_MODE_NONE, null);
   }
 
-  /** The topic as the app already knows it: the cached topic list, else TDLib's topic cache. UI thread only. */
+  /**
+   * The topic as the app already knows it, normalized: the cached topic list (normalized when stored), else a
+   * normalized copy from TDLib's topic cache. UI thread only.
+   */
   @Nullable
   private static TdApi.ForumTopic knownTopic (Tdlib tdlib, long chatId, int forumTopicId) {
     TdApi.ForumTopic topic = ForumTopicList.peekTopic(tdlib, chatId, forumTopicId);
     if (topic == null) {
       TdlibForumTopicManager.Entry entry = tdlib.topics().find(new TdlibForumTopicManager.Key(chatId, forumTopicId));
-      topic = entry != null && !entry.isNotFound() ? entry.value : null;
+      topic = entry != null && !entry.isNotFound() && entry.value != null ? normalizedCopy(tdlib, entry.value) : null;
     }
     return topic;
   }

@@ -1404,7 +1404,7 @@ public class MessagesLoader implements Client.ResultHandler {
       TdApi.ForumTopic topic = manager.controller().xgramTopicReadState();
       chatId = chat.id;
       lastReadOutboxMessageId = Math.max(chat.lastReadOutboxMessageId, com.fahadali.xgram.topics.XgramTopicReadOutbox.get(tdlib, chat.id, ((TdApi.MessageTopicForum) topicId).forumTopicId));
-      lastReadInboxMessageId = topic != null ? topic.lastReadInboxMessageId : chat.lastReadInboxMessageId;
+      lastReadInboxMessageId = topic != null ? com.fahadali.xgram.topics.XgramForums.topicReadInboxId(tdlib, chat.id, topic) : chat.lastReadInboxMessageId; // XGram: ghost mode, read up to what was viewed here
       hasUnreadMessages = topic != null && topic.unreadCount > 0;
     } else if (chat != null) {
       chatId = chat.id;
