@@ -59,6 +59,11 @@ public final class XgramThemePack {
   private static final String ART_DIR = "xgram_wallpapers";
   /** Names of the first pack (before the icon themes); their installed copies are replaced. */
   private static final String[] OLD_KEYS = {"amoled", "midnight", "nord", "dracula", "mocha", "sakura", "latte", "paper"};
+  /**
+   * Raised by every switch: an install still waiting for its wallpaper (a pattern can take a few seconds the first
+   * time) is dropped when another switch came after it, so a double tap installs once and the last tap wins.
+   */
+  private static int request;
 
   /** The theme that goes with an app icon, or null for Classic (Telegram X's own Blue theme). */
   @Nullable
@@ -76,15 +81,21 @@ public final class XgramThemePack {
   public static void applyForIcon (ViewController<?> context, com.fahadali.xgram.appicons.XgramAppIcons.Icon icon) {
     String key = themeKeyForIcon(icon);
     if (key == null) {
+      request++;
       ThemeManager themes = ThemeManager.instance();
       themes.changeGlobalTheme(context.tdlib(), themes.getTheme(ThemeId.BLUE), false, null);
       return;
     }
     Context appContext = context.context();
+    final int requestId = ++request;
     org.thunderdog.challegram.core.Background.instance().post(() -> {
       TdlibUi.ImportedTheme theme = read(appContext, key);
       if (theme != null) {
-        context.runOnUiThreadOptional(() -> apply(context, key, theme, null));
+        context.runOnUiThreadOptional(() -> {
+          if (requestId == request) {
+            apply(context, key, theme, null);
+          }
+        });
       }
     });
   }
@@ -178,36 +189,42 @@ public final class XgramThemePack {
   /** Switches to the theme, installing it first if needed. {@code theme} is the parsed file. */
   public static void apply (ViewController<?> context, String key, TdlibUi.ImportedTheme theme, @Nullable Runnable after) {
     ThemeManager themes = ThemeManager.instance();
+    final int requestId = ++request;
     int themeId = installedId(key);
-    if (themeId != ThemeId.NONE && themes.currentThemeId() == themeId) {
+    boolean upToDate = Settings.instance().getInt(KEY_VERSION + key, 0) == PACK_VERSION;
+    if (themeId != ThemeId.NONE && themes.currentThemeId() == themeId && upToDate) {
       if (after != null) {
         after.run();
       }
       return;
     }
-    boolean upToDate = Settings.instance().getInt(KEY_VERSION + key, 0) == PACK_VERSION;
+    // An older copy (also the current one) is replaced by the new version below.
     if (themeId != ThemeId.NONE && upToDate) {
       // Installed already: use the stored copy, which keeps any edits made in Settings → Themes.
       themes.changeGlobalTheme(context.tdlib(), themes.getTheme(themeId), false, after);
       return;
     }
     if (!hasArt(key)) {
-      loadAndInstall(context, key, theme, themeId, null, after);
+      loadAndInstall(context, requestId, key, theme, themeId, null, after);
       return;
     }
     // A style icon theme: copy its picture out of the assets first (off the UI thread).
     Context appContext = context.context().getApplicationContext();
     org.thunderdog.challegram.core.Background.instance().post(() -> {
       String art = prepareArt(appContext, key);
-      context.runOnUiThreadOptional(() -> loadAndInstall(context, key, theme, themeId, art, after));
+      context.runOnUiThreadOptional(() -> {
+        if (requestId == request) {
+          loadAndInstall(context, requestId, key, theme, themeId, art, after);
+        }
+      });
     });
   }
 
-  private static void loadAndInstall (ViewController<?> context, String key, TdlibUi.ImportedTheme theme, int themeId, @Nullable String art, @Nullable Runnable after) {
+  private static void loadAndInstall (ViewController<?> context, int requestId, String key, TdlibUi.ImportedTheme theme, int themeId, @Nullable String art, @Nullable Runnable after) {
     // Like Telegram X's own theme install: have the wallpaper ready first (a gradient is built locally, at once;
     // a pattern is downloaded the first time, so it gets a little longer).
     context.tdlib().wallpaper().loadWallpaper(theme.wallpaper, 2500, () -> {
-      if (!context.isDestroyed()) {
+      if (!context.isDestroyed() && requestId == request) {
         install(context, key, theme, themeId, art, after);
       }
     });
