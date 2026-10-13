@@ -82,6 +82,7 @@ public final class XgramHistory {
     final int date;
     final String text, entities, kind;
     @Nullable final XgramMedia.Info media;
+    final String fallbackFileIds;
 
     Row (int accountId, TdApi.Message message, String text) {
       this.accountId = accountId;
@@ -95,6 +96,7 @@ public final class XgramHistory {
       this.entities = formatted != null ? XgramMedia.encodeEntities(formatted.entities) : "";
       this.kind = kindOf(message.content);
       this.media = XgramMedia.infoOf(message.content);
+      this.fallbackFileIds = XgramMedia.fallbackFileIdsOf(message.content);
     }
   }
 
@@ -267,6 +269,7 @@ public final class XgramHistory {
       values.put("width", row.media.width);
       values.put("height", row.media.height);
       values.put("file_size", row.media.size);
+      values.put("fallback_file_ids", row.fallbackFileIds);
     }
     try {
       helper.getWritableDatabase().insertWithOnConflict("messages", null, values, SQLiteDatabase.CONFLICT_IGNORE);
@@ -339,31 +342,53 @@ public final class XgramHistory {
     int accountId = tdlib.id();
     for (long messageId : messageIds) {
       int fileId = 0;
-      String fileName = "";
+      String fileName = "", fallbacks = null;
       try (Cursor c = helper.getReadableDatabase().rawQuery(
-        "SELECT file_id, file_name FROM messages WHERE account = ? AND chat = ? AND id = ? AND file_id != 0 AND media_path IS NULL",
+        "SELECT file_id, file_name, fallback_file_ids FROM messages WHERE account = ? AND chat = ? AND id = ? AND file_id != 0 AND media_path IS NULL",
         new String[] {String.valueOf(accountId), String.valueOf(chatId), String.valueOf(messageId)})) {
         if (c.moveToFirst()) {
           fileId = c.getInt(0);
           fileName = c.getString(1);
+          fallbacks = c.getString(2);
         }
       } catch (Throwable ignored) { }
       if (fileId <= 0) {
         continue;
       }
-      final String name = fileName != null ? fileName : "";
-      tdlib.send(new TdApi.GetFile(fileId), (file, error) -> {
-        if (file != null && file.local.isDownloadingCompleted && !file.local.path.isEmpty()) {
-          String path = file.local.path;
-          executor.execute(() -> {
-            String copy = XgramMedia.copy(path, accountId, chatId, messageId, name);
-            if (copy != null) {
-              setMediaPath(accountId, chatId, messageId, copy);
+      List<Integer> fileIds = new ArrayList<>();
+      fileIds.add(fileId);
+      if (fallbacks != null && !fallbacks.isEmpty()) {
+        for (String id : fallbacks.split(",")) {
+          try {
+            int value = Integer.parseInt(id.trim());
+            if (value > 0 && !fileIds.contains(value)) {
+              fileIds.add(value);
             }
-          });
+          } catch (NumberFormatException ignored) { }
         }
-      });
+      }
+      saveFirstDownloaded(tdlib, accountId, chatId, messageId, fileName != null ? fileName : "", fileIds, 0);
     }
+  }
+
+  /** Copies the first of the files (a photo's sizes, biggest first) that is fully downloaded. */
+  private void saveFirstDownloaded (Tdlib tdlib, int accountId, long chatId, long messageId, String name, List<Integer> fileIds, int index) {
+    if (index >= fileIds.size()) {
+      return;
+    }
+    tdlib.send(new TdApi.GetFile(fileIds.get(index)), (file, error) -> {
+      if (file != null && file.local.isDownloadingCompleted && !file.local.path.isEmpty()) {
+        String path = file.local.path;
+        executor.execute(() -> {
+          String copy = XgramMedia.copy(path, accountId, chatId, messageId, name);
+          if (copy != null) {
+            setMediaPath(accountId, chatId, messageId, copy);
+          }
+        });
+      } else {
+        saveFirstDownloaded(tdlib, accountId, chatId, messageId, name, fileIds, index + 1);
+      }
+    });
   }
 
   @WorkerThread
@@ -595,7 +620,7 @@ public final class XgramHistory {
 
   private static final class Helper extends SQLiteOpenHelper {
     Helper (Context context) {
-      super(context, "xgram_history.db", null, 3);
+      super(context, "xgram_history.db", null, 4);
       // Reads (the history loader, on the TDLib thread) don't wait for the writes of incoming messages.
       setWriteAheadLoggingEnabled(true);
     }
@@ -616,6 +641,12 @@ public final class XgramHistory {
       db.execSQL("CREATE INDEX edits_message ON edits (account, chat, id)");
       addVersion2Columns(db);
       addVersion3Indexes(db);
+      addVersion4Columns(db);
+    }
+
+    private static void addVersion4Columns (SQLiteDatabase db) {
+      // Photos: the smaller sizes, kept when the largest one was never downloaded.
+      db.execSQL("ALTER TABLE messages ADD COLUMN fallback_file_ids TEXT");
     }
 
     private static void addVersion2Columns (SQLiteDatabase db) {
@@ -637,6 +668,9 @@ public final class XgramHistory {
       }
       if (oldVersion < 3) {
         addVersion3Indexes(db);
+      }
+      if (oldVersion < 4) {
+        addVersion4Columns(db);
       }
     }
   }

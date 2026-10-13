@@ -50,6 +50,52 @@ public final class XgramDeletedColor {
         }
         return color;
       }
+
+      // TextColorSetOverride leaves these to the TextColorSet defaults (the no-bubble colors): keep the bubble's own.
+      @Override
+      public int quoteTextColorId () {
+        return colorSet.quoteTextColorId();
+      }
+
+      @Override
+      public int quoteLineColorId () {
+        return colorSet.quoteLineColorId();
+      }
+
+      @Override
+      public int overlayColor (boolean isPressed) {
+        return colorSet.overlayColor(isPressed);
+      }
+
+      @Override
+      public int overlayOutlineColor (boolean isPressed) {
+        return colorSet.overlayOutlineColor(isPressed);
+      }
+
+      @Override
+      public int overlayColorId (boolean isPressed) {
+        return colorSet.overlayColorId(isPressed);
+      }
+
+      @Override
+      public int overlayOutlineColorId (boolean isPressed) {
+        return colorSet.overlayOutlineColorId(isPressed);
+      }
+
+      @Override
+      public long backgroundId (boolean isPressed) {
+        return colorSet.backgroundId(isPressed);
+      }
+
+      @Override
+      public long overlayId (boolean isPressed) {
+        return colorSet.overlayId(isPressed);
+      }
+
+      @Override
+      public int backgroundPadding () {
+        return colorSet.backgroundPadding();
+      }
     };
   }
 

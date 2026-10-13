@@ -360,7 +360,7 @@
   <string name="XgramTopicsDesc">Split the group into topics. Tabs show them above or beside the messages, List shows them as a list of chats.</string>
   <string name="XgramHistoryOpenMedia">Open saved media</string>
   <string name="XgramHistoryView">Deleted &amp; edited messages</string>
-  <string name="XgramHistorySettingsInfo">XGram keeps a copy of the messages you receive on this device, so they stay readable after the sender deletes or edits them. Copies of messages that stay unchanged are dropped after the time set above; deleted and edited ones are kept until you clear them. With Save media of deleted messages on, the photos, videos, GIFs, voice and video messages, music and files of deleted messages are kept too, if they were already downloaded on this device when the message was deleted.</string>
+  <string name="XgramHistorySettingsInfo">XGram keeps a copy of the messages you receive on this device, so they stay readable after the sender deletes or edits them. Copies of messages that stay unchanged are dropped after the time set above; deleted and edited ones are kept until you clear them. With Save media of deleted messages on, the photos, videos, GIFs, voice and video messages, music and files of deleted messages are kept too, if they were downloaded on this device (for photos, at least the size shown in the chat) when the message was deleted.</string>
   <string name="XgramHistoryRedDeleted">Show deleted messages in red</string>
   <string name="XgramHistoryRedDeletedInfo">The text of deleted messages turns red, in a shade that stays readable on your theme\'s bubbles. When off, they only show the trash icon.</string>
   <string name="XgramHistoryInfo">Only messages received while saving was on can be recovered.</string>

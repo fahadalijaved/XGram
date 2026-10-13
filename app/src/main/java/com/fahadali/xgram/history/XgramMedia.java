@@ -51,6 +51,33 @@ public final class XgramMedia {
     }
   }
 
+  /**
+   * Photos: the file ids of the other sizes, biggest first, comma separated. A photo seen in the chat but never opened
+   * full size only has a smaller size downloaded, which is kept when the largest one isn't there.
+   */
+  public static String fallbackFileIdsOf (TdApi.MessageContent content) {
+    if (content.getConstructor() != TdApi.MessagePhoto.CONSTRUCTOR) {
+      return "";
+    }
+    TdApi.PhotoSize[] sizes = ((TdApi.MessagePhoto) content).photo.sizes;
+    if (sizes.length < 2) {
+      return "";
+    }
+    TdApi.PhotoSize[] others = java.util.Arrays.copyOf(sizes, sizes.length - 1);
+    java.util.Arrays.sort(others, (a, b) -> Long.compare((long) b.width * b.height, (long) a.width * a.height));
+    StringBuilder b = new StringBuilder();
+    for (TdApi.PhotoSize size : others) {
+      if (size.photo == null || size.photo.id <= 0) {
+        continue;
+      }
+      if (b.length() > 0) {
+        b.append(',');
+      }
+      b.append(size.photo.id);
+    }
+    return b.toString();
+  }
+
   @Nullable
   public static Info infoOf (TdApi.MessageContent content) {
     switch (content.getConstructor()) {
