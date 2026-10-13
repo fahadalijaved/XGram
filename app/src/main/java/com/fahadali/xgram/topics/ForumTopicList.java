@@ -303,6 +303,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     // Many topics at once (a read in "All", a burst of messages): one page instead of one request per topic, which
     // ends in FLOOD_WAIT. Topics not on that page are fetched one by one, a few at a time.
     lastResyncAt = android.os.SystemClock.uptimeMillis();
+    final int requestedReorderVersion = localReorderVersion;
     tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
       if (isDestroyed) {
         return;
@@ -312,7 +313,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
         left.add(forumTopicId);
       }
       if (result != null) {
-        applyFirstPage(result);
+        applyFirstPage(result, requestedReorderVersion);
         for (TdApi.ForumTopic topic : result.topics) {
           left.remove(topic.info.forumTopicId);
         }
@@ -613,6 +614,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       return false;
     }
     insertPinnedAt(toPosition, moved.info.forumTopicId);
+    localReorderVersion++;
     topics.remove(fromIndex);
     topics.add(toIndex, moved);
     for (Listener listener : listeners) {
@@ -622,6 +624,25 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   }
 
   private long lastResyncAt;
+
+  /**
+   * Counts drag moves made here. A first page asked for before the latest move carries the old server order, so it
+   * must not undo the move (mid-drag, or before {@code SetPinnedForumTopics} answers).
+   */
+  private int localReorderVersion;
+
+  /** The current {@link #localReorderVersion}: pass it back to {@link #setPinnedOrder(int[], int)}. */
+  public int localReorderVersion () {
+    return localReorderVersion;
+  }
+
+  /** As {@link #setPinnedOrder(int[])}, unless the user moved a pinned topic again since {@code reorderVersion}. */
+  @UiThread
+  public void setPinnedOrder (int[] ids, int reorderVersion) {
+    if (reorderVersion == localReorderVersion) {
+      setPinnedOrder(ids);
+    }
+  }
 
   private int firstPageLimit () {
     return Math.min(100, Math.max(20, topics.size()));
@@ -647,21 +668,25 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       return;
     }
     lastResyncAt = now;
+    final int requestedReorderVersion = localReorderVersion;
     tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
       if (isDestroyed || result == null) {
         return;
       }
-      applyFirstPage(result);
+      applyFirstPage(result, requestedReorderVersion);
     }));
   }
 
-  /** Puts the topics of a first page in and takes the server's pinned order from it. */
+  /**
+   * Puts the topics of a first page in and takes the server's pinned order from it, unless a pinned topic was moved
+   * here after the page was asked for (its order is then older than the one shown).
+   */
   @UiThread
-  private void applyFirstPage (TdApi.ForumTopics result) {
+  private void applyFirstPage (TdApi.ForumTopics result, int requestedReorderVersion) {
     for (TdApi.ForumTopic topic : result.topics) {
       putTopicImpl(topic);
     }
-    setPinnedOrder(serverPinnedIds(result.topics));
+    setPinnedOrder(serverPinnedIds(result.topics), requestedReorderVersion);
     publishUnread();
   }
 
@@ -766,6 +791,10 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       }
       int index = indexOf(update.forumTopicId);
       if (index == -1) {
+        if (!update.isPinned) {
+          // Known as pinned but not loaded as a row: forget it, or the next reorder would pin it again.
+          pinnedOrder.remove(update.forumTopicId);
+        }
         return;
       }
       TdApi.ForumTopic topic = topics.get(index);

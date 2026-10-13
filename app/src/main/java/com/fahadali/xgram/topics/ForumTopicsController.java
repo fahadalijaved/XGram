@@ -541,14 +541,17 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
         reorderChanged = false;
         final ForumTopicList targetList = list;
         final int[] pinnedIds = targetList.pinnedTopicIds();
-        tdlib.send(new TdApi.SetPinnedForumTopics(chat.id, pinnedIds), (ok, error) -> runOnUiThreadOptional(() -> {
+        final int reorderVersion = targetList.localReorderVersion();
+        // Not tied to this screen: the list stays cached after leaving it, so it must take the answer either way.
+        tdlib.send(new TdApi.SetPinnedForumTopics(chat.id, pinnedIds), (ok, error) -> tdlib.ui().post(() -> {
           if (error != null) {
             org.thunderdog.challegram.tool.UI.showError(error);
             // The server kept its order: fetch it to undo the move.
             targetList.resyncFirstPage(true);
           } else {
-            // The order the server accepted is the one shown; it sticks until the server says otherwise.
-            targetList.setPinnedOrder(pinnedIds);
+            // The order the server accepted is the one shown; it sticks until the server says otherwise. A newer
+            // drag (still on its way to the server) is left alone.
+            targetList.setPinnedOrder(pinnedIds, reorderVersion);
           }
         }));
       }
