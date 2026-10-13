@@ -1054,6 +1054,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (Passcode.instance().isEnabled()) {
         menuWidth += Screen.dp(48f);
       }
+      if (xgramGhostButton != null && xgramGhostButton.getVisibility() == View.VISIBLE) {
+        menuWidth += Screen.dp(49f); // XGram: the ghost mode button, or the last folder tab slides under it
+      }
       if (Lang.rtl()) {
         paddingLeft = menuWidth;
         paddingRight = Screen.dp(44f);
@@ -1927,6 +1930,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (xgramGhostButton != null) {
       xgramGhostButton.setVisibility(com.fahadali.xgram.XgramSettings.instance().isAnyGhostEnabled() ? View.VISIBLE : View.GONE);
     }
+    checkHeaderMargins(); // the folder tabs make room for the button, or take it back
   }
 
   @Override
