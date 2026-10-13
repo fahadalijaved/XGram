@@ -262,7 +262,7 @@ public class TGMessageText extends TGMessage {
       animated = animated && Config.ENABLE_TEXT_ANIMATIONS && needAnimateChanges();
 
       this.text = text;
-      TextColorSet colorSet = isErrorMessage() ? TextColorSets.Regular.NEGATIVE : getTextColorSet();
+      TextColorSet colorSet = isErrorMessage() ? TextColorSets.Regular.NEGATIVE : xgramBodyColorSet(); // XGram: red when deleted
       TextWrapper.TextMediaListener textMediaListener = (wrapper, updatedText, specificTextMedia) -> {
         if (effectiveWrapper == wrapper) {
           invalidateTextMediaReceiver(updatedText, specificTextMedia);

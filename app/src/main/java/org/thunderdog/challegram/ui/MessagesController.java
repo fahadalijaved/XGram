@@ -7761,8 +7761,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private final com.fahadali.xgram.XgramSettings.Listener xgramInputButtonsListener = key -> {
     if (key.startsWith(com.fahadali.xgram.XgramSettings.KEY_INPUT_BUTTON_HIDDEN)) {
       UI.post(this::xgramUpdateInputButtons);
+    } else if (key.equals(com.fahadali.xgram.XgramSettings.KEY_HISTORY_RED_DELETED)) {
+      UI.post(this::xgramRedrawMessages); // XGram: deleted messages in red, redrawn at once (the chat can be open next to settings)
     }
   };
+
+  private void xgramRedrawMessages () {
+    if (!isDestroyed() && manager.getAdapter() != null) {
+      manager.getAdapter().invalidateAllMessages();
+    }
+  }
 
   private void xgramUpdateInputButtons () {
     if (isDestroyed() || attachButtons == null) {

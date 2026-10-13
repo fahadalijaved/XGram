@@ -203,6 +203,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setEnabled(settings.historySaveDeleted());
         } else if (id == R.id.btn_xgramHistorySaveEdits) {
           view.getToggler().setRadioEnabled(settings.historySaveEdits(), isUpdate);
+        } else if (id == R.id.btn_xgramHistoryRedDeleted) {
+          view.getToggler().setRadioEnabled(settings.historyRedDeleted(), isUpdate);
         } else if (id == R.id.btn_xgramHideSponsored) {
           view.getToggler().setRadioEnabled(settings.hideSponsored(), isUpdate);
         } else if (id == R.id.btn_xgramShowPeerIds) {
@@ -416,6 +418,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramHistoryRetention, 0, R.string.XgramHistoryRetention)
     );
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramHistorySettingsInfo));
+    addRows(items, toggle(R.id.btn_xgramHistoryRedDeleted, R.string.XgramHistoryRedDeleted));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramHistoryRedDeletedInfo));
     addRows(items, new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramHistoryView, R.drawable.baseline_history_24, R.string.XgramHistoryView));
   }
 
@@ -865,6 +869,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramHistorySaveEdits) {
       settings.setHistorySaveEdits(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramHistoryRedDeleted) {
+      settings.setHistoryRedDeleted(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramHideSponsored) {
       settings.setHideSponsored(adapter.toggleView(v));

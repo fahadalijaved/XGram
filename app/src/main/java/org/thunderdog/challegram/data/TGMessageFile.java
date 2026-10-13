@@ -128,7 +128,7 @@ public class TGMessageFile extends TGMessage {
         }
         TextWrapper wrapper;
         if (!Td.isEmpty(caption)) {
-          wrapper = new TextWrapper(caption.text, getTextStyleProvider(), getTextColorSet())
+          wrapper = new TextWrapper(caption.text, getTextStyleProvider(), xgramBodyColorSet()) // XGram: red when deleted
             .setEntities(TextEntity.valueOf(tdlib, caption, openParameters()), (wrapper1, text, specificMedia) -> {
               if (captionWrapper == wrapper1) {
                 invalidateTextMediaReceiver(text, specificMedia);

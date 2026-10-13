@@ -61,6 +61,7 @@
   <item type="id" name="btn_xgramHistorySaveDeleted" />
   <item type="id" name="btn_xgramHistorySaveEdits" />
   <item type="id" name="btn_xgramHistorySaveMedia" />
+  <item type="id" name="btn_xgramHistoryRedDeleted" />
   <item type="id" name="btn_xgramTwoPane" />
   <item type="id" name="btn_xgramHideFab" />
   <item type="id" name="btn_xgramAboutSupport" />

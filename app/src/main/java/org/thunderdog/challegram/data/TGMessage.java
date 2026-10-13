@@ -7594,6 +7594,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     );
   }
 
+  /** XGram: the message's own text and captions, red once deleted when "Show deleted messages in red" is on. */
+  public final TextColorSet xgramBodyColorSet () {
+    return com.fahadali.xgram.history.XgramDeletedColor.wrap(this, getTextColorSet());
+  }
+
   public final TextColorSet getChatAuthorColorSet () {
     return overrideWithAccent(
       pick(TextColorSets.Regular.MESSAGE_AUTHOR, TextColorSets.BubbleOut.MESSAGE_AUTHOR, TextColorSets.BubbleIn.MESSAGE_AUTHOR),

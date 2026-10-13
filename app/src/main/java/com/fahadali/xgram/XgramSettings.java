@@ -36,6 +36,7 @@ public final class XgramSettings {
   public static final String KEY_HISTORY_SAVE_DELETED = "xgram_history_save_deleted";
   public static final String KEY_HISTORY_SAVE_EDITS = "xgram_history_save_edits";
   public static final String KEY_HISTORY_SAVE_MEDIA = "xgram_history_save_media";
+  public static final String KEY_HISTORY_RED_DELETED = "xgram_history_red_deleted";
   public static final String KEY_HIDE_SPONSORED = "xgram_hide_sponsored";
   public static final String KEY_SHOW_PEER_IDS = "xgram_show_peer_ids";
   public static final String KEY_TWO_PANE = "xgram_two_pane";
@@ -85,7 +86,7 @@ public final class XgramSettings {
 
   private final ReferenceList<Listener> listeners = new ReferenceList<>(true);
   private volatile boolean ghostDontRead, ghostDontType, ghostOffline, ghostReadOnSend, ghostLocalRead, ghostTypingForStickers, ghostScheduleSend, ghostSilent;
-  private volatile boolean historySaveDeleted, historySaveEdits, historySaveMedia;
+  private volatile boolean historySaveDeleted, historySaveEdits, historySaveMedia, historyRedDeleted;
   private volatile boolean hideSponsored, showPeerIds, twoPaneLayout, saveLastSeen, showSeconds, cleanLinks, fixLinkPreviews, allowScreenshots, saveProtected, proxyOffOnVpn, proxyOffOnWifi, proxyOffOnMobile, hidePhone, blockContentCapture, iconTheme, mergeCommunities;
   private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel;
   private volatile boolean tapTimeForDetails;
@@ -105,6 +106,7 @@ public final class XgramSettings {
     historySaveDeleted = pmc.getBoolean(KEY_HISTORY_SAVE_DELETED, true);
     historySaveEdits = pmc.getBoolean(KEY_HISTORY_SAVE_EDITS, true);
     historySaveMedia = pmc.getBoolean(KEY_HISTORY_SAVE_MEDIA, true);
+    historyRedDeleted = pmc.getBoolean(KEY_HISTORY_RED_DELETED, false);
     hideSponsored = pmc.getBoolean(KEY_HIDE_SPONSORED, true);
     showPeerIds = pmc.getBoolean(KEY_SHOW_PEER_IDS, true);
     twoPaneLayout = pmc.getBoolean(KEY_TWO_PANE, true);
@@ -771,6 +773,16 @@ public final class XgramSettings {
   public void setHistorySaveEdits (boolean value) {
     historySaveEdits = value;
     put(KEY_HISTORY_SAVE_EDITS, value);
+  }
+
+  /** Draw the text of messages kept after the sender deleted them in red, besides the trash icon. */
+  public boolean historyRedDeleted () {
+    return historyRedDeleted;
+  }
+
+  public void setHistoryRedDeleted (boolean value) {
+    historyRedDeleted = value;
+    put(KEY_HISTORY_RED_DELETED, value);
   }
 
   // Chats
