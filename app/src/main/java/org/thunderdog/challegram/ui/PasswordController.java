@@ -1977,7 +1977,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   private void proceedForgot () {
     // XGram: the email-code screen has its own resend / reset menu
     if (mode == MODE_CODE_EMAIL && emailCodeLinks != null) {
-      emailCodeLinks.onLinkClick();
+      if (!inProgress) { // a second auth query would make TDLib abort the code check
+        emailCodeLinks.onLinkClick();
+      }
       return;
     }
     switch (mode) {

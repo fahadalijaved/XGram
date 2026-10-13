@@ -322,8 +322,14 @@ public final class EmailCodeLinks implements Handler.Callback {
         int floodSeconds = EmailLoginErrors.floodSeconds(error);
         if (floodSeconds > 0) {
           resendAvailableAt = SystemClock.elapsedRealtime() + floodSeconds * 1000L;
+          host.setHintText(EmailLoginErrors.toString(error), true);
+        } else if (!fromEmailSetup) {
+          // In WaitEmailCode TDLib re-sends to the email given in WaitEmailAddress. For the account's own login email it
+          // has none, so the server rejects it (e.g. EMAIL_INVALID). Don't tell the user their email is wrong.
+          host.setHintText(Lang.getString(R.string.xgram_login_ResendEmailCodeFailed), true);
+        } else {
+          host.setHintText(EmailLoginErrors.toString(error), true);
         }
-        host.setHintText(EmailLoginErrors.toString(error), true);
       } else {
         // Telegram limits how often a code can be sent; a short pause keeps users away from FLOOD_WAIT.
         resendAvailableAt = SystemClock.elapsedRealtime() + RESEND_COOLDOWN_MS;

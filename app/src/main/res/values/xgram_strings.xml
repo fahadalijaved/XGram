@@ -499,6 +499,7 @@
   <string name="xgram_login_ResendEmailCode">Resend code</string>
   <string name="xgram_login_ResendEmailCodeIn">Resend code in %1$s</string>
   <string name="xgram_login_EmailCodeResent">Code sent again. Check your inbox and spam folder.</string>
+  <string name="xgram_login_ResendEmailCodeFailed">Couldn’t send a new code from here. Go back and enter your phone number again to get one.</string>
   <string name="xgram_login_CantAccessEmailLink">Can’t access this email?</string>
   <string name="xgram_login_CantAccessEmail">Lost access to this email? You can reset it and log in with a code sent to your phone number instead.</string>
   <string name="xgram_login_ResetEmailNow">Reset email now</string>
@@ -506,9 +507,9 @@
   <string name="xgram_login_ResetEmailNowInfo">The login email of this account will be removed, and Telegram will send a login code to your phone number instead.</string>
   <string name="xgram_login_ResetEmailAfterInfo">The login email of this account will be removed after %1$s. Then you can log in with a code sent to your phone number. Until then, codes still go to this email.</string>
   <string name="xgram_login_ResetEmailConfirm">Reset email</string>
-  <string name="xgram_login_ResetEmailRequested">Reset already requested. Come back when the wait is over.</string>
+  <string name="xgram_login_ResetEmailRequested">Reset requested. Come back when the wait is over.</string>
   <string name="xgram_login_ResetEmailPending">Email will be reset in %1$s</string>
-  <string name="xgram_login_ResetEmailReady">The email can be reset now. Tap Check again.</string>
+  <string name="xgram_login_ResetEmailReady">The wait is over. Tap “Can’t access this email?”, then Check again.</string>
   <string name="xgram_login_ResetEmailCheck">Check again</string>
   <string name="xgram_login_ResetEmailNotYet">The email can’t be reset yet. Try again in %1$s.</string>
   <string name="xgram_login_UseDifferentEmail">Use a different email</string>
