@@ -1601,8 +1601,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     boolean showAsArchive = (isMain && menuNeedArchive) || isArchive;
     if (hasFolders) {
       String source;
-      // XGram: "All chats" follows the chosen style like every folder (Telegram X always showed it as a bare icon first).
-      boolean iconOnly = chatFolderStyle == ChatFolderStyle.ICON_ONLY;
+      // XGram: optionally, "All chats" follows the chosen style like every folder (Telegram X shows it as a bare icon first).
+      boolean iconOnly = chatFolderStyle == ChatFolderStyle.ICON_ONLY ||
+        (isMain && pagerItemPosition == 0 && !com.fahadali.xgram.XgramSettings.instance().allChatsLabel());
       if (iconOnly) {
         source = "";
       } else if (showAsArchive) {
@@ -1918,6 +1919,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       UI.post(this::xgramUpdateGhostButton);
     } else if (com.fahadali.xgram.XgramSettings.KEY_HIDE_FAB.equals(key)) {
       UI.post(this::xgramUpdateComposeVisibility);
+    } else if (com.fahadali.xgram.XgramSettings.KEY_ALL_CHATS_LABEL.equals(key)) {
+      UI.post(this::onFoldersAppearanceChanged);
     }
   };
 

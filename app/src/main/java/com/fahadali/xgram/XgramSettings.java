@@ -56,6 +56,7 @@ public final class XgramSettings {
   public static final String KEY_BLOCK_CONTENT_CAPTURE = "xgram_block_content_capture";
   public static final String KEY_AI_TOOLS = "xgram_ai_tools";
   public static final String KEY_HIDE_FAB = "xgram_hide_fab";
+  public static final String KEY_ALL_CHATS_LABEL = "xgram_all_chats_label";
   public static final String KEY_PULL_TO_NEXT = "xgram_pull_to_next";
 
   private static XgramSettings instance;
@@ -75,7 +76,7 @@ public final class XgramSettings {
   private volatile boolean ghostDontRead, ghostDontType, ghostOffline, ghostReadOnSend, ghostLocalRead, ghostTypingForStickers, ghostScheduleSend, ghostSilent;
   private volatile boolean historySaveDeleted, historySaveEdits, historySaveMedia;
   private volatile boolean hideSponsored, showPeerIds, twoPaneLayout, saveLastSeen, showSeconds, cleanLinks, fixLinkPreviews, allowScreenshots, saveProtected, proxyOffOnVpn, proxyOffOnWifi, proxyOffOnMobile, hidePhone, blockContentCapture, iconTheme, mergeCommunities;
-  private volatile boolean aiTools, hideFab, pullToNext;
+  private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel;
   private volatile boolean tapTimeForDetails;
 
   private XgramSettings () {
@@ -110,6 +111,7 @@ public final class XgramSettings {
     ghostSilent = pmc.getBoolean(KEY_GHOST_SILENT, false);
     aiTools = pmc.getBoolean(KEY_AI_TOOLS, true);
     hideFab = pmc.getBoolean(KEY_HIDE_FAB, false);
+    allChatsLabel = pmc.getBoolean(KEY_ALL_CHATS_LABEL, false);
     pullToNext = pmc.getBoolean(KEY_PULL_TO_NEXT, true);
     applyGhostSend();
   }
@@ -611,6 +613,16 @@ public final class XgramSettings {
   public void setHideFab (boolean value) {
     hideFab = value;
     put(KEY_HIDE_FAB, value);
+  }
+
+  /** The "All chats" tab shows its label like the other folders (off: Telegram X's bare icon when it's first). */
+  public boolean allChatsLabel () {
+    return allChatsLabel;
+  }
+
+  public void setAllChatsLabel (boolean value) {
+    allChatsLabel = value;
+    put(KEY_ALL_CHATS_LABEL, value);
   }
 
   public void setTwoPaneLayout (boolean value) {

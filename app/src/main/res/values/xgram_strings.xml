@@ -161,6 +161,7 @@
   <string name="XgramSaveLastSeen">Save last seen locally</string>
   <string name="XgramShowSeconds">Show seconds in message time</string>
   <string name="XgramHideFab">Hide the new chat button</string>
+  <string name="XgramAllChatsLabel">Label on the All chats tab</string>
   <string name="XgramChatLook">Chat look</string>
   <string name="XgramIconPack">Icons</string>
   <string name="XgramIconPackClassic">Classic</string>
