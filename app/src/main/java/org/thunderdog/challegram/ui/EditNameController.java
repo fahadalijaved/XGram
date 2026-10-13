@@ -126,6 +126,7 @@ public class EditNameController extends EditBaseController<EditNameController.Ar
 
   private SettingsAdapter adapter;
   private ListItem firstName, shareMyNumber;
+  private @Nullable ListItem notifyContacts; // XGram: sign-up "tell my contacts" option
   private @Nullable ListItem lastName;
 
   @Override
@@ -212,6 +213,9 @@ public class EditNameController extends EditBaseController<EditNameController.Ar
     if (termsOfService != null && termsOfService.minUserAge != 0) {
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Lang.plural(R.string.AgeVerification, termsOfService.minUserAge), false));
     }
+    if (mode == Mode.SIGNUP) { // XGram: off by default, as Telegram X always sent disableNotification=true
+      items.add(notifyContacts = new ListItem(ListItem.TYPE_CHECKBOX_OPTION_REVERSE, R.id.btn_xgramNotifyContacts, 0, R.string.xgram_login_NotifyContactsJoined, false));
+    }
     if ((mode == Mode.RENAME_CONTACT || mode == Mode.ADD_CONTACT) && user != null) {
       if (StringUtils.isEmpty(knownPhoneNumber) && !TD.hasPhoneNumber(user)) {
         items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Lang.getStringBold(R.string.NumberHiddenHint, tdlib.cache().userName(user.id)), false));
@@ -279,6 +283,8 @@ public class EditNameController extends EditBaseController<EditNameController.Ar
   public void onClick (View v) {
     if (v.getId() == R.id.btn_shareMyContact) {
       shareMyNumber.setSelected(adapter.toggleView(v));
+    } else if (v.getId() == R.id.btn_xgramNotifyContacts && notifyContacts != null) { // XGram
+      notifyContacts.setSelected(adapter.toggleView(v));
     }
   }
 
@@ -357,8 +363,8 @@ public class EditNameController extends EditBaseController<EditNameController.Ar
           CharSequence text = TD.formatString(this, termsOfService.text.text, termsOfService.text.entities, null, null);
           openAlert(R.string.TermsOfService, text, Lang.getString(R.string.TermsOfServiceDone), (dialog, which) -> {
             setDoneInProgress(true);
-            // TODO: add checkbox & explanation that this allows
-            tdlib.client().send(new TdApi.RegisterUser(firstName, lastName, true), this);
+            boolean disableNotification = notifyContacts == null || !notifyContacts.isSelected(); // XGram: "Tell my contacts I joined"
+            tdlib.client().send(new TdApi.RegisterUser(firstName, lastName, disableNotification), this);
           }, ALERT_NO_CANCELABLE | ALERT_HAS_LINKS);
           break;
         }

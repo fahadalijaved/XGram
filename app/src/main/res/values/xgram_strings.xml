@@ -554,4 +554,12 @@
   <string name="xgram_login_VerificationFailed">Telegram couldn’t verify this app. Try QR login or another way to get the code.</string>
   <string name="xgram_login_UpdateAppToLogin">Telegram has blocked logins from this app for now. Try QR login.</string>
   <string name="xgram_login_PhoneNumberUnoccupied">No Telegram account uses this phone number.</string>
+  <string name="xgram_login_ResetAccount">Reset account</string>
+  <string name="xgram_login_ResetAccountInfo">Resetting deletes your Telegram account with all your chats, messages and contacts. This can’t be undone. You can then sign up again with the same number.\n\nIf the account is in use, Telegram may make you wait up to 7 days first, for your safety.</string>
+  <string name="xgram_login_ResetAccountTypePhone">Type this account’s phone number to confirm</string>
+  <string name="xgram_login_ResetAccountTypeWord">Type %1$s to confirm</string>
+  <string name="xgram_login_ResetAccountWord">RESET</string>
+  <string name="xgram_login_ResetAccountWait">This account is protected by a password and is in use, so Telegram will let you reset it in %1$s. Come back then and tap Reset account again.</string>
+  <string name="xgram_login_ResetAccountDone">Account deleted. You can sign up again with this number.</string>
+  <string name="xgram_login_NotifyContactsJoined">Tell my contacts I joined Telegram</string>
 </resources>

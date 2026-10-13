@@ -210,6 +210,8 @@
   <item type="id" name="menu_xgramQrLogin" />
   <item type="id" name="btn_xgramQrLogin" />
   <item type="id" name="btn_xgramQrCancel" />
+  <item type="id" name="btn_xgramResetAccount" />
+  <item type="id" name="btn_xgramNotifyContacts" />
   <item type="id" name="btn_xgramCodeNext" />
   <item type="id" name="btn_xgramCodeSupport" />
 </resources>

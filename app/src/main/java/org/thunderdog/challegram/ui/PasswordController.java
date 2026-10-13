@@ -1391,7 +1391,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
 
   private void requestRecovery () {
     if ((state != null && !state.hasRecoveryEmailAddress && authState != null) || (authState != null && authState.getConstructor() == TdApi.AuthorizationStateWaitPassword.CONSTRUCTOR && !((TdApi.AuthorizationStateWaitPassword) authState).hasRecoveryEmailAddress) || (state == null && authState == null)) {
-      openAlert(R.string.RestorePasswordNoEmailTitle, R.string.SinceNotProvided);
+      showNoRecoveryEmail(R.string.SinceNotProvided); // XGram: offers "Reset account" on the login screen
       return;
     }
 
@@ -1409,10 +1409,12 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     if (mode == MODE_LOGIN) {
       if (authState.getConstructor() != TdApi.AuthorizationStateWaitPassword.CONSTRUCTOR) {
         Log.e("Can't proceed, authState: %s", authState);
+        setInRecoveryProgress(false); // XGram: the spinner kept turning after an early return
         return;
       }
       if (!((TdApi.AuthorizationStateWaitPassword) authState).hasRecoveryEmailAddress) {
-        openAlert(R.string.RestorePasswordNoEmailTitle, R.string.SinceNotProvided);
+        setInRecoveryProgress(false); // XGram
+        showNoRecoveryEmail(R.string.SinceNotProvided); // XGram
         return;
       }
       tdlib.client().send(new TdApi.RequestAuthenticationPasswordRecovery(), object -> runOnUiThreadOptional(() -> {
@@ -1428,7 +1430,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
           case TdApi.Error.CONSTRUCTOR: {
             TdApi.Error error = (TdApi.Error) object;
             if ("PASSWORD_RECOVERY_NA".equals(error.message)) {
-              openAlert(R.string.RestorePasswordNoEmailTitle, R.string.SinceNotProvided);
+              showNoRecoveryEmail(R.string.SinceNotProvided); // XGram
             } else {
               UI.showError(object);
             }
@@ -2095,6 +2097,27 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     }, state);
   }
 
+  // XGram: on the 2FA login screen the "no recovery email" text comes with "Reset account", see com.fahadali.xgram.login.ResetAccount.
+  // Not "Log in with QR code": a QR login of an account with a password ends at this same password step.
+  private void showNoRecoveryEmail (@StringRes int textRes) {
+    boolean isLogin = (mode == MODE_LOGIN || mode == MODE_LOGIN_EMAIL_RECOVERY) && authState != null && authState.getConstructor() == TdApi.AuthorizationStateWaitPassword.CONSTRUCTOR;
+    if (!isLogin || !com.fahadali.xgram.login.ResetAccount.isAvailable(tdlib)) {
+      openAlert(R.string.RestorePasswordNoEmailTitle, textRes);
+      return;
+    }
+    com.fahadali.xgram.login.ResetAccount.showOptions(this, tdlib, Lang.getString(textRes), new com.fahadali.xgram.login.ResetAccount.Host() {
+      @Override
+      public boolean isBusy () {
+        return inProgress || inRecoveryProgress;
+      }
+
+      @Override
+      public void setInProgress (boolean inProgress) {
+        setInRecoveryProgress(inProgress);
+      }
+    });
+  }
+
   private void proceedForgot () {
     // XGram: the email-code screen has its own resend / reset menu
     if (mode == MODE_CODE_EMAIL && emailCodeLinks != null) {
@@ -2114,7 +2137,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
         break;
       }
       case MODE_LOGIN_EMAIL_RECOVERY: {
-        openAlert(R.string.RestorePasswordNoEmailTitle, R.string.RestoreEmailTroubleText);
+        showNoRecoveryEmail(R.string.RestoreEmailTroubleText); // XGram: offers "Reset account"
         break;
       }
       case MODE_CODE:
