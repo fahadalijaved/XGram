@@ -177,6 +177,7 @@ public class ThemeManager implements FactorAnimator.Target, GlobalAccountListene
       return;
     Runnable onDone = () -> {
       int usageId = Theme.getWallpaperIdentifier(themeId);
+      com.fahadali.xgram.appearance.XgramThemePack.onThemeRemoved(themeId); // XGram: drops the copied wallpaper picture of a style icon theme
       Settings.instance().removeCustomTheme(resolveCustomThemeId(themeId));
       U.run(after);
       TdlibManager.instance().replaceThemeId(themeId, parentThemeId);

@@ -2,8 +2,14 @@
 by role into .tgx-theme files, installed by XgramThemePack through Telegram X's own theme format.
 
 Two sets: the pack (AMOLED, Nord, Dracula, Catppuccin, Sakura, Paper) and one theme per app icon (pack_*.tgx-theme,
-icon_<alias>.tgx-theme). Every theme has its own wallpaper slot (wallpaperUsageId 2) and, except AMOLED, a matching
-four-color gradient wallpaper that TDLib builds locally from its name ("a~b~c~d").
+icon_<alias>.tgx-theme). Every theme has its own wallpaper slot (wallpaperUsageId 2) and, except AMOLED, a wallpaper:
+  - the pack: a four-color gradient that TDLib builds locally from its name ("a~b~c~d");
+  - the ten color icon themes: a Telegram doodle pattern over a stronger gradient
+    ("<slug>?intensity=I&bg_color=a~b~c~d", or "a-b&rotation=N"), downloaded by TDLib on first use;
+  - the six style icon themes (neon, turbo, retro, pixel, origami, stardust): their own picture from
+    assets/xgram_wallpapers (tools/xgram/wallpapers.py), set by XgramThemePack when the theme is installed. The
+    gradient here is only the fallback (accounts not loaded at the time, "reset to default" in the picker).
+TGX tints a pattern at 40% x intensity, so intensities are 35-60 and always positive (it never draws inverted ones).
 
 Run: python gen_themes.py   (writes app/src/main/assets/xgram_themes)
 """
@@ -137,53 +143,53 @@ PACK = [
 
 ICONS = [
     # colors
-    dict(key='icon_default', name='XGram', dark=False, wallpaper='d8eefc~e2defb~ccE8fa~dcd5f8'.lower(),
+    dict(key='icon_default', name='XGram', dark=False, wallpaper='fqv01SQemVIBAAAApND8LDRUhRU?intensity=50&bg_color=9fccf4~b9b4f2~8ec0f0~aea2ee',
          p=derive(False, bg='EAF0FB', surface='FFFFFF', header='4A72E8', text='1F2433', muted='7B8399', accent='4C6FEA',
                   link='2AABEE', bubbleOut='DCE4FF')),
-    dict(key='icon_aqua', name='Aurora', dark=True, wallpaper='06222a~1d1340~0b2f3a~2a1a4f',
+    dict(key='icon_aqua', name='Aurora', dark=True, wallpaper='O-wmAfBPSFADAAAA4zINVfD_bro?intensity=40&bg_color=0d3d43~271c5a~104e50~38256f',
          p=derive(True, bg='08161D', surface='0F222C', header='0F2430', text='E6FFFA', muted='86A7A6', accent='00C9A7',
                   accentBright='3CE3C4', link='9C82E8', bubbleOut='3E3480', onAccent='04211C')),
-    dict(key='icon_sunset', name='Sunset', dark=False, wallpaper='ffe1c2~ffd0c8~ffeedd~ffc4b4',
+    dict(key='icon_sunset', name='Sunset', dark=False, wallpaper='p-pXcflrmFIBAAAAvXYQk-mCwZU?intensity=55&bg_color=ffbd92~ffa190~ffcaa0~ff917e',
          p=derive(False, bg='FFF1E8', surface='FFFFFF', header='FF7A59', text='3A2620', muted='9A7B70', accent='FF6A4D',
                   link='E8553A', bubbleOut='FFE0CC')),
-    dict(key='icon_mono', name='Midnight', dark=True, wallpaper='070b1c~101a3d~0b1030~1a1446',
+    dict(key='icon_mono', name='Midnight', dark=True, wallpaper='9LW_RcoOSVACAAAAFTk3DTyXN-M?intensity=38&bg_color=14245f-25186c&rotation=315',
          p=derive(True, bg='070B1C', surface='0B1026', header='0B1026', text='E8F7FF', muted='7E8FB5', accent='00E5FF',
                   accentBright='7C4DFF', link='4FD8FF', bubbleOut='2A237A', onAccent='021820', headerTab='00E5FF')),
-    dict(key='icon_emerald', name='Emerald', dark=False, wallpaper='d9f7e8~c8f2dc~ebfbf2~bdebcf',
+    dict(key='icon_emerald', name='Emerald', dark=False, wallpaper='JqSUrO0-mFIBAAAAWwTvLzoWGQI?intensity=50&bg_color=a6e3c4~88d6b3~bfecd3~79cba9',
          p=derive(False, bg='EAF7F0', surface='FFFFFF', header='129E86', text='1D332B', muted='6F8C80', accent='11998E',
                   link='0F8C6E', bubbleOut='D6F7E2')),
-    dict(key='icon_gold', name='Gold', dark=True, wallpaper='0e0e0e~1d1a14~141210~261f14',
+    dict(key='icon_gold', name='Gold', dark=True, wallpaper='F5oWoCs7QFACAAAAgf2bD_mg8Bw?intensity=35&bg_color=2b2317~3a2e1c~211c14~453520',
          p=derive(True, bg='0B0B0B', surface='151413', header='141414', text='F3EBDD', muted='A0947C', accent='E9C46A',
                   accentBright='F7D774', link='E0B65A', bubbleOut='4A3B1C', onAccent='1A1408', headerTab='E9C46A')),
-    dict(key='icon_violet', name='Glass', dark=False, wallpaper='dde6fb~e8dcf7~eef2fd~d6cdf3',
+    dict(key='icon_violet', name='Glass', dark=False, wallpaper='MIo6r0qGSFAFAAAAtL8TsDzNX60?intensity=50&bg_color=c4b2ef-a6bdf3&rotation=135',
          p=derive(False, bg='EEF0FB', surface='FFFFFF', header='6F79E0', text='262842', muted='7E80A0', accent='7B5FD6',
                   link='5B86E5', bubbleOut='E4DDFA')),
-    dict(key='icon_rose', name='Rose', dark=False, wallpaper='ffd9e4~ffd6d6~ffeaf0~ffcbd6',
+    dict(key='icon_rose', name='Rose', dark=False, wallpaper='PllZ-bf_SFAEAAAA8crRfwZiDNg?intensity=55&bg_color=ffb0c3~ffb5b5~ffc8d3~ff9cb2',
          p=derive(False, bg='FFF0F3', surface='FFFFFF', header='F2577F', text='3A2228', muted='9C7880', accent='F0507E',
                   link='E8436A', bubbleOut='FFDCE3')),
-    dict(key='icon_night', name='Night', dark=True, wallpaper='12121f~16213e~1a1a2e~1c1f45',
+    dict(key='icon_night', name='Night', dark=True, wallpaper='dk_wwlghOFACAAAAfz9xrxi6euw?intensity=42&bg_color=232b43~2c3b5d~202539~353b64',
          p=derive(True, bg='10101C', surface='1A1A2E', header='16213E', text='E6ECFF', muted='8A93B8', accent='4FC3F7',
                   accentBright='7C9DFF', link='6FB8FF', bubbleOut='2E3570', onAccent='06202C')),
-    dict(key='icon_light', name='Mono', dark=False, light_header=True, wallpaper='f2f2f2~e5e5e5~f8f8f8~eaeaea',
+    dict(key='icon_light', name='Mono', dark=False, light_header=True, wallpaper='RepJ5uE_SVABAAAAr4d0YhgB850?intensity=45&bg_color=d2d2d2-bababa&rotation=180',
          p=derive(False, bg='EFEFEF', surface='FFFFFF', header='F7F7F7', text='111111', muted='777777', accent='111111',
                   link='333333', bubbleOut='E4E4E4', headerText='111111', headerMuted='777777', headerTab='111111')),
     # styles
-    dict(key='icon_neon', name='Neon', dark=True, wallpaper='0a0418~2a0a3e~0b1a3a~1c0a3a',
+    dict(key='icon_neon', name='Neon', dark=True, wallpaper='1a0a40~45125e~142a58~33115c',
          p=derive(True, bg='0A0418', surface='120A26', header='1C0A3A', text='F7EBFF', muted='9C86C0', accent='FF2BD6',
                   accentBright='00E5FF', link='00E5FF', bubbleOut='4E1460', onAccent='1C0A3A', headerTab='FF2BD6')),
-    dict(key='icon_turbo', name='Turbo', dark=False, wallpaper='ffe6bd~ffd1b5~fff1dc~ffc6c0',
+    dict(key='icon_turbo', name='Turbo', dark=False, wallpaper='ffd49a~ffb98f~ffc7a8~ffa6a6',
          p=derive(False, bg='FFF2E6', surface='FFFFFF', header='FF6A00', text='37231A', muted='9B7B6B', accent='FF5A1F',
                   link='FF2D55', bubbleOut='FFE0C7')),
-    dict(key='icon_retro', name='Retro', dark=False, wallpaper='f7e9c6~eed7a1~f9efd6~e8cf9a',
+    dict(key='icon_retro', name='Retro', dark=False, wallpaper='ead6a4~dfc286~f0e0b8~d9b977',
          p=derive(False, bg='F3E6C4', surface='FBF3DE', header='264653', text='1D3557', muted='7C7458', accent='E63946',
                   link='2A9D8F', bubbleOut='F2DEA6', headerText='F7E9C6', headerMuted='A8C3BF')),
-    dict(key='icon_pixel', name='Pixel', dark=True, wallpaper='120a26~2a1450~1b1037~24124a',
+    dict(key='icon_pixel', name='Pixel', dark=True, wallpaper='28154f~42207a~2d1860~3a1c70',
          p=derive(True, bg='0F0820', surface='1B1037', header='2A1450', text='F2EEFF', muted='9A8CC0', accent='4DD0E1',
                   accentBright='7CF3FF', link='4DD0E1', bubbleOut='3A2470', onAccent='0A1F24')),
-    dict(key='icon_origami', name='Origami', dark=False, wallpaper='d6f1fd~c9defb~e8f7fe~bdd5f7',
+    dict(key='icon_origami', name='Origami', dark=False, wallpaper='bfe6fa~a9cdf5~d3eefc~9cc2f2',
          p=derive(False, bg='EAF4FD', surface='FFFFFF', header='3F86F0', text='1C2A3F', muted='72819A', accent='2F6FED',
                   link='1F8FE0', bubbleOut='D9EBFF')),
-    dict(key='icon_stardust', name='Stardust', dark=False, wallpaper='dfe6ff~e9dcff~f8dcf0~e2d4ff',
+    dict(key='icon_stardust', name='Stardust', dark=False, wallpaper='c9d3ff~d6c0ff~efc0e2~ccbaff',
          p=derive(False, bg='F2EFFD', surface='FFFFFF', header='8A6CFF', text='2A2342', muted='857DA3', accent='976FFF',
                   accentBright='E46ACE', link='6B93FF', bubbleOut='EADFFF')),
 ]
