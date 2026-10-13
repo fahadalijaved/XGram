@@ -11,11 +11,16 @@
  */
 package com.fahadali.xgram.chats;
 
+import androidx.annotation.Nullable;
+
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.telegram.Tdlib;
 
 import java.text.BreakIterator;
 import java.util.ArrayList;
 import java.util.List;
+
+import tgx.td.Td;
 
 /**
  * Turns a text selection into the quote TDLib takes: exactly that part of the message text (UTF-16 offsets), trimmed
@@ -240,5 +245,21 @@ public final class XgramQuoteText {
     }
     TdApi.FormattedText quoteText = new TdApi.FormattedText(s.substring(start, end), kept.toArray(new TdApi.TextEntity[0]));
     return new Quote(new TdApi.InputTextQuote(quoteText, start), wasCut);
+  }
+
+  /**
+   * The quote, taken from quotedText, for the message text as it is now: unchanged if the text is the same, else moved
+   * to where the edited text has the same quote. Null when it no longer has it, as Telegram would refuse the reply.
+   */
+  @Nullable
+  public static TdApi.InputTextQuote relocate (TdApi.InputTextQuote quote, TdApi.FormattedText quotedText, @Nullable TdApi.FormattedText currentText) {
+    if (currentText == null || isBlank(currentText.text)) {
+      return null;
+    }
+    if (Td.equalsTo(quotedText, currentText)) {
+      return quote;
+    }
+    TdApi.FoundPosition found = Tdlib.executeOrNull(new TdApi.SearchQuote(currentText, quote.text, quote.position));
+    return found != null && found.position >= 0 ? new TdApi.InputTextQuote(quote.text, found.position) : null;
   }
 }

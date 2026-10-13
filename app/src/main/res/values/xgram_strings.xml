@@ -210,6 +210,7 @@
   <string name="XgramQuoteSelectHint">Select the part to quote</string>
   <string name="XgramQuoteReply">Reply with quote</string>
   <string name="XgramQuoteTooLong">Quotes can be up to %1$d characters, so the end was cut</string>
+  <string name="XgramQuoteChanged">The message was edited and no longer has this text</string>
   <string name="XgramMaterialYou">Material You theme</string>
   <string name="XgramAllowScreenshots">Allow screenshots in protected chats</string>
   <string name="XgramSaveProtected">Allow saving protected content</string>

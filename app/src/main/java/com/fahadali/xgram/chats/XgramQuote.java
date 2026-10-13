@@ -12,6 +12,7 @@
 package com.fahadali.xgram.chats;
 
 import android.content.Context;
+import android.os.Build;
 import android.text.Selection;
 import android.text.Spannable;
 import android.text.SpannableStringBuilder;
@@ -24,6 +25,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -42,6 +44,7 @@ import org.thunderdog.challegram.data.TGMessageMedia;
 import org.thunderdog.challegram.navigation.OptionsLayout;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.support.RippleSupport;
+import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Fonts;
@@ -71,8 +74,12 @@ public final class XgramQuote {
 
   // The message to quote
 
-  private static boolean hasText (@Nullable TdApi.Message message) {
+  private static boolean hasText (Tdlib tdlib, @Nullable TdApi.Message message) {
     if (message == null || message.id == 0 || message.content == null || message.content.getConstructor() == TdApi.MessageAnimatedEmoji.CONSTRUCTOR) {
+      return false;
+    }
+    if (tdlib.messageBeingEdited(message)) {
+      // The bubble already shows the new text, the message still has the old one.
       return false;
     }
     TdApi.FormattedText text = Td.textOrCaption(message.content);
@@ -82,20 +89,21 @@ public final class XgramQuote {
   /** The album part with the caption, else the newest message with text, as Copy picks it. Null without text. */
   @Nullable
   private static TdApi.Message quotable (TGMessage msg) {
+    Tdlib tdlib = msg.tdlib();
     if (msg instanceof TGMessageMedia) {
       long captionMessageId = ((TGMessageMedia) msg).getCaptionMessageId();
       TdApi.Message message = captionMessageId != 0 ? msg.getMessage(captionMessageId) : null;
-      if (hasText(message)) {
+      if (hasText(tdlib, message)) {
         return message;
       }
     }
     TdApi.Message newest = msg.getNewestMessage();
-    if (hasText(newest)) {
+    if (hasText(tdlib, newest)) {
       return newest;
     }
     TdApi.Message[] messages = msg.getAllMessages();
     for (int i = messages.length - 1; i >= 0; i--) {
-      if (hasText(messages[i])) {
+      if (hasText(tdlib, messages[i])) {
         return messages[i];
       }
     }
@@ -132,7 +140,7 @@ public final class XgramQuote {
       popupLayout.setHideKeyboard();
       Context context = optionsLayout.getContext();
 
-      TextView textView = newTextView(m, context, text);
+      TextView textView = newTextView(m, context, text, canCopy);
       // Read when a button is touched, in case the selection is gone by the time it is clicked.
       int[] touchedSelection = {-1, -1};
       Runnable dropSelection = () -> {
@@ -144,7 +152,7 @@ public final class XgramQuote {
       RunnableData<int[]> replyWith = selection -> {
         dropSelection.run();
         popupLayout.hideWindow(true);
-        reply(m, msg, message, text, selection[0], selection[1]);
+        reply(m, message, text, selection[0], selection[1]);
       };
       textView.setCustomSelectionActionModeCallback(new ActionMode.Callback() {
         @Override
@@ -286,17 +294,67 @@ public final class XgramQuote {
     return b;
   }
 
-  private static TextView newTextView (MessagesController m, Context context, TdApi.FormattedText text) {
+  private static TextView newTextView (MessagesController m, Context context, TdApi.FormattedText text, boolean canCopy) {
     CharSequence display = displayText(text);
-    TextView textView = new EmojiTextView(context);
+    TextView textView = canCopy ? new EmojiTextView(context) : new EmojiTextView(context) {
+      @Override
+      public boolean onTextContextMenuItem (int id) {
+        return !isCopyOut(id) && super.onTextContextMenuItem(id);
+      }
+    };
     setUpTextView(m, textView, display);
     if (!text.text.contentEquals(textView.getText())) {
       // Selection offsets must be the message's own: drop the emoji images if they changed the text.
       ((EmojiTextView) textView).performDestroy();
-      textView = new TextView(context);
+      textView = canCopy ? new TextView(context) : new TextView(context) {
+        @Override
+        public boolean onTextContextMenuItem (int id) {
+          return !isCopyOut(id) && super.onTextContextMenuItem(id);
+        }
+      };
       setUpTextView(m, textView, display);
     }
+    if (!canCopy) {
+      keepInApp(textView);
+    }
     return textView;
+  }
+
+  /** Copy, cut and share, from the text menus, keyboard shortcuts or accessibility services. */
+  private static boolean isCopyOut (int id) {
+    return id == android.R.id.copy || id == android.R.id.cut || id == android.R.id.shareText;
+  }
+
+  /** Protected content: the selected text can't be dragged into another app, and copy isn't offered to accessibility. */
+  private static void keepInApp (TextView textView) {
+    float[] down = new float[2];
+    textView.setOnTouchListener((v, e) -> {
+      if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+        down[0] = e.getX();
+        down[1] = e.getY();
+      }
+      return false;
+    });
+    // A long press on the selected text starts dragging it, and the drop can be in any app.
+    textView.setOnLongClickListener(v -> {
+      int start = Math.min(textView.getSelectionStart(), textView.getSelectionEnd());
+      int end = Math.max(textView.getSelectionStart(), textView.getSelectionEnd());
+      if (start < 0 || start == end) {
+        return false;
+      }
+      int offset = textView.getOffsetForPosition(down[0], down[1]);
+      return offset >= start && offset <= end;
+    });
+    textView.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+      @Override
+      public void onInitializeAccessibilityNodeInfo (View host, AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(host, info);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+          info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_COPY);
+          info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CUT);
+        }
+      }
+    });
   }
 
   private static void setUpTextView (MessagesController m, TextView textView, CharSequence display) {
@@ -317,8 +375,9 @@ public final class XgramQuote {
 
   // Reply
 
-  private static void reply (MessagesController m, TGMessage msg, TdApi.Message message, TdApi.FormattedText text, int selectionStart, int selectionEnd) {
-    int maxLength = m.tdlib().options().messageReplyQuoteLengthMax;
+  private static void reply (MessagesController m, TdApi.Message message, TdApi.FormattedText text, int selectionStart, int selectionEnd) {
+    Tdlib tdlib = m.tdlib();
+    int maxLength = tdlib.options().messageReplyQuoteLengthMax;
     if (maxLength <= 0) {
       maxLength = XgramQuoteText.DEFAULT_LENGTH_MAX;
     }
@@ -326,18 +385,28 @@ public final class XgramQuote {
     if (quote == null) {
       return;
     }
-    if (quote.wasCut) {
-      UI.showToast(Lang.getString(R.string.XgramQuoteTooLong, maxLength), Toast.LENGTH_SHORT);
-    }
-    // Same as Reply.
-    msg.getMessageProperties(message.id, properties -> m.runOnUiThreadOptional(() -> {
-      if (properties != null) {
-        m.showReply(new MessageWithProperties(message, properties), quote.quote, 0, "", true, true);
+    int lengthMax = maxLength;
+    // The sheet can stay open a while: the message may have been edited or deleted since, so read it again.
+    tdlib.send(new TdApi.GetMessage(message.chatId, message.id), (current, error) -> {
+      TdApi.InputTextQuote inputQuote = current != null ? XgramQuoteText.relocate(quote.quote, text, Td.textOrCaption(current.content)) : null;
+      if (inputQuote == null) {
+        m.runOnUiThreadOptional(() -> UI.showToast(current != null ? R.string.XgramQuoteChanged : R.string.MessageNotFound, Toast.LENGTH_SHORT));
+        return;
+      }
+      // Same as Reply.
+      tdlib.send(new TdApi.GetMessageProperties(current.chatId, current.id), (properties, propertiesError) -> m.runOnUiThreadOptional(() -> {
+        if (properties == null) {
+          return;
+        }
+        if (quote.wasCut) {
+          UI.showToast(Lang.getString(R.string.XgramQuoteTooLong, lengthMax), Toast.LENGTH_SHORT);
+        }
+        m.showReply(new MessageWithProperties(current, properties), inputQuote, 0, "", true, true);
         InputView inputView = m.xgramInputView();
         if (inputView != null && inputView.isEmpty()) {
           Keyboard.show(inputView);
         }
-      }
-    }));
+      }));
+    });
   }
 }
