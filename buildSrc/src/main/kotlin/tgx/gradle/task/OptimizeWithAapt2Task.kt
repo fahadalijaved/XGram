@@ -32,6 +32,8 @@ abstract class OptimizeWithAapt2Task @Inject constructor(
         if (minSdk.get() >= 34) {
           args("--enable-compact-entries")
         }
+        // XGram: the output and input were never passed, so aapt2 failed with "must have one APK as argument".
+        args("-o", tempFile.absolutePath, inputFile.absolutePath)
         standardOutput = output
         errorOutput = output
         isIgnoreExitValue = true
