@@ -63,6 +63,7 @@
   <item type="id" name="btn_xgramHistorySaveMedia" />
   <item type="id" name="btn_xgramTwoPane" />
   <item type="id" name="btn_xgramHideFab" />
+  <item type="id" name="btn_xgramAboutSupport" />
   <item type="id" name="btn_xgramAllChatsLabel" />
   <item type="id" name="btn_xgramChatLook" />
   <item type="id" name="btn_xgramIconPack" />

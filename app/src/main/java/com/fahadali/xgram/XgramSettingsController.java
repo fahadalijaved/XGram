@@ -168,6 +168,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(Lang.getAppBuildAndVersion(tdlib));
         } else if (id == R.id.btn_xgramAboutBasedOn) {
           view.setData(R.string.XgramAboutBasedOnInfo);
+        } else if (id == R.id.btn_xgramAboutSupport) {
+          view.setData(R.string.XgramAboutSupportInfo);
         } else if (id == R.id.btn_xgramAvatarCorners) {
           view.setData(avatarCornersName(settings.avatarCorners()));
         } else if (id == R.id.btn_xgramIconPack) {
@@ -352,7 +354,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramAbout));
     addRows(items,
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutVersion, R.drawable.baseline_info_24, R.string.XgramAboutVersion),
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutBasedOn, R.drawable.baseline_code_24, R.string.XgramAboutBasedOn)
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutBasedOn, R.drawable.baseline_code_24, R.string.XgramAboutBasedOn),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutSupport, R.drawable.baseline_favorite_24, R.string.XgramAboutSupport)
     );
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramAboutCredits));
   }
@@ -965,6 +968,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         org.thunderdog.challegram.tool.UI.showToast(R.string.XgramImportDone, android.widget.Toast.LENGTH_SHORT);
         org.thunderdog.challegram.tool.UI.post(() -> XgramApp.restart(context), 800);
       }
+      return;
+    } else if (id == R.id.btn_xgramAboutSupport) {
+      tdlib.ui().openUrl(this, "https://paypal.me/fahadalijaved23", new org.thunderdog.challegram.telegram.TdlibUi.UrlOpenParameters().disableInstantView());
       return;
     } else if (id == R.id.btn_xgramAboutBasedOn) {
       tdlib.ui().openUrl(this, "https://github.com/TGX-Android/Telegram-X", new org.thunderdog.challegram.telegram.TdlibUi.UrlOpenParameters().disableInstantView());
