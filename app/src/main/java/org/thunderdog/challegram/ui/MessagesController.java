@@ -6090,7 +6090,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         }
         TdApi.File file = TD.getFile(selectedMessage);
         if (file != null && !file.local.isDownloadingActive && !file.local.isDownloadingCompleted) {
-          tdlib.files().downloadFile(file);
+          tdlib.files().downloadFile(file, com.fahadali.xgram.XgramDownloadBoost.tappedPriority(), null); // XGram: download boost
         }
         return true;
       } else if (id == R.id.btn_pauseFile) {

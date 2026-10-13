@@ -555,7 +555,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
           runOnUiThreadOptional(c, defaultOpen);
           return true;
         }
-        tdlib.files().downloadFile(file, TdlibFilesManager.PRIORITY_USER_REQUEST_DOWNLOAD, (downloadedFile, error) -> {
+        tdlib.files().downloadFile(file, com.fahadali.xgram.XgramDownloadBoost.tappedPriority(), (downloadedFile, error) -> { // XGram: download boost
           if (error != null) {
             UI.showError(error);
             return;
@@ -785,7 +785,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     switch (currentState) {
       case TdlibFilesManager.STATE_PAUSED: {
         if (file != null) {
-          tdlib.files().downloadFile(file);
+          tdlib.files().downloadFile(file, com.fahadali.xgram.XgramDownloadBoost.tappedPriority(), null); // XGram: download boost
           return true;
         }
         break;

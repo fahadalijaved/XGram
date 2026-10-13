@@ -442,11 +442,12 @@ public final class TdlibDataSource extends BaseDataSource {
           if (file.size != 0 && file.size <= minDownloadChunk * 3) {
             return TdlibFilesManager.LIMIT_MAX;
           } else if (durationMs > 0) {
-            if (durationMs <= TimeUnit.SECONDS.toMillis(PRELOAD_SECONDS)) {
+            final long preloadSeconds = com.fahadali.xgram.XgramDownloadBoost.videoPreloadSeconds(PRELOAD_SECONDS); // XGram: download boost
+            if (preloadSeconds == 0 || durationMs <= TimeUnit.SECONDS.toMillis(preloadSeconds)) {
               return TdlibFilesManager.LIMIT_MAX;
             }
             double bytesPerSecond = ((double) file.size / (double) durationMs) * 1000.0;
-            long bytesPerPeriod = Math.round(bytesPerSecond * (double) PRELOAD_SECONDS);
+            long bytesPerPeriod = Math.round(bytesPerSecond * (double) preloadSeconds);
             long extraBytes = bytesPerPeriod % minDownloadChunk;
             if (extraBytes != 0) {
               bytesPerPeriod += minDownloadChunk - extraBytes;

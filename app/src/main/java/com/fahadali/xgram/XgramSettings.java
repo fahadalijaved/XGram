@@ -58,6 +58,8 @@ public final class XgramSettings {
   public static final String KEY_HIDE_FAB = "xgram_hide_fab";
   public static final String KEY_ALL_CHATS_LABEL = "xgram_all_chats_label";
   public static final String KEY_PULL_TO_NEXT = "xgram_pull_to_next";
+  public static final String KEY_DOWNLOAD_BOOST = "xgram_download_boost_on";
+  public static final String KEY_DOWNLOAD_BOOST_LEVEL = "xgram_download_boost_level";
 
   private static XgramSettings instance;
 
@@ -78,6 +80,8 @@ public final class XgramSettings {
   private volatile boolean hideSponsored, showPeerIds, twoPaneLayout, saveLastSeen, showSeconds, cleanLinks, fixLinkPreviews, allowScreenshots, saveProtected, proxyOffOnVpn, proxyOffOnWifi, proxyOffOnMobile, hidePhone, blockContentCapture, iconTheme, mergeCommunities;
   private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel;
   private volatile boolean tapTimeForDetails;
+  private volatile boolean downloadBoost;
+  private volatile int downloadBoostLevel;
 
   private XgramSettings () {
     LevelDB pmc = pmc();
@@ -113,6 +117,8 @@ public final class XgramSettings {
     hideFab = pmc.getBoolean(KEY_HIDE_FAB, false);
     allChatsLabel = pmc.getBoolean(KEY_ALL_CHATS_LABEL, false);
     pullToNext = pmc.getBoolean(KEY_PULL_TO_NEXT, true);
+    downloadBoost = pmc.getBoolean(KEY_DOWNLOAD_BOOST, false);
+    downloadBoostLevel = Math.max(XgramDownloadBoost.LEVEL_LOW, Math.min(XgramDownloadBoost.LEVEL_MAX, pmc.getInt(KEY_DOWNLOAD_BOOST_LEVEL, XgramDownloadBoost.LEVEL_DEFAULT)));
     applyGhostSend();
   }
 
@@ -371,6 +377,26 @@ public final class XgramSettings {
   }
 
   // Network
+
+  /** Download boost (see {@link XgramDownloadBoost}). Read on every download request, so it applies at once to every account. */
+  public boolean downloadBoost () {
+    return downloadBoost;
+  }
+
+  public void setDownloadBoost (boolean value) {
+    downloadBoost = value;
+    put(KEY_DOWNLOAD_BOOST, value);
+  }
+
+  /** {@link XgramDownloadBoost#LEVEL_LOW} .. {@link XgramDownloadBoost#LEVEL_MAX}, kept while boost is off. */
+  public int downloadBoostLevel () {
+    return downloadBoostLevel;
+  }
+
+  public void setDownloadBoostLevel (int level) {
+    downloadBoostLevel = Math.max(XgramDownloadBoost.LEVEL_LOW, Math.min(XgramDownloadBoost.LEVEL_MAX, level));
+    putInt(KEY_DOWNLOAD_BOOST_LEVEL, downloadBoostLevel);
+  }
 
   public boolean preferIpv6 () {
     return pmc().getBoolean("xgram_prefer_ipv6", false);

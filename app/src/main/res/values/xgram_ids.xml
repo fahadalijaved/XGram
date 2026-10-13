@@ -89,6 +89,9 @@
   <item type="id" name="btn_xgramHidePhone" />
   <item type="id" name="btn_xgramHistoryRetention" />
   <item type="id" name="btn_xgramPreferIpv6" />
+  <item type="id" name="btn_xgramDownloadBoost" />
+  <item type="id" name="btn_xgramDownloadBoostLevel" />
+  <item type="id" name="btn_xgramDownloadBoostInfo" />
   <item type="id" name="btn_xgramLimitMessageWidth" />
   <item type="id" name="btn_xgramMute1h" />
   <item type="id" name="btn_xgramMute8h" />

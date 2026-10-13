@@ -235,6 +235,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.blockContentCapture(), isUpdate);
         } else if (id == R.id.btn_xgramPreferIpv6) {
           view.getToggler().setRadioEnabled(settings.preferIpv6(), isUpdate);
+        } else if (id == R.id.btn_xgramDownloadBoost) {
+          view.getToggler().setRadioEnabled(settings.downloadBoost(), isUpdate);
         } else if (id == R.id.btn_xgramForwardWithoutAuthor) {
           view.getToggler().setRadioEnabled(settings.forwardWithoutAuthor(), isUpdate);
         } else if (id == R.id.btn_xgramMergeCommunities) {
@@ -254,6 +256,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         }
         // Settings search: results show where they live; locked switches stay tappable. Keep this last.
         XgramSettingsSearch.bindResult(item, view, isUpdate);
+      }
+
+      @Override
+      protected void onSliderValueChanged (ListItem item, org.thunderdog.challegram.widget.SliderWrapView view, int newValue, int oldValue) {
+        if (item.getId() == R.id.btn_xgramDownloadBoostLevel) {
+          XgramSettings.instance().setDownloadBoostLevel(XgramDownloadBoost.LEVEL_LOW + newValue);
+          updateDownloadBoostInfo();
+        }
       }
 
       @SuppressLint("ClickableViewAccessibility")
@@ -451,6 +461,17 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   }
 
   private void buildNetwork (List<ListItem> items) {
+    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramSpeed));
+    String[] levels = new String[XgramDownloadBoost.LEVEL_NAMES.length];
+    for (int i = 0; i < levels.length; i++) {
+      levels[i] = Lang.getString(XgramDownloadBoost.LEVEL_NAMES[i]);
+    }
+    addRows(items,
+      toggle(R.id.btn_xgramDownloadBoost, R.string.XgramDownloadBoost),
+      new ListItem(ListItem.TYPE_SLIDER, R.id.btn_xgramDownloadBoostLevel, 0, R.string.XgramBoostStrength)
+        .setSliderInfo(levels, XgramSettings.instance().downloadBoostLevel() - XgramDownloadBoost.LEVEL_LOW)
+    );
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramDownloadBoostInfo, 0, downloadBoostInfo(), false));
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramProxyRules));
     addRows(items,
       toggle(R.id.btn_xgramProxyOffVpn, R.string.XgramProxyOffVpn),
@@ -459,6 +480,18 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     );
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramProxyRulesInfo));
     addRows(items, toggle(R.id.btn_xgramPreferIpv6, R.string.XgramPreferIpv6));
+  }
+
+  private static CharSequence downloadBoostInfo () {
+    return Lang.getString(XgramDownloadBoost.description(XgramDownloadBoost.level())) + "\n\n" + Lang.getString(R.string.XgramDownloadBoostInfo);
+  }
+
+  private void updateDownloadBoostInfo () {
+    int index = adapter.indexOfViewById(R.id.btn_xgramDownloadBoostInfo);
+    if (index != -1) {
+      adapter.getItems().get(index).setString(downloadBoostInfo());
+      adapter.updateItem(index);
+    }
   }
 
   private void buildBackup (List<ListItem> items) {
@@ -861,6 +894,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramPreferIpv6) {
       settings.setPreferIpv6(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramDownloadBoost) {
+      settings.setDownloadBoost(adapter.toggleView(v));
+      updateDownloadBoostInfo();
       return;
     } else if (id == R.id.btn_xgramDeleteForEveryone) {
       settings.setDeleteForEveryoneByDefault(adapter.toggleView(v));

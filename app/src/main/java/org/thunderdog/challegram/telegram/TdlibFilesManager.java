@@ -667,7 +667,7 @@ public class TdlibFilesManager implements GlobalConnectionListener {
   public boolean downloadAutomatically (@NonNull TdApi.File file, @Nullable TdApi.ChatType chat, @MediaDownloadType int mediaType, boolean force) {
     synchronized (this) {
       if (canAutomaticallyDownload(file, mediaType, chat) && (!TD.isFileLoaded(file) || force)) {
-        downloadFile(file);
+        downloadFile(file, com.fahadali.xgram.XgramDownloadBoost.autoPriority(mediaType), null); // XGram: download boost
         return true;
       }
     }
@@ -763,6 +763,8 @@ public class TdlibFilesManager implements GlobalConnectionListener {
           tdlib.send(downloadFile(fileId, priority, offset, limit, false), fileHandler(fileId));
         }
       }
+    } else if (pendingOperation == OPERATION_DOWNLOAD && com.fahadali.xgram.XgramDownloadBoost.isTappedPriority(priority) && !Config.DEBUG_DISABLE_DOWNLOAD) {
+      tdlib.client().send(downloadFile(fileId, priority, offset, limit, false), tdlib.silentHandler()); // XGram: download boost, a running download the user asked for goes first
     }
   }
 
