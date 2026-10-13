@@ -556,10 +556,13 @@ public final class XgramUpdates {
     AlertDialog.Builder b = new AlertDialog.Builder(c.context(), Theme.dialogTheme());
     b.setTitle(Lang.getString(R.string.XgramUpdateWhatsNewTitle, found.versionName));
     b.setMessage(StringUtils.isEmpty(found.changelog) ? Lang.getString(R.string.XgramUpdateNoChangelog) : found.changelog);
+    // Two short buttons in one row: a third (Open post, already in the update prompt) made the theme stack them in a
+    // scrolling area, one of them drawn without text.
     if (download != null && c.context().appUpdater().state() == AppUpdater.State.AVAILABLE) {
-      b.setPositiveButton(Lang.getString(R.string.DownloadUpdate), (dialog, which) -> download.run());
+      b.setPositiveButton(Lang.getString(R.string.XgramUpdateDownload), (dialog, which) -> download.run());
+    } else {
+      b.setPositiveButton(Lang.getString(R.string.XgramUpdateOpenPost), (dialog, which) -> openPost(c, found));
     }
-    b.setNeutralButton(Lang.getString(R.string.XgramUpdateOpenPost), (dialog, which) -> openPost(c, found));
     b.setNegativeButton(Lang.getString(R.string.XgramUpdateClose), (dialog, which) -> dialog.dismiss());
     c.showAlert(b);
   }
