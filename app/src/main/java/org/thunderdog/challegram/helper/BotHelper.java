@@ -360,7 +360,7 @@ public class BotHelper implements Runnable, InlineSearchContext.CommandListProvi
       case TdApi.ReplyMarkupShowKeyboard.CONSTRUCTOR: {
         TdApi.ReplyMarkupShowKeyboard showKeyboard = (TdApi.ReplyMarkupShowKeyboard) markup;
         processShowKeyboard(messageId, showKeyboard);
-        if (type == TYPE_GROUP || type == TYPE_SUPERGROUP) {
+        if ((type == TYPE_GROUP || type == TYPE_SUPERGROUP) && !context.xgramHasQuoteReply()) { // XGram: keep a picked quote
           context.showReply(message, null, 0, "", false, false); // FIXME?
         }
         context.setCustomBotPlaceholder(showKeyboard.inputFieldPlaceholder);
@@ -388,7 +388,12 @@ public class BotHelper implements Runnable, InlineSearchContext.CommandListProvi
   }
 
   private void processForceReply (MessageWithProperties message, boolean personal) {
-    if (personal) {
+    if (context.xgramHasQuoteReply()) {
+      // XGram: keep a picked quote
+      if (personal) {
+        context.showKeyboard();
+      }
+    } else if (personal) {
       context.showKeyboard();
       context.showReply(message, null, 0, "", false, false);
     } else if (type == TYPE_PRIVATE) {

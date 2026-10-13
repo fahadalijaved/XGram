@@ -4084,7 +4084,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       for (int i = 0; i < messageIds.length; i++) {
         messageIds[i] = selectedMessageIds.keyAt(i);
       }
-      tdlib.resendMessages(getChatId(), messageIds);
+      com.fahadali.xgram.chats.XgramQuote.resend(tdlib, getChatId(), messageIds); // XGram: refused quotes
     }
   }
 
@@ -5876,7 +5876,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         showCallOptions(contact.phoneNumber, contact.userId);
         return true;
       } else if (id == R.id.btn_messageResend) {
-        tdlib.resendMessages(selectedMessage.getChatId(), selectedMessage.getIds());
+        com.fahadali.xgram.chats.XgramQuote.resend(tdlib, selectedMessage.getChatId(), selectedMessage.getIds()); // XGram: refused quotes
         return true;
       } else if (id == R.id.btn_messageSendNow) {
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
@@ -7058,7 +7058,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return;
     }
 
+    if (quote != null) {
+      // XGram: a draft's quote, for the message as it is now.
+      quote = com.fahadali.xgram.chats.XgramQuote.check(quote, message.message.content);
+    }
     setReplyInfo(new ReplyInfo(tdlib, message, quote, checklistTaskId, pollOptionId), false);
+  }
+
+  /** XGram: a quote the user picked, which bot keyboards don't replace. */
+  public boolean xgramHasQuoteReply () {
+    return reply != null && reply.quote != null;
   }
 
   private void setReplyInfo (ReplyInfo replyInfo, boolean animated) {
@@ -8444,6 +8453,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
         updateReplyBarVisibility(true);
         // This is required because we work with a reference from TGMessage, not a copy.
         editContext.message.content = oldContent;
+      }
+    }
+    if (reply != null && reply.quote != null && reply.message.message.chatId == chatId && reply.message.message.id == messageId) {
+      // XGram: the replied message was edited, so the quote moves with its text, or goes if the text is gone.
+      TdApi.InputTextQuote quote = com.fahadali.xgram.chats.XgramQuote.check(reply.quote, content);
+      if (!Td.equalsTo(quote, reply.quote)) {
+        setReplyInfo(new ReplyInfo(tdlib, reply.message, quote, reply.checklistTaskId, reply.pollOptionId), true);
+        saveDraft();
       }
     }
   }

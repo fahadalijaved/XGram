@@ -231,6 +231,11 @@ public final class XgramQuoteText {
         return null;
       }
     }
+    return new Quote(new TdApi.InputTextQuote(quoteText(s, entities, start, end), start), wasCut);
+  }
+
+  /** Text [start, end) with the entities TDLib keeps in quotes; a custom emoji or date only when it is all there. */
+  private static TdApi.FormattedText quoteText (String s, TdApi.TextEntity[] entities, int start, int end) {
     List<TdApi.TextEntity> kept = new ArrayList<>();
     for (TdApi.TextEntity entity : entities) {
       if (entity.type == null || !isKept(entity.type)) {
@@ -243,23 +248,29 @@ public final class XgramQuoteText {
       }
       kept.add(new TdApi.TextEntity(from - start, to - from, entity.type));
     }
-    TdApi.FormattedText quoteText = new TdApi.FormattedText(s.substring(start, end), kept.toArray(new TdApi.TextEntity[0]));
-    return new Quote(new TdApi.InputTextQuote(quoteText, start), wasCut);
+    return new TdApi.FormattedText(s.substring(start, end), kept.toArray(new TdApi.TextEntity[0]));
   }
 
   /**
-   * The quote, taken from quotedText, for the message text as it is now: unchanged if the text is the same, else moved
-   * to where the edited text has the same quote. Null when it no longer has it, as Telegram would refuse the reply.
+   * The quote for the message text as it is now: moved to where the text has the same words, with the formatting
+   * the text has there now. Null when the text no longer has them, as Telegram would refuse the reply.
    */
   @Nullable
-  public static TdApi.InputTextQuote relocate (TdApi.InputTextQuote quote, TdApi.FormattedText quotedText, @Nullable TdApi.FormattedText currentText) {
-    if (currentText == null || isBlank(currentText.text)) {
+  public static TdApi.InputTextQuote relocate (@Nullable TdApi.InputTextQuote quote, @Nullable TdApi.FormattedText currentText) {
+    if (quote == null || quote.text == null || isBlank(quote.text.text) || currentText == null || currentText.text == null || isBlank(currentText.text)) {
       return null;
     }
-    if (Td.equalsTo(quotedText, currentText)) {
-      return quote;
+    String s = currentText.text;
+    int length = quote.text.text.length();
+    int position = quote.position;
+    if (!(position >= 0 && position + length <= s.length() && s.startsWith(quote.text.text, position))) {
+      TdApi.FoundPosition found = Tdlib.executeOrNull(new TdApi.SearchQuote(currentText, quote.text, quote.position));
+      if (found == null || found.position < 0 || found.position + length > s.length()) {
+        return null;
+      }
+      position = found.position;
     }
-    TdApi.FoundPosition found = Tdlib.executeOrNull(new TdApi.SearchQuote(currentText, quote.text, quote.position));
-    return found != null && found.position >= 0 ? new TdApi.InputTextQuote(quote.text, found.position) : null;
+    TdApi.InputTextQuote relocated = new TdApi.InputTextQuote(quoteText(s, entitiesOf(currentText), position, position + length), position);
+    return Td.equalsTo(relocated, quote) ? quote : relocated;
   }
 }

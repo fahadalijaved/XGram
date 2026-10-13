@@ -59,6 +59,8 @@ import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.widget.EmojiTextView;
 import org.thunderdog.challegram.widget.PopupLayout;
 
+import java.util.Arrays;
+
 import me.vkryl.core.collection.IntList;
 import me.vkryl.core.lambda.RunnableData;
 import tgx.td.ChatId;
@@ -405,7 +407,7 @@ public final class XgramQuote {
     int lengthMax = maxLength;
     // The sheet can stay open a while: the message may have been edited or deleted since, so read it again.
     tdlib.send(new TdApi.GetMessage(message.chatId, message.id), (current, error) -> {
-      TdApi.InputTextQuote inputQuote = current != null ? XgramQuoteText.relocate(quote.quote, text, Td.textOrCaption(current.content)) : null;
+      TdApi.InputTextQuote inputQuote = current != null ? XgramQuoteText.relocate(quote.quote, Td.textOrCaption(current.content)) : null;
       if (inputQuote == null) {
         m.runOnUiThreadOptional(() -> UI.showToast(current != null ? R.string.XgramQuoteChanged : R.string.MessageNotFound, Toast.LENGTH_SHORT));
         return;
@@ -424,6 +426,76 @@ public final class XgramQuote {
           Keyboard.show(inputView);
         }
       }));
+    });
+  }
+
+  // After the reply is set
+
+  /**
+   * The quote of a reply that is set (or restored from a draft) for the replied message as it is now. Null, with a
+   * toast, when an edit took the quoted text out: the reply stays, without the quote.
+   */
+  @Nullable
+  public static TdApi.InputTextQuote check (@Nullable TdApi.InputTextQuote quote, @Nullable TdApi.MessageContent content) {
+    if (quote == null) {
+      return null;
+    }
+    TdApi.InputTextQuote current = XgramQuoteText.relocate(quote, content != null ? Td.textOrCaption(content) : null);
+    if (current == null) {
+      UI.showToast(R.string.XgramQuoteDropped, Toast.LENGTH_SHORT);
+    }
+    return current;
+  }
+
+  private static boolean needsAnotherQuote (@Nullable TdApi.Message message) {
+    return message != null && message.sendingState != null && message.sendingState.getConstructor() == TdApi.MessageSendingStateFailed.CONSTRUCTOR && ((TdApi.MessageSendingStateFailed) message.sendingState).needAnotherReplyQuote;
+  }
+
+  /**
+   * Resend. Telegram refuses a quote the replied message no longer has, and TDLib resends it with that same quote
+   * unless given another one, one message at a time: those get the quote as the message has it now, or none.
+   */
+  public static void resend (Tdlib tdlib, long chatId, long[] messageIds) {
+    tdlib.send(new TdApi.GetMessages(chatId, messageIds), (messages, error) -> {
+      if (messages == null || messages.messages == null) {
+        tdlib.resendMessages(chatId, messageIds);
+        return;
+      }
+      long[] rest = new long[messageIds.length];
+      int restCount = 0;
+      for (long messageId : messageIds) {
+        TdApi.Message message = null;
+        for (TdApi.Message m : messages.messages) {
+          if (m != null && m.id == messageId) {
+            message = m;
+            break;
+          }
+        }
+        if (needsAnotherQuote(message)) {
+          resendWithNewQuote(tdlib, message);
+        } else {
+          rest[restCount++] = messageId;
+        }
+      }
+      if (restCount > 0) {
+        tdlib.resendMessages(chatId, restCount == rest.length ? rest : Arrays.copyOf(rest, restCount));
+      }
+    });
+  }
+
+  private static void resendWithNewQuote (Tdlib tdlib, TdApi.Message message) {
+    TdApi.TextQuote oldQuote = message.replyTo instanceof TdApi.MessageReplyToMessage ? ((TdApi.MessageReplyToMessage) message.replyTo).quote : null;
+    tdlib.send(new TdApi.GetRepliedMessage(message.chatId, message.id), (replied, error) -> {
+      TdApi.InputTextQuote quote = null;
+      if (oldQuote != null && replied != null) {
+        quote = XgramQuoteText.relocate(new TdApi.InputTextQuote(oldQuote.text, oldQuote.position), Td.textOrCaption(replied.content));
+      }
+      if (quote == null) {
+        // An empty quote: TDLib sends it as a plain reply.
+        quote = new TdApi.InputTextQuote(new TdApi.FormattedText("", new TdApi.TextEntity[0]), 0);
+        UI.showToast(R.string.XgramQuoteDropped, Toast.LENGTH_SHORT);
+      }
+      tdlib.client().send(new TdApi.ResendMessages(message.chatId, new long[] {message.id}, quote, 0), tdlib.messageHandler());
     });
   }
 }
