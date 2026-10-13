@@ -733,9 +733,11 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   // Everything below the accounts. XGram: built here so the side menu settings can rebuild it at once.
   private void addMenuItems (List<ListItem> items) {
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_contacts, R.drawable.baseline_perm_contact_calendar_24, R.string.Contacts));
     // XGram: side menu items can be hidden (Settings → XGram → Side menu).
     com.fahadali.xgram.XgramSettings xgram = com.fahadali.xgram.XgramSettings.instance();
+    if (!xgram.drawerItemHidden("contacts")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_contacts, R.drawable.baseline_perm_contact_calendar_24, R.string.Contacts));
+    }
     if (!xgram.drawerItemHidden("hub")) {
       // XGram: its settings, one tap from the chat list
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramHub, R.drawable.baseline_stars_24, R.string.XgramHub));
@@ -752,12 +754,15 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_invite, R.drawable.baseline_person_add_24, R.string.InviteFriends));
     }
 
-    this.proxyAvailable = Settings.instance().getAvailableProxyCount() > 0;
+    // XGram: proxyAvailable means "the proxy row is shown", so it is false when the row is hidden in the side menu settings.
+    this.proxyAvailable = Settings.instance().getAvailableProxyCount() > 0 && !xgram.drawerItemHidden("proxy");
     if (proxyAvailable) {
       proxyItem.setSelected(Settings.instance().getEffectiveProxyId() != Settings.PROXY_ID_NONE);
       items.add(proxyItem);
     }
-    items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_help, R.drawable.baseline_help_24, R.string.Help));
+    if (!xgram.drawerItemHidden("help")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_help, R.drawable.baseline_help_24, R.string.Help));
+    }
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     if (!xgram.drawerItemHidden("night")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_night, R.drawable.baseline_brightness_2_24, R.string.NightMode, R.id.btn_night, Theme.isDark()));
@@ -788,11 +793,19 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     if (adapter == null) {
       return;
     }
-    int start = adapter.indexOfViewById(R.id.btn_contacts);
+    List<ListItem> items = adapter.getItems();
+    // The menu starts at its first item; Contacts, Calls etc. can be hidden, Settings never is.
+    int start = -1;
+    for (int i = 0; i < items.size(); i++) {
+      int id = items.get(i).getId();
+      if (id == R.id.btn_contacts || id == R.id.btn_xgramHub || id == R.id.btn_calls || id == R.id.btn_savedMessages || id == R.id.btn_settings) {
+        start = i;
+        break;
+      }
+    }
     if (start == -1) {
       return;
     }
-    List<ListItem> items = adapter.getItems();
     int oldCount = items.size() - start;
     items.subList(start, items.size()).clear();
     List<ListItem> fresh = new ArrayList<>();
@@ -987,15 +1000,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   @Override
   public void onProxyAvailabilityChanged (boolean isAvailable) {
-    if (this.proxyAvailable != isAvailable) {
-      this.proxyAvailable = isAvailable;
-      if (isAvailable) {
-        int i = adapter.indexOfViewByIdReverse(R.id.btn_help);
-        adapter.addItem(i, proxyItem);
-      } else {
-        int i = adapter.indexOfViewById(R.id.btn_proxy);
-        adapter.removeItem(i);
-      }
+    boolean shown = isAvailable && !com.fahadali.xgram.XgramSettings.instance().drawerItemHidden("proxy");
+    if (this.proxyAvailable != shown) {
+      // XGram: rebuild instead of inserting before Help: Help (and the proxy row itself) can be hidden in the side menu settings.
+      xgramUpdateMenuItems();
     }
   }
 

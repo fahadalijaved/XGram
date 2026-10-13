@@ -28,8 +28,8 @@ import java.util.List;
 
 /** Settings → XGram → Side menu: which items the drawer shows (exteraGram custom drawer). */
 public final class XgramDrawerItemsController extends RecyclerViewController<Void> implements View.OnClickListener {
-  private static final String[] KEYS = {"hub", "saved", "calls", "invite", "night", "ghost"};
-  private static final int[] NAMES = {R.string.XgramHub, R.string.SavedMessages, R.string.Calls, R.string.InviteFriends, R.string.NightMode, R.string.XgramGhostMode};
+  private static final String[] KEYS = {"contacts", "hub", "calls", "saved", "invite", "proxy", "help", "night", "ghost"};
+  private static final int[] NAMES = {R.string.Contacts, R.string.XgramHub, R.string.Calls, R.string.SavedMessages, R.string.InviteFriends, R.string.Proxy, R.string.Help, R.string.NightMode, R.string.XgramGhostMode};
 
   private SettingsAdapter adapter;
 

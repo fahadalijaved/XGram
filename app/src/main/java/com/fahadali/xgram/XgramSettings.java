@@ -526,7 +526,7 @@ public final class XgramSettings {
 
   // Side menu
 
-  /** Side menu items that can be hidden: calls, saved, invite, night, ghost. */
+  /** Side menu items that can be hidden: contacts, hub, calls, saved, invite, proxy, help, night, ghost. */
   public boolean drawerItemHidden (String item) {
     return pmc().getBoolean("xgram_drawer_hide_" + item, false);
   }
