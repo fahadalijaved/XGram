@@ -23,6 +23,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
@@ -45,7 +46,9 @@ import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
+import org.thunderdog.challegram.ui.IntroController;
 import org.thunderdog.challegram.ui.PhoneController;
 import org.thunderdog.challegram.widget.NoScrollTextView;
 
@@ -175,7 +178,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
       // Login screens of this account below this one are stale now: leaving the QR screen goes back to the phone number.
       for (int i = stackSize() - 2; i >= 0; i--) {
         ViewController<?> c = stackItemAt(i);
-        if (c != null && c != this && c.isSameTdlib(tdlib) && c.isUnauthorized() && !(c instanceof PhoneController)) {
+        if (c != null && c != this && c.isSameTdlib(tdlib) && c.isUnauthorized() && !(c instanceof PhoneController) && !(c instanceof IntroController)) {
           destroyStackItemAt(i);
         }
       }
@@ -195,6 +198,17 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
         shownLink = null;
         qrView.setImageBitmap(null);
         statusView.setText(Lang.getString(R.string.xgram_login_QrScanned));
+      } else if (!cancelled && state.getConstructor() == TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR) {
+        // TDLib ended the QR login by itself. MainActivity keeps this screen for that state, so don't leave a dead code here.
+        cancelled = true;
+        encodeGeneration++;
+        shownLink = null;
+        qrView.setImageBitmap(null);
+        statusView.setText(Lang.getString(R.string.xgram_login_QrEnded));
+        if (isFocused()) {
+          UI.showToast(R.string.xgram_login_QrEnded, Toast.LENGTH_SHORT);
+          navigateBack();
+        }
       }
     });
   }

@@ -526,6 +526,7 @@
   <string name="xgram_login_QrSteps">1. Open Telegram on a phone where you are logged in.\n2. Go to Settings → Devices → Link Desktop Device.\n3. Point the camera at this code.</string>
   <string name="xgram_login_QrRefresh">The code refreshes by itself. Keep this screen open until you scan it.</string>
   <string name="xgram_login_QrScanned">Code scanned. Continue on the next screen.</string>
+  <string name="xgram_login_QrEnded">The QR login ended. Try again.</string>
   <string name="xgram_login_QrInstead">Log in with phone number instead</string>
   <string name="xgram_login_QrDuplicateAccount">This account is already added. Switched to it.</string>
 </resources>

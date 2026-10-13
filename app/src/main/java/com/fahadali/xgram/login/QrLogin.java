@@ -80,7 +80,7 @@ public final class QrLogin {
    */
   @UiThread
   public static boolean request (@NonNull ViewController<?> controller, @NonNull Tdlib tdlib, @NonNull RunnableData<TdApi.Error> after) {
-    if (!tdlib.isUnauthorized()) {
+    if (tdlib.isAuthorized()) {
       return false;
     }
     if (tdlib.context().watchDog().isOffline()) {
@@ -95,16 +95,33 @@ public final class QrLogin {
       controller.navigateTo(c);
       return false;
     }
-    if (state != null && !canRequest(state)) {
+    if (state != null && !canRequest(state) && !isRestarting(state)) {
       return false;
     }
     final long[] otherUserIds = otherUserIds(tdlib);
-    tdlib.awaitReadyOrWaitingForData(() ->
+    // A slot that is starting, or restarting after a cancelled QR login, gets there in a moment: wait for it
+    tdlib.awaitReadyOrWaitingForData(() -> {
+      if (!canRequest(tdlib.authorizationState())) {
+        controller.runOnUiThreadOptional(() -> after.runWithData(null));
+        return;
+      }
       tdlib.send(new TdApi.RequestQrCodeAuthentication(otherUserIds), (ok, error) ->
         controller.runOnUiThreadOptional(() -> after.runWithData(error))
-      )
-    );
+      );
+    });
     return true;
+  }
+
+  /** States TDLib passes through while it starts or restarts after LogOut; awaitReadyOrWaitingForData waits them out. */
+  private static boolean isRestarting (@NonNull TdApi.AuthorizationState state) {
+    switch (state.getConstructor()) {
+      case TdApi.AuthorizationStateWaitTdlibParameters.CONSTRUCTOR:
+      case TdApi.AuthorizationStateLoggingOut.CONSTRUCTOR:
+      case TdApi.AuthorizationStateClosing.CONSTRUCTOR:
+      case TdApi.AuthorizationStateClosed.CONSTRUCTOR:
+        return true;
+    }
+    return false;
   }
 
   /**
