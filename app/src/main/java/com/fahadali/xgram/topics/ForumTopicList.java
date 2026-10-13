@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 
+import me.vkryl.core.collection.IntList;
 import me.vkryl.core.collection.IntSet;
 import me.vkryl.core.lambda.Destroyable;
 import me.vkryl.core.reference.ReferenceList;
@@ -55,17 +56,41 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   /** At most this many single-topic requests after a page request. */
   private static final int MAX_SINGLE_FETCHES = 10;
 
-  private static final Comparator<TdApi.ForumTopic> COMPARATOR = (a, b) -> {
+  /** The first page is fetched again at most this often (uptime ms) to follow pin and order changes made elsewhere. */
+  private static final long RESYNC_INTERVAL_MS = 30_000;
+
+  /**
+   * Pinned topics in their server order (ids). TDLib's {@code order} only follows the last message and the draft,
+   * never pinning, so this list is what keeps pinned topics on top and in the order the user chose.
+   */
+  private final IntList pinnedOrder = new IntList(8);
+
+  private final Comparator<TdApi.ForumTopic> comparator = (a, b) -> {
     // Hidden General goes first, like the official app's pull-down row.
     boolean aHidden = a.info.isHidden, bHidden = b.info.isHidden;
     if (aHidden != bHidden) {
       return aHidden ? -1 : 1;
+    }
+    if (a.isPinned != b.isPinned) {
+      return a.isPinned ? -1 : 1;
+    }
+    if (a.isPinned) {
+      int aIndex = pinnedIndex(a.info.forumTopicId), bIndex = pinnedIndex(b.info.forumTopicId);
+      if (aIndex != bIndex) {
+        return Integer.compare(aIndex, bIndex);
+      }
     }
     if (a.order != b.order) {
       return Long.compare(b.order, a.order);
     }
     return Integer.compare(b.info.forumTopicId, a.info.forumTopicId);
   };
+
+  /** Position of a pinned topic in {@link #pinnedOrder}; topics the order doesn't know go after the known ones. */
+  private int pinnedIndex (int forumTopicId) {
+    int index = pinnedOrder.indexOf(forumTopicId);
+    return index == -1 ? Integer.MAX_VALUE : index;
+  }
 
   // Recently opened forums stay loaded and live-updated, so going back into a forum shows its topics
   // immediately instead of loading them again.
@@ -207,6 +232,8 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     }
     isLoading = true;
     int limit = topics.isEmpty() ? FIRST_PAGE_SIZE : NEXT_PAGE_SIZE;
+    // The server lists pinned topics first on the first page: that is the only place their order comes from.
+    final boolean firstPage = nextOffsetDate == 0 && nextOffsetMessageId == 0 && nextOffsetForumTopicId == 0;
     tdlib.send(new TdApi.GetForumTopics(chatId, "", nextOffsetDate, nextOffsetMessageId, nextOffsetForumTopicId, limit), (result, error) -> tdlib.ui().post(() -> {
       if (isDestroyed) {
         return;
@@ -228,7 +255,10 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
             topics.add(XgramForums.normalizeUnread(tdlib, topic));
           }
         }
-        Collections.sort(topics, COMPARATOR);
+        if (firstPage) {
+          replacePinnedOrder(serverPinnedIds(result.topics));
+        }
+        Collections.sort(topics, comparator);
         nextOffsetDate = result.nextOffsetDate;
         nextOffsetMessageId = result.nextOffsetMessageId;
         nextOffsetForumTopicId = result.nextOffsetForumTopicId;
@@ -272,8 +302,8 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     }
     // Many topics at once (a read in "All", a burst of messages): one page instead of one request per topic, which
     // ends in FLOOD_WAIT. Topics not on that page are fetched one by one, a few at a time.
-    int limit = Math.min(100, Math.max(20, topics.size()));
-    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, limit), (result, error) -> tdlib.ui().post(() -> {
+    lastResyncAt = android.os.SystemClock.uptimeMillis();
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
       if (isDestroyed) {
         return;
       }
@@ -282,11 +312,10 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
         left.add(forumTopicId);
       }
       if (result != null) {
+        applyFirstPage(result);
         for (TdApi.ForumTopic topic : result.topics) {
-          putTopicImpl(topic);
           left.remove(topic.info.forumTopicId);
         }
-        publishUnread();
       }
       int fetched = 0;
       List<Integer> later = new ArrayList<>();
@@ -353,6 +382,15 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     XgramTopicReadOutbox.set(tdlib, chatId, topic);
     XgramTopicMute.onSettings(tdlib, chatId, topic);
     int oldIndex = indexOf(topic.info.forumTopicId);
+    // A topic pinned or unpinned since the last fetch (or one not seen before): keep the pinned order in step before
+    // the comparator places it. A fresh pin goes on top, as it does on the server.
+    if (topic.isPinned) {
+      if (!pinnedOrder.contains(topic.info.forumTopicId)) {
+        prependPinned(topic.info.forumTopicId);
+      }
+    } else {
+      pinnedOrder.remove(topic.info.forumTopicId);
+    }
     if (oldIndex == -1) {
       if (!isLoaded) {
         return;
@@ -432,31 +470,124 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   }
 
   private int insertionIndex (TdApi.ForumTopic topic) {
-    int index = Collections.binarySearch(topics, topic, COMPARATOR);
+    int index = Collections.binarySearch(topics, topic, comparator);
     return index >= 0 ? index : -index - 1;
   }
 
-  /** Pinned topics, in their current order. */
+  // Pinned order
+
+  /** Pinned topics, in their current order (the ids {@code SetPinnedForumTopics} takes). */
   public int[] pinnedTopicIds () {
-    int count = 0;
-    for (TdApi.ForumTopic topic : topics) {
+    return pinnedOrder.get().clone(); // IntList.get() is its own array
+  }
+
+  /** Ids of the pinned topics of a server page, in the server's order. */
+  private static int[] serverPinnedIds (TdApi.ForumTopic[] serverTopics) {
+    IntList ids = new IntList(8);
+    for (TdApi.ForumTopic topic : serverTopics) {
       if (topic.isPinned) {
-        count++;
+        ids.append(topic.info.forumTopicId);
       }
     }
-    int[] ids = new int[count];
+    return ids.get();
+  }
+
+  private void replacePinnedOrder (int[] ids) {
+    pinnedOrder.clear();
+    pinnedOrder.appendAll(ids);
+  }
+
+  private void prependPinned (int forumTopicId) {
+    insertPinnedAt(0, forumTopicId);
+  }
+
+  /** Puts the id at {@code position} among the other ids (removing it first if it is already there). */
+  private void insertPinnedAt (int position, int forumTopicId) {
+    int[] rest = pinnedOrder.get().clone(); // IntList.get() is its own array, cleared and refilled below
+    pinnedOrder.clear();
     int i = 0;
-    for (TdApi.ForumTopic topic : topics) {
-      if (topic.isPinned) {
-        ids[i++] = topic.info.forumTopicId;
+    boolean inserted = false;
+    for (int id : rest) {
+      if (id == forumTopicId) {
+        continue;
       }
+      if (i == position) {
+        pinnedOrder.append(forumTopicId);
+        inserted = true;
+      }
+      pinnedOrder.append(id);
+      i++;
     }
-    return ids;
+    if (!inserted) {
+      pinnedOrder.append(forumTopicId);
+    }
   }
 
   /**
-   * Moves a pinned topic among the pinned ones before the server confirms it. Orders are swapped along the way,
-   * so the list stays sorted; the real orders are fetched again after {@code SetPinnedForumTopics}.
+   * Makes the pinned order match the pinned rows as they are listed: every pinned row is in it, in list order, and
+   * nothing else. Rows the order didn't know (sorted after the known ones) get their place that way.
+   */
+  private void normalizePinnedOrder () {
+    IntList ids = new IntList(Math.max(8, pinnedOrder.size()));
+    for (TdApi.ForumTopic topic : topics) {
+      if (topic.isPinned) {
+        ids.append(topic.info.forumTopicId);
+      }
+    }
+    // Pinned topics that are known but not loaded as rows (a failed fetch) stay, so a reorder can't unpin them.
+    for (int i = 0; i < pinnedOrder.size(); i++) {
+      int id = pinnedOrder.get(i);
+      if (!ids.contains(id)) {
+        ids.append(id);
+      }
+    }
+    replacePinnedOrder(ids.get());
+  }
+
+  /**
+   * Sets the pinned order (e.g. the ids the server accepted in {@code SetPinnedForumTopics}) and moves the rows to
+   * match it.
+   */
+  @UiThread
+  public void setPinnedOrder (int[] ids) {
+    if (isDestroyed) {
+      return;
+    }
+    replacePinnedOrder(ids);
+    resort();
+  }
+
+  /** Moves rows until the list is sorted by {@link #comparator} again, one {@code onTopicMoved} per moved row. */
+  @UiThread
+  private void resort () {
+    List<TdApi.ForumTopic> sorted = new ArrayList<>(topics);
+    Collections.sort(sorted, comparator);
+    for (int i = 0; i < sorted.size(); i++) {
+      TdApi.ForumTopic expected = sorted.get(i);
+      if (topics.get(i) == expected) {
+        continue;
+      }
+      int fromIndex = -1;
+      for (int j = i + 1; j < topics.size(); j++) {
+        if (topics.get(j) == expected) {
+          fromIndex = j;
+          break;
+        }
+      }
+      if (fromIndex == -1) {
+        continue;
+      }
+      topics.remove(fromIndex);
+      topics.add(i, expected);
+      for (Listener listener : listeners) {
+        listener.onTopicMoved(this, fromIndex, i);
+      }
+    }
+  }
+
+  /**
+   * Moves a pinned topic among the pinned ones before the server confirms it: the pinned order changes with it, so
+   * the list stays sorted, and {@link #pinnedTopicIds()} gives the ids to send in {@code SetPinnedForumTopics}.
    */
   @UiThread
   public boolean movePinnedLocally (int fromIndex, int toIndex) {
@@ -465,25 +596,73 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     }
     int step = toIndex > fromIndex ? 1 : -1;
     for (int i = fromIndex; ; i += step) {
-      if (!topics.get(i).isPinned) {
+      TdApi.ForumTopic topic = topics.get(i);
+      if (!topic.isPinned || topic.info.isHidden) {
+        // Only through pinned rows, and never across the hidden General, which stays first whatever its pin.
         return false;
       }
       if (i == toIndex) {
         break;
       }
     }
-    for (int i = fromIndex; i != toIndex; i += step) {
-      TdApi.ForumTopic a = topics.get(i), b = topics.get(i + step);
-      long order = a.order;
-      a.order = b.order;
-      b.order = order;
-      topics.set(i, b);
-      topics.set(i + step, a);
+    normalizePinnedOrder();
+    TdApi.ForumTopic moved = topics.get(fromIndex);
+    int fromPosition = pinnedOrder.indexOf(moved.info.forumTopicId);
+    int toPosition = pinnedOrder.indexOf(topics.get(toIndex).info.forumTopicId);
+    if (fromPosition == -1 || toPosition == -1) {
+      return false;
     }
+    insertPinnedAt(toPosition, moved.info.forumTopicId);
+    topics.remove(fromIndex);
+    topics.add(toIndex, moved);
     for (Listener listener : listeners) {
       listener.onTopicMoved(this, fromIndex, toIndex);
     }
     return true;
+  }
+
+  private long lastResyncAt;
+
+  private int firstPageLimit () {
+    return Math.min(100, Math.max(20, topics.size()));
+  }
+
+  /**
+   * Fetches the first page again and takes its pin state and pinned order (at most once per
+   * {@link #RESYNC_INTERVAL_MS}): the way to follow a reorder made on another device, which TDLib doesn't report.
+   */
+  @UiThread
+  public void resyncFirstPage () {
+    resyncFirstPage(false);
+  }
+
+  /** As {@link #resyncFirstPage()}; {@code force} skips the throttle, e.g. to undo a reorder the server refused. */
+  @UiThread
+  public void resyncFirstPage (boolean force) {
+    if (isDestroyed || !isLoaded) {
+      return;
+    }
+    long now = android.os.SystemClock.uptimeMillis();
+    if (!force && lastResyncAt != 0 && now - lastResyncAt < RESYNC_INTERVAL_MS) {
+      return;
+    }
+    lastResyncAt = now;
+    tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
+      if (isDestroyed || result == null) {
+        return;
+      }
+      applyFirstPage(result);
+    }));
+  }
+
+  /** Puts the topics of a first page in and takes the server's pinned order from it. */
+  @UiThread
+  private void applyFirstPage (TdApi.ForumTopics result) {
+    for (TdApi.ForumTopic topic : result.topics) {
+      putTopicImpl(topic);
+    }
+    setPinnedOrder(serverPinnedIds(result.topics));
+    publishUnread();
   }
 
   /** Fetches topics again, e.g. after their pinned order changed on the server. */
@@ -496,6 +675,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
 
   @UiThread
   private void removeTopic (int forumTopicId) {
+    pinnedOrder.remove(forumTopicId);
     int index = indexOf(forumTopicId);
     if (index != -1) {
       topics.remove(index);
@@ -614,13 +794,31 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
         topic.unreadCount = 0;
         changed = true;
       }
+      if (pinChanged) {
+        // Pinned here or elsewhere: it goes on top of the pinned ones (as on the server); unpinned, it falls back to
+        // its place by date. No fetch is needed, as order doesn't follow pinning.
+        if (update.isPinned) {
+          prependPinned(update.forumTopicId);
+        } else {
+          pinnedOrder.remove(update.forumTopicId);
+        }
+        topics.remove(index);
+        int newIndex = insertionIndex(topic);
+        topics.add(newIndex, topic);
+        if (newIndex != index) {
+          for (Listener listener : listeners) {
+            listener.onTopicMoved(this, index, newIndex);
+          }
+          index = newIndex;
+        }
+      }
       if (changed) {
         notifyChanged(index);
         publishUnread();
       }
-      // Partial reads change the unread count and pinning changes the order: fetch the exact values.
+      // Partial reads change the unread count: fetch the exact values.
       // Fetching on every update can loop, as fetching a topic may emit this update again.
-      if ((readChanged && !readFully) || pinChanged) {
+      if (readChanged && !readFully) {
         scheduleRefresh(update.forumTopicId);
       }
     });
@@ -673,7 +871,21 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   @Override
   public void onMessageSendFailed (TdApi.Message message, long oldMessageId, TdApi.Error error) {
     int forumTopicId = forumTopicId(message.topicId);
-    tdlib.ui().post(() -> scheduleRefresh(forumTopicId));
+    tdlib.ui().post(() -> {
+      if (isDestroyed) {
+        return;
+      }
+      int index = indexOf(forumTopicId);
+      if (index != -1) {
+        TdApi.ForumTopic topic = topics.get(index);
+        if (topic.lastMessage != null && topic.lastMessage.id == oldMessageId) {
+          // Not pending any more: left as it was, putTopicImpl would keep the pending preview over the server's for good.
+          topic.lastMessage = message;
+          notifyChanged(index);
+        }
+      }
+      scheduleRefresh(forumTopicId);
+    });
   }
 
   @Override
@@ -699,10 +911,17 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       if (isDestroyed) {
         return;
       }
-      for (TdApi.ForumTopic topic : topics) {
+      for (int i = 0; i < topics.size(); i++) {
+        TdApi.ForumTopic topic = topics.get(i);
         if (topic.lastMessage != null) {
           for (long messageId : messageIds) {
             if (topic.lastMessage.id == messageId) {
+              if (topic.lastMessage.sendingState != null) {
+                // Deleted before it was sent (or after it failed): only this list knows it. Drop it, or
+                // putTopicImpl would keep its preview over the server's last message.
+                topic.lastMessage = null;
+                notifyChanged(i);
+              }
               scheduleRefresh(topic.info.forumTopicId);
               break;
             }

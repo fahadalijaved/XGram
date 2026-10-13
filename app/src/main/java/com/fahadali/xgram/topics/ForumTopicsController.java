@@ -489,7 +489,12 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
   private class ReorderCallback extends ItemTouchHelper.Callback {
     private boolean isPinnedRow (RecyclerView.ViewHolder holder) {
       int position = holder.getBindingAdapterPosition();
-      return list != null && position >= 0 && position < list.size() && list.get(position).isPinned;
+      if (list == null || position < 0 || position >= list.size()) {
+        return false;
+      }
+      TdApi.ForumTopic topic = list.get(position);
+      // The hidden General stays first whether it is pinned or not, so it can't be dragged or dragged onto.
+      return topic.isPinned && !topic.info.isHidden;
     }
 
     @Override
@@ -539,9 +544,12 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
         tdlib.send(new TdApi.SetPinnedForumTopics(chat.id, pinnedIds), (ok, error) -> runOnUiThreadOptional(() -> {
           if (error != null) {
             org.thunderdog.challegram.tool.UI.showError(error);
+            // The server kept its order: fetch it to undo the move.
+            targetList.resyncFirstPage(true);
+          } else {
+            // The order the server accepted is the one shown; it sticks until the server says otherwise.
+            targetList.setPinnedOrder(pinnedIds);
           }
-          // The server's orders replace the local ones (or undo the move after an error).
-          targetList.refreshTopics(pinnedIds);
         }));
       }
     }
