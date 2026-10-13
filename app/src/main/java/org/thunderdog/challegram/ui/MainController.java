@@ -1601,7 +1601,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     boolean showAsArchive = (isMain && menuNeedArchive) || isArchive;
     if (hasFolders) {
       String source;
-      boolean iconOnly = chatFolderStyle == ChatFolderStyle.ICON_ONLY || (isMain && pagerItemPosition == 0);
+      // XGram: "All chats" follows the chosen style like every folder (Telegram X always showed it as a bare icon first).
+      boolean iconOnly = chatFolderStyle == ChatFolderStyle.ICON_ONLY;
       if (iconOnly) {
         source = "";
       } else if (showAsArchive) {
