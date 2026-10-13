@@ -317,6 +317,23 @@ public final class XgramQuote {
     if (!canCopy) {
       keepInApp(textView);
     }
+    // The text is set and measured before the sheet is in a window, and TextView only checks whether it can show
+    // selection handles then ("TextView does not support text selection"). Check again once it is attached.
+    TextView selectable = textView;
+    textView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+      @Override
+      public void onViewAttachedToWindow (View v) {
+        selectable.post(() -> {
+          if (selectable.isAttachedToWindow()) {
+            selectable.setTextIsSelectable(false);
+            selectable.setTextIsSelectable(true);
+          }
+        });
+      }
+
+      @Override
+      public void onViewDetachedFromWindow (View v) { }
+    });
     return textView;
   }
 
