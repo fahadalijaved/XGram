@@ -1049,6 +1049,11 @@ public class RecordAudioVideoController implements
   private MessagesController targetController;
 
   public boolean startRecording (View view, boolean inRaiseMode) {
+    return startRecording(view, inRaiseMode, inRaiseMode);
+  }
+
+  /** XGram: {@code locked} starts hands-free, as after sliding up to the lock (Tap to record). */
+  public boolean startRecording (View view, boolean inRaiseMode, boolean locked) {
     if (this.recordMode != RECORD_MODE_NONE) {
       return false;
     }
@@ -1135,8 +1140,8 @@ public class RecordAudioVideoController implements
 
     resetViews();
     this.inRaiseMode = inRaiseMode;
-    setReleased(inRaiseMode, false);
-    if (inRaiseMode) {
+    setReleased(locked, false);
+    if (locked) {
       lockView.setCollapseFactor(1f);
     }
     lockView.setMode(needVideo ? RecordLockView.MODE_VIDEO : RecordLockView.MODE_AUDIO);

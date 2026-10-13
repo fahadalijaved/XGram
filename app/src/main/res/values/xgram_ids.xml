@@ -101,6 +101,10 @@
   <item type="id" name="btn_xgramSideMenu" />
   <item type="id" name="btn_xgramDrawerItem" />
   <item type="id" name="controller_xgramDrawerItems" />
+  <item type="id" name="btn_xgramInputButtons" />
+  <item type="id" name="btn_xgramInputButton" />
+  <item type="id" name="controller_xgramInputButtons" />
+  <item type="id" name="btn_xgramTapToRecord" />
   <item type="id" name="btn_xgramChatHistory" />
   <item type="id" name="btn_xgramBlockContentCapture" />
   <item type="id" name="btn_xgramGhostTypingForStickers" />

@@ -60,6 +60,14 @@ public final class XgramSettings {
   public static final String KEY_PULL_TO_NEXT = "xgram_pull_to_next";
   public static final String KEY_DOWNLOAD_BOOST = "xgram_download_boost_on";
   public static final String KEY_DOWNLOAD_BOOST_LEVEL = "xgram_download_boost_level";
+  public static final String KEY_TAP_TO_RECORD = "xgram_tap_to_record";
+  /** Prefix of the message box buttons the user hid, followed by one of the {@code INPUT_BUTTON_*} names. */
+  public static final String KEY_INPUT_BUTTON_HIDDEN = "xgram_input_hide_";
+
+  public static final String INPUT_BUTTON_COMMANDS = "commands";
+  public static final String INPUT_BUTTON_CAMERA = "camera";
+  public static final String INPUT_BUTTON_SCHEDULED = "scheduled";
+  public static final String INPUT_BUTTON_VOICE = "voice";
 
   private static XgramSettings instance;
 
@@ -80,6 +88,7 @@ public final class XgramSettings {
   private volatile boolean hideSponsored, showPeerIds, twoPaneLayout, saveLastSeen, showSeconds, cleanLinks, fixLinkPreviews, allowScreenshots, saveProtected, proxyOffOnVpn, proxyOffOnWifi, proxyOffOnMobile, hidePhone, blockContentCapture, iconTheme, mergeCommunities;
   private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel;
   private volatile boolean tapTimeForDetails;
+  private volatile boolean tapToRecord;
   private volatile boolean downloadBoost;
   private volatile int downloadBoostLevel;
 
@@ -117,6 +126,7 @@ public final class XgramSettings {
     hideFab = pmc.getBoolean(KEY_HIDE_FAB, false);
     allChatsLabel = pmc.getBoolean(KEY_ALL_CHATS_LABEL, false);
     pullToNext = pmc.getBoolean(KEY_PULL_TO_NEXT, true);
+    tapToRecord = pmc.getBoolean(KEY_TAP_TO_RECORD, false);
     downloadBoost = pmc.getBoolean(KEY_DOWNLOAD_BOOST, false);
     downloadBoostLevel = Math.max(XgramDownloadBoost.LEVEL_LOW, Math.min(XgramDownloadBoost.LEVEL_MAX, pmc.getInt(KEY_DOWNLOAD_BOOST_LEVEL, XgramDownloadBoost.LEVEL_DEFAULT)));
     applyGhostSend();
@@ -374,6 +384,35 @@ public final class XgramSettings {
   public void setAiTools (boolean value) {
     aiTools = value;
     put(KEY_AI_TOOLS, value);
+  }
+
+  // Message box
+
+  /** A tap on the microphone records hands-free, a long press switches between voice and video messages. */
+  public boolean tapToRecord () {
+    return tapToRecord;
+  }
+
+  public void setTapToRecord (boolean value) {
+    tapToRecord = value;
+    put(KEY_TAP_TO_RECORD, value);
+  }
+
+  /** Message box buttons the user hid ({@code INPUT_BUTTON_*}). Telegram X still decides when a shown one appears. */
+  public boolean inputButtonHidden (String button) {
+    return pmc().getBoolean(KEY_INPUT_BUTTON_HIDDEN + button, false);
+  }
+
+  public void setInputButtonHidden (String button, boolean hidden) {
+    String key = KEY_INPUT_BUTTON_HIDDEN + button;
+    if (hidden) {
+      pmc().putBoolean(key, true);
+    } else {
+      pmc().remove(key);
+    }
+    for (Listener listener : listeners) {
+      listener.onXgramSettingChanged(key);
+    }
   }
 
   // Network

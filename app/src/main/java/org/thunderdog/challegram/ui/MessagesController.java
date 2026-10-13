@@ -1273,6 +1273,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     recordButton.setHasTouchControls(true);
     addThemeInvalidateListener(recordButton);
     recordButton.setLayoutParams(lp);
+    if (!xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_VOICE)) {
+      recordButton.setVisibility(View.GONE); // XGram: Message box buttons
+    }
+    com.fahadali.xgram.XgramSettings.instance().addListener(xgramInputButtonsListener); // XGram
 
     attachButtons.addView(commandButton);
     if (silentButton != null) {
@@ -3008,7 +3012,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
 
     updateShadowColor();
-    if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chat.id))) {
+    if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chat.id) && xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED))) {
       commandButton.setTranslationX(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width);
       attachButtons.updatePivot();
     }
@@ -3454,15 +3458,22 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onPreferVideoModeChanged (boolean preferVideoMode) {
     if (!sendShown.getValue()) {
-      showBottomHint(preferVideoMode ? R.string.HoldToVideo : R.string.HoldToAudio);
+      showBottomHint(xgramRecordHint(preferVideoMode));
     }
   }
 
   @Override
   public void onRecordAudioVideoError (boolean preferVideoMode) {
     if (!sendShown.getValue()) {
-      showBottomHint(preferVideoMode ? R.string.HoldToVideo : R.string.HoldToAudio);
+      showBottomHint(xgramRecordHint(preferVideoMode));
     }
+  }
+
+  private static int xgramRecordHint (boolean preferVideoMode) {
+    if (com.fahadali.xgram.XgramSettings.instance().tapToRecord()) { // XGram: Tap to record
+      return preferVideoMode ? R.string.XgramTapToVideo : R.string.XgramTapToAudio;
+    }
+    return preferVideoMode ? R.string.HoldToVideo : R.string.HoldToAudio;
   }
 
   public void setInputVisible (boolean visible, boolean notEmpty) {
@@ -4577,6 +4588,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (replyBarView != null)
         replyBarView.performDestroy();
       recordButton.performDestroy();
+      com.fahadali.xgram.XgramSettings.instance().removeListener(xgramInputButtonsListener); // XGram
       if (inputView != null)
         inputView.performDestroy();
       if (wallpaperView != null)
@@ -4649,6 +4661,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (!manager.isTotallyEmpty() && (Config.USE_SECRET_SEARCH || !isSecretChat()) && !messagesHidden) {
       ids.append(R.id.btn_search);
       strings.append(R.string.Search);
+    }
+
+    if (scheduleButton != null && messageThread == null && !xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED) && tdlib.chatHasScheduled(chat.id)) {
+      ids.append(R.id.btn_viewScheduled); // XGram: the message box button is hidden
+      strings.append(R.string.ScheduledMessages);
     }
 
     if (messageTopicId == null && !inPreviewMode && tdlib.isForum(chat.id) && !com.fahadali.xgram.topics.XgramForums.hasForumTabs(tdlib, chat)) {
@@ -7693,25 +7710,58 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public void updateCommandButton (boolean isVisible) {
     boolean ok = setCameraVisible(!isVisible || !ChatId.isUserChat(getChatId()));
-    if (commandButton.setVisible(isVisible) || ok) {
+    if (xgramSetCommandVisible(isVisible, lastCmdResource) || ok) {
       attachButtons.updatePivot();
     }
   }
 
   private void updateCommandButton (int resource) {
     if (resource == 0) {
-      if (commandButton.setVisible(false)) {
+      if (xgramSetCommandVisible(false, 0)) {
         attachButtons.updatePivot();
       }
       return;
     }
-    if (commandButton.setVisible(true)) {
+    if (xgramSetCommandVisible(true, resource)) {
       attachButtons.updatePivot();
     }
     if (lastCmdResource != resource) {
       lastCmdResource = resource;
       commandButton.setImageResource(resource);
     }
+  }
+
+  // XGram: Settings → XGram → Chats → Message box buttons. Only hides: Telegram X still decides when a button shows.
+
+  private boolean xgramCommandWanted;
+
+  private static boolean xgramInputButtonShown (String button) {
+    return !com.fahadali.xgram.XgramSettings.instance().inputButtonHidden(button);
+  }
+
+  private boolean xgramSetCommandVisible (boolean visible, int resource) {
+    xgramCommandWanted = visible;
+    // Only the "/" button hides: the bot keyboard toggle is the way back to a bot's keyboard.
+    return commandButton.setVisible(visible && (resource != R.drawable.deproko_baseline_bots_command_26 || xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_COMMANDS)));
+  }
+
+  private final com.fahadali.xgram.XgramSettings.Listener xgramInputButtonsListener = key -> {
+    if (key.startsWith(com.fahadali.xgram.XgramSettings.KEY_INPUT_BUTTON_HIDDEN)) {
+      UI.post(this::xgramUpdateInputButtons);
+    }
+  };
+
+  private void xgramUpdateInputButtons () {
+    if (isDestroyed() || attachButtons == null) {
+      return;
+    }
+    xgramSetCommandVisible(xgramCommandWanted, lastCmdResource);
+    if (scheduleButton != null && chat != null && scheduleButton.setVisible(xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED) && messageThread == null && tdlib.chatHasScheduled(chat.id))) {
+      commandButton.setTranslationX(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width);
+    }
+    recordButton.setVisibility(xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_VOICE) ? View.VISIBLE : View.GONE);
+    updateSelectMessageSenderInterface(false); // camera
+    attachButtons.updatePivot();
   }
 
   private void onCommandClick () {
@@ -11455,7 +11505,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onChatHasScheduledMessagesChanged (long chatId, boolean hasScheduledMessages) {
     tdlib.ui().post(() -> {
       if (getChatId() == chatId) {
-        if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chatId))) {
+        if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chatId) && xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED))) {
           commandButton.setTranslationX(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width);
           attachButtons.updatePivot();
         }
@@ -12479,7 +12529,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public boolean isCameraButtonVisibleOnAttachPanel () {
-    return !canSelectSender();
+    // XGram: a camera button the user hid moves into the gallery, as when the sender button takes its place.
+    return !canSelectSender() && xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_CAMERA);
   }
 
   public HapticMenuHelper.MenuItem createHapticSenderItem (int id, TdApi.MessageSender sender, boolean useUsername, boolean isLocked) {

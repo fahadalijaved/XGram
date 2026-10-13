@@ -249,6 +249,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.deleteForEveryoneByDefault(), isUpdate);
         } else if (id == R.id.btn_xgramAiTools) {
           view.getToggler().setRadioEnabled(settings.aiTools(), isUpdate);
+        } else if (id == R.id.btn_xgramTapToRecord) {
+          view.getToggler().setRadioEnabled(settings.tapToRecord(), isUpdate);
         } else if (id == R.id.btn_xgramProxyOffVpn) {
           view.getToggler().setRadioEnabled(settings.proxyOffOnVpn(), isUpdate);
         } else if (id == R.id.btn_xgramProxyOffWifi) {
@@ -445,6 +447,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools)
     );
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramAiToolsInfo));
+    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramMessageBox));
+    addRows(items,
+      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramInputButtons, 0, R.string.XgramInputButtons),
+      toggle(R.id.btn_xgramTapToRecord, R.string.XgramTapToRecord)
+    );
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTapToRecordInfo));
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramProfiles));
     addRows(items,
       toggle(R.id.btn_xgramShowPeerIds, R.string.XgramShowPeerIds),
@@ -907,6 +915,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramAiTools) {
       settings.setAiTools(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramTapToRecord) {
+      settings.setTapToRecord(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramInputButtons) {
+      navigateTo(new com.fahadali.xgram.chats.XgramInputButtonsController(context, tdlib));
       return;
     } else if (id == R.id.btn_xgramMergeCommunities) {
       settings.setMergeCommunities(adapter.toggleView(v));

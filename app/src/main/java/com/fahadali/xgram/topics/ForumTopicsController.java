@@ -204,8 +204,87 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       ((ViewGroup) view).addView(mentionWrap);
       tdlib.listeners().subscribeToChatUpdates(getArgumentsStrict().chat.id, mentionListener);
       updateMentionButton(false);
+
+      createRequestsBar(context, (ViewGroup) view);
     }
     return view;
+  }
+
+  // Join requests: the bar Telegram X shows over a group's messages, here over the topics, so admins of forums see them.
+
+  private android.widget.LinearLayout requestsWrap;
+  private org.thunderdog.challegram.component.chat.JoinRequestsView requestsView;
+
+  private final org.thunderdog.challegram.telegram.ChatListener requestsListener = new org.thunderdog.challegram.telegram.ChatListener() {
+    @Override
+    public void onChatPendingJoinRequestsChanged (long chatId, TdApi.ChatJoinRequestsInfo pendingJoinRequests) {
+      runOnUiThreadOptional(() -> checkJoinRequests(pendingJoinRequests, true));
+    }
+  };
+
+  private final org.thunderdog.challegram.telegram.TdlibSettingsManager.DismissRequestsListener requestsDismissListener = new org.thunderdog.challegram.telegram.TdlibSettingsManager.DismissRequestsListener() {
+    @Override
+    public void onJoinRequestsDismissed (long chatId) {
+      onRequestsDismissChanged(chatId);
+    }
+
+    @Override
+    public void onJoinRequestsRestore (long chatId) {
+      onRequestsDismissChanged(chatId);
+    }
+  };
+
+  private void onRequestsDismissChanged (long chatId) {
+    runOnUiThreadOptional(() -> {
+      if (chat != null && chat.id == chatId) {
+        checkJoinRequests(pendingJoinRequests(), true);
+      }
+    });
+  }
+
+  private void createRequestsBar (Context context, ViewGroup parent) {
+    requestsView = new org.thunderdog.challegram.component.chat.JoinRequestsView(context, tdlib);
+    requestsView.setLayoutParams(new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f)));
+    requestsView.setOnClickListener(v -> org.thunderdog.challegram.component.popups.ModernActionedLayout.showJoinRequests(this, chat.id, requestsView.getInfo()));
+    requestsView.setOnDismissRunnable(() -> tdlib.settings().dismissRequests(chat.id, requestsView.getInfo()));
+    org.thunderdog.challegram.support.RippleSupport.setSimpleWhiteBackground(requestsView, this);
+    org.thunderdog.challegram.tool.Views.setClickable(requestsView);
+
+    org.thunderdog.challegram.widget.ShadowView shadowView = new org.thunderdog.challegram.widget.ShadowView(context);
+    shadowView.setSimpleBottomTransparentShadow(true);
+
+    requestsWrap = new android.widget.LinearLayout(context);
+    requestsWrap.setOrientation(android.widget.LinearLayout.VERTICAL);
+    requestsWrap.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+    requestsWrap.addView(requestsView);
+    requestsWrap.addView(shadowView);
+    requestsWrap.setVisibility(View.GONE);
+    parent.addView(requestsWrap);
+
+    tdlib.listeners().subscribeToChatUpdates(chat.id, requestsListener);
+    tdlib.settings().addJoinRequestsDismissListener(requestsDismissListener);
+    checkJoinRequests(pendingJoinRequests(), false);
+  }
+
+  private TdApi.ChatJoinRequestsInfo pendingJoinRequests () {
+    TdApi.Chat current = tdlib.chat(chat.id);
+    return current != null ? current.pendingJoinRequests : chat.pendingJoinRequests;
+  }
+
+  /** As MessagesController.checkJoinRequests: shown while there are requests the admin hasn't dismissed. */
+  private void checkJoinRequests (TdApi.ChatJoinRequestsInfo info, boolean animated) {
+    if (requestsWrap == null || chat == null || isDestroyed()) {
+      return;
+    }
+    boolean show = info != null && info.totalCount > 0 && tdlib.canInviteUsers(chat, false) && !tdlib.settings().isRequestsDismissed(chat.id, info);
+    if (show) {
+      tdlib.settings().restoreRequests(chat.id, true);
+      requestsView.setInfo(info, animated);
+    }
+    if ((requestsWrap.getVisibility() == View.VISIBLE) != show) {
+      requestsWrap.setVisibility(show ? View.VISIBLE : View.GONE);
+      org.thunderdog.challegram.tool.Views.setTopMargin(getRecyclerView(), show ? Screen.dp(48f) : 0);
+    }
   }
 
   private void updateMentionButton (boolean animated) {
@@ -574,6 +653,11 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       row.statusHelper().detachFromAnyChat();
     }
     tdlib.listeners().unsubscribeFromChatUpdates(getArgumentsStrict().chat.id, mentionListener);
+    if (requestsView != null) {
+      tdlib.listeners().unsubscribeFromChatUpdates(getArgumentsStrict().chat.id, requestsListener);
+      tdlib.settings().removeJoinRequestsDismissListener(requestsDismissListener);
+      requestsView.performDestroy();
+    }
     if (list != null) {
       // The list stays cached for the next visit.
       list.removeListener(this);

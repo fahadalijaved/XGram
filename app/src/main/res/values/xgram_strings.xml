@@ -478,6 +478,18 @@
   <string name="XgramAiLimitPremium">Daily AI limit reached. Try again later.</string>
   <string name="XgramAiTools">Telegram AI tools</string>
   <string name="XgramAiToolsInfo">Summarize long messages from the message menu. Long-press Send to fix, rewrite or translate what you typed. Never in secret chats.</string>
+  <string name="XgramMessageBox">Message box</string>
+  <string name="XgramInputButtons">Message box buttons</string>
+  <string name="XgramInputButtonsInfo">Choose which buttons the message box shows. A button you keep still appears only where it applies, like bot commands in chats with bots.</string>
+  <string name="XgramInputCommands">Bot commands</string>
+  <string name="XgramInputCamera">Camera</string>
+  <string name="XgramInputScheduled">Scheduled messages</string>
+  <string name="XgramInputVoice">Voice and video messages</string>
+  <string name="XgramInputButtonsNote">Without the bot commands button, typing / still lists the commands, and the button for a bot\'s keyboard still shows. Without the camera button, the camera is in the attach menu\'s gallery. Without the scheduled messages button, they open from the chat\'s ⋮ menu.\n\nThe emoji and sticker button always stays: it\'s the way to stickers, GIFs and emoji.</string>
+  <string name="XgramTapToRecord">Tap to record</string>
+  <string name="XgramTapToRecordInfo">Tap the microphone to start recording, long press to switch between voice and video messages. Recording goes on until you tap Send or Cancel.</string>
+  <string name="XgramTapToAudio">Tap to record audio. Hold to switch to video.</string>
+  <string name="XgramTapToVideo">Tap to record video. Hold to switch to audio.</string>
   <!-- XGram: bot button long-press -->
   <string name="XgramBotButtonCopyText">Copy button text</string>
   <string name="XgramBotButtonCopyValue">Copy \"%1$s\"</string>

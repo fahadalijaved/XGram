@@ -21,6 +21,7 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.config.Config;
@@ -201,16 +202,32 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
 
   private void scheduleLongTap () {
     cancelLongTap();
+    final boolean xgramToggle = xgramTapToRecord;
     scheduledLongTap = new CancellableRunnable() {
       @Override
       public void act () {
         if (scheduledLongTap == this) {
+          if (xgramToggle) {
+            // XGram: Tap to record, a long press switches between voice and video.
+            scheduledLongTap = null;
+            xgramToggled = true;
+            UI.hapticVibrate(VoiceVideoButtonView.this, true);
+            performTap();
+            return;
+          }
           setInLongTap(true, false);
           scheduledLongTap = null;
         }
       }
     };
-    postDelayed(scheduledLongTap, 120l);
+    postDelayed(scheduledLongTap, xgramToggle ? ViewConfiguration.getLongPressTimeout() : 120l);
+  }
+
+  // XGram: Settings → XGram → Chats → Tap to record. Read on touch down.
+  private boolean xgramTapToRecord, xgramToggled;
+
+  private void xgramStartRecordingLocked () {
+    UI.getContext(getContext()).getRecordAudioVideoController().startRecording(this, false, true);
   }
 
   private void cancelLongTap () {
@@ -263,6 +280,8 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
         trackDownY = e.getY();
         draggingLeft = draggingUp = false;
         cancelLongTap = false;
+        xgramTapToRecord = com.fahadali.xgram.XgramSettings.instance().tapToRecord();
+        xgramToggled = false;
 
         setIsDown(true);
         break;
@@ -304,6 +323,11 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
         if (isDown) {
           if (inLongTap) {
             setInLongTap(false, false);
+          } else if (xgramTapToRecord) {
+            cancelLongTap();
+            if (!xgramToggled) {
+              xgramStartRecordingLocked();
+            }
           } else {
             performTap();
           }
