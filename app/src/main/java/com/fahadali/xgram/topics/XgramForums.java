@@ -347,7 +347,48 @@ public final class XgramForums {
   private static final java.util.Set<ForumTopicList.Listener> PENDING_PICKERS = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
 
   private static void showTopicPicker (ViewController<?> context, long chatId, ForumTopicList list, RunnableData<PickedTopic> onPicked) {
-    int count = Math.min(list.size(), 100);
+    Tdlib tdlib = context.tdlib();
+    if (!list.isEndReached() && list.size() < 100) {
+      // Only the first page is loaded: fetch up to 100 topics for the picker, so none of them is missing.
+      tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (result, error) -> tdlib.ui().post(() -> {
+        if (context.isDestroyed()) {
+          return;
+        }
+        showTopicPicker(context, chatId, result != null ? java.util.Arrays.asList(result.topics) : loadedTopics(list), onPicked);
+      }));
+      return;
+    }
+    showTopicPicker(context, chatId, loadedTopics(list), onPicked);
+  }
+
+  private static java.util.List<TdApi.ForumTopic> loadedTopics (ForumTopicList list) {
+    java.util.List<TdApi.ForumTopic> topics = new java.util.ArrayList<>(list.size());
+    for (int i = 0; i < list.size(); i++) {
+      topics.add(list.get(i));
+    }
+    return topics;
+  }
+
+  private static void showTopicPicker (ViewController<?> context, long chatId, java.util.List<TdApi.ForumTopic> allTopics, RunnableData<PickedTopic> onPicked) {
+    Tdlib tdlib = context.tdlib();
+    TdApi.Chat chat = tdlib.chat(chatId);
+    boolean canManage = canManageTopics(tdlib, chatId);
+    // Only topics the user can write in: closed ones (unless they are theirs or they manage topics) and the hidden
+    // General for members who can't manage topics would make the share fail later.
+    java.util.List<TdApi.ForumTopic> writable = new java.util.ArrayList<>(allTopics.size());
+    for (TdApi.ForumTopic topic : allTopics) {
+      if (writable.size() >= 100) {
+        break;
+      }
+      if (chat != null && isTopicClosedForMe(tdlib, chat, topic.info)) {
+        continue;
+      }
+      if (topic.info.isHidden && !canManage) {
+        continue;
+      }
+      writable.add(topic);
+    }
+    int count = writable.size();
     if (count == 0) {
       onPicked.runWithData(new PickedTopic(null, Lang.getString(R.string.XgramGeneralTopic)));
       return;
@@ -357,7 +398,7 @@ public final class XgramForums {
     int[] icons = new int[count];
     TdApi.ForumTopic[] topics = new TdApi.ForumTopic[count];
     for (int i = 0; i < count; i++) {
-      TdApi.ForumTopic topic = list.get(i);
+      TdApi.ForumTopic topic = writable.get(i);
       topics[i] = topic;
       ids[i] = i + 1;
       titles[i] = topicTitle(topic.info);

@@ -77,15 +77,29 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   public static ForumTopicList obtain (Tdlib tdlib, long chatId) {
     String key = tdlib.id() + "_" + chatId;
     ForumTopicList list = cache.get(key);
-    if (list == null || list.isDestroyed || list.loadFailed) {
-      if (list != null) {
-        list.performDestroy();
-      }
+    if (list == null || list.isDestroyed) {
       list = new ForumTopicList(tdlib, chatId);
       cache.put(key, list);
       trimCache();
+    } else if (list.loadFailed) {
+      // Reset in place: screens still bound to this instance keep a list that loads and updates again. Replacing it
+      // would leave them a dead, empty one, as they don't obtain the list again for the same chat.
+      list.resetAfterFailure();
     }
     return list;
+  }
+
+  /** Lets a list whose first page failed try again: not loaded, nothing reached, offsets at the start. */
+  @UiThread
+  private void resetAfterFailure () {
+    loadFailed = false;
+    endReached = false;
+    isLoaded = false;
+    isLoading = false;
+    loadRetryAfter = 0;
+    nextOffsetDate = 0;
+    nextOffsetMessageId = 0;
+    nextOffsetForumTopicId = 0;
   }
 
   /** A topic from the cached list of the chat, without creating or loading a list. */
@@ -355,6 +369,11 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       return;
     }
     TdApi.ForumTopic oldTopic = topics.remove(oldIndex);
+    if (oldTopic.lastMessage != null && oldTopic.lastMessage.sendingState instanceof TdApi.MessageSendingStatePending &&
+      (topic.lastMessage == null || topic.lastMessage.id < oldTopic.lastMessage.id)) {
+      // Still sending: the server doesn't know the message yet. Keep its preview until it is sent or fails.
+      topic.lastMessage = oldTopic.lastMessage;
+    }
     int newIndex = insertionIndex(topic);
     topics.add(newIndex, topic);
     boolean changed = !sameVisibleState(oldTopic, topic);
@@ -612,13 +631,43 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   @Override
   public void onNewMessage (TdApi.Message message) {
     int forumTopicId = forumTopicId(message.topicId);
-    tdlib.ui().post(() -> scheduleRefresh(forumTopicId));
+    tdlib.ui().post(() -> {
+      if (isDestroyed) {
+        return;
+      }
+      if (message.sendingState != null) {
+        int index = indexOf(forumTopicId);
+        if (index != -1) {
+          // A message being sent: TDLib's topic last_message only comes from the server, which doesn't know it yet, so
+          // a fetch would return the previous message. Show the clock and the new preview now; the server order is
+          // fetched once it is sent.
+          topics.get(index).lastMessage = message;
+          notifyChanged(index);
+          return;
+        }
+      }
+      scheduleRefresh(forumTopicId);
+    });
   }
 
   @Override
   public void onMessageSendSucceeded (TdApi.Message message, long oldMessageId) {
     int forumTopicId = forumTopicId(message.topicId);
-    tdlib.ui().post(() -> scheduleRefresh(forumTopicId));
+    tdlib.ui().post(() -> {
+      if (isDestroyed) {
+        return;
+      }
+      int index = indexOf(forumTopicId);
+      if (index != -1) {
+        TdApi.ForumTopic topic = topics.get(index);
+        if (topic.lastMessage != null && topic.lastMessage.id == oldMessageId) {
+          // The clock goes away at once; the fetch below brings the server order.
+          topic.lastMessage = message;
+          notifyChanged(index);
+        }
+      }
+      scheduleRefresh(forumTopicId);
+    });
   }
 
   @Override

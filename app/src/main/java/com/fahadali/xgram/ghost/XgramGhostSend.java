@@ -19,6 +19,7 @@ import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccount;
+import org.thunderdog.challegram.telegram.TdlibForumTopicManager;
 import org.thunderdog.challegram.telegram.TdlibManager;
 
 import tgx.td.ChatId;
@@ -144,6 +145,11 @@ public final class XgramGhostSend implements Client.QueryInterceptor {
   private static TdApi.Message lastMessageOf (Tdlib tdlib, long chatId, @Nullable TdApi.MessageTopic topicId) {
     if (topicId instanceof TdApi.MessageTopicForum || (topicId == null && tdlib.isForum(chatId))) {
       int forumTopicId = topicId != null ? ((TdApi.MessageTopicForum) topicId).forumTopicId : com.fahadali.xgram.topics.XgramForums.GENERAL_TOPIC_ID;
+      if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+        // Client.send runs on the caller's thread. The topic list cache is UI-thread only; the topic manager is synchronized.
+        TdlibForumTopicManager.Entry entry = tdlib.topics().find(new TdlibForumTopicManager.Key(chatId, forumTopicId));
+        return entry != null && entry.value != null ? entry.value.lastMessage : null;
+      }
       TdApi.ForumTopic topic = com.fahadali.xgram.topics.ForumTopicList.peekTopic(tdlib, chatId, forumTopicId);
       return topic != null ? topic.lastMessage : null;
     }
