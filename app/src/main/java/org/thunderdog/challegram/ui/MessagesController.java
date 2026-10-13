@@ -11353,6 +11353,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         xgramForumTopic = com.fahadali.xgram.topics.XgramForums.normalizeUnread(tdlib, topic);
         xgramApplyTopicCounters(true);
         com.fahadali.xgram.topics.XgramTopicReadOutbox.set(tdlib, chatId, topic);
+        com.fahadali.xgram.topics.XgramTopicMute.onSettings(tdlib, chatId, topic); // XGram: topic mute for notifications
         xgramApplyTopicReadOutbox();
         if (firstLoad && !Td.isEmpty(topic.draftMessage)) {
           // XGram: opened without a cached topic (notification, link, tabs): the topic's draft was unknown when the input was filled.
