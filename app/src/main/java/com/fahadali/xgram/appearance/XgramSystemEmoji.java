@@ -148,6 +148,8 @@ public final class XgramSystemEmoji {
   private static final float BASE_SIZE = 100f;
   /** Share of the emoji square that the phone's 😀 takes, close to how the built-in set fills it. */
   private static final float FILL = .95f;
+  /** Before Android 8 the hardware renderer leaves out colour glyphs bigger than its glyph cache, so bigger ones use the set's image. */
+  private static final float MAX_TEXT_SIZE_LEGACY = 200f;
   private static final String REFERENCE = "\uD83D\uDE00";
   private static final String[] PREVIEW = {"\uD83D\uDE00", "\uD83D\uDE09", "\uD83D\uDE14", "\uD83D\uDE28"}; // as R.string.EmojiPreview
 
@@ -176,6 +178,9 @@ public final class XgramSystemEmoji {
     Glyph glyph = glyph(info);
     if (glyph == null)
       return false;
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O && c.isHardwareAccelerated() &&
+      BASE_SIZE * scale(glyph, Math.min(rect.width(), rect.height())) > MAX_TEXT_SIZE_LEGACY)
+      return false;
     drawGlyph(c, glyph, rect, alpha);
     return true;
   }
@@ -203,15 +208,21 @@ public final class XgramSystemEmoji {
     if (box <= 0 || alpha <= 0)
       return;
     TextPaint paint = paint();
+    float scale = scale(glyph, box);
+    paint.setTextSize(BASE_SIZE * scale);
+    // Colour emoji ignore the colour; a plain one (rare) takes the text colour
+    paint.setColor((Theme.textAccentColor() & 0xffffff) | (Math.min(alpha, 255) << 24));
+    c.drawText(glyph.text, rect.exactCenterX() - glyph.centerX * scale, rect.exactCenterY() - referenceCenterY * scale, paint);
+  }
+
+  private static float scale (Glyph glyph, int box) {
+    paint(); // sets referenceSize
     // Phone emoji keep their sizes relative to each other; only one wider than the square is fitted into it
     float scale = FILL * box / referenceSize;
     if (glyph.size * scale > box) {
       scale = box / glyph.size;
     }
-    paint.setTextSize(BASE_SIZE * scale);
-    // Colour emoji ignore the colour; a plain one (rare) takes the text colour
-    paint.setColor((Theme.textAccentColor() & 0xffffff) | (Math.min(alpha, 255) << 24));
-    c.drawText(glyph.text, rect.exactCenterX() - glyph.centerX * scale, rect.exactCenterY() - referenceCenterY * scale, paint);
+    return scale;
   }
 
   @Nullable
