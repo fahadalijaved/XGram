@@ -180,6 +180,8 @@ jobs:
           TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
           TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
           XGRAM_BOT_API_URL: ${{ vars.XGRAM_BOT_API_URL }}
+          # GPLv3: each APK caption links to the source of its commit.
+          XGRAM_SOURCE_URL: ${{ vars.XGRAM_SOURCE_URL || format('{0}/{1}', github.server_url, github.repository) }}
           XGRAM_BOT_STATE_FILE: telegram-state/telegram_state.json
           VERSION: ${{ steps.collect.outputs.version_name }}
           COMMIT: ${{ needs.plan.outputs.head }}

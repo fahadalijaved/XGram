@@ -694,7 +694,12 @@ def apk_caption(info, version, commit, source_url, kind="stable"):
                                                     if info["size"] >= 1024 else ""),
              "Commit: <code>%s</code>" % esc(commit[:12]), "SHA-256: <code>%s</code>" % info["sha256"]]
     if source_url:
-        lines.append('Source: <a href="%s">%s</a>' % (esc(source_url), esc(source_url)))
+        # a GitHub repo links to the tree of this exact commit; the text stays the short repo address
+        href = source_url.rstrip("/")
+        if commit and re.match(r"https://github\.com/[^/]+/[^/]+$", href):
+            href += "/tree/" + commit
+        text = re.sub(r"^https?://", "", source_url.rstrip("/"))
+        lines.append('Source: <a href="%s">%s</a>' % (esc(href), esc(text)))
     return "\n".join(lines)
 
 def cmd_publish(args, cfg, api):
