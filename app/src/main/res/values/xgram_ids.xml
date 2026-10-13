@@ -206,4 +206,8 @@
   <item type="id" name="btn_xgramEmailReset" />
   <item type="id" name="btn_xgramEmailResetCheck" />
   <item type="id" name="btn_xgramEmailChange" />
+  <item type="id" name="controller_xgramQrLogin" />
+  <item type="id" name="menu_xgramQrLogin" />
+  <item type="id" name="btn_xgramQrLogin" />
+  <item type="id" name="btn_xgramQrCancel" />
 </resources>

@@ -370,6 +370,9 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     if (mode != MODE_ADD_CONTACT) {
       this.baseItems.add(hintItem);
     }
+    if (mode == MODE_LOGIN) { // XGram: QR code login, no SMS or email needed when another device is logged in
+      this.baseItems.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramQrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, R.string.xgram_login_QrButton));
+    }
 
     if (isAccountAdd) {
       // this.baseItems.add(new SettingItem(SettingItem.TYPE_CHECKBOX_OPTION_REVERSE, R.id.btn_syncContacts, 0, R.string.SyncContacts, R.id.btn_syncContacts, true));
@@ -598,6 +601,8 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     final int viewId = v.getId();
     if (viewId == R.id.btn_syncContacts) {
       adapter.toggleView(v);
+    } else if (viewId == R.id.btn_xgramQrLogin) { // XGram
+      requestQrLogin();
     } else if (viewId == R.id.result) {
       ListItem item = (ListItem) v.getTag();
       if (item != null && item.getData() instanceof TdApi.CountryInfo country) {
@@ -1095,6 +1100,22 @@ public class PhoneController extends EditBaseController<Void> implements Setting
 
   private String getPhoneNumber () {
     return "+" + Strings.getNumber(codeView.getText().toString()) + Strings.getNumber(numberView.getText().toString());
+  }
+
+  // XGram: TDLib answers with WaitOtherDeviceConfirmation and MainActivity opens the QR screen
+  private void requestQrLogin () {
+    if (mode != MODE_LOGIN || isInProgress() || inCountryMode) {
+      return;
+    }
+    showError(null);
+    if (com.fahadali.xgram.login.QrLogin.request(this, tdlib, error -> {
+      setInProgress(false);
+      if (error != null) {
+        showError(TD.toErrorString(error));
+      }
+    })) {
+      setInProgress(true);
+    }
   }
 
   private boolean makeRequest () {

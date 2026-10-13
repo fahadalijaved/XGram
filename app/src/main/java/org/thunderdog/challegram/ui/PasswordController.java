@@ -80,7 +80,7 @@ import me.vkryl.core.lambda.RunnableData;
 import tgx.td.Td;
 
 // TODO: Rework properly from scratch with the app redesign.
-public class PasswordController extends ViewController<PasswordController.Args> implements View.OnClickListener, FactorAnimator.Target, MaterialEditTextGroup.EmptyListener, MaterialEditTextGroup.DoneListener, MaterialEditTextGroup.TextChangeListener, AuthorizationListener, Handler.Callback {
+public class PasswordController extends ViewController<PasswordController.Args> implements View.OnClickListener, FactorAnimator.Target, MaterialEditTextGroup.EmptyListener, MaterialEditTextGroup.DoneListener, MaterialEditTextGroup.TextChangeListener, AuthorizationListener, Handler.Callback, org.thunderdog.challegram.navigation.Menu /* XGram: QR login button */ {
   public static final int MODE_EDIT = 0;
   public static final int MODE_NEW = 1;
   public static final int MODE_UNLOCK_EDIT = 2;
@@ -289,6 +289,48 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   @Override
   protected int getBackButton () {
     return BackHeaderButton.TYPE_BACK;
+  }
+
+  // XGram: "Log in with QR code" in the header of the code and email login screens, a way out when no code arrives.
+  // Not on the 2FA password screen: a QR login of an account with a password ends at that same password step.
+  private boolean isQrLoginMode () {
+    return mode == MODE_CODE || mode == MODE_CODE_EMAIL || mode == MODE_EMAIL_LOGIN;
+  }
+
+  @Override
+  protected int getMenuId () {
+    return isQrLoginMode() ? R.id.menu_xgramQrLogin : 0;
+  }
+
+  @Override
+  public void fillMenuItems (int id, HeaderView header, android.widget.LinearLayout menu) {
+    if (id == R.id.menu_xgramQrLogin) {
+      header.addButton(menu, R.id.btn_xgramQrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, ColorId.headerIcon, this, Screen.dp(48f));
+    }
+  }
+
+  @Override
+  public void onMenuItemPressed (int id, View view) {
+    if (id == R.id.btn_xgramQrLogin) {
+      requestQrLogin();
+    }
+  }
+
+  private boolean qrLoginInProgress;
+
+  private void requestQrLogin () {
+    // TDLib refuses it while a code check or another login request is pending
+    if (!isQrLoginMode() || inProgress || inRecoveryProgress || qrLoginInProgress) {
+      return;
+    }
+    if (com.fahadali.xgram.login.QrLogin.request(this, tdlib, error -> {
+      qrLoginInProgress = false;
+      if (error != null) {
+        setHintText(TD.toErrorString(error), true);
+      }
+    })) {
+      qrLoginInProgress = true;
+    }
   }
 
   @Override

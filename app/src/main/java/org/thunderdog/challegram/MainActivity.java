@@ -367,6 +367,19 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     }
 
     if (status == Tdlib.Status.READY) {
+      // XGram: a QR login skips the phone-number check, so a user already added here can log in again in a new slot.
+      // Keep the existing slot: end only the new session and switch to the existing account.
+      TdlibAccount existingAccount = current != null && current.isSameAccount(account) && current.isUnauthorized() ? com.fahadali.xgram.login.QrLogin.findExistingAccount(account) : null;
+      if (existingAccount != null) {
+        com.fahadali.xgram.login.QrLogin.discardNewSession(account);
+        UI.showToast(R.string.xgram_login_QrDuplicateAccount, Toast.LENGTH_LONG);
+        if (tdlib.context().preferredAccountId() != existingAccount.id) {
+          tdlib.context().changePreferredAccountId(existingAccount.id, TdlibManager.SWITCH_REASON_EXISTING_NUMBER);
+        } else {
+          navigation.setControllerAnimated(new MainController(this, existingAccount.tdlib()), false, false);
+        }
+        return;
+      }
       ViewController<?> first = navigation.getStack().get(0);
       boolean needThemeSwitch = this.account.id != account.id && isUnauthorizedController(current) && !isUnauthorizedController(first) && first.tdlibId() != account.id && current.tdlibId() == account.id;
 
@@ -605,8 +618,10 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         break;
       }
       case TdApi.AuthorizationStateWaitOtherDeviceConfirmation.CONSTRUCTOR: {
-        // Should never come to TGX.
-        break;
+        // XGram: QR code login, requested from the phone, code, email or premium screens
+        com.fahadali.xgram.login.QrLoginController c = new com.fahadali.xgram.login.QrLoginController(this, tdlib);
+        c.setArguments((TdApi.AuthorizationStateWaitOtherDeviceConfirmation) authState);
+        return c;
       }
 
       case TdApi.AuthorizationStateClosed.CONSTRUCTOR:
