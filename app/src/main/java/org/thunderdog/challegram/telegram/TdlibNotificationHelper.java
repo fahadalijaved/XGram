@@ -596,7 +596,11 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
     rebuild(null, 0, groupId);
   }
 
-  /** XGram: messages hidden by filters or from shadow-banned people don't notify. */
+  /**
+   * XGram: messages hidden by filters or from shadow-banned people don't notify, and neither do messages in a muted
+   * forum topic (TDLib only looks at the chat's mute state). An unmuted topic inside a muted forum still can't
+   * notify: TDLib never creates that notification.
+   */
   private void xgramDropHiddenNotifications (TdApi.UpdateNotificationGroup update) {
     if (update.addedNotifications == null || update.addedNotifications.length == 0) {
       return;
@@ -604,8 +608,12 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
     List<TdApi.Notification> kept = null;
     for (int i = 0; i < update.addedNotifications.length; i++) {
       TdApi.Notification notification = update.addedNotifications[i];
-      boolean hidden = notification.type instanceof TdApi.NotificationTypeNewMessage &&
-        com.fahadali.xgram.chats.XgramFilters.isHidden(tdlib, ((TdApi.NotificationTypeNewMessage) notification.type).message);
+      boolean hidden = false;
+      if (notification.type instanceof TdApi.NotificationTypeNewMessage) {
+        TdApi.Message message = ((TdApi.NotificationTypeNewMessage) notification.type).message;
+        hidden = com.fahadali.xgram.chats.XgramFilters.isHidden(tdlib, message) ||
+          com.fahadali.xgram.topics.XgramTopicMute.isMutedMessage(tdlib, message);
+      }
       if (hidden) {
         if (kept == null) {
           kept = new ArrayList<>();

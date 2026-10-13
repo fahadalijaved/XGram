@@ -209,6 +209,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       } else {
         for (TdApi.ForumTopic topic : result.topics) {
           XgramTopicReadOutbox.set(tdlib, chatId, topic);
+          XgramTopicMute.onSettings(tdlib, chatId, topic);
           if (indexOf(topic.info.forumTopicId) == -1) {
             topics.add(XgramForums.normalizeUnread(tdlib, topic));
           }
@@ -336,6 +337,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   private void putTopicImpl (TdApi.ForumTopic topic) {
     XgramForums.normalizeUnread(tdlib, topic);
     XgramTopicReadOutbox.set(tdlib, chatId, topic);
+    XgramTopicMute.onSettings(tdlib, chatId, topic);
     int oldIndex = indexOf(topic.info.forumTopicId);
     if (oldIndex == -1) {
       if (!isLoaded) {

@@ -3118,6 +3118,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     }
     tdlib.send(new TdApi.GetForumTopic(chat.id, xgramTopicId), (topic, error) -> runOnUiThreadOptional(() -> {
       if (topic != null) {
+        com.fahadali.xgram.topics.XgramTopicMute.onSettings(tdlib, chat.id, topic);
         xgramTopic = topic;
         xgramOnTopicChanged();
       }
@@ -3132,6 +3133,31 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         }
       }));
     }
+  }
+
+  /** XGram: the notifications row follows the topic (muted from this page, or from anywhere else). */
+  @Override
+  public void onForumTopicUpdated (TdApi.UpdateForumTopic update) {
+    if (xgramTopicId == 0 || update.chatId != chat.id || update.forumTopicId != xgramTopicId) {
+      return;
+    }
+    runOnUiThreadOptional(() -> {
+      TdApi.ForumTopic topic = xgramTopic;
+      if (topic == null || update.chatId != chat.id || update.forumTopicId != xgramTopicId) {
+        return;
+      }
+      topic.isPinned = update.isPinned;
+      topic.lastReadInboxMessageId = update.lastReadInboxMessageId;
+      topic.lastReadOutboxMessageId = update.lastReadOutboxMessageId;
+      topic.unreadReactionCount = update.unreadReactionCount;
+      topic.unreadPollVoteCount = update.unreadPollVoteCount;
+      topic.notificationSettings = update.notificationSettings;
+      topic.draftMessage = update.draftMessage;
+      // unreadMentionCount is left to the topic list, which lowers it in ghost mode.
+      if (baseAdapter != null) {
+        baseAdapter.updateValuedSettingById(R.id.btn_notifications);
+      }
+    });
   }
 
   private void xgramOnTopicChanged () {
@@ -5002,7 +5028,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       }
     } else if (viewId == R.id.btn_notifications && xgramTopicId != 0) {
       if (xgramTopic != null) {
-        com.fahadali.xgram.topics.XgramForums.promptMuteTopic(this, chat, xgramTopic);
+        if (com.fahadali.xgram.topics.XgramForums.isTopicMuted(tdlib, chat.id, xgramTopic)) {
+          com.fahadali.xgram.topics.XgramForums.setTopicMuted(tdlib, chat.id, xgramTopic, false);
+        } else {
+          com.fahadali.xgram.topics.XgramForums.promptMuteTopic(this, chat, xgramTopic);
+        }
       }
     } else if (viewId == R.id.btn_xgramTopicGroup) {
       com.fahadali.xgram.topics.XgramForums.openTopicList(this, chat);

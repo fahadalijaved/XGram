@@ -752,6 +752,7 @@ public final class XgramForums {
     TdApi.ChatNotificationSettings settings = copyOf(current);
     settings.useDefaultMuteFor = false;
     settings.muteFor = muteForSeconds;
+    XgramTopicMute.onSettings(tdlib, chatId, topic.info.forumTopicId, settings); // notifications follow right away
     tdlib.send(new TdApi.SetForumTopicNotificationSettings(chatId, topic.info.forumTopicId, settings), tdlib.typedOkHandler());
   }
 
