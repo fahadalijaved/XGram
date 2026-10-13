@@ -529,6 +529,15 @@
   <string name="xgram_login_QrScanned">Code scanned. Continue on the next screen.</string>
   <string name="xgram_login_QrEnded">The QR login ended. Try again.</string>
   <string name="xgram_login_QrInstead">Log in with phone number instead</string>
+  <string name="xgram_login_QrOpenApp">Open in Telegram on this phone</string>
+  <string name="xgram_login_QrOpenAppHint">Opens the Telegram app on this phone and asks it to log in XGram.</string>
+  <string name="xgram_login_QrNoApp">No Telegram app on this phone can open this link.</string>
+  <string name="xgram_login_QrNotReady">The code isn\'t ready yet. Try again in a moment.</string>
+  <string name="xgram_login_QrSave">Save QR code</string>
+  <string name="xgram_login_QrShare">Share QR code</string>
+  <string name="xgram_login_QrSaveHint">The code changes often, so a saved or shared image stops working soon.</string>
+  <string name="xgram_login_QrSaved">QR code saved to %1$s</string>
+  <string name="xgram_login_QrSaveFailed">Couldn\'t save the QR code.</string>
   <string name="xgram_login_QrDuplicateAccount">This account is already added. Switched to it.</string>
   <string name="xgram_login_NextCodeSms">Get the code by SMS</string>
   <string name="xgram_login_NextCodeCall">Get the code by phone call</string>

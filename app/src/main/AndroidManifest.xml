@@ -118,6 +118,11 @@
       <action android:name="android.intent.action.VIEW" />
       <data android:scheme="*" />
     </intent>
+    <!-- XGram: apps that open tg://login links, for QR login on the same phone -->
+    <intent>
+      <action android:name="android.intent.action.VIEW" />
+      <data android:scheme="tg" />
+    </intent>
   </queries>
 
   <application

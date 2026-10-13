@@ -10,5 +10,7 @@
   <files-path name="xgram_deleted_media" path="xgram_deleted_media/" />
   <!-- XGram: exported chats, shared from Chat → Export chat -->
   <files-path name="xgram_exports" path="xgram_exports/" />
+  <!-- XGram: QR login code, shared from the QR login screen -->
+  <files-path name="xgram_qr" path="xgram_qr/" />
 
 </paths>
