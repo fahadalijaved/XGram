@@ -20,6 +20,7 @@ import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.update.XgramUpdates;
 import com.google.android.play.core.appupdate.AppUpdateInfo;
 import com.google.android.play.core.appupdate.AppUpdateManager;
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
@@ -114,6 +115,7 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
   private boolean forceTelegramChannelFlow;
   private Tdlib telegramChannelTdlib;
   private Tdlib.UpdateFileInfo telegramChannelFile;
+  private XgramUpdates.Found xgramUpdate; // XGram: the post telegramChannelFile comes from
 
   @State
   private int state = State.NONE;
@@ -122,7 +124,8 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
     this.context = context;
     this.listeners = new ReferenceList<>();
     AppUpdateManager appUpdateManager = null;
-    if (AppInstallationUtil.allowInAppGooglePlayUpdates(context)) {
+    // XGram: not on Google Play. Without a manager preferTelegramChannelFlow() always picks XGram's Telegram source.
+    if (false && AppInstallationUtil.allowInAppGooglePlayUpdates(context)) {
       try {
         appUpdateManager = AppUpdateManagerFactory.create(context);
       } catch (Throwable t) {
@@ -168,9 +171,39 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
     listeners.remove(listener);
   }
 
+  // XGram: Settings → XGram → Updates
+
+  /** "Check for updates": a check now, whatever the 6-hour limit. */
+  public void checkForUpdatesNow () {
+    XgramUpdates.requestCheck();
+    checkForUpdates();
+  }
+
+  /** The update channel changed: forget an update found in the old one, unless it is downloading or downloaded. */
+  public void resetXgramUpdate () {
+    if (state != State.AVAILABLE) {
+      return;
+    }
+    if (telegramChannelTdlib != null) {
+      telegramChannelTdlib.listeners().unsubscribeFromConnectivityUpdates(this);
+      if (telegramChannelFile != null) {
+        telegramChannelTdlib.listeners().removeFileListener(telegramChannelFile.document.document.id, this);
+      }
+    }
+    xgramUpdate = null;
+    updateOffered = false;
+    setState(State.NONE);
+  }
+
+  @Nullable
+  public XgramUpdates.Found xgramUpdate () {
+    return xgramUpdate;
+  }
+
   public void checkForUpdates () {
-    if (true) {
-      // XGram: Telegram X's update sources (Google Play, its Telegram channel) serve Telegram X, not XGram.
+    // XGram: XGram's own posts on Telegram (Settings → XGram → Updates), never Telegram X's. A new check runs on app
+    // start and then at most every 6 hours, never when updates are Off (XgramUpdates.isCheckDue).
+    if (state == State.NONE && !XgramUpdates.isCheckDue()) {
       return;
     }
     if (state == State.NONE) {
@@ -328,17 +361,17 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
   private void checkForTelegramChannelUpdates () {
     setState(State.CHECKING);
     Tdlib tdlib = context.hasTdlib() ? context.currentTdlib() : null;
-    if (tdlib == null || tdlib.context().inRecoveryMode() || !tdlib.isAuthorized()) {
+    // XGram: XGram's posts (XgramUpdates) instead of Telegram X's channel. On app start TDLib may still be starting,
+    // so XgramUpdates waits for it and finds nothing when logged out.
+    if (tdlib == null || tdlib.context().inRecoveryMode()) {
       onUpdateUnavailable();
       return;
     }
-    if (BuildConfig.EXPERIMENTAL || (!AppInstallationUtil.allowInAppTelegramUpdates(AppContext.get()) && !tdlib.hasUrgentInAppUpdate())) {
-      onUpdateUnavailable();
-      return;
-    }
-    tdlib.findUpdateFile(updateFile -> {
+    XgramUpdates.find(tdlib, found -> {
+      final Tdlib.UpdateFileInfo updateFile = found != null ? found.file : null;
       RunnableBool act = updateFileLoadedAndExists -> tdlib.ui().post(() -> {
         if (updateFile != null) {
+          this.xgramUpdate = found; // XGram
           this.telegramChannelTdlib = tdlib;
           this.telegramChannelFile = updateFile;
           TdApi.File file = updateFile.document.document;
@@ -377,16 +410,20 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
               Strings.buildSize(bytesToDownload), displayVersion
             ))
             .item(new ViewController.OptionItem(R.id.btn_update, Lang.getString(R.string.DownloadUpdate), ViewController.OptionColor.BLUE, R.drawable.baseline_system_update_24));
-          final String changesUrl = commit != null && !BuildConfig.COMMIT.equals(commit) ? BuildConfig.REMOTE_URL + "/compare/" + BuildConfig.COMMIT + "..." + commit : null;
-          if (changesUrl != null) {
-            b.item(new ViewController.OptionItem(R.id.btn_sourceCode, Lang.getString(R.string.UpdateSourceChanges), ViewController.OptionColor.NORMAL, R.drawable.baseline_code_24));
+          // XGram: the changelog and the post instead of a GitHub compare link (the repository is private).
+          final XgramUpdates.Found found = xgramUpdate;
+          if (found != null) {
+            b.item(new ViewController.OptionItem(R.id.btn_xgramUpdateWhatsNew, Lang.getString(R.string.XgramUpdateWhatsNew), ViewController.OptionColor.NORMAL, R.drawable.baseline_whatshot_24));
+            b.item(new ViewController.OptionItem(R.id.btn_xgramUpdateOpenPost, Lang.getString(R.string.XgramUpdateOpenPost), ViewController.OptionColor.NORMAL, R.drawable.baseline_open_in_browser_24));
           }
           b.cancelItem();
           c.showOptions(b.build(), (optionItemView, id) -> {
             if (id == R.id.btn_update) {
               downloadUpdate();
-            } else if (id == R.id.btn_sourceCode) {
-              UI.openUrl(changesUrl);
+            } else if (id == R.id.btn_xgramUpdateWhatsNew) {
+              XgramUpdates.showWhatsNew(c, found, this::downloadUpdate);
+            } else if (id == R.id.btn_xgramUpdateOpenPost) {
+              XgramUpdates.openPost(c, found);
             }
             return true;
           });
@@ -418,7 +455,7 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
   public void onConnectionTypeChanged (TdApi.NetworkType type) {
     if (type instanceof TdApi.NetworkTypeWiFi) {
       telegramChannelTdlib.listeners().unsubscribeFromConnectivityUpdates(this);
-      checkForUpdates();
+      downloadUpdate(); // XGram: checkForUpdates() would skip it, the update counts as offered already
     }
   }
 
@@ -512,7 +549,11 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
         break;
       case FlowType.TELEGRAM_CHANNEL: {
         // TODO guide on how to allow installing APKs
-        UI.openFile(new TdlibContext(context, telegramChannelTdlib), telegramChannelFile.document.fileName, new File(telegramChannelFile.document.document.local.path), telegramChannelFile.document.mimeType, 0);
+        // XGram: the installer opens only when the file's SHA-256 matches the post's "SHA-256:" line.
+        final Tdlib.UpdateFileInfo updateFile = telegramChannelFile;
+        XgramUpdates.verifyThenInstall(telegramChannelTdlib, xgramUpdate, () ->
+          UI.openFile(new TdlibContext(context, telegramChannelTdlib), updateFile.document.fileName, new File(updateFile.document.document.local.path), updateFile.document.mimeType, 0)
+        );
         break;
       }
       case FlowType.GOOGLE_PLAY: {

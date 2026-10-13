@@ -472,4 +472,27 @@
   <!-- Settings search -->
   <string name="XgramSettingsSearchHint">Search settings</string>
   <string name="XgramSettingsSearchPath">%1$s › %2$s</string>
+  <!-- In-app updates (Settings → XGram → Updates) -->
+  <string name="XgramUpdates">Updates</string>
+  <string name="XgramUpdateChannel">Channel</string>
+  <string name="XgramUpdateChannelStable">Stable</string>
+  <string name="XgramUpdateChannelCi">CI builds</string>
+  <string name="XgramUpdateChannelOff">Off</string>
+  <string name="XgramUpdateChannelInfo">Stable: releases only, from @XGramTD and @XGramci. CI builds: every build from @XGramci, newer but less tested. Off: XGram never checks.</string>
+  <string name="XgramUpdateMode">Download updates</string>
+  <string name="XgramUpdateModeAsk">Ask first</string>
+  <string name="XgramUpdateModeWifi">On Wi-Fi</string>
+  <string name="XgramUpdateModeAlways">Always</string>
+  <string name="XgramUpdateModeNever">Never</string>
+  <string name="XgramUpdateInstalled">Installed version</string>
+  <string name="XgramUpdateInstalledValue">%1$s · %2$s</string>
+  <string name="XgramUpdateCheckInfo">XGram checks when it starts, at most every 6 hours. Before installing, the file is checked against the SHA-256 in the post.</string>
+  <string name="XgramUpdateLatest">You have the latest version</string>
+  <string name="XgramUpdateCheckFailed">Couldn’t check for updates: %1$s</string>
+  <string name="XgramUpdateWhatsNew">What’s new</string>
+  <string name="XgramUpdateWhatsNewTitle">XGram %1$s</string>
+  <string name="XgramUpdateNoChangelog">No changelog for this version.</string>
+  <string name="XgramUpdateOpenPost">Open post</string>
+  <string name="XgramUpdateClose">Close</string>
+  <string name="XgramUpdateBadFile">The downloaded update doesn’t match its SHA-256 and was deleted. Download it again.</string>
 </resources>

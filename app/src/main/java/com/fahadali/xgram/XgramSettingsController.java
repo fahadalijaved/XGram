@@ -22,13 +22,18 @@ import androidx.annotation.StringRes;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.fahadali.xgram.ghost.XgramGhost;
+import com.fahadali.xgram.update.XgramUpdates;
 
+import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.component.base.TogglerView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.Strings;
+import org.thunderdog.challegram.unsorted.Settings;
+import org.thunderdog.challegram.util.AppUpdater;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.RecyclerViewController;
 import org.thunderdog.challegram.ui.SettingsAdapter;
@@ -40,11 +45,11 @@ import java.util.List;
 /**
  * XGram's own settings: a short list of categories, each opening its own page (the same controller with a section).
  */
-public final class XgramSettingsController extends RecyclerViewController<Integer> implements View.OnClickListener {
+public final class XgramSettingsController extends RecyclerViewController<Integer> implements View.OnClickListener, AppUpdater.Listener {
   public static final int SECTION_MAIN = 0, SECTION_APPEARANCE = 1, SECTION_GHOST = 2, SECTION_HISTORY = 3,
-    SECTION_CHATS = 4, SECTION_PRIVACY = 5, SECTION_NETWORK = 6, SECTION_BACKUP = 7;
+    SECTION_CHATS = 4, SECTION_PRIVACY = 5, SECTION_NETWORK = 6, SECTION_BACKUP = 7, SECTION_UPDATES = 8;
   /** Highest section. The settings search indexes SECTION_MAIN..SECTION_LAST, so raise this when adding a section. */
-  static final int SECTION_LAST = SECTION_BACKUP;
+  static final int SECTION_LAST = SECTION_UPDATES;
 
   private SettingsAdapter adapter;
 
@@ -54,6 +59,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   private boolean showingResults;
   private View lastTouchView; // where a result row was last touched (switch vs. row)
   private float lastTouchX;
+
+  private boolean manualUpdateCheck; // Updates: show the result of "Check for updates"
 
   public XgramSettingsController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -96,6 +103,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SECTION_PRIVACY: return R.string.XgramPrivacy;
       case SECTION_NETWORK: return R.string.XgramNetwork;
       case SECTION_BACKUP: return R.string.XgramBackupAndReset;
+      case SECTION_UPDATES: return R.string.XgramUpdates;
       default: return R.string.XgramSettings;
     }
   }
@@ -110,6 +118,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SECTION_PRIVACY: return R.drawable.baseline_lock_24;
       case SECTION_NETWORK: return R.drawable.baseline_public_24;
       case SECTION_BACKUP: return R.drawable.baseline_import_export_24;
+      case SECTION_UPDATES: return R.drawable.baseline_system_update_24;
       default: return R.drawable.baseline_settings_24;
     }
   }
@@ -135,6 +144,17 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(R.string.XgramNetworkSummary);
         } else if (id == R.id.btn_xgramSectionBackup) {
           view.setData(R.string.XgramBackupSummary);
+        } else if (id == R.id.btn_xgramSectionUpdates || id == R.id.btn_xgramUpdateChannel) {
+          view.setData(XgramUpdates.channelName(XgramUpdates.channel()));
+        } else if (id == R.id.btn_xgramUpdateMode) {
+          view.setData(XgramUpdates.modeName(Settings.instance().getAutoUpdateMode()));
+          view.setEnabled(XgramUpdates.channel() != XgramUpdates.CHANNEL_OFF);
+        } else if (id == R.id.btn_xgramUpdateInstalled) {
+          view.setData(Lang.getString(R.string.XgramUpdateInstalledValue, BuildConfig.VERSION_NAME, Lang.getString(XgramUpdates.channelName(XgramUpdates.channel()))));
+        } else if (id == R.id.btn_xgramUpdateCheck) {
+          if (!(item.getData() instanceof XgramSettingsSearch.Entry)) { // a search result keeps its title
+            bindUpdateCheck(view, isUpdate);
+          }
         } else if (id == R.id.btn_xgramThemes) {
           view.setData(R.string.XgramThemesSummary);
         } else if (id == R.id.btn_xgramMaterialYou) {
@@ -251,6 +271,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     };
 
     adapter.setItems(buildSectionItems(section()), false);
+    if (section() == SECTION_UPDATES) {
+      context().appUpdater().addListener(this);
+    }
 
     recyclerView.setItemAnimator(null); // search swaps the whole list on every keystroke
     recyclerView.setAdapter(adapter);
@@ -275,6 +298,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SECTION_PRIVACY: buildPrivacy(items); break;
       case SECTION_NETWORK: buildNetwork(items); break;
       case SECTION_BACKUP: buildBackup(items); break;
+      case SECTION_UPDATES: buildUpdates(items); break;
       default: buildMain(items); break;
     }
     return items;
@@ -310,6 +334,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       category(R.id.btn_xgramSectionChats, R.drawable.baseline_chat_bubble_24, R.string.XgramChats),
       category(R.id.btn_xgramSectionPrivacy, R.drawable.baseline_lock_24, R.string.XgramPrivacy),
       category(R.id.btn_xgramSectionNetwork, R.drawable.baseline_public_24, R.string.XgramNetwork),
+      category(R.id.btn_xgramSectionUpdates, R.drawable.baseline_system_update_24, R.string.XgramUpdates),
       category(R.id.btn_xgramSectionBackup, R.drawable.baseline_import_export_24, R.string.XgramBackupAndReset)
     );
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramAbout));
@@ -443,9 +468,170 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     addRows(items, new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramResetSettings, R.drawable.baseline_delete_24, R.string.XgramResetSettings).setTextColorId(org.thunderdog.challegram.theme.ColorId.textNegative));
   }
 
+  private void buildUpdates (List<ListItem> items) {
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    addRows(items,
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramUpdateChannel, 0, R.string.XgramUpdateChannel),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramUpdateMode, 0, R.string.XgramUpdateMode)
+    );
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramUpdateChannelInfo));
+    addRows(items,
+      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramUpdateCheck, R.drawable.baseline_system_update_24, R.string.CheckForUpdates),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramUpdateInstalled, R.drawable.baseline_info_24, R.string.XgramUpdateInstalled)
+    );
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramUpdateCheckInfo));
+  }
+
+  /** The "Check for updates" row follows the updater, as in Telegram X's own settings. */
+  private void bindUpdateCheck (SettingView v, boolean isUpdate) {
+    AppUpdater updater = context().appUpdater();
+    if (XgramUpdates.channel() == XgramUpdates.CHANNEL_OFF) {
+      v.setEnabledAnimated(false, isUpdate);
+      v.setName(R.string.CheckForUpdates);
+      return;
+    }
+    switch (updater.state()) {
+      case AppUpdater.State.CHECKING:
+        v.setEnabledAnimated(false, isUpdate);
+        v.setName(R.string.CheckingForUpdates);
+        break;
+      case AppUpdater.State.AVAILABLE: {
+        v.setEnabledAnimated(true, isUpdate);
+        long bytesToDownload = updater.totalBytesToDownload() - updater.bytesDownloaded();
+        if (bytesToDownload > 0) {
+          v.setName(Lang.getStringBold(R.string.DownloadUpdateSize, Strings.buildSize(bytesToDownload)));
+        } else {
+          v.setName(R.string.DownloadUpdate);
+        }
+        break;
+      }
+      case AppUpdater.State.DOWNLOADING:
+        v.setEnabledAnimated(false, isUpdate);
+        v.setName(Lang.getDownloadProgress(updater.bytesDownloaded(), updater.totalBytesToDownload(), true));
+        break;
+      case AppUpdater.State.READY_TO_INSTALL:
+        v.setEnabledAnimated(true, isUpdate);
+        v.setName(R.string.InstallUpdate);
+        break;
+      case AppUpdater.State.NONE:
+      case AppUpdater.State.INSTALLING:
+      default:
+        v.setEnabledAnimated(true, isUpdate);
+        v.setName(R.string.CheckForUpdates);
+        break;
+    }
+  }
+
+  private void onUpdateCheckClick () {
+    if (XgramUpdates.channel() == XgramUpdates.CHANNEL_OFF) {
+      return;
+    }
+    AppUpdater updater = context().appUpdater();
+    switch (updater.state()) {
+      case AppUpdater.State.NONE:
+        manualUpdateCheck = true;
+        updater.checkForUpdatesNow();
+        break;
+      case AppUpdater.State.AVAILABLE:
+        if (updater.xgramUpdate() != null) {
+          XgramUpdates.showWhatsNew(this, updater.xgramUpdate(), updater::downloadUpdate);
+        } else {
+          updater.downloadUpdate();
+        }
+        break;
+      case AppUpdater.State.READY_TO_INSTALL:
+        updater.installUpdate();
+        break;
+      default:
+        break;
+    }
+  }
+
+  private void showUpdateChannelOptions () {
+    int[] channels = {XgramUpdates.CHANNEL_STABLE, XgramUpdates.CHANNEL_CI, XgramUpdates.CHANNEL_OFF};
+    String[] titles = new String[channels.length];
+    int[] ids = new int[channels.length];
+    for (int i = 0; i < channels.length; i++) {
+      titles[i] = Lang.getString(XgramUpdates.channelName(channels[i]));
+      ids[i] = i + 1;
+    }
+    showOptions(Lang.getString(R.string.XgramUpdateChannelInfo), ids, titles, null, null, (itemView, optionId) -> {
+      int channel = channels[optionId - 1];
+      if (channel != XgramUpdates.channel()) {
+        XgramUpdates.setChannel(channel);
+        AppUpdater updater = context().appUpdater();
+        updater.resetXgramUpdate();
+        if (channel != XgramUpdates.CHANNEL_OFF && updater.state() == AppUpdater.State.NONE) {
+          manualUpdateCheck = true;
+          updater.checkForUpdatesNow();
+        }
+        updateUpdateRows();
+      }
+      return true;
+    });
+  }
+
+  private void showUpdateModeOptions () {
+    if (XgramUpdates.channel() == XgramUpdates.CHANNEL_OFF) {
+      return;
+    }
+    int[] modes = {Settings.AUTO_UPDATE_MODE_PROMPT, Settings.AUTO_UPDATE_MODE_WIFI_ONLY, Settings.AUTO_UPDATE_MODE_ALWAYS, Settings.AUTO_UPDATE_MODE_NEVER};
+    String[] titles = new String[modes.length];
+    int[] ids = new int[modes.length];
+    for (int i = 0; i < modes.length; i++) {
+      titles[i] = Lang.getString(XgramUpdates.modeName(modes[i]));
+      ids[i] = i + 1;
+    }
+    showOptions(null, ids, titles, null, null, (itemView, optionId) -> {
+      Settings.instance().setAutoUpdateMode(modes[optionId - 1]);
+      adapter.updateValuedSettingById(R.id.btn_xgramUpdateMode);
+      return true;
+    });
+  }
+
+  private void updateUpdateRows () {
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_xgramUpdateChannel);
+      adapter.updateValuedSettingById(R.id.btn_xgramUpdateMode);
+      adapter.updateValuedSettingById(R.id.btn_xgramUpdateCheck);
+      adapter.updateValuedSettingById(R.id.btn_xgramUpdateInstalled);
+    }
+  }
+
+  @Override
+  public void onAppUpdateStateChanged (int state, int oldState, boolean isApk) {
+    if (isDestroyed()) {
+      return;
+    }
+    if (manualUpdateCheck && oldState == AppUpdater.State.CHECKING) {
+      manualUpdateCheck = false;
+      if (state == AppUpdater.State.NONE) {
+        String error = XgramUpdates.lastError();
+        org.thunderdog.challegram.tool.UI.showToast(error != null ? Lang.getString(R.string.XgramUpdateCheckFailed, error) : Lang.getString(R.string.XgramUpdateLatest), android.widget.Toast.LENGTH_SHORT);
+      }
+    }
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_xgramUpdateCheck);
+    }
+  }
+
+  @Override
+  public void onAppUpdateDownloadProgress (long bytesDownloaded, long totalBytesToDownload) {
+    if (adapter != null && !isDestroyed()) {
+      adapter.updateValuedSettingById(R.id.btn_xgramUpdateCheck);
+    }
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    context().appUpdater().removeListener(this);
+  }
+
   /** Values that a page further in can change. */
   private static final int[] SUMMARY_IDS = {
-    R.id.btn_xgramSectionGhost, R.id.btn_xgramSectionHistory, R.id.btn_xgramAppIcon, R.id.btn_xgramMaterialYou
+    R.id.btn_xgramSectionGhost, R.id.btn_xgramSectionHistory, R.id.btn_xgramAppIcon, R.id.btn_xgramMaterialYou,
+    R.id.btn_xgramSectionUpdates
   };
 
   private void updateGhostToggles () {
@@ -810,6 +996,21 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramSectionBackup) {
       navigateTo(section(context, tdlib, SECTION_BACKUP));
+      return;
+    } else if (id == R.id.btn_xgramSectionUpdates) {
+      navigateTo(section(context, tdlib, SECTION_UPDATES));
+      return;
+    } else if (id == R.id.btn_xgramUpdateChannel) {
+      showUpdateChannelOptions();
+      return;
+    } else if (id == R.id.btn_xgramUpdateMode) {
+      showUpdateModeOptions();
+      return;
+    } else if (id == R.id.btn_xgramUpdateCheck) {
+      onUpdateCheckClick();
+      return;
+    } else if (id == R.id.btn_xgramUpdateInstalled) {
+      org.thunderdog.challegram.tool.UI.copyText(BuildConfig.VERSION_NAME, R.string.CopiedText);
       return;
     } else if (id == R.id.btn_xgramAppIcon) {
       navigateTo(new com.fahadali.xgram.appicons.XgramAppIconsController(context, tdlib));

@@ -194,4 +194,11 @@
   <item type="id" name="btn_xgramCopyCallbackData" />
   <item type="id" name="btn_xgramCopyInlineQuery" />
   <item type="id" name="btn_xgramCopyUserId" />
+  <item type="id" name="btn_xgramSectionUpdates" />
+  <item type="id" name="btn_xgramUpdateChannel" />
+  <item type="id" name="btn_xgramUpdateMode" />
+  <item type="id" name="btn_xgramUpdateCheck" />
+  <item type="id" name="btn_xgramUpdateInstalled" />
+  <item type="id" name="btn_xgramUpdateWhatsNew" />
+  <item type="id" name="btn_xgramUpdateOpenPost" />
 </resources>
