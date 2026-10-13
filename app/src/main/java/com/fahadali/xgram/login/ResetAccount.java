@@ -50,6 +50,8 @@ public final class ResetAccount {
   }
 
   private static final String CONFIRM_WAIT_PREFIX = "2FA_CONFIRM_WAIT_";
+  /** A reset was asked for recently and cancelled from a logged-in device; the server refuses a new one for 7 days. */
+  private static final String RECENT_CONFIRM = "2FA_RECENT_CONFIRM";
   private static final String REASON = "Forgot password";
   private static final int MIN_NATIONAL_DIGITS = 6;
 
@@ -135,8 +137,9 @@ public final class ResetAccount {
     }
     boolean byPhone = !StringUtils.isEmpty(knownPhoneDigits(tdlib));
     String word = Lang.getString(R.string.xgram_login_ResetAccountWord);
+    // The word is named on the phone prompt too: the stored number can be stale (a QR login of another account)
     CharSequence title = byPhone ?
-      Lang.getString(R.string.xgram_login_ResetAccountTypePhone) :
+      Lang.getString(R.string.xgram_login_ResetAccountTypePhone, word) :
       Lang.getString(R.string.xgram_login_ResetAccountTypeWord, word);
     CharSequence placeholder = byPhone ? Lang.getString(R.string.login_PhoneNumber) : word;
     MaterialEditTextGroup inputView = controller.openInputAlert(title, placeholder, R.string.xgram_login_ResetAccount, R.string.Cancel, null, (view, result) -> {
@@ -151,9 +154,21 @@ public final class ResetAccount {
     }
   }
 
-  /** Seconds from 2FA_CONFIRM_WAIT_X, or -1. */
+  /**
+   * Seconds until the scheduled reset, or -1. The server answers 420 2FA_CONFIRM_WAIT_X, but TDLib's NetQueryDelayer
+   * waits out 420 errors itself (up to 60 s, then it sends the request again) and turns a longer one into
+   * 429 "Too Many Requests: retry after X", so that is the form the app gets. The raw form is kept in case it ever
+   * comes through.
+   */
   private static int confirmWaitSeconds (@Nullable TdApi.Error error) {
-    if (error == null || error.message == null || !error.message.startsWith(CONFIRM_WAIT_PREFIX)) {
+    if (error == null || error.message == null) {
+      return -1;
+    }
+    int retryAfter = TD.getFloodErrorSeconds(error.code, error.message, -1);
+    if (retryAfter >= 0) {
+      return retryAfter;
+    }
+    if (!error.message.startsWith(CONFIRM_WAIT_PREFIX)) {
       return -1;
     }
     String seconds = error.message.substring(CONFIRM_WAIT_PREFIX.length());
@@ -187,7 +202,9 @@ public final class ResetAccount {
           return;
         }
         int waitSeconds = confirmWaitSeconds(error);
-        if (waitSeconds >= 0) {
+        if (RECENT_CONFIRM.equals(error.message)) {
+          controller.openAlert(R.string.xgram_login_ResetAccount, Lang.getString(R.string.xgram_login_ResetAccountRecentConfirm));
+        } else if (waitSeconds >= 0) {
           controller.openAlert(R.string.xgram_login_ResetAccount, Lang.getString(R.string.xgram_login_ResetAccountWait, Lang.getDuration(Math.max(waitSeconds, 1))));
         } else {
           controller.openAlert(R.string.xgram_login_ResetAccount, TD.toErrorString(error));
