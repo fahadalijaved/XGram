@@ -896,7 +896,12 @@ public class PasswordController extends ViewController<PasswordController.Args> 
         return Strings.replaceBoldTokens(Lang.getString(R.string.SentCallOnly, formattedPhone), ColorId.textLight);
       }
       case TdApi.AuthenticationCodeTypeTelegramMessage.CONSTRUCTOR: {
-        return Strings.replaceBoldTokens(Lang.getString(R.string.SentAppCode), ColorId.textLight);
+        CharSequence sentAppCode = Strings.replaceBoldTokens(Lang.getString(R.string.SentAppCode), ColorId.textLight);
+        if (mode == MODE_CODE && !hasNextCodeType()) {
+          // XGram: Telegram gives unofficial apps no SMS: a number without an account gets this answer and no code anywhere.
+          return android.text.TextUtils.concat(sentAppCode, "\n\n", Lang.getString(R.string.XgramLoginAppCodeOnly));
+        }
+        return sentAppCode;
       }
       case TdApi.AuthenticationCodeTypeSms.CONSTRUCTOR:
       case TdApi.AuthenticationCodeTypeFirebaseIos.CONSTRUCTOR: // XGram: an SMS hint instead of a crash

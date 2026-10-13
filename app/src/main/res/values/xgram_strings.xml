@@ -161,6 +161,7 @@
   <string name="XgramSaveLastSeen">Save last seen locally</string>
   <string name="XgramShowSeconds">Show seconds in message time</string>
   <string name="XgramHideFab">Hide the new chat button</string>
+  <string name="XgramLoginAppCodeOnly">No Telegram app with this number? Telegram doesn\'t send codes by SMS to unofficial apps, and new accounts have to be created in the official Telegram app first. After that, log in here and the code arrives in that app.</string>
   <string name="XgramAllChatsLabel">Label on the All chats tab</string>
   <string name="XgramChatLook">Chat look</string>
   <string name="XgramIconPack">Icons</string>
