@@ -214,4 +214,6 @@
   <item type="id" name="btn_xgramNotifyContacts" />
   <item type="id" name="btn_xgramCodeNext" />
   <item type="id" name="btn_xgramCodeSupport" />
+  <item type="id" name="btn_xgramPremiumOtherNumber" />
+  <item type="id" name="btn_xgramPremiumSupport" />
 </resources>

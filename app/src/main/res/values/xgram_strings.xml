@@ -563,4 +563,10 @@
   <string name="xgram_login_ResetAccountDone">Account deleted. You can sign up again with this number.</string>
   <string name="xgram_login_ResetAccountRecentConfirm">A reset of this account was cancelled from a device where it is logged in. Try again in 7 days.</string>
   <string name="xgram_login_NotifyContactsJoined">Tell my contacts I joined Telegram</string>
+  <string name="xgram_login_PremiumRequired">Telegram asks for **Telegram Premium** before this number can log in.\n\nXGram can’t sell the subscription. Buy it in an official Telegram app, then log in here with the same number.</string>
+  <string name="xgram_login_PremiumRequiredDays">Telegram asks for **Telegram Premium** before this number can log in. Buying it gives you %1$s of Premium.\n\nXGram can’t sell the subscription. Buy it in an official Telegram app, then log in here with the same number.</string>
+  <string name="xgram_login_UseDifferentNumber">Use a different number</string>
+  <string name="xgram_login_PremiumSupport">Contact support</string>
+  <string name="xgram_login_PremiumSupportText">I’m trying to log in with the phone number %1$s, and Telegram asks me to buy Telegram Premium first.\n\n%2$s</string>
+  <string name="xgram_login_PremiumSupportTextNoPhone">I’m trying to log in, and Telegram asks me to buy Telegram Premium first.\n\n%1$s</string>
 </resources>
