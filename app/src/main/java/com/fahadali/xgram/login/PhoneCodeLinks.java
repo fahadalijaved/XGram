@@ -249,13 +249,15 @@ public final class PhoneCodeLinks implements Handler.Callback {
     codeExpired = true;
     resendUnavailable = true;
     refresh();
-    if (authRestartHandled || inProgress) {
-      host.setHintText(Lang.getString(R.string.xgram_login_AuthRestart), true);
+    // Another login request still running (a code check during a resend) would be aborted by a second one
+    host.setHintText(Lang.getString(R.string.xgram_login_AuthRestart), true);
+    if (authRestartHandled || inProgress || host.isBusy()) {
       return true;
     }
     authRestartHandled = true;
-    host.setHintText(Lang.getString(R.string.xgram_login_AuthRestartNewCode), false);
-    sendPhoneNumberAgain();
+    if (sendPhoneNumberAgain()) { // offline or no number: the error above stays and the link sends it on tap
+      host.setHintText(Lang.getString(R.string.xgram_login_AuthRestartNewCode), false);
+    }
     return true;
   }
 
@@ -337,15 +339,15 @@ public final class PhoneCodeLinks implements Handler.Callback {
    * An expired code with no other way to send it: send the same number again, as the phone screen does. TDLib accepts
    * SetAuthenticationPhoneNumber in WaitCode when no other login request is pending, and answers with a new WaitCode.
    */
-  private void sendPhoneNumberAgain () {
+  private boolean sendPhoneNumberAgain () {
     String number = state != null && state.codeInfo != null ? Strings.getNumber(state.codeInfo.phoneNumber) : null;
     if (StringUtils.isEmpty(number)) {
       host.setHintText(Lang.getString(R.string.xgram_login_PhoneCodeExpiredBack), true);
-      return;
+      return false;
     }
     if (tdlib.context().watchDog().isOffline()) {
       UI.showNetworkPrompt();
-      return;
+      return false;
     }
     setInProgress(true);
     tdlib.send(new TdApi.SetAuthenticationPhoneNumber("+" + number, tdlib.phoneNumberAuthenticationSettings(controller.context())), (ok, error) -> controller.runOnUiThreadOptional(() -> {
@@ -359,5 +361,6 @@ public final class PhoneCodeLinks implements Handler.Callback {
         controller.showInfoTooltip(host.linkView(), Lang.getString(R.string.xgram_login_PhoneCodeSent));
       }
     }));
+    return true;
   }
 }
