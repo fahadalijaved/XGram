@@ -225,6 +225,15 @@ public class MessagesLoader implements Client.ResultHandler {
     return messageThread != null ? messageThread.getMessageTopicId() : null;
   }
 
+  /** XGram: the topic this history belongs to: the thread's, or the open forum topic (scroll positions and live filters). */
+  @Nullable
+  public TdApi.MessageTopic xgramTopicKey () {
+    if (messageThread != null) {
+      return messageThread.getMessageTopicId();
+    }
+    return topicId instanceof TdApi.MessageTopicForum ? topicId : null;
+  }
+
   @Nullable
   public TdApi.MessageTopic getTopicId () {
     return topicId;
@@ -1389,6 +1398,14 @@ public class MessagesLoader implements Client.ResultHandler {
       lastReadOutboxMessageId = messageThread.getLastReadOutboxMessageId();
       lastReadInboxMessageId = messageThread.getLastReadInboxMessageId();
       hasUnreadMessages = messageThread.hasUnreadMessages(chat);
+    } else if (chat != null && topicId instanceof TdApi.MessageTopicForum) {
+      // XGram: inside a forum topic the topic's own read positions; the chat's cover the whole forum
+      // (its unread count is the sum over all topics, so a read topic would show the separator at an old message).
+      TdApi.ForumTopic topic = manager.controller().xgramTopicReadState();
+      chatId = chat.id;
+      lastReadOutboxMessageId = Math.max(chat.lastReadOutboxMessageId, com.fahadali.xgram.topics.XgramTopicReadOutbox.get(tdlib, chat.id, ((TdApi.MessageTopicForum) topicId).forumTopicId));
+      lastReadInboxMessageId = topic != null ? topic.lastReadInboxMessageId : chat.lastReadInboxMessageId;
+      hasUnreadMessages = topic != null && topic.unreadCount > 0;
     } else if (chat != null) {
       chatId = chat.id;
       lastReadOutboxMessageId = chat.lastReadOutboxMessageId;
@@ -1529,7 +1546,7 @@ public class MessagesLoader implements Client.ResultHandler {
           }
         } else if (!unreadFound) {
           if (top != null && top.getBiggestId() >= lastReadInboxMessageId ||
-              (messageThread != null && cur.getBiggestId() > lastReadInboxMessageId)) {
+              ((messageThread != null || topicId instanceof TdApi.MessageTopicForum) && cur.getBiggestId() > lastReadInboxMessageId)) { // XGram: a topic page can start right after the read position, like a thread
             unreadFound = true;
             if (cur.isOutgoing()) {
               lookForInbox = true;

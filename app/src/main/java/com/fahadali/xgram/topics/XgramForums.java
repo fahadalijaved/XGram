@@ -83,9 +83,17 @@ public final class XgramForums {
     }
   }
 
-  /** Opens the topic at its first unread message, or at its start if it was never read. */
+  /** Opens the topic at its first unread message, else where it was left, else at the bottom. */
   public static void openTopic (ViewController<?> context, TdApi.Chat chat, TdApi.ForumTopic topic) {
-    openTopic(context, chat, topic.info.forumTopicId, topic.lastReadInboxMessageId);
+    openTopic(context, chat, topic, null);
+  }
+
+  private static void openTopic (TdlibDelegate context, TdApi.Chat chat, TdApi.ForumTopic topic, @Nullable TdlibUi.UrlOpenParameters urlOpenParameters) {
+    TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().keepStack().urlOpenParameters(urlOpenParameters);
+    params.messageTopicId = new TdApi.MessageTopicForum(topic.info.forumTopicId);
+    TopicResume resume = topicResume(context.tdlib(), chat.id, topic.info.forumTopicId, topic);
+    params.highlightMessage(resume.highlightMode, resume.anchor);
+    context.tdlib().ui().openChat(context, chat, params);
   }
 
   public static void openTopic (TdlibDelegate context, TdApi.Chat chat, int forumTopicId, long lastReadInboxMessageId) {
@@ -123,7 +131,11 @@ public final class XgramForums {
       return;
     }
     tdlib.send(new TdApi.GetForumTopic(chatId, topicId.forumTopicId), (topic, error) -> tdlib.ui().post(() -> {
-      openTopic(context, chat, topicId.forumTopicId, topic != null ? topic.lastReadInboxMessageId : 0, urlOpenParameters);
+      if (topic != null) {
+        openTopic(context, chat, normalizeUnread(tdlib, topic), urlOpenParameters);
+      } else {
+        openTopic(context, chat, topicId.forumTopicId, 0, urlOpenParameters);
+      }
     }));
   }
 
@@ -445,6 +457,58 @@ public final class XgramForums {
     return new MessageId(chatId, topic.lastReadInboxMessageId != 0 ? topic.lastReadInboxMessageId : MessageId.MIN_VALID_ID);
   }
 
+  /** Where a topic opens: at its first unread message, else where it was left, else at the bottom. */
+  public static final class TopicResume {
+    public final int highlightMode;
+    @Nullable public final MessageId anchor;
+
+    TopicResume (int highlightMode, @Nullable MessageId anchor) {
+      this.highlightMode = highlightMode;
+      this.anchor = anchor;
+    }
+  }
+
+  public static TopicResume topicResume (Tdlib tdlib, long chatId, int forumTopicId, @Nullable TdApi.ForumTopic topic) {
+    MessageId unread = topicUnreadAnchor(chatId, topic);
+    if (unread != null) {
+      return new TopicResume(MessagesManager.HIGHLIGHT_MODE_UNREAD, unread);
+    }
+    // The position MessagesManager saves under the topic's own key when the topic is left.
+    org.thunderdog.challegram.unsorted.Settings.SavedMessageId saved = org.thunderdog.challegram.unsorted.Settings.instance()
+      .getScrollMessageId(tdlib.id(), chatId, new TdApi.MessageTopicForum(forumTopicId));
+    if (saved != null && saved.id != null && saved.id.getChatId() == chatId && saved.id.getMessageId() != 0) {
+      return new TopicResume(MessagesManager.HIGHLIGHT_MODE_POSITION_RESTORE, saved.id);
+    }
+    return new TopicResume(MessagesManager.HIGHLIGHT_MODE_NONE, null);
+  }
+
+  /** The topic as the app already knows it: the cached topic list, else TDLib's topic cache. UI thread only. */
+  @Nullable
+  private static TdApi.ForumTopic knownTopic (Tdlib tdlib, long chatId, int forumTopicId) {
+    TdApi.ForumTopic topic = ForumTopicList.peekTopic(tdlib, chatId, forumTopicId);
+    if (topic == null) {
+      TdlibForumTopicManager.Entry entry = tdlib.topics().find(new TdlibForumTopicManager.Key(chatId, forumTopicId));
+      topic = entry != null && !entry.isNotFound() ? entry.value : null;
+    }
+    return topic;
+  }
+
+  /**
+   * Whether the open history has unread messages, for the "Unread messages" separator: the thread's state in a
+   * thread, the topic's own inside a forum topic (the chat's unread count is the sum over every topic), else the chat's.
+   */
+  public static boolean topicHasUnread (MessagesController controller, TdApi.Chat chat) {
+    org.thunderdog.challegram.data.ThreadInfo messageThread = controller.getMessageThread();
+    if (messageThread != null) {
+      return messageThread.hasUnreadMessages(chat);
+    }
+    if (controller.getMessageTopicId() instanceof TdApi.MessageTopicForum) {
+      TdApi.ForumTopic topic = controller.xgramTopicReadState();
+      return topic != null && topic.unreadCount > 0;
+    }
+    return chat.unreadCount > 0;
+  }
+
   /** Opening a forum with tabs: the last tab, at its first unread message. */
   public static void prepareTabsOpen (Tdlib tdlib, TdApi.Chat chat, TdlibUi.ChatOpenParameters params) {
     params.xgramSkipForumRouting();
@@ -454,8 +518,8 @@ public final class XgramForums {
       return;
     }
     params.messageTopicId = new TdApi.MessageTopicForum(tab);
-    MessageId anchor = topicUnreadAnchor(chat.id, ForumTopicList.peekTopic(tdlib, chat.id, tab));
-    params.highlightMessage(anchor != null ? MessagesManager.HIGHLIGHT_MODE_UNREAD : MessagesManager.HIGHLIGHT_MODE_NONE, anchor);
+    TopicResume resume = topicResume(tdlib, chat.id, tab, knownTopic(tdlib, chat.id, tab));
+    params.highlightMessage(resume.highlightMode, resume.anchor);
   }
 
   /** Arguments that switch an open forum chat to another tab in place. */
@@ -465,8 +529,8 @@ public final class XgramForums {
       MessageId anchor = MessagesManager.getAnchorMessageId(tdlib.id(), chat, null, mode);
       return new MessagesController.Arguments(chatList, chat, null, null, anchor, anchor != null ? mode : MessagesManager.HIGHLIGHT_MODE_NONE, null);
     }
-    MessageId anchor = topicUnreadAnchor(chat.id, ForumTopicList.peekTopic(tdlib, chat.id, tab));
-    return new MessagesController.Arguments(chatList, chat, null, new TdApi.MessageTopicForum(tab), anchor, anchor != null ? MessagesManager.HIGHLIGHT_MODE_UNREAD : MessagesManager.HIGHLIGHT_MODE_NONE, null);
+    TopicResume resume = topicResume(tdlib, chat.id, tab, knownTopic(tdlib, chat.id, tab));
+    return new MessagesController.Arguments(chatList, chat, null, new TdApi.MessageTopicForum(tab), resume.anchor, resume.highlightMode, null);
   }
 
   // Group settings: topics on or off, and their layout

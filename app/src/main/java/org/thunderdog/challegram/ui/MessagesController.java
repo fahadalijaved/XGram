@@ -11212,7 +11212,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   // XGram: forum topic state (counters for the scroll and mention buttons).
-  private TdApi.ForumTopic xgramForumTopic;
+  private volatile TdApi.ForumTopic xgramForumTopic; // read by the history loader off the UI thread
   private final Runnable xgramTopicRefresh = this::xgramLoadTopic;
 
   // XGram: pull up at the bottom of a channel (or topic) for the next unread one, as in Telegram
@@ -11303,6 +11303,28 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private boolean xgramInForumTopic () {
     return chat != null && messageThread == null && messageTopicId instanceof TdApi.MessageTopicForum;
+  }
+
+  /**
+   * XGram: the open forum topic's read state (read positions, unread count) for the history loader and the
+   * "Unread messages" separator: the loaded topic, else TDLib's topic cache; null outside a topic or when unknown.
+   * Safe off the UI thread (never touches the topic list cache).
+   */
+  @Nullable
+  public TdApi.ForumTopic xgramTopicReadState () {
+    TdApi.Chat chat = this.chat;
+    TdApi.MessageTopic topicId = this.messageTopicId;
+    if (chat == null || messageThread != null || !(topicId instanceof TdApi.MessageTopicForum)) {
+      return null;
+    }
+    TdApi.ForumTopic topic = xgramForumTopic;
+    if (topic != null) {
+      return topic;
+    }
+    org.thunderdog.challegram.telegram.TdlibForumTopicManager.Entry entry = tdlib.topics().find(
+      new org.thunderdog.challegram.telegram.TdlibForumTopicManager.Key(chat.id, ((TdApi.MessageTopicForum) topicId).forumTopicId)
+    );
+    return entry != null && !entry.isNotFound() ? entry.value : null;
   }
 
   private void xgramApplyTopicCounters (boolean animated) {

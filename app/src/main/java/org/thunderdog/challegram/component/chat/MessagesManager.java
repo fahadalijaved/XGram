@@ -1365,7 +1365,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         topEndReached = true;
       } else if (!items.isEmpty()) {
         final int accountId = tdlib.id();
-        Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), loader.getMessageTopicId());
+        Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), loader.xgramTopicKey()); // XGram: per forum topic
         if (messageId != null && messageId.topEndMessageId != 0) {
           TGMessage topMessage = items.get(items.size() - 1);
           topEndReached = topMessage.isDescendantOrSelf(messageId.topEndMessageId);
@@ -1917,6 +1917,11 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     }
     TdApi.MessageTopic topicId = loader.getMessageTopicId();
     if (!Td.matchesTopic(message.getMessageTopicId(), topicId)) {
+      return;
+    }
+    // XGram: inside a forum topic only its own messages (getMessageTopicId is null there, which matches everything).
+    TdApi.MessageTopic xgramTopic = loader.xgramTopicKey();
+    if (topicId == null && xgramTopic != null && message.getMessageTopicId() != null && !Td.matchesTopic(message.getMessageTopicId(), xgramTopic)) {
       return;
     }
     ThreadInfo messageThread = loader.getMessageThread();
@@ -2667,7 +2672,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     if (scrollChatId != 0) {
       final int accountId = tdlib.id();
       final long chatId = loader.getChatId();
-      final TdApi.MessageTopic topicId = loader.getMessageTopicId();
+      final TdApi.MessageTopic topicId = loader.xgramTopicKey(); // XGram: a forum topic keeps its own position, apart from the merged history
       Settings.SavedMessageId savedMessageId = new Settings.SavedMessageId(
         new MessageId(scrollMessageChatId, scrollMessageId, scrollMessageOtherIds),
         scrollOffsetInPixels,
@@ -3089,7 +3094,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     }
     if (highlightMode == HIGHLIGHT_MODE_POSITION_RESTORE) {
       final int accountId = tdlib.id();
-      Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), loader.getMessageTopicId());
+      Settings.SavedMessageId messageId = Settings.instance().getScrollMessageId(accountId, loader.getChatId(), loader.xgramTopicKey()); // XGram: per forum topic
       int offset = messageId != null ? messageId.offsetPixels - scrollMessage.getExtraPadding() : 0;
       this.returnToMessageIds = messageId != null ? messageId.returnToMessageIds : null;
       scrollToPositionWithOffset(index, offset, false);
@@ -3447,7 +3452,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   public void onNewMessage (final TdApi.Message message) {
     final ThreadInfo messageThread = loader.getMessageThread();
     // XGram: inside a forum topic only its own messages; filters and shadow-banned senders.
-    TdApi.MessageTopic openTopic = loader.getMessageTopicId();
+    TdApi.MessageTopic openTopic = loader.xgramTopicKey(); // getMessageTopicId() is null inside a forum topic
     if (openTopic instanceof TdApi.MessageTopicForum && message.topicId != null && !Td.matchesTopic(message.topicId, openTopic)) {
       return;
     }

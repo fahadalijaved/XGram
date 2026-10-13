@@ -524,12 +524,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesHolder> {
       if (!message.isSponsoredMessage() && (!needScrollToBottom || message.isOld()) && !message.isOutgoing() && message.checkIsUnread(false) && !hasUnreadSeparator()) {
         TdApi.Chat chat = message.tdlib().chat(message.getChatId());
         if (chat != null) {
-          ThreadInfo messageThread = message.messagesController().getMessageThread();
-          if (messageThread != null) {
-            message.setShowUnreadBadge(messageThread.hasUnreadMessages(chat));
-          } else {
-            message.setShowUnreadBadge(chat.unreadCount > 0);
-          }
+          // XGram: inside a forum topic, the topic's own unread state (the chat's counts every topic).
+          message.setShowUnreadBadge(com.fahadali.xgram.topics.XgramForums.topicHasUnread(message.messagesController(), chat));
         }
       }
     }
@@ -685,12 +681,8 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesHolder> {
           if (!message.isOutgoing() /*&& (message.isOld() || )*/ && message.checkIsUnread(false)) {
             TdApi.Chat chat = message.tdlib().chat(message.getChatId());
             if (chat != null) {
-              ThreadInfo messageThread = message.messagesController().getMessageThread();
-              if (messageThread != null) {
-                message.setShowUnreadBadge(messageThread.hasUnreadMessages(chat));
-              } else {
-                message.setShowUnreadBadge(chat.unreadCount > 0);
-              }
+              // XGram: inside a forum topic, the topic's own unread state (the chat's counts every topic).
+              message.setShowUnreadBadge(com.fahadali.xgram.topics.XgramForums.topicHasUnread(message.messagesController(), chat));
             }
             break;
           }
