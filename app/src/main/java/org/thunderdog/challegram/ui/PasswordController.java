@@ -1263,6 +1263,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
           break;
         }
         case TdApi.Error.CONSTRUCTOR: {
+          if (mode == MODE_CODE && phoneCodeLinks != null && phoneCodeLinks.onResendError((TdApi.Error) object)) {
+            break; // XGram: expired code, the link now sends the phone number again
+          }
           setHint(TD.toErrorString(object), true);
           break;
         }

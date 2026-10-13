@@ -60,6 +60,7 @@ public final class PhoneCodeLinks implements Handler.Callback {
   }
 
   public static final String PHONE_CODE_EXPIRED = "PHONE_CODE_EXPIRED";
+  public static final String SEND_CODE_UNAVAILABLE = "SEND_CODE_UNAVAILABLE";
 
   private static final int MSG_TICK = 1;
 
@@ -71,6 +72,8 @@ public final class PhoneCodeLinks implements Handler.Callback {
   private @Nullable TdApi.AuthorizationStateWaitCode state;
   private long stateReceivedAt;
   private boolean codeExpired;
+  /** A resend failed for good (expired code, or no other way left), so codeInfo.nextType can't be used until a new state. */
+  private boolean resendUnavailable;
   private boolean inProgress;
   private boolean destroyed;
 
@@ -105,6 +108,7 @@ public final class PhoneCodeLinks implements Handler.Callback {
       this.state = (TdApi.AuthorizationStateWaitCode) newState;
       this.stateReceivedAt = SystemClock.elapsedRealtime();
       this.codeExpired = false;
+      this.resendUnavailable = false;
       refresh();
       return;
     }
@@ -115,7 +119,7 @@ public final class PhoneCodeLinks implements Handler.Callback {
   }
 
   private @Nullable TdApi.AuthenticationCodeType nextType () {
-    return state != null && state.codeInfo != null ? state.codeInfo.nextType : null;
+    return state != null && state.codeInfo != null && !resendUnavailable ? state.codeInfo.nextType : null;
   }
 
   private int secondsLeft () {
@@ -198,6 +202,30 @@ public final class PhoneCodeLinks implements Handler.Callback {
     host.setHintText(Lang.getString(R.string.xgram_login_PhoneCodeExpired), true);
     refresh();
     return true;
+  }
+
+  /**
+   * Handles a failed ResendAuthenticationCode. The server refuses a resend once the code has expired, and answers
+   * SEND_CODE_UNAVAILABLE when every way was used, so tapping the same link again would only repeat the error.
+   * Then the link falls back to sending the phone number again (expired) or to the help sheet.
+   * Returns true when the error is already shown.
+   */
+  public boolean onResendError (@Nullable TdApi.Error error) {
+    if (destroyed || state == null || error == null) {
+      return false;
+    }
+    if (PHONE_CODE_EXPIRED.equals(error.message)) {
+      codeExpired = true;
+      resendUnavailable = true;
+      host.setHintText(Lang.getString(R.string.xgram_login_PhoneCodeExpired), true);
+      refresh();
+      return true;
+    }
+    if (codeExpired || SEND_CODE_UNAVAILABLE.equals(error.message)) {
+      resendUnavailable = true;
+      refresh();
+    }
+    return false;
   }
 
   /** The link under the code field was pressed. */
