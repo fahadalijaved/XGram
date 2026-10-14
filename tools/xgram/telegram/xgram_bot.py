@@ -698,6 +698,8 @@ def apk_caption(info, version, commit, source_url, kind="stable"):
         href = source_url.rstrip("/")
         if commit and re.match(r"https://github\.com/[^/]+/[^/]+$", href):
             href += "/tree/" + commit
+        elif commit and re.match(r"https://gitlab\.com/[^/]+/[^/]+$", href):
+            href += "/-/tree/" + commit
         text = re.sub(r"^https?://", "", source_url.rstrip("/"))
         lines.append('Source: <a href="%s">%s</a>' % (esc(href), esc(text)))
     return "\n".join(lines)
