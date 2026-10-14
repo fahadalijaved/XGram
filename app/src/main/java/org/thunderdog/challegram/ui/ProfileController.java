@@ -660,6 +660,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     }
     //}
 
+    if (com.fahadali.xgram.chats.XgramFolderPicker.canOffer(tdlib, chat)) {
+      ids.append(R.id.btn_xgramAddToFolder); // XGram
+      strings.append(R.string.AddToFolder);
+    }
+
     if (tdlib.canSetPasscode(chat)) {
       ids.append(R.id.btn_setPasscode);
       strings.append(R.string.PasscodeTitle);
@@ -719,6 +724,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.Stats);
     }
 
+    if (com.fahadali.xgram.chats.XgramFolderPicker.canOffer(tdlib, chat)) {
+      ids.append(R.id.btn_xgramAddToFolder); // XGram
+      strings.append(R.string.AddToFolder);
+    }
+
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, false, true);
 
     if (ids.size() > 0) {
@@ -734,6 +744,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Override
   public void onMoreItemPressed (int id) {
+    if (id == R.id.btn_xgramAddToFolder && chat != null) {
+      com.fahadali.xgram.chats.XgramFolderPicker.show(this, chat.id); // XGram
+      return;
+    }
     if (tdlib.ui().processLeaveButton(this, null, getChatId(), id, null)) {
       return;
     }

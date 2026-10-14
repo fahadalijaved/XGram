@@ -234,4 +234,5 @@
   <item type="id" name="btn_xgramChatLongPressPreview" />
   <item type="id" name="btn_xgramChatLongPressQuick" />
   <item type="id" name="btn_xgramChatLongPressCompact" />
+  <item type="id" name="btn_xgramAddToFolder" />
 </resources>

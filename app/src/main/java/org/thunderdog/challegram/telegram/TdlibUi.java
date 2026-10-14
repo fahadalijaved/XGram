@@ -5310,6 +5310,12 @@ public class TdlibUi extends Handler {
         colors.append(ViewController.OptionColor.NORMAL);
         icons.append(R.drawable.templarian_baseline_folder_plus_24);
       } else if (TD.isChatListFolder(chatList)) {
+        if (com.fahadali.xgram.chats.XgramFolderPicker.canOffer(tdlib, chat)) {
+          ids.append(R.id.btn_addChatToFolder); // XGram: the folder picker also works from inside a folder
+          strings.append(R.string.AddToFolder);
+          colors.append(ViewController.OptionColor.NORMAL);
+          icons.append(R.drawable.templarian_baseline_folder_plus_24);
+        }
         ids.append(R.id.btn_removeChatFromFolder);
         strings.append(R.string.RemoveFromFolder);
         colors.append(ViewController.OptionColor.NORMAL);
@@ -5763,7 +5769,7 @@ public class TdlibUi extends Handler {
       tdlib.context().calls().makeCallDelayed(context, TD.getUserId(chat), null, true);
       return true;
     } else if (actionId == R.id.btn_addChatToFolder) {
-      showAddChatToFolderOptions(context, chatId, /* after */ null);
+      com.fahadali.xgram.chats.XgramFolderPicker.show(context, chatId); // XGram: folders with checks, tap to add or remove
       return true;
     } else if (actionId == R.id.btn_removeChatFromFolder) {
       if (TD.isChatListFolder(chatList)) {
@@ -5864,6 +5870,12 @@ public class TdlibUi extends Handler {
           ids.append(R.id.btn_archiveUnarchiveChat);
           strings.append(isArchived ? R.string.Unarchive : R.string.Archive);
           icons.append(isArchived ? R.drawable.baseline_unarchive_24 : R.drawable.baseline_archive_24);
+        }
+
+        if (com.fahadali.xgram.chats.XgramFolderPicker.canOffer(tdlib, chat)) {
+          ids.append(R.id.btn_addChatToFolder); // XGram: preview action bar and the quick actions pill
+          strings.append(R.string.AddToFolder);
+          icons.append(R.drawable.templarian_baseline_folder_plus_24);
         }
 
         ids.append(R.id.btn_removeChatFromListOrClearHistory);

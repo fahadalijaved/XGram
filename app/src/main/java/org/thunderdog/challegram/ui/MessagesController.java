@@ -2331,6 +2331,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (chat != null) {
         com.fahadali.xgram.chats.XgramLocalNames.promptRename(this, chat.id); // XGram
       }
+    } else if (id == R.id.btn_xgramAddToFolder) {
+      if (chat != null) {
+        com.fahadali.xgram.chats.XgramFolderPicker.show(this, chat.id); // XGram
+      }
     } else if (id == R.id.btn_xgramGoToFirstMessage) {
       if (chat != null) {
         // XGram: loads the history from its oldest message.
@@ -4688,6 +4692,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (tdlib.isSelfChat(chat.id) && !inPreviewMode) {
       ids.append(R.id.btn_xgramSavedByChat); // XGram: Saved Messages grouped by chat
       strings.append(R.string.XgramSavedByChat);
+    }
+
+    if (!inPreviewMode && com.fahadali.xgram.chats.XgramFolderPicker.canOffer(tdlib, chat)) {
+      ids.append(R.id.btn_xgramAddToFolder); // XGram
+      strings.append(R.string.AddToFolder);
     }
 
     if (com.fahadali.xgram.chats.XgramLocalNames.canRename(tdlib, chat.id)) {

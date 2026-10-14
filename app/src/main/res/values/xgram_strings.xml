@@ -623,4 +623,8 @@
   <string name="XgramChatLongPressPreview">Preview (Telegram X)</string>
   <string name="XgramChatLongPressQuick">Quick actions</string>
   <string name="XgramChatLongPressCompact">Compact preview</string>
+  <string name="XgramFolderFull">This folder already holds as many chats as Telegram allows (%1$d). Remove a chat from it first.</string>
+  <string name="XgramFolderFullPremium">This folder already holds as many chats as Telegram allows (%1$d). Remove a chat from it first, or get Telegram Premium for a higher limit.</string>
+  <string name="XgramFolderChatNotAllowed">This chat can\'t be put in that folder.</string>
+  <string name="XgramFolderError">Couldn\'t change the folder: %1$s</string>
 </resources>
