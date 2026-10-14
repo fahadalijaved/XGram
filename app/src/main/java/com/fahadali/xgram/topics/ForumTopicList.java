@@ -118,6 +118,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   @UiThread
   private void resetAfterFailure () {
     loadFailed = false;
+    firstPageRetries = 0;
     endReached = false;
     isLoaded = false;
     isLoading = false;
@@ -167,6 +168,8 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   private boolean refreshScheduled;
   /** A page that failed to load isn't asked again before this (uptime ms), so scrolling can't hammer an offline server. */
   private long loadRetryAfter;
+  private static final int MAX_FIRST_PAGE_RETRIES = 4;
+  private int firstPageRetries;
   /** Topics whose fetch failed once (not as deleted): they get one more try. */
   private final java.util.Set<Integer> retriedOnce = new java.util.HashSet<>();
 
@@ -247,6 +250,18 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       }
       isLoading = false;
       if (error != null) {
+        if (topics.isEmpty() && !isLoaded && !listeners.isEmpty() && firstPageRetries < MAX_FIRST_PAGE_RETRIES) {
+          // An open screen keeps its spinner and tries again (FLOOD_WAIT after a burst is common), instead of "No topics".
+          firstPageRetries++;
+          long delay = XgramForums.retryAfterMs(error, 3000);
+          loadRetryAfter = android.os.SystemClock.uptimeMillis() + delay;
+          tdlib.ui().postDelayed(() -> {
+            if (!isDestroyed && !isLoaded && !listeners.isEmpty()) {
+              loadMore();
+            }
+          }, delay);
+          return;
+        }
         if (topics.isEmpty()) {
           endReached = true;
           loadFailed = true;
@@ -368,7 +383,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   /** The chat list badge of the forum: the unread messages of its topics (see {@link XgramForumUnread}). */
   @UiThread
   private void publishUnread () {
-    if (!isLoaded || isDestroyed) {
+    if (!isLoaded || isDestroyed || loadFailed) { // a failed load knows no topics: the badge isn't 0
       return;
     }
     int sum = 0;
