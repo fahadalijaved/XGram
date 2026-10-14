@@ -1,7 +1,8 @@
 # XGram Line batch "emoji": emoji keyboard sections, chat folder icons, inline emoji of chat previews and a few tools.
 #
-# Left out on purpose: giveaway_particle (giveaway_particle_1/_2). They are not icons but confetti pieces that
-# GiftParticlesDrawable scatters (10 x 9.5 dp and 4 x 12.5 dp, not square); a square 24-grid drawable would squash them.
+# giveaway_particle_1/_2 are confetti pieces that GiftParticlesDrawable scatters (10 x 9.5 dp and 4 x 12.5 dp, not
+# square): they are drawn in dp units in their own frames (FRAMES), a sparkle and a wavy streamer, so the line keeps
+# the set's 1.8 dp weight at that size.
 # Notes: all six dice faces (dice_1.._6) share one 'dice' icon, a tilted die; 'clock' is the small sending-status clock
 # drawn at the size of the check marks it sits with; the outline/filled pairs of the emoji sections are the same line
 # shape (the selected one is tinted), except the lamp, whose 'filled' twin is a lit bulb.
@@ -200,6 +201,8 @@ def _soccer(pr=4.2):
 
 
 ICONS = {
+    'giveaway_particle': [P('M5 1Q6 3.75 9 4.75Q6 5.75 5 8.5Q4 5.75 1 4.75Q4 3.75 5 1Z')],
+    'giveaway_particle_2': [P('M1.6 1.2C3.2 2.3 3.2 3.9 2 4.9S.8 7.4 2 8.4 3.2 10.4 2.4 11.3')],
     'broom': tfe([L(12, 1.8, 12, 8.6), P('M9.8 9.4h4.4a1 1 0 0 1 1 .8L17 19H7l1.8-8.8a1 1 0 0 1 1-.8Z'), L(10.4, 15, 10.1, 19), L(13.6, 15, 13.9, 19)],
                  rot=45, dx=0.6, dy=-0.6),
     'brush': tfe([L(12, 1.6, 12, 8.3), RR(9.6, 8.3, 4.8, 3.7, 1.1),
@@ -249,7 +252,11 @@ ICONS = {
     'live_help': [core.ICONS['chat_bubble'][0], P('M10 8.6a2.1 2.1 0 0 1 4.1.6c0 1.4-2.1 1.7-2.1 3.1'), DOT(12, 14.6, 1.1)],
 }
 
+FRAMES = {'giveaway_particle': (10, 9.5), 'giveaway_particle_2': (4, 12.5)}
+
 MAP = {
+    'giveaway_particle_1': 'giveaway_particle',
+    'giveaway_particle_2': 'giveaway_particle_2',
     'templarian_baseline_broom_24': 'broom',
     'baseline_brush_24': 'brush',
     'belledeboheme_baseline_dice_1_16': 'dice',

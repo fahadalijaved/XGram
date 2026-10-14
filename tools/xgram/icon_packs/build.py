@@ -91,6 +91,7 @@ def load_shapes(only_batch=None):
             if tgx in mapping and mapping[tgx] != icon:
                 raise SystemExit('%s mapped twice (%s, %s)' % (tgx, mapping[tgx], icon))
             mapping[tgx] = icon
+        FRAMES.update(getattr(m, 'FRAMES', {}))
     for tgx, icon in mapping.items():
         if icon not in icons:
             raise SystemExit('%s -> unknown icon %r' % (tgx, icon))
@@ -98,6 +99,8 @@ def load_shapes(only_batch=None):
 
 
 _refs = None
+# Own icons that are not square: {icon: (width dp, height dp)}, drawn in dp units (batches' FRAMES)
+FRAMES = {}
 
 
 def referenced_drawables():
@@ -172,7 +175,8 @@ def build_own(pack, icons, mapping, written):
             if icon not in cache:
                 cache[icon] = styles.render(icons[icon], pack['style'], icon)
             layers, scale = cache[icon]
-            write(os.path.join(RES, res + '.xml'), styles.vector_xml(layers, scale, size, '#FFFFFFFF' if white else '#FF000000', pack['title']))
+            write(os.path.join(RES, res + '.xml'), styles.vector_xml(layers, scale, size, '#FFFFFFFF' if white else '#FF000000', pack['title'],
+                                                                     frame=FRAMES.get(icon)))
             written.add(res)
         table.append((tgx, res))
     return table
@@ -192,15 +196,16 @@ def build_library(pack, tgx_concept, written):
     p = library.PACKS[pack]
     map_path = os.path.join(HERE, 'maps', pack + '.json')
     mapping = json.load(open(map_path, encoding='utf-8')) if os.path.exists(map_path) else {}
-    icons = library.library(p['lib'])
     table, cache, missing = [], {}, set()
     for tgx in sorted(tgx_concept):
         if STATUS.match(tgx):
             continue
         c = tgx_concept[tgx]
         base = mapping.get(c)
-        full = library.resolve(pack, base) if base else None
-        if not full:
+        key = library.label(base)
+        if key not in cache:
+            cache[key] = library.icon(pack, base)
+        if not cache[key]:
             missing.add(c)
             continue
         info = tgx_info(tgx)
@@ -209,10 +214,7 @@ def build_library(pack, tgx_concept, written):
         size, white = info
         res = res_name(p['prefix'], c, size, white)
         if res not in written:
-            if full not in cache:
-                body, w, h = icons[full]
-                cache[full] = (library.layers(body), (w, h))
-            lys, viewport = cache[full]
+            lys, viewport = cache[key]
             write(os.path.join(RES, res + '.xml'), library.vector_xml(lys, viewport, size, '#FFFFFFFF' if white else '#FF000000', p['title']))
             written.add(res)
         table.append((tgx, res))
@@ -256,15 +258,13 @@ def preview_page(concepts, icons, line_concepts, lib_maps, title):
         row = ['<div class="o">%s</div>' % original_svg(v['tgx'][0])]
         for own in OWN:
             if c in line_concepts:
-                row.append('<div class="n">%s</div>' % styles.svg(*styles.render(icons[c], own['style'], c), px=36))
+                row.append('<div class="n">%s</div>' % styles.svg(*styles.render(icons[c], own['style'], c), px=36, frame=FRAMES.get(c)))
             else:
                 row.append('<div class="x">-</div>')
         for k in packs:
-            base = lib_maps[k].get(c)
-            full = library.resolve(k, base) if base else None
-            if full:
-                body, w, h = library.library(library.PACKS[k]['lib'])[full]
-                row.append('<div class="n">%s</div>' % library.svg_preview(body, w, h))
+            pv = library.icon_preview(k, lib_maps[k].get(c))
+            if pv:
+                row.append('<div class="n">%s</div>' % pv)
             else:
                 row.append('<div class="x">-</div>')
         cells.append('<div class="c"><div class="r">%s</div><div class="t">%s</div></div>' % (''.join(row), c))
@@ -289,7 +289,8 @@ def batch_preview(batch, png):
     names = [n for n in icons if origin[n] == batch]
     cells = ''.join('<div class="c"><div class="r"><div class="o">%s</div><div class="n">%s</div><div class="n">%s</div></div><div class="t">%s</div></div>' % (
         original_svg(sorted(t for t, i in mapping.items() if i == n)[0]) if any(i == n for i in mapping.values()) else '',
-        styles.svg(*styles.render(icons[n], 'line', n), px=56), styles.svg(*styles.render(icons[n], 'duotone', n), px=56), n) for n in names)
+        styles.svg(*styles.render(icons[n], 'line', n), px=56, frame=FRAMES.get(n)),
+        styles.svg(*styles.render(icons[n], 'duotone', n), px=56, frame=FRAMES.get(n)), n) for n in names)
     html = os.path.join(HERE, 'batches', '_preview_%s.html' % batch)
     write(html, '<!doctype html><html><head><meta charset="utf-8"><style>body{font:12px sans-serif;padding:12px}'
                 '.g{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}.c{border:1px solid #ddd;border-radius:8px;padding:6px;text-align:center}'
