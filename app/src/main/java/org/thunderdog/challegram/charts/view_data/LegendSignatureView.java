@@ -85,7 +85,7 @@ public class LegendSignatureView extends FrameLayout {
         hourTime.setTypeface(Fonts.getRobotoMedium());
 
         chevron = new ImageView(context);
-        chevron.setImageResource(R.drawable.round_keyboard_arrow_right_18);
+        chevron.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.round_keyboard_arrow_right_18));
 
         progressView = new RadialProgressView(context);
         progressView.setSize(Screen.dp(12));

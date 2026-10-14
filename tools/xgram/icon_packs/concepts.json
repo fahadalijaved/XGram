@@ -659,13 +659,48 @@
    "java/org/thunderdog/challegram/ui/MessagesController.java"
   ]
  },
- "dice": {
+ "dice_1": {
   "tgx": [
-   "belledeboheme_baseline_dice_1_16",
-   "belledeboheme_baseline_dice_2_16",
-   "belledeboheme_baseline_dice_3_16",
-   "belledeboheme_baseline_dice_4_16",
-   "belledeboheme_baseline_dice_5_16",
+   "belledeboheme_baseline_dice_1_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "dice_2": {
+  "tgx": [
+   "belledeboheme_baseline_dice_2_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "dice_3": {
+  "tgx": [
+   "belledeboheme_baseline_dice_3_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "dice_4": {
+  "tgx": [
+   "belledeboheme_baseline_dice_4_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "dice_5": {
+  "tgx": [
+   "belledeboheme_baseline_dice_5_16"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/ContentPreview.java"
+  ]
+ },
+ "dice_6": {
+  "tgx": [
    "belledeboheme_baseline_dice_6_16"
   ],
   "where": [

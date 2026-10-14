@@ -1538,7 +1538,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
       case ListItem.TYPE_ICONIZED_EMPTY: {
         ViewGroup group = (ViewGroup) ((ViewGroup) holder.itemView).getChildAt(0);
         if (viewType == ListItem.TYPE_ICONIZED_EMPTY) {
-          ((ImageView) group.getChildAt(0)).setImageResource(item.getIconResource());
+          ((ImageView) group.getChildAt(0)).setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(item.getIconResource()));
         }
         ((TextView) group.getChildAt(1)).setText(item.getString());
         break;
@@ -1808,7 +1808,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
         textView.setTextColor(Theme.getColor(item.getTextColorId(ColorId.background_textLight)));
         ImageView imageView = (ImageView) ((FrameLayoutFix) holder.itemView).getChildAt(1);
         imageView.setId(item.getId());
-        imageView.setImageResource(item.getIconResource());
+        imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(item.getIconResource()));
         imageView.setTag(item);
         Views.setIsRtl(imageView, Lang.rtl());
         Views.setGravity((FrameLayout.LayoutParams) imageView.getLayoutParams(), Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT);

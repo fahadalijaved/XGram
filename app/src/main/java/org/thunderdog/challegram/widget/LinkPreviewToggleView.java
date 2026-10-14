@@ -65,7 +65,7 @@ public class LinkPreviewToggleView extends AppCompatImageView implements Tooltip
 
   public LinkPreviewToggleView (Context context) {
     super(context);
-    setImageResource(R.drawable.baseline_link_preview_bg_24);
+    setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_link_preview_bg_24));
     setScaleType(ScaleType.CENTER);
 
     setColorFilter(Theme.iconColor());

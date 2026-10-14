@@ -147,7 +147,7 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     if (needShowMoreButton) {
       moreButton = new ImageView(context);
       moreButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
-      moreButton.setImageResource(R.drawable.baseline_small_arrow_down_24);
+      moreButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_small_arrow_down_24));
       moreButton.setScaleType(ImageView.ScaleType.CENTER);
       moreButton.setColorFilter(Paints.getColorFilter(Theme.getColor(ColorId.icon)));
       RippleSupport.setTransparentSelector(moreButton);

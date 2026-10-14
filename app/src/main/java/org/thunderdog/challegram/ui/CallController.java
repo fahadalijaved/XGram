@@ -472,7 +472,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
     ImageView brandIcon = new ImageView(context);
     brandIcon.setScaleType(ImageView.ScaleType.CENTER);
-    brandIcon.setImageResource(R.drawable.deproko_logo_telegram_18);
+    brandIcon.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_logo_telegram_18));
     brandIcon.setLayoutParams(lp);
     brandWrap.addView(brandIcon);
 

@@ -132,7 +132,7 @@ public class HashtagChatController extends ViewPagerController<HashtagChatContro
 
       ImageView imageView = new ImageView(context);
       imageView.setScaleType(ImageView.ScaleType.CENTER);
-      imageView.setImageResource(R.drawable.round_keyboard_arrow_left_24);
+      imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.round_keyboard_arrow_left_24));
       imageView.setColorFilter(Theme.textAccentColor());
       imageView.setAlpha(.15f);
       addThemeFilterListener(imageView, ColorId.text);

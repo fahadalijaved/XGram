@@ -467,7 +467,7 @@ public class EditChatFolderInviteLinkController extends EditBaseController<EditC
         editText.getEditText().setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
 
         ImageView iconView = parent.findViewById(android.R.id.icon);
-        iconView.setImageResource(item.getIconResource());
+        iconView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(item.getIconResource()));
       }
     }
 

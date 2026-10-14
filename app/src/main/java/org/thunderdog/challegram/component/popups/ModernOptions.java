@@ -104,7 +104,7 @@ public class ModernOptions {
 
     ImageView coloredHeader = new ImageView(layout.getContext());
     coloredHeader.setBackgroundColor(Theme.getColor(ColorId.fillingPositive));
-    coloredHeader.setImageResource(icon);
+    coloredHeader.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(icon));
     coloredHeader.setScaleType(ImageView.ScaleType.CENTER);
     coloredHeader.setColorFilter(Paints.getColorFilter(Theme.getColor(ColorId.fillingPositiveContent)));
     coloredHeader.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, Screen.dp(132f)));

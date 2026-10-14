@@ -478,7 +478,7 @@ public class RecordAudioVideoController implements
         }
       };
       this.deleteButton.setScaleType(ImageView.ScaleType.CENTER);
-      this.deleteButton.setImageResource(R.drawable.baseline_delete_24);
+      this.deleteButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_delete_24));
       Views.setClickable(deleteButton);
       this.deleteButton.setOnClickListener(v -> {
         if (recordMode == RECORD_MODE_VIDEO_EDIT) {
@@ -584,7 +584,7 @@ public class RecordAudioVideoController implements
         }
       };
       this.muteIcon.setScaleType(ImageView.ScaleType.CENTER);
-      this.muteIcon.setImageResource(R.drawable.deproko_baseline_sound_muted_24);
+      this.muteIcon.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_sound_muted_24));
       this.muteIcon.setColorFilter(0xffffffff);
       params = FrameLayoutFix.newParams(Screen.dp(12f) * 2 + Screen.dp(2f), Screen.dp(12f) * 2 + Screen.dp(2), Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM);
       params.bottomMargin = Screen.dp(8f);

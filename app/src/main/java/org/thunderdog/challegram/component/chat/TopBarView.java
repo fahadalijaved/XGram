@@ -97,7 +97,7 @@ public class TopBarView extends FrameLayoutFix {
     });
     topDismissButton.setScaleType(ImageView.ScaleType.CENTER);
     topDismissButton.setColorFilter(Theme.iconColor());
-    topDismissButton.setImageResource(R.drawable.baseline_close_18);
+    topDismissButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_close_18));
     topDismissButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(40f), ViewGroup.LayoutParams.MATCH_PARENT, Lang.gravity() | Gravity.TOP));
     topDismissButton.setBackgroundResource(R.drawable.bg_btn_header);
     Views.setClickable(topDismissButton);

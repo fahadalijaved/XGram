@@ -41,14 +41,14 @@ public class GearView extends FrameLayoutFix {
     ImageView imageView;
 
     imageView = new ImageView(context);
-    imageView.setImageResource(R.drawable.baseline_settings_96);
+    imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_settings_96));
     imageView.setColorFilter(Theme.getColor(ColorId.iconActive));
     imageView.setScaleType(ImageView.ScaleType.CENTER);
     imageView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
     addView(gearBig = imageView);
 
     imageView = new ImageView(context);
-    imageView.setImageResource(R.drawable.baseline_settings_56);
+    imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_settings_56));
     imageView.setAlpha(.5f);
     imageView.setColorFilter(Theme.getColor(ColorId.iconActive));
     imageView.setScaleType(ImageView.ScaleType.CENTER);
@@ -57,7 +57,7 @@ public class GearView extends FrameLayoutFix {
     addView(gearSmallLeft = imageView);
 
     imageView = new ImageView(context);
-    imageView.setImageResource(R.drawable.baseline_settings_56);
+    imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_settings_56));
     imageView.setAlpha(.5f);
     imageView.setColorFilter(Theme.getColor(ColorId.iconActive));
     imageView.setScaleType(ImageView.ScaleType.CENTER);

@@ -91,7 +91,7 @@ public class CreateChannelController extends ViewController<String[]> implements
 
     iconView = new ImageView(context);
     iconView.setScaleType(ImageView.ScaleType.CENTER);
-    iconView.setImageResource(R.drawable.baseline_info_24);
+    iconView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_info_24));
     iconView.setColorFilter(Theme.iconColor());
     addThemeFilterListener(iconView, ColorId.icon);
     iconView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(24f), Screen.dp(46f), Lang.gravity(), Lang.rtl() ? 0 : Screen.dp(6f), 0, Lang.rtl() ? Screen.dp(6f) : 0, 0));

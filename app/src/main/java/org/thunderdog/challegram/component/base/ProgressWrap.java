@@ -66,7 +66,7 @@ public class ProgressWrap extends FrameLayoutFix {
       addView(progressBar);
     } else {
       SpinnerView spinnerView = new SpinnerView(getContext());
-      spinnerView.setImageResource(R.drawable.spinner_48_inner);
+      spinnerView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.spinner_48_inner));
       spinnerView.setLayoutParams(params);
 
       addView(spinnerView);

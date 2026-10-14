@@ -116,7 +116,7 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
 
     ImageView iconView = new ImageView(context);
     iconView.setScaleType(ImageView.ScaleType.CENTER);
-    iconView.setImageResource(R.drawable.baseline_link_24);
+    iconView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_link_24));
     iconView.setColorFilter(Theme.iconColor());
     addThemeFilterListener(iconView, ColorId.icon);
     iconView.setLayoutParams(new LinearLayout.LayoutParams(Screen.dp(24f), Screen.dp(46f)));

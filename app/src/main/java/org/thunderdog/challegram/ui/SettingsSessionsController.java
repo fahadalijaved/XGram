@@ -285,7 +285,7 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
             locationView.setText(Lang.getString(R.string.SessionUnknown));
           }
           progressView.forceFactor(0f);
-          iconView.setImageResource(R.drawable.baseline_device_android_x_24);
+          iconView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_device_android_x_24));
           secretStateView.setVisibility(sessions.currentSession.canAcceptSecretChats ? View.VISIBLE : View.GONE);
           callsStateView.setVisibility(sessions.currentSession.canAcceptCalls ? View.VISIBLE : View.GONE);
           callsStateView.setPadding(sessions.currentSession.canAcceptSecretChats ? 0 : Screen.dp(48f), 0, 0, 0);
@@ -312,7 +312,7 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
           } else {
             progressView.forceFactor(inProgress ? 1f : 0f);
           }
-          iconView.setImageResource(SessionIconKt.asIcon(session));
+          iconView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(SessionIconKt.asIcon(session)));
           secretStateView.setVisibility((session.canAcceptSecretChats && !session.isPasswordPending) ? View.VISIBLE : View.GONE);
           callsStateView.setVisibility((session.canAcceptCalls && !session.isPasswordPending) ? View.VISIBLE : View.GONE);
           callsStateView.setPadding(session.canAcceptSecretChats ? 0 : Screen.dp(48f), 0, 0, 0);

@@ -208,7 +208,7 @@ public class MessagesHolder extends RecyclerView.ViewHolder {
         imageViewHolder[0] = imageView;
         imageView.setId(R.id.secret_icon);
         imageView.setScaleType(ImageView.ScaleType.CENTER);
-        imageView.setImageResource(R.drawable.baseline_lock_48);
+        imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_lock_48));
         if (forBubble) {
           imageView.setColorFilter(0xffffffff);
         } else {

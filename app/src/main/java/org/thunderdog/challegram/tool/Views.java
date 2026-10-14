@@ -145,7 +145,7 @@ public class Views {
   public static ImageView newImageButton (Context context, @DrawableRes int icon, @ColorId int colorId, @Nullable ViewController<?> themeProvider) {
     ImageView imageView = new ImageView(context);
     imageView.setScaleType(ImageView.ScaleType.CENTER);
-    imageView.setImageResource(icon);
+    imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(icon));
     imageView.setColorFilter(Theme.getColor(colorId));
     setClickable(imageView);
     if (themeProvider != null) {
@@ -759,7 +759,7 @@ public class Views {
       view = bar;
     } else {
       org.thunderdog.challegram.widget.SpinnerView spinnerView = new org.thunderdog.challegram.widget.SpinnerView(context);
-      spinnerView.setImageResource(R.drawable.spinner_48_inner);
+      spinnerView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.spinner_48_inner));
       view = spinnerView;
     }
     if (params != null) {

@@ -101,7 +101,7 @@ public class StickersSuggestionsLayout extends AnimatedFrameLayout implements Fa
 
     stickerSuggestionArrowView = new ImageView(context);
     stickerSuggestionArrowView.setScaleType(ImageView.ScaleType.CENTER);
-    stickerSuggestionArrowView.setImageResource(R.drawable.stickers_back_arrow);
+    stickerSuggestionArrowView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.stickers_back_arrow));
     addView(stickerSuggestionArrowView);
   }
 

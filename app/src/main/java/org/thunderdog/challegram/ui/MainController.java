@@ -680,9 +680,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         sectionView.setOnClickListener(v -> { });
         sectionView.setCompoundDrawablePadding(Screen.dp(16));
         if (!Lang.rtl()) {
-          sectionView.setCompoundDrawablesWithIntrinsicBounds(filterIcon, ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL);
+          sectionView.setCompoundDrawablesWithIntrinsicBounds(com.fahadali.xgram.appearance.XgramIconPack.map(filterIcon), ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL);
         } else {
-          sectionView.setCompoundDrawablesWithIntrinsicBounds(ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL, filterIcon, ResourcesCompat.ID_NULL);
+          sectionView.setCompoundDrawablesWithIntrinsicBounds(ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL, com.fahadali.xgram.appearance.XgramIconPack.map(filterIcon), ResourcesCompat.ID_NULL);
         }
         Views.setMediumText(sectionView, Lang.getString(bindLocaleChanger(filterName, sectionView, false, true)));
         RippleSupport.setTransparentBlackSelector(sectionView);

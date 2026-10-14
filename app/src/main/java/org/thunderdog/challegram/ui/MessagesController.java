@@ -1158,7 +1158,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     emojiButton = new ImageView(context);
     emojiButton.setId(R.id.msg_emoji);
     emojiButton.setScaleType(ImageView.ScaleType.CENTER);
-    emojiButton.setImageResource(EmojiLayout.getTargetIcon(true));
+    emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(EmojiLayout.getTargetIcon(true)));
     emojiButton.setColorFilter(Theme.iconColor());
     addThemeFilterListener(emojiButton, ColorId.icon);
     emojiButton.setOnClickListener(this);
@@ -1212,7 +1212,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     mediaButton = new CameraAccessImageView(context, this);
     mediaButton.setId(R.id.msg_attach);
     mediaButton.setScaleType(ImageView.ScaleType.CENTER);
-    mediaButton.setImageResource(R.drawable.deproko_baseline_attach_26);
+    mediaButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_attach_26));
     mediaButton.setColorFilter(Theme.iconColor());
     addThemeFilterListener(mediaButton, ColorId.icon);
     mediaButton.setOnClickListener(this);
@@ -1223,7 +1223,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     cameraButton = new CameraAccessImageView(context, this);
     cameraButton.setId(R.id.btn_camera);
     cameraButton.setScaleType(ImageView.ScaleType.CENTER);
-    cameraButton.setImageResource(R.drawable.deproko_baseline_camera_26);
+    cameraButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_camera_26));
     cameraButton.setColorFilter(Theme.iconColor());
     addThemeFilterListener(cameraButton, ColorId.icon);
     cameraButton.setOnClickListener(this);
@@ -1234,7 +1234,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       scheduleButton = new CameraAccessImageView(context, this);
       scheduleButton.setId(R.id.btn_viewScheduled);
       scheduleButton.setScaleType(ImageView.ScaleType.CENTER);
-      scheduleButton.setImageResource(R.drawable.baseline_date_range_24);
+      scheduleButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_date_range_24));
       scheduleButton.setColorFilter(Theme.iconColor());
       addThemeFilterListener(scheduleButton, ColorId.icon);
       scheduleButton.setOnClickListener(this);
@@ -5094,7 +5094,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       Gravity.CENTER_VERTICAL,
       Screen.dp(17f), 0, 0, 0
     ));
-    iconView.setImageResource(R.drawable.baseline_visibility_24);
+    iconView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_visibility_24));
     iconView.setColorFilter(Theme.iconColor());
     addThemeFilterListener(iconView, ColorId.icon);
     frameLayout.addView(iconView);
@@ -6377,7 +6377,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         ImageView imageView = new ImageView(context());
         imageView.setOnClickListener(this);
         imageView.setScaleType(ImageView.ScaleType.CENTER);
-        imageView.setImageResource(R.drawable.baseline_help_outline_24);
+        imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_help_outline_24));
         imageView.setColorFilter(Theme.getColor(ColorId.textNeutral));
         addThemeFilterListener(imageView, ColorId.textNeutral);
         imageView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(49f), Screen.dp(49f), Gravity.RIGHT | Gravity.CENTER_VERTICAL));
@@ -7736,7 +7736,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     if (lastCmdResource != resource) {
       lastCmdResource = resource;
-      commandButton.setImageResource(resource);
+      commandButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(resource));
     }
   }
 
@@ -9237,10 +9237,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
       setEmojiShown(true, true);
       if (emojiState) {
-        emojiButton.setImageResource(R.drawable.baseline_keyboard_24);
+        emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_keyboard_24));
         emojiKeyboardFrameLayout.hideKeyboard(inputView);
       } else {
-        emojiButton.setImageResource(R.drawable.baseline_direction_arrow_down_24);
+        emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_direction_arrow_down_24));
       }
     }
   }
@@ -9282,7 +9282,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         emojiKeyboardFrameLayout.setVisible(false);
       }
       setEmojiShown(false, false);
-      emojiButton.setImageResource(getTargetIcon(true));
+      emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon(true)));
     }
   }
 
@@ -9299,7 +9299,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         emojiKeyboardFrameLayout.showKeyboard(inputView);
       }
       setEmojiShown(false, true);
-      emojiButton.setImageResource(getTargetIcon(true));
+      emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon(true)));
     }
   }
 
@@ -12889,7 +12889,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     searchMessagesFilterIndex = index;
 
     if (searchSetTypeFilterButton != null && index < searchFilterIcons.length && index >= 0) {
-      searchSetTypeFilterButton.setImageResource(searchFilterIcons[index]);
+      searchSetTypeFilterButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(searchFilterIcons[index]));
       searchSetTypeFilterButton.setColorFilter(Theme.getColor(index == 0 ? ColorId.icon : ColorId.iconActive));
     }
     checkSearchFilteredModeButton(false);
@@ -13114,7 +13114,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onInputSelectionExistChanged (InputView v, boolean hasSelection) {
     textInputHasSelection = hasSelection;
     if (!emojiShown) {
-      emojiButton.setImageResource(getTargetIcon(true));
+      emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon(true)));
     }
   }
 

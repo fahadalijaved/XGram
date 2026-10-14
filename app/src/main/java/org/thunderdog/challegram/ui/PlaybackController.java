@@ -212,7 +212,7 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     ImageView imageView = new ImageView(context());
     imageView.setId(id);
     imageView.setScaleType(ImageView.ScaleType.CENTER);
-    imageView.setImageResource(image);
+    imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(image));
     imageView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(64f), Screen.dp(48f)));
     int colorId = isActive ? ColorId.playerButtonActive : ColorId.playerButton;
     imageView.setColorFilter(Theme.getColor(colorId));
@@ -830,7 +830,7 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
       setActive(repeatButton, newRepeatMode != 0);
     }
     if (prevRepeatMode == TGPlayerController.PLAY_FLAG_REPEAT_ONE == (newRepeatMode != TGPlayerController.PLAY_FLAG_REPEAT_ONE)) {
-      repeatButton.setImageResource(newRepeatMode == TGPlayerController.PLAY_FLAG_REPEAT_ONE ? R.drawable.round_repeat_one_24 : R.drawable.round_repeat_24);
+      repeatButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(newRepeatMode == TGPlayerController.PLAY_FLAG_REPEAT_ONE ? R.drawable.round_repeat_one_24 : R.drawable.round_repeat_24));
     }
 
     boolean wasReverse = (playFlags & TGPlayerController.PLAYLIST_FLAG_REVERSE) != 0;

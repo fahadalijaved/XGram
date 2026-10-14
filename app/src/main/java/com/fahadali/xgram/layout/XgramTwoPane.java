@@ -375,7 +375,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     content.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
 
     ImageView icon = new ImageView(context);
-    icon.setImageResource(R.drawable.baseline_forum_96);
+    icon.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_forum_96));
     icon.setColorFilter(Theme.getColor(ColorId.iconLight));
     content.addView(icon, new LinearLayout.LayoutParams(Screen.dp(96f), Screen.dp(96f)));
 

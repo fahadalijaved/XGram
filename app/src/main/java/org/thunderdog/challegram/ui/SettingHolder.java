@@ -1654,7 +1654,7 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         ImageView imageView = new ImageView(context);
         imageView.setId(R.id.btn_sessionsEmpty_image);
         imageView.setScaleType(ImageView.ScaleType.CENTER);
-        imageView.setImageResource(R.drawable.baseline_devices_other_96);
+        imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_devices_other_96));
         imageView.setColorFilter(Theme.backgroundIconColor());
         if (themeProvider != null) {
           themeProvider.addThemeFilterListener(imageView, ColorId.background_icon);
@@ -1913,7 +1913,7 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         ImageView imageView = new ImageView(context);
         imageView.setId(R.id.icon_email);
         imageView.setScaleType(ImageView.ScaleType.CENTER);
-        imageView.setImageResource(R.drawable.baseline_mail_96);
+        imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_mail_96));
         imageView.setColorFilter(Theme.backgroundIconColor());
         if (themeProvider != null) {
           themeProvider.addThemeFilterListener(imageView, ColorId.background_icon);
@@ -2598,7 +2598,7 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         imageViewHolder[0] = imageView;
         imageView.setId(R.id.secret_icon);
         imageView.setScaleType(ImageView.ScaleType.CENTER);
-        imageView.setImageResource(R.drawable.baseline_lock_48);
+        imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_lock_48));
         if (forBubble) {
           imageView.setColorFilter(0xffffffff);
         } else {

@@ -312,7 +312,7 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
       headerView.addView(backButton, FrameLayoutFix.newParams(Screen.dp(56f), LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
 
       HeaderButton searchButton = new HeaderButton(context);
-      searchButton.setImageResource(R.drawable.baseline_search_24);
+      searchButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_search_24));
       searchButton.setThemeColorId(getHeaderIconColorId());
       headerView.addView(searchButton, FrameLayoutFix.newParams(Screen.dp(56f), LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.RIGHT));
 

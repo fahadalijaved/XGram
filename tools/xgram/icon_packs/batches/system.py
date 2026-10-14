@@ -1,7 +1,7 @@
 # XGram Line / Duotone batch "system": debugging, storage, security, passcode, devices, networks and sessions.
 #
-# Left out (brand logos, they keep Telegram X's drawing): android, device_android, device_android_x (the Android
-# robot), device_xbox (the Xbox logo), device_ubuntu (the Ubuntu logo), device_linux (Tux, the Linux mascot).
+# Brand logos are not copied: android / device_android get a plain robot head of our own (device_android_x adds an x),
+# device_xbox a generic controller, device_linux and device_ubuntu a desktop monitor.
 import math
 
 from dsl import *
@@ -172,6 +172,14 @@ ICONS = {
     # devices and networks
     'device_other': list(core.ICONS['devices']),
     'device_ipad': [RR(4.5, 2.5, 15, 19, 2.5), L(10.5, 18, 13.5, 18)],
+    # robot head: a dome with two antennae and two eyes
+    'android_robot': [P('M4 17.5a8 8 0 0 1 16 0Z'), L(8, 10.6, 6.3, 7.6), L(16, 10.6, 17.7, 7.6),
+                      DOT(8.9, 14.3, 1.2), DOT(15.1, 14.3, 1.2)],
+    'android_robot_x': [P('M2.5 15.5a7 7 0 0 1 14 0Z'), L(6, 9.4, 4.5, 6.8), L(13, 9.4, 14.5, 6.8),
+                        DOT(7.2, 12.6, 1.1), DOT(11.8, 12.6, 1.1), L(17.3, 17.3, 21, 21), L(21, 17.3, 17.3, 21)],
+    'device_controller': [RR(2.5, 7, 19, 10.5, 5.25), L(7.5, 10.2, 7.5, 14.3), L(5.45, 12.25, 9.55, 12.25),
+                          DOT(15.4, 11, 1.15), DOT(17.6, 13.5, 1.15)],
+    'device_desktop': [RR(2.5, 3.5, 19, 13, 2.5), L(12, 16.5, 12, 20.5), L(8, 20.5, 16, 20.5)],
     'router': [RR(3, 13, 18, 7.5, 2.5), DOT(7, 16.75, 1.15), DOT(10.5, 16.75, 1.15), L(16, 13, 16, 10),
                P(arc(16, 9.5, 3, 135, 45)), P(arc(16, 9.5, 6, 135, 45))],
     'signal_cellular_alt': [L(5.5, 19.5, 5.5, 15), L(12, 19.5, 12, 10), L(18.5, 19.5, 18.5, 4.5)],
@@ -208,6 +216,12 @@ MAP = {
     'baseline_gavel_24': 'gavel',
     'baseline_device_other_24': 'device_other',
     'baseline_device_ipad_24': 'device_ipad',
+    'baseline_android_24': 'android_robot',
+    'baseline_device_android_24': 'android_robot',
+    'baseline_device_android_x_24': 'android_robot_x',
+    'baseline_device_xbox_24': 'device_controller',
+    'baseline_device_linux_24': 'device_desktop',
+    'templarian_baseline_device_ubuntu_24': 'device_desktop',
     'baseline_router_24': 'router',
     'baseline_signal_cellular_alt_24': 'signal_cellular_alt',
     'baseline_wifi_24': 'wifi',

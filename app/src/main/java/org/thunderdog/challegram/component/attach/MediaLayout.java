@@ -1554,7 +1554,7 @@ public class MediaLayout extends FrameLayoutFix implements
       hotMediaView.setOnClickListener(this);
       hotMediaView.setId(R.id.btn_spoiler);
       hotMediaView.setScaleType(ImageView.ScaleType.CENTER);
-      hotMediaView.setImageResource(R.drawable.baseline_whatshot_24);
+      hotMediaView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_whatshot_24));
       hotMediaView.setAlpha(allowSpoiler ? 1f : 0f);
       hotMediaView.setColorFilter(Theme.getColor(needSpoiler ? ColorId.iconActive : ColorId.icon));
       themeListeners.addThemeFilterListener(hotMediaView, needSpoiler ? ColorId.iconActive : ColorId.icon);
@@ -1572,7 +1572,7 @@ public class MediaLayout extends FrameLayoutFix implements
       groupMediaView.setOnClickListener(this);
       groupMediaView.setId(R.id.btn_mosaic);
       groupMediaView.setScaleType(ImageView.ScaleType.CENTER);
-      groupMediaView.setImageResource(R.drawable.deproko_baseline_mosaic_group_24);
+      groupMediaView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_mosaic_group_24));
       int colorId = needGroupMedia ? ColorId.iconActive : ColorId.icon;
       groupMediaView.setColorFilter(Theme.getColor(colorId));
       themeListeners.addThemeFilterListener(groupMediaView, colorId);

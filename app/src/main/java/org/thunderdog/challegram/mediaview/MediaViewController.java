@@ -740,10 +740,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
       setEmojiShown(true);
       if (emojiState) {
-        captionEmojiButton.setImageResource(R.drawable.baseline_keyboard_24);
+        captionEmojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_keyboard_24));
         keyboardFrameLayout.hideKeyboard((EditText) captionView);
       } else {
-        captionEmojiButton.setImageResource(R.drawable.baseline_direction_arrow_down_24);
+        captionEmojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_direction_arrow_down_24));
       }
     }
   }
@@ -758,7 +758,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     if (emojiShown) {
       removeEmojiView();
       setEmojiShown(false);
-      captionEmojiButton.setImageResource(getTargetIcon());
+      captionEmojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon()));
       setInCaption();
     }
   }
@@ -776,7 +776,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         }
       }
       setEmojiShown(false);
-      captionEmojiButton.setImageResource(getTargetIcon());
+      captionEmojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon()));
     }
   }
 
@@ -6203,7 +6203,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
             return false;
           });
           undoButton.setScaleType(ImageView.ScaleType.CENTER);
-          undoButton.setImageResource(R.drawable.baseline_undo_24);
+          undoButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_undo_24));
           undoButton.setColorFilter(0xffffffff);
           Views.setClickable(undoButton);
           undoButton.setBackgroundResource(R.drawable.bg_btn_header_light);
@@ -8620,7 +8620,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   public void onInputSelectionExistChanged (InputView v, boolean hasSelection) {
     textInputHasSelection = hasSelection;
     if (!emojiShown) {
-      captionEmojiButton.setImageResource(getTargetIcon());
+      captionEmojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon()));
     }
   }
 
@@ -9176,7 +9176,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     captionDoneButton.setId(R.id.btn_caption_done);
     captionDoneButton.setOnClickListener(this);
     captionDoneButton.setScaleType(ImageView.ScaleType.CENTER);
-    captionDoneButton.setImageResource(R.drawable.baseline_check_24);
+    captionDoneButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_check_24));
     captionDoneButton.setColorFilter(0xffffffff);
     captionDoneButton.setAlpha(0f);
     captionDoneButton.setEnabled(false);
@@ -9186,7 +9186,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     captionEmojiButton.setId(R.id.btn_caption_emoji);
     captionEmojiButton.setOnClickListener(this);
     captionEmojiButton.setScaleType(ImageView.ScaleType.CENTER);
-    captionEmojiButton.setImageResource(R.drawable.deproko_baseline_insert_emoticon_26);
+    captionEmojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_insert_emoticon_26));
     captionEmojiButton.setColorFilter(0xffffffff);
     captionEmojiButton.setAlpha(0f);
     captionEmojiButton.setEnabled(false);
@@ -9407,7 +9407,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     ImageView imageView = new ImageView(context);
     imageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-    imageView.setImageResource(icon);
+    imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(icon));
     imageView.setColorFilter(0xffffffff);
     imageView.setAlpha((float) 0xaa / (float) 0xff);
     imageView.setLayoutParams(lp);

@@ -69,7 +69,7 @@ public class ChartHeaderView extends FrameLayout implements Chart.DateListener, 
 
     back.setVisibility(View.GONE);
     back.setText(Lang.getString(R.string.ZoomOut));
-    zoomIcon = ContextCompat.getDrawable(getContext(), R.drawable.baseline_zoom_in_24);
+    zoomIcon = ContextCompat.getDrawable(getContext(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_zoom_in_24));
     back.setCompoundDrawablesWithIntrinsicBounds(zoomIcon, null, null, null);
     back.setCompoundDrawablePadding(Screen.dp(4));
     back.setPadding(Screen.dp(8), Screen.dp(4), Screen.dp(8), Screen.dp(4));

@@ -199,7 +199,7 @@ public class ReplyBarView extends FrameLayoutFix implements View.OnClickListener
   private ImageView newButton (@IdRes int idRes, @DrawableRes int iconRes, ViewController<?> themeProvider) {
     ImageView btn = new ImageView(getContext());
     btn.setId(idRes);
-    btn.setImageResource(iconRes);
+    btn.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(iconRes));
     btn.setColorFilter(Theme.iconColor());
     themeProvider.addThemeFilterListener(btn, ColorId.icon);
     btn.setScaleType(ImageView.ScaleType.CENTER);
@@ -314,9 +314,9 @@ public class ReplyBarView extends FrameLayoutFix implements View.OnClickListener
       final boolean usePhotoIcon = Td.isPhoto(msg.message.content) || hasReplacedImage
         || (msg.message.content != null && msg.message.content.getConstructor() == TdApi.MessageVideo.CONSTRUCTOR);
 
-      replaceMediaView.setImageResource(usePhotoIcon ? R.drawable.dot_baseline_image_replace_24 : R.drawable.dot_baseline_file_replace_24);
+      replaceMediaView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(usePhotoIcon ? R.drawable.dot_baseline_image_replace_24 : R.drawable.dot_baseline_file_replace_24));
     } else {
-      replaceMediaView.setImageResource(R.drawable.dot_baseline_file_media_replace_24);
+      replaceMediaView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.dot_baseline_file_media_replace_24));
     }
 
     displayedMessage = msg;

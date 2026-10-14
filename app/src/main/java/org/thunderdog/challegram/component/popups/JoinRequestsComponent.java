@@ -174,7 +174,7 @@ public class JoinRequestsComponent implements TGLegacyManager.EmojiLoadListener,
         group.text().setText(user.getName(), user.getStatus());
         group.text().setIcon(R.drawable.baseline_person_add_16, (v) -> acceptRequest(user));
         group.text().setEmojiStatus(tdlib(), user.getUser());
-        group.icon().setImageResource(R.drawable.baseline_close_24);
+        group.icon().setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_close_24));
         group.setIconClickListener((v) -> declineRequest(user));
         group.setTextClickListener((v) -> onClick(group));
       }

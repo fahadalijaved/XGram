@@ -839,7 +839,7 @@ public class MediaStickersAdapter extends RecyclerView.Adapter<MediaStickersAdap
 
       imageView = new ImageView(context);
       imageView.setScaleType(ImageView.ScaleType.CENTER);
-      imageView.setImageResource(R.drawable.baseline_small_arrow_down_18);
+      imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_small_arrow_down_18));
       imageView.setColorFilter(new PorterDuffColorFilter(Theme.iconColor(), PorterDuff.Mode.SRC_IN));
       imageView.setLayoutParams(LayoutHelper.createLinear(18, 18, 0, Gravity.NO_GRAVITY, 0, 0, 4, 0));
 

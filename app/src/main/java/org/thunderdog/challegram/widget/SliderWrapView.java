@@ -58,7 +58,7 @@ public class SliderWrapView extends LinearLayout implements SliderView.Listener,
     public BrightnessIcon (Context context) {
       super(context);
       setScaleType(ScaleType.CENTER);
-      setImageResource(R.drawable.baseline_brightness_5_24);
+      setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_brightness_5_24));
       setColorFilter(Theme.iconColor());
     }
 

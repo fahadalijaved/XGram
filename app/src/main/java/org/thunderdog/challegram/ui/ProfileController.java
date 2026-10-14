@@ -2226,7 +2226,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
         params = FrameLayoutFix.newParams(Screen.dp(56f), getPagerTopViewHeight(), Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT);
         counterDismiss = new ImageView(context());
-        counterDismiss.setImageResource(R.drawable.baseline_close_24);
+        counterDismiss.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_close_24));
         counterDismiss.setColorFilter(Theme.iconColor());
         addThemeFilterListener(counterDismiss, ColorId.icon);
         counterDismiss.setScaleType(ImageView.ScaleType.CENTER);

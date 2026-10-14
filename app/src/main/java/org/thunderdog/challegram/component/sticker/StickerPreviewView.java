@@ -567,7 +567,7 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
       imageView.setId(R.id.btn_favorite);
       imageView.setScaleType(ImageView.ScaleType.CENTER);
       imageView.setOnClickListener(onClickListener);
-      imageView.setImageResource(isFavorite ? R.drawable.baseline_star_24 : R.drawable.baseline_star_border_24);
+      imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(isFavorite ? R.drawable.baseline_star_24 : R.drawable.baseline_star_border_24));
       imageView.setColorFilter(Theme.getColor(ColorId.textNeutral));
       themeListenerList.addThemeFilterListener(imageView, ColorId.textNeutral);
       imageView.setLayoutParams(new ViewGroup.LayoutParams(Screen.dp(48f), ViewGroup.LayoutParams.MATCH_PARENT));
@@ -635,7 +635,7 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
       removeRecentView.setId(R.id.btn_removeRecent);
       removeRecentView.setScaleType(ImageView.ScaleType.CENTER);
       removeRecentView.setOnClickListener(onClickListener);
-      removeRecentView.setImageResource(R.drawable.baseline_auto_delete_24);
+      removeRecentView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_auto_delete_24));
       removeRecentView.setColorFilter(Theme.getColor(ColorId.textNegative));
       themeListenerList.addThemeFilterListener(removeRecentView, ColorId.textNegative);
       removeRecentView.setLayoutParams(new ViewGroup.LayoutParams(Screen.dp(48f), ViewGroup.LayoutParams.MATCH_PARENT));

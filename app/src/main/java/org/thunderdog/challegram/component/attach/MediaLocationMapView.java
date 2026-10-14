@@ -142,7 +142,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
 
     pinXView = new ImageView(getContext());
     pinXView.setScaleType(ImageView.ScaleType.CENTER);
-    pinXView.setImageResource(R.drawable.baseline_close_18);
+    pinXView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_close_18));
     pinXView.setColorFilter(Theme.getColor(ColorId.icon, ThemeId.BLUE));
     pinXView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
     addView(pinXView);
@@ -150,7 +150,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
     params.bottomMargin = Screen.dp(18f);
     pinView = new ImageView(getContext());
-    pinView.setImageResource(R.drawable.ic_map_pin_44);
+    pinView.setImageResource(R.drawable.ic_map_pin_44); // XGram: the red pin stays, packs draw it in one colour
     pinView.setLayoutParams(params);
     pinView.setAlpha(0f);
     addView(pinView);

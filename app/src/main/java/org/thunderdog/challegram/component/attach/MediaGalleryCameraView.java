@@ -53,7 +53,7 @@ public class MediaGalleryCameraView extends FrameLayoutFix implements Destroyabl
 
     ImageView imageView = new ImageView(context);
     imageView.setScaleType(ImageView.ScaleType.CENTER);
-    imageView.setImageResource(R.drawable.baseline_camera_alt_24);
+    imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_camera_alt_24));
     imageView.setColorFilter(0xffffffff);
     imageView.setLayoutParams(params);
     addView(imageView);

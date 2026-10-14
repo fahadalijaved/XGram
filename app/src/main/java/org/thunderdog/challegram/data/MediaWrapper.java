@@ -187,7 +187,7 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       this.nativeEmbed = nativeEmbed;
       int iconRes = nativeEmbed.getIcon();
       if (iconRes != 0) {
-        this.embedIcon = ResourcesCompat.getDrawable(UI.getResources(), iconRes, null);
+        this.embedIcon = ResourcesCompat.getDrawable(UI.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(iconRes), null);
       }
       this.fileProgress.setDownloadedIconRes(FileProgressComponent.PLAY_ICON);
       this.fileProgress.setPausedIconRes(FileProgressComponent.PLAY_ICON);

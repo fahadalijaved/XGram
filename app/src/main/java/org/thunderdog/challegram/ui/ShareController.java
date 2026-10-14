@@ -1354,7 +1354,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
     okButton = new CustomImageView(context);
     okButton.setId(R.id.btn_done);
     okButton.setScaleType(ImageView.ScaleType.CENTER);
-    okButton.setImageResource(R.drawable.deproko_baseline_send_24);
+    okButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_send_24));
     okButton.setColorFilter(Theme.chatSendButtonColor());
     addThemeFilterListener(okButton, ColorId.chatSendButton);
     okButton.setVisibility(View.INVISIBLE);
@@ -1371,7 +1371,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
     emojiButton.setScaleType(ImageView.ScaleType.CENTER);
     emojiButton.setId(R.id.btn_emoji);
     emojiButton.setOnClickListener(this);
-    emojiButton.setImageResource(R.drawable.deproko_baseline_insert_emoticon_26);
+    emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_insert_emoticon_26));
     emojiButton.setColorFilter(Theme.iconColor());
     addThemeFilterListener(emojiButton, ColorId.icon);
     emojiButton.setLayoutParams(params);
@@ -3084,10 +3084,10 @@ public class ShareController extends TelegramViewController<ShareController.Args
 
       setEmojiShown(true);
       if (emojiState) {
-        emojiButton.setImageResource(R.drawable.baseline_keyboard_24);
+        emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_keyboard_24));
         keyboardFrameLayout.hideKeyboard(inputView);
       } else {
-        emojiButton.setImageResource(R.drawable.baseline_direction_arrow_down_24);
+        emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_direction_arrow_down_24));
       }
 
       checkKeyboardVisible();
@@ -3100,7 +3100,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
         keyboardFrameLayout.setVisible(false);
       }
       setEmojiShown(false);
-      emojiButton.setImageResource(getTargetIcon());
+      emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon()));
 
       checkKeyboardVisible();
     }
@@ -3119,7 +3119,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
         }
       }
       setEmojiShown(false);
-      emojiButton.setImageResource(getTargetIcon());
+      emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon()));
       checkKeyboardVisible();
     }
   }
@@ -3786,7 +3786,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
   public void onInputSelectionExistChanged (InputView v, boolean hasSelection) {
     textInputHasSelection = hasSelection;
     if (!emojiShown) {
-     emojiButton.setImageResource(getTargetIcon());
+     emojiButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(getTargetIcon()));
     }
   }
 

@@ -60,7 +60,7 @@ public class ListInfoView extends FrameLayoutFix {
       addView(progress, new LayoutParams(Screen.dp(32f), Screen.dp(32f), Gravity.CENTER));
     } else {
       spinnerView = new SpinnerView(context);
-      spinnerView.setImageResource(R.drawable.spinner_48_inner);
+      spinnerView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.spinner_48_inner));
       addView(spinnerView, new LayoutParams(Screen.dp(32f), Screen.dp(32f), Gravity.CENTER));
     }
 
