@@ -280,6 +280,7 @@ public class BaseView extends SparseDrawableView implements ClickHelper.Delegate
 
   @Override
   public void onLongPressMove (View view, MotionEvent e, float x, float y, float startX, float startY) {
+    com.fahadali.xgram.chats.XgramChatLongPress.onDragMove(this, x, y); // XGram: slide onto a quick action
     if (awaitingSlideOff) {
       boolean ok = false;
       if (customControllerProvider != null) {
@@ -317,6 +318,11 @@ public class BaseView extends SparseDrawableView implements ClickHelper.Delegate
       switch (forceTouchMode) {
         case FORCE_TOUCH_CHAT: {
           TdApi.Chat chat = tdlib.chat(chatId);
+          if (chat != null && com.fahadali.xgram.chats.XgramChatLongPress.showQuickActions(this, actionListProvider, x, y)) {
+            // XGram: "Long press on a chat" set to quick actions shows a small action pill instead of the preview.
+            setInLongPress(true, x, y);
+            return true;
+          }
           if (chat != null) {
             if (threadMessages != null && threadMessages.length > 0) {
               cancelAsyncPreview();
@@ -388,12 +394,14 @@ public class BaseView extends SparseDrawableView implements ClickHelper.Delegate
 
   @Override
   public void onLongPressCancelled (View view, float x, float y) {
+    com.fahadali.xgram.chats.XgramChatLongPress.onDragEnd(this, true); // XGram
     cancelAsyncPreview();
     closePreview();
   }
 
   @Override
   public void onLongPressFinish (View view, float x, float y) {
+    com.fahadali.xgram.chats.XgramChatLongPress.onDragEnd(this, false); // XGram: release on a quick action
     setInLongPress(false, x, y);
     closePreview();
   }

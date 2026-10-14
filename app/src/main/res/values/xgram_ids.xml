@@ -230,4 +230,8 @@
   <item type="id" name="btn_xgramCodeSupport" />
   <item type="id" name="btn_xgramPremiumOtherNumber" />
   <item type="id" name="btn_xgramPremiumSupport" />
+  <item type="id" name="btn_xgramChatLongPress" />
+  <item type="id" name="btn_xgramChatLongPressPreview" />
+  <item type="id" name="btn_xgramChatLongPressQuick" />
+  <item type="id" name="btn_xgramChatLongPressCompact" />
 </resources>

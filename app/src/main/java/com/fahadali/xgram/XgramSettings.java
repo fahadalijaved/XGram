@@ -606,6 +606,21 @@ public final class XgramSettings {
     avatarRadiusFactor = percent < 0 ? -1f : percent / 100f;
   }
 
+  private int chatLongPress = -1;
+
+  /** What holding a chat in the chat list does: 0 Telegram X preview, 1 quick actions, 2 compact preview. */
+  public int chatLongPress () {
+    if (chatLongPress < 0) {
+      chatLongPress = pmc().getInt("xgram_chat_long_press", 0);
+    }
+    return chatLongPress;
+  }
+
+  public void setChatLongPress (int mode) {
+    chatLongPress = mode;
+    pmc().putInt("xgram_chat_long_press", mode);
+  }
+
   // Side menu
 
   /** Side menu items that can be hidden: contacts, hub, calls, saved, invite, proxy, help, night, ghost. */

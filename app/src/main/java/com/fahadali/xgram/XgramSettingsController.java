@@ -174,6 +174,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(R.string.XgramAboutSupportInfo);
         } else if (id == R.id.btn_xgramAvatarCorners) {
           view.setData(avatarCornersName(settings.avatarCorners()));
+        } else if (id == R.id.btn_xgramChatLongPress) {
+          view.setData(com.fahadali.xgram.chats.XgramChatLongPress.modeName(settings.chatLongPress()));
         } else if (id == R.id.btn_xgramIconPack) {
           view.setData(com.fahadali.xgram.appearance.XgramIconPack.name(com.fahadali.xgram.appearance.XgramIconPack.current()));
         } else if (id == R.id.btn_xgramGhostMode) {
@@ -435,6 +437,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     );
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramChatList));
     addRows(items,
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramChatLongPress, 0, R.string.XgramChatLongPress),
       toggle(R.id.btn_xgramMergeCommunities, R.string.XgramMergeCommunities),
       toggle(R.id.btn_xgramHideBlocked, R.string.XgramHideBlocked),
       toggle(R.id.btn_xgramHideSponsored, R.string.XgramHideSponsored)
@@ -1092,6 +1095,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramIconPack) {
       navigateTo(new com.fahadali.xgram.appearance.XgramIconPacksController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramChatLongPress) {
+      com.fahadali.xgram.chats.XgramChatLongPress.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramChatLongPress));
       return;
     } else if (id == R.id.btn_xgramAvatarCorners) {
       int[] values = XgramSettings.AVATAR_CORNERS;

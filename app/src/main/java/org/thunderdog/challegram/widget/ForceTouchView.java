@@ -292,6 +292,14 @@ public class ForceTouchView extends FrameLayoutFix implements
     }
 
     FrameLayoutFix.LayoutParams baseParams = (FrameLayoutFix.LayoutParams) contentWrap.getLayoutParams();
+    if (context.isMatchParent && com.fahadali.xgram.chats.XgramChatLongPress.isCompact()) {
+      // XGram: compact preview, a smaller centred card that fades and scales in, clipped to its rounded corners.
+      context.animationType = ForceTouchContext.ANIMATION_TYPE_SCALE;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        contentWrap.setClipToOutline(true);
+        contentWrap.setElevation(Screen.dp(12f));
+      }
+    }
     if (context.isMatchParent) {
       baseParams.leftMargin = baseParams.rightMargin = getMatchParentHorizontalMargin();
       baseParams.topMargin = getMatchParentTopMargin();
@@ -1006,14 +1014,17 @@ public class ForceTouchView extends FrameLayoutFix implements
   }
 
   public static int getMatchParentTopMargin () {
+    if (com.fahadali.xgram.chats.XgramChatLongPress.isCompact()) return com.fahadali.xgram.chats.XgramChatLongPress.compactVerticalMargin(); // XGram: compact preview
     return HeaderView.getTopOffset() + Screen.dp(20f);
   }
 
   public static int getMatchParentBottomMargin () {
+    if (com.fahadali.xgram.chats.XgramChatLongPress.isCompact()) return com.fahadali.xgram.chats.XgramChatLongPress.compactVerticalMargin(); // XGram: compact preview
     return HeaderView.getTopOffset() + (Device.NEED_LESS_PREVIEW_MARGINS ? Screen.dp(16f) : Screen.dp(20f));
   }
 
   public static int getMatchParentHorizontalMargin () {
+    if (com.fahadali.xgram.chats.XgramChatLongPress.isCompact()) return com.fahadali.xgram.chats.XgramChatLongPress.compactHorizontalMargin(); // XGram: compact preview
     return Device.NEED_LESS_PREVIEW_MARGINS ? Screen.dp(16f) : Screen.dp(26f);
   }
 

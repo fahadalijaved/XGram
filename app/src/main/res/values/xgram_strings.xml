@@ -619,4 +619,8 @@
   <string name="xgram_login_PremiumSupport">Contact support</string>
   <string name="xgram_login_PremiumSupportText">I’m trying to log in with the phone number %1$s, and Telegram asks me to buy Telegram Premium first.\n\n%2$s</string>
   <string name="xgram_login_PremiumSupportTextNoPhone">I’m trying to log in, and Telegram asks me to buy Telegram Premium first.\n\n%1$s</string>
+  <string name="XgramChatLongPress">Long press on a chat</string>
+  <string name="XgramChatLongPressPreview">Preview (Telegram X)</string>
+  <string name="XgramChatLongPressQuick">Quick actions</string>
+  <string name="XgramChatLongPressCompact">Compact preview</string>
 </resources>
