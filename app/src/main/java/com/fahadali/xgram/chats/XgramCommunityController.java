@@ -744,10 +744,8 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
         if (requestedChats.add(chatId)) {
           pendingChats.add(chatId);
           tdlib.send(new TdApi.GetChat(chatId), (result, error) -> runOnUiThreadOptional(() -> {
+            // On failure it stays requested: building again would ask again at once. The next opening tries again.
             pendingChats.remove(chatId);
-            if (result == null) {
-              requestedChats.remove(chatId); // a later build asks once more
-            }
             buildItems();
           }));
         }

@@ -524,7 +524,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     long communityId = com.fahadali.xgram.chats.XgramCommunities.communityOf(tdlib, chatId);
     if (communityId != 0) {
       long front = com.fahadali.xgram.chats.XgramCommunities.frontChat(tdlib, communityId, chatList());
-      if (front != 0 && front != chatId) {
+      if (front != 0) { // the front too: its own update leaves the members line as it was
         chatsView.xgramRefreshCommunityRow(front);
       }
     }
@@ -2869,6 +2869,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     runOnUiThreadOptional(() -> {
       if (chatsView != null) {
         chatsView.updateChatTitle(chatId, title);
+        xgramRefreshCommunityRowFor(chatId);
       }
     });
   }

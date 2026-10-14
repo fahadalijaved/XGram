@@ -691,9 +691,9 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   public boolean updateChatTitle (long chatId, String newTitle) {
     if (getChatId() == chatId) {
       chat.title = newTitle;
-      setTitleImpl(tdlib.chatTitle(chat));
+      setTitleImpl(xgramCommunityId != 0 ? xgramCommunityTitle() : tdlib.chatTitle(chat)); // XGram: a merged row keeps the community name
       layoutTitle(true);
-      if (tdlib.isMultiChat(chat) && !ChatId.isUserChat(chatId) && Td.getSenderId(chat.lastMessage) == chatId) {
+      if (xgramCommunityId != 0 || (tdlib.isMultiChat(chat) && !ChatId.isUserChat(chatId) && Td.getSenderId(chat.lastMessage) == chatId)) {
         setText();
       }
       return true;
@@ -1059,11 +1059,23 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     long communityId = xgramComputeCommunity();
     if (communityId != xgramCommunityId) {
       xgramCommunityId = communityId;
+      xgramPrepareCommunity();
       if (currentWidth > 0) {
         setTitle();
         setText();
       }
       setCounter(false);
+    }
+  }
+
+  /** The hidden members never get a row of their own: their forum badges and the community's look are asked for here. */
+  private void xgramPrepareCommunity () {
+    if (xgramCommunityId == 0) {
+      return;
+    }
+    com.fahadali.xgram.chats.XgramCommunities.requestLookIfNeeded(tdlib, xgramCommunityId);
+    for (TdApi.Chat member : com.fahadali.xgram.chats.XgramCommunities.presentMembers(tdlib, xgramCommunityId, chatList)) {
+      com.fahadali.xgram.topics.XgramForumUnread.requestIfNeeded(tdlib, member);
     }
   }
 
@@ -1090,6 +1102,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       return false;
     }
     xgramCommunityId = communityId;
+    xgramPrepareCommunity();
     setTitle();
     setText();
     setCounter(true);
