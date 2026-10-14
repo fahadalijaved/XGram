@@ -2296,8 +2296,6 @@ public class TdlibUi extends Handler {
         }
       });
     };
-    controller.postOnAnimationReady(actor);
-
     final MessagesController.Arguments arguments;
     if (params != null && !StringUtils.isEmpty(params.searchQuery) && params.foundMessage != null) {
       arguments = new MessagesController.Arguments(chatList, chat, messageThread, messageTopicId, highlightMessageId, highlightMode, filter, params.foundMessage, params.searchQuery);
@@ -2320,6 +2318,7 @@ public class TdlibUi extends Handler {
       }
       return;
     }
+    controller.postOnAnimationReady(actor); // XGram: queued only when the chat really opens, or it fires on the next open
     if (view.getParent() != null) {
       ((ViewGroup) view.getParent()).removeView(controller.getValue());
     }

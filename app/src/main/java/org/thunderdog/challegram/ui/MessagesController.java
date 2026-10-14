@@ -2313,13 +2313,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     } else if (id == R.id.btn_xgramViewAsTopics) {
       if (chat != null) {
         TdApi.Chat forum = chat;
-        tdlib.send(new TdApi.ToggleChatViewAsTopics(forum.id, true), tdlib.typedOkHandler());
-        com.fahadali.xgram.topics.XgramForums.openTopicList(this, forum);
-        tdlib.ui().postDelayed(() -> {
-          if (!isDestroyed()) {
-            destroyStackItemById(getId());
-          }
-        }, 400);
+        if (com.fahadali.xgram.topics.XgramForums.openTopicList(this, forum, true)) { // XGram: this screen goes once the topics have slid in
+          tdlib.send(new TdApi.ToggleChatViewAsTopics(forum.id, true), tdlib.typedOkHandler());
+        }
       }
     } else if (id == R.id.btn_xgramExportChat) {
       if (chat != null) {

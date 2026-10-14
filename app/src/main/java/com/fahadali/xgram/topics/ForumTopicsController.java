@@ -530,10 +530,15 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
         org.thunderdog.challegram.tool.UI.showToast(R.string.XgramReorderTopicsHint, android.widget.Toast.LENGTH_LONG);
       }
     } else if (id == R.id.btn_xgramViewAsMessages) {
-      tdlib.send(new TdApi.ToggleChatViewAsTopics(chat.id, false), tdlib.typedOkHandler());
+      if (context().isNavigationBusy()) {
+        return;
+      }
       tdlib.ui().openChat(this, chat, new TdlibUi.ChatOpenParameters().keepStack().xgramSkipForumRouting().after(chatId -> {
+        // Runs once the chat is pushed, before the slide: drop this list only after the chat has focus.
+        tdlib.send(new TdApi.ToggleChatViewAsTopics(chat.id, false), tdlib.typedOkHandler());
         if (!isDestroyed()) {
-          destroyStackItemById(getId());
+          org.thunderdog.challegram.navigation.NavigationController nav = context().navigation();
+          XgramForums.destroyWhenCovered(this, nav != null ? nav.getCurrentStackItem() : null);
         }
       }));
     }

@@ -71,16 +71,49 @@ public final class XgramForums {
   }
 
   public static void openTopicList (TdlibDelegate context, TdApi.Chat chat) {
+    openTopicList(context, chat, false);
+  }
+
+  /**
+   * Opens the topic list. With {@code replaceContext}, the screen it was opened from is dropped
+   * from the stack once the topic list has fully slid in.
+   *
+   * @return false if nothing was opened (navigation busy)
+   */
+  public static boolean openTopicList (TdlibDelegate context, TdApi.Chat chat, boolean replaceContext) {
     ForumTopicsController c = new ForumTopicsController(context.context(), context.tdlib());
     c.setArguments(new ForumTopicsController.Arguments(chat));
     if (context instanceof ViewController<?> && com.fahadali.xgram.layout.XgramTwoPane.replacesRightPane((ViewController<?>) context)) {
       com.fahadali.xgram.layout.XgramTwoPane.showOnRight((ViewController<?>) context, c); // two panes: replace, don't stack
-      return;
+      return true;
     }
     NavigationController navigation = context.context().navigation();
-    if (navigation != null) {
-      navigation.navigateTo(c);
+    if (navigation == null || !navigation.navigateTo(c)) {
+      return false;
     }
+    if (replaceContext && context instanceof ViewController<?>) {
+      destroyWhenCovered((ViewController<?>) context, c);
+    }
+    return true;
+  }
+
+  /**
+   * Removes {@code old} from the stack once {@code opened} gets focus, i.e. after the slide.
+   * Removing it any earlier changes which screen the transition slides away from.
+   */
+  public static void destroyWhenCovered (ViewController<?> old, @Nullable ViewController<?> opened) {
+    if (opened == null || opened == old) {
+      return;
+    }
+    opened.addOneShotFocusListener(() -> {
+      NavigationController navigation = old.context().navigation();
+      if (old.isDestroyed() || navigation == null || navigation.getCurrentStackItem() == old) {
+        return;
+      }
+      if (navigation.getStack().indexOf(old) != -1) {
+        navigation.getStack().destroy(old);
+      }
+    });
   }
 
   /** Opens the topic at its first unread message, else where it was left, else at the bottom. */
