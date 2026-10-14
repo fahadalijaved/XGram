@@ -69,6 +69,25 @@ public final class XgramUpdates {
   private static final String KEY_CHANNEL = "xgram_update_channel"; // a setting (exported by XgramBackup)
   private static final String KEY_LAST_CHECK = "xgram_update_last_check"; // local state, not exported
   private static final String KEY_FOUND_CODE = "xgram_update_found_code";
+  // Local state: whether the post of the installed build was a Stable release or a CI build.
+  private static final String KEY_INSTALLED_CODE = "xgram_update_installed_code";
+  private static final String KEY_INSTALLED_STABLE = "xgram_update_installed_stable";
+
+  /** The kind of the installed build, as its post in @XGramTD or @XGramci said: 1 Stable, 0 CI build, -1 not seen yet. */
+  public static int installedKind () {
+    if (pmc().getInt(KEY_INSTALLED_CODE, 0) != BuildConfig.ORIGINAL_VERSION_CODE) {
+      return -1;
+    }
+    return pmc().getBoolean(KEY_INSTALLED_STABLE, false) ? 1 : 0;
+  }
+
+  private static void noteInstalledPost (boolean isStable) {
+    // The same build can be posted as a CI build first and as Stable later: Stable wins.
+    if (pmc().getInt(KEY_INSTALLED_CODE, 0) != BuildConfig.ORIGINAL_VERSION_CODE || (isStable && !pmc().getBoolean(KEY_INSTALLED_STABLE, false))) {
+      pmc().putInt(KEY_INSTALLED_CODE, BuildConfig.ORIGINAL_VERSION_CODE);
+      pmc().putBoolean(KEY_INSTALLED_STABLE, isStable);
+    }
+  }
 
   private static final long CHECK_INTERVAL_MS = 6L * 60L * 60L * 1000L;
   private static final long RETRY_AFTER_ERROR_MS = 30L * 60L * 1000L;
@@ -330,6 +349,9 @@ public final class XgramUpdates {
       }
       String caption = content.caption != null ? content.caption.text : "";
       boolean isStable = isStableCaption(caption);
+      if (name.versionCode == BuildConfig.ORIGINAL_VERSION_CODE) {
+        noteInstalledPost(isStable);
+      }
       if (source.stableOnly && !isStable) {
         return VERDICT_SKIP;
       }

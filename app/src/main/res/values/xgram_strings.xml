@@ -525,6 +525,8 @@
   <string name="XgramUpdateModeNever">Never</string>
   <string name="XgramUpdateInstalled">Installed version</string>
   <string name="XgramUpdateInstalledValue">%1$s · %2$s</string>
+  <string name="XgramUpdateKindStable">Stable</string>
+  <string name="XgramUpdateKindCi">CI build</string>
   <string name="XgramUpdateCheckInfo">XGram checks when it starts, at most every 6 hours. Before installing, the file is checked against the SHA-256 in the post.</string>
   <string name="XgramUpdateLatest">You have the latest version</string>
   <string name="XgramUpdateCheckFailed">Couldn’t check for updates: %1$s</string>

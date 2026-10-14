@@ -150,7 +150,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(XgramUpdates.modeName(Settings.instance().getAutoUpdateMode()));
           view.setEnabled(XgramUpdates.channel() != XgramUpdates.CHANNEL_OFF);
         } else if (id == R.id.btn_xgramUpdateInstalled) {
-          view.setData(Lang.getString(R.string.XgramUpdateInstalledValue, BuildConfig.VERSION_NAME, Lang.getString(XgramUpdates.channelName(XgramUpdates.channel()))));
+          // The build's own kind, from its post; the channel picked above is a separate setting.
+          int kind = XgramUpdates.installedKind();
+          view.setData(kind == -1 ? BuildConfig.VERSION_NAME : Lang.getString(R.string.XgramUpdateInstalledValue, BuildConfig.VERSION_NAME, Lang.getString(kind == 1 ? R.string.XgramUpdateKindStable : R.string.XgramUpdateKindCi)));
         } else if (id == R.id.btn_xgramUpdateCheck) {
           if (!(item.getData() instanceof XgramSettingsSearch.Entry)) { // a search result keeps its title
             bindUpdateCheck(view, isUpdate);

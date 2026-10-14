@@ -748,6 +748,12 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     if (!xgram.drawerItemHidden("saved")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
     }
+    if (!xgram.drawerItemHidden("bookmarks")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramBookmarks, R.drawable.baseline_star_24, R.string.XgramBookmarks)); // XGram
+    }
+    if (!xgram.drawerItemHidden("saved_by_chat")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramSavedByChat, R.drawable.baseline_forum_24, R.string.XgramSavedByChat)); // XGram
+    }
     this.settingsClickBait = getSettingsClickBait();
     items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_settings, R.drawable.baseline_settings_24, R.string.Settings));
     if (!xgram.drawerItemHidden("invite")) {
@@ -798,7 +804,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     int start = -1;
     for (int i = 0; i < items.size(); i++) {
       int id = items.get(i).getId();
-      if (id == R.id.btn_contacts || id == R.id.btn_xgramHub || id == R.id.btn_calls || id == R.id.btn_savedMessages || id == R.id.btn_settings) {
+      if (id == R.id.btn_contacts || id == R.id.btn_xgramHub || id == R.id.btn_calls || id == R.id.btn_savedMessages || id == R.id.btn_xgramBookmarks || id == R.id.btn_xgramSavedByChat || id == R.id.btn_settings) {
         start = i;
         break;
       }
@@ -912,6 +918,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       openController(new com.fahadali.xgram.XgramSettingsController(context, context.currentTdlib())); // XGram
     } else if (viewId == R.id.btn_savedMessages) {
       openSavedMessages();
+    } else if (viewId == R.id.btn_xgramBookmarks) {
+      openController(new com.fahadali.xgram.chats.XgramBookmarksController(context, context.currentTdlib())); // XGram
+    } else if (viewId == R.id.btn_xgramSavedByChat) {
+      openController(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, context.currentTdlib())); // XGram
     } else if (viewId == R.id.btn_addAccount) {
       context.currentTdlib().ui().addAccount(context, true, false);
       /*case R.id.btn_logout: {
