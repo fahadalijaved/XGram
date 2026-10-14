@@ -2260,7 +2260,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         context().navigation().navigateTo(c);
         return true;
       });
-      return null;
+      return com.fahadali.xgram.chats.XgramCommunityActions.create(this, tdlib, communityId, ids, icons, strings); // XGram: read all, mute all, add to folder
     }
 
     if (chat != null && chat.isArchive()) {
@@ -2333,6 +2333,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           if (getSelectedChatCount() == 0) {
             tdlib.ui().showArchiveOptions(this, tdlib.chatList(ChatPosition.CHAT_LIST_ARCHIVE));
           }
+        } else if (chat.xgramCommunityId() != 0) {
+          // XGram: a merged community row offers its own actions, not the front chat's.
+          TdApi.Community community = tdlib.cache().community(chat.xgramCommunityId());
+          String name = community != null && !me.vkryl.core.StringUtils.isEmpty(community.name) ? community.name : tdlib.chatTitle(chat.getChatId());
+          com.fahadali.xgram.chats.XgramCommunityActions.showOptions(this, tdlib, chat.xgramCommunityId(), name);
         } else {
           tdlib.ui().showChatOptions(this, chatList(), chat.getChatId(), null, new TdApi.MessageSourceChatList(), canSelectChat(chat), isChatSelected(chat), () -> selectUnselectChat(chat, true));
         }

@@ -47,12 +47,38 @@ public final class XgramFolderPicker {
     return tdlib != null && canOffer(tdlib, tdlib.chat(chatId));
   }
 
+  /** Several chats at once (a merged community): offered when any of them can go in a folder. */
+  public static boolean canOffer (Tdlib tdlib, long[] chatIds) {
+    return tdlib != null && offerable(tdlib, chatIds).length > 0;
+  }
+
+  private static long[] offerable (Tdlib tdlib, long[] chatIds) {
+    LongList result = new LongList(chatIds != null ? chatIds.length : 0);
+    if (chatIds != null) {
+      for (long chatId : chatIds) {
+        if (canOffer(tdlib, tdlib.chat(chatId)) && !result.contains(chatId)) {
+          result.append(chatId);
+        }
+      }
+    }
+    return result.get();
+  }
+
   public static void show (ViewController<?> context, long chatId) {
+    show(context, new long[] {chatId});
+  }
+
+  /** A folder is checked when all the chats are in it; tapping adds the missing ones or takes them all out. */
+  public static void show (ViewController<?> context, long[] chatIds) {
     Tdlib tdlib = context.tdlib();
+    long[] ids = offerable(tdlib, chatIds);
+    if (ids.length == 0) {
+      return;
+    }
     TdApi.ChatFolderInfo[] infos = tdlib.chatFolders();
     TdApi.ChatFolder[] folders = new TdApi.ChatFolder[infos.length];
     if (infos.length == 0) {
-      UI.post(() -> open(context, chatId, infos, folders));
+      UI.post(() -> open(context, ids, infos, folders));
       return;
     }
     int[] pending = {infos.length};
@@ -61,22 +87,39 @@ public final class XgramFolderPicker {
       tdlib.send(new TdApi.GetChatFolder(infos[i].id), (folder, error) -> UI.post(() -> {
         folders[index] = folder;
         if (--pending[0] == 0 && !context.isDestroyed()) {
-          open(context, chatId, infos, folders);
+          open(context, ids, infos, folders);
         }
       }));
     }
   }
 
-  private static void open (ViewController<?> context, long chatId, TdApi.ChatFolderInfo[] infos, TdApi.ChatFolder[] folders) {
+  private static boolean allInFolder (Tdlib tdlib, long[] chatIds, TdApi.ChatFolder folder) {
+    if (folder == null) {
+      return false;
+    }
+    int count = 0;
+    for (long chatId : chatIds) {
+      TdApi.Chat chat = tdlib.chat(chatId);
+      if (chat == null) {
+        continue;
+      }
+      if (!isInFolder(tdlib, chat, folder)) {
+        return false;
+      }
+      count++;
+    }
+    return count > 0;
+  }
+
+  private static void open (ViewController<?> context, long[] chatIds, TdApi.ChatFolderInfo[] infos, TdApi.ChatFolder[] folders) {
     Tdlib tdlib = context.tdlib();
-    TdApi.Chat chat = tdlib.chat(chatId);
-    if (chat == null) {
+    if (chatIds.length == 0) {
       return;
     }
     List<ListItem> items = new ArrayList<>(infos.length + 1);
     for (int i = 0; i < infos.length; i++) {
       TdApi.ChatFolderInfo info = infos[i];
-      boolean inFolder = folders[i] != null && isInFolder(tdlib, chat, folders[i]);
+      boolean inFolder = allInFolder(tdlib, chatIds, folders[i]);
       items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.chatFolder, TD.findFolderIcon(info.icon, R.drawable.baseline_folder_24), TD.toCharSequence(info.name), inFolder).setIntValue(info.id));
     }
     if (tdlib.canCreateChatFolder()) {
@@ -102,7 +145,7 @@ public final class XgramFolderPicker {
           if (settings[0] != null) {
             settings[0].window.hideWindow(true);
           }
-          context.context().navigation().navigateTo(EditChatFolderController.newFolder(context.context(), tdlib, TD.newChatFolder(new long[] {chatId})));
+          context.context().navigation().navigateTo(EditChatFolderController.newFolder(context.context(), tdlib, TD.newChatFolder(chatIds)));
           return;
         }
         int folderId = item.getIntValue();
@@ -112,7 +155,7 @@ public final class XgramFolderPicker {
         }
         busy.add(busyKey);
         boolean add = !item.isSelected();
-        toggle(tdlib, chatId, folderId, add, ok -> {
+        toggle(tdlib, chatIds, folderId, add, ok -> {
           busy.remove(busyKey);
           if (ok) {
             item.setSelected(add);
@@ -129,16 +172,7 @@ public final class XgramFolderPicker {
     void onDone (boolean ok);
   }
 
-  private static void toggle (Tdlib tdlib, long chatId, int folderId, boolean add, Done done) {
-    if (add) {
-      tdlib.send(new TdApi.AddChatToList(chatId, new TdApi.ChatListFolder(folderId)), (ok, error) -> UI.post(() -> {
-        if (error != null) {
-          showError(tdlib, error);
-        }
-        done.onDone(error == null);
-      }));
-      return;
-    }
+  private static void toggle (Tdlib tdlib, long[] chatIds, int folderId, boolean add, Done done) {
     tdlib.send(new TdApi.GetChatFolder(folderId), (folder, error) -> {
       if (error != null) {
         UI.post(() -> {
@@ -147,25 +181,58 @@ public final class XgramFolderPicker {
         });
         return;
       }
+      if (add) {
+        LongList missing = new LongList(chatIds.length);
+        for (long chatId : chatIds) {
+          TdApi.Chat chat = tdlib.chat(chatId);
+          if (chat != null && !isInFolder(tdlib, chat, folder)) {
+            missing.append(chatId);
+          }
+        }
+        addAll(tdlib, missing.get(), 0, folderId, done);
+        return;
+      }
       LongList pinned = new LongList(folder.pinnedChatIds);
       LongSet included = new LongSet(folder.includedChatIds);
       LongSet excluded = new LongSet(folder.excludedChatIds);
-      pinned.remove(chatId);
-      included.remove(chatId);
+      for (long chatId : chatIds) {
+        pinned.remove(chatId);
+        included.remove(chatId);
+      }
       folder.pinnedChatIds = pinned.get();
       folder.includedChatIds = included.toArray();
-      TdApi.Chat chat = tdlib.chat(chatId);
-      if (chat != null && matchesFlags(tdlib, chat, folder)) {
-        // Still in the folder through a chat type ("All groups" and so on): exclude it.
-        excluded.add(chatId);
-        folder.excludedChatIds = excluded.toArray();
+      for (long chatId : chatIds) {
+        TdApi.Chat chat = tdlib.chat(chatId);
+        if (chat != null && matchesFlags(tdlib, chat, folder)) {
+          // Still in the folder through a chat type ("All groups" and so on): exclude it.
+          excluded.add(chatId);
+        }
       }
+      folder.excludedChatIds = excluded.toArray();
       tdlib.send(new TdApi.EditChatFolder(folderId, folder), (info, editError) -> UI.post(() -> {
         if (editError != null) {
           showError(tdlib, editError);
         }
         done.onDone(editError == null);
       }));
+    });
+  }
+
+  /** One chat after another, stopping at the first error (a full folder and so on). */
+  private static void addAll (Tdlib tdlib, long[] chatIds, int index, int folderId, Done done) {
+    if (index >= chatIds.length) {
+      UI.post(() -> done.onDone(true));
+      return;
+    }
+    tdlib.send(new TdApi.AddChatToList(chatIds[index], new TdApi.ChatListFolder(folderId)), (ok, error) -> {
+      if (error != null) {
+        UI.post(() -> {
+          showError(tdlib, error);
+          done.onDone(false);
+        });
+      } else {
+        addAll(tdlib, chatIds, index + 1, folderId, done);
+      }
     });
   }
 

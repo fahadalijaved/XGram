@@ -147,8 +147,9 @@ public final class XgramChatLongPress {
       }
     }
 
-    QuickActionsView view = new QuickActionsView(v.getContext(), v, context, listener, items, x, y);
-    PopupLayout popup = new PopupLayout(v.getContext());
+    QuickActionsView view = new QuickActionsView(org.thunderdog.challegram.tool.UI.getContext(v.getContext()), v, context, listener, items, x, y);
+    // The row's context can be a theme wrapper (community pages); popups need the activity.
+    PopupLayout popup = new PopupLayout(org.thunderdog.challegram.tool.UI.getContext(v.getContext()));
     popup.setOverlayStatusBar(true);
     popup.init(true);
     popup.setNeedFullScreen(Settings.instance().useEdgeToEdge());
