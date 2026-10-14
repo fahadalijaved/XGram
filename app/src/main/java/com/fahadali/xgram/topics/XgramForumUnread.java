@@ -18,10 +18,13 @@ import androidx.annotation.UiThread;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.unsorted.Settings;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import me.vkryl.leveldb.LevelDB;
 
 /**
  * Chat list badge of groups with topics. The server doesn't lower a forum's unread count when its topics are read
@@ -39,9 +42,91 @@ public final class XgramForumUnread {
   private static final Map<String, Integer> tdlibCounts = new ConcurrentHashMap<>();
   private static final Set<String> requested = ConcurrentHashMap.newKeySet();
   private static final ThreadLocal<Boolean> applying = new ThreadLocal<>();
+  /** TDLib's own count, before ghost mode lowers it: the app's chat object may already hold the lowered one. */
+  private static final Map<String, Integer> rawCounts = new ConcurrentHashMap<>();
 
   private static String key (Tdlib tdlib, long chatId) {
     return tdlib.id() + "_" + chatId;
+  }
+
+  // Kept on disk, so a cold start shows the last counted badge instead of TDLib's stale one.
+
+  private static final String PREFIX = "xgram_fu_";
+  private static volatile boolean loaded;
+  /** Loaded from disk and not counted again yet in this process. */
+  private static final Set<String> restored = ConcurrentHashMap.newKeySet();
+  private static final Set<String> dirty = ConcurrentHashMap.newKeySet();
+  private static final java.util.concurrent.ScheduledExecutorService writer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+    Thread thread = new Thread(r, "XgramForumUnread");
+    thread.setPriority(Thread.MIN_PRIORITY);
+    return thread;
+  });
+
+  private static void ensureLoaded () {
+    if (loaded) {
+      return;
+    }
+    synchronized (XgramForumUnread.class) {
+      if (loaded) {
+        return;
+      }
+      for (LevelDB.Entry stored : Settings.instance().pmc().find(PREFIX)) {
+        long[] values = stored.asLongArray();
+        if (values == null || values.length < 2) {
+          continue;
+        }
+        String key = stored.key().substring(PREFIX.length());
+        if (counts.putIfAbsent(key, (int) values[0]) == null) {
+          tdlibCounts.put(key, (int) values[1]);
+          restored.add(key);
+        }
+      }
+      loaded = true;
+    }
+  }
+
+  private static void save (String key) {
+    if (dirty.add(key)) {
+      writer.schedule(XgramForumUnread::flush, 1, java.util.concurrent.TimeUnit.SECONDS);
+    }
+  }
+
+  private static void flush () {
+    for (String key : dirty.toArray(new String[0])) {
+      dirty.remove(key);
+      Integer count = counts.get(key);
+      Integer tdlibCount = tdlibCounts.get(key);
+      if (count == null || tdlibCount == null) {
+        Settings.instance().pmc().remove(PREFIX + key);
+      } else {
+        Settings.instance().pmc().putLongArray(PREFIX + key, new long[] {count, tdlibCount});
+      }
+    }
+  }
+
+  /**
+   * TDLib thread, {@code updateNewChat}, before ghost mode: keeps TDLib's own count and, for a forum counted before,
+   * puts the stored badge in its place (plus what TDLib's count changed by meanwhile). Returns whether it did.
+   */
+  public static boolean rewriteChat (Tdlib tdlib, TdApi.Chat chat) {
+    ensureLoaded();
+    String key = key(tdlib, chat.id);
+    rawCounts.put(key, chat.unreadCount);
+    Integer count = counts.get(key);
+    if (count == null) {
+      return false;
+    }
+    Integer previous = tdlibCounts.put(key, chat.unreadCount);
+    int delta = previous != null ? chat.unreadCount - previous : 0;
+    if (delta != 0) {
+      count = Math.max(0, count + delta);
+      counts.put(key, count);
+    }
+    if (delta != 0 || previous == null) {
+      save(key);
+    }
+    chat.unreadCount = count;
+    return true;
   }
 
   /**
@@ -49,7 +134,11 @@ public final class XgramForumUnread {
    * XGram doesn't know the forum's topics yet (TDLib's count stays).
    */
   public static boolean rewrite (Tdlib tdlib, TdApi.UpdateChatReadInbox update) {
+    ensureLoaded();
     String key = key(tdlib, update.chatId);
+    if (!Boolean.TRUE.equals(applying.get())) {
+      rawCounts.put(key, update.unreadCount);
+    }
     Integer count = counts.get(key);
     if (count == null) {
       return false;
@@ -57,6 +146,8 @@ public final class XgramForumUnread {
     if (!tdlib.isForum(update.chatId)) {
       counts.remove(key);
       tdlibCounts.remove(key);
+      restored.remove(key);
+      save(key);
       return false;
     }
     if (!Boolean.TRUE.equals(applying.get())) {
@@ -65,6 +156,9 @@ public final class XgramForumUnread {
       if (delta != 0) {
         count = Math.max(0, count + delta);
         counts.put(key, count);
+      }
+      if (previous == null || previous != update.unreadCount) {
+        save(key);
       }
     }
     update.unreadCount = count;
@@ -79,10 +173,13 @@ public final class XgramForumUnread {
       if (chat == null) {
         return;
       }
-      tdlibCounts.put(key, chat.unreadCount);
+      Integer raw = rawCounts.get(key);
+      tdlibCounts.put(key, raw != null ? raw : chat.unreadCount);
     }
     Integer previous = counts.put(key, unreadCount);
+    restored.remove(key);
     if (previous == null || previous != unreadCount) {
+      save(key);
       tdlib.runOnTdlibThread(() -> {
         TdApi.Chat chat = tdlib.chat(chatId);
         if (chat != null && chat.unreadCount != unreadCount) {
@@ -183,7 +280,7 @@ public final class XgramForumUnread {
       return;
     }
     String key = key(tdlib, chat.id);
-    if (counts.containsKey(key) || !tdlib.isForum(chat.id) || !requested.add(key)) {
+    if ((counts.containsKey(key) && !restored.contains(key)) || !tdlib.isForum(chat.id) || !requested.add(key)) {
       return;
     }
     long chatId = chat.id;
@@ -208,5 +305,9 @@ public final class XgramForumUnread {
     com.fahadali.xgram.XgramAccountData.removeKeys(requested, prefix);
     com.fahadali.xgram.XgramAccountData.removeKeys(readIds.keySet(), prefix);
     com.fahadali.xgram.XgramAccountData.removeKeys(lastRefreshAt.keySet(), prefix);
+    com.fahadali.xgram.XgramAccountData.removeKeys(restored, prefix);
+    com.fahadali.xgram.XgramAccountData.removeKeys(rawCounts.keySet(), prefix);
+    // On the writer thread, after any write still in flight.
+    writer.execute(() -> Settings.instance().pmc().removeByPrefix(PREFIX + prefix));
   }
 }

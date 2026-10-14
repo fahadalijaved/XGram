@@ -7814,7 +7814,13 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateNewChat (TdApi.UpdateNewChat update) {
-    com.fahadali.xgram.ghost.XgramLocalRead.rewriteChat(this, update.chat); // XGram: ghost mode local read
+    if (com.fahadali.xgram.topics.XgramForumUnread.rewriteChat(this, update.chat)) { // XGram: stored forum badge, before ghost mode
+      int xgramCount = update.chat.unreadCount; // the topic sum already leaves out local reads
+      com.fahadali.xgram.ghost.XgramLocalRead.rewriteChat(this, update.chat);
+      update.chat.unreadCount = xgramCount;
+    } else {
+      com.fahadali.xgram.ghost.XgramLocalRead.rewriteChat(this, update.chat); // XGram: ghost mode local read
+    }
     com.fahadali.xgram.chats.XgramLocalNames.rewriteChat(this, update.chat); // XGram: local names
     List<TdlibChatList> chatLists;
     synchronized (dataLock) {
@@ -8394,6 +8400,11 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     // topics are read); other chats get ghost mode's local reads.
     if (!com.fahadali.xgram.topics.XgramForumUnread.rewrite(this, update)) {
       com.fahadali.xgram.ghost.XgramLocalRead.rewriteReadInbox(this, update);
+    } else {
+      // The topic sum already leaves out local reads: only the read position is taken from ghost mode.
+      int xgramCount = update.unreadCount;
+      com.fahadali.xgram.ghost.XgramLocalRead.rewriteReadInbox(this, update);
+      update.unreadCount = xgramCount;
     }
     final TdApi.Chat chat;
     final boolean availabilityChanged;
