@@ -7302,6 +7302,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   private void resetChatsData () {
     knownChatIds.clear();
     chats.clear();
+    com.fahadali.xgram.topics.XgramForumUnread.onChatsReset(this); // XGram: count forum badges again
+    com.fahadali.xgram.chats.XgramCommunities.onChatsReset(this); // XGram: load community names again
     synchronized (chatLists) {
       for (TdlibChatList chatList : chatLists.values()) {
         chatList.clear();

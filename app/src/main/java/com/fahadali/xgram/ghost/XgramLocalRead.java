@@ -167,6 +167,11 @@ public final class XgramLocalRead {
     }
   }
 
+  /** The app goes to the background: writes pending reads now, the process may be killed before the delayed write. */
+  public static void flushNow () {
+    writer.execute(XgramLocalRead::flush);
+  }
+
   private static void flush () {
     Map<String, long[]> writes = new HashMap<>();
     List<String> removals = new ArrayList<>();

@@ -1085,6 +1085,8 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   public void onPause () {
     blockFocus();
     setActivityState(UI.State.PAUSED);
+    com.fahadali.xgram.ghost.XgramLocalRead.flushNow(); // XGram: pending local reads survive a kill
+    com.fahadali.xgram.topics.XgramForumUnread.flushNow();
     if (camera != null) {
       camera.onActivityPause();
     }

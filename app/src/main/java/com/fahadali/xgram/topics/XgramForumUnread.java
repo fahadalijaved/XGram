@@ -91,6 +91,11 @@ public final class XgramForumUnread {
     }
   }
 
+  /** The app goes to the background: writes pending badges now. */
+  public static void flushNow () {
+    writer.execute(XgramForumUnread::flush);
+  }
+
   private static void flush () {
     for (String key : dirty.toArray(new String[0])) {
       dirty.remove(key);
@@ -180,18 +185,19 @@ public final class XgramForumUnread {
     restored.remove(key);
     if (previous == null || previous != unreadCount) {
       save(key);
-      tdlib.runOnTdlibThread(() -> {
-        TdApi.Chat chat = tdlib.chat(chatId);
-        if (chat != null && chat.unreadCount != unreadCount) {
-          applying.set(true);
-          try {
-            tdlib.xgramApplyReadInbox(chatId, chat.lastReadInboxMessageId, unreadCount);
-          } finally {
-            applying.set(false);
-          }
-        }
-      });
     }
+    // Always: after a TDLib restart the chat holds TDLib's count again even when the sum hasn't changed.
+    tdlib.runOnTdlibThread(() -> {
+      TdApi.Chat chat = tdlib.chat(chatId);
+      if (chat != null && chat.unreadCount != unreadCount) {
+        applying.set(true);
+        try {
+          tdlib.xgramApplyReadInbox(chatId, chat.lastReadInboxMessageId, unreadCount);
+        } finally {
+          applying.set(false);
+        }
+      }
+    });
   }
 
   /** The badge XGram shows for the forum, or TDLib's count when XGram hasn't counted it yet; -1 if the chat is unknown. */
@@ -247,7 +253,7 @@ public final class XgramForumUnread {
     }
     long now = SystemClock.uptimeMillis();
     Long last = lastRefreshAt.get(key);
-    long delay = Math.max(REFRESH_DELAY_MS, last != null ? last + REFRESH_DELAY_MS - now : 0);
+    long delay = last == null && !counts.containsKey(key) ? 0 : Math.max(REFRESH_DELAY_MS, last != null ? last + REFRESH_DELAY_MS - now : 0);
     tdlib.ui().postDelayed(() -> {
       refreshPending.remove(key);
       if (ForumTopicList.isFullyLoaded(tdlib, chatId) || !tdlib.isForum(chatId)) {
@@ -276,18 +282,37 @@ public final class XgramForumUnread {
 
   /** Chat list: counts the topics of a forum with unread messages once, so its badge is right without opening it. */
   public static void requestIfNeeded (Tdlib tdlib, TdApi.Chat chat) {
-    if (chat.unreadCount <= 0) {
+    String key = key(tdlib, chat.id);
+    Integer raw = rawCounts.get(key);
+    if ((raw != null ? raw : chat.unreadCount) <= 0 || !tdlib.isForum(chat.id) || !requested.add(key)) {
       return;
     }
-    String key = key(tdlib, chat.id);
-    if ((counts.containsKey(key) && !restored.contains(key)) || !tdlib.isForum(chat.id) || !requested.add(key)) {
-      return;
+    // Spaced out: a chat list full of unread forums would otherwise ask for all of them at once.
+    long now = SystemClock.uptimeMillis();
+    long at;
+    synchronized (XgramForumUnread.class) {
+      at = Math.max(now, nextRequestAt);
+      nextRequestAt = at + REQUEST_SPACING_MS;
     }
     long chatId = chat.id;
+    tdlib.ui().postDelayed(() -> sendRequest(tdlib, chatId, key), at - now);
+  }
+
+  private static final long REQUEST_SPACING_MS = 150;
+  private static long nextRequestAt;
+
+  private static void sendRequest (Tdlib tdlib, long chatId, String key) {
     // Topics come sorted by their last message, so the unread ones are in the first page.
     tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> {
       if (topics == null) {
-        requested.remove(key);
+        // The key stays requested until the retry, so rebuilt rows don't ask again meanwhile.
+        tdlib.ui().postDelayed(() -> {
+          requested.remove(key);
+          TdApi.Chat chat = tdlib.chat(chatId);
+          if (chat != null) {
+            requestIfNeeded(tdlib, chat);
+          }
+        }, XgramForums.retryAfterMs(error, 30_000));
         return;
       }
       int sum = 0;
@@ -296,6 +321,11 @@ public final class XgramForumUnread {
       }
       update(tdlib, chatId, sum);
     });
+  }
+
+  /** TDLib thread: the client restarts and sends its chats again, so each forum is counted once more. */
+  public static void onChatsReset (Tdlib tdlib) {
+    com.fahadali.xgram.XgramAccountData.removeKeys(requested, tdlib.id() + "_");
   }
 
   public static void forgetAccount (int accountId) {

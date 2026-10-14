@@ -165,6 +165,26 @@ public final class XgramCommunities {
     memberships.remove(accountId);
     confirmed.remove(accountId);
     modes.remove(accountId);
+    com.fahadali.xgram.XgramAccountData.removeKeys(lookRequested, accountId + "_");
+  }
+
+  private static final java.util.Set<String> lookRequested = ConcurrentHashMap.newKeySet();
+
+  /** A merged row needs the community's name and photo, which TDLib doesn't load with the chats: asks once. */
+  public static void requestLookIfNeeded (Tdlib tdlib, long communityId) {
+    if (communityId == 0 || tdlib.cache().community(communityId) != null || !lookRequested.add(tdlib.id() + "_" + communityId)) {
+      return;
+    }
+    tdlib.send(new TdApi.GetCommunityFullInfo(communityId), (full, error) -> {
+      if (full != null) {
+        tdlib.cache().xgramOnCommunityFullLoaded(communityId, full);
+      }
+    });
+  }
+
+  /** TDLib thread: the client restarts and forgets its communities. */
+  public static void onChatsReset (Tdlib tdlib) {
+    com.fahadali.xgram.XgramAccountData.removeKeys(lookRequested, tdlib.id() + "_");
   }
 
   /** Merging was switched on or off: every account's lists check their communities again. */
