@@ -183,7 +183,7 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
   private final ComplexReceiver textMediaReceiver;
   private final ComplexReceiver reactionsReceiver;
 
-  private final BoolAnimator isSelected = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+  private final BoolAnimator isSelected = new BoolAnimator(this, com.fahadali.xgram.appearance.XgramMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 180l));
   private final RefreshRateLimiter refreshRateLimiter;
 
   public ChatView (Context context, Tdlib tdlib) {

@@ -35,11 +35,11 @@ import me.vkryl.core.ColorUtils;
 import me.vkryl.core.MathUtils;
 
 public class CheckBoxView extends View {
-  private final BoolAnimator isChecked = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 165l);
-  private final BoolAnimator isHidden = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 165l);
-  private final BoolAnimator isPartially = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 165l);
-  private final BoolAnimator isDisabled = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 165l);
-  private final BoolAnimator isCircle = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 165l);
+  private final BoolAnimator isChecked = new BoolAnimator(this, com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 165l));
+  private final BoolAnimator isHidden = new BoolAnimator(this, com.fahadali.xgram.appearance.XgramMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 165l));
+  private final BoolAnimator isPartially = new BoolAnimator(this, com.fahadali.xgram.appearance.XgramMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 165l));
+  private final BoolAnimator isDisabled = new BoolAnimator(this, com.fahadali.xgram.appearance.XgramMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 165l));
+  private final BoolAnimator isCircle = new BoolAnimator(this, com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 165l));
   // TODO isIntermediate state, when check angle smoothly changes from 90 to 180 degrees
 
   private final RectF rect;

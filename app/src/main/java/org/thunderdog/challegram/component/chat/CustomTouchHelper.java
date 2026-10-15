@@ -625,6 +625,12 @@ public class CustomTouchHelper extends RecyclerView.ItemDecoration
         final long duration = mCallback.getAnimationDuration(mRecyclerView, animationType,
           targetTranslateX - currentTranslateX, targetTranslateY - currentTranslateY);
         rv.setDuration(duration);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: a cancelled reply swipe springs back with a bounce, a dropped row settles fast, a swiped row leaves on the standard spring.
+          int token = animationType == ANIMATION_TYPE_SWIPE_CANCEL ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT : animationType == ANIMATION_TYPE_DRAG ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST;
+          rv.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(token));
+          rv.xgramSetInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpolator(token));
+        }
         mRecoverAnimations.add(rv);
         rv.start();
       } else {
@@ -2281,6 +2287,10 @@ public class CustomTouchHelper extends RecyclerView.ItemDecoration
 
     public void setDuration(long duration) {
       mValueAnimator.setDuration(duration);
+    }
+
+    void xgramSetInterpolator (android.view.animation.Interpolator interpolator) {
+      mValueAnimator.setInterpolator(interpolator);
     }
 
     public void start() {
