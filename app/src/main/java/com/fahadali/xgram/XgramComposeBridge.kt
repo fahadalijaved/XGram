@@ -13,6 +13,7 @@ package com.fahadali.xgram
 
 import com.fahadali.xgram.compose.XgramPage
 import org.thunderdog.challegram.BaseActivity
+import org.thunderdog.challegram.core.Lang
 import org.thunderdog.challegram.telegram.Tdlib
 
 /** A settings search result: the page that holds the row (null: a row of the main page itself) and the row. */
@@ -77,4 +78,16 @@ object XgramComposeBridge {
       controller.destroy()
     }
   }
+
+  /** The settings pages themselves, as search shortcuts (shown before anything is typed), in Main's order. */
+  @JvmStatic
+  fun searchShortcuts(): List<XgramSearchHit> = XgramSettingsController.SEARCH_SECTIONS
+    .filter { it != XgramSettingsController.SECTION_MAIN }
+    .map { section ->
+      val title = Lang.getString(XgramSettingsController.sectionTitleRes(section))
+      XgramSearchHit(
+        XgramPage.fromSection(section), section, 0, 0, null, false,
+        XgramSettingsController.sectionIcon(section), title, title.lowercase(), ""
+      )
+    }
 }

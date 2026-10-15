@@ -15,11 +15,14 @@ package com.fahadali.xgram.compose.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.ExpandedFullScreenSearchBar
@@ -31,9 +34,11 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,21 +47,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.XgramComposeBridge
 import com.fahadali.xgram.XgramSearchHit
+import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.compose.LocalXgramHost
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.thunderdog.challegram.R
 
 /**
  * The search bar at the top of the main page. Tapping it opens a full-screen search (a window of its own: it handles
- * back and the keyboard). The index is built when it opens, so it follows the current language. A result opens its
- * page and points at the row; a row of the main page itself runs [onMainHit] with the row's id.
+ * back and the keyboard), whose leading icon is a back arrow that closes it. The index is built when it opens, so it
+ * follows the current language. Before anything is typed it shows the results opened last and the settings pages.
+ * A result opens its page and points at the row; a row of the main page itself runs [onMainHit] with the row's id.
  */
 @Composable
 fun SettingsSearchBar(onMainHit: (Int) -> Unit) {
@@ -65,42 +75,33 @@ fun SettingsSearchBar(onMainHit: (Int) -> Unit) {
   val searchState = rememberSearchBarState()
   val scope = rememberCoroutineScope()
   var index by remember { mutableStateOf<List<XgramSearchHit>?>(null) }
+  var recents by remember { mutableStateOf<List<String>>(emptyList()) }
 
   val expanded = searchState.currentValue == SearchBarValue.Expanded
   LaunchedEffect(expanded, host.langVersion) {
     if (expanded) {
       index = XgramComposeBridge.searchIndex(host.activity, host.tdlib)
+      recents = XgramSettings.instance().searchRecents()
     }
-  }
-
-  val inputField = @Composable {
-    SearchBarDefaults.InputField(
-      textFieldState = textState,
-      searchBarState = searchState,
-      onSearch = { },
-      placeholder = { Text(str(R.string.XgramSettingsSearchHint)) },
-      leadingIcon = { Icon(tgxIcon(R.drawable.baseline_search_24), contentDescription = null) },
-      trailingIcon = if (textState.text.isNotEmpty()) {
-        {
-          IconButton(onClick = { textState.clearText() }) {
-            Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.Clear))
-          }
-        }
-      } else {
-        null
-      }
-    )
   }
 
   SearchBar(
     state = searchState,
-    inputField = inputField,
+    inputField = { SearchInputField(textState, searchState, scope, expandedLook = false) },
     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
   )
-  ExpandedFullScreenSearchBar(state = searchState, inputField = inputField) {
+  // The full-screen search view: the same container colour as the pill, and no line under the field.
+  ExpandedFullScreenSearchBar(
+    state = searchState,
+    inputField = { SearchInputField(textState, searchState, scope, expandedLook = true) },
+    colors = SearchBarDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, dividerColor = Color.Transparent)
+  ) {
     val query = textState.text.toString()
     val hits = remember(query, index) { filterHits(index, query) }
-    val open: (XgramSearchHit) -> Unit = { hit ->
+    val open: (XgramSearchHit, Boolean) -> Unit = { hit, record ->
+      if (record) {
+        XgramSettings.instance().addSearchRecent(hitKey(hit))
+      }
       scope.launch {
         searchState.animateToCollapsed()
         val page = hit.page
@@ -111,7 +112,30 @@ fun SettingsSearchBar(onMainHit: (Int) -> Unit) {
         }
       }
     }
-    if (query.isNotBlank() && hits.isEmpty() && index != null) {
+    if (query.isBlank()) {
+      val recentHits = remember(recents, index) { resolveRecents(index, recents) }
+      val shortcuts = remember(host.langVersion) { XgramComposeBridge.searchShortcuts() }
+      LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+      ) {
+        if (recentHits.isNotEmpty()) {
+          item(key = "recent", contentType = "header") {
+            SearchHeader(str(R.string.XgramSearchRecent), action = str(R.string.Clear)) {
+              XgramSettings.instance().clearSearchRecents()
+              recents = emptyList()
+            }
+          }
+          hitRows(recentHits, "r", query = "", iconOf = { R.drawable.baseline_history_24 }) { open(it, true) }
+        }
+        item(key = "pages", contentType = "header") {
+          SearchHeader(str(R.string.XgramSearchPages))
+        }
+        // The pages look as they do on the main page: icons in tonal circles.
+        hitRows(shortcuts, "p", query = "", iconStyle = IconStyle.CIRCLE) { open(it, false) }
+      }
+    } else if (hits.isEmpty() && index != null) {
       Text(
         str(R.string.NothingFound),
         modifier = Modifier.fillMaxWidth().padding(24.dp),
@@ -124,23 +148,105 @@ fun SettingsSearchBar(onMainHit: (Int) -> Unit) {
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
       ) {
-        itemsIndexed(hits, key = { _, hit -> "${hit.section}/${hit.subPage}/${hit.id}:${hit.key ?: ""}" }) { i, hit ->
-          SegmentedListItem(
-            onClick = { open(hit) },
-            shapes = ListItemDefaults.segmentedShapes(index = i, count = hits.size),
-            leadingContent = if (hit.icon != 0) {
-              { RowIcon(hit.icon) }
-            } else {
-              null
-            },
-            supportingContent = { Text(hit.path) },
-            colors = settingsRowColors(),
-            content = { Text(highlightWords(hit.title, query, MaterialTheme.colorScheme.primary)) }
-          )
-        }
+        hitRows(hits, "h", query) { open(it, true) }
       }
     }
   }
+}
+
+/** The pill shows a search icon; the full-screen view a back arrow that closes it. */
+@Composable
+private fun SearchInputField(textState: TextFieldState, searchState: SearchBarState, scope: CoroutineScope, expandedLook: Boolean) {
+  SearchBarDefaults.InputField(
+    textFieldState = textState,
+    searchBarState = searchState,
+    onSearch = { },
+    placeholder = { Text(str(R.string.XgramSettingsSearchHint)) },
+    leadingIcon = if (expandedLook) {
+      {
+        IconButton(onClick = {
+          textState.clearText()
+          scope.launch { searchState.animateToCollapsed() }
+        }) {
+          Icon(tgxIcon(R.drawable.baseline_arrow_back_24), contentDescription = str(R.string.XgramComposeBack))
+        }
+      }
+    } else {
+      { Icon(tgxIcon(R.drawable.baseline_search_24), contentDescription = null) }
+    },
+    trailingIcon = if (textState.text.isNotEmpty()) {
+      {
+        IconButton(onClick = { textState.clearText() }) {
+          Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.Clear))
+        }
+      }
+    } else {
+      null
+    }
+  )
+}
+
+@Composable
+private fun SearchHeader(title: String, action: String? = null, onAction: () -> Unit = { }) {
+  Row(
+    modifier = Modifier.fillMaxWidth().padding(start = 4.dp, top = 8.dp, bottom = 4.dp),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Text(
+      title,
+      modifier = Modifier.weight(1f).padding(vertical = 12.dp),
+      style = MaterialTheme.typography.titleSmall,
+      color = MaterialTheme.colorScheme.primary
+    )
+    if (action != null) {
+      TextButton(onClick = onAction) { Text(action) }
+    }
+  }
+}
+
+/** Result rows as one segmented group; [iconOf] gives each row's leading icon (0: none). */
+private fun LazyListScope.hitRows(
+  hits: List<XgramSearchHit>,
+  prefix: String,
+  query: String,
+  iconStyle: IconStyle = IconStyle.PLAIN,
+  iconOf: (XgramSearchHit) -> Int = { it.icon },
+  onClick: (XgramSearchHit) -> Unit
+) {
+  itemsIndexed(hits, key = { _, hit -> "$prefix:${hitKey(hit)}" }, contentType = { _, _ -> "hit" }) { i, hit ->
+    val icon = iconOf(hit)
+    SegmentedListItem(
+      onClick = { onClick(hit) },
+      shapes = ListItemDefaults.segmentedShapes(index = i, count = hits.size),
+      leadingContent = if (icon != 0) {
+        { RowIcon(icon, iconStyle) }
+      } else {
+        null
+      },
+      supportingContent = if (hit.path.isNotEmpty()) {
+        { Text(hit.path) }
+      } else {
+        null
+      },
+      colors = settingsRowColors(),
+      content = { Text(highlightWords(hit.title, query, MaterialTheme.colorScheme.primary)) }
+    )
+  }
+}
+
+/** Identifies a result across index rebuilds (the language may change in between). */
+private fun hitKey(hit: XgramSearchHit): String = "${hit.section}/${hit.subPage}/${hit.id}:${hit.key ?: ""}"
+
+/** The remembered results that are still in the index, newest first. */
+private fun resolveRecents(index: List<XgramSearchHit>?, recents: List<String>): List<XgramSearchHit> {
+  if (index == null || recents.isEmpty()) {
+    return emptyList()
+  }
+  val byKey = HashMap<String, XgramSearchHit>(index.size)
+  for (hit in index) {
+    byKey.putIfAbsent(hitKey(hit), hit)
+  }
+  return recents.mapNotNull { byKey[it] }
 }
 
 private fun words(query: String): List<String> =

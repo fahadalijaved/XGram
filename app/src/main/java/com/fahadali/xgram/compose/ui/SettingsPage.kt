@@ -81,7 +81,7 @@ fun SettingsPage(
   val blocks = PageScope().apply(content).blocks
   val currentBlocks by rememberUpdatedState(blocks)
 
-  val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+  val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(snapAnimationSpec = MaterialTheme.motionScheme.fastSpatialSpec())
   val listState = rememberLazyListState()
   val density = LocalDensity.current
   val highlight = remember { if (host.highlightId != 0) XgramHighlight(host.highlightId, host.highlightKey) else null }

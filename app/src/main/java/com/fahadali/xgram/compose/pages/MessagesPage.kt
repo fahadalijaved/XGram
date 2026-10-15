@@ -36,7 +36,7 @@ fun MessagesPage() {
   SettingsPage(title = str(R.string.XgramMessages)) {
     val settings = XgramSettings.instance()
 
-    header(R.string.XgramMessageMenu)
+    // No header over this group: its only row is called Message menu already.
     group {
       val hidden = XgramComposeBridge.messageMenuHiddenCount()
       value(

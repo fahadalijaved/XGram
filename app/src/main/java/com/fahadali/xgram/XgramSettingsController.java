@@ -659,7 +659,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   }
 
   private void buildMessages (List<ListItem> items) {
-    items.add(header(R.string.XgramMessageMenu));
+    // No header: the row is called Message menu already.
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items, link(R.id.btn_xgramMessageMenu, R.string.XgramMessageMenu));
 
     items.add(header(R.string.XgramHeaderGestures));

@@ -1163,6 +1163,42 @@ public final class XgramSettings {
     put(KEY_PANE_RESIZABLE, value);
   }
 
+  // Settings search: the results opened last (search hit keys, newest first), shown before anything is typed.
+  // Not a setting: left out of backups.
+
+  private static final String KEY_SEARCH_RECENT = "xgram_search_recent";
+  private static final int SEARCH_RECENT_MAX = 6;
+
+  public java.util.List<String> searchRecents () {
+    String value = pmc().getString(KEY_SEARCH_RECENT, "");
+    java.util.List<String> list = new java.util.ArrayList<>();
+    if (value != null && !value.isEmpty()) {
+      for (String key : value.split("\n")) {
+        if (!key.isEmpty()) {
+          list.add(key);
+        }
+      }
+    }
+    return list;
+  }
+
+  public void addSearchRecent (String key) {
+    if (key == null || key.isEmpty() || key.indexOf('\n') >= 0) {
+      return;
+    }
+    java.util.List<String> list = searchRecents();
+    list.remove(key);
+    list.add(0, key);
+    while (list.size() > SEARCH_RECENT_MAX) {
+      list.remove(list.size() - 1);
+    }
+    pmc().putString(KEY_SEARCH_RECENT, android.text.TextUtils.join("\n", list));
+  }
+
+  public void clearSearchRecents () {
+    pmc().remove(KEY_SEARCH_RECENT);
+  }
+
   /** The chat list pane width (dp) last set by dragging, or 0: the usual width. */
   public int paneListWidthDp () {
     int value = paneListWidthDp;

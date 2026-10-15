@@ -908,6 +908,12 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
     if (icon != null) {
       int x = (int) (rtl ? width - pIconLeft - icon.getMinimumWidth() : pIconLeft) + Screen.dp(24f) / 2 - icon.getMinimumWidth() / 2;
       float y = pIconTop;
+      // XGram M3E: icons sit in 40dp tonal circles, as on XGram's own settings pages (until these pages are Compose)
+      final boolean xgramCircle = lastIconResource != 0 && overlay == null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      if (xgramCircle) {
+        int circleColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER);
+        c.drawCircle(x + icon.getMinimumWidth() / 2f, y + icon.getMinimumHeight() / 2f, Screen.dp(20f), Paints.fillingPaint(ColorUtils.alphaColor(iconAlpha, circleColor)));
+      }
       final boolean needRotateIcon = iconRotated.getFloatValue() > 0;
       if (needRotateIcon) {
         float cx = x + icon.getMinimumWidth() / 2f;
@@ -915,7 +921,7 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
         c.save();
         c.rotate(MathUtils.fromTo(0, 90, iconRotated.getFloatValue()), cx, cy);
       }
-      Drawables.draw(c, icon, x, y, lastIconResource == 0 ? Paints.getBitmapPaint() : iconColorId != 0 ? PorterDuffPaint.get(iconColorId, iconAlpha) : Paints.getIconGrayPorterDuffPaint());
+      Drawables.draw(c, icon, x, y, lastIconResource == 0 ? Paints.getBitmapPaint() : iconColorId != 0 ? PorterDuffPaint.get(iconColorId, iconAlpha) : xgramCircle ? Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER)) : Paints.getIconGrayPorterDuffPaint());
       if (needRotateIcon) {
         c.restore();
       }
