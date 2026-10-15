@@ -1053,6 +1053,15 @@ public class MosaicWrapper implements FactorAnimator.Target, ComplexReceiver.Key
     return info != null ? info.target : null;
   }
 
+  /** XGram: the videos shown here (Play videos in chat). */
+  public void xgramCollectVideos (List<MediaWrapper> out) {
+    for (MediaWrapper item : items) {
+      if (item.isVideo()) {
+        out.add(item);
+      }
+    }
+  }
+
   public MosaicItemInfo findItemInfoByMessageId (long messageId) {
     if (mosaicItems != null) {
       for (MosaicItemInfo item : mosaicItems) {

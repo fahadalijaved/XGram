@@ -894,6 +894,29 @@ public class TGMessageMedia extends TGMessage {
     return mosaicWrapper.performLongPress(view) || (wrapper != null && wrapper.performLongPress(view)) || res;
   }
 
+  // XGram: Play videos in chat. The player goes in the MessageViewGroup Telegram X uses for round videos.
+  // Decided once, from TGMessage's constructor (before this class's fields are set up), so no initializer here.
+  private int xgramViewGroup;
+
+  @Override
+  public boolean needViewGroup () {
+    if (xgramViewGroup == 0) {
+      xgramViewGroup = com.fahadali.xgram.chats.XgramInlineVideo.needViewGroup(msg) ? 1 : 2;
+    }
+    return xgramViewGroup == 1;
+  }
+
+  public void xgramCollectVideos (java.util.List<MediaWrapper> out) {
+    if (mosaicWrapper != null) {
+      mosaicWrapper.xgramCollectVideos(out);
+    }
+  }
+
+  /** The bubble outline the media is clipped with (see drawContent), or null. */
+  public @Nullable android.graphics.Path xgramBubbleClipPath () {
+    return useBubbles() && !useForward() ? getBubbleClipPath() : null;
+  }
+
   public boolean isVideoFirstInMosaic (int mediaId) {
     return mosaicWrapper.isSingular() || (mosaicWrapper.getSingularItem() != null && mosaicWrapper.getSingularItem().isVideo() && mosaicWrapper.getSingularItem().getVideo().video.id == mediaId);
   }

@@ -249,6 +249,11 @@ public class VideoPlayerView implements Player.Listener, CallManager.CurrentCall
       seekToSavedPosition = false;
       player.seekTo(savedPosition);
     }
+    // XGram: a video opened from the chat's own player goes on where it was
+    long xgramStartMs = com.fahadali.xgram.chats.XgramInlineVideo.takeStartPosition(mediaItem.getTargetFile());
+    if (xgramStartMs > 0) {
+      player.seekTo(xgramStartMs);
+    }
     if (forcePlay) {
       setPlaying(true);
     }

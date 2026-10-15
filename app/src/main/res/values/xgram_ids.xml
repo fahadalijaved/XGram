@@ -273,4 +273,7 @@
   <item type="id" name="btn_xgramChatActionsOrder" />
   <item type="id" name="btn_xgramChatAction" />
   <item type="id" name="controller_xgramChatActionsOrder" />
+  <!-- Play videos in chat -->
+  <item type="id" name="btn_xgramInlineVideo" />
+  <item type="id" name="btn_xgramInlineVideoStart" />
 </resources>

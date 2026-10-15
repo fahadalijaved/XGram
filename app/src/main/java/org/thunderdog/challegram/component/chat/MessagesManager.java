@@ -309,6 +309,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       checkMessageThreadHeaderPreview(last);
 
       controller.checkRoundVideo(first, last, true);
+      com.fahadali.xgram.chats.XgramInlineVideo.onMessagesShown(controller); // XGram: Play videos in chat
     }
   }
 

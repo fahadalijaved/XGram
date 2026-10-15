@@ -991,6 +991,9 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     int cellRight = cellLeft + cellWidth;
     int cellBottom = cellTop + cellHeight;
 
+    // XGram: Play videos in chat. The player lies over the cell and its own controls replace the badge and the play button.
+    final boolean xgramPlaying = video != null && com.fahadali.xgram.chats.XgramInlineVideo.onCellDraw(this, view, cellLeft, cellTop, cellRight, cellBottom, selectionFactor);
+
     int selectionColor = selectionFactor > 0f ? Theme.chatSelectionColor() : 0;
     int overlayColor = selectionFactor > 0f ? ColorUtils.alphaColor(selectionFactor < .5f ? selectionFactor / .5f : 1f, ColorUtils.compositeColor(source != null ? source.getContentBackgroundColor() : Theme.fillingColor(), selectionColor)) : 0;
     if (selectionPadding > 0) {
@@ -1081,7 +1084,7 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     // Log.d("%s %s => [%s, %s, trim: %s] <%s>", isStreamingUI, isDoubleLine, duration, durationShort, durationTrimmed, dlFactor);
 
     RectF actionButtonRect = Paints.getRectF();
-    boolean showDuration = !StringUtils.isEmpty(durationTrimmed) && selectionFactor < 1f;
+    boolean showDuration = !StringUtils.isEmpty(durationTrimmed) && selectionFactor < 1f && !xgramPlaying;
 
     if (showDuration) {
       // Only if: channel + single item in stack + bubble-less mode
@@ -1166,7 +1169,7 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       getFileProgress().setPausedIconRes(R.drawable.baseline_cloud_download_24);
     }
 
-    if (!hideLoader) {
+    if (!hideLoader && !xgramPlaying) {
       getFileProgress().setRequestedAlpha(alpha * (1f - selectionFactor) * (1f - spoilerFactor), alpha * (1f - selectionFactor));
       if (isStreamingUI) {
         fileProgress.drawClipped(view, c, durationRect, (-durationDx) * downloadedAnimator.getFloatValue());
@@ -1256,6 +1259,9 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       }
       return true;
     }
+    if (com.fahadali.xgram.chats.XgramInlineVideo.onClick(this, view)) {
+      return true; // XGram: Play videos in chat
+    }
     if (source != null) {
       if (source instanceof TGMessageMedia) {
         MediaViewController.openFromMessage((TGMessageMedia) source, messageId);
@@ -1332,6 +1338,22 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
   public void destroy () {
     fileProgress.performDestroy();
     destroyed = true;
+    com.fahadali.xgram.chats.XgramInlineVideo.onWrapperDestroyed(this); // XGram: Play videos in chat
+  }
+
+  // XGram: Play videos in chat (com.fahadali.xgram.chats.XgramInlineVideo)
+
+  public @Nullable TGMessage xgramSource () {
+    return source;
+  }
+
+  /** The rounded outline the cell was last clipped with, or null when the cell isn't clipped. */
+  public @Nullable Path xgramCellPath () {
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && path != null && !(source != null && source.useFullWidth()) ? path : null;
+  }
+
+  public boolean xgramSpoilerVisible () {
+    return spoilerOverlayVisible.getValue();
   }
 
   // Video stuff

@@ -405,6 +405,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(translateStyleName());
         } else if (id == R.id.btn_xgramTapToRecord) {
           view.getToggler().setRadioEnabled(settings.tapToRecord(), isUpdate);
+        } else if (id == R.id.btn_xgramInlineVideo) {
+          view.getToggler().setRadioEnabled(settings.inlineVideo(), isUpdate);
+        } else if (id == R.id.btn_xgramInlineVideoStart) {
+          view.setData(settings.inlineVideoStart() == XgramSettings.INLINE_VIDEO_START_TAP ? R.string.XgramInlineVideoStartTap : R.string.XgramInlineVideoStartAuto);
         } else if (id == R.id.btn_xgramProxyOffVpn) {
           view.getToggler().setRadioEnabled(settings.proxyOffOnVpn(), isUpdate);
         } else if (id == R.id.btn_xgramProxyOffWifi) {
@@ -635,6 +639,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramFixLinkPreviews, R.string.XgramFixLinkPreviews, R.string.XgramFixLinkPreviewsSub)
     );
     items.add(description(R.string.XgramFixLinkPreviewsInfo));
+
+    items.add(header(R.string.XgramHeaderVideos));
+    addRows(items,
+      toggle(R.id.btn_xgramInlineVideo, R.string.XgramInlineVideo, R.string.XgramInlineVideoSub),
+      link(R.id.btn_xgramInlineVideoStart, R.string.XgramInlineVideoStart)
+    );
+    items.add(description(R.string.XgramInlineVideoInfo));
 
     items.add(header(R.string.XgramMessageBox));
     addRows(items,
@@ -1309,6 +1320,21 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramTapToRecord) {
       settings.setTapToRecord(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramInlineVideo) {
+      settings.setInlineVideo(adapter.toggleView(v));
+      if (!settings.inlineVideo()) {
+        com.fahadali.xgram.chats.XgramInlineVideo.stop();
+      }
+      return;
+    } else if (id == R.id.btn_xgramInlineVideoStart) {
+      int[] modes = {XgramSettings.INLINE_VIDEO_START_AUTO, XgramSettings.INLINE_VIDEO_START_TAP};
+      String[] titles = {Lang.getString(R.string.XgramInlineVideoStartAuto), Lang.getString(R.string.XgramInlineVideoStartTap)};
+      showOptions(null, new int[] {1, 2}, titles, null, null, (itemView, optionId) -> {
+        settings.setInlineVideoStart(modes[optionId - 1]);
+        adapter.updateValuedSettingById(R.id.btn_xgramInlineVideoStart);
+        return true;
+      });
       return;
     } else if (id == R.id.btn_xgramInputButtons) {
       navigateTo(new com.fahadali.xgram.chats.XgramInputButtonsController(context, tdlib));
