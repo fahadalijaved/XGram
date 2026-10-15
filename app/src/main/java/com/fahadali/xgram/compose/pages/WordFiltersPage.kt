@@ -12,16 +12,49 @@
 package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
-import com.fahadali.xgram.chats.XgramFiltersController
-import com.fahadali.xgram.compose.ClassicStubPage
+import com.fahadali.xgram.chats.XgramFilters
+import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
+import com.fahadali.xgram.compose.PromptSpec
+import com.fahadali.xgram.compose.ui.SettingsPage
+import com.fahadali.xgram.compose.ui.s
+import com.fahadali.xgram.compose.ui.str
 import org.thunderdog.challegram.R
 
-/** Stub until PAGES-2 builds this page (spec section 5): it opens the classic page. */
+/** Filters → Word filters: add a word, phrase or pattern; tap one to remove it. Same rules as the classic page. */
 @Composable
 fun WordFiltersPage() {
   val host = LocalXgramHost.current
-  ClassicStubPage(R.string.XgramWordFilters) { highlightId ->
-    XgramFiltersController.words(host.activity, host.tdlib)
+  SettingsPage(title = str(R.string.XgramWordFilters)) {
+    header(R.string.XgramFilterWords)
+    group {
+      action(R.id.btn_xgramAddFilter, s(R.string.XgramAddFilter), icon = R.drawable.baseline_add_24) {
+        host.prompt(
+          PromptSpec(title = s(R.string.XgramAddFilter), hint = s(R.string.XgramFilterHint), confirm = s(R.string.Save)) { result ->
+            val text = result.trim()
+            if (text.isNotEmpty()) {
+              val filters = XgramFilters.getFilters()
+              if (!filters.contains(text)) {
+                filters.add(text)
+                XgramFilters.setFilters(filters)
+              }
+            }
+          }
+        )
+      }
+      for (filter in XgramFilters.getFilters()) {
+        // The words are the user's own text: one row each, tap to remove.
+        action(R.id.btn_xgramFilter, filter, key = filter) {
+          host.confirm(
+            ConfirmSpec(text = filter, confirm = s(R.string.XgramRemoveFilter), destructive = true) {
+              val filters = XgramFilters.getFilters()
+              filters.remove(filter)
+              XgramFilters.setFilters(filters)
+            }
+          )
+        }
+      }
+    }
+    description(R.string.XgramFiltersInfo)
   }
 }

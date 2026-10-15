@@ -41,9 +41,9 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
   private static final int FEATURES_VERSION = 2;
   private static final String KEY_SEEN = "xgram_whatsnew_seen";
 
-  private static final class Entry {
-    final int icon, title, subtitle;
-    final int action;
+  public static final class Entry { // XGram: public, for the Compose What's new page
+    public final int icon, title, subtitle;
+    public final int action;
 
     Entry (@DrawableRes int icon, @StringRes int title, @StringRes int subtitle, int action) {
       this.icon = icon;
@@ -53,10 +53,10 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
     }
   }
 
-  private static final int OPEN_NONE = 0, OPEN_SETTINGS = 1, OPEN_HISTORY = 2, OPEN_BOOKMARKS = 3, OPEN_SAVED_BY_CHAT = 4,
+  public static final int OPEN_NONE = 0, OPEN_SETTINGS = 1, OPEN_HISTORY = 2, OPEN_BOOKMARKS = 3, OPEN_SAVED_BY_CHAT = 4,
     OPEN_ICONS = 5, OPEN_FILTERS = 6, OPEN_GHOST = 8, OPEN_APPEARANCE = 9, OPEN_PRIVACY = 10, OPEN_THEMES = 11;
 
-  private static final Entry[] ENTRIES = {
+  public static final Entry[] ENTRIES = {
     new Entry(R.drawable.baseline_palette_24, R.string.XgramNewThemes, R.string.XgramNewThemesInfo, OPEN_THEMES),
     new Entry(R.drawable.baseline_apps_24, R.string.XgramNewIconStyles, R.string.XgramNewIconStylesInfo, OPEN_ICONS),
     new Entry(R.drawable.baseline_settings_24, R.string.XgramNewSettings, R.string.XgramNewSettingsInfo, OPEN_SETTINGS),
@@ -86,7 +86,13 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
     Settings.instance().pmc().putInt(KEY_SEEN, FEATURES_VERSION);
     context.tdlib().ui().postDelayed(() -> {
       if (!context.isDestroyed() && context.isFocused()) {
-        context.navigateTo(new XgramWhatsNewController(context.context(), context.tdlib()));
+        ViewController<?> c;
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: the Compose page with Expressive design
+          c = com.fahadali.xgram.compose.XgramComposeController.create(context.context(), context.tdlib(), com.fahadali.xgram.compose.XgramPage.WHATS_NEW);
+        } else {
+          c = new XgramWhatsNewController(context.context(), context.tdlib());
+        }
+        context.navigateTo(c);
       }
     }, 700);
   }
