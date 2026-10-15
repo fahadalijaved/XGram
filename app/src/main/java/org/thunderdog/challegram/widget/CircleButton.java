@@ -15,18 +15,27 @@
 package org.thunderdog.challegram.widget;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewOutlineProvider;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
+import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.component.sticker.TGStickerObj;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGReaction;
@@ -84,6 +93,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   }
 
   public void setIconColorId (int colorId) {
+    xgramIconRole = -1;
     if (!this.iconColorIsId || this.iconColor != colorId) {
       this.iconColorIsId = true;
       this.iconColor = colorId;
@@ -98,6 +108,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   }
 
   public void setCustomIconColor (int color) {
+    xgramIconRole = -1;
     if (this.iconColorIsId || this.iconColor != color) {
       this.iconColorIsId = false;
       this.iconColor = color;
@@ -144,7 +155,186 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     this.backgroundColorId = backgroundColorId;
     this.iconColorIsId = true;
     this.iconColor = iconColorId;
+    if (xgramInit(size, backgroundColorId, needShadow)) {
+      return;
+    }
     RippleSupport.setCircleBackground(this, size, padding, backgroundColorId, needShadow, null);
+  }
+
+  // XGram M3E. FAB sizes (56, 80, 96) get the FAB container: corner 16/20/28, elevation level 3, ripple only (no press morph).
+  // Smaller circles become icon buttons whose corners morph from full to 8dp while pressed (fast spatial spring).
+  // Other sizes (the 70.5dp call buttons) keep the old circle.
+
+  private XgramExpressive.MorphDrawable xgramMorph, xgramMask;
+  private RippleDrawable xgramRipple;
+  private int xgramRippleColor;
+  private float xgramSizeDp, xgramZ;
+  private boolean xgramFab, xgramToggle;
+  private int xgramContainerRole = -1, xgramIconRole = -1;
+  private float xgramToggleFactor;
+  private Drawable xgramCloseIcon;
+
+  private static float xgramFabCorner (float sizeDp) {
+    return sizeDp >= 96f ? XgramExpressive.CORNER_XL : sizeDp >= 80f ? XgramExpressive.CORNER_L_INC : XgramExpressive.CORNER_L;
+  }
+
+  private static float xgramFabIcon (float sizeDp) {
+    return sizeDp >= 96f ? 36f : sizeDp >= 80f ? 28f : 24f;
+  }
+
+  private boolean xgramInit (float size, @ColorId int backgroundColorId, boolean needShadow) {
+    if (!XgramExpressive.isEnabled()) {
+      return false;
+    }
+    final boolean fab;
+    if (size < 56f) {
+      fab = false;
+    } else if (size < 64f || size == 80f || size == 96f) {
+      fab = true;
+    } else {
+      return false;
+    }
+    this.xgramFab = fab;
+    this.xgramSizeDp = size;
+    final float resting = fab ? xgramFabCorner(size) : XgramExpressive.CORNER_FULL;
+    final float pressed = fab ? resting : XgramExpressive.CORNER_S;
+    xgramMorph = new XgramExpressive.MorphDrawable(0, resting, pressed);
+    xgramMask = new XgramExpressive.MorphDrawable(0xff000000, resting, pressed);
+    xgramMorph.setSize(size, size, Gravity.CENTER);
+    xgramMask.setSize(size, size, Gravity.CENTER);
+    if (fab && backgroundColorId == ColorId.circleButtonRegular) {
+      // The FAB color: primaryContainer / onPrimaryContainer
+      xgramContainerRole = XgramExpressive.PRIMARY_CONTAINER;
+      xgramIconRole = XgramExpressive.ON_PRIMARY_CONTAINER;
+      xgramMorph.setColorRole(xgramContainerRole);
+    } else {
+      xgramContainerRole = xgramIconRole = -1;
+      xgramMorph.applyColor(backgroundColorId, backgroundColorId, 0f);
+    }
+    xgramMorph.setHost(this);
+    xgramMask.setHost(this);
+    xgramRippleColor = XgramExpressive.withAlpha(xgramIconColor(), XgramExpressive.STATE_PRESSED);
+    // The mask is wrapped so RippleSupport.changeViewColor recolors the container only
+    xgramRipple = new RippleDrawable(ColorStateList.valueOf(xgramRippleColor), xgramMorph, new InsetDrawable(xgramMask, 0));
+    setBackground(xgramRipple);
+    setStateListAnimator(null);
+    setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+    xgramZ = needShadow ? Screen.dp(fab ? XgramExpressive.ELEVATION_3 : XgramExpressive.ELEVATION_2) : 0;
+    setElevation(xgramZ);
+    xgramSyncTagZ();
+    return true;
+  }
+
+  /** A counter badge kept in the tag must stay above the button (it used to follow the press animator's Z). */
+  private void xgramSyncTagZ () {
+    if (xgramMorph != null && getTag() instanceof View) {
+      ((View) getTag()).setTranslationZ(xgramZ);
+    }
+  }
+
+  private int xgramIconColor () {
+    if (xgramIconRole >= 0) {
+      if (xgramToggle && xgramIconRole == XgramExpressive.ON_PRIMARY_CONTAINER) {
+        final float f = MathUtils.clamp(xgramToggleFactor);
+        return f == 0f ? XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER) : ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER), XgramExpressive.color(XgramExpressive.ON_PRIMARY), f);
+      }
+      return XgramExpressive.color(xgramIconRole);
+    }
+    return iconColorIsId ? Theme.getColor(iconColor) : iconColor;
+  }
+
+  /** The main FAB of a FAB menu: it morphs into the 56dp round close button (ToggleFloatingActionButton). */
+  public void xgramSetToggleFab (boolean isToggle) {
+    this.xgramToggle = isToggle && xgramFab;
+    if (xgramToggle && xgramCloseIcon == null) {
+      xgramCloseIcon = Drawables.get(getResources(), R.drawable.baseline_close_24);
+    }
+    xgramApplyShape();
+  }
+
+  public void xgramSetFabSize (float sizeDp) {
+    if (xgramMorph == null || !xgramFab) {
+      return;
+    }
+    this.xgramSizeDp = sizeDp;
+    xgramApplyShape();
+  }
+
+  public void xgramSetToggleFactor (float factor) {
+    if (this.xgramToggleFactor != factor) {
+      this.xgramToggleFactor = factor;
+      xgramApplyShape();
+    }
+  }
+
+  private void xgramApplyShape () {
+    if (xgramMorph == null || !xgramFab) {
+      return;
+    }
+    final float p = xgramToggle ? xgramToggleFactor : 0f;
+    final float fabCorner = xgramFabCorner(xgramSizeDp);
+    final float size = Math.min(xgramSizeDp, xgramSizeDp + (56f - xgramSizeDp) * p);
+    final float corner = Math.max(0f, Math.min(size / 2f, fabCorner + (28f - fabCorner) * p));
+    // The shrinking container stays in the top end corner of the FAB's box
+    final int gravity = xgramToggle ? Gravity.TOP | (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) : Gravity.CENTER;
+    xgramMorph.setSize(size, size, gravity);
+    xgramMask.setSize(size, size, gravity);
+    xgramMorph.setCornerTarget(corner, false);
+    xgramMask.setCornerTarget(corner, false);
+    xgramMorph.setPressedCorner(corner);
+    xgramMask.setPressedCorner(corner);
+    if (xgramToggle && xgramContainerRole == XgramExpressive.PRIMARY_CONTAINER) {
+      final float f = MathUtils.clamp(p);
+      if (f == 0f) {
+        xgramMorph.setColorRole(XgramExpressive.PRIMARY_CONTAINER);
+      } else if (f == 1f) {
+        xgramMorph.setColorRole(XgramExpressive.PRIMARY);
+      } else {
+        xgramMorph.setColor(ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), XgramExpressive.color(XgramExpressive.PRIMARY), f));
+      }
+    }
+    invalidate();
+    invalidateOutline();
+  }
+
+  private void xgramUpdateRippleColor () {
+    if (xgramRipple != null) {
+      final int color = XgramExpressive.withAlpha(xgramIconColor(), XgramExpressive.STATE_PRESSED);
+      if (color != xgramRippleColor) {
+        xgramRippleColor = color;
+        xgramRipple.setColor(ColorStateList.valueOf(color));
+      }
+    }
+  }
+
+  private void xgramDrawToggleIcon (Canvas c, int width) {
+    final float p = xgramToggleFactor;
+    final float f = MathUtils.clamp(p);
+    final Drawable drawable = f >= .5f && xgramCloseIcon != null ? xgramCloseIcon : icon;
+    if (drawable == null) {
+      return;
+    }
+    final float box = Screen.dpf(Math.min(xgramSizeDp, xgramSizeDp + (56f - xgramSizeDp) * p));
+    final float cx = Lang.rtl() ? box / 2f : width - box / 2f;
+    final float cy = box / 2f;
+    final float fabIcon = xgramFabIcon(xgramSizeDp);
+    final float iconDp = fabIcon + (20f - fabIcon) * f;
+    final float replaceScale = (1f - (replaceFactor <= .5f ? replaceFactor / .5f : 1f - ((replaceFactor - .5f) / .5f))) * (1f - progressFactor);
+    final int iconWidth = Math.max(1, drawable.getMinimumWidth());
+    final float scale = Screen.dpf(iconDp) / iconWidth * (.6f + .4f * replaceScale);
+    final int color = xgramIconColor();
+    final Paint paint = getIconPaint(color);
+    final int sourceAlpha = paint.getAlpha();
+    paint.setAlpha((int) ((float) sourceAlpha * MathUtils.clamp(replaceScale * iconAlpha)));
+    c.save();
+    c.scale(scale, scale, cx, cy);
+    Drawables.draw(c, drawable, cx - drawable.getMinimumWidth() / 2f, cy - drawable.getMinimumHeight() / 2f, paint);
+    c.restore();
+    paint.setAlpha(sourceAlpha);
+    if (progress != null && progressFactor >= .5f) {
+      progress.forceColor(color);
+      progress.draw(c);
+    }
   }
 
   public void setCrossColorId (@ColorId int backgroundColorId, @ColorId int iconColorId) {
@@ -429,6 +619,14 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
 
     boolean hasText = !StringUtils.isEmpty(bottomText);
 
+    if (xgramRipple != null) {
+      xgramUpdateRippleColor();
+      if (xgramToggle && sticker == null && icon != null) {
+        xgramDrawToggleIcon(c, width);
+        return;
+      }
+    }
+
     if (sticker != null && imageReceiver != null && gifReceiver != null) {
       imageReceiver.setBounds(cx - width / 3, cy - height / 3, cx + width / 3, cy + height / 3);
       gifReceiver.setBounds(cx - width / 3, cy - height / 3, cx + width / 3, cy + height / 3);
@@ -461,7 +659,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
         Views.restore(c, restoreToCount);
       }
     } else if (icon != null) {
-      final int iconColor = iconColorIsId ? Theme.getColor(this.iconColor) : this.iconColor;
+      final int iconColor = xgramIconRole >= 0 ? xgramIconColor() : iconColorIsId ? Theme.getColor(this.iconColor) : this.iconColor;
       final int crossIconColor = ColorUtils.fromToArgb(iconColor, crossIconColorId != 0 ? Theme.getColor(crossIconColorId) : iconColor, factor);
       final Paint bitmapPaint = getIconPaint(iconColor);
       final int sourceAlpha = bitmapPaint.getAlpha();
@@ -598,6 +796,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   @Override
   protected void onAttachedToWindow () {
     super.onAttachedToWindow();
+    xgramSyncTagZ();
     if (gifReceiver != null) {
       gifReceiver.attach();
     }

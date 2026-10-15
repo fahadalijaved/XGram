@@ -16,6 +16,7 @@ package org.thunderdog.challegram.component.base;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
@@ -30,6 +31,8 @@ import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -46,6 +49,7 @@ import me.vkryl.android.ViewUtils;
 import me.vkryl.android.animator.BoolAnimator;
 import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.core.ColorUtils;
+import me.vkryl.core.MathUtils;
 
 public class TogglerView extends View implements FactorAnimator.Target, TooltipOverlayView.LocationProvider {
   private Paint circlePaint;
@@ -68,6 +72,11 @@ public class TogglerView extends View implements FactorAnimator.Target, TooltipO
   public void init (boolean isEnabled) {
     setRadioEnabled(isEnabled, false);
     initDrawingItems();
+    if (xgram) {
+      // M3E switch: flat, no elevation, outline or background drawable
+      buildLayout();
+      return;
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       setOutlineProvider(new android.view.ViewOutlineProvider() {
         @Override
@@ -119,6 +128,9 @@ public class TogglerView extends View implements FactorAnimator.Target, TooltipO
   public TogglerView setUseNegativeState (boolean useNegativeState) {
     if (this.useNegativeState != useNegativeState) {
       this.useNegativeState = useNegativeState;
+      if (xgram) {
+        xgramUpdateHandle(false);
+      }
       invalidate();
     }
     return this;
@@ -157,11 +169,18 @@ public class TogglerView extends View implements FactorAnimator.Target, TooltipO
       if (lockDrawable == null) {
         lockDrawable = Drawables.get(getResources(), R.drawable.baseline_lock_14);
       }
+      if (xgram) {
+        xgramUpdateHandle(false);
+      }
       invalidate();
     }
   }
 
   public void setRadioEnabled (boolean isEnabled, boolean animated) {
+    if (xgram) {
+      xgramSetChecked(isEnabled, animated);
+      return;
+    }
     this.isEnabled.setValue(isEnabled, animated);
   }
 
@@ -177,6 +196,11 @@ public class TogglerView extends View implements FactorAnimator.Target, TooltipO
   public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) { }
 
   public boolean toggle (boolean animated) {
+    if (xgram) {
+      final boolean value = !isEnabled.getValue();
+      xgramSetChecked(value, animated);
+      return value;
+    }
     return isEnabled.toggleValue(animated);
   }
 
@@ -255,11 +279,205 @@ public class TogglerView extends View implements FactorAnimator.Target, TooltipO
   @Override
   public void getTargetBounds (View targetView, Rect outRect) {
     final int bound = Screen.dp(2f);
+    if (xgram) {
+      xgramLayout(getMeasuredWidth(), getMeasuredHeight());
+      outRect.set((int) (xgramHandleX - xgramHandleR - bound), (int) (xgramHandleY - xgramHandleR - bound), (int) (xgramHandleX + xgramHandleR + bound), (int) (xgramHandleY + xgramHandleR + bound));
+      return;
+    }
     outRect.set((int) (origX - origRadius - bound), (int) (origY - origRadius - bound), (int) (origX + origRadius + bound), (int) (origY + origRadius + bound));
+  }
+
+  // XGram M3E switch (SwitchTokens): 52x32 full-corner track 16dp from the end, handle 16 (off), 24 (on or with an icon),
+  // 28 (pressed). Position and handle size use the fast spatial spring, colors the default effects spring.
+
+  private final boolean xgram = XgramExpressive.isEnabled();
+  private XgramExpressive.Spring xgramPos, xgramSize, xgramColor, xgramPress;
+  private final RectF xgramTrack = new RectF();
+  private float xgramHandleX, xgramHandleY, xgramHandleR;
+  private Drawable xgramCheck;
+
+  private void xgramInitSprings () {
+    if (xgramPos != null) {
+      return;
+    }
+    final float checked = isEnabled.getValue() ? 1f : 0f;
+    final XgramExpressive.Spring.Listener listener = (spring, value) -> invalidate();
+    xgramPos = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, checked, listener).setThreshold(.002f);
+    xgramSize = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, xgramHandleTargetDp(), listener).setThreshold(.05f);
+    xgramColor = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, checked, listener).setThreshold(.002f);
+    xgramPress = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, isPressed() ? 1f : 0f, listener).setThreshold(.002f);
+  }
+
+  private float xgramHandleTargetDp () {
+    if (isPressed()) {
+      return 28f;
+    }
+    return isEnabled.getValue() || showLock || useNegativeState ? 24f : 16f;
+  }
+
+  private void xgramSetChecked (boolean checked, boolean animated) {
+    this.isEnabled.setValue(checked, false);
+    xgramInitSprings();
+    final float target = checked ? 1f : 0f;
+    if (animated) {
+      xgramPos.animateTo(target);
+      xgramColor.animateTo(target);
+    } else {
+      xgramPos.setValue(target);
+      xgramColor.setValue(target);
+    }
+    xgramUpdateHandle(animated);
+    invalidate();
+  }
+
+  private void xgramUpdateHandle (boolean animated) {
+    if (xgramSize == null) {
+      return;
+    }
+    final float size = xgramHandleTargetDp();
+    final float press = isPressed() ? 1f : 0f;
+    if (animated) {
+      xgramSize.animateTo(size);
+      xgramPress.animateTo(press);
+    } else {
+      xgramSize.setValue(size);
+      xgramPress.setValue(press);
+    }
+    invalidate();
+  }
+
+  @Override
+  public void setPressed (boolean pressed) {
+    final boolean changed = isPressed() != pressed;
+    super.setPressed(pressed);
+    // A row press reaches the switch through ViewGroup.dispatchSetPressed
+    if (xgram && changed) {
+      xgramInitSprings();
+      xgramUpdateHandle(true);
+    }
+  }
+
+  private void xgramLayout (int width, int height) {
+    final boolean rtl = Lang.rtl();
+    final float trackWidth = Screen.dpf(52f);
+    final float trackHeight = Screen.dpf(32f);
+    final float endPadding = Screen.dpf(16f);
+    final float right = rtl ? endPadding + trackWidth : width - endPadding;
+    final float left = right - trackWidth;
+    final float top = height / 2f - trackHeight / 2f;
+    xgramTrack.set(left, top, right, top + trackHeight);
+    // Handle centers sit 16dp in from the track ends
+    final float inset = Screen.dpf(16f);
+    final float startX = rtl ? right - inset : left + inset;
+    final float endX = rtl ? left + inset : right - inset;
+    final float position = xgramPos != null ? xgramPos.getValue() : isEnabled.getValue() ? 1f : 0f;
+    xgramHandleX = startX + (endX - startX) * position;
+    xgramHandleY = top + trackHeight / 2f;
+    final float sizeDp = xgramSize != null ? xgramSize.getValue() : xgramHandleTargetDp();
+    xgramHandleR = Math.max(0f, Screen.dpf(sizeDp) / 2f);
+  }
+
+  private void xgramDrawIcon (Canvas c, Drawable drawable, int color) {
+    if (drawable == null || Color.alpha(color) == 0) {
+      return;
+    }
+    final int width = Math.max(1, drawable.getMinimumWidth());
+    final int height = Math.max(1, drawable.getMinimumHeight());
+    final float scale = Screen.dpf(16f) / Math.max(width, height);
+    c.save();
+    c.scale(scale, scale, xgramHandleX, xgramHandleY);
+    Drawables.draw(c, drawable, xgramHandleX - width / 2f, xgramHandleY - height / 2f, Paints.getPorterDuffPaint(color));
+    c.restore();
+  }
+
+  private void xgramDraw (Canvas c) {
+    xgramInitSprings();
+    xgramLayout(getMeasuredWidth(), getMeasuredHeight());
+
+    final float selected = MathUtils.clamp(xgramColor.getValue());
+    final float pressed = MathUtils.clamp(xgramPress.getValue());
+    final float disabled = !useNegativeState && this.isDisabled != null ? this.isDisabled.getFloatValue() : 0f;
+
+    final int trackColor, outlineColor, handleColor, iconColor;
+    if (useNegativeState) {
+      trackColor = ColorUtils.fromToArgb(Theme.getColor(ColorId.togglerNegativeBackground), Theme.getColor(ColorId.togglerPositiveBackground), selected);
+      outlineColor = 0;
+      handleColor = ColorUtils.fromToArgb(Theme.getColor(ColorId.togglerNegative), Theme.getColor(ColorId.togglerPositive), selected);
+      iconColor = ColorUtils.fromToArgb(Theme.getColor(ColorId.togglerNegativeContent), Theme.getColor(ColorId.togglerPositiveContent), selected);
+    } else {
+      final int highest = XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+      final int outline = XgramExpressive.color(XgramExpressive.OUTLINE);
+      int trackOn = XgramExpressive.color(XgramExpressive.PRIMARY);
+      int trackOff = highest;
+      int outlineOff = outline;
+      int handleOn = ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_PRIMARY), XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), pressed);
+      int handleOff = ColorUtils.fromToArgb(outline, XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), pressed);
+      int iconOn = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
+      int iconOff = highest;
+      if (disabled > 0f) {
+        final int onSurface = XgramExpressive.color(XgramExpressive.ON_SURFACE);
+        trackOn = ColorUtils.fromToArgb(trackOn, XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTAINER), disabled);
+        trackOff = ColorUtils.fromToArgb(trackOff, XgramExpressive.withAlpha(highest, XgramExpressive.DISABLED_CONTAINER), disabled);
+        outlineOff = ColorUtils.fromToArgb(outlineOff, XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTAINER), disabled);
+        handleOn = ColorUtils.fromToArgb(handleOn, XgramExpressive.color(XgramExpressive.SURFACE), disabled);
+        handleOff = ColorUtils.fromToArgb(handleOff, XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTENT), disabled);
+        iconOn = ColorUtils.fromToArgb(iconOn, XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTENT), disabled);
+        iconOff = ColorUtils.fromToArgb(iconOff, XgramExpressive.withAlpha(highest, XgramExpressive.DISABLED_CONTENT), disabled);
+      }
+      trackColor = ColorUtils.fromToArgb(trackOff, trackOn, selected);
+      outlineColor = ColorUtils.alphaColor(1f - selected, outlineOff);
+      handleColor = ColorUtils.fromToArgb(handleOff, handleOn, selected);
+      iconColor = ColorUtils.fromToArgb(iconOff, iconOn, selected);
+    }
+
+    final float trackRadius = xgramTrack.height() / 2f;
+    c.drawRoundRect(xgramTrack, trackRadius, trackRadius, Paints.fillingPaint(trackColor));
+    if (Color.alpha(outlineColor) > 0) {
+      final float stroke = Screen.dpf(2f);
+      final float inset = stroke / 2f;
+      final RectF rect = Paints.getRectF();
+      rect.set(xgramTrack.left + inset, xgramTrack.top + inset, xgramTrack.right - inset, xgramTrack.bottom - inset);
+      c.drawRoundRect(rect, trackRadius - inset, trackRadius - inset, Paints.getProgressPaint(outlineColor, stroke));
+    }
+
+    circlePaint.setColor(handleColor);
+    c.drawCircle(xgramHandleX, xgramHandleY, xgramHandleR, circlePaint);
+
+    if (showLock) {
+      xgramDrawIcon(c, lockDrawable, iconColor);
+    } else if (useNegativeState) {
+      final Paint strokePaint = Paints.getProgressPaint(iconColor, Screen.dp(2f));
+      final float factor = selected;
+      final float origX = xgramHandleX, origY = xgramHandleY;
+      final int lineWidth = (int) (Math.min(xgramHandleR, Screen.dpf(12f)) * .75f);
+      final int linePart = lineWidth / 2;
+      final int offsetGlobal = (int) (Screen.dp(.5f) * factor);
+      final int offsetGlobalY = (int) (Screen.dp(.5f) * factor);
+      final int offsetX1 = (int) (Screen.dp(1.5f) * factor);
+      c.drawLine(origX - linePart + offsetX1, origY + linePart + offsetGlobalY, origX + linePart + offsetX1, origY - linePart + offsetGlobalY, strokePaint);
+      final int offsetX = (int) (Screen.dp(-3.5f) * factor);
+      final int offsetY = (int) (Screen.dp(3f) * factor);
+      final int removeLeft = (int) (Screen.dp(.5f) * factor);
+      c.drawLine(origX - linePart + offsetX + offsetGlobal + removeLeft, origY - linePart + offsetY + offsetGlobalY + removeLeft, origX + linePart * (1f - factor) + offsetX + offsetGlobal, origY + linePart * (1f - factor) + offsetY + offsetGlobalY, strokePaint);
+    } else {
+      // Pixel style: a check on the selected handle only, growing in with the handle
+      final float grow = MathUtils.clamp((xgramSize.getValue() - 16f) / 8f);
+      final float iconAlpha = selected * grow;
+      if (iconAlpha > 0f) {
+        if (xgramCheck == null) {
+          xgramCheck = Drawables.get(getResources(), R.drawable.baseline_check_24);
+        }
+        xgramDrawIcon(c, xgramCheck, ColorUtils.alphaColor(iconAlpha, iconColor));
+      }
+    }
   }
 
   @Override
   public void onDraw (Canvas c) {
+    if (xgram) {
+      xgramDraw(c);
+      return;
+    }
     final float factor = this.isEnabled.getFloatValue();
     updateOrigX();
     final int fromBackgroundColor, fromColor;

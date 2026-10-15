@@ -27,6 +27,8 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.support.ViewSupport;
@@ -173,9 +175,32 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
   private void setIsPressed (boolean isPressed) {
     if (this.isPressed != isPressed) {
       this.isPressed = isPressed;
+      if (xgram) {
+        xgramAnimatePress(isPressed);
+      }
       if (pressureListener != null)
         pressureListener.onPressStateChanged(this, isPressed);
     }
+  }
+
+  // XGram M3E: full corners at rest, morphing to small (8dp, buttons under 48dp) or medium (12dp) while pressed, fast spatial spring
+
+  private final boolean xgram = XgramExpressive.isEnabled();
+  private XgramExpressive.Spring xgramPress;
+
+  private void xgramAnimatePress (boolean pressed) {
+    if (xgramPress == null) {
+      xgramPress = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (spring, value) -> invalidate()).setThreshold(.002f);
+    }
+    xgramPress.animateTo(pressed ? 1f : 0f);
+    invalidate();
+  }
+
+  private float xgramCornerPx (RectF rect) {
+    final float full = Math.min(rect.width(), rect.height()) / 2f;
+    final float pressed = Screen.dpf(rect.height() >= Screen.dpf(48f) ? XgramExpressive.CORNER_M : XgramExpressive.CORNER_S);
+    final float factor = xgramPress != null ? xgramPress.getValue() : 0f;
+    return Math.max(0f, Math.min(full, full + (pressed - full) * factor));
   }
 
   @Override
@@ -438,10 +463,16 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
 
     if (buttonFactor > 0f) {
       RectF rectF = Paints.getRectF();
-      int radius = Screen.dp(3f);
+      float radius = Screen.dp(3f);
 
       int padding = (getStrokeWidth() / 2);
       rectF.set(padding, padding, width - padding, height - padding);
+
+      if (xgram) {
+        radius = xgramCornerPx(rectF);
+        rectPath.reset();
+        rectPath.addRoundRect(rectF, radius, radius, Path.Direction.CCW);
+      }
 
       final boolean saved = buttonFactor != 1f;
       if (saved) {

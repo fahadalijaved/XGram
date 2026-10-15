@@ -35,6 +35,9 @@ import androidx.annotation.IdRes;
 import androidx.annotation.NonNull;
 import androidx.core.content.res.ResourcesCompat;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramFabMenuItemView;
+
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.theme.ColorId;
@@ -52,7 +55,10 @@ import me.vkryl.android.ViewUtils;
 import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.ColorUtils;
+import me.vkryl.core.MathUtils;
 import me.vkryl.core.lambda.Destroyable;
+
+import java.util.ArrayList;
 
 public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickListener, FactorAnimator.Target, Destroyable {
   private static final float START_SCALE = .6f;
@@ -61,6 +67,16 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   private CircleButton mainButton;
   // private int rowsCount;
   private final FactorAnimator animator;
+
+  // XGram M3E: FloatingActionButtonMenu. Pill items (index 0 is the one nearest the FAB), a toggle FAB that
+  // morphs into the close button, a visible-count stagger, no scrim. Decided once per activity (the switch restarts it).
+  private final boolean xgram = XgramExpressive.isEnabled();
+  private final ArrayList<XgramFabMenuItemView> xgramItems = new ArrayList<>();
+  private XgramExpressive.Spring xgramMorph, xgramStagger, xgramShowScale, xgramShowAlpha;
+  private int xgramVisibleCount;
+  private float xgramFabSize = 56f, xgramFabMargin = 16f;
+  /** FloatingActionButtonDefaults.ShowHideTargetScale */
+  private static final float XGRAM_HIDDEN_SCALE = .2f;
 
   public OverlayButtonWrap (Context context) {
     super(context);
@@ -97,6 +113,10 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   // Views
 
   private void addMainButton (@NonNull ViewController<?> parent, int id, int resource, @ColorId int circleColorId, @ColorId int iconColorId, @ColorId int overlayColorId, @ColorId int overlayIconColorId) {
+    if (xgram) {
+      xgramAddMainButton(parent, id, resource, circleColorId, iconColorId);
+      return;
+    }
     FrameLayoutFix.LayoutParams params;
 
     int padding = Screen.dp(4f);
@@ -117,6 +137,10 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   }
 
   public void updateRtl () {
+    if (xgram) {
+      xgramUpdateRtl();
+      return;
+    }
     int gravity = Lang.rtl() ? Gravity.LEFT | Gravity.BOTTOM : Gravity.RIGHT | Gravity.BOTTOM;
     int padding = Screen.dp(4f);
     int leftMargin, rightMargin;
@@ -172,6 +196,10 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   }
 
   private void addButton (@NonNull ViewController<?> parent, int index, int id, int resource, int background, int colorId, int stringRes) {
+    if (xgram) {
+      xgramAddItem(parent, index, id, resource, stringRes);
+      return;
+    }
     FrameLayoutFix.LayoutParams params;
 
     final int padding = Screen.dp(4f);
@@ -257,6 +285,9 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   @Override
   public void performDestroy () {
     this.isDestroyed = true;
+    if (xgram) {
+      xgramCancelSprings();
+    }
     for (int i = 0; i < getChildCount(); i++) {
       View view = getChildAt(i);
       if (view instanceof Destroyable) {
@@ -280,6 +311,10 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
       return;
     }
     isOpen = !isOpen;
+    if (xgram) {
+      xgramAnimateMenu();
+      return;
+    }
     if (Views.HARDWARE_LAYER_ENABLED) {
       if (isOpen && animator.getFactor() == 0f) {
         setChildrenLayerType(LAYER_TYPE_HARDWARE);
@@ -312,6 +347,10 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   private FactorAnimator hideAnimator;
 
   private void setHideFactor (float factor) {
+    if (xgram) {
+      xgramSetHidden(factor >= .5f, false);
+      return;
+    }
     factor = Anim.anticipateRange(factor);
     if (this.hideFactor != factor) {
       this.hideFactor = factor;
@@ -330,6 +369,10 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   private static final boolean USE_DECELERATE = false;
 
   private void animateHideFactor (float toFactor) {
+    if (xgram) {
+      xgramSetHidden(toFactor >= .5f, true);
+      return;
+    }
     if (hideAnimator == null) {
       if (USE_DECELERATE) {
         hideAnimator = new FactorAnimator(1, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.hideFactor);
@@ -446,6 +489,9 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   // Background shit
 
   private int calculateOverlayColor () {
+    if (xgram) {
+      return 0; // M3E FAB menu has no scrim
+    }
     if (easeFactor != 0f) {
       int color = ColorUtils.fromToArgb(ColorUtils.color(0, Theme.overlayColor()), Theme.overlayColor(), easeFactor);
       if (Color.alpha(color) != 0) {
@@ -492,11 +538,208 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
     if (e.getAction() == MotionEvent.ACTION_DOWN) {
       close();
     }
+    if (xgram) {
+      return Views.isValid(this) && (super.onTouchEvent(e) || (xgramMorph != null && xgramMorph.getValue() != 0f));
+    }
     return Views.isValid(this) && (super.onTouchEvent(e) || animator.getFactor() != 0f);
   }
 
   public boolean isShowing () {
+    if (xgram) {
+      return isOpen || (xgramMorph != null && (xgramMorph.isRunning() || xgramMorph.getValue() != 0f));
+    }
     return animator.isAnimating() || animator.getFactor() != 0f;
+  }
+
+  // XGram M3E FAB menu
+
+  @Override
+  protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+    if (xgram && mainButton != null) {
+      // Medium FAB (80dp, 24dp from the edges) once the content is at least 600dp wide (unfolded Fold, tablets)
+      final float size = MeasureSpec.getSize(widthMeasureSpec) >= Screen.dp(600f) ? 80f : 56f;
+      if (size != xgramFabSize) {
+        xgramFabSize = size;
+        xgramFabMargin = size == 80f ? 24f : 16f;
+        xgramApplyFabSize();
+      }
+    }
+    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+  }
+
+  private int xgramGravity () {
+    return Lang.rtl() ? Gravity.LEFT | Gravity.BOTTOM : Gravity.RIGHT | Gravity.BOTTOM;
+  }
+
+  private void xgramAddMainButton (@NonNull ViewController<?> parent, int id, int resource, @ColorId int circleColorId, @ColorId int iconColorId) {
+    final int size = Screen.dp(xgramFabSize);
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(size, size, xgramGravity());
+    params.rightMargin = params.leftMargin = params.bottomMargin = Screen.dp(xgramFabMargin);
+
+    CircleButton button = new CircleButton(getContext());
+    button.init(resource, 0, xgramFabSize, 0f, circleColorId, iconColorId, true);
+    button.xgramSetToggleFab(true);
+    button.setId(id);
+    button.setOnClickListener(this);
+    button.setLayoutParams(params);
+    parent.addThemeInvalidateListener(button);
+
+    addView(mainButton = button);
+    xgramLayoutItems();
+  }
+
+  private void xgramAddItem (@NonNull ViewController<?> parent, int index, int id, int resource, int stringRes) {
+    XgramFabMenuItemView item = new XgramFabMenuItemView(getContext());
+    item.setId(id);
+    item.setIcon(resource);
+    item.setText(Lang.getString(parent.bindLocaleChanger(stringRes, item, false, false)));
+    item.setOnClickListener(this);
+    item.setEnabled(false);
+    item.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(XgramFabMenuItemView.HEIGHT), xgramGravity()));
+    parent.addThemeInvalidateListener(item);
+    index = Math.min(index, xgramItems.size());
+    xgramItems.add(index, item);
+    addView(item, index);
+    xgramLayoutItems();
+  }
+
+  /** Items sit above the FAB's layout box: 8dp from it, 4dp apart, end-aligned with the FAB. */
+  private void xgramLayoutItems () {
+    final int margin = Screen.dp(xgramFabMargin);
+    final int itemHeight = Screen.dp(XgramFabMenuItemView.HEIGHT);
+    final int spacing = Screen.dp(XgramFabMenuItemView.SPACING);
+    final int base = margin + Screen.dp(xgramFabSize) + Screen.dp(XgramFabMenuItemView.FAB_GAP);
+    for (int i = 0; i < xgramItems.size(); i++) {
+      FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) xgramItems.get(i).getLayoutParams();
+      if (params == null) {
+        continue;
+      }
+      params.leftMargin = params.rightMargin = margin;
+      params.bottomMargin = base + (itemHeight + spacing) * i;
+    }
+  }
+
+  private void xgramApplyFabSize () {
+    FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) mainButton.getLayoutParams();
+    if (params != null) {
+      params.width = params.height = Screen.dp(xgramFabSize);
+      params.leftMargin = params.rightMargin = params.bottomMargin = Screen.dp(xgramFabMargin);
+    }
+    mainButton.xgramSetFabSize(xgramFabSize);
+    xgramLayoutItems();
+  }
+
+  private void xgramUpdateRtl () {
+    final int gravity = xgramGravity();
+    for (int i = 0; i < getChildCount(); i++) {
+      View view = getChildAt(i);
+      if (view == null)
+        continue;
+      FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) view.getLayoutParams();
+      if (params != null && params.gravity != gravity) {
+        params.gravity = gravity;
+        view.setLayoutParams(params);
+      }
+      if (view instanceof XgramFabMenuItemView) {
+        ((XgramFabMenuItemView) view).updatePaddings();
+      }
+    }
+    if (mainButton != null) {
+      mainButton.xgramSetFabSize(xgramFabSize);
+      mainButton.setPivotX(Lang.rtl() ? 0f : mainButton.getMeasuredWidth());
+    }
+  }
+
+  private void xgramAnimateMenu () {
+    if (xgramMorph == null) {
+      // ToggleFloatingActionButton: one progress (fast spatial) drives size, corner, color and the icon swap
+      xgramMorph = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> {
+        if (mainButton != null) {
+          mainButton.xgramSetToggleFactor(value);
+        }
+      }).setThreshold(.002f).setEndListener(() -> UI.getContext(getContext()).notifyBackPressAvailabilityChanged());
+      // FloatingActionButtonMenuItemColumn: an integer visible count, slow effects spring, visibility threshold 1
+      xgramStagger = new XgramExpressive.Spring(XgramExpressive.EFFECTS_SLOW, 0f, (s, value) -> xgramSetVisibleCount(value)).setThreshold(1f);
+    }
+    xgramMorph.animateTo(isOpen ? 1f : 0f);
+    xgramStagger.animateTo(isOpen ? xgramItems.size() : 0f);
+    if (mainButton != null && !xgramMorph.isRunning()) {
+      mainButton.xgramSetToggleFactor(xgramMorph.getValue()); // reduce motion snaps
+    }
+    if (!xgramStagger.isRunning()) {
+      xgramSetVisibleCount(xgramStagger.getValue());
+    }
+    xgramUpdateItemsEnabled();
+    UI.getContext(getContext()).notifyBackPressAvailabilityChanged();
+  }
+
+  private void xgramSetVisibleCount (float value) {
+    final int count = MathUtils.clamp((int) value, 0, xgramItems.size());
+    if (this.xgramVisibleCount != count) {
+      this.xgramVisibleCount = count;
+      // Item i (counted from the FAB) shows while i < count: the nearest appears first, the farthest hides first
+      for (int i = 0; i < xgramItems.size(); i++) {
+        xgramItems.get(i).setItemVisible(i < count, true);
+      }
+      xgramUpdateItemsEnabled();
+    }
+  }
+
+  private void xgramUpdateItemsEnabled () {
+    for (int i = 0; i < xgramItems.size(); i++) {
+      xgramItems.get(i).setEnabled(isOpen && i < xgramVisibleCount);
+    }
+  }
+
+  /** Modifier.animateFloatingActionButton: scale to 0.2 towards the bottom end (fast spatial) and fade (fast effects). */
+  private void xgramSetHidden (boolean hide, boolean animated) {
+    if (mainButton == null) {
+      return;
+    }
+    this.hideFactor = hide ? 1f : 0f;
+    if (xgramShowScale == null) {
+      final boolean visible = mainButton.getAlpha() != 0f;
+      xgramShowScale = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, visible ? 1f : 0f, (s, value) -> xgramApplyShowScale(value)).setThreshold(.002f);
+      xgramShowAlpha = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, visible ? 1f : 0f, (s, value) -> mainButton.setAlpha(MathUtils.clamp(value))).setThreshold(.002f);
+    }
+    final float target = hide ? 0f : 1f;
+    mainButton.setPivotX(Lang.rtl() ? 0f : mainButton.getMeasuredWidth());
+    mainButton.setPivotY(mainButton.getMeasuredHeight());
+    if (animated) {
+      xgramShowScale.animateTo(target);
+      xgramShowAlpha.animateTo(target);
+    } else {
+      xgramShowScale.setValue(target);
+      xgramShowAlpha.setValue(target);
+    }
+    if (!xgramShowScale.isRunning()) {
+      xgramApplyShowScale(xgramShowScale.getValue());
+    }
+    if (!xgramShowAlpha.isRunning()) {
+      mainButton.setAlpha(MathUtils.clamp(xgramShowAlpha.getValue()));
+    }
+  }
+
+  private void xgramApplyShowScale (float value) {
+    final float scale = XGRAM_HIDDEN_SCALE + (1f - XGRAM_HIDDEN_SCALE) * value;
+    mainButton.setPivotX(Lang.rtl() ? 0f : mainButton.getMeasuredWidth());
+    mainButton.setPivotY(mainButton.getMeasuredHeight());
+    mainButton.setScaleX(scale);
+    mainButton.setScaleY(scale);
+  }
+
+  private void xgramCancelSprings () {
+    if (xgramMorph != null) {
+      xgramMorph.cancel();
+      xgramStagger.cancel();
+    }
+    if (xgramShowScale != null) {
+      xgramShowScale.cancel();
+      xgramShowAlpha.cancel();
+    }
+    for (XgramFabMenuItemView item : xgramItems) {
+      item.cancelAnimations();
+    }
   }
 
   // Callback stuff
