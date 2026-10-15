@@ -6112,11 +6112,15 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
     View view = baseRecyclerView.getLayoutManager().findViewByPosition(firstVisibleItemPosition);
 
+    List<ListItem> items = baseAdapter.getItems();
     if (view != null) {
       scrollY -= view.getTop();
+      if (firstVisibleItemPosition >= 0 && com.fahadali.xgram.appearance.XgramExpressive.hasListDecoration(baseRecyclerView)) {
+        scrollY += com.fahadali.xgram.appearance.XgramM3Profile.groupGapPx(items, firstVisibleItemPosition); // XGram: the tile's gap is above its top
+      }
     }
     for (int j = firstVisibleItemPosition - 1; j >= 0; j--) {
-      scrollY += calculateHeight(j, width, baseAdapter.getItems().get(j));
+      scrollY += xgramItemHeight(items, j, width, items.get(j));
     }
     return scrollY;
   }

@@ -817,6 +817,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     reactionsCounter.setCount(hasReactions ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, !notificationsEnabled(), allowAnimation && needAnimateChanges());
     mentionCounter.setCount(hasMentions ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, false, allowAnimation && needAnimateChanges());
     counter.setCount(hasMentions && unreadCount == 1 ? 0 : unreadCount, !notificationsEnabled(), allowAnimation && needAnimateChanges());
+    xgramCheckUnreadStyle();
   }
 
   public boolean needAnimateChanges () {
@@ -981,12 +982,17 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       avail -= reactionsWidth + (reactionsWidth > 0 ? Screen.dp(3) : 0);
     }
 
+    boolean xgramUnread = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramHasUnread();
+    if (xgramTitleUnread != xgramUnread) {
+      xgramTitleUnread = xgramUnread; // XGram: unread titles are bolder
+      changed = true;
+    }
     if (changed || lastAvailWidth != avail) {
       lastAvailWidth = avail;
       if (StringUtils.isEmpty(title)) {
         trimmedTitle = null;
       } else {
-        trimmedTitle = new Text.Builder(title, avail, getTitleStyleProvider(listMode), isSecretChat() ? TextColorSets.Regular.SECURE : TextColorSets.Regular.NORMAL)
+        trimmedTitle = new Text.Builder(title, avail, xgramTitleStyleProvider(), isSecretChat() ? TextColorSets.Regular.SECURE : TextColorSets.Regular.NORMAL)
           .singleLine()
           .allBold()
           .clipTextArea()
@@ -1356,8 +1362,9 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
 
     this.textIconsPadding = textIconIds != null && textIconIds.size() > 0 ? Screen.dp(2f) + Screen.dp(18f) * textIconIds.size() : 0;
 
+    xgramTextUnread = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramHasUnread();
     if (avail > 0 && !StringUtils.isEmpty(text)) {
-      trimmedText = new Text.Builder(text, avail, getTextStyleProvider(listMode), TextColorSets.Regular.LIGHT)
+      trimmedText = new Text.Builder(text, avail, getTextStyleProvider(listMode), xgramTextUnread ? TextColorSets.Regular.NORMAL : TextColorSets.Regular.LIGHT)
         .maxLineCount(isSingleLine() ? 1 : 2)
         .textFlags(Text.FLAG_ELLIPSIZE_NEWLINE)
         .ignoreContinuousNewLines()
@@ -1388,6 +1395,36 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
 
   private static TextStyleProvider getTextStyleProvider (int chatListMode) {
     return Paints.robotoStyleProvider(chatListMode == Settings.CHAT_MODE_3LINE ? 15 : 16);
+  }
+
+  // XGram: Material 3 Expressive chat list typography: Google Sans Flex titleMedium, weight 700 while unread.
+
+  private boolean xgramTitleUnread, xgramTextUnread;
+
+  /** Has unread messages (or is marked as unread). */
+  public boolean xgramHasUnread () {
+    int count = getUnreadCount();
+    return count > 0 || count == Tdlib.CHAT_MARKED_AS_UNREAD;
+  }
+
+  private TextStyleProvider xgramTitleStyleProvider () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, xgramTitleUnread, 16f);
+    }
+    return getTitleStyleProvider(listMode);
+  }
+
+  private void xgramCheckUnreadStyle () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || currentWidth <= 0) {
+      return;
+    }
+    boolean unread = xgramHasUnread();
+    if (unread != xgramTitleUnread) {
+      layoutTitle(false);
+    }
+    if (unread != xgramTextUnread) {
+      layoutText();
+    }
   }
 
   private static TextStyleProvider getTitleStyleProvider (int chatListMode) {

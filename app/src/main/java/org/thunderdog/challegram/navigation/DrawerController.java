@@ -241,7 +241,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   @Override
   protected View onCreateView (Context context) {
-    shadowWidth = Screen.dp(7f);
+    shadowWidth = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 0 : Screen.dp(7f); // XGram: no shadow, tone separates the drawer
 
     currentWidth = Math.min(Screen.smallestSide() - Screen.dp(56f), Screen.dp(300f)) + shadowWidth;
 
@@ -258,11 +258,15 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     contentView.setLayoutParams(FrameLayoutFix.newParams(currentWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT));
     UI.setFullscreenIfNeeded(contentView);
 
-    ShadowView shadowView = new ShadowView(context);
-    shadowView.setSimpleRightShadow(false);
-    shadowView.setLayoutParams(FrameLayoutFix.newParams(shadowWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT));
-    addThemeInvalidateListener(shadowView);
-    contentView.addView(shadowView);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      com.fahadali.xgram.appearance.XgramM3Profile.roundEndCorners(contentView, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L); // XGram: modal navigation drawer, 16dp end corners
+    } else {
+      ShadowView shadowView = new ShadowView(context);
+      shadowView.setSimpleRightShadow(false);
+      shadowView.setLayoutParams(FrameLayoutFix.newParams(shadowWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT));
+      addThemeInvalidateListener(shadowView);
+      contentView.addView(shadowView);
+    }
 
     headerView = new DrawerHeaderView(context, this);
 
@@ -323,8 +327,12 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     });
     recyclerView.setItemAnimator(null);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-    ViewSupport.setThemedBackground(recyclerView, ColorId.filling, this);
-    addThemeFillingColorListener(recyclerView);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      ViewSupport.setThemedBackground(recyclerView, ColorId.drawer, this); // XGram: SURFACE_CONTAINER_LOW
+    } else {
+      ViewSupport.setThemedBackground(recyclerView, ColorId.filling, this);
+      addThemeFillingColorListener(recyclerView);
+    }
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     recyclerView.setAdapter(adapter);
     recyclerView.setLayoutParams(params);
@@ -470,7 +478,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         float shadowFactor = 1f - lineFactor;
 
 
-        if (shadowFactor != 0f) {
+        if (shadowFactor != 0f && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
           final int alpha = (int) (255f * maxAlpha * shadowFactor * dragFactor);
 
           topShadowPaint.setAlpha(alpha);
@@ -1403,13 +1411,17 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       View overlay = context().getOverlayView();
       contentView.setTranslationX(translation);
       if (overlay != null) {
-        overlay.setAlpha(.6f * factor);
+        overlay.setAlpha((com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? .32f : .6f) * factor); // XGram: M3 scrim
       }
 
       /*float cx = currentWidth * factor;
       overlay.setTranslationX(cx <= 1f ? 0 : cx - 1f);*/
       if (currentView != null) {
-        currentView.setClipLeft((int) (currentWidth() * factor));
+        int clipLeft = (int) (currentWidth() * factor);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !Lang.rtl()) {
+          clipLeft = Math.max(0, clipLeft - Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L)); // XGram: the page shows behind the rounded corners
+        }
+        currentView.setClipLeft(clipLeft);
       }
 
       if (factor == 0f && !StringUtils.isEmpty(shareTextOnClose)) {
