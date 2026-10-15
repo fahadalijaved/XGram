@@ -50,9 +50,75 @@ import me.vkryl.core.MathUtils;
 public class ChatBottomBarView extends BaseView {
   private Drawable drawable;
 
+  // XGram: Material 3 Expressive. The bar keeps the surface color and the action (Join, Mute, Unmute) is a filled
+  // tonal pill: secondaryContainer, 40dp tall, 16dp side margins, full corners that morph to 12dp while pressed. It
+  // still collapses into the round scroll button; the shadow only shows while it floats.
+  private final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress;
+  private boolean xgramPressed;
+
+  private void xgramInit () {
+    Drawable content = new SimpleDrawable() {
+      @Override
+      public void draw (@NonNull Canvas c) {
+        float barAlpha = 1f - collapseFactor;
+        if (barAlpha > 0f) {
+          c.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(barAlpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE))));
+        }
+        int color = ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), Theme.getColor(ColorId.circleButtonChat), collapseFactor);
+        RectF rectF = buildRectF();
+        float radius = xgramRadius(rectF);
+        c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(color));
+      }
+    };
+    Drawable mask = new SimpleDrawable() {
+      @Override
+      public void draw (@NonNull Canvas c) {
+        RectF rectF = buildRectF();
+        float radius = xgramRadius(rectF);
+        c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(0xff000000));
+      }
+    };
+    int rippleColor = com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER));
+    ViewUtils.setBackground(this, this.drawable = new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(rippleColor), content, mask));
+    xgramPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> update());
+    setOutlineProvider(new android.view.ViewOutlineProvider() {
+      @Override
+      public void getOutline (View view, android.graphics.Outline outline) {
+        RectF rectF = buildRectF();
+        outline.setRoundRect((int) rectF.left, (int) rectF.top, (int) rectF.right, (int) rectF.bottom, xgramRadius(rectF));
+        outline.setAlpha(collapseFactor);
+      }
+    });
+    Views.setSimpleStateListAnimator(this);
+  }
+
+  private float xgramRadius (RectF rectF) {
+    float full = Math.min(rectF.width(), rectF.height()) / 2f;
+    float pressed = Math.min(full, Screen.dp(12f));
+    float press = xgramPress != null ? xgramPress.getValue() * (1f - collapseFactor) : 0f;
+    return full + (pressed - full) * press;
+  }
+
+  @Override
+  protected void drawableStateChanged () {
+    super.drawableStateChanged();
+    if (xgramM3 && xgramPress != null) {
+      boolean pressed = isPressed() && isEnabled();
+      if (xgramPressed != pressed) {
+        xgramPressed = pressed;
+        xgramPress.animateTo(pressed ? 1f : 0f);
+      }
+    }
+  }
+
   public ChatBottomBarView (Context context, Tdlib tdlib) {
     super(context, tdlib);
     Views.setClickable(this);
+    if (xgramM3) {
+      xgramInit();
+      return;
+    }
     Drawable drawable = new SimpleDrawable() {
       @Override
       public void draw (@NonNull Canvas c) {
@@ -114,6 +180,10 @@ public class ChatBottomBarView extends BaseView {
     float centerX = fromWidth / 2f;
     float centerY = getPaddingTop() + (getMeasuredHeight() - getPaddingTop() - getPaddingBottom()) / 2f;
 
+    if (xgramM3) {
+      float pillHalf = Screen.dp(40f) / 2f;
+      fromRect.set(Screen.dp(16f), centerY - pillHalf, fromWidth - Screen.dp(16f), centerY + pillHalf);
+    } else
     fromRect.set(0, 0, fromWidth, fromHeight);
     toRect.set(
       centerX - toSize / 2f,
@@ -160,7 +230,18 @@ public class ChatBottomBarView extends BaseView {
       this.drawable = Drawables.get(iconRes);
     }
 
+    private String xgramText; // XGram: labelLarge in sentence case
+    private float xgramTextWidth;
+
     public void layout (int width) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        int available = width - Screen.dp(16f) * 2 - Screen.dp(24f) * 2;
+        android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramM3Chat.labelLargePaint(0xff000000);
+        this.xgramText = available > 0 ? android.text.TextUtils.ellipsize(this.text, paint, available, android.text.TextUtils.TruncateAt.END).toString() : null;
+        this.xgramTextWidth = xgramText != null ? paint.measureText(xgramText) : 0f;
+        this.drawingText = null;
+        return;
+      }
       width -= Screen.dp(8f) * 2;
       this.drawingText = width > 0 ? new Text.Builder(Lang.uppercase(this.text), width - Screen.dp(8f), Paints.robotoStyleProvider(16), TextColorSets.Regular.NEUTRAL).allBold().singleLine().build() : null;
     }
@@ -194,6 +275,11 @@ public class ChatBottomBarView extends BaseView {
       }
       if (drawingText != null && collapseFactor < 1f) {
         drawingText.draw(c, (int) (cx - drawingText.getWidth() / 2f), (int) (cy - drawingText.getHeight() / 2f), null, factor * (1f - collapseFactor));
+      }
+      if (xgramText != null && collapseFactor < 1f) {
+        int textColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+        android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramM3Chat.labelLargePaint(ColorUtils.alphaColor(factor * (1f - collapseFactor), textColor));
+        c.drawText(xgramText, cx - xgramTextWidth / 2f, cy - (paint.ascent() + paint.descent()) / 2f, paint);
       }
       if (collapseFactor > 0f && drawable != null) {
         Paint paint = PorterDuffPaint.get(ColorId.circleButtonChatIcon, factor * collapseFactor);

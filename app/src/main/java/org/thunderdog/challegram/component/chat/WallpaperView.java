@@ -359,8 +359,37 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
 
   public static final int OVERLAY_ALPHA = 0x70;
 
+  /**
+   * XGram: Material 3 Expressive replaces the theme's own wallpaper (none, the built-in cats or the theme default) with
+   * a solid surface, like Google Messages. A wallpaper the user picked still draws; previews always draw.
+   */
+  private boolean xgramSolidSurface () {
+    if (inSetupMode || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return false;
+    }
+    if (isAnimatingChanges() && !xgramIsDefault(previewWallpaper)) {
+      return false;
+    }
+    return xgramIsDefault(wallpaper);
+  }
+
+  private static boolean xgramIsDefault (@Nullable TGBackground background) {
+    if (background == null || background.isEmpty() || background.isBuiltIn()) {
+      return true;
+    }
+    if (background.isCustom()) {
+      return false;
+    }
+    String name = background.getName();
+    return name != null && name.equals(Theme.getDefaultWallpaper());
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (xgramSolidSurface()) {
+      c.drawColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE));
+      return;
+    }
     if (manager.useBubbles()) {
       layoutReceivers();
       if (!isAnimatingChanges()) {

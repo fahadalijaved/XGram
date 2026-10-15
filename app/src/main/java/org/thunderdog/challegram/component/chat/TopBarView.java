@@ -77,7 +77,9 @@ public class TopBarView extends FrameLayoutFix {
     super(context);
 
     setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(36f)));
-    ViewSupport.setThemedBackground(this, ColorId.filling, null);
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: a card of the Material 3 Expressive group draws the background
+      ViewSupport.setThemedBackground(this, ColorId.filling, null);
+    }
 
     actionsList = new LinearLayout(context);
     actionsList.setOrientation(LinearLayout.HORIZONTAL);
@@ -99,6 +101,9 @@ public class TopBarView extends FrameLayoutFix {
     topDismissButton.setColorFilter(Theme.iconColor());
     topDismissButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_close_18));
     topDismissButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(40f), ViewGroup.LayoutParams.MATCH_PARENT, Lang.gravity() | Gravity.TOP));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      topDismissButton.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+    } else
     topDismissButton.setBackgroundResource(R.drawable.bg_btn_header);
     Views.setClickable(topDismissButton);
     topDismissButton.setVisibility(View.INVISIBLE);
@@ -152,9 +157,16 @@ public class TopBarView extends FrameLayoutFix {
       }
       button.setEllipsize(TextUtils.TruncateAt.END);
       button.setSingleLine(true);
-      button.setBackgroundResource(R.drawable.bg_btn_header);
       button.setOnClickListener(item.onClickListener);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive text button: labelLarge in sentence case, full-corner state layer
+        com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(button, Theme.getColor(textColorId));
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(button, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+        button.setText(Lang.getString(item.stringRes));
+      } else {
+      button.setBackgroundResource(R.drawable.bg_btn_header);
       Views.setMediumText(button, Lang.uppercase(Lang.getString(item.stringRes)));
+      }
       Views.setClickable(button);
       button.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, 2f));
       actionsList.addView(button);

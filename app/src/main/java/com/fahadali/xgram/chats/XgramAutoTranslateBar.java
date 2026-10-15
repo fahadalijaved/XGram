@@ -81,6 +81,13 @@ public final class XgramAutoTranslateBar extends FrameLayoutFix {
     close.setOnClickListener(onClose);
     addView(close);
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // Material 3 Expressive: a card of the group under the app bar (the card is set by the bar stack), the label in
+      // labelLarge and the cross as a standard icon button.
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(label, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      close.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+    }
+
     if (themeProvider != null) {
       themeProvider.addThemeFilterListener(icon, ColorId.icon);
       themeProvider.addThemeFilterListener(close, ColorId.icon);

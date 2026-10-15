@@ -70,6 +70,7 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
     final BoolAnimator isVisible;
 
     int height;
+    @Nullable com.fahadali.xgram.appearance.XgramM3Chat.CardDrawable xgramCard; // XGram: Material 3 Expressive card
 
     public Entry (Item item, View view, ShadowView shadowView, FactorAnimator.Target target) {
       this.item = item;
@@ -92,12 +93,32 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
     return super.onTouchEvent(event) || event.getAction() != MotionEvent.ACTION_DOWN || event.getY() < getTotalVisualHeight();
   }
 
+  // XGram: Material 3 Expressive. The bars become a segmented card group (surfaceContainerHigh, outer corners 20dp,
+  // inner 4dp, 2dp gaps, 8dp side margins) with no shadows; items passed here keep their own full-width look.
+  private @Nullable Item[] xgramPlainItems;
+
+  public void xgramSetPlainItems (@Nullable Item... items) {
+    this.xgramPlainItems = items;
+  }
+
+  private boolean xgramIsPlain (Item item) {
+    if (xgramPlainItems != null) {
+      for (Item plain : xgramPlainItems) {
+        if (plain == item) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   public void initWithList (Item[] items, @Nullable ViewController<?> themeProvider) {
     if (!entries.isEmpty())
       throw new IllegalStateException();
     if (items.length == 0)
       throw new IllegalArgumentException();
 
+    final boolean xgramCards = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     entries.ensureCapacity(items.length);
     for (Item item : items) {
       ShadowView shadowView = new ShadowView(getContext());
@@ -128,7 +149,17 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
         }
       };
 
-      entries.add(new Entry(item, view, shadowView, target));
+      Entry entry = new Entry(item, view, shadowView, target);
+      if (xgramCards && !xgramIsPlain(item)) {
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        if (params instanceof MarginLayoutParams) {
+          ((MarginLayoutParams) params).leftMargin = Screen.dp(8f);
+          ((MarginLayoutParams) params).rightMargin = Screen.dp(8f);
+          view.setLayoutParams(params);
+        }
+        entry.xgramCard = com.fahadali.xgram.appearance.XgramM3Chat.applyCard(view);
+      }
+      entries.add(entry);
     }
     entries.trimToSize();
   }
@@ -191,6 +222,10 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
   }
 
   private void updatePositions () {
+    final boolean xgramCards = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramCards) {
+      xgramUpdateSegments();
+    }
     float y = 0;
     for (Entry entry : entries) {
       float visibility = entry.isVisible.getFloatValue();
@@ -212,13 +247,62 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
 
       entry.shadowView.setAlpha(visibility);
       entry.shadowView.setTranslationY(positionY);
-      if (entry.shadowView.getVisibility() != viewVisibility) {
-        entry.shadowView.setVisibility(viewVisibility);
+      int shadowVisibility = xgramCards ? View.GONE : viewVisibility; // XGram: no shadows in Material 3 Expressive
+      if (entry.shadowView.getVisibility() != shadowVisibility) {
+        entry.shadowView.setVisibility(shadowVisibility);
       }
 
       y += height * visibility;
     }
     notifyTotalHeightChanged(Math.round(y));
+  }
+
+  /** XGram: segment of each visible card over the visible cards (a plain item breaks the group). */
+  private void xgramUpdateSegments () {
+    final int count = entries.size();
+    for (int i = 0; i < count; i++) {
+      Entry entry = entries.get(i);
+      if (entry.xgramCard == null || !xgramIsShown(entry)) {
+        continue;
+      }
+      boolean first = true, last = true;
+      for (int j = i - 1; j >= 0; j--) {
+        Entry other = entries.get(j);
+        if (xgramIsShown(other)) {
+          first = other.xgramCard == null;
+          break;
+        }
+      }
+      for (int j = i + 1; j < count; j++) {
+        Entry other = entries.get(j);
+        if (xgramIsShown(other)) {
+          last = other.xgramCard == null;
+          break;
+        }
+      }
+      int segment;
+      if (first && last) {
+        segment = com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE;
+      } else if (first) {
+        segment = com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST;
+      } else if (last) {
+        segment = com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_LAST;
+      } else {
+        segment = com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_MIDDLE;
+      }
+      if (entry.xgramCard.getSegment() != segment) {
+        entry.xgramCard.setSegment(segment);
+        entry.view.invalidateOutline();
+      }
+    }
+  }
+
+  private boolean xgramIsShown (Entry entry) {
+    float visibility = entry.isVisible.getFloatValue();
+    if (entry.item.allowCollapse()) {
+      visibility *= globalVisibility.getFactor();
+    }
+    return visibility > 0f && entry.height > 0;
   }
 
   private int lastHeight;
