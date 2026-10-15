@@ -1965,6 +1965,32 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     RectF rectF = Paints.getRectF();
     int textX, textY;
     TextPaint textPaint;
+    if (useBubbles() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive date: labelMedium in onSurfaceVariant, a pill only over a wallpaper or while it floats
+      int color = getBubbleDateBackgroundColor();
+      int textColor = getBubbleDateTextColor();
+      int padding = Screen.dp(12f);
+      rectF.set(centerX - pDateWidth / 2f - padding, startY + Screen.dp(5f), centerX + pDateWidth / 2f + padding, startY + Screen.dp(5f) + Screen.dp(26f));
+      int pillColor = color;
+      if (((color >>> 24) & 0xff) == 0 && detachFactor > 0f) {
+        pillColor = ColorUtils.alphaColor(detachFactor, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH));
+      }
+      if (((pillColor >>> 24) & 0xff) != 0) {
+        float radius = rectF.height() / 2f;
+        c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(alpha, pillColor)));
+      }
+      TextPaint datePaint = com.fahadali.xgram.appearance.XgramM3Chat.datePaint(textColor);
+      float baseline = rectF.centerY() - (datePaint.ascent() + datePaint.descent()) / 2f;
+      int savedDateAlpha = datePaint.getAlpha();
+      if (alpha != 1f) {
+        datePaint.setAlpha((int) ((float) savedDateAlpha * alpha));
+      }
+      c.drawText(date, centerX - pDateWidth / 2f, baseline, datePaint);
+      if (alpha != 1f) {
+        datePaint.setAlpha(savedDateAlpha);
+      }
+      return true;
+    }
     if (useBubbles()) {
       int color = getBubbleDateBackgroundColor();
       int textColor = getBubbleDateTextColor();
@@ -2039,12 +2065,20 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         top += (flags & FLAG_SHOW_DATE) != 0 ? Screen.dp(3.5f) : Screen.dp(2f);
       }
       int bottom = xBadgeHeight + top;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive: a surfaceContainerHigh pill inset 16dp, no shadows
+        RectF badgeRect = Paints.getRectF();
+        badgeRect.set(Screen.dp(16f), top + Screen.dp(2f), width - Screen.dp(16f), bottom - Screen.dp(2f));
+        float badgeRadius = badgeRect.height() / 2f;
+        c.drawRoundRect(badgeRect, badgeRadius, badgeRadius, Paints.fillingPaint(getUnreadSeparatorBackgroundColor()));
+      } else {
       float shadow = Theme.getBubbleUnreadShadow();
       if (shadow > 0f) {
         ShadowView.drawTopShadow(c, 0, width, top, shadow);
         ShadowView.drawBottomShadow(c, 0, width, bottom, shadow);
       }
       c.drawRect(0, top, width, bottom, Paints.fillingPaint(getUnreadSeparatorBackgroundColor()));
+      }
       TextPaint mBadge = getBadgePaint(uBadge.needFakeBold);
       int color = getUnreadSeparatorContentColor();
       mBadge.setColor(color);
@@ -2080,7 +2114,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     float lineFactor = 0f;
     if (hasBubble) {
       final int bubbleColor = Theme.getColor(isOutgoingBubble() && !useCircleBubble() ? ColorId.bubbleOut_background : ColorId.bubbleIn_background);
-      lineFactor = Theme.getBubbleOutlineFactor();
+      final boolean xgramFlat = com.fahadali.xgram.appearance.XgramExpressive.isEnabled(); // XGram: Material 3 Expressive bubbles have no shadow or outline
+      lineFactor = xgramFlat ? 0f : Theme.getBubbleOutlineFactor();
       /*if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP && lineFactor < 1f) {
         c.save();
         int offset = Screen.dp(1.5f);
@@ -2089,7 +2124,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         drawBubble(c, Paints.fillingPaint(Utils.alphaColor((1f - lineFactor) * .2f, 0xff000000)), false);
         c.restore();
       }*/
-      if (lineFactor != 1f) {
+      if (lineFactor != 1f && !xgramFlat) {
         drawBubbleShadow(c, 1f - lineFactor);
       }
       if (lineFactor != 0f) {
@@ -3155,6 +3190,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     this.flags = BitwiseUtils.setFlag(flags, FLAG_DATE_FAKE_BOLD, needFakeBold);
     // TextPaint paint = useBubbles() ? Paints.getDatePaint() : Paints.getTitlePaint(false);
     TextPaint paint = useBubbles() ? Paints.getBoldPaint13(needFakeBold) : Paints.getTitlePaint(needFakeBold);
+    if (useBubbles() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      paint = com.fahadali.xgram.appearance.XgramM3Chat.dateMeasurePaint(); // XGram: labelMedium date
+    }
     this.pDateWidth = StringUtils.isEmpty(date) ? 0 : (int) U.measureText(date, paint);
   }
 
@@ -3909,8 +3947,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       int topContentEdge = computeBubbleTop();
       int bottomContentEdge = topContentEdge + bubbleHeight;
 
-      int bubbleDefaultRadius = Screen.dp(Theme.getBubbleDefaultRadius());
-      int bubbleMergeRadius = Screen.dp(Theme.getBubbleMergeRadius());
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled(); // XGram: Google Messages bubble corners
+      int bubbleDefaultRadius = Screen.dp(xgramM3 ? com.fahadali.xgram.appearance.XgramM3Chat.bubbleRadius() : Theme.getBubbleDefaultRadius());
+      int bubbleMergeRadius = Screen.dp(xgramM3 ? com.fahadali.xgram.appearance.XgramM3Chat.bubbleMergeRadius() : Theme.getBubbleMergeRadius());
 
       if (this.leftContentEdge == leftContentEdge && this.topContentEdge == topContentEdge && this.rightContentEdge == rightContentEdge && this.bottomContentEdge == bottomContentEdge && this.lastMergeRadius == bubbleMergeRadius && this.lastDefaultRadius == bubbleDefaultRadius && !force) {
         return;
@@ -3945,7 +3984,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           dr = bubbleDefaultRadius;
           mr = bubbleMergeRadius;
         }
-        final boolean mergeTop = !headerDisabled(); /* && !drawBubbleTimeOverContent()*/ // !hasHeader() && !headerDisabled();
+        // XGram: with Material 3 Expressive only a message joined to the one above gets the small top corner
+        final boolean mergeTop = !headerDisabled() && (!xgramM3 || (flags & FLAG_HEADER_ENABLED) == 0); /* && !drawBubbleTimeOverContent()*/ // !hasHeader() && !headerDisabled();
         final boolean mergeBottom = (flags & MESSAGE_FLAG_IS_BOTTOM) == 0 || (msg.content.getConstructor() == TdApi.MessageGame.CONSTRUCTOR);
 
         synchronized (bubblePath) {

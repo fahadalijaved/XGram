@@ -281,13 +281,14 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
   }
 
   private Path path;
+  private Path xgramBlockPath; // XGram: Material 3 Expressive reply block
   private int pathLeft, pathTop, pathRight, pathBottom, pathRadius;
 
   private void layoutPath (int left, int top, int right, int bottom) {
     if (path == null) {
       path = new Path();
     }
-    int radius = Screen.dp(Theme.getImageRadius());
+    int radius = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(8f) : Screen.dp(Theme.getImageRadius()); // XGram
     if (pathLeft != left || pathTop != top || pathRight != right || pathBottom != bottom || pathRadius != radius) {
       pathLeft = left;
       pathTop = top;
@@ -422,8 +423,25 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
       rectF.bottom = startY + mHeight + padding;
       rectF.left = startX - paddingHorizontal;
       rectF.right = startX + width;
-      float mergeRadius = Theme.getBubbleMergeRadius();
+      float mergeRadius = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(12f) : Theme.getBubbleMergeRadius();
       c.drawRoundRect(rectF, mergeRadius, mergeRadius, Paints.fillingPaint(parent.getBubbleMediaReplyBackgroundColor()));
+    }
+
+    final boolean xgramBlock = isMessageComponent() && !isWhite && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramBlock) {
+      // XGram: Material 3 Expressive: the reply sits in a tinted block with 12dp corners; the line follows its edge
+      int blockLeft = rtl ? endX - width : startX, blockRight = rtl ? endX : startX + width;
+      rectF.set(blockLeft, startY - Screen.dp(2f), blockRight, startY + mHeight + Screen.dp(2f));
+      int blockColor = isOutBubble ?
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), .08f) :
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(lineColor, .10f);
+      float blockRadius = Screen.dp(12f);
+      c.drawRoundRect(rectF, blockRadius, blockRadius, Paints.fillingPaint(blockColor));
+      if (xgramBlockPath == null) {
+        xgramBlockPath = new Path();
+      }
+      xgramBlockPath.rewind();
+      xgramBlockPath.addRoundRect(rectF, blockRadius, blockRadius, Path.Direction.CW);
     }
 
     if (cornerDrawable != null) {
@@ -474,6 +492,19 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
       if (trimmedContent != null) {
         trimmedContent.draw(c, startX + textLeft, startX + textLeft + trimmedContent.getWidth(), 0, startY + Screen.dp(22f), null, 1f, textMediaReceiver);
+      }
+
+      if (xgramBlock) {
+        int saveCount = c.save();
+        c.clipPath(xgramBlockPath);
+        int blockLeft = rtl ? endX - width : startX, blockRight = rtl ? endX : startX + width;
+        if (rtl) {
+          c.drawRect(blockRight - lineWidth, startY - Screen.dp(2f), blockRight, startY + mHeight + Screen.dp(2f), Paints.fillingPaint(lineColor));
+        } else {
+          c.drawRect(blockLeft, startY - Screen.dp(2f), blockLeft + lineWidth, startY + mHeight + Screen.dp(2f), Paints.fillingPaint(lineColor));
+        }
+        c.restoreToCount(saveCount);
+        return;
       }
 
       if (rtl) {

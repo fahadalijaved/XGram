@@ -828,6 +828,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
       params.addRule(RelativeLayout.ALIGN_TOP, R.id.msg_bottom);
 
       replyBarView = new ReplyBarView(context(), tdlib);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive: the reply preview is a block joined to the composer field
+        replyBarView.setBackground(new com.fahadali.xgram.appearance.XgramM3Chat.ComposerBlockDrawable(this::xgramHasTrailingButton));
+        int blockInset = com.fahadali.xgram.appearance.XgramM3Chat.composerBlockEndInset();
+        replyBarView.setPadding(Lang.rtl() ? blockInset : 0, 0, Lang.rtl() ? 0 : blockInset, 0);
+        addThemeInvalidateListener(replyBarView);
+      } else
       ViewSupport.setThemedBackground(replyBarView, ColorId.filling, this);
       replyBarView.setId(R.id.msg_bottomReply);
       replyBarView.setAnimationsDisabled(true);
@@ -853,7 +860,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
       @Override
       protected void onDraw (Canvas c) {
-        c.drawRect(0, 0, getMeasuredWidth(), Screen.dp(36f), Paints.fillingPaint(Theme.fillingColor()));
+        if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: the Material 3 Expressive card is the background
+          c.drawRect(0, 0, getMeasuredWidth(), Screen.dp(36f), Paints.fillingPaint(Theme.fillingColor()));
+        }
         if (liveLocation != null) {
           liveLocation.draw(c, 0);
         }
@@ -988,9 +997,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramSideTabs.setVisibility(View.GONE);
     xgramSideTabs.setCallback(tabsCallback);
 
+    xgramTabsItem = new CollapseListView.ViewItem(xgramTabs, com.fahadali.xgram.topics.ForumTabsView.getBarHeight());
+    topBar.xgramSetPlainItems(xgramTabsItem); // XGram: the topic tabs stay a full-width row above the Material 3 Expressive cards
     topBar.initWithList(new CollapseListView.Item[] {
       // TODO voice chat bar
-      xgramTabsItem = new CollapseListView.ViewItem(xgramTabs, com.fahadali.xgram.topics.ForumTabsView.getBarHeight()),
+      xgramTabsItem,
       pinnedMessagesItem,
       requestsItem = new CollapseListView.ViewItem(requestsView, requestsViewHeight),
       liveLocationItem = new CollapseListView.ViewItem(liveLocationView, liveLocationHeight),
@@ -1539,10 +1550,33 @@ public class MessagesController extends ViewController<MessagesController.Argume
     contentView.addView(bottomShadowView);
 
     contentView.addView(topBar);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && previewMode == PREVIEW_MODE_NONE && !isInForceTouchMode()) {
+      // XGram: Material 3 Expressive: the messages sit in a container with 28dp top corners under the app bar
+      xgramCornersView = new com.fahadali.xgram.appearance.XgramM3Chat.CornersView(context, () -> Theme.getColor(inSelectMode() ? getSelectHeaderColorId() : getHeaderColorId()));
+      xgramCornersView.setLayoutParams(new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.appearance.XgramM3Chat.cornersHeight()));
+      addThemeInvalidateListener(xgramCornersView);
+      contentView.addView(xgramCornersView);
+    }
     contentView.addView(bottomBar);
     contentView.addView(reactionsButtonWrap);
     contentView.addView(mentionButtonWrap);
     contentView.addView(scrollToBottomButtonWrap);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && previewMode == PREVIEW_MODE_NONE && !isInForceTouchMode()) {
+      // XGram: Material 3 Expressive floating toolbar for selected messages (reply, copy, share, delete)
+      xgramSelectionToolbar = new com.fahadali.xgram.appearance.XgramM3Chat.FloatingToolbar(context);
+      View.OnClickListener toolbarClick = v -> onMenuItemPressed(v.getId(), v);
+      xgramSelectionToolbar.addButton(R.id.menu_btn_reply, R.drawable.baseline_reply_24, Lang.getString(R.string.Reply), toolbarClick);
+      xgramSelectionToolbar.addButton(R.id.menu_btn_copy, R.drawable.baseline_content_copy_24, Lang.getString(R.string.Copy), toolbarClick);
+      xgramSelectionToolbar.addButton(R.id.menu_btn_forward, R.drawable.baseline_forward_24, Lang.getString(R.string.Share), toolbarClick);
+      xgramSelectionToolbar.addButton(R.id.menu_btn_delete, R.drawable.baseline_delete_24, Lang.getString(R.string.Delete), toolbarClick);
+      RelativeLayout.LayoutParams toolbarParams = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(64f));
+      toolbarParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
+      toolbarParams.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
+      toolbarParams.bottomMargin = Screen.dp(16f);
+      xgramSelectionToolbar.setLayoutParams(toolbarParams);
+      addThemeInvalidateListener(xgramSelectionToolbar);
+      contentView.addView(xgramSelectionToolbar);
+    }
     contentView.addView(goToNextFoundMessageButtonBadge);
     contentView.addView(goToPrevFoundMessageButtonBadge);
 
@@ -1826,12 +1860,22 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (pagerContentView != null) {
       pagerContentView.setPagingEnabled(false);
     }
+    if (xgramCornersView != null) {
+      xgramCornersView.invalidate(); // XGram: corners in the selection app bar color
+    }
+    xgramUpdateSelectionToolbar(true); // XGram
   }
 
   @Override
   public void onLeaveSelectMode () {
     if (pagerContentView != null) {
       pagerContentView.setPagingEnabled(true);
+    }
+    if (xgramCornersView != null) {
+      xgramCornersView.invalidate(); // XGram
+    }
+    if (xgramSelectionToolbar != null) {
+      xgramSelectionToolbar.setShown(false, true); // XGram
     }
     if (exitOnTransformFinish)
       tdlib.ui().post(this::navigateBack);
@@ -3840,6 +3884,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (value) totalButtonsCount++;
 
       reportButton.setVisibility(canReportSelectedMessages(totalButtonsCount) ? View.VISIBLE : View.GONE);
+      if (xgramSelectionToolbar != null) {
+        for (int actionId : XGRAM_TOOLBAR_ACTIONS) { // XGram: these live in the floating toolbar
+          View button = menu.findViewById(actionId);
+          if (button != null) {
+            button.setVisibility(View.GONE);
+          }
+        }
+      }
     }
   }
 
@@ -5361,6 +5413,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (value) totalButtonsCount++;
       headerView.updateButton(R.id.menu_messageActions, R.id.menu_btn_report, canReportSelectedMessages(totalButtonsCount) ? View.VISIBLE : View.GONE, 0);
     }
+    xgramUpdateSelectionToolbar(true); // XGram
   }
 
   private void copySelectedMessages () {
@@ -7326,6 +7379,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (goToNextFoundMessageButtonBadge != null) {
       goToNextFoundMessageButtonBadge.setTranslationY(offsetY - Screen.dp(74 - 16));
     }
+    if (xgramSelectionToolbar != null) {
+      boolean overBottomBar = bottomBar != null && bottomBar.getVisibility() == View.VISIBLE && bottomWrap.getVisibility() != View.VISIBLE;
+      xgramSelectionToolbar.setTranslationY(offsetY - (overBottomBar ? Screen.dp(48f) : 0));
+    }
     updateBottomBarStyle();
   }
 
@@ -7337,6 +7394,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     bottomShadowView.setTranslationY(y + offset + keyboardOffset);
     if (replyBarView != null) {
       replyBarView.setTranslationY(y + keyboardOffset);
+    }
+    if (inputView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      inputView.invalidate(); // XGram: the field's top corners follow the reply block
     }
     checkScrollButtonOffsets();
     onMessagesFrameChanged();
@@ -8066,17 +8126,32 @@ public class MessagesController extends ViewController<MessagesController.Argume
       Rect bounds = getBounds();
       c.drawRect(bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE)));
       final float verticalInset = (Screen.dp(49f) - Screen.dp(com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX)) / 2f;
-      final boolean hasTrailingButton = (recordButton != null && recordButton.getVisibility() != View.GONE) || (sendButton != null && sendButton.getVisibility() == View.VISIBLE);
-      final float start = Screen.dp(8f);
-      final float end = Screen.dp(hasTrailingButton ? 55f : 8f);
+      final boolean hasTrailingButton = xgramHasTrailingButton();
+      final float start = com.fahadali.xgram.appearance.XgramM3Chat.fieldStart();
+      final float end = com.fahadali.xgram.appearance.XgramM3Chat.fieldEnd(hasTrailingButton);
       final boolean rtl = Lang.rtl();
-      rect.set(bounds.left + (rtl ? end : start), bounds.top + verticalInset, bounds.right - (rtl ? start : end), bounds.bottom - verticalInset);
+      // While the reply, edit or link preview block shows above, the field joins it: 2dp gap, 4dp top corners.
+      final float connect = replyBarView != null ? MathUtils.clamp(getReplyOffset() / (float) Screen.dp(48f)) : 0f;
+      final float topInset = verticalInset + (Screen.dp(2f) - verticalInset) * connect;
+      rect.set(bounds.left + (rtl ? end : start), bounds.top + topInset, bounds.right - (rtl ? start : end), bounds.bottom - verticalInset);
       if (rect.width() <= 0f || rect.height() <= 0f) {
         return;
       }
       final float radius = Math.min(Screen.dp(20f), rect.height() / 2f);
-      c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+      if (connect <= 0f) {
+        c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+      } else {
+        final float topRadius = radius + (Math.min(Screen.dp(4f), radius) - radius) * connect;
+        radii[0] = radii[1] = radii[2] = radii[3] = topRadius;
+        radii[4] = radii[5] = radii[6] = radii[7] = radius;
+        path.rewind();
+        path.addRoundRect(rect, radii, android.graphics.Path.Direction.CW);
+        c.drawPath(path, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+      }
     }
+
+    private final float[] radii = new float[8];
+    private final android.graphics.Path path = new android.graphics.Path();
 
     @Override
     public void setAlpha (int alpha) { }
@@ -9569,6 +9644,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public final void onMessagesFrameChanged () {
     xgramUpdateSideTabsOffset(); // XGram
+    xgramUpdateCorners(); // XGram
     context().updateHackyOverlaysPositions();
     manager.onViewportMeasure();
     if (attachedFiles != null && attachedFiles.getParent() != null) {
@@ -11423,6 +11499,65 @@ public class MessagesController extends ViewController<MessagesController.Argume
       messagesView.setLayoutParams(params);
     }
     xgramUpdateSideTabsOffset();
+  }
+
+  // XGram: Material 3 Expressive container corners, below the topic tabs when they are shown on top.
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.CornersView xgramCornersView;
+
+  // XGram: Material 3 Expressive floating toolbar in message selection. It takes over reply, copy, share and delete
+  // from the selection app bar, which keeps the count, close and the less common actions.
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.FloatingToolbar xgramSelectionToolbar;
+
+  private static final int[] XGRAM_TOOLBAR_ACTIONS = {R.id.menu_btn_reply, R.id.menu_btn_copy, R.id.menu_btn_forward, R.id.menu_btn_delete};
+
+  private boolean xgramToolbarActionAvailable (int id) {
+    if (id == R.id.menu_btn_reply) {
+      return canReplyToSelectedMessages();
+    } else if (id == R.id.menu_btn_copy) {
+      return canCopySelectedMessages();
+    } else if (id == R.id.menu_btn_forward) {
+      return canShareSelectedMessages();
+    } else if (id == R.id.menu_btn_delete) {
+      return canDeleteSelectedMessages();
+    }
+    return false;
+  }
+
+  private void xgramUpdateSelectionToolbar (boolean animated) {
+    if (xgramSelectionToolbar == null) {
+      return;
+    }
+    boolean selecting = inSelectMode() && selectedMessageIds != null && selectedMessageIds.size() > 0;
+    for (int id : XGRAM_TOOLBAR_ACTIONS) {
+      View button = xgramSelectionToolbar.findViewById(id);
+      if (button != null) {
+        int visibility = selecting && xgramToolbarActionAvailable(id) ? View.VISIBLE : View.GONE;
+        if (button.getVisibility() != visibility) {
+          button.setVisibility(visibility);
+        }
+      }
+      if (headerView != null) {
+        headerView.updateButton(R.id.menu_messageActions, id, View.GONE, 0);
+      }
+    }
+    xgramSelectionToolbar.setShown(selecting && xgramSelectionToolbar.hasVisibleButtons(), animated);
+  }
+
+  private void xgramUpdateCorners () {
+    if (xgramCornersView == null) {
+      return;
+    }
+    float top = 0f;
+    if (xgramTabs != null && xgramTabs.getVisibility() == View.VISIBLE) {
+      top = Math.max(0f, xgramTabs.getTranslationY() + xgramTabs.getMeasuredHeight());
+    }
+    if (xgramCornersView.getTranslationY() != top) {
+      xgramCornersView.setTranslationY(top);
+    }
+  }
+
+  private boolean xgramHasTrailingButton () {
+    return (recordButton != null && recordButton.getVisibility() != View.GONE) || (sendButton != null && sendButton.getVisibility() == View.VISIBLE);
   }
 
   /** Side tabs start below the bars above the messages (pinned message, join requests…). */

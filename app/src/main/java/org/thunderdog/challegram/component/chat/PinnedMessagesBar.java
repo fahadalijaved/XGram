@@ -153,8 +153,9 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
         //
 
-        final int lineX = Screen.dp(10f);
-        final float strokeWidth = Screen.dp(1.5f);
+        final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+        final int lineX = Screen.dp(xgramM3 ? 12f : 10f);
+        final float strokeWidth = Screen.dp(xgramM3 ? 2f : 1.5f); // XGram: a 4dp primary pill line
         final int outerSpacing = Screen.dp(6f); // spacing before the first and the last item
         final int minSpacingBetweenItems = Screen.dp(3f);
         final float lineStartX = lineX - strokeWidth;
@@ -196,7 +197,10 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
             entry = (Entry) messagesAdapter.getItems().get(dataPosition).getData();
           }
           final int fillColor, backgroundColor;
-          if (entry != null && entry.accentColor != null) {
+          if (xgramM3) {
+            fillColor = ColorUtils.alphaColor(alpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+            backgroundColor = ColorUtils.alphaColor(.3f * alpha, fillColor);
+          } else if (entry != null && entry.accentColor != null) {
             fillColor = ColorUtils.alphaColor(alpha, entry.accentColor.getVerticalLineColor());
             backgroundColor = ColorUtils.alphaColor(.3f * alpha, fillColor);
           } else {
@@ -223,7 +227,9 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
           }
         }
 
-        c.drawRect(0, parent.getMeasuredHeight() - Screen.separatorSize(), parent.getMeasuredWidth(), parent.getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(getExpandFactor() * MathUtils.clamp(focusPosition), Theme.separatorColor())));
+        if (!xgramM3) {
+          c.drawRect(0, parent.getMeasuredHeight() - Screen.separatorSize(), parent.getMeasuredWidth(), parent.getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(getExpandFactor() * MathUtils.clamp(focusPosition), Theme.separatorColor())));
+        }
       }
     });
     addView(recyclerView);
@@ -242,8 +248,12 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     Views.setClickable(collapseButton);
     addView(collapseButton);
 
-    ViewSupport.setThemedBackground(this, ColorId.filling, null);
-    ViewSupport.setThemedBackground(recyclerView, ColorId.filling, null);
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: Material 3 Expressive draws the card (or the composer block) behind
+      ViewSupport.setThemedBackground(this, ColorId.filling, null);
+      ViewSupport.setThemedBackground(recyclerView, ColorId.filling, null);
+    } else {
+      collapseButton.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+    }
     setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
     setWillNotDraw(false);
@@ -273,6 +283,9 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return; // XGram: the Material 3 Expressive card is the background
+    }
     c.drawRect(0, getRecyclerHeight(), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.fillingColor()));
   }
 

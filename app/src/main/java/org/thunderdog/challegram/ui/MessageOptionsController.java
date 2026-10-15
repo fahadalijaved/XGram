@@ -76,7 +76,7 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
 
   @Override
   protected int getRecyclerBackground () {
-    return ColorId.filling;
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.background : ColorId.filling; // XGram: one tone with the sheet header
   }
 
   @Override
@@ -135,6 +135,12 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
         text.setPadding(Screen.dp(17f), Screen.dp(1f), Screen.dp(17f), 0);
         text.setCompoundDrawablePadding(Screen.dp(18f));
         text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(54f)));
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: Material 3 Expressive menu rows: bodyLarge, 24dp icon at 16dp, text at 56dp
+          text.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false));
+          text.setPadding(Screen.dp(16f), Screen.dp(1f), Screen.dp(16f), 0);
+          text.setCompoundDrawablePadding(Screen.dp(16f));
+        }
         Views.setClickable(text);
         RippleSupport.setTransparentSelector(text);
         return new OptionHolder(text);

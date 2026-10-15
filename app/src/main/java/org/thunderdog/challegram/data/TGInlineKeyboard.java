@@ -525,7 +525,7 @@ public class TGInlineKeyboard {
     public void draw (MessageView view, Canvas c, int cx, int cy, int buttonWidth, int buttonHeight, int strokePadding, RectF rounder, int row, int column) {
       final int right = cx + buttonWidth;
       final int bottom = cy + buttonHeight;
-      final int radius = Screen.dp(context.context.useBubbles() && isCustom ? Theme.getBubbleMergeRadius() : 6f);
+      final int radius = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(12f) : Screen.dp(context.context.useBubbles() && isCustom ? Theme.getBubbleMergeRadius() : 6f); // XGram: Material 3 Expressive 12dp buttons
 
       rounder.left = cx + strokePadding; rounder.right = right - strokePadding;
       rounder.top = cy + strokePadding; rounder.bottom = bottom - strokePadding;

@@ -206,6 +206,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     headerView.getBackButton().setIsReverse(true);
     if (state.needShowReactionsPopupPicker) {
       headerView.setBackground(null);
+    } else if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable sheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable(); // XGram: updated in setHeaderBackgroundFactor
+      sheetTop.set(Theme.getColor(ColorId.background), 1f);
+      headerView.setBackground(sheetTop);
+      addThemeInvalidateListener(headerView);
     } else {
       ViewSupport.setThemedBackground(headerView, ColorId.background, this);
     }
@@ -388,6 +393,23 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   @Override
   protected void setHeaderBackgroundFactor (float headerBackgroundFactor) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive modal sheet: one tone with its pages (the background color id, a surface
+      // container role), 28dp top corners that square off at the top, a drag handle
+      final int sheetColor = Theme.getColor(ColorId.background);
+      setLickViewColor(sheetColor);
+      if (headerView != null && !state.needShowReactionsPopupPicker) {
+        if (!(headerView.getBackground() instanceof com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable)) {
+          headerView.setBackground(new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable());
+        }
+        ((com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable) headerView.getBackground()).set(sheetColor, 1f - headerBackgroundFactor);
+      }
+      if (headerCell != null) {
+        headerCell.updatePaints(sheetColor);
+      }
+      invalidatePickerWrapper();
+      return;
+    }
     final int headerBackground = ColorUtils.blendARGB(
       Theme.getColor(ColorId.background),
       Theme.getColor(ColorId.headerLightBackground),
