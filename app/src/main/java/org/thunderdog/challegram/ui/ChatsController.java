@@ -577,7 +577,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   @Override
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
-    Views.applyBottomInset(chatsView, extraBottomInset);
+    Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this)); // XGram
   }
 
   @Override
@@ -614,7 +614,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         adapter.notifyLastItemChanged();
       }
     });
-    Views.applyBottomInset(chatsView, extraBottomInset);
+    // XGram: in the narrow chat list pane the last rows scroll clear of the compose button
+    Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this));
     chatsView.setItemAnimator(null);
     if (isInForceTouchMode()) {
       chatsView.setVerticalScrollBarEnabled(false);

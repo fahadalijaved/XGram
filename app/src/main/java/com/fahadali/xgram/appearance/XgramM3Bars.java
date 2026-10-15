@@ -156,19 +156,53 @@ public final class XgramM3Bars {
       invalidate();
     }
 
+    private int sideInset;
+    private final Paint sidePaint = new Paint();
+
+    /**
+     * Keeps the container {@code px} clear of both sides (the narrow chat list pane of the two-pane layout), with the
+     * app bar color in the margins, like the settings groups in the other pane. The anchor gets the margins, so its
+     * content is laid out inside them.
+     */
+    public void setSideInset (int px) {
+      px = Math.max(0, px);
+      if (sideInset == px) {
+        return;
+      }
+      sideInset = px;
+      View anchor = this.anchor;
+      if (anchor != null && anchor.getLayoutParams() instanceof MarginLayoutParams) {
+        MarginLayoutParams params = (MarginLayoutParams) anchor.getLayoutParams();
+        params.leftMargin = px;
+        params.rightMargin = px;
+        anchor.setLayoutParams(params);
+      }
+      invalidate();
+    }
+
     @Override
     protected void dispatchDraw (Canvas canvas) {
       super.dispatchDraw(canvas);
       if (XgramExpressive.isEnabled()) {
-        int top = 0;
+        int top = 0, bottom = getHeight();
         View anchor = this.anchor;
         if (anchor != null && anchor.getParent() == this) {
           if (anchor.getVisibility() != View.VISIBLE) {
             return;
           }
-          top = anchor.getTop() + Math.round(anchor.getTranslationY());
+          int dy = Math.round(anchor.getTranslationY());
+          top = anchor.getTop() + dy;
+          bottom = anchor.getBottom() + dy;
         }
-        corners.draw(canvas, 0, top, getWidth());
+        int inset = sideInset;
+        if (inset > 0 && getWidth() > inset * 2 && bottom > top) {
+          sidePaint.setColor(Theme.getColor(ColorId.headerBackground));
+          canvas.drawRect(0, top, inset, bottom, sidePaint);
+          canvas.drawRect(getWidth() - inset, top, getWidth(), bottom, sidePaint);
+          corners.draw(canvas, inset, top, getWidth() - inset);
+        } else {
+          corners.draw(canvas, 0, top, getWidth());
+        }
       }
     }
   }

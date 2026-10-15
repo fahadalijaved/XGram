@@ -788,6 +788,15 @@
   <string name="XgramFoldTabletop">Use tabletop layout</string>
   <string name="XgramFoldTabletopSub">Media, calls and camera</string>
   <string name="XgramFoldInfo">Held half open like a book, the chat list and the chat meet at the fold. Standing half open, videos, calls and the camera show above the fold and their buttons below it.</string>
+  <!-- XGram: two-pane widths (Appearance > Layout) -->
+  <string name="XgramPaneSplitEvenly">Split evenly</string>
+  <string name="XgramPaneSplitEvenlySub">Half the screen each, at the fold</string>
+  <string name="XgramPaneResizable">Resize panes</string>
+  <string name="XgramPaneResizableSub">Drag the handle between them</string>
+  <string name="XgramPaneInfo">Drag the handle on the line between the chat list and the chat to change their widths. XGram keeps the width you set; double-tap the handle to go back to the usual width.</string>
+  <!-- XGram: settings search, nothing typed yet -->
+  <string name="XgramSearchRecent">Recent searches</string>
+  <string name="XgramSearchPages">Go to</string>
   <!-- XGram: Drag and drop, paste and side by side (adaptive plan part 2; Appearance > Layout) -->
   <string name="XgramDragDrop">Allow drag and drop</string>
   <string name="XgramDragDropSub">Photos, videos, files, text</string>

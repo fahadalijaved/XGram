@@ -226,6 +226,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
     pagerWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     pagerWrap.addView(pager);
+    xgramUpdatePaneInset(); // XGram
 
     mainWrap = new FrameLayoutFix(context);
     mainWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -1388,6 +1389,14 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private boolean xgramIsHiddenRoot () {
     com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
     return twoPane != null && twoPane.isHiddenRoot(this);
+  }
+
+  /** XGram: as the chat list pane of the two-pane layout, the list keeps clear of the screen edge and the divider. */
+  public void xgramUpdatePaneInset () {
+    if (pagerWrap instanceof com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout) {
+      boolean pane = com.fahadali.xgram.layout.XgramTwoPane.isPaneChatList(this);
+      ((com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout) pagerWrap).setSideInset(pane ? Screen.dp(16f) : 0);
+    }
   }
 
   @Override

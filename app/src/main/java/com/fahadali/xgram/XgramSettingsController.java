@@ -351,6 +351,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.foldHingeSplit(), isUpdate);
         } else if (id == R.id.btn_xgramFoldTabletop) {
           view.getToggler().setRadioEnabled(settings.foldTabletop(), isUpdate);
+        } else if (id == R.id.btn_xgramPaneSplitEvenly) {
+          view.getToggler().setRadioEnabled(settings.paneSplitEvenly(), isUpdate);
+        } else if (id == R.id.btn_xgramPaneResizable) {
+          view.getToggler().setRadioEnabled(settings.paneResizable(), isUpdate);
         } else if (id == R.id.btn_xgramDragDrop) {
           view.getToggler().setRadioEnabled(settings.dragDrop(), isUpdate);
         } else if (id == R.id.btn_xgramOpenBeside) {
@@ -613,6 +617,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(header(R.string.XgramLayout));
     addRows(items, toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub));
     items.add(description(R.string.XgramTwoPaneInfo));
+    addRows(items,
+      toggle(R.id.btn_xgramPaneSplitEvenly, R.string.XgramPaneSplitEvenly, R.string.XgramPaneSplitEvenlySub),
+      toggle(R.id.btn_xgramPaneResizable, R.string.XgramPaneResizable, R.string.XgramPaneResizableSub)
+    );
+    items.add(description(R.string.XgramPaneInfo));
     addRows(items, toggle(R.id.btn_xgramLimitMessageWidth, R.string.XgramLimitMessageWidth, R.string.XgramLimitMessageWidthSub));
     // Foldables: the posture rows only where a fold can be reported (androidx.window, minSdk 23 builds).
     if (com.fahadali.xgram.layout.XgramWindow.isPostureSupported()) {
@@ -1331,6 +1340,18 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramFoldTabletop) {
       settings.setFoldTabletop(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramPaneSplitEvenly) {
+      settings.setPaneSplitEvenly(adapter.toggleView(v));
+      if (context.xgramTwoPane() != null) {
+        context.xgramTwoPane().update();
+      }
+      return;
+    } else if (id == R.id.btn_xgramPaneResizable) {
+      settings.setPaneResizable(adapter.toggleView(v));
+      if (context.xgramTwoPane() != null) {
+        context.xgramTwoPane().update();
+      }
       return;
     } else if (id == R.id.btn_xgramDragDrop) {
       settings.setDragDrop(adapter.toggleView(v));

@@ -1124,4 +1124,63 @@ public final class XgramSettings {
     foldTabletop = value;
     put(KEY_FOLD_TABLETOP, value);
   }
+
+  // Two panes (Appearance > Layout, see com.fahadali.xgram.layout.XgramTwoPane): how wide the chat list pane is.
+  // Read while measuring the panes, so cached.
+
+  public static final String KEY_PANE_SPLIT_EVENLY = "xgram_split_evenly";
+  public static final String KEY_PANE_RESIZABLE = "xgram_pane_drag";
+  public static final String KEY_PANE_LIST_WIDTH = "xgram_pane_width";
+
+  private volatile Boolean paneSplitEvenly, paneResizable;
+  private volatile int paneListWidthDp = -1;
+
+  /** The chat list and the chat get half the screen each, split at the hinge when the screen folds there. */
+  public boolean paneSplitEvenly () {
+    Boolean value = paneSplitEvenly;
+    if (value == null) {
+      paneSplitEvenly = value = pmc().getBoolean(KEY_PANE_SPLIT_EVENLY, false);
+    }
+    return value;
+  }
+
+  public void setPaneSplitEvenly (boolean value) {
+    paneSplitEvenly = value;
+    put(KEY_PANE_SPLIT_EVENLY, value);
+  }
+
+  /** The line between the panes has a handle that drags it; the width is kept. */
+  public boolean paneResizable () {
+    Boolean value = paneResizable;
+    if (value == null) {
+      paneResizable = value = pmc().getBoolean(KEY_PANE_RESIZABLE, true);
+    }
+    return value;
+  }
+
+  public void setPaneResizable (boolean value) {
+    paneResizable = value;
+    put(KEY_PANE_RESIZABLE, value);
+  }
+
+  /** The chat list pane width (dp) last set by dragging, or 0: the usual width. */
+  public int paneListWidthDp () {
+    int value = paneListWidthDp;
+    if (value < 0) {
+      paneListWidthDp = value = Math.max(0, pmc().getInt(KEY_PANE_LIST_WIDTH, 0));
+    }
+    return value;
+  }
+
+  public void setPaneListWidthDp (int value) {
+    paneListWidthDp = value = Math.max(0, value);
+    if (value == 0) {
+      pmc().remove(KEY_PANE_LIST_WIDTH);
+      for (Listener listener : listeners) {
+        listener.onXgramSettingChanged(KEY_PANE_LIST_WIDTH);
+      }
+    } else {
+      putInt(KEY_PANE_LIST_WIDTH, value);
+    }
+  }
 }

@@ -35,6 +35,7 @@ import com.fahadali.xgram.compose.ui.PageScope
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
+import com.fahadali.xgram.layout.XgramWindow
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.ui.MessagesController
 import org.thunderdog.challegram.ui.SettingsCloudEmojiController
@@ -119,11 +120,45 @@ fun AppearancePage() {
       }
     }
     description(R.string.XgramTwoPaneInfo)
+    // How wide the panes are: half each, or the width set with the handle on the line between them.
+    group {
+      switch(R.id.btn_xgramPaneSplitEvenly, s(R.string.XgramPaneSplitEvenly), s(R.string.XgramPaneSplitEvenlySub), checked = settings.paneSplitEvenly()) {
+        settings.setPaneSplitEvenly(it)
+        host.activity.xgramTwoPane()?.update()
+      }
+      switch(R.id.btn_xgramPaneResizable, s(R.string.XgramPaneResizable), s(R.string.XgramPaneResizableSub), checked = settings.paneResizable()) {
+        settings.setPaneResizable(it)
+        host.activity.xgramTwoPane()?.update()
+      }
+    }
+    description(R.string.XgramPaneInfo)
     group {
       switch(R.id.btn_xgramLimitMessageWidth, s(R.string.XgramLimitMessageWidth), s(R.string.XgramLimitMessageWidthSub), checked = settings.limitMessageWidth()) {
         settings.setLimitMessageWidth(it)
       }
     }
+    // Foldables: only where a fold can be reported (as the classic page).
+    if (XgramWindow.isPostureSupported()) {
+      group {
+        switch(R.id.btn_xgramFoldHingeSplit, s(R.string.XgramFoldHingeSplit), s(R.string.XgramFoldHingeSplitSub), checked = settings.foldHingeSplit()) {
+          settings.setFoldHingeSplit(it)
+          host.activity.xgramTwoPane()?.update()
+        }
+        switch(R.id.btn_xgramFoldTabletop, s(R.string.XgramFoldTabletop), s(R.string.XgramFoldTabletopSub), checked = settings.foldTabletop()) {
+          settings.setFoldTabletop(it)
+        }
+      }
+      description(R.string.XgramFoldInfo)
+    }
+    group {
+      switch(R.id.btn_xgramDragDrop, s(R.string.XgramDragDrop), s(R.string.XgramDragDropSub), checked = settings.dragDrop()) {
+        settings.setDragDrop(it)
+      }
+      switch(R.id.btn_xgramOpenBeside, s(R.string.XgramOpenBeside), s(R.string.XgramOpenBesideSub), checked = settings.openBeside()) {
+        settings.setOpenBeside(it)
+      }
+    }
+    description(R.string.XgramDragDropInfo)
   }
 }
 
