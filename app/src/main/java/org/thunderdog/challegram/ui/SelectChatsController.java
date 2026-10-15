@@ -1194,13 +1194,17 @@ class Chip extends Drawable implements FlowListAnimator.Measurable, Drawable.Cal
       saveCount = Integer.MIN_VALUE;
     }
 
-    int outlineColor = Theme.inlineOutlineColor(false);
+    // XGram M3E: Material 3 input chip (transparent, 1dp outlineVariant border, 8dp corners)
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    int outlineColor = xgram ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT) : Theme.inlineOutlineColor(false);
     Paint outlinePaint = Paints.strokeSmallPaint(outlineColor);
     float outlineInset = outlinePaint.getStrokeWidth() / 2f;
     int radius = Screen.dp(8f);
     RectF roundRect = Paints.getRectF();
     roundRect.set(bounds.left + outlineInset, bounds.top + outlineInset, bounds.right - outlineInset, bounds.bottom - outlineInset);
-    canvas.drawRoundRect(roundRect, radius, radius, Paints.fillingPaint(Theme.fillingColor()));
+    if (!xgram) {
+      canvas.drawRoundRect(roundRect, radius, radius, Paints.fillingPaint(Theme.fillingColor()));
+    }
     canvas.drawRoundRect(roundRect, radius, radius, outlinePaint);
 
     int avatarRadius = Screen.dp(AVATAR_RADIUS);
@@ -1235,7 +1239,7 @@ class Chip extends Drawable implements FlowListAnimator.Measurable, Drawable.Cal
       crossIconRipple.setBounds(iconX - rippleRadius, iconY - rippleRadius, iconX + rippleRadius, iconY + rippleRadius);
       crossIconRipple.draw(canvas);
     }
-    Drawables.drawCentered(canvas, crossIcon, iconX, iconY, PorterDuffPaint.get(ColorId.inlineIcon));
+    Drawables.drawCentered(canvas, crossIcon, iconX, iconY, xgram ? Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT)) : PorterDuffPaint.get(ColorId.inlineIcon));
 
     if (alpha < 0xFF) {
       canvas.restoreToCount(saveCount);
@@ -1301,6 +1305,9 @@ class Chip extends Drawable implements FlowListAnimator.Measurable, Drawable.Cal
 
   @Override
   public int defaultTextColor () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    }
     return Theme.textAccentColor();
   }
 }

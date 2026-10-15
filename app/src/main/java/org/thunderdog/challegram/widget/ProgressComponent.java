@@ -28,6 +28,7 @@ import androidx.annotation.Nullable;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramLoadingIndicator;
+import com.fahadali.xgram.appearance.XgramWavyProgress;
 
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.theme.Theme;
@@ -122,6 +123,16 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
   }
 
   private boolean isPrecise;
+
+  // XGram M3E: precise progress drawn as the wavy ring (set by FileProgressComponent for theme colored file circles)
+  private boolean xgramWavy;
+
+  public void setXgramWavy (boolean wavy) {
+    if (this.xgramWavy != wavy) {
+      this.xgramWavy = wavy;
+      invalidate();
+    }
+  }
 
   public void setIsPrecise () {
     this.isPrecise = true;
@@ -350,6 +361,17 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
       // XGram M3E: the expressive loading indicator; the old spinner diameter stands for its 38dp active indicator
       final int indicatorColor = ColorUtils.alphaColor(alpha, colorForced ? this.color : XgramExpressive.color(XgramExpressive.PRIMARY));
       XgramLoadingIndicator.draw(c, arcRect.centerX(), arcRect.centerY(), radius * 2f, indicatorColor, timeMs);
+      if (!scheduled && isActive()) {
+        scheduleInvalidateIfNeeded(true, true);
+      }
+      return;
+    }
+
+    if (xgramWavy && isPrecise && !isTimer && XgramExpressive.isEnabled()) {
+      // XGram M3E: wavy determinate ring with a flat track (track = indicator color at 30 %)
+      final int indicatorColor = ColorUtils.alphaColor(alpha, colorForced ? this.color : Theme.progressColor());
+      final float stroke = useLargerPaint ? strokeWidth : Screen.dp(2f);
+      XgramWavyProgress.drawCircular(c, arcRect.centerX(), arcRect.centerY(), radius, stroke, preciseFactor, indicatorColor, XgramExpressive.withAlpha(indicatorColor, .3f), Math.min(Screen.dp(1.5f), stroke * .4f));
       if (!scheduled && isActive()) {
         scheduleInvalidateIfNeeded(true, true);
       }

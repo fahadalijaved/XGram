@@ -34,6 +34,8 @@ import androidx.annotation.StringRes;
 import androidx.core.os.CancellationSignal;
 import androidx.core.view.ViewCompat;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
@@ -116,6 +118,45 @@ public class TooltipOverlayView extends ViewGroup {
     public abstract boolean onTouchEvent (TooltipInfo info, View view, MotionEvent e);
     public abstract void requestIcons (ComplexReceiver iconReceiver);
     public abstract void draw (Canvas c, ColorProvider colorProvider, int left, int top, int right, int bottom, float alpha, ComplexReceiver iconReceiver);
+
+    /** XGram M3E: more than one line makes a rich tooltip. */
+    public int xgramLineCount () {
+      return getHeight() > Screen.dp(24f) ? 2 : 1;
+    }
+  }
+
+  /** XGram M3E: colors of a plain (inverse surface) or rich (surfaceContainer) Material 3 tooltip. */
+  private static final class XgramTooltipColors implements ColorProvider {
+    private final TooltipInfo info;
+
+    XgramTooltipColors (TooltipInfo info) {
+      this.info = info;
+    }
+
+    @Override
+    public int tooltipColor () {
+      return XgramExpressive.color(info.xgramRich ? XgramExpressive.SURFACE_CONTAINER : XgramExpressive.INVERSE_SURFACE);
+    }
+
+    @Override
+    public int tooltipOutlineColor () {
+      return 0;
+    }
+
+    @Override
+    public int defaultTextColor () {
+      return XgramExpressive.color(info.xgramRich ? XgramExpressive.ON_SURFACE_VARIANT : XgramExpressive.INVERSE_ON_SURFACE);
+    }
+
+    @Override
+    public int iconColor () {
+      return defaultTextColor();
+    }
+
+    @Override
+    public int clickableTextColor (boolean isPressed) {
+      return XgramExpressive.color(info.xgramRich ? XgramExpressive.PRIMARY : XgramExpressive.INVERSE_PRIMARY);
+    }
   }
 
   public interface ColorProvider extends TextColorSetThemed {
@@ -256,6 +297,11 @@ public class TooltipOverlayView extends ViewGroup {
         text.draw(c, left, right, 0, top, null, alpha, iconReceiver);
       }
     }
+
+    @Override
+    public int xgramLineCount () {
+      return text != null ? text.getLineCount() : 1;
+    }
   }
 
   public static class TooltipLanguageSelectorView extends TooltipContentView {
@@ -372,6 +418,27 @@ public class TooltipOverlayView extends ViewGroup {
     private final int[] position = new int[2];
     private final Rect innerRect = new Rect();
 
+    // XGram M3E: one-line tooltips are plain M3 tooltips (inverse surface, 4dp corners), longer ones or ones with an
+    // icon are rich tooltips (surfaceContainer, 12dp corners, 16dp/12dp padding, a soft shadow)
+    private final boolean xgram;
+    private boolean xgramRich;
+
+    private int padStart (boolean hasIcon) {
+      return xgram ? Screen.dp(xgramRich ? 16f : 8f) : Screen.dp(hasIcon ? INNER_PADDING_LEFT_WITH_ICON : INNER_PADDING_LEFT);
+    }
+
+    private int padEnd (boolean hasIcon) {
+      return xgram ? Screen.dp(xgramRich ? 16f : 8f) : Screen.dp(hasIcon ? INNER_PADDING_RIGHT_WITH_ICON : INNER_PADDING_RIGHT);
+    }
+
+    private int padVertical (boolean hasIcon) {
+      return xgram ? Screen.dp(xgramRich ? 12f : 6f) : Screen.dp(hasIcon ? INNER_PADDING_VERTICAL_WITH_ICON : INNER_PADDING_VERTICAL);
+    }
+
+    private int backgroundRadius () {
+      return xgram ? Screen.dp(xgramRich ? XgramExpressive.CORNER_M : XgramExpressive.CORNER_XS) : Screen.dp(BACKGROUND_RADIUS);
+    }
+
     private ReferenceList<VisibilityListener> visibilityListeners;
 
     public boolean isVisible () {
@@ -416,7 +483,8 @@ public class TooltipOverlayView extends ViewGroup {
       this.originalView = originalView;
       this.viewProvider = viewProvider;
       this.locationProvider = locationProvider;
-      this.colorProvider = colorProvider != null ? colorProvider : parent.defaultProvider;
+      this.xgram = colorProvider == null && XgramExpressive.isEnabled();
+      this.colorProvider = colorProvider != null ? colorProvider : xgram ? new XgramTooltipColors(this) : parent.defaultProvider;
       this.offsetProvider = offsetProvider;
       this.controller = controller;
       this.textSize = textSize;
@@ -688,7 +756,7 @@ public class TooltipOverlayView extends ViewGroup {
 
     private void buildPath (Path backgroundPath, RectF contentRect) {
       int pivotWidth = Screen.dp(PIVOT_WIDTH);
-      int backgroundRadius = Screen.dp(BACKGROUND_RADIUS);
+      int backgroundRadius = backgroundRadius();
       int pivotHeight = Screen.dp(PIVOT_HEIGHT);
 
       backgroundPath.reset();
@@ -866,9 +934,9 @@ public class TooltipOverlayView extends ViewGroup {
       }
 
       boolean hasIcon = hasIcon();
-      int innerPaddingLeft = Screen.dp(hasIcon ? INNER_PADDING_LEFT_WITH_ICON : INNER_PADDING_LEFT);
-      int innerPaddingRight = Screen.dp(hasIcon ? INNER_PADDING_RIGHT_WITH_ICON : INNER_PADDING_RIGHT);
-      int innerPaddingVertical = Screen.dp(hasIcon ? INNER_PADDING_VERTICAL_WITH_ICON : INNER_PADDING_VERTICAL);
+      int innerPaddingLeft = padStart(hasIcon);
+      int innerPaddingRight = padEnd(hasIcon);
+      int innerPaddingVertical = padVertical(hasIcon);
       int verticalOffset = 0;
       int horizontalMargin = Screen.dp(8f);
       int iconOffset = hasIcon ? Screen.dp(ICON_SIZE) + Screen.dp(ICON_HORIZONTAL_MARGIN) : 0;
@@ -879,6 +947,17 @@ public class TooltipOverlayView extends ViewGroup {
         maxWidth = Math.min(Screen.dp(this.maxWidthDp), maxWidth);
       }
       boolean textChanged = popupView.layout(this, parentWidth, parentHeight, maxWidth - innerPaddingLeft - innerPaddingRight - iconOffset);
+      if (xgram) {
+        boolean rich = hasIcon || popupView.xgramLineCount() > 1;
+        if (rich != xgramRich) {
+          xgramRich = rich;
+          innerPaddingLeft = padStart(hasIcon);
+          innerPaddingRight = padEnd(hasIcon);
+          innerPaddingVertical = padVertical(hasIcon);
+          popupView.layout(this, parentWidth, parentHeight, maxWidth - innerPaddingLeft - innerPaddingRight - iconOffset);
+          textChanged = true;
+        }
+      }
 
       int triangleHeight = Screen.dp(12f);
       int totalHeight = popupView.getHeight() + innerPaddingVertical * 2 + triangleHeight;
@@ -914,7 +993,7 @@ public class TooltipOverlayView extends ViewGroup {
       }
       contentRect.offset(Math.max(0, horizontalMargin - contentRect.left), 0);
       contentRect.offset(Math.min(0, (parentWidth - horizontalMargin) - contentRect.right), 0);
-      int checkBound = Screen.dp(PIVOT_WIDTH) / 2 + Screen.dp(BACKGROUND_RADIUS);
+      int checkBound = Screen.dp(PIVOT_WIDTH) / 2 + backgroundRadius();
       if (pivotX - checkBound < contentRect.left) {
         contentRect.offset((pivotX - checkBound) - contentRect.left, 0);
       } else if (pivotX + checkBound > contentRect.right) {
@@ -966,16 +1045,22 @@ public class TooltipOverlayView extends ViewGroup {
         parentView.paint.setStyle(Paint.Style.FILL);
       }
       parentView.paint.setColor(ColorUtils.alphaColor(alpha, colorProvider.tooltipColor()));
-      c.drawPath(backgroundPath, parentView.paint);
+      if (xgram && xgramRich) {
+        parentView.paint.setShadowLayer(Screen.dp(XgramExpressive.ELEVATION_2), 0, Screen.dp(1f), ColorUtils.alphaColor(alpha * .25f, 0xff000000));
+        c.drawPath(backgroundPath, parentView.paint);
+        parentView.paint.clearShadowLayer();
+      } else {
+        c.drawPath(backgroundPath, parentView.paint);
+      }
 
       boolean hasIcon = hasIcon();
 
       int innerPaddingLeft, innerPaddingRight, innerPaddingVertical, iconOffset, verticalOffset;
 
       if (hasIcon) {
-        innerPaddingLeft = Screen.dp(INNER_PADDING_LEFT_WITH_ICON);
-        innerPaddingRight = Screen.dp(INNER_PADDING_RIGHT_WITH_ICON);
-        innerPaddingVertical = Screen.dp(INNER_PADDING_VERTICAL_WITH_ICON);
+        innerPaddingLeft = padStart(true);
+        innerPaddingRight = padEnd(true);
+        innerPaddingVertical = padVertical(true);
         iconOffset = Screen.dp(ICON_SIZE) + Screen.dp(ICON_HORIZONTAL_MARGIN);
 
         verticalOffset = Math.max(0, Screen.dp(ICON_SIZE) / 2 - popupView.getHeight() / 2);
@@ -1005,9 +1090,9 @@ public class TooltipOverlayView extends ViewGroup {
           // TODO
         }
       } else {
-        innerPaddingLeft = Screen.dp(INNER_PADDING_LEFT);
-        innerPaddingRight = Screen.dp(INNER_PADDING_RIGHT);
-        innerPaddingVertical = Screen.dp(INNER_PADDING_VERTICAL);
+        innerPaddingLeft = padStart(false);
+        innerPaddingRight = padEnd(false);
+        innerPaddingVertical = padVertical(false);
         iconOffset = verticalOffset = 0;
       }
       popupView.draw(c, colorProvider, (int) (contentRect.left + innerPaddingLeft + iconOffset), (int) (contentRect.top + innerPaddingVertical + verticalOffset), (int) (contentRect.right - innerPaddingRight), (int) (contentRect.bottom - innerPaddingVertical), alpha, iconReceiver);

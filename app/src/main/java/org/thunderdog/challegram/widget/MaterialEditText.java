@@ -20,6 +20,8 @@ import android.graphics.RectF;
 import android.text.method.PasswordTransformationMethod;
 import android.view.KeyEvent;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
@@ -168,9 +170,23 @@ public class MaterialEditText extends CustomEmojiEditText implements FactorAnima
     }
   }
 
+  // XGram M3E: the filled text field's active indicator, 1dp onSurfaceVariant growing to 2dp primary when focused, error in error
+  private final boolean xgram = XgramExpressive.isEnabled();
+
   @Override
   protected void onDraw (Canvas c) {
-    if (!lineDisabled) {
+    if (!lineDisabled && xgram && forceColorId == 0) {
+      final int width = getMeasuredWidth();
+      final int height = getMeasuredHeight();
+      final float size = Screen.dpf(1f) + Screen.dpf(1f) * Math.max(factor, errorFactor);
+      final int scrollLeft = getScrollX();
+      int color = ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), XgramExpressive.color(XgramExpressive.PRIMARY), factor);
+      if (goodFactor != 0f)
+        color = ColorUtils.fromToArgb(color, Theme.getColor(ColorId.inputPositive), goodFactor);
+      if (errorFactor != 0f)
+        color = ColorUtils.fromToArgb(color, XgramExpressive.color(XgramExpressive.ERROR), errorFactor);
+      c.drawRect(scrollLeft, height - size, width + scrollLeft, height, Paints.fillingPaint(color));
+    } else if (!lineDisabled) {
       final int width = getMeasuredWidth();
       final int height = getMeasuredHeight();
       final int size = Screen.dp(2f);

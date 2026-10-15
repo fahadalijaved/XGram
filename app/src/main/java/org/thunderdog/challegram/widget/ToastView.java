@@ -21,18 +21,30 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 
 public class ToastView extends NoScrollTextView {
+  // XGram M3E: the snackbar look (inverse surface, 4dp corners, bodyMedium in inverse onSurface)
+  private final boolean xgram = XgramExpressive.isEnabled();
+
   public ToastView (Context context) {
     super(context);
 
-    setTypeface(Fonts.getRobotoRegular());
-    setTextColor(0xffffffff);
-    setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
-    setPadding(Screen.dp(10f), Screen.dp(10f), Screen.dp(10f), Screen.dp(10f));
+    if (xgram) {
+      XgramExpressive.applyText(this, XgramExpressive.TS_BODY_M, false);
+      setTextColor(XgramExpressive.color(XgramExpressive.INVERSE_ON_SURFACE));
+      setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(16f), Screen.dp(14f));
+      setMinHeight(Screen.dp(48f));
+    } else {
+      setTypeface(Fonts.getRobotoRegular());
+      setTextColor(0xffffffff);
+      setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+      setPadding(Screen.dp(10f), Screen.dp(10f), Screen.dp(10f), Screen.dp(10f));
+    }
     setGravity(Gravity.CENTER);
 
     setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -43,9 +55,9 @@ public class ToastView extends NoScrollTextView {
     RectF rectF = Paints.getRectF();
     int width = getMeasuredWidth();
     int height = getMeasuredHeight();
-    int radius = Screen.dp(10f);
+    int radius = xgram ? Screen.dp(getLineCount() > 1 ? XgramExpressive.CORNER_S : XgramExpressive.CORNER_XS) : Screen.dp(10f);
     rectF.set(0, 0, width, height);
-    c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(0xa0000000));
+    c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(xgram ? XgramExpressive.color(XgramExpressive.INVERSE_SURFACE) : 0xa0000000));
 
     super.onDraw(c);
   }

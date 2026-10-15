@@ -111,7 +111,7 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
   private int iconRes;
 
   public void setText (@StringRes int res) {
-    this.text = res != 0 ? new Letters(Lang.uppercase(Lang.getString(res))) : null;
+    this.text = res != 0 ? new Letters(xgram ? Lang.getString(res) : Lang.uppercase(Lang.getString(res))) : null; // XGram M3E: sentence case
     this.textWidth = text != null ? (int) U.measureText(text.text, Paints.getBoldPaint15(text.needFakeBold)) : 0;
 
     this.icon = null;

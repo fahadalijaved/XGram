@@ -15,13 +15,19 @@
 package org.thunderdog.challegram.widget;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -36,6 +42,7 @@ import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.animator.BoolAnimator;
 import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.widget.FrameLayoutFix;
+import me.vkryl.core.MathUtils;
 
 public class SnackBar extends RelativeLayout {
   public interface Callback {
@@ -75,7 +82,9 @@ public class SnackBar extends RelativeLayout {
     Views.setClickable(actionView);
     addView(actionView);
 
-    ViewSupport.setThemedBackground(this, ColorId.snackbarUpdate);
+    if (!xgram) {
+      ViewSupport.setThemedBackground(this, ColorId.snackbarUpdate);
+    }
 
     isShowing = new BoolAnimator(0, new FactorAnimator.Target() {
       @Override
@@ -94,6 +103,66 @@ public class SnackBar extends RelativeLayout {
 
     setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
     setOnTouchListener((v, e) -> true);
+    if (xgram) {
+      xgramStyle();
+    }
+  }
+
+  // XGram M3E: floating Material 3 snackbar (inverse surface, 4dp corners, 12dp margins, sentence case action)
+
+  private final boolean xgram = XgramExpressive.isEnabled();
+  private int xgramBottomInset;
+
+  private void xgramStyle () {
+    textView.setTextColor(XgramExpressive.color(XgramExpressive.INVERSE_ON_SURFACE));
+    XgramExpressive.applyText(textView, XgramExpressive.TS_BODY_M, false);
+    textView.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(8f), Screen.dp(14f));
+    textView.setGravity(Gravity.CENTER_VERTICAL);
+    actionView.setId(R.id.text_title);
+    actionView.setTextColor(XgramExpressive.color(XgramExpressive.INVERSE_PRIMARY));
+    XgramExpressive.applyText(actionView, XgramExpressive.TS_LABEL_L, false);
+    actionView.setPadding(Screen.dp(12f), Screen.dp(10f), Screen.dp(12f), Screen.dp(10f));
+    RelativeLayout.LayoutParams actionParams = (RelativeLayout.LayoutParams) actionView.getLayoutParams();
+    actionParams.addRule(RelativeLayout.CENTER_VERTICAL);
+    actionParams.rightMargin = Screen.dp(8f);
+    GradientDrawable actionMask = new GradientDrawable();
+    actionMask.setColor(0xffffffff);
+    actionMask.setCornerRadius(Screen.dp(100f));
+    actionView.setBackground(new RippleDrawable(ColorStateList.valueOf(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.INVERSE_PRIMARY), XgramExpressive.STATE_PRESSED)), null, actionMask));
+
+    XgramExpressive.MorphDrawable background = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_XS, Float.NaN);
+    background.setColorRole(XgramExpressive.INVERSE_SURFACE);
+    setBackground(background);
+    setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+    setElevation(Screen.dp(XgramExpressive.ELEVATION_3));
+    setMinimumHeight(Screen.dp(48f));
+    xgramUpdateMargins();
+  }
+
+  private void xgramUpdateMargins () {
+    if (getLayoutParams() instanceof MarginLayoutParams) {
+      MarginLayoutParams params = (MarginLayoutParams) getLayoutParams();
+      int margin = Screen.dp(12f);
+      int bottom = margin + xgramBottomInset;
+      if (params.leftMargin != margin || params.rightMargin != margin || params.bottomMargin != bottom) {
+        params.leftMargin = params.rightMargin = margin;
+        params.bottomMargin = bottom;
+        setLayoutParams(params);
+      }
+    }
+  }
+
+  @Override
+  public void setPadding (int left, int top, int right, int bottom) {
+    if (xgram) {
+      // The bottom inset becomes a margin, so the floating container stays above the navigation bar
+      if (xgramBottomInset != bottom) {
+        xgramBottomInset = bottom;
+        xgramUpdateMargins();
+      }
+      bottom = 0;
+    }
+    super.setPadding(left, top, right, bottom);
   }
 
   private Callback callback;
@@ -109,7 +178,11 @@ public class SnackBar extends RelativeLayout {
   }
 
   public SnackBar setAction (String action, Runnable callback, boolean dismissAutomatically) {
-    Views.setMediumText(actionView, Lang.uppercase(action));
+    if (xgram) {
+      actionView.setText(action);
+    } else {
+      Views.setMediumText(actionView, Lang.uppercase(action));
+    }
     actionView.setOnClickListener(v -> {
       callback.run();
       if (dismissAutomatically) {
@@ -149,6 +222,10 @@ public class SnackBar extends RelativeLayout {
 
   private void updateTranslation () {
     float y = getMeasuredHeight() * (1f - isShowing.getFloatValue());
+    if (xgram) {
+      y = (getMeasuredHeight() + Screen.dp(12f) + xgramBottomInset) * (1f - isShowing.getFloatValue());
+      setAlpha(MathUtils.clamp(isShowing.getFloatValue()));
+    }
     if (getTranslationY() != y || y == 0) {
       if (callback != null) {
         callback.onSnackBarTransition(this, isShowing.getFloatValue());

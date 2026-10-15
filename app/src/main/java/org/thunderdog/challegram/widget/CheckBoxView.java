@@ -22,6 +22,9 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Controls;
+
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Paints;
@@ -84,6 +87,8 @@ public class CheckBoxView extends View {
   private static final float FACTOR_DIFF = .65f;
   private static final float SCALE_DIFF = .15f;
 
+  private final boolean xgram = XgramExpressive.isEnabled();
+
   @Override
   protected void onDraw (Canvas c) {
     final float showFactor = 1f - isHidden.getFloatValue();
@@ -94,6 +99,13 @@ public class CheckBoxView extends View {
 
     final int paddingLeft = getPaddingLeft();
     final int paddingTop = getPaddingTop();
+
+    if (xgram) {
+      // XGram M3E: Material 3 checkbox (the fill grows in from the outline, then the mark draws in)
+      final int boxSize = Math.min(getMeasuredWidth() - paddingLeft - getPaddingRight(), getMeasuredHeight() - paddingTop - getPaddingBottom());
+      XgramM3Controls.drawCheckbox(c, paddingLeft, paddingTop, boxSize, isChecked.getFloatValue(), isPartially.getFloatValue(), isDisabled.getFloatValue(), isCircle.getFloatValue(), showFactor);
+      return;
+    }
 
     final float factor = isChecked.getFloatValue();
     final int alpha = (int) (255f * showFactor);
