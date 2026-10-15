@@ -110,6 +110,7 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
     rootView = Views.findAncestor(this, RootFrameLayout.class, true);
     if (rootView != null) {
       rootView.addInsetsChangeListener(this);
+      xgramApplyPosition(); // XGram
     }
   }
 
@@ -129,6 +130,8 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
   public void onSecondaryInsetsChanged (RootFrameLayout viewGroup, boolean systemGesturesInsetsChanged, boolean displayCutoutInsetsChanged) {
     if (Config.ADJUST_STATUS_BAR_TO_AVOID_DISPLAY_CUTOUT && displayCutoutInsetsChanged) {
       applyTopInset(viewGroup, viewGroup.getDisplayCutoutTopInset());
+    } else if (displayCutoutInsetsChanged) {
+      xgramApplyPosition();
     }
   }
 
@@ -137,6 +140,40 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
       // TODO
     }
     return getResources().getDisplayMetrics().widthPixels;
+  }
+
+  /**
+   * XGram: "Connecting...", "Updating..." and "Waiting for network" sit centred in the status bar, where a centred
+   * camera hole (Galaxy S25 Ultra, Pixel...) covers them. With such a cutout, or when Settings, XGram, Appearance asks
+   * for it, they move to the start side (past a corner camera hole on that side).
+   */
+  private void xgramApplyPosition () {
+    Rect rect = rootView != null ? rootView.getDisplayCutoutTopInset() : null;
+    int width = getFrameWidth();
+    boolean cutout = rect != null && !rect.isEmpty();
+    boolean centred = cutout && Math.abs(rect.left - (width - rect.right)) <= Screen.dp(48f);
+    boolean start = centred || com.fahadali.xgram.XgramSettings.instance().connectionStatusAtStart();
+    FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) statusWrap.getLayoutParams();
+    boolean updated;
+    if (start) {
+      boolean rtl = Lang.rtl();
+      int edge = Screen.dp(12f);
+      if (cutout && !centred) {
+        if (!rtl && rect.left < width / 2) {
+          edge = rect.right + Screen.dp(8f);
+        } else if (rtl && rect.right > width / 2) {
+          edge = width - rect.left + Screen.dp(8f);
+        }
+      }
+      updated = Views.setGravity(layoutParams, rtl ? Gravity.RIGHT : Gravity.LEFT);
+      updated = Views.setMargins(layoutParams, rtl ? 0 : edge, 0, rtl ? edge : 0, 0) || updated;
+    } else {
+      updated = Views.setGravity(layoutParams, Gravity.CENTER_HORIZONTAL);
+      updated = Views.setMargins(layoutParams, 0, 0, 0, 0) || updated;
+    }
+    if (updated) {
+      Views.updateLayoutParams(statusWrap);
+    }
   }
 
   private void applyTopInset (RootFrameLayout rootView, Rect rect) {
@@ -230,6 +267,7 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
   private boolean ignoreTranslation;
 
   public void updateVisible () {
+    xgramApplyPosition(); // XGram: the setting may have changed since
     boolean isKeyboardVisible = UI.getContext(getContext()).isKeyboardVisible();
     setIsVisible(state != ConnectionState.CONNECTED && !isKeyboardVisible, ignoreTranslation = ignoreTranslation || isKeyboardVisible);
   }

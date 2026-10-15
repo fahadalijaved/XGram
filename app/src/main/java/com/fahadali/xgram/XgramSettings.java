@@ -57,6 +57,7 @@ public final class XgramSettings {
   public static final String KEY_BLOCK_CONTENT_CAPTURE = "xgram_block_content_capture";
   public static final String KEY_AI_TOOLS = "xgram_ai_tools";
   public static final String KEY_HIDE_FAB = "xgram_hide_fab";
+  public static final String KEY_CONNECTION_STATUS_START = "xgram_connection_status_start";
   public static final String KEY_ALL_CHATS_LABEL = "xgram_all_chats_label";
   public static final String KEY_PULL_TO_NEXT = "xgram_pull_to_next";
   public static final String KEY_DOWNLOAD_BOOST = "xgram_download_boost_on";
@@ -88,7 +89,7 @@ public final class XgramSettings {
   private volatile boolean ghostDontRead, ghostDontType, ghostOffline, ghostReadOnSend, ghostLocalRead, ghostTypingForStickers, ghostScheduleSend, ghostSilent;
   private volatile boolean historySaveDeleted, historySaveEdits, historySaveMedia, historyRedDeleted;
   private volatile boolean hideSponsored, showPeerIds, twoPaneLayout, saveLastSeen, showSeconds, cleanLinks, fixLinkPreviews, allowScreenshots, saveProtected, proxyOffOnVpn, proxyOffOnWifi, proxyOffOnMobile, hidePhone, blockContentCapture, iconTheme, mergeCommunities;
-  private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel;
+  private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel, connectionStatusAtStart;
   private volatile boolean tapTimeForDetails;
   private volatile boolean tapToRecord;
   private volatile boolean systemEmoji;
@@ -128,6 +129,7 @@ public final class XgramSettings {
     ghostSilent = pmc.getBoolean(KEY_GHOST_SILENT, false);
     aiTools = pmc.getBoolean(KEY_AI_TOOLS, true);
     hideFab = pmc.getBoolean(KEY_HIDE_FAB, false);
+    connectionStatusAtStart = pmc.getBoolean(KEY_CONNECTION_STATUS_START, false);
     allChatsLabel = pmc.getBoolean(KEY_ALL_CHATS_LABEL, false);
     pullToNext = pmc.getBoolean(KEY_PULL_TO_NEXT, true);
     tapToRecord = pmc.getBoolean(KEY_TAP_TO_RECORD, false);
@@ -705,6 +707,16 @@ public final class XgramSettings {
   public void setPullToNext (boolean value) {
     pullToNext = value;
     put(KEY_PULL_TO_NEXT, value);
+  }
+
+  /** "Connecting..." in the status bar on the start side even without a centred camera hole (which moves it there anyway). */
+  public boolean connectionStatusAtStart () {
+    return connectionStatusAtStart;
+  }
+
+  public void setConnectionStatusAtStart (boolean value) {
+    connectionStatusAtStart = value;
+    put(KEY_CONNECTION_STATUS_START, value);
   }
 
   public void setHideFab (boolean value) {
