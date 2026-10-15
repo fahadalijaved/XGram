@@ -56,6 +56,8 @@ public final class XgramCommunityTopics {
   /** Forums asked for at least once (a page asks once; updates ask again). */
   private final Set<Long> requested = new HashSet<>();
   private final Set<Long> inFlight = new HashSet<>();
+  /** Forums whose first request failed (no topics to wait for). */
+  private final Set<Long> failed = new HashSet<>();
   /** Forums whose answer is in flight and that must be asked again once it is here. */
   private final Set<Long> fetchAgain = new HashSet<>();
   private final Map<Long, Runnable> delayedFetches = new HashMap<>();
@@ -77,10 +79,17 @@ public final class XgramCommunityTopics {
     }
   }
 
+  /** Asked for and not here yet (nor failed): the row shows a placeholder for its topics line meanwhile. */
+  @UiThread
+  public boolean isLoading (long chatId) {
+    return !destroyed && requested.contains(chatId) && !topics.containsKey(chatId) && !failed.contains(chatId);
+  }
+
   /** The chat left the page. */
   @UiThread
   public void forget (long chatId) {
     requested.remove(chatId);
+    failed.remove(chatId);
     topics.remove(chatId);
     lastReadInbox.remove(chatId);
     fetchAgain.remove(chatId);
@@ -142,8 +151,11 @@ public final class XgramCommunityTopics {
         for (TdApi.ForumTopic topic : result.topics) {
           list.add(XgramForums.normalizeUnread(tdlib, topic));
         }
+        failed.remove(chatId);
         topics.put(chatId, list);
         onChanged.runWithLong(chatId);
+      } else if (result == null && requested.contains(chatId) && !topics.containsKey(chatId) && failed.add(chatId)) {
+        onChanged.runWithLong(chatId); // the row stops waiting for them
       }
       if (fetchAgain.remove(chatId)) {
         fetch(chatId, 0);

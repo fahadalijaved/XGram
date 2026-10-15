@@ -548,7 +548,24 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     list();
     updateNetworkStatus(tdlib.connectionState());
 
-    contentView = new ContentFrameLayout(context);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isInForceTouchMode()) {
+      // XGram: Material 3 Expressive: a chat list on its own page (Archive, a folder, a picker) is the same container
+      // with rounded top corners on the app bar's layer as the main list. Pages of MainController's pager are left out
+      // (it rounds the pager itself); that is checked when drawing, the pager builds its pages before adopting them.
+      contentView = new ContentFrameLayout(context) {
+        private final com.fahadali.xgram.appearance.XgramM3Bars.ContainerCorners xgramCorners = new com.fahadali.xgram.appearance.XgramM3Bars.ContainerCorners();
+
+        @Override
+        protected void dispatchDraw (Canvas canvas) {
+          super.dispatchDraw(canvas);
+          if (getParentOrSelf() == ChatsController.this && chatsView != null && chatsView.getParent() == this && chatsView.getVisibility() == View.VISIBLE) {
+            xgramCorners.draw(canvas, 0, chatsView.getTop() + Math.round(chatsView.getTranslationY()), getWidth());
+          }
+        }
+      };
+    } else {
+      contentView = new ContentFrameLayout(context);
+    }
     contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
     chatsViewport = tdlib.messageViewer().createViewport(new TdApi.MessageSourceChatList(), this);

@@ -12,9 +12,19 @@
 package com.fahadali.xgram.chats;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.RectF;
+import android.view.animation.AnimationUtils;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.component.dialogs.ChatView;
+import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.data.TGChat;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.widget.AttachDelegate;
 
 import me.vkryl.core.lambda.Destroyable;
@@ -32,5 +42,52 @@ public final class XgramCommunityChatView extends ChatView implements AttachDele
   @Override
   public void performDestroy () {
     setChat(null);
+  }
+
+  // XGram M3E: while a forum's topics load, a pulsing surfaceContainerHighest bar stands on the topics line.
+
+  private static final long PULSE_MS = 1200L;
+  private static final Paint placeholderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final RectF placeholderRect = new RectF();
+  private boolean topicsLoading;
+
+  public void xgramSetTopicsLoading (boolean loading) {
+    if (this.topicsLoading != loading) {
+      this.topicsLoading = loading;
+      invalidate();
+    }
+  }
+
+  @Override
+  protected void onDraw (Canvas c) {
+    super.onDraw(c);
+    if (!topicsLoading || !XgramExpressive.isEnabled()) {
+      return;
+    }
+    TGChat chat = getChat();
+    Text line = chat != null ? chat.getPrefix() : null;
+    if (line == null) {
+      return;
+    }
+    int mode = chat.getListMode();
+    int left = ChatView.getLeftPadding(mode);
+    int width = Math.min(line.getWidth(), Math.max(0, getMeasuredWidth() - left - ChatView.getRightPadding()));
+    if (width <= 0) {
+      return;
+    }
+    float centerY = ChatView.getTextTop(mode) + line.getLineHeight() / 2f;
+    float halfHeight = Screen.dp(6f);
+    if (Lang.rtl()) {
+      placeholderRect.set(getMeasuredWidth() - left - width, centerY - halfHeight, getMeasuredWidth() - left, centerY + halfHeight);
+    } else {
+      placeholderRect.set(left, centerY - halfHeight, left + width, centerY + halfHeight);
+    }
+    long t = AnimationUtils.currentAnimationTimeMillis() % PULSE_MS;
+    float pulse = .5f + .5f * (float) Math.cos(2.0 * Math.PI * t / PULSE_MS);
+    placeholderPaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST), .55f + .45f * pulse));
+    c.drawRoundRect(placeholderRect, halfHeight, halfHeight, placeholderPaint);
+    if (getWindowToken() != null) {
+      postInvalidateOnAnimation();
+    }
   }
 }
