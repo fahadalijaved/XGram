@@ -166,6 +166,67 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
     this.maxTextWidth = maxTextWidth;
     this.items = items;
     this.lastBarWidth = 0; // Resetting all related metrics
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      if (xgramIndicator == null) {
+        xgramIndicator = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, currentIndex, (s, value) -> invalidate());
+      } else {
+        xgramIndicator.setValue(currentIndex);
+      }
+    }
+  }
+
+  // XGram: Material 3 Expressive navigation bar: surfaceContainer, icon and label on every item, a 56x32dp
+  // secondaryContainer indicator behind the active icon that springs between the items
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramIndicator;
+  private @androidx.annotation.Nullable android.text.TextPaint xgramLabelPaint;
+  private @androidx.annotation.Nullable Paint xgramIconPaint;
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+
+  private static boolean xgramM3 () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  private void xgramDraw (Canvas c, int barWidth, int fullHeight) {
+    final int surface = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER);
+    c.drawRect(0, 0, barWidth, fullHeight, Paints.fillingPaint(surface));
+    final int itemWidth = itemNormalWidth;
+    if (itemWidth <= 0) {
+      return;
+    }
+    final float position = xgramIndicator != null ? xgramIndicator.getValue() : index;
+    final float indicatorTop = Screen.dp(5f), indicatorHeight = Screen.dp(32f), indicatorWidth = Screen.dp(56f);
+    final float iconCenterY = indicatorTop + indicatorHeight / 2f;
+    final float labelY = Screen.dp(51f);
+    float indicatorCx = itemStartX + itemWidth * (position + .5f);
+    xgramRect.set(indicatorCx - indicatorWidth / 2f, indicatorTop, indicatorCx + indicatorWidth / 2f, indicatorTop + indicatorHeight);
+    c.drawRoundRect(xgramRect, indicatorHeight / 2f, indicatorHeight / 2f, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER)));
+
+    if (xgramLabelPaint == null) {
+      xgramLabelPaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+      xgramLabelPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false));
+      xgramLabelPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M)));
+      xgramLabelPaint.setTextAlign(Paint.Align.CENTER);
+    }
+    final int inactive = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    final int activeIcon = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+    final int activeLabel = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY);
+    for (int i = 0; i < items.length; i++) {
+      BarItem item = items[i];
+      float cx = itemStartX + itemWidth * (i + .5f);
+      float selected = Math.max(0f, 1f - Math.abs(position - i));
+      int iconColor = ColorUtils.fromToArgb(inactive, activeIcon, selected);
+      if (item.icon != null) {
+        xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, iconColor);
+        Drawables.draw(c, item.icon, cx - item.icon.getMinimumWidth() / 2f, iconCenterY - item.icon.getMinimumHeight() / 2f, xgramIconPaint);
+      }
+      xgramLabelPaint.setColor(ColorUtils.fromToArgb(inactive, activeLabel, selected));
+      String label = item.name;
+      float maxWidth = itemWidth - Screen.dp(8f);
+      if (xgramLabelPaint.measureText(label) > maxWidth) {
+        label = android.text.TextUtils.ellipsize(label, xgramLabelPaint, maxWidth, android.text.TextUtils.TruncateAt.END).toString();
+      }
+      c.drawText(label, cx, labelY, xgramLabelPaint);
+    }
   }
 
   public void setCallback (Callback callback) {
@@ -210,6 +271,11 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
 
     this.itemNormalWidth = itemNormalWidth;
     this.itemActiveDiff = itemActiveWidth - itemNormalWidth;
+    if (xgramM3()) {
+      // XGram: navigation bar items share the width equally (the active item does not grow)
+      this.itemNormalWidth = totalWidth / items.length;
+      this.itemActiveDiff = 0;
+    }
 
     this.circleRadius = (float) Math.sqrt((barWidth * barWidth) + (barHeight * barHeight)) * .5f;
   }
@@ -367,6 +433,9 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
     obj.setDuration(240l);
     obj.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
     obj.start();
+    if (xgramIndicator != null && xgramM3()) {
+      xgramIndicator.animateTo(index); // XGram: the indicator springs to the new item
+    }
 
     return true;
   }
@@ -431,7 +500,9 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
       int centerY = barHeight / 2;
       int barHeight = MediaBottomBar.this.barHeight + MediaBottomBar.this.getPaddingBottom();
 
-      if (overlayFactor != 1f) {
+      if (overlayFactor != 1f && xgramM3()) {
+        xgramDraw(c, barWidth, barHeight);
+      } else if (overlayFactor != 1f) {
         int backgroundColor = Theme.getColor(items[index].backgroundColorId);
 
 
@@ -517,6 +588,9 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
   }
 
   public int getCurrentColor ()  {
+    if (xgramM3()) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER); // XGram
+    }
     int backgroundColor = Theme.getColor(items[index].backgroundColorId);
     if (factor != 0f) {
       int toColor = Theme.getColor(toItem.backgroundColorId);

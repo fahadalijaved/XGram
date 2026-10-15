@@ -199,6 +199,33 @@ public final class XgramMessageMenu {
     com.fahadali.xgram.XgramReorder.sort(com.fahadali.xgram.XgramReorder.MESSAGE_MENU, ids, icons, strings, XgramMessageMenu::keyOfId, defaultKeys);
   }
 
+  // Material 3 Expressive menu groups (segmented tiles): consecutive options of one group share a tile group
+
+  public static final int GROUP_PRIMARY = 0, GROUP_SECONDARY = 1, GROUP_MODERATION = 2, GROUP_DELETE = 3;
+
+  /** The tile group of an option: actions on the message, copy / info / tools, moderation, and Delete on its own. */
+  public static int menuGroup (@IdRes int id) {
+    if (id == R.id.btn_messageReplies || id == R.id.btn_messageReply || id == R.id.btn_xgramQuote ||
+      id == R.id.btn_messageShare || id == R.id.btn_messagePin || id == R.id.btn_messageUnpin ||
+      id == R.id.btn_messageEdit || id == R.id.btn_xgramReplyPrivately) {
+      return GROUP_PRIMARY;
+    }
+    if (id == R.id.btn_messageDelete) {
+      return GROUP_DELETE;
+    }
+    if (id == R.id.btn_messageReport || id == R.id.btn_messageRestrictMember || id == R.id.btn_messageBlockUser ||
+      id == R.id.btn_xgramShadowBan) {
+      return GROUP_MODERATION;
+    }
+    return GROUP_SECONDARY;
+  }
+
+  /** Whether two neighbouring options share a tile group (Delete never does). */
+  public static boolean sameMenuGroup (@IdRes int a, @IdRes int b) {
+    int group = menuGroup(a);
+    return group != GROUP_DELETE && group == menuGroup(b);
+  }
+
   @androidx.annotation.Nullable
   private static String keyOfId (Integer id) {
     for (Option option : OPTIONS) {

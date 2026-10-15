@@ -101,6 +101,46 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
     this.xgramPlainItems = items;
   }
 
+  // XGram: the card group sits on an opaque backing in the app bar color (full width, 8dp above the first card and
+  // 8dp below the last one), so the messages never show between, beside or above the cards.
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.ColorSource xgramBackingColor;
+  private final android.graphics.Paint xgramBackingPaint = new android.graphics.Paint();
+  private int xgramBackingBottom;
+
+  public void xgramSetBackingColor (@Nullable com.fahadali.xgram.appearance.XgramM3Chat.ColorSource source) {
+    this.xgramBackingColor = source;
+    setWillNotDraw(false);
+    invalidate();
+  }
+
+  /** Bottom of the opaque backing (the visible height of the bars, cards and their padding included). */
+  public int xgramBackingBottom () {
+    return xgramBackingBottom;
+  }
+
+  private float xgramCardGroupVisibility () {
+    float max = 0f;
+    for (Entry entry : entries) {
+      if (entry.xgramCard != null && entry.height > 0) {
+        float visibility = entry.isVisible.getFloatValue();
+        if (entry.item.allowCollapse()) {
+          visibility *= globalVisibility.getFactor();
+        }
+        max = Math.max(max, visibility);
+      }
+    }
+    return Math.max(0f, Math.min(1f, max));
+  }
+
+  @Override
+  protected void dispatchDraw (android.graphics.Canvas c) {
+    if (xgramBackingColor != null && xgramBackingBottom > 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramBackingPaint.setColor(xgramBackingColor.color());
+      c.drawRect(0, 0, getWidth(), xgramBackingBottom, xgramBackingPaint);
+    }
+    super.dispatchDraw(c);
+  }
+
   private boolean xgramIsPlain (Item item) {
     if (xgramPlainItems != null) {
       for (Item plain : xgramPlainItems) {
@@ -223,11 +263,18 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
 
   private void updatePositions () {
     final boolean xgramCards = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    float xgramPad = 0f;
+    boolean xgramPadded = false;
     if (xgramCards) {
       xgramUpdateSegments();
+      xgramPad = Screen.dp(8f) * xgramCardGroupVisibility();
     }
     float y = 0;
     for (Entry entry : entries) {
+      if (xgramPad > 0f && !xgramPadded && entry.xgramCard != null) {
+        xgramPadded = true;
+        y += xgramPad; // XGram: 8dp between the app bar (or the topic tabs) and the first card
+      }
       float visibility = entry.isVisible.getFloatValue();
       if (entry.item.allowCollapse()) {
         visibility *= globalVisibility.getFactor();
@@ -253,6 +300,12 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
       }
 
       y += height * visibility;
+    }
+    y += xgramPad; // XGram: 8dp of backing below the last card
+    int xgramBottom = xgramCards ? Math.round(y) : 0;
+    if (xgramBackingBottom != xgramBottom) {
+      xgramBackingBottom = xgramBottom;
+      invalidate();
     }
     notifyTotalHeightChanged(Math.round(y));
   }
@@ -315,6 +368,9 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
         visibility *= globalVisibility.getFactor();
       }
       height += entry.height * visibility;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      height += 2 * Math.round(Screen.dp(8f) * xgramCardGroupVisibility()); // XGram: padding above and below the cards
     }
     notifyTotalHeightChanged(height);
     return height;

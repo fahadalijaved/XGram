@@ -150,7 +150,12 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
       moreButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_small_arrow_down_24));
       moreButton.setScaleType(ImageView.ScaleType.CENTER);
       moreButton.setColorFilter(Paints.getColorFilter(Theme.getColor(ColorId.icon)));
-      RippleSupport.setTransparentSelector(moreButton);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive standard icon button (40dp state layer)
+        moreButton.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(Theme.getColor(ColorId.icon), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+      } else {
+        RippleSupport.setTransparentSelector(moreButton);
+      }
       Views.setClickable(moreButton);
       addView(moreButton);
     } else {
@@ -210,9 +215,42 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     return getMeasuredWidth() - width + x;
   }
 
+  // XGram: Material 3 Expressive: the sheet's rounded top-end corner, so the fill behind the expand button keeps it
+  private float xgramTopEndRadius;
+  private final android.graphics.Path xgramPath = new android.graphics.Path();
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+  private final float[] xgramRadii = new float[8];
+  private final float[] xgramPillRadii = new float[8];
+
+  /** The reaction pill row, in dp from the top of the row: the popup picker's first row draws it under the same bounds. */
+  public static final float XGRAM_PILL_TOP = 4f, XGRAM_PILL_BOTTOM = 50f, XGRAM_PILL_SIDE = 8f;
+
+  public void xgramSetTopEndRadius (float radius) {
+    if (this.xgramTopEndRadius != radius) {
+      this.xgramTopEndRadius = radius;
+      invalidate();
+    }
+  }
+
   @Override
   protected void dispatchDraw (Canvas c) {
-    if (state.needShowReactionsPopupPicker) {
+    if (state.needShowReactionsPopupPicker && xgramTopEndRadius > 0f && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramRect.set(getReactionPickerHiddenZoneLeft(), 0, getMeasuredWidth(), getMeasuredHeight());
+      float r = Math.min(xgramTopEndRadius, Math.min(xgramRect.width(), xgramRect.height()));
+      xgramRadii[2] = xgramRadii[3] = r;
+      xgramPath.rewind();
+      xgramPath.addRoundRect(xgramRect, xgramRadii, android.graphics.Path.Direction.CW);
+      c.drawPath(xgramPath, Paints.fillingPaint(Theme.backgroundColor()));
+      // the end of the reaction pill continues under the expand button
+      xgramRect.set(getReactionPickerHiddenZoneLeft() - 1, Screen.dp(XGRAM_PILL_TOP), getMeasuredWidth() - Screen.dp(XGRAM_PILL_SIDE), Screen.dp(XGRAM_PILL_BOTTOM));
+      if (xgramRect.width() > 0f) {
+        float pr = Math.min(xgramRect.height() / 2f, xgramRect.width());
+        xgramPillRadii[2] = xgramPillRadii[3] = xgramPillRadii[4] = xgramPillRadii[5] = pr;
+        xgramPath.rewind();
+        xgramPath.addRoundRect(xgramRect, xgramPillRadii, android.graphics.Path.Direction.CW);
+        c.drawPath(xgramPath, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+      }
+    } else if (state.needShowReactionsPopupPicker) {
       c.drawRect(getReactionPickerHiddenZoneLeft(), 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.backgroundColor()));
     }
     super.dispatchDraw(c);

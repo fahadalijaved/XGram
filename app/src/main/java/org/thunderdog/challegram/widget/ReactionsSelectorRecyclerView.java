@@ -70,10 +70,28 @@ public class ReactionsSelectorRecyclerView extends RecyclerView {
     this.invalidate();
   }
 
+  // XGram: Material 3 Expressive: the reactions sit in a surfaceContainerHigh pill row
+  private final android.graphics.Path xgramPill = new android.graphics.Path();
+  private final android.graphics.RectF xgramPillRect = new android.graphics.RectF();
+
   @Override
   protected void dispatchDraw (Canvas canvas) {
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramM3) {
+      int inset = Screen.dp(4f);
+      xgramPillRect.set(inset, inset, getMeasuredWidth() - inset, getMeasuredHeight() - inset);
+      float r = xgramPillRect.height() / 2f;
+      xgramPill.rewind();
+      xgramPill.addRoundRect(xgramPillRect, r, r, android.graphics.Path.Direction.CW);
+      canvas.drawPath(xgramPill, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+      canvas.save();
+      canvas.clipPath(xgramPill);
+    }
     super.dispatchDraw(canvas);
     if (!needDrawBorderGradient) {
+      if (xgramM3) {
+        canvas.restore();
+      }
       return;
     }
 
@@ -84,6 +102,9 @@ public class ReactionsSelectorRecyclerView extends RecyclerView {
     gradientDrawableRight.setAlpha(alpha);
     gradientDrawableRight.setBounds(getMeasuredWidth() - Screen.dp(35), 0, getMeasuredWidth(), getMeasuredHeight());
     gradientDrawableRight.draw(canvas);
+    if (xgramM3) {
+      canvas.restore();
+    }
   }
 
   @Override
@@ -97,9 +118,9 @@ public class ReactionsSelectorRecyclerView extends RecyclerView {
   private int lastColor;
 
   private void checkGradients () {
-    int color = Theme.backgroundColor();
+    int color = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH) : Theme.backgroundColor(); // XGram: fade into the pill
     if (color != lastColor) {
-      gradientDrawableRight.setColors(new int[]{ 0, lastColor = Theme.backgroundColor() });
+      gradientDrawableRight.setColors(new int[]{ 0, lastColor = color });
     }
   }
 
@@ -185,6 +206,10 @@ public class ReactionsSelectorRecyclerView extends RecyclerView {
       ReactionView reactionView = new ReactionView(context);
       reactionView.stickerView.init(tdlib);
       reactionView.setId(R.id.btn_reactionSelector);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive: a 40dp state layer circle under each reaction
+        reactionView.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+      }
       //reactionView.setLayoutParams(new RecyclerView.LayoutParams(Screen.dp(42), ViewGroup.LayoutParams.WRAP_CONTENT));
       return new ReactionHolder(reactionView);
     }

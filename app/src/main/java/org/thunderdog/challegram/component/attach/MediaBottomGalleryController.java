@@ -210,7 +210,7 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
 
     int spanCount = calculateSpanCount(Screen.currentWidth(), Screen.currentHeight());
 
-    decoration = new GridSpacingItemDecoration(spanCount, Screen.dp(4f), true, true, true);
+    decoration = new GridSpacingItemDecoration(spanCount, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 2f : 4f), true, true, true); // XGram: 2dp gaps between the M3E tiles
     GridLayoutManager manager = new RtlGridLayoutManager(context(), spanCount);
 
     int options = inSingleMediaMode() ? MediaGalleryAdapter.OPTION_NEVER_SELECTABLE :

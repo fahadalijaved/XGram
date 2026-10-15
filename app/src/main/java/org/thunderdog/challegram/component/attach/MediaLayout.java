@@ -288,6 +288,9 @@ public class MediaLayout extends FrameLayoutFix implements
       params.gravity = Gravity.BOTTOM;
       shadowView.setLayoutParams(params);
       themeListeners.addThemeInvalidateListener(shadowView);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        shadowView.setVisibility(View.GONE); // XGram: the Material 3 Expressive navigation bar has no shadow
+      }
     }
 
     currentController = getControllerForIndex(index);

@@ -44,6 +44,14 @@ public class MediaContentView extends FrameLayoutFix implements GestureDetector.
     this.base = controller;
   }
 
+  @Override
+  protected void dispatchDraw (android.graphics.Canvas c) {
+    if (base != null) {
+      base.xgramDrawSheetTop(c, getMeasuredWidth()); // XGram: Material 3 Expressive sheet top (corners and drag handle)
+    }
+    super.dispatchDraw(c);
+  }
+
   private int lastMeasuredWidth;
   private int lastMeasuredHeight;
 

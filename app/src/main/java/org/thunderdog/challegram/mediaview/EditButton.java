@@ -300,14 +300,43 @@ public class EditButton extends View implements FactorAnimator.Target {
 
   private final Path clipPath = new Path();
 
+  // XGram: Material 3 Expressive small FAB look (40dp primaryContainer, 12dp corners, onPrimaryContainer icon)
+  private boolean xgramFab;
+  private final android.graphics.RectF xgramFabRect = new android.graphics.RectF();
+
+  public void xgramSetFab (boolean fab) {
+    if (this.xgramFab != fab) {
+      this.xgramFab = fab;
+      if (fab && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        int content = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
+        setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(content)), null,
+          new com.fahadali.xgram.appearance.XgramExpressiveC.PressMorphMask(40f, com.fahadali.xgram.appearance.XgramExpressive.CORNER_M, com.fahadali.xgram.appearance.XgramExpressive.CORNER_S)));
+      }
+      invalidate();
+    }
+  }
+
+  private boolean xgramIsFab () {
+    return xgramFab && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
   @ColorInt
   private int getCurrentIconColor () {
+    if (xgramIsFab()) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
+    }
     float activeFactor = iconRes != R.drawable.baseline_volume_up_24 ? this.activeFactor : 0f;
     return changer.getColor(activeFactor);
   }
 
   @Override
   protected void onDraw (Canvas c) {
+    if (xgramIsFab()) {
+      float half = Math.min(Screen.dp(20f), Math.min(getMeasuredWidth(), getMeasuredHeight()) / 2f);
+      xgramFabRect.set(getMeasuredWidth() / 2f - half, getMeasuredHeight() / 2f - half, getMeasuredWidth() / 2f + half, getMeasuredHeight() / 2f + half);
+      float r = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
+      c.drawRoundRect(xgramFabRect, r, r, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER)));
+    }
     Paint paint = Paints.getPorterDuffPaint(getCurrentIconColor());
 
     int centerX = getMeasuredWidth() / 2;

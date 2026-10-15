@@ -691,6 +691,9 @@ public class MediaStickersAdapter extends RecyclerView.Adapter<MediaStickersAdap
           }
           textView.setGravity(Lang.gravity() | Gravity.CENTER_VERTICAL);
           textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            com.fahadali.xgram.appearance.XgramExpressive.applyText(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_S, false); // XGram: M3E section title
+          }
           textView.setSingleLine(true);
           textView.setEllipsize(TextUtils.TruncateAt.END);
           textView.setPadding(paddingHorizontal, paddingTop, paddingHorizontal, Screen.dp(5f));
@@ -719,6 +722,9 @@ public class MediaStickersAdapter extends RecyclerView.Adapter<MediaStickersAdap
             if (i == 0) {
               textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
               textView.setTypeface(Fonts.getRobotoMedium());
+              if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+                com.fahadali.xgram.appearance.XgramExpressive.applyText(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_S, false); // XGram: M3E section title
+              }
               textView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
             } else {
               textView.setId(R.id.btn_toggleCollapseRecentStickers);

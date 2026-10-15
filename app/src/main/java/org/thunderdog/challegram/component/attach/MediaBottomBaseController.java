@@ -239,6 +239,9 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     if (recyclerView != null) {
       float top = height - currentHeight;
       recyclerView.setTranslationY(top);
+      if (contentView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        contentView.invalidate(); // XGram: the sheet top follows the list
+      }
       onRecyclerTopUpdate(top);
     }
   }
@@ -315,6 +318,33 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
 
   public void onRecyclerFirstMovement () {
 
+  }
+
+  // XGram: Material 3 Expressive modal sheet top above the list: 28dp corners and a drag handle in a 16dp band, both
+  // fading out as the sheet reaches the top (where the header takes over)
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramSheetTop;
+
+  public void xgramDrawSheetTop (android.graphics.Canvas c, int width) {
+    if (recyclerView == null || recyclerView.getVisibility() != View.VISIBLE || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    int color = org.thunderdog.challegram.theme.Theme.getColor(getRecyclerBackgroundColorId());
+    if ((color >>> 24) == 0) {
+      return;
+    }
+    float corner = me.vkryl.core.MathUtils.clamp(recyclerView.getTranslationY() / Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL));
+    if (corner <= 0f) {
+      return;
+    }
+    float top = recyclerView.getTop() + recyclerView.getTranslationY();
+    float band = Screen.dp(16f) * corner;
+    if (xgramSheetTop == null) {
+      xgramSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
+    }
+    xgramSheetTop.set(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(color, recyclerView.getAlpha()), corner);
+    xgramSheetTop.setHandleAlpha(corner * recyclerView.getAlpha());
+    xgramSheetTop.setBounds(0, (int) (top - band), width, (int) Math.ceil(top) + 1);
+    xgramSheetTop.draw(c);
   }
 
   protected @ColorId int getRecyclerBackgroundColorId () {

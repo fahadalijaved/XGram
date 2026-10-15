@@ -507,6 +507,16 @@ public final class XgramM3Chat {
     private final float[] radii = new float[8];
     private @ColorInt int color;
     private float cornerFactor = 1f;
+    private float handleAlpha = 1f;
+
+    /** Drag handle opacity (1 by default), e.g. faded out with the corners when the handle has no band of its own. */
+    public void setHandleAlpha (float alpha) {
+      alpha = Math.max(0f, Math.min(1f, alpha));
+      if (this.handleAlpha != alpha) {
+        this.handleAlpha = alpha;
+        invalidateSelf();
+      }
+    }
 
     public void set (@ColorInt int color, float cornerFactor) {
       if (this.color != color || this.cornerFactor != cornerFactor) {
@@ -530,9 +540,12 @@ public final class XgramM3Chat {
         path.addRoundRect(rect, radii, Path.Direction.CW);
         c.drawPath(path, paint);
       }
+      if (handleAlpha <= 0f) {
+        return;
+      }
       float handleW = Screen.dpf(32f), handleH = Screen.dpf(4f);
       rect.set(b.exactCenterX() - handleW / 2f, b.top + Screen.dpf(6f), b.exactCenterX() + handleW / 2f, b.top + Screen.dpf(6f) + handleH);
-      paint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), .4f));
+      paint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), .4f * handleAlpha));
       c.drawRoundRect(rect, handleH / 2f, handleH / 2f, paint);
     }
 

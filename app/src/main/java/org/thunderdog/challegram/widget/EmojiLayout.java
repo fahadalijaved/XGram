@@ -366,6 +366,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(shadowView.getLayoutParams().width, shadowView.getLayoutParams().height);
     params.topMargin = headerSize;
     shadowView.setLayoutParams(params);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !useDarkMode) {
+      shadowView.setVisibility(View.GONE); // XGram: Material 3 Expressive surfaces have no shadow line
+    }
 
     int position;
     if (allowMedia) {
@@ -441,7 +444,27 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     }
   }
 
+  private boolean xgramThemeListener;
+
   private void checkBackground () {
+    if (!useDarkMode && !isOptimizedForDisplayMessageOptionsWindow && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive panel: surfaceContainerLow with 28dp top corners, the header clipped to them
+      com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable panel = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE);
+      panel.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
+      panel.setCorners(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL, 0f, 0f);
+      setBackground(panel);
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+        setClipToOutline(true);
+      }
+      if (themeProvider != null && !xgramThemeListener) {
+        xgramThemeListener = true;
+        themeProvider.addThemeInvalidateListener(this);
+      }
+      return;
+    } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && getClipToOutline()) {
+      setClipToOutline(false);
+    }
     if (useDarkMode) {
       setBackgroundColor(Theme.getColor(ColorId.chatKeyboard, ThemeId.NIGHT_BLACK));
     } else {

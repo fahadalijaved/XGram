@@ -290,6 +290,36 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
           float bottom = getPickerBottom();
           if (bottom <= top) return;
 
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram: Material 3 Expressive modal sheet over the reaction row too: 28dp top corners and a drag handle
+            // in a band above the row, both kept until the sheet reaches the top of the window
+            float corner = xgramSheetCornerFactor(top);
+            float band = Screen.dp(14f) * corner;
+            if (xgramPickerSheetTop == null) {
+              xgramPickerSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
+            }
+            xgramPickerSheetTop.set(Theme.backgroundColor(), corner);
+            xgramPickerSheetTop.setHandleAlpha(corner);
+            xgramPickerSheetTop.setBounds(0, (int) (top - band), getMeasuredWidth(), (int) Math.ceil(bottom));
+            xgramPickerSheetTop.draw(canvas);
+            // the reaction row as a surfaceContainerHigh pill (fades out as the full picker opens)
+            float pillAlpha = 1f - reactionsPickerVisibility.getFloatValue();
+            if (pillAlpha > 0f) {
+              xgramPillRect.set(Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_SIDE), top + Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_TOP),
+                getMeasuredWidth() - Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_SIDE), top + Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_BOTTOM));
+              float pr = xgramPillRect.height() / 2f;
+              canvas.drawRoundRect(xgramPillRect, pr, pr, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), pillAlpha)));
+            }
+            if (headerCell != null) {
+              headerCell.xgramSetTopEndRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL) * corner);
+            }
+            canvas.save();
+            canvas.clipRect(0, top, getMeasuredWidth(), bottom);
+            super.dispatchDraw(canvas);
+            canvas.restore();
+            return;
+          }
+
           canvas.save();
           canvas.clipRect(0, top, getMeasuredWidth(), bottom);
           canvas.drawRect(0, top, getMeasuredWidth(), bottom, Paints.fillingPaint(Theme.backgroundColor()));
@@ -303,6 +333,14 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     return vg;
   }
 
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramPickerSheetTop;
+  private final android.graphics.RectF xgramPillRect = new android.graphics.RectF();
+
+  /** XGram: 1 while the sheet top is 28dp or more below the top of the window, 0 once it reaches it. */
+  private static float xgramSheetCornerFactor (float sheetTop) {
+    return MathUtils.clamp((sheetTop - HeaderView.getTopOffset()) / Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL));
+  }
+
   private void invalidatePickerWrapper () {
     if (reactionsPickerWrapper != null) {
       reactionsPickerWrapper.invalidate();
@@ -313,6 +351,9 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   @Override
   protected void setHeaderPosition (float y) {
     super.setHeaderPosition(y);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && headerView != null && headerView.getBackground() instanceof com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable) {
+      ((com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable) headerView.getBackground()).set(Theme.getColor(ColorId.background), xgramSheetCornerFactor(headerTranslationY)); // XGram
+    }
     checkReactionPickerPosition();
   }
 
@@ -402,7 +443,8 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
         if (!(headerView.getBackground() instanceof com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable)) {
           headerView.setBackground(new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable());
         }
-        ((com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable) headerView.getBackground()).set(sheetColor, 1f - headerBackgroundFactor);
+        // the corners follow the sheet top (not the header background factor): rounded until it reaches the window top
+        ((com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable) headerView.getBackground()).set(sheetColor, xgramSheetCornerFactor(headerTranslationY));
       }
       if (headerCell != null) {
         headerCell.updatePaints(sheetColor);
