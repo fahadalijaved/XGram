@@ -26,6 +26,9 @@ import android.view.animation.Interpolator;
 
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramLoadingIndicator;
+
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Paints;
@@ -342,6 +345,16 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
     final long timeMs = (monotonic ? SystemClock.uptimeMillis() : SystemClock.uptimeMillis() - startTime) + (noStartDelay ? timeBetweenSweep + timePerSweep + timeBetweenSweep : 0);
     final float startAngle, sweepAngle;
     final boolean isTimer = isTimer();
+
+    if (!isTimer && !isPrecise && radius >= Screen.dp(10f) && XgramExpressive.isEnabled()) {
+      // XGram M3E: the expressive loading indicator; the old spinner diameter stands for its 38dp active indicator
+      final int indicatorColor = ColorUtils.alphaColor(alpha, colorForced ? this.color : XgramExpressive.color(XgramExpressive.PRIMARY));
+      XgramLoadingIndicator.draw(c, arcRect.centerX(), arcRect.centerY(), radius * 2f, indicatorColor, timeMs);
+      if (!scheduled && isActive()) {
+        scheduleInvalidateIfNeeded(true, true);
+      }
+      return;
+    }
 
     if (isTimer) {
       sweepAngle = 360f * getTimerValue();
