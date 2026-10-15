@@ -873,6 +873,11 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   @Override
   public boolean onLongClick (View v) {
+    if (v.getId() == R.id.btn_xgramGhostMode) {
+      // XGram: a long press on the Ghost mode switch opens its settings (Privacy, Ghost mode first).
+      openController(com.fahadali.xgram.XgramSettingsController.ghost(context, context.currentTdlib()));
+      return true;
+    }
     if (!(v instanceof BaseView)) {
       return false;
     }

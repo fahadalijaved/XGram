@@ -765,6 +765,9 @@ public class SettingHolder extends RecyclerView.ViewHolder {
                 RippleSupport.setTransparentSelector(wrap);
                 item.setEnabled(false);
                 wrap.setOnClickListener(onClickListener);
+                if (viewType == ListItem.TYPE_DRAWER_ITEM_WITH_RADIO && onLongClickListener != null) {
+                  wrap.setOnLongClickListener(onLongClickListener); // XGram: a long press on the side menu's Ghost mode switch opens its settings
+                }
 
                 TogglerView togglerView = new TogglerView(context);
                 togglerView.init(false);

@@ -44,12 +44,28 @@ import java.util.List;
 
 /**
  * XGram's own settings: a short list of categories, each opening its own page (the same controller with a section).
+ * Layout and wording follow docs/xgram/settings_structure.md.
  */
 public final class XgramSettingsController extends RecyclerViewController<Integer> implements View.OnClickListener, AppUpdater.Listener {
   public static final int SECTION_MAIN = 0, SECTION_APPEARANCE = 1, SECTION_GHOST = 2, SECTION_HISTORY = 3,
-    SECTION_CHATS = 4, SECTION_PRIVACY = 5, SECTION_NETWORK = 6, SECTION_BACKUP = 7, SECTION_UPDATES = 8;
-  /** Highest section. The settings search indexes SECTION_MAIN..SECTION_LAST, so raise this when adding a section. */
-  static final int SECTION_LAST = SECTION_UPDATES;
+    SECTION_CHATS = 4, SECTION_PRIVACY = 5, SECTION_NETWORK = 6, SECTION_BACKUP = 7, SECTION_UPDATES = 8,
+    SECTION_CHAT_LIST = 9, SECTION_TRANSLATION = 10, SECTION_FILTERS = 11;
+  /** Messages: the page that was Chats (same id). */
+  public static final int SECTION_MESSAGES = SECTION_CHATS;
+  // SECTION_GHOST: Ghost mode is the top of Privacy now. Opening it opens Privacy (see section() and ghost()).
+
+  /** Pages the settings search reads, in the main page's order. Add a new section here. */
+  static final int[] SEARCH_SECTIONS = {
+    SECTION_MAIN, SECTION_APPEARANCE, SECTION_CHAT_LIST, SECTION_MESSAGES, SECTION_TRANSLATION,
+    SECTION_PRIVACY, SECTION_FILTERS, SECTION_HISTORY, SECTION_NETWORK, SECTION_UPDATES, SECTION_BACKUP
+  };
+
+  /** Pages further in (their own controllers) that the settings search reads too. */
+  static final int SUB_SIDE_MENU = 1, SUB_CHAT_ACTIONS = 2, SUB_MESSAGE_MENU = 3, SUB_INPUT_BUTTONS = 4,
+    SUB_WORD_FILTERS = 5, SUB_HIDDEN_PEOPLE = 6;
+  static final int[] SEARCH_SUB_PAGES = {
+    SUB_SIDE_MENU, SUB_CHAT_ACTIONS, SUB_MESSAGE_MENU, SUB_INPUT_BUTTONS, SUB_WORD_FILTERS, SUB_HIDDEN_PEOPLE
+  };
 
   private SettingsAdapter adapter;
 
@@ -68,15 +84,26 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
   public static XgramSettingsController section (Context context, Tdlib tdlib, int section) {
     XgramSettingsController c = new XgramSettingsController(context, tdlib);
-    c.setArguments(section);
+    c.setArguments(section == SECTION_GHOST ? SECTION_PRIVACY : section);
     return c;
   }
 
-  /** A section page that scrolls to one row and flashes it once shown (settings search, Telegram X shortcuts). */
+  /**
+   * A section page that scrolls to one row and flashes it once shown: settings search, and shortcuts from Telegram X's
+   * pages (for example Network at R.id.btn_xgramProxyOffVpn, the first Turn proxy off row).
+   */
   public static XgramSettingsController section (Context context, Tdlib tdlib, int section, @IdRes int highlightId) {
     XgramSettingsController c = section(context, tdlib, section);
     c.highlightId = highlightId;
     return c;
+  }
+
+  /**
+   * Ghost mode settings: Privacy, whose first part is Ghost mode. Opened by the main screen's ghost button, a long
+   * press on the side menu's Ghost mode switch, a long press on the Quick Settings tile and What's new.
+   */
+  public static XgramSettingsController ghost (Context context, Tdlib tdlib) {
+    return section(context, tdlib, SECTION_PRIVACY);
   }
 
   private int section () {
@@ -97,12 +124,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   static @StringRes int sectionTitleRes (int section) {
     switch (section) {
       case SECTION_APPEARANCE: return R.string.XgramAppearance;
-      case SECTION_GHOST: return R.string.XgramGhostMode;
-      case SECTION_HISTORY: return R.string.XgramHistory;
-      case SECTION_CHATS: return R.string.XgramChats;
+      case SECTION_CHAT_LIST: return R.string.XgramChatList;
+      case SECTION_MESSAGES: return R.string.XgramMessages;
+      case SECTION_TRANSLATION: return R.string.XgramTranslation;
+      case SECTION_GHOST:
       case SECTION_PRIVACY: return R.string.XgramPrivacy;
+      case SECTION_FILTERS: return R.string.XgramFilters;
+      case SECTION_HISTORY: return R.string.XgramHistory;
       case SECTION_NETWORK: return R.string.XgramNetwork;
-      case SECTION_BACKUP: return R.string.XgramBackupAndReset;
+      case SECTION_BACKUP: return R.string.XgramBackup;
       case SECTION_UPDATES: return R.string.XgramUpdates;
       default: return R.string.XgramSettings;
     }
@@ -112,14 +142,82 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   static @DrawableRes int sectionIcon (int section) {
     switch (section) {
       case SECTION_APPEARANCE: return R.drawable.baseline_palette_24;
-      case SECTION_GHOST: return R.drawable.baseline_ghost_24;
-      case SECTION_HISTORY: return R.drawable.baseline_history_24;
-      case SECTION_CHATS: return R.drawable.baseline_chat_bubble_24;
+      case SECTION_CHAT_LIST: return R.drawable.baseline_forum_24;
+      case SECTION_MESSAGES: return R.drawable.baseline_chat_bubble_24;
+      case SECTION_TRANSLATION: return R.drawable.baseline_translate_24;
+      case SECTION_GHOST:
       case SECTION_PRIVACY: return R.drawable.baseline_lock_24;
+      case SECTION_FILTERS: return R.drawable.baseline_filter_variant_remove_24;
+      case SECTION_HISTORY: return R.drawable.baseline_history_24;
       case SECTION_NETWORK: return R.drawable.baseline_public_24;
       case SECTION_BACKUP: return R.drawable.baseline_import_export_24;
       case SECTION_UPDATES: return R.drawable.baseline_system_update_24;
       default: return R.drawable.baseline_settings_24;
+    }
+  }
+
+  // Pages further in, for the settings search
+
+  /** The section whose page opens it (SECTION_MAIN for the side menu, a category of its own). */
+  static int subPageParent (int subPage) {
+    switch (subPage) {
+      case SUB_CHAT_ACTIONS: return SECTION_CHAT_LIST;
+      case SUB_MESSAGE_MENU:
+      case SUB_INPUT_BUTTONS: return SECTION_MESSAGES;
+      case SUB_WORD_FILTERS:
+      case SUB_HIDDEN_PEOPLE: return SECTION_FILTERS;
+      case SUB_SIDE_MENU:
+      default: return SECTION_MAIN;
+    }
+  }
+
+  static @StringRes int subPageTitleRes (int subPage) {
+    switch (subPage) {
+      case SUB_CHAT_ACTIONS: return R.string.XgramChatActionsOrder;
+      case SUB_MESSAGE_MENU: return R.string.XgramMessageMenu;
+      case SUB_INPUT_BUTTONS: return R.string.XgramInputButtons;
+      case SUB_WORD_FILTERS: return R.string.XgramWordFilters;
+      case SUB_HIDDEN_PEOPLE: return R.string.XgramShadowBanned;
+      case SUB_SIDE_MENU:
+      default: return R.string.XgramSideMenu;
+    }
+  }
+
+  static @DrawableRes int subPageIcon (int subPage) {
+    return subPage == SUB_SIDE_MENU ? R.drawable.baseline_format_list_bulleted_type_24 : sectionIcon(subPageParent(subPage));
+  }
+
+  /** Rows of a page further in, read from that page's own list. */
+  List<ListItem> buildSubPageItems (int subPage) {
+    switch (subPage) {
+      case SUB_CHAT_ACTIONS: return com.fahadali.xgram.chats.XgramChatActionsController.buildItems();
+      case SUB_MESSAGE_MENU: return com.fahadali.xgram.chats.XgramMessageMenuController.buildItems();
+      case SUB_INPUT_BUTTONS: return com.fahadali.xgram.chats.XgramInputButtonsController.buildItems();
+      case SUB_WORD_FILTERS: {
+        List<ListItem> items = com.fahadali.xgram.chats.XgramFiltersController.buildItems(false);
+        List<ListItem> rows = new ArrayList<>(items.size());
+        for (ListItem item : items) {
+          if (item.getId() != R.id.btn_xgramFilter) { // the words themselves are the user's, not settings
+            rows.add(item);
+          }
+        }
+        return rows;
+      }
+      case SUB_HIDDEN_PEOPLE: return com.fahadali.xgram.chats.XgramFiltersController.buildItems(true);
+      case SUB_SIDE_MENU: return XgramDrawerItemsController.buildItems();
+      default: return new ArrayList<>();
+    }
+  }
+
+  private RecyclerViewController<?> openSubPage (int subPage) {
+    switch (subPage) {
+      case SUB_CHAT_ACTIONS: return new com.fahadali.xgram.chats.XgramChatActionsController(context, tdlib);
+      case SUB_MESSAGE_MENU: return new com.fahadali.xgram.chats.XgramMessageMenuController(context, tdlib);
+      case SUB_INPUT_BUTTONS: return new com.fahadali.xgram.chats.XgramInputButtonsController(context, tdlib);
+      case SUB_WORD_FILTERS: return com.fahadali.xgram.chats.XgramFiltersController.words(context, tdlib);
+      case SUB_HIDDEN_PEOPLE: return com.fahadali.xgram.chats.XgramFiltersController.people(context, tdlib);
+      case SUB_SIDE_MENU:
+      default: return new XgramDrawerItemsController(context, tdlib);
     }
   }
 
@@ -130,21 +228,35 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         XgramSettings settings = XgramSettings.instance();
         @IdRes int id = item.getId();
-        if (id == R.id.btn_xgramSectionGhost) {
-          view.setData(settings.isAnyGhostEnabled() ? R.string.XgramStateOn : R.string.XgramStateOff);
-        } else if (id == R.id.btn_xgramSectionHistory) {
-          view.setData(settings.historySaveDeleted() || settings.historySaveEdits() ? R.string.XgramHistorySummaryOn : R.string.XgramStateOff);
-        } else if (id == R.id.btn_xgramSectionAppearance) {
+        // A fixed line under the title (toggle(), link() with a subtitle); values below replace it.
+        CharSequence subtitle = item.getCharSequenceValue();
+        if (subtitle != null) {
+          view.setData(subtitle);
+        }
+        if (id == R.id.btn_xgramSectionAppearance) {
           view.setData(R.string.XgramAppearanceSummary);
+        } else if (id == R.id.btn_xgramSectionChatList) {
+          view.setData(R.string.XgramChatListSummary);
         } else if (id == R.id.btn_xgramSectionChats) {
-          view.setData(R.string.XgramChatsSummary);
+          view.setData(R.string.XgramMessagesSummary);
+        } else if (id == R.id.btn_xgramSectionTranslation) {
+          view.setData(R.string.XgramTranslationSummary);
+        } else if (id == R.id.btn_xgramSideMenu) {
+          int hidden = XgramDrawerItemsController.hiddenCount();
+          view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(R.string.XgramSideMenuSummary));
         } else if (id == R.id.btn_xgramSectionPrivacy) {
-          view.setData(R.string.XgramPrivacySummary);
+          view.setData(settings.isAnyGhostEnabled() ? R.string.XgramPrivacySummaryGhostOn : R.string.XgramPrivacySummary);
+        } else if (id == R.id.btn_xgramSectionFilters) {
+          view.setData(R.string.XgramFiltersSummary);
+        } else if (id == R.id.btn_xgramSectionHistory) {
+          view.setData(R.string.XgramHistorySummary);
         } else if (id == R.id.btn_xgramSectionNetwork) {
           view.setData(R.string.XgramNetworkSummary);
         } else if (id == R.id.btn_xgramSectionBackup) {
           view.setData(R.string.XgramBackupSummary);
-        } else if (id == R.id.btn_xgramSectionUpdates || id == R.id.btn_xgramUpdateChannel) {
+        } else if (id == R.id.btn_xgramSectionUpdates) {
+          view.setData(R.string.XgramUpdatesSummary);
+        } else if (id == R.id.btn_xgramUpdateChannel) {
           view.setData(XgramUpdates.channelName(XgramUpdates.channel()));
         } else if (id == R.id.btn_xgramUpdateMode) {
           view.setData(XgramUpdates.modeName(Settings.instance().getAutoUpdateMode()));
@@ -158,9 +270,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
             bindUpdateCheck(view, isUpdate);
           }
         } else if (id == R.id.btn_xgramThemes) {
-          view.setData(R.string.XgramThemesSummary);
+          view.setData(currentThemeName());
         } else if (id == R.id.btn_xgramMaterialYou) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramMaterialYou.isEnabled(), isUpdate);
+        } else if (id == R.id.btn_xgramEmojiSet) {
+          view.setData(emojiSetName());
         } else if (id == R.id.btn_xgramHistoryRetention) {
           int days = settings.historyRetentionDays();
           view.setData(days == 0 ? Lang.getString(R.string.XgramRetentionForever) : Lang.getString(R.string.XgramRetentionDays, days));
@@ -176,6 +290,20 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(avatarCornersName(settings.avatarCorners()));
         } else if (id == R.id.btn_xgramChatLongPress) {
           view.setData(com.fahadali.xgram.chats.XgramChatLongPress.modeName(settings.chatLongPress()));
+        } else if (id == R.id.btn_xgramChatActionsOrder) {
+          view.setData(XgramReorder.hasOrder(XgramReorder.CHAT_ACTIONS) ? R.string.XgramOrderCustom : R.string.XgramOrderDefault);
+        } else if (id == R.id.btn_xgramMessageMenu) {
+          int hidden = messageMenuHiddenCount();
+          view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(XgramReorder.hasOrder(XgramReorder.MESSAGE_MENU) ? R.string.XgramOrderCustom : R.string.XgramOrderDefault));
+        } else if (id == R.id.btn_xgramInputButtons) {
+          int hidden = com.fahadali.xgram.chats.XgramInputButtonsController.hiddenCount();
+          view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(R.string.XgramAllShown));
+        } else if (id == R.id.btn_xgramFilters) {
+          int count = com.fahadali.xgram.chats.XgramFilters.getFilters().size();
+          view.setData(count == 0 ? Lang.getString(R.string.XgramNone) : count == 1 ? Lang.getString(R.string.XgramFilterCountOne) : Lang.getString(R.string.XgramFilterCount, count));
+        } else if (id == R.id.btn_xgramHiddenPeople) {
+          int count = com.fahadali.xgram.chats.XgramFilters.shadowBannedCount(tdlib);
+          view.setData(count == 0 ? Lang.getString(R.string.XgramNone) : count == 1 ? Lang.getString(R.string.XgramPeopleCountOne) : Lang.getString(R.string.XgramPeopleCount, count));
         } else if (id == R.id.btn_xgramSwipeLeft || id == R.id.btn_xgramSwipeRight) {
           view.setData(com.fahadali.xgram.chats.XgramSwipeActions.name(settings.swipeAction(id == R.id.btn_xgramSwipeRight)));
         } else if (id == R.id.btn_xgramIconPack) {
@@ -265,12 +393,16 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.translateAlways(), isUpdate);
         } else if (id == R.id.btn_xgramTrFallback) {
           view.getToggler().setRadioEnabled(settings.translateFallback(), isUpdate);
+          // Only a third-party service can fail over to Telegram.
+          view.setEnabled(com.fahadali.xgram.translate.XgramTranslator.isThirdParty(settings.translateProvider()));
         } else if (id == R.id.btn_xgramTrProvider) {
           view.setData(com.fahadali.xgram.translate.XgramTranslator.name(settings.translateProvider()));
         } else if (id == R.id.btn_xgramTrTarget) {
           view.setData(com.fahadali.xgram.chats.XgramTranslateTargetController.currentName());
         } else if (id == R.id.btn_xgramTrAutoAll) {
           view.getToggler().setRadioEnabled(settings.translateAutoAll(), isUpdate);
+        } else if (id == R.id.btn_xgramTrStyle) {
+          view.setData(translateStyleName());
         } else if (id == R.id.btn_xgramTapToRecord) {
           view.getToggler().setRadioEnabled(settings.tapToRecord(), isUpdate);
         } else if (id == R.id.btn_xgramProxyOffVpn) {
@@ -330,10 +462,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     List<ListItem> items = new ArrayList<>();
     switch (section) {
       case SECTION_APPEARANCE: buildAppearance(items); break;
-      case SECTION_GHOST: buildGhost(items); break;
-      case SECTION_HISTORY: buildHistory(items); break;
-      case SECTION_CHATS: buildChats(items); break;
+      case SECTION_CHAT_LIST: buildChatList(items); break;
+      case SECTION_MESSAGES: buildMessages(items); break;
+      case SECTION_TRANSLATION: buildTranslation(items); break;
+      case SECTION_GHOST:
       case SECTION_PRIVACY: buildPrivacy(items); break;
+      case SECTION_FILTERS: buildFilters(items); break;
+      case SECTION_HISTORY: buildHistory(items); break;
       case SECTION_NETWORK: buildNetwork(items); break;
       case SECTION_BACKUP: buildBackup(items); break;
       case SECTION_UPDATES: buildUpdates(items); break;
@@ -353,8 +488,36 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
   }
 
-  private static ListItem toggle (@IdRes int id, int title) {
+  private static ListItem header (@StringRes int title) {
+    return new ListItem(ListItem.TYPE_HEADER, 0, 0, title);
+  }
+
+  private static ListItem description (@StringRes int text) {
+    return new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, text);
+  }
+
+  /** A switch with a short line under its title: its scope or effect. */
+  private static ListItem toggle (@IdRes int id, @StringRes int title, @StringRes int subtitle) {
+    return toggle(id, 0, title, subtitle);
+  }
+
+  private static ListItem toggle (@IdRes int id, int icon, @StringRes int title, @StringRes int subtitle) {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, id, icon, title).setStringValue(Lang.getString(subtitle));
+  }
+
+  /** A switch without a line under its title. */
+  private static ListItem toggle (@IdRes int id, @StringRes int title) {
     return new ListItem(ListItem.TYPE_RADIO_SETTING, id, 0, title);
+  }
+
+  /** A row that opens a page or a choice; setValuedSetting puts its current value under the title. */
+  private static ListItem link (@IdRes int id, @StringRes int title) {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, id, 0, title);
+  }
+
+  /** A row that opens a page, with a fixed line under its title. */
+  private static ListItem link (@IdRes int id, int icon, @StringRes int title, @StringRes int subtitle) {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, id, icon, title).setStringValue(Lang.getString(subtitle));
   }
 
   private static ListItem category (@IdRes int id, int icon, int title) {
@@ -367,179 +530,237 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items,
       category(R.id.btn_xgramSectionAppearance, R.drawable.baseline_palette_24, R.string.XgramAppearance),
-      category(R.id.btn_xgramSectionGhost, R.drawable.baseline_ghost_24, R.string.XgramGhostMode),
-      category(R.id.btn_xgramSectionHistory, R.drawable.baseline_history_24, R.string.XgramHistory),
-      category(R.id.btn_xgramSectionChats, R.drawable.baseline_chat_bubble_24, R.string.XgramChats),
+      category(R.id.btn_xgramSectionChatList, R.drawable.baseline_forum_24, R.string.XgramChatList),
+      category(R.id.btn_xgramSectionChats, R.drawable.baseline_chat_bubble_24, R.string.XgramMessages),
+      category(R.id.btn_xgramSectionTranslation, R.drawable.baseline_translate_24, R.string.XgramTranslation),
+      category(R.id.btn_xgramSideMenu, R.drawable.baseline_format_list_bulleted_type_24, R.string.XgramSideMenu)
+    );
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    addRows(items,
       category(R.id.btn_xgramSectionPrivacy, R.drawable.baseline_lock_24, R.string.XgramPrivacy),
+      category(R.id.btn_xgramSectionFilters, R.drawable.baseline_filter_variant_remove_24, R.string.XgramFilters),
+      category(R.id.btn_xgramSectionHistory, R.drawable.baseline_history_24, R.string.XgramHistory)
+    );
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    addRows(items,
       category(R.id.btn_xgramSectionNetwork, R.drawable.baseline_public_24, R.string.XgramNetwork),
       category(R.id.btn_xgramSectionUpdates, R.drawable.baseline_system_update_24, R.string.XgramUpdates),
-      category(R.id.btn_xgramSectionBackup, R.drawable.baseline_import_export_24, R.string.XgramBackupAndReset)
+      category(R.id.btn_xgramSectionBackup, R.drawable.baseline_import_export_24, R.string.XgramBackup)
     );
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramAbout));
+    items.add(header(R.string.XgramAbout));
     addRows(items,
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutVersion, R.drawable.baseline_info_24, R.string.XgramAboutVersion),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutBasedOn, R.drawable.baseline_code_24, R.string.XgramAboutBasedOn),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutSupport, R.drawable.baseline_favorite_24, R.string.XgramAboutSupport)
     );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramAboutCredits));
+    items.add(description(R.string.XgramAboutCredits));
   }
 
   private void buildAppearance (List<ListItem> items) {
-    boolean materialYou = com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable();
-    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-    List<ListItem> rows = new ArrayList<>();
-    rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramThemes, 0, R.string.XgramThemes));
-    rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAppIcon, 0, R.string.XgramAppIcon));
-    rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramIconPack, 0, R.string.XgramIconPack));
-    if (materialYou) {
-      rows.add(toggle(R.id.btn_xgramMaterialYou, R.string.XgramMaterialYou));
+    items.add(header(R.string.XgramHeaderTheme));
+    List<ListItem> pickers = new ArrayList<>();
+    pickers.add(link(R.id.btn_xgramIconPack, R.string.XgramIconPack));
+    pickers.add(link(R.id.btn_xgramAppIcon, R.string.XgramAppIcon));
+    pickers.add(link(R.id.btn_xgramEmojiSet, R.string.XgramEmoji));
+    if (com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable()) {
+      // Android 12+. Its note goes right under it, so the card is split there.
+      addRows(items,
+        link(R.id.btn_xgramThemes, R.string.XgramThemes),
+        toggle(R.id.btn_xgramMaterialYou, R.string.XgramMaterialYou, R.string.XgramMaterialYouSub)
+      );
+      items.add(description(R.string.XgramMaterialYouInfo));
+    } else {
+      pickers.add(0, link(R.id.btn_xgramThemes, R.string.XgramThemes));
     }
-    rows.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramChatLook, 0, R.string.XgramChatLookRow));
-    rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAvatarCorners, 0, R.string.XgramAvatarCorners));
-    rows.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramSideMenu, 0, R.string.XgramSideMenu));
-    addRows(items, rows.toArray(new ListItem[0]));
-    if (materialYou) {
-      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramMaterialYouInfo));
-    }
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramLayout));
+    addRows(items, pickers.toArray(new ListItem[0]));
+
+    items.add(header(R.string.XgramChats));
     addRows(items,
-      toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane),
-      toggle(R.id.btn_xgramLimitMessageWidth, R.string.XgramLimitMessageWidth),
-      toggle(R.id.btn_xgramShowSeconds, R.string.XgramShowSeconds),
-      toggle(R.id.btn_xgramHideFab, R.string.XgramHideFab),
-      toggle(R.id.btn_xgramConnectionStatusStart, R.string.XgramConnectionStatusStart),
-      toggle(R.id.btn_xgramAllChatsLabel, R.string.XgramAllChatsLabel),
-      toggle(R.id.btn_xgramHideFolders, R.string.XgramHideFolders)
+      link(R.id.btn_xgramChatLook, 0, R.string.XgramChatLookRow, R.string.XgramChatLookSub),
+      link(R.id.btn_xgramAvatarCorners, R.string.XgramAvatarCorners),
+      toggle(R.id.btn_xgramShowSeconds, R.string.XgramShowSeconds, R.string.XgramShowSecondsSub),
+      toggle(R.id.btn_xgramShowPeerIds, R.string.XgramShowPeerIds, R.string.XgramShowPeerIdsSub)
     );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTwoPaneInfo));
+
+    items.add(header(R.string.XgramLayout));
+    addRows(items, toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub));
+    items.add(description(R.string.XgramTwoPaneInfo));
+    addRows(items, toggle(R.id.btn_xgramLimitMessageWidth, R.string.XgramLimitMessageWidth, R.string.XgramLimitMessageWidthSub));
   }
 
-  private void buildGhost (List<ListItem> items) {
-    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-    addRows(items, toggle(R.id.btn_xgramGhostMode, R.string.XgramGhostModeToggle));
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramGhostWhat));
+  private void buildChatList (List<ListItem> items) {
+    items.add(header(R.string.XgramHeaderFolders));
+    addRows(items, toggle(R.id.btn_xgramHideFolders, R.string.XgramHideFolders, R.string.XgramHideFoldersSub));
+    items.add(description(R.string.XgramChatListFoldersInfo));
+    addRows(items, toggle(R.id.btn_xgramAllChatsLabel, R.string.XgramAllChatsLabel, R.string.XgramAllChatsLabelSub));
+
+    items.add(header(R.string.XgramChats));
     addRows(items,
-      toggle(R.id.btn_xgramGhostDontRead, R.string.XgramGhostDontRead),
-      toggle(R.id.btn_xgramGhostReadOnSend, R.string.XgramGhostReadOnSend),
-      toggle(R.id.btn_xgramGhostLocalRead, R.string.XgramGhostLocalRead),
-      toggle(R.id.btn_xgramGhostDontType, R.string.XgramGhostDontType),
-      toggle(R.id.btn_xgramGhostTypingForStickers, R.string.XgramGhostTypingForStickers),
-      toggle(R.id.btn_xgramGhostOffline, R.string.XgramGhostOffline),
-      toggle(R.id.btn_xgramGhostScheduleSend, R.string.XgramGhostScheduleSend),
-      toggle(R.id.btn_xgramGhostSilent, R.string.XgramGhostSilent)
+      toggle(R.id.btn_xgramMergeCommunities, R.string.XgramMergeCommunities, R.string.XgramMergeCommunitiesSub),
+      link(R.id.btn_xgramChatLongPress, R.string.XgramChatLongPress),
+      link(R.id.btn_xgramChatActionsOrder, R.string.XgramChatActionsOrder)
     );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramGhostModeInfo));
+
+    items.add(header(R.string.XgramHeaderScreen));
+    addRows(items,
+      toggle(R.id.btn_xgramHideFab, R.string.XgramHideFab, R.string.XgramHideFabSub),
+      toggle(R.id.btn_xgramConnectionStatusStart, R.string.XgramConnectionStatusStart, R.string.XgramConnectionStatusStartSub)
+    );
+  }
+
+  private void buildMessages (List<ListItem> items) {
+    items.add(header(R.string.XgramMessageMenu));
+    addRows(items, link(R.id.btn_xgramMessageMenu, R.string.XgramMessageMenu));
+
+    items.add(header(R.string.XgramHeaderGestures));
+    addRows(items,
+      link(R.id.btn_xgramSwipeLeft, R.string.XgramSwipeLeft),
+      link(R.id.btn_xgramSwipeRight, R.string.XgramSwipeRight)
+    );
+    items.add(description(R.string.XgramSwipeInfo));
+    addRows(items,
+      toggle(R.id.btn_xgramTapTimeDetails, R.string.XgramTapTimeDetails, R.string.XgramTapTimeDetailsSub),
+      toggle(R.id.btn_xgramPullToNext, R.string.XgramPullToNext, R.string.XgramPullToNextSub)
+    );
+
+    items.add(header(R.string.XgramHeaderDefaults));
+    addRows(items,
+      toggle(R.id.btn_xgramDeleteForEveryone, R.string.XgramDeleteForEveryone, R.string.XgramCheckedByDefault),
+      toggle(R.id.btn_xgramForwardWithoutAuthor, R.string.XgramForwardWithoutAuthor, R.string.XgramCheckedByDefault)
+    );
+
+    items.add(header(R.string.XgramHeaderLinks));
+    addRows(items,
+      toggle(R.id.btn_xgramCleanLinks, R.string.XgramCleanLinks, R.string.XgramCleanLinksSub),
+      toggle(R.id.btn_xgramFixLinkPreviews, R.string.XgramFixLinkPreviews, R.string.XgramFixLinkPreviewsSub)
+    );
+    items.add(description(R.string.XgramFixLinkPreviewsInfo));
+
+    items.add(header(R.string.XgramMessageBox));
+    addRows(items,
+      link(R.id.btn_xgramInputButtons, R.string.XgramInputButtons),
+      toggle(R.id.btn_xgramTapToRecord, R.string.XgramTapToRecord, R.string.XgramTapToRecordSub)
+    );
+    items.add(description(R.string.XgramTapToRecordInfo));
+
+    items.add(header(R.string.XgramHeaderTelegramAi));
+    addRows(items, toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools, R.string.XgramAiToolsSub));
+    items.add(description(R.string.XgramAiToolsInfo));
+  }
+
+  private void buildTranslation (List<ListItem> items) {
+    items.add(header(R.string.XgramHeaderService));
+    addRows(items,
+      link(R.id.btn_xgramTrProvider, R.string.XgramTrProvider),
+      toggle(R.id.btn_xgramTrFallback, R.string.XgramTrFallback, R.string.XgramTrFallbackSub)
+    );
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramTrProviderInfo, 0, com.fahadali.xgram.translate.XgramTranslator.info(XgramSettings.instance().translateProvider()), false));
+
+    items.add(header(R.string.XgramHeaderAutoTranslate));
+    addRows(items,
+      link(R.id.btn_xgramTrTarget, R.string.XgramTrTarget),
+      toggle(R.id.btn_xgramTrAutoAll, R.string.XgramTrAutoAll)
+    );
+    items.add(description(R.string.XgramTrAutoAllInfo));
+
+    items.add(header(R.string.XgramMessageMenu));
+    addRows(items, toggle(R.id.btn_xgramTrAlways, R.string.XgramTrAlways, R.string.XgramTrAlwaysSub));
+    items.add(description(R.string.XgramTrAlwaysInfo));
+
+    items.add(header(R.string.XgramHeaderStyle));
+    addRows(items, link(R.id.btn_xgramTrStyle, R.string.XgramTrStyle));
+  }
+
+  private void buildPrivacy (List<ListItem> items) {
+    // Ghost mode first: the main screen's ghost button, the side menu switch and the Quick Settings tile open this page.
+    items.add(header(R.string.XgramGhostMode));
+    addRows(items, toggle(R.id.btn_xgramGhostMode, R.drawable.baseline_ghost_24, R.string.XgramGhostModeToggle, R.string.XgramGhostModeSub));
+    items.add(description(R.string.XgramGhostModeInfo));
+    items.add(header(R.string.XgramHeaderReading));
+    addRows(items,
+      toggle(R.id.btn_xgramGhostDontRead, R.string.XgramGhostDontRead, R.string.XgramGhostDontReadSub),
+      toggle(R.id.btn_xgramGhostReadOnSend, R.string.XgramGhostReadOnSend, R.string.XgramGhostReadOnSendSub),
+      toggle(R.id.btn_xgramGhostLocalRead, R.string.XgramGhostLocalRead, R.string.XgramGhostLocalReadSub)
+    );
+    items.add(header(R.string.XgramHeaderTyping));
+    addRows(items,
+      toggle(R.id.btn_xgramGhostDontType, R.string.XgramGhostDontType, R.string.XgramGhostDontTypeSub),
+      toggle(R.id.btn_xgramGhostTypingForStickers, R.string.XgramGhostTypingForStickers, R.string.XgramGhostTypingForStickersSub)
+    );
+    items.add(header(R.string.XgramHeaderOnlineStatus));
+    addRows(items,
+      toggle(R.id.btn_xgramGhostOffline, R.string.XgramGhostOffline, R.string.XgramGhostOfflineSub),
+      toggle(R.id.btn_xgramGhostScheduleSend, R.string.XgramGhostScheduleSend, R.string.XgramGhostScheduleSendSub)
+    );
+    items.add(header(R.string.XgramHeaderSending));
+    addRows(items, toggle(R.id.btn_xgramGhostSilent, R.string.XgramGhostSilent, R.string.XgramGhostSilentSub));
+
+    items.add(header(R.string.XgramHeaderProtectedContent));
+    addRows(items,
+      toggle(R.id.btn_xgramAllowScreenshots, R.string.XgramAllowScreenshots, R.string.XgramAllowScreenshotsSub),
+      toggle(R.id.btn_xgramSaveProtected, R.string.XgramSaveProtected, R.string.XgramSaveProtectedSub)
+    );
+    items.add(header(R.string.XgramHeaderDevice));
+    addRows(items,
+      toggle(R.id.btn_xgramHidePhone, R.string.XgramHidePhone, R.string.XgramHidePhoneSub),
+      toggle(R.id.btn_xgramBlockContentCapture, R.string.XgramBlockContentCapture, R.string.XgramBlockContentCaptureSub)
+    );
+    items.add(description(R.string.XgramPrivacyInfo));
+  }
+
+  private void buildFilters (List<ListItem> items) {
+    items.add(header(R.string.XgramHeaderHide));
+    addRows(items,
+      toggle(R.id.btn_xgramHideSponsored, R.string.XgramHideSponsored, R.string.XgramHideSponsoredSub),
+      toggle(R.id.btn_xgramHideBlocked, R.string.XgramHideBlocked, R.string.XgramHideBlockedSub)
+    );
+    items.add(header(R.string.XgramHeaderWords));
+    addRows(items, link(R.id.btn_xgramFilters, R.string.XgramWordFilters));
+    items.add(description(R.string.XgramFiltersInfo));
+    items.add(header(R.string.XgramHeaderPeople));
+    addRows(items, link(R.id.btn_xgramHiddenPeople, R.string.XgramShadowBanned));
+    items.add(description(R.string.XgramShadowBanInfo));
   }
 
   private void buildHistory (List<ListItem> items) {
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    addRows(items, link(R.id.btn_xgramHistoryView, R.drawable.baseline_history_24, R.string.XgramHistoryView, R.string.XgramHistoryViewSub));
+    items.add(header(R.string.XgramHeaderSaving));
     addRows(items,
       toggle(R.id.btn_xgramHistorySaveDeleted, R.string.XgramHistorySaveDeleted),
-      toggle(R.id.btn_xgramHistorySaveMedia, R.string.XgramHistorySaveMedia),
+      toggle(R.id.btn_xgramHistorySaveMedia, R.string.XgramHistorySaveMedia, R.string.XgramHistorySaveMediaSub),
       toggle(R.id.btn_xgramHistorySaveEdits, R.string.XgramHistorySaveEdits),
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramHistoryRetention, 0, R.string.XgramHistoryRetention)
+      link(R.id.btn_xgramHistoryRetention, R.string.XgramHistoryRetention)
     );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramHistorySettingsInfo));
-    addRows(items, toggle(R.id.btn_xgramHistoryRedDeleted, R.string.XgramHistoryRedDeleted));
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramHistoryRedDeletedInfo));
-    addRows(items, new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramHistoryView, R.drawable.baseline_history_24, R.string.XgramHistoryView));
-  }
-
-  private void buildChats (List<ListItem> items) {
-    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-    addRows(items,
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramBookmarks, R.drawable.baseline_star_24, R.string.XgramBookmarks),
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramSavedByChat, R.drawable.baseline_bookmark_24, R.string.XgramSavedByChat),
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramFilters, R.drawable.baseline_block_24, R.string.XgramFilters),
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramMessageMenu, R.drawable.baseline_more_horiz_24, R.string.XgramMessageMenu)
-    );
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramChatList));
-    addRows(items,
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramChatLongPress, 0, R.string.XgramChatLongPress),
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramChatActionsOrder, 0, R.string.XgramChatActionsOrder),
-      toggle(R.id.btn_xgramMergeCommunities, R.string.XgramMergeCommunities),
-      toggle(R.id.btn_xgramHideBlocked, R.string.XgramHideBlocked),
-      toggle(R.id.btn_xgramHideSponsored, R.string.XgramHideSponsored)
-    );
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramMessages));
-    addRows(items,
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramSwipeLeft, 0, R.string.XgramSwipeLeft),
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramSwipeRight, 0, R.string.XgramSwipeRight)
-    );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramSwipeInfo));
-    addRows(items,
-      toggle(R.id.btn_xgramDeleteForEveryone, R.string.XgramDeleteForEveryone),
-      toggle(R.id.btn_xgramForwardWithoutAuthor, R.string.XgramForwardWithoutAuthor),
-      toggle(R.id.btn_xgramCleanLinks, R.string.XgramCleanLinks),
-      toggle(R.id.btn_xgramFixLinkPreviews, R.string.XgramFixLinkPreviews)
-    );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramFixLinkPreviewsInfo));
-    addRows(items,
-      toggle(R.id.btn_xgramTapTimeDetails, R.string.XgramTapTimeDetails),
-      toggle(R.id.btn_xgramPullToNext, R.string.XgramPullToNext),
-      toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools)
-    );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramAiToolsInfo));
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramTranslation));
-    addRows(items,
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTrProvider, 0, R.string.XgramTrProvider),
-      toggle(R.id.btn_xgramTrFallback, R.string.XgramTrFallback)
-    );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramTrProviderInfo, 0, com.fahadali.xgram.translate.XgramTranslator.info(XgramSettings.instance().translateProvider()), false));
-    addRows(items,
-      toggle(R.id.btn_xgramTrAlways, R.string.XgramTrAlways),
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramTrStyle, 0, R.string.XgramTrStyle)
-    );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTrAlwaysInfo));
-    addRows(items,
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTrTarget, 0, R.string.XgramTrTarget),
-      toggle(R.id.btn_xgramTrAutoAll, R.string.XgramTrAutoAll)
-    );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTrAutoAllInfo));
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramMessageBox));
-    addRows(items,
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramInputButtons, 0, R.string.XgramInputButtons),
-      toggle(R.id.btn_xgramTapToRecord, R.string.XgramTapToRecord)
-    );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTapToRecordInfo));
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramProfiles));
-    addRows(items,
-      toggle(R.id.btn_xgramShowPeerIds, R.string.XgramShowPeerIds),
-      toggle(R.id.btn_xgramSaveLastSeen, R.string.XgramSaveLastSeen)
-    );
-  }
-
-  private void buildPrivacy (List<ListItem> items) {
-    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-    addRows(items,
-      toggle(R.id.btn_xgramAllowScreenshots, R.string.XgramAllowScreenshots),
-      toggle(R.id.btn_xgramSaveProtected, R.string.XgramSaveProtected),
-      toggle(R.id.btn_xgramHidePhone, R.string.XgramHidePhone),
-      toggle(R.id.btn_xgramBlockContentCapture, R.string.XgramBlockContentCapture)
-    );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramPrivacyInfo));
+    items.add(description(R.string.XgramHistorySettingsInfo));
+    items.add(header(R.string.XgramHeaderDisplay));
+    addRows(items, toggle(R.id.btn_xgramHistoryRedDeleted, R.string.XgramHistoryRedDeleted, R.string.XgramHistoryRedDeletedSub));
+    items.add(header(R.string.XgramHeaderLastSeen));
+    addRows(items, toggle(R.id.btn_xgramSaveLastSeen, R.string.XgramSaveLastSeen, R.string.XgramSaveLastSeenSub));
+    items.add(description(R.string.XgramLastSeenInfo));
   }
 
   private void buildNetwork (List<ListItem> items) {
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramSpeed));
+    items.add(header(R.string.XgramSpeed));
     String[] levels = new String[XgramDownloadBoost.LEVEL_NAMES.length];
     for (int i = 0; i < levels.length; i++) {
       levels[i] = Lang.getString(XgramDownloadBoost.LEVEL_NAMES[i]);
     }
     addRows(items,
-      toggle(R.id.btn_xgramDownloadBoost, R.string.XgramDownloadBoost),
+      toggle(R.id.btn_xgramDownloadBoost, R.string.XgramDownloadBoost, R.string.XgramDownloadBoostSub),
       new ListItem(ListItem.TYPE_SLIDER, R.id.btn_xgramDownloadBoostLevel, 0, R.string.XgramBoostStrength)
         .setSliderInfo(levels, XgramSettings.instance().downloadBoostLevel() - XgramDownloadBoost.LEVEL_LOW)
     );
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramDownloadBoostInfo, 0, downloadBoostInfo(), false));
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramProxyRules));
+    items.add(header(R.string.XgramProxyRules));
     addRows(items,
       toggle(R.id.btn_xgramProxyOffVpn, R.string.XgramProxyOffVpn),
       toggle(R.id.btn_xgramProxyOffWifi, R.string.XgramProxyOffWifi),
       toggle(R.id.btn_xgramProxyOffMobile, R.string.XgramProxyOffMobile)
     );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramProxyRulesInfo));
-    addRows(items, toggle(R.id.btn_xgramPreferIpv6, R.string.XgramPreferIpv6));
+    items.add(description(R.string.XgramProxyRulesInfo));
+    items.add(header(R.string.XgramHeaderConnection));
+    addRows(items, toggle(R.id.btn_xgramPreferIpv6, R.string.XgramPreferIpv6, R.string.XgramPreferIpv6Sub));
   }
 
   private static CharSequence downloadBoostInfo () {
@@ -555,10 +776,18 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   private void setTranslateProvider (int provider) {
     XgramSettings.instance().setTranslateProvider(provider);
     adapter.updateValuedSettingById(R.id.btn_xgramTrProvider);
+    adapter.updateValuedSettingById(R.id.btn_xgramTrFallback);
+    updateTranslateProviderInfo();
+  }
+
+  /** The note under Translation service says who translates; the service can also change on Telegram X's translation page. */
+  private void updateTranslateProviderInfo () {
     int index = adapter.indexOfViewById(R.id.btn_xgramTrProviderInfo);
     if (index != -1) {
-      adapter.getItems().get(index).setString(com.fahadali.xgram.translate.XgramTranslator.info(provider));
-      adapter.updateItem(index);
+      CharSequence info = com.fahadali.xgram.translate.XgramTranslator.info(XgramSettings.instance().translateProvider());
+      if (adapter.getItems().get(index).setStringIfChanged(info)) {
+        adapter.updateItem(index);
+      }
     }
   }
 
@@ -573,25 +802,73 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   private void buildBackup (List<ListItem> items) {
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items,
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramExportSettings, R.drawable.baseline_share_24, R.string.XgramExportSettings),
-      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramImportSettings, R.drawable.baseline_content_paste_24, R.string.XgramImportSettings)
+      link(R.id.btn_xgramExportSettings, R.drawable.baseline_share_24, R.string.XgramExportSettings, R.string.XgramExportSettingsSub),
+      link(R.id.btn_xgramImportSettings, R.drawable.baseline_content_paste_24, R.string.XgramImportSettings, R.string.XgramImportSettingsSub)
     );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramBackupInfo));
+    items.add(description(R.string.XgramBackupInfo));
     addRows(items, new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramResetSettings, R.drawable.baseline_delete_24, R.string.XgramResetSettings).setTextColorId(org.thunderdog.challegram.theme.ColorId.textNegative));
   }
 
   private void buildUpdates (List<ListItem> items) {
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items,
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramUpdateChannel, 0, R.string.XgramUpdateChannel),
-      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramUpdateMode, 0, R.string.XgramUpdateMode)
+      link(R.id.btn_xgramUpdateChannel, R.string.XgramUpdateChannel),
+      link(R.id.btn_xgramUpdateMode, R.string.XgramUpdateMode)
     );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramUpdateChannelInfo));
+    items.add(description(R.string.XgramUpdateChannelInfo));
     addRows(items,
       new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramUpdateCheck, R.drawable.baseline_system_update_24, R.string.CheckForUpdates),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramUpdateInstalled, R.drawable.baseline_info_24, R.string.XgramUpdateInstalled)
     );
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramUpdateCheckInfo));
+    items.add(description(R.string.XgramUpdateCheckInfo));
+  }
+
+  // Values
+
+  /** The theme in use: a built-in one's name, or the name of an installed theme (XGram's themes are installed ones). */
+  private static String currentThemeName () {
+    try {
+      int themeId = org.thunderdog.challegram.theme.ThemeManager.instance().currentThemeId();
+      if (org.thunderdog.challegram.theme.ThemeManager.isCustomTheme(themeId)) {
+        String name = Settings.instance().getCustomThemeName(org.thunderdog.challegram.theme.ThemeManager.resolveCustomThemeId(themeId));
+        return name != null && !name.isEmpty() ? name : Lang.getString(R.string.ThemeCustom);
+      }
+      return Lang.getString(org.thunderdog.challegram.theme.ThemeManager.getBuiltinThemeName(themeId));
+    } catch (RuntimeException e) { // a theme being edited has no name
+      return Lang.getString(R.string.ThemeCustom);
+    }
+  }
+
+  /** The emoji set, as Settings → Stickers and emoji shows it. */
+  private static CharSequence emojiSetName () {
+    if (com.fahadali.xgram.appearance.XgramSystemEmoji.isEnabled()) {
+      return Lang.getString(R.string.XgramEmojiSystem);
+    }
+    Settings.EmojiPack emojiPack = Settings.instance().getEmojiPack();
+    if (emojiPack == null || BuildConfig.EMOJI_BUILTIN_ID.equals(emojiPack.identifier)) {
+      return Lang.getString(R.string.EmojiBuiltIn);
+    }
+    return emojiPack.displayName;
+  }
+
+  /** Telegram X's translation style, with the names its own page uses. */
+  private static @StringRes int translateStyleName () {
+    switch (Settings.instance().getChatTranslateMode()) {
+      case Settings.TRANSLATE_MODE_INLINE: return R.string.ChatTranslateStyle2;
+      case Settings.TRANSLATE_MODE_NONE: return R.string.ChatTranslateStyle3;
+      case Settings.TRANSLATE_MODE_POPUP:
+      default: return R.string.ChatTranslateStyle1;
+    }
+  }
+
+  private static int messageMenuHiddenCount () {
+    int count = 0;
+    for (com.fahadali.xgram.chats.XgramMessageMenu.Option option : com.fahadali.xgram.chats.XgramMessageMenu.OPTIONS) {
+      if (com.fahadali.xgram.chats.XgramMessageMenu.isHidden(option.key)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /** The "Check for updates" row follows the updater, as in Telegram X's own settings. */
@@ -740,12 +1017,6 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     context().appUpdater().removeListener(this);
   }
 
-  /** Values that a page further in can change. */
-  private static final int[] SUMMARY_IDS = {
-    R.id.btn_xgramSectionGhost, R.id.btn_xgramSectionHistory, R.id.btn_xgramAppIcon, R.id.btn_xgramMaterialYou,
-    R.id.btn_xgramSectionUpdates
-  };
-
   private void updateGhostToggles () {
     adapter.updateValuedSettingById(R.id.btn_xgramGhostMode);
     adapter.updateValuedSettingById(R.id.btn_xgramGhostDontRead);
@@ -758,24 +1029,42 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     adapter.updateValuedSettingById(R.id.btn_xgramGhostSilent);
   }
 
+  private static boolean isValueRow (int viewType) {
+    switch (viewType) {
+      case ListItem.TYPE_SETTING:
+      case ListItem.TYPE_RADIO_SETTING:
+      case ListItem.TYPE_VALUED_SETTING_COMPACT:
+      case ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER:
+        return true;
+    }
+    return false;
+  }
+
+  /**
+   * Every value and switch the page shows, again: a page further in, another screen (the side menu, Telegram X's own
+   * pages, the Quick Settings tile) or the result of a search may have changed them. Covers search results too.
+   */
+  private void refreshValues () {
+    List<ListItem> shown = adapter.getItems();
+    for (int i = 0; i < shown.size(); i++) {
+      ListItem item = shown.get(i);
+      if (item.getId() != 0 && isValueRow(item.getViewType())) {
+        adapter.updateValuedSettingByPosition(i);
+      }
+    }
+    if (!showingResults) {
+      updateTranslateProviderInfo();
+      if (adapter.indexOfViewById(R.id.btn_xgramDownloadBoostInfo) != -1) {
+        updateDownloadBoostInfo();
+      }
+    }
+  }
+
   @Override
   public void onFocus () {
     super.onFocus();
     if (adapter != null) {
-      for (int id : SUMMARY_IDS) {
-        adapter.updateValuedSettingById(id);
-      }
-      adapter.updateValuedSettingById(R.id.btn_xgramHidePhone); // also a toggle in Side menu
-      adapter.updateValuedSettingById(R.id.btn_xgramTrTarget); // set on its own page
-      if (showingResults) {
-        // A page opened from the results may have changed what they show.
-        List<ListItem> shown = adapter.getItems();
-        for (int i = 0; i < shown.size(); i++) {
-          if (shown.get(i).getData() instanceof XgramSettingsSearch.Entry) {
-            adapter.updateValuedSettingByPosition(i);
-          }
-        }
-      }
+      refreshValues();
       if (highlightId != 0) {
         int id = highlightId;
         highlightId = 0;
@@ -856,6 +1145,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     XgramSettingsSearch.Entry entry = (XgramSettingsSearch.Entry) item.getData();
     if (entry.isToggle && !item.getBoolValue() && isSwitchTouch(v)) {
       return false; // flip it right here (getBoolValue = locked by another switch)
+    }
+    if (entry.subPage != 0) {
+      // A row of a page further in (Side Menu, Message menu, ...): open that page and point at the row.
+      preventLeavingSearchMode();
+      RecyclerViewController<?> c = openSubPage(entry.subPage);
+      navigateTo(c);
+      XgramSettingsSearch.flashWhenShown(c, entry);
+      return true;
     }
     if (entry.section == SECTION_MAIN) {
       preventLeavingSearchMode(); // come back to the results
@@ -993,6 +1290,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       settings.setTranslateAlways(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramTrFallback) {
+      if (!com.fahadali.xgram.translate.XgramTranslator.isThirdParty(settings.translateProvider())) {
+        return; // Telegram itself has nothing to fall back to
+      }
       settings.setTranslateFallback(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramTrProvider) {
@@ -1051,6 +1351,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       org.thunderdog.challegram.ui.MessagesController c = new org.thunderdog.challegram.ui.MessagesController(context, tdlib);
       c.setArguments(new org.thunderdog.challegram.ui.MessagesController.Arguments(org.thunderdog.challegram.ui.MessagesController.PREVIEW_MODE_FONT_SIZE, null, null));
       navigateTo(c);
+      return;
+    } else if (id == R.id.btn_xgramEmojiSet) {
+      // Telegram X's emoji set picker (with XGram's System set), the same as in Settings → Stickers and emoji.
+      navigateTo(new org.thunderdog.challegram.ui.SettingsCloudEmojiController(context, tdlib));
       return;
     } else if (id == R.id.btn_xgramPullToNext) {
       settings.setPullToNext(adapter.toggleView(v));
@@ -1114,22 +1418,21 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         return true;
       });
       return;
-    } else if (id == R.id.btn_xgramBookmarks) {
-      navigateTo(new com.fahadali.xgram.chats.XgramBookmarksController(context, tdlib));
     } else if (id == R.id.btn_xgramMessageMenu) {
       navigateTo(new com.fahadali.xgram.chats.XgramMessageMenuController(context, tdlib));
       return;
-    } else if (id == R.id.btn_xgramSavedByChat) {
-      navigateTo(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib));
-      return;
     } else if (id == R.id.btn_xgramFilters) {
-      navigateTo(new com.fahadali.xgram.chats.XgramFiltersController(context, tdlib));
+      navigateTo(com.fahadali.xgram.chats.XgramFiltersController.words(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramHiddenPeople) {
+      navigateTo(com.fahadali.xgram.chats.XgramFiltersController.people(context, tdlib));
       return;
     } else if (id == R.id.btn_xgramMaterialYou) {
       adapter.toggleView(v);
       com.fahadali.xgram.appearance.XgramMaterialYou.toggle(this, () -> {
         if (!isDestroyed()) {
           adapter.updateValuedSettingById(R.id.btn_xgramMaterialYou);
+          adapter.updateValuedSettingById(R.id.btn_xgramThemes);
         }
       });
       return;
@@ -1139,17 +1442,23 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramSectionAppearance) {
       navigateTo(section(context, tdlib, SECTION_APPEARANCE));
       return;
-    } else if (id == R.id.btn_xgramSectionGhost) {
-      navigateTo(section(context, tdlib, SECTION_GHOST));
-      return;
-    } else if (id == R.id.btn_xgramSectionHistory) {
-      navigateTo(section(context, tdlib, SECTION_HISTORY));
+    } else if (id == R.id.btn_xgramSectionChatList) {
+      navigateTo(section(context, tdlib, SECTION_CHAT_LIST));
       return;
     } else if (id == R.id.btn_xgramSectionChats) {
-      navigateTo(section(context, tdlib, SECTION_CHATS));
+      navigateTo(section(context, tdlib, SECTION_MESSAGES));
+      return;
+    } else if (id == R.id.btn_xgramSectionTranslation) {
+      navigateTo(section(context, tdlib, SECTION_TRANSLATION));
       return;
     } else if (id == R.id.btn_xgramSectionPrivacy) {
       navigateTo(section(context, tdlib, SECTION_PRIVACY));
+      return;
+    } else if (id == R.id.btn_xgramSectionFilters) {
+      navigateTo(section(context, tdlib, SECTION_FILTERS));
+      return;
+    } else if (id == R.id.btn_xgramSectionHistory) {
+      navigateTo(section(context, tdlib, SECTION_HISTORY));
       return;
     } else if (id == R.id.btn_xgramSectionNetwork) {
       navigateTo(section(context, tdlib, SECTION_NETWORK));
@@ -1207,7 +1516,6 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         if (index >= 0 && index < values.length) {
           settings.setAvatarCorners(values[index]);
           adapter.updateValuedSettingById(R.id.btn_xgramAvatarCorners);
-          // Redraw every screen with the new shape.
           // Redraw every avatar on screen now (lists only redraw rows when scrolled otherwise).
           com.fahadali.xgram.XgramUi.invalidateAll(context);
         }

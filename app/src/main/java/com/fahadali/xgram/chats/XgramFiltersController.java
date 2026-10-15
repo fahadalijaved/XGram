@@ -26,12 +26,28 @@ import org.thunderdog.challegram.v.CustomRecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Settings → XGram → Message filters: words or patterns to hide, and shadow-banned people. */
+/**
+ * Settings → XGram → Filters: Word filters (words or patterns to hide) or Hidden people (shadow-banned senders).
+ * One controller, two pages: {@link #words} and {@link #people}.
+ */
 public final class XgramFiltersController extends RecyclerViewController<Void> implements View.OnClickListener {
   private SettingsAdapter adapter;
+  private boolean people;
 
   public XgramFiltersController (Context context, Tdlib tdlib) {
     super(context, tdlib);
+  }
+
+  /** Word filters: words or patterns that hide a message. */
+  public static XgramFiltersController words (Context context, Tdlib tdlib) {
+    return new XgramFiltersController(context, tdlib);
+  }
+
+  /** Hidden people: senders whose messages don't show in groups. */
+  public static XgramFiltersController people (Context context, Tdlib tdlib) {
+    XgramFiltersController c = new XgramFiltersController(context, tdlib);
+    c.people = true;
+    return c;
   }
 
   @Override
@@ -41,7 +57,7 @@ public final class XgramFiltersController extends RecyclerViewController<Void> i
 
   @Override
   public CharSequence getName () {
-    return Lang.getString(R.string.XgramFilters);
+    return Lang.getString(people ? R.string.XgramShadowBanned : R.string.XgramWordFilters);
   }
 
   @Override
@@ -59,7 +75,22 @@ public final class XgramFiltersController extends RecyclerViewController<Void> i
   }
 
   private void rebuild () {
+    adapter.setItems(buildItems(people), false);
+  }
+
+  /** Rows of one of the two pages. The settings search indexes these too. */
+  public static List<ListItem> buildItems (boolean people) {
     List<ListItem> items = new ArrayList<>();
+    if (people) {
+      items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramShadowBanList, 0, R.string.XgramShadowBanned));
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramClearShadowBans, 0, R.string.XgramClearShadowBans).setTextColorId(org.thunderdog.challegram.theme.ColorId.textNegative));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramShadowBanInfo));
+      return items;
+    }
     items.add(new ListItem(ListItem.TYPE_HEADER_PADDED, 0, 0, R.string.XgramFilterWords));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramAddFilter, R.drawable.baseline_add_24, R.string.XgramAddFilter));
@@ -69,15 +100,7 @@ public final class XgramFiltersController extends RecyclerViewController<Void> i
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramFiltersInfo));
-
-    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramShadowBans));
-    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramShadowBanList, 0, R.string.XgramShadowBanned));
-    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramClearShadowBans, 0, R.string.XgramClearShadowBans).setTextColorId(org.thunderdog.challegram.theme.ColorId.textNegative));
-    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramShadowBanInfo));
-    adapter.setItems(items, false);
+    return items;
   }
 
   @Override

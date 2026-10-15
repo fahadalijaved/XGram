@@ -18,6 +18,7 @@ import android.text.Spanned;
 import android.view.View;
 
 import androidx.annotation.IdRes;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -28,6 +29,8 @@ import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.ui.ListItem;
+import org.thunderdog.challegram.ui.RecyclerViewController;
+import org.thunderdog.challegram.ui.SettingsAdapter;
 import org.thunderdog.challegram.util.CustomTypefaceSpan;
 
 import java.util.ArrayList;
@@ -36,9 +39,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.StringTokenizer;
 
+import me.vkryl.core.ObjectUtils;
+
 /**
  * Settings search (NagramX). The index is read from the pages' own row lists
- * ({@link XgramSettingsController#buildSectionItems}), so a row is searchable as soon as a page shows it.
+ * ({@link XgramSettingsController#buildSectionItems} and {@link XgramSettingsController#buildSubPageItems}),
+ * so a row is searchable as soon as a page shows it, also on the pages a section opens (Side Menu, Message menu, ...).
  */
 final class XgramSettingsSearch {
   private XgramSettingsSearch () { }
@@ -46,14 +52,20 @@ final class XgramSettingsSearch {
   /** One searchable row: which page holds it, and what a result needs to draw it. */
   static final class Entry {
     final int section;
+    /** 0: a row of the section's own page; otherwise the page it opens ({@link XgramSettingsController#SUB_SIDE_MENU}, ...). */
+    final int subPage;
     final @IdRes int id;
+    /** Tells apart rows that share an id on a page (side menu items, message menu options, ...). */
+    final @Nullable String key;
     final boolean isToggle;
     final int iconRes, textColorId;
     final String title, titleLower, path;
 
-    Entry (int section, @IdRes int id, boolean isToggle, int iconRes, int textColorId, String title, String path) {
+    Entry (int section, int subPage, @IdRes int id, @Nullable String key, boolean isToggle, int iconRes, int textColorId, String title, String path) {
       this.section = section;
+      this.subPage = subPage;
       this.id = id;
+      this.key = key;
       this.isToggle = isToggle;
       this.iconRes = iconRes;
       this.textColorId = textColorId;
@@ -63,39 +75,93 @@ final class XgramSettingsSearch {
     }
   }
 
-  /** A few dozen rows: built when search opens, so it follows the current language. */
+  /** A few dozen rows: built when search opens, so it follows the current language. Main page order, sub-pages last. */
   static List<Entry> buildIndex (XgramSettingsController controller) {
     List<Entry> entries = new ArrayList<>();
-    Set<Integer> seen = new HashSet<>();
-    for (int section = XgramSettingsController.SECTION_MAIN; section <= XgramSettingsController.SECTION_LAST; section++) {
+    Set<String> seen = new HashSet<>();
+    for (int section : XgramSettingsController.SEARCH_SECTIONS) {
       String sectionName = Lang.getString(XgramSettingsController.sectionTitleRes(section));
-      int sectionIcon = XgramSettingsController.sectionIcon(section);
-      String group = null;
-      for (ListItem item : controller.buildSectionItems(section)) {
-        int viewType = item.getViewType();
-        if (viewType == ListItem.TYPE_HEADER) {
-          CharSequence header = item.getString();
-          group = header != null && header.length() > 0 ? header.toString() : null;
-          continue;
-        }
-        if (viewType == ListItem.TYPE_SHADOW_BOTTOM) {
-          group = null; // a header names only the card below it
-          continue;
-        }
-        if (item.getId() == 0 || !isSearchable(viewType)) {
-          continue;
-        }
-        CharSequence title = item.getString();
-        if (title == null || title.length() == 0 || !seen.add(item.getId())) {
-          continue;
-        }
-        String path = group != null ? Lang.getString(R.string.XgramSettingsSearchPath, sectionName, group) : sectionName;
-        boolean isToggle = viewType == ListItem.TYPE_RADIO_SETTING || viewType == ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER;
-        int icon = item.getIconResource() != 0 ? item.getIconResource() : sectionIcon;
-        entries.add(new Entry(section, item.getId(), isToggle, icon, item.getTextColorId(ColorId.NONE), title.toString(), path));
-      }
+      addEntries(entries, seen, controller.buildSectionItems(section), section, 0, sectionName, XgramSettingsController.sectionIcon(section), true);
+    }
+    for (int subPage : XgramSettingsController.SEARCH_SUB_PAGES) {
+      int parent = XgramSettingsController.subPageParent(subPage);
+      String pageName = Lang.getString(XgramSettingsController.subPageTitleRes(subPage));
+      boolean topLevel = parent == XgramSettingsController.SECTION_MAIN;
+      String base = topLevel ? pageName : Lang.getString(R.string.XgramSettingsSearchPath, Lang.getString(XgramSettingsController.sectionTitleRes(parent)), pageName);
+      // A page opened from a section is two levels deep already: its own headers would make the path too long.
+      addEntries(entries, seen, controller.buildSubPageItems(subPage), parent, subPage, base, XgramSettingsController.subPageIcon(subPage), topLevel);
     }
     return entries;
+  }
+
+  private static void addEntries (List<Entry> entries, Set<String> seen, List<ListItem> items, int section, int subPage, String base, int defaultIcon, boolean withGroups) {
+    String group = null;
+    for (ListItem item : items) {
+      int viewType = item.getViewType();
+      if (viewType == ListItem.TYPE_HEADER || viewType == ListItem.TYPE_HEADER_PADDED) {
+        CharSequence header = item.getString();
+        group = header != null && header.length() > 0 ? header.toString() : null;
+        continue;
+      }
+      if (viewType == ListItem.TYPE_SHADOW_BOTTOM) {
+        group = null; // a header names only the card below it
+        continue;
+      }
+      if (item.getId() == 0 || !isSearchable(viewType)) {
+        continue;
+      }
+      CharSequence title = item.getString();
+      if (title == null || title.length() == 0) {
+        continue;
+      }
+      String key = keyOf(item);
+      String rowKey = item.getId() + ":" + key;
+      // A row shown on a section page and on a page further in (Hide phone number) is found once, on the section page.
+      boolean isNew = subPage == 0 ? seen.add(rowKey) : !seen.contains(rowKey) && seen.add(subPage + "/" + rowKey);
+      if (!isNew) {
+        continue;
+      }
+      String path = withGroups && group != null ? Lang.getString(R.string.XgramSettingsSearchPath, base, group) : base;
+      // Switches of the pages further in belong to those pages: their results open the page instead.
+      boolean isToggle = subPage == 0 && (viewType == ListItem.TYPE_RADIO_SETTING || viewType == ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER);
+      int icon = item.getIconResource() != 0 ? item.getIconResource() : defaultIcon;
+      entries.add(new Entry(section, subPage, item.getId(), key, isToggle, icon, item.getTextColorId(ColorId.NONE), title.toString(), path));
+    }
+  }
+
+  /** The key that tells apart rows sharing an id: a side menu item, message box button or chat action key, or a message menu option. */
+  @Nullable
+  private static String keyOf (ListItem item) {
+    Object data = item.getData();
+    if (data instanceof String) {
+      return (String) data;
+    }
+    if (data instanceof com.fahadali.xgram.chats.XgramMessageMenu.Option) {
+      return ((com.fahadali.xgram.chats.XgramMessageMenu.Option) data).key;
+    }
+    return null;
+  }
+
+  /** Position of the row a result stands for, or -1. */
+  static int indexOf (SettingsAdapter adapter, Entry e) {
+    List<ListItem> items = adapter.getItems();
+    for (int i = 0; i < items.size(); i++) {
+      ListItem item = items.get(i);
+      if (item.getId() == e.id && !(item.getData() instanceof Entry) && ObjectUtils.equals(keyOf(item), e.key)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /** A result opened a page further in: flash its row once that page shows. */
+  static void flashWhenShown (RecyclerViewController<?> c, Entry e) {
+    c.addOneShotFocusListener(() -> {
+      RecyclerView recyclerView = c.getRecyclerView();
+      if (!c.isDestroyed() && recyclerView != null && recyclerView.getAdapter() instanceof SettingsAdapter) {
+        flash(recyclerView, indexOf((SettingsAdapter) recyclerView.getAdapter(), e));
+      }
+    });
   }
 
   private static boolean isSearchable (int viewType) {

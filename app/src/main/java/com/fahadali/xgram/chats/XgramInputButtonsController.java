@@ -28,7 +28,7 @@ import org.thunderdog.challegram.v.CustomRecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Settings → XGram → Chats → Message box buttons: which buttons the message box shows. Open chats update at once. */
+/** Settings → XGram → Messages → Message box buttons: which buttons the message box shows. Open chats update at once. */
 public final class XgramInputButtonsController extends RecyclerViewController<Void> implements View.OnClickListener {
   private static final String[] KEYS = {XgramSettings.INPUT_BUTTON_COMMANDS, XgramSettings.INPUT_BUTTON_SCHEDULED, XgramSettings.INPUT_BUTTON_CAMERA, XgramSettings.INPUT_BUTTON_VOICE};
   private static final int[] NAMES = {R.string.XgramInputCommands, R.string.XgramInputScheduled, R.string.XgramInputCamera, R.string.XgramInputVoice};
@@ -61,6 +61,12 @@ public final class XgramInputButtonsController extends RecyclerViewController<Vo
         }
       }
     };
+    adapter.setItems(buildItems(), false);
+    recyclerView.setAdapter(adapter);
+  }
+
+  /** Rows of this page. The settings search indexes these too. */
+  public static List<ListItem> buildItems () {
     List<ListItem> items = new ArrayList<>();
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramInputButtonsInfo));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
@@ -72,8 +78,18 @@ public final class XgramInputButtonsController extends RecyclerViewController<Vo
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramInputButtonsNote));
-    adapter.setItems(items, false);
-    recyclerView.setAdapter(adapter);
+    return items;
+  }
+
+  /** How many buttons are hidden (Settings → XGram → Messages shows it). */
+  public static int hiddenCount () {
+    int count = 0;
+    for (String key : KEYS) {
+      if (XgramSettings.instance().inputButtonHidden(key)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   @Override

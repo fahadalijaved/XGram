@@ -18,7 +18,6 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.StringRes;
 
 import com.fahadali.xgram.chats.XgramBookmarksController;
-import com.fahadali.xgram.chats.XgramFiltersController;
 import com.fahadali.xgram.chats.XgramSavedTopicsController;
 import com.fahadali.xgram.history.XgramHistoryController;
 
@@ -145,7 +144,7 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
         navigateTo(new com.fahadali.xgram.appearance.XgramThemesController(context, tdlib));
         break;
       case OPEN_GHOST:
-        navigateTo(XgramSettingsController.section(context, tdlib, XgramSettingsController.SECTION_GHOST));
+        navigateTo(XgramSettingsController.ghost(context, tdlib)); // Privacy, Ghost mode first
         break;
       case OPEN_APPEARANCE:
         navigateTo(XgramSettingsController.section(context, tdlib, XgramSettingsController.SECTION_APPEARANCE));
@@ -166,7 +165,7 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
         navigateTo(new com.fahadali.xgram.appicons.XgramAppIconsController(context, tdlib));
         break;
       case OPEN_FILTERS:
-        navigateTo(new XgramFiltersController(context, tdlib));
+        navigateTo(XgramSettingsController.section(context, tdlib, XgramSettingsController.SECTION_FILTERS));
         break;
       default:
         break;

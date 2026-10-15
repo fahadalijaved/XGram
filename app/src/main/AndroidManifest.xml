@@ -423,6 +423,12 @@
 
         <data android:scheme="tg" />
       </intent-filter>
+
+      <!-- XGram: a long press on the ghost mode Quick Settings tile opens its settings. -->
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
     </activity>
 
     <!-- XGram: Quick Settings tile for ghost mode. -->
