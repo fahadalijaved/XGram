@@ -30,6 +30,10 @@ import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramMotion;
+import com.fahadali.xgram.appearance.XgramNavMotion;
+
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.config.Config;
@@ -432,9 +436,93 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     });
     rootView.addView(floatingButton);
 
+    if (XgramExpressive.isEnabled()) {
+      xgramNav = new XgramNavMotion(rootView, contentWrapper, headerView, floatingButton);
+    }
+
     Lang.addLanguageListener(this);
 
     return rootView;
+  }
+
+  // XGram: Expressive design screen transitions (shared axis, predictive back card), see XgramNavMotion.
+
+  private @Nullable XgramNavMotion xgramNav;
+  private int xgramRequestedMode = XgramNavMotion.MODE_NONE;
+  private float xgramTouchY;
+
+  private void xgramBegin (int mode, ViewController<?> left, ViewController<?> right, boolean forward, int direction, int predictiveGestureMode) {
+    if (xgramNav == null || mode == XgramNavMotion.MODE_NONE || direction != TRANSLATION_HORIZONTAL || left.usePopupMode() || right.usePopupMode()) {
+      return;
+    }
+    if (!xgramNav.begin(mode, leftWrap, rightWrap, forward, needRtl(), predictiveGestureMode == PredictiveGesture.BACK_FROM_RIGHT_EDGE, xgramTouchY)) {
+      return;
+    }
+    if (USE_PREVIEW_FADE && fadeView != null) {
+      fadeView.setAlpha(0f);
+    }
+    if (DROP_SHADOW_ENABLED && shadowView != null) {
+      shadowView.setVisibility(View.GONE);
+    }
+  }
+
+  private void xgramSetFactor (float rawFactor) {
+    if (!xgramNav.isReleased()) {
+      xgramNav.apply(rawFactor);
+    }
+    float factor = MathUtils.clamp(rawFactor);
+    this.translationFactor = factor;
+    this.lastTranslation = translationMode == TRANSLATION_VERTICAL ? Math.round(currentHeight * factor) : currentWidth * factor;
+    if (xgramNav.getMode() == XgramNavMotion.MODE_SHARED_AXIS) {
+      headerView.setTranslation(factor);
+    }
+    if (currentRight != null) {
+      currentRight.onTranslationChanged(xgramNav.getRightTx());
+    }
+    if (currentLeft != null) {
+      currentLeft.onTranslationChanged(xgramNav.getLeftTx());
+    }
+    updateHackyViews();
+  }
+
+  private void xgramEnd (int finishMode) {
+    if (xgramNav != null && xgramNav.isActive()) {
+      boolean card = xgramNav.isCard();
+      xgramNav.end();
+      if (card && finishMode == FINISH_NAVIGATION) {
+        headerView.setTranslation(1f);
+      }
+    }
+  }
+
+  /** Release of a back gesture on the SPATIAL_DEFAULT spring with the finger's velocity (px/s towards the target). */
+  private void xgramRelease (boolean commit, float velocity) {
+    final float startFactor = getFactor();
+    final float distance = commit ? 1f - startFactor : startFactor;
+    xgramNav.release(commit, startFactor);
+    float v0 = distance > .001f && currentWidth > 0f ? (velocity / currentWidth) / distance : 0f;
+    v0 = Math.max(-25f, Math.min(25f, v0));
+    long duration = Math.min(900L, XgramMotion.duration(XgramNavMotion.RELEASE_K, XgramNavMotion.RELEASE_Z, v0, .005f));
+    ValueAnimator animator = AnimatorUtils.simpleValueAnimator();
+    animator.setInterpolator(XgramMotion.interpolator(XgramNavMotion.RELEASE_K, XgramNavMotion.RELEASE_Z, v0, duration));
+    animator.setDuration(duration);
+    animator.addUpdateListener(animation -> {
+      float c = AnimatorUtils.getFraction(animation);
+      xgramNav.applyRelease(c);
+      setFactor(commit ? startFactor + distance * c : startFactor - startFactor * c);
+    });
+    animator.addListener(new AnimatorListenerAdapter() {
+      @Override
+      public void onAnimationEnd (Animator animation) {
+        finishTransaction(commit ? FINISH_NAVIGATION : FINISH_PREVIEW);
+      }
+    });
+    animator.start();
+  }
+
+  /** Part of the width past which a swipe back commits. */
+  public float xgramDropFactor () {
+    return xgramNav != null && xgramNav.getMode() == XgramNavMotion.MODE_CARD_FINGER ? XgramNavMotion.FINGER_COMMIT : Size.NAVIGATION_DROP_FACTOR;
   }
 
   public void addViewUnderHeader (View view) {
@@ -920,6 +1008,10 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     onAfterShow();
 
     preventNextLayouts(forward ? 1 : 2);
+
+    int xgramMode = xgramRequestedMode;
+    xgramRequestedMode = XgramNavMotion.MODE_NONE;
+    xgramBegin(xgramMode, left, right, forward, direction, predictiveGestureMode);
   }
 
   private void onAfterShow () {
@@ -1001,6 +1093,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   void animateNavigate (final ViewController<?> controller, int direction, final boolean forward, final int rebase, final boolean fastAnimation) {
     final ViewController<?> left, right;
 
+    xgramRequestedMode = xgramNav != null ? XgramNavMotion.MODE_SHARED_AXIS : XgramNavMotion.MODE_NONE;
     if (forward) {
       prepareFactorAnimation(left = getStack().getPrevious(), right = controller, true, direction, PredictiveGesture.NONE);
     } else {
@@ -1009,6 +1102,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
     final boolean[] isDone = new boolean[1];
     Runnable onDone = () -> {
+      if (forward) {
+        xgramEnd(FINISH_NAVIGATION);
+      }
       setFactor(forward ? 0f : 1f);
       isDone[0] = true;
       if (forward) {
@@ -1054,7 +1150,19 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       });
     }
 
-    switch (direction) {
+    if (xgramNav != null && !Config.DEBUG_NAV_ANIM && direction != TRANSLATION_NONE) {
+      // Shared axis (and Telegram X's slide when it cannot run) on SPATIAL_DEFAULT, sheets on STD_SPATIAL_DEFAULT, fades on EFFECTS.
+      int token;
+      if (direction == TRANSLATION_FADE) {
+        token = fastAnimation ? XgramExpressive.EFFECTS_FAST : XgramExpressive.EFFECTS_DEFAULT;
+      } else if (direction == TRANSLATION_VERTICAL) {
+        token = XgramExpressive.STD_SPATIAL_DEFAULT;
+      } else {
+        token = xgramNav.getMode() == XgramNavMotion.MODE_SHARED_AXIS ? XgramExpressive.SPATIAL_DEFAULT : XgramExpressive.STD_SPATIAL_DEFAULT;
+      }
+      animator.setDuration(XgramMotion.duration(token));
+      animator.setInterpolator(XgramMotion.interpolator(token));
+    } else switch (direction) {
       case TRANSLATION_FADE: {
         animator.setDuration(Config.DEBUG_NAV_ANIM ? 1000l : fastAnimation ? 120l : 180l);
         animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
@@ -1207,6 +1315,10 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     if (right.usePopupMode()) {
       prepareFactorAnimation(getStack().getPrevious(), right, false, force ? TRANSLATION_NONE : TRANSLATION_VERTICAL, predictiveGestureMode);
     } else {
+      if (xgramNav != null && !force) {
+        xgramRequestedMode = predictiveGestureMode != PredictiveGesture.NONE ? XgramNavMotion.MODE_CARD_SYSTEM : XgramNavMotion.MODE_CARD_FINGER;
+        xgramTouchY = y;
+      }
       prepareFactorAnimation(getStack().getPrevious(), right, false, force ? TRANSLATION_NONE : TRANSLATION_HORIZONTAL, predictiveGestureMode);
     }
 
@@ -1224,6 +1336,11 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
         translationFactor = lastTranslation / currentHeight;
       } else {
         translationFactor = lastTranslation / currentWidth;
+      }
+
+      if (xgramNav != null && xgramNav.isActive()) {
+        xgramRelease(false, velocity);
+        return;
       }
 
       ValueAnimator animator;
@@ -1328,6 +1445,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   private static final int FINISH_PREVIEW_FORCE = 3;
 
   private void finishTransaction (int mode) {
+    xgramEnd(mode);
     completeNextLayout();
 
     preventLayout();
@@ -1382,6 +1500,11 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
         translationFactor = lastTranslation / currentWidth;
       }
 
+      if (xgramNav != null && xgramNav.isActive()) {
+        xgramRelease(true, velocity);
+        return;
+      }
+
       ValueAnimator animator;
 
       final float startFactor = getFactor();
@@ -1409,6 +1532,11 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   public void setFactor (float factor) {
     if (this.translationFactor == factor) return;
+
+    if (xgramNav != null && xgramNav.isActive()) {
+      xgramSetFactor(factor);
+      return;
+    }
 
     factor = MathUtils.clamp(factor);
 
@@ -1517,6 +1645,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   public int getHorizontalTranslate () {
+    if (xgramNav != null && xgramNav.isActive()) {
+      return (int) xgramNav.getRightTx();
+    }
     if (isAnimating && translationMode == TRANSLATION_HORIZONTAL) {
       return (int) ((float) rootView.getMeasuredWidth() * translationFactor);
     }
@@ -1555,6 +1686,10 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   @Override
   public void onSystemBackProgressed (@NonNull BackEventCompat backEvent) {
     if (isAnimating) {
+      if (xgramNav != null && xgramNav.isActive() && !xgramNav.isReleased()) {
+        xgramNav.setTouchY(backEvent.getTouchY());
+        xgramNav.apply(backEvent.getProgress());
+      }
       setFactor(backEvent.getProgress());
     }
   }

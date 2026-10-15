@@ -159,6 +159,7 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
       }
     });
     onCreateView(context, recyclerView);
+    com.fahadali.xgram.appearance.XgramMotion.attachScrollLink(this, recyclerView, 0);
     wrap.addView(recyclerView);
     if (needPersistentScrollPosition()) {
       restorePersistentScrollPosition();
@@ -184,6 +185,7 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
       }
     });
     recyclerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
     return recyclerView;
   }
 
@@ -255,7 +257,7 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
         if (view != null) {
           scrollTop -= view.getTop();
         }
-        getRecyclerView().smoothScrollBy(0, -scrollTop);
+        com.fahadali.xgram.appearance.XgramMotion.smoothScrollByOr(getRecyclerView(), 0, -scrollTop);
       } catch (Throwable t) {
         Log.w("Cannot scroll to top", t);
       }

@@ -90,6 +90,7 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
     LinearLayoutManager manager = new LinearLayoutManager(context);
     addThemeInvalidateListener(recyclerView);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
     recyclerView.setLayoutManager(manager);
     recyclerView.setAdapter(adapter);
     recyclerView.setItemAnimator(null);

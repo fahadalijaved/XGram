@@ -90,3 +90,8 @@
 -dontwarn org.openjsse.net.ssl.OpenJSSE
 
 -dontwarn com.google.firebase.analytics.connector.AnalyticsConnector
+# XGram: ViewPager fields set by reflection (spring page settle, first layout fix)
+-keepclassmembers class androidx.viewpager.widget.ViewPager {
+  android.widget.Scroller mScroller;
+  boolean mFirstLayout;
+}

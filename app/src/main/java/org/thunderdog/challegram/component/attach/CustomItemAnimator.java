@@ -24,6 +24,9 @@ import androidx.core.view.ViewPropertyAnimatorListener;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.SimpleItemAnimator;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramMotion;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -89,8 +92,15 @@ public class CustomItemAnimator extends SimpleItemAnimator {
 
   private final Interpolator customInterpolator;
 
+  // XGram: with Expressive design every item animation runs on springs (XgramMotion.ItemSprings).
+  private final XgramMotion.ItemSprings xgram;
+
   public CustomItemAnimator (Interpolator customInterpolator) {
     this.customInterpolator = customInterpolator;
+    this.xgram = XgramExpressive.isEnabled() ? new XgramMotion.ItemSprings(this, this::setAlpha) : null;
+    if (xgram != null) {
+      xgramSetDurations();
+    }
   }
 
   public CustomItemAnimator (Interpolator customInterpolator, long defaultDuration) {
@@ -99,10 +109,26 @@ public class CustomItemAnimator extends SimpleItemAnimator {
     setAddDuration(defaultDuration);
     setChangeDuration(defaultDuration);
     setRemoveDuration(defaultDuration);
+    this.xgram = XgramExpressive.isEnabled() ? new XgramMotion.ItemSprings(this, this::setAlpha) : null;
+    if (xgram != null && defaultDuration > 0) {
+      xgramSetDurations();
+    }
+  }
+
+  /** What the springs take (to .5%), for code that reads the durations. */
+  private void xgramSetDurations () {
+    setMoveDuration(370);
+    setAddDuration(186);
+    setRemoveDuration(120);
+    setChangeDuration(186);
   }
 
   @Override
   public void runPendingAnimations() {
+    if (xgram != null) {
+      xgram.runPendingAnimations();
+      return;
+    }
     boolean removalsPending = !mPendingRemovals.isEmpty();
     boolean movesPending = !mPendingMoves.isEmpty();
     boolean changesPending = !mPendingChanges.isEmpty();
@@ -188,6 +214,9 @@ public class CustomItemAnimator extends SimpleItemAnimator {
     if (getRemoveDuration() <= 0) {
       return false;
     }
+    if (xgram != null) {
+      return xgram.animateRemove(holder);
+    }
     resetAnimation(holder);
     mPendingRemovals.add(holder);
     return true;
@@ -219,6 +248,9 @@ public class CustomItemAnimator extends SimpleItemAnimator {
   public boolean animateAdd(final RecyclerView.ViewHolder holder) {
     if (getAddDuration() <= 0) {
       return false;
+    }
+    if (xgram != null) {
+      return xgram.animateAdd(holder);
     }
     resetAnimation(holder);
     setAlpha(holder.itemView, 0);
@@ -256,6 +288,9 @@ public class CustomItemAnimator extends SimpleItemAnimator {
                              int toX, int toY) {
     if (getMoveDuration() <= 0) {
       return false;
+    }
+    if (xgram != null) {
+      return xgram.animateMove(holder, fromX, fromY, toX, toY);
     }
     final View view = holder.itemView;
     fromX += getTranslationX(holder.itemView);
@@ -321,6 +356,12 @@ public class CustomItemAnimator extends SimpleItemAnimator {
                                int fromX, int fromY, int toX, int toY) {
     if (getChangeDuration() <= 0) {
       return false;
+    }
+    if (xgram != null) {
+      if (oldHolder == newHolder) {
+        return getMoveDuration() > 0 && xgram.animateMove(oldHolder, fromX, fromY, toX, toY);
+      }
+      return xgram.animateChange(oldHolder, newHolder, fromX, fromY, toX, toY);
     }
     if (oldHolder == newHolder) {
       // Don't know how to run change animations when the same view holder is re-used.
@@ -467,6 +508,10 @@ public class CustomItemAnimator extends SimpleItemAnimator {
 
   @Override
   public void endAnimation(RecyclerView.ViewHolder item) {
+    if (xgram != null) {
+      xgram.endAnimation(item);
+      return;
+    }
     final View view = item.itemView;
     // this will trigger end callback which should set properties to their target values.
     animate(view).cancel();
@@ -558,6 +603,9 @@ public class CustomItemAnimator extends SimpleItemAnimator {
 
   @Override
   public boolean isRunning() {
+    if (xgram != null) {
+      return xgram.isRunning();
+    }
     return (!mPendingAdditions.isEmpty() ||
         !mPendingChanges.isEmpty() ||
         !mPendingMoves.isEmpty() ||
@@ -584,6 +632,10 @@ public class CustomItemAnimator extends SimpleItemAnimator {
 
   @Override
   public void endAnimations() {
+    if (xgram != null) {
+      xgram.endAnimations();
+      return;
+    }
     int count = mPendingMoves.size();
     for (int i = count - 1; i >= 0; i--) {
       MoveInfo item = mPendingMoves.get(i);

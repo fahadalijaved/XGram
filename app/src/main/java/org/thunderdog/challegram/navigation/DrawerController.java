@@ -1145,6 +1145,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   }
 
   private void hideView () {
+    if (xgramBackScale != null) {
+      xgramBackScale.reset();
+    }
     if (Views.HARDWARE_LAYER_ENABLED) {
       Views.setLayerType(contentView, View.LAYER_TYPE_NONE);
     }
@@ -1177,9 +1180,13 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     ValueAnimator animator = AnimatorUtils.simpleValueAnimator();
     final float startFactor = getFactor();
     final float diffFactor = 1f - startFactor;
-    animator.addUpdateListener(animation -> setFactor(startFactor + diffFactor * AnimatorUtils.getFraction(animation)));
+    animator.addUpdateListener(animation -> setFactor(Math.min(1f, startFactor + diffFactor * AnimatorUtils.getFraction(animation))));
     animator.setDuration(NavigationController.calculateDropDuration(lastTranslation(), velocity, 300, 180));
     animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: STD_SPATIAL_DEFAULT spring that starts with the finger's velocity.
+      com.fahadali.xgram.appearance.XgramMotion.applySpring(animator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, com.fahadali.xgram.appearance.XgramMotion.progressVelocity(velocity, currentWidth(), diffFactor), 600);
+    }
     animator.addListener(new AnimatorListenerAdapter() {
       @Override
       public void onAnimationEnd (Animator animation) {
@@ -1210,9 +1217,15 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     } else {
       ValueAnimator animator = AnimatorUtils.simpleValueAnimator();
       final float startFactor = getFactor();
-      animator.addUpdateListener(animation -> setFactor(startFactor - startFactor * AnimatorUtils.getFraction(animation)));
+      animator.addUpdateListener(animation -> setFactor(Math.max(0f, startFactor - startFactor * AnimatorUtils.getFraction(animation))));
       animator.setDuration(NavigationController.calculateDropDuration(currentWidth() + lastTranslation(), velocity, 300, 180));
       animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        com.fahadali.xgram.appearance.XgramMotion.applySpring(animator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, com.fahadali.xgram.appearance.XgramMotion.progressVelocity(velocity, currentWidth(), startFactor), 600);
+        if (xgramBackScale != null) {
+          xgramBackScale.release();
+        }
+      }
       animator.addListener(new AnimatorListenerAdapter() {
         @Override
         public void onAnimationEnd (Animator animation) {
@@ -1289,20 +1302,37 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   private ContentFrameLayout currentView;
 
+  // XGram: with Expressive design the open drawer keeps its place and shrinks (MDC side sheet back) during the gesture.
+  private com.fahadali.xgram.appearance.XgramMotion.BackScale xgramBackScale;
+
   @Override
   public boolean onSystemBackStarted (@NonNull BackEventCompat backEvent) {
-    return prepare();
+    boolean prepared = prepare();
+    if (prepared && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !com.fahadali.xgram.appearance.XgramMotion.reduce() && contentView != null) {
+      if (xgramBackScale == null) {
+        xgramBackScale = new com.fahadali.xgram.appearance.XgramMotion.BackScale(contentView, Lang.rtl() ? com.fahadali.xgram.appearance.XgramMotion.BackScale.SIDE_RIGHT : com.fahadali.xgram.appearance.XgramMotion.BackScale.SIDE_LEFT);
+      }
+      xgramBackScale.start(backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT);
+    }
+    return prepared;
   }
 
   @Override
   public void onSystemBackProgressed (@NonNull BackEventCompat backEvent) {
     if (!isAnimating) {
+      if (xgramBackScale != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+        xgramBackScale.progress(backEvent.getProgress());
+        return;
+      }
       setFactor(1f - backEvent.getProgress());
     }
   }
 
   @Override
   public void onSystemBackCancelled () {
+    if (xgramBackScale != null) {
+      xgramBackScale.release();
+    }
     if (!isAnimating) {
       setIsVisible(false);
       open(0f);

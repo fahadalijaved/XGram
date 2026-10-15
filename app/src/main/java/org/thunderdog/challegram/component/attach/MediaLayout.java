@@ -992,7 +992,7 @@ public class MediaLayout extends FrameLayoutFix implements
     }
 
     ValueAnimator animator = AnimatorUtils.simpleValueAnimator();
-    animator.setDuration(REVEAL_DURATION);
+    animator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, REVEAL_DURATION));
     final float fromFactor = bottomBarFactor;
     final float factorDiff = -bottomBarFactor;
 
@@ -1013,7 +1013,7 @@ public class MediaLayout extends FrameLayoutFix implements
       pendingPopup.setRevealFactor(1f - factor);
     });
     animator.addListener(endListener);
-    animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+    animator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
     getCurrentController().onBottomBarAnimationStart(true);
     return animator;
   }
@@ -1023,11 +1023,11 @@ public class MediaLayout extends FrameLayoutFix implements
   @Override
   public void modifyBaseHideAnimator (final ValueAnimator animator) {
     if (hideCollapsed || headerFactor != 0f) {
-      animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-      animator.setDuration(REVEAL_DURATION);
+      animator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
+      animator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, REVEAL_DURATION));
     } else {
-      animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-      animator.setDuration(REVEAL_HIDE_DURATION);
+      animator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
+      animator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, REVEAL_HIDE_DURATION));
       if (headerFactor != 0f && hideCircular) {
         ignoreHeaderStyles = true;
         animator.addUpdateListener(animation -> setHeaderFactor(AnimatorUtils.getFraction(animation)));
@@ -1043,8 +1043,8 @@ public class MediaLayout extends FrameLayoutFix implements
   @Override
   public Animator createCustomShowAnimator () {
     ValueAnimator animator = AnimatorUtils.simpleValueAnimator();
-    animator.setDuration(REVEAL_DURATION);
-    animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+    animator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, REVEAL_DURATION));
+    animator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR));
     animator.addUpdateListener(animation -> setRevealFactor(AnimatorUtils.getFraction(animation)));
     animator.addListener(new AnimatorListenerAdapter() {
       @Override
@@ -1068,8 +1068,8 @@ public class MediaLayout extends FrameLayoutFix implements
 
   @Override
   public void modifyBaseShowAnimator (ValueAnimator animator) {
-    animator.setDuration(REVEAL_DURATION);
-    animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+    animator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, REVEAL_DURATION));
+    animator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR));
   }
 
   private ViewController.CameraOpenOptions cameraOpenOptions;

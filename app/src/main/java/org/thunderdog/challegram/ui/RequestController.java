@@ -69,6 +69,7 @@ public class RequestController extends EditBaseController<RequestController.Dele
 
     recyclerView.setAdapter(adapter);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
 
     setDoneVisible(true);
   }
