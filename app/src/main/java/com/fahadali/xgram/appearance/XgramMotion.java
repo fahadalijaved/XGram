@@ -19,6 +19,7 @@ import android.view.View;
 import android.view.animation.Interpolator;
 import android.widget.EdgeEffect;
 
+import androidx.activity.BackEventCompat;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.dynamicanimation.animation.DynamicAnimation;
@@ -29,7 +30,9 @@ import androidx.dynamicanimation.animation.SpringForce;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.SimpleItemAnimator;
 
+import org.thunderdog.challegram.navigation.SystemBackEventListener;
 import org.thunderdog.challegram.navigation.ViewController;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.unsorted.Settings;
 
 import java.lang.ref.WeakReference;
@@ -189,6 +192,146 @@ public final class XgramMotion {
     }
     final Interpolator spring = interpolator(token);
     return f -> clamp01(spring.getInterpolation(f));
+  }
+
+  /** Progress velocity (per second, towards the target) of a finger moving {@code pxPerSecond} with {@code remaining} (0..1) of {@code sizePx} to go. */
+  public static float progressVelocity (float pxPerSecond, float sizePx, float remaining) {
+    if (remaining <= .001f || sizePx <= 0f) {
+      return 0f;
+    }
+    return Math.max(-25f, Math.min(25f, (pxPerSecond / sizePx) / remaining));
+  }
+
+  /** Puts a 0..1 ValueAnimator on spring {@code token} starting with {@code v0} (see {@link #progressVelocity}). */
+  public static void applySpring (ValueAnimator animator, int token, float v0, long maxDurationMs) {
+    token = token(token);
+    float k = XgramExpressive.stiffness(token), z = XgramExpressive.damping(token);
+    long duration = Math.min(maxDurationMs, duration(k, z, v0, SETTLE_EPS));
+    animator.setDuration(duration);
+    animator.setInterpolator(interpolator(k, z, v0, duration));
+  }
+
+  // Predictive back of sheets and side sheets (MDC MaterialBottomContainerBackHelper / MaterialSideContainerBackHelper)
+
+  /** AOSP Interpolators.BACK_GESTURE. */
+  public static final Interpolator BACK_GESTURE = new android.view.animation.PathInterpolator(.1f, .1f, 0f, 1f);
+
+  /** Scales a sheet while the system back gesture is in progress and springs it back (SPATIAL_DEFAULT) after. */
+  public static final class BackScale {
+    public static final int BOTTOM = 0, SIDE_LEFT = 1, SIDE_RIGHT = 2;
+
+    private final View view;
+    private final int type;
+    private boolean fromLeftEdge;
+    private float progress;
+    private @Nullable Value spring;
+
+    public BackScale (@NonNull View view, int type) {
+      this.view = view;
+      this.type = type;
+    }
+
+    public void start (boolean fromLeftEdge) {
+      if (spring != null) {
+        spring.cancel();
+      }
+      this.fromLeftEdge = fromLeftEdge;
+    }
+
+    /** Raw BackEvent progress. */
+    public void progress (float rawProgress) {
+      if (spring != null) {
+        spring.cancel();
+      }
+      set(BACK_GESTURE.getInterpolation(clamp01(rawProgress)));
+    }
+
+    /** Back to full size on a spring (cancelled, or committed while the sheet hides). */
+    public void release () {
+      if (progress == 0f) {
+        return;
+      }
+      if (spring == null) {
+        spring = new Value(XgramExpressive.SPATIAL_DEFAULT, progress, (v, value, velocity) -> set(value));
+        spring.setThreshold(.002f);
+        spring.setEndListener(() -> set(0f));
+      } else {
+        spring.setValue(progress);
+      }
+      spring.animateTo(0f);
+    }
+
+    public void reset () {
+      if (spring != null) {
+        spring.cancel();
+      }
+      set(0f);
+    }
+
+    public boolean isActive () {
+      return progress != 0f;
+    }
+
+    private void set (float p) {
+      this.progress = p;
+      float w = view.getWidth(), h = view.getHeight();
+      if (p == 0f || w <= 0f || h <= 0f) {
+        view.setScaleX(1f);
+        view.setScaleY(1f);
+        if (p == 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+          view.resetPivot();
+        }
+        return;
+      }
+      float scaleX, scaleY;
+      if (type == BOTTOM) {
+        view.setPivotX(w / 2f);
+        view.setPivotY(h);
+        scaleX = 1f - p * Screen.dp(48f) / w;
+        scaleY = 1f - p * Screen.dp(24f) / h;
+      } else {
+        boolean leftGravity = type == SIDE_LEFT;
+        view.setPivotX(leftGravity ? 0f : w);
+        view.setPivotY(h / 2f);
+        boolean grow = fromLeftEdge == leftGravity;
+        scaleX = grow ? 1f + p * Screen.dp(12f) / w : 1f - p * Screen.dp(24f) / w;
+        scaleY = 1f - p * Screen.dp(48f) / h;
+      }
+      view.setScaleX(scaleX);
+      view.setScaleY(scaleY);
+    }
+  }
+
+  /**
+   * Predictive back of a bottom sheet: shrinks it while the gesture is in progress. Returns false from
+   * onSystemBackPressed, so the activity then dismisses the sheet as before while it springs back to full size.
+   */
+  public static SystemBackEventListener sheetBackTarget (@NonNull View sheet) {
+    final BackScale scale = new BackScale(sheet, BackScale.BOTTOM);
+    return new SystemBackEventListener() {
+      @Override
+      public boolean onSystemBackStarted (@NonNull BackEventCompat backEvent) {
+        scale.start(backEvent.getSwipeEdge() == BackEventCompat.EDGE_LEFT);
+        scale.progress(backEvent.getProgress());
+        return true;
+      }
+
+      @Override
+      public void onSystemBackProgressed (@NonNull BackEventCompat backEvent) {
+        scale.progress(backEvent.getProgress());
+      }
+
+      @Override
+      public void onSystemBackCancelled () {
+        scale.release();
+      }
+
+      @Override
+      public boolean onSystemBackPressed () {
+        scale.release();
+        return false;
+      }
+    };
   }
 
   // A float on a spring that can start with a velocity

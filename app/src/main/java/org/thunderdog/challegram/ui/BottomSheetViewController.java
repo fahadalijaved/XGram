@@ -573,7 +573,7 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
               ci.onScrollToTopRequested();
             } else if (canHideByScroll && (topEdge > contentOffset)) {
               if (controller.getContentVisibleHeight() > controller.getHideByScrollBorder()) {
-                ci.getRecyclerView().smoothScrollBy(0, topEdge - contentOffset);
+                com.fahadali.xgram.appearance.XgramMotion.sheetScrollByOr(ci.getRecyclerView(), 0, topEdge - contentOffset);
                 ignoreScrollChangeState = true;
               } else {
                 controller.hidePopupWindow(true);

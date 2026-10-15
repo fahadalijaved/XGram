@@ -1417,6 +1417,8 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
           target = drawer;
           break;
         case BackPressMode.CUSTOM_ACTION_PERFORMED:
+          target = xgramSheetBackTarget();
+          break;
         case BackPressMode.SYSTEM_ACTION_REQUIRED:
           target = null;
           break;
@@ -1445,6 +1447,27 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
 
   private static boolean isBackPressActionAvailable (@BackPressMode int backPressMode) {
     return backPressMode != BackPressMode.SYSTEM_ACTION_REQUIRED;
+  }
+
+  /** XGram: Expressive design shrinks the top bottom sheet during the system back gesture (it then closes as before). */
+  @Nullable
+  private SystemBackEventListener xgramSheetBackTarget () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || com.fahadali.xgram.appearance.XgramMotion.reduce() || isPasscodeShowing || isProgressShowing) {
+      return null;
+    }
+    if (tooltipOverlayView != null && tooltipOverlayView.handleOnBackPress(false)) {
+      return null;
+    }
+    for (int i = windows.size() - 1; i >= 0; i--) {
+      PopupLayout window = windows.get(i);
+      if (window.isBoundWindowShowing()) {
+        if (!window.xgramIsBottomSheet() || window.performOnBackPressed(false, false) || window.getBoundView() == null) {
+          return null;
+        }
+        return com.fahadali.xgram.appearance.XgramMotion.sheetBackTarget(window.getBoundView());
+      }
+    }
+    return null;
   }
 
   private @BackPressMode int backPressMode = BackPressMode.SYSTEM_ACTION_REQUIRED;

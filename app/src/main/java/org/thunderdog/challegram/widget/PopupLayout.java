@@ -980,6 +980,11 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     }
   }
 
+  /** XGram: a sheet that slides up from the bottom (predictive back shrinks it). */
+  public boolean xgramIsBottomSheet () {
+    return animationType == ANIMATION_TYPE_SIMPLE && boundView != null && !isHidden;
+  }
+
   public void animateRevealFactor (float toFactor) {
     if (animationType == ANIMATION_TYPE_SIMPLE && XgramExpressive.isEnabled()) {
       xgramAnimateReveal(toFactor);
