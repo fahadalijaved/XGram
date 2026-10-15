@@ -1283,19 +1283,17 @@ public final class XgramExpressive {
 
   /** Between a group opener (see {@link #isGroupOpener}) and a SHADOW_BOTTOM. */
   private static boolean isInGroup (List<ListItem> items, int position) {
-    boolean top = false;
+    // The list start also opens a group: TGX pages such as Interface Options start straight
+    // with rows (no SHADOW_TOP) and close them with a SHADOW_BOTTOM. A list made only of rows
+    // (no SHADOW_BOTTOM at all) still stays flat, as before.
     for (int i = position - 1; i >= 0; i--) {
       int type = items.get(i).getViewType();
       if (isGroupOpener(type)) {
-        top = true;
         break;
       }
       if (type == ListItem.TYPE_SHADOW_BOTTOM) {
         return false;
       }
-    }
-    if (!top) {
-      return false;
     }
     for (int i = position + 1; i < items.size(); i++) {
       int type = items.get(i).getViewType();
@@ -1380,6 +1378,9 @@ public final class XgramExpressive {
         if (isRowType(prevType)) {
           outRect.top = Screen.dp(LIST_GAP);
         }
+      } else if (groupRow) {
+        // A group opened by the list start: the space a SHADOW_TOP would give.
+        outRect.top = Screen.dp(8f);
       }
     }
 
