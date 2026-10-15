@@ -458,6 +458,12 @@ public class SettingsProxyController extends RecyclerViewController<Void> implem
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
+    // XGram: shortcut to the proxy rules in XGram's Network page. It sits before the calls block, which is
+    // added and removed at the end of the list.
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTgxProxyRules, 0, R.string.XgramTgxProxyRules));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+
     if (canUseForCalls) {
       addProxyCallItems(items);
     }
@@ -486,6 +492,10 @@ public class SettingsProxyController extends RecyclerViewController<Void> implem
           radioView.setChecked(proxy.id == effectiveProxyId, isUpdate);
         } else if (itemId == R.id.btn_useProxyForCalls) {
           view.getToggler().setRadioEnabled(Settings.instance().checkProxySetting(Settings.PROXY_FLAG_USE_FOR_CALLS), isUpdate);
+        } else if (itemId == R.id.btn_xgramTgxProxyRules) { // XGram: how many rules are on
+          com.fahadali.xgram.XgramSettings xgram = com.fahadali.xgram.XgramSettings.instance();
+          int count = (xgram.proxyOffOnVpn() ? 1 : 0) + (xgram.proxyOffOnWifi() ? 1 : 0) + (xgram.proxyOffOnMobile() ? 1 : 0);
+          view.setData(count == 0 ? Lang.getString(R.string.Off) : Lang.getString(R.string.XgramTgxProxyRulesOn, count));
         }
       }
     };
@@ -622,6 +632,16 @@ public class SettingsProxyController extends RecyclerViewController<Void> implem
       }
     } else if (viewId == R.id.btn_useProxyForCalls) {
       Settings.instance().setProxySetting(Settings.PROXY_FLAG_USE_FOR_CALLS, adapter.toggleView(v));
+    } else if (viewId == R.id.btn_xgramTgxProxyRules) { // XGram: Network page, scrolled to the proxy rules
+      navigateTo(com.fahadali.xgram.XgramSettingsController.section(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_NETWORK, R.id.btn_xgramProxyOffVpn));
+    }
+  }
+
+  @Override
+  public void onFocus () {
+    super.onFocus();
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_xgramTgxProxyRules); // XGram: the rules can change in XGram's Network page
     }
   }
 

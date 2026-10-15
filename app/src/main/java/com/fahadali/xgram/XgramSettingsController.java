@@ -72,8 +72,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     return c;
   }
 
-  /** A section page that scrolls to one row and flashes it once shown (settings search). */
-  static XgramSettingsController section (Context context, Tdlib tdlib, int section, @IdRes int highlightId) {
+  /** A section page that scrolls to one row and flashes it once shown (settings search, Telegram X shortcuts). */
+  public static XgramSettingsController section (Context context, Tdlib tdlib, int section, @IdRes int highlightId) {
     XgramSettingsController c = section(context, tdlib, section);
     c.highlightId = highlightId;
     return c;
@@ -548,30 +548,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
   /** Telegram, Google Translate or Yandex Translate; a third-party service asks once, saying the text goes to it. */
   private void showTranslateProviderOptions () {
-    int[] providers = com.fahadali.xgram.translate.XgramTranslator.PROVIDERS;
-    String[] titles = new String[providers.length];
-    int[] ids = new int[providers.length];
-    for (int i = 0; i < providers.length; i++) {
-      titles[i] = com.fahadali.xgram.translate.XgramTranslator.name(providers[i]);
-      ids[i] = i + 1;
-    }
-    showOptions(Lang.getString(R.string.XgramTrProvider), ids, titles, null, null, (itemView, optionId) -> {
-      int provider = providers[optionId - 1];
-      XgramSettings settings = XgramSettings.instance();
-      if (provider == settings.translateProvider()) {
-        return true;
-      }
-      if (com.fahadali.xgram.translate.XgramTranslator.isThirdParty(provider) && !settings.translateNoticeShown(provider)) {
-        String name = com.fahadali.xgram.translate.XgramTranslator.name(provider);
-        showConfirm(com.fahadali.xgram.translate.XgramTranslator.info(provider), Lang.getString(R.string.XgramTrUse, name), () -> {
-          settings.setTranslateNoticeShown(provider);
-          setTranslateProvider(provider);
-        });
-      } else {
-        setTranslateProvider(provider);
-      }
-      return true;
-    });
+    // Shared with Telegram X's Translate messages page
+    com.fahadali.xgram.translate.XgramTranslateProviderPicker.show(this, this::setTranslateProvider);
   }
 
   private void setTranslateProvider (int provider) {

@@ -677,10 +677,17 @@
   <string name="XgramCommunityReadAll">Mark all as read</string>
   <string name="XgramCommunityMuteAll">Mute all</string>
   <string name="XgramCommunityUnmuteAll">Unmute all</string>
-  <string name="XgramHideFolders">Hide folders in XGram</string>
+  <string name="XgramHideFolders">Hide folder tabs</string>
   <string name="XgramHideFoldersInfo">Shows only the main chat list here, without folder tabs. Your folders aren\'t changed or deleted: they stay on your account and on your other devices, like Telegram on PC. The eye next to a folder below hides just that folder in XGram.</string>
   <string name="XgramFolderHide">Hide in XGram</string>
   <string name="XgramFolderShow">Show in XGram</string>
-  <string name="XgramFoldersAllHidden">All folders are hidden in XGram. Turn off Hide folders in XGram to pick which ones show.</string>
+  <string name="XgramFoldersAllHidden">All folder tabs are hidden. Turn off Hide folder tabs to pick which ones show.</string>
   <string name="XgramFolderHiddenMark">%1$s (hidden in XGram)</string>
+  <!-- XGram: shortcuts in Telegram X's own pages (Chat folders, Privacy and security, Proxy) -->
+  <string name="XgramTgxHideFoldersInfo">Shows only the main chat list; your folders are not changed. The eye next to a folder hides only that folder\'s tab.</string>
+  <string name="XgramTgxPrivacy">XGram privacy</string>
+  <string name="XgramTgxPrivacyInfo">Ghost mode, screenshots, phone number</string>
+  <string name="XgramTgxPrivacyInfoGhostOn">Ghost mode on · screenshots, phone number</string>
+  <string name="XgramTgxProxyRules">Proxy rules</string>
+  <string name="XgramTgxProxyRulesOn">%1$d on</string>
 </resources>
