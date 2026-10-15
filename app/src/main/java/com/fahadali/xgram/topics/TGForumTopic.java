@@ -16,6 +16,9 @@ import android.view.View;
 
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Profile;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
@@ -30,6 +33,7 @@ import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.util.text.Counter;
 import org.thunderdog.challegram.util.text.Text;
+import org.thunderdog.challegram.util.text.TextColorSet;
 import org.thunderdog.challegram.util.text.TextColorSets;
 import org.thunderdog.challegram.util.text.TextEntity;
 import org.thunderdog.challegram.util.text.TextStyleProvider;
@@ -83,14 +87,29 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
       .drawable(R.drawable.baseline_at_16, 16f, 0f, Gravity.CENTER)
       .callback(this)
       .build();
-    this.reactionsCounter = new Counter.Builder()
+    Counter.Builder reactions = new Counter.Builder()
       .drawable(R.drawable.baseline_favorite_14, 16f, 0f, Gravity.CENTER)
-      .callback(this)
-      .build();
+      .callback(this);
+    if (XgramExpressive.isEnabled()) {
+      reactions.colorSet(XGRAM_REACTIONS_COLORS); // XGram M3E: a tertiary container badge, muted or not
+    }
+    this.reactionsCounter = reactions.build();
     buildIcon(topic.info);
     this.statusHelper = new TdlibStatusManager.Helper(context.context(), tdlib, this, context);
     setCounter(false);
   }
+
+  private static final TextColorSet XGRAM_REACTIONS_COLORS = new TextColorSet() {
+    @Override
+    public int defaultTextColor () {
+      return XgramExpressive.color(XgramExpressive.ON_TERTIARY_CONTAINER);
+    }
+
+    @Override
+    public int backgroundColor (boolean isPressed) {
+      return XgramExpressive.color(XgramExpressive.TERTIARY_CONTAINER);
+    }
+  };
 
   private void buildIcon (TdApi.ForumTopicInfo info) {
     iconDrawable = new ForumTopicIconDrawable(info);
@@ -297,7 +316,16 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
     return false;
   }
 
-  private static TextStyleProvider titleStyleProvider () {
+  /** Has unread messages: with Expressive design the title, time and preview are emphasized then (as chats). */
+  public boolean hasUnread () {
+    return topic.unreadCount > 0;
+  }
+
+  private TextStyleProvider titleStyleProvider () {
+    if (XgramExpressive.isEnabled()) {
+      // XGram M3E: the chat list's title style, Google Sans Flex titleMedium, weight 700 while unread
+      return XgramM3Profile.flexProvider(XgramExpressive.TS_TITLE_M, hasUnread(), 16f);
+    }
     return Paints.robotoStyleProvider(16);
   }
 
@@ -445,7 +473,8 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
     }
     textIconsPadding = textIconIds != null && textIconIds.size() > 0 ? Screen.dp(2f) + Screen.dp(18f) * textIconIds.size() : 0;
     if (avail > 0 && !StringUtils.isEmpty(textValue)) {
-      text = new Text.Builder(textValue, avail, textStyleProvider(), TextColorSets.Regular.LIGHT)
+      boolean xgramUnread = XgramExpressive.isEnabled() && hasUnread(); // XGram M3E: unread previews in onSurface
+      text = new Text.Builder(textValue, avail, textStyleProvider(), xgramUnread ? TextColorSets.Regular.NORMAL : TextColorSets.Regular.LIGHT)
         .singleLine()
         .ignoreNewLines()
         .lineMarginProvider((lineIndex, y, defaultMaxWidth, lineHeight) -> lineIndex == 0 ? textIconsPadding : 0)

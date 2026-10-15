@@ -16,6 +16,10 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramListStateView;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
@@ -44,7 +48,9 @@ import org.thunderdog.challegram.ui.SettingHolder;
 import org.thunderdog.challegram.ui.SettingsAdapter;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.StringList;
+import org.thunderdog.challegram.util.text.TextColorSet;
 import org.thunderdog.challegram.util.text.TextEntity;
+import org.thunderdog.challegram.util.text.TextEntityCustom;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.BaseView;
 import org.thunderdog.challegram.widget.ForceTouchView;
@@ -74,6 +80,7 @@ import tgx.td.ChatPosition;
  */
 public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, View.OnLongClickListener, BaseView.ActionListProvider, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener, MoreDelegate {
   private static final int TYPE_CHAT_ROW = 1;
+  private static final int TYPE_LOADING_ROW = 2;
   private static final long REBUILD_DELAY_MS = 200;
   /** notifyItemChanged payload: the item animator keeps the bound view instead of fading a new one in. */
   private static final Object REBIND = new Object();
@@ -271,6 +278,13 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
           addThemeInvalidateListener(view);
           return new SettingHolder(view);
         }
+        if (customViewType == TYPE_LOADING_ROW) {
+          // XGram M3E: the contained loading indicator in place of the "Loading the community…" line
+          XgramListStateView view = new XgramListStateView(parent.getContext());
+          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+          view.setLoading(true, 38f);
+          return new SettingHolder(view);
+        }
         throw new IllegalArgumentException("customViewType=" + customViewType);
       }
 
@@ -278,6 +292,15 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
         if (customViewType == TYPE_CHAT_ROW) {
           ((XgramCommunityChatView) view).setChat(rows.get(item.getLongId()));
+          ((XgramCommunityChatView) view).xgramSetTopicsLoading(xgramTopicsLoading.contains(item.getLongId()));
+        } else if (customViewType == TYPE_LOADING_ROW) {
+          // Alone, centred on the page; above the note about the chats this device has seen, a block of its own.
+          int height = getItems().size() == 1 ? ViewGroup.LayoutParams.MATCH_PARENT : Screen.dp(160f);
+          ViewGroup.LayoutParams params = view.getLayoutParams();
+          if (params != null && params.height != height) {
+            params.height = height;
+            view.setLayoutParams(params);
+          }
         }
       }
     };
@@ -316,6 +339,21 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   @Override
   public boolean needAsynchronousAnimation () {
     return communityFull() == null && !useKnownChats;
+  }
+
+  // XGram M3E: a slow answer no longer holds the tap without feedback (up to 2.5 s): the page slides in with the
+  // loading indicator after 150 ms.
+  @Override
+  public long getAsynchronousAnimationTimeout (boolean fastAnimation) {
+    return XgramExpressive.isEnabled() ? 150L : super.getAsynchronousAnimationTimeout(fastAnimation);
+  }
+
+  /** The loading row: the M3E indicator, or Telegram X's description line. */
+  private static ListItem loadingItem () {
+    if (XgramExpressive.isEnabled()) {
+      return new ListItem(ListItem.TYPE_CUSTOM - TYPE_LOADING_ROW);
+    }
+    return new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityLoading);
   }
 
   @Nullable
@@ -653,6 +691,15 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     }
     List<TextEntity> topicsEntities = new ArrayList<>();
     String topicsLine = forum ? topics.line(this, chat.id, topicsEntities) : null;
+    if (topicsLine == null && forum && XgramExpressive.isEnabled() && topics.isLoading(chat.id)) {
+      // XGram M3E: the second line keeps its place while the topics load (an invisible stand-in the row draws a
+      // placeholder bar over), so the row doesn't rearrange itself once they are here.
+      topicsLine = TOPICS_PLACEHOLDER;
+      topicsEntities.add(new TextEntityCustom(this, tdlib, null, 0, TOPICS_PLACEHOLDER.length(), 0, null).setCustomColorSet(INVISIBLE_TEXT));
+      xgramTopicsLoading.add(chat.id);
+    } else {
+      xgramTopicsLoading.remove(chat.id);
+    }
     String forcedText = XgramCommunityData.isMember(tdlib, chat) ? null : subtitleFor(tdlib, chat);
     row = new TGChat(this, listFor(chat), chat, false);
     // Before the first layout: the row keeps three lines (topics, then "sender: message") whatever the chat list's mode.
@@ -660,6 +707,11 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     rows.put(chat.id, row);
     return row;
   }
+
+  /** Forums whose row shows the topics placeholder (UI thread). */
+  private final Set<Long> xgramTopicsLoading = new HashSet<>();
+  private static final String TOPICS_PLACEHOLDER = "—————————";
+  private static final TextColorSet INVISIBLE_TEXT = () -> 0;
 
   private static int rowMode () {
     int mode = Settings.instance().getChatListMode();
@@ -721,7 +773,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       // TDLib didn't send the community's chat list: the chats this device saw being added to it.
       chatIds.addAll(XgramCommunities.chatsOf(tdlib, communityId()));
     } else {
-      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityLoading));
+      items.add(loadingItem());
       adapter.setItems(items, false);
       return;
     }
@@ -769,6 +821,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       if (!present.contains(chatId)) {
         retired.add(rows.remove(chatId));
         topics.forget(chatId);
+        xgramTopicsLoading.remove(chatId);
       }
     }
     if (!searchQuery.isEmpty()) {
@@ -792,7 +845,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       addSection(items, R.string.XgramCommunityHiddenChats, hidden);
     }
     if (items.isEmpty()) {
-      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, pendingChats.isEmpty() ? R.string.XgramCommunityEmpty : R.string.XgramCommunityLoading));
+      items.add(pendingChats.isEmpty() ? new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityEmpty) : loadingItem());
     }
     if (full == null && searchQuery.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loadError != null ? Lang.getString(R.string.XgramCommunityPartialError, loadError) : Lang.getString(R.string.XgramCommunityPartial)));

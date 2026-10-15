@@ -24,6 +24,10 @@ import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramListStateView;
+import com.fahadali.xgram.appearance.XgramM3Bars;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.chat.ChatHeaderView;
@@ -222,9 +226,22 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     }
   };
 
+  // XGram M3E: the topics are one surface container with 28dp top corners on the app bar's layer, as the chat list.
+  @Override
+  protected FrameLayout createFrameLayout (Context context) {
+    if (XgramExpressive.isEnabled()) {
+      return new XgramM3Bars.CornerFrameLayout(context);
+    }
+    return super.createFrameLayout(context);
+  }
+
   @Override
   protected View onCreateView (Context context) {
     View view = super.onCreateView(context);
+    if (view instanceof XgramM3Bars.CornerFrameLayout && getRecyclerView() != null) {
+      ((XgramM3Bars.CornerFrameLayout) view).setCornerAnchor(getRecyclerView());
+      org.thunderdog.challegram.support.ViewSupport.setThemedBackground(getRecyclerView(), ColorId.filling, this);
+    }
     if (view instanceof ViewGroup) {
       int padding = Screen.dp(4f);
       mentionWrap = new FrameLayout(context);
@@ -457,6 +474,15 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
   public boolean needAsynchronousAnimation () {
     return !ensureList().isLoaded();
   }
+
+  // XGram M3E: a first page TDLib has at hand still opens complete; a slower one no longer leaves the tap without
+  // feedback for up to half a second: the page slides in with the loading indicator.
+  @Override
+  public long getAsynchronousAnimationTimeout (boolean fastAnimation) {
+    return XgramExpressive.isEnabled() ? XGRAM_ASYNC_TIMEOUT_MS : super.getAsynchronousAnimationTimeout(fastAnimation);
+  }
+
+  private static final long XGRAM_ASYNC_TIMEOUT_MS = 150;
 
   private void checkLoadMore () {
     if (list != null && list.canLoadMore() && list.isLoaded()) {
@@ -740,12 +766,18 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       super.onSelectedChanged(viewHolder, actionState);
       if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) {
         setDragging(true);
+        if (viewHolder != null && viewHolder.itemView instanceof ForumTopicView) {
+          ((ForumTopicView) viewHolder.itemView).xgramSetDragging(true);
+        }
       }
     }
 
     @Override
     public void clearView (@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
       super.clearView(recyclerView, viewHolder);
+      if (viewHolder.itemView instanceof ForumTopicView) {
+        ((ForumTopicView) viewHolder.itemView).xgramSetDragging(false);
+      }
       recyclerView.post(() -> setDragging(false)); // after the dropped row settles
       if (reorderChanged && list != null) {
         reorderChanged = false;
@@ -859,6 +891,12 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
           return new Holder(view);
         }
         case VIEW_TYPE_LOADING: {
+          if (XgramExpressive.isEnabled()) {
+            // XGram M3E: the loading indicator, contained and centred while there are no topics yet, plain as the footer
+            XgramListStateView view = new XgramListStateView(context);
+            view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            return new Holder(view);
+          }
           FrameLayout frame = new FrameLayout(context);
           frame.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f)));
           ProgressComponentView progress = new ProgressComponentView(context);
@@ -868,6 +906,12 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
         }
         case VIEW_TYPE_EMPTY:
         default: {
+          if (XgramExpressive.isEnabled()) {
+            // XGram M3E: the empty state of shared media (icon on a soft burst, headline, supporting text), centred
+            XgramListStateView view = new XgramListStateView(context);
+            view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            return new Holder(view);
+          }
           TextView text = new TextView(context);
           text.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(120f)));
           text.setGravity(Gravity.CENTER);
@@ -884,6 +928,22 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     public void onBindViewHolder (@NonNull Holder holder, int position) {
       if (holder.itemView instanceof ForumTopicView) {
         ((ForumTopicView) holder.itemView).setTopic(rowFor(visibleTopic(position)));
+      } else if (holder.itemView instanceof XgramListStateView) {
+        XgramListStateView view = (XgramListStateView) holder.itemView;
+        boolean alone = visibleCount() == 0;
+        if (holder.getItemViewType() == VIEW_TYPE_LOADING) {
+          view.setLoading(alone, alone ? 38f : 32f);
+        } else if (searchResults != null) {
+          view.setEmpty(R.drawable.baseline_search_96, Lang.getString(R.string.NoResultsToShow), Lang.getString(R.string.NoResultsToShowDesc));
+        } else {
+          view.setEmpty(R.drawable.baseline_forum_96, Lang.getString(R.string.XgramNoTopics), Lang.getString(R.string.XgramNoTopicsHint));
+        }
+        int height = alone ? ViewGroup.LayoutParams.MATCH_PARENT : Screen.dp(56f);
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        if (params != null && params.height != height) {
+          params.height = height;
+          view.setLayoutParams(params);
+        }
       }
     }
 

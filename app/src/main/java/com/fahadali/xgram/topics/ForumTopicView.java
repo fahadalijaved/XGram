@@ -40,6 +40,8 @@ import org.thunderdog.challegram.util.text.Counter;
 import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.widget.SparseDrawableView;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import me.vkryl.core.collection.IntList;
 
 /**
@@ -63,8 +65,33 @@ public final class ForumTopicView extends SparseDrawableView {
   }
 
   public static int getTextLeft () {
-    return Screen.dp(58f);
+    return Screen.dp(XgramExpressive.isEnabled() ? XGRAM_TEXT_LEFT : 58f);
   }
+
+  // XGram M3E: a 40dp leading container 16dp from the start, the text 16dp after it (list item spec)
+  private static final float XGRAM_LEADING_LEFT = 16f, XGRAM_LEADING_SIZE = 40f, XGRAM_TEXT_LEFT = 72f;
+  private static final float XGRAM_ICON_SIZE = 24f, XGRAM_EMOJI_SIZE = 26f;
+
+  // XGram M3E: labelMedium time, primary and weight 700 while the topic has unread messages (as ChatView)
+  private static Paint xgramTimePaint, xgramTimePaintUnread;
+
+  private static Paint xgramTimePaint (boolean unread) {
+    Paint paint = unread ? xgramTimePaintUnread : xgramTimePaint;
+    if (paint == null) {
+      paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+      paint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_M, unread));
+      if (unread) {
+        xgramTimePaintUnread = paint;
+      } else {
+        xgramTimePaint = paint;
+      }
+    }
+    paint.setTextSize(Screen.dp(12f));
+    paint.setColor(XgramExpressive.color(unread ? XgramExpressive.PRIMARY : XgramExpressive.ON_SURFACE_VARIANT));
+    return paint;
+  }
+
+  private static final Paint xgramLeadingPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
   public static int getRightPaddingPx () {
     return Screen.dp(15f);
@@ -107,8 +134,66 @@ public final class ForumTopicView extends SparseDrawableView {
     this.tdlib = tdlib;
     this.textMediaReceiver = new ComplexReceiver(this);
     // Opaque, so rows don't show through each other while the list animates a re-sort.
-    RippleSupport.setSimpleWhiteBackground(this);
+    if (XgramExpressive.isEnabled()) {
+      setBackground(xgramRowBackground());
+    } else {
+      RippleSupport.setSimpleWhiteBackground(this);
+    }
     setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, getViewHeight()));
+  }
+
+  // XGram M3E: an opaque surface row whose press state layer is a rounded tile (inset 8dp / 2dp, 16dp corners), the
+  // same shape as the selection tile, instead of Telegram X's full-bleed rectangle.
+
+  private @Nullable android.graphics.drawable.RippleDrawable xgramRipple;
+  private int xgramRippleColor;
+
+  private Drawable xgramRowBackground () {
+    Drawable surface = new Drawable() {
+      private final Paint paint = new Paint();
+
+      @Override
+      public void draw (@androidx.annotation.NonNull Canvas c) {
+        paint.setColor(XgramExpressive.color(XgramExpressive.SURFACE));
+        c.drawRect(getBounds(), paint);
+      }
+
+      @Override
+      public void setAlpha (int alpha) { }
+
+      @Override
+      public void setColorFilter (@Nullable android.graphics.ColorFilter colorFilter) { }
+
+      @Override
+      public int getOpacity () {
+        return android.graphics.PixelFormat.OPAQUE;
+      }
+    };
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
+      return surface;
+    }
+    android.graphics.drawable.GradientDrawable mask = new android.graphics.drawable.GradientDrawable();
+    mask.setColor(0xff000000);
+    mask.setCornerRadius(Screen.dp(XgramExpressive.CORNER_L));
+    int insetX = Screen.dp(8f), insetY = Screen.dp(2f);
+    xgramRippleColor = xgramRippleColor();
+    xgramRipple = new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(xgramRippleColor), null,
+      new android.graphics.drawable.InsetDrawable(mask, insetX, insetY, insetX, insetY));
+    return new android.graphics.drawable.LayerDrawable(new Drawable[] {surface, xgramRipple});
+  }
+
+  private static int xgramRippleColor () {
+    return XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.STATE_PRESSED);
+  }
+
+  /** A pinned topic being dragged: drawn on the selection tile. */
+  private boolean xgramDragging;
+
+  public void xgramSetDragging (boolean dragging) {
+    if (this.xgramDragging != dragging) {
+      this.xgramDragging = dragging;
+      invalidate();
+    }
   }
 
   public ComplexReceiver getTextMediaReceiver () {
@@ -225,18 +310,50 @@ public final class ForumTopicView extends SparseDrawableView {
     }
     final boolean rtl = Lang.rtl();
     final int viewWidth = getMeasuredWidth();
+    final boolean xgramM3 = XgramExpressive.isEnabled();
+
+    if (xgramM3) {
+      if (xgramRipple != null && xgramRippleColor != xgramRippleColor()) {
+        xgramRippleColor = xgramRippleColor();
+        xgramRipple.setColor(android.content.res.ColorStateList.valueOf(xgramRippleColor));
+      }
+      if (xgramDragging) {
+        com.fahadali.xgram.appearance.XgramM3Profile.drawSelectionTile(c, viewWidth, getMeasuredHeight(), 1f);
+      }
+    }
 
     // Icon
-    int iconSize = getIconSize();
-    int iconLeft = rtl ? viewWidth - getIconLeft() - iconSize : getIconLeft();
     Drawable icon = emojiIcon != null ? emojiIcon : topic.getIconDrawable();
-    icon.setBounds(iconLeft, getIconTop(), iconLeft + iconSize, getIconTop() + iconSize);
+    if (xgramM3) {
+      // In a 40dp surfaceContainerHighest circle, like a list item's leading avatar
+      float leadingSize = Screen.dp(XGRAM_LEADING_SIZE);
+      float leadingLeft = Screen.dp(XGRAM_LEADING_LEFT);
+      float cx = rtl ? viewWidth - leadingLeft - leadingSize / 2f : leadingLeft + leadingSize / 2f;
+      float cy = getViewHeight() / 2f;
+      xgramLeadingPaint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST));
+      c.drawCircle(cx, cy, leadingSize / 2f, xgramLeadingPaint);
+      int size = Screen.dp(emojiIcon != null ? XGRAM_EMOJI_SIZE : XGRAM_ICON_SIZE);
+      int left = Math.round(cx - size / 2f), top = Math.round(cy - size / 2f);
+      icon.setBounds(left, top, left + size, top + size);
+    } else {
+      int iconSize = getIconSize();
+      int iconLeft = rtl ? viewWidth - getIconLeft() - iconSize : getIconLeft();
+      icon.setBounds(iconLeft, getIconTop(), iconLeft + iconSize, getIconTop() + iconSize);
+    }
     icon.draw(c);
 
     // Time
     String time = topic.getTime();
     if (!time.isEmpty()) {
-      c.drawText(time, rtl ? viewWidth - topic.getTimeLeft() - topic.getTimeWidth() : topic.getTimeLeft(), getTimeBaseline(), getTimePaint());
+      if (xgramM3) {
+        boolean unread = topic.hasUnread();
+        Paint paint = xgramTimePaint(unread);
+        float timeWidth = unread ? paint.measureText(time) : topic.getTimeWidth();
+        float timeX = rtl ? viewWidth - topic.getTimeLeft() - topic.getTimeWidth() : topic.getTimeLeft() + topic.getTimeWidth() - timeWidth;
+        c.drawText(time, timeX, getTimeBaseline(), paint);
+      } else {
+        c.drawText(time, rtl ? viewWidth - topic.getTimeLeft() - topic.getTimeWidth() : topic.getTimeLeft(), getTimeBaseline(), getTimePaint());
+      }
     }
 
     // Title, mute and lock
@@ -275,7 +392,8 @@ public final class ForumTopicView extends SparseDrawableView {
     mentionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, ColorId.badgeText);
     counterRight -= mentionCounter.getScaledWidth(Screen.dp(7f));
     Counter reactionsCounter = topic.getReactionsCounter();
-    reactionsCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, topic.isMuted() ? ColorId.badgeMutedText : ColorId.badgeText);
+    // XGram M3E: the heart takes the badge's own (tertiary) content color
+    reactionsCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, xgramM3 ? ColorId.NONE : topic.isMuted() ? ColorId.badgeMutedText : ColorId.badgeText);
     counterRight -= reactionsCounter.getScaledWidth(Screen.dp(7f));
     if (topic.isPinned() && counterRight == viewWidth - getRightPaddingPx()) {
       Drawable pin = getSparseDrawable(R.drawable.deproko_baseline_pin_16, ColorId.iconLight);
