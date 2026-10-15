@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Jetpack Compose Material 3 Expressive settings pages (Filters, History, Network, Updates, Backup, What's new) -->
+  <string name="XgramClearShadowBansConfirm">Unhide everyone? Their messages show in groups again.</string>
+  <string name="XgramUpdateMoreActions">More actions</string>
+</resources>

@@ -12,16 +12,32 @@
 package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
-import com.fahadali.xgram.chats.XgramFiltersController
-import com.fahadali.xgram.compose.ClassicStubPage
+import com.fahadali.xgram.chats.XgramFilters
+import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
+import com.fahadali.xgram.compose.ui.SettingsPage
+import com.fahadali.xgram.compose.ui.s
+import com.fahadali.xgram.compose.ui.str
 import org.thunderdog.challegram.R
 
-/** Stub until PAGES-2 builds this page (spec section 5): it opens the classic page. */
+/** Filters → Hidden people: how many senders this account hides in groups, and unhiding them all. */
 @Composable
 fun HiddenPeoplePage() {
   val host = LocalXgramHost.current
-  ClassicStubPage(R.string.XgramShadowBanned) { highlightId ->
-    XgramFiltersController.people(host.activity, host.tdlib)
+  SettingsPage(title = str(R.string.XgramShadowBanned)) {
+    val count = XgramFilters.shadowBannedCount(host.tdlib)
+    group {
+      value(R.id.btn_xgramShadowBanList, s(R.string.XgramShadowBanned), count.toString()) {
+        // A count only, as on the classic page.
+      }
+      action(R.id.btn_xgramClearShadowBans, s(R.string.XgramClearShadowBans), destructive = true, enabled = count > 0) {
+        host.confirm(
+          ConfirmSpec(text = s(R.string.XgramClearShadowBansConfirm), confirm = s(R.string.XgramClearShadowBans), destructive = true) {
+            XgramFilters.clearShadowBans(host.tdlib)
+          }
+        )
+      }
+    }
+    description(R.string.XgramShadowBanInfo)
   }
 }
