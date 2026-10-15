@@ -12,12 +12,15 @@
 package com.fahadali.xgram.appearance;
 
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Picture;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
@@ -44,14 +47,15 @@ import org.thunderdog.challegram.tool.Screen;
  * Screen transitions of the navigation stack with Expressive design:
  * <ul>
  *   <li>Push / pop: Material shared axis X (96dp slide, fade through at .35) on SPATIAL_DEFAULT.</li>
- *   <li>System back gesture: the Android 16 predictive back card (closing screen shrinks to .9 with rounded corners and
- *   follows the finger's height, the previous screen waits at .9 behind a scrim; after commit the card slides away and
- *   fades while the previous screen springs to full size).</li>
+ *   <li>System back gesture: the predictive back card (closing screen shrinks to .9 with rounded corners and
+ *   follows the finger's height; after commit the card slides away and fades).</li>
  *   <li>Swipe back anywhere: the same card that follows the finger.</li>
  * </ul>
- * The closing card is the closing screen plus the live header (still showing it); the entering card is the previous
- * screen plus a snapshot of its header, drawn in its overlay. NavigationController feeds the raw factor and calls
- * {@link #end()} on every finish path.
+ * In the card modes the live app bar shows the previous screen from the first frame, stationary and at full colour
+ * (as Google Messages and Contacts do); the previous screen waits under it at full size behind a light scrim that
+ * never covers the bar. The closing screen's app bar is a snapshot drawn on the closing card, and the live bar is cut
+ * out where the card is, so the card stays above it. Nothing swaps when the gesture ends. NavigationController feeds
+ * the raw factor and calls {@link #end(boolean)} on every finish path.
  */
 public final class XgramNavMotion {
   public static final int MODE_NONE = 0, MODE_SHARED_AXIS = 1, MODE_CARD_SYSTEM = 2, MODE_CARD_FINGER = 3;
@@ -62,6 +66,8 @@ public final class XgramNavMotion {
   public static final float FINGER_COMMIT = .33f;
   /** Release spring of back gestures (SPATIAL_DEFAULT). */
   public static final float RELEASE_K = 380f, RELEASE_Z = .8f;
+  /** Scrim over the previous screen's content (never over its app bar). */
+  public static final float SCRIM_LIGHT = .12f, SCRIM_DARK = .36f;
 
   private static final Interpolator BACK = new PathInterpolator(.1f, .1f, 0f, 1f);
   private static final Interpolator DECELERATE = new DecelerateInterpolator();
@@ -110,11 +116,9 @@ public final class XgramNavMotion {
     }
   }
 
-  /** Drawn over the entering screen: the snapshot of its header and the scrim. */
+  /** Scrim over the entering screen's content, from the bottom of the app bar down. */
   private static final class EnteringOverlay extends Drawable {
     private final Paint scrimPaint = new Paint();
-    private @Nullable Picture header;
-    private float headerX, headerY;
     private float scrim;
 
     void setScrim (float scrim) {
@@ -126,16 +130,41 @@ public final class XgramNavMotion {
 
     @Override
     public void draw (@NonNull Canvas c) {
-      if (header != null) {
-        int save = c.save();
-        c.translate(headerX, headerY);
-        c.drawPicture(header);
-        c.restoreToCount(save);
-      }
       if (scrim > 0f) {
         scrimPaint.setColor(XgramExpressive.withAlpha(0xff000000, scrim));
         c.drawRect(getBounds(), scrimPaint);
       }
+    }
+
+    @Override
+    public void setAlpha (int alpha) { }
+
+    @Override
+    public void setColorFilter (@Nullable ColorFilter colorFilter) { }
+
+    @Override
+    public int getOpacity () {
+      return PixelFormat.TRANSLUCENT;
+    }
+  }
+
+  /** The closing screen's app bar, drawn on the closing card so it shrinks and fades with it. */
+  private static final class ClosingHeader extends Drawable {
+    private final Picture picture;
+    private final float x, y;
+
+    ClosingHeader (Picture picture, float x, float y) {
+      this.picture = picture;
+      this.x = x;
+      this.y = y;
+    }
+
+    @Override
+    public void draw (@NonNull Canvas c) {
+      int save = c.save();
+      c.translate(x, y);
+      c.drawPicture(picture);
+      c.restoreToCount(save);
     }
 
     @Override
@@ -162,14 +191,20 @@ public final class XgramNavMotion {
   private float width, height, distance, edgeGap, radius, scrimMax;
   private int e = 1;
   private float touchStartY, touchY;
-  private float p0, closingScale0, closingX0, closingY0, enteringX0, enteringY0, scrim0;
+  private float p0, closingScale0, closingX0, closingY0, scrim0;
   private float rightTx, leftTx;
   private float fabAlpha = 1f;
   private boolean clipChildrenWas = true;
+  private boolean headerMoved;
+  private float headerTranslation0;
+  private float headerX, headerY;
 
-  private final Saved leftSaved = new Saved(), rightSaved = new Saved(), headerSaved = new Saved();
-  private final CardOutline leftOutline = new CardOutline(), rightOutline = new CardOutline(), headerOutline = new CardOutline();
+  private final Saved leftSaved = new Saved(), rightSaved = new Saved();
+  private final CardOutline rightOutline = new CardOutline();
+  private final Path cardHole = new Path();
+  private final RectF cardRect = new RectF();
   private @Nullable EnteringOverlay overlay;
+  private @Nullable ClosingHeader closingHeader;
 
   public XgramNavMotion (@NonNull ViewGroup rootView, @NonNull ViewGroup contentWrapper, @NonNull HeaderView headerView, @Nullable View floatingButton) {
     this.rootView = rootView;
@@ -218,7 +253,8 @@ public final class XgramNavMotion {
    */
   public boolean begin (int mode, @NonNull View left, @NonNull View right, boolean forward, boolean rtl, boolean fromRightEdge, float touchY) {
     if (active) {
-      end();
+      headerMoved = false; // A stale transition: the app bar was just prepared for this one, leave it.
+      end(false);
     }
     if (mode == MODE_NONE || !XgramExpressive.isEnabled()) {
       return false;
@@ -248,43 +284,61 @@ public final class XgramNavMotion {
       this.distance = Screen.dpf(SHARED_AXIS_DP);
       this.edgeGap = Screen.dpf(EDGE_GAP_DP);
       this.e = mode == MODE_CARD_SYSTEM ? (fromRightEdge ? -1 : 1) : (rtl ? -1 : 1);
-      this.scrimMax = ThemeManager.instance().isCurrentThemeDark() ? .8f : .2f;
+      this.scrimMax = ThemeManager.instance().isCurrentThemeDark() ? SCRIM_DARK : SCRIM_LIGHT;
       this.touchStartY = this.touchY = touchY;
       this.released = false;
       this.commit = false;
       this.rightTx = this.leftTx = 0f;
+      this.headerMoved = false;
+      this.headerTranslation0 = headerView.getTranslation();
       save(left, leftSaved);
       save(right, rightSaved);
       int surface = XgramExpressive.color(XgramExpressive.SURFACE) | 0xff000000;
       if (!card) {
         backdrop.setColor(surface);
       } else {
-        backdrop.setColor(androidx.core.graphics.ColorUtils.compositeColors(XgramExpressive.withAlpha(0xff000000, scrimMax), surface));
         this.radius = cornerRadius();
-        save(headerView, headerSaved);
         fabAlpha = floatingButton != null ? floatingButton.getAlpha() : 1f;
+        int[] leftPos = positionInRoot(left), rightPos = positionInRoot(right), headerPos = positionInRoot(headerView);
+        this.headerX = headerPos[0];
+        this.headerY = headerPos[1];
 
+        // The closing screen's app bar (as it is now) goes on the closing card.
+        Picture closingBar = snapshotHeader();
+        if (closingBar != null) {
+          ClosingHeader closingHeader = new ClosingHeader(closingBar, headerPos[0] - rightPos[0], headerPos[1] - rightPos[1]);
+          closingHeader.setBounds(-rightPos[0], -rightPos[1], Math.round(w) - rightPos[0], Math.round(h) - rightPos[1]);
+          right.getOverlay().add(closingHeader);
+          this.closingHeader = closingHeader;
+        }
+
+        // The live app bar shows the previous screen right away, untransformed.
+        headerView.setTranslation(1f);
+        headerMoved = true;
+        int barColor = headerView.getFilling().getColor();
+        // Shows through the fading card under the bar: the bar's own colour, not a darkened surface.
+        backdrop.setColor(Color.alpha(barColor) == 255 ? barColor : surface);
+
+        // The previous screen waits at rest under the bar (no Telegram X preview offset, no scale).
+        transform(left, 1f, 0f, 0f);
         EnteringOverlay overlay = new EnteringOverlay();
-        int[] leftPos = positionInRoot(left), headerPos = positionInRoot(headerView);
-        overlay.setBounds(-leftPos[0], -leftPos[1], Math.round(w) - leftPos[0], Math.round(h) - leftPos[1]);
-        overlay.header = snapshotEnteringHeader();
-        overlay.headerX = headerPos[0] - leftPos[0];
-        overlay.headerY = headerPos[1] - leftPos[1];
+        int barBottom = Math.round(headerY) + headerView.getFilling().getBottom();
+        overlay.setBounds(-leftPos[0], Math.max(0, barBottom) - leftPos[1], Math.round(w) - leftPos[0], Math.round(h) - leftPos[1]);
         left.getOverlay().add(overlay);
         this.overlay = overlay;
 
-        // The entering header snapshot sits above the entering screen's own bounds.
+        // The closing app bar snapshot sits above the closing screen's own bounds: no clip, no hardware layer.
         clipChildrenWas = contentWrapper.getClipChildren();
         contentWrapper.setClipChildren(false);
-        left.post(() -> {
-          if (this.active && this.leftWrap == left) {
-            left.setLayerType(View.LAYER_TYPE_NONE, null);
+        dropHardwareLayer(right);
+        right.post(() -> {
+          if (this.active && this.rightWrap == right) {
+            dropHardwareLayer(right);
+            dropHardwareLayer(left);
           }
         });
 
-        prepareCard(left, leftOutline, radius);
         prepareCard(right, rightOutline, radius);
-        prepareCard(headerView, headerOutline, radius);
       }
       this.active = true;
       if (card) {
@@ -296,7 +350,7 @@ public final class XgramNavMotion {
     } catch (Throwable t) {
       Log.w(t);
       this.active = true;
-      end();
+      end(false);
       return false;
     }
   }
@@ -327,12 +381,10 @@ public final class XgramNavMotion {
     this.released = true;
     this.commit = commit;
     this.p0 = XgramMotion.clamp01(p0);
-    if (rightWrap != null && leftWrap != null) {
+    if (rightWrap != null) {
       closingScale0 = rightWrap.getScaleX();
       closingX0 = rightWrap.getTranslationX();
       closingY0 = rightWrap.getTranslationY();
-      enteringX0 = leftWrap.getTranslationX();
-      enteringY0 = leftWrap.getTranslationY();
     }
     scrim0 = overlay != null ? overlay.scrim : 0f;
   }
@@ -385,13 +437,13 @@ public final class XgramNavMotion {
     float maxY = Math.max(0f, (1f - closingScale) * height / 2f - edgeGap);
     float closingY = Math.signum(dy) * maxY * DECELERATE.getInterpolation(Math.min(1f, Math.abs(dy) / (height / 2f)));
     setClosing(closingScale, closingX, closingY, 1f);
-    setEntering(MIN_SCALE, closingX - e * distance, closingY, radius, scrimMax);
+    setEntering(scrimMax);
   }
 
   private void applySystemCommit (float c) {
     float cc = XgramMotion.clamp01(c);
     setClosing(closingScale0, closingX0 + e * distance * c, closingY0, 1f - XgramMotion.clamp01(c / .5f));
-    setEntering(XgramMotion.lerp(MIN_SCALE, 1f, c), XgramMotion.lerp(enteringX0, 0f, c), XgramMotion.lerp(enteringY0, 0f, c), radius * (1f - cc), scrim0 * (1f - cc));
+    setEntering(scrim0 * (1f - cc));
   }
 
   private void applyFinger (float f) {
@@ -399,7 +451,7 @@ public final class XgramNavMotion {
     float closingScale = 1f - (1f - MIN_SCALE) * BACK.getInterpolation(XgramMotion.clamp01(f / SHRINK_TRAVEL));
     float closingX = e * Math.max(f, -.02f) * width;
     setClosing(closingScale, closingX, 0f, 1f);
-    setEntering(XgramMotion.lerp(MIN_SCALE, 1f, fc), -e * distance * (1f - f), 0f, radius * (1f - fc), scrimMax * (1f - fc));
+    setEntering(scrimMax * (1f - fc));
   }
 
   private void setClosing (float scale, float x, float y, float alpha) {
@@ -407,26 +459,24 @@ public final class XgramNavMotion {
       transform(rightWrap, scale, x, y);
       rightWrap.setAlpha(rightSaved.alpha * alpha);
     }
-    transform(headerView, scale, x, y);
-    headerView.setAlpha(headerSaved.alpha * alpha);
+    // The live app bar (the previous screen's) is cut out where the card is and shows through it as it fades.
+    float left = width / 2f * (1f - scale) + x - headerX, top = height / 2f * (1f - scale) + y - headerY;
+    cardRect.set(left, top, left + width * scale, top + height * scale);
+    float r = radius * scale;
+    cardHole.rewind();
+    cardHole.addRoundRect(cardRect, r, r, Path.Direction.CW);
+    headerView.xgramSetCardHole(cardHole, alpha);
     if (floatingButton != null) {
       floatingButton.setAlpha(fabAlpha * alpha * (1f - XgramMotion.clamp01((1f - scale) / ((1f - MIN_SCALE) / 2f))));
     }
     rightTx = x;
   }
 
-  private void setEntering (float scale, float x, float y, float cornerRadius, float scrim) {
-    if (leftWrap != null) {
-      transform(leftWrap, scale, x, y);
-      if (leftOutline.radius != cornerRadius) {
-        leftOutline.radius = cornerRadius;
-        leftWrap.invalidateOutline();
-      }
-    }
+  private void setEntering (float scrim) {
     if (overlay != null) {
       overlay.setScrim(scrim);
     }
-    leftTx = x;
+    leftTx = 0f;
   }
 
   private static void transform (View v, float scale, float x, float y) {
@@ -462,15 +512,20 @@ public final class XgramNavMotion {
     v.invalidateOutline();
   }
 
+  private static void dropHardwareLayer (View v) {
+    if (v.getLayerType() == View.LAYER_TYPE_HARDWARE) {
+      v.setLayerType(View.LAYER_TYPE_NONE, null);
+    }
+  }
+
+  /** The app bar as it is drawn now. */
   @Nullable
-  private Picture snapshotEnteringHeader () {
+  private Picture snapshotHeader () {
     int w = headerView.getWidth(), h = headerView.getHeight();
     if (w <= 0 || h <= 0) {
       return null;
     }
-    float translation = headerView.getTranslation();
     try {
-      headerView.setTranslation(1f);
       Picture picture = new Picture();
       Canvas c = picture.beginRecording(w, h);
       headerView.draw(c);
@@ -479,8 +534,6 @@ public final class XgramNavMotion {
     } catch (Throwable t) {
       Log.w(t);
       return null;
-    } finally {
-      headerView.setTranslation(translation);
     }
   }
 
@@ -531,17 +584,12 @@ public final class XgramNavMotion {
     s.clipToOutline = v.getClipToOutline();
   }
 
-  private static void restore (View v, Saved s, boolean card, boolean keepTranslation) {
+  private static void restore (View v, Saved s, boolean card) {
     v.setAlpha(s.alpha);
     v.setScaleX(s.scaleX);
     v.setScaleY(s.scaleY);
-    if (keepTranslation) {
-      v.setTranslationX(s.translationX);
-      v.setTranslationY(s.translationY);
-    } else {
-      v.setTranslationX(0f);
-      v.setTranslationY(0f);
-    }
+    v.setTranslationX(0f);
+    v.setTranslationY(0f);
     if (card) {
       if (s.pivotSet) {
         v.setPivotX(s.pivotX);
@@ -555,25 +603,42 @@ public final class XgramNavMotion {
     }
   }
 
-  /** Puts every view back (screens at rest, translation 0). Safe to call on every finish path. */
+  /** Same as {@code end(false)}. */
   public void end () {
+    end(false);
+  }
+
+  /**
+   * Puts every view back (screens at rest, translation 0). Safe to call on every finish path.
+   * {@code navigated}: the previous screen became current, so the app bar keeps showing it; otherwise the app bar goes
+   * back to the closing screen (the card is back at full size over it, so this does not show).
+   */
+  public void end (boolean navigated) {
     if (!active) {
       return;
     }
     active = false;
     boolean card = mode == MODE_CARD_SYSTEM || mode == MODE_CARD_FINGER;
     try {
+      if (card) {
+        headerView.xgramSetCardHole(null, 0f);
+        if (headerMoved && !navigated) {
+          headerView.setTranslation(headerTranslation0);
+        }
+      }
       if (leftWrap != null) {
         if (overlay != null) {
           leftWrap.getOverlay().remove(overlay);
         }
-        restore(leftWrap, leftSaved, card, false);
+        restore(leftWrap, leftSaved, false);
       }
       if (rightWrap != null) {
-        restore(rightWrap, rightSaved, card, false);
+        if (closingHeader != null) {
+          rightWrap.getOverlay().remove(closingHeader);
+        }
+        restore(rightWrap, rightSaved, card);
       }
       if (card) {
-        restore(headerView, headerSaved, true, true);
         if (floatingButton != null) {
           floatingButton.setAlpha(fabAlpha);
         }
@@ -586,6 +651,8 @@ public final class XgramNavMotion {
     }
     backdrop.setColor(0);
     overlay = null;
+    closingHeader = null;
+    headerMoved = false;
     leftWrap = rightWrap = null;
     released = false;
     commit = false;
