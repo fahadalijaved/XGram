@@ -145,6 +145,10 @@ public class StickerSectionView extends View implements Destroyable, FactorAnima
       final int selectionAlpha = Color.alpha(selectionColor);
       int color = ColorUtils.color((int) ((float) selectionAlpha * selectionFactor), selectionColor);
       int radius = Screen.dp(18f) - (int) ((float) Screen.dp(4f) * (1f - selectionFactor));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive: the active set sits on a secondaryContainer shape
+        color = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), selectionFactor);
+      }
 
       c.drawCircle(cx, cy, radius, Paints.fillingPaint(color));
       c.save();

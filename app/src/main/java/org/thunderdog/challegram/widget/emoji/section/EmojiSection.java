@@ -28,6 +28,7 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.theme.ThemeId;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.widget.emoji.EmojiLayoutRecyclerController;
 
 import me.vkryl.android.AnimatorUtils;
@@ -257,7 +258,32 @@ public class EmojiSection implements FactorAnimator.Target {
     }
   }
 
+  // XGram: Material 3 Expressive category: a 40x32dp secondaryContainer pill grows behind the active icon,
+  // onSecondaryContainer active icon, onSurfaceVariant inactive
+  private static final android.graphics.RectF xgramPill = new android.graphics.RectF();
+  private static Paint xgramIconPaint;
+
+  private boolean xgramDraw (Canvas c, int cx, int cy) {
+    if (callback.isUseDarkMode() || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return false;
+    }
+    float factor = activeDisabled ? 0f : selectionFactor;
+    if (factor > 0f) {
+      float halfWidth = Screen.dp(20f) * (.5f + .5f * factor), halfHeight = Screen.dp(16f);
+      xgramPill.set(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight);
+      c.drawRoundRect(xgramPill, halfHeight, halfHeight, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), factor)));
+    }
+    final Drawable icon = factor > .5f && this.activeIcon != null ? activeIcon : this.icon;
+    int color = me.vkryl.core.ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), factor);
+    xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
+    Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2, cy - icon.getMinimumHeight() / 2, xgramIconPaint);
+    return true;
+  }
+
   public void draw (Canvas c, int cx, int cy) {
+    if (xgramDraw(c, cx, cy)) {
+      return;
+    }
     boolean isUseDarkMode = callback.isUseDarkMode();
 
     if (selectionFactor == 0f || activeDisabled) {
