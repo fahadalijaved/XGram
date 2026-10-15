@@ -883,7 +883,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   public boolean onLongClick (View v) {
     if (v.getId() == R.id.btn_xgramGhostMode) {
       // XGram: a long press on the Ghost mode switch opens its settings (Privacy, Ghost mode first).
-      openController(com.fahadali.xgram.XgramSettingsController.ghost(context, context.currentTdlib()));
+      openController(com.fahadali.xgram.compose.XgramSettingsPages.ghost(context, context.currentTdlib()));
       return true;
     }
     if (!(v instanceof BaseView)) {
@@ -944,7 +944,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         Test.onClick(context);
       }
     } else if (viewId == R.id.btn_xgramHub) {
-      openController(new com.fahadali.xgram.XgramSettingsController(context, context.currentTdlib())); // XGram
+      openController(com.fahadali.xgram.compose.XgramSettingsPages.main(context, context.currentTdlib())); // XGram
     } else if (viewId == R.id.btn_savedMessages) {
       openSavedMessages();
     } else if (viewId == R.id.btn_xgramBookmarks) {

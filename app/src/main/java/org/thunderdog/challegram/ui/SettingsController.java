@@ -1195,7 +1195,7 @@ public class SettingsController extends ViewController<Void> implements
       c.setArguments(new SettingsThemeController.Args(SettingsThemeController.MODE_INTERFACE_OPTIONS));
       navigateTo(c);
     } else if (viewId == R.id.btn_xgramSettings) { // XGram
-      navigateTo(new com.fahadali.xgram.XgramSettingsController(context, tdlib));
+      navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.main(context, tdlib));
     } else if (viewId == R.id.btn_chatSettings) {
       navigateTo(new SettingsDataController(context, tdlib));
     } else if (viewId == R.id.btn_privacySettings) {

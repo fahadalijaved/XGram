@@ -1971,7 +1971,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   @Override
   public void onMenuItemPressed (int id, View view) {
     if (id == R.id.menu_btn_xgramGhost) {
-      navigateTo(com.fahadali.xgram.XgramSettingsController.ghost(context, tdlib)); // XGram: Privacy, Ghost mode first
+      navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.ghost(context, tdlib)); // XGram: Privacy, Ghost mode first
       return;
     }
     if (id == R.id.menu_btn_search) {

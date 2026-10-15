@@ -14,6 +14,7 @@ import java.util.*
 plugins {
   id("java-toolchain-convention")
   id(libs.plugins.android.application.get().pluginId)
+  id(libs.plugins.kotlin.compose.get().pluginId) // XGram: Compose compiler (version = Kotlin, from buildSrc)
   id("tgx-config")
   id("tgx-module")
 }
@@ -533,6 +534,7 @@ android {
   buildFeatures {
     buildConfig = true
     resValues = true
+    compose = true // XGram: Jetpack Compose settings pages (xgram-m3e)
   }
 
   flavorDimensions += arrayOf("SDK", "ABI")
@@ -1039,6 +1041,18 @@ dependencies {
   // minSdk 23: legacy and lollipop build src/preMarshmallow's XgramPostureSource (no postures) instead.
   sinceMarshmallowImplementation(libs.androidx.window.latest)
   sinceMarshmallowImplementation(libs.androidx.window.java.latest)
+  // XGram: Jetpack Compose Material 3 Expressive settings pages (xgram-m3e only; minSdk 24)
+  implementation(platform(libs.androidx.compose.bom))
+  implementation(libs.androidx.compose.ui)
+  implementation(libs.androidx.compose.ui.graphics)
+  implementation(libs.androidx.compose.foundation)
+  implementation(libs.androidx.compose.animation)
+  implementation(libs.androidx.compose.material3)
+  implementation(libs.androidx.compose.ui.tooling.preview)
+  implementation(libs.androidx.activity.compose)
+  implementation(libs.androidx.lifecycle.runtime.compose)
+  implementation(libs.kotlinx.coroutines.android)
+  debugImplementation(libs.androidx.compose.ui.tooling)
   // CameraX: https://developer.android.com/jetpack/androidx/releases/camera
   flavorImplementation(
     libs.androidx.camera.camera2.legacy,

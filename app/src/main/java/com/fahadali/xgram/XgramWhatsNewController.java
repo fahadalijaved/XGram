@@ -138,19 +138,19 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
     }
     switch (((Entry) ((ListItem) tag).getData()).action) {
       case OPEN_SETTINGS:
-        navigateTo(new XgramSettingsController(context, tdlib));
+        navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.main(context, tdlib));
         break;
       case OPEN_THEMES:
         navigateTo(new com.fahadali.xgram.appearance.XgramThemesController(context, tdlib));
         break;
       case OPEN_GHOST:
-        navigateTo(XgramSettingsController.ghost(context, tdlib)); // Privacy, Ghost mode first
+        navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.ghost(context, tdlib)); // Privacy, Ghost mode first
         break;
       case OPEN_APPEARANCE:
-        navigateTo(XgramSettingsController.section(context, tdlib, XgramSettingsController.SECTION_APPEARANCE));
+        navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_APPEARANCE));
         break;
       case OPEN_PRIVACY:
-        navigateTo(XgramSettingsController.section(context, tdlib, XgramSettingsController.SECTION_PRIVACY));
+        navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_PRIVACY));
         break;
       case OPEN_HISTORY:
         navigateTo(new XgramHistoryController(context, tdlib));
@@ -165,7 +165,7 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
         navigateTo(new com.fahadali.xgram.appicons.XgramAppIconsController(context, tdlib));
         break;
       case OPEN_FILTERS:
-        navigateTo(XgramSettingsController.section(context, tdlib, XgramSettingsController.SECTION_FILTERS));
+        navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_FILTERS));
         break;
       default:
         break;
