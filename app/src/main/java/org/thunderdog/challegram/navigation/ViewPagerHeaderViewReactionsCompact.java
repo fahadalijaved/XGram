@@ -210,9 +210,29 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     return getMeasuredWidth() - width + x;
   }
 
+  // XGram: Material 3 Expressive: the sheet's rounded top-end corner, so the fill behind the expand button keeps it
+  private float xgramTopEndRadius;
+  private final android.graphics.Path xgramPath = new android.graphics.Path();
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+  private final float[] xgramRadii = new float[8];
+
+  public void xgramSetTopEndRadius (float radius) {
+    if (this.xgramTopEndRadius != radius) {
+      this.xgramTopEndRadius = radius;
+      invalidate();
+    }
+  }
+
   @Override
   protected void dispatchDraw (Canvas c) {
-    if (state.needShowReactionsPopupPicker) {
+    if (state.needShowReactionsPopupPicker && xgramTopEndRadius > 0f && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramRect.set(getReactionPickerHiddenZoneLeft(), 0, getMeasuredWidth(), getMeasuredHeight());
+      float r = Math.min(xgramTopEndRadius, Math.min(xgramRect.width(), xgramRect.height()));
+      xgramRadii[2] = xgramRadii[3] = r;
+      xgramPath.rewind();
+      xgramPath.addRoundRect(xgramRect, xgramRadii, android.graphics.Path.Direction.CW);
+      c.drawPath(xgramPath, Paints.fillingPaint(Theme.backgroundColor()));
+    } else if (state.needShowReactionsPopupPicker) {
       c.drawRect(getReactionPickerHiddenZoneLeft(), 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.backgroundColor()));
     }
     super.dispatchDraw(c);
