@@ -1832,6 +1832,16 @@ public class ShareController extends TelegramViewController<ShareController.Args
     return selectedChats.get(chatId) != null;
   }
 
+  /** XGram: for translating the comment, a selected secret chat (so it stays on Telegram), else any selected chat, else 0. */
+  public long xgramTranslateChatId () {
+    for (int i = 0; i < selectedChats.size(); i++) {
+      if (ChatId.isSecret(selectedChats.keyAt(i))) {
+        return selectedChats.keyAt(i);
+      }
+    }
+    return selectedChats.size() > 0 ? selectedChats.keyAt(0) : 0;
+  }
+
   private boolean hasSelectedAnything;
 
   private boolean processSingleTap (TGFoundChat chat) {

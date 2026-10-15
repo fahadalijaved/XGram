@@ -24,6 +24,8 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.telegram.Tdlib;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.net.ConnectException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -62,10 +64,17 @@ public final class XgramTranslator {
   static final class TranslateException extends Exception {
     /** HTTP status, or 0 for a network error. */
     final int code;
+    /** No answer at all (timed out or refused, e.g. a blocked endpoint): trying again would only keep the spinner up. */
+    final boolean unreachable;
 
     TranslateException (int code, String message) {
+      this(code, message, false);
+    }
+
+    TranslateException (int code, String message, boolean unreachable) {
       super(message);
       this.code = code;
+      this.unreachable = unreachable;
     }
   }
 
@@ -86,10 +95,16 @@ public final class XgramTranslator {
     return provider != PROVIDER_TELEGRAM;
   }
 
-  /** The service used for text from {@code chatId} (0 when unknown): always Telegram in secret chats. */
+  /** A chat id for text whose destination can't be told (e.g. a composer host that doesn't say): it stays on Telegram. */
+  public static final long CHAT_UNKNOWN = Long.MIN_VALUE;
+
+  /**
+   * The service used for text from {@code chatId}: 0 when there is no chat (e.g. a bio), {@link #CHAT_UNKNOWN} when
+   * the destination can't be told. Always Telegram in secret chats and for {@link #CHAT_UNKNOWN}.
+   */
   public static int providerFor (long chatId) {
     int provider = XgramSettings.instance().translateProvider();
-    return isThirdParty(provider) && chatId != 0 && ChatId.isSecret(chatId) ? PROVIDER_TELEGRAM : provider;
+    return isThirdParty(provider) && (chatId == CHAT_UNKNOWN || (chatId != 0 && ChatId.isSecret(chatId))) ? PROVIDER_TELEGRAM : provider;
   }
 
   public static String name (int provider) {
@@ -202,7 +217,7 @@ public final class XgramTranslator {
     separators.add("");
   }
 
-  /** One piece, retried twice with backoff after a network or server error. */
+  /** One piece, retried twice with backoff after a quick network error or a server error (not after a timeout). */
   private static String request (int provider, String text, String target) throws TranslateException {
     TranslateException last = null;
     for (int attempt = 0; attempt <= RETRIES; attempt++) {
@@ -217,8 +232,8 @@ public final class XgramTranslator {
         return provider == PROVIDER_GOOGLE ? GoogleTranslate.translate(text, target) : YandexTranslate.translate(text, target);
       } catch (TranslateException e) {
         last = e;
-        if (e.code != 0 && e.code < 500) {
-          break; // too many requests or a refused request: trying again right away won't help
+        if (e.unreachable || (e.code != 0 && e.code < 500)) {
+          break; // timed out, too many requests or a refused request: trying again right away won't help
         }
       }
     }
@@ -230,9 +245,10 @@ public final class XgramTranslator {
       synchronized (XgramTranslator.class) {
         if (client == null) {
           client = new OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .build();
         }
       }
@@ -251,6 +267,9 @@ public final class XgramTranslator {
       }
       ResponseBody body = response.body();
       return body != null ? body.string() : "";
+    } catch (InterruptedIOException | ConnectException e) {
+      // a connect, read or whole-call timeout, or a refused connection: Telegram can step in right away
+      throw new TranslateException(0, Lang.getString(R.string.XgramTrErrorNetwork), true);
     } catch (IOException e) {
       throw new TranslateException(0, Lang.getString(R.string.XgramTrErrorNetwork));
     }

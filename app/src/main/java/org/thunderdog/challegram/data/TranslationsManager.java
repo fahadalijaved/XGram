@@ -42,7 +42,10 @@ public final class TranslationsManager {
 
     TdApi.FormattedText getTextToTranslate ();
 
-    /** XGram: the chat the text is from, 0 if none or unknown. Third-party translation services are never used in secret chats. */
+    /**
+     * XGram: the chat the text is from, 0 if there is none (e.g. a bio), {@code XgramTranslator.CHAT_UNKNOWN} if it can't
+     * be told. Third-party translation services are never used in secret chats or for an unknown chat.
+     */
     default long xgramChatId () {
       return 0;
     }
@@ -106,7 +109,8 @@ public final class TranslationsManager {
     tdlib.ui().post(() -> requestTranslationImpl(textToTranslate, language, (object, provider, providerError) -> tdlib.ui().post(() -> {
       if (object instanceof TdApi.FormattedText) {
         TdApi.FormattedText text = prepareTranslatedText((TdApi.FormattedText) object);
-        saveCachedTextTranslation(textToTranslate.text, language, providerKey, text, provider);
+        // under the key of the service that actually translated: after a fallback to Telegram the chosen service is tried again next time
+        saveCachedTextTranslation(textToTranslate.text, language, provider + ":" + language, text, provider);
         if (StringUtils.equalsOrBothEmpty(currentTranslatedLanguage, language)) {
           if (providerError != null) {
             errorDelegate.onError(providerError);

@@ -440,7 +440,16 @@ public class TextFormattingLayout extends FrameLayout implements TranslationsMan
 
   @Override
   public long xgramChatId () {
-    return parent instanceof org.thunderdog.challegram.ui.MessagesController ? ((org.thunderdog.challegram.ui.MessagesController) parent).getChatId() : 0;
+    // XGram: where the text goes. Every composer host says it; one that can't keeps the text on Telegram.
+    long chatId = 0;
+    if (parent instanceof org.thunderdog.challegram.ui.MessagesController) {
+      chatId = ((org.thunderdog.challegram.ui.MessagesController) parent).getChatId();
+    } else if (parent instanceof org.thunderdog.challegram.mediaview.MediaViewController) {
+      chatId = ((org.thunderdog.challegram.mediaview.MediaViewController) parent).getOutputChatId();
+    } else if (parent instanceof org.thunderdog.challegram.ui.ShareController) {
+      chatId = ((org.thunderdog.challegram.ui.ShareController) parent).xgramTranslateChatId();
+    }
+    return chatId != 0 ? chatId : com.fahadali.xgram.translate.XgramTranslator.CHAT_UNKNOWN;
   }
 
   /* * */

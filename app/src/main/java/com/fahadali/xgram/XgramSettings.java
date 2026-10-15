@@ -421,11 +421,17 @@ public final class XgramSettings {
 
   private int trProvider = -1, trFallback = -1;
 
-  /** The translation service, one of {@code XgramTranslator.PROVIDER_*}: Telegram by default. */
+  /**
+   * The translation service, one of {@code XgramTranslator.PROVIDER_*}: Telegram by default, and Telegram while a
+   * third-party service's notice hasn't been accepted on this device (e.g. it came from a backup import).
+   */
   public int translateProvider () {
     if (trProvider < 0) {
       int value = pmc().getInt(KEY_TR_PROVIDER, com.fahadali.xgram.translate.XgramTranslator.PROVIDER_TELEGRAM);
       trProvider = com.fahadali.xgram.translate.XgramTranslator.isValidProvider(value) ? value : com.fahadali.xgram.translate.XgramTranslator.PROVIDER_TELEGRAM;
+    }
+    if (com.fahadali.xgram.translate.XgramTranslator.isThirdParty(trProvider) && !translateNoticeShown(trProvider)) {
+      return com.fahadali.xgram.translate.XgramTranslator.PROVIDER_TELEGRAM;
     }
     return trProvider;
   }
