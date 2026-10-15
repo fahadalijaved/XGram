@@ -494,6 +494,10 @@
   <string name="XgramAiLimitPremium">Daily AI limit reached. Try again later.</string>
   <string name="XgramAiTools">Telegram AI tools</string>
   <string name="XgramAiToolsInfo">Summarize long messages from the message menu. Long-press Send to fix, rewrite or translate what you typed. Never in secret chats.</string>
+  <string name="XgramTranslation">Translation</string>
+  <string name="XgramTrAlways">Show Translate on every message</string>
+  <string name="XgramTrAlwaysInfo">Translate shows in the message menu for every message with text, including messages in your own language. Off: Telegram X\'s Do not translate languages hide it. A swipe set to Translate always works. Never offered in secret chats.</string>
+  <string name="XgramTrStyle">Translation style and languages</string>
   <string name="XgramMessageBox">Message box</string>
   <string name="XgramInputButtons">Message box buttons</string>
   <string name="XgramInputButtonsInfo">Choose which buttons the message box shows. A button you keep still appears only where it applies, like bot commands in chats with bots.</string>

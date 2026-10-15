@@ -194,8 +194,8 @@ public final class XgramSwipeActions {
         if (msg.isTranslated()) {
           return newAction(R.string.TranslateOff, R.drawable.baseline_translate_off_24, msg::stopTranslated);
         }
-        if (msg.isTranslatable() && msg.translationStyleMode() != Settings.TRANSLATE_MODE_NONE) {
-          return newAction(R.string.Translate, R.drawable.baseline_translate_24, () -> m.startTranslateMessages(msg));
+        if (XgramTranslate.canOffer(msg, true)) {
+          return newAction(R.string.Translate, R.drawable.baseline_translate_24, () -> XgramTranslate.start(m, msg));
         }
         return null;
       case COPY:

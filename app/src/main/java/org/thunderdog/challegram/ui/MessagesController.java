@@ -6077,7 +6077,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         return true;
       } else if (id == R.id.btn_chatTranslate) {
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
-        startTranslateMessages(selectedMessage);
+        com.fahadali.xgram.chats.XgramTranslate.start(this, selectedMessage);
         return true;
       } else if (id == R.id.btn_chatTranslateOff) {
         stopTranslateMessages(selectedMessage);

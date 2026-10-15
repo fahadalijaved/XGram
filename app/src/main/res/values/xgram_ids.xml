@@ -203,6 +203,8 @@
   <item type="id" name="btn_xgramAiEmojify" />
   <item type="id" name="btn_xgramAiApply" />
   <item type="id" name="btn_xgramAiTools" />
+  <item type="id" name="btn_xgramTrAlways" />
+  <item type="id" name="btn_xgramTrStyle" />
   <!-- XGram: bot button long-press -->
   <item type="id" name="btn_xgramCopyButtonText" />
   <item type="id" name="btn_xgramCopyCallbackData" />

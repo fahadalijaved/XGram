@@ -8812,6 +8812,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   public final void loadAvailableReactions (Runnable after) {
     tdlib.send(new TdApi.GetMessageAvailableReactions(msg.chatId, getSmallestId(), 25), (availableReactions, error) -> {
       if (error != null) {
+        computeQuickButtons(); // XGram: the swipe actions still follow the text known by now (Translate)
         runOnUiThreadOptional(after);
       } else {
         tdlib.ensureReactionsAvailable(availableReactions, reactionsUpdated -> {
@@ -9104,9 +9105,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         rightActions.add(new SwipeQuickAction(translateStopText, iQuickStopTranslate, () -> {
           stopTranslated();
         }, true, false));
-      } else if (isTranslatable() && translationStyleMode() != Settings.TRANSLATE_MODE_NONE) {
+      } else if (com.fahadali.xgram.chats.XgramTranslate.canOffer(this, false)) {
         rightActions.add(new SwipeQuickAction(translateText, iQuickTranslate, () -> {
-          messagesController().startTranslateMessages(this);
+          com.fahadali.xgram.chats.XgramTranslate.start(messagesController(), this);
         }, true, false));
       }
     }
@@ -9884,6 +9885,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   public boolean isTranslatable () {
     return !Td.isEmpty(textToTranslate) && (flags & FLAG_UNSUPPORTED) == 0 && !Settings.instance().isNotTranslatableLanguage(textToTranslateOriginalLanguage);
+  }
+
+  /** XGram: there is text to translate, whatever its language (see {@link com.fahadali.xgram.chats.XgramTranslate}). */
+  public boolean xgramHasTextToTranslate () {
+    return !Td.isEmpty(textToTranslate) && (flags & FLAG_UNSUPPORTED) == 0;
   }
 
   @Override

@@ -395,6 +395,25 @@ public final class XgramSettings {
     put(KEY_AI_TOOLS, value);
   }
 
+  // Translation
+
+  public static final String KEY_TR_ALWAYS = "xgram_tr_always";
+
+  private int trAlways = -1;
+
+  /** Translate in the message menu for every message, not only those outside Telegram X's "Do not translate" languages. */
+  public boolean translateAlways () {
+    if (trAlways < 0) {
+      trAlways = pmc().getBoolean(KEY_TR_ALWAYS, true) ? 1 : 0;
+    }
+    return trAlways == 1;
+  }
+
+  public void setTranslateAlways (boolean value) {
+    trAlways = value ? 1 : 0;
+    put(KEY_TR_ALWAYS, value);
+  }
+
   // Message box
 
   /** A tap on the microphone records hands-free, a long press switches between voice and video messages. */

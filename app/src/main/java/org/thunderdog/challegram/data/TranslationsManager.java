@@ -130,7 +130,7 @@ public final class TranslationsManager {
   private final HashMap<String, TranslatedCachedValue> mTranslationsCache2 = new HashMap<>();
 
   private static class TranslatedCachedValue {
-    public final String originalLanguage;
+    public String originalLanguage;
     public final HashMap<String, TdApi.FormattedText> translationsCache;
 
     public TranslatedCachedValue (String originalLanguage) {
@@ -145,8 +145,11 @@ public final class TranslationsManager {
   }
 
   public void saveCachedTextLanguage (String text, String language) {
-    if (!mTranslationsCache2.containsKey(text)) {
+    TranslatedCachedValue cachedValue = mTranslationsCache2.get(text);
+    if (cachedValue == null) {
       mTranslationsCache2.put(text, new TranslatedCachedValue(language));
+    } else if (cachedValue.originalLanguage == null) {
+      cachedValue.originalLanguage = language; // XGram: an entry made by a translation before the language was known
     }
   }
 
@@ -157,9 +160,12 @@ public final class TranslationsManager {
 
   public void saveCachedTextTranslation (String text, String language, TdApi.FormattedText translated) {
     TranslatedCachedValue cachedValue = mTranslationsCache2.get(text);
-    if (cachedValue != null) {
-      cachedValue.translationsCache.put(language, translated);
+    if (cachedValue == null) {
+      // XGram: also cached when the language wasn't detected, so toggling Translate doesn't send a new request
+      cachedValue = new TranslatedCachedValue(null);
+      mTranslationsCache2.put(text, cachedValue);
     }
+    cachedValue.translationsCache.put(language, translated);
   }
 
 
