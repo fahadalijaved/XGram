@@ -12,16 +12,40 @@
 package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
-import com.fahadali.xgram.chats.XgramMessageMenuController
-import com.fahadali.xgram.compose.ClassicStubPage
-import com.fahadali.xgram.compose.LocalXgramHost
+import com.fahadali.xgram.XgramReorder
+import com.fahadali.xgram.chats.XgramMessageMenu
+import com.fahadali.xgram.compose.ui.ReorderRow
+import com.fahadali.xgram.compose.ui.SettingsPage
+import com.fahadali.xgram.compose.ui.reorderGroup
+import com.fahadali.xgram.compose.ui.s
+import com.fahadali.xgram.compose.ui.str
 import org.thunderdog.challegram.R
 
-/** Stub until PAGES-1 builds this page (spec section 5): it opens the classic page. */
+/** Message menu: which options a long press on a message shows, and in what order (Telegram X's and XGram's mixed). */
 @Composable
 fun MessageMenuPage() {
-  val host = LocalXgramHost.current
-  ClassicStubPage(R.string.XgramMessageMenu) { highlightId ->
-    XgramMessageMenuController(host.activity, host.tdlib)
+  SettingsPage(title = str(R.string.XgramMessageMenu)) {
+    val options = XgramMessageMenu.OPTIONS.associateBy { it.key }
+    val keys = XgramMessageMenu.OPTIONS.map { it.key }.toTypedArray()
+
+    description(R.string.XgramMessageMenuInfo)
+    reorderGroup(
+      key = "messageMenu",
+      id = R.id.btn_xgramMenuItem,
+      rows = XgramReorder.ordered(XgramReorder.MESSAGE_MENU, keys).mapNotNull { key ->
+        options[key]?.let { option ->
+          ReorderRow(key = key, title = s(option.name), icon = option.icon, checked = !XgramMessageMenu.isHidden(key))
+        }
+      },
+      onToggle = { key, shown -> XgramMessageMenu.setHidden(key, !shown) }
+    ) { order ->
+      XgramReorder.save(XgramReorder.MESSAGE_MENU, order)
+    }
+
+    group {
+      action(R.id.btn_xgramResetOrder, s(R.string.XgramResetOrder), icon = R.drawable.baseline_replay_24) {
+        XgramReorder.reset(XgramReorder.MESSAGE_MENU)
+      }
+    }
   }
 }

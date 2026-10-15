@@ -12,16 +12,30 @@
 package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
+import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.chats.XgramInputButtonsController
-import com.fahadali.xgram.compose.ClassicStubPage
-import com.fahadali.xgram.compose.LocalXgramHost
+import com.fahadali.xgram.compose.ui.SettingsPage
+import com.fahadali.xgram.compose.ui.s
+import com.fahadali.xgram.compose.ui.str
 import org.thunderdog.challegram.R
 
-/** Stub until PAGES-1 builds this page (spec section 5): it opens the classic page. */
+/** Message box buttons: which buttons the message box shows. Open chats update at once. */
 @Composable
 fun InputButtonsPage() {
-  val host = LocalXgramHost.current
-  ClassicStubPage(R.string.XgramInputButtons) { highlightId ->
-    XgramInputButtonsController(host.activity, host.tdlib)
+  SettingsPage(title = str(R.string.XgramInputButtons)) {
+    val settings = XgramSettings.instance()
+
+    description(R.string.XgramInputButtonsInfo)
+    group {
+      XgramInputButtonsController.KEYS.forEachIndexed { index, key ->
+        switch(
+          R.id.btn_xgramInputButton, s(XgramInputButtonsController.NAMES[index]),
+          icon = XgramInputButtonsController.ICONS[index], checked = !settings.inputButtonHidden(key), key = key
+        ) {
+          settings.setInputButtonHidden(key, !it)
+        }
+      }
+    }
+    description(R.string.XgramInputButtonsNote)
   }
 }
