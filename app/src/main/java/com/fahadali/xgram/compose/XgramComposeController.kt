@@ -60,8 +60,9 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
   private val dialogState = mutableStateOf<Any?>(null)
 
   private var highlightConsumed = false
+  private var focusedOnce = false
   private var backConsumer: (() -> Unit)? = null
-  private val noSwipeRects = HashMap<Any, Rect>()
+  private val noSwipeAreas = HashMap<Any, () -> Rect?>()
 
   private val host: XgramComposeHost = Host()
 
@@ -102,8 +103,13 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
     super.onFocus()
     owner.moveTo(Lifecycle.State.RESUMED)
     updateCanGoBack()
-    // Values may have changed on a Telegram X page (Themes, emoji sets, ...) or on another screen.
-    versionState.intValue++
+    // Values may have changed on a Telegram X page (Themes, emoji sets, ...) or on another screen. Not on the first
+    // focus: the page was just built, and building it again would land right when the user starts to scroll.
+    if (focusedOnce) {
+      versionState.intValue++
+    } else {
+      focusedOnce = true
+    }
     // Opened as the first page (Quick Settings tile), the main screen goes in below it right after.
     UI.post { if (!isDestroyed) updateCanGoBack() }
   }
@@ -133,7 +139,7 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
   override fun destroy() {
     super.destroy()
     backConsumer = null
-    noSwipeRects.clear()
+    noSwipeAreas.clear()
     owner.destroy()
   }
 
@@ -188,13 +194,15 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
   }
 
   override fun canSlideBackFrom(nav: NavigationController?, x: Float, y: Float): Boolean {
-    if (nav != null && noSwipeRects.isNotEmpty()) {
+    if (nav != null && noSwipeAreas.isNotEmpty()) {
       val location = IntArray(2)
       nav.getValue().getLocationInWindow(location)
       val wx = (location[0] + x).toInt()
       val wy = (location[1] + y).toInt()
-      for (rect in noSwipeRects.values) {
-        if (rect.contains(wx, wy)) {
+      // The bounds are worked out only now, when a swipe could start.
+      for (bounds in noSwipeAreas.values) {
+        val rect = bounds()
+        if (rect != null && rect.contains(wx, wy)) {
           return false
         }
       }
@@ -289,11 +297,11 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
       }
     }
 
-    override fun noSwipeBack(key: Any, rectInWindow: Rect?) {
-      if (rectInWindow == null || rectInWindow.isEmpty) {
-        noSwipeRects.remove(key)
+    override fun noSwipeBack(key: Any, bounds: (() -> Rect?)?) {
+      if (bounds == null) {
+        noSwipeAreas.remove(key)
       } else {
-        noSwipeRects[key] = Rect(rectInWindow)
+        noSwipeAreas[key] = bounds
       }
     }
 

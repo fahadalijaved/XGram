@@ -72,7 +72,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -108,8 +109,13 @@ class ReorderRow(
   val checked: Boolean? = null
 )
 
-/** Content type of a reorderable group in the page's list (PageBlock.TYPE_* are 1 to 4). */
+/** Content type of a reorderable group in the page's list (PageBlock.TYPE_* leave 10 free for it). */
 private const val TYPE_REORDER = 10
+
+/** While a row is held, Telegram X's swipe-back stays off everywhere on the page. */
+private val NO_SWIPE_EVERYWHERE: () -> android.graphics.Rect? = {
+  android.graphics.Rect(Int.MIN_VALUE / 2, Int.MIN_VALUE / 2, Int.MAX_VALUE / 2, Int.MAX_VALUE / 2)
+}
 
 /**
  * A reorderable card group. [id] is the classic rows' id (search and highlight use it with the row's key).
@@ -127,11 +133,11 @@ fun PageScope.reorderGroup(
     return
   }
   // Same spacing as PageScope.group: none under a header, 16dp after anything else.
-  val previous = blocks.lastOrNull()
-  val gap = if (previous == null || previous.type == PageBlock.TYPE_HEADER) 0.dp else 16.dp
+  val gap = groupGap()
   // The rows are listed for the page's highlight lookup (search results scroll to this group); the block draws them.
-  val lookup = rows.map { row -> GroupRow(id, row.key, "$id:${row.key}") { _ -> } }
-  blocks.add(PageBlock("r:$key", TYPE_REORDER, lookup) { ReorderGroupBlock(id, rows, gap, onToggle, onDrop) })
+  // Unlike PageScope.group the group stays one item: rows are dragged inside it.
+  val lookup = rows.map { row -> GroupRow(id, row.key, "$id:${row.key}", TYPE_REORDER) { _ -> } }
+  add("r:$key", TYPE_REORDER, lookup) { ReorderGroupBlock(id, rows, gap, onToggle, onDrop) }
 }
 
 private const val OWNER_HANDLE = 1
@@ -154,8 +160,11 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
   private var travel = 0f
   private var settleJob: Job? = null
 
-  val heights = HashMap<String, Int>()
-  val slotTops = HashMap<String, Float>()
+  /**
+   * Where each row is laid out. Only the coordinates are kept as rows are placed (scrolling places them every frame);
+   * sizes and positions are read from them while a row is held.
+   */
+  private val slots = HashMap<String, Slot>()
   private val offsets = HashMap<String, MutableFloatState>()
   private val jobs = HashMap<String, Job>()
 
@@ -167,6 +176,16 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
   var onDrop: (List<String>) -> Unit = {}
 
   fun offset(key: String): MutableFloatState = offsets.getOrPut(key) { mutableFloatStateOf(0f) }
+
+  fun slot(key: String): Slot = slots.getOrPut(key) { Slot() }
+
+  private fun attached(key: String): LayoutCoordinates? = slots[key]?.coordinates?.takeIf { it.isAttached }
+
+  /** The row's height in px, null while it is not laid out. */
+  private fun height(key: String): Int? = attached(key)?.size?.height
+
+  /** The top of the row's slot in the window (before the drag offset), null while it is not laid out. */
+  private fun slotTop(key: String): Float? = attached(key)?.positionInWindow()?.y
 
   fun isMoving(key: String): Boolean = dragged == key || settling == key
 
@@ -192,8 +211,7 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
     travel = 0f
     dragged = key
     haptic?.performHapticFeedback(HapticFeedbackType.LongPress)
-    // While a row is held, Telegram X's swipe-back stays off everywhere on the page.
-    host.noSwipeBack(this, android.graphics.Rect(Int.MIN_VALUE / 2, Int.MIN_VALUE / 2, Int.MAX_VALUE / 2, Int.MAX_VALUE / 2))
+    host.noSwipeBack(this, NO_SWIPE_EVERYWHERE)
     return true
   }
 
@@ -214,13 +232,13 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
     if (index < 0) {
       return
     }
-    val self = (heights[key] ?: 0) + gapPx
+    val self = (height(key) ?: 0) + gapPx
     var offset = dragOffset + dy
     var swapped = false
     while (true) {
       if (offset > 0f && index < list.size - 1) {
         val next = list[index + 1]
-        val step = (heights[next] ?: 0) + gapPx
+        val step = (height(next) ?: 0) + gapPx
         if (offset > step / 2f) {
           list[index] = next
           list[index + 1] = key
@@ -232,7 +250,7 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
         }
       } else if (offset < 0f && index > 0) {
         val previous = list[index - 1]
-        val step = (heights[previous] ?: 0) + gapPx
+        val step = (height(previous) ?: 0) + gapPx
         if (-offset > step / 2f) {
           list[index] = previous
           list[index - 1] = key
@@ -317,8 +335,8 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
    */
   fun autoScrollVelocity(view: View, density: Density): Float {
     val key = dragged ?: return 0f
-    val slot = slotTops[key] ?: return 0f
-    val height = heights[key] ?: return 0f
+    val slot = slotTop(key) ?: return 0f
+    val height = height(key) ?: return 0f
     if (travel < with(density) { 8.dp.toPx() }) {
       return 0f
     }
@@ -338,6 +356,11 @@ private class ReorderState(val host: XgramComposeHost, val scope: CoroutineScope
       else -> 0f
     }
   }
+}
+
+/** Holds the coordinates of one row's slot (set as it is placed, read only while a row is held). */
+private class Slot {
+  var coordinates: LayoutCoordinates? = null
 }
 
 @Composable
@@ -434,6 +457,7 @@ private fun ReorderItem(
   val scale = animateFloatAsState(if (isDragged) 1.02f else 1f, motion.fastSpatialSpec(), label = "xgramReorderScale")
   val lift = animateDpAsState(if (isDragged) 8.dp else 0.dp, motion.fastEffectsSpec(), label = "xgramReorderLift")
   val slide = state.offset(rowKey)
+  val slot = remember(rowKey) { state.slot(rowKey) }
   val liftShape = MaterialTheme.shapes.large
   // A held row is a card of its own; the others keep the group's corners for their place in it.
   val shapes = if (isDragged) {
@@ -457,10 +481,7 @@ private fun ReorderItem(
   val modifier = Modifier
     .zIndex(if (state.isMoving(rowKey)) 1f else 0f)
     .bringIntoViewRequester(requester)
-    .onGloballyPositioned { coordinates ->
-      state.slotTops[rowKey] = coordinates.positionInWindow().y
-      state.heights[rowKey] = coordinates.size.height
-    }
+    .onPlaced { coordinates -> slot.coordinates = coordinates }
     .pointerInput(rowKey) {
       // Holding a row anywhere picks it up too.
       detectDragGesturesAfterLongPress(

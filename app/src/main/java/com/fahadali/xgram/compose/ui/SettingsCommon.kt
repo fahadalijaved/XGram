@@ -30,23 +30,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
+import androidx.compose.ui.node.LayoutAwareModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.appearance.XgramIconPack
 import com.fahadali.xgram.compose.LocalXgramHost
+import com.fahadali.xgram.compose.XgramComposeHost
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
 import kotlin.math.roundToInt
@@ -69,18 +71,43 @@ fun str(@StringRes id: Int, vararg args: Any): String {
 fun tgxIcon(@DrawableRes id: Int): Painter = painterResource(XgramIconPack.map(id))
 
 /**
- * Keeps Telegram X's swipe-back from starting on this element (sliders, drag handles, horizontal scrollers):
- * reports its bounds in the window to the page's controller, and removes them when it leaves the composition.
+ * Keeps Telegram X's swipe-back from starting on this element (sliders, drag handles, horizontal scrollers). The
+ * element registers with the page's controller while it is attached; its bounds in the window are worked out only when
+ * a swipe could start, never while the page scrolls.
  */
-fun Modifier.xgramNoSwipeBack(): Modifier = composed {
-  val host = LocalXgramHost.current
-  val key = remember { Any() }
-  DisposableEffect(host, key) {
-    onDispose { host.noSwipeBack(key, null) }
+fun Modifier.xgramNoSwipeBack(): Modifier = this then NoSwipeBackElement
+
+private data object NoSwipeBackElement : ModifierNodeElement<NoSwipeBackNode>() {
+  override fun create(): NoSwipeBackNode = NoSwipeBackNode()
+
+  override fun update(node: NoSwipeBackNode) = Unit
+}
+
+private class NoSwipeBackNode : Modifier.Node(), CompositionLocalConsumerModifierNode, LayoutAwareModifierNode {
+  private var host: XgramComposeHost? = null
+  // Placing only keeps the coordinates (the same object every frame); nothing is measured or allocated then.
+  private var coordinates: LayoutCoordinates? = null
+
+  override fun onAttach() {
+    val h = currentValueOf(LocalXgramHost)
+    host = h
+    h.noSwipeBack(this, ::bounds)
   }
-  onGloballyPositioned { coordinates ->
-    val b = coordinates.boundsInWindow()
-    host.noSwipeBack(key, android.graphics.Rect(b.left.roundToInt(), b.top.roundToInt(), b.right.roundToInt(), b.bottom.roundToInt()))
+
+  override fun onDetach() {
+    host?.noSwipeBack(this, null)
+    host = null
+    coordinates = null
+  }
+
+  override fun onPlaced(coordinates: LayoutCoordinates) {
+    this.coordinates = coordinates
+  }
+
+  private fun bounds(): android.graphics.Rect? {
+    val c = coordinates?.takeIf { it.isAttached } ?: return null
+    val b = c.boundsInWindow()
+    return android.graphics.Rect(b.left.roundToInt(), b.top.roundToInt(), b.right.roundToInt(), b.bottom.roundToInt())
   }
 }
 

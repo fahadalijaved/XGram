@@ -34,6 +34,8 @@ fun TranslationPage() {
   SettingsPage(title = str(R.string.XgramTranslation)) {
     val settings = XgramSettings.instance()
     val provider = settings.translateProvider()
+    // Worked out once per build of the page, not while rows are drawn.
+    val styleName = s(XgramComposeBridge.translateStyleName())
 
     header(R.string.XgramHeaderService)
     group {
@@ -80,7 +82,7 @@ fun TranslationPage() {
 
     header(R.string.XgramHeaderStyle)
     group {
-      value(R.id.btn_xgramTrStyle, s(R.string.XgramTrStyle), s(XgramComposeBridge.translateStyleName())) {
+      value(R.id.btn_xgramTrStyle, s(R.string.XgramTrStyle), styleName) {
         host.open(SettingsLanguageTranslateController(host.activity, host.tdlib))
       }
     }

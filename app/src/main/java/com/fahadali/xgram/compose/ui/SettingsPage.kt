@@ -36,6 +36,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
@@ -52,7 +53,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
@@ -65,7 +68,10 @@ import org.thunderdog.challegram.R
  *
  * [content] runs during composition after the page has read the host's version, so it reads settings singletons
  * directly: every setter path calls host.changed(), which builds the page again (a few dozen rows, cheap). Rows that
- * depend on other rows (enabled only while a switch is on) need no extra state.
+ * depend on other rows (enabled only while a switch is on) need no extra state. Every row of a group is an item of its
+ * own in the list, so scrolling composes one row at a time.
+ *
+ * [overlay] is composed over the page, outside the list (the main page's full-screen search).
  */
 @Composable
 fun SettingsPage(
@@ -73,6 +79,7 @@ fun SettingsPage(
   subtitle: String? = null,
   large: Boolean = true,
   actions: @Composable RowScope.() -> Unit = {},
+  overlay: @Composable () -> Unit = {},
   content: PageScope.() -> Unit
 ) {
   val host = LocalXgramHost.current
@@ -81,7 +88,10 @@ fun SettingsPage(
   val blocks = PageScope().apply(content).blocks
   val currentBlocks by rememberUpdatedState(blocks)
 
-  val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+  // A quick settle: the bar never rests half collapsed after a fling.
+  val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+    snapAnimationSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+  )
   val listState = rememberLazyListState()
   val density = LocalDensity.current
   val highlight = remember { if (host.highlightId != 0) XgramHighlight(host.highlightId, host.highlightKey) else null }
@@ -139,21 +149,42 @@ fun SettingsPage(
       }
     }
   ) { padding ->
-    val bottom = with(density) { host.bottomInset.toDp() }
+    // Read only when the list is measured: the bar collapsing remeasures the list instead of recomposing it.
+    val contentPadding = remember(padding, host, density) { PagePadding(padding, host, density) }
     CompositionLocalProvider(LocalXgramHighlight provides highlight) {
       Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(
           modifier = Modifier.fillMaxHeight().widthIn(max = MaxPageWidth).fillMaxWidth(),
           state = listState,
-          contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding() + 8.dp, bottom = 16.dp + bottom)
+          contentPadding = contentPadding
         ) {
           items(blocks, key = { it.key }, contentType = { it.type }) { block ->
             block.content()
           }
         }
+        overlay()
       }
     }
   }
+}
+
+/**
+ * The list's padding: 16dp at the sides, the Scaffold's top padding (the collapsing app bar) plus 8dp at the top, and
+ * the navigation bar or keyboard plus 16dp at the bottom. The Scaffold's padding and the inset are read when the list
+ * asks for them while it is measured, never during composition.
+ */
+private class PagePadding(
+  private val scaffold: PaddingValues,
+  private val host: XgramComposeHost,
+  private val density: Density
+) : PaddingValues {
+  override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = 16.dp
+
+  override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = 16.dp
+
+  override fun calculateTopPadding(): Dp = scaffold.calculateTopPadding() + 8.dp
+
+  override fun calculateBottomPadding(): Dp = 16.dp + with(density) { host.bottomInset.toDp() }
 }
 
 /** Unfolded and in landscape the cards stop growing at this width, centered. */
@@ -171,7 +202,7 @@ private fun BackButton(host: XgramComposeHost) {
   }
 }
 
-/** One item of a page's list. */
+/** One item of a page's list: a header, a description, one row of a card group, or anything else. */
 class PageBlock internal constructor(
   val key: String,
   val type: Int,
@@ -183,8 +214,19 @@ class PageBlock internal constructor(
   companion object {
     const val TYPE_HEADER = 1
     const val TYPE_DESCRIPTION = 2
-    const val TYPE_GROUP = 3
     const val TYPE_ITEM = 4
+
+    // Rows of card groups: one content type per kind of row, so the list only reuses a row for one of the same kind.
+    // 10 is SettingsReorder's reorderable group.
+    const val TYPE_SWITCH = 5
+    const val TYPE_MAIN_SWITCH = 6
+    const val TYPE_VALUE = 7
+    const val TYPE_LINK = 8
+    const val TYPE_ACTION = 9
+    const val TYPE_BUTTONS = 11
+    const val TYPE_SLIDER = 12
+    const val TYPE_RADIO = 13
+    const val TYPE_CUSTOM = 14
   }
 }
 
@@ -202,15 +244,21 @@ class PageScope internal constructor() {
     return key
   }
 
-  private val lastType: Int
-    get() = if (blocks.isEmpty()) 0 else blocks[blocks.size - 1].type
+  /** Adds an item to the list under [base] (made unique on the page). */
+  internal fun add(base: String, type: Int, rows: List<GroupRow>, content: @Composable () -> Unit) {
+    blocks.add(PageBlock(uniqueKey(base), type, rows, content))
+  }
+
+  /** The space above a card group: none at the top of the page or under a header, 16dp after anything else. */
+  internal fun groupGap(): Dp =
+    if (blocks.isEmpty() || blocks[blocks.size - 1].type == PageBlock.TYPE_HEADER) 0.dp else 16.dp
 
   /** titleSmall in the primary color; [icon] in front of it (the Ghost Mode header). */
   fun header(@StringRes title: Int, @DrawableRes icon: Int = 0) = header(s(title), icon)
 
   fun header(title: String, @DrawableRes icon: Int = 0) {
     val top = if (blocks.isEmpty()) 8.dp else 20.dp
-    blocks.add(PageBlock(uniqueKey("h:$title"), PageBlock.TYPE_HEADER, emptyList()) { SettingsHeader(title, icon, top) })
+    add("h:$title", PageBlock.TYPE_HEADER, emptyList()) { SettingsHeader(title, icon, top) }
   }
 
   /** One or two sentences under a group, in onSurfaceVariant. */
@@ -219,24 +267,30 @@ class PageScope internal constructor() {
   /** A description whose text changes: give it a stable [key]. */
   fun description(text: CharSequence, key: Any) {
     val string = text.toString()
-    blocks.add(PageBlock(uniqueKey("d:$key"), PageBlock.TYPE_DESCRIPTION, emptyList()) { SettingsDescription(string) })
+    add("d:$key", PageBlock.TYPE_DESCRIPTION, emptyList()) { SettingsDescription(string) }
   }
 
-  /** One segmented card group: rows with 2dp gaps, large outer corners on the first and last row. */
+  /**
+   * One segmented card group: rows with 2dp gaps, large outer corners on the first and last row. Each row is an item of
+   * its own; its place in the group (so its shape) and the space above it are fixed here.
+   */
   fun group(key: Any? = null, rows: GroupScope.() -> Unit) {
-    val scope = GroupScope().apply(rows)
-    val list = scope.rows.toList()
+    val list = GroupScope().apply(rows).rows
     if (list.isEmpty()) {
       return
     }
-    val base = key?.toString() ?: list.first().rowKey
-    val gap = if (lastType == PageBlock.TYPE_HEADER || blocks.isEmpty()) 0.dp else 16.dp
-    blocks.add(PageBlock(uniqueKey("g:$base"), PageBlock.TYPE_GROUP, list) { SettingsGroupBlock(list, gap) })
+    val gap = groupGap()
+    val prefix = if (key != null) "g:$key/" else "row:"
+    val count = list.size
+    list.forEachIndexed { index, row ->
+      val top = if (index == 0) gap else ListItemDefaults.SegmentedGap
+      add(prefix + row.rowKey, row.type, listOf(row)) { SettingsGroupRow(row, index, count, top) }
+    }
   }
 
   /** Anything else, full width (the search bar, previews). */
   fun item(key: Any, content: @Composable () -> Unit) {
-    blocks.add(PageBlock(uniqueKey("i:$key"), PageBlock.TYPE_ITEM, emptyList(), content))
+    add("i:$key", PageBlock.TYPE_ITEM, emptyList(), content)
   }
 }
 
