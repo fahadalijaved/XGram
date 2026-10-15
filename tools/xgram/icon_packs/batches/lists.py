@@ -34,6 +34,8 @@ ICONS = {
     'small_arrow_down': [PL((8, 10), (12, 14), (16, 10))],
     'swap_horiz': [L(8, 8, 20, 8), PL((16.5, 4.5), (20, 8), (16.5, 11.5)), L(16, 16, 4, 16), PL((7.5, 12.5), (4, 16), (7.5, 19.5))],
     'recent': [P('M4.1 13.5A8 8 0 1 0 6.3 6.3L4 8.5'), PL((4, 4.5), (4, 8.5), (8, 8.5)), PL((12, 8), (12, 12.3), (15, 14.1))],
+    # the handle of a row that can be dragged (XGram reorder lists): two bars, as Telegram X draws it
+    'drag_handle': [L(5, 10, 19, 10), L(5, 14, 19, 14)],
     'import': [RR(9, 3.5, 11.5, 17, 2.5), L(3.5, 12, 14.5, 12), PL((11, 8.5), (14.5, 12), (11, 15.5))],
     'source_merge': [C(6.5, 5, 2.3), C(6.5, 19, 2.3), C(17.5, 13.5, 2.3), L(6.5, 7.3, 6.5, 16.7), P('M6.5 7.3V8.5a5 5 0 0 0 5 5h3.7')],
     # folders
@@ -126,4 +128,5 @@ MAP = {
     'dotvhs_baseline_folders_reorder_24': 'folders_reorder',
     'baseline_swap_horiz_24': 'swap_horiz',
     'baseline_recent_24': 'recent',
+    'baseline_drag_handle_24': 'drag_handle',
 }

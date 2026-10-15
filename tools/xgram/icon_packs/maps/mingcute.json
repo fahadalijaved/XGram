@@ -324,5 +324,6 @@
  "replay": "refresh-anticlockwise-1",
  "clear_formatting": "eraser",
  "content_cut": "scissors",
- "animals_filled_blink": "bear"
+ "animals_filled_blink": "bear",
+ "drag_handle": {"drawn": "drag_handle"}
 }

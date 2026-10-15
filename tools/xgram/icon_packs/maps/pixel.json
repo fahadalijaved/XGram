@@ -34,7 +34,7 @@
  "contacts": "contact",
  "chat_bubble": "message",
  "chat_unread": "mail-unread",
- "forum": "message-text",
+ "forum": {"drawn": "forum"},
  "bullhorn": "megaphone",
  "bots": "robot",
  "phone": "phone",
@@ -324,5 +324,6 @@
  "replay": "reload",
  "clear_formatting": "eraser",
  "content_cut": "cut",
- "animals_filled_blink": "dog"
+ "animals_filled_blink": "dog",
+ "drag_handle": {"drawn": "drag_handle"}
 }
