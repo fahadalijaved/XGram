@@ -15,6 +15,13 @@
 package org.thunderdog.challegram.v;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.text.InputFilter;
 import android.text.InputType;
@@ -29,6 +36,8 @@ import android.view.inputmethod.EditorInfo;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.navigation.RtlCheckListener;
@@ -36,6 +45,8 @@ import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Fonts;
+import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.util.CharacterStyleFilter;
 import org.thunderdog.challegram.widget.EmojiEditText;
@@ -119,5 +130,61 @@ public class HeaderEditText extends EmojiEditText implements ActionMode.Callback
     view.setImeOptions(EditorInfo.IME_ACTION_DONE);
     Views.setCursorDrawable(view, R.drawable.cursor_grey);
     return view;
+  }
+
+  // XGram: Material 3 Expressive search bar. A full-corner pill, 48dp tall inside the 56dp header
+  // (a deliberate deviation from the 56dp M3 search bar), bodyLarge text with 16dp side padding.
+  // On a surface: surfaceContainerHigh pill, onSurface text, onSurfaceVariant hint, primary cursor.
+  // On a colored header: a translucent pill of the header text color; the text keeps its colors.
+
+  public static void xgramApplySearchBar (@NonNull HeaderEditText view, boolean surface, @Nullable ViewController<?> themeProvider) {
+    XgramExpressive.applyText(view, XgramExpressive.TS_BODY_L, false);
+    if (surface) {
+      view.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
+      view.setHintTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        GradientDrawable cursor = new GradientDrawable();
+        cursor.setColor(XgramExpressive.color(XgramExpressive.PRIMARY));
+        cursor.setSize(Screen.dp(2f), Screen.dp(20f));
+        view.setTextCursorDrawable(cursor);
+      }
+    }
+    view.setBackground(new XgramSearchPill(surface));
+    final int padding = Screen.dp(16f);
+    view.setPadding(padding, 0, padding, 0);
+    if (themeProvider != null) {
+      themeProvider.addThemeInvalidateListener(view);
+    }
+  }
+
+  private static final class XgramSearchPill extends Drawable {
+    private final boolean surface;
+    private final RectF rect = new RectF();
+
+    XgramSearchPill (boolean surface) {
+      this.surface = surface;
+    }
+
+    @Override
+    public void draw (@NonNull Canvas c) {
+      Rect bounds = getBounds();
+      float height = Math.min(Screen.dp(48f), bounds.height());
+      float top = bounds.exactCenterY() - height / 2f;
+      rect.set(bounds.left, top, bounds.right, top + height);
+      int color = surface ? XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGH) : ColorUtils.alphaColor(.12f, Theme.getColor(ColorId.headerText));
+      c.drawRoundRect(rect, height / 2f, height / 2f, Paints.fillingPaint(color));
+    }
+
+    @Override
+    public void setAlpha (int alpha) { }
+
+    @Override
+    public void setColorFilter (@Nullable ColorFilter colorFilter) { }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public int getOpacity () {
+      return PixelFormat.TRANSLUCENT;
+    }
   }
 }

@@ -23,6 +23,7 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
@@ -45,6 +46,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.Px;
 import androidx.core.view.ViewCompat;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.U;
@@ -698,7 +701,84 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
   }
 
   private TextPaint getItemTextPaint (Item item) {
+    if (!item.needFakeBold && XgramExpressive.isEnabled()) {
+      return xgramTextPaint(Theme.headerTextColor());
+    }
     return Paints.getViewPagerTextPaint(Theme.headerTextColor(), item.needFakeBold);
+  }
+
+  // XGram: Material 3 Expressive tabs: titleSmall labels and a full-corner pill indicator
+  // (40dp in a 56dp bar, else 32dp) around the label with 16dp on each side. The pill edges
+  // follow the pager directly while dragging and spring (spatial fast) on taps and jumps.
+
+  private static TextPaint xgramTextPaint;
+
+  private static TextPaint xgramTextPaint (int color) {
+    if (xgramTextPaint == null) {
+      xgramTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+      xgramTextPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_TITLE_S, false));
+      float sizeSp = XgramExpressive.textSizeSp(XgramExpressive.TS_TITLE_S);
+      xgramTextPaint.setTextSize(Screen.sp(sizeSp));
+      xgramTextPaint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_TITLE_S) / sizeSp);
+    }
+    xgramTextPaint.setColor(color);
+    return xgramTextPaint;
+  }
+
+  private XgramExpressive.Spring xgramPillStart, xgramPillEnd;
+
+  private float xgramContentWidth (int index) {
+    Item item = items.get(index);
+    float labelFactor = getLabelFactor(index, selectionFactor);
+    return Math.min(item.getContentWidth(labelFactor), item.getWidth(labelFactor));
+  }
+
+  private void xgramUpdatePill (float selectionFactor, int selectionLeft, int selectionWidth) {
+    final int count = items.size();
+    final int index = MathUtils.clamp((int) selectionFactor, 0, count - 1);
+    final int nextIndex = MathUtils.clamp(index + 1, 0, count - 1);
+    final float remainFactor = MathUtils.clamp(selectionFactor - (float) ((int) selectionFactor));
+    final float fromWidth = xgramContentWidth(index);
+    final float contentWidth = fromWidth + (xgramContentWidth(nextIndex) - fromWidth) * remainFactor;
+    final float half = contentWidth / 2f + Screen.dp(16f);
+    final float center = selectionLeft + selectionWidth / 2f;
+    final float start = center - half, end = center + half;
+    if (xgramPillStart == null || xgramPillEnd == null) {
+      xgramPillStart = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, start, (s, value) -> invalidate());
+      xgramPillEnd = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, end, (s, value) -> invalidate());
+      xgramPillStart.setThreshold(.5f);
+      xgramPillEnd.setThreshold(.5f);
+      return;
+    }
+    final boolean programmatic = fromIndex != -1 && toIndex != -1;
+    if (programmatic || xgramPillStart.isRunning() || xgramPillEnd.isRunning()) {
+      xgramPillStart.animateTo(start);
+      xgramPillEnd.animateTo(end);
+    } else {
+      xgramPillStart.setValue(start);
+      xgramPillEnd.setValue(end);
+    }
+  }
+
+  private void xgramDrawPill (Canvas c, int viewHeight, boolean rtl, int color) {
+    if (xgramPillStart == null || xgramPillEnd == null || Color.alpha(color) == 0) {
+      return;
+    }
+    float start = xgramPillStart.getValue();
+    float end = xgramPillEnd.getValue();
+    if (rtl) {
+      float mirroredStart = totalWidth - end;
+      end = totalWidth - start;
+      start = mirroredStart;
+    }
+    if (end - start <= 0f) {
+      return;
+    }
+    final float height = Screen.dp(viewHeight >= Screen.dp(56f) ? 40f : 32f);
+    final float top = (viewHeight - height) / 2f;
+    RectF rectF = Paints.getRectF();
+    rectF.set(start, top, end, top + height);
+    c.drawRoundRect(rectF, height / 2f, height / 2f, Paints.fillingPaint(color));
   }
 
   private void relayout () {
@@ -897,6 +977,9 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
         this.selectionLeft = selectionLeft;
         this.selectionWidth = selectionWidth;
       }
+      if (XgramExpressive.isEnabled()) {
+        xgramUpdatePill(selectionFactor, selectionLeft, selectionWidth);
+      }
       callListener = (fromIndex == -1 && toIndex == -1) || (fromIndex != -1 && toIndex != -1 && Math.abs(toIndex - fromIndex) == 1 && !selectionChangeListener.hasPendingUserInteraction());
     } else {
       callListener = fromIndex != -1 && toIndex != -1 && (Math.abs(toIndex - fromIndex) > 1 || selectionChangeListener.hasPendingUserInteraction());
@@ -1072,6 +1155,18 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
 
       boolean rtl = Lang.rtl();
 
+      if (XgramExpressive.isEnabled()) {
+        final boolean surfaceHeader = XgramExpressive.surfaceHeader();
+        if (surfaceHeader) {
+          textToColor = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
+          textFromColor = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+        }
+        int pillColor = surfaceHeader ? XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER) : ColorUtils.alphaColor(.16f, selectionColor);
+        if (disabledFactor != 0f) {
+          pillColor = ColorUtils.alphaColor(1f - disabledFactor, pillColor);
+        }
+        xgramDrawPill(c, viewHeight, rtl, pillColor);
+      } else {
       int selectionHeight = Screen.dp(SELECTION_HEIGHT);
       int selectionLeft = rtl ? this.totalWidth - this.selectionLeft - this.selectionWidth : this.selectionLeft;
       int selectionRight = selectionLeft + this.selectionWidth;
@@ -1079,6 +1174,7 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
       int selectionBottom = selectionTop + selectionHeight;
 
       c.drawRect(selectionLeft, selectionTop, selectionRight, selectionBottom, Paints.fillingPaint(disabledFactor == 0f ? selectionColor : ColorUtils.fromToArgb(selectionColor, textFromColor, disabledFactor)));
+      }
 
       int cx = rtl ? totalWidth : 0;
       int itemIndex = 0;

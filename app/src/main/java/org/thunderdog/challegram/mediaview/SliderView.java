@@ -16,10 +16,13 @@ package org.thunderdog.challegram.mediaview;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
@@ -162,6 +165,12 @@ public class SliderView extends View implements FactorAnimator.Target {
         upAnimator = new FactorAnimator(ANIMATOR_TOUCH, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
       }
       upAnimator.animateTo(isUp ? 1f : 0f);
+      if (XgramExpressive.isEnabled()) {
+        if (xgramHandleWidth == null) {
+          xgramHandleWidth = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, XGRAM_HANDLE_WIDTH, (s, v) -> invalidate());
+        }
+        xgramHandleWidth.animateTo(isUp ? XGRAM_HANDLE_WIDTH_PRESSED : XGRAM_HANDLE_WIDTH);
+      }
       if (listener != null) {
         listener.onSetStateChanged(this, isUp);
       }
@@ -406,8 +415,141 @@ public class SliderView extends View implements FactorAnimator.Target {
     }
   }
 
+  // XGram: Material 3 Expressive slider (XS): 16dp track with full outer and 2dp inside corners,
+  // a 4x44dp handle with a 6dp gap on each side, stop indicators and ticks.
+
+  private static final float XGRAM_HANDLE_WIDTH = 4f, XGRAM_HANDLE_WIDTH_PRESSED = 2f;
+  private XgramExpressive.Spring xgramHandleWidth;
+  private Path xgramPath;
+  private float[] xgramRadii;
+
+  private void xgramAddSegment (Path path, float left, float top, float right, float bottom, float leftRadius, float rightRadius) {
+    if (right - left <= 0f) {
+      return;
+    }
+    float max = Math.min((right - left) / 2f, (bottom - top) / 2f);
+    float lr = Math.min(leftRadius, max);
+    float rr = Math.min(rightRadius, max);
+    float[] radii = xgramRadii;
+    radii[0] = radii[1] = lr;
+    radii[2] = radii[3] = rr;
+    radii[4] = radii[5] = rr;
+    radii[6] = radii[7] = lr;
+    RectF rectF = Paints.getRectF();
+    rectF.set(left, top, right, bottom);
+    path.addRoundRect(rectF, radii, Path.Direction.CW);
+  }
+
+  private void xgramFillSegment (Canvas c, float left, float top, float right, float bottom, float leftRadius, float rightRadius, int color) {
+    if (right - left <= 0f) {
+      return;
+    }
+    Path path = xgramPath;
+    path.reset();
+    xgramAddSegment(path, left, top, right, bottom, leftRadius, rightRadius);
+    c.drawPath(path, Paints.fillingPaint(color));
+  }
+
+  private void xgramDraw (Canvas c) {
+    if (xgramPath == null) {
+      xgramPath = new Path();
+      xgramRadii = new float[8];
+    }
+    final int left = getTotalPaddingLeft();
+    final int right = getMeasuredWidth() - getTotalPaddingRight();
+    final int width = right - left;
+    final int cy = findCenterY();
+    final float viewHeight = getMeasuredHeight();
+
+    final float trackHeight = Math.min(Screen.dp(16f), viewHeight * .36f);
+    final float top = cy - trackHeight / 2f;
+    final float bottom = cy + trackHeight / 2f;
+    final float outer = trackHeight / 2f;
+    final float inside = Screen.dp(2f);
+    final float handleHeight = Math.min(Screen.dp(44f), viewHeight);
+    final float handleWidth = Screen.dp(xgramHandleWidth != null ? xgramHandleWidth.getValue() : XGRAM_HANDLE_WIDTH);
+    final float gap = Screen.dp(6f);
+    final float dotRadius = Screen.dp(2f);
+
+    final float overlayAlpha = (1f - enableFactor) * .65f;
+    final int origColor = colorAnimator == null || !colorAnimator.isAnimating() ? Theme.getColor(colorId) : ColorUtils.fromToArgb(Theme.getColor(fromColorId), Theme.getColor(toColorId), colorAnimator.getFactor());
+    final int color = overlayAlpha > 0f ? ColorUtils.compositeColor(origColor, ColorUtils.color((int) (255f * overlayAlpha), 0)) : origColor;
+    // sliderInactive is the generic inactive track of the in-app sliders: it becomes secondaryContainer.
+    // Other forced colors (media viewer) stay as they are.
+    final int inactiveColor = forceBackgroundColorId != 0 && forceBackgroundColorId != ColorId.sliderInactive ? Theme.getColor(forceBackgroundColorId) : XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER);
+    final int secondaryColor = forceSecondaryColorId != 0 ? Theme.getColor(forceSecondaryColorId) : XgramExpressive.withAlpha(color, XgramExpressive.DISABLED_CONTENT);
+
+    final float cx = findCenterX();
+    final float activeEnd = cx - handleWidth / 2f - gap;
+    final float inactiveStart = cx + handleWidth / 2f + gap;
+    final int centerX = left + width / 2;
+
+    if (anchorMode == ANCHOR_MODE_CENTER) {
+      Path path = xgramPath;
+      path.reset();
+      xgramAddSegment(path, left, top, activeEnd, bottom, outer, inside);
+      xgramAddSegment(path, inactiveStart, top, right, bottom, inside, outer);
+      c.drawPath(path, Paints.fillingPaint(inactiveColor));
+      if (cx > centerX) {
+        xgramFillSegment(c, centerX, top, activeEnd, bottom, inside, inside, color);
+      } else if (cx < centerX) {
+        xgramFillSegment(c, inactiveStart, top, centerX, bottom, inside, inside, color);
+      }
+    } else {
+      xgramFillSegment(c, left, top, activeEnd, bottom, outer, inside, color);
+      xgramFillSegment(c, inactiveStart, top, right, bottom, inside, outer, inactiveColor);
+      if (secondaryValue > 0f) {
+        float secondaryLeft = Math.max(inactiveStart, left + (float) width * secondaryValueOffset);
+        float secondaryRight = Math.min(right, left + (float) width * (secondaryValueOffset + secondaryValue));
+        xgramFillSegment(c, secondaryLeft, top, secondaryRight, bottom, inside, secondaryRight >= right - .5f ? outer : inside, secondaryColor);
+      }
+    }
+
+    final float excludeLeft = activeEnd - dotRadius;
+    final float excludeRight = inactiveStart + dotRadius;
+    if (valueCount > 1) {
+      final float minX = left + outer, maxX = right - outer;
+      for (int i = 0; i < valueCount; i++) {
+        float x = Math.max(minX, Math.min(maxX, left + (float) width * (float) i / (float) (valueCount - 1)));
+        if (x > excludeLeft && x < excludeRight) {
+          continue;
+        }
+        boolean onActive = anchorMode == ANCHOR_MODE_CENTER ? (x >= Math.min(centerX, cx) && x <= Math.max(centerX, cx)) : x < cx;
+        c.drawCircle(x, cy, dotRadius, Paints.fillingPaint(onActive ? inactiveColor : color));
+      }
+    } else {
+      final float hideDistance = Screen.dp(12f);
+      float endX = right - outer;
+      if (endX - cx >= hideDistance) {
+        c.drawCircle(endX, cy, dotRadius, Paints.fillingPaint(color));
+      }
+      if (anchorMode == ANCHOR_MODE_CENTER) {
+        float startX = left + outer;
+        if (cx - startX >= hideDistance) {
+          c.drawCircle(startX, cy, dotRadius, Paints.fillingPaint(color));
+        }
+      }
+    }
+
+    float smallValue = getSmallValue();
+    if (smallValue != -1f) {
+      float x = Math.max(left + outer, Math.min(right - outer, left + width * smallValue));
+      if (!(x > excludeLeft && x < excludeRight)) {
+        c.drawCircle(x, cy, dotRadius, Paints.fillingPaint(x < cx ? inactiveColor : color));
+      }
+    }
+
+    RectF rectF = Paints.getRectF();
+    rectF.set(cx - handleWidth / 2f, cy - handleHeight / 2f, cx + handleWidth / 2f, cy + handleHeight / 2f);
+    c.drawRoundRect(rectF, handleWidth / 2f, handleWidth / 2f, Paints.fillingPaint(color));
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (XgramExpressive.isEnabled()) {
+      xgramDraw(c);
+      return;
+    }
     int height = Screen.dp(1f);
 
     int left = getTotalPaddingLeft();

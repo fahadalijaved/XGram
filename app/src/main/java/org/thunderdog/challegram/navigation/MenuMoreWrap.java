@@ -15,11 +15,15 @@
 package org.thunderdog.challegram.navigation;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -32,6 +36,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -122,6 +128,28 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     this.forcedTheme = forcedTheme;
 
     setMinimumWidth(Screen.dp(196f));
+    if (XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive menu container: surfaceContainerLow, large (16dp) corners,
+      // elevation level 2, 8dp vertical padding inside the container. The 8dp side insets keep
+      // the old position on screen.
+      XgramExpressive.MorphDrawable container = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_L, XgramExpressive.CORNER_L);
+      if (forcedTheme != null) {
+        container.setColor(forcedTheme.getColor(ColorId.overlayFilling));
+      } else {
+        container.setColorRole(XgramExpressive.SURFACE_CONTAINER_LOW);
+      }
+      final int inset = Screen.dp(PADDING);
+      ViewUtils.setBackground(this, new InsetDrawable(container, inset, 0, inset, 0));
+      setPadding(inset, inset, inset, inset);
+      setElevation(Screen.dp(XgramExpressive.ELEVATION_2));
+      if (themeProvider != null && forcedTheme == null) {
+        themeProvider.addThemeInvalidateListener(this);
+      }
+      setOrientation(VERTICAL);
+      setLayerType(LAYER_TYPE_HARDWARE, Views.getLayerPaint());
+      setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT)));
+      return;
+    }
     Drawable drawable;
     if (forcedTheme != null) {
       drawable = ViewSupport.getDrawableFilter(getContext(), R.drawable.bg_popup_fixed, new PorterDuffColorFilter(forcedTheme.getColor(ColorId.overlayFilling), PorterDuff.Mode.MULTIPLY));
@@ -215,10 +243,25 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     }
 
     FrameLayout.LayoutParams lp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ITEM_HEIGHT), Gravity.LEFT);
+    final TextView[] titleTextItemRef = new TextView[1];
     FrameLayout frameLayout = new FrameLayoutFix(getContext()) {
       @Override
       protected void onDraw (Canvas canvas) {
         super.onDraw(canvas);
+        if (menuItem.isCheckbox && XgramExpressive.isEnabled()) {
+          // XGram: checked items sit on a tertiaryContainer pill (medium corners, 4dp inset).
+          float checkedFactor = menuItem.isCheckboxSelectedAnimated != null ? menuItem.isCheckboxSelectedAnimated.getFloatValue() : menuItem.isCheckboxSelected ? 1f : 0f;
+          if (forcedTheme == null) {
+            int textColor = ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.color(XgramExpressive.ON_TERTIARY_CONTAINER), checkedFactor);
+            if (titleTextItemRef[0] != null && titleTextItemRef[0].getCurrentTextColor() != textColor) {
+              titleTextItemRef[0].setTextColor(textColor);
+            }
+          }
+          if (checkedFactor > 0f) {
+            int pillColor = forcedTheme != null ? ColorUtils.alphaColor(.12f, forcedTheme.getColor(ColorId.text)) : XgramExpressive.color(XgramExpressive.TERTIARY_CONTAINER);
+            xgramDrawItemPill(canvas, getMeasuredWidth(), getMeasuredHeight(), ColorUtils.alphaColor(checkedFactor, pillColor));
+          }
+        }
         if (receiver != null) {
           receiver.draw(canvas);
         }
@@ -338,8 +381,15 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       subtitleTextItem = null;
     }
 
+    final boolean xgramExpressive = XgramExpressive.isEnabled();
+    titleTextItemRef[0] = titleTextItem;
+    if (xgramExpressive) {
+      XgramExpressive.applyText(titleTextItem, XgramExpressive.TS_LABEL_L, false);
+    }
     if (forcedTheme != null) {
       titleTextItem.setTextColor(forcedTheme.getColor(ColorId.text));
+    } else if (xgramExpressive) {
+      titleTextItem.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
     } else {
       titleTextItem.setTextColor(Theme.textAccentColor());
       if (themeListeners != null) {
@@ -357,6 +407,9 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     }
 
     Views.setClickable(frameLayout);
+    if (xgramExpressive) {
+      xgramSetItemBackground(frameLayout);
+    } else
     RippleSupport.setTransparentSelector(frameLayout);
     itemsLayout.addView(frameLayout);
     frameLayout.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
@@ -369,8 +422,14 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     menuItem.setId(id);
     menuItem.setTypeface(Fonts.getRobotoRegular());
     menuItem.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+    final boolean xgramExpressive = XgramExpressive.isEnabled();
+    if (xgramExpressive) {
+      XgramExpressive.applyText(menuItem, XgramExpressive.TS_LABEL_L, false);
+    }
     if (forcedTheme != null) {
       menuItem.setTextColor(forcedTheme.getColor(ColorId.text));
+    } else if (xgramExpressive) {
+      menuItem.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
     } else {
       menuItem.setTextColor(Theme.textAccentColor());
       if (themeListeners != null) {
@@ -405,6 +464,9 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       }
     }
     Views.setClickable(menuItem);
+    if (xgramExpressive) {
+      xgramSetItemBackground(menuItem);
+    } else
     RippleSupport.setTransparentSelector(menuItem);
     itemsLayout.addView(menuItem);
     menuItem.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
@@ -508,6 +570,28 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     invalidate();
   }
 
+  // XGram: Material 3 Expressive menu item shapes: a 4dp inset with medium (12dp) corners,
+  // used for the press ripple, the drag highlight and the checked pill.
+
+  private static void xgramDrawItemPill (Canvas canvas, int width, int height, int color) {
+    final int inset = Screen.dp(4f);
+    final float radius = Screen.dp(XgramExpressive.CORNER_M);
+    RectF rectF = Paints.getRectF();
+    rectF.set(inset, inset, width - inset, height - inset);
+    canvas.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(color));
+  }
+
+  private void xgramSetItemBackground (View view) {
+    final float radius = Screen.dp(XgramExpressive.CORNER_M);
+    GradientDrawable mask = new GradientDrawable();
+    mask.setColor(0xffffffff);
+    mask.setCornerRadius(radius);
+    final int baseColor = forcedTheme != null ? forcedTheme.getColor(ColorId.text) : XgramExpressive.color(XgramExpressive.ON_SURFACE);
+    final int inset = Screen.dp(4f);
+    RippleDrawable ripple = new RippleDrawable(ColorStateList.valueOf(XgramExpressive.withAlpha(baseColor, XgramExpressive.STATE_PRESSED)), null, new InsetDrawable(mask, inset));
+    ViewUtils.setBackground(view, ripple);
+  }
+
   private int bubbleTailX = -1;
 
   public void setBubbleTailX (int bubbleTailX) {
@@ -517,7 +601,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
 
   @Override
   protected void onDraw (Canvas canvas) {
-    if (bubbleTailX > 0) {
+    if (bubbleTailX > 0 && !XgramExpressive.isEnabled()) { // XGram: Material 3 menus have no tail
       float cx = bubbleTailX;
       float cy = getMeasuredHeight() - Screen.dp(PADDING);
       canvas.save();
@@ -532,7 +616,21 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       canvas.restore();
     }
 
-    if (lastSelectedIndex != -1 && itemsLayout == this) {
+    if (lastSelectedIndex != -1 && itemsLayout == this && XgramExpressive.isEnabled()) {
+      // XGram: the drag-to-select highlight is the same rounded state layer as a press.
+      final int baseColor = forcedTheme != null ? forcedTheme.getColor(ColorId.text) : XgramExpressive.color(XgramExpressive.ON_SURFACE);
+      final int itemWidth = getMeasuredWidth() - Screen.dp(PADDING) * 2;
+      int childCount = getChildCount();
+      for (int i = 0; i < childCount; i++) {
+        final float alpha = MathUtils.clamp(1f - Math.abs(factorAnimator.getFactor() - i));
+        if (alpha > 0f) {
+          canvas.save();
+          canvas.translate(Screen.dp(PADDING), Screen.dp(PADDING + ITEM_HEIGHT * i));
+          xgramDrawItemPill(canvas, itemWidth, Screen.dp(ITEM_HEIGHT), XgramExpressive.withAlpha(baseColor, alpha * XgramExpressive.STATE_PRESSED));
+          canvas.restore();
+        }
+      }
+    } else if (lastSelectedIndex != -1 && itemsLayout == this) {
       int childCount = getChildCount();
       for (int i = 0; i < childCount; i++) {
         final float alpha = MathUtils.clamp(1f - Math.abs(factorAnimator.getFactor() - i));

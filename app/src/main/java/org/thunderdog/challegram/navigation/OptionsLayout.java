@@ -17,8 +17,10 @@ package org.thunderdog.challegram.navigation;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
+import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
 import android.util.TypedValue;
@@ -33,6 +35,8 @@ import android.widget.TextView;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
@@ -69,9 +73,11 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
 
     setOrientation(LinearLayout.VERTICAL);
 
+    final boolean xgramExpressive = XgramExpressive.isEnabled();
+
     headerView = new CustomTextView(context, parent.tdlib());
     headerView.setTextSize(18f);
-    headerView.setPadding(Screen.dp(16f), Screen.dp(18f), Screen.dp(16f), Screen.dp(6f));
+    headerView.setPadding(Screen.dp(16f), Screen.dp(xgramExpressive ? 0f : 18f), Screen.dp(16f), Screen.dp(6f));
     headerView.setTextColorId(ColorId.text);
     headerView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     headerView.setMaxLineCount(1);
@@ -79,11 +85,14 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
     addView(headerView);
 
     textView = new CustomTextView(context, parent.tdlib());
-    textView.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(16f), Screen.dp(6f));
+    textView.setPadding(Screen.dp(16f), Screen.dp(xgramExpressive ? 4f : 14f), Screen.dp(16f), Screen.dp(6f));
     textView.setTextColorId(ColorId.textLight);
     textView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     addView(textView);
 
+    if (xgramExpressive) {
+      ViewUtils.setBackground(this, new XgramSheetBackground());
+    } else
     ViewUtils.setBackground(this, new Drawable() {
       @Override
       public void draw (@NonNull Canvas c) {
@@ -117,6 +126,67 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
     }
   }
 
+  // XGram: Material 3 Expressive bottom sheet. The first child (the old top shadow slot) becomes
+  // the 48dp drag handle band; the surface starts at its top with extra-large (28dp) top corners.
+
+  public static int xgramHandleBandHeight () {
+    return Screen.dp(48f);
+  }
+
+  private class XgramSheetBackground extends Drawable {
+    private final Path path = new Path();
+    private final float[] radii = new float[8];
+    private final RectF rect = new RectF();
+
+    @Override
+    public void draw (@NonNull Canvas c) {
+      View view = getChildAt(0);
+      if (view == null || view.getMeasuredHeight() <= 0) {
+        return;
+      }
+      final float top = view.getTop() + view.getTranslationY();
+      final float corner = Screen.dp(XgramExpressive.CORNER_XL);
+      // Painted 24dp below the bottom, so the spring overshoot of the reveal never shows a gap.
+      rect.set(0, top, getMeasuredWidth(), getMeasuredHeight() + Screen.dp(24f));
+      radii[0] = radii[1] = radii[2] = radii[3] = corner;
+      radii[4] = radii[5] = radii[6] = radii[7] = 0f;
+      path.reset();
+      path.addRoundRect(rect, radii, Path.Direction.CW);
+      final int surfaceColor = forcedTheme != null ? forcedTheme.getColor(ColorId.filling) : XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_LOW);
+      c.drawPath(path, Paints.fillingPaint(surfaceColor));
+
+      final int handleColor = XgramExpressive.withAlpha(forcedTheme != null ? forcedTheme.getColor(ColorId.textLight) : XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), .4f);
+      final float handleWidth = Screen.dp(32f), handleHeight = Screen.dp(4f);
+      final float handleTop = top + (xgramHandleBandHeight() - handleHeight) / 2f;
+      final float cx = getMeasuredWidth() / 2f;
+      RectF handle = Paints.getRectF();
+      handle.set(cx - handleWidth / 2f, handleTop, cx + handleWidth / 2f, handleTop + handleHeight);
+      c.drawRoundRect(handle, handleHeight / 2f, handleHeight / 2f, Paints.fillingPaint(handleColor));
+    }
+
+    @Override
+    public void setAlpha (int alpha) { }
+
+    @Override
+    public void setColorFilter (@Nullable ColorFilter colorFilter) { }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public int getOpacity () {
+      return PixelFormat.UNKNOWN;
+    }
+  }
+
+  @Override
+  public void setLayoutParams (ViewGroup.LayoutParams params) {
+    if (params instanceof FrameLayout.LayoutParams && XgramExpressive.isEnabled()) {
+      // Max width 640dp, centered (unfolded Fold, tablets).
+      FrameLayout.LayoutParams frameParams = (FrameLayout.LayoutParams) params;
+      frameParams.gravity = (frameParams.gravity & ~Gravity.HORIZONTAL_GRAVITY_MASK) | Gravity.CENTER_HORIZONTAL;
+    }
+    super.setLayoutParams(params);
+  }
+
   @Override
   public void onApplyMarginInsets (View child, FrameLayout.LayoutParams params, Rect legacyInsets, Rect insets, Rect insetsWithoutIme) {
     Views.setMargins(params, insets.left, 0, insets.right, 0);
@@ -125,6 +195,12 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+    if (XgramExpressive.isEnabled()) {
+      final int maxWidth = Screen.dp(640f);
+      if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED && MeasureSpec.getSize(widthMeasureSpec) > maxWidth) {
+        widthMeasureSpec = MeasureSpec.makeMeasureSpec(maxWidth, MeasureSpec.EXACTLY);
+      }
+    }
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
     int currentHeight = getMeasuredHeight();
@@ -169,9 +245,15 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
     text.setId(id);
     text.setTypeface(Fonts.getRobotoRegular());
     text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+    final boolean xgramExpressive = XgramExpressive.isEnabled();
+    if (xgramExpressive) {
+      XgramExpressive.applyText(text, XgramExpressive.TS_BODY_L, false);
+    }
     final int textColorId = getOptionColorId(textColor);
     if (forcedTheme != null) {
       text.setTextColor(forcedTheme.getColor(textColorId));
+    } else if (xgramExpressive && textColor == ViewController.OptionColor.NORMAL) {
+      text.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
     } else {
       text.setTextColor(Theme.getColor(textColorId));
       if (themeProvider != null)
@@ -194,9 +276,13 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
         } else {
           drawableColorId = getOptionColorId(iconColor);
         }
-        drawable.setColorFilter(Paints.getColorFilter(forcedTheme != null ? forcedTheme.getColor(drawableColorId) : Theme.getColor(drawableColorId)));
-        if (themeProvider != null) {
-          themeProvider.addThemeFilterListener(drawable, drawableColorId);
+        if (forcedTheme == null && xgramExpressive && iconColor == ViewController.OptionColor.NORMAL) {
+          drawable.setColorFilter(Paints.getColorFilter(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT)));
+        } else {
+          drawable.setColorFilter(Paints.getColorFilter(forcedTheme != null ? forcedTheme.getColor(drawableColorId) : Theme.getColor(drawableColorId)));
+          if (themeProvider != null) {
+            themeProvider.addThemeFilterListener(drawable, drawableColorId);
+          }
         }
         if (Drawables.needMirror(icon)) {
           // TODO

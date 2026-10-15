@@ -32,6 +32,8 @@ import android.widget.PopupWindow;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
@@ -436,6 +438,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
   @Override
   public void performDestroy () {
     isDestroyed = true;
+    xgramCancelSprings();
     for (int i = getChildCount() - 1; i >= 0; i--) {
       View view = getChildAt(i);
       if (view instanceof Destroyable) {
@@ -516,6 +519,10 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     }
 
     animationType = ANIMATION_TYPE_SIMPLE;
+    if (view instanceof OptionsLayout && XgramExpressive.isEnabled()) {
+      // XGram: the sheet paints below its bounds to cover the spring overshoot.
+      setClipChildren(false);
+    }
     view.setTranslationY(currentHeight = height);
     addView(boundView = view);
     ((BaseActivity) getContext()).showPopupWindow(this);
@@ -541,7 +548,13 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     int cx = anchorRight != Lang.rtl() ? itemsWidth - padding : Screen.dp(17f);
     int cy = menuWrap.shouldPivotBottom() ? menuWrap.getItemsHeight() - padding : padding;
 
-    if (Config.REVEAL_ANIMATION_AVAILABLE && anchorRight) {
+    if (XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive menus scale in from the anchor corner, no circular reveal.
+      animationType = ANIMATION_TYPE_MORE_SCALE;
+      menuWrap.setAlpha(0f);
+      menuWrap.setScaleX(XGRAM_MORE_START_SCALE);
+      menuWrap.setScaleY(XGRAM_MORE_START_SCALE);
+    } else if (Config.REVEAL_ANIMATION_AVAILABLE && anchorRight) {
       animationType = ANIMATION_TYPE_MORE_REVEAL;
       menuWrap.setAlpha(0f);
       menuWrap.setScaleX(1f);
@@ -564,6 +577,16 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     MenuMoreWrapAbstract menuWrap = (MenuMoreWrapAbstract) getContentChild();
 
     if (menuWrap == null) {
+      return;
+    }
+
+    if (XgramExpressive.isEnabled()) {
+      // XGram: close with alpha only (effects fast spring).
+      XgramExpressive.Spring alpha = xgramMoreAlpha(menuWrap);
+      alpha.animateTo(0f);
+      if (!alpha.isRunning()) {
+        dismissWindow();
+      }
       return;
     }
 
@@ -699,6 +722,11 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
             return;
           }
 
+          if (XgramExpressive.isEnabled()) {
+            xgramShowMore(menuWrap);
+            return;
+          }
+
           if (animationType == ANIMATION_TYPE_MORE_SCALE) {
             if (menuWrap.getAnchorMode() == MenuMoreWrap.ANCHOR_MODE_CENTER) {
               final int itemsWidth = menuWrap.getItemsWidth();
@@ -821,7 +849,142 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
   private static final int REVEAL_ANIMATOR = 0;
   private FactorAnimator animator;
 
+  // XGram: Material 3 Expressive motion.
+  // Sheets (ANIMATION_TYPE_SIMPLE) show with the spatial default spring (about 1.5% overshoot)
+  // and hide with the standard spatial fast spring. Menus scale 0.8 to 1 from the anchor corner
+  // with the spatial fast spring and fade with the effects fast spring.
+
+  private static final float XGRAM_MORE_START_SCALE = .8f;
+  private XgramExpressive.Spring xgramShowSpring, xgramHideSpring;
+  private XgramExpressive.Spring xgramMoreScaleSpring, xgramMoreAlphaSpring;
+  private Runnable xgramPendingReveal;
+
+  private void xgramAnimateReveal (float toFactor) {
+    if (xgramPendingReveal != null) {
+      removeCallbacks(xgramPendingReveal);
+      xgramPendingReveal = null;
+    }
+    if (toFactor == 1f && needRevealStartDelay) {
+      xgramPendingReveal = () -> {
+        xgramPendingReveal = null;
+        xgramStartReveal(1f);
+      };
+      postDelayed(xgramPendingReveal, MenuMoreWrap.REVEAL_DURATION);
+      return;
+    }
+    xgramStartReveal(toFactor);
+  }
+
+  private void xgramStartReveal (float toFactor) {
+    final boolean show = toFactor == 1f;
+    XgramExpressive.Spring other = show ? xgramHideSpring : xgramShowSpring;
+    if (other != null) {
+      other.setEndListener(null);
+      other.cancel();
+      if (show) {
+        xgramHideSpring = null;
+      } else {
+        xgramShowSpring = null;
+      }
+    }
+    XgramExpressive.Spring spring = show ? xgramShowSpring : xgramHideSpring;
+    if (spring == null) {
+      spring = new XgramExpressive.Spring(show ? XgramExpressive.SPATIAL_DEFAULT : XgramExpressive.STD_SPATIAL_FAST, factor, (s, value) -> setRevealFactor(value));
+      spring.setThreshold(.001f);
+      final float target = toFactor;
+      spring.setEndListener(() -> xgramOnRevealEnd(target));
+      if (show) {
+        xgramShowSpring = spring;
+      } else {
+        xgramHideSpring = spring;
+      }
+    }
+    spring.animateTo(toFactor);
+    if (!spring.isRunning()) {
+      // Reduced motion snaps without running.
+      xgramOnRevealEnd(toFactor);
+    }
+  }
+
+  private void xgramOnRevealEnd (float target) {
+    if (target == 0f) {
+      if (!isHidden) {
+        return;
+      }
+      setRevealFactor(0f);
+      dismissWindow();
+    } else {
+      if (isHidden || hasCompletelyShown) {
+        return;
+      }
+      setRevealFactor(1f);
+      onCustomShowComplete();
+    }
+    UI.getContext(getContext()).notifyBackPressAvailabilityChanged();
+  }
+
+  private XgramExpressive.Spring xgramMoreAlpha (MenuMoreWrapAbstract menuWrap) {
+    if (xgramMoreAlphaSpring == null) {
+      xgramMoreAlphaSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, menuWrap.getAlpha(), (s, value) -> menuWrap.setAlpha(Math.max(0f, Math.min(1f, value))));
+      xgramMoreAlphaSpring.setThreshold(.004f);
+      xgramMoreAlphaSpring.setEndListener(() -> {
+        if (hideAnimationLaunched && xgramMoreAlphaSpring != null && xgramMoreAlphaSpring.getTarget() == 0f) {
+          dismissWindow();
+        }
+      });
+    }
+    return xgramMoreAlphaSpring;
+  }
+
+  private void xgramShowMore (MenuMoreWrapAbstract menuWrap) {
+    if (menuWrap.getAnchorMode() == MenuMoreWrap.ANCHOR_MODE_CENTER) {
+      menuWrap.setPivotX(menuWrap.getItemsWidth() / 2f);
+    }
+    if (xgramMoreScaleSpring == null) {
+      xgramMoreScaleSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, menuWrap.getScaleX(), (s, value) -> {
+        menuWrap.setScaleX(value);
+        menuWrap.setScaleY(value);
+      });
+      xgramMoreScaleSpring.setThreshold(.002f);
+      xgramMoreScaleSpring.setEndListener(this::xgramOnMoreShown);
+    }
+    XgramExpressive.Spring alpha = xgramMoreAlpha(menuWrap);
+    alpha.animateTo(1f);
+    xgramMoreScaleSpring.animateTo(1f);
+    if (!xgramMoreScaleSpring.isRunning()) {
+      menuWrap.setScaleX(1f);
+      menuWrap.setScaleY(1f);
+      menuWrap.setAlpha(1f);
+      xgramOnMoreShown();
+    }
+  }
+
+  private void xgramOnMoreShown () {
+    if (!hideAnimationLaunched && !hasCompletelyShown) {
+      factor = 1f;
+      onCustomShowComplete();
+    }
+  }
+
+  private void xgramCancelSprings () {
+    if (xgramPendingReveal != null) {
+      removeCallbacks(xgramPendingReveal);
+      xgramPendingReveal = null;
+    }
+    XgramExpressive.Spring[] springs = {xgramShowSpring, xgramHideSpring, xgramMoreScaleSpring, xgramMoreAlphaSpring};
+    for (XgramExpressive.Spring spring : springs) {
+      if (spring != null) {
+        spring.setEndListener(null);
+        spring.cancel();
+      }
+    }
+  }
+
   public void animateRevealFactor (float toFactor) {
+    if (animationType == ANIMATION_TYPE_SIMPLE && XgramExpressive.isEnabled()) {
+      xgramAnimateReveal(toFactor);
+      return;
+    }
     if (animator == null) {
       animator = new FactorAnimator(REVEAL_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, factor);
     }
@@ -863,7 +1026,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
 
     @Override
     protected void onDraw (Canvas c) {
-      final int color = ColorUtils.color((int) (255f * (Theme.getPopupOverlayAlpha())), 0);
+      final int color = ColorUtils.color((int) (255f * (XgramExpressive.isEnabled() ? .32f : Theme.getPopupOverlayAlpha())), 0);
       int offset = HeaderView.getTopOffset();
       if (useStatusBar && offset != 0) {
         c.drawRect(0, offset, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(color));
@@ -878,6 +1041,19 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
   public void setRevealFactor (float factor) {
     if (this.factor != factor) {
       this.factor = factor;
+      if (XgramExpressive.isEnabled()) {
+        // XGram: spring values may leave 0..1. Only Options sheets (which paint below their
+        // bounds) show the overshoot; other content stops at its resting position.
+        if (animationType == ANIMATION_TYPE_SIMPLE) {
+          View view = getContentChild();
+          if (view != null) {
+            float translation = currentHeight * (1f - factor);
+            view.setTranslationY(view instanceof OptionsLayout ? translation : Math.max(0f, translation));
+          }
+        }
+        backgroundView.setAlpha(Math.max(0f, Math.min(1f, factor)));
+        return;
+      }
       switch (animationType) {
         case ANIMATION_TYPE_SIMPLE: {
           View view = getContentChild();
