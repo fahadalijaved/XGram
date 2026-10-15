@@ -215,7 +215,14 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       Test.execute();
     }
 
-    pagerWrap = new FrameLayoutFix(context);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive: the chat list is a container with rounded top corners on the app bar's layer
+      com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout cornerWrap = new com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout(context);
+      cornerWrap.setCornerAnchor(pager);
+      pagerWrap = cornerWrap;
+    } else {
+      pagerWrap = new FrameLayoutFix(context);
+    }
     pagerWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     pagerWrap.addView(pager);
 
@@ -2867,6 +2874,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         ShadowView shadowView = new ShadowView(context);
         shadowView.setVerticalShadow(new int[]{0x00000000, 0x40000000}, null, shadowHeight);
         shadowView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, shadowHeight));
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          shadowView.setVisibility(View.INVISIBLE); // XGram: Material 3 Expressive bars are separated by tone, not shadows
+        }
         Views.setTopMargin(headerCellView, shadowHeight - Screen.dp(1f));
 
         ViewSupport.setThemedBackground(headerCellView, ColorId.headerLightBackground, this);

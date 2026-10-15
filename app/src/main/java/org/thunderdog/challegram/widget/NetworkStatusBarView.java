@@ -142,6 +142,19 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
     return getResources().getDisplayMetrics().widthPixels;
   }
 
+  @Override
+  protected void dispatchDraw (android.graphics.Canvas canvas) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: no scrim with Expressive design, the status sits on the app bar, so its color follows the scheme
+      int color = Theme.getColor(Config.STATUS_BAR_TEXT_COLOR_ID);
+      if (textView.getCurrentTextColor() != color) {
+        textView.setTextColor(color);
+        progressView.setProgressColor(color);
+      }
+    }
+    super.dispatchDraw(canvas);
+  }
+
   /**
    * XGram: "Connecting...", "Updating..." and "Waiting for network" sit centred in the status bar, where a centred
    * camera hole (Galaxy S25 Ultra, Pixel...) covers them. Settings, XGram, Appearance alone decides whether they move to

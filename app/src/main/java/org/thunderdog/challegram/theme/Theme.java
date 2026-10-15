@@ -35,6 +35,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Colors;
+
 import org.thunderdog.challegram.FillingDrawable;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -189,18 +192,29 @@ public class Theme {
   // Base
 
   public static float getProperty (final @PropertyId int propertyId) {
+    if (XgramExpressive.isEnabled() && (propertyId == PropertyId.BUBBLE_OUTLINE || propertyId == PropertyId.BUBBLE_UNREAD_SHADOW)) {
+      return 0f; // XGram: Material 3 Expressive bubbles have no outline or shadow
+    }
     return ThemeManager.instance().currentTheme().getProperty(propertyId);
   }
 
   @ColorInt
   public static int getColor (final @ColorId int colorId) {
-    return ThemeManager.instance().currentTheme().getColor(colorId);
+    ThemeDelegate currentTheme = ThemeManager.instance().currentTheme();
+    if (XgramExpressive.isEnabled() && XgramM3Colors.isMapped(colorId)) {
+      return XgramM3Colors.resolve(currentTheme, colorId); // XGram: Material You color roles
+    }
+    return currentTheme.getColor(colorId);
   }
 
   public static int getColorFast (final @ColorId int colorId) {
     ThemeDelegate currentTheme = ThemeManager.currentThemeFast();
-    if (currentTheme != null)
+    if (currentTheme != null) {
+      if (XgramExpressive.isEnabled() && XgramM3Colors.isMapped(colorId)) {
+        return XgramM3Colors.resolve(currentTheme, colorId); // XGram
+      }
       return currentTheme.getColor(colorId);
+    }
     return ThemeSet.getColor(ThemeId.BLUE, colorId);
   }
 
@@ -221,8 +235,12 @@ public class Theme {
   @ColorInt
   public static int getColor (final @ColorId int colorId, final @ThemeId int themeId) {
     ThemeDelegate currentTheme = ThemeManager.currentThemeFast();
-    if (currentTheme != null && themeId == currentTheme.getId())
+    if (currentTheme != null && themeId == currentTheme.getId()) {
+      if (XgramExpressive.isEnabled() && XgramM3Colors.isMapped(colorId)) {
+        return XgramM3Colors.resolve(currentTheme, colorId); // XGram
+      }
       return currentTheme.getColor(colorId);
+    }
     return ThemeSet.getColor(themeId, colorId);
   }
 
@@ -894,6 +912,12 @@ public class Theme {
   }
 
   public static boolean needLightStatusBar (@ThemeId int themeId) {
+    if (XgramExpressive.isEnabled()) {
+      ThemeDelegate currentTheme = ThemeManager.currentThemeFast();
+      if (currentTheme != null && themeId == currentTheme.getId()) {
+        return !currentTheme.isDark(); // XGram: surface app bars, dark icons on light schemes
+      }
+    }
     return (int) getProperty(PropertyId.LIGHT_STATUS_BAR, themeId) == 1;
   }
 

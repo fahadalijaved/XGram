@@ -58,6 +58,7 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
   /** Section titles (string ids), theme items, and FOOTER for "All themes", in grid order. */
   private final List<Object> rows = new ArrayList<>();
   private static final Object FOOTER = new Object();
+  private static final Object EXPRESSIVE_NOTE = new Object(); // Expressive design draws with the wallpaper colors
   private Adapter adapter;
 
   public XgramThemesController (Context context, Tdlib tdlib) {
@@ -99,6 +100,9 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     XgramThemePack.cleanUpOldPack(tdlib);
     Background.instance().post(() -> {
       List<Object> loaded = new ArrayList<>();
+      if (XgramExpressive.isEnabled()) {
+        loaded.add(EXPRESSIVE_NOTE);
+      }
       loaded.add(R.string.XgramIconThemes);
       addThemes(context, loaded, XgramThemePack.ICON_KEYS);
       loaded.add(R.string.XgramThemesPack);
@@ -234,12 +238,19 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     @Override
     public int getItemViewType (int position) {
       Object row = rows.get(position);
-      return row instanceof Item ? 0 : row == FOOTER ? 1 : 2;
+      return row instanceof Item ? 0 : row == FOOTER ? 1 : row == EXPRESSIVE_NOTE ? 3 : 2;
     }
 
     @NonNull
     @Override
     public Holder onCreateViewHolder (@NonNull ViewGroup parent, int viewType) {
+      if (viewType == 3) {
+        TextView note = new TextView(parent.getContext());
+        XgramExpressive.applyText(note, XgramExpressive.TS_BODY_M, false);
+        note.setPadding(Screen.dp(10f), Screen.dp(6f), Screen.dp(10f), Screen.dp(6f));
+        note.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return new Holder(note);
+      }
       if (viewType == 2) {
         TextView title = new TextView(parent.getContext());
         title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f);
@@ -274,6 +285,12 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     @Override
     public void onBindViewHolder (@NonNull Holder holder, int position) {
       Object row = rows.get(position);
+      if (row == EXPRESSIVE_NOTE) {
+        TextView note = (TextView) holder.itemView;
+        note.setText(Lang.getString(R.string.XgramExpressiveThemesNote));
+        note.setTextColor(Theme.getColor(ColorId.textLight));
+        return;
+      }
       if (row == FOOTER) {
         TextView more = (TextView) holder.itemView;
         more.setText(Lang.getString(R.string.XgramAllThemes));

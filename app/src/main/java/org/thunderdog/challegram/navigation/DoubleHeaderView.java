@@ -29,6 +29,8 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.theme.ColorId;
@@ -95,6 +97,26 @@ public class DoubleHeaderView extends FrameLayoutFix implements RtlCheckListener
     subtitleView.setGravity(Lang.gravity());
     subtitleView.setLayoutParams(params);
     addView(subtitleView);
+
+    if (XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive app bar with a subtitle: titleLarge (22sp, 500) over labelMedium (12sp)
+      XgramExpressive.applyText(titleView, XgramExpressive.TS_TITLE_L, true);
+      Views.setTopMargin(titleView, Screen.dp(6f));
+      XgramExpressive.applyText(subtitleView, XgramExpressive.TS_LABEL_M, false);
+      Views.setTopMargin(subtitleView, Screen.dp(34f));
+    }
+  }
+
+  private static int xgramStartMargin () {
+    return Screen.dp(XgramExpressive.isEnabled() ? 56f : 68f);
+  }
+
+  /** The subtitle under a title of {@code titleColor}: onSurfaceVariant under an onSurface title with Expressive design. */
+  private static int subtitleColorFor (@ColorInt int titleColor) {
+    if (XgramExpressive.isEnabled() && titleColor == XgramExpressive.color(XgramExpressive.ON_SURFACE)) {
+      return XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+    }
+    return Theme.subtitleColor(titleColor);
   }
 
   @Override
@@ -130,7 +152,7 @@ public class DoubleHeaderView extends FrameLayoutFix implements RtlCheckListener
   public void setTextColor (@ColorInt int color) {
     if (!customColors) {
       titleView.setTextColor(color);
-      subtitleView.setTextColor(Theme.subtitleColor(color));
+      subtitleView.setTextColor(subtitleColorFor(color));
     }
   }
 
@@ -157,15 +179,15 @@ public class DoubleHeaderView extends FrameLayoutFix implements RtlCheckListener
   }
 
   public void initWithMargin (int marginRight, boolean transparentHeaderColor) {
-    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, HeaderView.getSize(false), Lang.gravity(), Lang.rtl() ? marginRight : Screen.dp(68f), 0, Lang.rtl() ? Screen.dp(68f) : marginRight, 0));
+    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, HeaderView.getSize(false), Lang.gravity(), Lang.rtl() ? marginRight : xgramStartMargin(), 0, Lang.rtl() ? xgramStartMargin() : marginRight, 0));
     if (transparentHeaderColor) {
-      subtitleView.setTextColor(Theme.subtitleColor(titleView.getCurrentTextColor()));
+      subtitleView.setTextColor(subtitleColorFor(titleView.getCurrentTextColor()));
     }
   }
 
   public void checkRtlMargin (int marginRight) {
     if (Views.setGravity(this, Lang.gravity())) {
-      Views.setMargins(((FrameLayout.LayoutParams) getLayoutParams()), Lang.rtl() ? marginRight : Screen.dp(68f), 0, Lang.rtl() ? Screen.dp(68f) : marginRight, 0);
+      Views.setMargins(((FrameLayout.LayoutParams) getLayoutParams()), Lang.rtl() ? marginRight : xgramStartMargin(), 0, Lang.rtl() ? xgramStartMargin() : marginRight, 0);
       Views.updateLayoutParams(this);
     }
   }

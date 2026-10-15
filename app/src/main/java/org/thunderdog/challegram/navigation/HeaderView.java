@@ -1229,6 +1229,19 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     if (textTitle == null || item == null)
       return;
     boolean updated;
+    if (XgramExpressive.isEnabled()) {
+      // XGram: Material 3 app bar: the title starts at 56dp after the navigation icon (48dp box at 4dp), 16dp without one
+      int top = Screen.dp(14f) + currentHeaderOffset;
+      int start = Screen.dp(item.getBackButton() != BackHeaderButton.TYPE_NONE ? 56f : 16f);
+      if (Lang.rtl()) {
+        updated = Views.setMargins((FrameLayout.LayoutParams) textTitle.getLayoutParams(), menuWidth, top, start, 0);
+      } else {
+        updated = Views.setMargins((FrameLayout.LayoutParams) textTitle.getLayoutParams(), start, top, menuWidth, 0);
+      }
+      if (updated)
+        Views.updateLayoutParams(textTitle);
+      return;
+    }
     int top = Screen.dp(15f) + currentHeaderOffset;
     if (item.getBackButton() != BackHeaderButton.TYPE_NONE) {
       if (Lang.rtl()) {
@@ -1266,6 +1279,9 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       textTitle.setId(item.getId());
       Views.setMediumText(textTitle, item.getName());
       newTitle = textTitle;
+      if (XgramExpressive.isEnabled() && !previewOpened) {
+        textTitle.setAlpha(item.xgramTitleAlpha); // XGram: the large title of the page may be on screen
+      }
     } else {
       dispatchOffset(newTitle);
     }
@@ -1411,6 +1427,35 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     }
   }
 
+  // XGram: Material 3 Expressive flexible app bar (the small title fades in once the page's large title scrolls away)
+
+  /** The alpha of a page's small text title: 1 unless the page shows a large title (see XgramM3Bars.LargeTitleDecoration). */
+  private float xgramTextAlpha (View view, @Nullable ViewController<?> item) {
+    if (item == null || view == null || (view != textTitle && view != textPreview) || !XgramExpressive.isEnabled()) {
+      return 1f;
+    }
+    return item.xgramTitleAlpha;
+  }
+
+  /** Sets the small title alpha of {@code c}; applied now when {@code c} is the page on screen and nothing animates. */
+  public static void xgramSetTitleAlpha (ViewController<?> c, float alpha) {
+    if (c == null) {
+      return;
+    }
+    alpha = Math.max(0f, Math.min(1f, alpha));
+    if (c.xgramTitleAlpha == alpha) {
+      return;
+    }
+    c.xgramTitleAlpha = alpha;
+    HeaderView header = c.headerView;
+    if (header == null || header.previewOpened || header.isAnimating || header.stack == null || header.stack.getCurrent() != c || c.inTransformMode()) {
+      return;
+    }
+    if (header.title != null && header.title == header.textTitle && header.textTitle.getId() == c.getId()) {
+      header.textTitle.setAlpha(alpha);
+    }
+  }
+
   // Animation
 
   private static final int MODE_NONE = 0; // Values must be the same as in NavigationController
@@ -1516,8 +1561,8 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
           }
         }
 
-        title.setAlpha(1f - raptor);
-        preview.setAlpha(raptor);
+        title.setAlpha((1f - raptor) * xgramTextAlpha(title, baseItem));
+        preview.setAlpha(raptor * xgramTextAlpha(preview, previewItem));
 
         break;
       }
@@ -1536,14 +1581,14 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
           }
         }
 
-        title.setAlpha(1f - raptor);
-        preview.setAlpha(raptor);
+        title.setAlpha((1f - raptor) * xgramTextAlpha(title, baseItem));
+        preview.setAlpha(raptor * xgramTextAlpha(preview, previewItem));
 
         break;
       }
       case MODE_FADE: {
-        title.setAlpha(1f - raptor);
-        preview.setAlpha(raptor);
+        title.setAlpha((1f - raptor) * xgramTextAlpha(title, baseItem));
+        preview.setAlpha(raptor * xgramTextAlpha(preview, previewItem));
 
         break;
       }
@@ -2305,7 +2350,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
         break;
       }
       case MODE_NONE: {
-        preview.setAlpha(1f);
+        preview.setAlpha(xgramTextAlpha(preview, previewItem));
         axisShift = 0f;
 
         break;
@@ -2662,7 +2707,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     if (shareHeader) {
       title.setVisibility(View.VISIBLE);
     }
-    title.setAlpha(1f);
+    title.setAlpha(xgramTextAlpha(title, stack.getCurrent()));
     title.setTranslationX(0f);
     removeView(preview);
     removeView(menuPreview);

@@ -197,6 +197,9 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   protected @Nullable FloatingButton floatingButton;
   protected @Nullable NavigationController navigationController;
 
+  /** XGram: alpha of the small app bar title while a Material 3 Expressive large title is on screen (see HeaderView.xgramSetTitleAlpha). */
+  public float xgramTitleAlpha = 1f;
+
   public ViewController (@NonNull Context context, Tdlib tdlib) {
     this.context = UI.getContext(context);
     this.tdlib = tdlib;
@@ -1352,6 +1355,16 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
   protected @ColorId int getHeaderColorId () {
     return ColorId.headerBackground;
+  }
+
+  /**
+   * XGram: whether a Material 3 Expressive large title (XgramM3Bars.LargeTitleDecoration) may sit above this page's
+   * list: a page of its own (not inside a pager or a popup) on the regular app bar, with a plain text title.
+   */
+  public boolean xgramAllowsLargeTitle () {
+    return getParentOrSelf() == this && !usePopupMode() && !inTransformMode() &&
+      getHeaderColorId() == ColorId.headerBackground && getCustomHeaderCell() == null &&
+      !android.text.TextUtils.isEmpty(getName());
   }
 
   @Deprecated

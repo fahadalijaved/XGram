@@ -369,6 +369,7 @@ public final class XgramExpressive {
     @Override
     public void onThemeColorsChanged (boolean areTemp, @Nullable ColorState state) {
       roleValid = 0;
+      XgramM3Colors.onThemeColorsChanged();
     }
 
     @Override
@@ -381,6 +382,124 @@ public final class XgramExpressive {
   public static void invalidateColors () {
     roleValid = 0;
     cacheThemeId = Integer.MIN_VALUE;
+    systemValid[0] = 0;
+    systemValid[1] = 0;
+    XgramM3Colors.invalidate();
+  }
+
+  // Dynamic (wallpaper) colors while Expressive design is on: one cache per scheme, independent of the theme in use.
+
+  private static final int[][] systemCache = new int[2][ROLE_COUNT];
+  private static final long[] systemValid = new long[2];
+  private static volatile boolean seedWatcherAdded;
+  private static String lastSeed;
+
+  /**
+   * The role in the light or the dark scheme. With Expressive design on it is the device's dynamic color (every Telegram
+   * X theme then draws with Material You roles); off, the old per-theme role.
+   */
+  @ColorInt
+  public static int colorFor (int role, boolean dark) {
+    if (isEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      if (!seedWatcherAdded) {
+        addSeedWatcher();
+      }
+      int scheme = dark ? 1 : 0;
+      long bit = 1L << role;
+      if ((systemValid[scheme] & bit) == 0) {
+        int value;
+        try {
+          value = systemRole(AppContext.get(), role, dark);
+        } catch (Throwable t) {
+          value = themeRole(role, dark);
+        }
+        systemCache[scheme][role] = value;
+        systemValid[scheme] |= bit;
+      }
+      return systemCache[scheme][role];
+    }
+    ensureColorCache();
+    if (cacheMaterialYou && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      return systemRole(AppContext.get(), role, dark);
+    }
+    return themeRole(role, dark);
+  }
+
+  @RequiresApi(Build.VERSION_CODES.S)
+  private static String systemSeed (Context context) {
+    return Integer.toHexString(context.getColor(android.R.color.system_accent1_500)) + ":" +
+      Integer.toHexString(context.getColor(android.R.color.system_accent2_500)) + ":" +
+      Integer.toHexString(context.getColor(android.R.color.system_neutral1_500));
+  }
+
+  /**
+   * Called when an activity is created or resumed (and from the Material You wallpaper check): when the wallpaper
+   * colors changed, drops every cached role and repaints the app with the new ones.
+   */
+  public static void checkSystemSeed (@Nullable Context context) {
+    if (!isEnabled() || Build.VERSION.SDK_INT < Build.VERSION_CODES.S || context == null) {
+      return;
+    }
+    String seed;
+    try {
+      seed = systemSeed(context);
+    } catch (Throwable t) {
+      return;
+    }
+    String previous = lastSeed;
+    lastSeed = seed;
+    if (previous != null && !previous.equals(seed)) {
+      invalidateColors();
+      try {
+        ThemeManager.xgramNotifyColorsChanged();
+      } catch (Throwable t) {
+        android.util.Log.e("XGram", "Expressive color refresh failed", t);
+      }
+    }
+  }
+
+  private static synchronized void addSeedWatcher () {
+    if (seedWatcherAdded) {
+      return;
+    }
+    seedWatcherAdded = true;
+    try {
+      Context app = AppContext.get().getApplicationContext();
+      if (!(app instanceof android.app.Application)) {
+        return;
+      }
+      ((android.app.Application) app).registerActivityLifecycleCallbacks(new android.app.Application.ActivityLifecycleCallbacks() {
+        @Override
+        public void onActivityCreated (@NonNull android.app.Activity activity, @Nullable android.os.Bundle savedInstanceState) {
+          checkSystemSeed(activity);
+        }
+
+        @Override
+        public void onActivityStarted (@NonNull android.app.Activity activity) { }
+
+        @Override
+        public void onActivityResumed (@NonNull android.app.Activity activity) {
+          checkSystemSeed(activity);
+        }
+
+        @Override
+        public void onActivityPaused (@NonNull android.app.Activity activity) { }
+
+        @Override
+        public void onActivityStopped (@NonNull android.app.Activity activity) { }
+
+        @Override
+        public void onActivitySaveInstanceState (@NonNull android.app.Activity activity, @NonNull android.os.Bundle outState) { }
+
+        @Override
+        public void onActivityDestroyed (@NonNull android.app.Activity activity) { }
+      });
+      if (lastSeed == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        lastSeed = systemSeed(app);
+      }
+    } catch (Throwable t) {
+      android.util.Log.e("XGram", "Expressive seed watcher failed", t);
+    }
   }
 
   private static void ensureColorCache () {
@@ -403,6 +522,9 @@ public final class XgramExpressive {
   @ColorInt
   public static int color (int role) {
     ensureColorCache();
+    if (isEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      return colorFor(role, cacheDark);
+    }
     long bit = 1L << role;
     if ((roleValid & bit) == 0) {
       int value;
@@ -417,13 +539,12 @@ public final class XgramExpressive {
     return roleCache[role];
   }
 
-  /** True when the header background is a surface role: Material You themes with Expressive design. */
+  /**
+   * True when the header background is a surface role: with Expressive design every Telegram X color resolves to a
+   * Material You role (see {@link XgramM3Colors}), so every app bar is a surface container.
+   */
   public static boolean surfaceHeader () {
-    if (!isEnabled()) {
-      return false;
-    }
-    ensureColorCache();
-    return cacheMaterialYou;
+    return isEnabled();
   }
 
   /**
@@ -466,34 +587,36 @@ public final class XgramExpressive {
 
   /** Any other Telegram X theme: accents are a tonal spot of the theme's accent, surfaces are the theme's own. */
   private static int themeRole (int role, boolean dark) {
+    // Raw theme colors (never Theme.getColor: with Expressive design on it resolves to these roles)
+    ThemeDelegate theme = ThemeManager.instance().currentTheme();
     switch (role) {
       case SURFACE:
       case SURFACE_BRIGHT:
       case SURFACE_CONTAINER_LOWEST:
-        return Theme.fillingColor();
+        return theme.getColor(ColorId.filling);
       case SURFACE_CONTAINER:
-        return Theme.backgroundColor();
+        return theme.getColor(ColorId.background);
       case SURFACE_CONTAINER_LOW:
-        return androidx.core.graphics.ColorUtils.blendARGB(Theme.backgroundColor(), Theme.fillingColor(), .5f);
+        return androidx.core.graphics.ColorUtils.blendARGB(theme.getColor(ColorId.background), theme.getColor(ColorId.filling), .5f);
       case SURFACE_CONTAINER_HIGH:
-        return androidx.core.graphics.ColorUtils.blendARGB(Theme.backgroundColor(), Theme.getColor(ColorId.text), .04f);
+        return androidx.core.graphics.ColorUtils.blendARGB(theme.getColor(ColorId.background), theme.getColor(ColorId.text), .04f);
       case SURFACE_CONTAINER_HIGHEST:
-        return androidx.core.graphics.ColorUtils.blendARGB(Theme.backgroundColor(), Theme.getColor(ColorId.text), .08f);
+        return androidx.core.graphics.ColorUtils.blendARGB(theme.getColor(ColorId.background), theme.getColor(ColorId.text), .08f);
       case SURFACE_DIM:
-        return androidx.core.graphics.ColorUtils.blendARGB(Theme.backgroundColor(), Theme.getColor(ColorId.text), .06f);
+        return androidx.core.graphics.ColorUtils.blendARGB(theme.getColor(ColorId.background), theme.getColor(ColorId.text), .06f);
       case ON_SURFACE:
-        return Theme.getColor(ColorId.text);
+        return theme.getColor(ColorId.text);
       case ON_SURFACE_VARIANT:
-        return Theme.getColor(ColorId.textLight);
+        return theme.getColor(ColorId.textLight);
       case OUTLINE:
-        return Theme.getColor(ColorId.iconLight);
+        return theme.getColor(ColorId.iconLight);
       case OUTLINE_VARIANT:
-        return Theme.getColor(ColorId.separator);
+        return theme.getColor(ColorId.separator);
       case SCRIM:
         return 0xff000000;
     }
     float[] hct = new float[3];
-    androidx.core.graphics.ColorUtils.colorToM3HCT(Theme.getColor(ColorId.progress) | 0xff000000, hct);
+    androidx.core.graphics.ColorUtils.colorToM3HCT(theme.getColor(ColorId.progress) | 0xff000000, hct);
     float hue = hct[0];
     switch (ROLE_PALETTE[role]) {
       case P_PRIMARY: return tone(hue, 36f, role, dark);
@@ -1141,12 +1264,17 @@ public final class XgramExpressive {
     return type == ListItem.TYPE_SEPARATOR || type == ListItem.TYPE_SEPARATOR_FULL;
   }
 
-  /** Between a SHADOW_TOP and a SHADOW_BOTTOM. */
+  /** Opens a group: a SHADOW_TOP, or the empty offset a list (profile, Settings) starts with before its first rows. */
+  private static boolean isGroupOpener (int type) {
+    return type == ListItem.TYPE_SHADOW_TOP || type == ListItem.TYPE_EMPTY_OFFSET || type == ListItem.TYPE_EMPTY_OFFSET_SMALL;
+  }
+
+  /** Between a group opener (see {@link #isGroupOpener}) and a SHADOW_BOTTOM. */
   private static boolean isInGroup (List<ListItem> items, int position) {
     boolean top = false;
     for (int i = position - 1; i >= 0; i--) {
       int type = items.get(i).getViewType();
-      if (type == ListItem.TYPE_SHADOW_TOP) {
+      if (isGroupOpener(type)) {
         top = true;
         break;
       }
@@ -1162,7 +1290,7 @@ public final class XgramExpressive {
       if (type == ListItem.TYPE_SHADOW_BOTTOM) {
         return true;
       }
-      if (type == ListItem.TYPE_SHADOW_TOP) {
+      if (isGroupOpener(type)) {
         return false;
       }
     }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Material 3 Expressive stage 2, part 1 (colors, app bars) -->
+  <string name="XgramExpressiveThemesNote">Expressive design uses your wallpaper colors. Themes apply when it is off.</string>
+</resources>

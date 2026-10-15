@@ -610,7 +610,9 @@ public class SettingHolder extends RecyclerView.ViewHolder {
             break;
           }
           case ListItem.TYPE_EMPTY_OFFSET: {
-            ViewSupport.setThemedBackground(view, ColorId.filling, themeProvider);
+            if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: the page background shows through, the rows below are tiles
+              ViewSupport.setThemedBackground(view, ColorId.filling, themeProvider);
+            }
             view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(12f) + Size.getMaximumHeaderSizeDifference()));
             break;
           }

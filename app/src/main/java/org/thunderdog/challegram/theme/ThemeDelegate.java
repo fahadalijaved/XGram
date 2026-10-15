@@ -26,6 +26,9 @@ public interface ThemeDelegate {
     return getProperty(PropertyId.DARK) == 1f;
   }
   default boolean needLightStatusBar () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return !isDark(); // XGram: Material 3 Expressive app bars are surfaces, so the icons follow the scheme
+    }
     return getProperty(PropertyId.LIGHT_STATUS_BAR) == 1f;
   }
 }

@@ -71,6 +71,7 @@ public final class XgramMaterialYou {
 
   /** On resume: rebuilds the themes if the wallpaper (so the system palette) changed while XGram was away. */
   public static void checkWallpaper (BaseActivity activity) {
+    XgramExpressive.checkSystemSeed(activity); // Expressive design draws with the dynamic colors whatever theme is in use
     if (!isAvailable() || !isEnabled()) {
       return;
     }

@@ -271,7 +271,15 @@ public class ThemeManager implements FactorAnimator.Target, GlobalAccountListene
   }
 
   public boolean needLightStatusBar () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return !currentTheme(false).isDark(); // XGram: surface app bars
+    }
     return currentTheme(false).needLightStatusBar();
+  }
+
+  /** XGram: repaints everything after the Expressive design colors (the wallpaper colors) changed. */
+  public static void xgramNotifyColorsChanged () {
+    instance().notifyThemeColorsChanged(false, null);
   }
 
   public @NonNull ThemeDelegate currentTheme (boolean allowTemp) {

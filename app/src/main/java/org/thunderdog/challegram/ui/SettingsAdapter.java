@@ -220,12 +220,18 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
   public void onAttachedToRecyclerView (RecyclerView recyclerView) {
     parentViews.add(recyclerView);
     com.fahadali.xgram.appearance.XgramExpressive.attachListDecoration(recyclerView, items); // XGram: Expressive design lists
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && themeProvider != null &&
+      !(themeProvider instanceof ProfileController) && !(themeProvider instanceof SettingsController) &&
+      !(themeProvider instanceof MainController) && !(themeProvider instanceof MessagesController)) {
+      com.fahadali.xgram.appearance.XgramM3Bars.attachLargeTitle(themeProvider, recyclerView); // XGram: medium flexible app bar title
+    }
   }
 
   @Override
   public void onDetachedFromRecyclerView (RecyclerView recyclerView) {
     parentViews.remove(recyclerView);
     com.fahadali.xgram.appearance.XgramExpressive.detachListDecoration(recyclerView);
+    com.fahadali.xgram.appearance.XgramM3Bars.detachLargeTitle(recyclerView);
   }
 
   public void setInnerOnScrollListener (@Nullable RecyclerView.OnScrollListener innerOnScrollListener) {
