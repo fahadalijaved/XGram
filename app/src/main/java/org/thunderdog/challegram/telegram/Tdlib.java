@@ -6635,6 +6635,16 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     updateChatUnreadMentionCount(new TdApi.UpdateChatUnreadMentionCount(chatId, unreadMentionCount));
   }
 
+  /** XGram: runs TDLib's own unread totals of a chat list through the update path again, where the rows' counts apply. */
+  @TdlibThread
+  public void xgramApplyUnreadTotals (TdApi.Update update) {
+    if (update instanceof TdApi.UpdateUnreadMessageCount) {
+      updateUnreadMessageCount((TdApi.UpdateUnreadMessageCount) update);
+    } else if (update instanceof TdApi.UpdateUnreadChatCount) {
+      updateUnreadChatCount((TdApi.UpdateUnreadChatCount) update);
+    }
+  }
+
   // XGram: ghost mode keeps the account offline even while the app is open.
   public void xgramApplyOnlineState () {
     if (Config.NEED_ONLINE) {
@@ -7303,6 +7313,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     knownChatIds.clear();
     chats.clear();
     com.fahadali.xgram.topics.XgramForumUnread.onChatsReset(this); // XGram: count forum badges again
+    com.fahadali.xgram.chats.XgramUnreadTotals.onChatsReset(this); // XGram: chats come again with their counts
     com.fahadali.xgram.chats.XgramCommunities.onChatsReset(this); // XGram: load community names again
     synchronized (chatLists) {
       for (TdlibChatList chatList : chatLists.values()) {
@@ -7849,6 +7860,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
         chatLists = null;
       }
     }
+    com.fahadali.xgram.chats.XgramUnreadTotals.onChatCount(this, update.chat); // XGram: folder and app badges follow the row
     if (chatLists != null) {
       for (TdlibChatList chatList : chatLists) {
         chatList.onUpdateNewChat(update.chat);
@@ -8168,6 +8180,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
     }
     if (chatListChange != null) {
+      com.fahadali.xgram.chats.XgramUnreadTotals.onChatChanged(this, update.chatId); // XGram: folder badges
       listeners.updateChatPosition(update, chatListChange);
     }
   }
@@ -8424,6 +8437,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       chat.unreadCount = update.unreadCount;
       chatLists = chatListsImpl(chat.positions);
     }
+    com.fahadali.xgram.chats.XgramUnreadTotals.onChatCount(this, chat); // XGram: folder and app badges follow the row
     listeners.updateChatReadInbox(update, availabilityChanged, chat, chatLists);
   }
 
@@ -8567,6 +8581,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       }
       chat.isMarkedAsUnread = update.isMarkedAsUnread;
     }
+    com.fahadali.xgram.chats.XgramUnreadTotals.onChatChanged(this, update.chatId); // XGram: folder badges
 
     listeners.updateChatIsMarkedAsUnread(update);
   }
@@ -8941,12 +8956,14 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
     listeners.updateNotificationSettings(update);
     notificationManager.onUpdateNotificationSettings(update, chatId, oldNotificationSettings);
+    com.fahadali.xgram.chats.XgramUnreadTotals.onChatChanged(this, chatId); // XGram: folder badges
   }
 
   @TdlibThread
   private void updateNotificationSettings (TdApi.UpdateScopeNotificationSettings update) {
     listeners.updateNotificationSettings(update);
     notificationManager.onUpdateNotificationSettings(update);
+    com.fahadali.xgram.chats.XgramUnreadTotals.onScopeChanged(this); // XGram: folder badges
   }
 
   @TdlibThread
@@ -9249,6 +9266,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateUnreadMessageCount (TdApi.UpdateUnreadMessageCount update) {
+    com.fahadali.xgram.chats.XgramUnreadTotals.rewrite(this, update); // XGram: totals match the counts the chat rows show
     if (setUnreadCounters(update.chatList, update.unreadCount, update.unreadUnmutedCount) && tempCounter.reset(this)) {
       ui().sendMessage(ui().obtainMessage(MSG_ACTION_DISPATCH_UNREAD_COUNTER, tempCounter.getCount(), tempCounter.isMuted() ? 1 : 0, update.chatList));
     }
@@ -9256,6 +9274,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
   @TdlibThread
   private void updateUnreadChatCount (TdApi.UpdateUnreadChatCount update) {
+    com.fahadali.xgram.chats.XgramUnreadTotals.rewrite(this, update); // XGram: totals match the counts the chat rows show
     if (setUnreadChatCounters(update.chatList, update.totalCount, update.unreadCount, update.unreadUnmutedCount, update.markedAsUnreadCount, update.markedAsUnreadUnmutedCount) && tempCounter.reset(this)) {
       ui().sendMessage(ui().obtainMessage(MSG_ACTION_DISPATCH_UNREAD_COUNTER, tempCounter.getCount(), tempCounter.isMuted() ? 1 : 0, update.chatList));
     }

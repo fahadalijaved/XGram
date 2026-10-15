@@ -55,6 +55,7 @@ public final class XgramAccountData {
       XgramDeleted.forgetAccount(accountId);
       XgramLocalRead.forgetAccount(accountId);
       com.fahadali.xgram.topics.XgramForumUnread.forgetAccount(accountId);
+      com.fahadali.xgram.chats.XgramUnreadTotals.forgetAccount(accountId);
       com.fahadali.xgram.topics.XgramTopicMute.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramAiTools.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramCommunities.forgetAccount(accountId);
