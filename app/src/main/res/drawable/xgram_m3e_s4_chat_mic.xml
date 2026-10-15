@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Material Symbols Rounded "mic", filled, 24dp (composer record button in Material 3 Expressive) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="960"
+  android:viewportHeight="960">
+  <group android:translateY="960">
+    <path
+      android:fillColor="#FF000000"
+      android:pathData="M480,-400Q430,-400 395,-435Q360,-470 360,-520L360,-760Q360,-810 395,-845Q430,-880 480,-880Q530,-880 565,-845Q600,-810 600,-760L600,-520Q600,-470 565,-435Q530,-400 480,-400ZM440,-160L440,-243Q348,-256 282.5,-321Q217,-386 203,-479Q201,-496 212,-508Q223,-520 240,-520Q257,-520 268.5,-508.5Q280,-497 284,-480Q298,-410 353.5,-365Q409,-320 480,-320Q552,-320 607,-365.5Q662,-411 676,-480Q680,-497 691.5,-508.5Q703,-520 720,-520Q737,-520 748,-508Q759,-496 757,-479Q743,-388 678,-322Q613,-256 520,-243L520,-160Q520,-143 508.5,-131.5Q497,-120 480,-120Q463,-120 451.5,-131.5Q440,-143 440,-160Z" />
+  </group>
+</vector>
