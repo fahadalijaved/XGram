@@ -180,7 +180,7 @@ public class NavigationGestureController implements GestureDetector.OnGestureLis
       if (slidingVertical) {
         close = lastScrollY < (float) navigation.getValue().getMeasuredHeight() * Size.NAVIGATION_DROP_FACTOR;
       } else {
-        close = lastScrollX < (float) navigation.getValue().getMeasuredWidth() * Size.NAVIGATION_DROP_FACTOR;
+        close = lastScrollX < (float) navigation.getValue().getMeasuredWidth() * navigation.xgramDropFactor();
       }
 
       if (close) {
