@@ -469,6 +469,27 @@ def upload_telethon(cfg, api, target, path, caption, silent):
             await client.log_out()
     return asyncio.run(run())
 
+def upload_telethon_album(cfg, api, target, paths, captions, silent):
+    """Uploads several files as one album (a grouped post) through MTProto. Returns the message ids in order."""
+    api.check_token()
+    import asyncio
+    from telethon import TelegramClient
+    from telethon.sessions import StringSession
+
+    async def run():
+        client = TelegramClient(StringSession(), int(cfg["TELEGRAM_API_ID"]), cfg["TELEGRAM_API_HASH"])
+        await client.start(bot_token=api.token)
+        try:
+            entity = await client.get_input_entity(target.chat_id)
+            log("upload album: %s" % ", ".join(os.path.basename(p) for p in paths))
+            msgs = await client.send_file(entity, paths, caption=captions, parse_mode="html", force_document=True,
+                                          reply_to=target.thread_id, silent=silent)
+            msgs = msgs if isinstance(msgs, list) else [msgs]
+            return [m.id for m in msgs]
+        finally:
+            await client.log_out()
+    return asyncio.run(run())
+
 # ------------------------------------------------------------------ files, posts, state
 
 def file_info(path):
@@ -729,6 +750,12 @@ def cmd_publish(args, cfg, api):
             caption, notes_in_caption = caption + "\n\n" + notes, True
         check_html(caption, CAPTION_LIMIT, info["name"] + " caption", telethon=big)
         plan.append((info, caption, big))
+    if len(plan) > 1 and api.send and not telethon_problem(cfg):
+        # Several APKs (arm64, armeabi-v7a, ...) go out as one album: one post in the chat, a caption per file.
+        ids = upload_telethon_album(cfg, api, target, [p[0]["path"] for p in plan], [p[1] for p in plan], args.silent)
+        for (info, caption, big), message_id in zip(plan, ids):
+            sent.append(dict(info, message_id=message_id, link=message_link(target, message_id)))
+        plan = []
     for i, (info, caption, big) in enumerate(plan):
         if i and api.send:
             time.sleep(GROUP_GAP if target.name != "channel" else 1)
