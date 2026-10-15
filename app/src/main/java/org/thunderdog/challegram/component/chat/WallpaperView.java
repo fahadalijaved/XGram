@@ -374,7 +374,7 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   }
 
   private static boolean xgramIsDefault (@Nullable TGBackground background) {
-    if (background == null || background.isEmpty() || background.isBuiltIn() || background.isCat()) {
+    if (background == null || background.isEmpty() || background.isBuiltIn()) {
       return true;
     }
     if (background.isCustom()) {
