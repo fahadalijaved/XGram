@@ -212,6 +212,7 @@ public class EditProxyController extends EditBaseController<EditProxyController.
     adapter.setItems(items, false);
 
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
     recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
       @Override
       public void getItemOffsets (Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {

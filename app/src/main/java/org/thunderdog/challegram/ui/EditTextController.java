@@ -142,6 +142,7 @@ public class EditTextController<T> extends EditBaseController<T> {
 
     recyclerView.setAdapter(adapter);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
 
     setDoneVisible(delegate.allowEmptyValue());
     @DrawableRes int iconRes = delegate.getDoneIcon();

@@ -196,6 +196,7 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
         addView(buildContentView(), LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP, 0, contentTopMargin, 0, 0));
       }};
       recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+      com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
       recyclerView.setItemAnimator(null);
       recyclerView.setAdapter(adapter = new SingleViewAdapter<>(singleView));
     }

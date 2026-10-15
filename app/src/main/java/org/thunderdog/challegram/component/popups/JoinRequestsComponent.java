@@ -194,6 +194,7 @@ public class JoinRequestsComponent implements TGLegacyManager.EmojiLoadListener,
 
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
     recyclerView.setAdapter(this.adapter);
 
     this.recyclerView = recyclerView;

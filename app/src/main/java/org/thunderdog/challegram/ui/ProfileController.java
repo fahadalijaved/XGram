@@ -1715,6 +1715,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     baseRecyclerView.setItemAnimator(null);
     baseRecyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     baseRecyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(baseRecyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
     baseRecyclerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     contentView.addView(baseRecyclerView);
 

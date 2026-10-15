@@ -231,6 +231,7 @@ public class EditNameController extends EditBaseController<EditNameController.Ar
     }
     adapter.setItems(items, false);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
     recyclerView.setAdapter(adapter);
     setDoneIcon(mode == Mode.SIGNUP ? R.drawable.baseline_arrow_forward_24 : R.drawable.baseline_check_24);
   }

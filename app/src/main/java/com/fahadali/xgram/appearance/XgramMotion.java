@@ -399,6 +399,18 @@ public final class XgramMotion {
     }
   }
 
+  /** A sheet snapping open or back (SHEET_SNAP) when Expressive design is on, RecyclerView's smoothScrollBy otherwise. */
+  public static void sheetScrollByOr (@Nullable RecyclerView rv, int dx, int dy) {
+    if (rv == null) {
+      return;
+    }
+    if (XgramExpressive.isEnabled()) {
+      springScrollBy(rv, dx, dy, SHEET_SNAP_K, SHEET_SNAP_Z);
+    } else {
+      rv.smoothScrollBy(dx, dy);
+    }
+  }
+
   /** Scroll by (dx, dy) on a spring; z below 1 can overshoot, which the layout manager may not consume. */
   public static void springScrollBy (@Nullable RecyclerView rv, int dx, int dy, float k, float z) {
     if (rv == null || (dx == 0 && dy == 0)) {

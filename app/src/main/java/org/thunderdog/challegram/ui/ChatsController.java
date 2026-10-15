@@ -656,6 +656,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
     adapter = chatsView.initWithController(this, this);
     chatsView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    com.fahadali.xgram.appearance.XgramMotion.stretch(chatsView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
+    com.fahadali.xgram.appearance.XgramMotion.attachScrollLink(this, chatsView, 0);
     if (filter != null)
       chatsView.setTotalRes(filter.getTotalStringRes());
     tdlib.ui().attachViewportToRecyclerView(chatsViewport, chatsView);
@@ -724,7 +726,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
                   int top = view != null ? -manager.getDecoratedTop(view) : 0;
                   int itemHeight = ChatsViewHolder.measureHeightForType(ChatsAdapter.VIEW_TYPE_CHAT);
                   if (top < itemHeight / 2) {
-                    chatsView.smoothScrollBy(0, -top);
+                    com.fahadali.xgram.appearance.XgramMotion.smoothScrollByOr(chatsView, 0, -top);
                   } else {
                     onScrollToTopRequested();
                   }
@@ -924,7 +926,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       if (view != null) {
         int top = Math.max(0, manager.getDecoratedTop(view));
         int bottom = Math.max(0, manager.getDecoratedBottom(view));
-        chatsView.smoothScrollBy(0, (bottom - top));
+        com.fahadali.xgram.appearance.XgramMotion.smoothScrollByOr(chatsView, 0, (bottom - top));
       }
       if (parentController != null) {
         parentController.showComposeWrap(this);
@@ -1137,7 +1139,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       if (firstView != null) {
         totalScrollBy -= manager.getDecoratedTop(firstView); // firstView.getTop();
       }
-      chatsView.smoothScrollBy(0, -totalScrollBy);
+      com.fahadali.xgram.appearance.XgramMotion.smoothScrollByOr(chatsView, 0, -totalScrollBy);
     }
   }
 

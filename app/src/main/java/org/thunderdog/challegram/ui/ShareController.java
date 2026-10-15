@@ -1068,6 +1068,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
     recyclerView.setItemAnimator(null);
     recyclerView.setClipToPadding(false);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
       @Override
       public void onScrollStateChanged (@NonNull RecyclerView recyclerView, int newState) {
@@ -2196,7 +2197,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
       totalScrollingBy = y;
       autoScrolling = true;
     }
-    recyclerView.smoothScrollBy(0, y);
+    com.fahadali.xgram.appearance.XgramMotion.sheetScrollByOr(recyclerView, 0, y);
   }
 
   @Override

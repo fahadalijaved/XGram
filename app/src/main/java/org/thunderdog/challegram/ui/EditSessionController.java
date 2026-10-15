@@ -244,6 +244,7 @@ public class EditSessionController extends EditBaseController<EditSessionControl
 
     adapter.setItems(items, false);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
     recyclerView.setAdapter(adapter);
     checkDoneButton();
   }

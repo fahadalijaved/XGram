@@ -81,6 +81,7 @@ public class SetSenderControllerPage extends BottomSheetViewController.BottomShe
     addThemeInvalidateListener(recyclerView);
     recyclerView.setItemAnimator(null);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
       @Override

@@ -285,6 +285,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
       }
     });
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
     ViewSupport.setThemedBackground(recyclerView, getRecyclerBackgroundColorId());
     addThemeInvalidateListener(recyclerView);
     recyclerView.setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 150l));
@@ -718,7 +719,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   public void collapseToStart () {
     int scrollY = getRecyclerScrollY();
     if (scrollY != 0) {
-      recyclerView.smoothScrollBy(0, -scrollY);
+      com.fahadali.xgram.appearance.XgramMotion.sheetScrollByOr(recyclerView, 0, -scrollY);
     }
     animateCurrentHeight(startHeight, false);
   }

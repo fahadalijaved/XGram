@@ -962,6 +962,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   @Override
   public void onPageSelected (int position, int actualPosition) {
+    com.fahadali.xgram.appearance.XgramMotion.notifyActive(getCurrentPagerItem());
     if (!inSearchMode()) {
       composeWrap.show();
     }

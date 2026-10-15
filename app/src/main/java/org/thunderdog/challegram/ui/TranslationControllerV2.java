@@ -227,6 +227,7 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
     recyclerView.setItemAnimator(null);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     recyclerView.setAdapter(new RecyclerView.Adapter<>() {
       @NonNull
@@ -756,6 +757,7 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
       RecyclerView languageRecyclerView = new CustomRecyclerView(context);
       languageRecyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+      com.fahadali.xgram.appearance.XgramMotion.stretch(languageRecyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
       languageRecyclerView.setLayoutManager(new LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false));
       languageRecyclerView.setAdapter(new LanguageAdapter(context, themeProvider, this::onOptionClick, selected, original));
       languageRecyclerView.setItemAnimator(null);

@@ -323,6 +323,7 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     }
 
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
 
     FrameLayoutFix countryWrap = new FrameLayoutFix(context);
     countryWrap.setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), 0);

@@ -179,6 +179,7 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
     messageViewport = tdlib.messageViewer().createViewport(new TdApi.MessageSourceSearch(), this);
     recyclerView = (MediaRecyclerView) Views.inflate(context(), R.layout.recycler_sharedmedia, null);
     recyclerView.setOverScrollMode(RecyclerView.OVER_SCROLL_NEVER);
+    com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
     Views.applyBottomInset(recyclerView, extraBottomInset);
     addThemeInvalidateListener(recyclerView);
     if (alternateParent != null) {
@@ -888,6 +889,7 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
       items.add(new ListItem(ListItem.TYPE_SMART_PROGRESS));
     } else {
       // recyclerView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+      com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
       addItems(reuse, provideViewType(), target, 0, items, null, this, buildFlags());
     }
     adapter.replaceItems(items);
