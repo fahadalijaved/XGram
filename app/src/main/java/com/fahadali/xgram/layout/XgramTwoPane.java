@@ -199,6 +199,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
         if (!isActive || leftMain == null || leftMain.tdlib() != root.tdlib()) {
           activate(root.tdlib());
         } else {
+          leftWidth = computeLeftWidth(); // the pane settings may have changed
           layout();
         }
         hideRoot(root);
@@ -267,10 +268,33 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
   }
 
+  /** The chat list pane width: the one last set with the handle, or 38% of the screen within 320 to 420dp. */
   private int computeLeftWidth () {
+    XgramSettings settings = XgramSettings.instance();
+    int saved = settings.paneResizable() ? settings.paneListWidthDp() : 0;
+    if (saved > 0) {
+      return Screen.dp(saved);
+    }
     int width = context.getResources().getConfiguration().screenWidthDp;
     int dp = Math.max(320, Math.min(420, Math.round(width * .38f)));
     return Screen.dp(dp);
+  }
+
+  /**
+   * The chat list's own pane, while two panes are shown or kept for the next unfold: it keeps clear of the screen
+   * edge and the divider (see MainController#xgramUpdatePaneInset).
+   */
+  public static boolean isPaneChatList (@Nullable ViewController<?> c) {
+    if (c == null) {
+      return false;
+    }
+    XgramTwoPane twoPane = c.context().xgramTwoPane();
+    return twoPane != null && twoPane.leftMain != null && twoPane.leftMain == c;
+  }
+
+  /** Space under the last chat of a chat list page in the narrow pane, so the compose button doesn't cover it. */
+  public static int fabSpace (@Nullable ViewController<?> c) {
+    return c != null && isPaneChatList(c.getParentOrSelf()) ? Screen.dp(56f + 16f + 8f) : 0;
   }
 
   private void activate (Tdlib tdlib) {
@@ -305,7 +329,13 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     underlay = createPlaceholder();
     container.addView(underlay, container.indexOfChild(navigation.getValue()));
 
+    // Over both panes (and the placeholder), so it gets touches before them.
+    handle = new HandleView(context);
+    handle.setLayoutParams(new FrameLayout.LayoutParams(Screen.dp(HANDLE_TOUCH_WIDTH_DP), Screen.dp(HANDLE_TOUCH_HEIGHT_DP), Gravity.LEFT | Gravity.TOP));
+    container.addView(handle, container.indexOfChild(placeholder) + 1);
+
     isActive = true;
+    leftMain.xgramUpdatePaneInset();
     layout();
     android.util.Log.i("XGram", "two-pane on, chat list " + leftWidth + "px of " + context.getResources().getConfiguration().screenWidthDp + "dp");
   }
@@ -365,7 +395,19 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       }
     }
 
-    int list = Math.min(leftWidth, (end - start) / 2);
+    int total = end - start;
+    XgramSettings settings = XgramSettings.instance();
+    int list;
+    if (settings.paneSplitEvenly()) {
+      list = evenListWidth(parent, start, end, rtl);
+    } else if (dragListWidth >= 0 || (settings.paneResizable() && settings.paneListWidthDp() > 0)) {
+      // Set with the handle: anything that leaves both panes usable.
+      int min = Math.min(Screen.dp(HINGE_MIN_LIST_DP), total / 2);
+      int max = Math.max(total / 2, total - Screen.dp(HINGE_MIN_CHAT_DP));
+      list = Math.max(min, Math.min(max, dragListWidth >= 0 ? dragListWidth : leftWidth));
+    } else {
+      list = Math.min(leftWidth, total / 2);
+    }
     if (rtl) {
       chatStart = start;
       chatEnd = end - list;
@@ -379,6 +421,28 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       chatEnd = end;
       gutterStart = gutterEnd = listEnd;
     }
+  }
+
+  /**
+   * Split evenly: half the width each, meeting at the fold when the screen folds down the middle (a Fold lying flat
+   * reports its fold too), so the line between the panes sits on the crease.
+   */
+  private int evenListWidth (ViewGroup parent, int start, int end, boolean rtl) {
+    XgramWindow window = context.xgramWindow();
+    XgramWindow.Fold fold = window != null ? window.fold() : null;
+    if (fold != null && !fold.horizontal) {
+      android.graphics.Rect hinge = window.hingeBoundsIn(parent);
+      if (hinge != null) {
+        int center = (hinge.left + hinge.right) / 2;
+        int total = end - start;
+        int list = rtl ? end - center : center - start;
+        // Only a fold near the middle: anything else is not "even".
+        if (list > total * 2 / 5 && list < total * 3 / 5) {
+          return list;
+        }
+      }
+    }
+    return (end - start) / 2;
   }
 
   /** Book posture: the hinge in {@code parent}, when the panes should meet there. */
@@ -416,6 +480,12 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     if (divider != null) {
       divider.measure(View.MeasureSpec.makeMeasureSpec(dividerWidth(), View.MeasureSpec.EXACTLY), heightSpec);
     }
+    if (handle != null) {
+      handle.measure(
+        View.MeasureSpec.makeMeasureSpec(Screen.dp(HANDLE_TOUCH_WIDTH_DP), View.MeasureSpec.EXACTLY),
+        View.MeasureSpec.makeMeasureSpec(Screen.dp(HANDLE_TOUCH_HEIGHT_DP), View.MeasureSpec.EXACTLY)
+      );
+    }
   }
 
   /** Called by the activity's content layout after its own layout pass. */
@@ -444,6 +514,162 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       } else {
         divider.layout(listStart, 0, listStart + dividerWidth, height); // list on the right
       }
+    }
+    if (handle != null) {
+      // Centred on the line, in the middle of the space under the headers.
+      int line = listStart < chatStart ? listEnd : listStart;
+      int w = handle.getMeasuredWidth(), h = handle.getMeasuredHeight();
+      int headerHeight = org.thunderdog.challegram.navigation.HeaderView.getSize(true);
+      int top = headerHeight + Math.max(0, (height - headerHeight - h) / 2);
+      handle.layout(line - w / 2, top, line - w / 2 + w, top + h);
+      boolean visible = canResize();
+      handle.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+      if (!visible) {
+        handle.cancelDrag();
+      }
+    }
+  }
+
+  // Resizing: the handle on the line between the panes drags it; the width is kept (in dp) for the next time.
+
+  private static final float HANDLE_TOUCH_WIDTH_DP = 24f, HANDLE_TOUCH_HEIGHT_DP = 72f;
+
+  @Nullable private HandleView handle;
+  /** The chat list width while the handle is being dragged, else -1. */
+  private int dragListWidth = -1;
+
+  /** Not when split evenly, nor in book posture (the hinge is the line), nor with the setting off. */
+  private boolean canResize () {
+    XgramSettings settings = XgramSettings.instance();
+    return isActive && settings.paneResizable() && !settings.paneSplitEvenly() && gutterEnd <= gutterStart;
+  }
+
+  private void onDragged (int listWidth) {
+    if (dragListWidth != listWidth) {
+      dragListWidth = listWidth;
+      container.requestLayout();
+    }
+  }
+
+  private void onDragEnd (boolean commit) {
+    if (dragListWidth < 0) {
+      return;
+    }
+    dragListWidth = -1;
+    if (commit && listEnd > listStart) {
+      XgramSettings.instance().setPaneListWidthDp(Math.round((listEnd - listStart) / Screen.density()));
+    }
+    leftWidth = computeLeftWidth();
+    container.requestLayout();
+  }
+
+  /** Double tap on the handle: back to the usual width. */
+  private void resetWidth () {
+    dragListWidth = -1;
+    XgramSettings.instance().setPaneListWidthDp(0);
+    leftWidth = computeLeftWidth();
+    container.requestLayout();
+  }
+
+  /**
+   * The Material 3 pane drag handle: a 4dp pill on the line between the panes (wider while held), in a 24 x 72dp touch
+   * area. It takes the gesture from the panes and the back swipe as soon as it is touched.
+   */
+  private final class HandleView extends View {
+    private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.RectF pill = new android.graphics.RectF();
+    private final int touchSlop;
+    private float downRawX;
+    private int downList;
+    private boolean tracking, dragging;
+    private long lastTapUp;
+
+    HandleView (android.content.Context context) {
+      super(context);
+      touchSlop = android.view.ViewConfiguration.get(context).getScaledTouchSlop();
+      setContentDescription(Lang.getString(R.string.XgramPaneResizable));
+    }
+
+    void cancelDrag () {
+      if (tracking) {
+        tracking = dragging = false;
+        setPressed(false);
+        onDragEnd(false);
+        invalidate();
+      }
+    }
+
+    @Override
+    protected void onDraw (android.graphics.Canvas c) {
+      boolean held = tracking;
+      float w = Screen.dpf(held ? 8f : 4f), h = Screen.dpf(held ? 52f : 48f);
+      float cx = getWidth() / 2f, cy = getHeight() / 2f;
+      pill.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
+      paint.setColor(Theme.getColor(held ? ColorId.text : ColorId.iconLight));
+      c.drawRoundRect(pill, w / 2f, w / 2f, paint);
+    }
+
+    @Override
+    public boolean onTouchEvent (android.view.MotionEvent e) {
+      switch (e.getActionMasked()) {
+        case android.view.MotionEvent.ACTION_DOWN: {
+          if (!canResize()) {
+            return false;
+          }
+          ViewGroup parent = (ViewGroup) getParent();
+          if (parent != null) {
+            parent.requestDisallowInterceptTouchEvent(true);
+          }
+          downRawX = e.getRawX();
+          downList = listEnd - listStart;
+          tracking = true;
+          dragging = false;
+          setPressed(true);
+          invalidate();
+          return true;
+        }
+        case android.view.MotionEvent.ACTION_MOVE: {
+          if (!tracking) {
+            return false;
+          }
+          float dx = e.getRawX() - downRawX;
+          if (!dragging && Math.abs(dx) > touchSlop) {
+            dragging = true;
+            performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+          }
+          if (dragging) {
+            onDragged(Math.round(Lang.rtl() ? downList - dx : downList + dx));
+          }
+          return true;
+        }
+        case android.view.MotionEvent.ACTION_UP: {
+          if (!tracking) {
+            return false;
+          }
+          tracking = false;
+          setPressed(false);
+          if (dragging) {
+            dragging = false;
+            onDragEnd(true);
+          } else {
+            long now = android.os.SystemClock.uptimeMillis();
+            if (lastTapUp != 0 && now - lastTapUp <= android.view.ViewConfiguration.getDoubleTapTimeout()) {
+              lastTapUp = 0;
+              performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
+              resetWidth();
+            } else {
+              lastTapUp = now;
+            }
+          }
+          invalidate();
+          return true;
+        }
+        case android.view.MotionEvent.ACTION_CANCEL: {
+          cancelDrag();
+          return true;
+        }
+      }
+      return tracking;
     }
   }
 
@@ -515,6 +741,11 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       container.removeView(underlay);
       underlay = null;
     }
+    if (handle != null) {
+      handle.cancelDrag();
+      container.removeView(handle);
+      handle = null;
+    }
   }
 
   // Placeholder
@@ -579,6 +810,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
     if (divider != null) {
       divider.invalidate();
+    }
+    if (handle != null) {
+      handle.invalidate();
     }
     if (underlay != null) {
       container.removeView(underlay);

@@ -247,6 +247,8 @@ public final class XgramExpressive {
   /** Pixel SettingsLib (Android 16 QPR1) and Compose SegmentedListItem. */
   public static final float LIST_OUTER_CORNER = 20f, LIST_INNER_CORNER = 4f, LIST_PRESSED_CORNER = 16f,
     LIST_GAP = 2f, LIST_INSET = 16f;
+  /** Extra space above the first group under a collapsing avatar header, so its floating button doesn't cover it. */
+  private static final float HEADER_FAB_CLEARANCE = 24f;
 
   public static final float ELEVATION_1 = 1f, ELEVATION_2 = 3f, ELEVATION_3 = 6f, ELEVATION_4 = 8f, ELEVATION_5 = 12f;
 
@@ -1377,6 +1379,10 @@ public final class XgramExpressive {
         int prevType = items.get(position - 1).getViewType();
         if (isRowType(prevType)) {
           outRect.top = Screen.dp(LIST_GAP);
+        } else if (prevType == ListItem.TYPE_EMPTY_OFFSET) {
+          // Under a collapsing avatar header (Settings, profiles) the floating button sits half below the header's
+          // edge: the first group starts clear of it instead of under it.
+          outRect.top = Screen.dp(HEADER_FAB_CLEARANCE);
         }
       } else if (groupRow) {
         // A group opened by the list start: the space a SHADOW_TOP would give.

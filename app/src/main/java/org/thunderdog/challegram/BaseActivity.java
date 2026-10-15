@@ -576,7 +576,14 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     navigation.getStack().addChangeListener(navigationStackChangeListener);
     xgramWindow = new com.fahadali.xgram.layout.XgramWindow(this); // XGram: size classes, fold posture
     xgramWindow.watch(rootView);
-    xgramTwoPane = new com.fahadali.xgram.layout.XgramTwoPane(this, navigation, contentView); // XGram: foldables, tablets
+    // XGram: unfolding, resizing and posture changes can drop the light-bar flags (white icons on a light bar):
+    // set the bars again whenever the window changes.
+    xgramWindow.addListener((window, changes) -> {
+      if ((changes & (com.fahadali.xgram.layout.XgramWindow.CHANGE_SIZE | com.fahadali.xgram.layout.XgramWindow.CHANGE_POSTURE | com.fahadali.xgram.layout.XgramWindow.CHANGE_MULTI_WINDOW)) != 0) {
+        xgramReapplySystemBars();
+      }
+    });
+    xgramTwoPane =new com.fahadali.xgram.layout.XgramTwoPane(this, navigation, contentView); // XGram: foldables, tablets
     com.fahadali.xgram.XgramProxyRules.init(this); // XGram
     xgramTwoPane.update();
     backPressedCallback.setEnabled(isBackPressActionAvailable(handleOnBackPress(false, false)));
@@ -1425,6 +1432,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       camera.onConfigurationChanged(newConfig);
     }
     setGestureNavigationEnabled(Screen.isGesturalNavigationEnabled(getResources()));
+    xgramReapplySystemBars(); // XGram: folding / unfolding resets the bar appearance
     currentOrientation = newConfig.orientation;
     Lang.checkLanguageCode();
     setSystemNightMode(newConfig.uiMode & Configuration.UI_MODE_NIGHT_MASK);
@@ -3618,10 +3626,36 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
         isLight = isLight && passcodeFactor < .5f;
       }
       UI.setNavigationBarColor(getWindow(), color, isGestureNavigationEnabled);
-      if (this.isWindowLight != isLight) {
+      if (this.isWindowLight != isLight || xgramForceSystemBars) {
         this.isWindowLight = isLight;
         UI.setLightSystemBars(getWindow(), isLight, Theme.needLightStatusBar(), lastWindowVisibility, true);
       }
+    }
+  }
+
+  private boolean xgramForceSystemBars;
+
+  /**
+   * XGram: sets the navigation bar colour and the light status and navigation bar flags again, even when nothing
+   * changed on our side. After a fold or unfold the system can hand the window back with the flags cleared (white
+   * icons on a light bar) while {@link #isWindowLight} still says they are set. On a wide screen the taskbar sits where
+   * the navigation bar was and gets a grey contrast scrim over our own colour, so the scrim is turned off there.
+   */
+  private void xgramReapplySystemBars () {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Settings.instance().useEdgeToEdge()) {
+      try {
+        boolean wide = getResources().getConfiguration().smallestScreenWidthDp >= 600;
+        getWindow().setNavigationBarContrastEnforced(!(Config.EDGE_TO_EDGE_CUSTOMIZABLE || wide));
+      } catch (Throwable ignored) { }
+    }
+    xgramForceSystemBars = true;
+    try {
+      updateNavigationBarColor();
+    } finally {
+      xgramForceSystemBars = false;
+    }
+    if (!Config.USE_CUSTOM_NAVIGATION_COLOR && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      UI.setLightSystemBars(getWindow(), false, Theme.needLightStatusBar(), lastWindowVisibility, true);
     }
   }
 

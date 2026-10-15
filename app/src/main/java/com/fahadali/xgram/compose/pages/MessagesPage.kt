@@ -38,7 +38,7 @@ fun MessagesPage() {
     // Worked out once per build of the page, not while rows are drawn.
     val hidden = XgramComposeBridge.messageMenuHiddenCount()
 
-    header(R.string.XgramMessageMenu)
+    // No header over this group: its only row is called Message menu already.
     group {
       value(
         R.id.btn_xgramMessageMenu, s(R.string.XgramMessageMenu),

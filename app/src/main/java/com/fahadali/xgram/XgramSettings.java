@@ -1124,4 +1124,99 @@ public final class XgramSettings {
     foldTabletop = value;
     put(KEY_FOLD_TABLETOP, value);
   }
+
+  // Two panes (Appearance > Layout, see com.fahadali.xgram.layout.XgramTwoPane): how wide the chat list pane is.
+  // Read while measuring the panes, so cached.
+
+  public static final String KEY_PANE_SPLIT_EVENLY = "xgram_split_evenly";
+  public static final String KEY_PANE_RESIZABLE = "xgram_pane_drag";
+  public static final String KEY_PANE_LIST_WIDTH = "xgram_pane_width";
+
+  private volatile Boolean paneSplitEvenly, paneResizable;
+  private volatile int paneListWidthDp = -1;
+
+  /** The chat list and the chat get half the screen each, split at the hinge when the screen folds there. */
+  public boolean paneSplitEvenly () {
+    Boolean value = paneSplitEvenly;
+    if (value == null) {
+      paneSplitEvenly = value = pmc().getBoolean(KEY_PANE_SPLIT_EVENLY, false);
+    }
+    return value;
+  }
+
+  public void setPaneSplitEvenly (boolean value) {
+    paneSplitEvenly = value;
+    put(KEY_PANE_SPLIT_EVENLY, value);
+  }
+
+  /** The line between the panes has a handle that drags it; the width is kept. */
+  public boolean paneResizable () {
+    Boolean value = paneResizable;
+    if (value == null) {
+      paneResizable = value = pmc().getBoolean(KEY_PANE_RESIZABLE, true);
+    }
+    return value;
+  }
+
+  public void setPaneResizable (boolean value) {
+    paneResizable = value;
+    put(KEY_PANE_RESIZABLE, value);
+  }
+
+  // Settings search: the results opened last (search hit keys, newest first), shown before anything is typed.
+  // Not a setting: left out of backups.
+
+  private static final String KEY_SEARCH_RECENT = "xgram_search_recent";
+  private static final int SEARCH_RECENT_MAX = 6;
+
+  public java.util.List<String> searchRecents () {
+    String value = pmc().getString(KEY_SEARCH_RECENT, "");
+    java.util.List<String> list = new java.util.ArrayList<>();
+    if (value != null && !value.isEmpty()) {
+      for (String key : value.split("\n")) {
+        if (!key.isEmpty()) {
+          list.add(key);
+        }
+      }
+    }
+    return list;
+  }
+
+  public void addSearchRecent (String key) {
+    if (key == null || key.isEmpty() || key.indexOf('\n') >= 0) {
+      return;
+    }
+    java.util.List<String> list = searchRecents();
+    list.remove(key);
+    list.add(0, key);
+    while (list.size() > SEARCH_RECENT_MAX) {
+      list.remove(list.size() - 1);
+    }
+    pmc().putString(KEY_SEARCH_RECENT, android.text.TextUtils.join("\n", list));
+  }
+
+  public void clearSearchRecents () {
+    pmc().remove(KEY_SEARCH_RECENT);
+  }
+
+  /** The chat list pane width (dp) last set by dragging, or 0: the usual width. */
+  public int paneListWidthDp () {
+    int value = paneListWidthDp;
+    if (value < 0) {
+      paneListWidthDp = value = Math.max(0, pmc().getInt(KEY_PANE_LIST_WIDTH, 0));
+    }
+    return value;
+  }
+
+  public void setPaneListWidthDp (int value) {
+    paneListWidthDp = value = Math.max(0, value);
+    if (value == 0) {
+      pmc().remove(KEY_PANE_LIST_WIDTH);
+      for (Listener listener : listeners) {
+        listener.onXgramSettingChanged(KEY_PANE_LIST_WIDTH);
+      }
+    } else {
+      putInt(KEY_PANE_LIST_WIDTH, value);
+    }
+  }
 }
