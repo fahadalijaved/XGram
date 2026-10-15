@@ -35,7 +35,7 @@ import java.util.List;
 import me.vkryl.core.collection.IntList;
 
 /**
- * Settings → XGram → Chats → Chat actions order: the order of the actions a long press on a chat shows, in the chat
+ * Settings → XGram → Chat List → Chat actions: the order of the actions a long press on a chat shows, in the chat
  * preview's bar and in XGram's quick actions pill. Telegram X's order by default.
  */
 public final class XgramChatActionsController extends RecyclerViewController<Void> implements View.OnClickListener {
@@ -102,7 +102,8 @@ public final class XgramChatActionsController extends RecyclerViewController<Voi
     reorder = new XgramReorder.Ui(recyclerView, adapter, XgramReorder.CHAT_ACTIONS, item -> item.getId() == R.id.btn_xgramChatAction ? (String) item.getData() : null, null, null);
   }
 
-  private static List<ListItem> buildItems () {
+  /** Rows of this page. The settings search indexes these too. */
+  public static List<ListItem> buildItems () {
     List<ListItem> items = new ArrayList<>();
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramChatActionsOrderInfo));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));

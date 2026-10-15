@@ -28,7 +28,7 @@ import org.thunderdog.challegram.v.CustomRecyclerView;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Settings → XGram → Chats → Message menu: which options a long press on a message shows, and in what order. */
+/** Settings → XGram → Messages → Message menu: which options a long press on a message shows, and in what order. */
 public final class XgramMessageMenuController extends RecyclerViewController<Void> implements View.OnClickListener {
   private SettingsAdapter adapter;
   private XgramReorder.Ui reorder;
@@ -66,7 +66,8 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
     reorder = new XgramReorder.Ui(recyclerView, adapter, XgramReorder.MESSAGE_MENU, item -> item.getData() instanceof XgramMessageMenu.Option ? ((XgramMessageMenu.Option) item.getData()).key : null, null, null);
   }
 
-  private static List<ListItem> buildItems () {
+  /** Rows of this page. The settings search indexes these too. */
+  public static List<ListItem> buildItems () {
     List<ListItem> items = new ArrayList<>();
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramMessageMenuInfo));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));

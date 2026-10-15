@@ -46,6 +46,11 @@
   <item type="id" name="btn_xgramSectionPrivacy" />
   <item type="id" name="btn_xgramSectionNetwork" />
   <item type="id" name="btn_xgramSectionBackup" />
+  <item type="id" name="btn_xgramSectionChatList" />
+  <item type="id" name="btn_xgramSectionTranslation" />
+  <item type="id" name="btn_xgramSectionFilters" />
+  <item type="id" name="btn_xgramEmojiSet" />
+  <item type="id" name="btn_xgramHiddenPeople" />
   <item type="id" name="btn_xgramSettings" />
   <item type="id" name="btn_xgramGhostMode" />
   <item type="id" name="btn_xgramGhostDontRead" />

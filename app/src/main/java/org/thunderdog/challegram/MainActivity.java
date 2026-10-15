@@ -853,6 +853,18 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       return false;
     }
 
+    if (com.fahadali.xgram.ghost.XgramGhost.ACTION_TILE_PREFERENCES.equals(action)) {
+      // XGram: a long press on the ghost mode Quick Settings tile opens its settings (Privacy, Ghost mode first).
+      ViewController<?> c = com.fahadali.xgram.XgramSettingsController.ghost(this, account.tdlib());
+      if (navigation.isEmpty()) {
+        navigation.initController(c);
+        insertMainController();
+      } else {
+        navigation.navigateTo(c);
+      }
+      return true;
+    }
+
     // System shit
 
     RunnableData<TdlibAccount> consumer = null;

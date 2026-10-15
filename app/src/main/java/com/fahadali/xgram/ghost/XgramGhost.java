@@ -26,6 +26,9 @@ import org.thunderdog.challegram.telegram.TdlibManager;
 public final class XgramGhost {
   private XgramGhost () { }
 
+  /** TileService.ACTION_QS_TILE_PREFERENCES (API 24): a long press on the Quick Settings tile opens the app with it. */
+  public static final String ACTION_TILE_PREFERENCES = "android.service.quicksettings.action.QS_TILE_PREFERENCES";
+
   public static boolean dontReadMessages () {
     return XgramSettings.instance().ghostDontRead();
   }

@@ -98,6 +98,7 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
         }
         Object data = item.getData();
         if (item.getId() == R.id.btn_xgramHidePhone) {
+          view.setData(R.string.XgramHidePhoneSub);
           view.getToggler().setRadioEnabled(XgramSettings.instance().hidePhone(), isUpdate);
         } else if (data instanceof String && view.getToggler() != null) {
           view.getToggler().setRadioEnabled(!XgramSettings.instance().drawerItemHidden((String) data), isUpdate);
@@ -112,21 +113,46 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
     }, this::updateDrawer);
   }
 
-  private static List<ListItem> buildItems () {
+  /** Rows of this page. The settings search indexes these too. */
+  static List<ListItem> buildItems () {
     List<ListItem> items = new ArrayList<>();
     // The same option as in Settings → XGram → Privacy: the header shows the @username instead of the number.
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramHidePhone, 0, R.string.XgramHidePhone));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramHidePhone, 0, R.string.XgramHidePhone));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramSideMenuItems));
     addSection(items, KEYS, NAMES);
     addSection(items, TOGGLE_KEYS, TOGGLE_NAMES);
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramSideMenuInfo));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramResetOrder, R.drawable.baseline_replay_24, R.string.XgramResetOrder));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramSideMenuInfo));
     return items;
+  }
+
+  /** How many items the side menu hides (Settings → XGram shows it). Settings can't be hidden. */
+  static int hiddenCount () {
+    int count = 0;
+    for (String key : KEYS) {
+      if (!KEY_SETTINGS.equals(key) && XgramSettings.instance().drawerItemHidden(key)) {
+        count++;
+      }
+    }
+    for (String key : TOGGLE_KEYS) {
+      if (XgramSettings.instance().drawerItemHidden(key)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  @Override
+  public void onFocus () {
+    super.onFocus();
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_xgramHidePhone); // also a switch in Privacy
+    }
   }
 
   private static void addSection (List<ListItem> items, String[] keys, int[] names) {
