@@ -72,6 +72,9 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
     receiver = new ImageReceiver(this, 0);
     receiver.prepareToBeCropped();
     receiver.setAnimationDisabled(true);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      receiver.setRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS)); // XGram: Material 3 Expressive 4dp tiles
+    }
 
     setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
   }
@@ -297,9 +300,45 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
     return factor != 0f ? (receiver.getWidth() - (int) ((float) receiver.getWidth() * (1f - factor * SCALE))) / 2 : 0;
   }
 
+  // XGram: Material 3 Expressive check: a primary circle with the onPrimary selection number, an outline circle
+  // (white on a light scrim, over the photo) when not selected
+  private @Nullable android.text.TextPaint xgramCheckText;
+
+  private void xgramDrawCheck (Canvas c, int centerX, int centerY) {
+    final float radius = Screen.dp(11f);
+    if (factor < 1f) {
+      float alpha = 1f - factor;
+      c.drawCircle(centerX, centerY, radius, Paints.fillingPaint(ColorUtils.alphaColor(alpha, 0x33000000)));
+      c.drawCircle(centerX, centerY, radius - Screen.dp(1f), Paints.getProgressPaint(ColorUtils.alphaColor(alpha, 0xffffffff), Screen.dp(2f)));
+    }
+    if (factor > 0f) {
+      float r = radius * (.6f + .4f * factor);
+      int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      c.drawCircle(centerX, centerY, r + Screen.dp(1.5f) * factor, Paints.fillingPaint(ColorUtils.alphaColor(factor, 0xffffffff)));
+      c.drawCircle(centerX, centerY, r, Paints.fillingPaint(ColorUtils.alphaColor(factor, primary)));
+      if (selectionIndexStr != null) {
+        if (xgramCheckText == null) {
+          xgramCheckText = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+          xgramCheckText.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, true));
+          xgramCheckText.setTextAlign(android.graphics.Paint.Align.CENTER);
+        }
+        xgramCheckText.setTextSize(Screen.dp(12f) * (.6f + .4f * factor));
+        xgramCheckText.setColor(ColorUtils.alphaColor(factor, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY)));
+        android.graphics.Paint.FontMetrics fm = xgramCheckText.getFontMetrics();
+        c.drawText(selectionIndexStr, centerX, centerY - (fm.ascent + fm.descent) / 2f, xgramCheckText);
+      }
+    }
+  }
+
   @Override
   protected void onDraw (Canvas c) {
-    if (factor != 0f || receiver.needPlaceholder()) {
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramM3 && (factor != 0f || receiver.needPlaceholder())) {
+      RectF tile = Paints.getRectF();
+      tile.set(0, 0, width, height);
+      float r = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS);
+      c.drawRoundRect(tile, r, r, Paints.fillingPaint(factor != 0f ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST)));
+    } else if (factor != 0f || receiver.needPlaceholder()) {
       c.drawRect(0, 0, width, height, Paints.fillingPaint(Theme.chatSelectionColor()));
     }
 
@@ -332,6 +371,11 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
       final int centerX = receiver.centerX() + (int) ((float) receiver.getWidth() * (1f - SCALE)) / 2;
       final int centerY = receiver.centerY() - (int) ((float) receiver.getHeight() * (1f - SCALE)) / 2;
       final int radius = Screen.dp(9f + 2f * factor);
+
+      if (xgramM3) {
+        xgramDrawCheck(c, centerX, centerY);
+        return;
+      }
 
       final int toColor = ColorUtils.compositeColor(Theme.fillingColor(), Theme.chatSelectionColor());
       c.drawCircle(centerX, centerY, radius, Paints.getOuterCheckPaint(ColorUtils.alphaColor(1f, ColorUtils.fromToArgb(0xffffffff, toColor, factor))));
