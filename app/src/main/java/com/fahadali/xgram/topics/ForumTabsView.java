@@ -102,7 +102,7 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       setPadding(Screen.dp(4f), 0, Screen.dp(6f), 0);
     }
     setAdapter(adapter = new Adapter());
-    ViewSupport.setThemedBackground(this, ColorId.filling, parent);
+    ViewSupport.setThemedBackground(this, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.background : ColorId.filling, parent); // XGram: Expressive tabs sit on the page layer
     addOnScrollListener(new OnScrollListener() {
       @Override
       public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
@@ -389,11 +389,36 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       this.counter = new Counter.Builder().textSize(11f).callback((Counter.Callback) this).build();
     }
 
+    private static TextPaint xgramTitlePaint, xgramSideTitlePaint;
+
+    /** XGram: Expressive tab label: ON_SECONDARY_CONTAINER on the selected pill, ON_SURFACE_VARIANT otherwise. */
+    private static int xgramLabelColor (boolean selected) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(selected ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    }
+
     private static TextPaint titlePaint (boolean selected) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        if (xgramTitlePaint == null) {
+          xgramTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+          xgramTitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false));
+        }
+        xgramTitlePaint.setTextSize(Screen.dp(14f));
+        xgramTitlePaint.setColor(xgramLabelColor(selected));
+        return xgramTitlePaint;
+      }
       return Paints.getBoldPaint14(false, Theme.getColor(selected ? ColorId.textNeutral : ColorId.textLight));
     }
 
     private static TextPaint sideTitlePaint (boolean selected) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        if (xgramSideTitlePaint == null) {
+          xgramSideTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+          xgramSideTitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false));
+        }
+        xgramSideTitlePaint.setTextSize(Screen.dp(12f));
+        xgramSideTitlePaint.setColor(xgramLabelColor(selected));
+        return xgramSideTitlePaint;
+      }
       if (sideTitlePaint == null) {
         sideTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         sideTitlePaint.setTypeface(Fonts.getRobotoMedium());
@@ -561,7 +586,7 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
     private void drawIcon (Canvas c, @DrawableRes int res, float cx, float cy, boolean active) {
       Drawable icon = Drawables.get(getResources(), res);
       Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f,
-        Paints.getPorterDuffPaint(Theme.getColor(active ? ColorId.textNeutral : ColorId.icon)));
+        Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramLabelColor(active) : Theme.getColor(active ? ColorId.textNeutral : ColorId.icon)));
     }
 
     @Override
@@ -581,9 +606,10 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
         return;
       }
       if (selected) {
-        int pillHeight = Screen.dp(30f);
+        int pillHeight = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 32f : 30f);
         RectF rect = Paints.getRectF(Screen.dp(2f), centerY - pillHeight / 2f, width - Screen.dp(2f), centerY + pillHeight / 2f);
-        c.drawRoundRect(rect, pillHeight / 2f, pillHeight / 2f, Paints.fillingPaint(ColorUtils.alphaColor(.14f, Theme.getColor(ColorId.textNeutral))));
+        int pillColor = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : ColorUtils.alphaColor(.14f, Theme.getColor(ColorId.textNeutral));
+        c.drawRoundRect(rect, pillHeight / 2f, pillHeight / 2f, Paints.fillingPaint(pillColor));
       }
       if (type == TYPE_ADD) {
         drawIcon(c, R.drawable.baseline_add_24, width / 2f, centerY, false);
@@ -624,7 +650,13 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
         drawIcon(c, R.drawable.baseline_add_24, centerX, height / 2f, false);
         return;
       }
-      if (selected) {
+      if (selected && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: navigation rail style, a 56x32dp SECONDARY_CONTAINER pill behind the icon.
+        float pillWidth = Math.min(Screen.dp(56f), width - Screen.dp(4f)), pillHeight = Screen.dp(32f);
+        float pillCenterY = Screen.dp(8f) + Screen.dp(30f) / 2f;
+        RectF pill = Paints.getRectF(centerX - pillWidth / 2f, pillCenterY - pillHeight / 2f, centerX + pillWidth / 2f, pillCenterY + pillHeight / 2f);
+        c.drawRoundRect(pill, pillHeight / 2f, pillHeight / 2f, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER)));
+      } else if (selected) {
         // Highlight behind the tab and an accent bar on the edge next to the messages' opposite side.
         RectF rect = Paints.getRectF(Screen.dp(4f), Screen.dp(2f), width - Screen.dp(4f), height - Screen.dp(2f));
         c.drawRoundRect(rect, Screen.dp(10f), Screen.dp(10f), Paints.fillingPaint(ColorUtils.alphaColor(.12f, Theme.getColor(ColorId.textNeutral))));

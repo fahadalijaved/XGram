@@ -148,7 +148,7 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
     lookup.setSpanIndexCacheEnabled(true);
 
     spanCount = calculateSpanCount(Screen.currentWidth(), Screen.currentHeight());
-    decoration = new GridSpacingItemDecoration(spanCount, Screen.dp(3f), false, true, true);
+    decoration = new GridSpacingItemDecoration(spanCount, xgramSpacing(), false, true, true);
     decoration.setNeedDraw(true, ListItem.TYPE_SMALL_MEDIA);
     decoration.setDrawColorId(ColorId.filling);
     decoration.setSpanSizeLookup(lookup);
@@ -172,6 +172,11 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
     int maxItemCount = Math.max(5, Screen.widestSide() / minWidth);
     int itemWidth = Screen.widestSide() / maxItemCount;
     return Screen.calculateLoadingItems(itemWidth, 18);
+  }
+
+  /** XGram: Expressive design uses a 2dp grid (Google Photos), Telegram X 3dp. */
+  private static int xgramSpacing () {
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 2f : 3f);
   }
 
   private static int calculateSpanCount (int width, int height) {
@@ -203,7 +208,7 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
         case ListItem.TYPE_SMALL_MEDIA: {
           int width = recyclerView.getMeasuredWidth();
           int maxItemWidth = width / spanCount;
-          int spacing = Screen.dp(3f);
+          int spacing = xgramSpacing();
 
           int remainCount = spanCount - 1;
           while (remainCount > 0 && i < position && i < itemCount) {
@@ -223,7 +228,7 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
           break;
         }
         case ListItem.TYPE_SHADOW_BOTTOM: {
-          scrollY += Screen.dp(3f) + SettingHolder.measureHeightForType(ListItem.TYPE_SHADOW_BOTTOM);
+          scrollY += xgramSpacing() + SettingHolder.measureHeightForType(ListItem.TYPE_SHADOW_BOTTOM);
           break;
         }
         case ListItem.TYPE_SMART_EMPTY:

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E stage 2, part 3: chat list, drawer, profile, topics -->
+  <item type="id" name="xgram_m3e_p3_surface" />
+  <item type="id" name="btn_xgramProfileMessage" />
+  <item type="id" name="btn_xgramProfileCall" />
+  <item type="id" name="btn_xgramProfileMute" />
+  <item type="id" name="btn_xgramProfileSearch" />
+  <item type="id" name="btn_xgramProfileShare" />
+  <item type="id" name="btn_xgramProfileDiscuss" />
+</resources>

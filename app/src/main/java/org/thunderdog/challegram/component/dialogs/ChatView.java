@@ -113,7 +113,29 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     return needFake ? titlePaintFake : titlePaint;
   }
 
+  // XGram: Material 3 Expressive time: labelMedium, PRIMARY and weight 700 while unread.
+  private static Paint xgramTimePaint, xgramTimePaintUnread;
+
+  private static Paint xgramTimePaint (boolean unread) {
+    Paint paint = unread ? xgramTimePaintUnread : xgramTimePaint;
+    if (paint == null) {
+      paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+      paint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, unread));
+      if (unread) {
+        xgramTimePaintUnread = paint;
+      } else {
+        xgramTimePaint = paint;
+      }
+    }
+    paint.setTextSize(Screen.dp(12f));
+    paint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(unread ? com.fahadali.xgram.appearance.XgramExpressive.PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+    return paint;
+  }
+
   public static Paint getTimePaint () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return xgramTimePaint(false);
+    }
     if (timePaint == null) {
       synchronized (ChatView.class) {
         if (timePaint == null) {
@@ -623,13 +645,29 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     boolean rtl = Lang.rtl();
     int viewWidth = getMeasuredWidth();
 
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     if (isDragging) {
       c.drawColor(ColorUtils.alphaColor(.8f, Theme.fillingColor()));
     } else if (com.fahadali.xgram.layout.XgramTwoPane.isHighlighted(tdlib, chat.getChatId())) {
-      c.drawColor(ColorUtils.alphaColor(.6f, Theme.getColor(ColorId.fillingPressed))); // XGram: chat open in the right pane, the ripple stays visible
+      if (xgramM3) {
+        com.fahadali.xgram.appearance.XgramM3Profile.drawSelectionTile(c, viewWidth, getMeasuredHeight(), 1f); // XGram: a rounded tile
+      } else {
+        c.drawColor(ColorUtils.alphaColor(.6f, Theme.getColor(ColorId.fillingPressed))); // XGram: chat open in the right pane, the ripple stays visible
+      }
+    }
+    if (xgramM3 && !isDragging) {
+      com.fahadali.xgram.appearance.XgramM3Profile.drawSelectionTile(c, viewWidth, getMeasuredHeight(), isSelected.getFloatValue());
     }
 
-    c.drawText(chat.getTime(), (rtl ? viewWidth - chat.getTimeLeft() - chat.getTimeWidth() : chat.getTimeLeft()), getTitleTop(chatListMode), timePaint);
+    if (xgramM3) {
+      boolean unread = chat.xgramHasUnread();
+      Paint paint = xgramTimePaint(unread);
+      float timeWidth = unread ? paint.measureText(chat.getTime()) : chat.getTimeWidth();
+      float timeX = rtl ? viewWidth - chat.getTimeLeft() - chat.getTimeWidth() : chat.getTimeLeft() + chat.getTimeWidth() - timeWidth;
+      c.drawText(chat.getTime(), timeX, getTitleTop(chatListMode), paint);
+    } else {
+      c.drawText(chat.getTime(), (rtl ? viewWidth - chat.getTimeLeft() - chat.getTimeWidth() : chat.getTimeLeft()), getTitleTop(chatListMode), timePaint);
+    }
 
     Text title = chat.getTitle();
     if (title != null) {

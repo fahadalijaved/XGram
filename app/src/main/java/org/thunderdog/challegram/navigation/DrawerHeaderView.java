@@ -104,12 +104,16 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
 
     TGLegacyManager.instance().addEmojiListener(this);
 
-    ViewUtils.setBackground(this, new FillingDrawable(ColorId.headerBackground) {
-      @Override
-      protected int getFillingColor () {
-        return ColorUtils.compositeColor(super.getFillingColor(), Theme.getColor(ColorId.drawer));
-      }
-    });
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      ViewUtils.setBackground(this, new FillingDrawable(ColorId.drawer)); // XGram: plain SURFACE_CONTAINER_LOW
+    } else {
+      ViewUtils.setBackground(this, new FillingDrawable(ColorId.headerBackground) {
+        @Override
+        protected int getFillingColor () {
+          return ColorUtils.compositeColor(super.getFillingColor(), Theme.getColor(ColorId.drawer));
+        }
+      });
+    }
   }
 
   public boolean onEmojiStatusClick (View v, EmojiStatusHelper emojiStatusHelper) {
@@ -149,6 +153,9 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
   }
 
   private int getTextColor (float factor) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+    }
     return ColorUtils.fromToArgb(ColorUtils.compositeColor(Theme.headerTextColor(), Theme.getColor(ColorId.drawerText)), Theme.getColor(ColorId.white), factor);
   }
 
@@ -351,6 +358,12 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
         return;
       }
       this.trimmedWidth = availWidth;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: name titleMedium ON_SURFACE, phone bodyMedium ON_SURFACE_VARIANT.
+        this.trimmedName = new Text.Builder(name, availWidth, com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false, 16f), this).singleLine().allBold().build();
+        this.trimmedPhone = new Text.Builder(phone, availWidth, com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false, 14f), () -> com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT)).singleLine().allBold().build();
+        return;
+      }
       this.trimmedName = new Text.Builder(name, availWidth, Paints.robotoStyleProvider(15), this).singleLine().allBold().build();
       this.trimmedPhone = new Text.Builder(phone, availWidth, Paints.robotoStyleProvider(13), this).singleLine().allBold().build();
     }
@@ -380,6 +393,9 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
     public static final int DRAW_MODE_TEXTS = 2;
 
     public void draw (DrawerHeaderView view, Canvas c, DoubleImageReceiver receiver, int viewWidth, int viewHeight, float factor, float avatarFactor, float avatarAlphaFactor, int drawMode, boolean rtl, int equalFlags, boolean drawEqual) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        avatarFactor = 0f; // XGram: the photo stays a round avatar on the surface
+      }
       int contentLeft = contentLeft();
       final int startRadius = Screen.dp(32f);
       final int startCx = rtl ? viewWidth - contentLeft - startRadius : contentLeft + startRadius;
@@ -634,8 +650,10 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
         displayInfo.draw(this, c, receiver, viewWidth, viewHeight, 1f - futureFactor, 1f, 1f, DisplayInfo.DRAW_MODE_IMAGES, rtl, 0, true);
         displayInfoFuture.draw(this, c, receiver2, viewWidth, viewHeight, futureFactor, 1f, futureFactor, DisplayInfo.DRAW_MODE_IMAGES, rtl, 0, true);
         drawMode = DisplayInfo.DRAW_MODE_TEXTS;
-        gradient.setAlpha(DRAWER_ALPHA);
-        gradient.draw(c);
+        if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          gradient.setAlpha(DRAWER_ALPHA);
+          gradient.draw(c);
+        }
       }
 
       avatarFactor = displayInfo.avatar != null ? (avatarChanged ? 1f - futureFactor : 1f) : (avatarChanged ? futureFactor : 0f);
@@ -645,6 +663,6 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
       displayInfoFuture.draw(this, c, receiver2, viewWidth, viewHeight, futureFactor, avatarFactor, futureFactor, drawMode, rtl, displayInfoFuture.equalFlags, true);
     }
 
-    expanderView.draw(c, rtl ? Screen.dp(54f) / 2 : viewWidth - Screen.dp(54f) / 2, viewHeight - Screen.dp(54f) / 2, getTextColor(avatarFactor));
+    expanderView.draw(c, rtl ? Screen.dp(54f) / 2 : viewWidth - Screen.dp(54f) / 2, viewHeight - Screen.dp(54f) / 2, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT) : getTextColor(avatarFactor));
   }
 }

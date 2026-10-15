@@ -127,9 +127,25 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
     iconTop = icon == null ? (int) ((float) getLayoutParams().height * .5f) : (int) ((float) getLayoutParams().height * .5f - (float) icon.getHeight() * .5f);
   }*/
 
+  // XGram: Material 3 Expressive navigation drawer item: a pill inset 12dp, icon at 28dp, label at 64dp.
+
+  private @Nullable Drawable xgramBackground;
+
+  private void xgramCheckBackground () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (xgramBackground == null || getBackground() != xgramBackground)) {
+      xgramBackground = com.fahadali.xgram.appearance.XgramM3Profile.drawerItemBackground(0);
+      setBackground(xgramBackground);
+    }
+  }
+
+  private int xgramLabelColor () {
+    return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), receiver != null ? checkFactor : 0f);
+  }
+
   public void setText (String text) {
+    xgramCheckBackground();
     if (this.text == null || !StringUtils.equalsOrBothEmpty(this.text, text)) {
-      this.textLeft = Screen.dp(72f);
+      this.textLeft = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && receiver == null ? 64f : 72f);
       this.text = text;
       trimText(true);
       invalidate();
@@ -163,7 +179,11 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
     }
     if (force || lastAvailTextWidth != availWidth) {
       lastAvailTextWidth = availWidth;
-      trimmedText = new Text.Builder(text, availWidth, Paints.robotoStyleProvider(15), TextColorSets.Regular.NORMAL).singleLine().allBold().build();
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        trimmedText = new Text.Builder(text, availWidth, com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false, 14f), this::xgramLabelColor).singleLine().allBold().build();
+      } else {
+        trimmedText = new Text.Builder(text, availWidth, Paints.robotoStyleProvider(15), TextColorSets.Regular.NORMAL).singleLine().allBold().build();
+      }
     }
   }
 
@@ -171,6 +191,10 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
 
   public void addAvatar () {
     receiver = new AvatarReceiver(this);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && text != null) {
+      textLeft = Screen.dp(72f); // XGram: account rows keep the text after the avatar
+      trimText(true);
+    }
     layoutReceiver();
     counter = new Counter.Builder().callback(this).build();
   }
@@ -178,7 +202,7 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
   private void layoutReceiver () {
     if (receiver == null)
       return;
-    int left = Screen.dp(12f);
+    int left = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 22f : 12f);
     int top = Screen.dp(6f);
     int size = Screen.dp(AVATAR_SIZE);
     if (Lang.rtl()) {
@@ -306,14 +330,27 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
     int viewWidth = getMeasuredWidth();
     layoutReceiver();
 
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     if (isDragging) {
       c.drawColor(ColorUtils.alphaColor(.85f, Theme.fillingColor()));
     }
+    if (xgramM3 && checkFactor > 0f && receiver != null) {
+      // XGram: the active item (current account) is a SECONDARY_CONTAINER pill.
+      RectF pill = Paints.getRectF();
+      pill.set(Screen.dp(12f), 0, viewWidth - Screen.dp(12f), getMeasuredHeight());
+      c.drawRoundRect(pill, pill.height() / 2f, pill.height() / 2f, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), checkFactor)));
+    }
     if (icon != null) {
-      Drawables.draw(c, icon, rtl ? viewWidth - iconLeft - icon.getMinimumWidth() : iconLeft, iconTop, Paints.getIconGrayPorterDuffPaint());
+      if (xgramM3) {
+        int x = Screen.dp(28f) + (Screen.dp(24f) - icon.getMinimumWidth()) / 2;
+        Drawables.draw(c, icon, rtl ? viewWidth - x - icon.getMinimumWidth() : x, iconTop, Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT)));
+      } else {
+        Drawables.draw(c, icon, rtl ? viewWidth - iconLeft - icon.getMinimumWidth() : iconLeft, iconTop, Paints.getIconGrayPorterDuffPaint());
+      }
     }
     if (trimmedText != null) {
-      trimmedText.draw(c, textLeft, textLeft + trimmedText.getWidth(), 0, Screen.dp(17f));
+      int textTop = xgramM3 ? (getMeasuredHeight() - trimmedText.getLineHeight()) / 2 : Screen.dp(17f);
+      trimmedText.draw(c, textLeft, textLeft + trimmedText.getWidth(), 0, textTop);
     }
     emojiStatusHelper.draw(c, textLeft + (trimmedText != null ? trimmedText.getWidth() + Screen.dp(6) : 0), Screen.dp(17f));
     if (receiver != null) {

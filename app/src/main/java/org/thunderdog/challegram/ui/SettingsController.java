@@ -163,6 +163,9 @@ public class SettingsController extends ViewController<Void> implements
 
   @Override
   protected int getHeaderIconColorId () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return ColorId.headerIcon; // XGram: the avatar stays round, the app bar stays a surface
+    }
     return headerCell != null && !headerCell.isCollapsed() ? ColorId.white : ColorId.headerIcon;
   }
 
