@@ -242,6 +242,7 @@
   <string name="XgramMuteForever">Mute forever</string>
   <string name="XgramSideMenu">Side menu</string>
   <string name="XgramSideMenuInfo">Choose what the side menu shows.</string>
+  <string name="XgramSideMenuItems">Items</string>
   <string name="XgramHistoryRetentionInfo">How long XGram keeps its copies of messages that were never deleted or edited. Deleted and edited ones are kept until you clear them.</string>
   <string name="XgramRetentionDays">%1$s days</string>
   <string name="XgramRetentionForever">Forever</string>

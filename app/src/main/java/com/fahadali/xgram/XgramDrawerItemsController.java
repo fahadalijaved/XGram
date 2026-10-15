@@ -53,13 +53,20 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
       @Override
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         Object data = item.getData();
-        if (data instanceof String) {
+        if (item.getId() == R.id.btn_xgramHidePhone) {
+          view.getToggler().setRadioEnabled(XgramSettings.instance().hidePhone(), isUpdate);
+        } else if (data instanceof String) {
           view.getToggler().setRadioEnabled(!XgramSettings.instance().drawerItemHidden((String) data), isUpdate);
         }
       }
     };
     List<ListItem> items = new ArrayList<>();
+    // The same option as in Settings → XGram → Privacy: the header shows the @username instead of the number.
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramHidePhone, 0, R.string.XgramHidePhone));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramSideMenuItems));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     for (int i = 0; i < KEYS.length; i++) {
       if (i > 0) {
@@ -76,7 +83,12 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
   @Override
   public void onClick (View v) {
     Object tag = v.getTag();
-    if (v.getId() == R.id.btn_xgramDrawerItem && tag instanceof ListItem && ((ListItem) tag).getData() instanceof String) {
+    if (v.getId() == R.id.btn_xgramHidePhone) {
+      XgramSettings.instance().setHidePhone(adapter.toggleView(v));
+      if (context.getDrawer() != null) {
+        context.getDrawer().xgramRefreshHeader(); // the side menu shows the @username instead
+      }
+    } else if (v.getId() == R.id.btn_xgramDrawerItem && tag instanceof ListItem && ((ListItem) tag).getData() instanceof String) {
       String key = (String) ((ListItem) tag).getData();
       boolean shown = adapter.toggleView(v);
       XgramSettings.instance().setDrawerItemHidden(key, !shown);

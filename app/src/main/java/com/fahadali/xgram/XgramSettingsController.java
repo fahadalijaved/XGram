@@ -722,6 +722,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       for (int id : SUMMARY_IDS) {
         adapter.updateValuedSettingById(id);
       }
+      adapter.updateValuedSettingById(R.id.btn_xgramHidePhone); // also a toggle in Side menu
       if (showingResults) {
         // A page opened from the results may have changed what they show.
         List<ListItem> shown = adapter.getItems();
