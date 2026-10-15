@@ -833,11 +833,23 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     } else if (getSource() != null) {
       return 0;
     } else if (xgramCommunityId != 0) {
-      int unreadCount = 0;
-      boolean markedAsUnread = false;
+      // The badge counts what notifies you: the unmuted chats' unread when they have any (coloured badge),
+      // otherwise everything that is unread (muted badge). A muted group never lends its count to a coloured badge.
+      int unreadCount = 0, unmutedUnreadCount = 0;
+      boolean markedAsUnread = false, unmutedMarkedAsUnread = false;
       for (TdApi.Chat member : xgramMembers()) {
         unreadCount += member.unreadCount;
         markedAsUnread |= member.isMarkedAsUnread;
+        if (tdlib.chatNotificationsEnabled(member)) {
+          unmutedUnreadCount += member.unreadCount;
+          unmutedMarkedAsUnread |= member.isMarkedAsUnread;
+        }
+      }
+      if (unmutedUnreadCount > 0) {
+        return unmutedUnreadCount;
+      }
+      if (unmutedMarkedAsUnread) {
+        return Tdlib.CHAT_MARKED_AS_UNREAD;
       }
       return unreadCount > 0 ? unreadCount : markedAsUnread ? Tdlib.CHAT_MARKED_AS_UNREAD : 0;
     } else {
@@ -901,8 +913,8 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       return counter.chatUnmutedCount > 0;
     } else if (xgramCommunityId != 0) {
       for (TdApi.Chat member : xgramMembers()) {
-        if (tdlib.chatNotificationsEnabled(member)) {
-          return true; // the badge is muted only if every chat of the community is
+        if (tdlib.chatNotificationsEnabled(member) && (member.unreadCount > 0 || member.isMarkedAsUnread || member.unreadReactionCount > 0)) {
+          return true; // coloured only for the unread of chats that notify you, never for a muted chat's unread
         }
       }
       return false;
