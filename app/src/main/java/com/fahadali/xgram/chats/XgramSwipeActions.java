@@ -51,12 +51,13 @@ public final class XgramSwipeActions {
 
   public static final int REPLY = 0, QUOTE = 1, TRANSLATE = 2, COPY = 3, FORWARD = 4, SAVE = 5, BOOKMARK = 6, REACT = 7, NOTHING = 8;
 
-  private static final int[] ACTIONS = {REPLY, QUOTE, TRANSLATE, COPY, FORWARD, SAVE, BOOKMARK, REACT, NOTHING};
+  // XGram: ACTIONS and NAMES are public for the Compose Messages page (xgram-m3e)
+  public static final int[] ACTIONS = {REPLY, QUOTE, TRANSLATE, COPY, FORWARD, SAVE, BOOKMARK, REACT, NOTHING};
   private static final int[] OPTION_IDS = {
     R.id.btn_xgramSwipeReply, R.id.btn_xgramSwipeQuote, R.id.btn_xgramSwipeTranslate, R.id.btn_xgramSwipeCopy, R.id.btn_xgramSwipeForward,
     R.id.btn_xgramSwipeSave, R.id.btn_xgramSwipeBookmark, R.id.btn_xgramSwipeReact, R.id.btn_xgramSwipeNothing
   };
-  private static final int[] NAMES = {
+  public static final int[] NAMES = {
     R.string.XgramSwipeReply, R.string.XgramQuote, R.string.Translate, R.string.XgramSwipeCopy, R.string.XgramSwipeForward,
     R.string.XgramSaveToSaved, R.string.XgramBookmark, R.string.XgramSwipeReact, R.string.XgramSwipeNothing
   };

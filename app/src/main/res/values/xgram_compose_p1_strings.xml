@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Jetpack Compose Material 3 Expressive settings pages (Chat List, Messages, Translation, Side Menu and their pages) -->
+  <!-- Short labels for connected buttons, where the full option names don't fit -->
+  <string name="XgramComposeLongPressQuick">Quick</string>
+  <string name="XgramComposeLongPressCompact">Compact</string>
+  <string name="XgramComposeInlineVideoAuto">Auto (muted)</string>
+  <!-- Accessibility actions of a row that can be reordered -->
+  <string name="XgramComposeMoveUp">Move up</string>
+  <string name="XgramComposeMoveDown">Move down</string>
+</resources>

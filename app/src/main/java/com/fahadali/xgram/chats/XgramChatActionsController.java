@@ -39,9 +39,10 @@ import me.vkryl.core.collection.IntList;
  * preview's bar and in XGram's quick actions pill. Telegram X's order by default.
  */
 public final class XgramChatActionsController extends RecyclerViewController<Void> implements View.OnClickListener {
-  private static final String[] KEYS = {"call", "notifications", "pin", "read", "archive", "folder", "delete", "select"};
-  private static final int[] NAMES = {R.string.Call, R.string.Mute, R.string.Pin, R.string.MarkAsRead, R.string.Archive, R.string.AddToFolder, R.string.Delete, R.string.MoreChatOptions};
-  private static final int[] ICONS = {R.drawable.baseline_call_24, R.drawable.baseline_notifications_off_24, R.drawable.deproko_baseline_pin_24, Config.ICON_MARK_AS_READ, R.drawable.baseline_archive_24, R.drawable.templarian_baseline_folder_plus_24, R.drawable.baseline_delete_24, R.drawable.baseline_more_horiz_24};
+  // XGram: public for the Compose Chat actions page (xgram-m3e)
+  public static final String[] KEYS = {"call", "notifications", "pin", "read", "archive", "folder", "delete", "select"};
+  public static final int[] NAMES = {R.string.Call, R.string.Mute, R.string.Pin, R.string.MarkAsRead, R.string.Archive, R.string.AddToFolder, R.string.Delete, R.string.MoreChatOptions};
+  public static final int[] ICONS = {R.drawable.baseline_call_24, R.drawable.baseline_notifications_off_24, R.drawable.deproko_baseline_pin_24, Config.ICON_MARK_AS_READ, R.drawable.baseline_archive_24, R.drawable.templarian_baseline_folder_plus_24, R.drawable.baseline_delete_24, R.drawable.baseline_more_horiz_24};
 
   @Nullable
   private static String keyOfId (Integer id) {
