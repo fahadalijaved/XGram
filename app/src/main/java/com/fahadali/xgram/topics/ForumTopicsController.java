@@ -123,13 +123,55 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       return;
     }
     searchQuery = trimmed;
+    cancelPendingSearch();
     if (trimmed.isEmpty()) {
       setSearchResults(null);
       return;
     }
-    tdlib.send(new TdApi.GetForumTopics(chat.id, trimmed, 0, 0, 0, 100), (topics, error) -> runOnUiThreadOptional(() -> {
-      if (!trimmed.equals(searchQuery) || !inSearchMode()) {
+    // Only once typing pauses: a request per key ended in FLOOD_WAIT, and only the last query's results are shown.
+    scheduleSearch(trimmed, SEARCH_DELAY_MS);
+  }
+
+  private static final long SEARCH_DELAY_MS = 350;
+  private @androidx.annotation.Nullable Runnable pendingSearch;
+
+  private void scheduleSearch (String query, long delay) {
+    cancelPendingSearch();
+    Runnable search = () -> {
+      pendingSearch = null;
+      searchTopics(query);
+    };
+    pendingSearch = search;
+    tdlib.ui().postDelayed(search, delay);
+  }
+
+  private void cancelPendingSearch () {
+    if (pendingSearch != null) {
+      tdlib.ui().removeCallbacks(pendingSearch);
+      pendingSearch = null;
+    }
+  }
+
+  private void searchTopics (String query) {
+    if (isDestroyed() || !query.equals(searchQuery) || !inSearchMode()) {
+      return;
+    }
+    long floodWait = XgramTopicFlood.waitMs(tdlib);
+    if (floodWait > 0) {
+      scheduleSearch(query, floodWait);
+      return;
+    }
+    tdlib.send(new TdApi.GetForumTopics(chat.id, query, 0, 0, 0, 100), (topics, error) -> runOnUiThreadOptional(() -> {
+      if (!query.equals(searchQuery) || !inSearchMode()) {
         return;
+      }
+      if (topics == null) {
+        long delay = XgramTopicFlood.onError(tdlib, error, 0);
+        if (XgramTopicFlood.waitMs(tdlib) > 0) {
+          // Asked to wait: the same query goes again then, the results shown so far stay meanwhile.
+          scheduleSearch(query, delay);
+          return;
+        }
       }
       List<TdApi.ForumTopic> results = new ArrayList<>();
       if (topics != null) {
@@ -145,6 +187,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
   protected void onLeaveSearchMode () {
     super.onLeaveSearchMode();
     searchQuery = "";
+    cancelPendingSearch();
     setSearchResults(null);
   }
 
@@ -378,10 +421,23 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     xgramFocusedOnce = true;
   }
 
+  @Override
+  public void onActivityResume () {
+    super.onActivityResume();
+    // Back from the background with the topics on screen: they missed the same as while a topic was open. (With a
+    // topic open, the list refreshes once it is back in front.)
+    if (isFocused() && list != null && list.isLoaded()) {
+      list.refreshOnReturn();
+    }
+  }
+
   private org.thunderdog.challegram.component.attach.CustomItemAnimator dragAnimator;
+  /** A pinned topic is being dragged: the drag moves rows and scrolls, the list is left alone meanwhile. */
+  private boolean dragging;
 
   /** Telegram X's chat list animator, only while a pinned topic is dragged. */
   private void setDragging (boolean dragging) {
+    this.dragging = dragging;
     CustomRecyclerView recyclerView = getRecyclerView();
     if (recyclerView == null) {
       return;
@@ -434,6 +490,13 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
   }
 
   @Override
+  public void onLoadMoreAvailable (ForumTopicList list) {
+    if (adapter != null && searchResults == null) {
+      checkLoadMore();
+    }
+  }
+
+  @Override
   public void onTopicInserted (ForumTopicList list, int index) {
     if (adapter == null || searchResults != null) {
       return;
@@ -441,7 +504,9 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     if (list.size() == 1) {
       adapter.notifyDataSetChanged();
     } else {
+      int[] scroll = captureScroll();
       adapter.notifyItemInserted(index);
+      restoreScroll(scroll, -1);
     }
   }
 
@@ -462,7 +527,44 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     if (adapter == null || searchResults != null) {
       return;
     }
+    int[] scroll = captureScroll();
     adapter.notifyItemMoved(fromIndex, toIndex);
+    restoreScroll(scroll, fromIndex);
+  }
+
+  /**
+   * Where the list is scrolled to before a row moves or comes in: {first visible position, its offset}, or null to
+   * leave it to RecyclerView. RecyclerView keeps the first row on screen in place, so a row moving or coming in at the
+   * top stayed above the screen, hidden, and moving that first row away scrolled the list along with it.
+   */
+  @androidx.annotation.Nullable
+  private int[] captureScroll () {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (dragging || recyclerView == null || recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE ||
+      !(recyclerView.getLayoutManager() instanceof LinearLayoutManager)) {
+      return null;
+    }
+    if (!recyclerView.canScrollVertically(-1)) {
+      return new int[] {0, 0}; // at the top: stays at the top
+    }
+    if (recyclerView.hasPendingAdapterUpdates()) {
+      return null; // the positions on screen are from before the changes still pending
+    }
+    LinearLayoutManager manager = (LinearLayoutManager) recyclerView.getLayoutManager();
+    int first = manager.findFirstVisibleItemPosition();
+    View view = first != RecyclerView.NO_POSITION ? manager.findViewByPosition(first) : null;
+    return view != null ? new int[] {first, manager.getDecoratedTop(view) - manager.getPaddingTop()} : null;
+  }
+
+  /** After the change: at the top, stays there; moving the first row on screen away, keeps the place. */
+  private void restoreScroll (@androidx.annotation.Nullable int[] scroll, int movedFrom) {
+    if (scroll == null) {
+      return;
+    }
+    boolean atTop = scroll[0] == 0 && scroll[1] == 0;
+    if (atTop || movedFrom == scroll[0]) {
+      ((LinearLayoutManager) getRecyclerView().getLayoutManager()).scrollToPositionWithOffset(scroll[0], scroll[1]);
+    }
   }
 
   @Override
@@ -475,12 +577,31 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     if (row != null) {
       row.setTopic(topic);
     }
-    View view = getRecyclerView().getLayoutManager() != null ? getRecyclerView().getLayoutManager().findViewByPosition(index) : null;
-    if (view instanceof ForumTopicView) {
-      ((ForumTopicView) view).onTopicChanged();
+    // By topic, not by position: right after a move the view at a position is still the row that was there.
+    ForumTopicView view = findTopicView(topic.info.forumTopicId);
+    if (view != null) {
+      view.onTopicChanged();
     } else {
       adapter.notifyItemChanged(index);
     }
+  }
+
+  @androidx.annotation.Nullable
+  private ForumTopicView findTopicView (int forumTopicId) {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return null;
+    }
+    for (int i = 0; i < recyclerView.getChildCount(); i++) {
+      View child = recyclerView.getChildAt(i);
+      if (child instanceof ForumTopicView) {
+        TdApi.ForumTopic shown = ((ForumTopicView) child).getForumTopic();
+        if (shown != null && shown.info.forumTopicId == forumTopicId) {
+          return (ForumTopicView) child;
+        }
+      }
+    }
+    return null;
   }
 
   // Header
@@ -654,6 +775,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
   @Override
   public void destroy () {
     super.destroy();
+    cancelPendingSearch();
     for (TGForumTopic row : rows.values()) {
       row.statusHelper().detachFromAnyChat();
     }

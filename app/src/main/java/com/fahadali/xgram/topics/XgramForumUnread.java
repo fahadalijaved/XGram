@@ -215,6 +215,15 @@ public final class XgramForumUnread {
     return counts.containsKey(key(tdlib, chatId));
   }
 
+  /**
+   * TDLib thread: TDLib's own unread count of any chat, before XGram changes it (topic sums here, ghost mode's local
+   * reads); -1 when no count was seen yet.
+   */
+  public static int rawCount (Tdlib tdlib, long chatId) {
+    Integer raw = rawCounts.get(key(tdlib, chatId));
+    return raw != null ? raw : -1;
+  }
+
   /** {@code GetForumTopics} always asks the server, so a forum's badge is counted again at most this often. */
   private static final long REFRESH_DELAY_MS = 5000;
   /** Read positions of topics in forums whose badge XGram counts, by account_chat_topic. */
@@ -259,9 +268,16 @@ public final class XgramForumUnread {
       if (ForumTopicList.isFullyLoaded(tdlib, chatId) || !tdlib.isForum(chatId)) {
         return;
       }
+      long floodWait = XgramTopicFlood.waitMs(tdlib);
+      if (floodWait > 0) {
+        // The server asked to wait: counted once it may be asked again.
+        tdlib.ui().postDelayed(() -> refresh(tdlib, chatId), floodWait);
+        return;
+      }
       lastRefreshAt.put(key, SystemClock.uptimeMillis());
       tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> {
         if (topics == null) {
+          XgramTopicFlood.onError(tdlib, error, 0);
           return;
         }
         int sum = 0;
@@ -288,20 +304,31 @@ public final class XgramForumUnread {
       return;
     }
     // Spaced out: a chat list full of unread forums would otherwise ask for all of them at once.
+    long chatId = chat.id;
+    tdlib.ui().postDelayed(() -> sendRequest(tdlib, chatId, key), nextSlotDelay(0));
+  }
+
+  private static final long REQUEST_SPACING_MS = 300;
+  private static long nextRequestAt;
+
+  /** Reserves the next free request slot at least {@code minDelayMs} from now; returns the delay until it. */
+  private static long nextSlotDelay (long minDelayMs) {
     long now = SystemClock.uptimeMillis();
     long at;
     synchronized (XgramForumUnread.class) {
-      at = Math.max(now, nextRequestAt);
+      at = Math.max(now + minDelayMs, nextRequestAt);
       nextRequestAt = at + REQUEST_SPACING_MS;
     }
-    long chatId = chat.id;
-    tdlib.ui().postDelayed(() -> sendRequest(tdlib, chatId, key), at - now);
+    return at - now;
   }
 
-  private static final long REQUEST_SPACING_MS = 150;
-  private static long nextRequestAt;
-
   private static void sendRequest (Tdlib tdlib, long chatId, String key) {
+    long floodWait = XgramTopicFlood.waitMs(tdlib);
+    if (floodWait > 0) {
+      // The server asked to wait: back in the queue after the wait, still spaced out from the others.
+      tdlib.ui().postDelayed(() -> sendRequest(tdlib, chatId, key), nextSlotDelay(floodWait));
+      return;
+    }
     // Topics come sorted by their last message, so the unread ones are in the first page.
     tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, 100), (topics, error) -> {
       if (topics == null) {
@@ -312,7 +339,7 @@ public final class XgramForumUnread {
           if (chat != null) {
             requestIfNeeded(tdlib, chat);
           }
-        }, XgramForums.retryAfterMs(error, 30_000));
+        }, XgramTopicFlood.onError(tdlib, error, 30_000));
         return;
       }
       int sum = 0;

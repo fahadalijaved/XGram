@@ -46,6 +46,8 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     default void onTopicRemoved (ForumTopicList list, int index) { }
     default void onTopicMoved (ForumTopicList list, int fromIndex, int toIndex) { }
     default void onTopicChanged (ForumTopicList list, int index) { }
+    /** A page that failed or had to wait may be asked again: load it if the end of the list is on screen. */
+    default void onLoadMoreAvailable (ForumTopicList list) { }
   }
 
   private static final int FIRST_PAGE_SIZE = 20;
@@ -143,6 +145,16 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     return list != null && !list.isDestroyed && list.isLoaded && list.endReached && !list.loadFailed;
   }
 
+  /** A topic was deleted here. TDLib sends no update for it, so the cached list of the chat drops it now. */
+  @UiThread
+  public static void onTopicDeleted (Tdlib tdlib, long chatId, int forumTopicId) {
+    ForumTopicList list = cache.get(tdlib.id() + "_" + chatId);
+    if (list != null && !list.isDestroyed) {
+      list.removeTopic(forumTopicId);
+      list.publishUnread();
+    }
+  }
+
   private static void trimCache () {
     Iterator<ForumTopicList> it = cache.values().iterator();
     while (cache.size() > CACHE_SIZE && it.hasNext()) {
@@ -172,6 +184,18 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   private int firstPageRetries;
   /** Topics whose fetch failed once (not as deleted): they get one more try. */
   private final java.util.Set<Integer> retriedOnce = new java.util.HashSet<>();
+  /** A retry of a failed or postponed page is on its way ({@link #scheduleLoadRetry}). */
+  private boolean loadRetryScheduled;
+
+  // Updates of topics that aren't rows yet while a page is loading. TDLib sends them as it takes the page in (those
+  // match the page) or for changes made meanwhile (those are newer): kept, they are applied once the page is in, as
+  // dropping them lost read and pin changes made during the first load.
+  private final java.util.Map<Integer, TdApi.UpdateForumTopic> updatesWhileLoading = new java.util.HashMap<>();
+  private final java.util.Map<Integer, TdApi.ForumTopicInfo> infosWhileLoading = new java.util.HashMap<>();
+  /** Topics fetched before the first page was in: fetched again after it, as the page may be older than them. */
+  private final IntSet fetchedWhileLoading = new IntSet();
+  /** The General topic was looked for once, as the hidden one goes first but may be on a later page. */
+  private boolean generalChecked;
 
   public ForumTopicList (Tdlib tdlib, long chatId) {
     this.tdlib = tdlib;
@@ -182,7 +206,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     TdApi.Chat chat = tdlib.chat(chatId);
     if (chat != null) {
       // The chat's read state when the list was made: the first read update compares with it (refreshing every unread topic otherwise).
-      lastChatReadInboxMessageId = chat.lastReadInboxMessageId;
+      lastChatReadInboxMessageId = com.fahadali.xgram.ghost.XgramLocalRead.serverReadUpTo(tdlib, chatId, chat.lastReadInboxMessageId);
     }
   }
 
@@ -240,6 +264,13 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     if (!canLoadMore()) {
       return;
     }
+    long floodWait = XgramTopicFlood.waitMs(tdlib);
+    if (floodWait > 0) {
+      // The server asked to wait: the page is asked for once it may be.
+      loadRetryAfter = android.os.SystemClock.uptimeMillis() + floodWait;
+      scheduleLoadRetry(floodWait);
+      return;
+    }
     isLoading = true;
     int limit = topics.isEmpty() ? FIRST_PAGE_SIZE : NEXT_PAGE_SIZE;
     // The server lists pinned topics first on the first page: that is the only place their order comes from.
@@ -250,24 +281,21 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       }
       isLoading = false;
       if (error != null) {
+        long delay = XgramTopicFlood.onError(tdlib, error, topics.isEmpty() ? 3000 : 5000);
         if (topics.isEmpty() && !isLoaded && !listeners.isEmpty() && firstPageRetries < MAX_FIRST_PAGE_RETRIES) {
           // An open screen keeps its spinner and tries again (FLOOD_WAIT after a burst is common), instead of "No topics".
           firstPageRetries++;
-          long delay = XgramForums.retryAfterMs(error, 3000);
           loadRetryAfter = android.os.SystemClock.uptimeMillis() + delay;
-          tdlib.ui().postDelayed(() -> {
-            if (!isDestroyed && !isLoaded && !listeners.isEmpty()) {
-              loadMore();
-            }
-          }, delay);
+          scheduleLoadRetry(delay);
           return;
         }
         if (topics.isEmpty()) {
           endReached = true;
           loadFailed = true;
         } else {
-          // Keep what's loaded and allow scrolling to try the next page again a bit later.
-          loadRetryAfter = android.os.SystemClock.uptimeMillis() + XgramForums.retryAfterMs(error, 5000);
+          // Keep what's loaded and try the next page again a bit later, without waiting for the next scroll.
+          loadRetryAfter = android.os.SystemClock.uptimeMillis() + delay;
+          scheduleLoadRetry(delay);
         }
       } else {
         for (TdApi.ForumTopic topic : result.topics) {
@@ -292,8 +320,83 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       for (Listener listener : listeners) {
         listener.onTopicsLoaded(this);
       }
+      applyUpdatesWhileLoading();
       publishUnread();
+      if (firstPage && error == null) {
+        checkGeneral();
+      }
     }));
+  }
+
+  /**
+   * After a page failed or had to wait: once it may be asked again, a first page loads by itself and screens are told
+   * the next one can (they load it if the end of the list is on screen), so no scroll is needed to try again.
+   */
+  @UiThread
+  private void scheduleLoadRetry (long delay) {
+    if (loadRetryScheduled) {
+      return;
+    }
+    loadRetryScheduled = true;
+    tdlib.ui().postDelayed(() -> {
+      loadRetryScheduled = false;
+      if (isDestroyed || listeners.isEmpty()) {
+        return;
+      }
+      long left = loadRetryAfter - android.os.SystemClock.uptimeMillis();
+      if (left > 0) {
+        scheduleLoadRetry(left); // the wait grew meanwhile
+        return;
+      }
+      if (!isLoaded) {
+        loadMore();
+      } else {
+        for (Listener listener : listeners) {
+          listener.onLoadMoreAvailable(this);
+        }
+      }
+    }, Math.max(0, delay));
+  }
+
+  /** Applies what TDLib said about topics that weren't rows while the page was loading, now that they may be. */
+  @UiThread
+  private void applyUpdatesWhileLoading () {
+    if (!infosWhileLoading.isEmpty()) {
+      List<TdApi.ForumTopicInfo> infos = new ArrayList<>(infosWhileLoading.values());
+      infosWhileLoading.clear();
+      for (TdApi.ForumTopicInfo info : infos) {
+        applyTopicInfo(info);
+      }
+    }
+    if (!updatesWhileLoading.isEmpty()) {
+      List<TdApi.UpdateForumTopic> updates = new ArrayList<>(updatesWhileLoading.values());
+      updatesWhileLoading.clear();
+      for (TdApi.UpdateForumTopic update : updates) {
+        applyTopicUpdate(update);
+      }
+    }
+    if (!fetchedWhileLoading.isEmpty()) {
+      int[] forumTopicIds = fetchedWhileLoading.toArray();
+      fetchedWhileLoading.clear();
+      for (int forumTopicId : forumTopicIds) {
+        scheduleRefresh(forumTopicId);
+      }
+    }
+  }
+
+  /**
+   * After the first page: the hidden General goes on top, but a quiet one sorts onto a later page on the server and
+   * would only show up (and jump to the top) once the list is scrolled that far. Fetched once if it isn't a row.
+   */
+  @UiThread
+  private void checkGeneral () {
+    if (generalChecked || endReached || isDestroyed) {
+      return;
+    }
+    generalChecked = true;
+    if (indexOf(XgramForums.GENERAL_TOPIC_ID) == -1) {
+      scheduleRefresh(XgramForums.GENERAL_TOPIC_ID); // a General that isn't hidden stays out: its page isn't loaded
+    }
   }
 
   // Refreshing single topics
@@ -314,12 +417,21 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     if (isDestroyed || pendingRefresh.isEmpty()) {
       return;
     }
+    long floodWait = XgramTopicFlood.waitMs(tdlib);
+    if (floodWait > 0) {
+      // The server asked to wait: the topics stay pending until then (more may join them meanwhile).
+      refreshScheduled = true;
+      tdlib.ui().postDelayed(this::performRefresh, floodWait);
+      return;
+    }
     int[] forumTopicIds = pendingRefresh.toArray();
     pendingRefresh.clear();
     if (forumTopicIds.length <= BATCH_THRESHOLD) {
+      List<Integer> ids = new ArrayList<>(forumTopicIds.length);
       for (int forumTopicId : forumTopicIds) {
-        fetchTopic(forumTopicId);
+        ids.add(forumTopicId);
       }
+      fetchSingles(ids);
       return;
     }
     // Many topics at once (a read in "All", a burst of messages): one page instead of one request per topic, which
@@ -339,25 +451,40 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
         for (TdApi.ForumTopic topic : result.topics) {
           left.remove(topic.info.forumTopicId);
         }
-      }
-      int fetched = 0;
-      List<Integer> later = new ArrayList<>();
-      for (int forumTopicId : left) {
-        if (fetched < MAX_SINGLE_FETCHES) {
-          fetchTopic(forumTopicId);
-          fetched++;
-        } else {
-          later.add(forumTopicId);
-        }
-      }
-      if (!later.isEmpty()) {
-        tdlib.ui().postDelayed(() -> {
-          for (int forumTopicId : later) {
+      } else {
+        XgramTopicFlood.onError(tdlib, error, 0);
+        if (XgramTopicFlood.waitMs(tdlib) > 0) {
+          // A flood wait: one request per topic now would only fail too. All of them wait and go as one page again.
+          for (int forumTopicId : forumTopicIds) {
             scheduleRefresh(forumTopicId);
           }
-        }, 1000);
+          return;
+        }
       }
+      // Topics further down than the page: one by one, a few at a time (as single fetches, not as another page).
+      fetchSingles(new ArrayList<>(left));
     }));
+  }
+
+  /** Fetches topics one by one, {@link #MAX_SINGLE_FETCHES} a second, after any flood wait. */
+  @UiThread
+  private void fetchSingles (List<Integer> forumTopicIds) {
+    if (isDestroyed || forumTopicIds.isEmpty()) {
+      return;
+    }
+    long floodWait = XgramTopicFlood.waitMs(tdlib);
+    if (floodWait > 0) {
+      tdlib.ui().postDelayed(() -> fetchSingles(forumTopicIds), floodWait);
+      return;
+    }
+    int count = Math.min(MAX_SINGLE_FETCHES, forumTopicIds.size());
+    for (int i = 0; i < count; i++) {
+      fetchTopic(forumTopicIds.get(i));
+    }
+    if (count < forumTopicIds.size()) {
+      List<Integer> later = new ArrayList<>(forumTopicIds.subList(count, forumTopicIds.size()));
+      tdlib.ui().postDelayed(() -> fetchSingles(later), 1000);
+    }
   }
 
   private void fetchTopic (int forumTopicId) {
@@ -371,11 +498,15 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       } else if (XgramForums.isTopicGone(error)) {
         retriedOnce.remove(forumTopicId);
         removeTopic(forumTopicId);
-      } else if (retriedOnce.add(forumTopicId)) {
-        // Offline, flood wait, a server hiccup: the topic still exists. Try once more, later.
-        tdlib.ui().postDelayed(() -> scheduleRefresh(forumTopicId), XgramForums.retryAfterMs(error, 5000));
+        publishUnread();
       } else {
-        retriedOnce.remove(forumTopicId); // gave up for now; the next update of this topic tries again
+        long delay = XgramTopicFlood.onError(tdlib, error, 5000);
+        if (retriedOnce.add(forumTopicId)) {
+          // Offline, flood wait, a server hiccup: the topic still exists. Try once more, later.
+          tdlib.ui().postDelayed(() -> scheduleRefresh(forumTopicId), delay);
+        } else {
+          retriedOnce.remove(forumTopicId); // gave up for now; the next update of this topic tries again
+        }
       }
     }));
   }
@@ -438,6 +569,10 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     }
     if (oldIndex == -1) {
       if (!isLoaded) {
+        if (isLoading) {
+          // Fetched while the first page loads, which may be older: fetched again once the page is in.
+          fetchedWhileLoading.add(topic.info.forumTopicId);
+        }
         return;
       }
       int newIndex = insertionIndex(topic);
@@ -714,10 +849,17 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     if (!force && lastResyncAt != 0 && now - lastResyncAt < RESYNC_INTERVAL_MS) {
       return false;
     }
+    if (!force && XgramTopicFlood.waitMs(tdlib) > 0) {
+      return false; // the server asked to wait; the next return or resume asks again
+    }
     lastResyncAt = now;
     final int requestedReorderVersion = localReorderVersion;
     tdlib.send(new TdApi.GetForumTopics(chatId, "", 0, 0, 0, firstPageLimit()), (result, error) -> tdlib.ui().post(() -> {
-      if (isDestroyed || result == null) {
+      if (isDestroyed) {
+        return;
+      }
+      if (result == null) {
+        XgramTopicFlood.onError(tdlib, error, 0);
         return;
       }
       applyFirstPage(result, requestedReorderVersion);
@@ -735,7 +877,44 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       putTopicImpl(topic);
     }
     setPinnedOrder(serverPinnedIds(result.topics), requestedReorderVersion);
+    checkMissingRows(result);
     publishUnread();
+  }
+
+  /**
+   * Rows listed among the topics of a fresh first page that the page doesn't have: deleted elsewhere (TDLib sends no
+   * update for that, so they stayed for good) or out of place. Each is fetched: a deleted one goes, others move.
+   */
+  @UiThread
+  private void checkMissingRows (TdApi.ForumTopics result) {
+    if (result.topics.length == 0) {
+      return;
+    }
+    java.util.Set<Integer> onPage = new java.util.HashSet<>();
+    for (TdApi.ForumTopic topic : result.topics) {
+      onPage.add(topic.info.forumTopicId);
+    }
+    // The page holds every topic: any other row is gone. Else only rows listed above its last one are suspect.
+    int end = -1;
+    if (result.topics.length >= result.totalCount) {
+      end = topics.size();
+    } else {
+      for (int i = 0; i < topics.size(); i++) {
+        if (onPage.contains(topics.get(i).info.forumTopicId)) {
+          end = i;
+        }
+      }
+    }
+    List<Integer> missing = new ArrayList<>();
+    // A few per page: more would be a burst of requests (the rest are seen at the next resync).
+    for (int i = 0; i < end && missing.size() < MAX_SINGLE_FETCHES; i++) {
+      TdApi.ForumTopic topic = topics.get(i);
+      // General can't be deleted, and the hidden one is listed first here whatever its place on the server.
+      if (!topic.info.isGeneral && !onPage.contains(topic.info.forumTopicId)) {
+        missing.add(topic.info.forumTopicId);
+      }
+    }
+    fetchSingles(missing);
   }
 
   /** Fetches topics again, e.g. after their pinned order changed on the server. */
@@ -766,6 +945,11 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
   }
 
   private static int forumTopicId (@Nullable TdApi.MessageTopic topicId) {
+    if (topicId == null) {
+      // A message of this forum without a topic is one of General (messages sent there go without one), whose row
+      // didn't follow them.
+      return XgramForums.GENERAL_TOPIC_ID;
+    }
     return topicId instanceof TdApi.MessageTopicForum ? ((TdApi.MessageTopicForum) topicId).forumTopicId : 0;
   }
 
@@ -778,12 +962,16 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     // Reading from the "All" tab, the merged view or another device marks messages read in their topics without
     // an update for each topic: fetch the topics that still look unread. Only when the chat's state changed, so a
     // refresh that makes TDLib resend the same state can't loop.
+    // The server's position: ghost mode moves the one in the update up to each message viewed, nothing read on the
+    // server, and refreshing every unread topic for each of them flooded the server while scrolling. Topics viewed
+    // that way are refreshed through onLocalReadChanged.
+    long serverReadId = com.fahadali.xgram.ghost.XgramLocalRead.serverReadUpTo(tdlib, chatId, lastReadInboxMessageId);
     tdlib.ui().post(() -> {
       // Only a moved read position: new messages change unreadCount too, and they arrive through onNewMessage.
-      if (lastChatReadInboxMessageId == lastReadInboxMessageId) {
+      if (lastChatReadInboxMessageId == serverReadId) {
         return;
       }
-      lastChatReadInboxMessageId = lastReadInboxMessageId;
+      lastChatReadInboxMessageId = serverReadId;
       refreshUnreadTopics();
     });
   }
@@ -818,10 +1006,29 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
     if (isDestroyed || !isLoaded) {
       return;
     }
+    if (loadFailed) {
+      // "No topics" after the first page failed (offline, flood wait): load it again, the screens show the spinner.
+      resetAfterFailure();
+      for (Listener listener : listeners) {
+        listener.onTopicsLoaded(this);
+      }
+      loadMore();
+      return;
+    }
     int firstPage = firstPageLimit();
     boolean resynced = resyncFirstPage();
+    long now = android.os.SystemClock.uptimeMillis();
+    if (!resynced && lastReturnRefreshAt != 0 && now - lastReturnRefreshAt < RETURN_REFRESH_INTERVAL_MS) {
+      // Back again right away (in and out of topics): what changed since the last time came through updates.
+      return;
+    }
+    lastReturnRefreshAt = now;
     refreshUnreadTopics(resynced ? firstPage : 0);
   }
+
+  /** The unread topics are refreshed on return at most this often (uptime ms), unless the first page is fetched. */
+  private static final long RETURN_REFRESH_INTERVAL_MS = 10_000;
+  private long lastReturnRefreshAt;
 
   @Override
   public void onChatTopMessageChanged (long chatId, @Nullable TdApi.Message topMessage) {
@@ -845,102 +1052,158 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
 
   @Override
   public void onForumTopicInfoChanged (TdApi.ForumTopicInfo info) {
-    tdlib.ui().post(() -> {
-      if (isDestroyed) {
-        return;
-      }
-      int index = indexOf(info.forumTopicId);
-      if (index == -1) {
-        // Not loaded (yet). A new topic arrives with its "topic created" message through onNewMessage; fetching here
-        // too would request every topic TDLib tells about while pages are loading.
-        return;
-      }
-      TdApi.ForumTopic topic = topics.get(index);
-      boolean orderMayChange = topic.info.isHidden != info.isHidden;
-      topic.info = info;
-      if (orderMayChange) {
-        scheduleRefresh(info.forumTopicId);
-      }
-      notifyChanged(index);
-    });
+    tdlib.ui().post(() -> applyTopicInfo(info));
   }
+
+  @UiThread
+  private void applyTopicInfo (TdApi.ForumTopicInfo info) {
+    if (isDestroyed) {
+      return;
+    }
+    int index = indexOf(info.forumTopicId);
+    if (index == -1) {
+      if (isLoading) {
+        infosWhileLoading.put(info.forumTopicId, info);
+      }
+      // Not loaded (yet). A new topic arrives with its "topic created" message through onNewMessage; fetching here
+      // too would request every topic TDLib tells about while pages are loading.
+      return;
+    }
+    TdApi.ForumTopic topic = topics.get(index);
+    boolean hiddenChanged = topic.info.isHidden != info.isHidden;
+    boolean changed = !sameInfo(topic.info, info);
+    topic.info = info;
+    if (hiddenChanged) {
+      // The hidden General goes first: it moves now, as a row out of order misplaces the rows put in after it too.
+      index = reposition(index);
+      scheduleRefresh(info.forumTopicId);
+    }
+    if (changed) {
+      notifyChanged(index);
+    }
+  }
+
+  private static boolean sameInfo (TdApi.ForumTopicInfo a, TdApi.ForumTopicInfo b) {
+    return a.isClosed == b.isClosed &&
+      a.isHidden == b.isHidden &&
+      a.name.equals(b.name) &&
+      sameIcon(a.icon, b.icon);
+  }
+
+  /** Moves the row at {@code index} to where the comparator puts it now. Returns its new index. */
+  @UiThread
+  private int reposition (int index) {
+    TdApi.ForumTopic topic = topics.remove(index);
+    int newIndex = insertionIndex(topic);
+    topics.add(newIndex, topic);
+    if (newIndex != index) {
+      for (Listener listener : listeners) {
+        listener.onTopicMoved(this, index, newIndex);
+      }
+    }
+    return newIndex;
+  }
+
+  /** Ghost mode: topics whose local reads changed, fetched once the reads stop coming (while scrolling a topic). */
+  private final IntSet pendingLocalReads = new IntSet();
+  private final Runnable localReadsRefresh = this::flushLocalReads;
+  private long localReadsSince;
+  private static final long LOCAL_READ_DELAY_MS = 1500;
+  /** At most this long after the first of them, so the badge doesn't wait for the end of a long scroll. */
+  private static final long LOCAL_READ_MAX_DELAY_MS = 5000;
 
   @Override
   public void onLocalReadChanged (Tdlib tdlib, long chatId, int forumTopicId) {
-    // Ghost mode local read changed a topic's counter: fetch it again so normalizeUnread applies it.
+    // Ghost mode local read changed a topic's counter: fetch it again so normalizeUnread applies it. Each message
+    // viewed while scrolling changes it, so the fetch waits until they stop.
     if (tdlib == this.tdlib && chatId == this.chatId && forumTopicId != 0 && !isDestroyed && indexOf(forumTopicId) != -1) {
+      long now = android.os.SystemClock.uptimeMillis();
+      if (pendingLocalReads.isEmpty()) {
+        localReadsSince = now;
+      }
+      pendingLocalReads.add(forumTopicId);
+      tdlib.ui().removeCallbacks(localReadsRefresh);
+      tdlib.ui().postDelayed(localReadsRefresh, Math.max(0, Math.min(LOCAL_READ_DELAY_MS, localReadsSince + LOCAL_READ_MAX_DELAY_MS - now)));
+    }
+  }
+
+  @UiThread
+  private void flushLocalReads () {
+    int[] forumTopicIds = pendingLocalReads.toArray();
+    pendingLocalReads.clear();
+    for (int forumTopicId : forumTopicIds) {
       scheduleRefresh(forumTopicId);
     }
   }
 
   @Override
   public void onForumTopicUpdated (TdApi.UpdateForumTopic update) {
-    tdlib.ui().post(() -> {
-      if (isDestroyed) {
+    tdlib.ui().post(() -> applyTopicUpdate(update));
+  }
+
+  @UiThread
+  private void applyTopicUpdate (TdApi.UpdateForumTopic update) {
+    if (isDestroyed) {
+      return;
+    }
+    int index = indexOf(update.forumTopicId);
+    if (index == -1) {
+      if (isLoading) {
+        // It may be a row once the page is in: applied then (the last one of each topic).
+        updatesWhileLoading.put(update.forumTopicId, update);
         return;
       }
-      int index = indexOf(update.forumTopicId);
-      if (index == -1) {
-        if (!update.isPinned) {
-          // Known as pinned but not loaded as a row: forget it, or the next reorder would pin it again.
-          pinnedOrder.remove(update.forumTopicId);
-        }
-        return;
+      if (!update.isPinned) {
+        // Known as pinned but not loaded as a row: forget it, or the next reorder would pin it again.
+        pinnedOrder.remove(update.forumTopicId);
       }
-      TdApi.ForumTopic topic = topics.get(index);
-      // Ghost mode: mentions viewed without reading them count as read here.
-      int mentions = com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(tdlib, chatId, update.forumTopicId, update.unreadMentionCount);
-      boolean readChanged = topic.lastReadInboxMessageId != update.lastReadInboxMessageId;
-      boolean pinChanged = topic.isPinned != update.isPinned;
-      boolean changed = readChanged || pinChanged ||
-        topic.lastReadOutboxMessageId != update.lastReadOutboxMessageId ||
-        topic.unreadMentionCount != mentions ||
-        topic.unreadReactionCount != update.unreadReactionCount ||
-        topic.unreadPollVoteCount != update.unreadPollVoteCount ||
-        !sameNotificationSettings(topic.notificationSettings, update.notificationSettings) ||
-        !sameDraft(topic.draftMessage, update.draftMessage);
-      topic.isPinned = update.isPinned;
-      topic.lastReadInboxMessageId = update.lastReadInboxMessageId;
-      topic.lastReadOutboxMessageId = update.lastReadOutboxMessageId;
-      topic.unreadMentionCount = mentions;
-      topic.unreadReactionCount = update.unreadReactionCount;
-      topic.unreadPollVoteCount = update.unreadPollVoteCount;
-      topic.notificationSettings = update.notificationSettings;
-      topic.draftMessage = update.draftMessage;
-      // unread_count isn't part of this update. Reading up to the last message means nothing is left.
-      boolean readFully = topic.lastMessage != null && topic.lastReadInboxMessageId >= topic.lastMessage.id;
-      if (readFully && topic.unreadCount != 0) {
-        topic.unreadCount = 0;
-        changed = true;
+      return;
+    }
+    TdApi.ForumTopic topic = topics.get(index);
+    // Ghost mode: mentions viewed without reading them count as read here.
+    int mentions = com.fahadali.xgram.ghost.XgramLocalRead.lowerMentions(tdlib, chatId, update.forumTopicId, update.unreadMentionCount);
+    boolean readChanged = topic.lastReadInboxMessageId != update.lastReadInboxMessageId;
+    boolean pinChanged = topic.isPinned != update.isPinned;
+    boolean draftChanged = !sameDraft(topic.draftMessage, update.draftMessage);
+    boolean changed = readChanged || pinChanged || draftChanged ||
+      topic.lastReadOutboxMessageId != update.lastReadOutboxMessageId ||
+      topic.unreadMentionCount != mentions ||
+      topic.unreadReactionCount != update.unreadReactionCount ||
+      topic.unreadPollVoteCount != update.unreadPollVoteCount ||
+      !sameNotificationSettings(topic.notificationSettings, update.notificationSettings);
+    topic.isPinned = update.isPinned;
+    topic.lastReadInboxMessageId = update.lastReadInboxMessageId;
+    topic.lastReadOutboxMessageId = update.lastReadOutboxMessageId;
+    topic.unreadMentionCount = mentions;
+    topic.unreadReactionCount = update.unreadReactionCount;
+    topic.unreadPollVoteCount = update.unreadPollVoteCount;
+    topic.notificationSettings = update.notificationSettings;
+    topic.draftMessage = update.draftMessage;
+    // unread_count isn't part of this update. Reading up to the last message means nothing is left.
+    boolean readFully = topic.lastMessage != null && topic.lastReadInboxMessageId >= topic.lastMessage.id;
+    if (readFully && topic.unreadCount != 0) {
+      topic.unreadCount = 0;
+      changed = true;
+    }
+    if (pinChanged) {
+      // Pinned here or elsewhere: it goes on top of the pinned ones (as on the server); unpinned, it falls back to
+      // its place by date. No fetch is needed, as order doesn't follow pinning.
+      if (update.isPinned) {
+        prependPinned(update.forumTopicId);
+      } else {
+        pinnedOrder.remove(update.forumTopicId);
       }
-      if (pinChanged) {
-        // Pinned here or elsewhere: it goes on top of the pinned ones (as on the server); unpinned, it falls back to
-        // its place by date. No fetch is needed, as order doesn't follow pinning.
-        if (update.isPinned) {
-          prependPinned(update.forumTopicId);
-        } else {
-          pinnedOrder.remove(update.forumTopicId);
-        }
-        topics.remove(index);
-        int newIndex = insertionIndex(topic);
-        topics.add(newIndex, topic);
-        if (newIndex != index) {
-          for (Listener listener : listeners) {
-            listener.onTopicMoved(this, index, newIndex);
-          }
-          index = newIndex;
-        }
-      }
-      if (changed) {
-        notifyChanged(index);
-        publishUnread();
-      }
-      // Partial reads change the unread count: fetch the exact values.
-      // Fetching on every update can loop, as fetching a topic may emit this update again.
-      if (readChanged && !readFully) {
-        scheduleRefresh(update.forumTopicId);
-      }
-    });
+      index = reposition(index);
+    }
+    if (changed) {
+      notifyChanged(index);
+      publishUnread();
+    }
+    // Partial reads change the unread count, and a draft the order (which this update doesn't carry): fetch the
+    // exact values. Fetching on every update can loop, as fetching a topic may emit this update again.
+    if ((readChanged && !readFully) || draftChanged) {
+      scheduleRefresh(update.forumTopicId);
+    }
   }
 
   // MessageListener (TDLib thread)
@@ -1058,6 +1321,7 @@ public final class ForumTopicList implements ChatListener, MessageListener, Dest
       tdlib.listeners().unsubscribeFromChatUpdates(chatId, this);
       tdlib.listeners().unsubscribeFromMessageUpdates(chatId, this);
       com.fahadali.xgram.ghost.XgramLocalRead.removeListener(this);
+      tdlib.ui().removeCallbacks(localReadsRefresh);
       listeners.clear();
     }
   }

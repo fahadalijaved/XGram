@@ -251,6 +251,11 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
     adapter.notifyItemChanged(index + TOPICS_OFFSET);
   }
 
+  @Override
+  public void onLoadMoreAvailable (ForumTopicList list) {
+    checkLoadMore(); // the next page failed or had to wait: try again without a scroll
+  }
+
   // Adapter
 
   private static final class Holder extends ViewHolder {

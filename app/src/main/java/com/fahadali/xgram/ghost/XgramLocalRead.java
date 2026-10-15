@@ -264,7 +264,7 @@ public final class XgramLocalRead {
       scheduleChatRefresh(tdlib, chat.id);
     }
     if (topicChanged) {
-      notifyChanged(tdlib, chat.id, forumTopicId);
+      scheduleTopicRefresh(tdlib, chat.id, forumTopicId);
     }
   }
 
@@ -434,6 +434,37 @@ public final class XgramLocalRead {
     };
     pendingRefresh.put(key, act);
     tdlib.ui().postDelayed(act, REFRESH_DELAY_MS);
+  }
+
+  /** Same for a forum topic: scrolling views a message every few frames, its topic list hears of them in one go. */
+  @UiThread
+  private static void scheduleTopicRefresh (Tdlib tdlib, long chatId, int forumTopicId) {
+    String key = tdlib.id() + "_" + chatId + "_" + forumTopicId;
+    if (pendingRefresh.containsKey(key)) {
+      return;
+    }
+    Runnable act = () -> {
+      pendingRefresh.remove(key);
+      notifyChanged(tdlib, chatId, forumTopicId);
+    };
+    pendingRefresh.put(key, act);
+    tdlib.ui().postDelayed(act, REFRESH_DELAY_MS);
+  }
+
+  /**
+   * The chat's read position on the server. The one Telegram X holds is moved up to what was viewed in ghost mode
+   * ({@link #rewriteReadInbox}), so it changes with every message viewed while nothing was read on the server.
+   */
+  @AnyThread
+  public static long serverReadUpTo (Tdlib tdlib, long chatId, long shownReadId) {
+    if (!isActive()) {
+      return shownReadId;
+    }
+    synchronized (lock) {
+      ensureLoaded();
+      Entry entry = entries.get(keyOf(tdlib.id(), chatId, 0));
+      return entry != null && !entry.viewed.isEmpty() ? Math.min(entry.serverReadId, shownReadId) : shownReadId;
+    }
   }
 
   /**

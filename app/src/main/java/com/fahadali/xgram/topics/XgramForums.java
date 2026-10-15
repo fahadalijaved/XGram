@@ -812,7 +812,9 @@ public final class XgramForums {
       new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24},
       (itemView, id) -> {
         if (id == R.id.btn_xgramTopicDelete) {
-          tdlib.send(new TdApi.DeleteForumTopic(chat.id, topic.info.forumTopicId), tdlib.typedOkHandler());
+          int forumTopicId = topic.info.forumTopicId;
+          // TDLib sends no update for a deleted topic: the list drops it once the server agrees.
+          tdlib.send(new TdApi.DeleteForumTopic(chat.id, forumTopicId), tdlib.typedOkHandler(() -> ForumTopicList.onTopicDeleted(tdlib, chat.id, forumTopicId)));
         }
         return true;
       });
