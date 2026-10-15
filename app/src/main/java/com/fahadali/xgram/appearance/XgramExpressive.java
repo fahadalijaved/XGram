@@ -404,6 +404,9 @@ public final class XgramExpressive {
       if (!seedWatcherAdded) {
         addSeedWatcher();
       }
+      if (!listenerAdded) {
+        ensureColorCache(); // registers the theme listener that resets the theme caches of XgramM3Colors
+      }
       int scheme = dark ? 1 : 0;
       long bit = 1L << role;
       if ((systemValid[scheme] & bit) == 0) {
@@ -523,6 +526,15 @@ public final class XgramExpressive {
   public static int color (int role) {
     ensureColorCache();
     if (isEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      ThemeDelegate theme = ThemeManager.instance().currentTheme();
+      if (theme.getId() == org.thunderdog.challegram.theme.ThemeId.TEMPORARY) {
+        // Day/night switch in progress: blend the two schemes like Theme.getColor does (see XgramM3Colors)
+        float dark = theme.getProperty(org.thunderdog.challegram.theme.PropertyId.DARK);
+        if (dark > 0f && dark < 1f) {
+          return me.vkryl.core.ColorUtils.fromToArgb(colorFor(role, false), colorFor(role, true), dark);
+        }
+        return colorFor(role, dark >= 1f);
+      }
       return colorFor(role, cacheDark);
     }
     long bit = 1L << role;

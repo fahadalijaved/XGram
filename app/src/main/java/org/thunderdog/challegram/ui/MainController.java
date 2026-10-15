@@ -1598,7 +1598,15 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     return chats;
   }
 
+  /** XGram: tab labels are uppercase in Telegram X, sentence case with Material 3 Expressive. */
+  private static String xgramTabLabel (String label) {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? label : Lang.uppercase(label);
+  }
+
   private CharSequence getMenuSectionName (long pagerItemId, int pagerItemPosition, boolean hasFolders, @ChatFolderStyle int chatFolderStyle, boolean upperCase) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      upperCase = false; // XGram: Material 3 tabs are in sentence case
+    }
     int selectedFilter = getSelectedFilter(pagerItemId);
     boolean isMain = pagerItemId == MAIN_PAGER_ITEM_ID;
     boolean isArchive = pagerItemId == ARCHIVE_PAGER_ITEM_ID;
@@ -1828,7 +1836,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
     return new CharSequence[] {
       getMenuSectionName(MAIN_PAGER_ITEM_ID, /* pagerItemPosition */ 0, /* hasFolders */ false, ChatFolderStyle.LABEL_ONLY, /* upperCase */ true),
-      Lang.uppercase(Lang.getString(R.string.Calls))/*, UI.getString(R.string.Contacts).toUpperCase()*/
+      xgramTabLabel(Lang.getString(R.string.Calls))/*, UI.getString(R.string.Contacts).toUpperCase()*/
     };
   }
 
@@ -1884,7 +1892,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private List<ViewPagerTopView.Item> getDefaultSectionItems () {
     if (defaultSectionItems == null) {
-      String callsItem = Lang.uppercase(Lang.getString(R.string.Calls));
+      String callsItem = xgramTabLabel(Lang.getString(R.string.Calls));
       defaultSectionItems = Arrays.asList(
         getDefaultMainItem(),
         new ViewPagerTopView.Item(callsItem)
