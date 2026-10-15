@@ -31,11 +31,12 @@ import java.util.List;
 /** Settings → XGram → Side menu: which items the drawer shows (exteraGram custom drawer), and in what order. */
 public final class XgramDrawerItemsController extends RecyclerViewController<Void> implements View.OnClickListener {
   // Telegram X's order. Settings can't be hidden, only moved; Night mode and Ghost mode sit below the line.
-  private static final String[] KEYS = {"contacts", "hub", "calls", "saved", "bookmarks", "saved_by_chat", "settings", "invite", "proxy", "help"};
-  private static final int[] NAMES = {R.string.Contacts, R.string.XgramHub, R.string.Calls, R.string.SavedMessages, R.string.XgramBookmarks, R.string.XgramSavedByChat, R.string.Settings, R.string.InviteFriends, R.string.Proxy, R.string.Help};
-  private static final String[] TOGGLE_KEYS = {"night", "ghost"};
-  private static final int[] TOGGLE_NAMES = {R.string.NightMode, R.string.XgramGhostMode};
-  private static final String KEY_SETTINGS = "settings";
+  // XGram: public for the Compose Side menu page (xgram-m3e)
+  public static final String[] KEYS = {"contacts", "hub", "calls", "saved", "bookmarks", "saved_by_chat", "settings", "invite", "proxy", "help"};
+  public static final int[] NAMES = {R.string.Contacts, R.string.XgramHub, R.string.Calls, R.string.SavedMessages, R.string.XgramBookmarks, R.string.XgramSavedByChat, R.string.Settings, R.string.InviteFriends, R.string.Proxy, R.string.Help};
+  public static final String[] TOGGLE_KEYS = {"night", "ghost"};
+  public static final int[] TOGGLE_NAMES = {R.string.NightMode, R.string.XgramGhostMode};
+  public static final String KEY_SETTINGS = "settings";
 
   /** The stored key of a side menu item, in the drawer itself or on this screen; null for anything else. */
   @Nullable

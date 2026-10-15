@@ -30,9 +30,10 @@ import java.util.List;
 
 /** Settings → XGram → Messages → Message box buttons: which buttons the message box shows. Open chats update at once. */
 public final class XgramInputButtonsController extends RecyclerViewController<Void> implements View.OnClickListener {
-  private static final String[] KEYS = {XgramSettings.INPUT_BUTTON_COMMANDS, XgramSettings.INPUT_BUTTON_SCHEDULED, XgramSettings.INPUT_BUTTON_CAMERA, XgramSettings.INPUT_BUTTON_VOICE};
-  private static final int[] NAMES = {R.string.XgramInputCommands, R.string.XgramInputScheduled, R.string.XgramInputCamera, R.string.XgramInputVoice};
-  private static final int[] ICONS = {R.drawable.deproko_baseline_bots_command_26, R.drawable.baseline_date_range_24, R.drawable.deproko_baseline_camera_26, R.drawable.deproko_baseline_msg_voice_24};
+  // XGram: public for the Compose Message box buttons page (xgram-m3e)
+  public static final String[] KEYS = {XgramSettings.INPUT_BUTTON_COMMANDS, XgramSettings.INPUT_BUTTON_SCHEDULED, XgramSettings.INPUT_BUTTON_CAMERA, XgramSettings.INPUT_BUTTON_VOICE};
+  public static final int[] NAMES = {R.string.XgramInputCommands, R.string.XgramInputScheduled, R.string.XgramInputCamera, R.string.XgramInputVoice};
+  public static final int[] ICONS = {R.drawable.deproko_baseline_bots_command_26, R.drawable.baseline_date_range_24, R.drawable.deproko_baseline_camera_26, R.drawable.deproko_baseline_msg_voice_24};
 
   private SettingsAdapter adapter;
 
