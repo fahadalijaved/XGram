@@ -733,8 +733,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   // Everything below the accounts. XGram: built here so the side menu settings can rebuild it at once.
   private void addMenuItems (List<ListItem> items) {
-    // XGram: side menu items can be hidden (Settings → XGram → Side menu).
+    // XGram: side menu items can be hidden and reordered (Settings → XGram → Side menu).
     com.fahadali.xgram.XgramSettings xgram = com.fahadali.xgram.XgramSettings.instance();
+    final int xgramMainStart = items.size();
     if (!xgram.drawerItemHidden("contacts")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_contacts, R.drawable.baseline_perm_contact_calendar_24, R.string.Contacts));
     }
@@ -769,13 +770,16 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     if (!xgram.drawerItemHidden("help")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_help, R.drawable.baseline_help_24, R.string.Help));
     }
+    com.fahadali.xgram.XgramReorder.sort(com.fahadali.xgram.XgramReorder.DRAWER, items.subList(xgramMainStart, items.size()), com.fahadali.xgram.XgramDrawerItemsController::keyOf); // XGram
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+    final int xgramTogglesStart = items.size();
     if (!xgram.drawerItemHidden("night")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_night, R.drawable.baseline_brightness_2_24, R.string.NightMode, R.id.btn_night, Theme.isDark()));
     }
     if (!xgram.drawerItemHidden("ghost")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_xgramGhostMode, R.drawable.baseline_ghost_24, R.string.XgramGhostMode, R.id.btn_xgramGhostMode, xgram.isAnyGhostEnabled())); // XGram
     }
+    com.fahadali.xgram.XgramReorder.sort(com.fahadali.xgram.XgramReorder.DRAWER, items.subList(xgramTogglesStart, items.size()), com.fahadali.xgram.XgramDrawerItemsController::keyOf); // XGram
     if (Test.NEED_CLICK) {
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_reportBug, R.drawable.baseline_bug_report_24, Test.CLICK_NAME, false));
@@ -801,21 +805,24 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     }
   }
 
-  /** XGram: shows or hides side menu items right away (Settings → XGram → Appearance → Side menu). */
+  /** XGram: where the menu starts, at its first item whatever it is (items can be hidden or moved; Settings is always there). */
+  private int xgramMenuStart () {
+    List<ListItem> items = adapter.getItems();
+    for (int i = 0; i < items.size(); i++) {
+      if (com.fahadali.xgram.XgramDrawerItemsController.keyOf(items.get(i)) != null) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /** XGram: shows, hides or reorders side menu items right away (Settings → XGram → Appearance → Side menu). */
   public void xgramUpdateMenuItems () {
     if (adapter == null) {
       return;
     }
     List<ListItem> items = adapter.getItems();
-    // The menu starts at its first item; Contacts, Calls etc. can be hidden, Settings never is.
-    int start = -1;
-    for (int i = 0; i < items.size(); i++) {
-      int id = items.get(i).getId();
-      if (id == R.id.btn_contacts || id == R.id.btn_xgramHub || id == R.id.btn_calls || id == R.id.btn_savedMessages || id == R.id.btn_xgramBookmarks || id == R.id.btn_xgramSavedByChat || id == R.id.btn_settings) {
-        start = i;
-        break;
-      }
-    }
+    int start = xgramMenuStart();
     if (start == -1) {
       return;
     }
@@ -849,8 +856,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       adapter.getItems().addAll(1, items);
       adapter.notifyItemRangeInserted(1, items.size());
     } else {
-      int count = adapter.indexOfViewById(R.id.btn_contacts) - 1;
-      adapter.removeRange(1, count);
+      int count = xgramMenuStart() - 1; // XGram: Contacts can be hidden or moved
+      if (count > 0) {
+        adapter.removeRange(1, count);
+      }
     }
   }
 

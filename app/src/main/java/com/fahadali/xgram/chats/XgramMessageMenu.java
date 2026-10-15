@@ -51,30 +51,20 @@ public final class XgramMessageMenu {
   }
 
   public static final Option[] OPTIONS = {
-    // Telegram X
-    new Option("reply", R.string.Reply, R.drawable.baseline_reply_24, false, R.id.btn_messageReply),
-    new Option("share", R.string.Share, R.drawable.baseline_forward_24, false, R.id.btn_messageShare),
-    new Option("copy", R.string.Copy, R.drawable.baseline_content_copy_24, false, R.id.btn_messageCopy, R.id.btn_copyTranslation),
-    new Option("copy_link", R.string.CopyLink, R.drawable.baseline_link_24, false, R.id.btn_messageCopyLink),
-    new Option("edit", R.string.edit, R.drawable.baseline_edit_24, false, R.id.btn_messageEdit),
-    new Option("pin", R.string.Pin, R.drawable.deproko_baseline_pin_24, false, R.id.btn_messagePin, R.id.btn_messageUnpin),
-    new Option("translate", R.string.Translate, R.drawable.baseline_translate_24, false, R.id.btn_chatTranslate, R.id.btn_chatTranslateOff),
+    // In the order Telegram X (and XGram, in between) usually shows them: the default order of the list in settings.
     new Option("thread", R.string.ViewThread, R.drawable.outline_forum_24, false, R.id.btn_messageReplies),
-    new Option("stats", R.string.ViewStats, R.drawable.baseline_bar_chart_24, false, R.id.btn_viewStatistics),
-    new Option("save", R.string.SaveToDownloads, R.drawable.baseline_file_download_24, false, R.id.btn_saveFile, R.id.btn_saveGif),
-    new Option("cache", R.string.DeleteFromCache, R.drawable.templarian_baseline_broom_24, false, R.id.btn_deleteFile, R.id.btn_xgramClearFromCache),
-    new Option("sticker_set", R.string.OpenStickerSet, R.drawable.deproko_baseline_stickers_24, false, R.id.btn_messageStickerSet),
-    new Option("report", R.string.MessageReport, R.drawable.baseline_report_24, false, R.id.btn_messageReport),
-    new Option("restrict", R.string.XgramMenuRestrict, R.drawable.baseline_block_24, false, R.id.btn_messageRestrictMember, R.id.btn_messageBlockUser),
-    new Option("delete", R.string.Delete, R.drawable.baseline_delete_24, false, R.id.btn_messageDelete),
-    new Option("more", R.string.MoreMessageOptions, R.drawable.baseline_more_horiz_24, false, R.id.btn_messageMore),
-    // XGram
+    new Option("reply", R.string.Reply, R.drawable.baseline_reply_24, false, R.id.btn_messageReply),
     new Option("quote", R.string.XgramQuote, R.drawable.baseline_format_quote_close_24, true, R.id.btn_xgramQuote),
-    new Option("details", R.string.XgramMessageDetails, R.drawable.baseline_info_24, true, R.id.btn_xgramMessageDetails),
+    new Option("share", R.string.Share, R.drawable.baseline_forward_24, false, R.id.btn_messageShare),
+    new Option("pin", R.string.Pin, R.drawable.deproko_baseline_pin_24, false, R.id.btn_messagePin, R.id.btn_messageUnpin),
+    new Option("stats", R.string.ViewStats, R.drawable.baseline_bar_chart_24, false, R.id.btn_viewStatistics),
+    new Option("edit", R.string.edit, R.drawable.baseline_edit_24, false, R.id.btn_messageEdit),
+    new Option("copy_link", R.string.CopyLink, R.drawable.baseline_link_24, false, R.id.btn_messageCopyLink),
     new Option("read_up_to_here", R.string.XgramReadUpToHere, R.drawable.baseline_done_all_24, true, R.id.btn_xgramReadUpToHere),
+    new Option("details", R.string.XgramMessageDetails, R.drawable.baseline_info_24, true, R.id.btn_xgramMessageDetails),
     new Option("save_to_saved", R.string.XgramSaveToSaved, R.drawable.baseline_bookmark_24, true, R.id.btn_xgramSaveToSaved),
-    new Option("bookmark", R.string.XgramBookmark, R.drawable.baseline_star_24, true, R.id.btn_xgramBookmark),
     new Option("view_in_topic", R.string.XgramViewInTopic, R.drawable.baseline_forum_24, true, R.id.btn_xgramViewInTopic),
+    new Option("bookmark", R.string.XgramBookmark, R.drawable.baseline_star_24, true, R.id.btn_xgramBookmark),
     new Option("repeat", R.string.XgramRepeat, R.drawable.baseline_repeat_24, true, R.id.btn_xgramRepeat),
     new Option("transcribe", R.string.XgramTranscribe, R.drawable.baseline_format_text_24, true, R.id.btn_xgramTranscribe),
     new Option("summarize", R.string.XgramSummarize, R.drawable.baseline_format_list_bulleted_type_24, true, R.id.btn_xgramSummarize),
@@ -83,6 +73,15 @@ public final class XgramMessageMenu {
     new Option("reply_privately", R.string.XgramReplyPrivately, R.drawable.baseline_reply_24, true, R.id.btn_xgramReplyPrivately),
     new Option("shadow_ban", R.string.XgramShadowBan, R.drawable.baseline_block_24, true, R.id.btn_xgramShadowBan),
     new Option("copy_photo", R.string.XgramCopyPhoto, R.drawable.baseline_content_copy_24, true, R.id.btn_xgramCopyPhoto),
+    new Option("copy", R.string.Copy, R.drawable.baseline_content_copy_24, false, R.id.btn_messageCopy, R.id.btn_copyTranslation),
+    new Option("translate", R.string.Translate, R.drawable.baseline_translate_24, false, R.id.btn_chatTranslate, R.id.btn_chatTranslateOff),
+    new Option("sticker_set", R.string.OpenStickerSet, R.drawable.deproko_baseline_stickers_24, false, R.id.btn_messageStickerSet),
+    new Option("save", R.string.SaveToDownloads, R.drawable.baseline_file_download_24, false, R.id.btn_saveFile, R.id.btn_saveGif),
+    new Option("cache", R.string.DeleteFromCache, R.drawable.templarian_baseline_broom_24, false, R.id.btn_deleteFile, R.id.btn_xgramClearFromCache),
+    new Option("report", R.string.MessageReport, R.drawable.baseline_report_24, false, R.id.btn_messageReport),
+    new Option("delete", R.string.Delete, R.drawable.baseline_delete_24, false, R.id.btn_messageDelete),
+    new Option("restrict", R.string.XgramMenuRestrict, R.drawable.baseline_block_24, false, R.id.btn_messageRestrictMember, R.id.btn_messageBlockUser),
+    new Option("more", R.string.MoreMessageOptions, R.drawable.baseline_more_horiz_24, false, R.id.btn_messageMore)
   };
 
   private static volatile Set<String> hidden;
@@ -168,7 +167,8 @@ public final class XgramMessageMenu {
       keptNames.append(names[i]);
     }
     if (keptIds.isEmpty() || keptIds.size() == count) {
-      return; // never leave the menu empty
+      order(ids, icons, strings); // never leave the menu empty
+      return;
     }
     String[] keptNameArray = keptNames.get();
     ids.clear();
@@ -179,5 +179,23 @@ public final class XgramMessageMenu {
       icons.append(keptIcons.get(i));
       strings.append(keptNameArray[i]);
     }
+    order(ids, icons, strings);
+  }
+
+  /** The user's order (Settings → XGram → Chats → Message menu); options it doesn't know keep their place. */
+  private static void order (IntList ids, IntList icons, StringList strings) {
+    com.fahadali.xgram.XgramReorder.sort(com.fahadali.xgram.XgramReorder.MESSAGE_MENU, ids, icons, strings, XgramMessageMenu::keyOfId);
+  }
+
+  @androidx.annotation.Nullable
+  private static String keyOfId (Integer id) {
+    for (Option option : OPTIONS) {
+      for (int optionId : option.ids) {
+        if (optionId == id) {
+          return option.key;
+        }
+      }
+    }
+    return null;
   }
 }

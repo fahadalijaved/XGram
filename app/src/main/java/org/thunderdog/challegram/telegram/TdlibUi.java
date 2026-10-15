@@ -5897,6 +5897,7 @@ public class TdlibUi extends Handler {
         icons.append(R.drawable.baseline_playlist_add_check_24);
       }
     }
+    com.fahadali.xgram.chats.XgramChatActionsController.order(ids, icons, strings); // XGram: the user's order
 
     return new ForceTouchView.ActionListener() {
       @Override

@@ -446,6 +446,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramChatList));
     addRows(items,
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramChatLongPress, 0, R.string.XgramChatLongPress),
+      new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramChatActionsOrder, 0, R.string.XgramChatActionsOrder),
       toggle(R.id.btn_xgramMergeCommunities, R.string.XgramMergeCommunities),
       toggle(R.id.btn_xgramHideBlocked, R.string.XgramHideBlocked),
       toggle(R.id.btn_xgramHideSponsored, R.string.XgramHideSponsored)
@@ -1121,6 +1122,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramChatLongPress) {
       com.fahadali.xgram.chats.XgramChatLongPress.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramChatLongPress));
+      return;
+    } else if (id == R.id.btn_xgramChatActionsOrder) {
+      navigateTo(new com.fahadali.xgram.chats.XgramChatActionsController(context, tdlib));
       return;
     } else if (id == R.id.btn_xgramSwipeLeft || id == R.id.btn_xgramSwipeRight) {
       com.fahadali.xgram.chats.XgramSwipeActions.showPicker(this, id == R.id.btn_xgramSwipeRight, () -> adapter.updateValuedSettingById(id));

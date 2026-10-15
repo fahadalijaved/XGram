@@ -101,7 +101,7 @@ public final class XgramBackup {
     }
     return count;
   }
-  private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden"};
+  private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", XgramReorder.KEY_PREFIX};
   private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_"};
   /** Data rather than settings: exported and imported, but kept by {@link #reset}. */
   private static final String[] LONG_PREFIXES = {"xgram_bm_"};
@@ -193,7 +193,7 @@ public final class XgramBackup {
       if (strings != null) {
         for (Iterator<String> it = strings.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.equals("xgram_filters") || key.startsWith("xgram_ln_")) {
+          if (key.equals("xgram_filters") || key.startsWith("xgram_ln_") || key.equals("xgram_menu_hidden") || key.startsWith(XgramReorder.KEY_PREFIX)) {
             pmc().putString(key, strings.getString(key));
             count++;
           }

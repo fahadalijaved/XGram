@@ -250,4 +250,8 @@
   <item type="id" name="btn_xgramSwipeBookmark" />
   <item type="id" name="btn_xgramSwipeReact" />
   <item type="id" name="btn_xgramSwipeNothing" />
+  <item type="id" name="btn_xgramResetOrder" />
+  <item type="id" name="btn_xgramChatActionsOrder" />
+  <item type="id" name="btn_xgramChatAction" />
+  <item type="id" name="controller_xgramChatActionsOrder" />
 </resources>

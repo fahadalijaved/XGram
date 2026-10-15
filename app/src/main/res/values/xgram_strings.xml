@@ -87,7 +87,7 @@
   <string name="XgramAddedToCommunityNamed">Added to the %1$s community</string>
   <string name="XgramRemovedFromCommunity">Removed from the community</string>
   <string name="XgramMessageMenu">Message menu</string>
-  <string name="XgramMessageMenuInfo">Choose what shows when you long-press a message. Options for one situation only, like Send now or Stop poll, always show.</string>
+  <string name="XgramMessageMenuInfo">Choose what shows when you long-press a message, and drag an option by its handle, or hold it, to change the order. Options for one situation only, like Send now or Stop poll, always show and keep their place.</string>
   <string name="XgramMenuTelegram">Telegram&#160;X</string>
   <string name="XgramMenuXgram">XGram</string>
   <string name="XgramMenuRestrict">Restrict or remove member</string>
@@ -241,7 +241,10 @@
   <string name="XgramMuteFor">Mute for %1$s</string>
   <string name="XgramMuteForever">Mute forever</string>
   <string name="XgramSideMenu">Side menu</string>
-  <string name="XgramSideMenuInfo">Choose what the side menu shows.</string>
+  <string name="XgramSideMenuInfo">Choose what the side menu shows. Drag an item by its handle, or hold it, to change the order.</string>
+  <string name="XgramResetOrder">Reset order</string>
+  <string name="XgramChatActionsOrder">Chat actions order</string>
+  <string name="XgramChatActionsOrderInfo">The order of the actions a long press on a chat shows, in the chat preview and in the quick actions. Drag an action by its handle, or hold it, to move it. Actions a chat does not have are left out.</string>
   <string name="XgramSideMenuItems">Items</string>
   <string name="XgramHistoryRetentionInfo">How long XGram keeps its copies of messages that were never deleted or edited. Deleted and edited ones are kept until you clear them.</string>
   <string name="XgramRetentionDays">%1$s days</string>
