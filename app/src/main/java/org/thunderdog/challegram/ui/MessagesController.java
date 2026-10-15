@@ -1012,6 +1012,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive: the cards sit on an opaque band in the app bar color
       topBar.xgramSetBackingColor(() -> Theme.getColor(inSelectMode() ? getSelectHeaderColorId() : getHeaderColorId()));
+      addThemeInvalidateListener(topBar);
     }
 
     // Mention button
@@ -1867,6 +1868,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (xgramCornersView != null) {
       xgramCornersView.invalidate(); // XGram: corners in the selection app bar color
     }
+    if (topBar != null) {
+      topBar.invalidate(); // XGram: the card backing follows the selection app bar color
+    }
     xgramUpdateSelectionToolbar(true); // XGram
   }
 
@@ -1877,6 +1881,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     if (xgramCornersView != null) {
       xgramCornersView.invalidate(); // XGram
+    }
+    if (topBar != null) {
+      topBar.invalidate(); // XGram
     }
     if (xgramSelectionToolbar != null) {
       xgramSelectionToolbar.setShown(false, true); // XGram
