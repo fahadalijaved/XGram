@@ -458,6 +458,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     if (!xgramNav.begin(mode, leftWrap, rightWrap, forward, needRtl(), predictiveGestureMode == PredictiveGesture.BACK_FROM_RIGHT_EDGE, xgramTouchY)) {
       return;
     }
+    headerView.xgramSetSharedAxis(xgramNav.getMode() == XgramNavMotion.MODE_SHARED_AXIS); // XGram: the app bar title follows the same axis
     if (USE_PREVIEW_FADE && fadeView != null) {
       fadeView.setAlpha(0f);
     }
@@ -486,6 +487,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   private void xgramEnd (int finishMode) {
+    if (headerView != null) {
+      headerView.xgramSetSharedAxis(false);
+    }
     if (xgramNav != null && xgramNav.isActive()) {
       boolean card = xgramNav.isCard();
       xgramNav.end();

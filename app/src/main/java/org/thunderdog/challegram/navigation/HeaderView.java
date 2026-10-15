@@ -1543,6 +1543,16 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
     switch (translationMode) {
       case MODE_HORIZONTAL: {
+        if (xgramSharedAxis) {
+          // XGram: shared axis X like the screens (raptor is the transition progress, title leaves, preview enters)
+          final int e = (forceRtlAnimation || Lang.rtl()) ? -1 : 1;
+          final float distance = com.fahadali.xgram.appearance.XgramNavMotion.sharedAxisDistance();
+          title.setTranslationX(com.fahadali.xgram.appearance.XgramNavMotion.outOffset(raptor, translateForward, e, distance));
+          preview.setTranslationX(com.fahadali.xgram.appearance.XgramNavMotion.inOffset(raptor, translateForward, e, distance));
+          title.setAlpha(com.fahadali.xgram.appearance.XgramNavMotion.outAlpha(raptor) * xgramTextAlpha(title, baseItem));
+          preview.setAlpha(com.fahadali.xgram.appearance.XgramNavMotion.inAlpha(raptor) * xgramTextAlpha(preview, previewItem));
+          break;
+        }
         if (forceRtlAnimation || Lang.rtl()) {
           if (translateForward) {
             title.setTranslationX(currentX * raptor);
@@ -2228,6 +2238,13 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
   }
 
   private float currentX, currentY;
+
+  // XGram: while NavigationController runs the Expressive shared axis transition, the title follows the same axis (96dp, fade through).
+  private boolean xgramSharedAxis;
+
+  public void xgramSetSharedAxis (boolean sharedAxis) {
+    this.xgramSharedAxis = sharedAxis;
+  }
 
   private int getTextSwitchModeForView (View view) {
     if (view instanceof TextView && view.getTag() == this) {
