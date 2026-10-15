@@ -404,8 +404,8 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   }
 
   public float getAvatarExpandFactor () {
-    if (xgramAvatarDrawable != null) {
-      return 0f; // XGram: a topic icon never grows into a full-width photo
+    if (xgramAvatarDrawable != null || xgramCentered()) {
+      return 0f; // XGram: a topic icon never grows into a full-width photo; Expressive design keeps a big round avatar
     }
     return avatarAllowanceFactor * (1f - avatarCollapseFactor);
   }
@@ -549,7 +549,43 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
     return (float) currentHeight / (float) startY;
   }
 
+  // XGram: Material 3 Expressive. Pages whose header can reach the big size (profile, Settings) center a large
+  // avatar with the name and subtitle under it (Google Contacts); the collapsed app bar uses Google Sans Flex.
+
+  private static final float XGRAM_TITLE_SCALE = 24f / 22f, XGRAM_SUBTITLE_SCALE = 14f / 12f;
+
+  private boolean xgramCentered () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !(this instanceof ChatHeaderView) && parent != null &&
+      parent.getMaximumHeaderHeight() >= Size.getHeaderBigPortraitSize(true);
+  }
+
+  /** 0 for the collapsed app bar, 1 for the fully expanded header. */
+  private float xgramS () {
+    return Math.max(0f, Math.min(1f, scaleFactor));
+  }
+
+  private boolean xgramWide () {
+    return xgramCentered() && xgramS() >= .5f;
+  }
+
+  private int xgramWideTextWidth (float scale) {
+    return Math.max(0, (int) ((getMeasuredWidth() - Screen.dp(48f)) / scale));
+  }
+
   private void layoutReceiver () {
+    if (xgramCentered()) {
+      float s = xgramS();
+      float collapsedRadius = Screen.dp(getBaseAvatarRadiusDp());
+      float collapsedX = innerLeftMargin + Screen.dp(4f) + collapsedRadius;
+      float collapsedY = currentHeaderOffset + HeaderView.getSize(false) / 2;
+      float radius = MathUtils.fromTo(collapsedRadius, Screen.dp(52f), s);
+      float centerX = MathUtils.fromTo(collapsedX, getMeasuredWidth() / 2f, s);
+      float centerY = MathUtils.fromTo(collapsedY, currentHeaderOffset + Screen.dp(108f), s);
+      receiver.setDisplayFullSizeOnlyInFullScreen(false);
+      receiver.forceFullScreen(false, 0f);
+      receiver.setBounds(Math.round(centerX - radius), Math.round(centerY - radius), Math.round(centerX + radius), Math.round(centerY + radius));
+      return;
+    }
     float baseRadius = Screen.dp(getBaseAvatarRadiusDp());
     float baseCenterX = innerLeftMargin + Screen.dp(4f) + baseRadius;
     float baseCenterY = currentHeaderOffset + HeaderView.getSize(false) / 2;
@@ -637,6 +673,9 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
 
   private int getCurrentScaledTextMaxWidth () {
     // return getBaseTextMaxWidth() + (int) Math.ceil((float) (getScaledTextMaxWidth() - getBaseTextMaxWidth()) * scaleFactor);
+    if (xgramWide()) {
+      return xgramWideTextWidth(XGRAM_TITLE_SCALE); // XGram: the centered title has the full width
+    }
     return Math.min(getBaseTextMaxWidth(), getScaledTextMaxWidth());
   }
 
@@ -684,7 +723,7 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       }
 
       avatarTextScale = DEFAULT_AVATAR_TEXT_SCALE;
-      trimmedTitle = new Text.Builder(title, getCurrentScaledTextMaxWidth() - additionalTextEndPadding, Paints.robotoStyleProvider(18), getTitleColorSet())
+      trimmedTitle = new Text.Builder(title, getCurrentScaledTextMaxWidth() - additionalTextEndPadding, xgramTitleStyleProvider(), getTitleColorSet())
         .lineWidthProvider((lineIndex, y, defaultMaxWidth, lineHeight) -> defaultMaxWidth - getTextOffsetLeft() - getTextOffsetRight())
         .lineMarginProvider((lineIndex, y, defaultMaxWidth, lineHeight) -> lineIndex == 0 ? getTextOffsetLeft() : 0)
         .singleLine()
@@ -695,7 +734,7 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       if (trimmedTitle.isEllipsized()) {
         int maxLineCount = 2;
         do {
-          trimmedTitleExpanded = new Text.Builder(title, getExpandedMaxTextWidth() - additionalTextEndPadding, Paints.robotoStyleProvider(18), getTitleColorSet())
+          trimmedTitleExpanded = new Text.Builder(title, getExpandedMaxTextWidth() - additionalTextEndPadding, xgramTitleStyleProvider(), getTitleColorSet())
             .lineMarginProvider((lineIndex, y, defaultMaxWidth, lineHeight) -> lineIndex == 0 ? getTextOffsetLeft() : 0)
             .maxLineCount(maxLineCount)
             .clipTextArea()
@@ -719,12 +758,12 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       trimmedSubtitle = trimmedSubtitleExpanded = null;
     } else {
       TextColorSet colorSet = this::getSubtitleColor;
-      trimmedSubtitle = new Text.Builder(subtitle, getCurrentScaledTextMaxWidth(), Paints.robotoStyleProvider(14), colorSet)
+      trimmedSubtitle = new Text.Builder(subtitle, xgramWide() ? xgramWideTextWidth(XGRAM_SUBTITLE_SCALE) : getCurrentScaledTextMaxWidth(), xgramSubtitleStyleProvider(), colorSet)
         .singleLine()
         .entities(subtitleEntities, null)
         .build();
       if (trimmedSubtitle.isEllipsized() || (expandedSubtitle != null && !expandedSubtitle.equals(subtitle))) {
-        trimmedSubtitleExpanded = new Text.Builder(expandedSubtitle != null ? expandedSubtitle : subtitle, getExpandedMaxTextWidth(), Paints.robotoStyleProvider(14), colorSet)
+        trimmedSubtitleExpanded = new Text.Builder(expandedSubtitle != null ? expandedSubtitle : subtitle, getExpandedMaxTextWidth(), xgramSubtitleStyleProvider(), colorSet)
           .singleLine()
           .entities(expandedSubtitle != null ? null /*TODO*/ : subtitleEntities, null)
           .build();
@@ -732,6 +771,22 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
         trimmedSubtitleExpanded = null;
       }
     }
+  }
+
+  /** XGram: Google Sans Flex titleLarge (22, weight 500) with Expressive design, Telegram X's 18dp bold otherwise. */
+  private static org.thunderdog.challegram.util.text.TextStyleProvider xgramTitleStyleProvider () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L, true, 22f);
+    }
+    return Paints.robotoStyleProvider(18);
+  }
+
+  /** XGram: labelMedium (12) with Expressive design. */
+  private static org.thunderdog.challegram.util.text.TextStyleProvider xgramSubtitleStyleProvider () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, 12f);
+    }
+    return Paints.robotoStyleProvider(14);
   }
 
   private TextColorSet getTitleColorSet () {
@@ -753,6 +808,9 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   }
 
   private int getTypingColor () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+    }
     float darkness = Theme.getDarkFactor();
     if (darkness == 0f) {
       if (this instanceof ChatHeaderView) {
@@ -859,6 +917,9 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   }
 
   private int getSubtitleColor () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), ColorUtils.alphaColor(Theme.getSubtitleAlpha(), Color.WHITE), getAvatarExpandFactor());
+    }
     return ColorUtils.fromToArgb(this.subtitleColor, ColorUtils.alphaColor(Theme.getSubtitleAlpha(), Color.WHITE), getAvatarExpandFactor());
   }
 
@@ -886,7 +947,10 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       final int titleColor = getTitleColor();
       final int subtitleColor = getSubtitleColor();
       final float scaleFactor = calculateRealScaleFactor();
-      final float textScaleFactor = MathUtils.fromTo(1f + scaleFactor * .1f, avatarTextScale, avatarExpandFactor);
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      final boolean xgramCentered = xgramM3 && xgramCentered();
+      final float xgramS = xgramS();
+      final float textScaleFactor = xgramCentered ? MathUtils.fromTo(1f, XGRAM_TITLE_SCALE, xgramS) : MathUtils.fromTo(1f + scaleFactor * .1f, avatarTextScale, avatarExpandFactor);
 
       layoutReceiver();
       if (xgramAvatarDrawable != null) {
@@ -902,7 +966,8 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       if (avatarExpandFactor > 0f && receiver.getRequestedPlaceholder() == null) {
         getTopShadow().setAlpha((int) (255f * .8f * avatarExpandFactor));
         getTopShadow().draw(c);
-
+      }
+      if (avatarExpandFactor > 0f && receiver.getRequestedPlaceholder() == null && !xgramM3) { // XGram: no shadows in Expressive design
         c.save();
         int headerHeight = calculateHeaderHeight();
         int shadowTop = headerHeight - getBottomShadowSize();
@@ -914,9 +979,21 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       }
 
       float baseTextLeft = innerLeftMargin + Screen.dp(4f) + Screen.dp(getBaseAvatarRadiusDp()) * 2 + Screen.dp(9f);
-      float baseTitleTop = currentHeaderOffset + Screen.dp(7f);
-      float baseSubtitleTop = currentHeaderOffset + Screen.dp(30f);
-      if (scaleFactor != 0f) {
+      float baseTitleTop = currentHeaderOffset + Screen.dp(xgramM3 ? 6f : 7f);
+      float baseSubtitleTop = currentHeaderOffset + Screen.dp(xgramM3 ? 34f : 30f);
+      final float xgramCollapsedTextLeft = baseTextLeft;
+      float xgramSubtitleLeft = baseTextLeft, xgramSubtitleScale = 1f;
+      if (xgramCentered) {
+        // XGram: avatar, title (22 to 24) and subtitle (12 to 14) move to the center as the header expands.
+        final int viewW = getMeasuredWidth();
+        float titleBlock = trimmedTitle != null ? (trimmedTitle.getWidth() + getTextOffsetRight() + additionalTextEndPadding) * textScaleFactor : 0f;
+        baseTextLeft = MathUtils.fromTo(xgramCollapsedTextLeft, (viewW - titleBlock) / 2f, xgramS);
+        baseTitleTop = MathUtils.fromTo(baseTitleTop, currentHeaderOffset + Screen.dp(168f), xgramS);
+        xgramSubtitleScale = MathUtils.fromTo(1f, XGRAM_SUBTITLE_SCALE, xgramS);
+        float subtitleWidth = trimmedSubtitle != null ? trimmedSubtitle.getWidth() * xgramSubtitleScale : 0f;
+        xgramSubtitleLeft = MathUtils.fromTo(xgramCollapsedTextLeft, (viewW - subtitleWidth) / 2f, xgramS);
+        baseSubtitleTop = MathUtils.fromTo(baseSubtitleTop, currentHeaderOffset + Screen.dp(202f), xgramS);
+      } else if (scaleFactor != 0f) {
         baseTextLeft += -Screen.dp(11f) * scaleFactor;
         baseTitleTop += Screen.dp(62f) * scaleFactor;
         baseSubtitleTop += Screen.dp(68f) * scaleFactor;
@@ -1016,7 +1093,13 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
         emojiStatusClickRect.inset(-Screen.dp(8), -Screen.dp(8));
       }
 
-      if (trimmedSubtitle != null) {
+      if (trimmedSubtitle != null && xgramCentered) {
+        c.save();
+        c.translate(xgramSubtitleLeft, baseSubtitleTop + dy);
+        c.scale(xgramSubtitleScale, xgramSubtitleScale);
+        trimmedSubtitle.draw(c, 0, 0, null, textAlpha);
+        c.restore();
+      } else if (trimmedSubtitle != null) {
         if (trimmedSubtitleExpanded != null && avatarExpandFactor > 0f) {
           if (avatarExpandFactor < 1f) {
             trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * (1f - avatarExpandFactor));
@@ -1038,7 +1121,9 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
           int statusTextColor;
           float darkness = Theme.getDarkFactor();
           int knownColorId = 0;
-          if (darkness == 0f) {
+          if (xgramM3) {
+            statusTextColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+          } else if (darkness == 0f) {
             if (this instanceof ChatHeaderView) {
               statusTextColor = Theme.headerTextColor();
               knownColorId = ColorId.headerText;
@@ -1052,8 +1137,9 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
             statusTextColor = ColorUtils.fromToArgb(this instanceof ChatHeaderView ? Theme.headerTextColor() : ColorUtils.color(0xff, (subtitleColor & 0x00ffffff)), Theme.chatListActionColor(), darkness);
             knownColorId = ColorId.chatListAction;
           }
-          DrawAlgorithms.drawStatus(c, state, baseTextLeft, top + text.getLineHeight() / 2f, ColorUtils.alphaColor(statusVisibility, statusTextColor), this, statusVisibility == 1f ? knownColorId : 0);
-          text.draw(c, (int) baseTextLeft, (int) top, null, statusVisibility);
+          float statusLeft = xgramCentered ? MathUtils.fromTo(xgramCollapsedTextLeft, (getMeasuredWidth() - text.getWidth()) / 2f, xgramS) : baseTextLeft;
+          DrawAlgorithms.drawStatus(c, state, statusLeft, top + text.getLineHeight() / 2f, ColorUtils.alphaColor(statusVisibility, statusTextColor), this, statusVisibility == 1f ? knownColorId : 0);
+          text.draw(c, (int) statusLeft, (int) top, null, statusVisibility);
         }
       }
     } finally {

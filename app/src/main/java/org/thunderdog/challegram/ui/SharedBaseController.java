@@ -203,6 +203,15 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
       protected void modifyChatView (ListItem item, SmallChatView chatView, @Nullable CheckBoxView checkBox, boolean isUpdate) {
         modifyChatViewIfNeeded(item, chatView, checkBox, isUpdate);
       }
+
+      @Override
+      public void onAttachedToRecyclerView (RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        if (parent != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: the profile's scroll sync assumes no decoration offsets; the list draws flat on the surface.
+          com.fahadali.xgram.appearance.XgramM3Profile.prepareProfileList(recyclerView);
+        }
+      }
     };
     if (probablyHasEmoji()) {
       TGLegacyManager.instance().addEmojiListener(adapter);

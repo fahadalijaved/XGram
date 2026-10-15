@@ -442,6 +442,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       if (mode == Mode.SECRET || mode == Mode.USER) {
         callButton = header.addButton(realMenu, R.id.menu_btn_call, R.drawable.baseline_phone_24, buttonColorId, this, Screen.dp(48f));
         callButton.setAlpha(userFull != null && (userFull.canBeCalled || userFull.hasPrivateCalls) ? 1f : 0f);
+        if (xgramNeedActions()) {
+          callButton.setVisibility(View.GONE); // XGram: Call is in the actions row
+        }
       }
 
       if (mode == Mode.SECRET) {
@@ -1023,6 +1026,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Override
   protected int getFloatingButtonId () {
+    if (xgramNeedActions()) {
+      return 0; // XGram: Message is in the actions row
+    }
     return isEditing() ? 0 : R.drawable.baseline_chat_bubble_24;
   }
 
@@ -1170,7 +1176,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     protected void onDraw (Canvas c) {
       if (factor != 0f) {
         int height = getMeasuredHeight();
-        c.drawRect(0, height - (float) height * factor, getMeasuredWidth(), height, Paints.fillingPaint(Theme.fillingColor()));
+        c.drawRect(0, height - (float) height * factor, getMeasuredWidth(), height, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER) : Theme.fillingColor()));
       }
     }
   }
@@ -1277,6 +1283,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (xgramTopicId != 0) {
       return isTransformed() && isExpanded ? ColorId.icon : ColorId.headerIcon; // XGram: a topic icon never expands
     }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return isTransformed() && isExpanded ? ColorId.icon : ColorId.headerIcon; // XGram: the header stays a surface
+    }
     return isTransformed() && isExpanded ? ColorId.icon : headerCell != null && !headerCell.isCollapsed() ? ColorId.white : ColorId.headerIcon;
   }
 
@@ -1292,6 +1301,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Override
   protected int getHeaderColorId () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return super.getHeaderColorId(); // XGram: the app bar keeps the page layer above the media container
+    }
     return isTransformed() ? ColorId.filling : super.getHeaderColorId();
   }
 
@@ -1308,13 +1320,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   @Override
   protected void drawTransform (Canvas c, float transformFactor, int width, int bottom) {
     float height = HeaderView.getSize(true);
-    c.drawRect(0, height - height * transformFactor, width, bottom, Paints.fillingPaint(Theme.fillingColor()));
+    c.drawRect(0, height - height * transformFactor, width, bottom, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Theme.headerColor() : Theme.fillingColor()));
   }
 
   @Override
   protected void applyTransformChanges () {
     if (headerView != null) {
-      headerView.getFilling().setColor(Theme.fillingColor());
+      headerView.getFilling().setColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Theme.headerColor() : Theme.fillingColor());
     }
   }
 
@@ -1741,7 +1753,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     topView.setSelectionColorId(ColorId.profileSectionActive);
     topView.setTextFromToColorId(ColorId.textLight, ColorId.profileSectionActiveContent);
     addThemeInvalidateListener(topView);
-    topView.setShowLabelOnActiveOnly(!isEditing() && !Settings.instance().needReduceMotion());
+    topView.setShowLabelOnActiveOnly(!isEditing() && !Settings.instance().needReduceMotion() && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      com.fahadali.xgram.appearance.XgramM3Profile.roundTopCorners(topCellView, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL); // XGram: tabs and media read as one container
+    }
     topView.setItems(getPagerTitles());
     topCellView.getRecyclerView().setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     topView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -1756,6 +1771,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     addThemeInvalidateListener(shadowView);
     shadowView.setSimpleBottomTransparentShadow(false);
     shadowView.setLayoutParams(params);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      shadowView.setVisibility(View.GONE);
+    }
     topWrap.addView(shadowView);
 
     /**/
@@ -1766,6 +1784,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     addThemeInvalidateListener(lickShadow);
     lickShadow.setSimpleTopShadow(true);
     lickShadow.setLayoutParams(params);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      lickShadow.setVisibility(View.GONE);
+    }
 
     if (needTabs()) {
       contentView.addView(topWrap);
@@ -1775,6 +1796,27 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
     // Base adapter
     baseAdapter = new SettingsAdapter(this) {
+      @Override
+      protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == XGRAM_ACTIONS_TYPE) {
+          com.fahadali.xgram.appearance.XgramButtonGroupView view = new com.fahadali.xgram.appearance.XgramButtonGroupView(context());
+          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.appearance.XgramButtonGroupView.getViewHeight()));
+          view.setCallback((v, actionId) -> xgramOnAction(actionId));
+          return new SettingHolder(view);
+        }
+        return super.initCustom(parent, customViewType);
+      }
+
+      @Override
+      protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+        if (customViewType == XGRAM_ACTIONS_TYPE && view instanceof com.fahadali.xgram.appearance.XgramButtonGroupView) {
+          xgramActionsView = (com.fahadali.xgram.appearance.XgramButtonGroupView) view;
+          xgramActionsView.setActions(xgramBuildActions());
+        } else {
+          super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
+        }
+      }
+
       @Override
       protected void setChatData (ListItem item, int position, BetterChatView chatView) {
         chatView.setEnabled(false);
@@ -2405,7 +2447,167 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private int baseHeaderItemCount;
 
+  // XGram: Material 3 Expressive actions row (a connected button group, Google Contacts style) under the header.
+
+  private static final int XGRAM_ACTIONS_TYPE = 88;
+  private boolean xgramHasActions;
+  private @Nullable com.fahadali.xgram.appearance.XgramButtonGroupView xgramActionsView;
+
+  private boolean xgramNeedActions () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isEditing();
+  }
+
+  /** The actions row and a SHADOW_TOP right after the header offset, so the info rows open their own group. */
+  private void xgramAddActions (ArrayList<ListItem> items) {
+    xgramHasActions = xgramNeedActions();
+    if (xgramHasActions) {
+      items.add(new ListItem(ListItem.TYPE_CUSTOM - XGRAM_ACTIONS_TYPE));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    }
+  }
+
+  /** Index of the first info row (or where it goes): after the header offset, and after the actions row. */
+  private int xgramInfoStart () {
+    return xgramHasActions ? 3 : 1;
+  }
+
+  private int xgramItemHeight (List<ListItem> items, int position, int width, ListItem item) {
+    if (baseRecyclerView != null && com.fahadali.xgram.appearance.XgramExpressive.hasListDecoration(baseRecyclerView)) {
+      // Segmented tiles are inset 16dp and may have a 2dp gap above them.
+      return calculateHeight(position, com.fahadali.xgram.appearance.XgramM3Profile.rowWidth(items, position, width), item) +
+        com.fahadali.xgram.appearance.XgramM3Profile.groupGapPx(items, position);
+    }
+    return calculateHeight(position, width, item);
+  }
+
+  private boolean xgramIsMuted () {
+    if (xgramTopicId != 0) {
+      return xgramTopic != null && com.fahadali.xgram.topics.XgramForums.isTopicMuted(tdlib, chat.id, xgramTopic);
+    }
+    return !tdlib.chatNotificationsEnabled(chat.id);
+  }
+
+  private List<com.fahadali.xgram.appearance.XgramButtonGroupView.Action> xgramBuildActions () {
+    ArrayList<com.fahadali.xgram.appearance.XgramButtonGroupView.Action> actions = new ArrayList<>(4);
+    final boolean isSelf = user != null && tdlib.isSelfUserId(user.id);
+    final boolean muted = !isSelf && xgramIsMuted();
+    com.fahadali.xgram.appearance.XgramButtonGroupView.Action mute = new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileMute,
+      muted ? R.drawable.baseline_notifications_off_24 : R.drawable.baseline_notifications_24, Lang.getString(muted ? R.string.Unmute : R.string.Mute), muted);
+    com.fahadali.xgram.appearance.XgramButtonGroupView.Action search = new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileSearch,
+      R.drawable.baseline_search_24, Lang.getString(R.string.Search), false);
+    com.fahadali.xgram.appearance.XgramButtonGroupView.Action share = new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileShare,
+      R.drawable.baseline_share_arrow_24, Lang.getString(R.string.Share), false);
+    final boolean canSearch = Config.USE_SECRET_SEARCH || mode != Mode.SECRET;
+    if (xgramTopicId != 0) {
+      actions.add(new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileMessage, R.drawable.baseline_chat_bubble_24, Lang.getString(R.string.Message), false));
+      actions.add(mute);
+      return actions;
+    }
+    final boolean hasDiscussion = mode == Mode.CHANNEL && supergroup != null && supergroup.hasLinkedChat && supergroupFull != null && supergroupFull.linkedChatId != 0;
+    if (hasDiscussion) {
+      actions.add(new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileDiscuss, R.drawable.baseline_forum_24, Lang.getString(R.string.Discuss), false));
+    } else {
+      actions.add(new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileMessage, R.drawable.baseline_chat_bubble_24, Lang.getString(R.string.Message), false));
+    }
+    switch (mode) {
+      case Mode.USER:
+      case Mode.SECRET: {
+        if (isSelf) {
+          if (canSearch) {
+            actions.add(search);
+          }
+          break;
+        }
+        if (TD.isBot(user)) {
+          actions.add(mute);
+          actions.add(search);
+          if (!StringUtils.isEmpty(getProfileUsername())) {
+            actions.add(share);
+          }
+          break;
+        }
+        if (BuildConfig.CALLS_AVAILABLE && userFull != null && (userFull.canBeCalled || userFull.hasPrivateCalls)) {
+          actions.add(new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileCall, R.drawable.baseline_phone_24, Lang.getString(R.string.Call), false));
+        }
+        actions.add(mute);
+        if (canSearch) {
+          actions.add(search);
+        }
+        break;
+      }
+      case Mode.GROUP:
+      case Mode.SUPERGROUP:
+      case Mode.CHANNEL: {
+        actions.add(mute);
+        actions.add(search);
+        if (mode == Mode.CHANNEL ? isPublicChannel() : isPublicGroup()) {
+          actions.add(share);
+        }
+        break;
+      }
+    }
+    return actions;
+  }
+
+  private void xgramUpdateActions () {
+    if (xgramActionsView != null && xgramHasActions && chat != null) {
+      xgramActionsView.setActions(xgramBuildActions());
+    }
+  }
+
+  private void xgramOnAction (int actionId) {
+    if (actionId == R.id.btn_xgramProfileMessage) {
+      onFloatingButtonPressed();
+    } else if (actionId == R.id.btn_xgramProfileDiscuss) {
+      if (supergroup != null) {
+        tdlib.ui().openLinkedChat(this, supergroup.id, false, new TdlibUi.ChatOpenParameters().keepStack().removeDuplicates());
+      }
+    } else if (actionId == R.id.btn_xgramProfileCall) {
+      if (user != null && userFull != null) {
+        tdlib.context().calls().makeCall(this, user.id, userFull);
+      }
+    } else if (actionId == R.id.btn_xgramProfileMute) {
+      if (xgramTopicId != 0) {
+        if (xgramTopic != null) {
+          if (com.fahadali.xgram.topics.XgramForums.isTopicMuted(tdlib, chat.id, xgramTopic)) {
+            com.fahadali.xgram.topics.XgramForums.setTopicMuted(tdlib, chat.id, xgramTopic, false);
+          } else {
+            com.fahadali.xgram.topics.XgramForums.promptMuteTopic(this, chat, xgramTopic);
+          }
+        }
+      } else if (!tdlib.chatNotificationsEnabled(chat.id)) {
+        tdlib.ui().unmute(chat.id);
+      } else {
+        tdlib.ui().showMuteOptions(this, chat.id, true, null);
+      }
+    } else if (actionId == R.id.btn_xgramProfileSearch) {
+      xgramSearchChat();
+    } else if (actionId == R.id.btn_xgramProfileShare) {
+      share(false);
+    }
+  }
+
+  /** Opens the chat's message search: going back to the chat when it is the previous page, opening it otherwise. */
+  private void xgramSearchChat () {
+    ViewController<?> previous = previousStackItem();
+    if (previous instanceof MessagesController && previous.getChatId() == chat.id) {
+      final MessagesController messages = (MessagesController) previous;
+      messages.addOneShotFocusListener(() -> messages.onMenuItemPressed(R.id.menu_btn_search, null));
+      navigateBack();
+      return;
+    }
+    final BaseActivity activity = context();
+    tdlib.ui().openChat(this, chat, new TdlibUi.ChatOpenParameters().keepStack().removeDuplicates().after(chatId -> UI.post(() -> {
+      ViewController<?> current = activity.navigation().getCurrentStackItem();
+      if (current instanceof MessagesController && current.getChatId() == chatId) {
+        final MessagesController messages = (MessagesController) current;
+        messages.addOneShotFocusListener(() -> messages.onMenuItemPressed(R.id.menu_btn_search, null));
+      }
+    })));
+  }
+
   private void buildCells () {
+    xgramHasActions = false;
     if (xgramTopicId != 0 && !isEditing()) {
       xgramBuildTopicCells();
       return;
@@ -2529,6 +2731,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     ArrayList<ListItem> items = new ArrayList<>(15);
 
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET));
+    xgramAddActions(items);
 
     int addedCount = 0;
     if (Settings.instance().showPeerIds()) {
@@ -2625,6 +2828,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private void checkUserButtons () {
+    xgramUpdateActions();
     if (headerView != null && !isEditing()) {
       headerView.updateButtonAlpha(getMenuId(), R.id.menu_btn_call, BuildConfig.CALLS_AVAILABLE && (userFull.canBeCalled || userFull.hasPrivateCalls) ? 1f : 0f);
     }
@@ -2714,17 +2918,18 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private void addTopItem (ListItem item, int index) {
     index = Math.min(baseHeaderItemCount, index);
+    final int start = xgramInfoStart();
     if (baseHeaderItemCount == 0) {
-      baseAdapter.getItems().add(1, item);
-      baseAdapter.getItems().add(2, new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-      baseAdapter.getItems().add(3, new ListItem(ListItem.TYPE_SHADOW_TOP));
-      baseAdapter.notifyItemRangeInserted(1, 3);
+      baseAdapter.getItems().add(start, item);
+      baseAdapter.getItems().add(start + 1, new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      baseAdapter.getItems().add(start + 2, new ListItem(ListItem.TYPE_SHADOW_TOP));
+      baseAdapter.notifyItemRangeInserted(start, 3);
     } else if (index == 0) {
-      baseAdapter.getItems().add(1, item);
-      baseAdapter.getItems().add(2, new ListItem(item.getViewType() == ListItem.TYPE_RADIO_SETTING ? ListItem.TYPE_SEPARATOR_FULL : ListItem.TYPE_SEPARATOR));
-      baseAdapter.notifyItemRangeInserted(1, 2);
+      baseAdapter.getItems().add(start, item);
+      baseAdapter.getItems().add(start + 1, new ListItem(item.getViewType() == ListItem.TYPE_RADIO_SETTING ? ListItem.TYPE_SEPARATOR_FULL : ListItem.TYPE_SEPARATOR));
+      baseAdapter.notifyItemRangeInserted(start, 2);
     } else {
-      int targetIndex = 1 + Math.max(0, index * 2 - 1);
+      int targetIndex = start + Math.max(0, index * 2 - 1);
       baseAdapter.getItems().add(targetIndex, new ListItem(item.getViewType() == ListItem.TYPE_RADIO_SETTING ? ListItem.TYPE_SEPARATOR_FULL : ListItem.TYPE_SEPARATOR));
       baseAdapter.getItems().add(targetIndex + 1, item);
       baseAdapter.notifyItemRangeInserted(targetIndex, 2);
@@ -2743,7 +2948,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       baseAdapter.getItems().remove(index); // shadow bottom
       baseAdapter.getItems().remove(index); // shadow top
       baseAdapter.notifyItemRangeRemoved(index, 3);
-    } else if (index == 1) {
+    } else if (index == xgramInfoStart()) {
       baseAdapter.getItems().remove(index); // bottom separator
       baseAdapter.notifyItemRangeRemoved(index, 2);
     } else {
@@ -2767,7 +2972,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private static ViewPagerTopView.Item newItem (SharedBaseController<?> c) {
     return new ViewPagerTopView.Item(
-      Lang.uppercase(c.getName().toString()),
+      com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? c.getName().toString() : Lang.uppercase(c.getName().toString()), // XGram: sentence case tabs
       c.getIcon(),
       null
     );
@@ -3189,6 +3394,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       if (baseAdapter != null) {
         baseAdapter.updateValuedSettingById(R.id.btn_notifications);
       }
+      xgramUpdateActions();
     });
   }
 
@@ -3219,6 +3425,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private void xgramBuildTopicCells () {
     ArrayList<ListItem> items = new ArrayList<>(12);
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET));
+    xgramAddActions(items);
     items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_xgramTopicGroup, R.drawable.baseline_forum_24, R.string.XgramTopicGroup));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_xgramTopicLink, R.drawable.baseline_link_24, R.string.XgramTopicLink));
@@ -3242,6 +3449,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     ArrayList<ListItem> items = new ArrayList<>(20);
 
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET));
+    xgramAddActions(items);
 
     int addedCount = 0;
 
@@ -3327,6 +3535,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     ArrayList<ListItem> items = new ArrayList<>(20);
 
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET));
+    xgramAddActions(items);
 
     int addedCount = 0;
 
@@ -5514,6 +5723,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private void updateHeader (boolean updatePhoto) {
+    xgramUpdateActions();
     if (headerCell != null) {
       setHeaderText();
       if (updatePhoto) {
@@ -5667,6 +5877,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private int calculateHeight (int position, int width, ListItem item) {
     final int itemId = item.getId();
+    if (item.getViewType() == ListItem.TYPE_CUSTOM - XGRAM_ACTIONS_TYPE) {
+      return com.fahadali.xgram.appearance.XgramButtonGroupView.getViewHeight();
+    }
     switch (item.getViewType()) {
       case ListItem.TYPE_INFO_MULTILINE: {
         if (itemId == R.id.btn_username) {
@@ -5722,7 +5935,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     List<ListItem> items = baseAdapter.getItems();
     int i = 0;
     for (ListItem item : items) {
-      height += calculateHeight(i, width, item);
+      height += xgramItemHeight(items, i, width, item);
       i++;
     }
     cachedItemsWidth = width;
@@ -5788,7 +6001,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           }
         }
         if (i != ignoreIndex) {
-          recyclerBottom += calculateHeight(i, width, item);
+          recyclerBottom += xgramItemHeight(items, i, width, item);
         }
       }
       i++;
@@ -6843,6 +7056,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       if (chat.id == chatId) {
         setHeaderMute(true);
         baseAdapter.updateValuedSettingById(R.id.btn_notifications);
+        xgramUpdateActions();
       }
     });
   }
@@ -6852,6 +7066,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       if (scope.getConstructor() == tdlib.notifications().scope(chat.id).getConstructor()) {
         setHeaderMute(true);
         baseAdapter.updateValuedSettingById(R.id.btn_notifications);
+        xgramUpdateActions();
       }
     });
   }
