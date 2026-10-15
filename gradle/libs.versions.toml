@@ -19,6 +19,11 @@ androidx-interpolator = "1.0.0"
 androidx-graphics-shapes = "1.1.0"
 androidx-dynamicanimation = "1.1.0"
 
+# XGram: Jetpack Compose (Material 3 Expressive settings pages, xgram-m3e only)
+androidx-compose-bom = "2026.09.00"
+androidx-compose-material3 = "1.5.0-beta01" # the BOM maps material3 to 1.4.0, which has no expressive APIs
+androidx-lifecycle-compose = "2.11.0"
+
 google-zxing = "3.5.4"
 google-play-app-update = "2.1.0"
 
@@ -148,6 +153,7 @@ androidx-multidex = { module = "androidx.multidex:multidex", version.ref = "andr
 
 android-gradle-plugin = { module = "com.android.tools.build:gradle", version.ref = "android-gradle-plugin" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+kotlin-compose-compiler-gradle-plugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
 
 jgit = { module = "org.eclipse.jgit:org.eclipse.jgit", version.ref = "jgit" }
 jgit-lfs = { module = "org.eclipse.jgit:org.eclipse.jgit.lfs", version.ref = "jgit" }
@@ -162,6 +168,19 @@ androidx-graphics-shapes = { module = "androidx.graphics:graphics-shapes", versi
 androidx-dynamicanimation = { module = "androidx.dynamicanimation:dynamicanimation", version.ref = "androidx-dynamicanimation" }
 androidx-collection = { module = "androidx.collection:collection", version.ref = "androidx-collection" }
 androidx-palette = { module = "androidx.palette:palette", version.ref = "androidx-palette" }
+
+# XGram: Jetpack Compose (versions from the BOM, except material3)
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "androidx-compose-bom" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui" }
+androidx-compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
+androidx-compose-foundation = { module = "androidx.compose.foundation:foundation" }
+androidx-compose-animation = { module = "androidx.compose.animation:animation" }
+androidx-compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "androidx-compose-material3" }
+androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-latest" }
+androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle-compose" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinx-coroutines" }
 
 androidx-core-ktx-legacy = { module = "androidx.core:core-ktx", version.ref = "androidx-core-legacy" }
 androidx-core-ktx-lollipop = { module = "androidx.core:core-ktx", version.ref = "androidx-core-lollipop" }
@@ -315,5 +334,6 @@ android-test = { id = "com.android.test", version.ref = "android-gradle-plugin" 
 google-services = { id = "com.google.gms.google-services", version.ref = "google-services-plugin" }
 
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
 androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "androidx-baselineprofile" }
