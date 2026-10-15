@@ -219,6 +219,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       // XGram: Material 3 Expressive: the chat list is a container with rounded top corners on the app bar's layer
       com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout cornerWrap = new com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout(context);
       cornerWrap.setCornerAnchor(pager);
+      addThemeInvalidateListener(cornerWrap); // XGram: the notches take the new app bar color on a theme switch
       pagerWrap = cornerWrap;
     } else {
       pagerWrap = new FrameLayoutFix(context);

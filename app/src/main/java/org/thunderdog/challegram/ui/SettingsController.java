@@ -606,7 +606,9 @@ public class SettingsController extends ViewController<Void> implements
 
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET));
     if (Settings.instance().showPeerIds()) {
-      items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_peer_id, R.drawable.baseline_identifier_24, R.string.UserId).setContentStrings(R.string.LoadingInformation, R.string.LoadingInformation));
+      // XGram M3E: with the Telegram X icons, a Material "badge" glyph in place of the custom "ID" letters
+      final int xgramPeerIdIcon = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramIconPack.current() == com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X ? R.drawable.xgram_m3e_s4_badge_24 : R.drawable.baseline_identifier_24;
+      items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_peer_id, xgramPeerIdIcon, R.string.UserId).setContentStrings(R.string.LoadingInformation, R.string.LoadingInformation));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     }
     items.add(new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_username, R.drawable.baseline_alternate_email_24, R.string.Username).setContentStrings(R.string.LoadingUsername, R.string.SetUpUsername));

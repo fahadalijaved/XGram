@@ -266,8 +266,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       final int separatorHeight = Math.max(1, Screen.dp(.5f, 3f));
       final int separatorColor = Theme.separatorColor();
       final float maxAlpha = Theme.getShadowDepth();
-      final float lineFactor = Theme.getSeparatorReplacement();
-      final float shadowFactor = 1f - lineFactor;
+      // XGram M3E: the groups (Archive, pinned, other chats) are separate containers on the app bar's layer, without
+      // shadows or row dividers (Google Messages); their rounded corners are drawn over the rows, see onDrawOver
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      final float lineFactor = xgramM3 ? 0f : Theme.getSeparatorReplacement();
+      final float shadowFactor = xgramM3 ? 0f : 1f - lineFactor;
 
       boolean needLiveLocation = false;
       int liveLocationClipTop = 0, liveLocationRight = 0, liveLocationTop = 0, liveLocationBottom = 0;
@@ -311,7 +314,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
                 View nextView = parent.getLayoutManager().findViewByPosition(adapterPosition + 1);
                 final int bottom = (nextView != null ? nextView.getTop() : parent.getLayoutManager().getDecoratedBottom(view)) + offsetTop;
 
-                c.drawRect(0, top, right, bottom, Paints.fillingPaint(Theme.backgroundColor()));
+                c.drawRect(0, top, right, bottom, Paints.fillingPaint(xgramM3 ? Theme.getColor(ColorId.headerBackground) : Theme.backgroundColor()));
 
                 if (shadowFactor != 0f) {
                   final int alpha = (int) (255f * maxAlpha * shadowFactor);
@@ -338,7 +341,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
               }
             }
           }
-          if (needSeparator) {
+          if (needSeparator && !xgramM3) {
             int separatorTop = view.getBottom() + offsetTop;
             if (Lang.rtl()) {
               c.drawRect(0, separatorTop, right - separatorLeft, separatorTop + separatorHeight, Paints.fillingPaint(separatorColor));
@@ -398,6 +401,40 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         c.clipRect(0, liveLocationClipTop, liveLocationRight, liveLocationBottom);
         context.liveLocationHelper.draw(c, liveLocationTop);
         c.restore();
+      }
+    }
+
+    private final com.fahadali.xgram.appearance.XgramM3Bars.ContainerCorners xgramCorners = new com.fahadali.xgram.appearance.XgramM3Bars.ContainerCorners();
+
+    // XGram M3E: at each group split, rounded bottom corners close the group above and rounded top corners open the
+    // group below, in the app bar color of the gap between them. Drawn over the rows, which may have a background.
+    @Override
+    public void onDrawOver (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || parent.getLayoutManager() == null) {
+        return;
+      }
+      final int childCount = parent.getChildCount();
+      for (int i = 0; i < childCount; i++) {
+        View view = parent.getChildAt(i);
+        if (!(view instanceof ChatView)) {
+          continue;
+        }
+        TGChat chat = ((ChatView) view).getChat();
+        int adapterPosition = parent.getChildAdapterPosition(view);
+        if (chat == null || adapterPosition == RecyclerView.NO_POSITION) {
+          continue;
+        }
+        TGChat nextChat = context.adapter.getChatByItemPosition(adapterPosition + 1);
+        if (nextChat == null || (chat.isArchive() == nextChat.isArchive() && chat.isPinnedOrSpecial() == nextChat.isPinnedOrSpecial())) {
+          continue;
+        }
+        final int offsetTop = ((ChatView) view).isDragging() || (context.animatorFlags & ANIMATOR_FLAG_DRAGGING) != 0 ? 0 : (int) view.getTranslationY();
+        final int right = view.getMeasuredWidth();
+        final int top = view.getBottom() + offsetTop;
+        View nextView = parent.getLayoutManager().findViewByPosition(adapterPosition + 1);
+        final int bottom = (nextView != null ? nextView.getTop() : parent.getLayoutManager().getDecoratedBottom(view)) + offsetTop;
+        xgramCorners.drawBottom(c, 0, top, right);
+        xgramCorners.draw(c, 0, bottom, right);
       }
     }
 
@@ -563,6 +600,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           }
         }
       };
+      addThemeInvalidateListener(contentView); // XGram: the notches take the new app bar color on a theme switch
     } else {
       contentView = new ContentFrameLayout(context);
     }

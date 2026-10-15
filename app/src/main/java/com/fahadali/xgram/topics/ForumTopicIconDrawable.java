@@ -14,6 +14,7 @@ package com.fahadali.xgram.topics;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.LinearGradient;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
@@ -23,6 +24,9 @@ import android.graphics.drawable.Drawable;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramShapes;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.theme.Theme;
@@ -90,6 +94,12 @@ public final class ForumTopicIconDrawable extends Drawable {
   private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
   private final Path bubblePath = new Path();
   private boolean isDark;
+  // XGram M3E: the General topic's container shape
+  private final Paint shapePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Path generalShape = new Path();
+  private final Matrix generalMatrix = new Matrix();
+  private float generalShapeSize = -1f;
+  private int alpha = 255;
 
   public ForumTopicIconDrawable (TdApi.ForumTopicInfo info) {
     this(info.isGeneral, info.icon != null ? info.icon.color : COLORS[0][0], info.name);
@@ -115,6 +125,7 @@ public final class ForumTopicIconDrawable extends Drawable {
     float size = Math.min(bounds.width(), bounds.height());
     float left = bounds.left, top = bounds.top;
     bubblePath.reset();
+    generalShapeSize = -1f;
     if (size <= 0) {
       return;
     }
@@ -144,6 +155,23 @@ public final class ForumTopicIconDrawable extends Drawable {
       return;
     }
     if (isGeneral) {
+      if (XgramExpressive.isEnabled()) {
+        // M3E: a tonal 9-sided cookie in secondary container with a medium "#" in on secondary container, as the
+        // tinted bubbles of the other topics and the M3E avatars
+        if (generalShapeSize != size) {
+          generalShapeSize = size;
+          XgramShapes.toPath(XgramShapes.COOKIE_9, generalShape);
+          XgramShapes.fit(generalShape, bounds.exactCenterX(), bounds.exactCenterY(), size, 0f, generalMatrix);
+        }
+        shapePaint.setColor(ColorUtils.alphaColor(alpha / 255f, XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER)));
+        c.drawPath(generalShape, shapePaint);
+        textPaint.setTypeface(Fonts.getRobotoMedium());
+        textPaint.setColor(ColorUtils.alphaColor(alpha / 255f, XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER)));
+        textPaint.setTextSize(size * .56f);
+        drawCenteredText(c, bounds.exactCenterX(), bounds.exactCenterY());
+        textPaint.setTypeface(Fonts.getRobotoBold());
+        return;
+      }
       textPaint.setColor(Theme.iconColor());
       textPaint.setTextSize(size * .9f);
       drawCenteredText(c, bounds.exactCenterX(), bounds.exactCenterY());
@@ -170,12 +198,14 @@ public final class ForumTopicIconDrawable extends Drawable {
   public void setAlpha (int alpha) {
     fillPaint.setAlpha(alpha);
     textPaint.setAlpha(alpha);
+    this.alpha = alpha;
   }
 
   @Override
   public void setColorFilter (@Nullable ColorFilter colorFilter) {
     fillPaint.setColorFilter(colorFilter);
     textPaint.setColorFilter(colorFilter);
+    shapePaint.setColorFilter(colorFilter);
   }
 
   @Override
