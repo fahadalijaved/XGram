@@ -14,6 +14,7 @@ package com.fahadali.xgram.compose
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Rect
+import android.os.Build
 import android.view.ViewGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
@@ -54,6 +55,14 @@ class XgramComposeRoot(
   init {
     addView(composeView, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     layoutParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    // ViewController.onFocus calls requestFocus() on the page's view. This view takes it itself: passed on to the
+    // ComposeView, Compose would move focus to the first text field (the search bar) and open it. A tap on a field
+    // still moves focus into Compose.
+    isFocusable = true
+    isFocusableInTouchMode = true
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      defaultFocusHighlightEnabled = false
+    }
   }
 
   override fun onAttachedToWindow() {

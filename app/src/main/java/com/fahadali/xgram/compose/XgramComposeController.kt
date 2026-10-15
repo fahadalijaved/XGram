@@ -113,6 +113,23 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
     owner.moveTo(Lifecycle.State.STARTED)
   }
 
+  override fun onActivityPause() {
+    super.onActivityPause()
+    owner.moveTo(Lifecycle.State.STARTED)
+  }
+
+  override fun onActivityResume() {
+    super.onActivityResume()
+    // The wallpaper (so the dynamic colors) may have changed while XGram was away.
+    checkDark()
+    themeVersionState.intValue++
+    if (isFocused) {
+      owner.moveTo(Lifecycle.State.RESUMED)
+      // Values may have changed while XGram was away (Quick Settings tile).
+      versionState.intValue++
+    }
+  }
+
   override fun destroy() {
     super.destroy()
     backConsumer = null
