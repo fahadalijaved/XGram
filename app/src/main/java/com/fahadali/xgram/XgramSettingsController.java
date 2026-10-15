@@ -908,6 +908,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramHidePhone) {
       settings.setHidePhone(adapter.toggleView(v));
+      if (context.getDrawer() != null) {
+        context.getDrawer().xgramRefreshHeader(); // the side menu shows the @username instead
+      }
       return;
     } else if (id == R.id.btn_xgramBlockContentCapture) {
       settings.setBlockContentCapture(adapter.toggleView(v));

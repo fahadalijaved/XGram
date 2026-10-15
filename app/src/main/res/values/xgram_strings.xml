@@ -219,7 +219,7 @@
   <string name="XgramSaveProtected">Allow saving protected content</string>
   <string name="XgramProxyRules">Proxy rules</string>
   <string name="XgramTranscribe">Transcribe</string>
-  <string name="XgramHidePhone">Hide my phone number in Settings</string>
+  <string name="XgramHidePhone">Hide my phone number in Settings and the side menu</string>
   <string name="XgramHistoryRetention">Keep saved copies</string>
   <string name="XgramPreferIpv6">Prefer IPv6</string>
   <string name="XgramSpeed">Speed</string>

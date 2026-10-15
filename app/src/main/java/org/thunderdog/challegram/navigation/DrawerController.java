@@ -794,6 +794,13 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     }
   }
 
+  /** XGram: the header again, after the phone number privacy option changed. */
+  public void xgramRefreshHeader () {
+    if (headerView != null) {
+      headerView.xgramRefreshUser();
+    }
+  }
+
   /** XGram: shows or hides side menu items right away (Settings → XGram → Appearance → Side menu). */
   public void xgramUpdateMenuItems () {
     if (adapter == null) {

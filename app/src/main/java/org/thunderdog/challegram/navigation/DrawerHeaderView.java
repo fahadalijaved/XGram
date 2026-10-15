@@ -319,7 +319,11 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
       userId = account.getKnownUserId();
       if (account.hasUserInfo()) {
         name = account.getName();
-        if (Settings.instance().needHidePhoneNumber()) {
+        if (com.fahadali.xgram.XgramSettings.instance().hidePhone()) {
+          // XGram: the privacy option hides the number here too: the @username, or "Hidden" without one.
+          String username = account.getUsername();
+          phone = !StringUtils.isEmpty(username) ? "@" + username : Lang.getString(R.string.XgramPhoneHidden);
+        } else if (Settings.instance().needHidePhoneNumber()) {
           phone = Strings.replaceNumbers(Strings.formatPhone(account.getPhoneNumber()));
         } else {
           phone = Strings.formatPhone(account.getPhoneNumber());
@@ -470,6 +474,13 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
   public static final long SWITCH_CLOSE_DURATION = 290l;
 
   private FactorAnimator animator;
+
+  /** XGram: rebuilds the name and phone line, e.g. when the phone number gets hidden. */
+  public void xgramRefreshUser () {
+    if (currentAccount != null) {
+      setUser(currentAccount);
+    }
+  }
 
   public synchronized void setUser (final TdlibAccount account) {
     boolean animate = parent.getShowFactor() > 0f && this.displayInfo != null /*&& !displayInfo.compareTo(account, true)*/;
