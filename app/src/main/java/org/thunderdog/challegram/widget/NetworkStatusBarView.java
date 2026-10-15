@@ -144,15 +144,18 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
 
   /**
    * XGram: "Connecting...", "Updating..." and "Waiting for network" sit centred in the status bar, where a centred
-   * camera hole (Galaxy S25 Ultra, Pixel...) covers them. With such a cutout, or when Settings, XGram, Appearance asks
-   * for it, they move to the start side (past a corner camera hole on that side).
+   * camera hole (Galaxy S25 Ultra, Pixel...) covers them. Settings, XGram, Appearance alone decides whether they move to
+   * the start side (past a corner camera hole on that side); a centred hole only turns that on by default, once.
    */
   private void xgramApplyPosition () {
     Rect rect = rootView != null ? rootView.getDisplayCutoutTopInset() : null;
     int width = getFrameWidth();
     boolean cutout = rect != null && !rect.isEmpty();
     boolean centred = cutout && Math.abs(rect.left - (width - rect.right)) <= Screen.dp(48f);
-    boolean start = centred || com.fahadali.xgram.XgramSettings.instance().connectionStatusAtStart();
+    if (centred) {
+      com.fahadali.xgram.XgramSettings.instance().presetConnectionStatusAtStart();
+    }
+    boolean start = com.fahadali.xgram.XgramSettings.instance().connectionStatusAtStart();
     FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) statusWrap.getLayoutParams();
     boolean updated;
     if (start) {
@@ -284,8 +287,13 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
   private void setIsVisible (boolean isVisible, boolean noDelay) {
     if (this.isVisible != isVisible) {
       this.isVisible = isVisible;
+      // XGram: hide the system status bar icons now, before the text's first frame (it used to wait for the animation,
+      // so the clock and icons showed next to the text for a moment)
+      boolean wasLowProfile = inLowProfile;
+      checkLowProfile();
+      boolean waitForLowProfile = isVisible && !wasLowProfile && inLowProfile && factor == 0f;
       if (getParent() != null && getMeasuredWidth() != 0 && getMeasuredHeight() != 0) {
-        animateFactor(isVisible ? 1f : 0f, noDelay);
+        animateFactor(isVisible ? 1f : 0f, noDelay, waitForLowProfile);
       } else {
         forceFactor(isVisible ? 1f : 0f);
       }
@@ -295,11 +303,15 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
   private float factor = -1f, colorFactor = -1f;
   private FactorAnimator animator;
 
-  private void animateFactor (float factor, boolean noDelay) {
+  private void animateFactor (float factor, boolean noDelay, boolean waitForLowProfile) {
     if (animator == null) {
       animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.factor);
     }
-    animator.setStartDelay((this.factor != 1f && this.factor != 0f) || noDelay ? 0 : isVisible ? 300l : 1200l);
+    long delay = (this.factor != 1f && this.factor != 0f) || noDelay ? 0 : isVisible ? 300l : 1200l;
+    if (waitForLowProfile) {
+      delay = Math.max(delay, 150l); // XGram: even without the usual delay, let the system bar drop its icons before the text slides in
+    }
+    animator.setStartDelay(delay);
     animator.animateTo(factor);
   }
 

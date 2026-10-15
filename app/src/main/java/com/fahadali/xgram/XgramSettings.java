@@ -738,7 +738,7 @@ public final class XgramSettings {
     put(KEY_PULL_TO_NEXT, value);
   }
 
-  /** "Connecting..." in the status bar on the start side even without a centred camera hole (which moves it there anyway). */
+  /** "Connecting..." in the status bar on the start side (off: Telegram X's centred position). The only thing that decides it. */
   public boolean connectionStatusAtStart () {
     return connectionStatusAtStart;
   }
@@ -746,6 +746,13 @@ public final class XgramSettings {
   public void setConnectionStatusAtStart (boolean value) {
     connectionStatusAtStart = value;
     put(KEY_CONNECTION_STATUS_START, value);
+  }
+
+  /** First run only: a phone with a centred camera hole gets the start side as its default; once stored, the stored value rules. */
+  public void presetConnectionStatusAtStart () {
+    if (!connectionStatusAtStart && !pmc().contains(KEY_CONNECTION_STATUS_START)) {
+      setConnectionStatusAtStart(true);
+    }
   }
 
   public void setHideFab (boolean value) {
