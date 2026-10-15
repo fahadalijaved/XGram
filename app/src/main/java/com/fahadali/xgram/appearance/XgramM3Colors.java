@@ -237,10 +237,10 @@ public final class XgramM3Colors {
     switch (accentColorId) {
       case TdlibAccentColor.InternalId.ARCHIVE:
       case TdlibAccentColor.InternalId.ARCHIVE_PINNED:
-        return ColorId.fillingActiveContent;
+        return ColorId.text; // PorterDuffPaint only tints the ids it was generated for (fillingActiveContent crashed)
       case TdlibAccentColor.InternalId.SAVED_MESSAGES:
       case TdlibAccentColor.InternalId.REPLIES:
-        return ColorId.circleButtonRegularIcon;
+        return ColorId.iconActive; // as above: a PorterDuffPaint id
       default:
         return fallback;
     }
