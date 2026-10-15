@@ -94,7 +94,7 @@ public class SimplestCheckBox {
   private static void prepareCounterPaint () {
     if (counterPaint == null) {
       counterPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-      counterPaint.setTypeface(Fonts.getRobotoBold());
+      counterPaint.setTypeface(XgramExpressive.isEnabled() ? XgramExpressive.typeface(XgramExpressive.TS_LABEL_M, true) : Fonts.getRobotoBold());
       counterPaint.setTextSize(Screen.dp(12f));
     }
   }
