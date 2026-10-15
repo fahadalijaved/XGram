@@ -16,6 +16,7 @@ package com.fahadali.xgram.compose.ui
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,11 +55,15 @@ import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.compose.LocalXgramHost
 import kotlin.math.roundToInt
 
-/** One row of a card group. [id] is the R.id.btn_xgram* of the classic row (search and highlight use it). */
+/**
+ * One row of a card group. [id] is the R.id.btn_xgram* of the classic row (search and highlight use it). [type] is its
+ * kind (PageBlock.TYPE_*), the row's content type in the page's list.
+ */
 class GroupRow internal constructor(
   val id: Int,
   val key: String?,
   val rowKey: String,
+  val type: Int,
   val content: @Composable (ListItemShapes) -> Unit
 )
 
@@ -71,13 +75,13 @@ class GroupScope internal constructor() {
   internal val rows = ArrayList<GroupRow>()
   private val keys = HashSet<String>()
 
-  private fun add(id: Int, key: String?, content: @Composable (ListItemShapes) -> Unit) {
+  private fun add(id: Int, key: String?, type: Int, content: @Composable (ListItemShapes) -> Unit) {
     var rowKey = "$id:${key ?: ""}"
     var n = 1
     while (!keys.add(rowKey)) {
       rowKey = "$id:${key ?: ""}#${n++}"
     }
-    rows.add(GroupRow(id, key, rowKey, content))
+    rows.add(GroupRow(id, key, rowKey, type, content))
   }
 
   /** A switch: the whole row toggles it. */
@@ -91,7 +95,7 @@ class GroupScope internal constructor() {
     key: String? = null,
     busy: Boolean = false,
     onChange: (Boolean) -> Unit
-  ) = add(id, key) { shapes ->
+  ) = add(id, key, PageBlock.TYPE_SWITCH) { shapes ->
     SwitchRow(id, key, title, subtitle, icon, checked, enabled, busy, shapes, onChange)
   }
 
@@ -104,7 +108,7 @@ class GroupScope internal constructor() {
     checked: Boolean,
     key: String? = null,
     onChange: (Boolean) -> Unit
-  ) = add(id, key) { shapes ->
+  ) = add(id, key, PageBlock.TYPE_MAIN_SWITCH) { shapes ->
     MainSwitchRow(id, key, title, subtitle, icon, checked, shapes, onChange)
   }
 
@@ -117,7 +121,7 @@ class GroupScope internal constructor() {
     enabled: Boolean = true,
     key: String? = null,
     onClick: () -> Unit
-  ) = add(id, key) { shapes ->
+  ) = add(id, key, PageBlock.TYPE_VALUE) { shapes ->
     ClickRow(id, key, title, value, icon, IconStyle.PLAIN, enabled, false, null, null, shapes, onClick)
   }
 
@@ -131,7 +135,7 @@ class GroupScope internal constructor() {
     enabled: Boolean = true,
     key: String? = null,
     onClick: () -> Unit
-  ) = add(id, key) { shapes ->
+  ) = add(id, key, PageBlock.TYPE_LINK) { shapes ->
     ClickRow(id, key, title, subtitle, icon, iconStyle, enabled, false, null, null, shapes, onClick)
   }
 
@@ -150,7 +154,7 @@ class GroupScope internal constructor() {
     trailing: (@Composable () -> Unit)? = null,
     below: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
-  ) = add(id, key) { shapes ->
+  ) = add(id, key, PageBlock.TYPE_ACTION) { shapes ->
     ClickRow(id, key, title, subtitle, icon, IconStyle.PLAIN, enabled, destructive, trailing, below, shapes, onClick)
   }
 
@@ -163,7 +167,7 @@ class GroupScope internal constructor() {
     enabled: Boolean = true,
     key: String? = null,
     onSelect: (T) -> Unit
-  ) = add(id, key) { shapes ->
+  ) = add(id, key, PageBlock.TYPE_BUTTONS) { shapes ->
     ButtonsRow(id, key, title, options, selected, enabled, shapes, onSelect)
   }
 
@@ -176,7 +180,7 @@ class GroupScope internal constructor() {
     enabled: Boolean = true,
     key: String? = null,
     onChange: (Int) -> Unit
-  ) = add(id, key) { shapes ->
+  ) = add(id, key, PageBlock.TYPE_SLIDER) { shapes ->
     SliderRow(id, key, title, labels, index, enabled, shapes, onChange)
   }
 
@@ -189,7 +193,7 @@ class GroupScope internal constructor() {
     enabled: Boolean = true,
     key: String? = null,
     onClick: () -> Unit
-  ) = add(id, key) { shapes ->
+  ) = add(id, key, PageBlock.TYPE_RADIO) { shapes ->
     val host = LocalXgramHost.current
     SettingsRadioRow(title, subtitle, selected, shapes, enabled, id, key) {
       onClick()
@@ -198,22 +202,18 @@ class GroupScope internal constructor() {
   }
 
   /** Anything else in the group's shape (use the given shapes for the corners). [id] lets search highlight it. */
-  fun custom(key: Any, id: Int = 0, content: @Composable (ListItemShapes) -> Unit) = add(id, key.toString(), content)
+  fun custom(key: Any, id: Int = 0, content: @Composable (ListItemShapes) -> Unit) =
+    add(id, key.toString(), PageBlock.TYPE_CUSTOM, content)
 }
 
-/** Draws a group: shapes come from the row's position, so the outer corners follow the order. */
+/**
+ * Draws one row of a group (an item of the page's list): its shape comes from its place in the group, so the outer
+ * corners follow the order. [top] is the group's gap above its first row and the segmented gap above the others.
+ */
 @Composable
-internal fun SettingsGroupBlock(rows: List<GroupRow>, topGap: Dp) {
-  Column(
-    modifier = Modifier.fillMaxWidth().padding(top = topGap),
-    verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
-  ) {
-    val count = rows.size
-    rows.forEachIndexed { index, row ->
-      key(row.rowKey) {
-        row.content(ListItemDefaults.segmentedShapes(index = index, count = count))
-      }
-    }
+internal fun SettingsGroupRow(row: GroupRow, index: Int, count: Int, top: Dp) {
+  Box(Modifier.fillMaxWidth().padding(top = top)) {
+    row.content(ListItemDefaults.segmentedShapes(index = index, count = count))
   }
 }
 

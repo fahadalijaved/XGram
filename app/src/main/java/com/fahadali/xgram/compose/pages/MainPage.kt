@@ -23,6 +23,8 @@ import com.fahadali.xgram.compose.ui.GroupScope
 import com.fahadali.xgram.compose.ui.IconStyle
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.SettingsSearchBar
+import com.fahadali.xgram.compose.ui.SettingsSearchOverlay
+import com.fahadali.xgram.compose.ui.rememberSettingsSearchState
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
 import org.thunderdog.challegram.R
@@ -37,11 +39,19 @@ private const val URL_SUPPORT = "https://paypal.me/fahadalijaved23"
 @Composable
 fun MainPage() {
   val host = LocalXgramHost.current
-  SettingsPage(title = str(R.string.XgramSettings)) {
+  val search = rememberSettingsSearchState()
+  SettingsPage(
+    title = str(R.string.XgramSettings),
+    // The full-screen search stays out of the list: only the bar scrolls with the page.
+    overlay = { SettingsSearchOverlay(search, onMainHit = { id -> mainPageAction(host, id) }) }
+  ) {
     val settings = XgramSettings.instance()
+    // Values from Telegram X, worked out once per build of the page, not while rows are drawn.
+    val hidden = XgramComposeBridge.drawerHiddenCount()
+    val ghost = settings.isAnyGhostEnabled()
 
     item("search") {
-      SettingsSearchBar(onMainHit = { id -> mainPageAction(host, id) })
+      SettingsSearchBar(search)
     }
 
     group {
@@ -55,7 +65,6 @@ fun MainPage() {
       category(host, R.id.btn_xgramSectionChatList, R.drawable.baseline_forum_24, R.string.XgramChatList, s(R.string.XgramChatListSummary))
       category(host, R.id.btn_xgramSectionChats, R.drawable.baseline_chat_bubble_24, R.string.XgramMessages, s(R.string.XgramMessagesSummary))
       category(host, R.id.btn_xgramSectionTranslation, R.drawable.baseline_translate_24, R.string.XgramTranslation, s(R.string.XgramTranslationSummary))
-      val hidden = XgramComposeBridge.drawerHiddenCount()
       category(
         host, R.id.btn_xgramSideMenu, R.drawable.baseline_format_list_bulleted_type_24, R.string.XgramSideMenu,
         if (hidden > 0) s(R.string.XgramHiddenCount, hidden) else s(R.string.XgramSideMenuSummary)
@@ -65,7 +74,7 @@ fun MainPage() {
     group {
       category(
         host, R.id.btn_xgramSectionPrivacy, R.drawable.baseline_lock_24, R.string.XgramPrivacy,
-        s(if (settings.isAnyGhostEnabled()) R.string.XgramPrivacySummaryGhostOn else R.string.XgramPrivacySummary)
+        s(if (ghost) R.string.XgramPrivacySummaryGhostOn else R.string.XgramPrivacySummary)
       )
       category(host, R.id.btn_xgramSectionFilters, R.drawable.baseline_filter_variant_remove_24, R.string.XgramFilters, s(R.string.XgramFiltersSummary))
       category(host, R.id.btn_xgramSectionHistory, R.drawable.baseline_history_24, R.string.XgramHistory, s(R.string.XgramHistorySummary))

@@ -961,11 +961,19 @@ if (generateBaselineProfile) {
   afterEvaluate {
     dependencies.add("latestLabReleaseBaselineProfile", project(":baseline-profile"))
   }
+} else {
+  // XGram: without the baselineprofile plugin nothing read the generated profile, so Telegram X's rules never
+  // reached the APK. Ship it (and src/main/baseline-prof.txt, which AGP reads by itself) with every build.
+  android {
+    sourceSets.getByName("main") {
+      baselineProfiles.directories += "src/main/generated/baselineProfiles"
+    }
+  }
 }
 
 afterEvaluate {
   tasks.withType<ExternalNativeBuildTask>().configureEach {
-    val variantName = variantName.replace(Regex("(Benchmark)?(NonMinified)?(Release|Debug)$", RegexOption.IGNORE_CASE), "")
+    val variantName = variantName.replace(Regex("(Benchmark)?(NonMinified)?(Release|Debug|Qa)$", RegexOption.IGNORE_CASE), "")
     val buildNativeTask = buildNativeTasks[variantName]
     require(buildNativeTask != null) {
       "Could not find buildNativeTask for $variantName (${this.variantName})"

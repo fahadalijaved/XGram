@@ -47,11 +47,15 @@ fun AppearancePage() {
   var materialYouBusy by remember { mutableStateOf(false) }
   SettingsPage(title = str(R.string.XgramAppearance)) {
     val settings = XgramSettings.instance()
+    // Values from Telegram X, worked out once per build of the page, not while rows are drawn.
+    val themeName = XgramComposeBridge.currentThemeName()
+    val emojiSetName = XgramComposeBridge.emojiSetName()
+    val avatarCornersName = XgramComposeBridge.avatarCornersName(settings.avatarCorners())
 
     header(R.string.XgramHeaderTheme)
     if (XgramMaterialYou.isAvailable()) {
       group {
-        themes(host)
+        themes(host, themeName)
         switch(
           R.id.btn_xgramMaterialYou, s(R.string.XgramMaterialYou), s(R.string.XgramMaterialYouSub),
           checked = XgramMaterialYou.isEnabled(), busy = materialYouBusy
@@ -71,14 +75,14 @@ fun AppearancePage() {
       group {
         iconPack(host)
         appIcon(host)
-        emojiSet(host)
+        emojiSet(host, emojiSetName)
       }
     } else {
       group {
-        themes(host)
+        themes(host, themeName)
         iconPack(host)
         appIcon(host)
-        emojiSet(host)
+        emojiSet(host, emojiSetName)
       }
       expressive(host)
     }
@@ -90,7 +94,7 @@ fun AppearancePage() {
         c.setArguments(MessagesController.Arguments(MessagesController.PREVIEW_MODE_FONT_SIZE, null, null))
         host.open(c)
       }
-      value(R.id.btn_xgramAvatarCorners, s(R.string.XgramAvatarCorners), XgramComposeBridge.avatarCornersName(settings.avatarCorners())) {
+      value(R.id.btn_xgramAvatarCorners, s(R.string.XgramAvatarCorners), avatarCornersName) {
         host.choose(
           ChoiceSpec(
             title = s(R.string.XgramAvatarCorners),
@@ -127,8 +131,8 @@ fun AppearancePage() {
   }
 }
 
-private fun GroupScope.themes(host: XgramComposeHost) {
-  value(R.id.btn_xgramThemes, s(R.string.XgramThemes), XgramComposeBridge.currentThemeName()) {
+private fun GroupScope.themes(host: XgramComposeHost, name: String) {
+  value(R.id.btn_xgramThemes, s(R.string.XgramThemes), name) {
     host.open(XgramThemesController(host.activity, host.tdlib))
   }
 }
@@ -145,9 +149,9 @@ private fun GroupScope.appIcon(host: XgramComposeHost) {
   }
 }
 
-private fun GroupScope.emojiSet(host: XgramComposeHost) {
+private fun GroupScope.emojiSet(host: XgramComposeHost, name: String) {
   // Telegram X's emoji set picker (with XGram's System set), as in Settings → Stickers and emoji.
-  value(R.id.btn_xgramEmojiSet, s(R.string.XgramEmoji), XgramComposeBridge.emojiSetName()) {
+  value(R.id.btn_xgramEmojiSet, s(R.string.XgramEmoji), name) {
     host.open(SettingsCloudEmojiController(host.activity, host.tdlib))
   }
 }

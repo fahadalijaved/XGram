@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.ExpandedFullScreenSearchBar
@@ -31,12 +32,14 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SearchBarValue
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,15 +57,63 @@ import kotlinx.coroutines.launch
 import org.thunderdog.challegram.R
 
 /**
- * The search bar at the top of the main page. Tapping it opens a full-screen search (a window of its own: it handles
- * back and the keyboard). The index is built when it opens, so it follows the current language. A result opens its
- * page and points at the row; a row of the main page itself runs [onMainHit] with the row's id.
+ * The settings search of the main page. The bar is an item of the page's list ([SettingsSearchBar]); the full-screen
+ * search it opens is composed by the page outside the list ([SettingsSearchOverlay]). Both share this state.
+ */
+@Stable
+class SettingsSearchState internal constructor(
+  internal val text: TextFieldState,
+  internal val bar: SearchBarState
+)
+
+@Composable
+fun rememberSettingsSearchState(): SettingsSearchState {
+  val text = rememberTextFieldState()
+  val bar = rememberSearchBarState()
+  return remember(text, bar) { SettingsSearchState(text, bar) }
+}
+
+@Composable
+private fun SearchInputField(state: SettingsSearchState) {
+  val textState = state.text
+  SearchBarDefaults.InputField(
+    textFieldState = textState,
+    searchBarState = state.bar,
+    onSearch = { },
+    placeholder = { Text(str(R.string.XgramSettingsSearchHint)) },
+    leadingIcon = { Icon(tgxIcon(R.drawable.baseline_search_24), contentDescription = null) },
+    trailingIcon = if (textState.text.isNotEmpty()) {
+      {
+        IconButton(onClick = { textState.clearText() }) {
+          Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.Clear))
+        }
+      }
+    } else {
+      null
+    }
+  )
+}
+
+/** The search bar at the top of the main page, an item of its list. Tapping it opens [SettingsSearchOverlay]. */
+@Composable
+fun SettingsSearchBar(state: SettingsSearchState) {
+  SearchBar(
+    state = state.bar,
+    inputField = { SearchInputField(state) },
+    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+  )
+}
+
+/**
+ * The full-screen search (a window of its own: it handles back and the keyboard), passed to SettingsPage as its
+ * overlay so it lives outside the list. The index is built when it opens, so it follows the current language. A result
+ * opens its page and points at the row; a row of the main page itself runs [onMainHit] with the row's id.
  */
 @Composable
-fun SettingsSearchBar(onMainHit: (Int) -> Unit) {
+fun SettingsSearchOverlay(state: SettingsSearchState, onMainHit: (Int) -> Unit) {
   val host = LocalXgramHost.current
-  val textState = rememberTextFieldState()
-  val searchState = rememberSearchBarState()
+  val searchState = state.bar
+  val textState = state.text
   val scope = rememberCoroutineScope()
   var index by remember { mutableStateOf<List<XgramSearchHit>?>(null) }
 
@@ -73,31 +124,7 @@ fun SettingsSearchBar(onMainHit: (Int) -> Unit) {
     }
   }
 
-  val inputField = @Composable {
-    SearchBarDefaults.InputField(
-      textFieldState = textState,
-      searchBarState = searchState,
-      onSearch = { },
-      placeholder = { Text(str(R.string.XgramSettingsSearchHint)) },
-      leadingIcon = { Icon(tgxIcon(R.drawable.baseline_search_24), contentDescription = null) },
-      trailingIcon = if (textState.text.isNotEmpty()) {
-        {
-          IconButton(onClick = { textState.clearText() }) {
-            Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.Clear))
-          }
-        }
-      } else {
-        null
-      }
-    )
-  }
-
-  SearchBar(
-    state = searchState,
-    inputField = inputField,
-    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-  )
-  ExpandedFullScreenSearchBar(state = searchState, inputField = inputField) {
+  ExpandedFullScreenSearchBar(state = searchState, inputField = { SearchInputField(state) }) {
     val query = textState.text.toString()
     val hits = remember(query, index) { filterHits(index, query) }
     val open: (XgramSearchHit) -> Unit = { hit ->

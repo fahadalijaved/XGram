@@ -35,10 +35,11 @@ fun MessagesPage() {
   val host = LocalXgramHost.current
   SettingsPage(title = str(R.string.XgramMessages)) {
     val settings = XgramSettings.instance()
+    // Worked out once per build of the page, not while rows are drawn.
+    val hidden = XgramComposeBridge.messageMenuHiddenCount()
 
     header(R.string.XgramMessageMenu)
     group {
-      val hidden = XgramComposeBridge.messageMenuHiddenCount()
       value(
         R.id.btn_xgramMessageMenu, s(R.string.XgramMessageMenu),
         if (hidden > 0) {

@@ -79,8 +79,11 @@ interface XgramComposeHost {
    */
   fun setBackConsumer(f: (() -> Unit)?)
 
-  /** Keeps Telegram X's swipe-back from starting inside [rectInWindow] (null removes it). See Modifier.xgramNoSwipeBack. */
-  fun noSwipeBack(key: Any, rectInWindow: Rect?)
+  /**
+   * Keeps Telegram X's swipe-back from starting inside the rectangle [bounds] returns, in window pixels (null from it:
+   * nowhere right now). [bounds] runs only when a swipe could start; null removes the area. See Modifier.xgramNoSwipeBack.
+   */
+  fun noSwipeBack(key: Any, bounds: (() -> Rect?)?)
 
   /** Reads the dynamic colors again (after a wallpaper or Material You change). */
   fun themeChanged()
