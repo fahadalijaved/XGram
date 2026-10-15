@@ -989,4 +989,46 @@ public final class XgramSettings {
     showPeerIds = value;
     put(KEY_SHOW_PEER_IDS, value);
   }
+
+  // Play videos in chat (Messages page, see com.fahadali.xgram.chats.XgramInlineVideo)
+
+  public static final String KEY_INLINE_VIDEO = "xgram_inline_video";
+  public static final String KEY_INLINE_VIDEO_START = "xgram_inline_video_start";
+  public static final int INLINE_VIDEO_START_AUTO = 0;
+  public static final int INLINE_VIDEO_START_TAP = 1;
+
+  private volatile boolean inlineVideo;
+  private volatile int inlineVideoStart = -1; // -1: not read yet (read on first use, it's asked while drawing)
+
+  private void loadInlineVideo () {
+    if (inlineVideoStart == -1) {
+      LevelDB pmc = pmc();
+      inlineVideo = pmc.getBoolean(KEY_INLINE_VIDEO, false);
+      inlineVideoStart = pmc.getInt(KEY_INLINE_VIDEO_START, INLINE_VIDEO_START_AUTO) == INLINE_VIDEO_START_TAP ? INLINE_VIDEO_START_TAP : INLINE_VIDEO_START_AUTO;
+    }
+  }
+
+  /** Video messages play inside the chat instead of in the media viewer. */
+  public boolean inlineVideo () {
+    loadInlineVideo();
+    return inlineVideo;
+  }
+
+  public void setInlineVideo (boolean value) {
+    loadInlineVideo();
+    inlineVideo = value;
+    put(KEY_INLINE_VIDEO, value);
+  }
+
+  /** {@link #INLINE_VIDEO_START_AUTO} (muted, while on screen) or {@link #INLINE_VIDEO_START_TAP}. */
+  public int inlineVideoStart () {
+    loadInlineVideo();
+    return inlineVideoStart;
+  }
+
+  public void setInlineVideoStart (int value) {
+    loadInlineVideo();
+    inlineVideoStart = value == INLINE_VIDEO_START_TAP ? INLINE_VIDEO_START_TAP : INLINE_VIDEO_START_AUTO;
+    putInt(KEY_INLINE_VIDEO_START, inlineVideoStart);
+  }
 }

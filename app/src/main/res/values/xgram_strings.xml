@@ -770,4 +770,12 @@
   <string name="XgramTgxPrivacyInfoGhostOn">Ghost mode on · screenshots, phone number</string>
   <string name="XgramTgxProxyRules">Proxy rules</string>
   <string name="XgramTgxProxyRulesOn">%1$d on</string>
+  <!-- XGram: Play videos in chat (Messages page) -->
+  <string name="XgramHeaderVideos">Videos</string>
+  <string name="XgramInlineVideo">Play videos in chat</string>
+  <string name="XgramInlineVideoSub">Inside the message</string>
+  <string name="XgramInlineVideoStart">Start playing</string>
+  <string name="XgramInlineVideoStartAuto">Automatically (muted)</string>
+  <string name="XgramInlineVideoStartTap">On tap</string>
+  <string name="XgramInlineVideoInfo">Videos play inside the message with a seek bar, and a tap turns the sound on or off. Autoplay follows Autoplay GIFs, Data Saver and, on mobile data, automatic media download.</string>
 </resources>

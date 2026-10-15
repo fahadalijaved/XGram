@@ -137,6 +137,7 @@ public class MessageViewGroup extends ViewGroup implements Destroyable, AttachDe
   private void updateTranslation () {
     float dx = swipeTranslation + selectableTranslation;
     videoPlayerView.setTranslationX(dx);
+    com.fahadali.xgram.chats.XgramInlineVideo.onGroupTranslate(this, dx); // XGram: Play videos in chat
     TGMessage msg = messageView.getMessage();
     UI.getContext(getContext()).getRoundVideoController().onMessageTranslate(msg.getChatId(), msg.getId());
   }
@@ -254,6 +255,7 @@ public class MessageViewGroup extends ViewGroup implements Destroyable, AttachDe
 
   @Override
   public void performDestroy () {
+    com.fahadali.xgram.chats.XgramInlineVideo.onGroupDetached(this); // XGram: Play videos in chat
     messageView.performDestroy();
     videoPlayerView.performDestroy();
   }
@@ -266,11 +268,13 @@ public class MessageViewGroup extends ViewGroup implements Destroyable, AttachDe
 
   @Override
   public void detach () {
+    com.fahadali.xgram.chats.XgramInlineVideo.onGroupDetached(this); // XGram: a video playing here stops when scrolled away
     messageView.onDetachedFromRecyclerView();
     videoPlayerView.detach();
   }
 
   public void setMessage (TGMessage message) {
+    com.fahadali.xgram.chats.XgramInlineVideo.onGroupMessageChanged(this, message); // XGram: the view now shows another message
     messageView.setMessage(message);
     overlayView.setMessage(message);
     videoPlayerView.setVisibility(TD.isSelfDestructTypeImmediately(message.getMessage()) ? GONE:  VISIBLE);

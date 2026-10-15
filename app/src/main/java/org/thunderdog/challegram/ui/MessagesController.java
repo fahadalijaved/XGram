@@ -3214,6 +3214,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   protected void onFocusStateChanged () {
     checkRoundVideo();
+    com.fahadali.xgram.chats.XgramInlineVideo.onChatFocusChanged(this, isFocused()); // XGram: Play videos in chat
     checkInlineResults();
     checkBroadcastingSomeAction();
     if (pinnedMessagesBar != null) {
