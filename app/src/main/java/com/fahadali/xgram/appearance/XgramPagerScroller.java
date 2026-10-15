@@ -15,6 +15,7 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.os.Build;
 import android.view.animation.AnimationUtils;
+import android.view.animation.Interpolator;
 import android.widget.Scroller;
 
 import androidx.annotation.Nullable;
@@ -25,29 +26,47 @@ import androidx.viewpager.widget.ViewPager;
  * The settle of every ViewPager page swipe on Compose's pager spring (SPATIAL_DEFAULT: 380, .8) with the finger's
  * velocity, instead of androidx ViewPager's quintic scroller. At the first and last page the spring is critically
  * damped and clamped, so it never scrolls past the adapter's ends. Installed into ViewPager.mScroller by reflection.
+ * <p>
+ * Scroller's getters are final, so the spring runs through Scroller's own scroll mode: a per-scroll spring
+ * interpolator over the spring's settle time.
  */
 public class XgramPagerScroller extends Scroller {
   private static final float K = 380f, Z = .8f;
   private static final long PENDING_VELOCITY_TIMEOUT = 50, ABORT_VELOCITY_TIMEOUT = 32;
   private static final float MAX_V0 = 60f;
 
+  /** Spring position for f = 0..1 of the current scroll's duration. */
+  private static final class SpringCurve implements Interpolator {
+    float k = K, z = Z, v0, seconds = .001f;
+    float minProgress = Float.NEGATIVE_INFINITY, maxProgress = Float.POSITIVE_INFINITY;
+
+    @Override
+    public float getInterpolation (float f) {
+      if (f >= 1f) {
+        return 1f;
+      }
+      float p = XgramMotion.springValue(k, z, v0, f * seconds);
+      return Math.max(minProgress, Math.min(maxProgress, p));
+    }
+  }
+
   private final @Nullable ViewPager pager;
+  private final SpringCurve curve;
 
-  private boolean finished = true;
-  private int startX, startY, finalX, finalY, currX, currY;
-  private long startTime;
-  private float k = K, z = Z, v0;
-  private float settleSeconds;
-  private boolean clampToFinal;
-
+  private int deltaX, deltaY;
   private float pendingVelocity;
   private long pendingVelocityTime;
   private float lastAbortVelocity;
   private long lastAbortTime;
 
   public XgramPagerScroller (Context context, @Nullable ViewPager pager) {
-    super(context);
+    this(context, pager, new SpringCurve());
+  }
+
+  private XgramPagerScroller (Context context, @Nullable ViewPager pager, SpringCurve curve) {
+    super(context, curve);
     this.pager = pager;
+    this.curve = curve;
   }
 
   /** Scroll velocity (px/s, positive = scrollX grows) of the finger that is lifting now. */
@@ -80,11 +99,6 @@ public class XgramPagerScroller extends Scroller {
   }
 
   @Override
-  public void startScroll (int startX, int startY, int dx, int dy) {
-    startScroll(startX, startY, dx, dy, 0);
-  }
-
-  @Override
   public void startScroll (int startX, int startY, int dx, int dy, int ignoredDuration) {
     long now = AnimationUtils.currentAnimationTimeMillis();
     float velocity;
@@ -97,79 +111,42 @@ public class XgramPagerScroller extends Scroller {
     }
     pendingVelocityTime = 0;
     lastAbortTime = 0;
-    start(startX, startY, dx, dy, velocity, now);
+    start(startX, startY, dx, dy, velocity);
   }
 
-  private void start (int startX, int startY, int dx, int dy, float velocityPx, long now) {
-    this.startX = startX;
-    this.startY = startY;
-    this.finalX = startX + dx;
-    this.finalY = startY + dy;
-    this.currX = startX;
-    this.currY = startY;
-    this.startTime = now;
+  private void start (int startX, int startY, int dx, int dy, float velocityPx) {
+    this.deltaX = dx;
+    this.deltaY = dy;
     int d = Math.abs(dx) >= Math.abs(dy) ? dx : dy;
     if (d == 0) {
-      finished = true;
-      currX = finalX;
-      currY = finalY;
+      super.startScroll(startX, startY, dx, dy, 0);
       return;
     }
-    boolean edge = dx != 0 && isEdge(finalX);
-    this.clampToFinal = edge;
-    this.k = K;
-    this.z = edge || XgramMotion.reduce() ? 1f : Z;
-    this.v0 = Math.max(-MAX_V0, Math.min(MAX_V0, velocityPx / d));
+    boolean edge = dx != 0 && isEdge(startX + dx);
+    curve.k = K;
+    curve.z = edge || XgramMotion.reduce() ? 1f : Z;
+    curve.v0 = Math.max(-MAX_V0, Math.min(MAX_V0, velocityPx / d));
+    curve.maxProgress = edge ? 1f : Float.POSITIVE_INFINITY;
+    // Never before the first page.
+    curve.minProgress = dx > 0 ? -startX / (float) dx : Float.NEGATIVE_INFINITY;
+    curve.seconds = XgramMotion.settleSeconds(curve.k, curve.z, curve.v0, .5f / Math.abs(d));
     float scale = durationScale();
-    this.settleSeconds = scale == 0f ? 0f : XgramMotion.settleSeconds(k, z, v0, .5f / Math.abs(d)) * scale;
-    this.finished = false;
-  }
-
-  private float elapsedSeconds () {
-    float scale = durationScale();
-    float t = (AnimationUtils.currentAnimationTimeMillis() - startTime) / 1000f;
-    return scale > 0f ? t / scale : Float.MAX_VALUE;
-  }
-
-  private int position (int from, int to, float progress) {
-    int d = to - from;
-    if (d == 0) {
-      return to;
-    }
-    if (clampToFinal) {
-      progress = Math.min(progress, 1f);
-    }
-    return from + Math.round(d * progress);
-  }
-
-  @Override
-  public boolean computeScrollOffset () {
-    if (finished) {
-      return false;
-    }
-    float t = elapsedSeconds();
-    if (t * Math.max(durationScale(), 1e-6f) >= settleSeconds) {
-      currX = finalX;
-      currY = finalY;
-      finished = true;
-      return true;
-    }
-    float p = XgramMotion.springValue(k, z, v0, t);
-    currX = position(startX, finalX, p);
-    if (currX < 0 && startX >= 0 && finalX >= 0) {
-      currX = 0; // never before the first page
-    }
-    currY = position(startY, finalY, p);
-    return true;
+    int duration = scale == 0f ? 0 : Math.max(1, Math.round(curve.seconds * 1000f * scale));
+    super.startScroll(startX, startY, dx, dy, duration);
   }
 
   /** px per second along the larger axis. */
   private float currentVelocityPx () {
-    if (finished) {
+    if (isFinished()) {
       return 0f;
     }
-    int d = Math.abs(finalX - startX) >= Math.abs(finalY - startY) ? finalX - startX : finalY - startY;
-    return d * XgramMotion.springVelocity(k, z, v0, elapsedSeconds());
+    int d = Math.abs(deltaX) >= Math.abs(deltaY) ? deltaX : deltaY;
+    float scale = durationScale();
+    float t = scale > 0f ? timePassed() / 1000f / scale : curve.seconds;
+    if (t >= curve.seconds) {
+      return 0f;
+    }
+    return d * XgramMotion.springVelocity(curve.k, curve.z, curve.v0, t);
   }
 
   @Override
@@ -179,84 +156,23 @@ public class XgramPagerScroller extends Scroller {
 
   @Override
   public void abortAnimation () {
-    if (!finished) {
+    if (!isFinished()) {
       lastAbortVelocity = currentVelocityPx();
       lastAbortTime = AnimationUtils.currentAnimationTimeMillis();
     }
-    currX = finalX;
-    currY = finalY;
-    finished = true;
-  }
-
-  @Override
-  public void forceFinished (boolean finished) {
-    this.finished = finished;
-  }
-
-  @Override
-  public boolean isFinished () {
-    return finished;
-  }
-
-  @Override
-  public int getCurrX () {
-    return currX;
-  }
-
-  @Override
-  public int getCurrY () {
-    return currY;
-  }
-
-  @Override
-  public int getStartX () {
-    return startX;
-  }
-
-  @Override
-  public int getStartY () {
-    return startY;
-  }
-
-  @Override
-  public int getFinalX () {
-    return finalX;
-  }
-
-  @Override
-  public int getFinalY () {
-    return finalY;
-  }
-
-  @Override
-  public int getDuration () {
-    return Math.round(settleSeconds * 1000f);
-  }
-
-  @Override
-  public int timePassed () {
-    return (int) (AnimationUtils.currentAnimationTimeMillis() - startTime);
+    super.abortAnimation();
   }
 
   @Override
   public void setFinalX (int newX) {
-    if (finished) {
-      finalX = newX;
-      currX = newX;
+    if (isFinished()) {
+      super.setFinalX(newX);
       return;
     }
     // Resized while settling: continue from here to the new end with the current velocity.
     computeScrollOffset();
     float velocity = currentVelocityPx();
-    int fromX = currX, fromY = currY;
-    start(fromX, fromY, newX - fromX, finalY - fromY, velocity, AnimationUtils.currentAnimationTimeMillis());
-  }
-
-  @Override
-  public void setFinalY (int newY) {
-    finalY = newY;
-    if (finished) {
-      currY = newY;
-    }
+    int x = getCurrX(), y = getCurrY();
+    start(x, y, newX - x, getFinalY() - y, velocity);
   }
 }
