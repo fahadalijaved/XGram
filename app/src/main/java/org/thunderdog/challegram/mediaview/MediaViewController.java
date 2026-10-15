@@ -8932,7 +8932,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     setDefaultSendButtonIcon(false);
     sendButton.setOnClickListener(this);
     sendButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT));
-    sendButton.setBackgroundResource(R.drawable.bg_btn_header_light);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      sendButton.xgramSetFab(true); // XGram: Material 3 Expressive send FAB (primaryContainer)
+    } else {
+      sendButton.setBackgroundResource(R.drawable.bg_btn_header_light);
+    }
     if (selectDelegate != null) {
       sendButton.getSlowModeCounterController(tdlib).setCurrentChat(selectDelegate.getOutputChatId());
     }

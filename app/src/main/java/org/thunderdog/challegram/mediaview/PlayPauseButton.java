@@ -47,8 +47,33 @@ class PlayPauseButton extends View implements FactorAnimator.Target {
     playPauseAnimator.setValue(isPlaying, animated);
   }
 
+  // XGram: Material 3 Expressive play/pause: a 40dp primaryContainer button whose shape springs from a circle
+  // (paused) to a 12dp rounded square (playing), onPrimaryContainer icon
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramShape;
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+
+  private float xgramShapeFactor () {
+    float target = playPauseAnimator.getValue() ? 1f : 0f;
+    if (xgramShape == null) {
+      xgramShape = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, target, (s, value) -> invalidate());
+    } else if (xgramShape.getTarget() != target) {
+      xgramShape.animateTo(target);
+    }
+    return xgramShape.getValue();
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      float cx = getMeasuredWidth() / 2f, cy = getMeasuredHeight() / 2f;
+      float half = Math.min(Screen.dp(20f), Math.min(getMeasuredWidth(), getMeasuredHeight()) / 2f);
+      float shape = xgramShapeFactor();
+      float radius = half + (Screen.dp(12f) - half) * Math.max(0f, Math.min(1.2f, shape));
+      xgramRect.set(cx - half, cy - half, cx + half, cy + half);
+      c.drawRoundRect(xgramRect, radius, radius, org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER)));
+      DrawAlgorithms.drawPlayPause(c, (int) cx, (int) cy, Screen.dp(9f), playPausePath, playPauseDrawFactor, playPauseDrawFactor = playPauseAnimator.getFloatValue(), 1f, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
+      return;
+    }
     DrawAlgorithms.drawPlayPause(c, getMeasuredWidth() / 2, getMeasuredHeight() / 2, Screen.dp(12f), playPausePath, playPauseDrawFactor, playPauseDrawFactor = playPauseAnimator.getFloatValue(), 1f, 0xffffffff);
   }
 }

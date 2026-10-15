@@ -31,7 +31,8 @@ import org.thunderdog.challegram.tool.Views;
 public class CounterView extends CounterHeaderView {
   public CounterView (Context context) {
     super(context);
-    init(14f, ColorId.white, Screen.dp(16f), 0, Screen.dp(9f) + Screen.dp(10f));
+    // XGram: Material 3 Expressive: onSurface text on a surfaceContainerHighest pill (see drawSpecial)
+    init(14f, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.text : ColorId.white, Screen.dp(16f), 0, Screen.dp(9f) + Screen.dp(10f));
     if (Config.HARDWARE_CLIP_PATH_FIX) {
       Views.setLayerType(this, LAYER_TYPE_HARDWARE);
     }
@@ -64,8 +65,12 @@ public class CounterView extends CounterHeaderView {
     float left = viewWidth - radius - radius - add / 2 + strokeWidth / 2;
     float right = viewWidth - strokeWidth / 2;
     rectF.set(left, strokeWidth / 2, right, viewHeight - strokeWidth / 2);
-    c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(0xa0000000));
-    c.drawRoundRect(rectF, radius, radius, Paints.getProgressPaint(0xffffffff, strokeWidth));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST), .9f)));
+    } else {
+      c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(0xa0000000));
+      c.drawRoundRect(rectF, radius, radius, Paints.getProgressPaint(0xffffffff, strokeWidth));
+    }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && path != null) {
       if (lastLeft != left || lastRight != right) {

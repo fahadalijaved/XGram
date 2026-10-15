@@ -299,8 +299,25 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
     }
   }
 
+  // XGram: Material 3 Expressive: the controls sit on a vertical scrim gradient instead of a flat band
+  private @androidx.annotation.Nullable android.graphics.Paint xgramScrimPaint;
+  private int xgramScrimHeight;
+
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      int scrimHeight = Screen.dp(96f);
+      if (xgramScrimPaint == null || xgramScrimHeight != scrimHeight) {
+        xgramScrimHeight = scrimHeight;
+        xgramScrimPaint = new android.graphics.Paint(android.graphics.Paint.DITHER_FLAG);
+        xgramScrimPaint.setShader(new android.graphics.LinearGradient(0, 0, 0, scrimHeight, new int[] {0x00000000, 0x59000000, 0x99000000}, new float[] {0f, .55f, 1f}, android.graphics.Shader.TileMode.CLAMP));
+      }
+      c.save();
+      c.translate(0, getMeasuredHeight() - scrimHeight);
+      c.drawRect(0, 0, getMeasuredWidth(), scrimHeight, xgramScrimPaint);
+      c.restore();
+      return;
+    }
     c.drawRect(0, getMeasuredHeight() - Screen.dp(56f), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.getColor(ColorId.transparentEditor)));
   }
 }
