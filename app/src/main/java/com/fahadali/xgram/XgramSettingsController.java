@@ -851,7 +851,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   // Values
 
   /** The theme in use: a built-in one's name, or the name of an installed theme (XGram's themes are installed ones). */
-  private static String currentThemeName () {
+  static String currentThemeName () { // XGram: package, for XgramComposeBridge
     try {
       int themeId = org.thunderdog.challegram.theme.ThemeManager.instance().currentThemeId();
       if (org.thunderdog.challegram.theme.ThemeManager.isCustomTheme(themeId)) {
@@ -865,7 +865,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   }
 
   /** The emoji set, as Settings → Stickers and emoji shows it. */
-  private static CharSequence emojiSetName () {
+  static CharSequence emojiSetName () { // XGram: package, for XgramComposeBridge
     if (com.fahadali.xgram.appearance.XgramSystemEmoji.isEnabled()) {
       return Lang.getString(R.string.XgramEmojiSystem);
     }
@@ -877,7 +877,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   }
 
   /** Telegram X's translation style, with the names its own page uses. */
-  private static @StringRes int translateStyleName () {
+  static @StringRes int translateStyleName () { // XGram: package, for XgramComposeBridge
     switch (Settings.instance().getChatTranslateMode()) {
       case Settings.TRANSLATE_MODE_INLINE: return R.string.ChatTranslateStyle2;
       case Settings.TRANSLATE_MODE_NONE: return R.string.ChatTranslateStyle3;
@@ -886,7 +886,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     }
   }
 
-  private static int messageMenuHiddenCount () {
+  static int messageMenuHiddenCount () { // XGram: package, for XgramComposeBridge
     int count = 0;
     for (com.fahadali.xgram.chats.XgramMessageMenu.Option option : com.fahadali.xgram.chats.XgramMessageMenu.OPTIONS) {
       if (com.fahadali.xgram.chats.XgramMessageMenu.isHidden(option.key)) {
@@ -1578,7 +1578,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     updateGhostToggles();
   }
 
-  private static String avatarCornersName (int percent) {
+  static String avatarCornersName (int percent) { // XGram: package, for XgramComposeBridge
     if (percent < 0) {
       return Lang.getString(R.string.XgramAvatarCornersTheme);
     } else if (percent >= 100) {

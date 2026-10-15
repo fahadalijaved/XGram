@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Jetpack Compose Material 3 Expressive settings pages (foundation) -->
+  <string name="XgramComposeBack">Back</string>
+  <string name="XgramComposeOpenClassic">Open classic page</string>
+  <string name="XgramComposeStubInfo">This page is not rebuilt yet. The classic page has all its settings.</string>
+</resources>

@@ -11,29 +11,22 @@
  */
 package com.fahadali.xgram.compose
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.fahadali.xgram.compose.theme.XgramM3Theme
+import com.fahadali.xgram.compose.ui.XgramDialogSlot
 import org.thunderdog.challegram.core.Lang
 
-/** Root of a Compose page: theme, host, layout direction of Telegram X's language. */
+/** Root of a Compose page: theme, host, Telegram X's layout direction, the page and its sheet or dialog. */
 @Composable
 internal fun XgramComposeApp(host: XgramComposeHost) {
   XgramM3Theme(dark = host.isDark, themeVersion = host.themeVersion) {
     val direction = if (host.langVersion >= 0 && Lang.rtl()) LayoutDirection.Rtl else LayoutDirection.Ltr
     CompositionLocalProvider(LocalXgramHost provides host, LocalLayoutDirection provides direction) {
-      Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer), contentAlignment = Alignment.Center) {
-        Text(host.page.name)
-      }
+      XgramPageContent(host.page)
+      XgramDialogSlot()
     }
   }
 }
