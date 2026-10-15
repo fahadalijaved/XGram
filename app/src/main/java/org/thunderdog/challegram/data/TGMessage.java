@@ -7161,6 +7161,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       return;
     }
 
+    if (bySwipe && translation == 0f && dx != 0f) { // XGram: Swipe on a message, the actions as they are now
+      xgramOnSwipeStart();
+    }
+
     translation = dx;
     context().reactionsOverlayManager().invalidate();
     translationOption = verticalPosition;
@@ -9119,6 +9123,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
         final boolean isOdd = a % 2 == 1;
         final SwipeQuickAction quickReaction = new SwipeQuickAction(reactionObj.getTitle(), reactionDrawable, () -> {
+          xgramQuickFromSwipeRight = translation > 0f; // XGram: React on a swipe right, shown on the other side
           boolean hasReaction = messageReactions.hasReaction(reactionType);
           if (Config.DISABLE_ANONYMOUS_NON_OWNER_REACTIONS && !hasReaction && tdlib.isAnonymousAdminNonCreator(msg.chatId)) {
             showContentHint(findCurrentView(), null, R.string.error_ANONYMOUS_REACTIONS_DISABLED);
@@ -9149,6 +9154,22 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     // XGram: Swipe left / right on a message (Settings, XGram, Chats) picks what a plain swipe does
     leftQuickDefaultPosition = com.fahadali.xgram.chats.XgramSwipeActions.arrange(this, leftActions, 0, true, rightActions, rightQuickDefaultPosition);
     rightQuickDefaultPosition = com.fahadali.xgram.chats.XgramSwipeActions.arrange(this, rightActions, rightQuickDefaultPosition, false, null, 0);
+    xgramSwipeKey = com.fahadali.xgram.chats.XgramSwipeActions.settingsKey();
+  }
+
+  // XGram: the swipe settings the actions were built with
+  private int xgramSwipeKey = -1;
+  // XGram: the last quick reaction was picked on a swipe right (React in Swipe on a message)
+  private boolean xgramQuickFromSwipeRight;
+
+  /** XGram: as a swipe starts, the actions follow Swipe on a message changed since, and Bookmark the message's state now. */
+  private void xgramOnSwipeStart () {
+    if (xgramSwipeKey != com.fahadali.xgram.chats.XgramSwipeActions.settingsKey()) {
+      computeQuickButtons();
+    } else {
+      com.fahadali.xgram.chats.XgramSwipeActions.refresh(leftActions);
+      com.fahadali.xgram.chats.XgramSwipeActions.refresh(rightActions);
+    }
   }
 
   /** XGram: what Telegram X's swipe to reply does, for Swipe on a message. */
@@ -9383,6 +9404,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           startX += Screen.dp(BUBBLE_MOVE_MAX) / 2;
         }
         startX -= translation;
+        if (xgramQuickFromSwipeRight) { // XGram: React on a swipe right flies in from the side it was shown on
+          startX = positionCords[0] + view.getMeasuredWidth() - (startX - positionCords[0]);
+        }
         startY = positionCords[1] + top + height / 2;
       } else {
         if (!Lang.rtl()) {

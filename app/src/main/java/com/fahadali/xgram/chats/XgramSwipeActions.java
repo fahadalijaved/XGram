@@ -220,20 +220,45 @@ public final class XgramSwipeActions {
 
   /** Bookmark, or Remove bookmark: the swipe shows the new state once it toggles. */
   private static TGMessage.SwipeQuickAction bookmark (TGMessage msg) {
-    final Tdlib tdlib = msg.tdlib();
-    final long chatId = msg.getChatId(), messageId = msg.getMessage().id;
-    final TGMessage.SwipeQuickAction[] self = new TGMessage.SwipeQuickAction[1];
-    self[0] = newAction(R.string.XgramBookmark, R.drawable.baseline_star_border_24, () -> {
-      XgramMessageActions.handle(msg.messagesController(), msg, R.id.btn_xgramBookmark);
-      showBookmarked(self[0], XgramBookmarks.isBookmarked(tdlib, chatId, messageId));
-    });
-    showBookmarked(self[0], XgramBookmarks.isBookmarked(tdlib, chatId, messageId));
-    return self[0];
+    return new BookmarkAction(msg);
   }
 
-  private static void showBookmarked (TGMessage.SwipeQuickAction action, boolean bookmarked) {
-    action.text = Lang.getString(bookmarked ? R.string.XgramRemoveBookmark : R.string.XgramBookmark);
-    action.icon = icon(bookmarked ? R.drawable.baseline_star_24 : R.drawable.baseline_star_border_24);
+  private static final class BookmarkAction extends TGMessage.SwipeQuickAction {
+    private final Tdlib tdlib;
+    private final long chatId, messageId;
+
+    BookmarkAction (TGMessage msg) {
+      super(Lang.getString(R.string.XgramBookmark), icon(R.drawable.baseline_star_border_24), null, true, false);
+      this.tdlib = msg.tdlib();
+      this.chatId = msg.getChatId();
+      this.messageId = msg.getMessage().id;
+      this.handler = () -> {
+        XgramMessageActions.handle(msg.messagesController(), msg, R.id.btn_xgramBookmark);
+        refresh();
+      };
+      refresh();
+    }
+
+    void refresh () {
+      boolean bookmarked = XgramBookmarks.isBookmarked(tdlib, chatId, messageId);
+      text = Lang.getString(bookmarked ? R.string.XgramRemoveBookmark : R.string.XgramBookmark);
+      icon = icon(bookmarked ? R.drawable.baseline_star_24 : R.drawable.baseline_star_border_24);
+    }
+  }
+
+  /** Both swipe settings in one number: a message whose actions were built with other ones builds them again. */
+  public static int settingsKey () {
+    XgramSettings settings = XgramSettings.instance();
+    return settings.swipeAction(false) * 16 + settings.swipeAction(true);
+  }
+
+  /** As a swipe starts: Bookmark shows the message's state now, it may have been bookmarked another way since. */
+  public static void refresh (List<TGMessage.SwipeQuickAction> actions) {
+    for (TGMessage.SwipeQuickAction action : actions) {
+      if (action instanceof BookmarkAction) {
+        ((BookmarkAction) action).refresh();
+      }
+    }
   }
 
   private static TGMessage.SwipeQuickAction newAction (@StringRes int text, @DrawableRes int icon, Runnable handler) {

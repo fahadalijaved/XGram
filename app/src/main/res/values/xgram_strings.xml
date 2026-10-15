@@ -645,5 +645,6 @@
   <string name="XgramHideFoldersInfo">Shows only the main chat list here, without folder tabs. Your folders aren\'t changed or deleted: they stay on your account and on your other devices, like Telegram on PC. The eye next to a folder below hides just that folder in XGram.</string>
   <string name="XgramFolderHide">Hide in XGram</string>
   <string name="XgramFolderShow">Show in XGram</string>
+  <string name="XgramFoldersAllHidden">All folders are hidden in XGram. Turn off Hide folders in XGram to pick which ones show.</string>
   <string name="XgramFolderHiddenMark">%1$s (hidden in XGram)</string>
 </resources>

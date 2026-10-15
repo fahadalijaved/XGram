@@ -13,6 +13,9 @@ package com.fahadali.xgram;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.thunderdog.challegram.telegram.TdlibAccount;
+import org.thunderdog.challegram.telegram.TdlibManager;
+import org.thunderdog.challegram.telegram.TdlibSettingsManager;
 import org.thunderdog.challegram.unsorted.Settings;
 
 import java.util.Iterator;
@@ -34,26 +37,69 @@ public final class XgramBackup {
     "xgram_clean_links", "xgram_fix_link_previews", "xgram_ghost_typing_for_stickers", "xgram_allow_screenshots", "xgram_save_protected", "xgram_proxy_off_vpn", "xgram_proxy_off_wifi", "xgram_proxy_off_mobile", "xgram_hide_phone", "xgram_block_content_capture", "xgram_prefer_ipv6", "xgram_limit_message_width", "xgram_delete_for_everyone", "xgram_hide_blocked", "xgram_forward_without_author", "xgram_ai_tools", "xgram_hide_fab", "xgram_all_chats_label", "xgram_pull_to_next", "xgram_bubble_tail", "xgram_download_boost_on", "xgram_tap_to_record", "xgram_system_emoji",
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
-    // per account
-    "xgram_hide_folders_"
+    // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
+    XgramSettings.KEY_HIDE_FOLDERS
   };
   /** Telegram X's own per account list of folders hidden on this device ("Hide in XGram" in Chat folders). */
   private static final String HIDDEN_FOLDERS_KEY = "disabled_chat_filter_ids";
 
-  private static boolean isHiddenFoldersKey (String key) {
-    if (key.equals(HIDDEN_FOLDERS_KEY)) {
-      return true;
-    }
-    int split = key.indexOf('_');
-    if (split <= 0 || !key.substring(split + 1).equals(HIDDEN_FOLDERS_KEY)) {
-      return false;
-    }
-    for (int i = 0; i < split; i++) {
-      if (!Character.isDigit(key.charAt(i))) {
-        return false;
+  /** The Telegram user logged in to an account slot, or null: per account settings follow the user, not the slot. */
+  private static String accountUser (TdlibAccount account) {
+    long userId = account.isUnauthorized() ? 0 : account.getKnownUserId();
+    return userId != 0 ? (account.isDebug() ? "test_" : "") + userId : null;
+  }
+
+  /** Every logged in account's per account settings, empty ones too, so a restore brings back what was shown. */
+  private static JSONObject exportAccounts () throws org.json.JSONException {
+    JSONObject accounts = new JSONObject();
+    for (TdlibAccount account : TdlibManager.instance()) {
+      String user = accountUser(account);
+      if (user == null || accounts.has(user)) {
+        continue;
       }
+      JSONArray hiddenFolders = new JSONArray();
+      int[] ids = Settings.instance().getIntArray(TdlibSettingsManager.key(HIDDEN_FOLDERS_KEY, account.id));
+      if (ids != null) {
+        for (int id : ids) {
+          hiddenFolders.put(id);
+        }
+      }
+      JSONObject values = new JSONObject();
+      values.put("hideFolders", XgramSettings.instance().hideFolders(account.id));
+      values.put("hiddenFolders", hiddenFolders);
+      accounts.put(user, values);
     }
-    return true;
+    return accounts;
+  }
+
+  /** Sets the per account settings of each account here whose user is in the backup; returns how many. */
+  private static int importAccounts (JSONObject accounts) throws org.json.JSONException {
+    int count = 0;
+    for (TdlibAccount account : TdlibManager.instance()) {
+      String user = accountUser(account);
+      JSONObject values = user != null ? accounts.optJSONObject(user) : null;
+      if (values == null) {
+        continue;
+      }
+      if (values.optBoolean("hideFolders", false)) {
+        pmc().putBoolean(XgramSettings.hideFoldersKey(account.id), true);
+      } else {
+        pmc().remove(XgramSettings.hideFoldersKey(account.id));
+      }
+      JSONArray hiddenFolders = values.optJSONArray("hiddenFolders");
+      String key = TdlibSettingsManager.key(HIDDEN_FOLDERS_KEY, account.id);
+      if (hiddenFolders == null || hiddenFolders.length() == 0) {
+        Settings.instance().remove(key);
+      } else {
+        int[] ids = new int[hiddenFolders.length()];
+        for (int i = 0; i < ids.length; i++) {
+          ids[i] = hiddenFolders.getInt(i);
+        }
+        Settings.instance().putIntArray(key, ids);
+      }
+      count++;
+    }
+    return count;
   }
   private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden"};
   private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_"};
@@ -70,7 +116,7 @@ public final class XgramBackup {
       JSONObject booleans = new JSONObject(), strings = new JSONObject(), ints = new JSONObject();
       for (String prefix : BOOLEAN_PREFIXES) {
         for (LevelDB.Entry entry : pmc().find(prefix)) {
-          if (isBooleanKey(entry.key())) {
+          if (isBooleanKey(entry.key()) && !entry.key().startsWith(XgramSettings.KEY_HIDE_FOLDERS)) {
             booleans.put(entry.key(), entry.asBoolean());
           }
         }
@@ -93,18 +139,6 @@ public final class XgramBackup {
           longs.put(entry.key(), entry.asLong());
         }
       }
-      JSONObject intArrays = new JSONObject();
-      for (org.thunderdog.challegram.telegram.TdlibAccount account : org.thunderdog.challegram.telegram.TdlibManager.instance()) {
-        String key = org.thunderdog.challegram.telegram.TdlibSettingsManager.key(HIDDEN_FOLDERS_KEY, account.id);
-        int[] ids = Settings.instance().getIntArray(key);
-        if (ids != null && ids.length > 0) {
-          JSONArray array = new JSONArray();
-          for (int id : ids) {
-            array.put(id);
-          }
-          intArrays.put(key, array);
-        }
-      }
       JSONObject root = new JSONObject();
       root.put("app", "XGram");
       root.put("version", 1);
@@ -112,7 +146,7 @@ public final class XgramBackup {
       root.put("strings", strings);
       root.put("ints", ints);
       root.put("longs", longs);
-      root.put("intArrays", intArrays);
+      root.put("accounts", exportAccounts());
       return root.toString(2);
     } catch (Throwable t) {
       return "{}";
@@ -149,7 +183,7 @@ public final class XgramBackup {
       if (booleans != null) {
         for (Iterator<String> it = booleans.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.startsWith("xgram_") && isBooleanKey(key)) {
+          if (key.startsWith("xgram_") && isBooleanKey(key) && !key.startsWith(XgramSettings.KEY_HIDE_FOLDERS)) {
             pmc().putBoolean(key, booleans.getBoolean(key));
             count++;
           }
@@ -185,20 +219,9 @@ public final class XgramBackup {
           }
         }
       }
-      JSONObject intArrays = root.optJSONObject("intArrays");
-      if (intArrays != null) {
-        for (Iterator<String> it = intArrays.keys(); it.hasNext(); ) {
-          String key = it.next();
-          JSONArray array = intArrays.optJSONArray(key);
-          if (array != null && isHiddenFoldersKey(key)) {
-            int[] ids = new int[array.length()];
-            for (int i = 0; i < ids.length; i++) {
-              ids[i] = array.getInt(i);
-            }
-            Settings.instance().putIntArray(key, ids);
-            count++;
-          }
-        }
+      JSONObject accounts = root.optJSONObject("accounts");
+      if (accounts != null) {
+        count += importAccounts(accounts);
       }
       return count;
     } catch (Throwable t) {
