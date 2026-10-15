@@ -94,6 +94,23 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
     recyclerView.setLayoutManager(manager);
     recyclerView.setAdapter(adapter);
     recyclerView.setItemAnimator(null);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive menu: the options as segmented tile groups, 16dp inset, 2dp gaps, 8dp between groups
+      recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
+        @Override
+        public void getItemOffsets (@NonNull android.graphics.Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+          int position = parent.getChildAdapterPosition(view);
+          int index = position != RecyclerView.NO_POSITION ? adapter.xgramOptionIndex(position) : -1;
+          if (index < 0) {
+            return;
+          }
+          int inset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+          int top = index == 0 ? Screen.dp(8f) : adapter.xgramSameGroup(index - 1, index) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
+          int bottom = index == adapter.options.items.length - 1 ? Screen.dp(8f) : 0;
+          outRect.set(inset, top, inset, bottom);
+        }
+      });
+    }
   }
 
   @Override
@@ -136,14 +153,22 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
         text.setPadding(Screen.dp(17f), Screen.dp(1f), Screen.dp(17f), 0);
         text.setCompoundDrawablePadding(Screen.dp(18f));
         text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(54f)));
+        Views.setClickable(text);
         if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-          // XGram: Material 3 Expressive menu rows: bodyLarge, 24dp icon at 16dp, text at 56dp
+          // XGram: Material 3 Expressive menu rows: 56dp segmented tiles (surfaceBright, outer 20 / inner 4, 16 pressed),
+          // bodyLarge, 24dp icon at 16dp, text at 56dp
+          text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f)));
           text.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false));
           text.setPadding(Screen.dp(16f), Screen.dp(1f), Screen.dp(16f), 0);
           text.setCompoundDrawablePadding(Screen.dp(16f));
+          com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(text,
+            com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT),
+            com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.LIST_PRESSED_CORNER);
+          morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+          morph.setSegment(com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE);
+        } else {
+          RippleSupport.setTransparentSelector(text);
         }
-        Views.setClickable(text);
-        RippleSupport.setTransparentSelector(text);
         return new OptionHolder(text);
       } else if (viewType == OptionsAdapter.TYPE_EMOJI_PACK_INFO) {
         EmojiPacksInfoView textView = new EmojiPacksInfoView(context, parent, parent.tdlib());
@@ -247,14 +272,25 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
           OptionItem item = options.items[position];
           TextView textView = ((TextView) holder.itemView);
           textView.setId(item.id);
-          final int textColorId = OptionsLayout.getOptionColorId(item.textColor);
+          final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+          final boolean xgramDelete = xgramM3 && item.id == R.id.btn_messageDelete; // XGram: destructive action in error
+          if (xgramM3) {
+            com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.findMorph(textView.getBackground());
+            if (morph != null) {
+              boolean joinsPrevious = position > 0 && xgramSameGroup(position - 1, position);
+              boolean joinsNext = position < options.items.length - 1 && xgramSameGroup(position, position + 1);
+              morph.setSegment(joinsPrevious ? (joinsNext ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_MIDDLE : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_LAST) :
+                (joinsNext ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE));
+            }
+          }
+          final int textColorId = xgramDelete ? ColorId.textNegative : OptionsLayout.getOptionColorId(item.textColor);
           textView.setTextColor(Theme.getColor(textColorId));
           if (themeProvider != null)
             themeProvider.addThemeColorListener(textView, textColorId);
           if (item.icon != 0) {
             Drawable drawable = Drawables.get(context.getResources(), item.icon);
             if (drawable != null) {
-              final int drawableColorId = item.iconColor == OptionColor.NORMAL ? ColorId.icon : item.iconColor;
+              final int drawableColorId = xgramDelete ? ColorId.iconNegative : item.iconColor == OptionColor.NORMAL ? ColorId.icon : item.iconColor;
               drawable.setColorFilter(Paints.getColorFilter(Theme.getColor(drawableColorId)));
               if (themeProvider != null) {
                 themeProvider.addThemeFilterListener(drawable, drawableColorId);
@@ -304,6 +340,27 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
       }
     }
 
+    /** XGram: the index in options.items of the row at {@code position}, or -1 for the subtitle and info rows. */
+    int xgramOptionIndex (int position) {
+      if (position < 0 || position >= getItemCount() || getItemViewType(position) != TYPE_OPTION) {
+        return -1;
+      }
+      if (subtitlePosition >= 0) {
+        position--;
+      }
+      if (emojiInfoPosition >= 0) {
+        position--;
+      }
+      if (textInfoPosition >= 0) {
+        position--;
+      }
+      return position >= 0 && position < options.items.length ? position : -1;
+    }
+
+    boolean xgramSameGroup (int index, int nextIndex) {
+      return com.fahadali.xgram.chats.XgramMessageMenu.sameMenuGroup(options.items[index].id, options.items[nextIndex].id);
+    }
+
     @Override
     public int getItemViewType (int position) {
       if (position == textInfoPosition) {
@@ -342,6 +399,13 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
   @Override
   public int getItemsHeight (RecyclerView recyclerView) {
     int totalHeight = (options.items.length + 2) * Screen.dp(54);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && options.items.length > 0) {
+      // XGram: 56dp tiles, 2dp gaps inside a group, 8dp between groups and around the list
+      totalHeight += options.items.length * Screen.dp(2f) + Screen.dp(16f);
+      for (int i = 1; i < options.items.length; i++) {
+        totalHeight += adapter.xgramSameGroup(i - 1, i) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
+      }
+    }
     if (adapter.textInfoPosition >= 0) {
       View view = recyclerView.getLayoutManager().findViewByPosition(adapter.textInfoPosition);
       int hintHeight =

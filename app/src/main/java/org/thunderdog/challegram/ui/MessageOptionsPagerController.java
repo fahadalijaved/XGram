@@ -302,6 +302,14 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
             xgramPickerSheetTop.setHandleAlpha(corner);
             xgramPickerSheetTop.setBounds(0, (int) (top - band), getMeasuredWidth(), (int) Math.ceil(bottom));
             xgramPickerSheetTop.draw(canvas);
+            // the reaction row as a surfaceContainerHigh pill (fades out as the full picker opens)
+            float pillAlpha = 1f - reactionsPickerVisibility.getFloatValue();
+            if (pillAlpha > 0f) {
+              xgramPillRect.set(Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_SIDE), top + Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_TOP),
+                getMeasuredWidth() - Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_SIDE), top + Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_BOTTOM));
+              float pr = xgramPillRect.height() / 2f;
+              canvas.drawRoundRect(xgramPillRect, pr, pr, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), pillAlpha)));
+            }
             if (headerCell != null) {
               headerCell.xgramSetTopEndRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL) * corner);
             }
@@ -326,6 +334,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   }
 
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramPickerSheetTop;
+  private final android.graphics.RectF xgramPillRect = new android.graphics.RectF();
 
   /** XGram: 1 while the sheet top is 28dp or more below the top of the window, 0 once it reaches it. */
   private static float xgramSheetCornerFactor (float sheetTop) {
