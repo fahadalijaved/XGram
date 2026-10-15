@@ -669,7 +669,8 @@ public class SettingsCacheController extends RecyclerViewController<SettingsData
 
     showSettings(new SettingsWrapBuilder(id).addHeaderItem(headerItem).setRawItems(array).setIntDelegate((id1, result) -> optimizeStorage(result, entry)).setOnSettingItemClick((view, settingsId, item, doneButton, settingsAdapter, window) -> {
       String size = Strings.buildSize(measureTotal(settingsAdapter.getCheckIntResults(), entry), false);
-      doneButton.setText(Lang.uppercase(Lang.getString(R.string.ClearX, size)));
+      String clearText = Lang.getString(R.string.ClearX, size);
+      doneButton.setText(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? clearText : Lang.uppercase(clearText)); // XGram M3E: sentence-case sheet actions
     }).setSaveStr(Lang.getString(R.string.ClearX, Strings.buildSize(selectedSize, false)))
       .setSaveColorId(ColorId.textNegative).setAllowResize(count >= 5));
   }
