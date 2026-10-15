@@ -995,8 +995,14 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return Theme.getColor(getSearchHeaderColorId());
   }
 
+  /** XGram: a Jetpack Compose page that draws its own Material 3 top app bar under a see-through, empty header. */
+  public boolean xgramDrawsOwnAppBar () {
+    return false;
+  }
+
   protected final int getHeaderColor () {
-    return Theme.getColor(getHeaderColorId());
+    int color = Theme.getColor(getHeaderColorId());
+    return xgramDrawsOwnAppBar() ? me.vkryl.core.ColorUtils.color(0, color) : color; // XGram: the header fades out over a Compose page
   }
 
   protected final int getHeaderTextColor () {

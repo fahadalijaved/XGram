@@ -482,7 +482,7 @@ public class SettingsPrivacyController extends RecyclerViewController<SettingsPr
       navigateTo(c);
     } else if (id == R.id.btn_xgramTgxPrivacy) { // XGram: XGram's Privacy page; the value is refreshed on return
       lastClickedButton = id;
-      navigateTo(com.fahadali.xgram.XgramSettingsController.section(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_PRIVACY));
+      navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_PRIVACY));
     } else if (id == R.id.btn_sessions) {
       lastClickedButton = id;
       SettingsSessionsController sessions = new SettingsSessionsController(context, tdlib);

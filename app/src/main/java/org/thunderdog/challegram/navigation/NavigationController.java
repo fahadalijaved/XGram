@@ -413,6 +413,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     contentWrapper.setController(this);
     contentWrapper.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     contentWrapper.setId(R.id.nav_wrapper);
+    contentWrapper.setClipToPadding(false); // XGram: Compose pages reach up under the header (XgramComposeRoot)
 
     headerView = new HeaderView(context);
     headerView.initWithController(this);

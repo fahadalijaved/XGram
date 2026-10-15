@@ -2801,7 +2801,9 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
   }
 
   private boolean shouldIgnoreTouches () {
-    return headerDisabled || Color.alpha(overlayColor) > 0 || getAlpha() == 0f || getVisibility() != View.VISIBLE;
+    return headerDisabled || Color.alpha(overlayColor) > 0 || getAlpha() == 0f || getVisibility() != View.VISIBLE ||
+      // XGram: a Compose page's own app bar (back, search) sits under the see-through header and takes the taps
+      (navigation != null && !navigation.isAnimating() && stack != null && stack.getCurrent() != null && stack.getCurrent().xgramDrawsOwnAppBar());
   }
 
   @Override

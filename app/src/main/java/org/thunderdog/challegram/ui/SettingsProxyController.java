@@ -633,7 +633,7 @@ public class SettingsProxyController extends RecyclerViewController<Void> implem
     } else if (viewId == R.id.btn_useProxyForCalls) {
       Settings.instance().setProxySetting(Settings.PROXY_FLAG_USE_FOR_CALLS, adapter.toggleView(v));
     } else if (viewId == R.id.btn_xgramTgxProxyRules) { // XGram: Network page, scrolled to the proxy rules
-      navigateTo(com.fahadali.xgram.XgramSettingsController.section(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_NETWORK, R.id.btn_xgramProxyOffVpn));
+      navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_NETWORK, R.id.btn_xgramProxyOffVpn));
     }
   }
 
