@@ -130,6 +130,8 @@ public class SettingsPrivacyController extends RecyclerViewController<SettingsPr
           }
         } else if (itemId == R.id.btn_secretLinkPreviews) {
           v.getToggler().setRadioEnabled(Settings.instance().needSecretLinkPreviews(), isUpdate);
+        } else if (itemId == R.id.btn_xgramTgxPrivacy) { // XGram
+          v.setData(com.fahadali.xgram.XgramSettings.instance().isGhostModeEnabled() ? R.string.XgramTgxPrivacyInfoGhostOn : R.string.XgramTgxPrivacyInfo);
         }
       }
     };
@@ -150,6 +152,11 @@ public class SettingsPrivacyController extends RecyclerViewController<SettingsPr
         items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
         items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_loginEmail, R.drawable.baseline_alternate_email_24, R.string.LoginEmail));
       }
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+
+      // XGram: shortcut to XGram's Privacy page (ghost mode, protected content, phone number)
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_xgramTgxPrivacy, R.drawable.baseline_ghost_24, R.string.XgramTgxPrivacy));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.PrivacyTitle));
@@ -473,6 +480,9 @@ public class SettingsPrivacyController extends RecyclerViewController<SettingsPr
       SettingsPrivacyKeyController c = new SettingsPrivacyKeyController(context, tdlib);
       c.setArguments(new SettingsPrivacyKeyController.Args(setting));
       navigateTo(c);
+    } else if (id == R.id.btn_xgramTgxPrivacy) { // XGram: XGram's Privacy page; the value is refreshed on return
+      lastClickedButton = id;
+      navigateTo(com.fahadali.xgram.XgramSettingsController.section(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_PRIVACY));
     } else if (id == R.id.btn_sessions) {
       lastClickedButton = id;
       SettingsSessionsController sessions = new SettingsSessionsController(context, tdlib);

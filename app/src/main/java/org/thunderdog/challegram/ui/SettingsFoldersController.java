@@ -154,7 +154,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
     xgramHideFolders = com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId()); // XGram
     items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramHideFolders, 0, R.string.XgramHideFolders)); // XGram
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramHideFoldersInfo)); // XGram
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTgxHideFoldersInfo)); // XGram: also explains the eye on the folder rows
 
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.ChatFolders));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP, chatFoldersPreviousItemId));
@@ -254,7 +254,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
           } else {
             throw new IllegalArgumentException();
           }
-          // XGram: with Hide folders in XGram on no folder has a tab, whatever its own eye says
+          // XGram: with Hide folder tabs on no folder has a tab, whatever its own eye says
           if (!isMainChatFolder(item) && !isArchiveChatFolder(item) && com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId())) {
             isEnabled = false;
           }
@@ -398,10 +398,10 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
     super.onFocus();
     // No need to show any prompts anymore.
     Settings.instance().revokeFeatureNotifications(FeatureAvailability.Feature.CHAT_FOLDERS);
-    xgramCheckHideFolders(); // XGram: it can change in XGram, Appearance too
+    xgramCheckHideFolders(); // XGram: it can change in XGram settings too
   }
 
-  // XGram: Hide folders in XGram as the switch and the folder rows show it
+  // XGram: Hide folder tabs as the switch and the folder rows show it
   private boolean xgramHideFolders;
 
   private void xgramCheckHideFolders () {

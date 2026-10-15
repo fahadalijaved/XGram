@@ -244,6 +244,10 @@
   <item type="id" name="btn_xgramAddToFolder" />
   <item type="id" name="btn_xgramHideFolders" />
   <item type="id" name="btn_xgramFolderVisible" />
+  <!-- XGram: shortcuts in Telegram X's own pages -->
+  <item type="id" name="btn_xgramTgxTrProvider" />
+  <item type="id" name="btn_xgramTgxPrivacy" />
+  <item type="id" name="btn_xgramTgxProxyRules" />
   <item type="id" name="btn_xgramSwipeLeft" />
   <item type="id" name="btn_xgramSwipeRight" />
   <item type="id" name="btn_xgramSwipeReply" />

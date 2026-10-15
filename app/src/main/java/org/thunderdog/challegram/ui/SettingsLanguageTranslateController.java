@@ -81,6 +81,8 @@ public class SettingsLanguageTranslateController extends RecyclerViewController<
           view.findRadioView().setChecked(item.isSelected(), isUpdate);
         } else if (itemId == R.id.btn_quickTranslate) {
           view.getToggler().setRadioEnabled(Settings.instance().needUseQuickTranslation(), isUpdate);
+        } else if (itemId == R.id.btn_xgramTgxTrProvider) { // XGram
+          view.setData(com.fahadali.xgram.translate.XgramTranslator.name(com.fahadali.xgram.XgramSettings.instance().translateProvider()));
         }
       }
     };
@@ -97,6 +99,10 @@ public class SettingsLanguageTranslateController extends RecyclerViewController<
     items.add(new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_chatTranslateStyleNone, 0, R.string.ChatTranslateStyle3, R.id.btn_chatTranslateStyle, chatTranslateMode == Settings.TRANSLATE_MODE_NONE));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.TranslateSettingsDesc));
+    // XGram: Translation service, the same setting as in XGram's Translation settings
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTgxTrProvider, 0, R.string.XgramTrProvider));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     headerItemCount = items.size();
 
     if (Settings.instance().getChatTranslateMode() != Settings.TRANSLATE_MODE_NONE) {
@@ -169,6 +175,11 @@ public class SettingsLanguageTranslateController extends RecyclerViewController<
       adapter.updateAllValuedSettingsById(R.id.btn_chatDoNotTranslateSelected);
     } else if (viewId == R.id.btn_quickTranslate) {
       Settings.instance().setUseQuickTranslation(adapter.toggleView(v));
+    } else if (viewId == R.id.btn_xgramTgxTrProvider) { // XGram: the service picker from XGram's Translation settings
+      com.fahadali.xgram.translate.XgramTranslateProviderPicker.show(this, provider -> {
+        com.fahadali.xgram.XgramSettings.instance().setTranslateProvider(provider);
+        adapter.updateValuedSettingById(R.id.btn_xgramTgxTrProvider);
+      });
     }
   }
 
