@@ -278,6 +278,17 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   }
 
   private void updateRemainingCharCount () {
+    if (lengthCounter != null && xgramSupportingCounter) {
+      // XGram M3E: "length/max" always shown, bodySmall onSurfaceVariant (error when over the limit)
+      if (maxLength == -1) {
+        lengthCounter.setText("");
+      } else {
+        final int length = getTextLength();
+        lengthCounter.setText(length + "/" + maxLength);
+        lengthCounter.setTextColor(XgramExpressive.color(length > maxLength ? XgramExpressive.ERROR : XgramExpressive.ON_SURFACE_VARIANT));
+      }
+      return;
+    }
     if (lengthCounter != null) {
       if (maxLength == -1) {
         lengthCounter.setText("");
@@ -307,12 +318,40 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   }
 
   public void onInputActiveFactorChange (float factor) {
-    if (lengthCounter != null) {
+    if (lengthCounter != null && !xgramSupportingCounter) {
       lengthCounter.setAlpha(factor);
     }
   }
 
+  // XGram M3E: the counter sits in the supporting-text row under the filled field, aligned to the end
+  private boolean xgramSupportingCounter;
+
   public void addLengthCounter (boolean reduceOffset) {
+    if (lengthCounter == null && xgram && !reduceOffset) {
+      editText.setParent(this);
+      xgramSupportingCounter = true;
+
+      final int supportingRowHeight = Screen.dp(20f); // 4dp padding + 16dp bodySmall line
+      FrameLayoutFix.LayoutParams editParams = (FrameLayoutFix.LayoutParams) editText.getLayoutParams();
+      editParams.bottomMargin = supportingRowHeight;
+      editText.setLayoutParams(editParams);
+
+      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      params.leftMargin = params.rightMargin = Screen.dp(16f);
+      params.gravity = Gravity.BOTTOM | (isRtl ? Gravity.LEFT : Gravity.RIGHT);
+
+      lengthCounter = new NoScrollTextView(getContext());
+      lengthCounter.setTypeface(Fonts.getRobotoRegular());
+      lengthCounter.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12f);
+      XgramExpressive.applyText(lengthCounter, XgramExpressive.TS_BODY_S, false);
+      lengthCounter.setSingleLine(true);
+      lengthCounter.setIncludeFontPadding(false);
+      lengthCounter.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+      lengthCounter.setLayoutParams(params);
+      addView(lengthCounter);
+      updateRemainingCharCount();
+      return;
+    }
     if (lengthCounter == null) {
       editText.setParent(this);
 
@@ -355,7 +394,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
       themeProvider.addThemeInvalidateListener(editText);
       themeProvider.addThemeHighlightColorListener(editText, ColorId.textSelectionHighlight);
       themeProvider.addThemeHintTextColorListener(editText, ColorId.textPlaceholder);
-      if (lengthCounter != null) {
+      if (lengthCounter != null && !xgramSupportingCounter) {
         themeProvider.addThemeTextColorListener(lengthCounter, ColorId.textLight);
       }
       if (checkboxView != null) {
