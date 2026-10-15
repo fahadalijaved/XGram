@@ -22,6 +22,9 @@ import android.text.TextPaint;
 
 import androidx.annotation.FloatRange;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Controls;
+
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.loader.Receiver;
 import org.thunderdog.challegram.theme.ColorId;
@@ -91,7 +94,7 @@ public class SimplestCheckBox {
   private static void prepareCounterPaint () {
     if (counterPaint == null) {
       counterPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-      counterPaint.setTypeface(Fonts.getRobotoBold());
+      counterPaint.setTypeface(XgramExpressive.isEnabled() ? XgramExpressive.typeface(XgramExpressive.TS_LABEL_M, true) : Fonts.getRobotoBold());
       counterPaint.setTextSize(Screen.dp(12f));
     }
   }
@@ -142,7 +145,11 @@ public class SimplestCheckBox {
         } else {
           final float fx = factor <= .2f ? 0f : (factor - .2f) / .8f;
 
-          if (fx > 0f) {
+          if (fx > 0f && XgramExpressive.isEnabled()) {
+            // XGram M3E: the Material 3 check mark (round caps, 2dp), drawn in
+            final float box = Screen.dp(16f);
+            XgramM3Controls.drawCheckMark(c, centerX - box / 2f, centerY - box / 2f, box, fx, contentColor, Screen.dp(2f));
+          } else if (fx > 0f) {
             final float t1;
             final float f1, f2;
 

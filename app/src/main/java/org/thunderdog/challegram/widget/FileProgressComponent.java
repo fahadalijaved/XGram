@@ -32,6 +32,8 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.Log;
@@ -966,9 +968,21 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     }
   }
 
+  // XGram M3E: theme file circles (documents, voice, music) are primary with onPrimary content and a wavy progress ring
+
+  private boolean xgramRoleCircle () {
+    return backgroundColorIsId && (backgroundColor == ColorId.file || backgroundColor == ColorId.bubbleOut_file) && XgramExpressive.isEnabled();
+  }
+
+  private int xgramContentColor () {
+    return xgramRoleCircle() ? XgramExpressive.color(XgramExpressive.ON_PRIMARY) : 0xffffffff;
+  }
+
   private int getProgressColor () {
     if (isTrack) {
       return ColorUtils.alphaColor(progressFactor * alpha, Theme.getColor(backgroundColor));
+    } else if (xgramRoleCircle()) {
+      return ColorUtils.alphaColor(progressFactor * alpha, xgramContentColor());
     } else {
       return ((int) (255f * progressFactor * alpha) << 24) | 0xffffff;
     }
@@ -1438,7 +1452,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     } else {
       factor = drawFactor;
     }
-    DrawAlgorithms.drawPlayPause(c, cx, cy, Screen.dp(13f), playPausePath, drawFactor, factor, progressFactor, ColorUtils.alphaColor(alpha, 0xffffffff));
+    DrawAlgorithms.drawPlayPause(c, cx, cy, Screen.dp(13f), playPausePath, drawFactor, factor, progressFactor, ColorUtils.alphaColor(alpha, xgramContentColor()));
   }
 
   public <T extends View & DrawableProvider> void drawClipped (T view, final Canvas c, RectF clipRect, float translateDx) {
@@ -1471,7 +1485,10 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       }
 
       final int fillingColor;
-      if (playPauseAlpha == 1f) {
+      final boolean xgramCircle = xgramRoleCircle();
+      if (xgramCircle) {
+        fillingColor = ColorUtils.alphaColor(playPauseAlpha, XgramExpressive.color(XgramExpressive.PRIMARY));
+      } else if (playPauseAlpha == 1f) {
         fillingColor = backgroundColorIsId ? Theme.getColor(backgroundColor) : backgroundColor;
       } else {
         fillingColor = ColorUtils.alphaColor(playPauseAlpha, backgroundColorIsId ? Theme.getColor(backgroundColor) : backgroundColor);
@@ -1499,7 +1516,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         drawPlayPause(c, cx, cy, playPauseAlpha, true);
       } else if (currentBitmapRes != 0 && (currentBitmapRes != downloadedIconRes || !hideDownloadedIcon) && !(isVideoStreaming() && isVideoStreamingCloudNeeded)) {
         boolean ignoreScale = isVideoStreaming() && !isVideoStreamingSmallUi() && vsOnDownloadedAnimator != null && vsOnDownloadedAnimator.isAnimating();
-        Paint bitmapPaint = Paints.whitePorterDuffPaint();
+        Paint bitmapPaint = xgramCircle ? Paints.getPorterDuffPaint(xgramContentColor()) : Paints.whitePorterDuffPaint();
 
         final float initScaleFactor = bitmapChangeFactor <= .5f ? (bitmapChangeFactor / .5f) : (1f - (bitmapChangeFactor - .5f) / .5f);
         final float scaleFactor = (ignoreScale) ? 0f : initScaleFactor;
@@ -1518,7 +1535,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         }
 
         if (currentBitmapRes == FileProgressComponent.PLAY_ICON && playPauseFile != null) {
-          DrawAlgorithms.drawPlayPause(c, cx, cy, Screen.dp(13f), playPausePath, playPauseDrawFactor, playPauseDrawFactor = this.playPauseFactor, progressFactor, ColorUtils.alphaColor(bitmapAlpha, 0xffffffff));
+          DrawAlgorithms.drawPlayPause(c, cx, cy, Screen.dp(13f), playPausePath, playPauseDrawFactor, playPauseDrawFactor = this.playPauseFactor, progressFactor, ColorUtils.alphaColor(bitmapAlpha, xgramContentColor()));
         } else {
           Drawable drawable;
 
@@ -1555,6 +1572,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     if (progress != null && !isVideoStreamingProgressHidden) {
       progress.setAlpha(alpha);
       progress.forceColor(getProgressColor());
+      progress.setXgramWavy(!isTrack && !cloudPlayback && !isVideoStreaming() && xgramRoleCircle());
       progress.draw(c);
     }
     if (isCanvasAltered) {

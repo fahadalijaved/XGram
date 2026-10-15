@@ -15,6 +15,10 @@
 package org.thunderdog.challegram.widget;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -30,6 +34,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
@@ -175,9 +181,9 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
         protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
           super.onMeasure(widthMeasureSpec, heightMeasureSpec);
           if (isRtl) {
-            setPivotX(getMeasuredWidth());
+            setPivotX(xgram ? getMeasuredWidth() - getPaddingRight() : getMeasuredWidth());
           } else {
-            setPivotX(0f);
+            setPivotX(xgram ? getPaddingLeft() : 0f);
           }
         }
       };
@@ -194,6 +200,58 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
     }
 
     editText.setOnFocusChangeListener(this);
+
+    if (xgram) {
+      xgramInit();
+    }
+  }
+
+  // XGram M3E: filled Material 3 text field (surfaceContainerHighest container with 4dp top corners behind the label
+  // and the input, 16dp side padding, the label in primary while focused); heights stay as they were
+
+  private final boolean xgram = XgramExpressive.isEnabled();
+  private Paint xgramPaint;
+  private final Path xgramPath = new Path();
+  private final RectF xgramRect = new RectF();
+  private final float[] xgramRadii = new float[8];
+
+  private void xgramInit () {
+    setWillNotDraw(false);
+    final int pad = Screen.dp(16f);
+    editText.setPadding(pad, editText.getPaddingTop(), pad, editText.getPaddingBottom());
+    if (hintView != null) {
+      hintView.setPadding(pad, 0, pad, 0);
+      hintView.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+    }
+  }
+
+  private void xgramUpdateHintColor () {
+    if (xgram && hintView != null) {
+      hintView.setTextColor(XgramExpressive.color(hasFocus ? XgramExpressive.PRIMARY : XgramExpressive.ON_SURFACE_VARIANT));
+    }
+  }
+
+  @Override
+  protected void onDraw (Canvas c) {
+    super.onDraw(c);
+    if (!xgram) {
+      return;
+    }
+    final int bottom = editText.getBottom();
+    if (bottom <= 0 || getWidth() <= 0) {
+      return;
+    }
+    if (xgramPaint == null) {
+      xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      xgramPaint.setStyle(Paint.Style.FILL);
+    }
+    final float r = Screen.dpf(XgramExpressive.CORNER_XS);
+    xgramRadii[0] = xgramRadii[1] = xgramRadii[2] = xgramRadii[3] = r;
+    xgramRect.set(editText.getLeft() + editText.getTranslationX(), 0, editText.getRight() + editText.getTranslationX(), bottom);
+    xgramPath.rewind();
+    xgramPath.addRoundRect(xgramRect, xgramRadii, Path.Direction.CW);
+    xgramPaint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST));
+    c.drawPath(xgramPath, xgramPaint);
   }
 
   private boolean isRtl;
@@ -543,6 +601,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   public void onFocusChange (View v, boolean hasFocus) {
     if (this.hasFocus != hasFocus) {
       this.hasFocus = hasFocus;
+      xgramUpdateHintColor();
       updateIsActive(true);
       if (focusListener != null) {
         focusListener.onFocusChanged(this, hasFocus);

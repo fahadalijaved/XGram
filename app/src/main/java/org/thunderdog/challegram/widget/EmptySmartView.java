@@ -16,10 +16,17 @@ package org.thunderdog.challegram.widget;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 import android.text.Layout;
 import android.text.StaticLayout;
+import android.text.TextPaint;
 import android.view.View;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramShapes;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
@@ -167,6 +174,9 @@ public class EmptySmartView extends View {
         this.description = new Letters(Lang.getString(descRes));
       }
       this.icon = Drawables.get(iconRes);
+      if (xgram && lastWidth > 0) {
+        xgramLayoutTexts(lastWidth);
+      }
 
       invalidate();
     }
@@ -187,7 +197,73 @@ public class EmptySmartView extends View {
   private int titleWidth;
   private StaticLayout staticLayout;
 
+  // XGram M3E: the icon on a soft burst shape in primaryContainer, titleLarge title and bodyMedium description, centered within 320dp
+
+  private final boolean xgram = XgramExpressive.isEnabled();
+  private TextPaint xgramTitlePaint, xgramTextPaint;
+  private StaticLayout xgramTitleLayout;
+  private Paint xgramShapePaint;
+  private final Path xgramShape = new Path();
+  private final Matrix xgramMatrix = new Matrix();
+
+  private void xgramLayoutTexts (int width) {
+    if (xgramTitlePaint == null) {
+      xgramTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+      xgramTitlePaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_TITLE_L, false));
+      xgramTitlePaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_TITLE_L)));
+      xgramTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+      xgramTextPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_BODY_M, false));
+      xgramTextPaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_M)));
+    }
+    int maxWidth = Math.max(0, Math.min(width - Screen.dp(16f) * 2, Screen.dp(320f)));
+    xgramTitleLayout = title != null && maxWidth > 0 ? new StaticLayout(title.text, xgramTitlePaint, maxWidth, Layout.Alignment.ALIGN_CENTER, 1f, Screen.dp(6f), false) : null;
+    staticLayout = description != null && maxWidth > 0 ? new StaticLayout(description.text, xgramTextPaint, maxWidth, Layout.Alignment.ALIGN_CENTER, 1f, Screen.dp(6f), false) : null;
+  }
+
+  private void xgramDraw (Canvas c) {
+    if (xgramTitleLayout == null || staticLayout == null) {
+      return;
+    }
+    final int viewWidth = getMeasuredWidth();
+    final int viewHeight = getMeasuredHeight() - getPaddingTop();
+    final int shapeSize = Screen.dp(112f);
+    final int gap = Screen.dp(16f);
+    final int totalHeight = shapeSize + gap + xgramTitleLayout.getHeight() + gap + staticLayout.getHeight();
+    final int visibleHeight = Math.max(totalHeight, viewHeight - getTop());
+
+    c.save();
+    c.translate(0, getPaddingTop() + visibleHeight / 2 - totalHeight / 2);
+
+    if (xgramShapePaint == null) {
+      xgramShapePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      xgramShapePaint.setStyle(Paint.Style.FILL);
+    }
+    final float cx = viewWidth / 2f, cy = shapeSize / 2f;
+    XgramShapes.toPath(XgramShapes.SOFT_BURST, xgramShape);
+    XgramShapes.fit(xgramShape, cx, cy, shapeSize, 0f, xgramMatrix);
+    xgramShapePaint.setColor(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER));
+    c.drawPath(xgramShape, xgramShapePaint);
+
+    // The 96dp icon at 48dp
+    c.save();
+    c.scale(.5f, .5f, cx, cy);
+    Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER)));
+    c.restore();
+
+    c.translate(viewWidth / 2f - xgramTitleLayout.getWidth() / 2f, shapeSize + gap);
+    xgramTitlePaint.setColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
+    xgramTitleLayout.draw(c);
+    c.translate(0, xgramTitleLayout.getHeight() + gap);
+    xgramTextPaint.setColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+    staticLayout.draw(c);
+    c.restore();
+  }
+
   private void layoutTexts (int width) {
+    if (xgram) {
+      xgramLayoutTexts(width);
+      return;
+    }
     titleWidth = title != null ? (int) U.measureText(title.text, Paints.getMediumTextPaint(TITLE_TEXT_SIZE_DP, title.needFakeBold)) : 0;
     staticLayout = description != null ? new StaticLayout(description.text, Paints.getTextPaint16(), mode == MODE_EMPTY_RESTRICTED ? width - Screen.dp(8f) * 2 : width, Layout.Alignment.ALIGN_CENTER, 1f, Screen.dp(2.5f), false) : null;
   }
@@ -195,6 +271,11 @@ public class EmptySmartView extends View {
   @Override
   protected void onDraw (Canvas c) {
     if (title == null || description == null || icon == null) {
+      return;
+    }
+
+    if (xgram) {
+      xgramDraw(c);
       return;
     }
 

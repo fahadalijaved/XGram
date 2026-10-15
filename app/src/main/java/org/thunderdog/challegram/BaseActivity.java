@@ -740,6 +740,12 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (theme == null)
       theme = ThemeManager.instance().currentTheme(false);
 
+    if (com.fahadali.xgram.appearance.XgramM3Controls.dialogsEnabled(theme)) {
+      // XGram M3E: Material 3 dialog (28dp corners, sentence case text buttons)
+      com.fahadali.xgram.appearance.XgramM3Controls.styleAlert(context, dialog);
+      return dialog;
+    }
+
     int textColor = theme.getColor(ColorId.text);
 
     view = dialog.findViewById(android.R.id.title);

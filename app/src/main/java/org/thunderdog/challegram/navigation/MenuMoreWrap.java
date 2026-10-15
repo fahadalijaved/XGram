@@ -38,6 +38,7 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Controls;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -285,6 +286,14 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
             fillingColor = Theme.checkFillingColor();
             checkColor = Theme.checkCheckColor();
             outlineColor = Theme.getColor(ColorId.icon);
+          }
+
+          if (forcedTheme == null && XgramExpressive.isEnabled()) {
+            // XGram M3E: Material 3 checkbox
+            float boxSize = Screen.dp(18f);
+            float checked = menuItem.isCheckboxSelectedAnimated != null ? menuItem.isCheckboxSelectedAnimated.getFloatValue() : menuItem.isCheckboxSelected ? 1f : 0f;
+            XgramM3Controls.drawCheckbox(canvas, Screen.dp(29f) - boxSize / 2f, getMeasuredHeight() / 2f - boxSize / 2f, boxSize, checked, 0f, 0f, 0f, 1f);
+            return;
           }
 
           // TODO move into SimplestCheckbox

@@ -27,6 +27,9 @@ import android.view.View;
 
 import androidx.annotation.RequiresApi;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Controls;
+
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Paints;
@@ -373,8 +376,14 @@ public class CheckView extends View {
               cy = padding + galleryTotalRadius;
 
               checkCanvas.drawCircle(cx, cy, galleryTotalRadius, Paints.fillingPaint(0xffffffff));
-              checkCanvas.drawCircle(cx, cy, galleryInnerRadius, Paints.fillingPaint(Theme.getColor(ColorId.checkActive)));
-              checkColor = Theme.getColor(ColorId.checkContent);
+              if (XgramExpressive.isEnabled()) {
+                // XGram M3E: primary circle with an onPrimary check
+                checkCanvas.drawCircle(cx, cy, galleryInnerRadius, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.PRIMARY)));
+                checkColor = XgramExpressive.color(XgramExpressive.ON_PRIMARY);
+              } else {
+                checkCanvas.drawCircle(cx, cy, galleryInnerRadius, Paints.fillingPaint(Theme.getColor(ColorId.checkActive)));
+                checkColor = Theme.getColor(ColorId.checkContent);
+              }
             }
 
             final float fx;
@@ -385,7 +394,10 @@ public class CheckView extends View {
               fx = checkFactor <= .75f ? 0f : (checkFactor - .75f) / .25f;
             }
 
-            if (fx > 0) {
+            if (fx > 0 && mode == MODE_GALLERY && XgramExpressive.isEnabled()) {
+              final float box = galleryInnerRadius * 2f * .8f;
+              XgramM3Controls.drawCheckMark(checkCanvas, cx - box / 2f, cy - box / 2f, box, fx, checkColor, Screen.dp(2.5f));
+            } else if (fx > 0) {
               final float t1;
               final float f1, f2;
 

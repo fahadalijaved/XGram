@@ -464,10 +464,27 @@ public class UI {
   }
 
   public static void showToast (CharSequence message, int duration) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !StringUtils.isEmpty(message)) {
+      // XGram M3E: a Material 3 snackbar over the resumed activity, the system toast otherwise
+      final CharSequence text = message;
+      post(() -> {
+        if (!com.fahadali.xgram.appearance.XgramSnackbar.show(text, duration)) {
+          getAppHandler().showToast(text, duration);
+        }
+      });
+      return;
+    }
     getAppHandler().showToast(message, duration);
   }
 
   public static void showToast (int resource, int duration) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && resource != 0) {
+      String text = Lang.getString(resource);
+      if (!StringUtils.isEmpty(text)) {
+        showToast(text, duration);
+      }
+      return;
+    }
     getAppHandler().showToast(resource, duration);
   }
 

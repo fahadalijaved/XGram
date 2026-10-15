@@ -20,6 +20,11 @@ import android.graphics.Paint;
 import android.view.Gravity;
 import android.view.View;
 
+import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Controls;
+
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
@@ -39,11 +44,16 @@ public class RadioView extends View implements FactorAnimator.Target {
   private final BoolAnimator checkAnimator = new BoolAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 192l, false);
   private final BoolAnimator activeAnimator = new BoolAnimator(1, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, true);
 
+  // XGram M3E: Material 3 radio button; the dot grows on a fast spatial spring (slight overshoot)
+  private final boolean xgram = XgramExpressive.isEnabled();
+  private final @Nullable XgramExpressive.Spring xgramDot;
+
   public RadioView (Context context) {
     super(context);
     radioPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
     radioPaint.setStrokeWidth(Screen.dp(2f));
     radioPaint.setStyle(Paint.Style.STROKE);
+    xgramDot = xgram ? new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate()) : null;
   }
 
   /*private float selectFactor;
@@ -71,6 +81,14 @@ public class RadioView extends View implements FactorAnimator.Target {
 
   public void setChecked (boolean checked, boolean isAnimated) {
     checkAnimator.setValue(checked, isAnimated);
+    if (xgramDot != null) {
+      if (isAnimated) {
+        xgramDot.animateTo(checked ? 1f : 0f);
+      } else {
+        xgramDot.setValue(checked ? 1f : 0f);
+        invalidate();
+      }
+    }
   }
 
   public void setActive (boolean active, boolean animated) {
@@ -107,6 +125,16 @@ public class RadioView extends View implements FactorAnimator.Target {
 
     float cx = paddingLeft + (getMeasuredWidth() - paddingLeft - getPaddingRight()) / 2;
     float cy = paddingTop + (getMeasuredHeight() - paddingTop - getPaddingBottom()) / 2;
+
+    if (xgramDot != null) {
+      final int onColor = colorId != 0 && useColor ? Theme.getColor(colorId) : XgramExpressive.color(XgramExpressive.PRIMARY);
+      final int offColor = colorId != 0 ? Theme.getColor(colorId) : XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+      final int disabledColor = XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTENT);
+      final int ringColor = ColorUtils.fromToArgb(disabledColor, ColorUtils.fromToArgb(offColor, onColor, checkAnimator.getFloatValue()), activeAnimator.getFloatValue());
+      final int dotColor = ColorUtils.fromToArgb(disabledColor, onColor, activeAnimator.getFloatValue());
+      XgramM3Controls.drawRadio(c, cx, cy, ringColor, dotColor, Math.max(0f, xgramDot.getValue()));
+      return;
+    }
 
     final float radius = Screen.dp(9f);
     final float innerRadius = Screen.dp(5f);
