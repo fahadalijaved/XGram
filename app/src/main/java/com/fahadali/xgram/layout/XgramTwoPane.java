@@ -608,6 +608,12 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     return navigation != null && navigation == leftNavigation;
   }
 
+  /** The chat list in the left pane while two panes are shown (keyboard shortcuts act on it), else null. */
+  @Nullable
+  public MainController leftMain () {
+    return isActive ? leftMain : null;
+  }
+
   /**
    * Whether a screen opened from {@code context} should replace what the right pane shows instead of stacking on
    * it: in two panes the chat list stays on the left, so Back never needs to return to an earlier chat or topic

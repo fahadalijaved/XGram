@@ -813,6 +813,23 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     keyEventListeners.remove(listener);
   }
 
+  // XGram: hardware keyboard shortcuts (Esc, Ctrl+F, Ctrl+K, Ctrl+Tab) before the focused view gets the key
+  @Override
+  public boolean dispatchKeyEvent (KeyEvent event) {
+    if (com.fahadali.xgram.layout.XgramKeyboard.dispatchKeyEvent(this, event)) {
+      return true;
+    }
+    return super.dispatchKeyEvent(event);
+  }
+
+  // XGram: Meta+/ lists XGram's shortcuts in the system keyboard shortcuts helper
+  @Override
+  @androidx.annotation.RequiresApi(Build.VERSION_CODES.N)
+  public void onProvideKeyboardShortcuts (java.util.List<android.view.KeyboardShortcutGroup> data, @Nullable Menu menu, int deviceId) {
+    super.onProvideKeyboardShortcuts(data, menu, deviceId);
+    com.fahadali.xgram.layout.XgramKeyboard.provideShortcuts(data);
+  }
+
   private boolean backKeyDownReceived;
 
   @Override

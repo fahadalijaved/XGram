@@ -417,6 +417,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.inlineVideo(), isUpdate);
         } else if (id == R.id.btn_xgramInlineVideoStart) {
           view.setData(settings.inlineVideoStart() == XgramSettings.INLINE_VIDEO_START_TAP ? R.string.XgramInlineVideoStartTap : R.string.XgramInlineVideoStartAuto);
+        } else if (id == R.id.btn_xgramEnterToSend) {
+          view.setData(com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(settings.enterToSend()));
         } else if (id == R.id.btn_xgramProxyOffVpn) {
           view.getToggler().setRadioEnabled(settings.proxyOffOnVpn(), isUpdate);
         } else if (id == R.id.btn_xgramProxyOffWifi) {
@@ -674,6 +676,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramTapToRecord, R.string.XgramTapToRecord, R.string.XgramTapToRecordSub)
     );
     items.add(description(R.string.XgramTapToRecordInfo));
+    addRows(items, link(R.id.btn_xgramEnterToSend, R.string.XgramEnterToSend));
+    items.add(description(R.string.XgramEnterToSendInfo));
 
     items.add(header(R.string.XgramHeaderTelegramAi));
     addRows(items, toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools, R.string.XgramAiToolsSub));
@@ -1369,6 +1373,18 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       showOptions(null, new int[] {1, 2}, titles, null, null, (itemView, optionId) -> {
         settings.setInlineVideoStart(modes[optionId - 1]);
         adapter.updateValuedSettingById(R.id.btn_xgramInlineVideoStart);
+        return true;
+      });
+      return;
+    } else if (id == R.id.btn_xgramEnterToSend) {
+      int[] modes = {XgramSettings.ENTER_TO_SEND_AUTO, XgramSettings.ENTER_TO_SEND_ON, XgramSettings.ENTER_TO_SEND_OFF};
+      String[] titles = new String[modes.length];
+      for (int i = 0; i < modes.length; i++) {
+        titles[i] = com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(modes[i]);
+      }
+      showOptions(null, new int[] {1, 2, 3}, titles, null, null, (itemView, optionId) -> {
+        settings.setEnterToSend(modes[optionId - 1]);
+        adapter.updateValuedSettingById(R.id.btn_xgramEnterToSend);
         return true;
       });
       return;

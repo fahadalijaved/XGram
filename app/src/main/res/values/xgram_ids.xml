@@ -282,4 +282,6 @@
   <!-- Drag and drop, side by side (adaptive plan part 2) -->
   <item type="id" name="btn_xgramDragDrop" />
   <item type="id" name="btn_xgramOpenBeside" />
+  <!-- Keyboard and mouse (adaptive part 3) -->
+  <item type="id" name="btn_xgramEnterToSend" />
 </resources>
