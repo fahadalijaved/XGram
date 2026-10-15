@@ -43,6 +43,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SwitchDrawable;
 import org.thunderdog.challegram.core.Lang;
@@ -924,6 +926,11 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     text.setSingleLine();
     text.setEllipsize(TextUtils.TruncateAt.END);
     text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 19f);
+    if (XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive app bar title: titleLarge (22sp, emphasized 500), a 28sp line centered in the 56dp bar.
+      XgramExpressive.applyText(text, XgramExpressive.TS_TITLE_L, true);
+      params.topMargin = Screen.dp(14f) + getCurrentHeaderOffset();
+    }
     text.setTextColor(0xffffffff);
     text.setLayoutParams(params);
     return text;
@@ -1020,6 +1027,15 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       params.leftMargin = Screen.dp(68f);
     }
     HeaderEditText view = HeaderEditText.createStyled(parent, isLight);
+    if (XgramExpressive.isEnabled() && XgramExpressive.surfaceHeader()) {
+      // XGram: Material 3 Expressive search bar on a surface header (see HeaderEditText.xgramApplySearchBar).
+      if (themeProvider != null)
+        themeProvider.addThemeHighlightColorListener(view, ColorId.textSelectionHighlight);
+      view.checkRtl();
+      HeaderEditText.xgramApplySearchBar(view, true, themeProvider);
+      view.setLayoutParams(params);
+      return view;
+    }
     view.setTextColor(Theme.getColor(ColorId.headerText));
     if (themeProvider != null)
       themeProvider.addThemeHighlightColorListener(view, ColorId.textSelectionHighlight);
@@ -1029,6 +1045,10 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     view.setHintTextColor(ColorUtils.alphaColor(Theme.HEADER_TEXT_DECENT_ALPHA, Theme.headerTextColor()));
     if (themeProvider != null)
       themeProvider.addThemeHintTextColorListener(view, ColorId.headerText).setAlpha(Theme.HEADER_TEXT_DECENT_ALPHA);
+    if (XgramExpressive.isEnabled()) {
+      // XGram: on a colored header the pill is a translucent layer of the header text color.
+      HeaderEditText.xgramApplySearchBar(view, false, themeProvider);
+    }
     view.setLayoutParams(params);
     return view;
   }
@@ -1045,6 +1065,14 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       params.leftMargin = Screen.dp(68f);
     }
     HeaderEditText view = HeaderEditText.createGreyStyled(parent);
+    if (XgramExpressive.isEnabled()) {
+      // XGram: the grey search field sits on a surface, so it is the Material 3 Expressive search bar.
+      themeProvider.addThemeHighlightColorListener(view, ColorId.textSelectionHighlight);
+      view.checkRtl();
+      HeaderEditText.xgramApplySearchBar(view, true, themeProvider);
+      view.setLayoutParams(params);
+      return view;
+    }
     view.setTextColor(Theme.textAccentColor());
     themeProvider.addThemeHighlightColorListener(view, ColorId.textSelectionHighlight);
     view.checkRtl();

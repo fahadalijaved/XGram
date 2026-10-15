@@ -18,10 +18,14 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramExpressiveC;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.config.Config;
@@ -121,6 +125,27 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
     return paint;
   }
 
+  // XGram: Material 3 Expressive filled tonal icon button in the input bar: a 40dp
+  // secondaryContainer circle with an onSecondaryContainer icon, morphing to small (8dp)
+  // corners while pressed (spatial fast spring).
+  private XgramExpressive.Spring xgramPress;
+  private Paint xgramIconPaint;
+  private final RectF xgramRect = new RectF();
+
+  private Paint xgramIconPaint () {
+    int color = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
+    if (xgramIconPaint == null || xgramIconPaint.getColor() != color)
+      xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
+    return xgramIconPaint;
+  }
+
+  private void xgramDrawContainer (Canvas c, int cx, int cy) {
+    final float size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight());
+    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
+    xgramRect.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
+    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER)));
+  }
+
   @Override
   protected void onDraw (Canvas c) {
     final int viewWidth = getMeasuredWidth();
@@ -130,7 +155,11 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
     final float videoFactor = inVideoMode.getFloatValue();
     final float searchFactor = inSearchMode.getFloatValue();
 
-    final Paint paint = hasTouchControls ? Paints.getIconGrayPorterDuffPaint() : getIconPaint();
+    final boolean xgramExpressive = hasTouchControls && XgramExpressive.isEnabled();
+    if (xgramExpressive) {
+      xgramDrawContainer(c, cx, cy);
+    }
+    final Paint paint = xgramExpressive ? xgramIconPaint() : hasTouchControls ? Paints.getIconGrayPorterDuffPaint() : getIconPaint();
     final int savedAlpha = paint.getAlpha();
     final float generalFactor = (1f - sendFactor);
     if (generalFactor > 0f) {
@@ -190,6 +219,13 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
   private void setIsDown (boolean isDown) {
     if (this.isDown != isDown) {
       this.isDown = isDown;
+      if (hasTouchControls && XgramExpressive.isEnabled()) {
+        if (xgramPress == null) {
+          xgramPress = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+          xgramPress.setThreshold(.005f);
+        }
+        xgramPress.animateTo(isDown ? 1f : 0f);
+      }
       if (isDown) {
         scheduleLongTap();
       } else {

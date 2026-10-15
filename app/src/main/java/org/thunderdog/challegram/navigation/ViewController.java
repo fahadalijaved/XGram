@@ -2552,6 +2552,10 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
     ShadowView shadowView = new ShadowView(context);
     shadowView.setSimpleTopShadow(true);
+    final boolean xgramExpressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramExpressive) {
+      xgramPrepareSheetTop(shadowView);
+    }
     optionsWrap.addView(shadowView, 0);
     addThemeInvalidateListener(shadowView);
 
@@ -2583,6 +2587,11 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
         ShadowView shadowViewTop = new ShadowView(context);
         shadowViewTop.setSimpleTopShadow(true, this);
+        if (xgramExpressive) {
+          // XGram: a plain gap on the sheet surface instead of the shadowed band.
+          shadowViewBottom.setVisibility(View.INVISIBLE);
+          shadowViewTop.setVisibility(View.INVISIBLE);
+        }
         addThemeInvalidateListener(shadowViewTop);
         optionsWrap.addView(shadowViewTop, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(6f)));
         index++;
@@ -2610,6 +2619,13 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return popupLayout;
   }
 
+  // XGram: Material 3 Expressive sheets have no gradient shadow. The top shadow slot stays (the
+  // height math reads its layout height) and becomes the 48dp drag handle band of the sheet.
+  private static void xgramPrepareSheetTop (ShadowView shadowView) {
+    shadowView.setVisibility(View.INVISIBLE);
+    shadowView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, OptionsLayout.xgramHandleBandHeight()));
+  }
+
   public interface PopUpBuilder {
     int onBuildPopUp (PopupLayout popupLayout, OptionsLayout optionsLayout);
   }
@@ -2629,6 +2645,9 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
     ShadowView shadowView = new ShadowView(context);
     shadowView.setSimpleTopShadow(true);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramPrepareSheetTop(shadowView);
+    }
     optionsWrap.addView(shadowView, 0);
     addThemeInvalidateListener(shadowView);
     totalHeight += shadowView.getLayoutParams().height;

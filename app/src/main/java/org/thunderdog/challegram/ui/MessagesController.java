@@ -807,6 +807,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       addThemeHintTextColorListener(inputView, ColorId.textPlaceholder);
       inputView.setLinkTextColor(Theme.textLinkColor());
       addThemeLinkTextColorListener(inputView, ColorId.textLink);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        inputView.setBackground(new XgramInputFieldBackground()); // XGram: Material 3 Expressive input field
+        addThemeInvalidateListener(inputView);
+      } else
       ViewSupport.setThemedBackground(inputView, ColorId.filling, this);
       inputView.setHighlightColor(Theme.fillingTextSelectionColor());
       addThemeHighlightColorListener(inputView, ColorId.textSelectionHighlight);
@@ -1151,6 +1155,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     bottomShadowView.setAlignBottom();
     addThemeInvalidateListener(bottomShadowView);
     bottomShadowView.setId(R.id.msg_bottomShadow);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      bottomShadowView.setVisibility(View.GONE); // XGram: no divider above the Material 3 Expressive input bar
+    }
 
     params = new RelativeLayout.LayoutParams(Screen.dp(55f), Screen.dp(49f));
     params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
@@ -1313,6 +1320,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
     sendButton.setVisibility(View.INVISIBLE);
     sendButton.setAlpha(0f);
     sendButton.setLayoutParams(params);
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive input bar: standard icon buttons inside the field, a filled send button.
+      sendButton.setXgramFilled(true);
+      xgramStyleInputIcon(emojiButton);
+      xgramStyleInputIcon(commandButton);
+      xgramStyleInputIcon(scheduleButton);
+      xgramStyleInputIcon(cameraButton);
+      xgramStyleInputIcon(mediaButton);
+    }
 
     sendMenu = new HapticMenuHelper(this, this, getThemeListeners(), null).attachToView(sendButton);
     sendAsMenu = new HapticMenuHelper(hapticSendAsMenuProvider, this, getThemeListeners(), null).selectableMode(messageSenderButton).hapticListener(messageSenderButton);
@@ -3519,7 +3536,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (visible) {
       bottomWrap.setVisibility(View.VISIBLE);
       bottomSpace.setVisibility(View.VISIBLE);
-      bottomShadowView.setVisibility(View.VISIBLE);
+      bottomShadowView.setVisibility(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? View.GONE : View.VISIBLE);
       if (replyBarView != null) {
         replyBarView.setVisibility(View.VISIBLE);
       }
@@ -8035,6 +8052,55 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private float prevButtonsY;
 
+  // XGram: Material 3 Expressive input bar. The bar keeps the surface color; the emoji button,
+  // the text and the attach buttons sit on a surfaceContainerHigh field (40dp tall on one line,
+  // 20dp corners, 8dp side margins). The trailing record or send button is a 40dp filled circle
+  // outside the field.
+
+  private final class XgramInputFieldBackground extends android.graphics.drawable.Drawable {
+    private final android.graphics.RectF rect = new android.graphics.RectF();
+
+    @Override
+    public void draw (@NonNull Canvas c) {
+      Rect bounds = getBounds();
+      c.drawRect(bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE)));
+      final float verticalInset = (Screen.dp(49f) - Screen.dp(com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX)) / 2f;
+      final boolean hasTrailingButton = (recordButton != null && recordButton.getVisibility() != View.GONE) || (sendButton != null && sendButton.getVisibility() == View.VISIBLE);
+      final float start = Screen.dp(8f);
+      final float end = Screen.dp(hasTrailingButton ? 55f : 8f);
+      final boolean rtl = Lang.rtl();
+      rect.set(bounds.left + (rtl ? end : start), bounds.top + verticalInset, bounds.right - (rtl ? start : end), bounds.bottom - verticalInset);
+      if (rect.width() <= 0f || rect.height() <= 0f) {
+        return;
+      }
+      final float radius = Math.min(Screen.dp(20f), rect.height() / 2f);
+      c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+    }
+
+    @Override
+    public void setAlpha (int alpha) { }
+
+    @Override
+    public void setColorFilter (@Nullable android.graphics.ColorFilter colorFilter) { }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public int getOpacity () {
+      return android.graphics.PixelFormat.OPAQUE;
+    }
+  }
+
+  private static void xgramStyleInputIcon (@Nullable ImageView view) {
+    if (view == null) {
+      return;
+    }
+    final int contentColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    view.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(contentColor, com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+    if (com.fahadali.xgram.appearance.XgramExpressive.surfaceHeader()) {
+      view.setColorFilter(contentColor);
+    }
+  }
+
   private void updateButtonsY () {
     float y = bottomWrap.getTop() + (inputView != null ? inputView.getBottom() : Screen.dp(49f)) - Screen.dp(49f) - getKeyboardOffset();
 
@@ -9178,7 +9244,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (isEventLog()) {
       bottomWrap.setVisibility(visible ? View.INVISIBLE : View.VISIBLE);
       bottomSpace.setVisibility(visible ? View.INVISIBLE : View.VISIBLE);
-      bottomShadowView.setVisibility(visible ? View.INVISIBLE : View.VISIBLE);
+      bottomShadowView.setVisibility(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? View.GONE : visible ? View.INVISIBLE : View.VISIBLE);
       RelativeLayout.LayoutParams params = ((RelativeLayout.LayoutParams) messagesView.getLayoutParams());
       params.addRule(RelativeLayout.ABOVE, visible ? 0 : R.id.msg_bottom);
       messagesView.setLayoutParams(params);

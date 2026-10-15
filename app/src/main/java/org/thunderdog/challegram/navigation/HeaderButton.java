@@ -15,13 +15,18 @@
 package org.thunderdog.challegram.navigation;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.RippleDrawable;
 import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.annotation.DrawableRes;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramExpressiveC;
 
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
@@ -123,7 +128,25 @@ public class HeaderButton extends View {
 
   private int lastBgResource;
 
+  // XGram: Material 3 Expressive standard icon button: a 40dp state layer in the icon color that
+  // morphs from full to small corners while pressed (spatial fast spring).
+  private RippleDrawable xgramRipple;
+  private int xgramRippleColor;
+
+  private int xgramContentColor () {
+    return getColor(XgramExpressive.surfaceHeader() ? XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT) : Theme.getColor(ColorId.headerIcon));
+  }
+
   public void setButtonBackground (int resource) {
+    if (XgramExpressive.isEnabled()) {
+      lastBgResource = resource;
+      if (xgramRipple == null) {
+        xgramRippleColor = XgramExpressiveC.stateLayerColor(xgramContentColor());
+        xgramRipple = XgramExpressiveC.iconButtonRipple(xgramContentColor(), XgramExpressiveC.ICON_BUTTON_BOX);
+        setBackground(xgramRipple);
+      }
+      return;
+    }
     if (lastBgResource != resource) {
       lastBgResource = resource;
       setBackgroundResource(resource);
@@ -142,6 +165,13 @@ public class HeaderButton extends View {
 
   @Override
   protected void onDraw (Canvas c) {
+    if (xgramRipple != null) {
+      int rippleColor = XgramExpressiveC.stateLayerColor(xgramContentColor());
+      if (rippleColor != xgramRippleColor) {
+        xgramRippleColor = rippleColor;
+        xgramRipple.setColor(ColorStateList.valueOf(rippleColor));
+      }
+    }
     if (progressFactor > 0f) {
       if (progress != null) {
         progress.forceColor(ColorUtils.alphaColor(progressFactor, getColor(Theme.progressColor())));

@@ -414,7 +414,9 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
         // c.drawCircle(startX, y, Screen.dp(2f), Paints.fillingPaint(0xaaff0000));
         c.restore();
       }
-      ShadowView.drawDropShadow(c, 0, width, (int) shadowTop, dropShadowAlpha);
+      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: Material 3 Expressive app bars have no shadow
+        ShadowView.drawDropShadow(c, 0, width, (int) shadowTop, dropShadowAlpha);
+      }
     } else {
       if (fillFactor == 1f) {
         c.drawRect(0f, 0f, width, fillingBottom, Paints.fillingPaint(color));

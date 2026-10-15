@@ -173,7 +173,7 @@ public class ViewPagerHeaderViewCompact extends FrameLayoutFix implements PagerH
           return;
         }
 
-        int selectionHeight = Screen.dp(ViewPagerTopView.SELECTION_HEIGHT);
+        int selectionHeight = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 0 : Screen.dp(ViewPagerTopView.SELECTION_HEIGHT); // XGram: the expressive pill fades with the labels
         int top = topView.isDrawSelectionAtTop() ? selectionHeight : 0;
         int bottom = getHeight() - (topView.isDrawSelectionAtTop() ? 0 : selectionHeight);
         int saveCount = Views.saveLayerAlpha(c, 0, 0, getWidth(), getHeight(), 0xFF, Canvas.ALL_SAVE_FLAG);

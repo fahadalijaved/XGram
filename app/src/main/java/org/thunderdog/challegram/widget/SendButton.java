@@ -28,6 +28,9 @@ import android.view.View;
 
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramExpressiveC;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.config.Config;
@@ -120,6 +123,71 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
     setInInlineProgress(inInlineProgress);
   }
 
+  // XGram: Material 3 Expressive filled icon button: a 40dp primary circle with an onPrimary icon,
+  // morphing to small (8dp) corners while pressed (spatial fast spring). While editing with
+  // nothing to save it shows the disabled colors (onSurface at 12% / 38%).
+  private XgramExpressive.Spring xgramPress;
+  private boolean xgramPressed, xgramFilled;
+  private Paint xgramIconPaint, xgramIconBgPaint;
+  private final RectF xgramRect = new RectF();
+
+  /** Input bar only: other send buttons (recording overlay, attach and share sheets) keep their look. */
+  public void setXgramFilled (boolean filled) {
+    if (this.xgramFilled != filled) {
+      this.xgramFilled = filled;
+      invalidate();
+    }
+  }
+
+  private boolean xgramUseFilled () {
+    return xgramFilled && XgramExpressive.isEnabled();
+  }
+
+  @Override
+  protected void drawableStateChanged () {
+    super.drawableStateChanged();
+    if (xgramUseFilled()) {
+      boolean pressed = isPressed();
+      if (xgramPressed != pressed) {
+        xgramPressed = pressed;
+        if (xgramPress == null) {
+          xgramPress = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+          xgramPress.setThreshold(.005f);
+        }
+        xgramPress.animateTo(pressed ? 1f : 0f);
+      }
+    }
+  }
+
+  private static int xgramInactiveContentColor () {
+    return XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTENT);
+  }
+
+  private Paint xgramIconPaint (boolean background) {
+    // The slow mode remainder: onPrimary at 38% over primary, kept opaque because the icon code drives the paint alpha.
+    int color = background ? ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.PRIMARY), XgramExpressive.color(XgramExpressive.ON_PRIMARY), XgramExpressive.DISABLED_CONTENT) : XgramExpressive.color(XgramExpressive.ON_PRIMARY);
+    if (background) {
+      if (xgramIconBgPaint == null || xgramIconBgPaint.getColor() != color)
+        xgramIconBgPaint = Paints.createPorterDuffPaint(xgramIconBgPaint, color);
+      return xgramIconBgPaint;
+    }
+    if (xgramIconPaint == null || xgramIconPaint.getColor() != color)
+      xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
+    return xgramIconPaint;
+  }
+
+  private void xgramDrawContainer (Canvas c, int cx, int cy, float visibility, float disabledFactor) {
+    final float scale = Config.DEFAULT_ICON_SWITCH_SCALE + (1f - Config.DEFAULT_ICON_SWITCH_SCALE) * visibility;
+    final float size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight()) * scale;
+    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
+    int color = XgramExpressive.color(XgramExpressive.PRIMARY);
+    if (disabledFactor > 0f) {
+      color = ColorUtils.fromToArgb(color, XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTAINER), disabledFactor);
+    }
+    xgramRect.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
+    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(visibility, color)));
+  }
+
   @Override
   protected void onDraw (Canvas c) {
     final int cx = getMeasuredWidth() / 2;
@@ -130,11 +198,16 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
     final float activeFactor = isActiveAnimator.getFloatValue();
     final float editFactor = inEditModeAnimator.getFloatValue();
 
+    final boolean xgramExpressive = xgramUseFilled();
+    if (xgramExpressive && sendScale > 0f) {
+      xgramDrawContainer(c, cx, cy, sendScale, editFactor * (1f - activeFactor));
+    }
+
     if (sendScale > 0f) {
       if (editFactor != 1f) {
-        final Paint paint = Paints.getSendButtonPaint();
-        final Paint paintBg = PorterDuffPaint.get(ColorId.iconLight);
-        final int sourceAlpha = Color.alpha(Theme.chatSendButtonColor());
+        final Paint paint = xgramExpressive ? xgramIconPaint(false) : Paints.getSendButtonPaint();
+        final Paint paintBg = xgramExpressive ? xgramIconPaint(true) : PorterDuffPaint.get(ColorId.iconLight);
+        final int sourceAlpha = xgramExpressive ? 255 : Color.alpha(Theme.chatSendButtonColor());
         final boolean saved = editFactor != 0f || sendScale != 1f;
         if (saved) {
           c.save();
@@ -180,7 +253,9 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
       }
       final float editScaleFactor = editFactor * sendScale;
       if (editScaleFactor != 0f) {
-        final int color = ColorUtils.color((int) (255f * editScaleFactor), ColorUtils.fromToArgb(Theme.iconLightColor(), Theme.chatSendButtonColor(), activeFactor));
+        final int color = xgramExpressive ?
+          ColorUtils.alphaColor(editScaleFactor, ColorUtils.fromToArgb(xgramInactiveContentColor(), XgramExpressive.color(XgramExpressive.ON_PRIMARY), activeFactor)) :
+          ColorUtils.color((int) (255f * editScaleFactor), ColorUtils.fromToArgb(Theme.iconLightColor(), Theme.chatSendButtonColor(), activeFactor));
 
         c.save();
 
@@ -207,8 +282,8 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
           c.drawRect(left, top1, right1, bottom1, Paints.fillingPaint(color));
           c.drawRect(left, top2, right2, cy, Paints.fillingPaint(color));
         } else {
-          final int inactiveColor = ColorUtils.color((int) (255f * editScaleFactor), Theme.iconLightColor());
-          final int activeColor = ColorUtils.color((int) (255f * editScaleFactor), Theme.chatSendButtonColor());
+          final int inactiveColor = xgramExpressive ? ColorUtils.alphaColor(editScaleFactor, xgramInactiveContentColor()) : ColorUtils.color((int) (255f * editScaleFactor), Theme.iconLightColor());
+          final int activeColor = xgramExpressive ? ColorUtils.alphaColor(editScaleFactor, XgramExpressive.color(XgramExpressive.ON_PRIMARY)) : ColorUtils.color((int) (255f * editScaleFactor), Theme.chatSendButtonColor());
 
           int diff1x = right1 - left;
           int diff2y = cy - top2;
