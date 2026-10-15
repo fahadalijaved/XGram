@@ -1032,6 +1032,9 @@ dependencies {
   implementation(libs.androidx.palette)
   implementation(libs.androidx.collection)
   implementation(libs.androidx.interpolator)
+  // XGram: Material 3 Expressive shapes (RoundedPolygon, Morph) and spring motion
+  implementation(libs.androidx.graphics.shapes)
+  implementation(libs.androidx.dynamicanimation)
   // CameraX: https://developer.android.com/jetpack/androidx/releases/camera
   flavorImplementation(
     libs.androidx.camera.camera2.legacy,

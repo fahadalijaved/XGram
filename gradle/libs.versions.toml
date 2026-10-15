@@ -16,6 +16,8 @@ androidx-biometric = "1.1.0"
 androidx-palette = "1.0.0"
 androidx-collection = "1.7.0"
 androidx-interpolator = "1.0.0"
+androidx-graphics-shapes = "1.1.0"
+androidx-dynamicanimation = "1.1.0"
 
 google-zxing = "3.5.4"
 google-play-app-update = "2.1.0"
@@ -156,6 +158,8 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidx-annotation" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "androidx-biometric" }
 androidx-interpolator = { module = "androidx.interpolator:interpolator", version.ref = "androidx-interpolator" }
+androidx-graphics-shapes = { module = "androidx.graphics:graphics-shapes", version.ref = "androidx-graphics-shapes" }
+androidx-dynamicanimation = { module = "androidx.dynamicanimation:dynamicanimation", version.ref = "androidx-dynamicanimation" }
 androidx-collection = { module = "androidx.collection:collection", version.ref = "androidx-collection" }
 androidx-palette = { module = "androidx.palette:palette", version.ref = "androidx-palette" }
 

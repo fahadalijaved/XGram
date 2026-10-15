@@ -778,4 +778,8 @@
   <string name="XgramInlineVideoStartAuto">Automatically (muted)</string>
   <string name="XgramInlineVideoStartTap">On tap</string>
   <string name="XgramInlineVideoInfo">Videos play inside the message with a seek bar, and a tap turns the sound on or off. Autoplay follows Autoplay GIFs, Data Saver and, on mobile data, automatic media download.</string>
+  <!-- XGram M3E part A: Expressive design switch (Appearance > Theme) -->
+  <string name="XgramExpressive">Expressive design</string>
+  <string name="XgramExpressiveSub">Material 3 Expressive look</string>
+  <string name="XgramExpressiveInfo">Shapes, motion and lists follow Material 3 Expressive. The app restarts to apply the change.</string>
 </resources>

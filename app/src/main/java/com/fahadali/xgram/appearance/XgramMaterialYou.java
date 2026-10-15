@@ -24,6 +24,7 @@ import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.PropertyId;
 import org.thunderdog.challegram.theme.ThemeId;
 import org.thunderdog.challegram.theme.ThemeManager;
 import org.thunderdog.challegram.tool.UI;
@@ -99,6 +100,17 @@ public final class XgramMaterialYou {
       return;
     }
     applyImpl(context, tdlib, after);
+  }
+
+  /** Builds the Material You themes again (Expressive design changes their colors); {@code after} always runs. */
+  public static void rebuild (ViewController<?> context, @Nullable Runnable after) {
+    if (!isAvailable() || !isEnabled()) {
+      if (after != null) {
+        after.run();
+      }
+      return;
+    }
+    apply(context.context(), context.tdlib(), after);
   }
 
   @RequiresApi(Build.VERSION_CODES.S)
@@ -234,6 +246,42 @@ public final class XgramMaterialYou {
     set(customThemeId, ColorId.bubbleOut_background, bubbleOut);
     set(customThemeId, ColorId.bubbleOut_text, bubbleOutText);
     set(customThemeId, ColorId.bubbleIn_background, bubbleIn);
+    if (XgramExpressive.isEnabled()) {
+      fillExpressive(context, customThemeId, dark);
+    }
+  }
+
+  /** Expressive design: Material 3 color roles for surfaces, the header, the FAB, switches and accents. */
+  @RequiresApi(Build.VERSION_CODES.S)
+  private static void fillExpressive (Context context, int customThemeId, boolean dark) {
+    final int[][] roles = {
+      {ColorId.filling, XgramExpressive.SURFACE},
+      {ColorId.background, XgramExpressive.SURFACE_CONTAINER},
+      {ColorId.headerBackground, XgramExpressive.SURFACE_CONTAINER},
+      {ColorId.headerText, XgramExpressive.ON_SURFACE},
+      {ColorId.headerIcon, XgramExpressive.ON_SURFACE},
+      {ColorId.headerTabActive, XgramExpressive.ON_SECONDARY_CONTAINER},
+      {ColorId.headerTabActiveText, XgramExpressive.ON_SECONDARY_CONTAINER},
+      {ColorId.headerTabInactiveText, XgramExpressive.ON_SURFACE_VARIANT},
+      {ColorId.headerLightBackground, XgramExpressive.SURFACE_CONTAINER},
+      {ColorId.circleButtonRegular, XgramExpressive.PRIMARY_CONTAINER},
+      {ColorId.circleButtonActive, XgramExpressive.PRIMARY_CONTAINER},
+      {ColorId.circleButtonRegularIcon, XgramExpressive.ON_PRIMARY_CONTAINER},
+      {ColorId.circleButtonActiveIcon, XgramExpressive.ON_PRIMARY_CONTAINER},
+      {ColorId.togglerActive, XgramExpressive.PRIMARY},
+      {ColorId.togglerActiveBackground, XgramExpressive.PRIMARY},
+      {ColorId.chatSendButton, XgramExpressive.PRIMARY},
+      {ColorId.badge, XgramExpressive.PRIMARY},
+      {ColorId.badgeText, XgramExpressive.ON_PRIMARY},
+      {ColorId.progress, XgramExpressive.PRIMARY},
+      {ColorId.sliderActive, XgramExpressive.PRIMARY}
+    };
+    for (int[] pair : roles) {
+      set(customThemeId, pair[0], XgramExpressive.systemRole(context, pair[1], dark));
+    }
+    // The header is a surface now: no dark overlay on the status bar, and dark status bar icons in the day theme.
+    set(customThemeId, ColorId.statusBar, 0);
+    Settings.instance().setCustomThemeProperty(customThemeId, PropertyId.LIGHT_STATUS_BAR, dark ? 0f : 1f);
   }
 
   private static void set (int customThemeId, int colorId, @ColorInt int color) {
