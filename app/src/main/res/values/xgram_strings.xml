@@ -161,6 +161,7 @@
   <string name="XgramSaveLastSeen">Save last seen locally</string>
   <string name="XgramShowSeconds">Show seconds in message time</string>
   <string name="XgramHideFab">Hide the new chat button</string>
+  <string name="XgramMediaCaption">Caption</string>
   <string name="XgramConnectionStatusStart">Connection status on the left of the status bar (automatic with a centred camera hole)</string>
   <string name="XgramAboutSupport">Support XGram ❤️</string>
   <string name="XgramAboutSupportInfo">Free and without ads. Donate via PayPal</string>

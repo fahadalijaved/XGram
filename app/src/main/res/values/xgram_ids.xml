@@ -65,6 +65,7 @@
   <item type="id" name="btn_xgramTwoPane" />
   <item type="id" name="btn_xgramHideFab" />
   <item type="id" name="btn_xgramConnectionStatusStart" />
+  <item type="id" name="btn_xgramMediaCaption" />
   <item type="id" name="btn_xgramAboutSupport" />
   <item type="id" name="btn_xgramAllChatsLabel" />
   <item type="id" name="btn_xgramChatLook" />

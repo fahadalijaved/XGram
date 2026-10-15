@@ -1407,6 +1407,8 @@ public class MediaLayout extends FrameLayoutFix implements
       }
     } else if (viewId == R.id.btn_mosaic) {
       setNeedGroupMedia(!needGroupMedia, true);
+    } else if (viewId == R.id.btn_xgramMediaCaption) {
+      xgramEditCaption();
     } else if (viewId == R.id.btn_close) {
       if (!getCurrentController().showExitWarning(true, true)) {
         cancelMultiSelection();
@@ -1427,6 +1429,58 @@ public class MediaLayout extends FrameLayoutFix implements
   private BackHeaderButton closeButton;
   private TextView counterHintView;
   private ImageView groupMediaView, hotMediaView;
+  private ImageView xgramCaptionView;
+
+  // XGram: Telegram X types a caption only in the media viewer (tap a selected photo). The bar of selected items
+  // gets a caption button too: the text goes on the first selected item, which Telegram shows under the album.
+
+  private @Nullable ImageGalleryFile xgramCaptionTarget () {
+    MediaBottomBaseController<?> c = getCurrentController();
+    if (c instanceof MediaBottomGalleryController) {
+      ArrayList<ImageFile> files = ((MediaBottomGalleryController) c).getSelectedMediaItems(false);
+      if (files != null && !files.isEmpty() && files.get(0) instanceof ImageGalleryFile) {
+        return (ImageGalleryFile) files.get(0);
+      }
+    }
+    return null;
+  }
+
+  private boolean xgramAllowCaption () {
+    return target != null && getCurrentController() instanceof MediaBottomGalleryController;
+  }
+
+  private int xgramCaptionMargin () {
+    return Screen.dp(55f) + Screen.dp(48f) + (allowSpoiler ? Screen.dp(48f) : 0);
+  }
+
+  private void xgramUpdateCaptionButton () {
+    if (xgramCaptionView == null) {
+      return;
+    }
+    xgramCaptionView.setAlpha(xgramAllowCaption() ? counterFactor : 0f);
+    ImageGalleryFile file = xgramCaptionTarget();
+    int colorId = file != null && file.hasCaption() ? ColorId.iconActive : ColorId.icon;
+    xgramCaptionView.setColorFilter(Theme.getColor(colorId));
+    themeListeners.removeThemeListenerByTarget(xgramCaptionView);
+    themeListeners.addThemeFilterListener(xgramCaptionView, colorId);
+  }
+
+  private void xgramEditCaption () {
+    ImageGalleryFile file = xgramCaptionTarget();
+    if (file == null || target == null) {
+      return;
+    }
+    TdApi.FormattedText current = file.getCaption(false, false);
+    org.thunderdog.challegram.widget.MaterialEditTextGroup inputView = target.openInputAlert(Lang.getString(R.string.XgramMediaCaption), Lang.getString(R.string.AddCaption), R.string.Done, R.string.Cancel, current != null ? current.text : null, (org.thunderdog.challegram.navigation.ViewController.InputAlertCallback) (input, result) -> {
+      file.setCaption(new TdApi.FormattedText(result.trim(), new TdApi.TextEntity[0]));
+      xgramUpdateCaptionButton();
+      return true;
+    }, false);
+    if (inputView != null) {
+      inputView.getEditText().setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+      inputView.getEditText().setMaxLines(6);
+    }
+  }
 
   private float groupMediaFactor;
   private boolean needGroupMedia, needSpoiler;
@@ -1579,6 +1633,24 @@ public class MediaLayout extends FrameLayoutFix implements
       groupMediaView.setLayoutParams(params);
       bottomBar.addView(groupMediaView);
 
+      params = FrameLayoutFix.newParams(Screen.dp(48f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT);
+      params.rightMargin = xgramCaptionMargin();
+      xgramCaptionView = new ImageView(getContext()) {
+        @Override
+        public boolean onTouchEvent (MotionEvent e) {
+          return isEnabled() && Views.isValid(this) && super.onTouchEvent(e);
+        }
+      };
+      xgramCaptionView.setOnClickListener(this);
+      xgramCaptionView.setId(R.id.btn_xgramMediaCaption);
+      xgramCaptionView.setScaleType(ImageView.ScaleType.CENTER);
+      xgramCaptionView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_file_caption_24));
+      xgramCaptionView.setColorFilter(Theme.getColor(ColorId.icon));
+      themeListeners.addThemeFilterListener(xgramCaptionView, ColorId.icon);
+      xgramCaptionView.setLayoutParams(params);
+      xgramCaptionView.setAlpha(0f);
+      bottomBar.addView(xgramCaptionView);
+
       closeButton = new BackHeaderButton(getContext()) {
         @Override
         public boolean onTouchEvent (MotionEvent e) {
@@ -1607,6 +1679,7 @@ public class MediaLayout extends FrameLayoutFix implements
     // setNeedSpoiler(false);
     setAllowSpoiler(getCurrentController().allowSpoiler());
     hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+    xgramUpdateCaptionButton();
     if (counterView != null) {
       counterView.setTranslationY(0f);
       checkSuffix(false);
@@ -1635,6 +1708,9 @@ public class MediaLayout extends FrameLayoutFix implements
       }
       if (groupMediaView != null) {
         Views.setRightMargin(groupMediaView, allowSpoiler ? Screen.dp(55f) + Screen.dp(48f) : Screen.dp(55f));
+      }
+      if (xgramCaptionView != null) {
+        Views.setRightMargin(xgramCaptionView, xgramCaptionMargin());
       }
     }
   }
@@ -1769,6 +1845,7 @@ public class MediaLayout extends FrameLayoutFix implements
         translateFactor = 0f;
       }
       hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
+      xgramUpdateCaptionButton();
       float alpha = counterFactor * translateFactor;
       groupMediaView.setAlpha(alpha);
       counterHintView.setAlpha(alpha);
@@ -1797,6 +1874,9 @@ public class MediaLayout extends FrameLayoutFix implements
     if (this.counterFactor != factor) {
       this.counterFactor = factor;
       hotMediaView.setAlpha(factor * (allowSpoiler ? 1f : 0f));
+      if (xgramCaptionView != null) {
+        xgramCaptionView.setAlpha(xgramAllowCaption() ? factor : 0f);
+      }
       setAddExtraSpacing(factor == 1f);
     }
   }
