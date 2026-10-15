@@ -324,5 +324,6 @@
  "replay": "arrow-counter-clockwise",
  "clear_formatting": "eraser",
  "content_cut": "scissors",
- "animals_filled_blink": "paw-print"
+ "animals_filled_blink": "paw-print",
+ "drag_handle": "equals"
 }
