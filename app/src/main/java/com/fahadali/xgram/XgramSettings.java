@@ -594,6 +594,36 @@ public final class XgramSettings {
     pmc().putBoolean("xgram_limit_message_width", value);
   }
 
+  // Drag and drop, side by side (adaptive plan part 2)
+
+  public static final String KEY_DRAG_DROP = "xgram_drag_drop";
+  public static final String KEY_OPEN_BESIDE = "xgram_open_beside";
+
+  /** Drop files and text onto chats, drag media out of the media viewer. Cached: read on every drag. */
+  private volatile Boolean dragDrop;
+
+  public boolean dragDrop () {
+    Boolean value = dragDrop;
+    if (value == null) {
+      dragDrop = value = pmc().getBoolean(KEY_DRAG_DROP, true);
+    }
+    return value;
+  }
+
+  public void setDragDrop (boolean value) {
+    dragDrop = value;
+    pmc().putBoolean(KEY_DRAG_DROP, value);
+  }
+
+  /** External links and files open in a window next to XGram in split screen and on large screens. */
+  public boolean openBeside () {
+    return pmc().getBoolean(KEY_OPEN_BESIDE, false);
+  }
+
+  public void setOpenBeside (boolean value) {
+    pmc().putBoolean(KEY_OPEN_BESIDE, value);
+  }
+
   /** Hide messages from people you blocked in groups (AyuGram, NagramX). Cached: checked for every message. */
   private volatile Boolean hideBlocked;
 
@@ -756,6 +786,33 @@ public final class XgramSettings {
       swipeLeft = action;
     }
     pmc().putInt(toRight ? "xgram_swipe_right" : "xgram_swipe_left", action);
+  }
+
+  // Enter to send (Messages page, see com.fahadali.xgram.layout.XgramKeyboard)
+
+  public static final String KEY_ENTER_TO_SEND = "xgram_enter_to_send";
+  /** Auto: Enter sends on a hardware keyboard; the on-screen keyboard follows Telegram X's Send with Enter. */
+  public static final int ENTER_TO_SEND_AUTO = 0;
+  public static final int ENTER_TO_SEND_ON = 1;
+  public static final int ENTER_TO_SEND_OFF = 2;
+
+  private volatile int enterToSend = -1;
+
+  public int enterToSend () {
+    int value = enterToSend;
+    if (value < 0) {
+      value = pmc().getInt(KEY_ENTER_TO_SEND, ENTER_TO_SEND_AUTO);
+      if (value != ENTER_TO_SEND_ON && value != ENTER_TO_SEND_OFF) {
+        value = ENTER_TO_SEND_AUTO;
+      }
+      enterToSend = value;
+    }
+    return value;
+  }
+
+  public void setEnterToSend (int value) {
+    enterToSend = value;
+    putInt(KEY_ENTER_TO_SEND, value);
   }
 
   // Side menu
@@ -1030,5 +1087,41 @@ public final class XgramSettings {
     loadInlineVideo();
     inlineVideoStart = value == INLINE_VIDEO_START_TAP ? INLINE_VIDEO_START_TAP : INLINE_VIDEO_START_AUTO;
     putInt(KEY_INLINE_VIDEO_START, inlineVideoStart);
+  }
+
+  // Foldables (Appearance > Layout, see com.fahadali.xgram.layout.XgramWindow). Read on first use: asked while
+  // measuring the two panes.
+
+  public static final String KEY_FOLD_HINGE_SPLIT = "xgram_fold_hinge_split";
+  public static final String KEY_FOLD_TABLETOP = "xgram_fold_tabletop";
+
+  private volatile Boolean foldHingeSplit, foldTabletop;
+
+  /** Book posture (half open like a book): the two panes meet at the hinge. */
+  public boolean foldHingeSplit () {
+    Boolean value = foldHingeSplit;
+    if (value == null) {
+      foldHingeSplit = value = pmc().getBoolean(KEY_FOLD_HINGE_SPLIT, true);
+    }
+    return value;
+  }
+
+  public void setFoldHingeSplit (boolean value) {
+    foldHingeSplit = value;
+    put(KEY_FOLD_HINGE_SPLIT, value);
+  }
+
+  /** Tabletop posture (Flex mode): media, calls and the camera show above the fold and their controls below it. */
+  public boolean foldTabletop () {
+    Boolean value = foldTabletop;
+    if (value == null) {
+      foldTabletop = value = pmc().getBoolean(KEY_FOLD_TABLETOP, true);
+    }
+    return value;
+  }
+
+  public void setFoldTabletop (boolean value) {
+    foldTabletop = value;
+    put(KEY_FOLD_TABLETOP, value);
   }
 }

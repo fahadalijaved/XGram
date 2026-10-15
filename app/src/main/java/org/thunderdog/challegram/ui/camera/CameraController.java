@@ -273,7 +273,55 @@ public class CameraController extends ViewController<Void> implements CameraDele
 
     Settings.instance().addNewSettingsListener(this);
 
+    // XGram: tabletop posture and 180 degree turns
+    rootLayout.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+        v.post(this::xgramUpdateFold);
+      }
+    });
+    if (context().xgramWindow() != null) {
+      context().xgramWindow().addListener(xgramWindowListener);
+    }
+
     return rootLayout;
+  }
+
+  // XGram: tabletop posture (Flex mode): the preview stays above the fold, the shutter and buttons go below it.
+
+  private int xgramFoldBottom;
+
+  private final com.fahadali.xgram.layout.XgramWindow.Listener xgramWindowListener = (window, changes) -> {
+    if ((changes & com.fahadali.xgram.layout.XgramWindow.CHANGE_ROTATION) != 0 && manager != null) {
+      checkDisplayRotation(); // a 180 degree turn brings no configuration change
+    }
+    xgramUpdateFold();
+  };
+
+  private void xgramUpdateFold () {
+    if (rootLayout == null || contentView == null || manager == null || isDestroyed()) {
+      return;
+    }
+    int bottom = 0;
+    if (contentView.getParent() == rootLayout) {
+      int foldTop = com.fahadali.xgram.layout.XgramWindow.tabletopFoldTop(rootLayout);
+      if (foldTop > 0) {
+        bottom = rootLayout.getHeight() - foldTop;
+      }
+    }
+    xgramSetFoldBottom(bottom);
+  }
+
+  private void xgramSetFoldBottom (int bottom) {
+    if (xgramFoldBottom == bottom || !(contentView.getLayoutParams() instanceof android.widget.FrameLayout.LayoutParams)) {
+      return;
+    }
+    xgramFoldBottom = bottom;
+    android.widget.FrameLayout.LayoutParams params = (android.widget.FrameLayout.LayoutParams) contentView.getLayoutParams();
+    // Centered with a bottom margin would move it up by half the margin: pin it to the top instead.
+    params.gravity = bottom > 0 ? Gravity.TOP | Gravity.CENTER_HORIZONTAL : Gravity.CENTER;
+    params.bottomMargin = bottom;
+    contentView.setLayoutParams(params);
+    updateControlMargins();
   }
 
   @Override
@@ -320,6 +368,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
 
   public void takeCameraLayout (ViewGroup toGroup, int index) {
     getValue();
+    xgramSetFoldBottom(0); // XGram: the tabletop margin belongs to the camera screen only
     Views.moveView(contentView, toGroup, index);
     manager.getView().requestLayout();
   }
@@ -328,6 +377,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
     getValue();
     Views.moveView(contentView, rootLayout, 0);
     manager.getView().requestLayout();
+    xgramUpdateFold(); // XGram
   }
 
   public boolean isInQrScanMode () {
@@ -502,6 +552,11 @@ public class CameraController extends ViewController<Void> implements CameraDele
         bottomGravity = Gravity.BOTTOM;
         topGravity = Gravity.TOP;
         break;
+    }
+    if (xgramFoldBottom > 0) {
+      // XGram: tabletop posture, the preview is above the fold: the controls go below it whatever the rotation.
+      bottomGravity = Gravity.BOTTOM;
+      topGravity = Gravity.TOP;
     }
 
     int bottomGravityCentered = makeCenter(bottomGravity);
@@ -1346,6 +1401,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
       Log.i(Log.TAG_CAMERA, "destroy");
     }
     Settings.instance().removeNewSettingsListener(this);
+    if (context().xgramWindow() != null) {
+      context().xgramWindow().removeListener(xgramWindowListener); // XGram
+    }
     if (manager != null) {
       manager.destroy();
     }
@@ -1798,12 +1856,13 @@ public class CameraController extends ViewController<Void> implements CameraDele
   @Override
   public boolean onKeyUp (int keyCode, KeyEvent event) {
     if (!isCameraOpen || viewController != null || isInQrScanMode()) {
-      return super.onKeyDown(keyCode, event);
+      return super.onKeyUp(keyCode, event); // XGram: was super.onKeyDown
     }
     switch (keyCode) {
       case KeyEvent.KEYCODE_VOLUME_DOWN:
       case KeyEvent.KEYCODE_VOLUME_UP: {
-        int controlType = Settings.instance().getCameraVolumeControl();
+        // XGram: the same choice as onKeyDown, which always zooms outside the main mode (round videos)
+        int controlType = cameraMode != MODE_MAIN ? Settings.CAMERA_VOLUME_CONTROL_ZOOM : Settings.instance().getCameraVolumeControl();
         switch (controlType) {
           case Settings.CAMERA_VOLUME_CONTROL_SHOOT:
             if (cancelVolumeKeyVideoCapture()) {
@@ -1817,7 +1876,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
         break;
       }
     }
-    return super.onKeyDown(keyCode, event);
+    return super.onKeyUp(keyCode, event); // XGram: was super.onKeyDown
   }
 
   // UI

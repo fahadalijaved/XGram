@@ -347,6 +347,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.showPeerIds(), isUpdate);
         } else if (id == R.id.btn_xgramLimitMessageWidth) {
           view.getToggler().setRadioEnabled(settings.limitMessageWidth(), isUpdate);
+        } else if (id == R.id.btn_xgramFoldHingeSplit) {
+          view.getToggler().setRadioEnabled(settings.foldHingeSplit(), isUpdate);
+        } else if (id == R.id.btn_xgramFoldTabletop) {
+          view.getToggler().setRadioEnabled(settings.foldTabletop(), isUpdate);
+        } else if (id == R.id.btn_xgramDragDrop) {
+          view.getToggler().setRadioEnabled(settings.dragDrop(), isUpdate);
+        } else if (id == R.id.btn_xgramOpenBeside) {
+          view.getToggler().setRadioEnabled(settings.openBeside(), isUpdate);
         } else if (id == R.id.btn_xgramTwoPane) {
           view.getToggler().setRadioEnabled(settings.twoPaneLayout(), isUpdate);
         } else if (id == R.id.btn_xgramHideFab) {
@@ -411,6 +419,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.inlineVideo(), isUpdate);
         } else if (id == R.id.btn_xgramInlineVideoStart) {
           view.setData(settings.inlineVideoStart() == XgramSettings.INLINE_VIDEO_START_TAP ? R.string.XgramInlineVideoStartTap : R.string.XgramInlineVideoStartAuto);
+        } else if (id == R.id.btn_xgramEnterToSend) {
+          view.setData(com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(settings.enterToSend()));
         } else if (id == R.id.btn_xgramProxyOffVpn) {
           view.getToggler().setRadioEnabled(settings.proxyOffOnVpn(), isUpdate);
         } else if (id == R.id.btn_xgramProxyOffWifi) {
@@ -604,6 +614,19 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     addRows(items, toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub));
     items.add(description(R.string.XgramTwoPaneInfo));
     addRows(items, toggle(R.id.btn_xgramLimitMessageWidth, R.string.XgramLimitMessageWidth, R.string.XgramLimitMessageWidthSub));
+    // Foldables: the posture rows only where a fold can be reported (androidx.window, minSdk 23 builds).
+    if (com.fahadali.xgram.layout.XgramWindow.isPostureSupported()) {
+      addRows(items,
+        toggle(R.id.btn_xgramFoldHingeSplit, R.string.XgramFoldHingeSplit, R.string.XgramFoldHingeSplitSub),
+        toggle(R.id.btn_xgramFoldTabletop, R.string.XgramFoldTabletop, R.string.XgramFoldTabletopSub)
+      );
+      items.add(description(R.string.XgramFoldInfo));
+    }
+    addRows(items,
+      toggle(R.id.btn_xgramDragDrop, R.string.XgramDragDrop, R.string.XgramDragDropSub),
+      toggle(R.id.btn_xgramOpenBeside, R.string.XgramOpenBeside, R.string.XgramOpenBesideSub)
+    );
+    items.add(description(R.string.XgramDragDropInfo));
   }
 
   private void buildChatList (List<ListItem> items) {
@@ -667,6 +690,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramTapToRecord, R.string.XgramTapToRecord, R.string.XgramTapToRecordSub)
     );
     items.add(description(R.string.XgramTapToRecordInfo));
+    addRows(items, link(R.id.btn_xgramEnterToSend, R.string.XgramEnterToSend));
+    items.add(description(R.string.XgramEnterToSendInfo));
 
     items.add(header(R.string.XgramHeaderTelegramAi));
     addRows(items, toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools, R.string.XgramAiToolsSub));
@@ -1298,6 +1323,21 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramLimitMessageWidth) {
       settings.setLimitMessageWidth(adapter.toggleView(v));
       return;
+    } else if (id == R.id.btn_xgramFoldHingeSplit) {
+      settings.setFoldHingeSplit(adapter.toggleView(v));
+      if (context.xgramTwoPane() != null) {
+        context.xgramTwoPane().update();
+      }
+      return;
+    } else if (id == R.id.btn_xgramFoldTabletop) {
+      settings.setFoldTabletop(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramDragDrop) {
+      settings.setDragDrop(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramOpenBeside) {
+      settings.setOpenBeside(adapter.toggleView(v));
+      return;
     } else if (id == R.id.btn_xgramPreferIpv6) {
       settings.setPreferIpv6(adapter.toggleView(v));
       return;
@@ -1347,6 +1387,18 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       showOptions(null, new int[] {1, 2}, titles, null, null, (itemView, optionId) -> {
         settings.setInlineVideoStart(modes[optionId - 1]);
         adapter.updateValuedSettingById(R.id.btn_xgramInlineVideoStart);
+        return true;
+      });
+      return;
+    } else if (id == R.id.btn_xgramEnterToSend) {
+      int[] modes = {XgramSettings.ENTER_TO_SEND_AUTO, XgramSettings.ENTER_TO_SEND_ON, XgramSettings.ENTER_TO_SEND_OFF};
+      String[] titles = new String[modes.length];
+      for (int i = 0; i < modes.length; i++) {
+        titles[i] = com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(modes[i]);
+      }
+      showOptions(null, new int[] {1, 2, 3}, titles, null, null, (itemView, optionId) -> {
+        settings.setEnterToSend(modes[optionId - 1]);
+        adapter.updateValuedSettingById(R.id.btn_xgramEnterToSend);
         return true;
       });
       return;

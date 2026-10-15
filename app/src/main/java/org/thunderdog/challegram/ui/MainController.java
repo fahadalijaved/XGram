@@ -2280,7 +2280,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
    *
    * @return true if provided caption parameter has been used as caption
    */
-  private static boolean addShareUri (Tdlib tdlib, ArrayList<TdApi.InputMessageContent> out, String mimeType, Uri uri, final @Nullable String rawCaption) {
+  // XGram: public, dropped and pasted files are sent the same way (XgramDragDrop)
+  public static boolean addShareUri (Tdlib tdlib, ArrayList<TdApi.InputMessageContent> out, String mimeType, Uri uri, final @Nullable String rawCaption) {
     if (uri == null) {
       return false;
     }

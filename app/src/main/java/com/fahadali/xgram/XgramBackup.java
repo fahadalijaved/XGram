@@ -36,6 +36,9 @@ public final class XgramBackup {
     "xgram_hide_sponsored", "xgram_show_peer_ids", "xgram_two_pane", "xgram_icon_theme", "xgram_merge_communities", "xgram_save_last_seen", "xgram_show_seconds", "xgram_tap_time_details",
     "xgram_clean_links", "xgram_fix_link_previews", "xgram_ghost_typing_for_stickers", "xgram_allow_screenshots", "xgram_save_protected", "xgram_proxy_off_vpn", "xgram_proxy_off_wifi", "xgram_proxy_off_mobile", "xgram_hide_phone", "xgram_block_content_capture", "xgram_prefer_ipv6", "xgram_limit_message_width", "xgram_delete_for_everyone", "xgram_hide_blocked", "xgram_forward_without_author", "xgram_ai_tools", "xgram_hide_fab", "xgram_all_chats_label", "xgram_pull_to_next", "xgram_bubble_tail", "xgram_download_boost_on", "xgram_tap_to_record", "xgram_system_emoji", "xgram_tr_always", "xgram_tr_fallback", XgramSettings.KEY_TR_AUTO_ALL,
     XgramSettings.KEY_INLINE_VIDEO,
+    // Foldables (Appearance > Layout)
+    XgramSettings.KEY_FOLD_HINGE_SPLIT, XgramSettings.KEY_FOLD_TABLETOP,
+    XgramSettings.KEY_DRAG_DROP, XgramSettings.KEY_OPEN_BESIDE,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
@@ -112,7 +115,7 @@ public final class XgramBackup {
     return count;
   }
   private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
-  private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START};
+  private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START, XgramSettings.KEY_ENTER_TO_SEND};
   /** Data rather than settings: exported and imported, but kept by {@link #reset}. */
   private static final String[] LONG_PREFIXES = {"xgram_bm_"};
 
@@ -213,7 +216,7 @@ public final class XgramBackup {
       if (ints != null) {
         for (Iterator<String> it = ints.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.startsWith("xgram_tab_") || key.startsWith("xgram_cmode_") || key.equals("xgram_history_retention") || key.equals("xgram_avatar_corners") || key.equals("xgram_chat_long_press") || key.equals("xgram_download_boost_level") || key.equals("xgram_swipe_left") || key.equals("xgram_swipe_right") || key.equals("xgram_tr_provider") || key.equals(XgramSettings.KEY_INLINE_VIDEO_START)) {
+          if (key.startsWith("xgram_tab_") || key.startsWith("xgram_cmode_") || key.equals("xgram_history_retention") || key.equals("xgram_avatar_corners") || key.equals("xgram_chat_long_press") || key.equals("xgram_download_boost_level") || key.equals("xgram_swipe_left") || key.equals("xgram_swipe_right") || key.equals("xgram_tr_provider") || key.equals(XgramSettings.KEY_INLINE_VIDEO_START) || key.equals(XgramSettings.KEY_ENTER_TO_SEND)) {
             pmc().putInt(key, ints.getInt(key));
             count++;
           }

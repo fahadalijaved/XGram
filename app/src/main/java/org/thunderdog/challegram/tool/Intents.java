@@ -183,6 +183,7 @@ public class Intents {
         intent = new Intent(Intent.ACTION_VIEW);
         intent.setData(Uri.parse(uri));
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        com.fahadali.xgram.layout.XgramOpenBeside.apply(intent); // XGram: open beside XGram (split screen)
 
         final BaseActivity context = UI.getUiContext();
         if (context != null) {
@@ -311,6 +312,7 @@ public class Intents {
         intent = new Intent(Intent.ACTION_VIEW);
         intent.setData(uri);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        com.fahadali.xgram.layout.XgramOpenBeside.apply(intent); // XGram: open beside XGram (split screen)
 
         UI.startActivity(intent);
         return true;
@@ -409,6 +411,7 @@ public class Intents {
         }
       }
 
+      com.fahadali.xgram.layout.XgramOpenBeside.apply(intent); // XGram: open beside XGram (split screen)
       if (intent.resolveActivity(pm) != null) {
         UI.startActivity(intent);
         return true;
@@ -755,6 +758,7 @@ public class Intents {
         builder.setActionButton(Drawables.getBitmap(R.drawable.baseline_share_24), Lang.getString(R.string.Share), PendingIntent.getBroadcast(UI.getContext(), 0, share, Intents.mutabilityFlags(true)), true);
         CustomTabsIntent intent = builder.build();
         intent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        com.fahadali.xgram.layout.XgramOpenBeside.apply(intent.intent); // XGram: open beside XGram (split screen)
         if (TD.isTelegramMeHost(uri)) {
           List<ResolveInfo> packages = getCustomTabsPackages(context);
           if (!packages.isEmpty()) {

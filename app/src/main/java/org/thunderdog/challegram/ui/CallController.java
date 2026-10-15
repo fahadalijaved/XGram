@@ -642,6 +642,16 @@ public class CallController extends ViewController<CallController.Arguments> imp
     contentView.addView(callControlsLayout);
     callControlsLayout.setCall(tdlib, call, false);
 
+    // XGram: tabletop posture
+    contentView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+        v.post(this::xgramUpdateFold);
+      }
+    });
+    if (context().xgramWindow() != null) {
+      context().xgramWindow().addListener(xgramWindowListener);
+    }
+
     // Data
 
     tdlib.cache().subscribeToCallUpdates(call.id, this);
@@ -703,20 +713,47 @@ public class CallController extends ViewController<CallController.Arguments> imp
     closeCall();
   }
 
+  // XGram: the portrait lock is undone by whoever set it, even if the phone was unfolded in between (UI.isTablet()
+  // changes then), and it is dropped as soon as the window is tablet sized.
+  private boolean xgramLockedPortrait;
+
   @Override
   public void onPrepareToShow () {
     super.onPrepareToShow();
     if (!UI.isTablet()) {
       context().setOrientation(BaseActivity.getAndroidOrientationPortrait());
+      xgramLockedPortrait = true;
     }
   }
 
   @Override
   public void onCleanAfterHide () {
     super.onCleanAfterHide();
-    if (!UI.isTablet()) {
+    xgramUnlockPortrait();
+  }
+
+  private void xgramUnlockPortrait () {
+    if (xgramLockedPortrait) {
+      xgramLockedPortrait = false;
       context().setOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
     }
+  }
+
+  // XGram: tabletop posture (Flex mode): the photo stays above the fold, the buttons below it.
+  private final com.fahadali.xgram.layout.XgramWindow.Listener xgramWindowListener = (window, changes) -> {
+    if (UI.isTablet()) {
+      xgramUnlockPortrait();
+    }
+    xgramUpdateFold();
+  };
+
+  private void xgramUpdateFold () {
+    if (avatarView == null || isDestroyed() || !(avatarView.getParent() instanceof View)) {
+      return;
+    }
+    View parent = (View) avatarView.getParent();
+    int foldTop = com.fahadali.xgram.layout.XgramWindow.tabletopFoldTop(parent);
+    Views.setBottomMargin(avatarView, foldTop > 0 ? parent.getHeight() - foldTop : 0);
   }
 
   private void updateLoop () {
@@ -1177,6 +1214,9 @@ public class CallController extends ViewController<CallController.Arguments> imp
   public void destroy () {
     super.destroy();
     Screen.removeStatusBarHeightListener(this);
+    if (context().xgramWindow() != null) {
+      context().xgramWindow().removeListener(xgramWindowListener); // XGram
+    }
     tdlib.cache().unsubscribeFromCallUpdates(call.id, this);
     tdlib.cache().removeUserDataListener(call.userId, this);
     avatarView.performDestroy();

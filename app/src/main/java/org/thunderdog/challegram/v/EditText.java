@@ -242,6 +242,9 @@ public class EditText extends android.widget.EditText {
           break;
         }
         case android.R.id.paste: {
+          if (com.fahadali.xgram.layout.XgramDragDrop.onPaste(this)) { // XGram: pasted images and files are sent
+            return true;
+          }
           CharSequence pasteText = U.getPasteText(getContext());
           if (pasteText != null) {
             paste(pasteText, false);

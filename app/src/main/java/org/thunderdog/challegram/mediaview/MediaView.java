@@ -264,12 +264,32 @@ public class MediaView extends FrameLayoutFix {
       this.paddingHorizontal = paddingHorizontal;
 
       if (layoutBuilt) {
-        baseCell.setOffsets(paddingHorizontal, offsetLeft, offsetTop, offsetRight, offsetBottom);
+        baseCell.setOffsets(paddingHorizontal, offsetLeft, offsetTop, offsetRight, cellOffsetBottom());
         if (previewCell != null) {
-          previewCell.setOffsets(paddingHorizontal, offsetLeft, offsetTop, offsetRight, offsetBottom);
+          previewCell.setOffsets(paddingHorizontal, offsetLeft, offsetTop, offsetRight, cellOffsetBottom());
         }
       }
     }
+  }
+
+  // XGram: tabletop posture (Flex mode): the media stays above the fold, the caption and controls below it.
+  private int foldOffset;
+
+  /** Space below the fold, in px (0: flat). The media is laid out above it, as with a bigger bottom offset. */
+  public void setFoldOffset (int foldOffset) {
+    if (this.foldOffset != foldOffset) {
+      this.foldOffset = foldOffset;
+      if (layoutBuilt) {
+        baseCell.setOffsets(paddingHorizontal, offsetLeft, offsetTop, offsetRight, cellOffsetBottom());
+        if (previewCell != null) {
+          previewCell.setOffsets(paddingHorizontal, offsetLeft, offsetTop, offsetRight, cellOffsetBottom());
+        }
+      }
+    }
+  }
+
+  private int cellOffsetBottom () {
+    return Math.max(offsetBottom, foldOffset);
   }
 
   public void setNavigationalOffsets (int left, int right, int bottom) {
@@ -318,9 +338,9 @@ public class MediaView extends FrameLayoutFix {
 
   public void layoutCells () {
     int currentHeight = this.currentHeight + getBottomAdd();
-    baseCell.layoutCell(paddingHorizontal, offsetLeft, offsetTop, offsetRight, offsetBottom, currentWidth, currentHeight);
+    baseCell.layoutCell(paddingHorizontal, offsetLeft, offsetTop, offsetRight, cellOffsetBottom(), currentWidth, currentHeight);
     if (previewCell != null) {
-      previewCell.layoutCell(paddingHorizontal, offsetLeft, offsetTop, offsetRight, offsetBottom, currentWidth, currentHeight);
+      previewCell.layoutCell(paddingHorizontal, offsetLeft, offsetTop, offsetRight, cellOffsetBottom(), currentWidth, currentHeight);
     }
   }
 
@@ -630,6 +650,24 @@ public class MediaView extends FrameLayoutFix {
 
   public boolean isMovingItem () {
     return isMoving;
+  }
+
+  // XGram: hold a photo or video, then drag it out to another app
+  private final com.fahadali.xgram.layout.XgramDragDrop.DragOut xgramDragOut = new com.fahadali.xgram.layout.XgramDragDrop.DragOut(this);
+
+  @Override
+  public boolean dispatchTouchEvent (MotionEvent e) {
+    int dragOut = xgramDragOut.onTouchEvent(e);
+    if (dragOut == com.fahadali.xgram.layout.XgramDragDrop.DragOut.PASS) {
+      return super.dispatchTouchEvent(e);
+    }
+    if (dragOut == com.fahadali.xgram.layout.XgramDragDrop.DragOut.CANCEL) {
+      MotionEvent cancel = MotionEvent.obtain(e);
+      cancel.setAction(MotionEvent.ACTION_CANCEL);
+      super.dispatchTouchEvent(cancel);
+      cancel.recycle();
+    }
+    return true;
   }
 
   @Override

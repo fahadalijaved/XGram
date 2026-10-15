@@ -622,6 +622,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     chatsView.setHasFixedSize(true);
     chatsView.addItemDecoration(new ChatPinSeparatorDecoration(this));
     ViewSupport.setThemedBackground(chatsView, ColorId.filling, this);
+    com.fahadali.xgram.layout.XgramDragDrop.attachChatList(this, chatsView); // XGram: drop onto a chat row to send there
 
     touchHelper = new ItemTouchHelper(new ItemTouchHelper.Callback() {
       @Override

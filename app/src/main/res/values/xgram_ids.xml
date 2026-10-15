@@ -280,4 +280,12 @@
   <item type="id" name="btn_xgramExpressive" />
   <item type="id" name="xgram_m3e_list" />
   <item type="id" name="xgram_m3e_row" />
+  <!-- Adaptive part 1: foldables (Appearance > Layout) -->
+  <item type="id" name="btn_xgramFoldHingeSplit" />
+  <item type="id" name="btn_xgramFoldTabletop" />
+  <!-- Drag and drop, side by side (adaptive plan part 2) -->
+  <item type="id" name="btn_xgramDragDrop" />
+  <item type="id" name="btn_xgramOpenBeside" />
+  <!-- Keyboard and mouse (adaptive part 3) -->
+  <item type="id" name="btn_xgramEnterToSend" />
 </resources>

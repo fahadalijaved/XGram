@@ -223,6 +223,13 @@ public class BaseView extends SparseDrawableView implements ClickHelper.Delegate
 
   @Override
   public boolean onTouchEvent (MotionEvent e) {
+    if (onLongClickListener != null && isEnabled() && com.fahadali.xgram.layout.XgramPointer.isSecondaryButton(e)) {
+      // XGram: right-click (mouse, two-finger tap on a trackpad) opens the long-press menu at once, e.g. a chat's
+      if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+        onLongClickListener.onLongClick(this);
+      }
+      return true;
+    }
     boolean res;
     switch (e.getAction()) {
       case MotionEvent.ACTION_DOWN: {
@@ -244,6 +251,13 @@ public class BaseView extends SparseDrawableView implements ClickHelper.Delegate
       return forceTouchHelper.onTouchEvent(this, e) || res;
     }
     return false;
+  }
+
+  // XGram: a mouse or trackpad pointer lights up the row's ripple background and shows the hand pointer
+  @Override
+  public boolean onHoverEvent (MotionEvent e) {
+    com.fahadali.xgram.layout.XgramPointer.onHover(this, e, onClickListener != null || onLongClickListener != null);
+    return super.onHoverEvent(e);
   }
 
   @Override

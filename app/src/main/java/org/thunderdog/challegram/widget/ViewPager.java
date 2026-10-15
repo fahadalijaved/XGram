@@ -146,6 +146,15 @@ public class ViewPager extends androidx.viewpager.widget.ViewPager {
     return pagingEnabled && super.onTouchEvent(ev);
   }
 
+  // XGram: a horizontal mouse wheel or sideways trackpad scroll turns the page
+  @Override
+  public boolean onGenericMotionEvent (MotionEvent event) {
+    if (pagingEnabled && com.fahadali.xgram.layout.XgramPointer.onPagerScroll(this, event)) {
+      return true;
+    }
+    return super.onGenericMotionEvent(event);
+  }
+
   @CheckResult
   public static float clampPositionOffset (float positionOffset) {
     if (Float.isNaN(positionOffset)) return 0f;
