@@ -156,6 +156,10 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
             view.setChecked(item.isSelected(), isUpdate);
         } else if (itemId == R.id.btn_icon) {
           v.setData(com.fahadali.xgram.appearance.XgramIconPack.name(com.fahadali.xgram.appearance.XgramIconPack.current())); // XGram
+        } else if (itemId == R.id.theme_chat_classic && item.getViewType() == ListItem.TYPE_RADIO_SETTING) {
+          v.getToggler().setRadioEnabled(tdlib.settings().chatStyle() == ThemeManager.CHAT_STYLE_BUBBLES, isUpdate); // XGram M3E switch
+        } else if (itemId == R.id.btn_forcePlainChannels && item.getViewType() == ListItem.TYPE_RADIO_SETTING) {
+          v.getToggler().setRadioEnabled(!tdlib.settings().forcePlainModeInChannels(), isUpdate); // XGram M3E switch
         } else if (itemId == R.id.btn_reduceMotion) {
           v.getToggler().setRadioEnabled(Settings.instance().needReduceMotion(), isUpdate);
         } else if (itemId == R.id.btn_autoplayGIFs) {
@@ -381,9 +385,16 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.ChatMode));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: two independent on/off settings are switches (Android 16 Settings), not checkboxes.
+        items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.theme_chat_classic, 0, R.string.ChatStyleBubbles));
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+        items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_forcePlainChannels, 0, R.string.ChatStyleBubblesChannel));
+      } else {
       items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.theme_chat_classic, 0, R.string.ChatStyleBubbles, R.id.theme_chat, chatStyle == ThemeManager.CHAT_STYLE_BUBBLES));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_forcePlainChannels, 0, R.string.ChatStyleBubblesChannel, R.id.btn_forcePlainChannels, !tdlib.settings().forcePlainModeInChannels()));
+      }
 
       // XGram: icon packs for everyone (Telegram X showed this row in debug builds only)
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
@@ -932,6 +943,12 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
     if (viewId == R.id.btn_reduceMotion) {
       Settings.instance().toggleReduceMotion();
       adapter.updateValuedSettingById(R.id.btn_reduceMotion);
+    } else if (viewId == R.id.theme_chat_classic && v.getTag() instanceof ListItem && ((ListItem) v.getTag()).getViewType() == ListItem.TYPE_RADIO_SETTING) {
+      // XGram M3E: Bubbles in Chats switch
+      tdlib.settings().setChatStyle(adapter.toggleView(v) ? ThemeManager.CHAT_STYLE_BUBBLES : ThemeManager.CHAT_STYLE_MODERN);
+    } else if (viewId == R.id.btn_forcePlainChannels && v.getTag() instanceof ListItem && ((ListItem) v.getTag()).getViewType() == ListItem.TYPE_RADIO_SETTING) {
+      // XGram M3E: Bubbles in Channels switch
+      tdlib.settings().setForcePlainModeInChannels(!adapter.toggleView(v));
     } else if (viewId == R.id.btn_icon) {
       navigateTo(new com.fahadali.xgram.appearance.XgramIconPacksController(context, tdlib)); // XGram
     } else if (viewId == R.id.btn_earpieceMode) {
