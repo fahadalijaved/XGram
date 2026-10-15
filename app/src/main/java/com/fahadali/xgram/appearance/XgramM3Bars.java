@@ -53,44 +53,89 @@ public final class XgramM3Bars {
    * content often starts under the header), at the y where the content starts.
    */
   public static final class ContainerCorners {
-    private final Path path = new Path();
+    // Paths are built at the origin for a width and radius, and translated when drawn, so scrolling does not rebuild them
+    private final Path path = new Path(), bottomPath = new Path();
     private final RectF arc = new RectF();
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private int pathLeft = Integer.MIN_VALUE, pathTop = Integer.MIN_VALUE, pathRight = Integer.MIN_VALUE;
-    private float pathRadius;
+    private int pathWidth = -1, bottomPathWidth = -1;
+    private float pathRadius, bottomPathRadius;
     private int colorId = ColorId.headerBackground;
+    private float radiusDp = XgramExpressive.CORNER_XL;
 
     /** The color the notches take: the app bar's (headerBackground, a surface container with Expressive design). */
     public void setColorId (int colorId) {
       this.colorId = colorId;
     }
 
+    /** The corner radius in dp (a CORNER_* token); {@link XgramExpressive#CORNER_XL} by default. */
+    public void setRadius (float radiusDp) {
+      this.radiusDp = radiusDp;
+    }
+
+    private float radius (int width) {
+      return Math.min(Screen.dpf(radiusDp), width / 2f);
+    }
+
+    /** Top corners of a container whose top edge is at {@code top}: the notches lie below it. */
     public void draw (@NonNull Canvas c, int left, int top, int right) {
       if (!XgramExpressive.isEnabled() || right <= left) {
         return;
       }
-      float r = Math.min(Screen.dpf(XgramExpressive.CORNER_XL), (right - left) / 2f);
-      if (left != pathLeft || top != pathTop || right != pathRight || r != pathRadius) {
-        pathLeft = left;
-        pathTop = top;
-        pathRight = right;
+      int width = right - left;
+      float r = radius(width);
+      if (width != pathWidth || r != pathRadius) {
+        pathWidth = width;
         pathRadius = r;
         path.rewind();
         // Top start notch: the square corner minus the quarter circle
-        path.moveTo(left, top);
-        path.lineTo(left + r, top);
-        arc.set(left, top, left + r * 2f, top + r * 2f);
+        path.moveTo(0, 0);
+        path.lineTo(r, 0);
+        arc.set(0, 0, r * 2f, r * 2f);
         path.arcTo(arc, 270f, -90f, false);
         path.close();
         // Top end notch
-        path.moveTo(right, top);
-        path.lineTo(right, top + r);
-        arc.set(right - r * 2f, top, right, top + r * 2f);
+        path.moveTo(width, 0);
+        path.lineTo(width, r);
+        arc.set(width - r * 2f, 0, width, r * 2f);
         path.arcTo(arc, 0f, -90f, false);
         path.close();
       }
+      drawPath(c, path, left, top);
+    }
+
+    /** Bottom corners of a container whose bottom edge is at {@code bottom}: the notches lie above it. */
+    public void drawBottom (@NonNull Canvas c, int left, int bottom, int right) {
+      if (!XgramExpressive.isEnabled() || right <= left) {
+        return;
+      }
+      int width = right - left;
+      float r = radius(width);
+      if (width != bottomPathWidth || r != bottomPathRadius) {
+        bottomPathWidth = width;
+        bottomPathRadius = r;
+        bottomPath.rewind();
+        // Bottom start notch
+        bottomPath.moveTo(0, 0);
+        bottomPath.lineTo(0, -r);
+        arc.set(0, -r * 2f, r * 2f, 0);
+        bottomPath.arcTo(arc, 180f, -90f, false);
+        bottomPath.close();
+        // Bottom end notch
+        bottomPath.moveTo(width, 0);
+        bottomPath.lineTo(width - r, 0);
+        arc.set(width - r * 2f, -r * 2f, width, 0);
+        bottomPath.arcTo(arc, 90f, -90f, false);
+        bottomPath.close();
+      }
+      drawPath(c, bottomPath, left, bottom);
+    }
+
+    private void drawPath (@NonNull Canvas c, @NonNull Path path, int dx, int dy) {
       paint.setColor(Theme.getColor(colorId));
+      c.save();
+      c.translate(dx, dy);
       c.drawPath(path, paint);
+      c.restore();
     }
   }
 

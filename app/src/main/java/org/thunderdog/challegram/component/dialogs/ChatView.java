@@ -823,10 +823,16 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
       // XGram: two cards behind the photo, the community's other chats (as in Telegram).
       float radius = avatarReceiver.getDisplayRadius();
       int color = Theme.getColor(ColorId.text);
+      // M3E: a tonal stack that peeks out on the end side (the start side is clipped by the screen edge with the
+      // M3E avatar inset), in surface container highest behind secondary container.
+      boolean m3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
       for (int i = 2; i >= 1; i--) {
-        float shift = Screen.dp(4f) * i * (rtl ? 1 : -1), inset = Screen.dp(3.5f) * i;
+        float shift = m3 ? Screen.dp(3.5f) * i * (rtl ? -1 : 1) : Screen.dp(4f) * i * (rtl ? 1 : -1), inset = Screen.dp(3.5f) * i;
         xgramCardRect.set(avatarReceiver.getLeft() + shift, avatarReceiver.getTop() + inset, avatarReceiver.getRight() + shift, avatarReceiver.getBottom() - inset);
-        c.drawRoundRect(xgramCardRect, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(i == 1 ? .14f : .07f, color)));
+        int cardColor = m3 ?
+          com.fahadali.xgram.appearance.XgramExpressive.color(i == 1 ? com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST) :
+          ColorUtils.alphaColor(i == 1 ? .14f : .07f, color);
+        c.drawRoundRect(xgramCardRect, radius, radius, Paints.fillingPaint(cardColor));
       }
     }
     if (avatarReceiver.needPlaceholder()) {

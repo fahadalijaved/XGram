@@ -2717,7 +2717,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private ListItem newPeerIdItem () {
-    return new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_peer_id, R.drawable.baseline_identifier_24, R.string.PeerId);
+    // XGram M3E: with the Telegram X icons, a Material "badge" glyph in place of the custom "ID" letters
+    final int icon = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramIconPack.current() == com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X ? R.drawable.xgram_m3e_s4_badge_24 : R.drawable.baseline_identifier_24;
+    return new ListItem(ListItem.TYPE_INFO_SETTING, R.id.btn_peer_id, icon, R.string.PeerId);
   }
 
   private ListItem newEncryptionKeyItem () {

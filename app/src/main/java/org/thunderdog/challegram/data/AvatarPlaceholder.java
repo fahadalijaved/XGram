@@ -176,7 +176,8 @@ public class AvatarPlaceholder {
       } else {
         saveCount = -1;
       }
-      Drawables.draw(c, drawable, centerX - drawable.getMinimumWidth() / 2f, centerY - drawable.getMinimumHeight() / 2f, PorterDuffPaint.get(metadata.iconColorId, alpha));
+      int iconColorId = metadata.iconColorId == ColorId.avatar_content ? com.fahadali.xgram.appearance.XgramM3Colors.avatarIconColorId(metadata.accentColor.getId(), metadata.iconColorId) : metadata.iconColorId; // XGram M3E: tonal special avatars
+      Drawables.draw(c, drawable, centerX - drawable.getMinimumWidth() / 2f, centerY - drawable.getMinimumHeight() / 2f, PorterDuffPaint.get(iconColorId, alpha));
       if (needRestore) {
         Views.restore(c, saveCount);
       }

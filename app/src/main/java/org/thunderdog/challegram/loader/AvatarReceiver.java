@@ -1191,7 +1191,7 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
         isFullScreen.getFloatValue()
       );
       drawPlaceholderRounded(c, displayRadius, ColorUtils.alphaColor(alpha, placeholderColor));
-      int avatarContentColorId = ColorId.avatar_content;
+      int avatarContentColorId = com.fahadali.xgram.appearance.XgramM3Colors.avatarIconColorId(requestedPlaceholder.accentColor.getId(), ColorId.avatar_content); // XGram M3E: tonal special avatars
       float primaryContentAlpha = requestedPlaceholder.extraDrawableRes != 0 ? 1f - isFullScreen.getFloatValue() : 1f;
       if (primaryContentAlpha > 0f) {
         if (requestedPlaceholder.drawableRes != 0) {

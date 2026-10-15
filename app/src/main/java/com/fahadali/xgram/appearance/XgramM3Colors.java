@@ -37,6 +37,7 @@ import static com.fahadali.xgram.appearance.XgramExpressive.TERTIARY_CONTAINER;
 
 import androidx.annotation.ColorInt;
 
+import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.PropertyId;
 import org.thunderdog.challegram.theme.ThemeDelegate;
@@ -205,8 +206,12 @@ public final class XgramM3Colors {
       ColorId.avatarYellow, ColorId.avatarYellow_big, ColorId.avatarGreen, ColorId.avatarGreen_big,
       ColorId.avatarCyan, ColorId.avatarCyan_big, ColorId.avatarBlue, ColorId.avatarBlue_big,
       ColorId.avatarViolet, ColorId.avatarViolet_big, ColorId.avatarPink, ColorId.avatarPink_big,
-      ColorId.avatarInactive, ColorId.avatarInactive_big, ColorId.avatarArchive, ColorId.avatarArchivePinned,
-      ColorId.avatarSavedMessages, ColorId.avatarSavedMessages_big, ColorId.avatarReplies, ColorId.avatarReplies_big);
+      ColorId.avatarInactive, ColorId.avatarInactive_big);
+    // Special avatars are tonal (Google Messages, Contacts): a container with an on-container glyph, see
+    // avatarIconColorId. Archive is secondary, Saved Messages and Replies primary.
+    role(SECONDARY_CONTAINER, ColorId.avatarArchive, ColorId.avatarArchivePinned);
+    role(PRIMARY_CONTAINER, ColorId.avatarSavedMessages, ColorId.avatarSavedMessages_big, ColorId.avatarReplies,
+      ColorId.avatarReplies_big);
     harmonize(ColorId.nameRed, ColorId.nameOrange, ColorId.nameYellow, ColorId.nameGreen, ColorId.nameCyan,
       ColorId.nameBlue, ColorId.nameViolet, ColorId.namePink, ColorId.nameInactive);
     harmonize(ColorId.lineRed, ColorId.lineOrange, ColorId.lineYellow, ColorId.lineGreen, ColorId.lineCyan,
@@ -218,6 +223,27 @@ public final class XgramM3Colors {
       ColorId.bubbleOut_chatCorrectFilling, ColorId.bubbleOut_chatCorrectChosenFilling);
     harmonize(ColorId.messageAuthorPsa, ColorId.bubbleOut_messageAuthorPsa);
     harmonize(ColorId.headerBarCallIncoming, ColorId.headerBarCallActive, ColorId.headerBarCallMuted);
+  }
+
+  /**
+   * The glyph color id of an avatar placeholder in the accent {@code accentColorId}: with Expressive design the tonal
+   * special avatars (Archive, Saved Messages, Replies) take the on-container color of their container (ids that map
+   * to ON_SECONDARY_CONTAINER and ON_PRIMARY_CONTAINER above) instead of white; everything else keeps {@code fallback}.
+   */
+  public static int avatarIconColorId (int accentColorId, int fallback) {
+    if (!XgramExpressive.isEnabled()) {
+      return fallback;
+    }
+    switch (accentColorId) {
+      case TdlibAccentColor.InternalId.ARCHIVE:
+      case TdlibAccentColor.InternalId.ARCHIVE_PINNED:
+        return ColorId.fillingActiveContent;
+      case TdlibAccentColor.InternalId.SAVED_MESSAGES:
+      case TdlibAccentColor.InternalId.REPLIES:
+        return ColorId.circleButtonRegularIcon;
+      default:
+        return fallback;
+    }
   }
 
   /** Whether the id resolves to a role while Expressive design is on. Cheap. */

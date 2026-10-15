@@ -240,6 +240,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     View view = super.onCreateView(context);
     if (view instanceof XgramM3Bars.CornerFrameLayout && getRecyclerView() != null) {
       ((XgramM3Bars.CornerFrameLayout) view).setCornerAnchor(getRecyclerView());
+      addThemeInvalidateListener(view); // the notches take the new app bar color on a theme switch
       org.thunderdog.challegram.support.ViewSupport.setThemedBackground(getRecyclerView(), ColorId.filling, this);
     }
     if (view instanceof ViewGroup) {
