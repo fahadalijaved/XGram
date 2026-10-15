@@ -1009,6 +1009,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramTranslateItem = new CollapseListView.ViewItem(xgramTranslateBar, com.fahadali.xgram.chats.XgramAutoTranslateBar.height()),
       toastAlertItem
     }, this);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive: the cards sit on an opaque band in the app bar color
+      topBar.xgramSetBackingColor(() -> Theme.getColor(inSelectMode() ? getSelectHeaderColorId() : getHeaderColorId()));
+    }
 
     // Mention button
 
@@ -11547,9 +11551,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (xgramCornersView == null) {
       return;
     }
-    float top = 0f;
+    // The container starts below the bars: the topic tabs and the card group with its backing.
+    float top = topBar != null ? Math.max(0, topBar.xgramBackingBottom()) : 0f;
     if (xgramTabs != null && xgramTabs.getVisibility() == View.VISIBLE) {
-      top = Math.max(0f, xgramTabs.getTranslationY() + xgramTabs.getMeasuredHeight());
+      top = Math.max(top, xgramTabs.getTranslationY() + xgramTabs.getMeasuredHeight());
     }
     if (xgramCornersView.getTranslationY() != top) {
       xgramCornersView.setTranslationY(top);
