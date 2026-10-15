@@ -219,11 +219,13 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
   @Override
   public void onAttachedToRecyclerView (RecyclerView recyclerView) {
     parentViews.add(recyclerView);
+    com.fahadali.xgram.appearance.XgramExpressive.attachListDecoration(recyclerView, items); // XGram: Expressive design lists
   }
 
   @Override
   public void onDetachedFromRecyclerView (RecyclerView recyclerView) {
     parentViews.remove(recyclerView);
+    com.fahadali.xgram.appearance.XgramExpressive.detachListDecoration(recyclerView);
   }
 
   public void setInnerOnScrollListener (@Nullable RecyclerView.OnScrollListener innerOnScrollListener) {
@@ -1322,6 +1324,9 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
 
     @Override
     public void onDraw (Canvas c, RecyclerView parent, RecyclerView.State state) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.hasListDecoration(parent)) {
+        return; // XGram: Expressive design, headers and shadows sit on the page color
+      }
       int color = Theme.getColor(colorId);
 
       Paint paint = Paints.fillingPaint(color);
@@ -1424,7 +1429,9 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
       }
       case ListItem.TYPE_SHADOW_BOTTOM:
       case ListItem.TYPE_SHADOW_TOP: {
-        setShadowVisibility(item, (ShadowView) holder.itemView);
+        if (holder.itemView instanceof ShadowView) { // XGram: a plain spacer with Expressive design
+          setShadowVisibility(item, (ShadowView) holder.itemView);
+        }
         int colorId = item.getTextColorId(ColorId.NONE);
         if (colorId != 0) {
           holder.itemView.setBackgroundColor(Theme.getColor(colorId));
@@ -1582,7 +1589,9 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
         break;
       }
       case ListItem.TYPE_SEPARATOR: {
-        setSeparatorOptions(item, position, (SeparatorView) holder.itemView);
+        if (holder.itemView instanceof SeparatorView) { // XGram: a plain 2dp gap with Expressive design
+          setSeparatorOptions(item, position, (SeparatorView) holder.itemView);
+        }
         break;
       }
       case ListItem.TYPE_SLIDER: {
@@ -1897,6 +1906,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
   @Override
   public void onBindViewHolder (SettingHolder holder, int position) {
     updateView(holder, position, holder.getItemViewType());
+    com.fahadali.xgram.appearance.XgramExpressive.bindListRow(holder.itemView);
   }
 
   public void resetRecyclerScrollById (int id) {

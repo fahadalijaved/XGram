@@ -23,8 +23,12 @@
     androidx.camera.*
     androidx.media3.transformer
     androidx.media3.effect
+    androidx.graphics.shapes (XGram Expressive design, used on Android 13+ only)
+    androidx.dynamicanimation (same)
    -->
   <uses-sdk tools:overrideLibrary="
+    androidx.graphics.shapes,
+    androidx.dynamicanimation,
     com.otaliastudios.transcoder,
     com.otaliastudios.opengl,
     com.google.android.recaptcha,

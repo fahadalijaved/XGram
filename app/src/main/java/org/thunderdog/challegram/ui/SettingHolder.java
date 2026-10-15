@@ -170,10 +170,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return Screen.dp(64f);
       }
       case ListItem.TYPE_SHADOW_TOP: { // 2 OK
-        return Screen.dp(6f);
+        return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(8f) : Screen.dp(6f);
       }
       case ListItem.TYPE_SHADOW_BOTTOM: { // 3 OK
-        return Screen.dp(6f);
+        return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(8f) : Screen.dp(6f);
       }
       case ListItem.TYPE_MEMBERS_LIST: {
         return Screen.dp(95f);
@@ -188,7 +188,7 @@ public class SettingHolder extends RecyclerView.ViewHolder {
       // unchecked
       case ListItem.TYPE_SEPARATOR_FULL:
       case ListItem.TYPE_SEPARATOR: {
-        return Screen.dp(1f);
+        return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(2f) : Screen.dp(1f);
       }
       case ListItem.TYPE_COUNTRY: {
         return Screen.dp(56f) + Screen.dp(1f);
@@ -635,6 +635,12 @@ public class SettingHolder extends RecyclerView.ViewHolder {
       }
       case ListItem.TYPE_SEPARATOR_FULL:
       case ListItem.TYPE_SEPARATOR: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: Expressive design, rows are separate tiles with a 2dp gap and no divider lines
+          View gap = new View(context);
+          gap.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(2f)));
+          return new SettingHolder(gap);
+        }
         int height = Math.max(1, Screen.dp(.5f));
         SeparatorView view = new SeparatorView(context);
         if (themeProvider != null) {
@@ -650,6 +656,12 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return new SettingHolder(view);
       }
       case ListItem.TYPE_SHADOW_TOP: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: Expressive design, no shadows; 8dp of page color above the group
+          View spacer = new View(context);
+          spacer.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(8f)));
+          return new SettingHolder(spacer);
+        }
         ShadowView shadowView = new ShadowView(context);
         if (themeProvider != null) {
           themeProvider.addThemeInvalidateListener(shadowView);
@@ -722,6 +734,12 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return new SettingHolder(view);
       }
       case ListItem.TYPE_SHADOW_BOTTOM: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: Expressive design, no shadows; 8dp of page color below the group
+          View spacer = new View(context);
+          spacer.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(8f)));
+          return new SettingHolder(spacer);
+        }
         ShadowView shadowView = new ShadowView(context);
         if (themeProvider != null) {
           themeProvider.addThemeInvalidateListener(shadowView);
@@ -1330,6 +1348,11 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         }
         textView.setTypeface(Fonts.getRobotoMedium());
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: Expressive design, titleSmall in primary (the list decoration keeps the color in sync)
+          com.fahadali.xgram.appearance.XgramExpressive.applyText(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_S, false);
+          textView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+        }
 
         if (viewType == ListItem.TYPE_HEADER_WITH_ACTION) {
           FrameLayoutFix wrapView = new FrameLayoutFix(context);
@@ -2773,6 +2796,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
       }
       textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
       textView.setPadding(Screen.dp(16f), Screen.dp(6f), Screen.dp(16f), Screen.dp(12f));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Expressive design, bodyMedium in onSurfaceVariant (the list decoration keeps the color in sync)
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+      }
     }
     textView.setLinkTextColor(Theme.textLinkColor());
     textView.setHighlightColor(Theme.textLinkHighlightColor());

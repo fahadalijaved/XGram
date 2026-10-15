@@ -186,9 +186,11 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
     if (togglerView == null) {
       togglerView = new TogglerView(getContext());
       togglerView.init(isEnabled());
-      FrameLayout.LayoutParams params = FrameLayoutFix.newParams(Screen.dp(66f), Screen.dp(48f), (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.CENTER_VERTICAL);
+      final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      // XGram: Expressive design, the 52dp switch track sits 16dp from the end, centered on the row
+      FrameLayout.LayoutParams params = FrameLayoutFix.newParams(Screen.dp(expressive ? 72f : 66f), Screen.dp(48f), (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.CENTER_VERTICAL);
       params.leftMargin = Screen.dp(4f);
-      params.bottomMargin = Screen.dp(3f);
+      params.bottomMargin = expressive ? 0 : Screen.dp(3f);
       togglerView.setLayoutParams(params);
 
       addView(togglerView);
@@ -549,6 +551,42 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
     checkEmojiListener();
   }
 
+  // XGram: Expressive design, list text in the Material 3 type scale (bodyLarge title, bodyMedium supporting text).
+  // Sizes and row heights stay as they are; copies of the shared paints carry the typeface.
+
+  private static TextPaint m3eTitlePaint, m3eSubtitlePaint;
+
+  private static TextPaint xgramTitlePaint (TextPaint base) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return base;
+    }
+    if (m3eTitlePaint == null) {
+      m3eTitlePaint = new TextPaint();
+    }
+    m3eTitlePaint.set(base);
+    m3eTitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false));
+    return m3eTitlePaint;
+  }
+
+  private static TextPaint xgramSubtitlePaint (TextPaint base) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return base;
+    }
+    if (m3eSubtitlePaint == null) {
+      m3eSubtitlePaint = new TextPaint();
+    }
+    m3eSubtitlePaint.set(base);
+    m3eSubtitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false));
+    return m3eSubtitlePaint;
+  }
+
+  private int subtitleColor () {
+    if (dataColorId == 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    }
+    return Theme.getColor(dataColorId != 0 ? dataColorId : ColorId.textLight);
+  }
+
   private boolean allowMultiLineName;
 
   public void setAllowMultiLineName (boolean allowMultiLineName) {
@@ -614,7 +652,7 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
       pDataTop = pTop;
       pTop = pTop + Screen.dp(20f);
       if (displayItemData != null) {
-        setDisplayItemData(displayItemData, availWidth, Paints.getTextPaint16());
+        setDisplayItemData(displayItemData, availWidth, xgramTitlePaint(Paints.getTextPaint16()));
       }
       if (text != null) {
         text.get(lastTextAvailWidth = (int) availWidth);
@@ -622,16 +660,16 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
         lastTextAvailWidth = 0;
       }
       if (displayItemName != null) {
-        setDisplayItemName(displayItemName, availWidth, Paints.getRegularTextPaint(13f), 13f);
+        setDisplayItemName(displayItemName, availWidth, xgramSubtitlePaint(Paints.getRegularTextPaint(13f)), 13f);
       }
     } else {
       if (displayItemData != null) {
-        setDisplayItemData(displayItemData, availWidth, Paints.getTextPaint16());
+        setDisplayItemData(displayItemData, availWidth, xgramTitlePaint(Paints.getTextPaint16()));
         pDataLeft = totalWidth - paddingRight - displayItemDataWidth;
         pDataTop = pTop;
       }
       if (displayItemName != null) {
-        setDisplayItemName(displayItemName, availWidth, Paints.getTextPaint16(), 16f);
+        setDisplayItemName(displayItemName, availWidth, xgramTitlePaint(Paints.getTextPaint16()), 16f);
       }
     }
 
@@ -850,7 +888,7 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
   private final TextColorSet subtitleColorSet = new TextColorSetOverride(this) {
     @Override
     public int defaultTextColor () {
-      int subtitleColor = Theme.getColor(dataColorId != 0 ? dataColorId : ColorId.textLight);
+      int subtitleColor = subtitleColor();
       if ((flags & FLAG_DATA_SUBTITLE) != 0) {
         subtitleColor = ColorUtils.alphaColor(Theme.getSubtitleAlpha(), subtitleColor);
       }
@@ -903,23 +941,23 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
 
     if (type == TYPE_INFO || type == TYPE_INFO_COMPACT || type == TYPE_INFO_SUPERCOMPACT || (type == TYPE_INFO_MULTILINE && text == null)) {
       if (displayItemName != null) {
-        int subtitleColor = Theme.getColor(dataColorId != 0 ? dataColorId : ColorId.textLight);
+        int subtitleColor = subtitleColor();
         if ((flags & FLAG_DATA_SUBTITLE) != 0) {
           subtitleColor = ColorUtils.alphaColor(Theme.getSubtitleAlpha(), subtitleColor);
         }
-        drawText(c, displayItemName, displayItemNameLayout, pLeft, pTop, (int) (pTop - Screen.dp(12f)), Paints.getRegularTextPaint(13f, subtitleColor), rtl, width, displayItemNameWidth, displayItemNameText, subtitleColorSet, emojiStatusHelper);
+        drawText(c, displayItemName, displayItemNameLayout, pLeft, pTop, (int) (pTop - Screen.dp(12f)), xgramSubtitlePaint(Paints.getRegularTextPaint(13f, subtitleColor)), rtl, width, displayItemNameWidth, displayItemNameText, subtitleColorSet, emojiStatusHelper);
       }
       if (displayItemData != null) {
-        drawText(c, displayItemData, displayItemDataLayout, pDataLeft, pDataTop,  (int) (pDataTop - Screen.dp(15f)), Paints.getTextPaint16(dataColor), rtl, width, displayItemDataWidth, null, null, emojiStatusHelper);
+        drawText(c, displayItemData, displayItemDataLayout, pDataLeft, pDataTop,  (int) (pDataTop - Screen.dp(15f)), xgramTitlePaint(Paints.getTextPaint16(dataColor)), rtl, width, displayItemDataWidth, null, null, emojiStatusHelper);
       }
     } else if (type == TYPE_INFO_MULTILINE) {
       if (displayItemName != null) {
-        int subtitleColor = Theme.getColor(dataColorId != 0 ? dataColorId : ColorId.textLight);
+        int subtitleColor = subtitleColor();
         if ((flags & FLAG_DATA_SUBTITLE) != 0) {
           subtitleColor = ColorUtils.alphaColor(Theme.getSubtitleAlpha(), subtitleColor);
         }
         float top = (int) pDataTop - Screen.dp(13f) + text.getHeight() + Screen.dp(17f);
-        drawText(c, displayItemName, displayItemNameLayout, pLeft, (int) pDataTop - Screen.dp(13f) + text.getHeight() + Screen.dp(15f), (int) (top - Screen.dp(12f)), Paints.getRegularTextPaint(13f, subtitleColor), rtl, width, displayItemNameWidth, displayItemNameText, subtitleColorSet, emojiStatusHelper);
+        drawText(c, displayItemName, displayItemNameLayout, pLeft, (int) pDataTop - Screen.dp(13f) + text.getHeight() + Screen.dp(15f), (int) (top - Screen.dp(12f)), xgramSubtitlePaint(Paints.getRegularTextPaint(13f, subtitleColor)), rtl, width, displayItemNameWidth, displayItemNameText, subtitleColorSet, emojiStatusHelper);
       }
       if (text != null) {
         if (rtl) {
@@ -930,10 +968,10 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
       }
     } else {
       if (displayItemData != null) {
-        drawText(c, displayItemData, displayItemDataLayout, pDataLeft, pDataTop, (int) (pDataTop - Screen.dp(15)), Paints.getTextPaint16(dataColor), rtl, width, displayItemDataWidth, null, null, emojiStatusHelper);
+        drawText(c, displayItemData, displayItemDataLayout, pDataLeft, pDataTop, (int) (pDataTop - Screen.dp(15)), xgramTitlePaint(Paints.getTextPaint16(dataColor)), rtl, width, displayItemDataWidth, null, null, emojiStatusHelper);
       }
       if (displayItemName != null) {
-        drawText(c, displayItemName, displayItemNameLayout, pLeft, pTop, (int) (pTop - Screen.dp(15f)), Paints.getTextPaint16(dataColor), rtl, width, displayItemNameWidth, displayItemNameText, this, emojiStatusHelper);
+        drawText(c, displayItemName, displayItemNameLayout, pLeft, pTop, (int) (pTop - Screen.dp(15f)), xgramTitlePaint(Paints.getTextPaint16(dataColor)), rtl, width, displayItemNameWidth, displayItemNameText, this, emojiStatusHelper);
       }
     }
     if (progressComponent != null) {

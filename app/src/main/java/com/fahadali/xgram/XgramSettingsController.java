@@ -273,6 +273,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(currentThemeName());
         } else if (id == R.id.btn_xgramMaterialYou) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramMaterialYou.isEnabled(), isUpdate);
+        } else if (id == R.id.btn_xgramExpressive) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramExpressive.isEnabled(), isUpdate);
         } else if (id == R.id.btn_xgramEmojiSet) {
           view.setData(emojiSetName());
         } else if (id == R.id.btn_xgramHistoryRetention) {
@@ -556,6 +558,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(description(R.string.XgramAboutCredits));
   }
 
+  /** Expressive design (Android 13+): its own card with its note right under it. */
+  private static void addExpressiveRow (List<ListItem> items) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isAvailable()) {
+      addRows(items, toggle(R.id.btn_xgramExpressive, R.string.XgramExpressive, R.string.XgramExpressiveSub));
+      items.add(description(R.string.XgramExpressiveInfo));
+    }
+  }
+
   private void buildAppearance (List<ListItem> items) {
     items.add(header(R.string.XgramHeaderTheme));
     List<ListItem> pickers = new ArrayList<>();
@@ -569,10 +579,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         toggle(R.id.btn_xgramMaterialYou, R.string.XgramMaterialYou, R.string.XgramMaterialYouSub)
       );
       items.add(description(R.string.XgramMaterialYouInfo));
+      addExpressiveRow(items);
     } else {
       pickers.add(0, link(R.id.btn_xgramThemes, R.string.XgramThemes));
     }
     addRows(items, pickers.toArray(new ListItem[0]));
+    if (!com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable()) {
+      addExpressiveRow(items);
+    }
 
     items.add(header(R.string.XgramChats));
     addRows(items,
@@ -1435,6 +1449,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           adapter.updateValuedSettingById(R.id.btn_xgramThemes);
         }
       });
+      return;
+    } else if (id == R.id.btn_xgramExpressive) {
+      adapter.toggleView(v);
+      com.fahadali.xgram.appearance.XgramExpressive.setEnabled(this, !com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
       return;
     } else if (id == R.id.btn_xgramThemes) {
       navigateTo(new com.fahadali.xgram.appearance.XgramThemesController(context, tdlib));
