@@ -492,7 +492,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     }
     if (xgramNav != null && xgramNav.isActive()) {
       boolean card = xgramNav.isCard();
-      xgramNav.end();
+      xgramNav.end(finishMode == FINISH_NAVIGATION); // XGram: the app bar already shows the previous screen during a back card
       if (card && finishMode == FINISH_NAVIGATION) {
         headerView.setTranslation(1f);
       }

@@ -1215,8 +1215,36 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     }
   }
 
+  // XGram: while a predictive back card closes above the app bar (XgramNavMotion), the bar is cut out where the card is
+  // and shows through it as the card fades (alpha: how opaque the card is).
+  private @Nullable android.graphics.Path xgramCardHole;
+  private float xgramCardHoleAlpha;
+  private @Nullable Paint xgramCardHolePaint;
+
+  public void xgramSetCardHole (@Nullable android.graphics.Path hole, float alpha) {
+    this.xgramCardHole = hole;
+    this.xgramCardHoleAlpha = hole != null ? Math.max(0f, Math.min(1f, alpha)) : 0f;
+    invalidate();
+  }
+
   @Override
   public void draw (Canvas c) {
+    if (xgramCardHole != null && xgramCardHoleAlpha > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      if (xgramCardHolePaint == null) {
+        xgramCardHolePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        xgramCardHolePaint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT));
+      }
+      xgramCardHolePaint.setColor(Color.argb(Math.round(255f * xgramCardHoleAlpha), 0, 0, 0));
+      int save = c.saveLayer(0f, 0f, getWidth(), getHeight(), null);
+      drawWithOverlayColor(c);
+      c.drawPath(xgramCardHole, xgramCardHolePaint);
+      c.restoreToCount(save);
+      return;
+    }
+    drawWithOverlayColor(c);
+  }
+
+  private void drawWithOverlayColor (Canvas c) {
     super.draw(c);
     if (Color.alpha(overlayColor) > 0) {
       c.drawRect(0, 0, getMeasuredWidth(), filling.getBottom(), Paints.fillingPaint(overlayColor));
