@@ -248,6 +248,21 @@ open class ModulePlugin : Plugin<Project> {
                   proguardFile("proguard-hms.pro")
                 }
               }
+
+              // XGram: debug's quick build, but not debuggable, so it runs at about release speed (no R8, debug key).
+              // Use debug to check that things work, and qa (or release) to judge smoothness.
+              create("qa") {
+                initWith(getByName("debug"))
+                signingConfig = signingConfigs["debug"]
+
+                isDebuggable = false
+                isJniDebuggable = false
+                isMinifyEnabled = false
+                isShrinkResources = false
+
+                // Library modules only have debug and release: take their optimized release build.
+                matchingFallbacks += listOf("release", "debug")
+              }
             }
           }
         }
