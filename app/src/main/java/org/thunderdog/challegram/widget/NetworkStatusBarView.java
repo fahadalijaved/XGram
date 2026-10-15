@@ -283,16 +283,25 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
   }
 
   private boolean isVisible;
+  private final Runnable xgramLowProfileCheck = this::checkLowProfile; // XGram
 
   private void setIsVisible (boolean isVisible, boolean noDelay) {
     if (this.isVisible != isVisible) {
       this.isVisible = isVisible;
-      // XGram: hide the system status bar icons now, before the text's first frame (it used to wait for the animation,
-      // so the clock and icons showed next to the text for a moment)
-      boolean wasLowProfile = inLowProfile;
-      checkLowProfile();
-      boolean waitForLowProfile = isVisible && !wasLowProfile && inLowProfile && factor == 0f;
-      if (getParent() != null && getMeasuredWidth() != 0 && getMeasuredHeight() != 0) {
+      // XGram: hide the system status bar icons before the text's first frame (it used to wait for the animation,
+      // so the clock and icons showed next to the text for a moment). With Telegram X's usual 300 ms delay the request
+      // goes out at 120 ms, so a blip that is over sooner (the status never shows) doesn't make the icons blink.
+      boolean animated = getParent() != null && getMeasuredWidth() != 0 && getMeasuredHeight() != 0;
+      removeCallbacks(xgramLowProfileCheck);
+      boolean waitForLowProfile = false;
+      if (isVisible && animated && !noDelay && factor == 0f) {
+        postDelayed(xgramLowProfileCheck, 120l);
+      } else {
+        boolean wasLowProfile = inLowProfile;
+        checkLowProfile();
+        waitForLowProfile = isVisible && !wasLowProfile && inLowProfile && factor == 0f;
+      }
+      if (animated) {
         animateFactor(isVisible ? 1f : 0f, noDelay, waitForLowProfile);
       } else {
         forceFactor(isVisible ? 1f : 0f);
@@ -346,7 +355,14 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
   }
 
   private void checkLowProfile () {
-    setLowProfile(!isPaused && (isVisible || factor != 0f));
+    boolean needLowProfile = isVisible || factor != 0f;
+    if (isPaused && needLowProfile && inLowProfile) {
+      // XGram: keep the icons hidden while paused (the flag only counts while this window has focus), so coming back
+      // while the status is on screen doesn't show the clock and icons behind it until the request goes out again
+      removeCallbacks(this);
+      return;
+    }
+    setLowProfile(!isPaused && needLowProfile);
   }
 
   private boolean inLowProfile;
@@ -413,7 +429,12 @@ public class NetworkStatusBarView extends FrameLayoutFix implements Destroyable,
   private void setIsPaused (boolean isPaused) {
     if (this.isPaused != isPaused) {
       this.isPaused = isPaused;
+      boolean wasLowProfile = inLowProfile;
       checkLowProfile();
+      if (!isPaused && wasLowProfile && inLowProfile) {
+        removeCallbacks(this);
+        run();
+      }
     }
   }
 

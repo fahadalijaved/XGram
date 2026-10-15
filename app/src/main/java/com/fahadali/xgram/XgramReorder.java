@@ -43,8 +43,10 @@ import org.thunderdog.challegram.util.StringList;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import me.vkryl.core.collection.IntList;
 
@@ -131,8 +133,110 @@ public final class XgramReorder {
     }
   }
 
+  /**
+   * For a list whose real menus show only some of its items, or not always in the default order: only the items the
+   * user moved away from their default place move (each right after the nearest item that comes before it in the
+   * user's order and is there), so everything the user didn't touch keeps the menu's own order.
+   */
+  public static <T> void sortMoved (String list, List<T> items, KeyOf<T> keyOf, String[] defaultKeys) {
+    List<String> order = saved(list);
+    if (order.isEmpty() || items.size() < 2) {
+      return;
+    }
+    Map<String, Integer> defaultIndex = new HashMap<>();
+    for (int i = 0; i < defaultKeys.length; i++) {
+      defaultIndex.put(defaultKeys[i], i);
+    }
+    List<String> known = new ArrayList<>();
+    for (String key : order) {
+      if (defaultIndex.containsKey(key) && !known.contains(key)) {
+        known.add(key);
+      }
+    }
+    // The longest run of keys still in their default order relative to each other stayed; the others were moved.
+    int n = known.size();
+    int[] length = new int[n], prev = new int[n];
+    int best = -1;
+    for (int i = 0; i < n; i++) {
+      length[i] = 1;
+      prev[i] = -1;
+      //noinspection ConstantConditions
+      int index = defaultIndex.get(known.get(i));
+      for (int j = 0; j < i; j++) {
+        //noinspection ConstantConditions
+        if (defaultIndex.get(known.get(j)) < index && length[j] + 1 > length[i]) {
+          length[i] = length[j] + 1;
+          prev[i] = j;
+        }
+      }
+      if (best == -1 || length[i] > length[best]) {
+        best = i;
+      }
+    }
+    Set<String> moved = new HashSet<>(known);
+    for (int i = best; i != -1; i = prev[i]) {
+      moved.remove(known.get(i));
+    }
+    if (moved.isEmpty()) {
+      return;
+    }
+    List<T> result = new ArrayList<>(items.size());
+    for (T item : items) {
+      String key = keyOf.keyOf(item);
+      if (key == null || !moved.contains(key)) {
+        result.add(item);
+      }
+    }
+    for (int i = 0; i < n; i++) {
+      String key = known.get(i);
+      if (!moved.contains(key)) {
+        continue;
+      }
+      List<T> group = new ArrayList<>();
+      int originalIndex = -1;
+      for (int k = 0; k < items.size(); k++) {
+        if (key.equals(keyOf.keyOf(items.get(k)))) {
+          if (originalIndex == -1) {
+            originalIndex = k;
+          }
+          group.add(items.get(k));
+        }
+      }
+      if (group.isEmpty()) {
+        continue;
+      }
+      int at = -1;
+      for (int j = i - 1; j >= 0 && at == -1; j--) { // after the nearest earlier one that is there
+        for (int k = result.size() - 1; k >= 0; k--) {
+          if (known.get(j).equals(keyOf.keyOf(result.get(k)))) {
+            at = k + 1;
+            break;
+          }
+        }
+      }
+      for (int k = 0; k < result.size() && at == -1; k++) { // or else (none of them there) before the first one ordered
+        String other = keyOf.keyOf(result.get(k));
+        if (other != null && known.contains(other)) {
+          at = k;
+        }
+      }
+      if (at == -1) {
+        at = Math.min(originalIndex, result.size());
+      }
+      result.addAll(at, group);
+    }
+    for (int i = 0; i < result.size(); i++) {
+      items.set(i, result.get(i));
+    }
+  }
+
   /** The same for a Telegram X option list (one id, icon and name per option); keyOfId gives each option id's key. */
   public static void sort (String list, IntList ids, IntList icons, StringList strings, KeyOf<Integer> keyOfId) {
+    sort(list, ids, icons, strings, keyOfId, null);
+  }
+
+  /** With defaultKeys, only the options the user moved move (see sortMoved). */
+  public static void sort (String list, IntList ids, IntList icons, StringList strings, KeyOf<Integer> keyOfId, @Nullable String[] defaultKeys) {
     int count = ids.size();
     String[] names = strings.get();
     if (count < 2 || icons.size() != count || names.length != count) {
@@ -142,7 +246,12 @@ public final class XgramReorder {
     for (int i = 0; i < count; i++) {
       order.add(i);
     }
-    sort(list, order, index -> keyOfId.keyOf(ids.get(index)));
+    KeyOf<Integer> keyOfIndex = index -> keyOfId.keyOf(ids.get(index));
+    if (defaultKeys != null) {
+      sortMoved(list, order, keyOfIndex, defaultKeys);
+    } else {
+      sort(list, order, keyOfIndex);
+    }
     boolean changed = false;
     for (int i = 0; i < count; i++) {
       if (order.get(i) != i) {

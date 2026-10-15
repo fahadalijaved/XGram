@@ -182,9 +182,21 @@ public final class XgramMessageMenu {
     order(ids, icons, strings);
   }
 
-  /** The user's order (Settings → XGram → Chats → Message menu); options it doesn't know keep their place. */
+  private static String[] defaultKeys;
+
+  /**
+   * The user's order (Settings → XGram → Chats → Message menu). Only the options the user moved move: not every menu
+   * follows the default order (a deleted message's, XGram's Clear from cache before Copy), and those keep their own.
+   */
   private static void order (IntList ids, IntList icons, StringList strings) {
-    com.fahadali.xgram.XgramReorder.sort(com.fahadali.xgram.XgramReorder.MESSAGE_MENU, ids, icons, strings, XgramMessageMenu::keyOfId);
+    if (defaultKeys == null) {
+      String[] keys = new String[OPTIONS.length];
+      for (int i = 0; i < keys.length; i++) {
+        keys[i] = OPTIONS[i].key;
+      }
+      defaultKeys = keys;
+    }
+    com.fahadali.xgram.XgramReorder.sort(com.fahadali.xgram.XgramReorder.MESSAGE_MENU, ids, icons, strings, XgramMessageMenu::keyOfId, defaultKeys);
   }
 
   @androidx.annotation.Nullable

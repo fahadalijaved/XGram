@@ -136,6 +136,9 @@ public class SettingsController extends ViewController<Void> implements
     contentView.setFactorLocked(false);
     stickerSetsPreloader.preloadStickers();
     emojiPacksPreloader.preloadStickers();
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_phone); // XGram: Hide my phone number may have changed meanwhile
+    }
     if (!oneShot) {
       oneShot = true;
       tdlib.listeners().subscribeToStickerUpdates(this);
