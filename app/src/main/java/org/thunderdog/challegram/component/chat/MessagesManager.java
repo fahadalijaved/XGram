@@ -541,6 +541,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void destroy (ViewController<?> context) {
+    com.fahadali.xgram.chats.XgramAutoTranslate.forget(this); // XGram: the chat's messages leave the auto-translate queue
     resetScroll();
     returnToMessageIds = null;
     highlightMode = 0;
@@ -807,6 +808,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     subscribeForUpdates();
     this.useReactionBubblesValue = checkReactionBubbles();
     this.xgramAutoTranslate = com.fahadali.xgram.chats.XgramAutoTranslate.appliesTo(controller, chat.id); // XGram
+    this.xgramAutoTranslateTarget = com.fahadali.xgram.chats.XgramAutoTranslate.targetLanguage();
     this.usedTranslateStyleMode = checkTranslateStyleMode();
     this.wasScrollByUser = false;
   }
@@ -1041,12 +1043,19 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     return xgramAutoTranslate;
   }
 
-  /** XGram: after the chat's auto-translate was turned on or off. Returns whether it changed here. */
+  /** XGram: after the chat's auto-translate was turned on or off, or "Translate to" changed. Returns whether it changed here. */
   public boolean xgramCheckAutoTranslate () {
     long chatId = loader.getChatId();
     boolean autoTranslate = chatId != 0 && com.fahadali.xgram.chats.XgramAutoTranslate.appliesTo(controller, chatId);
-    if (autoTranslate == xgramAutoTranslate) {
+    String target = com.fahadali.xgram.chats.XgramAutoTranslate.targetLanguage();
+    boolean targetChanged = autoTranslate && xgramAutoTranslate && !StringUtils.equalsOrBothEmpty(target, xgramAutoTranslateTarget);
+    xgramAutoTranslateTarget = target;
+    if (autoTranslate == xgramAutoTranslate && !targetChanged) {
       return false;
+    }
+    if (targetChanged) {
+      // the messages translated to the old language, and those skipped for being in it, are translated again
+      com.fahadali.xgram.chats.XgramAutoTranslate.onChatChanged(adapter.getItems(), false);
     }
     xgramAutoTranslate = autoTranslate;
     usedTranslateStyleMode = checkTranslateStyleMode();
@@ -1054,6 +1063,8 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     rebuildLayouts();
     return true;
   }
+
+  private String xgramAutoTranslateTarget;
 
   @Nullable
   @Override

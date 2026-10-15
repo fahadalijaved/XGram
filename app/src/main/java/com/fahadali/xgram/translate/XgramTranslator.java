@@ -140,7 +140,8 @@ public final class XgramTranslator {
           telegram(tdlib, text, toLanguage, callback, Lang.getString(R.string.XgramTrFellBack, error));
           return;
         }
-        result = new TdApi.Error(e.code != 0 ? e.code : 400, error);
+        // code 0 for a network error, so auto-translate tries again later
+        result = new TdApi.Error(e.code, error);
       } catch (Throwable t) {
         result = new TdApi.Error(400, Lang.getString(R.string.XgramTrError, name(provider), Lang.getString(R.string.XgramTrErrorAnswer)));
       }

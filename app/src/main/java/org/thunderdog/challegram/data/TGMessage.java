@@ -9852,11 +9852,18 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   /** XGram: where auto-translate is with this message, see {@link com.fahadali.xgram.chats.XgramAutoTranslate}. */
   public int xgramAutoTranslateState;
+  /** XGram: changes with every auto-translate request and edit, so an answer that comes late is told apart. */
+  public int xgramAutoTranslateToken;
 
   /** XGram: auto-translate shows the translation Inline; {@code listener} hears how the request ended. */
-  public void xgramAutoTranslate (String language, TranslationsManager.XgramListener listener) {
+  public void xgramAutoTranslate (String language, boolean telegramOnly, TranslationsManager.XgramListener listener) {
     translatedCounterForceShow = true;
-    mTranslationsManager.xgramRequestTranslation(language, listener);
+    mTranslationsManager.xgramRequestTranslation(language, telegramOnly, listener);
+  }
+
+  /** XGram: whether auto-translating to {@code language} needs no request (a cached translation). */
+  public boolean xgramIsAutoTranslateCached (String language) {
+    return mTranslationsManager.xgramIsAnsweredLocally(language);
   }
 
   public int translationStyleMode () {

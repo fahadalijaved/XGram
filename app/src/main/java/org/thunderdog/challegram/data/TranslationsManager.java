@@ -87,29 +87,42 @@ public final class TranslationsManager {
      * @param error null when the translation is shown (or there was nothing to translate), otherwise as received
      * @param errorText the error as shown to the user, null with {@code error}
      * @param notice why the chosen service failed when Telegram translated instead, otherwise null
+     * @param sent whether a request was sent; false when answered from a cache or there was nothing to translate
      */
-    void onDone (@Nullable TdApi.Error error, @Nullable String errorText, @Nullable String notice);
+    void onDone (@Nullable TdApi.Error error, @Nullable String errorText, @Nullable String notice, boolean sent);
   }
 
   /** XGram: translations shared by every message and screen, so a chat opened again isn't translated again. */
   private static final android.util.LruCache<String, Object[]> xgramSharedCache = new android.util.LruCache<>(400);
 
   public void requestTranslation (String language) {
-    requestTranslation(language, null);
+    requestTranslation(language, false, null);
   }
 
-  /** XGram: auto-translate; {@code listener} is told when the request ends, whatever the outcome. */
-  public void xgramRequestTranslation (String language, XgramListener listener) {
-    requestTranslation(language, listener);
+  /**
+   * XGram: auto-translate; {@code listener} is told when the request ends, whatever the outcome. A translation Telegram
+   * made after the chosen service failed is used too, and {@code telegramOnly} asks Telegram, not the chosen service.
+   */
+  public void xgramRequestTranslation (String language, boolean telegramOnly, XgramListener listener) {
+    requestTranslation(language, telegramOnly, listener);
   }
 
-  private void requestTranslation (String language, @Nullable XgramListener listener) {
+  /** XGram: whether {@link #xgramRequestTranslation} would be answered without sending a request. */
+  public boolean xgramIsAnsweredLocally (String language) {
+    if (language == null || StringUtils.equalsOrBothEmpty(language, message.getOriginalMessageLanguage())) {
+      return true;
+    }
+    TdApi.FormattedText textToTranslate = prepareTextToTranslate(message.getTextToTranslate());
+    return textToTranslate == null || xgramFindCached(textToTranslate.text, language, xgramCacheKeys(language, true)) != null;
+  }
+
+  private void requestTranslation (String language, boolean telegramOnly, @Nullable XgramListener listener) {
     currentTranslatedLanguage = language;
     if (language == null || StringUtils.equalsOrBothEmpty(language, message.getOriginalMessageLanguage())) {
       dispatchResult(TranslationCounterDrawable.TRANSLATE_STATUS_DEFAULT, null, true);
       currentTranslatedLanguage = null;
       if (listener != null) {
-        listener.onDone(null, null, null);
+        listener.onDone(null, null, null, false);
       }
       return;
     }
@@ -121,38 +134,34 @@ public final class TranslationsManager {
     TdApi.FormattedText textToTranslate = prepareTextToTranslate(message.getTextToTranslate());
     if (textToTranslate == null) {
       if (listener != null) {
-        listener.onDone(null, null, null);
+        listener.onDone(null, null, null, false);
       }
       return;
     }
 
     // XGram: cached per translation service, so choosing another service translates again
-    final String providerKey = xgramProviderKey(language);
-    TdApi.FormattedText cachedText = getCachedTranslation(textToTranslate.text, providerKey);
-    if (cachedText == null) {
-      Object[] shared = xgramSharedCache.get(providerKey + "\u0001" + textToTranslate.text);
-      if (shared != null) {
-        cachedText = (TdApi.FormattedText) shared[0];
-        saveCachedTextTranslation(textToTranslate.text, language, providerKey, cachedText, (Integer) shared[1]);
-      }
-    }
+    TdApi.FormattedText cachedText = xgramFindCached(textToTranslate.text, language, xgramCacheKeys(language, listener != null));
     if (cachedText != null) {
-      xgramTranslatedBy = getCachedTranslationProvider(textToTranslate.text, providerKey);
+      xgramTranslatedBy = xgramFoundProvider;
       dispatchResult(TranslationCounterDrawable.TRANSLATE_STATUS_SUCCESS, cachedText, true);
       if (listener != null) {
-        listener.onDone(null, null, null);
+        listener.onDone(null, null, null, false);
       }
       return;
     }
 
     dispatchStatus(TranslationCounterDrawable.TRANSLATE_STATUS_LOADING, true);
-    tdlib.ui().post(() -> requestTranslationImpl(textToTranslate, language, (object, provider, providerError) -> tdlib.ui().post(() -> {
+    tdlib.ui().post(() -> requestTranslationImpl(textToTranslate, language, telegramOnly, (object, provider, providerError) -> tdlib.ui().post(() -> {
+      // XGram: a message edited while this was on its way: the answer is for the old text
+      TdApi.FormattedText currentText = message.getTextToTranslate();
+      boolean edited = message instanceof TGMessage && (currentText == null || !StringUtils.equalsOrBothEmpty(currentText.text, textToTranslate.text));
+      boolean current = StringUtils.equalsOrBothEmpty(currentTranslatedLanguage, language) && !edited;
       if (object instanceof TdApi.FormattedText) {
         TdApi.FormattedText text = prepareTranslatedText((TdApi.FormattedText) object);
         // under the key of the service that actually translated: after a fallback to Telegram the chosen service is tried again next time
         saveCachedTextTranslation(textToTranslate.text, language, provider + ":" + language, text, provider);
         xgramSharedCache.put(provider + ":" + language + "\u0001" + textToTranslate.text, new Object[] {text, provider});
-        if (StringUtils.equalsOrBothEmpty(currentTranslatedLanguage, language)) {
+        if (current) {
           if (providerError != null && listener == null) {
             errorDelegate.onError(providerError);
           }
@@ -160,10 +169,10 @@ public final class TranslationsManager {
           dispatchResult(TranslationCounterDrawable.TRANSLATE_STATUS_SUCCESS, text, true);
         }
         if (listener != null) {
-          listener.onDone(null, null, providerError);
+          listener.onDone(null, null, providerError, true);
         }
       } else {
-        if (StringUtils.equalsOrBothEmpty(currentTranslatedLanguage, language)) {
+        if (current) {
           dispatchStatus(TranslationCounterDrawable.TRANSLATE_STATUS_ERROR, true);
           if (object instanceof TdApi.Error && listener == null) {
             // a third-party service's error already reads "Google Translate: ..."
@@ -172,21 +181,50 @@ public final class TranslationsManager {
         }
         if (listener != null) {
           TdApi.Error error = object instanceof TdApi.Error ? (TdApi.Error) object : new TdApi.Error(500, TD.toErrorString(object));
-          listener.onDone(error, XgramTranslator.isThirdParty(provider) ? error.message : TD.toErrorString(error), null);
+          listener.onDone(error, XgramTranslator.isThirdParty(provider) ? error.message : TD.toErrorString(error), null, true);
         }
       }
     })));
   }
 
-  private int xgramTranslatedBy = -1;
+  private int xgramTranslatedBy = -1, xgramFoundProvider = -1;
 
   /** XGram: the service that made the translation shown last ({@code XgramTranslator.PROVIDER_*}), or -1. */
   public int getTranslatedBy () {
     return xgramTranslatedBy;
   }
 
-  private String xgramProviderKey (String language) {
-    return XgramTranslator.providerFor(message.xgramChatId()) + ":" + language;
+  /**
+   * XGram: the keys a translation is looked up under, the chosen service's first. Auto-translate also takes what
+   * Telegram made after the chosen service failed, so a chat opened again sends nothing.
+   */
+  private String[] xgramCacheKeys (String language, boolean auto) {
+    int provider = XgramTranslator.providerFor(message.xgramChatId());
+    String key = provider + ":" + language;
+    return auto && XgramTranslator.isThirdParty(provider) ? new String[] {key, XgramTranslator.PROVIDER_TELEGRAM + ":" + language} : new String[] {key};
+  }
+
+  /** XGram: this message's translation, or another message's with the same text (then saved as this message's). */
+  private @Nullable TdApi.FormattedText xgramFindCached (String text, String language, String[] keys) {
+    for (String key : keys) {
+      TdApi.FormattedText cached = getCachedTranslation(text, key);
+      int provider;
+      if (cached != null) {
+        provider = getCachedTranslationProvider(text, key);
+      } else {
+        Object[] shared = xgramSharedCache.get(key + "\u0001" + text);
+        if (shared == null) {
+          continue;
+        }
+        cached = (TdApi.FormattedText) shared[0];
+        provider = (Integer) shared[1];
+      }
+      // also the latest under the language, which is what is shown (e.g. for Copy)
+      saveCachedTextTranslation(text, language, key, cached, provider);
+      xgramFoundProvider = provider;
+      return cached;
+    }
+    return null;
   }
 
   public String getCurrentTranslatedLanguage () {
@@ -197,9 +235,9 @@ public final class TranslationsManager {
     return lastTranslatedLanguage;
   }
 
-  private void requestTranslationImpl (TdApi.FormattedText originalText, String toLanguage, XgramTranslator.Callback callback) {
-    // XGram: Telegram, or the third-party service chosen in Settings, XGram, Chats, Translation
-    XgramTranslator.translate(tdlib, originalText, message.getOriginalMessageLanguage(), toLanguage, message.xgramChatId(), callback);
+  private void requestTranslationImpl (TdApi.FormattedText originalText, String toLanguage, boolean telegramOnly, XgramTranslator.Callback callback) {
+    // XGram: Telegram, or the third-party service chosen in Settings, XGram, Chats, Translation (an unknown chat stays on Telegram)
+    XgramTranslator.translate(tdlib, originalText, message.getOriginalMessageLanguage(), toLanguage, telegramOnly ? XgramTranslator.CHAT_UNKNOWN : message.xgramChatId(), callback);
   }
 
 

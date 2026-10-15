@@ -23,6 +23,7 @@ import org.drinkless.tdlib.TdApi;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TGMessage;
 import org.thunderdog.challegram.data.TGMessageBotInfo;
@@ -32,6 +33,7 @@ import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.unsorted.Settings;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -52,7 +54,9 @@ import tgx.td.ChatId;
  *
  * Only messages that are on screen are translated, two requests at a time. Translations are cached (per message
  * and, in {@code TranslationsManager}, for every message with the same text), so scrolling back or opening the chat
- * again sends nothing. After an error (e.g. too many requests) the queue waits, longer each time, and says so once.
+ * again sends nothing. After an error (e.g. too many requests) the queue waits, longer each time or as long as asked,
+ * and says so once; after Telegram translated because the chosen service failed, Telegram alone translates for a while.
+ * A message being edited again and again (a bot writing its answer) is translated once the edits stop.
  * Never in secret chats: the text would leave the end-to-end encrypted chat. Not in Saved Messages (all outgoing).
  *
  * Stored per account slot and chat: true or false when set in the chat menu, nothing when the chat follows
@@ -64,10 +68,16 @@ public final class XgramAutoTranslate {
   public static final String KEY_PREFIX = "xgram_atr_";
 
   /** {@link TGMessage#xgramAutoTranslateState}. */
-  public static final int STATE_NONE = 0, STATE_CHECKING = 1, STATE_QUEUED = 2, STATE_REQUESTED = 3, STATE_DONE = 4, STATE_SKIPPED = 5, STATE_FAILED = 6;
+  public static final int STATE_NONE = 0, STATE_CHECKING = 1, STATE_QUEUED = 2, STATE_REQUESTED = 3, STATE_DONE = 4, STATE_SKIPPED = 5, STATE_FAILED = 6, STATE_EDITED = 7;
 
   private static final int MAX_REQUESTS = 2;
   private static final long FIRST_BACKOFF = 5_000, MAX_BACKOFF = 5 * 60_000, ERROR_INTERVAL = 60_000;
+  /** Telegram alone after the chosen service failed: one minute, longer each time it fails again. */
+  private static final long FIRST_SERVICE_BACKOFF = 60_000, MAX_SERVICE_BACKOFF = 30 * 60_000;
+  /** A message edited again within this time (e.g. a bot writing its answer) is translated once the edits stop. */
+  private static final long EDIT_DELAY = 2_500;
+  /** A request with no answer by then (no connection) stops holding up the others; its answer is still shown. */
+  private static final long REQUEST_TIMEOUT = 30_000;
 
   // Settings
 
@@ -247,8 +257,9 @@ public final class XgramAutoTranslate {
       return;
     }
     m.xgramAutoTranslateState = STATE_CHECKING;
+    final int token = m.xgramAutoTranslateToken;
     m.checkTranslatableText(() -> {
-      if (m.xgramAutoTranslateState != STATE_CHECKING) {
+      if (m.xgramAutoTranslateState != STATE_CHECKING || m.xgramAutoTranslateToken != token) {
         return; // turned off, or edited, meanwhile
       }
       if (!m.manager().xgramAutoTranslate()) {
@@ -266,22 +277,40 @@ public final class XgramAutoTranslate {
     });
   }
 
-  /** The message's text changed: the translation was dropped, the new text is translated when on screen. */
+  /**
+   * The message's text changed: the translation was dropped, and an answer still on its way is for the old text.
+   * The new text is translated when on screen, once the edits stop for {@link #EDIT_DELAY}.
+   */
   public static void onMessageEdited (TGMessage m) {
-    m.xgramAutoTranslateState = STATE_NONE;
-    if (m.isAttachedToView()) {
-      onMessageShown(m);
+    final int token = ++m.xgramAutoTranslateToken;
+    if (!m.manager().xgramAutoTranslate()) {
+      m.xgramAutoTranslateState = STATE_NONE;
+      return;
     }
+    m.xgramAutoTranslateState = STATE_EDITED;
+    UI.post(() -> {
+      if (m.xgramAutoTranslateToken == token && m.xgramAutoTranslateState == STATE_EDITED) {
+        m.xgramAutoTranslateState = STATE_NONE;
+        if (m.isAttachedToView()) {
+          onMessageShown(m);
+        }
+      }
+    }, EDIT_DELAY);
   }
 
-  /** The chat's auto-translate was turned on or off: messages on screen are translated, or shown as they are. */
+  /**
+   * The chat's auto-translate was turned on or off: messages on screen are translated, or shown as they are. Turned
+   * off, only what auto-translate translated goes back to the original; what the user translated stays.
+   */
   public static void onChatChanged (@Nullable List<TGMessage> items, boolean autoTranslate) {
     if (items == null) {
       return;
     }
     for (TGMessage m : items) {
+      int state = m.xgramAutoTranslateState;
+      m.xgramAutoTranslateToken++;
       m.xgramAutoTranslateState = STATE_NONE;
-      if (!autoTranslate && m.isTranslated()) {
+      if (!autoTranslate && (state == STATE_DONE || state == STATE_REQUESTED) && m.isTranslated()) {
         m.stopTranslated();
       }
     }
@@ -298,8 +327,56 @@ public final class XgramAutoTranslate {
 
   private static final ArrayDeque<TGMessage> queue = new ArrayDeque<>();
   private static int requests;
-  private static long pausedUntil, backoff, lastErrorTime;
+  private static long pausedUntil, backoff, serviceUntil, serviceBackoff, lastErrorTime;
   private static boolean pumping, pumpScheduled, pumpPosted;
+
+  private static final class Request implements Runnable {
+    final TGMessage message;
+    final int token;
+    final String language;
+    final boolean telegramOnly, sent;
+    boolean released;
+
+    Request (TGMessage message, int token, String language, boolean telegramOnly, boolean sent) {
+      this.message = message;
+      this.token = token;
+      this.language = language;
+      this.telegramOnly = telegramOnly;
+      this.sent = sent;
+    }
+
+    /** {@link #REQUEST_TIMEOUT} passed. */
+    @Override
+    public void run () {
+      if (release(this)) {
+        pump();
+      }
+    }
+  }
+
+  /** The request stops counting against {@link #MAX_REQUESTS}. */
+  private static boolean release (Request r) {
+    if (!r.sent || r.released) {
+      return false;
+    }
+    r.released = true;
+    UI.removePendingRunnable(r);
+    requests = Math.max(0, requests - 1);
+    return true;
+  }
+
+  /** The chat's screen closed: its messages leave the queue. */
+  public static void forget (MessagesManager manager) {
+    for (Iterator<TGMessage> it = queue.iterator(); it.hasNext(); ) {
+      TGMessage m = it.next();
+      if (m.manager() == manager) {
+        it.remove();
+        if (m.xgramAutoTranslateState == STATE_QUEUED) {
+          m.xgramAutoTranslateState = STATE_NONE;
+        }
+      }
+    }
+  }
 
   /** Not while the list binds the message: a cached translation would change its layout in the middle of it. */
   private static void schedulePump () {
@@ -312,60 +389,105 @@ public final class XgramAutoTranslate {
     }
   }
 
+  /**
+   * Cached translations are shown right away, even during a pause or with every request taken; the others wait for a
+   * free request and the end of the pause.
+   */
   private static void pump () {
     if (pumping) {
       return;
     }
     pumping = true;
     try {
-      while (requests < MAX_REQUESTS && !queue.isEmpty()) {
-        long wait = pausedUntil - SystemClock.uptimeMillis();
-        if (wait > 0) {
-          if (!pumpScheduled) {
-            pumpScheduled = true;
-            UI.post(() -> {
-              pumpScheduled = false;
-              pump();
-            }, wait);
-          }
-          return;
-        }
-        TGMessage m = queue.pollFirst();
-        if (m == null || m.xgramAutoTranslateState != STATE_QUEUED) {
+      long now = SystemClock.uptimeMillis();
+      long wait = pausedUntil - now;
+      boolean telegramOnly = now < serviceUntil;
+      String language = targetLanguage();
+      int free = MAX_REQUESTS - requests;
+      List<Request> ready = null;
+      for (Iterator<TGMessage> it = queue.iterator(); it.hasNext(); ) {
+        TGMessage m = it.next();
+        if (m.xgramAutoTranslateState != STATE_QUEUED) {
+          it.remove();
           continue;
         }
         if (!m.isAttachedToView() || !m.manager().xgramAutoTranslate()) {
+          it.remove();
           m.xgramAutoTranslateState = STATE_NONE; // translated when it comes on screen again
           continue;
         }
-        requests++;
-        m.xgramAutoTranslateState = STATE_REQUESTED;
-        m.xgramAutoTranslate(targetLanguage(), (error, errorText, notice) -> onDone(m, error, errorText, notice));
+        if (m.isTranslated()) {
+          it.remove();
+          m.xgramAutoTranslateState = STATE_SKIPPED; // the user translated it meanwhile
+          continue;
+        }
+        boolean sent = !m.xgramIsAutoTranslateCached(language);
+        if (sent && (wait > 0 || free <= 0)) {
+          continue;
+        }
+        it.remove();
+        if (sent) {
+          free--;
+        }
+        if (ready == null) {
+          ready = new ArrayList<>();
+        }
+        ready.add(new Request(m, ++m.xgramAutoTranslateToken, language, telegramOnly, sent));
+      }
+      if (ready != null) {
+        for (Request r : ready) {
+          r.message.xgramAutoTranslateState = STATE_REQUESTED;
+          if (r.sent) {
+            requests++;
+            UI.post(r, REQUEST_TIMEOUT);
+          }
+          r.message.xgramAutoTranslate(r.language, r.telegramOnly, (error, errorText, notice, sent) -> onDone(r, error, errorText, notice, sent));
+        }
+      }
+      if (wait > 0 && !queue.isEmpty() && !pumpScheduled) {
+        pumpScheduled = true;
+        UI.post(() -> {
+          pumpScheduled = false;
+          pump();
+        }, wait);
       }
     } finally {
       pumping = false;
     }
   }
 
-  private static void onDone (TGMessage m, @Nullable TdApi.Error error, @Nullable String errorText, @Nullable String notice) {
-    requests = Math.max(0, requests - 1);
-    if (error == null) {
-      backoff = 0;
-      if (m.xgramAutoTranslateState == STATE_REQUESTED) {
+  private static void onDone (Request r, @Nullable TdApi.Error error, @Nullable String errorText, @Nullable String notice, boolean sent) {
+    release(r);
+    long now = SystemClock.uptimeMillis();
+    if (error != null) {
+      // every error pauses the queue, longer each time or as long as asked, so a failing service isn't flooded
+      backoff = backoff == 0 ? FIRST_BACKOFF : Math.min(MAX_BACKOFF, backoff * 2);
+      pausedUntil = Math.max(pausedUntil, now + Math.max(backoff, retryAfter(error)));
+    } else if (sent) {
+      backoff = 0; // a request went through (not a cached translation)
+      if (notice != null) {
+        // the chosen service failed and Telegram translated instead: Telegram alone for a while, longer each time
+        serviceBackoff = serviceBackoff == 0 ? FIRST_SERVICE_BACKOFF : Math.min(MAX_SERVICE_BACKOFF, serviceBackoff * 2);
+        serviceUntil = now + serviceBackoff;
+      } else if (!r.telegramOnly) {
+        serviceBackoff = 0;
+      }
+    }
+    TGMessage m = r.message;
+    if (m.xgramAutoTranslateToken == r.token && m.xgramAutoTranslateState == STATE_REQUESTED) {
+      if (!StringUtils.equalsOrBothEmpty(m.getCurrentTranslatedLanguage(), r.language)) {
+        // the user showed the original or picked another language meanwhile, or there was nothing to translate
+        m.xgramAutoTranslateState = STATE_SKIPPED;
+        if (m.getCurrentTranslatedLanguage() == null && m.isTranslated()) {
+          m.stopTranslated();
+        }
+      } else if (error == null) {
         m.xgramAutoTranslateState = STATE_DONE;
         MessagesController c = m.messagesController();
         if (c != null && m.isTranslated()) {
           c.xgramOnAutoTranslated(m.getOriginalMessageLanguage());
         }
-      }
-      if (notice != null) {
-        showError(m, notice);
-      }
-    } else {
-      // every error pauses the queue, longer each time (or as long as Telegram asks), so a failing service isn't flooded
-      backoff = Math.min(MAX_BACKOFF, Math.max(retryAfter(error), backoff == 0 ? FIRST_BACKOFF : backoff * 2));
-      pausedUntil = SystemClock.uptimeMillis() + backoff;
-      if (m.xgramAutoTranslateState == STATE_REQUESTED) {
+      } else {
         m.stopTranslated();
         if (isTemporary(error) && m.isAttachedToView()) {
           m.xgramAutoTranslateState = STATE_QUEUED;
@@ -374,8 +496,8 @@ public final class XgramAutoTranslate {
           m.xgramAutoTranslateState = isTemporary(error) ? STATE_NONE : STATE_FAILED;
         }
       }
-      showError(m, errorText);
     }
+    showError(m, error != null ? errorText : notice);
     pump();
   }
 
