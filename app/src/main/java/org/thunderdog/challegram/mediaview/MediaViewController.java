@@ -2726,7 +2726,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       if (Float.isNaN(factor))
         throw new IllegalArgumentException();
 
+      boolean xgramPipChanged = (this.pipFactor == 0f) != (factor == 0f);
       this.pipFactor = factor;
+      if (xgramPipChanged) {
+        xgramUpdateFold(); // XGram: the in-app picture in picture never splits at the fold
+      }
 
       updatePipLayout(mediaView.getMeasuredWidth(), mediaView.getMeasuredHeight(), false, false);
 
@@ -5149,6 +5153,16 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     mediaView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     contentView.addView(mediaView);
 
+    // XGram: tabletop posture. The viewer is a popup, so it gets no configuration callback: it listens to the window.
+    contentView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+        v.post(this::xgramUpdateFold);
+      }
+    });
+    if (context().xgramWindow() != null) {
+      context().xgramWindow().addListener(xgramWindowListener);
+    }
+
     if (needHeader()) {
       headerCell = new DoubleHeaderView(context);
       headerCell.setThemedTextColor(this);
@@ -5483,9 +5497,31 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
   }
 
+  // XGram: tabletop posture (Flex mode): the photo or video stays above the fold, the caption, seek bar and buttons
+  // below it. Not while editing in the gallery (its own offsets) or in the in-app picture in picture.
+
+  private final com.fahadali.xgram.layout.XgramWindow.Listener xgramWindowListener = (window, changes) -> xgramUpdateFold();
+
+  private void xgramUpdateFold () {
+    if (mediaView == null || contentView == null || isDestroyed()) {
+      return;
+    }
+    int offset = 0;
+    if (mode != MODE_GALLERY && pipFactor == 0f) {
+      int foldTop = com.fahadali.xgram.layout.XgramWindow.tabletopFoldTop(contentView);
+      if (foldTop > 0) {
+        offset = Math.max(0, mediaView.getBottom() - foldTop);
+      }
+    }
+    mediaView.setFoldOffset(offset);
+  }
+
   @Override
   public void destroy () {
     super.destroy();
+    if (context().xgramWindow() != null) {
+      context().xgramWindow().removeListener(xgramWindowListener); // XGram
+    }
     MediaItem current = stack.getCurrent();
     if (current != null && current.isViewOnce()) {
       current.viewContent(true);

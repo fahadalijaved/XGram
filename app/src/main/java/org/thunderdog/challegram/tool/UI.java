@@ -214,6 +214,18 @@ public class UI {
     return isTablet;
   }
 
+  /**
+   * XGram: keeps {@link #isTablet()} right after folding or unfolding. It was read once from values-sw600dp, so a
+   * Fold stayed a "phone" (or a "tablet") until the app restarted.
+   */
+  public static void onConfigurationChanged (android.content.res.Configuration newConfig) {
+    if (newConfig.smallestScreenWidthDp != android.content.res.Configuration.SMALLEST_SCREEN_WIDTH_DP_UNDEFINED) {
+      isTablet = newConfig.smallestScreenWidthDp >= 600; // the values-sw600dp threshold
+    } else {
+      isTablet = null; // read again from the resources
+    }
+  }
+
   public interface StateListener {
     void onUiStateChanged (int newState);
   }

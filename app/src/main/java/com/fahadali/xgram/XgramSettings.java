@@ -1031,4 +1031,40 @@ public final class XgramSettings {
     inlineVideoStart = value == INLINE_VIDEO_START_TAP ? INLINE_VIDEO_START_TAP : INLINE_VIDEO_START_AUTO;
     putInt(KEY_INLINE_VIDEO_START, inlineVideoStart);
   }
+
+  // Foldables (Appearance > Layout, see com.fahadali.xgram.layout.XgramWindow). Read on first use: asked while
+  // measuring the two panes.
+
+  public static final String KEY_FOLD_HINGE_SPLIT = "xgram_fold_hinge_split";
+  public static final String KEY_FOLD_TABLETOP = "xgram_fold_tabletop";
+
+  private volatile Boolean foldHingeSplit, foldTabletop;
+
+  /** Book posture (half open like a book): the two panes meet at the hinge. */
+  public boolean foldHingeSplit () {
+    Boolean value = foldHingeSplit;
+    if (value == null) {
+      foldHingeSplit = value = pmc().getBoolean(KEY_FOLD_HINGE_SPLIT, true);
+    }
+    return value;
+  }
+
+  public void setFoldHingeSplit (boolean value) {
+    foldHingeSplit = value;
+    put(KEY_FOLD_HINGE_SPLIT, value);
+  }
+
+  /** Tabletop posture (Flex mode): media, calls and the camera show above the fold and their controls below it. */
+  public boolean foldTabletop () {
+    Boolean value = foldTabletop;
+    if (value == null) {
+      foldTabletop = value = pmc().getBoolean(KEY_FOLD_TABLETOP, true);
+    }
+    return value;
+  }
+
+  public void setFoldTabletop (boolean value) {
+    foldTabletop = value;
+    put(KEY_FOLD_TABLETOP, value);
+  }
 }

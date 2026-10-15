@@ -48,8 +48,20 @@ import org.thunderdog.challegram.ui.MainController;
  * a "select a chat" placeholder covers it. Folding or unfolding only shows or hides the left pane.
  */
 public final class XgramTwoPane implements NavigationStack.ChangeListener {
-  /** Narrowest window (dp) that gets two panes. */
-  private static final int MIN_WIDTH_DP = 600;
+  /**
+   * Smallest window (dp) that gets two panes. The height rule keeps one pane on a phone in landscape and on a Fold's
+   * cover screen in landscape (both are 800 to 900dp wide but under 480dp high), where the list squashed the chat.
+   */
+  private static final int MIN_WIDTH_DP = 600, MIN_HEIGHT_DP = 480;
+  /** Wide enough for two panes whatever the height (desktop windows). */
+  private static final int ANY_HEIGHT_WIDTH_DP = 1200;
+  /**
+   * Two panes stay on until the window is this much below the line, so dragging a window (DeX, freeform) across
+   * it doesn't tear the chat list down and rebuild it on every frame.
+   */
+  private static final int HYSTERESIS_DP = 20;
+  /** Book posture: the hinge only becomes the divider when it leaves both panes at least this wide (dp). */
+  private static final int HINGE_MIN_LIST_DP = 260, HINGE_MIN_CHAT_DP = 300;
 
   private final BaseActivity context;
   private final NavigationController navigation;
@@ -75,7 +87,18 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     this.container = container;
     navigation.getStack().addChangeListener(this);
     org.thunderdog.challegram.theme.ThemeManager.instance().addThemeListener(themeListener);
+    XgramWindow window = context.xgramWindow();
+    if (window != null) {
+      window.addListener(windowListener);
+    }
   }
+
+  // Folding, unfolding, resizing and book posture: re-check the panes and where they split.
+  private final XgramWindow.Listener windowListener = (window, changes) -> {
+    if ((changes & (XgramWindow.CHANGE_SIZE | XgramWindow.CHANGE_POSTURE | XgramWindow.CHANGE_MULTI_WINDOW)) != 0) {
+      update();
+    }
+  };
 
   // The placeholder, its header strip and the divider take their colours when created: rebuild them when the
   // theme changes (e.g. Material You night), or they stay in the old theme.
@@ -103,8 +126,26 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   }
 
   public static boolean isWideEnough (BaseActivity context) {
-    Configuration configuration = context.getResources().getConfiguration();
-    return configuration.screenWidthDp >= MIN_WIDTH_DP;
+    return isWideEnough(context, false);
+  }
+
+  /** @param isActive two panes are shown now: they stay a little below the line (see {@link #HYSTERESIS_DP}) */
+  private static boolean isWideEnough (BaseActivity context, boolean isActive) {
+    int width, height;
+    XgramWindow window = context.xgramWindow();
+    if (window != null && window.widthDp() > 0 && window.heightDp() > 0) {
+      width = window.widthDp();
+      height = window.heightDp();
+    } else {
+      Configuration configuration = context.getResources().getConfiguration();
+      width = configuration.screenWidthDp;
+      height = configuration.screenHeightDp;
+    }
+    int slack = isActive ? HYSTERESIS_DP : 0;
+    if (width >= ANY_HEIGHT_WIDTH_DP - slack) {
+      return true;
+    }
+    return width >= MIN_WIDTH_DP - slack && height >= MIN_HEIGHT_DP - slack;
   }
 
   @Nullable
@@ -151,7 +192,8 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   /** Re-evaluates the layout: setting, window width and whether the app is past login. */
   public void update () {
     MainController root = mainRoot();
-    boolean needActive = root != null && XgramSettings.instance().twoPaneLayout() && isWideEnough(context) && !navigation.isDestroyed();
+    boolean isAllowed = root != null && XgramSettings.instance().twoPaneLayout() && !navigation.isDestroyed();
+    boolean needActive = isAllowed && isWideEnough(context, isActive);
     try {
       if (needActive) {
         if (!isActive || leftMain == null || leftMain.tdlib() != root.tdlib()) {
@@ -161,14 +203,18 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
         }
         hideRoot(root);
       } else if (isActive) {
-        deactivate();
+        // Folded or too small: the chat list is kept (scroll position, folder, open archive) for the next unfold.
+        // Setting off, logged out: it goes.
+        deactivate(isAllowed);
+      } else if (leftNavigation != null && (!isAllowed || leftMain == null || leftMain.tdlib() != root.tdlib())) {
+        removeLeft();
       }
     } catch (Throwable t) {
       // Never take the app down for a layout feature: fall back to Telegram X's single pane.
       Log.e("XGram: two-pane layout failed", t);
       android.util.Log.e("XGram", "two-pane layout failed", t);
       try {
-        deactivate();
+        deactivate(false);
       } catch (Throwable ignored) { }
     }
     updatePlaceholder();
@@ -228,19 +274,27 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   }
 
   private void activate (Tdlib tdlib) {
-    if (leftNavigation != null) {
+    // The chat list kept from the last fold comes back as it was, if it is still the same account's.
+    boolean reuse = leftNavigation != null && leftMain != null && leftMain.tdlib() == tdlib && !leftNavigation.isDestroyed() && !leftMain.isDestroyed();
+    if (reuse) {
+      detachLeft();
+    } else if (leftNavigation != null) {
       removeLeft();
     }
     leftWidth = computeLeftWidth();
 
-    leftNavigation = new NavigationController(context);
-    leftNavigation.getStack().addChangeListener(stack -> context.notifyBackPressAvailabilityChanged());
-    leftMain = new MainController(context, tdlib);
+    if (!reuse) {
+      leftNavigation = new NavigationController(context);
+      leftNavigation.getStack().addChangeListener(stack -> context.notifyBackPressAvailabilityChanged());
+      leftMain = new MainController(context, tdlib);
+    }
     View leftView = leftNavigation.getValue();
     leftView.setLayoutParams(new FrameLayout.LayoutParams(leftWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
     // Behind the main navigation and the drawer, after the focus view.
     container.addView(leftView, Math.min(1, container.getChildCount()));
-    leftNavigation.initController(leftMain);
+    if (!reuse) {
+      leftNavigation.initController(leftMain);
+    }
 
     divider = new DividerView(context);
     divider.setLayoutParams(new FrameLayout.LayoutParams(Math.max(1, Screen.dp(.5f)), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
@@ -261,25 +315,106 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     container.requestLayout();
   }
 
+  // Where the panes go, in the container: set by computeSplit in onMeasure and used by onLayout.
+  private int splitWidth = -1;
+  private int listStart, listEnd, chatStart, chatEnd;
+  /** Book posture with a physical hinge: the space it hides, kept empty. Equal values: no gutter. */
+  private int gutterStart, gutterEnd;
+
+  /**
+   * Splits {@code width} between the chat list and the chat.
+   * <ul>
+   *   <li>The navigation views carry the left and right system bar and cutout insets as margins
+   *   (RootFrameLayout#applyNavigationInsets): the list gets the inset on its side, the chat the one on its side,
+   *   so neither runs under a side navigation bar or a cutout.</li>
+   *   <li>Right-to-left languages put the list on the right. The root is always laid out left to right, so this
+   *   is mirrored here by hand.</li>
+   *   <li>Book posture (half open, vertical fold): the panes meet at the hinge instead of at the usual width.</li>
+   * </ul>
+   */
+  private void computeSplit (ViewGroup parent, int width) {
+    int insetLeft = 0, insetRight = 0;
+    ViewGroup.LayoutParams params = navigation.getValue().getLayoutParams();
+    if (params instanceof ViewGroup.MarginLayoutParams) {
+      insetLeft = Math.max(0, ((ViewGroup.MarginLayoutParams) params).leftMargin);
+      insetRight = Math.max(0, ((ViewGroup.MarginLayoutParams) params).rightMargin);
+    }
+    int start = Math.min(insetLeft, width), end = Math.max(start, width - insetRight);
+    boolean rtl = Lang.rtl();
+    splitWidth = width;
+
+    android.graphics.Rect hinge = hingeSplit(parent);
+    if (hinge != null && hinge.left >= start && hinge.right <= end) {
+      int before = hinge.left - start, after = end - hinge.right;
+      int listSize = rtl ? after : before, chatSize = rtl ? before : after;
+      if (listSize >= Screen.dp(HINGE_MIN_LIST_DP) && chatSize >= Screen.dp(HINGE_MIN_CHAT_DP)) {
+        if (rtl) {
+          chatStart = start;
+          chatEnd = hinge.left;
+          listStart = hinge.right;
+          listEnd = end;
+        } else {
+          listStart = start;
+          listEnd = hinge.left;
+          chatStart = hinge.right;
+          chatEnd = end;
+        }
+        gutterStart = hinge.left;
+        gutterEnd = hinge.right;
+        return;
+      }
+    }
+
+    int list = Math.min(leftWidth, (end - start) / 2);
+    if (rtl) {
+      chatStart = start;
+      chatEnd = end - list;
+      listStart = chatEnd;
+      listEnd = end;
+      gutterStart = gutterEnd = chatEnd;
+    } else {
+      listStart = start;
+      listEnd = start + list;
+      chatStart = listEnd;
+      chatEnd = end;
+      gutterStart = gutterEnd = listEnd;
+    }
+  }
+
+  /** Book posture: the hinge in {@code parent}, when the panes should meet there. */
+  @Nullable
+  private android.graphics.Rect hingeSplit (ViewGroup parent) {
+    XgramWindow window = context.xgramWindow();
+    XgramWindow.Fold fold = window != null ? window.fold() : null;
+    if (fold == null || !fold.separating || fold.horizontal || !XgramSettings.instance().foldHingeSplit()) {
+      return null;
+    }
+    return window.hingeBoundsIn(parent);
+  }
+
+  private int dividerWidth () {
+    return gutterEnd > gutterStart ? gutterEnd - gutterStart : Math.max(1, Screen.dp(.5f));
+  }
+
   /** Called by the activity's content layout after its own measure pass. */
   public void onMeasure (ViewGroup parent) {
     if (!isActive || leftNavigation == null) {
       return;
     }
     int width = parent.getMeasuredWidth(), height = parent.getMeasuredHeight();
-    int left = Math.min(leftWidth, width / 2);
+    computeSplit(parent, width);
     int heightSpec = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY);
-    int rightSpec = View.MeasureSpec.makeMeasureSpec(Math.max(0, width - left), View.MeasureSpec.EXACTLY);
-    leftNavigation.getValue().measure(View.MeasureSpec.makeMeasureSpec(left, View.MeasureSpec.EXACTLY), heightSpec);
-    navigation.getValue().measure(rightSpec, heightSpec);
+    int chatSpec = View.MeasureSpec.makeMeasureSpec(Math.max(0, chatEnd - chatStart), View.MeasureSpec.EXACTLY);
+    leftNavigation.getValue().measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, listEnd - listStart), View.MeasureSpec.EXACTLY), heightSpec);
+    navigation.getValue().measure(chatSpec, heightSpec);
     if (placeholder != null) {
-      placeholder.measure(rightSpec, heightSpec);
+      placeholder.measure(chatSpec, heightSpec);
     }
     if (underlay != null) {
-      underlay.measure(rightSpec, heightSpec);
+      underlay.measure(chatSpec, heightSpec);
     }
     if (divider != null) {
-      divider.measure(View.MeasureSpec.makeMeasureSpec(Math.max(1, Screen.dp(.5f)), View.MeasureSpec.EXACTLY), heightSpec);
+      divider.measure(View.MeasureSpec.makeMeasureSpec(dividerWidth(), View.MeasureSpec.EXACTLY), heightSpec);
     }
   }
 
@@ -289,22 +424,36 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       return;
     }
     int width = parent.getMeasuredWidth(), height = parent.getMeasuredHeight();
-    int left = Math.min(leftWidth, width / 2);
-    leftNavigation.getValue().layout(0, 0, left, height);
-    navigation.getValue().layout(left, 0, width, height);
+    if (splitWidth != width) {
+      computeSplit(parent, width);
+    }
+    leftNavigation.getValue().layout(listStart, 0, listEnd, height);
+    navigation.getValue().layout(chatStart, 0, chatEnd, height);
     if (placeholder != null) {
-      placeholder.layout(left, 0, width, height);
+      placeholder.layout(chatStart, 0, chatEnd, height);
     }
     if (underlay != null) {
-      underlay.layout(left, 0, width, height);
+      underlay.layout(chatStart, 0, chatEnd, height);
     }
     if (divider != null) {
-      divider.layout(left - divider.getMeasuredWidth(), 0, left, height);
+      int dividerWidth = divider.getMeasuredWidth();
+      if (gutterEnd > gutterStart) {
+        divider.layout(gutterStart, 0, gutterEnd, height); // covers the hinge
+      } else if (listStart < chatStart) {
+        divider.layout(listEnd - dividerWidth, 0, listEnd, height); // list on the left
+      } else {
+        divider.layout(listStart, 0, listStart + dividerWidth, height); // list on the right
+      }
     }
   }
 
-  private void deactivate () {
-    removeLeft();
+  /** @param keepLeft keep the chat list (detached) for the next time two panes are shown */
+  private void deactivate (boolean keepLeft) {
+    if (keepLeft) {
+      detachLeft();
+    } else {
+      removeLeft();
+    }
     isActive = false;
     container.requestLayout();
   }
@@ -340,13 +489,20 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   }
 
   private void removeLeft () {
-    showRoot();
+    detachLeft();
     if (leftNavigation != null) {
-      container.removeView(leftNavigation.getValue());
       leftNavigation.destroy();
       leftNavigation = null;
     }
     leftMain = null;
+  }
+
+  /** Takes the panes off screen. The chat list itself stays alive, so unfolding brings it back where it was. */
+  private void detachLeft () {
+    showRoot();
+    if (leftNavigation != null) {
+      container.removeView(leftNavigation.getValue());
+    }
     if (divider != null) {
       container.removeView(divider);
       divider = null;
@@ -487,8 +643,21 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   public void destroy () {
     navigation.getStack().removeChangeListener(this);
     org.thunderdog.challegram.theme.ThemeManager.instance().removeThemeListener(themeListener);
+    XgramWindow window = context.xgramWindow();
+    if (window != null) {
+      window.removeListener(windowListener);
+    }
     removeLeft();
     isActive = false;
+  }
+
+  /** The left chat list's screens hear about split screen too (the activity only tells the right pane's). */
+  public void onMultiWindowModeChanged (boolean inMultiWindowMode) {
+    if (leftNavigation != null) {
+      for (ViewController<?> c : leftNavigation.getStack().getAll()) {
+        c.onMultiWindowModeChanged(inMultiWindowMode);
+      }
+    }
   }
 
   /**

@@ -778,4 +778,10 @@
   <string name="XgramInlineVideoStartAuto">Automatically (muted)</string>
   <string name="XgramInlineVideoStartTap">On tap</string>
   <string name="XgramInlineVideoInfo">Videos play inside the message with a seek bar, and a tap turns the sound on or off. Autoplay follows Autoplay GIFs, Data Saver and, on mobile data, automatic media download.</string>
+  <!-- XGram: adaptive part 1, foldables (Appearance > Layout) -->
+  <string name="XgramFoldHingeSplit">Split panes at the fold</string>
+  <string name="XgramFoldHingeSplitSub">When half open like a book</string>
+  <string name="XgramFoldTabletop">Use tabletop layout</string>
+  <string name="XgramFoldTabletopSub">Media, calls and camera</string>
+  <string name="XgramFoldInfo">Held half open like a book, the chat list and the chat meet at the fold. Standing half open, videos, calls and the camera show above the fold and their buttons below it.</string>
 </resources>

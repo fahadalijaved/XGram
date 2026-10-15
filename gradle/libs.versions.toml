@@ -63,6 +63,7 @@ androidx-exifinterface-latest = "1.4.2"
 androidx-camera-latest = "1.6.2"
 androidx-media-latest = "1.11.1"
 androidx-tracing-latest = "2.0.3"
+androidx-window-latest = "1.5.1" # requires minSdk 23: legacy and lollipop build without it (see src/preMarshmallow)
 
 firebase-messaging-latest = "26.0.0"
 
@@ -302,6 +303,11 @@ androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro
 androidx-tracing-legacy = { module = "androidx.tracing:tracing-ktx", version.ref = "androidx-tracing-legacy" }
 androidx-tracing-lollipop = { module = "androidx.tracing:tracing-ktx", version.ref = "androidx-tracing-lollipop" }
 androidx-tracing-latest = { module = "androidx.tracing:tracing-ktx", version.ref = "androidx-tracing-latest" }
+
+# XGram: foldable postures (Jetpack WindowManager)
+androidx-window-latest = { module = "androidx.window:window", version.ref = "androidx-window-latest" }
+androidx-window-java-latest = { module = "androidx.window:window-java", version.ref = "androidx-window-latest" }
+androidx-window-testing-latest = { module = "androidx.window:window-testing", version.ref = "androidx-window-latest" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }

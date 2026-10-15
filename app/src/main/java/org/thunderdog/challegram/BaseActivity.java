@@ -574,6 +574,8 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     Lang.addLanguageListener(this);
 
     navigation.getStack().addChangeListener(navigationStackChangeListener);
+    xgramWindow = new com.fahadali.xgram.layout.XgramWindow(this); // XGram: size classes, fold posture
+    xgramWindow.watch(rootView);
     xgramTwoPane = new com.fahadali.xgram.layout.XgramTwoPane(this, navigation, contentView); // XGram: foldables, tablets
     com.fahadali.xgram.XgramProxyRules.init(this); // XGram
     xgramTwoPane.update();
@@ -1223,6 +1225,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (xgramTwoPane != null) {
       xgramTwoPane.destroy(); // XGram
     }
+    if (xgramWindow != null) {
+      xgramWindow.destroy(); // XGram
+    }
     if (navigation != null) {
       navigation.getStack().removeChangeListener(navigationStackChangeListener);
       navigation.destroy();
@@ -1255,17 +1260,47 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     TdlibManager.instance().player().removeTrackChangeListener(this);
   }
 
-  /*@Override
-  public void onMultiWindowModeChanged (boolean isInMultiWindowMode, Configuration newConfig) {
-    super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig);
-    navigation.onMultiWindowModeChanged(isInMultiWindowMode);
-    if (isPasscodeShowing) {
-      navigation.onMultiWindowModeChanged(isInMultiWindowMode);
+  // XGram: was commented out (it called a NavigationController method that doesn't exist, three times). The
+  // one-argument version runs on every API from 24: on 26+ the framework's two-argument version calls it.
+  @Override
+  @SuppressWarnings("deprecation")
+  public void onMultiWindowModeChanged (boolean isInMultiWindowMode) {
+    super.onMultiWindowModeChanged(isInMultiWindowMode);
+    if (navigation != null) {
+      for (ViewController<?> c : navigation.getStack().getAll()) {
+        c.onMultiWindowModeChanged(isInMultiWindowMode);
+      }
+    }
+    if (xgramTwoPane != null) {
+      xgramTwoPane.onMultiWindowModeChanged(isInMultiWindowMode);
+    }
+    if (isPasscodeShowing && passcodeController != null) {
+      passcodeController.onMultiWindowModeChanged(isInMultiWindowMode);
     }
     if (camera != null) {
-      navigation.onMultiWindowModeChanged(isInMultiWindowMode);
+      camera.onMultiWindowModeChanged(isInMultiWindowMode); // re-checks whether the camera stays open
     }
-  }*/
+    if (xgramWindow != null) {
+      xgramWindow.onMultiWindowModeChanged(isInMultiWindowMode);
+    }
+  }
+
+  // XGram: fold posture is only tracked while the activity is visible.
+  @Override
+  protected void onStart () {
+    super.onStart();
+    if (xgramWindow != null) {
+      xgramWindow.onStart();
+    }
+  }
+
+  @Override
+  protected void onStop () {
+    if (xgramWindow != null) {
+      xgramWindow.onStop();
+    }
+    super.onStop();
+  }
 
   private static final int SYSTEM_NIGHT_MODE_UNSPECIFIED = 0;
   private static final int SYSTEM_NIGHT_MODE_NO = 1;
@@ -1352,6 +1387,10 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   public void onConfigurationChanged (@NonNull Configuration newConfig)  {
     super.onConfigurationChanged(newConfig);
     boolean needRecreate = Screen.checkDensity();
+    UI.onConfigurationChanged(newConfig); // XGram: the tablet flag follows folding and unfolding
+    if (xgramWindow != null) {
+      xgramWindow.onConfigurationChanged(newConfig); // XGram: before anything below reads the window
+    }
     navigation.configurationChanged(newConfig);
     if (xgramTwoPane != null) {
       xgramTwoPane.onConfigurationChanged(newConfig); // XGram: folding / unfolding
@@ -2100,6 +2139,14 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   @Nullable
   public com.fahadali.xgram.layout.XgramTwoPane xgramTwoPane () {
     return xgramTwoPane;
+  }
+
+  // XGram: window size classes, fold posture and rotation for adaptive layouts.
+  private com.fahadali.xgram.layout.XgramWindow xgramWindow;
+
+  @Nullable
+  public com.fahadali.xgram.layout.XgramWindow xgramWindow () {
+    return xgramWindow;
   }
 
   public RootFrameLayout getRootView () {
