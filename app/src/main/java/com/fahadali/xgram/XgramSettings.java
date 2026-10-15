@@ -594,6 +594,36 @@ public final class XgramSettings {
     pmc().putBoolean("xgram_limit_message_width", value);
   }
 
+  // Drag and drop, side by side (adaptive plan part 2)
+
+  public static final String KEY_DRAG_DROP = "xgram_drag_drop";
+  public static final String KEY_OPEN_BESIDE = "xgram_open_beside";
+
+  /** Drop files and text onto chats, drag media out of the media viewer. Cached: read on every drag. */
+  private volatile Boolean dragDrop;
+
+  public boolean dragDrop () {
+    Boolean value = dragDrop;
+    if (value == null) {
+      dragDrop = value = pmc().getBoolean(KEY_DRAG_DROP, true);
+    }
+    return value;
+  }
+
+  public void setDragDrop (boolean value) {
+    dragDrop = value;
+    pmc().putBoolean(KEY_DRAG_DROP, value);
+  }
+
+  /** External links and files open in a window next to XGram in split screen and on large screens. */
+  public boolean openBeside () {
+    return pmc().getBoolean(KEY_OPEN_BESIDE, false);
+  }
+
+  public void setOpenBeside (boolean value) {
+    pmc().putBoolean(KEY_OPEN_BESIDE, value);
+  }
+
   /** Hide messages from people you blocked in groups (AyuGram, NagramX). Cached: checked for every message. */
   private volatile Boolean hideBlocked;
 

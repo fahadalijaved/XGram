@@ -38,6 +38,7 @@ public final class XgramBackup {
     XgramSettings.KEY_INLINE_VIDEO,
     // Foldables (Appearance > Layout)
     XgramSettings.KEY_FOLD_HINGE_SPLIT, XgramSettings.KEY_FOLD_TABLETOP,
+    XgramSettings.KEY_DRAG_DROP, XgramSettings.KEY_OPEN_BESIDE,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)

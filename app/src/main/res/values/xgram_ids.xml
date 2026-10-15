@@ -279,4 +279,7 @@
   <!-- Adaptive part 1: foldables (Appearance > Layout) -->
   <item type="id" name="btn_xgramFoldHingeSplit" />
   <item type="id" name="btn_xgramFoldTabletop" />
+  <!-- Drag and drop, side by side (adaptive plan part 2) -->
+  <item type="id" name="btn_xgramDragDrop" />
+  <item type="id" name="btn_xgramOpenBeside" />
 </resources>

@@ -652,6 +652,24 @@ public class MediaView extends FrameLayoutFix {
     return isMoving;
   }
 
+  // XGram: hold a photo or video, then drag it out to another app
+  private final com.fahadali.xgram.layout.XgramDragDrop.DragOut xgramDragOut = new com.fahadali.xgram.layout.XgramDragDrop.DragOut(this);
+
+  @Override
+  public boolean dispatchTouchEvent (MotionEvent e) {
+    int dragOut = xgramDragOut.onTouchEvent(e);
+    if (dragOut == com.fahadali.xgram.layout.XgramDragDrop.DragOut.PASS) {
+      return super.dispatchTouchEvent(e);
+    }
+    if (dragOut == com.fahadali.xgram.layout.XgramDragDrop.DragOut.CANCEL) {
+      MotionEvent cancel = MotionEvent.obtain(e);
+      cancel.setAction(MotionEvent.ACTION_CANCEL);
+      super.dispatchTouchEvent(cancel);
+      cancel.recycle();
+    }
+    return true;
+  }
+
   @Override
   public boolean onInterceptTouchEvent (MotionEvent e) {
     if ((disallowIntercept && (e.getAction() != MotionEvent.ACTION_DOWN /*|| !ignoreDisallowInterceptTouchEvent*/)) || disallowMove || disableTouch || detector == null) {
