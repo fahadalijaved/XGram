@@ -205,6 +205,9 @@
   <item type="id" name="btn_xgramAiTools" />
   <item type="id" name="btn_xgramTrAlways" />
   <item type="id" name="btn_xgramTrStyle" />
+  <item type="id" name="btn_xgramTrProvider" />
+  <item type="id" name="btn_xgramTrFallback" />
+  <item type="id" name="btn_xgramTrProviderInfo" />
   <!-- XGram: bot button long-press -->
   <item type="id" name="btn_xgramCopyButtonText" />
   <item type="id" name="btn_xgramCopyCallbackData" />

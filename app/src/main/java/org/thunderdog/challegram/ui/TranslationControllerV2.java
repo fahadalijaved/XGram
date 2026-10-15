@@ -378,7 +378,9 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
       headerCell.setSubtitle(Lang.getString(R.string.TranslateOriginal), animated);
     } else if (status == TranslationCounterDrawable.TRANSLATE_STATUS_SUCCESS) {
       headerCell.setTitle(Lang.getLanguageName(mTranslationsManager.getCurrentTranslatedLanguage(), Lang.getString(R.string.TranslateLangUnknown)), animated);
-      headerCell.setSubtitle(Lang.getString(R.string.TranslatedFrom, Lang.getLanguageName(messageOriginalLanguage, Lang.getString(R.string.TranslateLangUnknown))), animated);
+      String translatedFrom = Lang.getString(R.string.TranslatedFrom, Lang.getLanguageName(messageOriginalLanguage, Lang.getString(R.string.TranslateLangUnknown)));
+      int translatedBy = mTranslationsManager.getTranslatedBy(); // XGram: which service translated it
+      headerCell.setSubtitle(translatedBy >= 0 ? Lang.getString(R.string.XgramTrFromBy, translatedFrom, com.fahadali.xgram.translate.XgramTranslator.name(translatedBy)) : translatedFrom, animated);
     } else if (status == TranslationCounterDrawable.TRANSLATE_STATUS_LOADING) {
       headerCell.setTitle(Lang.getString(R.string.TranslatingTo, Lang.getLanguageName(mTranslationsManager.getCurrentTranslatedLanguage(), Lang.getString(R.string.TranslateLangUnknown))), animated);
       headerCell.setSubtitle(Lang.getString(R.string.TranslateWait), animated);

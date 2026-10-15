@@ -414,6 +414,48 @@ public final class XgramSettings {
     put(KEY_TR_ALWAYS, value);
   }
 
+  public static final String KEY_TR_PROVIDER = "xgram_tr_provider";
+  public static final String KEY_TR_FALLBACK = "xgram_tr_fallback";
+  /** Followed by the provider: the user has read that the text goes to that service. Kept out of backups. */
+  private static final String KEY_TR_NOTICE = "xgram_trnotice_";
+
+  private int trProvider = -1, trFallback = -1;
+
+  /** The translation service, one of {@code XgramTranslator.PROVIDER_*}: Telegram by default. */
+  public int translateProvider () {
+    if (trProvider < 0) {
+      int value = pmc().getInt(KEY_TR_PROVIDER, com.fahadali.xgram.translate.XgramTranslator.PROVIDER_TELEGRAM);
+      trProvider = com.fahadali.xgram.translate.XgramTranslator.isValidProvider(value) ? value : com.fahadali.xgram.translate.XgramTranslator.PROVIDER_TELEGRAM;
+    }
+    return trProvider;
+  }
+
+  public void setTranslateProvider (int provider) {
+    trProvider = provider;
+    putInt(KEY_TR_PROVIDER, provider);
+  }
+
+  /** When the chosen service fails, Telegram translates instead. */
+  public boolean translateFallback () {
+    if (trFallback < 0) {
+      trFallback = pmc().getBoolean(KEY_TR_FALLBACK, true) ? 1 : 0;
+    }
+    return trFallback == 1;
+  }
+
+  public void setTranslateFallback (boolean value) {
+    trFallback = value ? 1 : 0;
+    put(KEY_TR_FALLBACK, value);
+  }
+
+  public boolean translateNoticeShown (int provider) {
+    return pmc().getBoolean(KEY_TR_NOTICE + provider, false);
+  }
+
+  public void setTranslateNoticeShown (int provider) {
+    pmc().putBoolean(KEY_TR_NOTICE + provider, true);
+  }
+
   // Message box
 
   /** A tap on the microphone records hands-free, a long press switches between voice and video messages. */

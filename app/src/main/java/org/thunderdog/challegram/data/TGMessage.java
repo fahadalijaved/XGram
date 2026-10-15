@@ -9893,6 +9893,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   @Override
+  public long xgramChatId () {
+    return getChatId();
+  }
+
+  @Override
   public @Nullable TdApi.FormattedText getTextToTranslate () {
     return textToTranslate;
   }

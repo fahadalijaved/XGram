@@ -2,7 +2,8 @@ package org.thunderdog.challegram.data;
 
 import androidx.annotation.Nullable;
 
-import org.drinkless.tdlib.Client;
+import com.fahadali.xgram.translate.XgramTranslator;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.util.TranslationCounterDrawable;
@@ -40,6 +41,11 @@ public final class TranslationsManager {
     String getOriginalMessageLanguage ();
 
     TdApi.FormattedText getTextToTranslate ();
+
+    /** XGram: the chat the text is from, 0 if none or unknown. Third-party translation services are never used in secret chats. */
+    default long xgramChatId () {
+      return 0;
+    }
   }
 
   public TranslationsManager (Tdlib tdlib, Translatable message, OnChangeTranslatedStatus statusDelegate, OnChangeTranslatedResult resultDelegate, OnNewTranslatedError errorDelegate) {
@@ -87,29 +93,48 @@ public final class TranslationsManager {
     TdApi.FormattedText textToTranslate = prepareTextToTranslate(message.getTextToTranslate());
     if (textToTranslate == null) return;
 
-    TdApi.FormattedText cachedText = getCachedTextTranslation(textToTranslate.text, language);
+    // XGram: cached per translation service, so choosing another service translates again
+    final String providerKey = xgramProviderKey(language);
+    TdApi.FormattedText cachedText = getCachedTranslation(textToTranslate.text, providerKey);
     if (cachedText != null) {
+      xgramTranslatedBy = getCachedTranslationProvider(textToTranslate.text, providerKey);
       dispatchResult(TranslationCounterDrawable.TRANSLATE_STATUS_SUCCESS, cachedText, true);
       return;
     }
 
     dispatchStatus(TranslationCounterDrawable.TRANSLATE_STATUS_LOADING, true);
-    tdlib.ui().post(() -> requestTranslationImpl(textToTranslate, language, object -> tdlib.ui().post(() -> {
+    tdlib.ui().post(() -> requestTranslationImpl(textToTranslate, language, (object, provider, providerError) -> tdlib.ui().post(() -> {
       if (object instanceof TdApi.FormattedText) {
         TdApi.FormattedText text = prepareTranslatedText((TdApi.FormattedText) object);
-        saveCachedTextTranslation(textToTranslate.text, language, text);
+        saveCachedTextTranslation(textToTranslate.text, language, providerKey, text, provider);
         if (StringUtils.equalsOrBothEmpty(currentTranslatedLanguage, language)) {
+          if (providerError != null) {
+            errorDelegate.onError(providerError);
+          }
+          xgramTranslatedBy = provider;
           dispatchResult(TranslationCounterDrawable.TRANSLATE_STATUS_SUCCESS, text, true);
         }
       } else {
         if (StringUtils.equalsOrBothEmpty(currentTranslatedLanguage, language)) {
           dispatchStatus(TranslationCounterDrawable.TRANSLATE_STATUS_ERROR, true);
           if (object instanceof TdApi.Error) {
-            errorDelegate.onError(TD.toErrorString(object));
+            // a third-party service's error already reads "Google Translate: ..."
+            errorDelegate.onError(XgramTranslator.isThirdParty(provider) ? ((TdApi.Error) object).message : TD.toErrorString(object));
           }
         }
       }
     })));
+  }
+
+  private int xgramTranslatedBy = -1;
+
+  /** XGram: the service that made the translation shown last ({@code XgramTranslator.PROVIDER_*}), or -1. */
+  public int getTranslatedBy () {
+    return xgramTranslatedBy;
+  }
+
+  private String xgramProviderKey (String language) {
+    return XgramTranslator.providerFor(message.xgramChatId()) + ":" + language;
   }
 
   public String getCurrentTranslatedLanguage () {
@@ -120,8 +145,9 @@ public final class TranslationsManager {
     return lastTranslatedLanguage;
   }
 
-  private void requestTranslationImpl (TdApi.FormattedText originalText, String toLanguage, Client.ResultHandler callback) {
-    tdlib.client().send(new TdApi.TranslateText(originalText, toLanguage, TdConstants.TEXT_FORMAT_NEUTRAL), callback);
+  private void requestTranslationImpl (TdApi.FormattedText originalText, String toLanguage, XgramTranslator.Callback callback) {
+    // XGram: Telegram, or the third-party service chosen in Settings, XGram, Chats, Translation
+    XgramTranslator.translate(tdlib, originalText, message.getOriginalMessageLanguage(), toLanguage, message.xgramChatId(), callback);
   }
 
 
@@ -132,6 +158,8 @@ public final class TranslationsManager {
   private static class TranslatedCachedValue {
     public String originalLanguage;
     public final HashMap<String, TdApi.FormattedText> translationsCache;
+    /** XGram: which service made each translation. */
+    public final HashMap<String, Integer> translatedBy = new HashMap<>();
 
     public TranslatedCachedValue (String originalLanguage) {
       this.originalLanguage = originalLanguage;
@@ -153,12 +181,24 @@ public final class TranslationsManager {
     }
   }
 
+  /** The latest translation to {@code language}, whichever service made it (what is shown, e.g. for Copy). */
   public @Nullable TdApi.FormattedText getCachedTextTranslation (String text, String language) {
-    TranslatedCachedValue cachedValue = mTranslationsCache2.get(text);
-    return (cachedValue != null ? cachedValue.translationsCache.get(language) : null);
+    return getCachedTranslation(text, language);
   }
 
-  public void saveCachedTextTranslation (String text, String language, TdApi.FormattedText translated) {
+  private @Nullable TdApi.FormattedText getCachedTranslation (String text, String key) {
+    TranslatedCachedValue cachedValue = mTranslationsCache2.get(text);
+    return (cachedValue != null ? cachedValue.translationsCache.get(key) : null);
+  }
+
+  private int getCachedTranslationProvider (String text, String key) {
+    TranslatedCachedValue cachedValue = mTranslationsCache2.get(text);
+    Integer provider = cachedValue != null ? cachedValue.translatedBy.get(key) : null;
+    return provider != null ? provider : -1;
+  }
+
+  /** Saved under the language (the latest) and under the service's own key {@code providerKey}. */
+  private void saveCachedTextTranslation (String text, String language, String providerKey, TdApi.FormattedText translated, int provider) {
     TranslatedCachedValue cachedValue = mTranslationsCache2.get(text);
     if (cachedValue == null) {
       // XGram: also cached when the language wasn't detected, so toggling Translate doesn't send a new request
@@ -166,6 +206,9 @@ public final class TranslationsManager {
       mTranslationsCache2.put(text, cachedValue);
     }
     cachedValue.translationsCache.put(language, translated);
+    cachedValue.translationsCache.put(providerKey, translated);
+    cachedValue.translatedBy.put(language, provider);
+    cachedValue.translatedBy.put(providerKey, provider);
   }
 
 

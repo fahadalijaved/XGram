@@ -263,6 +263,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.aiTools(), isUpdate);
         } else if (id == R.id.btn_xgramTrAlways) {
           view.getToggler().setRadioEnabled(settings.translateAlways(), isUpdate);
+        } else if (id == R.id.btn_xgramTrFallback) {
+          view.getToggler().setRadioEnabled(settings.translateFallback(), isUpdate);
+        } else if (id == R.id.btn_xgramTrProvider) {
+          view.setData(com.fahadali.xgram.translate.XgramTranslator.name(settings.translateProvider()));
         } else if (id == R.id.btn_xgramTapToRecord) {
           view.getToggler().setRadioEnabled(settings.tapToRecord(), isUpdate);
         } else if (id == R.id.btn_xgramProxyOffVpn) {
@@ -474,6 +478,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramAiToolsInfo));
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramTranslation));
     addRows(items,
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTrProvider, 0, R.string.XgramTrProvider),
+      toggle(R.id.btn_xgramTrFallback, R.string.XgramTrFallback)
+    );
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramTrProviderInfo, 0, com.fahadali.xgram.translate.XgramTranslator.info(XgramSettings.instance().translateProvider()), false));
+    addRows(items,
       toggle(R.id.btn_xgramTrAlways, R.string.XgramTrAlways),
       new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramTrStyle, 0, R.string.XgramTrStyle)
     );
@@ -526,6 +535,44 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
   private static CharSequence downloadBoostInfo () {
     return Lang.getString(XgramDownloadBoost.description(XgramDownloadBoost.level())) + "\n\n" + Lang.getString(R.string.XgramDownloadBoostInfo);
+  }
+
+  /** Telegram, Google Translate or Yandex Translate; a third-party service asks once, saying the text goes to it. */
+  private void showTranslateProviderOptions () {
+    int[] providers = com.fahadali.xgram.translate.XgramTranslator.PROVIDERS;
+    String[] titles = new String[providers.length];
+    int[] ids = new int[providers.length];
+    for (int i = 0; i < providers.length; i++) {
+      titles[i] = com.fahadali.xgram.translate.XgramTranslator.name(providers[i]);
+      ids[i] = i + 1;
+    }
+    showOptions(Lang.getString(R.string.XgramTrProvider), ids, titles, null, null, (itemView, optionId) -> {
+      int provider = providers[optionId - 1];
+      XgramSettings settings = XgramSettings.instance();
+      if (provider == settings.translateProvider()) {
+        return true;
+      }
+      if (com.fahadali.xgram.translate.XgramTranslator.isThirdParty(provider) && !settings.translateNoticeShown(provider)) {
+        String name = com.fahadali.xgram.translate.XgramTranslator.name(provider);
+        showConfirm(com.fahadali.xgram.translate.XgramTranslator.info(provider), Lang.getString(R.string.XgramTrUse, name), () -> {
+          settings.setTranslateNoticeShown(provider);
+          setTranslateProvider(provider);
+        });
+      } else {
+        setTranslateProvider(provider);
+      }
+      return true;
+    });
+  }
+
+  private void setTranslateProvider (int provider) {
+    XgramSettings.instance().setTranslateProvider(provider);
+    adapter.updateValuedSettingById(R.id.btn_xgramTrProvider);
+    int index = adapter.indexOfViewById(R.id.btn_xgramTrProviderInfo);
+    if (index != -1) {
+      adapter.getItems().get(index).setString(com.fahadali.xgram.translate.XgramTranslator.info(provider));
+      adapter.updateItem(index);
+    }
   }
 
   private void updateDownloadBoostInfo () {
@@ -956,6 +1003,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramTrAlways) {
       settings.setTranslateAlways(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramTrFallback) {
+      settings.setTranslateFallback(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramTrProvider) {
+      showTranslateProviderOptions();
       return;
     } else if (id == R.id.btn_xgramTrStyle) {
       navigateTo(new org.thunderdog.challegram.ui.SettingsLanguageTranslateController(context, tdlib));

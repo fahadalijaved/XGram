@@ -438,6 +438,11 @@ public class TextFormattingLayout extends FrameLayout implements TranslationsMan
     return originalTextToTranslate;
   }
 
+  @Override
+  public long xgramChatId () {
+    return parent instanceof org.thunderdog.challegram.ui.MessagesController ? ((org.thunderdog.challegram.ui.MessagesController) parent).getChatId() : 0;
+  }
+
   /* * */
 
   private static int checkSpans (TdApi.FormattedText text, int start, int end) {
