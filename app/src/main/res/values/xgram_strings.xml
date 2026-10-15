@@ -625,6 +625,15 @@
   <string name="XgramChatLongPressPreview">Preview (Telegram X)</string>
   <string name="XgramChatLongPressQuick">Quick actions</string>
   <string name="XgramChatLongPressCompact">Compact preview</string>
+  <string name="XgramSwipeLeft">Swipe left on a message</string>
+  <string name="XgramSwipeRight">Swipe right on a message</string>
+  <string name="XgramSwipeInfo">By default a swipe left replies and a swipe right forwards, as in Telegram&#160;X. React sets your first quick reaction. The other swipe actions, such as Reply, Translate and the quick reactions, stay a slide up or down away. A message that can\'t do the chosen action keeps the usual one.</string>
+  <string name="XgramSwipeReply">Reply</string>
+  <string name="XgramSwipeCopy">Copy text</string>
+  <string name="XgramSwipeForward">Forward</string>
+  <string name="XgramSwipeSave">Save</string>
+  <string name="XgramSwipeReact">React</string>
+  <string name="XgramSwipeNothing">Nothing</string>
   <string name="XgramFolderFull">This folder already holds as many chats as Telegram allows (%1$d). Remove a chat from it first.</string>
   <string name="XgramFolderFullPremium">This folder already holds as many chats as Telegram allows (%1$d). Remove a chat from it first, or get Telegram Premium for a higher limit.</string>
   <string name="XgramFolderChatNotAllowed">This chat can\'t be put in that folder.</string>

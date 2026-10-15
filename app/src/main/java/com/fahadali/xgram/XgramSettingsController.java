@@ -176,6 +176,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(avatarCornersName(settings.avatarCorners()));
         } else if (id == R.id.btn_xgramChatLongPress) {
           view.setData(com.fahadali.xgram.chats.XgramChatLongPress.modeName(settings.chatLongPress()));
+        } else if (id == R.id.btn_xgramSwipeLeft || id == R.id.btn_xgramSwipeRight) {
+          view.setData(com.fahadali.xgram.chats.XgramSwipeActions.name(settings.swipeAction(id == R.id.btn_xgramSwipeRight)));
         } else if (id == R.id.btn_xgramIconPack) {
           view.setData(com.fahadali.xgram.appearance.XgramIconPack.name(com.fahadali.xgram.appearance.XgramIconPack.current()));
         } else if (id == R.id.btn_xgramGhostMode) {
@@ -449,6 +451,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramHideSponsored, R.string.XgramHideSponsored)
     );
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramMessages));
+    addRows(items,
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramSwipeLeft, 0, R.string.XgramSwipeLeft),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramSwipeRight, 0, R.string.XgramSwipeRight)
+    );
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramSwipeInfo));
     addRows(items,
       toggle(R.id.btn_xgramDeleteForEveryone, R.string.XgramDeleteForEveryone),
       toggle(R.id.btn_xgramForwardWithoutAuthor, R.string.XgramForwardWithoutAuthor),
@@ -1113,6 +1120,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramChatLongPress) {
       com.fahadali.xgram.chats.XgramChatLongPress.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramChatLongPress));
+      return;
+    } else if (id == R.id.btn_xgramSwipeLeft || id == R.id.btn_xgramSwipeRight) {
+      com.fahadali.xgram.chats.XgramSwipeActions.showPicker(this, id == R.id.btn_xgramSwipeRight, () -> adapter.updateValuedSettingById(id));
       return;
     } else if (id == R.id.btn_xgramAvatarCorners) {
       int[] values = XgramSettings.AVATAR_CORNERS;

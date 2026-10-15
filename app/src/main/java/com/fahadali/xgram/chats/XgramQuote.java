@@ -112,9 +112,20 @@ public final class XgramQuote {
     return null;
   }
 
+  /** The message whose text Copy and Quote take, null without text. */
+  @Nullable
+  public static TdApi.Message textMessage (TGMessage msg) {
+    return quotable(msg);
+  }
+
+  /** The message has text to quote. TDLib takes no quotes in secret chats. */
+  public static boolean canQuote (TGMessage msg) {
+    return !ChatId.isSecret(msg.getChatId()) && quotable(msg) != null;
+  }
+
   /** Adds Quote right after Reply. TDLib takes no quotes in secret chats. */
   public static void fill (TGMessage msg, IntList ids, IntList icons, StringList strings) {
-    if (ChatId.isSecret(msg.getChatId()) || quotable(msg) == null) {
+    if (!canQuote(msg)) {
       return;
     }
     ids.append(R.id.btn_xgramQuote);

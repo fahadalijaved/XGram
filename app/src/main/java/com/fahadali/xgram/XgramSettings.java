@@ -625,6 +625,33 @@ public final class XgramSettings {
     pmc().putInt("xgram_chat_long_press", mode);
   }
 
+  // Swipe on a message
+
+  private int swipeLeft = -1, swipeRight = -1;
+
+  /** What a plain swipe on a message does, one of {@link com.fahadali.xgram.chats.XgramSwipeActions}' actions. */
+  public int swipeAction (boolean toRight) {
+    int action = toRight ? swipeRight : swipeLeft;
+    if (action < 0) {
+      action = pmc().getInt(toRight ? "xgram_swipe_right" : "xgram_swipe_left", com.fahadali.xgram.chats.XgramSwipeActions.defaultAction(toRight));
+      if (toRight) {
+        swipeRight = action;
+      } else {
+        swipeLeft = action;
+      }
+    }
+    return action;
+  }
+
+  public void setSwipeAction (boolean toRight, int action) {
+    if (toRight) {
+      swipeRight = action;
+    } else {
+      swipeLeft = action;
+    }
+    pmc().putInt(toRight ? "xgram_swipe_right" : "xgram_swipe_left", action);
+  }
+
   // Side menu
 
   /** Side menu items that can be hidden: contacts, hub, calls, saved, invite, proxy, help, night, ghost. */

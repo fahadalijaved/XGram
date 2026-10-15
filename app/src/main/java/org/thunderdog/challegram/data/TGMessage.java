@@ -7272,7 +7272,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       drawTranslateRect(c,
         x, startY + positionOffset + height * a,
         view.getMeasuredWidth(), height, positionFactor,
-        quickColor, icon, action.text, (int) textWidth,
+        quickColor, icon, action.text, x > 0 ? (int) U.measureText(action.text, mQuickText) : (int) textWidth, // XGram: a swipe right ends its text at the icon, whatever the action
         height > Screen.dp(256) ? (int) (mInitialTouchY - getHeaderPadding() + xHeaderPadding) : (height / 2)
       );
     }
@@ -9052,7 +9052,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     public boolean needDelay;
     public boolean isQuickReaction;
 
-    SwipeQuickAction (String text, Drawable icon, Runnable handler, boolean needDelay, boolean isQuickReaction) {
+    public SwipeQuickAction (String text, Drawable icon, Runnable handler, boolean needDelay, boolean isQuickReaction) { // XGram: public for Swipe on a message
       this.text = text;
       this.icon = icon;
       this.handler = handler;
@@ -9145,6 +9145,20 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         messagesController().shareMessages(getAllMessages(), false);
       }, true, false));
     }
+
+    // XGram: Swipe left / right on a message (Settings, XGram, Chats) picks what a plain swipe does
+    leftQuickDefaultPosition = com.fahadali.xgram.chats.XgramSwipeActions.arrange(this, leftActions, 0, true, rightActions, rightQuickDefaultPosition);
+    rightQuickDefaultPosition = com.fahadali.xgram.chats.XgramSwipeActions.arrange(this, rightActions, rightQuickDefaultPosition, false, null, 0);
+  }
+
+  /** XGram: what Telegram X's swipe to reply does, for Swipe on a message. */
+  public void xgramSwipeReply () {
+    TdApi.Message message = getNewestMessage();
+    getMessageProperties(message.id, properties -> {
+      runOnUiThreadOptional(() -> {
+        messagesController().showReply(new MessageWithProperties(message, properties), null, 0, "", true, true);
+      });
+    });
   }
 
   // XGram: a deleted message kept on this device is gone from the server: no swipe actions.

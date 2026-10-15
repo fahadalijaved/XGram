@@ -239,4 +239,15 @@
   <item type="id" name="btn_xgramAddToFolder" />
   <item type="id" name="btn_xgramHideFolders" />
   <item type="id" name="btn_xgramFolderVisible" />
+  <item type="id" name="btn_xgramSwipeLeft" />
+  <item type="id" name="btn_xgramSwipeRight" />
+  <item type="id" name="btn_xgramSwipeReply" />
+  <item type="id" name="btn_xgramSwipeQuote" />
+  <item type="id" name="btn_xgramSwipeTranslate" />
+  <item type="id" name="btn_xgramSwipeCopy" />
+  <item type="id" name="btn_xgramSwipeForward" />
+  <item type="id" name="btn_xgramSwipeSave" />
+  <item type="id" name="btn_xgramSwipeBookmark" />
+  <item type="id" name="btn_xgramSwipeReact" />
+  <item type="id" name="btn_xgramSwipeNothing" />
 </resources>
