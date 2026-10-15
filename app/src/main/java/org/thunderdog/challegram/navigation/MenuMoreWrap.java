@@ -235,7 +235,12 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     }
 
     final int maxWidth = Screen.dp(250);
-    final int textRightOffset = Screen.dp(menuItem.isLocked ? 41 : 17);
+    // XGram: Material 3 menu item spec with M3E on: 24dp icon 12dp from the start, label 12dp after it, 12dp trailing padding.
+    final boolean xgramM3Layout = XgramExpressive.isEnabled();
+    final int textRightOffset = xgramM3Layout ? Screen.dp(menuItem.isLocked ? 40 : 12) : Screen.dp(menuItem.isLocked ? 41 : 17);
+    final int iconCenterX = Screen.dp(xgramM3Layout ? 24f : 29f);
+    final int textStartX = Screen.dp(xgramM3Layout ? 48f : 59f);
+    final int lockEndOffset = Screen.dp(xgramM3Layout ? 12 + 16 : 17 + 16);
     final Drawable finalIcon = menuItem.iconResId != 0 ? Drawables.get(getResources(), menuItem.iconResId) : menuItem.icon;
     final AvatarReceiver receiver = (menuItem.messageSenderId != null && menuItem.iconResId == 0) ?
       complexAvatarReceiver.getAvatarReceiver(Td.getSenderId(menuItem.messageSenderId)) : null;
@@ -270,7 +275,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
         if (menuItem.isLocked) {
           Drawable icon = Drawables.get(getResources(), R.drawable.baseline_lock_16);
           if (icon != null) {
-            float x = getMeasuredWidth() - Screen.dp(17 + 16);
+            float x = getMeasuredWidth() - lockEndOffset;
             float y = (getMeasuredHeight() - icon.getMinimumHeight()) / 2f;
             Drawables.draw(canvas, icon, x, y, PorterDuffPaint.get(ColorId.text));
           }
@@ -292,12 +297,12 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
             // XGram M3E: Material 3 checkbox
             float boxSize = Screen.dp(18f);
             float checked = menuItem.isCheckboxSelectedAnimated != null ? menuItem.isCheckboxSelectedAnimated.getFloatValue() : menuItem.isCheckboxSelected ? 1f : 0f;
-            XgramM3Controls.drawCheckbox(canvas, Screen.dp(29f) - boxSize / 2f, getMeasuredHeight() / 2f - boxSize / 2f, boxSize, checked, 0f, 0f, 0f, 1f);
+            XgramM3Controls.drawCheckbox(canvas, iconCenterX - boxSize / 2f, getMeasuredHeight() / 2f - boxSize / 2f, boxSize, checked, 0f, 0f, 0f, 1f);
             return;
           }
 
           // TODO move into SimplestCheckbox
-          int checkBoxCenterX = Screen.dp(29f);
+          int checkBoxCenterX = iconCenterX;
           int progressCy = getMeasuredHeight() / 2;
           int progressRadius = Screen.dp(9f);
           RectF rectF = Paints.getRectF();
@@ -313,14 +318,14 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
 
           SimplestCheckBox.draw(
             canvas,
-            Screen.dp(29f), getMeasuredHeight() / 2,
+            iconCenterX, getMeasuredHeight() / 2,
             selectionFactor, null, null,
             fillingColor, checkColor,
             SimplestCheckBox.MODE_NORMAL, 1f
           );
         } else if (finalIcon != null) {
           canvas.save();
-          canvas.translate(Screen.dp(29) - finalIcon.getMinimumWidth() / 2f, (getMeasuredHeight() - finalIcon.getMinimumHeight()) / 2f);
+          canvas.translate(iconCenterX - finalIcon.getMinimumWidth() / 2f, (getMeasuredHeight() - finalIcon.getMinimumHeight()) / 2f);
           if (menuItem.iconResId == 0) {
             finalIcon.draw(canvas);
           } else {
@@ -344,7 +349,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     }
     frameLayout.setWillNotDraw(false);
     if (receiver != null) {
-      receiver.setBounds(Screen.dp(19), Screen.dp(ITEM_HEIGHT / 2f - 10), Screen.dp(39), Screen.dp(ITEM_HEIGHT / 2f + 10));
+      receiver.setBounds(iconCenterX - Screen.dp(10), Screen.dp(ITEM_HEIGHT / 2f - 10), iconCenterX + Screen.dp(10), Screen.dp(ITEM_HEIGHT / 2f + 10));
       receiver.setUpdateListener(r -> frameLayout.invalidate());
     }
 
@@ -357,10 +362,10 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     titleTextItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ITEM_HEIGHT)));
     if (!StringUtils.isEmpty(menuItem.subtitle)) {
       titleTextItem.setGravity(Gravity.TOP | Lang.gravity());
-      titleTextItem.setPadding(Screen.dp(59f), Screen.dp(5f), textRightOffset, 0);
+      titleTextItem.setPadding(textStartX, Screen.dp(5f), textRightOffset, 0);
     } else {
       titleTextItem.setGravity(Gravity.CENTER_HORIZONTAL | Lang.gravity());
-      titleTextItem.setPadding(Screen.dp(59f), 0, textRightOffset, 0);
+      titleTextItem.setPadding(textStartX, 0, textRightOffset, 0);
       titleTextItem.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL | Lang.gravity()));
     }
     titleTextItem.setMaxWidth(maxWidth);
@@ -375,7 +380,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       subtitleTextItem.setSingleLine(true);
       subtitleTextItem.setEllipsize(TextUtils.TruncateAt.END);
       subtitleTextItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ITEM_HEIGHT)));
-      subtitleTextItem.setPadding(Screen.dp(59f), 0, textRightOffset, Screen.dp(8f));
+      subtitleTextItem.setPadding(textStartX, 0, textRightOffset, Screen.dp(8f));
       subtitleTextItem.setMaxWidth(maxWidth);
 
       if (forcedTheme != null) {
@@ -451,8 +456,14 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     menuItem.setEllipsize(TextUtils.TruncateAt.END);
     menuItem.setOnClickListener(listener);
     menuItem.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ITEM_HEIGHT)));
+    if (xgramExpressive) {
+      // XGram: Material 3 menu item spec: 12dp leading and trailing padding, 12dp between icon and label.
+      menuItem.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
+      menuItem.setCompoundDrawablePadding(Screen.dp(12f));
+    } else {
     menuItem.setPadding(Screen.dp(17f), 0, Screen.dp(17f), 0);
     menuItem.setCompoundDrawablePadding(Screen.dp(18f));
+    }
     icon = iconRes != 0 ? Drawables.get(getResources(), iconRes) : icon;
     if (icon != null) {
       if (forcedTheme != null) {
@@ -598,7 +609,11 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     final int baseColor = forcedTheme != null ? forcedTheme.getColor(ColorId.text) : XgramExpressive.color(XgramExpressive.ON_SURFACE);
     final int inset = Screen.dp(4f);
     RippleDrawable ripple = new RippleDrawable(ColorStateList.valueOf(XgramExpressive.withAlpha(baseColor, XgramExpressive.STATE_PRESSED)), null, new InsetDrawable(mask, inset));
+    // XGram: setBackground copies the drawable's padding (the mask's 4dp inset) onto the view,
+    // which pushed the labels to 4dp from the container edge. Keep the item's own padding.
+    final int paddingLeft = view.getPaddingLeft(), paddingTop = view.getPaddingTop(), paddingRight = view.getPaddingRight(), paddingBottom = view.getPaddingBottom();
     ViewUtils.setBackground(view, ripple);
+    view.setPadding(paddingLeft, paddingTop, paddingRight, paddingBottom);
   }
 
   private int bubbleTailX = -1;

@@ -1987,6 +1987,14 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       Collections.addAll(items, b.rawItems);
     }
 
+    // XGram M3E: a modal bottom sheet. A band for the drag handle above the rows (with the SHADOW_TOP spacer it is
+    // the 48dp handle band of the other sheets), and a closing SHADOW_BOTTOM so the rows become one inset group.
+    final boolean xgramSheet = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramSheet) {
+      items.add(0, new ListItem(ListItem.TYPE_PADDING).setHeight(Math.max(0, OptionsLayout.xgramHandleBandHeight() - SettingHolder.measureHeightForType(ListItem.TYPE_SHADOW_TOP))));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    }
+
     final SettingsWrapLayout settingsLayout = new SettingsWrapLayout(context);
     settingsLayout.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
@@ -2022,6 +2030,9 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         }
       }
     };
+    if (xgramSheet) {
+      recyclerView.addItemDecoration(new XgramSettingsSheetDecoration()); // added before the adapter, so it draws under the row tiles
+    } else
     recyclerView.addItemDecoration(new BottomInsetFillingDecoration(ColorId.filling));
     settings.recyclerView = recyclerView;
     if (b.allowResize) {
@@ -2142,10 +2153,16 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
           return true;
         }
       };
+      if (xgramSheet) {
+        footerView.setBackgroundColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW));
+      } else
       ViewSupport.setThemedBackground(footerView, ColorId.filling, this);
       footerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f) + extraBottomInsetWithoutIme, Gravity.BOTTOM));
       Views.setPaddingBottom(footerView, extraBottomInsetWithoutIme);
 
+      if (xgramSheet) {
+        xgramAddSheetActions(footerView, b, settings, onClickListener);
+      } else
       for (int i = 0; i < 2; i++) {
         TextView button = new NoScrollTextView(context);
 
@@ -2192,7 +2209,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       settingsLayout.addView(footerView);
     }
 
-    if (footerView != null) {
+    if (footerView != null && !xgramSheet) { // XGram M3E: no divider above the sheet actions
       params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(1f), Gravity.BOTTOM);
       params.bottomMargin = Screen.dp(56f) + extraBottomInsetWithoutIme;
       shadowView = SeparatorView.simpleSeparator(context, params, true);
@@ -2637,6 +2654,86 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   private static void xgramPrepareSheetTop (ShadowView shadowView) {
     shadowView.setVisibility(View.INVISIBLE);
     shadowView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, OptionsLayout.xgramHandleBandHeight()));
+  }
+
+  // XGram M3E: the settings choice sheet (showSettings). The list draws the sheet surface (surfaceContainerLow,
+  // 28dp top corners, the drag handle in the first 48dp) from its first item down; the rows sit on it as one inset group.
+
+  private static final class XgramSettingsSheetDecoration extends RecyclerView.ItemDecoration {
+    private final android.graphics.Path path = new android.graphics.Path();
+    private final android.graphics.RectF rect = new android.graphics.RectF();
+    private final float[] radii = new float[8];
+
+    @Override
+    public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      final float corner = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
+      float top = -corner; // first item scrolled away: the sheet fills the list, its corners above the top
+      boolean hasTop = false;
+      for (int i = 0; i < parent.getChildCount(); i++) {
+        View view = parent.getChildAt(i);
+        if (view != null && parent.getChildAdapterPosition(view) == 0) {
+          top = view.getTop() + view.getTranslationY();
+          hasTop = true;
+          break;
+        }
+      }
+      rect.set(0, top, parent.getWidth(), parent.getHeight() + Screen.dp(24f));
+      radii[0] = radii[1] = radii[2] = radii[3] = corner;
+      radii[4] = radii[5] = radii[6] = radii[7] = 0f;
+      path.rewind();
+      path.addRoundRect(rect, radii, android.graphics.Path.Direction.CW);
+      c.drawPath(path, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW)));
+      if (hasTop) {
+        final float handleWidth = Screen.dp(32f), handleHeight = Screen.dp(4f);
+        final float handleTop = top + (OptionsLayout.xgramHandleBandHeight() - handleHeight) / 2f;
+        final float cx = parent.getWidth() / 2f;
+        android.graphics.RectF handle = Paints.getRectF();
+        handle.set(cx - handleWidth / 2f, handleTop, cx + handleWidth / 2f, handleTop + handleHeight);
+        final int handleColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), .4f);
+        c.drawRoundRect(handle, handleHeight / 2f, handleHeight / 2f, Paints.fillingPaint(handleColor));
+      }
+    }
+  }
+
+  /** Sentence-case text buttons ("Cancel", "Save") at the end of the sheet footer, like M3 dialog actions. */
+  private void xgramAddSheetActions (FrameLayout footerView, SettingsWrapBuilder b, SettingsWrap settings, View.OnClickListener onClickListener) {
+    LinearLayout actions = new LinearLayout(context);
+    actions.setOrientation(LinearLayout.HORIZONTAL);
+    actions.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+    actions.setGravity(Gravity.CENTER_VERTICAL | (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT));
+    actions.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
+    actions.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f), Gravity.BOTTOM));
+    for (int i = 0; i < 2; i++) {
+      final boolean isSave = Lang.rtl() ? i == 0 : i == 1;
+      TextView button = new NoScrollTextView(context);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(button, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      final int colorId = isSave ? b.saveColorId : b.cancelColorId;
+      final int color = com.fahadali.xgram.appearance.XgramExpressive.color(colorId == ColorId.textNegative ? com.fahadali.xgram.appearance.XgramExpressive.ERROR : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      button.setTextColor(color);
+      com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(button, color);
+      button.setGravity(Gravity.CENTER);
+      button.setSingleLine(true);
+      button.setMinWidth(Screen.dp(48f));
+      button.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
+      button.setOnClickListener(onClickListener);
+      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f));
+      if (i == 1) {
+        lp.leftMargin = Screen.dp(8f);
+      }
+      button.setLayoutParams(lp);
+      if (isSave) {
+        button.setId(R.id.btn_save);
+        button.setText(b.saveStr);
+        settings.doneButton = button;
+      } else {
+        button.setId(R.id.btn_cancel);
+        button.setText(b.cancelStr);
+        settings.cancelButton = button;
+      }
+      Views.setClickable(button);
+      actions.addView(button);
+    }
+    footerView.addView(actions);
   }
 
   public interface PopUpBuilder {
