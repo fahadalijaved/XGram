@@ -1872,6 +1872,11 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       return;
     }
 
+    if (controller.inTextSizeMode() && !isWasScrollByUser()) {
+      controller.xgramPreviewToBottom(); // XGram: the Chat look preview rests at the bottom instead of compensating
+      return;
+    }
+
     final int heightDiff = oldHeight - newHeight;
     final int recyclerHeight = getRecyclerHeight();
     final View view = findMessageView(chatId, messageId);

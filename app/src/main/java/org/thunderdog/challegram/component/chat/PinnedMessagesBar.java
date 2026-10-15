@@ -154,9 +154,10 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
         //
 
         final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
-        final int lineX = Screen.dp(xgramM3 ? 12f : 10f);
+        // XGram: keep the line at least 20dp from the card's start, clear of its 20dp outer corner
+        final int lineX = xgramM3 ? Math.max(Screen.dp(12f), Screen.dp(20f) - parent.getLeft()) : Screen.dp(10f);
         final float strokeWidth = Screen.dp(xgramM3 ? 2f : 1.5f); // XGram: a 4dp primary pill line
-        final int outerSpacing = Screen.dp(6f); // spacing before the first and the last item
+        final int outerSpacing = Screen.dp(xgramM3 ? 8f : 6f); // spacing before the first and the last item
         final int minSpacingBetweenItems = Screen.dp(3f);
         final float lineStartX = lineX - strokeWidth;
         final float lineEndX = lineX + strokeWidth;
@@ -211,17 +212,17 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
           boolean isFull = focusPosition == position || (position > (int) focusPosition && position < (int) (focusPosition + visibleItemCount));
 
           rectF.set(lineStartX, lineStartY, lineEndX, lineEndY);
-          c.drawRoundRect(rectF, strokeWidth, strokeWidth, Paints.fillingPaint(isFull ? fillColor : backgroundColor));
+          drawSegment(c, rectF, strokeWidth, isFull ? fillColor : backgroundColor, xgramM3, outerSpacing, viewportHeight - outerSpacing);
 
           if (!isFull) {
             if (position == (int) focusPosition && focusPosition > position) {
               rectF.set(lineStartX, lineStartY, lineEndX, lineEndY + (lineStartY - lineEndY) * (focusPosition - (float) position));
-              c.drawRoundRect(rectF, strokeWidth, strokeWidth, Paints.fillingPaint(fillColor));
+              drawSegment(c, rectF, strokeWidth, fillColor, xgramM3, outerSpacing, viewportHeight - outerSpacing);
             } else {
               float remain = focusPosition + visibleItemCount - position;
               if (remain > 0f && remain < 1f) {
                 rectF.set(lineStartX, lineEndY + (lineStartY - lineEndY) * remain, lineEndX, lineEndY);
-                c.drawRoundRect(rectF, strokeWidth, strokeWidth, Paints.fillingPaint(fillColor));
+                drawSegment(c, rectF, strokeWidth, fillColor, xgramM3, outerSpacing, viewportHeight - outerSpacing);
               }
             }
           }
@@ -230,6 +231,19 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
         if (!xgramM3) {
           c.drawRect(0, parent.getMeasuredHeight() - Screen.separatorSize(), parent.getMeasuredWidth(), parent.getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(getExpandFactor() * MathUtils.clamp(focusPosition), Theme.separatorColor())));
         }
+      }
+
+      // XGram: in Material 3 Expressive, segments that scroll past the card's inner padding shrink into short pills instead of running into the rounded card edge
+      private void drawSegment (Canvas c, RectF rect, float radius, int color, boolean clamp, float clipTop, float clipBottom) {
+        if (clamp) {
+          rect.top = Math.max(rect.top, clipTop);
+          rect.bottom = Math.min(rect.bottom, clipBottom);
+          if (rect.bottom - rect.top <= 0f) {
+            return;
+          }
+          radius = Math.min(radius, (rect.bottom - rect.top) / 2f);
+        }
+        c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(color));
       }
     });
     addView(recyclerView);

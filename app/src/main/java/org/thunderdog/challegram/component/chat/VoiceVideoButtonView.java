@@ -126,24 +126,35 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
   }
 
   // XGram: Material 3 Expressive filled tonal icon button in the input bar: a 40dp
-  // secondaryContainer circle with an onSecondaryContainer icon, morphing to small (8dp)
-  // corners while pressed (spatial fast spring).
+  // primaryContainer circle (the size of the Send button) with an onPrimaryContainer
+  // Material Symbols mic or videocam, morphing to small (8dp) corners while pressed
+  // (spatial fast spring).
   private XgramExpressive.Spring xgramPress;
   private Paint xgramIconPaint;
   private final RectF xgramRect = new RectF();
+  private Drawable xgramMicIcon, xgramVideoIcon;
 
   private Paint xgramIconPaint () {
-    int color = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
+    int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
     if (xgramIconPaint == null || xgramIconPaint.getColor() != color)
       xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
     return xgramIconPaint;
+  }
+
+  private void xgramLoadIcons () {
+    if (xgramMicIcon == null) {
+      // An icon pack keeps its own mic and camera; Telegram X icons get Material Symbols Rounded
+      boolean pack = com.fahadali.xgram.appearance.XgramIconPack.current() != com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X;
+      xgramMicIcon = Drawables.get(getResources(), pack ? R.drawable.baseline_mic_24 : R.drawable.xgram_m3e_s4_chat_mic);
+      xgramVideoIcon = Drawables.get(getResources(), pack ? R.drawable.baseline_videocam_24 : R.drawable.xgram_m3e_s4_chat_videocam);
+    }
   }
 
   private void xgramDrawContainer (Canvas c, int cx, int cy) {
     final float size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight());
     final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
     xgramRect.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
-    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER)));
+    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER)));
   }
 
   @Override
@@ -158,7 +169,10 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
     final boolean xgramExpressive = hasTouchControls && XgramExpressive.isEnabled();
     if (xgramExpressive) {
       xgramDrawContainer(c, cx, cy);
+      xgramLoadIcons();
     }
+    final Drawable micIcon = xgramExpressive ? xgramMicIcon : this.micIcon;
+    final Drawable videoIcon = xgramExpressive ? xgramVideoIcon : this.videoIcon;
     final Paint paint = xgramExpressive ? xgramIconPaint() : hasTouchControls ? Paints.getIconGrayPorterDuffPaint() : getIconPaint();
     final int savedAlpha = paint.getAlpha();
     final float generalFactor = (1f - sendFactor);

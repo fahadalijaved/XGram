@@ -1432,6 +1432,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
               if (Settings.instance().setChatFontSize(Settings.CHAT_FONT_SIZES[index])) {
                 manager.onUpdateTextSize();
                 manager.rebuildLayouts();
+                xgramPreviewToBottom(); // XGram
               }
             }
 
@@ -1450,7 +1451,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
           com.fahadali.xgram.appearance.XgramChatLook.addRows(this, bottomWrap, () -> { // XGram: stickers, emoji, bubbles
             manager.onUpdateTextSize();
             manager.rebuildLayouts();
+            xgramPreviewToBottom();
           }, () -> manager.loadPreview());
+          // XGram: the preview list gets shorter as the panel grows; keep the newest demo bubble in view
+          messagesView.addOnLayoutChangeListener((xv, xl, xt, xr, xb, xol, xot, xor, xob) -> {
+            if (xb - xt != xob - xot) {
+              xgramPreviewToBottom();
+            }
+          });
           break;
         }
         case PREVIEW_MODE_NONE: {
@@ -2831,6 +2839,21 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public boolean inTextSizeMode () {
     return inPreviewMode && previewMode == PREVIEW_MODE_FONT_SIZE;
+  }
+
+  // XGram: the Chat look (and Message font size) preview rests at the bottom, so the newest
+  // demo bubble is never cut by the panel below it
+  private boolean xgramPreviewResetPending;
+
+  public void xgramPreviewToBottom () {
+    if (!inTextSizeMode() || messagesView == null || xgramPreviewResetPending) {
+      return;
+    }
+    xgramPreviewResetPending = true;
+    messagesView.post(() -> {
+      xgramPreviewResetPending = false;
+      manager.resetScroll();
+    });
   }
 
   private long linkedChatId;
@@ -6622,7 +6645,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }, AnimatorUtils.DECELERATE_INTERPOLATOR, 120l);
 
   public void setScrollToBottomVisible (boolean isVisible, boolean isReverse, boolean animated) {
-    if (messagesHidden) {
+    if (messagesHidden || inTextSizeMode() || inWallpaperMode()) { // XGram: demo previews (Chat look, Message font size, wallpapers) rest at the bottom with no scroll button
       isVisible = false;
     }
     scrollToBottomVisible.setValue(isVisible, animated);

@@ -7281,8 +7281,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         SwipeQuickAction action = actions.get(a);
         float positionFactor = getTranslatePositionFactor(isLeft, a);
         float cy = startY + offset * a;
-        float closenessToBorder = 1f - MathUtils.clamp(Math.min(cy - topContentEdge, bottomContentEdge - cy) / Screen.dp(12));
-        float maxAlpha = Math.max(positionFactor, 1f - closenessToBorder);
+        // XGram: measure the room against the view's own bounds and the circle's radius, so an action that would be cut by the view edge is hidden instead of drawn half
+        float circleRadius = Screen.dp(16f) * (.6f + .4f * Math.min(readyFactor, positionFactor));
+        float room = Math.min(cy - circleRadius, view.getMeasuredHeight() - (cy + circleRadius));
+        float fitFactor = MathUtils.clamp(room / Screen.dp(6));
+        float maxAlpha = Math.max(positionFactor * positionFactor, fitFactor);
         float ncx = cx + shrinkSize * (1f - positionFactor);
         Drawable icon = (!action.isQuickReaction || nextSetReactionAnimation == null) ? action.icon : null;
         drawTranslateRound(c, ncx, cy, readyFactor, maxAlpha, positionFactor, icon);
@@ -7341,17 +7344,23 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     float radius = Screen.dp(16f) * scale;
     float radius2 = Screen.dp(15.5f) * scale;
 
-    if (darkFactor > 0f) {
-      c.drawCircle(cx, cy, radius, Paints.getProgressPaint(ColorUtils.alphaColor(alpha * darkFactor, Theme.headerColor()), Screen.dp(1f)));
+    // XGram: Material 3 Expressive tonal icon buttons, secondary container with no ring or stroke
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramM3) {
+      c.drawCircle(cx, cy, radius, Paints.fillingPaint(ColorUtils.alphaColor(alpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER))));
+    } else {
+      if (darkFactor > 0f) {
+        c.drawCircle(cx, cy, radius, Paints.getProgressPaint(ColorUtils.alphaColor(alpha * darkFactor, Theme.headerColor()), Screen.dp(1f)));
+      }
+      c.drawCircle(cx, cy, radius, Paints.strokeSmallPaint(ColorUtils.alphaColor(alpha * 0.05f, getBubbleButtonTextColor())));
+      c.drawCircle(cx, cy, radius2, Paints.fillingPaint(ColorUtils.alphaColor(alpha, getBubbleButtonBackgroundColor())));
     }
-    c.drawCircle(cx, cy, radius, Paints.strokeSmallPaint(ColorUtils.alphaColor(alpha * 0.05f, getBubbleButtonTextColor())));
-    c.drawCircle(cx, cy, radius2, Paints.fillingPaint(ColorUtils.alphaColor(alpha, getBubbleButtonBackgroundColor())));
 
     if (icon != null) {
       final int restoreToCount = Views.save(c);
       c.scale((Lang.rtl() ? -.8f : .8f) * scale, .8f * scale, cx, cy);
       icon.setAlpha((int) (alpha * 255));
-      Paint paint = Paints.getInlineBubbleIconPaint(ColorUtils.alphaColor(alpha, getBubbleButtonTextColor()));
+      Paint paint = Paints.getInlineBubbleIconPaint(ColorUtils.alphaColor(alpha, xgramM3 ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER) : getBubbleButtonTextColor()));
       Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, paint);
       Views.restore(c, restoreToCount);
     }
