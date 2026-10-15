@@ -139,7 +139,7 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
   }
 
   private int xgramLabelColor () {
-    return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), checkFactor);
+    return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), receiver != null ? checkFactor : 0f);
   }
 
   public void setText (String text) {
@@ -334,7 +334,7 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
     if (isDragging) {
       c.drawColor(ColorUtils.alphaColor(.85f, Theme.fillingColor()));
     }
-    if (xgramM3 && checkFactor > 0f) {
+    if (xgramM3 && checkFactor > 0f && receiver != null) {
       // XGram: the active item (current account) is a SECONDARY_CONTAINER pill.
       RectF pill = Paints.getRectF();
       pill.set(Screen.dp(12f), 0, viewWidth - Screen.dp(12f), getMeasuredHeight());
