@@ -117,10 +117,15 @@ public final class XgramFolderPicker {
       return;
     }
     List<ListItem> items = new ArrayList<>(infos.length + 1);
+    boolean allHidden = com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId());
     for (int i = 0; i < infos.length; i++) {
       TdApi.ChatFolderInfo info = infos[i];
       boolean inFolder = allInFolder(tdlib, chatIds, folders[i]);
-      items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.chatFolder, TD.findFolderIcon(info.icon, R.drawable.baseline_folder_24), TD.toCharSequence(info.name), inFolder).setIntValue(info.id));
+      CharSequence name = TD.toCharSequence(info.name);
+      if (allHidden || !tdlib.settings().isChatFolderEnabled(info.id)) {
+        name = Lang.getCharSequence(R.string.XgramFolderHiddenMark, name);
+      }
+      items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.chatFolder, TD.findFolderIcon(info.icon, R.drawable.baseline_folder_24), name, inFolder).setIntValue(info.id));
     }
     if (tdlib.canCreateChatFolder()) {
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_createNewFolder, R.drawable.baseline_create_new_folder_24, R.string.CreateNewFolder).setTextColorId(ColorId.textNeutral));

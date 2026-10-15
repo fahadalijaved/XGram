@@ -237,4 +237,6 @@
   <item type="id" name="btn_xgramChatLongPressQuick" />
   <item type="id" name="btn_xgramChatLongPressCompact" />
   <item type="id" name="btn_xgramAddToFolder" />
+  <item type="id" name="btn_xgramHideFolders" />
+  <item type="id" name="btn_xgramFolderVisible" />
 </resources>

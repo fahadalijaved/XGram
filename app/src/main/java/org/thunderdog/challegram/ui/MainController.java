@@ -694,7 +694,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (visible) {
       int selectedFilter = getSelectedFilter(pagerItemId);
 
-      boolean needArchive = pagerItemId == MAIN_PAGER_ITEM_ID && (menuNeedArchive || (!tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE) && tdlib.hasArchivedChats()));
+      boolean needArchive = pagerItemId == MAIN_PAGER_ITEM_ID && (menuNeedArchive || (!xgramArchiveTabEnabled() && tdlib.hasArchivedChats()));
       menu.getChildAt(FILTER_ARCHIVE).setVisibility(needArchive ? View.VISIBLE : View.GONE);
 
       TdApi.ChatList chatList;
@@ -1921,8 +1921,22 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       UI.post(this::xgramUpdateComposeVisibility);
     } else if (com.fahadali.xgram.XgramSettings.KEY_ALL_CHATS_LABEL.equals(key)) {
       UI.post(this::onFoldersAppearanceChanged);
+    } else if (com.fahadali.xgram.XgramSettings.hideFoldersKey(tdlib.accountId()).equals(key)) {
+      UI.post(() -> {
+        if (!isDestroyed() && Settings.instance().chatFoldersEnabled()) {
+          if (globalFilter != FILTER_NONE && com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId())) {
+            applyGlobalFilter(FILTER_NONE);
+          }
+          updatePagerSections(false);
+        }
+      });
     }
   };
+
+  /** XGram: the archive gets a tab only while folders aren't hidden in XGram (Chat folders, Hide folders in XGram). */
+  private boolean xgramArchiveTabEnabled () {
+    return tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE) && !com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId());
+  }
 
   private void xgramUpdateComposeVisibility () {
     if (composeWrap != null) {
@@ -2944,7 +2958,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     boolean oldHasFolders = hasFolders();
     List<TdApi.ChatList> chatLists;
     List<ViewPagerTopView.Item> sections;
-    if (chatFolders.length > 0 || tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE)) {
+    if (com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId())) {
+      chatFolders = new TdApi.ChatFolderInfo[0]; // XGram: folder tabs hidden here only, the folders stay on the account
+    }
+    boolean xgramArchiveTab = xgramArchiveTabEnabled();
+    if (chatFolders.length > 0 || xgramArchiveTab) {
       int chatListCount = chatFolders.length;
       if (tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_MAIN)) {
         mainChatListPosition = MathUtils.clamp(mainChatListPosition, 0, chatListCount);
@@ -2952,7 +2970,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       } else {
         mainChatListPosition = NO_POSITION;
       }
-      if (tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE)) {
+      if (xgramArchiveTab) {
         archiveChatListPosition = MathUtils.clamp(archiveChatListPosition, 0, chatListCount);
         chatListCount++;
         if (mainChatListPosition >= archiveChatListPosition) {

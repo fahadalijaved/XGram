@@ -11,6 +11,7 @@
  */
 package com.fahadali.xgram;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.thunderdog.challegram.unsorted.Settings;
 
@@ -32,8 +33,28 @@ public final class XgramBackup {
     "xgram_hide_sponsored", "xgram_show_peer_ids", "xgram_two_pane", "xgram_icon_theme", "xgram_merge_communities", "xgram_save_last_seen", "xgram_show_seconds", "xgram_tap_time_details",
     "xgram_clean_links", "xgram_fix_link_previews", "xgram_ghost_typing_for_stickers", "xgram_allow_screenshots", "xgram_save_protected", "xgram_proxy_off_vpn", "xgram_proxy_off_wifi", "xgram_proxy_off_mobile", "xgram_hide_phone", "xgram_block_content_capture", "xgram_prefer_ipv6", "xgram_limit_message_width", "xgram_delete_for_everyone", "xgram_hide_blocked", "xgram_forward_without_author", "xgram_ai_tools", "xgram_hide_fab", "xgram_all_chats_label", "xgram_pull_to_next", "xgram_bubble_tail", "xgram_download_boost_on", "xgram_tap_to_record", "xgram_system_emoji",
     // per chat / per sender
-    "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_"
+    "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
+    // per account
+    "xgram_hide_folders_"
   };
+  /** Telegram X's own per account list of folders hidden on this device ("Hide in XGram" in Chat folders). */
+  private static final String HIDDEN_FOLDERS_KEY = "disabled_chat_filter_ids";
+
+  private static boolean isHiddenFoldersKey (String key) {
+    if (key.equals(HIDDEN_FOLDERS_KEY)) {
+      return true;
+    }
+    int split = key.indexOf('_');
+    if (split <= 0 || !key.substring(split + 1).equals(HIDDEN_FOLDERS_KEY)) {
+      return false;
+    }
+    for (int i = 0; i < split; i++) {
+      if (!Character.isDigit(key.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
+  }
   private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden"};
   private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level"};
   /** Data rather than settings: exported and imported, but kept by {@link #reset}. */
@@ -72,6 +93,18 @@ public final class XgramBackup {
           longs.put(entry.key(), entry.asLong());
         }
       }
+      JSONObject intArrays = new JSONObject();
+      for (org.thunderdog.challegram.telegram.TdlibAccount account : org.thunderdog.challegram.telegram.TdlibManager.instance()) {
+        String key = org.thunderdog.challegram.telegram.TdlibSettingsManager.key(HIDDEN_FOLDERS_KEY, account.id);
+        int[] ids = Settings.instance().getIntArray(key);
+        if (ids != null && ids.length > 0) {
+          JSONArray array = new JSONArray();
+          for (int id : ids) {
+            array.put(id);
+          }
+          intArrays.put(key, array);
+        }
+      }
       JSONObject root = new JSONObject();
       root.put("app", "XGram");
       root.put("version", 1);
@@ -79,6 +112,7 @@ public final class XgramBackup {
       root.put("strings", strings);
       root.put("ints", ints);
       root.put("longs", longs);
+      root.put("intArrays", intArrays);
       return root.toString(2);
     } catch (Throwable t) {
       return "{}";
@@ -147,6 +181,21 @@ public final class XgramBackup {
           String key = it.next();
           if (hasPrefix(key, LONG_PREFIXES)) {
             pmc().putLong(key, longs.getLong(key));
+            count++;
+          }
+        }
+      }
+      JSONObject intArrays = root.optJSONObject("intArrays");
+      if (intArrays != null) {
+        for (Iterator<String> it = intArrays.keys(); it.hasNext(); ) {
+          String key = it.next();
+          JSONArray array = intArrays.optJSONArray(key);
+          if (array != null && isHiddenFoldersKey(key)) {
+            int[] ids = new int[array.length()];
+            for (int i = 0; i < ids.length; i++) {
+              ids[i] = array.getInt(i);
+            }
+            Settings.instance().putIntArray(key, ids);
             count++;
           }
         }

@@ -59,6 +59,8 @@ public final class XgramSettings {
   public static final String KEY_HIDE_FAB = "xgram_hide_fab";
   public static final String KEY_CONNECTION_STATUS_START = "xgram_connection_status_start";
   public static final String KEY_ALL_CHATS_LABEL = "xgram_all_chats_label";
+  /** Prefix: followed by the account id (see {@link #hideFolders}). */
+  public static final String KEY_HIDE_FOLDERS = "xgram_hide_folders_";
   public static final String KEY_PULL_TO_NEXT = "xgram_pull_to_next";
   public static final String KEY_DOWNLOAD_BOOST = "xgram_download_boost_on";
   public static final String KEY_DOWNLOAD_BOOST_LEVEL = "xgram_download_boost_level";
@@ -732,6 +734,20 @@ public final class XgramSettings {
   public void setAllChatsLabel (boolean value) {
     allChatsLabel = value;
     put(KEY_ALL_CHATS_LABEL, value);
+  }
+
+  /** Key of {@link #hideFolders} for one account. */
+  public static String hideFoldersKey (int accountId) {
+    return KEY_HIDE_FOLDERS + accountId;
+  }
+
+  /** No folder tabs in XGram for this account: only the main list shows. Nothing changes on the server, so other devices keep the folders. */
+  public boolean hideFolders (int accountId) {
+    return pmc().getBoolean(hideFoldersKey(accountId), false);
+  }
+
+  public void setHideFolders (int accountId, boolean value) {
+    put(hideFoldersKey(accountId), value);
   }
 
   public void setTwoPaneLayout (boolean value) {

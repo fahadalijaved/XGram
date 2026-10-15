@@ -150,7 +150,10 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_appBadge, 0, R.string.BadgeCounter));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_archiveAsFolder, 0, R.string.ArchiveAsFolder));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL)); // XGram
+    items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramHideFolders, 0, R.string.XgramHideFolders)); // XGram
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramHideFoldersInfo)); // XGram
 
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.ChatFolders));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP, chatFoldersPreviousItemId));
@@ -173,6 +176,17 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
             settingView.setOnClickListener(SettingsFoldersController.this);
             settingView.setOnLongClickListener(SettingsFoldersController.this);
             addThemeInvalidateListener(settingView);
+            // XGram: eye at the end of a folder row, shows or hides the folder's tab in XGram only
+            android.widget.ImageView eyeView = new android.widget.ImageView(parent.getContext());
+            eyeView.setId(R.id.btn_xgramFolderVisible);
+            eyeView.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+            eyeView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(48f), ViewGroup.LayoutParams.MATCH_PARENT, Lang.reverseGravity(Gravity.CENTER_VERTICAL)));
+            eyeView.setColorFilter(Theme.getColor(ColorId.icon));
+            getThemeListeners().addThemeFilterListener(eyeView, ColorId.icon);
+            org.thunderdog.challegram.support.RippleSupport.setTransparentSelector(eyeView);
+            eyeView.setOnClickListener(SettingsFoldersController.this);
+            eyeView.setVisibility(View.GONE);
+            settingView.addView(eyeView);
             return new SettingHolder(settingView);
           }
           case TYPE_RECOMMENDED_CHAT_FOLDER:
@@ -230,9 +244,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
             settingView.setLongClickable(true);
             DrawModifier drawModifier;
             TdApi.ChatFolderInfo info = (TdApi.ChatFolderInfo) item.getData();
-            if (!isEnabled) {
-              drawModifier = disabledFolderModifier;
-            } else if (info.hasMyInviteLinks) {
+            if (info.hasMyInviteLinks) { // XGram: a hidden folder shows a crossed eye button instead of the eye icon
               drawModifier = hasInviteLinksModifier;
             } else {
               drawModifier = item.getDrawModifier();
@@ -244,6 +256,23 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
           settingView.setVisuallyEnabled(isEnabled, false);
           settingView.setIconColorId(ColorId.icon);
           settingView.setIconAlpha(isEnabled ? 1f : .68f);
+          // XGram: the eye shows whether the folder has a tab here; it sits before the invite link icon
+          android.widget.ImageView eyeView = settingView.findViewById(R.id.btn_xgramFolderVisible);
+          boolean hasEye = !isMainChatFolder(item) && !isArchiveChatFolder(item);
+          eyeView.setVisibility(hasEye ? View.VISIBLE : View.GONE);
+          eyeView.setTag(hasEye ? item : null);
+          if (hasEye) {
+            eyeView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(isEnabled ? R.drawable.baseline_visibility_24 : R.drawable.baseline_eye_off_24));
+            eyeView.setContentDescription(Lang.getString(isEnabled ? R.string.XgramFolderHide : R.string.XgramFolderShow));
+            eyeView.setAlpha(isEnabled ? 1f : .68f);
+            FrameLayout.LayoutParams eyeParams = (FrameLayout.LayoutParams) eyeView.getLayoutParams();
+            int endMargin = ((TdApi.ChatFolderInfo) item.getData()).hasMyInviteLinks ? Screen.dp(44f) : 0;
+            if (eyeParams.leftMargin != endMargin || eyeParams.rightMargin != endMargin) {
+              eyeParams.leftMargin = eyeParams.rightMargin = endMargin;
+              eyeView.setLayoutParams(eyeParams);
+            }
+          }
+          settingView.forcePadding(0, hasEye ? Screen.dp(36f) : 0);
         } else if (customViewType == TYPE_RECOMMENDED_CHAT_FOLDER) {
           SettingView settingView = (SettingView) holder.itemView;
           settingView.setIcon(item.getIconResource());
@@ -312,6 +341,8 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
         } else if (item.getId() == R.id.btn_archiveAsFolder) {
           boolean showArchiveAsFolder = tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE);
           view.getToggler().setRadioEnabled(showArchiveAsFolder, isUpdate);
+        } else if (item.getId() == R.id.btn_xgramHideFolders) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId()), isUpdate);
         }
       }
     };
@@ -483,6 +514,16 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
       boolean showArchiveAsFolder = adapter.toggleView(v);
       tdlib.settings().setChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE, showArchiveAsFolder);
       updateChatFolders();
+    } else if (v.getId() == R.id.btn_xgramHideFolders) {
+      com.fahadali.xgram.XgramSettings.instance().setHideFolders(tdlib.accountId(), adapter.toggleView(v));
+    } else if (v.getId() == R.id.btn_xgramFolderVisible) {
+      // XGram: hides or shows the folder's tab on this device only, the folder isn't changed
+      Object tag = v.getTag();
+      if (tag instanceof ListItem) {
+        int chatFolderId = ((ListItem) tag).getIntValue();
+        UI.forceVibrate(v, false);
+        tdlib.settings().setChatFolderEnabled(chatFolderId, !tdlib.settings().isChatFolderEnabled(chatFolderId));
+      }
     }
   }
 

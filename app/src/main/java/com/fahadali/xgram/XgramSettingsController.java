@@ -223,6 +223,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.connectionStatusAtStart(), isUpdate);
         } else if (id == R.id.btn_xgramAllChatsLabel) {
           view.getToggler().setRadioEnabled(settings.allChatsLabel(), isUpdate);
+        } else if (id == R.id.btn_xgramHideFolders) {
+          view.getToggler().setRadioEnabled(settings.hideFolders(tdlib.accountId()), isUpdate);
         } else if (id == R.id.btn_xgramPullToNext) {
           view.getToggler().setRadioEnabled(settings.pullToNext(), isUpdate);
         } else if (id == R.id.btn_xgramSaveLastSeen) {
@@ -394,7 +396,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramShowSeconds, R.string.XgramShowSeconds),
       toggle(R.id.btn_xgramHideFab, R.string.XgramHideFab),
       toggle(R.id.btn_xgramConnectionStatusStart, R.string.XgramConnectionStatusStart),
-      toggle(R.id.btn_xgramAllChatsLabel, R.string.XgramAllChatsLabel)
+      toggle(R.id.btn_xgramAllChatsLabel, R.string.XgramAllChatsLabel),
+      toggle(R.id.btn_xgramHideFolders, R.string.XgramHideFolders)
     );
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTwoPaneInfo));
   }
@@ -970,6 +973,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramAllChatsLabel) {
       settings.setAllChatsLabel(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramHideFolders) {
+      settings.setHideFolders(tdlib.accountId(), adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramChatLook) {
       org.thunderdog.challegram.ui.MessagesController c = new org.thunderdog.challegram.ui.MessagesController(context, tdlib);

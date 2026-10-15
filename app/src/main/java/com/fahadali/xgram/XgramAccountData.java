@@ -46,6 +46,7 @@ public final class XgramAccountData {
       for (String prefix : PREFIXES) {
         pmc.removeByPrefix(prefix + suffix);
       }
+      pmc.remove(XgramSettings.hideFoldersKey(accountId));
       XgramLocalNames.forgetAccount(accountId);
       XgramLastSeen.forgetAccount(accountId);
       XgramGhost.forgetAccount(accountId);
