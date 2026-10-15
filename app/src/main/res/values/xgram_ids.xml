@@ -276,4 +276,7 @@
   <!-- Play videos in chat -->
   <item type="id" name="btn_xgramInlineVideo" />
   <item type="id" name="btn_xgramInlineVideoStart" />
+  <!-- Adaptive part 1: foldables (Appearance > Layout) -->
+  <item type="id" name="btn_xgramFoldHingeSplit" />
+  <item type="id" name="btn_xgramFoldTabletop" />
 </resources>

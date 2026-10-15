@@ -3738,9 +3738,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
     manager.rebuildLayouts();
 
     if (emojiKeyboardFrameLayout != null) {
-      emojiState = false;
-      if (emojiShown) {
-        closeEmojiKeyboard();
+      // XGram: only close the emoji panel when the window changes size class or orientation (folding, unfolding,
+      // rotating), not on a night mode, locale or keyboard change.
+      com.fahadali.xgram.layout.XgramWindow xgramWindow = context.xgramWindow();
+      if (xgramWindow == null || xgramWindow.isConfigurationSizeChange()) {
+        emojiState = false;
+        if (emojiShown) {
+          closeEmojiKeyboard();
+        }
       }
       emojiKeyboardFrameLayout.rebuildLayout();
     }

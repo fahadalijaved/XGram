@@ -345,6 +345,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.showPeerIds(), isUpdate);
         } else if (id == R.id.btn_xgramLimitMessageWidth) {
           view.getToggler().setRadioEnabled(settings.limitMessageWidth(), isUpdate);
+        } else if (id == R.id.btn_xgramFoldHingeSplit) {
+          view.getToggler().setRadioEnabled(settings.foldHingeSplit(), isUpdate);
+        } else if (id == R.id.btn_xgramFoldTabletop) {
+          view.getToggler().setRadioEnabled(settings.foldTabletop(), isUpdate);
         } else if (id == R.id.btn_xgramTwoPane) {
           view.getToggler().setRadioEnabled(settings.twoPaneLayout(), isUpdate);
         } else if (id == R.id.btn_xgramHideFab) {
@@ -590,6 +594,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     addRows(items, toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub));
     items.add(description(R.string.XgramTwoPaneInfo));
     addRows(items, toggle(R.id.btn_xgramLimitMessageWidth, R.string.XgramLimitMessageWidth, R.string.XgramLimitMessageWidthSub));
+    // Foldables: the posture rows only where a fold can be reported (androidx.window, minSdk 23 builds).
+    if (com.fahadali.xgram.layout.XgramWindow.isPostureSupported()) {
+      addRows(items,
+        toggle(R.id.btn_xgramFoldHingeSplit, R.string.XgramFoldHingeSplit, R.string.XgramFoldHingeSplitSub),
+        toggle(R.id.btn_xgramFoldTabletop, R.string.XgramFoldTabletop, R.string.XgramFoldTabletopSub)
+      );
+      items.add(description(R.string.XgramFoldInfo));
+    }
   }
 
   private void buildChatList (List<ListItem> items) {
@@ -1283,6 +1295,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramLimitMessageWidth) {
       settings.setLimitMessageWidth(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramFoldHingeSplit) {
+      settings.setFoldHingeSplit(adapter.toggleView(v));
+      if (context.xgramTwoPane() != null) {
+        context.xgramTwoPane().update();
+      }
+      return;
+    } else if (id == R.id.btn_xgramFoldTabletop) {
+      settings.setFoldTabletop(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramPreferIpv6) {
       settings.setPreferIpv6(adapter.toggleView(v));

@@ -1032,6 +1032,10 @@ dependencies {
   implementation(libs.androidx.palette)
   implementation(libs.androidx.collection)
   implementation(libs.androidx.interpolator)
+  // XGram: foldable postures, https://developer.android.com/jetpack/androidx/releases/window
+  // minSdk 23: legacy and lollipop build src/preMarshmallow's XgramPostureSource (no postures) instead.
+  sinceMarshmallowImplementation(libs.androidx.window.latest)
+  sinceMarshmallowImplementation(libs.androidx.window.java.latest)
   // CameraX: https://developer.android.com/jetpack/androidx/releases/camera
   flavorImplementation(
     libs.androidx.camera.camera2.legacy,
