@@ -806,6 +806,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     });
     subscribeForUpdates();
     this.useReactionBubblesValue = checkReactionBubbles();
+    this.xgramAutoTranslate = com.fahadali.xgram.chats.XgramAutoTranslate.appliesTo(controller, chat.id); // XGram
     this.usedTranslateStyleMode = checkTranslateStyleMode();
     this.wasScrollByUser = false;
   }
@@ -1025,11 +1026,33 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   private int usedTranslateStyleMode;
   private int checkTranslateStyleMode () {
-    return Settings.instance().getChatTranslateMode();
+    // XGram: a chat set to auto-translate shows translations Inline, whatever the translation style
+    return xgramAutoTranslate ? Settings.TRANSLATE_MODE_INLINE : Settings.instance().getChatTranslateMode();
   }
 
   public int getUsedTranslateStyleMode () {
     return usedTranslateStyleMode;
+  }
+
+  private boolean xgramAutoTranslate;
+
+  /** XGram: incoming messages of this chat are translated as they show up. */
+  public boolean xgramAutoTranslate () {
+    return xgramAutoTranslate;
+  }
+
+  /** XGram: after the chat's auto-translate was turned on or off. Returns whether it changed here. */
+  public boolean xgramCheckAutoTranslate () {
+    long chatId = loader.getChatId();
+    boolean autoTranslate = chatId != 0 && com.fahadali.xgram.chats.XgramAutoTranslate.appliesTo(controller, chatId);
+    if (autoTranslate == xgramAutoTranslate) {
+      return false;
+    }
+    xgramAutoTranslate = autoTranslate;
+    usedTranslateStyleMode = checkTranslateStyleMode();
+    com.fahadali.xgram.chats.XgramAutoTranslate.onChatChanged(adapter.getItems(), autoTranslate);
+    rebuildLayouts();
+    return true;
   }
 
   @Nullable
@@ -2196,6 +2219,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         }
       }
       message.stopTranslated();
+      com.fahadali.xgram.chats.XgramAutoTranslate.onMessageEdited(message); // XGram: the new text is translated again
     }
     ThreadInfo messageThread = loader.getMessageThread();
     if (messageThread != null) {

@@ -4139,6 +4139,11 @@ public class Lang {
   }
 
   public static @Nullable String getDefaultLanguageToTranslateV2 (@Nullable String sourceLanguage) {
+    // XGram: "Translate to" in Settings, XGram, Chats, Translation comes first when set
+    String xgramTarget = com.fahadali.xgram.XgramSettings.instance().translateTarget();
+    if (!StringUtils.isEmpty(xgramTarget) && !StringUtils.equalsOrBothEmpty(xgramTarget, sourceLanguage)) {
+      return xgramTarget;
+    }
     ArrayList<String> recents = Settings.instance().getTranslateLanguageRecents();
     for (String lang : recents) {
       if (!StringUtils.equalsOrBothEmpty(lang, sourceLanguage)) {

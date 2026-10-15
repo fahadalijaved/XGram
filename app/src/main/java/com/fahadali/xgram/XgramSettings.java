@@ -462,6 +462,45 @@ public final class XgramSettings {
     pmc().putBoolean(KEY_TR_NOTICE + provider, true);
   }
 
+  public static final String KEY_TR_AUTO_ALL = "xgram_tr_auto_all";
+  public static final String KEY_TR_TARGET = "xgram_tr_target";
+
+  private int trAutoAll = -1;
+  private String trTarget;
+
+  /** Auto-translate in every chat not set otherwise in its menu. Off by default. */
+  public boolean translateAutoAll () {
+    if (trAutoAll < 0) {
+      trAutoAll = pmc().getBoolean(KEY_TR_AUTO_ALL, false) ? 1 : 0;
+    }
+    return trAutoAll == 1;
+  }
+
+  public void setTranslateAutoAll (boolean value) {
+    trAutoAll = value ? 1 : 0;
+    put(KEY_TR_AUTO_ALL, value);
+    com.fahadali.xgram.chats.XgramAutoTranslate.notifyChanged(null, 0);
+  }
+
+  /** "Translate to": a language code, or empty for the app's language. */
+  public String translateTarget () {
+    if (trTarget == null) {
+      String value = pmc().getString(KEY_TR_TARGET, "");
+      trTarget = value != null ? value : "";
+    }
+    return trTarget;
+  }
+
+  public void setTranslateTarget (@androidx.annotation.Nullable String language) {
+    trTarget = language != null ? language : "";
+    if (trTarget.isEmpty()) {
+      pmc().remove(KEY_TR_TARGET);
+    } else {
+      pmc().putString(KEY_TR_TARGET, trTarget);
+    }
+    com.fahadali.xgram.chats.XgramAutoTranslate.notifyChanged(null, 0);
+  }
+
   // Message box
 
   /** A tap on the microphone records hands-free, a long press switches between voice and video messages. */

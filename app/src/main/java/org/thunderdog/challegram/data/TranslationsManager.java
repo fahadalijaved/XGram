@@ -81,11 +81,36 @@ public final class TranslationsManager {
     }
   }
 
+  /** XGram: how an auto-translate request ended. Its errors go here instead of each message's own tooltip. */
+  public interface XgramListener {
+    /**
+     * @param error null when the translation is shown (or there was nothing to translate), otherwise as received
+     * @param errorText the error as shown to the user, null with {@code error}
+     * @param notice why the chosen service failed when Telegram translated instead, otherwise null
+     */
+    void onDone (@Nullable TdApi.Error error, @Nullable String errorText, @Nullable String notice);
+  }
+
+  /** XGram: translations shared by every message and screen, so a chat opened again isn't translated again. */
+  private static final android.util.LruCache<String, Object[]> xgramSharedCache = new android.util.LruCache<>(400);
+
   public void requestTranslation (String language) {
+    requestTranslation(language, null);
+  }
+
+  /** XGram: auto-translate; {@code listener} is told when the request ends, whatever the outcome. */
+  public void xgramRequestTranslation (String language, XgramListener listener) {
+    requestTranslation(language, listener);
+  }
+
+  private void requestTranslation (String language, @Nullable XgramListener listener) {
     currentTranslatedLanguage = language;
     if (language == null || StringUtils.equalsOrBothEmpty(language, message.getOriginalMessageLanguage())) {
       dispatchResult(TranslationCounterDrawable.TRANSLATE_STATUS_DEFAULT, null, true);
       currentTranslatedLanguage = null;
+      if (listener != null) {
+        listener.onDone(null, null, null);
+      }
       return;
     }
 
@@ -94,14 +119,29 @@ public final class TranslationsManager {
     }
 
     TdApi.FormattedText textToTranslate = prepareTextToTranslate(message.getTextToTranslate());
-    if (textToTranslate == null) return;
+    if (textToTranslate == null) {
+      if (listener != null) {
+        listener.onDone(null, null, null);
+      }
+      return;
+    }
 
     // XGram: cached per translation service, so choosing another service translates again
     final String providerKey = xgramProviderKey(language);
     TdApi.FormattedText cachedText = getCachedTranslation(textToTranslate.text, providerKey);
+    if (cachedText == null) {
+      Object[] shared = xgramSharedCache.get(providerKey + "\u0001" + textToTranslate.text);
+      if (shared != null) {
+        cachedText = (TdApi.FormattedText) shared[0];
+        saveCachedTextTranslation(textToTranslate.text, language, providerKey, cachedText, (Integer) shared[1]);
+      }
+    }
     if (cachedText != null) {
       xgramTranslatedBy = getCachedTranslationProvider(textToTranslate.text, providerKey);
       dispatchResult(TranslationCounterDrawable.TRANSLATE_STATUS_SUCCESS, cachedText, true);
+      if (listener != null) {
+        listener.onDone(null, null, null);
+      }
       return;
     }
 
@@ -111,20 +151,28 @@ public final class TranslationsManager {
         TdApi.FormattedText text = prepareTranslatedText((TdApi.FormattedText) object);
         // under the key of the service that actually translated: after a fallback to Telegram the chosen service is tried again next time
         saveCachedTextTranslation(textToTranslate.text, language, provider + ":" + language, text, provider);
+        xgramSharedCache.put(provider + ":" + language + "\u0001" + textToTranslate.text, new Object[] {text, provider});
         if (StringUtils.equalsOrBothEmpty(currentTranslatedLanguage, language)) {
-          if (providerError != null) {
+          if (providerError != null && listener == null) {
             errorDelegate.onError(providerError);
           }
           xgramTranslatedBy = provider;
           dispatchResult(TranslationCounterDrawable.TRANSLATE_STATUS_SUCCESS, text, true);
         }
+        if (listener != null) {
+          listener.onDone(null, null, providerError);
+        }
       } else {
         if (StringUtils.equalsOrBothEmpty(currentTranslatedLanguage, language)) {
           dispatchStatus(TranslationCounterDrawable.TRANSLATE_STATUS_ERROR, true);
-          if (object instanceof TdApi.Error) {
+          if (object instanceof TdApi.Error && listener == null) {
             // a third-party service's error already reads "Google Translate: ..."
             errorDelegate.onError(XgramTranslator.isThirdParty(provider) ? ((TdApi.Error) object).message : TD.toErrorString(object));
           }
+        }
+        if (listener != null) {
+          TdApi.Error error = object instanceof TdApi.Error ? (TdApi.Error) object : new TdApi.Error(500, TD.toErrorString(object));
+          listener.onDone(error, XgramTranslator.isThirdParty(provider) ? error.message : TD.toErrorString(error), null);
         }
       }
     })));

@@ -2698,6 +2698,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     setViewAttached(view != null || hasAttachedToAnything());
     if (currentViews.attachToView(view) && view != null) {
       onMessageAttachedToView(view, true);
+      com.fahadali.xgram.chats.XgramAutoTranslate.onMessageShown(this); // XGram: a chat set to auto-translate
     }
   }
 
@@ -9847,6 +9848,15 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   public void stopTranslated () {
     translatedCounterForceShow = false;
     mTranslationsManager.stopTranslation();
+  }
+
+  /** XGram: where auto-translate is with this message, see {@link com.fahadali.xgram.chats.XgramAutoTranslate}. */
+  public int xgramAutoTranslateState;
+
+  /** XGram: auto-translate shows the translation Inline; {@code listener} hears how the request ended. */
+  public void xgramAutoTranslate (String language, TranslationsManager.XgramListener listener) {
+    translatedCounterForceShow = true;
+    mTranslationsManager.xgramRequestTranslation(language, listener);
   }
 
   public int translationStyleMode () {

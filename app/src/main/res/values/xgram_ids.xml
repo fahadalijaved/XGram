@@ -208,6 +208,11 @@
   <item type="id" name="btn_xgramTrProvider" />
   <item type="id" name="btn_xgramTrFallback" />
   <item type="id" name="btn_xgramTrProviderInfo" />
+  <item type="id" name="btn_xgramTrTarget" />
+  <item type="id" name="btn_xgramTrTargetLanguage" />
+  <item type="id" name="btn_xgramTrAutoAll" />
+  <item type="id" name="btn_xgramAutoTranslate" />
+  <item type="id" name="controller_xgramTrTarget" />
   <!-- XGram: bot button long-press -->
   <item type="id" name="btn_xgramCopyButtonText" />
   <item type="id" name="btn_xgramCopyCallbackData" />

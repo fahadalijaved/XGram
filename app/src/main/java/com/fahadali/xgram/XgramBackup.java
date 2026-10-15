@@ -34,12 +34,17 @@ public final class XgramBackup {
     "xgram_ghost_dont_read", "xgram_ghost_dont_type", "xgram_ghost_offline", "xgram_ghost_schedule_send", "xgram_ghost_silent", "xgram_ghost_read_on_send",
     "xgram_ghost_local_read", "xgram_history_save_deleted", "xgram_history_save_edits", "xgram_history_save_media", "xgram_history_red_deleted",
     "xgram_hide_sponsored", "xgram_show_peer_ids", "xgram_two_pane", "xgram_icon_theme", "xgram_merge_communities", "xgram_save_last_seen", "xgram_show_seconds", "xgram_tap_time_details",
-    "xgram_clean_links", "xgram_fix_link_previews", "xgram_ghost_typing_for_stickers", "xgram_allow_screenshots", "xgram_save_protected", "xgram_proxy_off_vpn", "xgram_proxy_off_wifi", "xgram_proxy_off_mobile", "xgram_hide_phone", "xgram_block_content_capture", "xgram_prefer_ipv6", "xgram_limit_message_width", "xgram_delete_for_everyone", "xgram_hide_blocked", "xgram_forward_without_author", "xgram_ai_tools", "xgram_hide_fab", "xgram_all_chats_label", "xgram_pull_to_next", "xgram_bubble_tail", "xgram_download_boost_on", "xgram_tap_to_record", "xgram_system_emoji", "xgram_tr_always", "xgram_tr_fallback",
+    "xgram_clean_links", "xgram_fix_link_previews", "xgram_ghost_typing_for_stickers", "xgram_allow_screenshots", "xgram_save_protected", "xgram_proxy_off_vpn", "xgram_proxy_off_wifi", "xgram_proxy_off_mobile", "xgram_hide_phone", "xgram_block_content_capture", "xgram_prefer_ipv6", "xgram_limit_message_width", "xgram_delete_for_everyone", "xgram_hide_blocked", "xgram_forward_without_author", "xgram_ai_tools", "xgram_hide_fab", "xgram_all_chats_label", "xgram_pull_to_next", "xgram_bubble_tail", "xgram_download_boost_on", "xgram_tap_to_record", "xgram_system_emoji", "xgram_tr_always", "xgram_tr_fallback", XgramSettings.KEY_TR_AUTO_ALL,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
-    XgramSettings.KEY_HIDE_FOLDERS
+    XgramSettings.KEY_HIDE_FOLDERS, com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX
   };
+
+  /** Kept per account slot, so exported by Telegram user in "accounts" instead of as they are. */
+  private static boolean isPerAccountKey (String key) {
+    return key.startsWith(XgramSettings.KEY_HIDE_FOLDERS) || key.startsWith(com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX);
+  }
   /** Telegram X's own per account list of folders hidden on this device ("Hide in XGram" in Chat folders). */
   private static final String HIDDEN_FOLDERS_KEY = "disabled_chat_filter_ids";
 
@@ -67,6 +72,7 @@ public final class XgramBackup {
       JSONObject values = new JSONObject();
       values.put("hideFolders", XgramSettings.instance().hideFolders(account.id));
       values.put("hiddenFolders", hiddenFolders);
+      values.put("autoTranslate", com.fahadali.xgram.chats.XgramAutoTranslate.exportAccount(account.id)); // chats set in their menu
       accounts.put(user, values);
     }
     return accounts;
@@ -97,11 +103,14 @@ public final class XgramBackup {
         }
         Settings.instance().putIntArray(key, ids);
       }
+      if (values.has("autoTranslate")) {
+        com.fahadali.xgram.chats.XgramAutoTranslate.importAccount(account.id, values.optJSONObject("autoTranslate"));
+      }
       count++;
     }
     return count;
   }
-  private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", XgramReorder.KEY_PREFIX};
+  private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
   private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider"};
   /** Data rather than settings: exported and imported, but kept by {@link #reset}. */
   private static final String[] LONG_PREFIXES = {"xgram_bm_"};
@@ -116,7 +125,7 @@ public final class XgramBackup {
       JSONObject booleans = new JSONObject(), strings = new JSONObject(), ints = new JSONObject();
       for (String prefix : BOOLEAN_PREFIXES) {
         for (LevelDB.Entry entry : pmc().find(prefix)) {
-          if (isBooleanKey(entry.key()) && !entry.key().startsWith(XgramSettings.KEY_HIDE_FOLDERS)) {
+          if (isBooleanKey(entry.key()) && !isPerAccountKey(entry.key())) {
             booleans.put(entry.key(), entry.asBoolean());
           }
         }
@@ -183,7 +192,7 @@ public final class XgramBackup {
       if (booleans != null) {
         for (Iterator<String> it = booleans.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.startsWith("xgram_") && isBooleanKey(key) && !key.startsWith(XgramSettings.KEY_HIDE_FOLDERS)) {
+          if (key.startsWith("xgram_") && isBooleanKey(key) && !isPerAccountKey(key)) {
             pmc().putBoolean(key, booleans.getBoolean(key));
             count++;
           }
@@ -193,7 +202,7 @@ public final class XgramBackup {
       if (strings != null) {
         for (Iterator<String> it = strings.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.equals("xgram_filters") || key.startsWith("xgram_ln_") || key.equals("xgram_menu_hidden") || key.startsWith(XgramReorder.KEY_PREFIX)) {
+          if (key.equals("xgram_filters") || key.startsWith("xgram_ln_") || key.equals("xgram_menu_hidden") || key.startsWith(XgramReorder.KEY_PREFIX) || key.equals(XgramSettings.KEY_TR_TARGET)) {
             pmc().putString(key, strings.getString(key));
             count++;
           }
@@ -242,5 +251,6 @@ public final class XgramBackup {
     }
     // Ghost mode is off after a reset: counters lowered on this device go back to the server's.
     com.fahadali.xgram.ghost.XgramLocalRead.clearAll();
+    com.fahadali.xgram.chats.XgramAutoTranslate.reload();
   }
 }

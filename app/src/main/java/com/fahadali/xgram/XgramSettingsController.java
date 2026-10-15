@@ -267,6 +267,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.translateFallback(), isUpdate);
         } else if (id == R.id.btn_xgramTrProvider) {
           view.setData(com.fahadali.xgram.translate.XgramTranslator.name(settings.translateProvider()));
+        } else if (id == R.id.btn_xgramTrTarget) {
+          view.setData(com.fahadali.xgram.chats.XgramTranslateTargetController.currentName());
+        } else if (id == R.id.btn_xgramTrAutoAll) {
+          view.getToggler().setRadioEnabled(settings.translateAutoAll(), isUpdate);
         } else if (id == R.id.btn_xgramTapToRecord) {
           view.getToggler().setRadioEnabled(settings.tapToRecord(), isUpdate);
         } else if (id == R.id.btn_xgramProxyOffVpn) {
@@ -487,6 +491,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramTrStyle, 0, R.string.XgramTrStyle)
     );
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTrAlwaysInfo));
+    addRows(items,
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramTrTarget, 0, R.string.XgramTrTarget),
+      toggle(R.id.btn_xgramTrAutoAll, R.string.XgramTrAutoAll)
+    );
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramTrAutoAllInfo));
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramMessageBox));
     addRows(items,
       new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramInputButtons, 0, R.string.XgramInputButtons),
@@ -779,6 +788,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         adapter.updateValuedSettingById(id);
       }
       adapter.updateValuedSettingById(R.id.btn_xgramHidePhone); // also a toggle in Side menu
+      adapter.updateValuedSettingById(R.id.btn_xgramTrTarget); // set on its own page
       if (showingResults) {
         // A page opened from the results may have changed what they show.
         List<ListItem> shown = adapter.getItems();
@@ -1009,6 +1019,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramTrProvider) {
       showTranslateProviderOptions();
+      return;
+    } else if (id == R.id.btn_xgramTrTarget) {
+      navigateTo(new com.fahadali.xgram.chats.XgramTranslateTargetController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramTrAutoAll) {
+      settings.setTranslateAutoAll(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramTrStyle) {
       navigateTo(new org.thunderdog.challegram.ui.SettingsLanguageTranslateController(context, tdlib));

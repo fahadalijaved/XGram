@@ -665,6 +665,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.AddToFolder);
     }
 
+    if (com.fahadali.xgram.chats.XgramAutoTranslate.canUse(tdlib, getChatId())) {
+      ids.append(R.id.btn_xgramAutoTranslate); // XGram: auto-translate (AyuGram)
+      strings.append(com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, getChatId()) ? R.string.XgramStopTranslating : R.string.XgramTranslateChat);
+    }
+
     if (tdlib.canSetPasscode(chat)) {
       ids.append(R.id.btn_setPasscode);
       strings.append(R.string.PasscodeTitle);
@@ -729,6 +734,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       strings.append(R.string.AddToFolder);
     }
 
+    if (com.fahadali.xgram.chats.XgramAutoTranslate.canUse(tdlib, getChatId())) {
+      ids.append(R.id.btn_xgramAutoTranslate); // XGram: auto-translate (AyuGram)
+      strings.append(com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, getChatId()) ? R.string.XgramStopTranslating : R.string.XgramTranslateChat);
+    }
+
     tdlib.ui().addDeleteChatOptions(getChatId(), ids, strings, false, true);
 
     if (ids.size() > 0) {
@@ -746,6 +756,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   public void onMoreItemPressed (int id) {
     if (id == R.id.btn_xgramAddToFolder && chat != null) {
       com.fahadali.xgram.chats.XgramFolderPicker.show(this, chat.id); // XGram
+      return;
+    }
+    if (id == R.id.btn_xgramAutoTranslate) {
+      // XGram: the chat, if open below, starts or stops translating at once
+      long chatId = getChatId();
+      boolean enabled = !com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, chatId);
+      com.fahadali.xgram.chats.XgramAutoTranslate.setEnabled(tdlib, chatId, enabled);
+      UI.showToast(enabled ? Lang.getString(R.string.XgramTranslateChatOn, com.fahadali.xgram.chats.XgramAutoTranslate.languageName(com.fahadali.xgram.chats.XgramAutoTranslate.targetLanguage())) : Lang.getString(R.string.XgramTranslateChatOff), Toast.LENGTH_SHORT);
       return;
     }
     if (tdlib.ui().processLeaveButton(this, null, getChatId(), id, null)) {

@@ -35,7 +35,7 @@ public final class XgramAccountData {
 
   private static final String[] PREFIXES = {
     "xgram_bm_", "xgram_sb_", "xgram_ln_", "xgram_ghost_ex_", "xgram_ls_", "xgram_lr_", "xgram_tab_", "xgram_tabs_side_",
-    "xgram_cm_", "xgram_cmode_"
+    "xgram_cm_", "xgram_cmode_", com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX
   };
 
   /** TDLib thread: the account in this slot logged out. */
@@ -50,6 +50,7 @@ public final class XgramAccountData {
       XgramLocalNames.forgetAccount(accountId);
       XgramLastSeen.forgetAccount(accountId);
       XgramGhost.forgetAccount(accountId);
+      com.fahadali.xgram.chats.XgramAutoTranslate.forgetAccount(accountId);
       XgramFilters.forgetAccount(accountId);
       XgramDeleted.forgetAccount(accountId);
       XgramLocalRead.forgetAccount(accountId);

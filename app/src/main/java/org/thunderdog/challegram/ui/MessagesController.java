@@ -866,6 +866,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     actionView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, actionBarHeight));
     actionView.addThemeListeners(this);
 
+    // XGram: "Translating from …" while the chat is auto-translated
+    xgramTranslateBar = new com.fahadali.xgram.chats.XgramAutoTranslateBar(context, this, v -> xgramShowAutoTranslateOptions(), v -> xgramStopAutoTranslate());
+    com.fahadali.xgram.chats.XgramAutoTranslate.addListener(xgramTranslateListener);
+
     int requestsViewHeight = Screen.dp(48f);
     requestsView = new JoinRequestsView(context, tdlib);
     requestsView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, requestsViewHeight));
@@ -987,6 +991,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       requestsItem = new CollapseListView.ViewItem(requestsView, requestsViewHeight),
       liveLocationItem = new CollapseListView.ViewItem(liveLocationView, liveLocationHeight),
       actionItem = new CollapseListView.ViewItem(actionView, actionBarHeight),
+      xgramTranslateItem = new CollapseListView.ViewItem(xgramTranslateBar, com.fahadali.xgram.chats.XgramAutoTranslateBar.height()),
       toastAlertItem
     }, this);
 
@@ -2317,6 +2322,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
           tdlib.send(new TdApi.ToggleChatViewAsTopics(forum.id, true), tdlib.typedOkHandler());
         }
       }
+    } else if (id == R.id.btn_xgramAutoTranslate) {
+      if (chat != null) {
+        com.fahadali.xgram.chats.XgramAutoTranslate.setEnabled(tdlib, chat.id, !com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, chat.id)); // XGram
+      }
     } else if (id == R.id.btn_xgramExportChat) {
       if (chat != null) {
         com.fahadali.xgram.chats.XgramChatExport.prompt(this, chat.id); // XGram
@@ -3010,6 +3019,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (previewSearchSender == null) {
       manager.openChat(chat, messageThread, messageTopicId, previewSearchFilter, this, areScheduled, !inPreviewMode && !isInForceTouchMode());
     }
+    xgramTranslatedFrom.clear();
+    xgramUpdateTranslateBar(); // XGram
 
     updateShadowColor();
     if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chat.id) && xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED))) {
@@ -4181,6 +4192,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onFocus () {
     super.onFocus();
+    xgramCheckAutoTranslate(); // XGram: e.g. a chat preview opened in full
     if (promptDraftPrefillOnFocus) {
       promptDraftPrefillOnFocus = false;
       fillDraft(this.fillDraft, true);
@@ -4454,6 +4466,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void destroy () {
+    com.fahadali.xgram.chats.XgramAutoTranslate.removeListener(xgramTranslateListener); // XGram
     if (xgramTopicIcon != null) {
       xgramTopicIcon.performDestroy(); // XGram
       xgramTopicIcon = null;
@@ -4682,6 +4695,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if ((!tdlib.isChannel(chat.id) || (status != null && !TD.isLeft(status))) && !tdlib.isSelfChat(chat.id)) {
       ids.append(R.id.btn_mute);
       strings.append(tdlib.chatNotificationsEnabled(chat.id) ? R.string.Mute : R.string.Unmute);
+    }
+
+    if (!inPreviewMode && !areScheduled && com.fahadali.xgram.chats.XgramAutoTranslate.canUse(tdlib, chat.id)) {
+      ids.append(R.id.btn_xgramAutoTranslate); // XGram: auto-translate (AyuGram)
+      strings.append(com.fahadali.xgram.chats.XgramAutoTranslate.isEnabled(tdlib, chat.id) ? R.string.XgramStopTranslating : R.string.XgramTranslateChat);
     }
 
     if (com.fahadali.xgram.XgramSettings.instance().historySaveDeleted() || com.fahadali.xgram.XgramSettings.instance().historySaveEdits()) {
@@ -6774,6 +6792,79 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private CollapseListView topBar;
   private TopBarView actionView;
   private CollapseListView.Item actionItem;
+
+  // XGram: auto-translate
+
+  private com.fahadali.xgram.chats.XgramAutoTranslateBar xgramTranslateBar;
+  private CollapseListView.Item xgramTranslateItem;
+  /** Languages auto-translate translated from since the chat opened, for the bar. */
+  private final java.util.Set<String> xgramTranslatedFrom = new java.util.HashSet<>();
+  private final com.fahadali.xgram.chats.XgramAutoTranslate.Listener xgramTranslateListener = (changedTdlib, changedChatId) -> {
+    if ((changedTdlib == null || changedTdlib == tdlib) && (changedChatId == 0 || changedChatId == getChatId())) {
+      xgramCheckAutoTranslate();
+    }
+  };
+
+  private void xgramCheckAutoTranslate () {
+    if (manager != null && manager.xgramCheckAutoTranslate()) {
+      xgramTranslatedFrom.clear();
+    }
+    xgramUpdateTranslateBar();
+  }
+
+  private void xgramUpdateTranslateBar () {
+    if (xgramTranslateBar == null || xgramTranslateItem == null || topBar == null || manager == null) {
+      return;
+    }
+    boolean visible = manager.xgramAutoTranslate();
+    if (visible) {
+      xgramTranslateBar.setText(com.fahadali.xgram.chats.XgramAutoTranslate.barText(xgramTranslatedFrom));
+    } else {
+      xgramTranslatedFrom.clear();
+    }
+    topBar.setItemVisible(xgramTranslateItem, visible, isFocused());
+  }
+
+  /** A message was auto-translated from {@code fromLanguage}. */
+  public void xgramOnAutoTranslated (@Nullable String fromLanguage) {
+    if (!StringUtils.isEmpty(fromLanguage) && xgramTranslatedFrom.add(com.fahadali.xgram.chats.XgramAutoTranslate.base(fromLanguage)) && xgramTranslateBar != null && manager.xgramAutoTranslate()) {
+      xgramTranslateBar.setText(com.fahadali.xgram.chats.XgramAutoTranslate.barText(xgramTranslatedFrom));
+    }
+  }
+
+  /** Points an auto-translate error at the bar; false when the bar isn't shown. */
+  public boolean xgramShowAutoTranslateError (String text) {
+    if (xgramTranslateBar == null || manager == null || !manager.xgramAutoTranslate() || !isFocused() || xgramTranslateBar.getParent() == null) {
+      return false;
+    }
+    context().tooltipManager().builder(xgramTranslateBar.anchor()).show(tdlib, text).hideDelayed(3500, java.util.concurrent.TimeUnit.MILLISECONDS);
+    return true;
+  }
+
+  private void xgramStopAutoTranslate () {
+    if (chat != null) {
+      com.fahadali.xgram.chats.XgramAutoTranslate.setEnabled(tdlib, chat.id, false);
+    }
+  }
+
+  private void xgramShowAutoTranslateOptions () {
+    if (chat == null) {
+      return;
+    }
+    showOptions(xgramTranslateBar != null ? com.fahadali.xgram.chats.XgramAutoTranslate.barText(xgramTranslatedFrom) : null,
+      new int[] {R.id.btn_xgramAutoTranslate, R.id.btn_xgramTrTarget},
+      new String[] {Lang.getString(R.string.XgramStopTranslating), Lang.getString(R.string.XgramTrTarget)},
+      new int[] {OptionColor.RED, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_translate_off_24, R.drawable.baseline_translate_24},
+      (itemView, id) -> {
+        if (id == R.id.btn_xgramAutoTranslate) {
+          xgramStopAutoTranslate();
+        } else if (id == R.id.btn_xgramTrTarget) {
+          navigateTo(new com.fahadali.xgram.chats.XgramTranslateTargetController(context, tdlib));
+        }
+        return true;
+      });
+  }
 
   private CustomTextView toastAlertView;
   private CollapseListView.Item toastAlertItem;
