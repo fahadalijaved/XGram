@@ -7588,6 +7588,67 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return sendButton.inSimpleSendMode();
   }
 
+  // XGram: hardware keyboard (com.fahadali.xgram.layout.XgramKeyboard)
+
+  /** Enter or Ctrl+Enter: the same as tapping Send (also saves an edit, sends attached files, asks for a date). */
+  public boolean xgramSendFromKeyboard () {
+    if (sendButton == null || !sendShown.getValue() || inSelectMode() || inSearchMode()) {
+      return false;
+    }
+    onClick(sendButton);
+    return true;
+  }
+
+  /** Up in an empty message box: edits the newest message that can be edited, like Telegram Desktop. */
+  public boolean xgramEditLastMessage () {
+    if (isEditingMessage() || inSelectMode() || inSearchMode() || hasAttachedFiles() || !canWriteMessages()) {
+      return false;
+    }
+    MessagesAdapter adapter = manager.getAdapter();
+    TGMessage last = adapter.getMessage(adapter.indexOfMessage(m -> !m.isSponsoredMessage() && m.canEditText()));
+    if (last == null) {
+      return false;
+    }
+    TdApi.Message message = null;
+    if (last instanceof TGMessageMedia) {
+      message = last.getMessage(((TGMessageMedia) last).getCaptionMessageId());
+    }
+    if (message == null) {
+      message = last.getNewestMessage();
+    }
+    editMessage(new MessageWithProperties(message, last.lastMessageProperties(message.id)));
+    return true;
+  }
+
+  /** Esc: drops the reply or ends editing, like the bar's close button, before Esc goes back. */
+  public boolean xgramCloseReplyByKeyboard () {
+    if (inSelectMode() || inSearchMode() || emojiShown) {
+      return false;
+    }
+    if (isEditingMessage()) {
+      closeEdit(false);
+      return true;
+    }
+    if (reply != null) {
+      closeReply(true, true);
+      return true;
+    }
+    return false;
+  }
+
+  /** Ctrl+F: opens the search in this chat. */
+  public boolean xgramSearchByKeyboard () {
+    if (inSearchMode()) {
+      return true;
+    }
+    if (inSelectMode() || !manager.isReadyToSearch()) {
+      return false;
+    }
+    hideBottomHint();
+    openSearchMode();
+    return true;
+  }
+
   private static final int FLAG_INPUT_EDITING = 1;
   private static final int FLAG_INPUT_OFFSCREEN = 1 << 1;
   private static final int FLAG_INPUT_RECORDING = 1 << 2;

@@ -758,6 +758,33 @@ public final class XgramSettings {
     pmc().putInt(toRight ? "xgram_swipe_right" : "xgram_swipe_left", action);
   }
 
+  // Enter to send (Messages page, see com.fahadali.xgram.layout.XgramKeyboard)
+
+  public static final String KEY_ENTER_TO_SEND = "xgram_enter_to_send";
+  /** Auto: Enter sends on a hardware keyboard; the on-screen keyboard follows Telegram X's Send with Enter. */
+  public static final int ENTER_TO_SEND_AUTO = 0;
+  public static final int ENTER_TO_SEND_ON = 1;
+  public static final int ENTER_TO_SEND_OFF = 2;
+
+  private volatile int enterToSend = -1;
+
+  public int enterToSend () {
+    int value = enterToSend;
+    if (value < 0) {
+      value = pmc().getInt(KEY_ENTER_TO_SEND, ENTER_TO_SEND_AUTO);
+      if (value != ENTER_TO_SEND_ON && value != ENTER_TO_SEND_OFF) {
+        value = ENTER_TO_SEND_AUTO;
+      }
+      enterToSend = value;
+    }
+    return value;
+  }
+
+  public void setEnterToSend (int value) {
+    enterToSend = value;
+    putInt(KEY_ENTER_TO_SEND, value);
+  }
+
   // Side menu
 
   /** Side menu items that can be hidden: contacts, hub, calls, saved, invite, proxy, help, night, ghost. */

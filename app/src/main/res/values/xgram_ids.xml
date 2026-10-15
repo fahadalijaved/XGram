@@ -276,4 +276,6 @@
   <!-- Play videos in chat -->
   <item type="id" name="btn_xgramInlineVideo" />
   <item type="id" name="btn_xgramInlineVideoStart" />
+  <!-- Keyboard and mouse (adaptive part 3) -->
+  <item type="id" name="btn_xgramEnterToSend" />
 </resources>

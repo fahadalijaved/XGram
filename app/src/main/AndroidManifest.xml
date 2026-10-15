@@ -359,7 +359,7 @@
 
     <activity
       android:name=".MainActivity"
-      android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout|locale|layoutDirection|uiMode"
+      android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|smallestScreenSize|screenLayout|locale|layoutDirection|uiMode"
       android:launchMode="singleTask"
       android:windowSoftInputMode="stateHidden|adjustPan"
       android:exported="true">

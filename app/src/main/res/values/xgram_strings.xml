@@ -778,4 +778,17 @@
   <string name="XgramInlineVideoStartAuto">Automatically (muted)</string>
   <string name="XgramInlineVideoStartTap">On tap</string>
   <string name="XgramInlineVideoInfo">Videos play inside the message with a seek bar, and a tap turns the sound on or off. Autoplay follows Autoplay GIFs, Data Saver and, on mobile data, automatic media download.</string>
+  <!-- XGram: keyboard and mouse (adaptive part 3: Enter to send on the Messages page, Meta+/ shortcut list) -->
+  <string name="XgramEnterToSend">Enter to send</string>
+  <string name="XgramEnterToSendAuto">Auto</string>
+  <string name="XgramEnterToSendInfo">Auto sends with Enter on a hardware keyboard, and the on-screen keyboard follows Send with Enter. Shift+Enter adds a new line and Ctrl+Enter always sends.</string>
+  <string name="XgramKeysNavigation">Navigation</string>
+  <string name="XgramKeySend">Send</string>
+  <string name="XgramKeyNewLine">New line</string>
+  <string name="XgramKeyEditLast">Edit last message</string>
+  <string name="XgramKeySearch">Search in chat</string>
+  <string name="XgramKeySearchChats">Search chats</string>
+  <string name="XgramKeyNextFolder">Next folder</string>
+  <string name="XgramKeyPreviousFolder">Previous folder</string>
+  <string name="XgramKeyBack">Close or go back</string>
 </resources>

@@ -426,7 +426,23 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
 
   @Override
   public void onDraw (Canvas c) {
+    if (xgramHovered && msg != null) {
+      com.fahadali.xgram.layout.XgramPointer.drawMessageHover(this, c, msg); // XGram: mouse hover
+    }
     msg.draw(this, c, avatarReceiver, replyReceiver, replyTextMediaReceiver, previewReceiver, contentReceiver, gifReceiver, complexReceiver);
+  }
+
+  // XGram: a mouse or trackpad pointer over the message lightly highlights its row
+  private boolean xgramHovered;
+
+  @Override
+  public boolean onHoverEvent (MotionEvent e) {
+    boolean hovered = com.fahadali.xgram.layout.XgramPointer.hoverState(e, xgramHovered);
+    if (xgramHovered != hovered) {
+      xgramHovered = hovered;
+      invalidate();
+    }
+    return super.onHoverEvent(e);
   }
 
   public AvatarReceiver getAvatarReceiver () {
@@ -1573,6 +1589,19 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
     }
     if (UI.getContext(getContext()).getRecordAudioVideoController().isOpen()) {
       return false;
+    }
+    if (com.fahadali.xgram.layout.XgramPointer.isSecondaryButton(e)) {
+      // XGram: right-click (mouse, two-finger tap on a trackpad) opens the message menu at once
+      if (e.getActionMasked() == MotionEvent.ACTION_DOWN && !msg.messagesController().isEditingMessage()) {
+        preventLongPress();
+        flags &= ~(FLAG_CAUGHT_CLICK | FLAG_CAUGHT_MESSAGE_TOUCH);
+        touchX = e.getX();
+        touchY = e.getY();
+        if (onMessageClick(touchX, touchY)) {
+          ViewUtils.onClick(this);
+        }
+      }
+      return true;
     }
     switch (e.getAction()) {
       case MotionEvent.ACTION_DOWN: {

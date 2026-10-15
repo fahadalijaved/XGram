@@ -963,7 +963,7 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
   }
 
   private boolean needSendByEnter () {
-    return Settings.instance().needSendByEnter() && !isSettingText && controller != null && controller.inSimpleSendMode();
+    return com.fahadali.xgram.layout.XgramKeyboard.typedEnterSends(getContext()) && !isSettingText && controller != null && controller.inSimpleSendMode(); // XGram: Enter to send (Auto, On, Off)
   }
 
   private void sendByEnter () {
@@ -1646,12 +1646,59 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
 
   @Override
   public boolean needRemoveFinalNewLine (FinalNewLineFilter filter) {
-    return needSendByEnter();
+    return !xgramNewLineKey && needSendByEnter();
   }
 
   @Override
   public void onFinalNewLineBeingRemoved (FinalNewLineFilter filter) {
     post(InputView.this::sendByEnter);
+  }
+
+  // XGram: hardware keyboard. Enter sends (on release, so a held key sends once) unless Enter to send is Off,
+  // Shift+Enter adds a new line, Ctrl+Enter always sends, Up in an empty box edits the last message.
+
+  private boolean xgramNewLineKey;
+  private int xgramSendKeyCode;
+
+  @Override
+  public boolean onKeyDown (int keyCode, android.view.KeyEvent event) {
+    if (controller != null) {
+      switch (com.fahadali.xgram.layout.XgramKeyboard.composerKey(event, getText().length() == 0)) {
+        case com.fahadali.xgram.layout.XgramKeyboard.COMPOSER_SEND: {
+          if (event.getRepeatCount() == 0) {
+            xgramSendKeyCode = keyCode;
+          }
+          return true;
+        }
+        case com.fahadali.xgram.layout.XgramKeyboard.COMPOSER_NEW_LINE: {
+          xgramNewLineKey = true; // Telegram X's Send with Enter must not turn this new line into a send
+          try {
+            return super.onKeyDown(keyCode, event);
+          } finally {
+            xgramNewLineKey = false;
+          }
+        }
+        case com.fahadali.xgram.layout.XgramKeyboard.COMPOSER_EDIT_LAST: {
+          if (event.getRepeatCount() == 0 && controller.xgramEditLastMessage()) {
+            return true;
+          }
+          break;
+        }
+      }
+    }
+    return super.onKeyDown(keyCode, event);
+  }
+
+  @Override
+  public boolean onKeyUp (int keyCode, android.view.KeyEvent event) {
+    if (xgramSendKeyCode != 0 && keyCode == xgramSendKeyCode) {
+      xgramSendKeyCode = 0;
+      if (!event.isCanceled() && controller != null) {
+        controller.xgramSendFromKeyboard();
+      }
+      return true;
+    }
+    return super.onKeyUp(keyCode, event);
   }
 
   // == Rework ==
