@@ -778,4 +778,13 @@
   <string name="XgramInlineVideoStartAuto">Automatically (muted)</string>
   <string name="XgramInlineVideoStartTap">On tap</string>
   <string name="XgramInlineVideoInfo">Videos play inside the message with a seek bar, and a tap turns the sound on or off. Autoplay follows Autoplay GIFs, Data Saver and, on mobile data, automatic media download.</string>
+  <!-- XGram: Drag and drop, paste and side by side (adaptive plan part 2; Appearance > Layout) -->
+  <string name="XgramDragDrop">Allow drag and drop</string>
+  <string name="XgramDragDropSub">Photos, videos, files, text</string>
+  <string name="XgramOpenBeside">Open links side by side</string>
+  <string name="XgramOpenBesideSub">In split screen</string>
+  <string name="XgramDragDropInfo">Drop photos, videos, files or text from another app onto a chat, or onto a chat in the list, to send them. In the media viewer, hold a photo or video, then drag it to another app.</string>
+  <string name="XgramDropHere">Drop here to send</string>
+  <string name="XgramDropSendTo">Send to %1$s?</string>
+  <string name="XgramDropFailed">Couldn\'t read this file</string>
 </resources>

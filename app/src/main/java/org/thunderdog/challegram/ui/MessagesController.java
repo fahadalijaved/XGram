@@ -800,6 +800,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       };
       inputView.setNoPersonalizedLearning(Settings.instance().needsIncognitoMode(chat));
       inputView.setId(R.id.msg_input);
+      com.fahadali.xgram.layout.XgramDragDrop.attachChat(this, contentView, inputView); // XGram: drop onto the chat, paste files
       inputView.setTextColor(Theme.textAccentColor());
       addThemePaintColorListener(inputView.getPlaceholderPaint(), ColorId.textPlaceholder);
       addThemeTextColorListener(inputView, ColorId.text);

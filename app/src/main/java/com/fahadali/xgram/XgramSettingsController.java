@@ -345,6 +345,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.showPeerIds(), isUpdate);
         } else if (id == R.id.btn_xgramLimitMessageWidth) {
           view.getToggler().setRadioEnabled(settings.limitMessageWidth(), isUpdate);
+        } else if (id == R.id.btn_xgramDragDrop) {
+          view.getToggler().setRadioEnabled(settings.dragDrop(), isUpdate);
+        } else if (id == R.id.btn_xgramOpenBeside) {
+          view.getToggler().setRadioEnabled(settings.openBeside(), isUpdate);
         } else if (id == R.id.btn_xgramTwoPane) {
           view.getToggler().setRadioEnabled(settings.twoPaneLayout(), isUpdate);
         } else if (id == R.id.btn_xgramHideFab) {
@@ -590,6 +594,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     addRows(items, toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub));
     items.add(description(R.string.XgramTwoPaneInfo));
     addRows(items, toggle(R.id.btn_xgramLimitMessageWidth, R.string.XgramLimitMessageWidth, R.string.XgramLimitMessageWidthSub));
+    addRows(items,
+      toggle(R.id.btn_xgramDragDrop, R.string.XgramDragDrop, R.string.XgramDragDropSub),
+      toggle(R.id.btn_xgramOpenBeside, R.string.XgramOpenBeside, R.string.XgramOpenBesideSub)
+    );
+    items.add(description(R.string.XgramDragDropInfo));
   }
 
   private void buildChatList (List<ListItem> items) {
@@ -1283,6 +1292,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramLimitMessageWidth) {
       settings.setLimitMessageWidth(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramDragDrop) {
+      settings.setDragDrop(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramOpenBeside) {
+      settings.setOpenBeside(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramPreferIpv6) {
       settings.setPreferIpv6(adapter.toggleView(v));

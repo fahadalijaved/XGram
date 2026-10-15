@@ -276,4 +276,7 @@
   <!-- Play videos in chat -->
   <item type="id" name="btn_xgramInlineVideo" />
   <item type="id" name="btn_xgramInlineVideoStart" />
+  <!-- Drag and drop, side by side (adaptive plan part 2) -->
+  <item type="id" name="btn_xgramDragDrop" />
+  <item type="id" name="btn_xgramOpenBeside" />
 </resources>
