@@ -227,6 +227,10 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   public float getBackgroundTransparency () {
     if (!manager.useBubbles())
       return 0f;
+    if (xgramSolidSurface()) {
+      // XGram: the theme's wallpaper is hidden behind a solid surface, so overlays take their "no wallpaper" colors
+      return 1f;
+    }
     if (animator != null && animator.isAnimating()) {
       if (previewWallpaper == null) {
         return factor;

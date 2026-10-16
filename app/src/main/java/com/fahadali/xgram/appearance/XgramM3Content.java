@@ -78,7 +78,7 @@ public final class XgramM3Content {
 
   // Text
 
-  private static TextPaint onMediaLabelPaint, labelLargeEndPaint;
+  private static TextPaint onMediaLabelPaint, labelLargeEndPaint, labelMediumEndPaint;
   private static TextStyleProvider labelLargeProvider;
 
   /** labelMedium (12sp, 500) in white, for chips over media. */
@@ -102,6 +102,18 @@ public final class XgramM3Content {
     labelLargeEndPaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_L)));
     labelLargeEndPaint.setColor(color);
     return labelLargeEndPaint;
+  }
+
+  /** labelMedium (12sp, 500), aligned to its end: x is where the text ends. */
+  public static TextPaint labelMediumEndPaint (@ColorInt int color) {
+    if (labelMediumEndPaint == null) {
+      labelMediumEndPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+      labelMediumEndPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_M, false));
+      labelMediumEndPaint.setTextAlign(Paint.Align.RIGHT);
+    }
+    labelMediumEndPaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_M)));
+    labelMediumEndPaint.setColor(color);
+    return labelMediumEndPaint;
   }
 
   /** labelLarge (14, weight 500 for regular and bold, so allBold() texts keep it) for texts laid out in a message. */

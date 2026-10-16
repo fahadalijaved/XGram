@@ -1421,14 +1421,18 @@ public final class XgramInlineVideo {
         expandRect.setEmpty();
       }
 
-      // Middle: paused or over (the disk morphs away as it plays), or loading
-      final float cx = cell.exactCenterX(), cy = cell.exactCenterY();
+      // Middle: paused or over (the disk morphs away as it plays), or loading. In a short cell (an album tile) the disk
+      // keeps clear of the top controls: it moves down into the room under them and shrinks to it (to 32dp; with less
+      // room it is left out, the top chip still plays and pauses)
+      final float half = Screen.dp(28f);
+      final float topLimit = top + pad + chipHeight + Screen.dp(4f);
+      final float diskHalf = Math.min(half, (bottom - Screen.dp(8f) - topLimit) / 2f);
+      final float cx = cell.exactCenterX(), cy = Math.max(cell.exactCenterY(), topLimit + Math.max(0f, diskHalf));
       final float fade = Math.max(0f, Math.min(1f, m3Fade.getValue()));
-      if (fade > 0f) {
+      if (fade > 0f && diskHalf >= Screen.dp(16f)) {
         final float morph = Math.max(-.2f, Math.min(1.2f, m3Centre.getValue()));
-        final float half = Screen.dp(28f);
         final float corner = Math.min(half, half + (Screen.dp(XgramExpressive.CORNER_L) - half) * morph);
-        final float scale = 1f - .15f * Math.max(0f, morph);
+        final float scale = (1f - .15f * Math.max(0f, morph)) * (diskHalf / half);
         int saveCount = c.save();
         c.scale(scale, scale, cx, cy);
         rect.set(cx - half, cy - half, cx + half, cy + half);

@@ -395,7 +395,9 @@ public class TGMessageVideo extends TGMessage implements FileProgressComponent.S
   @Override
   protected void buildContent (int maxWidth) {
     videoSmallSize = Math.min(Screen.dp(200f), maxWidth);
-    videoFullSize = getVideoSize();
+    // XGram: the expanded circle fits the message width (the two-pane chat pane is narrower than the screen);
+    // the player keeps its getVideoSize() texture and is scaled down by getPlayerScale()
+    videoFullSize = Math.max(videoSmallSize, Math.min(getVideoSize(), width - Screen.dp(32f)));
     videoSize = MathUtils.fromTo(videoSmallSize, videoFullSize, isFullSizeAnimator.getFloatValue());
   }
 
@@ -574,7 +576,9 @@ public class TGMessageVideo extends TGMessage implements FileProgressComponent.S
     }
 
     if (viewFactor > 0f) {
-      c.drawCircle(circleX, textY + Screen.dp(11.5f), Screen.dp(1.5f), Paints.fillingPaint(ColorUtils.alphaColor(viewFactor, useBubbles ? 0xffffffff : Theme.getColor(ColorId.online))));
+      // XGram M3E: the chip is the surface pill, so the dot takes its text color instead of white
+      final int dotColor = useBubbles ? (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? getBubbleTimeTextColor() : 0xffffffff) : Theme.getColor(ColorId.online);
+      c.drawCircle(circleX, textY + Screen.dp(11.5f), Screen.dp(1.5f), Paints.fillingPaint(ColorUtils.alphaColor(viewFactor, dotColor)));
     }
 
     final boolean drawSpoiler = TD.isSelfDestructTypeImmediately(getMessage());

@@ -3839,7 +3839,8 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       return Theme.getColor(bubbleNoWallpaperColorId);
     } else {
       int color = Theme.getColor(bubbleColorId);
-      float override = Theme.getOverrideProperty(overridePropertyId);
+      // XGram: Expressive keeps the mapped M3 roles over a picked wallpaper instead of a tint taken from the image
+      float override = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 0f : Theme.getOverrideProperty(overridePropertyId);
       if (override > 0f)
         color = ColorUtils.fromToArgb(color, controller().wallpaper().getDefaultOverlayColor(color, false), override);
       if (transparency > 0f)
@@ -3856,7 +3857,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       return Theme.getColor(bubbleNoWallpaperColorId);
     } else {
       int color = Theme.getColor(bubbleColorId);
-      float override = Theme.getOverrideProperty(overridePropertyId);
+      float override = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 0f : Theme.getOverrideProperty(overridePropertyId);
       if (override > 0f)
         color = ColorUtils.fromToArgb(color, controller().wallpaper().getDefaultOverlayColor(color, true), override);
       if (transparency > 0f)

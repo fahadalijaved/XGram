@@ -1254,6 +1254,16 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
     this.width = width;
 
+    if (xgramTopicHeader && (flags & FLAG_SHOW_DATE) != 0 && forumTopicKey != null) {
+      final boolean topicKnown;
+      synchronized (forumTopicKey) {
+        topicKnown = topicInfo != null;
+      }
+      if (topicKnown) {
+        setDate(xgramTopicHeaderText()); // XGram: the topic name is fitted to the new width
+      }
+    }
+
     if (useBubbles()) {
       pRealContentX = computeBubbleLeft();
       pRealContentMaxWidth = width - (Device.NEED_BIGGER_BUBBLE_OFFSETS ? xBubbleLeft2 : xBubbleLeft1) - computeBubbleLeft() - (Screen.dp(isThreadHeader() ? 8f : 56f));
@@ -1399,6 +1409,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if ((flags & FLAG_LAYOUT_BUILT) != 0) {
       updateContentPositions(true);
       buildContent(pContentMaxWidth);
+      if (useBubbles() && xgramMediaTimeChip() != pTimeWidthInChip) {
+        pTimeWidth = measureBubbleTimeWidth(); // XGram M3E: a caption added or removed moves the time in or out of the media chip
+      }
       buildBubble(false);
       int oldHeight = height;
       height = computeHeight();
@@ -1755,7 +1768,14 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   public static void drawCornerFixes (Canvas c, TGMessage source, float factor, float left, float top, float right, float bottom, float topLeftRadius, float topRightRadius, float bottomRightRadius, float bottomLeftRadius) {
     if (factor == 0f)
       return;
-    Paint paint = Paints.strokeBigPaint(ColorUtils.alphaColor(factor, source.getContentReplaceColor()));
+    drawCornerFixes(c, source.getContentReplaceColor(), factor, left, top, right, bottom, topLeftRadius, topRightRadius, bottomRightRadius, bottomLeftRadius);
+  }
+
+  /** The corner fixes in {@code replaceColor}: the color behind the content (a link preview card's tint over the bubble). */
+  public static void drawCornerFixes (Canvas c, @ColorInt int replaceColor, float factor, float left, float top, float right, float bottom, float topLeftRadius, float topRightRadius, float bottomRightRadius, float bottomLeftRadius) {
+    if (factor == 0f)
+      return;
+    Paint paint = Paints.strokeBigPaint(ColorUtils.alphaColor(factor, replaceColor));
     // Paint paint = Paints.strokeBigPaint(0xffff0000);
 
     float offset = -paint.getStrokeWidth() / 2f;
@@ -2033,7 +2053,12 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public final int getDrawDateY () {
-    return (flags & FLAG_SHOW_BADGE) != 0 ? xBadgeHeight + (useBubbles() ? Screen.dp(3.5f) : 0) : 0;
+    return (flags & FLAG_SHOW_BADGE) != 0 ? getBadgeHeight() + (useBubbles() ? Screen.dp(3.5f) : 0) : 0;
+  }
+
+  /** The "Unread messages" badge row: with Expressive design it holds a 26dp pill with 2dp above and below. */
+  private static int getBadgeHeight () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(30f) : xBadgeHeight;
   }
 
   public final boolean separateReplyFromContent () {
@@ -2064,9 +2089,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       if (useBubbles) {
         top += (flags & FLAG_SHOW_DATE) != 0 ? Screen.dp(3.5f) : Screen.dp(2f);
       }
-      int bottom = xBadgeHeight + top;
-      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-        // XGram: Material 3 Expressive: a surfaceContainerHigh pill inset 16dp, no shadows
+      int bottom = getBadgeHeight() + top;
+      final boolean xgramBadge = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      if (xgramBadge) {
+        // XGram: Material 3 Expressive: a surfaceContainerHigh pill inset 16dp, no shadows, 26dp tall like the
+        // date and service chips
         RectF badgeRect = Paints.getRectF();
         badgeRect.set(Screen.dp(16f), top + Screen.dp(2f), width - Screen.dp(16f), bottom - Screen.dp(2f));
         float badgeRadius = badgeRect.height() / 2f;
@@ -2079,13 +2106,23 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
       c.drawRect(0, top, width, bottom, Paints.fillingPaint(getUnreadSeparatorBackgroundColor()));
       }
-      TextPaint mBadge = getBadgePaint(uBadge.needFakeBold);
       int color = getUnreadSeparatorContentColor();
-      mBadge.setColor(color);
-      c.drawText(uBadge.text, pBadgeX, xBadgeTop + top, mBadge);
-      if (isFirstUnread()) {
-        int iconTop = Screen.dp(4.5f);
-        Drawables.draw(c, iBadge, pBadgeIconX, iconTop + top, Paints.getUnreadSeparationPaint(color));
+      if (xgramBadge) {
+        // XGram M3E: labelMedium like the date chip, centered in the pill
+        TextPaint badgePaint = com.fahadali.xgram.appearance.XgramM3Chat.datePaint(color);
+        float centerY = (top + bottom) / 2f;
+        c.drawText(uBadge.text, pBadgeX, centerY - (badgePaint.ascent() + badgePaint.descent()) / 2f, badgePaint);
+        if (isFirstUnread()) {
+          Drawables.draw(c, iBadge, pBadgeIconX, centerY - iBadge.getMinimumHeight() / 2f, Paints.getUnreadSeparationPaint(color));
+        }
+      } else {
+        TextPaint mBadge = getBadgePaint(uBadge.needFakeBold);
+        mBadge.setColor(color);
+        c.drawText(uBadge.text, pBadgeX, xBadgeTop + top, mBadge);
+        if (isFirstUnread()) {
+          int iconTop = Screen.dp(4.5f);
+          Drawables.draw(c, iBadge, pBadgeIconX, iconTop + top, Paints.getUnreadSeparationPaint(color));
+        }
       }
     }
 
@@ -3189,10 +3226,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     boolean needFakeBold = Text.needFakeBold(date);
     this.flags = BitwiseUtils.setFlag(flags, FLAG_DATE_FAKE_BOLD, needFakeBold);
     // TextPaint paint = useBubbles() ? Paints.getDatePaint() : Paints.getTitlePaint(false);
-    TextPaint paint = useBubbles() ? Paints.getBoldPaint13(needFakeBold) : Paints.getTitlePaint(needFakeBold);
-    if (useBubbles() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      paint = com.fahadali.xgram.appearance.XgramM3Chat.dateMeasurePaint(); // XGram: labelMedium date
-    }
+    TextPaint paint = getDateMeasurePaint(needFakeBold);
     this.pDateWidth = StringUtils.isEmpty(date) ? 0 : (int) U.measureText(date, paint);
   }
 
@@ -3210,7 +3244,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
     if ((flags & FLAG_SHOW_BADGE) != 0) {
       float center = (float) currentWidth / 2f;
-      float badgeWidth = uBadge != null ? U.measureText(uBadge.text, getBadgePaint(uBadge.needFakeBold)) : 0;
+      float badgeWidth = uBadge != null ? U.measureText(uBadge.text, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3Chat.dateMeasurePaint() : getBadgePaint(uBadge.needFakeBold)) : 0;
 
       if (isFirstUnread()) {
         // badge has icon
@@ -3488,7 +3522,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
     if (useBubbles()) {
       // time part
-      pTimeWidth = (int) U.measureText(time, mTimeBubble());
+      pTimeWidth = measureBubbleTimeWidth();
 
       // header part
       int maxWidth = (allowMessageHorizontalExtend() ? pRealContentMaxWidth : getContentWidth()) + getBubblePaddingRight() + getBubblePaddingRight() - (xBubblePadding + xBubblePaddingSmall) * 2;
@@ -4010,7 +4044,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
             bubbleClipPathRect.set(leftContentEdge + bubblePaddingLeft, topContentEdge + bubblePaddingTop - getBubbleSpecialPaddingTop(), rightContentEdge - bubblePaddingRight, bottomContentEdge - bubblePaddingBottom);
             dr /= 1.5;
             mr /= 1.5;
-            DrawAlgorithms.buildPath(bubbleClipPath, bubbleClipPathRect, mergeTop && !alignContentRight ? mr : dr, mergeTop && alignContentRight ? mr : dr, mergeBottom && alignContentRight ? mr : dr, mergeBottom && !alignContentRight ? mr : dr);
+            // XGram: the tail corner is square, so media clipped by this path fills it too
+            DrawAlgorithms.buildPath(bubbleClipPath, bubbleClipPathRect, mergeTop && !alignContentRight ? mr : dr, mergeTop && alignContentRight ? mr : dr, xgramTail && alignContentRight ? 0 : (mergeBottom && alignContentRight ? mr : dr), xgramTail && !alignContentRight ? 0 : (mergeBottom && !alignContentRight ? mr : dr));
           }
         }
       }
@@ -4060,6 +4095,24 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   protected int getBubbleTimePartOffsetY () {
     return Screen.dp(8f);
+  }
+
+  /** XGram M3E: the time chip over photos and videos (not stickers or round videos): height, text padding, and how much
+   * further from the end its text starts than the 21dp chip's (so it ends where that chip ended). */
+  static final float XGRAM_TIME_CHIP_HEIGHT = 20f, XGRAM_TIME_CHIP_PADDING = 8f, XGRAM_TIME_CHIP_SHIFT = 2f;
+
+  /** XGram M3E: the time is drawn over the media in a bubble as the on-media chip (MediaWrapper's duration chip). */
+  final boolean xgramMediaTimeChip () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && useBubbles() && useBubble() && !useCircleBubble() && drawBubbleTimeOverContent() && !useForward();
+  }
+
+  /** Whether pTimeWidth was last measured in the media chip's label style. */
+  private boolean pTimeWidthInChip;
+
+  /** The bubble time's width in the paint drawBubbleTimePart draws it with. */
+  private int measureBubbleTimeWidth () {
+    pTimeWidthInChip = xgramMediaTimeChip();
+    return pTimeWidthInChip ? com.fahadali.xgram.appearance.XgramM3MediaButton.measureChipText(time) : (int) U.measureText(time, mTimeBubble());
   }
 
   protected int getTimePartTextColor () {
@@ -4120,7 +4173,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     } else { // Media
       iconColorId = ColorId.bubble_mediaOverlayText;
       textColor = Theme.getColor(ColorId.bubble_mediaOverlayText);
-      backgroundColor = Theme.getColor(ColorId.bubble_mediaOverlay);
+      backgroundColor = xgramMediaTimeChip() ? com.fahadali.xgram.appearance.XgramM3MediaButton.CHIP_SCRIM : Theme.getColor(ColorId.bubble_mediaOverlay);
       iconPaint = ticksPaint = ticksReadPaint = Paints.getBubbleOverlayTimePaint(textColor);
     }
 
@@ -4129,25 +4182,38 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
     final boolean isSending = isSending();
     final boolean isFailed = isFailed();
+    final boolean xgramChip = isWhite && !isTransparent && xgramMediaTimeChip();
+    final int xgramChipShift = xgramChip ? Screen.dp(XGRAM_TIME_CHIP_SHIFT) : 0;
 
     boolean reverseOrder;
 
     if ((reverseOrder = Config.MOVE_BUBBLE_TIME_RTL_TO_LEFT && moveBubbleTimePartToLeft())) {
-      startX = getActualLeftContentEdge() + Screen.dp(10f);
+      startX = getActualLeftContentEdge() + Screen.dp(10f) + xgramChipShift;
     } else {
-      startX = getAbsolutelyRealRightContentEdge(view, innerWidth + Screen.dp(11f));
+      startX = getAbsolutelyRealRightContentEdge(view, innerWidth + Screen.dp(11f) + xgramChipShift);
     }
     int startY = bottomContentEdge - getBubbleTimePartHeight() - getBubbleTimePartOffsetY();
     if (commentButton.isVisible() && commentButton.isInline()) {
       startY -= commentButton.getAnimatedHeight(0, commentButton.getVisibility());
     }
 
+    float xgramChipCenterY = 0f;
     if (backgroundColor != 0) {
       startY -= Screen.dp(4f);
       RectF rectF = Paints.getRectF();
-      int padding = Screen.dp(6f);
-      rectF.set(startX - padding, startY, startX + innerWidth + padding, startY + Screen.dp(21f));
-      c.drawRoundRect(rectF, Screen.dp(12f), Screen.dp(12f), Paints.fillingPaint(backgroundColor));
+      if (xgramChip) {
+        // XGram M3E: the time over photos and videos is the on-media chip of the duration chip (MediaWrapper): a 20dp
+        // full-corner pill on the 50% scrim with 8dp padding, centered where the 21dp chip was
+        final int padding = Screen.dp(XGRAM_TIME_CHIP_PADDING);
+        final float halfHeight = Screen.dp(XGRAM_TIME_CHIP_HEIGHT) / 2f;
+        xgramChipCenterY = startY + Screen.dp(10.5f);
+        rectF.set(startX - padding, xgramChipCenterY - halfHeight, startX + innerWidth + padding, xgramChipCenterY + halfHeight);
+        c.drawRoundRect(rectF, halfHeight, halfHeight, Paints.fillingPaint(backgroundColor));
+      } else {
+        int padding = Screen.dp(6f);
+        rectF.set(startX - padding, startY, startX + innerWidth + padding, startY + Screen.dp(21f));
+        c.drawRoundRect(rectF, Screen.dp(12f), Screen.dp(12f), Paints.fillingPaint(backgroundColor));
+      }
       startY -= Screen.dp(1f);
     }
 
@@ -4212,7 +4278,13 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
     final int xgramTimeLeft = startX; // XGram: tap the time for details
     if (time != null) {
-      c.drawText(time, startX, startY + Screen.dp(15.5f), Paints.colorPaint(mTimeBubble(), textColor));
+      if (xgramChip && xgramChipCenterY != 0f) {
+        // XGram M3E: labelMedium, as in the duration chip (pTimeWidth is measured in it, layoutInfo)
+        final TextPaint chipPaint = com.fahadali.xgram.appearance.XgramM3MediaButton.chipLabelPaint();
+        c.drawText(time, startX, xgramChipCenterY - (chipPaint.ascent() + chipPaint.descent()) / 2f, chipPaint);
+      } else {
+        c.drawText(time, startX, startY + Screen.dp(15.5f), Paints.colorPaint(mTimeBubble(), textColor));
+      }
       startX += pTimeWidth;
     }
 
@@ -4554,9 +4626,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     int result;
     if ((flags & FLAG_SHOW_BADGE) != 0) {
       if ((flags & FLAG_SHOW_DATE) != 0) {
-        result = xBadgeHeight + xBadgePadding + (useBubbles() ? xDatePadding - Screen.dp(3f) * 2 : xDatePadding);
+        result = getBadgeHeight() + xBadgePadding + (useBubbles() ? xDatePadding - Screen.dp(3f) * 2 : xDatePadding);
       } else {
-        result = xBadgeHeight + xBadgePadding;
+        result = getBadgeHeight() + xBadgePadding;
       }
     } else {
       if ((flags & FLAG_SHOW_DATE) != 0) {
@@ -10210,7 +10282,32 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       return genDate();
     }
     String name = com.fahadali.xgram.topics.XgramForums.topicTitle(info);
-    return xgramTopicHeaderSameDay ? name : genDate() + " · " + name;
+    String prefix = xgramTopicHeaderSameDay ? "" : genDate() + " · ";
+    final int width = this.width;
+    if (width > 0 && !StringUtils.isEmpty(name)) {
+      // A topic name may be 128 characters: ellipsized, so the date pill and its label keep 16dp to the edges
+      // (redone by buildLayout when the width changes)
+      TextPaint paint = getDateMeasurePaint(Text.needFakeBold(prefix + name));
+      float avail = width - (getDatePillPadding() + Screen.dp(16f)) * 2 - (prefix.isEmpty() ? 0 : U.measureText(prefix, paint));
+      name = avail > 0 ? TextUtils.ellipsize(name, paint, avail, TextUtils.TruncateAt.END).toString() : "";
+    }
+    return prefix + name;
+  }
+
+  /** The horizontal padding drawDate gives the date label. */
+  private int getDatePillPadding () {
+    if (!useBubbles()) {
+      return Screen.dp(10f);
+    }
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12f : 8f);
+  }
+
+  /** The paint setDate measures the date label with. */
+  private TextPaint getDateMeasurePaint (boolean needFakeBold) {
+    if (useBubbles() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramM3Chat.dateMeasurePaint(); // XGram: labelMedium date
+    }
+    return useBubbles() ? Paints.getBoldPaint13(needFakeBold) : Paints.getTitlePaint(needFakeBold);
   }
 
   private List<RunnableBool> postponedTopicInfoCallbacks;
