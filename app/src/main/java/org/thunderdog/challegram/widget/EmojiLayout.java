@@ -424,6 +424,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
         themeProvider.addThemeInvalidateListener(xgramTypeGroup);
       }
       xgramSyncTypeGroup(false);
+      xgramApplyGridInsets(); // pages made before the toolbar existed scroll clear of it too
     } else {
       xgramTypeGroup = null;
     }
@@ -449,9 +450,10 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       this.extraBottomInset = extraBottomInset;
       this.extraBottomInsetWithoutKeyboard = extraBottomInsetWithoutKeyboard;
       if (adapter != null) {
+        final int xgramClearance = xgramGridClearance(); // XGram: 0 without the floating toolbar
         for (int i = 0; i < adapter.cachedItems.size(); i++) {
           ViewController<?> controller = adapter.cachedItems.valueAt(i);
-          controller.setBottomInset(extraBottomInset, extraBottomInsetWithoutKeyboard);
+          controller.setBottomInset(extraBottomInset + xgramClearance, extraBottomInsetWithoutKeyboard + xgramClearance);
         }
       }
       if (circleButton != null) {
@@ -477,6 +479,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       if (xgramTypeGroup != null) {
         xgramTypeGroup.setVisibility(allowMedia && !isOptimizedForDisplayMessageOptionsWindow ? VISIBLE : GONE); // XGram
         xgramSyncTypeGroup(false);
+        xgramApplyGridInsets();
       }
     }
   }
@@ -494,6 +497,29 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   private int xgramTypeGroupBottomMargin () {
     return Screen.dp(16f) + (Screen.dp(xgramCircleSize()) - Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.HEIGHT_DP)) / 2 + extraBottomInsetWithoutKeyboard;
+  }
+
+  /**
+   * XGram M3E: extra bottom padding of the emoji, sticker and GIF grids while the floating toolbar shows, so their
+   * last row scrolls clear of it and of the FAB beside it (the higher top of the two, plus 8dp). 0 without it.
+   */
+  private int xgramGridClearance () {
+    if (xgramTypeGroup == null || !allowMedia || isOptimizedForDisplayMessageOptionsWindow) {
+      return 0;
+    }
+    final int toolbarTop = Screen.dp(16f) + (Screen.dp(xgramCircleSize()) - Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.HEIGHT_DP)) / 2 + Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.HEIGHT_DP);
+    final int fabTop = Screen.dp(16f) + Screen.dp(xgramCircleSize());
+    return Math.max(toolbarTop, fabTop) + Screen.dp(8f);
+  }
+
+  private void xgramApplyGridInsets () {
+    if (adapter == null) {
+      return;
+    }
+    final int clearance = xgramGridClearance();
+    for (int i = 0; i < adapter.cachedItems.size(); i++) {
+      adapter.cachedItems.valueAt(i).setBottomInset(extraBottomInset + clearance, extraBottomInsetWithoutKeyboard + clearance);
+    }
   }
 
   private void xgramSyncTypeGroup (boolean animated) {
@@ -546,15 +572,19 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   }
 
   private void checkBackground () {
+    xgramDockedCorners = false;
     if (!useDarkMode && !isOptimizedForDisplayMessageOptionsWindow && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive panel: surfaceContainerLow with 28dp top corners, the header clipped to them
       com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable panel = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE);
       panel.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
       panel.setCorners(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL, 0f, 0f);
       setBackground(panel);
+      // Docked under the composer, the corners are not cut out (the chat would show through them) but filled with
+      // the composer's color on top of the children (xgramDrawDockedCorners), so the two read as one surface
+      xgramDockedCorners = xgramDockedRole >= 0;
       if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
         setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
-        setClipToOutline(true);
+        setClipToOutline(!xgramDockedCorners);
       }
       if (themeProvider != null && !xgramThemeListener) {
         xgramThemeListener = true;
@@ -569,6 +599,73 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     } else {
       ViewSupport.setThemedBackground(this, isOptimizedForDisplayMessageOptionsWindow ? ColorId.filling : ColorId.chatKeyboard, themeProvider);
     }
+  }
+
+  // XGram M3E: the panel docked right under the chat composer. Its 28dp top corners used to be cut out of the view,
+  // so each one showed a wedge of the chat behind the panel under the full-width composer bar. Docked, the wedges
+  // are filled with the composer's own color role instead (drawn over the children, which they clip like the
+  // outline did), so the composer and the emoji / sticker / GIF panel read as one surface in light, dark and pure
+  // black, also while the panel opens, closes or gives way to the keyboard (the wedges move with the panel).
+
+  private int xgramDockedRole = -1;
+  private boolean xgramDockedCorners;
+  private @Nullable android.graphics.Path xgramCornerPath;
+  private @Nullable android.graphics.Paint xgramCornerPaint;
+  private @Nullable android.graphics.RectF xgramCornerOval;
+  private int xgramCornerWidth = -1;
+  private float xgramCornerRadius = -1f;
+
+  /** The panel sits right under a bar filled with {@code colorRole} (an XgramExpressive role), or -1 for none. */
+  public void xgramSetDockedUnder (int colorRole) {
+    if (this.xgramDockedRole != colorRole) {
+      this.xgramDockedRole = colorRole;
+      if (headerView != null) {
+        checkBackground();
+      }
+      invalidate();
+    }
+  }
+
+  @Override
+  protected void dispatchDraw (android.graphics.Canvas c) {
+    super.dispatchDraw(c);
+    if (xgramDockedCorners) {
+      xgramDrawDockedCorners(c);
+    }
+  }
+
+  private void xgramDrawDockedCorners (android.graphics.Canvas c) {
+    final int width = getWidth();
+    final float radius = Math.min(Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL), width / 2f);
+    if (width <= 0 || radius <= 0f) {
+      return;
+    }
+    if (xgramCornerPath == null || xgramCornerPaint == null || xgramCornerOval == null) {
+      xgramCornerPath = new android.graphics.Path();
+      xgramCornerPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+      xgramCornerOval = new android.graphics.RectF();
+      xgramCornerWidth = -1;
+    }
+    if (xgramCornerWidth != width || xgramCornerRadius != radius) {
+      // Rebuilt on size changes only: the two corner wedges outside the 28dp arcs
+      xgramCornerWidth = width;
+      xgramCornerRadius = radius;
+      final android.graphics.Path path = xgramCornerPath;
+      final android.graphics.RectF oval = xgramCornerOval;
+      path.rewind();
+      path.moveTo(0f, 0f);
+      path.lineTo(radius, 0f);
+      oval.set(0f, 0f, radius * 2f, radius * 2f);
+      path.arcTo(oval, 270f, -90f, false);
+      path.close();
+      path.moveTo(width, 0f);
+      path.lineTo(width - radius, 0f);
+      oval.set(width - radius * 2f, 0f, width, radius * 2f);
+      path.arcTo(oval, 270f, 90f, false);
+      path.close();
+    }
+    xgramCornerPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(xgramDockedRole));
+    c.drawPath(xgramCornerPath, xgramCornerPaint);
   }
 
   public void setAllowPremiumFeatures (boolean allowPremiumFeatures) {
@@ -1151,7 +1248,8 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
           c.bindThemeListeners(themeProvider);
         }
       }
-      c.setBottomInset(parent.extraBottomInset, parent.extraBottomInsetWithoutKeyboard);
+      final int xgramClearance = parent.xgramGridClearance(); // XGram: the grids scroll clear of the floating toolbar
+      c.setBottomInset(parent.extraBottomInset + xgramClearance, parent.extraBottomInsetWithoutKeyboard + xgramClearance);
       container.addView(c.getValue());
       return c;
     }

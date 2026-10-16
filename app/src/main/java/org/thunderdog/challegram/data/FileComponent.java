@@ -170,6 +170,7 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
     this.progress.setDocumentMetadata(doc, !hasPreview);
     if (hasPreview) {
       this.progress.setBackgroundColor(0x44000000);
+      this.progress.setXgramThumbnail(true); // XGram M3E: the media button on the thumbnail (Expressive design only)
     } else {
       this.progress.setBackgroundColorId(TdlibAccentColor.getFileColorId(doc, context.isOutgoingBubble()));
     }

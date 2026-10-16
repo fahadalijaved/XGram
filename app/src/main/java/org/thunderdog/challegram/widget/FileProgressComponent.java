@@ -618,7 +618,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       boolean isCloud = (Config.useCloudPlayback(playPauseFile) && !noCloud) || (isVideoStreaming() && isVideoStreamingCloudNeeded);
       if (xgramStyle() != XgramM3MediaButton.NONE && !isTrack && !isCloud) {
         // XGram M3E: a 4dp ring in the button, 2dp in the video streaming chip
-        progress.setUseLargerPaint(isVideoStreaming() ? Screen.dp(2f) : Screen.dp(XgramM3MediaButton.RING_STROKE));
+        progress.setUseLargerPaint(isVideoStreaming() ? Screen.dp(2f) : Screen.dp(XgramM3MediaButton.RING_STROKE) * xgramThumbScale());
       } else {
         progress.setUseLargerPaint((isVideoStreaming() && isVideoStreamingSmallUi()) ? Screen.dp(1.5f) : !isSendingMessage && isCloud ? Screen.dp(isTrack ? 2f : 1.5f) : Screen.dp(3f));
       }
@@ -667,7 +667,11 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         progress.setRadius(getRadius() - Screen.dp(xgramChipCap() ? 2f : 4f));
         progress.setBounds(vsDownloadRect.left, vsDownloadRect.top, vsDownloadRect.right, vsDownloadRect.bottom);
       } else {
-        if (xgramStyle() != XgramM3MediaButton.NONE) {
+        if (xgramThumbnailButton()) {
+          // XGram M3E: the thumbnail disk's ring, its inset and stroke scaled with a smaller disk
+          checkProgressStyles();
+          progress.setRadius(getRadius() - Math.round(Screen.dpf(XgramM3MediaButton.RING_INSET) * xgramThumbScale()));
+        } else if (xgramStyle() != XgramM3MediaButton.NONE) {
           progress.setRadius(getRadius() - Screen.dp(XgramM3MediaButton.RING_INSET)); // XGram M3E: the wave stays 4dp inside the button's edge
         } else {
           progress.setRadius(getRadius() - Screen.dp(4f));
@@ -708,6 +712,11 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     if (xgramMediaDisk()) {
       // XGram M3E: photos, videos, GIFs and round videos get the 48dp button (files keep theirs)
       return Math.min(Screen.dp(XgramM3MediaButton.MEDIA_RADIUS), Math.min(right - left, bottom - top) / 2);
+    }
+
+    if (xgramThumbnailButton()) {
+      // XGram M3E: the tonal disk on a document's thumbnail, inside a 4dp rim of the picture
+      return Math.max(0, Math.min(Screen.dp(XGRAM_THUMB_RADIUS), Math.min(right - left, bottom - top) / 2 - Screen.dp(XGRAM_THUMB_RIM)));
     }
 
     return Math.min(Screen.dp(fileType == TdlibFilesManager.DOWNLOAD_FLAG_FILE || fileType == TdlibFilesManager.DOWNLOAD_FLAG_MUSIC || fileType == TdlibFilesManager.DOWNLOAD_FLAG_VOICE ? DEFAULT_FILE_RADIUS : DEFAULT_RADIUS), Math.min(right - left, bottom - top) / 2);
@@ -1073,7 +1082,39 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
 
   /** A media style button over a picture it covers keeps the overlay color, so the picture stays visible. */
   private boolean xgramOverPicture (int style) {
-    return style == XgramM3MediaButton.MEDIA && !isVideoStreaming() && xgramCoversCell();
+    return style == XgramM3MediaButton.MEDIA && !isVideoStreaming() && !xgramThumbnail && xgramCoversCell();
+  }
+
+  // XGram M3E: a document's thumbnail (a GIF or a picture sent as a file, in the chat and in file lists) takes the
+  // media button of photos and videos instead of a dark overlay over the whole picture with a bare white glyph: a
+  // tonal primaryContainer disk centred on the thumbnail (40dp on the 50dp one, the picture's rim still showing),
+  // the glyph in onPrimaryContainer, the wavy ring inside it while downloading and the press morph. On a smaller
+  // thumbnail the disk keeps a 4dp rim and its glyph, ring and wave scale down with it.
+
+  private static final float XGRAM_THUMB_RADIUS = 20f, XGRAM_THUMB_RIM = 4f, XGRAM_THUMB_ICON = 20f;
+  private boolean xgramThumbnail;
+
+  /** The button sits on a document's thumbnail it would otherwise cover (FileComponent, InlineResultCommon). */
+  public void setXgramThumbnail (boolean thumbnail) {
+    if (this.xgramThumbnail != thumbnail) {
+      this.xgramThumbnail = thumbnail;
+      checkProgressStyles();
+      layoutProgress();
+      invalidate();
+    }
+  }
+
+  private boolean xgramThumbnailButton () {
+    return xgramThumbnail && xgramStyle() == XgramM3MediaButton.MEDIA && !isVideoStreaming();
+  }
+
+  /** 1 for the 40dp thumbnail disk (and every other button), less for a smaller one. */
+  private float xgramThumbScale () {
+    if (!xgramThumbnailButton()) {
+      return 1f;
+    }
+    final int radius = getRadius();
+    return radius > 0 ? Math.min(1f, radius / Screen.dpf(XGRAM_THUMB_RADIUS)) : 1f;
   }
 
   /** The progress sits in the small badge (voice and music playback, streaming without the duration chip). */
@@ -1234,7 +1275,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     final boolean streaming = isVideoStreaming();
     final boolean small = streaming && isVideoStreamingSmallUi();
     progress.setXgramTrackColor(XgramExpressive.withAlpha(xgramContentColor(), XgramM3MediaButton.RING_TRACK_ALPHA * progressFactor * alpha));
-    progress.setXgramAmplitude(small ? 0f : Screen.dpf(streaming ? 1f : XgramM3MediaButton.RING_AMPLITUDE));
+    progress.setXgramAmplitude(small ? 0f : Screen.dpf(streaming ? 1f : XgramM3MediaButton.RING_AMPLITUDE) * xgramThumbScale());
     progress.setXgramQueued(xgramQueuedFactor(), small ? 0f : getRadius() * 2f * XgramLoadingIndicator.ACTIVE_INDICATOR_SCALE);
   }
 
@@ -1899,10 +1940,12 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         }
         int saveCount = -1;
 
-        final boolean needRestore = scaleFactor != 0f;
+        // XGram M3E: the thumbnail disk's 20dp glyph (smaller on a smaller disk); 1 for every other button
+        final float xgramGlyphScale = xgramCircle && xgramThumbnailButton() ? (XGRAM_THUMB_ICON / 24f) * xgramThumbScale() : 1f;
+        final boolean needRestore = scaleFactor != 0f || xgramGlyphScale != 1f;
         if (needRestore) {
           saveCount = Views.save(c);
-          final float scale = MIN_SCALE + (1f - MIN_SCALE) * (1f - scaleFactor);
+          final float scale = (MIN_SCALE + (1f - MIN_SCALE) * (1f - scaleFactor)) * xgramGlyphScale;
           c.scale(scale, scale, cx, cy);
         }
 

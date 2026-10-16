@@ -14,12 +14,14 @@ package com.fahadali.xgram.appearance;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Outline;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewOutlineProvider;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -35,18 +37,19 @@ import me.vkryl.core.ColorUtils;
 import me.vkryl.core.MathUtils;
 
 /**
- * XGram M3E wave 2: the Emoji / Stickers / GIFs switch of the emoji panel as a Material 3 Expressive connected button
- * group of icon toggle buttons (ButtonGroup, size S), floating at the panel's bottom start like the backspace button at
- * its end.
+ * XGram M3E: the Emoji / Stickers / GIFs switch of the emoji panel as one Material 3 Expressive floating toolbar,
+ * floating at the panel's bottom start beside the backspace / search FAB at its end.
  * <ul>
- *   <li>Segments: 52 x 40dp (the small icon button, wide), 20dp icons, 2dp apart (ButtonGroupDefaults.ConnectedSpaceBetween).</li>
- *   <li>Shape: full outer corners, 8dp inner corners; the checked segment springs to full corners (checkedShape) and a
- *   pressed one to 4dp (pressedShape), on the spatial fast spring.</li>
- *   <li>Colors: the tonal toggle button, unchecked secondaryContainer / onSecondaryContainer, checked secondary /
- *   onSecondary, crossfaded on the same spring (clamped); a pressed segment adds its content color at 10%.</li>
- *   <li>Icons: outlined when unchecked, filled when checked where a filled drawing exists.</li>
+ *   <li>Container: one surfaceContainerHigh pill (full corners), elevation level 3, 4dp padding, so 48dp tall. The
+ *   grids under it scroll clear of it (EmojiLayout adds its height to their bottom inset).</li>
+ *   <li>Segments: 48 x 40dp, 2dp apart, 20dp icons in onSurfaceVariant (outlined).</li>
+ *   <li>Selection: a secondaryContainer pill under the selected segment with its filled icon in onSecondaryContainer;
+ *   the pill slides to a newly selected segment on the spatial fast spring.</li>
+ *   <li>Press: the pressed segment's shape (the pill, or its state layer) springs from full to 8dp corners under the
+ *   10% pressed state layer.</li>
  * </ul>
- * Nothing is allocated while drawing: two icon paints per segment state are rebuilt only when the theme colors change.
+ * It hides with the panel header on scroll down and comes back on scroll up ({@link #setHideFactor}). Nothing is
+ * allocated while drawing: the two icon paints are rebuilt only when the theme colors change.
  */
 @SuppressLint("ViewConstructor")
 public final class XgramW2EmojiTypeGroup extends View {
@@ -57,21 +60,21 @@ public final class XgramW2EmojiTypeGroup extends View {
     void onEmojiTypeSelected (int type);
   }
 
-  public static final float HEIGHT_DP = 40f, SEGMENT_WIDTH_DP = 52f;
-  private static final float ICON_DP = 20f, INNER_CORNER_DP = XgramExpressive.CORNER_S, PRESSED_CORNER_DP = XgramExpressive.CORNER_XS;
+  /** The toolbar's height (40dp segments in 4dp padding) and the segment size, in dp. */
+  public static final float HEIGHT_DP = 48f, SEGMENT_WIDTH_DP = 48f, SEGMENT_HEIGHT_DP = 40f, PADDING_DP = 4f;
+  private static final float ICON_DP = 20f, PRESSED_CORNER_DP = XgramExpressive.CORNER_S;
 
   private static final int[] ICONS = {R.drawable.baseline_emoticon_outline_24, R.drawable.deproko_baseline_stickers_24, R.drawable.deproko_baseline_gif_24};
   private static final int[] ICONS_CHECKED = {R.drawable.baseline_emoticon_24, R.drawable.deproko_baseline_stickers_24, R.drawable.deproko_baseline_gif_filled_24};
 
   private final Drawable[] icons = new Drawable[COUNT], checkedIcons = new Drawable[COUNT];
   private final String[] labels = new String[COUNT];
-  private final XgramExpressive.Spring[] checkSprings = new XgramExpressive.Spring[COUNT];
+  /** The selection pill's position in segment indexes (0 .. COUNT - 1), springing between them. */
+  private final XgramExpressive.Spring indicator;
   private final XgramExpressive.Spring[] pressSprings = new XgramExpressive.Spring[COUNT];
 
   private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
   private final RectF rect = new RectF();
-  private final Path path = new Path();
-  private final float[] radii = new float[8];
   private @Nullable Paint uncheckedIconPaint, checkedIconPaint;
   private int uncheckedIconColor, checkedIconColor;
 
@@ -86,13 +89,28 @@ public final class XgramW2EmojiTypeGroup extends View {
     for (int i = 0; i < COUNT; i++) {
       icons[i] = Drawables.get(getResources(), ICONS[i]);
       checkedIcons[i] = ICONS_CHECKED[i] == ICONS[i] ? icons[i] : Drawables.get(getResources(), ICONS_CHECKED[i]);
-      checkSprings[i] = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, i == selectedType ? 1f : 0f, (s, value) -> invalidate());
       pressSprings[i] = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
     }
+    indicator = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, selectedType, (s, value) -> invalidate());
     labels[TYPE_EMOJI] = Lang.getString(R.string.XgramW2EmojiTypeEmoji);
     labels[TYPE_STICKERS] = Lang.getString(R.string.Stickers);
     labels[TYPE_GIFS] = Lang.getString(R.string.GIFs);
     updateDescription();
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      // Level 3: the floating toolbar's elevation; the shadow follows the pill
+      setOutlineProvider(new ViewOutlineProvider() {
+        @Override
+        public void getOutline (View view, Outline outline) {
+          final int width = view.getWidth(), height = view.getHeight();
+          if (width <= 0 || height <= 0) {
+            outline.setEmpty();
+          } else {
+            outline.setRoundRect(0, 0, width, height, height / 2f);
+          }
+        }
+      });
+      setElevation(Screen.dp(XgramExpressive.ELEVATION_3));
+    }
   }
 
   public void setCallback (@Nullable Callback callback) {
@@ -109,13 +127,10 @@ public final class XgramW2EmojiTypeGroup extends View {
     }
     final boolean changed = this.selectedType != type;
     this.selectedType = type;
-    for (int i = 0; i < COUNT; i++) {
-      final float target = i == type ? 1f : 0f;
-      if (animated) {
-        checkSprings[i].animateTo(target);
-      } else {
-        checkSprings[i].setValue(target);
-      }
+    if (animated) {
+      indicator.animateTo(type);
+    } else {
+      indicator.setValue(type);
     }
     if (changed) {
       updateDescription();
@@ -133,7 +148,7 @@ public final class XgramW2EmojiTypeGroup extends View {
     if (this.hideFactor != factor) {
       this.hideFactor = factor;
       setAlpha(1f - factor);
-      setTranslationY(Screen.dp(HEIGHT_DP + 16f) * factor);
+      setTranslationY(Screen.dp(HEIGHT_DP + 24f) * factor);
       if (factor >= 1f) {
         releasePress();
       }
@@ -146,41 +161,54 @@ public final class XgramW2EmojiTypeGroup extends View {
     return Screen.dp(SEGMENT_WIDTH_DP);
   }
 
+  private int segmentHeight () {
+    return Screen.dp(SEGMENT_HEIGHT_DP);
+  }
+
+  private int padding () {
+    return Screen.dp(PADDING_DP);
+  }
+
   private int gap () {
     return Screen.dp(XgramM3Connected.GAP);
   }
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-    final int width = getPaddingLeft() + getPaddingRight() + segmentWidth() * COUNT + gap() * (COUNT - 1);
-    final int height = getPaddingTop() + getPaddingBottom() + Screen.dp(HEIGHT_DP);
+    final int width = padding() * 2 + segmentWidth() * COUNT + gap() * (COUNT - 1);
+    final int height = padding() * 2 + segmentHeight();
     setMeasuredDimension(width, height);
   }
 
-  /** The segment's slot from the start edge (mirrored under RTL). */
-  private int slotOf (int index) {
-    return Lang.rtl() ? COUNT - 1 - index : index;
+  @Override
+  protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+    super.onSizeChanged(w, h, oldw, oldh);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      invalidateOutline();
+    }
   }
 
-  private void segmentRect (int index, RectF out) {
-    final int slot = slotOf(index);
-    final float left = getPaddingLeft() + slot * (segmentWidth() + gap());
-    final float top = getPaddingTop();
-    out.set(left, top, left + segmentWidth(), top + Screen.dp(HEIGHT_DP));
+  /** Left edge of the segment at (fractional) index {@code position}, mirrored under RTL. */
+  private float segmentLeft (float position) {
+    final float slot = Lang.rtl() ? (COUNT - 1) - position : position;
+    return padding() + slot * (segmentWidth() + gap());
+  }
+
+  private void segmentRect (float position, RectF out) {
+    final float left = segmentLeft(position);
+    final float top = (getHeight() - segmentHeight()) / 2f;
+    out.set(left, top, left + segmentWidth(), top + segmentHeight());
   }
 
   private int findIndex (float x, float y) {
-    if (y < getPaddingTop() - Screen.dp(4f) || y > getPaddingTop() + Screen.dp(HEIGHT_DP) + Screen.dp(4f)) {
+    final int slop = Screen.dp(4f);
+    if (x < -slop || x > getWidth() + slop || y < -slop || y > getHeight() + slop) {
       return -1;
     }
-    for (int i = 0; i < COUNT; i++) {
-      segmentRect(i, rect);
-      // The gaps belong to the nearer segment, so every touch on the group lands on one
-      if (x >= rect.left - gap() && x < rect.right + gap()) {
-        return i;
-      }
-    }
-    return -1;
+    // The padding and the gaps belong to the nearer segment, so every touch on the toolbar lands on one
+    final float step = segmentWidth() + gap();
+    final int slot = MathUtils.clamp((int) Math.floor((x - padding() + gap() / 2f) / step), 0, COUNT - 1);
+    return Lang.rtl() ? (COUNT - 1) - slot : slot;
   }
 
   // Touch
@@ -239,21 +267,17 @@ public final class XgramW2EmojiTypeGroup extends View {
 
   // Drawing
 
-  private static float lerp (float from, float to, float factor) {
-    return from + (to - from) * factor;
-  }
-
   @Override
   protected void onDraw (Canvas c) {
-    final int height = Screen.dp(HEIGHT_DP);
-    final float full = height / 2f;
-    final float inner = Math.min(full, Screen.dpf(INNER_CORNER_DP));
-    final float pressedCorner = Math.min(full, Screen.dpf(PRESSED_CORNER_DP));
+    final int width = getWidth(), height = getHeight();
+    if (width <= 0 || height <= 0) {
+      return;
+    }
 
-    final int uncheckedContainer = XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER);
-    final int uncheckedContent = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
-    final int checkedContainer = XgramExpressive.color(XgramExpressive.SECONDARY);
-    final int checkedContent = XgramExpressive.color(XgramExpressive.ON_SECONDARY);
+    final int container = XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGH);
+    final int indicatorColor = XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER);
+    final int uncheckedContent = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+    final int checkedContent = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
     if (uncheckedIconPaint == null || uncheckedIconColor != uncheckedContent) {
       uncheckedIconPaint = Paints.createPorterDuffPaint(uncheckedIconPaint, uncheckedIconColor = uncheckedContent);
     }
@@ -261,38 +285,38 @@ public final class XgramW2EmojiTypeGroup extends View {
       checkedIconPaint = Paints.createPorterDuffPaint(checkedIconPaint, checkedIconColor = checkedContent);
     }
 
+    // One container for the three segments
+    rect.set(0, 0, width, height);
+    fillPaint.setColor(container);
+    c.drawRoundRect(rect, height / 2f, height / 2f, fillPaint);
+
+    final float full = segmentHeight() / 2f;
+    final float pressedCorner = Math.min(full, Screen.dpf(PRESSED_CORNER_DP));
+    final float position = MathUtils.clamp(indicator.getValue(), 0f, COUNT - 1);
+
+    // The selection pill, squashed while the segment under it is pressed
+    final int nearest = Math.round(position);
+    final float indicatorPress = pressSprings[nearest].getValue();
+    final float indicatorCorner = MathUtils.clamp(full + (pressedCorner - full) * indicatorPress, 0f, full);
+    segmentRect(position, rect);
+    fillPaint.setColor(indicatorColor);
+    c.drawRoundRect(rect, indicatorCorner, indicatorCorner, fillPaint);
+
     final float iconScale = Screen.dpf(ICON_DP) / Screen.dpf(24f);
     for (int i = 0; i < COUNT; i++) {
-      segmentRect(i, rect);
-      final int slot = slotOf(i);
-      final boolean firstSlot = slot == 0, lastSlot = slot == COUNT - 1;
-      final float checkRaw = checkSprings[i].getValue();
-      final float check = MathUtils.clamp(checkRaw);
+      final float check = MathUtils.clamp(1f - Math.abs(position - i));
       final float press = pressSprings[i].getValue();
+      segmentRect(i, rect);
 
-      // Corners: resting (outer full, inner 8dp) -> checked (full) -> pressed (4dp); physical order tl, tr, br, bl
-      final float restLeft = firstSlot ? full : inner, restRight = lastSlot ? full : inner;
-      float left = lerp(restLeft, full, checkRaw);
-      float right = lerp(restRight, full, checkRaw);
-      left = MathUtils.clamp(lerp(left, pressedCorner, press), 0f, full);
-      right = MathUtils.clamp(lerp(right, pressedCorner, press), 0f, full);
-      radii[0] = radii[1] = left;
-      radii[2] = radii[3] = right;
-      radii[4] = radii[5] = right;
-      radii[6] = radii[7] = left;
-      path.rewind();
-      path.addRoundRect(rect, radii, Path.Direction.CW);
-
-      final int container = ColorUtils.fromToArgb(uncheckedContainer, checkedContainer, check);
-      final int content = ColorUtils.fromToArgb(uncheckedContent, checkedContent, check);
-      fillPaint.setColor(container);
-      c.drawPath(path, fillPaint);
       if (press > 0f) {
+        // The pressed state layer in the segment's own shape (content color at 10%)
+        final float corner = MathUtils.clamp(full + (pressedCorner - full) * press, 0f, full);
+        final int content = ColorUtils.fromToArgb(uncheckedContent, checkedContent, check);
         fillPaint.setColor(XgramExpressive.withAlpha(content, XgramExpressive.STATE_PRESSED * Math.min(1f, press)));
-        c.drawPath(path, fillPaint);
+        c.drawRoundRect(rect, corner, corner, fillPaint);
       }
 
-      // Icon: the unchecked drawing in the unchecked color crossfades to the checked drawing in the checked color
+      // Icon: the outlined drawing in onSurfaceVariant crossfades to the filled one in onSecondaryContainer
       final float cx = rect.centerX(), cy = rect.centerY();
       final int save = c.save();
       c.scale(iconScale, iconScale, cx, cy);
