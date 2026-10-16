@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 import me.vkryl.android.AnimatorUtils;
 import me.vkryl.core.ArrayUtils;
 import me.vkryl.core.ObjectUtils;
+import me.vkryl.core.StringUtils;
 
 public class JoinRequestsComponent implements TGLegacyManager.EmojiLoadListener, Client.ResultHandler {
   private static final String UTYAN_EMOJI = "\uD83D\uDE0E";
@@ -170,6 +171,19 @@ public class JoinRequestsComponent implements TGLegacyManager.EmojiLoadListener,
       protected void setJoinRequest (ListItem item, int position, DoubleTextViewWithIcon group, boolean isUpdate) {
         TGUser user = joinRequests.get((isBottomSheet || isSeparateLink || inSearchMode()) ? position : position - 3);
         group.setTag(user);
+        com.fahadali.xgram.appearance.XgramM3JoinRequestTile xgramTile = group.xgramTile();
+        if (xgramTile != null) {
+          // XGram: Material 3 Expressive tile, "Requested today at 7:52 pm" in sentence case under the name, decline
+          // and add as icon buttons, the rest of the tile opening the request's options
+          String status = user.getStatus();
+          xgramTile.setRequest(tdlib(), user.getSenderId(), user.getUser(), user.getName(), status != null ? StringUtils.ucfirst(status, Lang.locale()) : null);
+          xgramTile.setActions(
+            (v) -> declineRequest(user), Lang.getString(R.string.InviteLinkActionDeclineAction),
+            (v) -> acceptRequest(user), Lang.getString(isChannel ? R.string.InviteLinkActionAcceptChannel : R.string.InviteLinkActionAccept)
+          );
+          group.setTextClickListener((v) -> onClick(group));
+          return;
+        }
         group.text().setSenderAvatar(tdlib(), user.getSenderId());
         group.text().setText(user.getName(), user.getStatus());
         group.text().setIcon(R.drawable.baseline_person_add_16, (v) -> acceptRequest(user));
@@ -359,7 +373,12 @@ public class JoinRequestsComponent implements TGLegacyManager.EmojiLoadListener,
 
   // bottomsheet only
   public int getHeight (int predictUserCount) {
-    int initialContentHeight = SettingHolder.measureHeightForType(ListItem.TYPE_JOIN_REQUEST) * predictUserCount;
+    int initialContentHeight;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: the Material 3 Expressive tiles grow to three lines (two of supporting text), 2dp apart, 8dp under the sheet top
+      initialContentHeight = (Screen.dp(com.fahadali.xgram.appearance.XgramM3JoinRequestTile.MAX_HEIGHT) + Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP)) * predictUserCount + Screen.dp(8f);
+    } else
+    initialContentHeight = SettingHolder.measureHeightForType(ListItem.TYPE_JOIN_REQUEST) * predictUserCount;
 
     initialContentHeight += Screen.dp(48f); // TODO
     initialContentHeight += SettingHolder.measureHeightForType(ListItem.TYPE_SHADOW_TOP);
