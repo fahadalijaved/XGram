@@ -1154,13 +1154,16 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
 
     /**
      * XGram M3E: filter chip roles, chosen mixed towards not chosen by the counter's mute factor. Selected is
-     * secondaryContainer / onSecondaryContainer (FilterChipTokens.FlatSelectedContainerColor), unselected a neutral
-     * surface container with onSurfaceVariant, the same on in and out bubbles and under media. The containers are
-     * picked by what the chip sits on, so the chip always shows: on the chat background (under media and stickers,
-     * and without bubbles) unselected is surfaceContainerHigh; inside a bubble (incoming is surfaceContainerHigh
-     * itself, outgoing primaryContainer) it is surfaceContainerLowest. In an outgoing bubble selected is
-     * inversePrimary / onPrimaryContainer instead: secondaryContainer has the bubble's own tone (90 light, 30 dark)
-     * and can't be told from it, while inversePrimary is the primary tone one step away (80 light, 40 dark).
+     * secondaryContainer / onSecondaryContainer (FilterChipTokens.FlatSelectedContainerColor), unselected a container
+     * with onSurfaceVariant. The containers are picked by what the chip sits on, so the chip always shows and is never
+     * the page's own color (with Pure black, surfaceContainerLowest is the black page: a black pill inside a bubble
+     * read as a hole). On the chat background (under media and stickers, and without bubbles) unselected is
+     * surfaceContainerHigh. Inside a bubble unselected is the bubble's own color one step brighter (see
+     * {@link #xgramChipStep}): in an incoming bubble (surfaceContainerHigh) about surfaceContainerHighest in the dark,
+     * the tinted grey above it with Pure black, and in an outgoing bubble (primaryContainer) a lighter tone of it, with
+     * onPrimaryContainer. In an outgoing bubble selected is the primary tone 80 with its dark content (primary /
+     * onPrimary in the dark, inversePrimary / onPrimaryContainer in the light): secondaryContainer has the bubble's own
+     * tone (90 light, 30 dark) and reads duller than the unselected step.
      */
     private int xgramChipColor (boolean content) {
       final int chosenRole, otherRole;
@@ -1168,14 +1171,41 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
       if (onChatBackground) {
         chosenRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER;
         otherRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH;
-      } else if (message.isOutgoingBubble()) {
-        chosenRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.INVERSE_PRIMARY;
-        otherRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOWEST;
-      } else {
-        chosenRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER;
-        otherRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOWEST;
+        return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(chosenRole), com.fahadali.xgram.appearance.XgramExpressive.color(otherRole), counter.getMuteFactor());
       }
-      return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(chosenRole), com.fahadali.xgram.appearance.XgramExpressive.color(otherRole), counter.getMuteFactor());
+      final float darkFactor = Theme.getDarkFactor();
+      final int chosen, other;
+      if (message.isOutgoingBubble()) {
+        final boolean dark = darkFactor >= .5f; // primary and inversePrimary swap tones (40 / 80) with the scheme
+        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ?
+          (dark ? com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER) :
+          (dark ? com.fahadali.xgram.appearance.XgramExpressive.PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.INVERSE_PRIMARY));
+        other = content ?
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER) :
+          xgramChipStep(message.getContentBackgroundColor(), darkFactor);
+      } else {
+        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+        other = content ?
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT) :
+          xgramChipStep(message.getContentBackgroundColor(), darkFactor);
+      }
+      return ColorUtils.fromToArgb(chosen, other, counter.getMuteFactor());
+    }
+
+    /**
+     * White over the bubble: 8% in the dark (incoming tone 17 to about 24, just above surfaceContainerHighest; #1A1A1A
+     * to #2B2B2B with Pure black; outgoing tone 30 to about 36), 60% in the light (tone 92 to about 97, 90 to 96).
+     */
+    private static final float XGRAM_CHIP_STEP_DARK = .08f, XGRAM_CHIP_STEP_LIGHT = .6f;
+
+    /**
+     * XGram M3E: {@code bubbleColor} one step brighter, the unselected chip inside a bubble: a lighter tone of the
+     * bubble's own color in every scheme (light, dark, Pure black), blended through a day / night switch.
+     */
+    private static int xgramChipStep (int bubbleColor, float darkFactor) {
+      final float f = darkFactor <= 0f ? 0f : darkFactor >= 1f ? 1f : darkFactor;
+      final float step = XGRAM_CHIP_STEP_LIGHT + (XGRAM_CHIP_STEP_DARK - XGRAM_CHIP_STEP_LIGHT) * f;
+      return ColorUtils.compositeColor(bubbleColor | 0xff000000, ColorUtils.alphaColor(step, 0xffffffff));
     }
 
     @Override
