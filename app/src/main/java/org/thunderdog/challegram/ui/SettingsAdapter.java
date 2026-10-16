@@ -1577,7 +1577,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
         com.fahadali.xgram.appearance.XgramListStateView xgramState = com.fahadali.xgram.appearance.XgramR5Lists.emptyBlockState(holder.itemView);
         if (xgramState != null) {
           // XGram M3E: the item's icon (a globe for websites) on a soft burst, the text split into headline and supporting text
-          final int icon = viewType == ListItem.TYPE_WEBSITES_EMPTY ? R.drawable.baseline_language_24 : com.fahadali.xgram.appearance.XgramR5Lists.emptyIcon(item.getStringResource(), item.getIconResource());
+          final int icon = viewType == ListItem.TYPE_WEBSITES_EMPTY ? org.thunderdog.challegram.R.drawable.baseline_language_24 :com.fahadali.xgram.appearance.XgramR5Lists.emptyIcon(item.getStringResource(), item.getIconResource());
           com.fahadali.xgram.appearance.XgramR5Lists.bindEmpty(xgramState, icon, item.getString());
           if (holder.itemView.getMeasuredHeight() != 0) {
             holder.itemView.requestLayout();

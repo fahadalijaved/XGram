@@ -490,6 +490,10 @@ public final class XgramM3Sessions {
     private final @Nullable Drawable check;
     private boolean checked, onTile;
 
+    ChipView (Context context, @StringRes int textRes) {
+      this(context, Lang.getString(textRes));
+    }
+
     ChipView (Context context, CharSequence text) {
       super(context);
       XgramExpressive.applyText(this, XgramExpressive.TS_LABEL_L, false);
