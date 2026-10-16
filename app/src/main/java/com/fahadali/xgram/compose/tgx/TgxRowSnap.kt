@@ -21,6 +21,7 @@ import android.util.SparseIntArray
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.Color
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.fahadali.xgram.appearance.XgramIconPack
 import org.thunderdog.challegram.component.base.SettingView
 import org.thunderdog.challegram.theme.ColorId
+import org.thunderdog.challegram.theme.Theme
 import org.thunderdog.challegram.ui.ListItem
 import org.thunderdog.challegram.ui.SettingHolder
 import org.thunderdog.challegram.util.CustomTypefaceSpan
@@ -66,21 +68,59 @@ internal class TgxRow(val item: ListItem, serial: Long) {
   var coordinates: LayoutCoordinates? = null
 }
 
+/** The color role Telegram X gives a row's value text (SettingView.setDataColorId), as an M3 role. */
+internal object TgxTone {
+  const val NONE = 0
+  /** textNegative: "Notifications blocked", importance None. */
+  const val ERROR = 1
+  /** textNeutral, textSecure, textLink: an exception, the pack in use, a working connection. */
+  const val PRIMARY = 2
+
+  fun of(colorId: Int): Int = when (colorId) {
+    ColorId.textNegative -> ERROR
+    ColorId.textNeutral, ColorId.textSecure, ColorId.textLink -> PRIMARY
+    else -> NONE
+  }
+}
+
+/** What sits at the end of a HEADER_ACTION row. */
+internal object TgxHeaderAction {
+  const val NONE = 0
+  const val ICON = 1
+  const val TEXT = 2
+  const val CHECKBOX = 3
+}
+
 /** What a row shows, read back from its bound view. Equal snaps write no state, so nothing recomposes. */
 internal data class TgxRowSnap(
   val kind: TgxRowKind,
   val title: CharSequence? = null,
+  /** The second line (the value), or a header's text button label. */
   val subtitle: CharSequence? = null,
   val icon: Int = 0,
   val checked: Boolean = false,
-  /** View.isEnabled: false takes no clicks. */
+  /** Checked only in part: a switch's or a checkbox's third state (some of a group on). */
+  val partial: Boolean = false,
+  /** View.isEnabled: false takes no taps. */
   val enabled: Boolean = true,
-  /** Telegram X's "visually disabled": dimmed but still tappable (it explains why in a tooltip). */
+  /**
+   * Telegram X's look: true when the row is drawn disabled (SettingView.isVisuallyEnabled false). Independent of
+   * [enabled]: a row may look enabled and take no taps (counters), or look disabled and still explain itself on tap.
+   */
   val dimmed: Boolean = false,
   val busy: Boolean = false,
+  /** The control itself is disabled (a toggler or a checkbox), whatever the row does. */
   val toggleDisabled: Boolean = false,
   val locked: Boolean = false,
   val destructive: Boolean = false,
+  /** [TgxTone] of the value text. */
+  val tone: Int = TgxTone.NONE,
+  /** The radio's own color (a theme's color), ARGB; 0: the M3 colors. */
+  val radioColor: Int = 0,
+  /** The radio is drawn in its own color when selected too (RadioView.setApplyColor), not only when unselected. */
+  val radioApplied: Boolean = false,
+  /** [TgxHeaderAction] of a HEADER_ACTION row. */
+  val action: Int = TgxHeaderAction.NONE,
   val iconRotated: Boolean = false,
   val longClickable: Boolean = false,
   val centered: Boolean = false,
@@ -105,9 +145,13 @@ internal object TgxRead {
 
   fun isSeparatorType(type: Int): Boolean = type == ListItem.TYPE_SEPARATOR || type == ListItem.TYPE_SEPARATOR_FULL
 
-  /** Plain headers become M3 headers; headers with a button or a checkbox stay real views for now. */
+  /** Headers become M3 headers on the page; those with an icon, a text button or a checkbox keep it at their end. */
   fun isHeaderType(type: Int): Boolean =
-    type == ListItem.TYPE_HEADER || type == ListItem.TYPE_HEADER_PADDED || type == ListItem.TYPE_HEADER_MULTILINE
+    type == ListItem.TYPE_HEADER || type == ListItem.TYPE_HEADER_PADDED || type == ListItem.TYPE_HEADER_MULTILINE ||
+      isActionHeaderType(type)
+
+  private fun isActionHeaderType(type: Int): Boolean = type == ListItem.TYPE_HEADER_WITH_ACTION ||
+    type == ListItem.TYPE_HEADER_WITH_TEXT_BUTTON || type == ListItem.TYPE_HEADER_WITH_CHECKBOX
 
   fun isDescriptionType(type: Int): Boolean =
     type == ListItem.TYPE_DESCRIPTION || type == ListItem.TYPE_DESCRIPTION_SMALL || type == ListItem.TYPE_DESCRIPTION_CENTERED
@@ -150,6 +194,47 @@ internal object TgxRead {
     return null
   }
 
+  /** The title of a HEADER_WITH_* row (SettingHolder: text1 next to a text button, else the first child). */
+  private fun headerTitleOf(view: ViewGroup, type: Int): TextView? =
+    if (type == ListItem.TYPE_HEADER_WITH_TEXT_BUTTON) {
+      view.findViewById<TextView>(android.R.id.text1)
+    } else {
+      view.getChildAt(0) as? TextView
+    }
+
+  /** The control at the end of a HEADER_WITH_* row: the child with a click of its own (icon, text button, checkbox). */
+  private fun headerTargetOf(view: ViewGroup, title: View?): View? {
+    for (i in 0 until view.childCount) {
+      val child = view.getChildAt(i)
+      if (child !== title && child.hasOnClickListeners()) {
+        return child
+      }
+    }
+    return null
+  }
+
+  /** What a HEADER_WITH_* row has at its end ([TgxHeaderAction]); NONE when its views are not the usual ones. */
+  private fun headerActionOf(context: Context, view: View, type: Int, item: ListItem): Int {
+    if (view !is ViewGroup) {
+      return TgxHeaderAction.NONE
+    }
+    val title = headerTitleOf(view, type) ?: return TgxHeaderAction.NONE
+    val target = headerTargetOf(view, title) ?: return TgxHeaderAction.NONE
+    return when (type) {
+      ListItem.TYPE_HEADER_WITH_ACTION -> {
+        val icon = item.iconResource
+        if (target is ImageView && icon != 0 && TgxIcons.supported(context, icon)) TgxHeaderAction.ICON else TgxHeaderAction.NONE
+      }
+      ListItem.TYPE_HEADER_WITH_TEXT_BUTTON -> if (target is TextView) TgxHeaderAction.TEXT else TgxHeaderAction.NONE
+      ListItem.TYPE_HEADER_WITH_CHECKBOX -> if (target is CheckBoxView) TgxHeaderAction.CHECKBOX else TgxHeaderAction.NONE
+      else -> TgxHeaderAction.NONE
+    }
+  }
+
+  /** Telegram X writes button labels in capitals; M3 buttons use the label as written, when it is the same text. */
+  private fun buttonLabel(shown: CharSequence?, written: CharSequence?): CharSequence? =
+    if (shown != null && written != null && shown.toString().equals(written.toString(), ignoreCase = true)) written else shown
+
   private fun isInfoType(type: Int): Boolean = type == SettingView.TYPE_INFO || type == SettingView.TYPE_INFO_COMPACT ||
     type == SettingView.TYPE_INFO_SUPERCOMPACT || type == SettingView.TYPE_INFO_MULTILINE
 
@@ -162,17 +247,22 @@ internal object TgxRead {
     when (type) {
       ListItem.TYPE_HEADER, ListItem.TYPE_HEADER_PADDED, ListItem.TYPE_HEADER_MULTILINE ->
         return if (view is TextView) TgxRowKind.HEADER else TgxRowKind.FALLBACK
+      ListItem.TYPE_HEADER_WITH_ACTION, ListItem.TYPE_HEADER_WITH_TEXT_BUTTON, ListItem.TYPE_HEADER_WITH_CHECKBOX ->
+        return if (headerActionOf(context, view, type, item) != TgxHeaderAction.NONE) TgxRowKind.HEADER_ACTION else TgxRowKind.FALLBACK
       ListItem.TYPE_DESCRIPTION, ListItem.TYPE_DESCRIPTION_SMALL, ListItem.TYPE_DESCRIPTION_CENTERED ->
         return if (view is TextView) TgxRowKind.DESCRIPTION else TgxRowKind.FALLBACK
       ListItem.TYPE_BUILD_NO -> return if (view is TextView) TgxRowKind.BUILD_NO else TgxRowKind.FALLBACK
       ListItem.TYPE_EMPTY -> return if (view is TextView) TgxRowKind.EMPTY else TgxRowKind.FALLBACK
       ListItem.TYPE_PROGRESS, ListItem.TYPE_SMART_PROGRESS -> return TgxRowKind.LOADING
       ListItem.TYPE_SLIDER -> {
-        val values = item.sliderValues
-        return if (view is SliderWrapView && values != null && values.size >= 2) TgxRowKind.SLIDER else TgxRowKind.FALLBACK
+        // The values the slider shows are on its view: setSliderValues puts the item's there, and pages such as
+        // EditChatLinkController set their own without the item.
+        val values = (view as? SliderWrapView)?.values
+        return if (values != null && values.size >= 2) TgxRowKind.SLIDER else TgxRowKind.FALLBACK
       }
       ListItem.TYPE_BUTTON -> return if (findText(view) != null && clickTarget(view) != null) TgxRowKind.BUTTON else TgxRowKind.FALLBACK
-      // A three-state switch, avatars and color previews: the real row until a hint draws them.
+      // Telegram X's red and green toggler (EditRights maps it in its hints), avatars and color previews: the real
+      // row until a hint draws them.
       ListItem.TYPE_RADIO_SETTING_WITH_NEGATIVE_STATE, ListItem.TYPE_CHECKBOX_OPTION_WITH_AVATAR,
       ListItem.TYPE_RADIO_OPTION_WITH_AVATAR, ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_COLOR -> return TgxRowKind.FALLBACK
     }
@@ -193,8 +283,10 @@ internal object TgxRead {
         return TgxRowKind.FALLBACK
       }
     }
-    if (view.toggler != null) {
-      return TgxRowKind.SWITCH
+    val toggler = view.toggler
+    if (toggler != null) {
+      // A toggler with a click of its own toggles, while the row does something else (it expands a group).
+      return if (toggler.isClickable && toggler.hasOnClickListeners()) TgxRowKind.SPLIT_SWITCH else TgxRowKind.SWITCH
     }
     if (view.childCount > 0) {
       return when (view.getChildAt(0)) {
@@ -206,11 +298,15 @@ internal object TgxRead {
     return TgxRowKind.VALUE
   }
 
-  /** Reads what the row shows now. Getters only: cheap enough to run on every change the view reports. */
-  fun read(kind: TgxRowKind, view: View, item: ListItem, type: Int): TgxRowSnap = when (kind) {
-    TgxRowKind.SWITCH, TgxRowKind.RADIO, TgxRowKind.CHECKBOX, TgxRowKind.VALUE ->
-      if (view is SettingView) readSetting(kind, view) else TgxRowSnap.HIDDEN
+  /**
+   * Reads what the row shows now. Getters only: cheap enough to run on every change the view reports. [partial]: the
+   * page's hint that a switch row is only partly on.
+   */
+  fun read(kind: TgxRowKind, view: View, item: ListItem, type: Int, partial: Boolean): TgxRowSnap = when (kind) {
+    TgxRowKind.SWITCH, TgxRowKind.SPLIT_SWITCH, TgxRowKind.RADIO, TgxRowKind.CHECKBOX, TgxRowKind.VALUE ->
+      if (view is SettingView) readSetting(kind, view, partial) else TgxRowSnap.HIDDEN
     TgxRowKind.HEADER -> TgxRowSnap(kind, title = (view as? TextView)?.text)
+    TgxRowKind.HEADER_ACTION -> readHeader(view, item, type)
     TgxRowKind.DESCRIPTION -> TgxRowSnap(kind, title = (view as? TextView)?.text, centered = type == ListItem.TYPE_DESCRIPTION_CENTERED)
     TgxRowKind.BUILD_NO, TgxRowKind.EMPTY -> TgxRowSnap(
       kind, title = (view as? TextView)?.text, enabled = view.isEnabled, longClickable = view.isLongClickable
@@ -218,47 +314,92 @@ internal object TgxRead {
     TgxRowKind.BUTTON -> TgxRowSnap(
       kind, title = item.string ?: findText(view)?.text, enabled = view.isEnabled, longClickable = view.isLongClickable
     )
-    TgxRowKind.SLIDER -> TgxRowSnap(
-      kind, title = item.string, enabled = view.isEnabled,
-      sliderLabels = item.sliderValues?.toList() ?: emptyList(), sliderIndex = item.sliderValue
-    )
+    TgxRowKind.SLIDER -> {
+      val slider = view as? SliderWrapView
+      val values = slider?.values
+      TgxRowSnap(
+        kind, title = item.string, enabled = view.isEnabled,
+        sliderLabels = values?.asList() ?: emptyList(),
+        sliderIndex = if (slider != null && values != null) slider.valueIndex else item.sliderValue
+      )
+    }
     TgxRowKind.LOADING, TgxRowKind.FALLBACK, TgxRowKind.HIDDEN -> TgxRowSnap(kind)
   }
 
-  private fun readSetting(kind: TgxRowKind, view: SettingView): TgxRowSnap {
+  private fun readHeader(view: View, item: ListItem, type: Int): TgxRowSnap {
+    if (view !is ViewGroup) {
+      return TgxRowSnap(TgxRowKind.HEADER_ACTION)
+    }
+    val title = headerTitleOf(view, type)
+    val target = headerTargetOf(view, title)
+    val enabled = view.isEnabled && target != null && target.isEnabled
+    return when (type) {
+      ListItem.TYPE_HEADER_WITH_ACTION -> TgxRowSnap(
+        TgxRowKind.HEADER_ACTION, title = title?.text, icon = item.iconResource, action = TgxHeaderAction.ICON, enabled = enabled
+      )
+      ListItem.TYPE_HEADER_WITH_TEXT_BUTTON -> TgxRowSnap(
+        TgxRowKind.HEADER_ACTION, title = title?.text, subtitle = buttonLabel((target as? TextView)?.text, item.string),
+        action = TgxHeaderAction.TEXT, enabled = enabled
+      )
+      else -> {
+        val box = target as? CheckBoxView
+        val checked = box?.isChecked == true
+        TgxRowSnap(
+          TgxRowKind.HEADER_ACTION, title = title?.text, action = TgxHeaderAction.CHECKBOX, enabled = enabled,
+          checked = checked, partial = checked && box?.isPartiallyChecked == true, toggleDisabled = box?.isDisabled == true
+        )
+      }
+    }
+  }
+
+  private fun readSetting(kind: TgxRowKind, view: SettingView, partialHint: Boolean): TgxRowSnap {
     val name = view.name
     val data = view.data
     val title: CharSequence?
     val subtitle: CharSequence?
+    // Info rows draw the data large and the name under it, unless swapped (valued settings: name, then value).
+    val dataIsTitle = isInfoType(view.type) && !view.isDataSwapped
     if (isInfoType(view.type)) {
-      // Info rows draw the data large and the name under it, unless swapped (valued settings: name, then value).
-      val swapped = view.isDataSwapped
       val wrapper = view.textWrapper
-      title = if (view.type == SettingView.TYPE_INFO_MULTILINE && wrapper != null) wrapper.text else if (swapped) name else data
-      subtitle = if (swapped) data else name
+      title = if (view.type == SettingView.TYPE_INFO_MULTILINE && wrapper != null) wrapper.text else if (dataIsTitle) data else name
+      subtitle = if (dataIsTitle) name else data
     } else {
       title = name
       subtitle = data
     }
     val toggler = view.toggler
+    val first = if (view.childCount > 0) view.getChildAt(0) else null
+    val radio = if (kind == TgxRowKind.RADIO) first as? RadioView else null
+    val box = if (kind == TgxRowKind.CHECKBOX) first as? CheckBoxView else null
     val checked = when (kind) {
-      TgxRowKind.SWITCH -> toggler?.isEnabled == true
-      TgxRowKind.RADIO -> (view.getChildAt(0) as? RadioView)?.isChecked == true
-      TgxRowKind.CHECKBOX -> (view.getChildAt(0) as? CheckBoxView)?.isChecked == true
+      TgxRowKind.SWITCH, TgxRowKind.SPLIT_SWITCH -> toggler?.isEnabled == true
+      TgxRowKind.RADIO -> radio?.isChecked == true
+      TgxRowKind.CHECKBOX -> box?.isChecked == true
       else -> false
     }
+    val partial = when (kind) {
+      TgxRowKind.SWITCH, TgxRowKind.SPLIT_SWITCH -> checked && partialHint
+      TgxRowKind.CHECKBOX -> checked && box?.isPartiallyChecked == true
+      else -> false
+    }
+    val radioColorId = radio?.colorId ?: 0
     return TgxRowSnap(
       kind = kind,
       title = title,
       subtitle = if (subtitle.isNullOrEmpty()) null else subtitle,
       icon = view.iconResource,
       checked = checked,
+      partial = partial,
       enabled = view.isEnabled,
       dimmed = !view.isVisuallyEnabled,
       busy = view.isInProgress,
-      toggleDisabled = toggler?.isDisabled == true,
+      toggleDisabled = toggler?.isDisabled == true || box?.isDisabled == true,
       locked = toggler?.isLockShown == true,
       destructive = view.textColorId == ColorId.textNegative,
+      // The value's color, when the second line is the value.
+      tone = if (dataIsTitle) TgxTone.NONE else TgxTone.of(view.dataColorId),
+      radioColor = if (radioColorId != 0) Theme.getColor(radioColorId) else 0,
+      radioApplied = radioColorId != 0 && radio?.isApplyColor == true,
       iconRotated = view.isIconRotated,
       longClickable = view.isLongClickable
     )
@@ -334,13 +475,38 @@ internal object TgxSpans {
               addStyle(SpanStyle(fontWeight = FontWeight.Medium), start, end)
             }
           }
-          is StyleSpan -> when (span.style) {
-            Typeface.BOLD -> addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
-            Typeface.ITALIC -> addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
-            Typeface.BOLD_ITALIC -> addStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic), start, end)
-          }
+          is StyleSpan -> addTgxStyle(span, start, end)
         }
       }
+    }
+  }
+
+  /**
+   * A row's title or value with Telegram X's bold and italic ("Share my number", "Allowed 3/9"), no links: the whole
+   * row is the tap target.
+   */
+  fun styled(text: Spanned): AnnotatedString = buildAnnotatedString {
+    append(text.toString())
+    for (span in text.getSpans(0, text.length, Any::class.java)) {
+      val start = text.getSpanStart(span)
+      val end = text.getSpanEnd(span)
+      if (start < 0 || end <= start || end > text.length) {
+        continue
+      }
+      when (span) {
+        is CustomTypefaceSpan -> if (span.typeface != null) {
+          addStyle(SpanStyle(fontWeight = FontWeight.Medium), start, end)
+        }
+        is StyleSpan -> addTgxStyle(span, start, end)
+      }
+    }
+  }
+
+  private fun AnnotatedString.Builder.addTgxStyle(span: StyleSpan, start: Int, end: Int) {
+    when (span.style) {
+      Typeface.BOLD -> addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, end)
+      Typeface.ITALIC -> addStyle(SpanStyle(fontStyle = FontStyle.Italic), start, end)
+      Typeface.BOLD_ITALIC -> addStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic), start, end)
     }
   }
 }

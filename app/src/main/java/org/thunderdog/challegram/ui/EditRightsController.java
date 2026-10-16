@@ -1862,6 +1862,22 @@ public class EditRightsController extends EditBaseController<EditRightsControlle
     return res;
   }
 
+  /**
+   * XGram: whether a rights group row (Send media) is only partly allowed, some of its rights on and some off.
+   * The Compose renderer of Telegram X pages draws that as the switch's third state.
+   */
+  public boolean xgramIsRightsGroupPartial (ListItem item) {
+    if (item == null || item.getId() != R.id.btn_togglePermissionGroup || !(item.getData() instanceof RightOption)) {
+      return false;
+    }
+    final int[] rights = ((RightOption) item.getData()).groupRightIds;
+    if (rights == null) {
+      return false;
+    }
+    final int count = getRightsGroupEnabledCount(rights);
+    return count > 0 && count < rights.length;
+  }
+
   private void toggleRightsGroupVisibility (int[] rights) {
     final int index = adapter.indexOfViewByIdAndValue(R.id.btn_togglePermissionGroup, rights[0]);
     if (index == -1) return;

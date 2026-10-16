@@ -90,6 +90,10 @@ public class CheckBoxView extends View {
     isDisabled.setValue(disabled, animated);
   }
 
+  public boolean isDisabled () { // XGram: read by the Compose renderer of Telegram X pages
+    return isDisabled.getValue();
+  }
+
   // Internal
 
   private static final float FACTOR_DIFF = .65f;

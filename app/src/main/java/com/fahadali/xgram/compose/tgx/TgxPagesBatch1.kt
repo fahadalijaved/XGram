@@ -15,6 +15,7 @@ import android.view.View
 import com.fahadali.xgram.chats.XgramCommunitySettingsController
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.component.base.SettingView
+import org.thunderdog.challegram.navigation.ViewController
 import org.thunderdog.challegram.ui.EditRightsController
 import org.thunderdog.challegram.ui.EditSessionController
 import org.thunderdog.challegram.ui.ListItem
@@ -52,15 +53,16 @@ internal object TgxPagesBatch1 {
 /**
  * Admin rights, member restrictions and chat permissions.
  * - A rights group row (Send media) has two targets: its toggler toggles the whole group, the rest of the row shows or
- *   hides the group's rights. A Compose switch row has one tap, so the group row stays the real view.
+ *   hides the group's rights. The core draws it as a split switch row (its toggler has a click of its own); the
+ *   switch shows the third state while only some of the group's rights are allowed.
  * - A single right with Telegram X's negative-state toggler (red when off, green when on) is an M3 switch: its row tap
- *   toggles it, or shows why it can't be changed (a tooltip at the toggler, lock shown).
+ *   toggles it, or shows why it can't be changed (a tooltip at the toggler, lock shown). It has two states only.
  */
 private object Batch1EditRightsHints : TgxPageHints {
+  override fun isPartial(c: ViewController<*>, item: ListItem, view: View): Boolean =
+    item.id == R.id.btn_togglePermissionGroup && (c as? EditRightsController)?.xgramIsRightsGroupPartial(item) == true
+
   override fun kind(item: ListItem, view: View): TgxRowKind? {
-    if (item.id == R.id.btn_togglePermissionGroup) {
-      return TgxRowKind.FALLBACK
-    }
     if (item.viewType == ListItem.TYPE_RADIO_SETTING_WITH_NEGATIVE_STATE && view is SettingView && view.toggler != null) {
       if (!view.drawModifiers.isNullOrEmpty()) {
         return TgxRowKind.FALLBACK

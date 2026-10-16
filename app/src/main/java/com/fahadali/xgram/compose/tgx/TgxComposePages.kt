@@ -27,9 +27,16 @@ enum class TgxRowKind {
   /** Shadows, separators and offsets: not drawn (groups and gaps replace them). */
   HIDDEN,
   SWITCH, RADIO, CHECKBOX,
+  /**
+   * A switch row with two targets (its toggler has a click of its own): the row opens or expands something, the
+   * switch after a divider toggles (EditRights' Send media group).
+   */
+  SPLIT_SWITCH,
   /** A row that opens something or shows a value (also destructive actions, by text color). */
   VALUE,
   HEADER, DESCRIPTION,
+  /** A header with an icon button, a text button or a checkbox at its end (Telegram X's HEADER_WITH_* rows). */
+  HEADER_ACTION,
   /** Telegram X's full-width text button: an action row in the primary color. */
   BUTTON,
   SLIDER, BUILD_NO, LOADING, EMPTY,
@@ -42,6 +49,12 @@ enum class TgxRowKind {
  * it is. Hints are Kotlin only; the controller itself stays untouched.
  */
 interface TgxPageHints {
+  /**
+   * Whether this instance of the page is drawn in Compose (false: the classic list). For pages that are also used
+   * where they must not depend on Compose, such as the crash recovery screen.
+   */
+  fun allow(c: ViewController<*>): Boolean = true
+
   /** The page title as the first list item, fading Telegram X's small title in as it scrolls away. */
   fun largeTitle(c: ViewController<*>): Boolean = c.xgramAllowsLargeTitle()
 
@@ -50,6 +63,12 @@ interface TgxPageHints {
 
   /** Extra trailing content of a VALUE row (an avatar stack, a preview); null: none. */
   fun trailing(item: ListItem, view: View): (@Composable () -> Unit)? = null
+
+  /**
+   * Whether a switch row is only partly on (a group with some of its options on): drawn as the switch's third state.
+   * Read with the row, after every change the page makes to it.
+   */
+  fun isPartial(c: ViewController<*>, item: ListItem, view: View): Boolean = false
 
   companion object {
     @JvmField

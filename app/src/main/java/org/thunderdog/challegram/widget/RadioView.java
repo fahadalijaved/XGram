@@ -104,6 +104,14 @@ public class RadioView extends View implements FactorAnimator.Target {
     }
   }
 
+  public int getColorId () { // XGram: read by the Compose renderer of Telegram X pages
+    return colorId;
+  }
+
+  public boolean isApplyColor () {
+    return useColor;
+  }
+
   public boolean toggleChecked () {
     setChecked(!checkAnimator.getValue(), true);
     return isChecked();

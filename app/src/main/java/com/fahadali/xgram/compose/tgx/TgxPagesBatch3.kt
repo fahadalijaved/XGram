@@ -30,9 +30,11 @@ import org.thunderdog.challegram.ui.SettingsStickersAndEmojiController
  * (TgxPageHints.DEFAULT, or an object overriding kind/trailing/largeTitle). Only this batch edits this file.
  *
  * Every page here is drawn by the generic mapping; what it cannot draw natively stays the real Telegram X row:
- * edit fields (EDITTEXT*), chats (CHAT_SMALL, CHAT_BETTER), LIST_INFO_VIEW, HEADER_WITH_CHECKBOX, rows with a
- * preview drawn into them (emoji, reactions, emoji and icon packs) and sliders whose values the page sets on the
- * view itself (EditChatLinkController). Taps, long presses, Done and the controllers' own update paths are unchanged.
+ * edit fields (EDITTEXT*), chats (CHAT_SMALL, CHAT_BETTER), LIST_INFO_VIEW and rows with a preview drawn into them
+ * (emoji, reactions, emoji and icon packs). The core draws the rest natively, among them the folder link's header
+ * checkbox (HEADER_WITH_CHECKBOX), the invite link sliders whose values the page sets on the view itself
+ * (EditChatLinkController) and the language download progress. Taps, long presses, Done and the controllers' own
+ * update paths are unchanged.
  */
 internal object TgxPagesBatch3 {
   val pages: Map<Class<*>, TgxPageHints> = mapOf(
