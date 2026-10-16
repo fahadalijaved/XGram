@@ -61,7 +61,7 @@ public class MessageOptionsSeenController extends BottomSheetViewController.Bott
       }
     };
     recyclerView.setAdapter(adapter);
-    ViewSupport.setThemedBackground(recyclerView, ColorId.background);
+    ViewSupport.setThemedBackground(recyclerView, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.background); // XGram: the Expressive sheet color
     addThemeInvalidateListener(recyclerView);
     tdlib.client().send(new TdApi.GetMessageViewers(message.getChatId(), message.getId()), (obj) -> {
       if (obj.getConstructor() != TdApi.MessageViewers.CONSTRUCTOR) return;

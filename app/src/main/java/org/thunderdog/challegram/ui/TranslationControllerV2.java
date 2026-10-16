@@ -488,7 +488,7 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
   @Override
   protected int getHeaderColorId () {
-    return ColorId.filling;
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.filling; // XGram: the Expressive sheet color (surfaceContainerLow)
   }
 
   @Override
@@ -679,7 +679,8 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
     @Override
     protected int getBackgroundColorId () {
-      return ColorId.filling;
+      // XGram: Material 3 Expressive: surfaceContainerLow, the color of every modal sheet
+      return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.filling;
     }
   }
 

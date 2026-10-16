@@ -266,6 +266,10 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
   /** The horizontal inset of the segmented list this row is a tile of (the row is measured at the list's width). */
   public void setXgramListInset (int insetPx) {
     this.xgramListInset = insetPx;
+    if (fileProgress != null) {
+      // XGram: the track disc and glyph cut-outs take the tile's surfaceBright, not the window surface
+      fileProgress.setXgramSurfaceRole(insetPx > 0 ? com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT : -1);
+    }
   }
 
   private boolean xgramM3 () {

@@ -43,7 +43,8 @@ import java.util.List;
  * tiles' inset);</li>
  * <li>outer corners full, inner corners 8dp (CornerSmall), 4dp while pressed (CornerExtraSmall); a checked toggle
  * (Mute while muted) becomes fully round (checked shape = CircleShape);</li>
- * <li>tonal colors: secondaryContainer / onSecondaryContainer, checked secondary / onSecondary;</li>
+ * <li>tonal colors: secondaryContainer / onSecondaryContainer, checked too (only the shape morphs: a secondary
+ * block is near white in the dark scheme);</li>
  * <li>a 24dp icon above a labelLarge label, the pressed state layer is the content color at 10%;</li>
  * <li>shape springs: fast spatial (stiffness 800, damping 0.6), colors and the state layer: fast effects.</li>
  * </ul>
@@ -301,8 +302,8 @@ public class XgramW2ProfileActions extends View {
     layoutButtons();
     final int container = XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER);
     final int content = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
-    final int checkedContainer = XgramExpressive.color(XgramExpressive.SECONDARY);
-    final int checkedContent = XgramExpressive.color(XgramExpressive.ON_SECONDARY);
+    final int checkedContainer = XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER); // XGram: a checked toggle keeps the tonal colors
+    final int checkedContent = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
     final int iconSize = Screen.dp(ICON);
     final float labelHeight = fontMetrics.descent - fontMetrics.ascent;
     final float blockHeight = iconSize + Screen.dp(ICON_LABEL_GAP) + labelHeight;

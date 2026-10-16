@@ -102,6 +102,12 @@ public class MediaBottomContactsController extends MediaBottomBaseController<Voi
   private SimpleUsersAdapter adapter;
   private ArrayList<TGUser> users;
 
+  @Override
+  protected int xgramErrorIcon () {
+    // XGram: no contacts at all: people; a search that found nothing keeps the search icon
+    return users == null ? R.drawable.baseline_group_96 : super.xgramErrorIcon();
+  }
+
   protected void displayContacts (final ArrayList<TGUser> users) {
     if (users.isEmpty()) {
       showError(this.users == null ? R.string.NoContacts : R.string.NothingFound, 0, null, this.users == null);

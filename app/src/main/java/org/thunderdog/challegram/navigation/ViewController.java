@@ -2836,7 +2836,8 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         com.fahadali.xgram.appearance.XgramExpressive.applyText(button, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
         final int color = com.fahadali.xgram.appearance.XgramExpressive.color(isNegative ? com.fahadali.xgram.appearance.XgramExpressive.ERROR : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
         button.setTextColor(color);
-        com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(button, color);
+        // XGram: the state layer follows the role through day / night switches
+        com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackgroundRole(button, isNegative ? com.fahadali.xgram.appearance.XgramExpressive.ERROR : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
         button.setGravity(Gravity.CENTER);
         button.setSingleLine(true);
         button.setMinWidth(Screen.dp(48f));

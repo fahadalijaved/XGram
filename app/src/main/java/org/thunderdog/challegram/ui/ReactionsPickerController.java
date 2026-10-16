@@ -419,8 +419,8 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
   @Override
   protected int getHeaderColorId () {
     // XGram: Material 3 Expressive: the small top app bar of the expanded sheet is in the sheet color (the message
-    // menu sheet's ColorId.background), not a white Telegram X bar over the grey grid
-    return xgramM3() ? ColorId.background : ColorId.filling;
+    // menu sheet's ColorId.drawer, surfaceContainerLow), not a white Telegram X bar over the grey grid
+    return xgramM3() ? ColorId.drawer : ColorId.filling;
   }
 
   @Override
@@ -726,7 +726,7 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
       protected void dispatchDraw (Canvas canvas) {
         if (xgramM3()) {
           // XGram: the status bar strip of the full-screen sheet is the sheet (and app bar) color
-          canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.getColor(ColorId.background)));
+          canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.getColor(ColorId.drawer)));
           return;
         }
         canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(),

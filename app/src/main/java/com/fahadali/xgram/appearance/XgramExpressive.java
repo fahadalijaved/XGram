@@ -418,6 +418,7 @@ public final class XgramExpressive {
         } catch (Throwable t) {
           value = themeRole(role, dark);
         }
+        value = XgramAmoled.override(role, value, dark); // XGram: Pure black (AMOLED) surfaces in the dark scheme
         systemCache[scheme][role] = value;
         systemValid[scheme] |= bit;
       }

@@ -583,7 +583,7 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
    * XGram M3E: the press and selection tile's horizontal inset (XgramM3Profile.drawSelectionTile), so the dragged
    * tile lines up with it.
    */
-  private static final float XGRAM_TILE_INSET_X = 8f, XGRAM_TILE_INSET_Y = 2f;
+  private static final float XGRAM_TILE_INSET_X = 4f, XGRAM_TILE_INSET_Y = 2f;
   private static @Nullable android.view.ViewOutlineProvider xgramDragOutline;
 
   private static android.view.ViewOutlineProvider xgramDragOutline () {

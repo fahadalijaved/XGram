@@ -236,31 +236,7 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
       if (text != null && !sizeChanged && !needBigEmoji) {
         text.set(maxWidth, this.text);
       } else {
-        Text.Builder b = new Text.Builder(this.text, maxWidth, textStyleProvider, colorTheme)
-          .maxLineCount(maxLines)
-          .entities(entities, this)
-          .viewProvider(viewProvider)
-          .highlight(highlightText)
-          .lineWidthProvider(lineWidthProvider)
-          .textFlags(BitwiseUtils.setFlag(textFlags, Text.FLAG_BIG_EMOJI, false));
-        text = b.build();
-        if (needBigEmoji) {
-          // TODO move inside Text class
-          int emojiCount = text.getEmojiOnlyCount();
-          if (emojiCount >= 1 && emojiCount <= SCALABLE_EMOJI_COUNT) {
-            float textSizeDp = textStyleProvider.getTextSizeInDp();
-            float maxEmojiSize = Math.min(Settings.CHAT_FONT_SIZE_DEFAULT + 4f, textSizeDp) + 12f;
-            maxEmojiSize = textSizeDp + (maxEmojiSize - textSizeDp) * com.fahadali.xgram.XgramSettings.instance().emojiScale() / 100f; // XGram: Chat look
-            if (maxEmojiSize > textSizeDp) {
-              float desiredEmojiSize = maxEmojiSize - (maxEmojiSize - textSizeDp) / SCALABLE_EMOJI_COUNT * (emojiCount - 1);
-              if (desiredEmojiSize > textSizeDp) {
-                TextStyleProvider newProvider = new TextStyleProvider(textStyleProvider.getTextPaintStorage()).setTextSize(desiredEmojiSize).setAllowSp(true);
-                text.performDestroy();
-                text = b.textFlags(textFlags).styleProvider(newProvider).build();
-              }
-            }
-          }
-        }
+        text = buildText(maxWidth, this, viewProvider, needBigEmoji);
         texts[index] = text;
         if (oldText != null) {
           oldText.performDestroy();
@@ -277,6 +253,52 @@ public class TextWrapper implements ListAnimator.Measurable, Destroyable, Text.T
       }
     }
     return texts[index];
+  }
+
+  /** A new layout of this text at {@code maxWidth}, big emoji resized as getInternal lays it out. */
+  private Text buildText (int maxWidth, Text.TextMediaListener listener, @Nullable ViewProvider viewProvider, boolean needBigEmoji) {
+    Text.Builder b = new Text.Builder(this.text, maxWidth, textStyleProvider, colorTheme)
+      .maxLineCount(maxLines)
+      .entities(entities, listener)
+      .viewProvider(viewProvider)
+      .highlight(highlightText)
+      .lineWidthProvider(lineWidthProvider)
+      .textFlags(BitwiseUtils.setFlag(textFlags, Text.FLAG_BIG_EMOJI, false));
+    Text text = b.build();
+    if (needBigEmoji) {
+      // TODO move inside Text class
+      int emojiCount = text.getEmojiOnlyCount();
+      if (emojiCount >= 1 && emojiCount <= SCALABLE_EMOJI_COUNT) {
+        float textSizeDp = textStyleProvider.getTextSizeInDp();
+        float maxEmojiSize = Math.min(Settings.CHAT_FONT_SIZE_DEFAULT + 4f, textSizeDp) + 12f;
+        maxEmojiSize = textSizeDp + (maxEmojiSize - textSizeDp) * com.fahadali.xgram.XgramSettings.instance().emojiScale() / 100f; // XGram: Chat look
+        if (maxEmojiSize > textSizeDp) {
+          float desiredEmojiSize = maxEmojiSize - (maxEmojiSize - textSizeDp) / SCALABLE_EMOJI_COUNT * (emojiCount - 1);
+          if (desiredEmojiSize > textSizeDp) {
+            TextStyleProvider newProvider = new TextStyleProvider(textStyleProvider.getTextPaintStorage()).setTextSize(desiredEmojiSize).setAllowSp(true);
+            text.performDestroy();
+            text = b.textFlags(textFlags).styleProvider(newProvider).build();
+          }
+        }
+      }
+    }
+    return text;
+  }
+
+  /**
+   * XGram: the width this text takes laid out at {@code maxWidth}, measured on a throwaway layout: the wrapper's own
+   * layouts (and their media) are left as they are, so measuring at another width (the caption that widens its media)
+   * never re-lays out the text on screen.
+   */
+  public int measureWidth (int maxWidth) {
+    if (maxWidth <= 0) {
+      return 0;
+    }
+    final boolean needBigEmoji = BitwiseUtils.hasFlag(textFlags, Text.FLAG_BIG_EMOJI) && Settings.instance().useBigEmoji();
+    final Text text = buildText(maxWidth, (t, m) -> { }, null, needBigEmoji);
+    final int width = text.getWidth();
+    text.performDestroy();
+    return width;
   }
 
   private static final int SCALABLE_EMOJI_COUNT = 3;

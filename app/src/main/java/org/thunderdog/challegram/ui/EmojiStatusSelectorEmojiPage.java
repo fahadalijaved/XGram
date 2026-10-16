@@ -500,7 +500,13 @@ public class EmojiStatusSelectorEmojiPage extends BottomSheetViewController.Bott
 
   @Override
   protected int getHeaderColorId () {
-    return ColorId.filling;
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.filling; // XGram: the Expressive sheet color (surfaceContainerLow)
+  }
+
+  @Override
+  protected int getRecyclerBackground () {
+    // XGram: Material 3 Expressive: the page is the sheet's color (BottomSheetViewController.getBackgroundColorId)
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : super.getRecyclerBackground();
   }
 
   @Override

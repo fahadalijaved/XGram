@@ -542,13 +542,12 @@ public class TGMessageMedia extends TGMessage {
     if (captionMeasuredWrapper != wrapper || captionMeasuredMaxWidth != maxCaptionWidth || captionMeasuredTextSize != textSize || captionMeasuredEmojiScale != emojiScale) {
       // Measured once per caption, width, text size and emoji scale: buildContent also runs on every frame of the
       // inline comment button's animation, and the caption's final layout (at the media's width) stays cached in the
-      // wrapper
-      wrapper.prepare(maxCaptionWidth);
+      // wrapper (measured on a throwaway layout, so the wrapper's own one is not laid out again at this width)
       captionMeasuredWrapper = wrapper;
       captionMeasuredMaxWidth = maxCaptionWidth;
       captionMeasuredTextSize = textSize;
       captionMeasuredEmojiScale = emojiScale;
-      captionMeasuredWidth = wrapper.getWidth();
+      captionMeasuredWidth = wrapper.measureWidth(maxCaptionWidth);
     }
     // + 1: Text reports a line's width rounded down (an int sum of float word widths), so laid out again at exactly
     // that width its last word no longer fits and wraps alone; one more pixel fits every line that fitted here and

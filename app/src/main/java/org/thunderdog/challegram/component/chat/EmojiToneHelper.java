@@ -421,7 +421,7 @@ public class EmojiToneHelper implements FactorAnimator.Target {
       // XGram: an M3E text button: labelLarge in sentence case, primary, a full-corner primary state layer at 10%
       Views.setMediumText(sendView, Lang.getString(R.string.ApplyToAll));
       com.fahadali.xgram.appearance.XgramExpressive.applyText(sendView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
-      com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(sendView, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+      com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackgroundRole(sendView, com.fahadali.xgram.appearance.XgramExpressive.PRIMARY); // follows theme switches
     }
     sendView.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
     sendView.setGravity(Gravity.CENTER);

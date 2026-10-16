@@ -108,6 +108,11 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
   }
 
   @Override
+  protected float xgramSheetHandleAlpha () {
+    return 0f; // XGram: the page starts at the sheet's top and covers where the handle would be
+  }
+
+  @Override
   protected int getContentOffset () {
     return getTargetHeight()
       - getHeaderHeight()
@@ -130,6 +135,12 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
     private static final float PREVIEW_HEADER_HEIGHT = 56f;
 
     private SingleViewAdapter<View> adapter;
+
+    @Override
+    protected int getRecyclerBackground () {
+      // XGram: Material 3 Expressive: the page is the sheet's color (BottomSheetViewController.getBackgroundColorId)
+      return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : super.getRecyclerBackground();
+    }
     private ViewPagerTopView topView;
     private FrameLayoutFix previewView;
     private final BottomSheetViewController<?> parent;
@@ -251,7 +262,7 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
     private View buildContentView () {
       LinearLayout contentView = new LinearLayout(context);
       contentView.setOrientation(LinearLayout.VERTICAL);
-      ViewSupport.setThemedBackground(contentView, ColorId.filling, this);
+      ViewSupport.setThemedBackground(contentView, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.filling, this); // XGram: the Expressive sheet color
 
       int contentVerticalPadding = Screen.dp(18f);
       int contentHorizontalPadding = Screen.dp(16f);

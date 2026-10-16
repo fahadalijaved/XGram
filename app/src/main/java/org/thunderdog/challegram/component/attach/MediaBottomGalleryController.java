@@ -238,6 +238,7 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
       cameraBadgeView.init(R.drawable.deproko_baseline_camera_26, 48f, 4f, ColorId.circleButtonChat, ColorId.circleButtonChatIcon);
       cameraBadgeView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(CircleCounterBadgeView.BUTTON_WRAPPER_WIDTH), Screen.dp(74f), Gravity.BOTTOM | Gravity.RIGHT, 0, 0, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 16 : 12), Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 16 : 12) + mediaLayout.getCameraButtonOffset())); // XGram M3E: the FAB's 16dp margins
       contentView.addView(cameraBadgeView);
+      cameraBadgeView.xgramMakeShadowRoom(); // XGram M3E: its 16dp margins move inside it, so its bounds no longer cut the FAB's shadow
     }
 
     return contentView;
@@ -257,7 +258,7 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
   protected void onUpdateBottomBarFactor (float bottomBarFactor, float counterFactor, float y) {
     float factor = Math.min(bottomBarFactor, 1f - counterFactor);
     if (cameraBadgeView != null) {
-      cameraBadgeView.setAlpha(factor);
+      cameraBadgeView.xgramSetFadeAlpha(factor); // XGram M3E: the FAB fades itself, so its shadow is not cut at this view's bounds
       cameraBadgeView.setTranslationY(y);
     }
   }
@@ -820,7 +821,7 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
     if (cameraBadgeView != null) {
-      Views.setBottomMargin(cameraBadgeView, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 16 : 12) + mediaLayout.getCameraButtonOffset() + extraBottomInsetWithoutIme); // XGram M3E: the FAB's 16dp margins
+      cameraBadgeView.xgramSetBottomMargin(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 16 : 12) + mediaLayout.getCameraButtonOffset() + extraBottomInsetWithoutIme); // XGram M3E: the FAB's 16dp margins
     }
   }
 

@@ -1343,10 +1343,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   /** The folder tab's filter menu is open (press and drag on a tab). */
   private boolean xgramFolderMenu;
 
-  /** XGram M3E: how far the FAB goes up for a floating snackbar: 8dp above it (it floats 12dp above the same inset). */
+  /** XGram M3E: how far the FAB goes up for a floating snackbar: 8dp above it (it floats BOTTOM_GAP_DP above the same inset). */
   private float xgramFabLiftFor (SnackBar v) {
     int fabMargin = composeWrap != null ? composeWrap.xgramFabMarginPx() : Screen.dp(16f);
-    return v.getMeasuredHeight() + Screen.dp(12f + 8f) - fabMargin;
+    return v.getMeasuredHeight() + Screen.dp(com.fahadali.xgram.appearance.XgramSnackbar.BOTTOM_GAP_DP + 8f) - fabMargin;
   }
 
   /** The connection snackbar swiped away: it goes at once, the FAB springs back down instead of jumping. */

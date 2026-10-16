@@ -71,7 +71,8 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
     RippleSupport.setTransparentSelector(this);
 
     avatarReceiver = new AvatarReceiver(this);
-    counter = new Counter.Builder().callback(this).outlineColor(ColorId.filling).build();
+    // XGram: Material 3 Expressive: the badge ring is the sheet color (surfaceContainerLow), the share sheet's cells
+    counter = new Counter.Builder().callback(this).outlineColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.filling).build();
     identityAvatarReceiver = new AvatarReceiver(this);
   }
 
@@ -336,7 +337,7 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
     if (checkFactor > 0f) {
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram: Material 3 Expressive selection: a circle checkbox at the avatar's bottom-end, ringed in the sheet color
-        com.fahadali.xgram.appearance.XgramM3Sheets.drawAvatarCheck(c, avatarReceiver, checkFactor, Theme.fillingColor());
+        com.fahadali.xgram.appearance.XgramM3Sheets.drawAvatarCheck(c, avatarReceiver, checkFactor, com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor());
       } else
       DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, checkFactor);
     }
