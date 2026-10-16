@@ -108,8 +108,13 @@ public class TdlibStatusManager implements CleanupStartupDelegate {
         this.isVisible = isVisible;
         if (animated) {
           if (visibleAnimator == null) {
-            visibleAnimator = new BoolAnimator(0, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, ANIMATION_DURATION), !isVisible); // XGram: typing status fades on EFFECTS_DEFAULT
+            visibleAnimator = new BoolAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, ANIMATION_DURATION, !isVisible);
           }
+          // XGram: the typing status fades on EFFECTS_DEFAULT, clamped so it never leaves 0..1 and ends on the exact
+          // value. Picked per animation, not when the animator is made: switching Expressive design applies at once,
+          // and Telegram X's own curve and duration run with it off.
+          visibleAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR));
+          visibleAnimator.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, ANIMATION_DURATION));
           visibleAnimator.setValue(isVisible, true);
         } else {
           if (visibleAnimator != null) {
@@ -126,7 +131,13 @@ public class TdlibStatusManager implements CleanupStartupDelegate {
     }
 
     @Override
-    public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) { }
+    public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: settle on the exact end value (0 or 1), so the chat list row never keeps a partly faded preview under
+        // the status, and the typing dots start looping (needsLooping wants exactly 1)
+        setVisibilityFactor(finalFactor <= 0f ? 0f : finalFactor >= 1f ? 1f : finalFactor);
+      }
+    }
 
     private String effectiveText;
     private float visibilityFactor;

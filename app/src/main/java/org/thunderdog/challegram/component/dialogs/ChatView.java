@@ -816,8 +816,21 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     TdlibStatusManager.ChatState state = status != null ? status.drawingState() : null;
     float statusVisibility = state != null ? state.visibility() : 0f;
     float textAlpha = 1f - statusVisibility;
+    float statusAlpha = statusVisibility;
+    float statusShift = 1f;
+    if (xgramM3) {
+      // XGram M3E: the typing status replaces the lines under it with a fade through (M3 content swap): the topic /
+      // sender and preview lines fade out over the first half, the status fades in over the second, so the two are
+      // never drawn over each other, and each ends at exactly 0 or 1. Reduce motion: fades only, no slide.
+      statusVisibility = statusVisibility <= 0f ? 0f : statusVisibility >= 1f ? 1f : statusVisibility;
+      textAlpha = statusVisibility >= .5f ? 0f : 1f - statusVisibility * 2f;
+      statusAlpha = statusVisibility <= .5f ? 0f : statusVisibility * 2f - 1f;
+      if (com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+        statusShift = 0f;
+      }
+    }
     if (textAlpha > 0f) {
-      final int dy = (int) (Screen.dp(14f) * statusVisibility);
+      final int dy = (int) (Screen.dp(14f) * statusVisibility * statusShift);
       final boolean needRestore = dy != 0;
       final int saveCount;
       if (needRestore) {
@@ -866,16 +879,16 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
         Views.restore(c, saveCount);
       }
     }
-    if (statusVisibility > 0f) {
+    if (statusAlpha > 0f) {
       Text text = status.drawingText();
       if (text != null) {
-        float top = getTextTop(chatListMode) - Screen.dp(14f) * textAlpha;
+        float top = getTextTop(chatListMode) - Screen.dp(14f) * (xgramM3 ? (1f - statusVisibility) * statusShift : textAlpha);
         if (chatListMode != Settings.CHAT_MODE_2LINE && text.getLineCount() == 1) {
           top += getSingleLineOffset(chatListMode);
         }
-        DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - getLeftPadding(chatListMode) : getLeftPadding(chatListMode), top + text.getLineHeight() / 2f, ColorUtils.alphaColor(statusVisibility, text.getTextColor()), this, statusVisibility == 1f ? ColorId.textLight : ColorId.NONE);
+        DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - getLeftPadding(chatListMode) : getLeftPadding(chatListMode), top + text.getLineHeight() / 2f, ColorUtils.alphaColor(statusAlpha, text.getTextColor()), this, statusAlpha == 1f ? ColorId.textLight : ColorId.NONE);
         int x = getLeftPadding(chatListMode);
-        text.draw(c, x, (int) top, null, statusVisibility);
+        text.draw(c, x, (int) top, null, statusAlpha);
       }
     }
 
