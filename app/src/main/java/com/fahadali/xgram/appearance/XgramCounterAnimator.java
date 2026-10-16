@@ -52,9 +52,10 @@ public class XgramCounterAnimator<T extends CounterAnimator.TextDrawable> extend
   public XgramCounterAnimator (Callback<T> callback) {
     super(callback);
     this.callback = callback;
+    // The cached spring (one per token, not one per counter: counters are made for every chat row and message)
     this.animator = new ListAnimator<>(listAnimator -> callback.onItemsChanged(this),
-      XgramMotion.interp(XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR),
-      XgramMotion.duration(XgramExpressive.SPATIAL_FAST, 180L));
+      XgramAppMotion.interp(XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR),
+      XgramAppMotion.duration(XgramExpressive.SPATIAL_FAST, 180L));
   }
 
   @Override

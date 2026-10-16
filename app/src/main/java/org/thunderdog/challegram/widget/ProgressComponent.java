@@ -102,6 +102,11 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
   public void performDestroy () {
     context.removeSimpleStateListener(this);
     setUiResumed(false);
+    if (XgramExpressive.isEnabled() && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+      // XGram: a destroyed component leaves no frame callback behind
+      android.view.Choreographer.getInstance().removeFrameCallback(xgramFrame);
+      scheduled = false;
+    }
   }
 
   public void setViewProvider (@Nullable ViewProvider viewProvider) {

@@ -45,7 +45,9 @@ public final class XgramAppMotion {
     int t = XgramMotion.token(token);
     Interpolator i = SPRINGS[t];
     if (i == null) {
-      i = XgramMotion.interpolator(t);
+      // Built over the settle time itself, not XgramMotion.duration (0 while animations are off), so a curve cached
+      // with animations off does not stay a 1 ms jump after they are back on
+      i = XgramMotion.interpolator(XgramExpressive.stiffness(t), XgramExpressive.damping(t), 0f, springDuration(t));
       SPRINGS[t] = i;
     }
     return i;
@@ -63,11 +65,16 @@ public final class XgramAppMotion {
     return i;
   }
 
+  /**
+   * Milliseconds until the spring of {@code token} settles. Never 0: the animators scale it by the system animator
+   * duration themselves (as they do Telegram X's fixed durations), and a 0 here would leave a ListAnimator built
+   * while animations are off without an animator for good.
+   */
   public static long springDuration (int token) {
     int t = XgramMotion.token(token);
     long d = DURATIONS[t];
     if (d == 0) {
-      d = XgramMotion.duration(t);
+      d = Math.max(1L, (long) Math.ceil(XgramMotion.settleSeconds(XgramExpressive.stiffness(t), XgramExpressive.damping(t), 0f, XgramMotion.SETTLE_EPS) * 1000f));
       DURATIONS[t] = d;
     }
     return d;

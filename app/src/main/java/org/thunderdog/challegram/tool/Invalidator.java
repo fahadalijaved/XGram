@@ -178,9 +178,13 @@ public class Invalidator implements Handler.Callback, ReferenceList.FullnessList
     if (this.isLooping != isLooping) {
       this.isLooping = isLooping;
       if (XgramExpressive.isEnabled()) {
+        // A handler loop started before Expressive design was turned on must not keep running next to the vsync one
+        handler.removeMessages(0);
         xgramSync();
         return;
       }
+      // ...and a vsync loop started with it on stops at its next frame
+      xgramVsync = false;
       if (isLooping) {
         handler.sendMessageDelayed(Message.obtain(handler, 0), getFrameDelay());
       } else {

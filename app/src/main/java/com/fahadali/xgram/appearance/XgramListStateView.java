@@ -50,6 +50,7 @@ public final class XgramListStateView extends View {
   private @Nullable TextPaint titlePaint, textPaint;
 
   private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG | Paint.FILTER_BITMAP_FLAG);
   private final Path shape = new Path();
   private final Matrix matrix = new Matrix();
 
@@ -201,7 +202,14 @@ public final class XgramListStateView extends View {
       float scale = Screen.dp(48f) / (float) icon.getMinimumWidth();
       c.save();
       c.scale(scale, scale, cx, cy);
-      Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER), burstAlpha)));
+      // The fade goes through the paint alpha over the opaque color's cached filter: a filter per alpha would be a new
+      // PorterDuffColorFilter every entrance frame, churning the shared 20-entry cache in Paints
+      final android.graphics.ColorFilter iconFilter = Paints.getColorFilter(XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER));
+      if (iconPaint.getColorFilter() != iconFilter) {
+        iconPaint.setColorFilter(iconFilter);
+      }
+      iconPaint.setAlpha((int) (255f * XgramMotion.clamp01(burstAlpha)));
+      Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, iconPaint);
       c.restore();
     }
     if (scaled) {
