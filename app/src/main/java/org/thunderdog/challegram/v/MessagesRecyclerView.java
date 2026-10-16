@@ -81,6 +81,7 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
   private @Nullable CustomItemAnimator xgramArmed;
   private boolean xgramArmWaiting;
+  private @Nullable android.view.ViewTreeObserver xgramArmObserver; // the one xgramArmCheck is registered on
   private final android.view.ViewTreeObserver.OnPreDrawListener xgramArmCheck = this::xgramCheckArmed;
   private final Runnable xgramDisarmNow = this::xgramDisarmIfIdle;
   // Never swapped from inside the animator's own callback: that can come from ItemAnimator.endAnimation in the middle
@@ -121,6 +122,7 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
         @Override
         public void onAddFinished (RecyclerView.ViewHolder item) {
+          super.onAddFinished(item); // a no-op today: ItemSprings resets alpha and scale before it dispatches
           if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
             item.itemView.resetPivot();
           }
@@ -133,7 +135,18 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     }
     if (!xgramArmWaiting) {
       xgramArmWaiting = true;
-      getViewTreeObserver().addOnPreDrawListener(xgramArmCheck);
+      xgramArmObserver = getViewTreeObserver();
+      xgramArmObserver.addOnPreDrawListener(xgramArmCheck);
+    }
+  }
+
+  /** Takes xgramArmCheck off the observer it was added to (not whatever getViewTreeObserver returns by then). */
+  private void xgramRemoveArmCheck () {
+    android.view.ViewTreeObserver observer = xgramArmObserver;
+    xgramArmObserver = null;
+    xgramArmWaiting = false;
+    if (observer != null && observer.isAlive()) {
+      observer.removeOnPreDrawListener(xgramArmCheck); // xgramArmOnce only arms while attached: the window's observer
     }
   }
 
@@ -141,8 +154,7 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     if (isLayoutRequested() || hasPendingAdapterUpdates()) {
       return true; // the pass that records the animations has not run yet
     }
-    getViewTreeObserver().removeOnPreDrawListener(xgramArmCheck);
-    xgramArmWaiting = false;
+    xgramRemoveArmCheck();
     if (xgramArmed != null && getItemAnimator() == xgramArmed) {
       xgramArmed.isRunning(xgramDisarm);
     }
@@ -320,8 +332,7 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     super.onDetachedFromWindow(); // ends running item animations and stops the scroll first
     // XGram: nothing armed, pending or springing outlives the window (callbacks and the pre-draw listener hold the list)
     if (xgramArmWaiting) {
-      xgramArmWaiting = false;
-      getViewTreeObserver().removeOnPreDrawListener(xgramArmCheck);
+      xgramRemoveArmCheck();
     }
     removeCallbacks(xgramDisarmNow);
     if (xgramArmed != null && getItemAnimator() == xgramArmed) {
