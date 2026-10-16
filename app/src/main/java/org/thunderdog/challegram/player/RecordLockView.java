@@ -132,8 +132,94 @@ public class RecordLockView extends View {
 
   private static final RectF tmpRect = new RectF();
 
+  // XGram: Material 3 Expressive lock: a full-corner secondaryContainer pill whose lock, stop and resume glyphs are
+  // onSecondaryContainer; the stop square has extra-small (4dp) corners. Same geometry and animation as Telegram X.
+  private @androidx.annotation.Nullable Paint xgramIconPaint;
+  private int xgramIconColor;
+
+  private Paint xgramIconPaint (int color, float alpha) {
+    if (xgramIconPaint == null || xgramIconColor != color) {
+      xgramIconColor = color;
+      xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
+    }
+    xgramIconPaint.setAlpha((int) (255f * MathUtils.clamp(alpha) * (((color >>> 24) & 0xff) / 255f)));
+    return xgramIconPaint;
+  }
+
+  private void xgramDraw (Canvas c) {
+    final int pillColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    final int glyphColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+    final float stopCorner = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS);
+
+    RectF rectF = Paints.getRectF();
+    final int viewWidth = getMeasuredWidth();
+    final int viewHeight = getMeasuredHeight();
+    rectF.set(0, 0, viewWidth, viewHeight - Screen.dp(BUTTON_EXPANDED) * collapseFactor);
+    float radius = Math.min(rectF.width(), rectF.height()) / 2f;
+    c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(pillColor));
+
+    int bottomCy = (int) (rectF.bottom - Screen.dp(BUTTON_SIZE) / 2);
+
+    int cx = viewWidth / 2;
+    int cy = Screen.dp(BUTTON_SIZE) / 2;
+
+    int totalDy = (int) (Screen.dp(2f) * collapseFactor * (1f - sendFactor));
+
+    int width = (int) (Screen.dp(6f) + Screen.dp(2f) * (1f - sendFactor));
+    int height = (int) (Screen.dp(6f) + Screen.dp(1f) * (mode == MODE_DEFAULT ? (1f - sendFactor) : 1f));
+    int dy = (int) (Screen.dp(BUTTON_SIZE) / 3f * (1f - collapseFactor));
+    rectF.set(cx - width, cy - height + dy + totalDy, cx + width, cy + height + dy + totalDy);
+
+    if (mode == MODE_DEFAULT) {
+      // the lock body, which becomes the stop square
+      final float corner = Screen.dp(2f) + (stopCorner - Screen.dp(2f)) * sendFactor;
+      c.drawRoundRect(rectF, corner, corner, Paints.fillingPaint(glyphColor));
+    } else {
+      final float pauseAlpha = 1f - editFactor;
+      final float alpha = editFactor;
+      final float r = Screen.dp(2) * (1f - sendFactor) + Screen.dp(1f) * sendFactor;
+
+      if (editFactor < 1f) {
+        c.drawRoundRect(rectF, r, r, Paints.fillingPaint(ColorUtils.alphaColor(pauseAlpha, glyphColor)));
+        final float w = Screen.dp(2);
+        final float h = MathUtils.fromTo(Screen.dp(2), rectF.height() / 2f + 1, sendFactor);
+        tmpRect.set(cx - w, rectF.centerY() - h, cx + w, rectF.centerY() + h);
+        c.drawRoundRect(tmpRect, r, r, Paints.fillingPaint(ColorUtils.alphaColor(pauseAlpha, pillColor)));
+      }
+
+      if (editFactor > 0f) {
+        Drawables.drawCentered(c, mode == MODE_VIDEO ? drawableRound : drawableVoice, rectF.centerX(), rectF.centerY(), xgramIconPaint(glyphColor, alpha));
+      }
+    }
+
+    if (sendFactor < 1f) {
+      if (mode == MODE_DEFAULT) {
+        c.drawCircle(cx, rectF.centerY(), Screen.dp(2f), Paints.fillingPaint(ColorUtils.alphaColor(1f - sendFactor, pillColor)));
+      }
+      dy /= 2;
+      rectF.offset(0, -dy);
+      Paint paint = Paints.strokeBigPaint(ColorUtils.alphaColor(1f - sendFactor, glyphColor));
+      rectF.set(cx - Screen.dp(5f), rectF.top - Screen.dp(5f), cx + Screen.dp(5f), rectF.top + Screen.dp(5f));
+      c.drawArc(rectF, 180f, 180f, false, paint);
+      if (dy > 0) {
+        int x = (int) rectF.left;
+        int y = (int) rectF.centerY();
+        c.drawLine(x, y, x, y + dy, paint);
+        c.drawLine(rectF.right, y, rectF.right, y + Math.min(Screen.dp(2f), dy), paint);
+      }
+    }
+
+    if (collapseFactor < 1f) {
+      DrawAlgorithms.drawDirection(c, cx, bottomCy, ColorUtils.alphaColor(1f - (collapseFactor >= .5f ? 1f : collapseFactor / .5f), glyphColor), Gravity.TOP);
+    }
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c);
+      return;
+    }
     int fillingColor = Theme.fillingColor();
 
     RectF rectF = Paints.getRectF();

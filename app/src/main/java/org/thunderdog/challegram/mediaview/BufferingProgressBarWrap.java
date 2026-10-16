@@ -15,10 +15,12 @@ package org.thunderdog.challegram.mediaview;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.RectF;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
@@ -41,11 +43,22 @@ public class BufferingProgressBarWrap extends View implements Destroyable {
 
   private Runnable progressDelayRunnable;
 
+  // XGram: Material 3 Expressive contained loading indicator: a 48dp primaryContainer disk behind a 38dp
+  // onPrimaryContainer indicator, both from the dark scheme (it sits on media); fixed when the view is built
+  private final boolean xgramContained;
+  private @Nullable Paint xgramContainerPaint;
+
   public BufferingProgressBarWrap (@NonNull Context context) {
     super(context);
     setWillNotDraw(false);
-    progressComponent = new ProgressComponent(UI.getContext(getContext()), Screen.dp(18f));
-    progressComponent.forceColor(Color.WHITE);
+    xgramContained = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramContained) {
+      progressComponent = new ProgressComponent(UI.getContext(getContext()), Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.LOADING_ACTIVE_DP / 2f));
+      progressComponent.forceColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
+    } else {
+      progressComponent = new ProgressComponent(UI.getContext(getContext()), Screen.dp(18f));
+      progressComponent.forceColor(Color.WHITE);
+    }
     progressComponent.setUseStupidInvalidate();
     progressComponent.setUseLargerPaint(Screen.dp(4f));
     progressComponent.setViewProvider(new SingleViewProvider(this));
@@ -105,6 +118,15 @@ public class BufferingProgressBarWrap extends View implements Destroyable {
   @Override
   protected void onDraw (Canvas canvas) {
     super.onDraw(canvas);
+
+    if (xgramContained) {
+      if (xgramContainerPaint == null) {
+        xgramContainerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      }
+      com.fahadali.xgram.appearance.XgramM3MediaChrome.drawLoadingContainer(canvas, getMeasuredWidth() / 2f, getMeasuredHeight() / 2f, progressVisible.getFloatValue(), xgramContainerPaint);
+      progressComponent.draw(canvas);
+      return;
+    }
 
     final int color = 0x4c000000;
     final int bgColor = ColorUtils.color((int) ((float) Color.alpha(color) * progressVisible.getFloatValue()), color);

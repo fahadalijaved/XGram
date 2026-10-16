@@ -48,7 +48,8 @@ class PlayPauseButton extends View implements FactorAnimator.Target {
   }
 
   // XGram: Material 3 Expressive play/pause: a 40dp primaryContainer button whose shape springs from a circle
-  // (paused) to a 12dp rounded square (playing), onPrimaryContainer icon
+  // (paused) to a 12dp rounded square (playing), onPrimaryContainer icon. It sits on media, so both roles come from the
+  // dark scheme whatever the app theme.
   private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramShape;
   private final android.graphics.RectF xgramRect = new android.graphics.RectF();
 
@@ -70,8 +71,8 @@ class PlayPauseButton extends View implements FactorAnimator.Target {
       float shape = xgramShapeFactor();
       float radius = half + (Screen.dp(12f) - half) * Math.max(0f, Math.min(1.2f, shape));
       xgramRect.set(cx - half, cy - half, cx + half, cy + half);
-      c.drawRoundRect(xgramRect, radius, radius, org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER)));
-      DrawAlgorithms.drawPlayPause(c, (int) cx, (int) cy, Screen.dp(9f), playPausePath, playPauseDrawFactor, playPauseDrawFactor = playPauseAnimator.getFloatValue(), 1f, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
+      c.drawRoundRect(xgramRect, radius, radius, org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER)));
+      DrawAlgorithms.drawPlayPause(c, (int) cx, (int) cy, Screen.dp(9f), playPausePath, playPauseDrawFactor, playPauseDrawFactor = playPauseAnimator.getFloatValue(), 1f, com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
       return;
     }
     DrawAlgorithms.drawPlayPause(c, getMeasuredWidth() / 2, getMeasuredHeight() / 2, Screen.dp(12f), playPausePath, playPauseDrawFactor, playPauseDrawFactor = playPauseAnimator.getFloatValue(), 1f, 0xffffffff);

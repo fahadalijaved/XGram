@@ -32,6 +32,16 @@ public class RecordBackgroundView extends View {
 
   private float factor = -1f;
 
+  @Override
+  public void setBackgroundColor (int color) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive: the video note backdrop is the surfaceContainer role, at the given colour's opacity
+      super.setBackgroundColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER), (float) ((color >>> 24) & 0xff) / 255f));
+      return;
+    }
+    super.setBackgroundColor(color);
+  }
+
   public void setFactor (float factor) {
     if (this.factor != factor) {
       this.factor = factor;

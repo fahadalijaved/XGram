@@ -357,6 +357,8 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     nextButton = newButton(R.id.btn_next, R.drawable.round_skip_next_36, false);
     prevButton = newButton(R.id.btn_previous, R.drawable.round_skip_previous_36, false);
     repeatButton = newButton(R.id.btn_repeat, getRepeatIcon(), isRepeatActive());
+    xgramInitToggle(shuffleButton, isShuffleActive());
+    xgramInitToggle(repeatButton, isRepeatActive());
     playPauseButton = new PlayPauseButton(context);
     playPauseButton.setId(R.id.btn_play);
     playPauseButton.setOnClickListener(this);
@@ -810,7 +812,42 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     onTrackListSizeChanged();
   }
 
+  // XGram: Material 3 Expressive toggle icon buttons for shuffle and repeat: selected = a 40dp secondaryContainer
+  // container with medium (12dp) corners and an onSecondaryContainer icon; unselected = no container and an
+  // onSurfaceVariant icon. One MorphDrawable each; the corners and the press spring on SPATIAL_FAST.
+
+  private void xgramInitToggle (ImageView imageView, boolean isActive) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(imageView, 0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, com.fahadali.xgram.appearance.XgramExpressive.CORNER_S);
+    morph.setSize(com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX, com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX, android.view.Gravity.CENTER);
+    xgramSetToggle(imageView, isActive, false);
+  }
+
+  /** False when {@code imageView} is not an Expressive toggle (then Telegram X's colours apply). */
+  private boolean xgramSetToggle (ImageView imageView, boolean isActive, boolean animated) {
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.findMorph(imageView.getBackground());
+    if (morph == null) {
+      return false;
+    }
+    if (isActive) {
+      morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    } else {
+      morph.setColor(0);
+    }
+    morph.setCornerTarget(isActive ? com.fahadali.xgram.appearance.XgramExpressive.CORNER_M : Float.NaN, animated);
+    removeThemeListenerByTarget(imageView);
+    int colorId = isActive ? ColorId.fillingActiveContent : ColorId.playerButton; // onSecondaryContainer / onSurfaceVariant
+    imageView.setColorFilter(Theme.getColor(colorId));
+    addThemeFilterListener(imageView, colorId);
+    return true;
+  }
+
   private void setActive (ImageView imageView, boolean isActive) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramSetToggle(imageView, isActive, true)) {
+      return;
+    }
     removeThemeListenerByTarget(imageView);
     int colorId = isActive ? ColorId.playerButtonActive : ColorId.playerButton;
     imageView.setColorFilter(Theme.getColor(colorId));
@@ -1347,8 +1384,44 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     @Override
     public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) { }
 
+    // XGram: Material 3 Expressive large toggle button: a primaryContainer container (the view's shorter side, at most
+    // 96dp) that is round while paused and springs to a rounded square while playing (28dp corners from 80dp up,
+    // 16dp below), with an onPrimaryContainer glyph. Same spring as the media viewer's play button.
+    private static final float XGRAM_MAX_SIZE_DP = 96f, XGRAM_XL_FROM_DP = 80f;
+    private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramShape;
+    private final RectF xgramRect = new RectF();
+
+    private float xgramShapeFactor () {
+      float target = animator.getValue() ? 1f : 0f;
+      if (xgramShape == null) {
+        xgramShape = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, target, (s, value) -> invalidate());
+      } else if (xgramShape.getTarget() != target) {
+        xgramShape.animateTo(target);
+      }
+      return xgramShape.getValue();
+    }
+
+    private void xgramDraw (Canvas c) {
+      final float cx = getMeasuredWidth() / 2f, cy = getMeasuredHeight() / 2f;
+      final float size = Math.min(Screen.dp(XGRAM_MAX_SIZE_DP), Math.min(getMeasuredWidth(), getMeasuredHeight()));
+      if (size <= 0f) {
+        return;
+      }
+      final float half = size / 2f;
+      final float playingCorner = Screen.dp(size >= Screen.dp(XGRAM_XL_FROM_DP) ? com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL : com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+      final float shape = Math.max(0f, Math.min(1.2f, xgramShapeFactor()));
+      final float radius = Math.max(0f, Math.min(half, half + (playingCorner - half) * shape));
+      xgramRect.set(cx - half, cy - half, cx + half, cy + half);
+      c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER)));
+      DrawAlgorithms.drawPlayPause(c, (int) cx, (int) cy, Math.round(size * .22f), path, drawFactor, drawFactor = factor, 1f, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
+    }
+
     @Override
     protected void onDraw (Canvas c) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramDraw(c);
+        return;
+      }
       int cx = getMeasuredWidth() / 2;
       int cy = getMeasuredHeight() / 2;
 

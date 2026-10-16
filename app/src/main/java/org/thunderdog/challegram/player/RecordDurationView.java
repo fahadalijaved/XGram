@@ -115,8 +115,28 @@ public class RecordDurationView extends View {
   private Cell[] cells;
   private float[] widths;
 
+  // XGram: Material 3 Expressive timer: labelLarge digits and an error-role recording dot. The paint is static and
+  // built once; the digit widths are measured with it, like Telegram X's own paint.
+  private static TextPaint xgramTextPaint;
+
+  private static TextPaint xgramTextPaint () {
+    if (xgramTextPaint == null) {
+      xgramTextPaint = new TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.DITHER_FLAG | android.graphics.Paint.SUBPIXEL_TEXT_FLAG);
+      xgramTextPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false));
+      xgramTextPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L)));
+    }
+    return xgramTextPaint;
+  }
+
+  private static TextPaint cellPaint () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return xgramTextPaint();
+    }
+    return Paints.getRegularTextPaint(15f);
+  }
+
   private void buildCells () {
-    TextPaint textPaint = Paints.getRegularTextPaint(15f);
+    TextPaint textPaint = cellPaint();
     if (widths == null) {
       widths = new float[10];
       for (int i = 0; i < widths.length; i++) {
@@ -150,7 +170,11 @@ public class RecordDurationView extends View {
   }
 
   public void draw (Canvas c, float centerY) {
-    c.drawCircle(circleCenterX, centerY, circleRadius, Paints.fillingPaint(ColorUtils.alphaColor((float) alpha / 255f * circleAlpha, 0xffff3b36)));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      c.drawCircle(circleCenterX, centerY, circleRadius, Paints.fillingPaint(ColorUtils.alphaColor((float) alpha / 255f * circleAlpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR))));
+    } else {
+      c.drawCircle(circleCenterX, centerY, circleRadius, Paints.fillingPaint(ColorUtils.alphaColor((float) alpha / 255f * circleAlpha, 0xffff3b36)));
+    }
 
     float cx = textLeft, cy = centerY + textOffset;
     for (Cell cell : cells) {
@@ -224,7 +248,7 @@ public class RecordDurationView extends View {
     public Cell (String str) {
       this.number = -1;
       this.str = str;
-      this.width = U.measureText(str, Paints.getRegularTextPaint(15f));
+      this.width = U.measureText(str, cellPaint());
     }
 
     public void reset (int number) {
@@ -266,7 +290,13 @@ public class RecordDurationView extends View {
     }
 
     public void draw (Canvas c, float x, float y, int alpha) {
-      TextPaint textPaint = Paints.getRegularTextPaint(15f, ColorUtils.color(alpha, Theme.textAccentColor()));
+      TextPaint textPaint;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        textPaint = xgramTextPaint();
+        textPaint.setColor(ColorUtils.color(alpha, Theme.textAccentColor()));
+      } else {
+        textPaint = Paints.getRegularTextPaint(15f, ColorUtils.color(alpha, Theme.textAccentColor()));
+      }
       if (factor == 0f || number == next) {
         if (number != 0 || !noZero) {
           c.drawText(str, x, y, textPaint);
@@ -296,6 +326,9 @@ public class RecordDurationView extends View {
     textLeft = Screen.dp(5f);
     textOffset = Screen.dp(5f);
     textShift = Screen.dp(17f);
+    if (xgramTextPaint != null) {
+      xgramTextPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L)));
+    }
   }
 
   public static void resetSizes () {
