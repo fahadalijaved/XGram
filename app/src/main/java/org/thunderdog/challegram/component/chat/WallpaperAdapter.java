@@ -120,7 +120,7 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
     attachedRecyclers.add(recyclerView);
     int i = indexOfWallpaper(selectedWallpaper);
     if (i != -1) {
-      ((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(i, Screen.currentWidth() / 2 - Screen.dp(105f) / 2);
+      ((LinearLayoutManager) recyclerView.getLayoutManager()).scrollToPositionWithOffset(i, Screen.currentWidth() / 2 - xgramCellSize() / 2);
     }
   }
 
@@ -354,8 +354,8 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
         continue;
       }
       int centerX = recyclerView.getMeasuredWidth() / 2;
-      int cellSize = Screen.dp(105f);
-      int spacing = Screen.dp(3f);
+      int cellSize = xgramCellSize();
+      int spacing = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(WallpaperView.XGRAM_TILE_GAP) : Screen.dp(3f); // XGram M3E: the 96dp tiles 8dp apart
       if (smooth) {
         int scrollX = calculateTotalScrollX(recyclerView, manager, cellSize, spacing);
         int availScrollX = spacing + (cellSize + spacing) * wallpapers.size() - recyclerView.getMeasuredWidth();
@@ -368,6 +368,11 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
       }
       manager.scrollToPositionWithOffset(position, centerX - cellSize / 2 - spacing);
     }
+  }
+
+  /** XGram: the width of a tile (Telegram X's 105dp square, or the 96dp M3E tile). */
+  private static int xgramCellSize () {
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? WallpaperView.XGRAM_TILE_WIDTH : 105f);
   }
 
   public void centerWallpapers (boolean smooth) {
@@ -498,11 +503,94 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
 
     @Override
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      if (xgramM3) {
+        // XGram M3E: a 96 x 136dp portrait tile
+        setMeasuredDimension(Screen.dp(XGRAM_TILE_WIDTH), Screen.dp(XGRAM_TILE_HEIGHT));
+      } else
       super.onMeasure(heightMeasureSpec, heightMeasureSpec);
       int width = getMeasuredWidth();
       int height = getMeasuredHeight();
       preview.setBounds(0, 0, width, height);
       receiver.setBounds(0, 0, width, height);
+    }
+
+    // XGram M3E: the wallpaper picker's tiles: 16dp corners, the selected one with a 3dp primary outline and a check
+    // badge, the gallery tile in surfaceContainerHighest with its icon over a labelMedium "Gallery"
+
+    public static final float XGRAM_TILE_WIDTH = 96f, XGRAM_TILE_HEIGHT = 136f, XGRAM_TILE_GAP = 8f, XGRAM_TILE_INSET = 16f;
+
+    private final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    private final android.graphics.Path xgramClip = new android.graphics.Path();
+    private final android.graphics.Path xgramCheck = new android.graphics.Path();
+    private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+    private final Paint xgramStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private int xgramClipWidth, xgramClipHeight;
+    private static android.text.TextPaint xgramLabelPaint;
+
+    private void xgramBuildShape (int width, int height) {
+      if (xgramClipWidth == width && xgramClipHeight == height) {
+        return;
+      }
+      xgramClipWidth = width;
+      xgramClipHeight = height;
+      final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+      xgramRect.set(0, 0, width, height);
+      xgramClip.rewind();
+      xgramClip.addRoundRect(xgramRect, radius, radius, android.graphics.Path.Direction.CW);
+    }
+
+    private void xgramDrawGallery (Canvas c) {
+      final int width = getMeasuredWidth(), height = getMeasuredHeight();
+      c.drawColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST));
+      final int content = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      if (xgramLabelPaint == null) {
+        xgramLabelPaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        xgramLabelPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false));
+        xgramLabelPaint.setTextAlign(Paint.Align.CENTER);
+      }
+      xgramLabelPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M)));
+      xgramLabelPaint.setColor(content);
+      final Drawable icon = getSparseDrawable(R.drawable.baseline_image_24, 0);
+      final float labelHeight = -xgramLabelPaint.ascent() + xgramLabelPaint.descent();
+      final float gap = Screen.dp(8f);
+      final float top = (height - (icon.getMinimumHeight() + gap + labelHeight)) / 2f;
+      Drawables.draw(c, icon, width / 2f - icon.getMinimumWidth() / 2f, top, Paints.getPorterDuffPaint(content));
+      c.drawText(Lang.getString(R.string.Gallery), width / 2f, top + icon.getMinimumHeight() + gap - xgramLabelPaint.ascent(), xgramLabelPaint);
+    }
+
+    private void xgramDrawSelection (Canvas c, float factor) {
+      if (factor <= 0f) {
+        return;
+      }
+      final int width = getMeasuredWidth(), height = getMeasuredHeight();
+      final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      // The outline, inside the tile's edge
+      final float strokeWidth = Screen.dp(3f);
+      xgramStroke.setStyle(Paint.Style.STROKE);
+      xgramStroke.setStrokeWidth(strokeWidth);
+      xgramStroke.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(primary, factor));
+      xgramRect.set(strokeWidth / 2f, strokeWidth / 2f, width - strokeWidth / 2f, height - strokeWidth / 2f);
+      final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L) - strokeWidth / 2f;
+      c.drawRoundRect(xgramRect, radius, radius, xgramStroke);
+      // The check badge: a 24dp primary circle 8dp from the top end corner, scaled in with the selection
+      final float badge = Screen.dp(24f), inset = Screen.dp(8f);
+      final float cx = Lang.rtl() ? inset + badge / 2f : width - inset - badge / 2f, cy = inset + badge / 2f;
+      c.save();
+      c.scale(factor, factor, cx, cy);
+      xgramStroke.setStyle(Paint.Style.FILL);
+      xgramStroke.setColor(primary);
+      c.drawCircle(cx, cy, badge / 2f, xgramStroke);
+      xgramCheck.rewind();
+      xgramCheck.moveTo(cx - Screen.dp(5f), cy + Screen.dp(.5f));
+      xgramCheck.lineTo(cx - Screen.dp(1.5f), cy + Screen.dp(4f));
+      xgramCheck.lineTo(cx + Screen.dp(5.5f), cy - Screen.dp(3.5f));
+      xgramStroke.setStyle(Paint.Style.STROKE);
+      xgramStroke.setStrokeWidth(Screen.dp(2f));
+      xgramStroke.setStrokeCap(Paint.Cap.ROUND);
+      xgramStroke.setStrokeJoin(Paint.Join.ROUND);
+      xgramStroke.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY));
+      c.drawPath(xgramCheck, xgramStroke);
+      c.restore();
     }
 
     private TGBackground wallpaper;
@@ -584,7 +672,8 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
 
     private void animateFactor (float factor) {
       if (this.animator == null) {
-        this.animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.factor);
+        // XGram: the selection springs in (SPATIAL_FAST, clamped: it also drives alpha) with Expressive design
+        this.animator = new FactorAnimator(0, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 180l), this.factor);
       }
       animator.animateTo(factor);
     }
@@ -600,8 +689,25 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
 
     @Override
     protected void onDraw (Canvas c) {
+      if (xgramM3) {
+        xgramBuildShape(getMeasuredWidth(), getMeasuredHeight());
+        c.save();
+        c.clipPath(xgramClip);
+        if (wallpaper != null && wallpaper.isCustom()) {
+          xgramDrawGallery(c);
+        } else {
+          drawContent(c, true);
+        }
+        c.restore();
+        xgramDrawSelection(c, isSelected ? factor : 0f);
+        return;
+      }
+      drawContent(c, false);
+    }
+
+    private void drawContent (Canvas c, boolean xgramM3) {
       if (wallpaper == null || wallpaper.isEmpty()) {
-        c.drawColor(Theme.backgroundColor());
+        c.drawColor(xgramM3 ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE) : Theme.backgroundColor());
       } else if (wallpaper.isFillSolid()) {
         c.drawColor(wallpaper.getBackgroundColor());
       } else if (wallpaper.isFillGradient()) {
@@ -632,6 +738,9 @@ public class WallpaperAdapter extends RecyclerView.Adapter<WallpaperAdapter.View
           preview.draw(c);
         }
         receiver.draw(c);
+      }
+      if (xgramM3) {
+        return; // the selection and the gallery tile are drawn by onDraw
       }
 
       float checkFactor = isSelected ? factor : 1f;

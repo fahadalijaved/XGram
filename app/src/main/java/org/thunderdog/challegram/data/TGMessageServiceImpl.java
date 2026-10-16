@@ -224,7 +224,8 @@ abstract class TGMessageServiceImpl extends TGMessage {
   @Override
   protected void buildContent (int maxWidth) {
     // XGram M3E: the pill adds 12dp on both sides of the text, so a wrapped text keeps a 16dp margin to the edges
-    int availWidth = Math.max(0, this.width - (useBubbles() && com.fahadali.xgram.appearance.XgramW2Cards.on() ? Screen.dp((com.fahadali.xgram.appearance.XgramW2Cards.SERVICE_PADDING_H + 16f) * 2) : Screen.dp(12f) * 2));
+    // (with and without bubbles: plain mode draws the same chat chip, round 5)
+    int availWidth = Math.max(0, this.width - (com.fahadali.xgram.appearance.XgramW2Cards.on() ? Screen.dp((com.fahadali.xgram.appearance.XgramW2Cards.SERVICE_PADDING_H + 16f) * 2) : Screen.dp(12f) * 2));
 
     FormattedText formattedText =
       textCreator != null ?
@@ -246,7 +247,7 @@ abstract class TGMessageServiceImpl extends TGMessage {
     if (availWidth > 0) {
       Text.Builder b = new Text.Builder(
         formattedText, availWidth,
-        useBubbles() && com.fahadali.xgram.appearance.XgramW2Cards.on() ? com.fahadali.xgram.appearance.XgramW2Cards.serviceLabelProvider() : getServiceTextStyleProvider(useBubbles()),
+        com.fahadali.xgram.appearance.XgramW2Cards.on() ? com.fahadali.xgram.appearance.XgramW2Cards.serviceLabelProvider() : getServiceTextStyleProvider(useBubbles()),
         defaultTextColorSet(),
         (text, specificMedia) -> {
           if (this.displayText == text) {
@@ -351,6 +352,11 @@ abstract class TGMessageServiceImpl extends TGMessage {
       } else {
         c.drawRoundRect(rectF, backgroundRadius, backgroundRadius, Paints.fillingPaint(backgroundColor));
       }
+    } else if (com.fahadali.xgram.appearance.XgramW2Cards.on()) {
+      // XGram M3E: plain mode, the chat chip of the dates: text only on the surface, the card step with Pure black
+      int left = (int) (this.width / 2f - displayText.getWidth() / 2f);
+      com.fahadali.xgram.appearance.XgramW2Cards.drawServicePill(c, left, textY, left + displayText.getWidth(), textY + displayText.getHeight(),
+        com.fahadali.xgram.appearance.XgramM3Colors.noWallpaperPillColor());
     }
 
     // Text

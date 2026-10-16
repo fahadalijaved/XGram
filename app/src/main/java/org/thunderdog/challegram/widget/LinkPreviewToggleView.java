@@ -54,9 +54,19 @@ import me.vkryl.core.MathUtils;
 import me.vkryl.core.lambda.RunnableData;
 
 public class LinkPreviewToggleView extends AppCompatImageView implements TooltipOverlayView.LocationProvider {
-  private final BoolAnimator showAboveText = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
-  private final BoolAnimator hasMedia = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
-  private final FactorAnimator mediaStateFactor = new FactorAnimator(0, (id, factor, fraction, callee) -> invalidate(), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
+  // XGram M3E: the toggle's parts move on the spatial fast spring (clamped: the factors also drive alpha); Telegram X's
+  // decelerate 180ms with Expressive design off
+  private final BoolAnimator showAboveText = new BoolAnimator(this, xgramInterpolator(), xgramDuration());
+  private final BoolAnimator hasMedia = new BoolAnimator(this, xgramInterpolator(), xgramDuration());
+  private final FactorAnimator mediaStateFactor = new FactorAnimator(0, (id, factor, fraction, callee) -> invalidate(), xgramInterpolator(), xgramDuration());
+
+  private static android.view.animation.Interpolator xgramInterpolator () {
+    return com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR);
+  }
+
+  private static long xgramDuration () {
+    return com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 180L);
+  }
 
   private int rectWidth, horizontalInset, verticalInset, verticalLineSpacing, horizontalLineSpacing, lineSize;
 

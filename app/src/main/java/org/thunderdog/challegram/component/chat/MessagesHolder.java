@@ -106,6 +106,15 @@ public class MessagesHolder extends RecyclerView.ViewHolder {
     // TODO migrate to SettingHolder.create
     switch (type) {
       case ListItem.TYPE_CHAT_EMPTY: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: a centred M3 card (MessagesManager.xgramBindEmptyChat) instead of the text on a tinted band
+          com.fahadali.xgram.appearance.XgramR5Chat.EmptyChatView emptyView = new com.fahadali.xgram.appearance.XgramR5Chat.EmptyChatView(context);
+          emptyView.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+          if (themeProvider != null) {
+            themeProvider.addThemeInvalidateListener(emptyView);
+          }
+          return new MessagesHolder(emptyView);
+        }
         final EmptyTextView view = new EmptyTextView(context) {
           @Override
           protected void onDraw (Canvas c) {

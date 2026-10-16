@@ -64,6 +64,120 @@ public class CounterHeaderView extends View {
     this.counters = new ArrayList<>();
   }
 
+  // XGram M3E: the select mode app bar title (HeaderView.genCounterHeader only): the count in titleLarge with
+  // tabular figures, onSurface, its numerals rolling on the SPATIAL_FAST spring (XgramCounterAnimator), centred
+  // vertically in the app bar. Telegram X's own roller still runs for the factor its listeners read.
+
+  private static final class XgramNumeral implements me.vkryl.android.animator.CounterAnimator.TextDrawable {
+    private final String text;
+    private final int width, height;
+
+    XgramNumeral (String text, int width, int height) {
+      this.text = text;
+      this.width = width;
+      this.height = height;
+    }
+
+    @Override
+    public int getWidth () {
+      return width;
+    }
+
+    @Override
+    public int getHeight () {
+      return height;
+    }
+
+    @Override
+    public String getText () {
+      return text;
+    }
+
+    @Override
+    public boolean equals (Object o) {
+      return o instanceof XgramNumeral && ((XgramNumeral) o).text.equals(text);
+    }
+
+    @Override
+    public int hashCode () {
+      return text.hashCode();
+    }
+  }
+
+  private static TextPaint xgramTitlePaint;
+  private com.fahadali.xgram.appearance.XgramCounterAnimator<XgramNumeral> xgramCounter;
+
+  /** XGram: titleLarge, tabular figures. Main thread. */
+  private static TextPaint xgramTitlePaint () {
+    if (xgramTitlePaint == null) {
+      xgramTitlePaint = new TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.SUBPIXEL_TEXT_FLAG);
+      xgramTitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L, false));
+      xgramTitlePaint.setFontFeatureSettings("tnum");
+    }
+    xgramTitlePaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L)));
+    return xgramTitlePaint;
+  }
+
+  /** XGram: true for the M3E app bar title (set by HeaderView.genCounterHeader with Expressive design). */
+  public boolean xgramIsM3Title () {
+    return xgramCounter != null;
+  }
+
+  /** XGram: makes this the M3E select mode title. Call before init; Expressive design only. */
+  public void xgramSetM3Title () {
+    if (xgramCounter != null) {
+      return;
+    }
+    xgramCounter = new com.fahadali.xgram.appearance.XgramCounterAnimator<>(new me.vkryl.android.animator.CounterAnimator.Callback<XgramNumeral>() {
+      @Override
+      public void onItemsChanged (me.vkryl.android.animator.CounterAnimator<?> animator) {
+        invalidate();
+      }
+
+      @Override
+      public XgramNumeral onCreateTextDrawable (String text) {
+        TextPaint paint = xgramTitlePaint();
+        android.graphics.Paint.FontMetricsInt metrics = paint.getFontMetricsInt();
+        return new XgramNumeral(text, (int) Math.ceil(U.measureText(text, paint)), metrics.descent - metrics.ascent);
+      }
+    });
+  }
+
+  private void xgramSetCounter (int counter, boolean animated) {
+    if (xgramCounter != null) {
+      animated = animated && !org.thunderdog.challegram.unsorted.Settings.instance().needReduceMotion(); // Reduce motion: the count snaps
+      if (counter > 0) {
+        xgramCounter.setCounter(counter, String.valueOf(counter), animated);
+      } else {
+        xgramCounter.hideCounter(animated);
+      }
+    }
+  }
+
+  /** XGram: the baseline that centres the title in the view (the app bar's height, see genCounterHeader). */
+  private float xgramBaseline () {
+    TextPaint paint = xgramTitlePaint();
+    return getMeasuredHeight() / 2f - (paint.ascent() + paint.descent()) / 2f;
+  }
+
+  private float xgramDrawCounter (Canvas c, float cx, int color) {
+    TextPaint paint = xgramTitlePaint();
+    final float baseline = xgramBaseline();
+    final int colorAlpha = (color >>> 24) & 0xff;
+    for (me.vkryl.android.animator.ListAnimator.Entry<me.vkryl.android.animator.CounterAnimator.Part<XgramNumeral>> entry : xgramCounter) {
+      final float position = entry.item.getVerticalPosition();
+      final float alpha = Math.max(0f, Math.min(1f, entry.getVisibility() * (1f - Math.abs(position))));
+      if (alpha <= 0f) {
+        continue;
+      }
+      paint.setColor(color);
+      paint.setAlpha(Math.round(colorAlpha * alpha));
+      c.drawText(entry.item.text.getText(), cx + entry.getRectF().left, baseline + entry.item.getHeight() * .8f * position, paint);
+    }
+    paint.setColor(color);
+    return cx + xgramCounter.getWidth();
+  }
+
   public void initDefault (@ColorId int colorId) {
     initDefault(19f, colorId);
   }
@@ -100,7 +214,7 @@ public class CounterHeaderView extends View {
     for (int i = 0; i < numbers.length; i++)
       numbers[i] = new DigitView(widths, diff);
     fullWidth = (int) Math.ceil(maxWidth * (float) numbers.length);
-    spaceSize = (int) U.measureText(" ", Paints.getMediumTextPaint(textSizeDp, false));
+    spaceSize = (int) U.measureText(" ", xgramCounter != null ? xgramTitlePaint() : Paints.getMediumTextPaint(textSizeDp, false));
   }
 
   private void updateWidths () {
@@ -185,6 +299,12 @@ public class CounterHeaderView extends View {
   private static final int SUFFIX_ANIMATE_OUT = 2;
 
   private TextPaint getPaint (boolean fakeBold, boolean willDraw) {
+    if (xgramCounter != null) {
+      // XGram M3E: titleLarge in onSurface, no fake bold
+      TextPaint paint = xgramTitlePaint();
+      paint.setColor(willDraw ? xgramColor() : 0xff000000);
+      return paint;
+    }
     if (willDraw) {
       return Paints.getMediumTextPaint(textSizeDp, Theme.getColor(colorId), fakeBold);
     } else {
@@ -246,6 +366,7 @@ public class CounterHeaderView extends View {
 
   public void initCounter (int counter, boolean animated) {
     if (this.counter != counter && counter >= 0 && counter < 99999) {
+      xgramSetCounter(counter, animated);
       if (this.counter != 0) {
         for (int i = 0; i < drawingSize; i++) {
           numbers[i].reset();
@@ -277,6 +398,7 @@ public class CounterHeaderView extends View {
 
   public boolean setCounter (int counter) {
     if (this.counter != counter && counter >= 0 && counter < 99999) {
+      xgramSetCounter(counter, true);
       boolean forward = this.counter < counter;
       this.prevCounter = this.counter;
       this.counter = counter;
@@ -384,6 +506,9 @@ public class CounterHeaderView extends View {
   }
 
   private float calculateCounterWidth () {
+    if (xgramCounter != null) {
+      return xgramCounter.getWidth();
+    }
     float cx = 0;
     if (isAnimating) {
       for (int i = 0; i < drawingSize; i++) {
@@ -423,6 +548,9 @@ public class CounterHeaderView extends View {
   }
 
   private float drawCounter (Canvas c, float cx) {
+    if (xgramCounter != null) {
+      return xgramDrawCounter(c, cx, xgramColor());
+    }
     if (isAnimating) {
       for (int i = 0; i < drawingSize; i++) {
         DigitView v = numbers[i];
@@ -445,6 +573,7 @@ public class CounterHeaderView extends View {
   private float drawSuffix (Canvas c, float cx, boolean rtl) {
     if (suffix == null)
       return cx;
+    final float textTop = xgramCounter != null ? xgramBaseline() : this.textTop; // XGram: centred titleLarge
     if (!rtl)
       cx += spaceSize;
     TextPaint suffixPaint = getPaint(suffix.fakeBold, true);
@@ -565,6 +694,14 @@ public class CounterHeaderView extends View {
 
   protected boolean needSpecial () {
     return false;
+  }
+
+  /**
+   * XGram: the M3E title color: the header text id, which Expressive design maps to onSurface (headerLightText,
+   * headerText), so a header that keeps another text color (media viewer) keeps it too.
+   */
+  private int xgramColor () {
+    return Theme.getColor(colorId);
   }
 
   protected void drawSpecial (Canvas c, int additionalWidth, int add) {

@@ -1985,12 +1985,16 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     RectF rectF = Paints.getRectF();
     int textX, textY;
     TextPaint textPaint;
-    if (useBubbles() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram: Material 3 Expressive date: labelMedium in onSurfaceVariant, a pill only over a wallpaper or while it floats
-      int color = getBubbleDateBackgroundColor();
-      int textColor = getBubbleDateTextColor();
-      int padding = Screen.dp(12f);
-      rectF.set(centerX - pDateWidth / 2f - padding, startY + Screen.dp(5f), centerX + pDateWidth / 2f + padding, startY + Screen.dp(5f) + Screen.dp(26f));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive date (and merged forum topic header): the chat chip, labelMedium in
+      // onSurfaceVariant; text only on the solid surface, a surfaceContainerHigh pill over a wallpaper or while it
+      // floats, the card step with Pure black. Plain (no bubbles) mode draws the same chip.
+      final boolean bubbles = useBubbles();
+      int color = bubbles ? getBubbleDateBackgroundColor() : com.fahadali.xgram.appearance.XgramM3Colors.noWallpaperPillColor();
+      int textColor = bubbles ? getBubbleDateTextColor() : com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      int padding = Screen.dp(com.fahadali.xgram.appearance.XgramR5Chat.CHIP_PADDING);
+      int chipTop = startY + Screen.dp(bubbles ? 5f : 7f);
+      rectF.set(centerX - pDateWidth / 2f - padding, chipTop, centerX + pDateWidth / 2f + padding, chipTop + Screen.dp(com.fahadali.xgram.appearance.XgramR5Chat.CHIP_HEIGHT));
       int pillColor = color;
       if (((color >>> 24) & 0xff) == 0 && detachFactor > 0f) {
         pillColor = ColorUtils.alphaColor(detachFactor, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH));
@@ -2104,10 +2108,13 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
       int color = getUnreadSeparatorContentColor();
       if (xgramBadge) {
-        // XGram M3E: a chip like the date chips (labelMedium, primary on surfaceContainerHigh, full corners) with an
-        // outlineVariant hairline on each side; the row keeps its height, so the scroll anchor is unchanged
+        // XGram M3E: the chat chip, tonal (labelMedium onSecondaryContainer on secondaryContainer, full corners, no
+        // chevron) with an outlineVariant hairline on each side; the row keeps its height, so the scroll anchor is
+        // unchanged. It fades out once the chat is read (xgramFadeOutUnreadBadge).
         com.fahadali.xgram.appearance.XgramM3UnreadDivider.draw(c, width, top, bottom, uBadge.text, pBadgeIconX - Screen.dp(2f) - pBadgeX,
-          isFirstUnread() ? iBadge : null, Paints.getUnreadSeparationPaint(color), getUnreadSeparatorBackgroundColor(), color);
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER),
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER),
+          xgramUnreadBadgeAlpha());
       } else {
         TextPaint mBadge = getBadgePaint(uBadge.needFakeBold);
         mBadge.setColor(color);
@@ -6356,7 +6363,32 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     return false;
   }
 
+  // XGram M3E: the unread divider fades out (effects fast spring) once the chat is read; the row keeps its height.
+  private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramUnreadBadgeFade;
+
+  /** XGram: the unread divider's opacity, 1 until {@link #xgramFadeOutUnreadBadge} ran. "Discussion started" never fades. */
+  private float xgramUnreadBadgeAlpha () {
+    if (xgramUnreadBadgeFade == null || !isFirstUnread()) {
+      return 1f;
+    }
+    return Math.max(0f, Math.min(1f, xgramUnreadBadgeFade.getValue()));
+  }
+
+  /** XGram: fades the "New messages" divider out (a snap with Reduce motion). Main thread, Expressive design only. */
+  public final void xgramFadeOutUnreadBadge () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !hasUnreadBadge()) {
+      return;
+    }
+    if (xgramUnreadBadgeFade == null) {
+      xgramUnreadBadgeFade = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, 1f, (s, value) -> invalidate());
+    }
+    xgramUnreadBadgeFade.animateTo(0f);
+  }
+
   public void setShowUnreadBadge (boolean show) {
+    if (xgramUnreadBadgeFade != null) {
+      xgramUnreadBadgeFade.setValue(1f); // XGram: a divider set again shows at once
+    }
     flags = BitwiseUtils.setFlag(flags, MESSAGE_FLAG_FIRST_UNREAD, show);
     updateShowBadge();
     updateBadgeText();
@@ -10289,16 +10321,19 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   /** The horizontal padding drawDate gives the date label. */
   private int getDatePillPadding () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Screen.dp(com.fahadali.xgram.appearance.XgramR5Chat.CHIP_PADDING); // XGram: the chat chip, with and without bubbles
+    }
     if (!useBubbles()) {
       return Screen.dp(10f);
     }
-    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12f : 8f);
+    return Screen.dp(8f);
   }
 
   /** The paint setDate measures the date label with. */
   private TextPaint getDateMeasurePaint (boolean needFakeBold) {
-    if (useBubbles() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      return com.fahadali.xgram.appearance.XgramM3Chat.dateMeasurePaint(); // XGram: labelMedium date
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramM3Chat.dateMeasurePaint(); // XGram: labelMedium date, with and without bubbles
     }
     return useBubbles() ? Paints.getBoldPaint13(needFakeBold) : Paints.getTitlePaint(needFakeBold);
   }

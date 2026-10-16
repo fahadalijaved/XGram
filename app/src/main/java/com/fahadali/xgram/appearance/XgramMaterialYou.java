@@ -257,6 +257,9 @@ public final class XgramMaterialYou {
   private static void fillExpressive (Context context, int customThemeId, boolean dark) {
     final int[][] roles = {
       {ColorId.filling, XgramExpressive.SURFACE},
+      // The chat without a wallpaper: the surface, as Expressive draws it, not the night theme's baked grey
+      {ColorId.chatBackground, XgramExpressive.SURFACE},
+      {ColorId.bubble_chatBackground, XgramExpressive.SURFACE},
       {ColorId.background, XgramExpressive.SURFACE_CONTAINER},
       {ColorId.headerBackground, XgramExpressive.SURFACE_CONTAINER},
       {ColorId.headerText, XgramExpressive.ON_SURFACE},

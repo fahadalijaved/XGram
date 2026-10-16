@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 5, chat canvas. Sentence-case strings are used only while Telegram&#160;X's string is the bundled English one, so translations are kept. -->
+  <!-- The wallpaper picker with Pure black on in a dark theme -->
+  <string name="XgramR5ChatPureBlackNote">Pure black shows colour backgrounds as black</string>
+  <!-- Preview mode chats: sentence case for Telegram&#160;X's title-case English -->
+  <string name="XgramR5ChatScheduledMessages">Scheduled messages</string>
+  <string name="XgramR5ChatTabVideoMessages">Video messages</string>
+  <!-- The empty chat card (English only: translations keep Telegram&#160;X's own text) -->
+  <string name="XgramR5ChatSayHi">Say hi</string>
+  <string name="XgramR5ChatEmptyTitle">No messages here yet</string>
+  <string name="XgramR5ChatEmptyText">Send a message to start the conversation.</string>
+  <string name="XgramR5ChatEmptyScheduledTitle">No scheduled messages</string>
+  <string name="XgramR5ChatEmptyScheduledText">Hold the send button to schedule a message.</string>
+  <string name="XgramR5ChatEmptyRemindersTitle">No reminders</string>
+  <string name="XgramR5ChatEmptyRemindersText">Hold the send button to set a reminder.</string>
+  <string name="XgramR5ChatEmptySearchTitle">No messages found</string>
+  <!-- The link preview editor menu (the composer's link preview) -->
+  <string name="XgramR5ChatPreviewAbove">Show above text</string>
+  <string name="XgramR5ChatPreviewBelow">Show below text</string>
+  <string name="XgramR5ChatPreviewLarger">Larger media</string>
+  <string name="XgramR5ChatPreviewSmaller">Smaller media</string>
+  <string name="XgramR5ChatPreviewChooseLink">Choose link</string>
+  <string name="XgramR5ChatPreviewRemove">Remove preview</string>
+  <!-- Jump to date (Compose date picker): the confirm button -->
+  <string name="XgramR5ChatGo">Go</string>
+  <!-- Night mode schedule (Compose time picker) -->
+  <string name="XgramR5ChatSelectTime">Select time</string>
+  <string name="XgramR5ChatNightFrom">Night theme from</string>
+  <string name="XgramR5ChatNightTo">Night theme until</string>
+  <string name="XgramR5ChatTimeTypeIn">Type in the time</string>
+  <string name="XgramR5ChatTimeDial">Pick on the clock</string>
+</resources>

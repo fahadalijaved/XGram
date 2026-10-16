@@ -269,6 +269,20 @@ public final class XgramM3Colors {
     // Pure black: the light header (the select mode app bar, the bottom tab bar, sheet headers and their status bar)
     // is an app bar, so it is black like headerBackground instead of the card step of surfaceContainerHigh.
     pureBlackRole(SURFACE, ColorId.headerLightBackground);
+    // Pure black: the chat is black under every color background (WallpaperView), so the date, service and media time
+    // pills on it take the card step (#121212) instead of no pill, as the chips of the rest of the app do.
+    pureBlackRole(SURFACE_CONTAINER_HIGH, ColorId.bubble_date_noWallpaper, ColorId.bubble_overlay_noWallpaper,
+      ColorId.bubble_mediaTime_noWallpaper);
+  }
+
+  /**
+   * XGram: the color of the pills on the chat background (dates, service messages, the media time chip) where no
+   * wallpaper shows, for helpers that draw a pill without a message (XgramW2Cards): the card step with Pure black in
+   * the dark scheme, else none. Cheap.
+   */
+  @ColorInt
+  public static int noWallpaperPillColor () {
+    return XgramAmoled.isActive() ? XgramExpressive.color(SURFACE_CONTAINER_HIGH) : 0;
   }
 
   /**
@@ -375,8 +389,8 @@ public final class XgramM3Colors {
   @ColorInt
   public static int resolve (ThemeDelegate theme, int colorId) {
     int entry = TABLE[colorId];
-    if ((entry & 0xf) == K_TRANSPARENT) {
-      return 0;
+    if ((entry & 0xf) == K_TRANSPARENT && PURE_BLACK[colorId] == 0) {
+      return 0; // a transparent id with a Pure black entry resolves below: transparent in light, the entry in dark
     }
     if (theme.getId() == ThemeId.TEMPORARY) {
       float dark = theme.getProperty(PropertyId.DARK);
