@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E wave 2: navigation rail of wide windows (XgramNavRail) and the two-pane layout -->
+<resources>
+  <string name="XgramNavRailSaved">Saved</string>
+  <string name="XgramNavRailSavedMessages">Saved messages</string>
+  <string name="XgramNavRailArchive">Archive</string>
+  <string name="XgramNavRailArchivedChats">Archived chats</string>
+  <string name="XgramNavRailAccounts">Accounts</string>
+  <string name="XgramNavRailAddAccount">Add account</string>
+  <string name="XgramNavRailInviteFriends">Invite friends</string>
+  <string name="XgramNavRailNightMode">Night mode</string>
+  <string name="XgramNavRailOpenMenu">Open navigation menu</string>
+  <string name="XgramNavRailCloseMenu">Close navigation menu</string>
+  <string name="XgramNavRailNewGroup">New group</string>
+  <string name="XgramNavRailNewChannel">New channel</string>
+  <string name="XgramNavRailNewSecretChat">New secret chat</string>
+  <string name="XgramNavRailCloseFabMenu">Close menu</string>
+</resources>
