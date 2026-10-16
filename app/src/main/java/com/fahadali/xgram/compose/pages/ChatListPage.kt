@@ -82,9 +82,12 @@ fun ChatListPage() {
       switch(R.id.btn_xgramHideFab, s(R.string.XgramHideFab), s(R.string.XgramHideFabSub), checked = settings.hideFab()) {
         settings.setHideFab(it)
       }
+      // Only the status bar text reads it, and Expressive design shows the connection in the app instead.
+      val statusReason = XgramSettingDeps.connectionStatusPositionReason()
       switch(
-        R.id.btn_xgramConnectionStatusStart, s(R.string.XgramConnectionStatusStart), s(R.string.XgramConnectionStatusStartSub),
-        checked = settings.connectionStatusAtStart()
+        R.id.btn_xgramConnectionStatusStart, s(R.string.XgramConnectionStatusStart),
+        s(if (statusReason != 0) statusReason else R.string.XgramConnectionStatusStartSub),
+        checked = settings.connectionStatusAtStart(), enabled = statusReason == 0
       ) {
         settings.setConnectionStatusAtStart(it)
       }

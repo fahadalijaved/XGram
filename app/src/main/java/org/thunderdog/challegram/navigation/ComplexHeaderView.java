@@ -173,6 +173,9 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   protected void onDetachedFromWindow () {
     super.onDetachedFromWindow();
     emojiStatusHelper.detach();
+    if (xgramSubtitleF != null) {
+      xgramEndSubtitleCrossfade(); // XGram M3E: off screen the new subtitle is simply there
+    }
   }
 
   protected final boolean hasSubtitle () {
@@ -462,12 +465,89 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   }
 
   public void setText (String text, CharSequence subtext) {
+    final String xgramPrevTitle = this.title, xgramPrevSubtitle = this.subtitle; // XGram M3E: subtitle crossfade
+    final Text xgramPrevText = this.trimmedSubtitle, xgramPrevTextExpanded = this.trimmedSubtitleExpanded;
     this.title = text;
     this.subtitle = StringUtils.isEmpty(subtext) ? null : subtext.toString();
     TdApi.TextEntity[] entities = this.subtitle != null ? TD.toEntities(subtext, false) : null;
     this.subtitleEntities = entities != null ? TextEntity.valueOf(tdlib, this.subtitle, entities, null) : null;
     buildLayout();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramOnSubtitleSet(xgramPrevTitle, xgramPrevSubtitle, xgramPrevText, xgramPrevTextExpanded);
+    }
     invalidate();
+  }
+
+  // XGram M3E: a changed subtitle (same title, header on screen) crossfades: the old one fades out in place while the
+  // new one fades in and rises a few dp, on the EFFECTS_DEFAULT spring (no rise with Reduce motion). Both texts are
+  // laid out once on the change; frames only blend them. The connection line (xgramConnectionFactor) still covers both.
+
+  private static final float XGRAM_SUBTITLE_RISE_DP = 6f;
+
+  private @Nullable Text xgramOldSubtitle, xgramOldSubtitleExpanded;
+  private @Nullable com.fahadali.xgram.appearance.XgramMotion.Value xgramSubtitleF;
+  private boolean xgramSubtitleRise;
+
+  private void xgramOnSubtitleSet (@Nullable String prevTitle, @Nullable String prevSubtitle, @Nullable Text prevText, @Nullable Text prevTextExpanded) {
+    if (StringUtils.equalsOrBothEmpty(prevSubtitle, subtitle)) {
+      return; // the same subtitle laid out again: a running crossfade carries on
+    }
+    if (!StringUtils.equalsOrBothEmpty(prevTitle, title) || !isAttachedToWindow() || getMeasuredWidth() == 0 || getVisibility() != View.VISIBLE) {
+      xgramEndSubtitleCrossfade(); // another chat or page, or not on screen
+      return;
+    }
+    if (xgramSubtitleF == null) {
+      xgramSubtitleF = new com.fahadali.xgram.appearance.XgramMotion.Value(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 1f, (v, value, velocity) -> invalidate())
+        .setThreshold(.002f)
+        .setEndListener(this::xgramReleaseOldSubtitle);
+    }
+    if (!(xgramSubtitleF.isRunning() && xgramSubtitleF.getValue() < .5f)) {
+      // The shown subtitle fades out. (Changed again early in a crossfade, the one before keeps fading out and only
+      // the incoming text is swapped, so nothing on screen jumps.)
+      xgramOldSubtitle = prevText;
+      xgramOldSubtitleExpanded = prevTextExpanded;
+      xgramSubtitleF.setValue(0f);
+    }
+    xgramSubtitleRise = !com.fahadali.xgram.appearance.XgramMotion.reduce();
+    xgramSubtitleF.animateTo(1f);
+  }
+
+  private void xgramEndSubtitleCrossfade () {
+    if (xgramSubtitleF != null) {
+      xgramSubtitleF.setValue(1f);
+    }
+    xgramReleaseOldSubtitle();
+  }
+
+  private void xgramReleaseOldSubtitle () {
+    xgramOldSubtitle = xgramOldSubtitleExpanded = null;
+  }
+
+  /** 0..1: how far the new subtitle has faded in (1 when nothing crossfades, always 1 with Expressive design off). */
+  private float xgramSubtitleFactor () {
+    return xgramSubtitleF != null ? com.fahadali.xgram.appearance.XgramMotion.clamp01(xgramSubtitleF.getValue()) : 1f;
+  }
+
+  /** Draws the outgoing subtitle where it was, at {@code alpha} (already times its fade-out). */
+  private void xgramDrawOldSubtitle (@NonNull Canvas c, float left, float top, float alpha, float avatarExpandFactor, boolean centered, float centeredScale) {
+    final Text old = xgramOldSubtitle;
+    if (old == null || alpha <= 0f) {
+      return;
+    }
+    if (centered) {
+      c.save();
+      c.translate(left, top);
+      c.scale(centeredScale, centeredScale);
+      old.draw(c, 0, 0, null, alpha);
+      c.restore();
+    } else if (xgramOldSubtitleExpanded != null && avatarExpandFactor > 0f) {
+      if (avatarExpandFactor < 1f) {
+        old.draw(c, (int) left, (int) top, null, alpha * (1f - avatarExpandFactor));
+      }
+      xgramOldSubtitleExpanded.draw(c, (int) left, (int) top, null, alpha * avatarExpandFactor);
+    } else {
+      old.draw(c, (int) left, (int) top, null, alpha);
+    }
   }
 
   public void setEmojiStatus (TdApi.User user) {
@@ -939,6 +1019,8 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
     float textAlpha = 1f - statusVisibility;
     int dy = (int) (Screen.dp(12f) * statusVisibility);
     final float xgramConnKeep = 1f - xgramConnectionFactor(); // XGram M3E: the connection line replaces subtitle and typing
+    final float xgramSubIn = xgramSubtitleFactor(); // XGram M3E: subtitle crossfade, 1 when none runs
+    final int xgramSubRise = xgramSubIn < 1f && xgramSubtitleRise ? Math.round(Screen.dp(XGRAM_SUBTITLE_RISE_DP) * (1f - xgramSubIn)) : 0;
     int viewWidth = getMeasuredWidth();
     float avatarExpandFactor = getAvatarExpandFactor();
 
@@ -1102,20 +1184,25 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
         emojiStatusClickRect.inset(-Screen.dp(8), -Screen.dp(8));
       }
 
+      if (xgramSubIn < 1f && xgramOldSubtitle != null) {
+        // XGram M3E: the outgoing subtitle fades out where it was
+        final float oldLeft = xgramCentered ? MathUtils.fromTo(xgramCollapsedTextLeft, (getMeasuredWidth() - xgramOldSubtitle.getWidth() * xgramSubtitleScale) / 2f, xgramS) : baseTextLeft;
+        xgramDrawOldSubtitle(c, oldLeft, baseSubtitleTop + dy, textAlpha * (1f - xgramSubIn) * xgramConnKeep, avatarExpandFactor, xgramCentered, xgramSubtitleScale);
+      }
       if (trimmedSubtitle != null && xgramCentered) {
         c.save();
-        c.translate(xgramSubtitleLeft, baseSubtitleTop + dy);
+        c.translate(xgramSubtitleLeft, baseSubtitleTop + dy + xgramSubRise);
         c.scale(xgramSubtitleScale, xgramSubtitleScale);
-        trimmedSubtitle.draw(c, 0, 0, null, textAlpha);
+        trimmedSubtitle.draw(c, 0, 0, null, textAlpha * xgramSubIn);
         c.restore();
       } else if (trimmedSubtitle != null) {
         if (trimmedSubtitleExpanded != null && avatarExpandFactor > 0f) {
           if (avatarExpandFactor < 1f) {
-            trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * (1f - avatarExpandFactor) * xgramConnKeep);
+            trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy + xgramSubRise, null, textAlpha * (1f - avatarExpandFactor) * xgramConnKeep * xgramSubIn);
           }
-          trimmedSubtitleExpanded.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * avatarExpandFactor * xgramConnKeep);
+          trimmedSubtitleExpanded.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy + xgramSubRise, null, textAlpha * avatarExpandFactor * xgramConnKeep * xgramSubIn);
         } else {
-          trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * xgramConnKeep);
+          trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy + xgramSubRise, null, textAlpha * xgramConnKeep * xgramSubIn);
         }
       }
 

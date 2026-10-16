@@ -104,6 +104,18 @@ public final class XgramSettingDeps {
     return tdlib.settings().chatFolderStyle() == ChatFolderStyle.ICON_ONLY ? R.string.XgramAllChatsLabelIcons : 0;
   }
 
+  /**
+   * Status on the left only places the connection text over the status bar (NetworkStatusBarView), which Expressive
+   * design does not create (BaseActivity): the connection shows in the app then (XgramConnection). The choice is kept.
+   */
+  public static boolean connectionStatusPositionEnabled () {
+    return !XgramExpressive.isEnabled();
+  }
+
+  public static @StringRes int connectionStatusPositionReason () {
+    return connectionStatusPositionEnabled() ? 0 : R.string.XgramConnectionStatusExpressive;
+  }
+
   // Messages
 
   /** Start playing is only read for videos played in the message (XgramInlineVideo). */

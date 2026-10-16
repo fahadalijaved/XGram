@@ -10,6 +10,7 @@
   <string name="XgramPaneInfoEven">Split evenly gives the chat list and the chat half the screen each. Turn it off to set their widths with the handle on the line between them.</string>
   <string name="XgramAllChatsLabelNoTabs">Folder tabs are hidden</string>
   <string name="XgramAllChatsLabelIcons">Folder tabs show icons only</string>
+  <string name="XgramConnectionStatusExpressive">Expressive design shows the status in the app</string>
   <string name="XgramTapToRecordNoButton">The voice and video button is hidden</string>
   <string name="XgramNeedsAiTools">Needs Telegram AI tools</string>
   <string name="XgramNeedsSaveEdits">Needs Save edit history</string>

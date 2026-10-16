@@ -381,6 +381,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.hideFab(), isUpdate);
         } else if (id == R.id.btn_xgramConnectionStatusStart) {
           view.getToggler().setRadioEnabled(settings.connectionStatusAtStart(), isUpdate);
+          setReason(view, XgramSettingDeps.connectionStatusPositionReason());
         } else if (id == R.id.btn_xgramAllChatsLabel) {
           view.getToggler().setRadioEnabled(settings.allChatsLabel(), isUpdate);
           setReason(view, XgramSettingDeps.allChatsLabelReason(tdlib));
@@ -1555,7 +1556,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       settings.setHideFab(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramConnectionStatusStart) {
-      settings.setConnectionStatusAtStart(adapter.toggleView(v));
+      if (XgramSettingDeps.connectionStatusPositionEnabled()) {
+        settings.setConnectionStatusAtStart(adapter.toggleView(v));
+      }
       return;
     } else if (id == R.id.btn_xgramAllChatsLabel) {
       if (XgramSettingDeps.allChatsLabelEnabled(tdlib)) {
