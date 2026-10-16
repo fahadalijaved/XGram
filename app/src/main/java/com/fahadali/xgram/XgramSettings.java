@@ -11,6 +11,9 @@
  */
 package com.fahadali.xgram;
 
+import androidx.annotation.DrawableRes;
+
+import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.unsorted.Settings;
 
 import me.vkryl.core.reference.ReferenceList;
@@ -813,6 +816,39 @@ public final class XgramSettings {
   public void setEnterToSend (int value) {
     enterToSend = value;
     putInt(KEY_ENTER_TO_SEND, value);
+  }
+
+  // Notification icon (Appearance > Theme, next to App icon). Separate from the app icon.
+
+  public static final String KEY_NOTIFICATION_ICON = "xgram_notification_icon";
+  /** XGram's X glyph in the status bar. */
+  public static final int NOTIFICATION_ICON_XGRAM = 0;
+  /** Telegram X's original glyph in the status bar. */
+  public static final int NOTIFICATION_ICON_TELEGRAM_X = 1;
+
+  private volatile int notificationIcon = -1; // -1: not read yet (read on first use, while building a notification)
+
+  /** {@link #NOTIFICATION_ICON_XGRAM} or {@link #NOTIFICATION_ICON_TELEGRAM_X}. */
+  public int notificationIcon () {
+    int value = notificationIcon;
+    if (value < 0) {
+      value = pmc().getInt(KEY_NOTIFICATION_ICON, NOTIFICATION_ICON_XGRAM) == NOTIFICATION_ICON_TELEGRAM_X ? NOTIFICATION_ICON_TELEGRAM_X : NOTIFICATION_ICON_XGRAM;
+      notificationIcon = value;
+    }
+    return value;
+  }
+
+  public void setNotificationIcon (int value) {
+    notificationIcon = value == NOTIFICATION_ICON_TELEGRAM_X ? NOTIFICATION_ICON_TELEGRAM_X : NOTIFICATION_ICON_XGRAM;
+    putInt(KEY_NOTIFICATION_ICON, notificationIcon);
+  }
+
+  /**
+   * Small icon of message notifications and their summary: the glyph picked in Notification icon. Read for every
+   * notification built, so a change shows on the next one without a restart.
+   */
+  public static @DrawableRes int notificationSmallIcon () {
+    return instance().notificationIcon() == NOTIFICATION_ICON_TELEGRAM_X ? R.mipmap.app_notification : R.drawable.xgram_notification;
   }
 
   // Side menu

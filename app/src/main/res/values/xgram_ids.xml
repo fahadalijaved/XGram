@@ -284,4 +284,8 @@
   <item type="id" name="btn_xgramOpenBeside" />
   <!-- Keyboard and mouse (adaptive part 3) -->
   <item type="id" name="btn_xgramEnterToSend" />
+  <!-- Notification icon (Appearance > Theme) -->
+  <item type="id" name="btn_xgramNotificationIcon" />
+  <item type="id" name="btn_xgramNotificationIconXgram" />
+  <item type="id" name="btn_xgramNotificationIconTelegramX" />
 </resources>

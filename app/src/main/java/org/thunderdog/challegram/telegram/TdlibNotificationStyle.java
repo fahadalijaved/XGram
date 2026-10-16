@@ -616,7 +616,7 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
 
     builder
       .setContentTitle(visualChatTitle)
-      .setSmallIcon(R.drawable.xgram_notification) // XGram
+      .setSmallIcon(com.fahadali.xgram.XgramSettings.notificationSmallIcon()) // XGram: Appearance > Notification icon
       .setContentText(textContent)
       .setTicker(tickerText)
       .setAutoCancel(Config.NOTIFICATION_AUTO_CANCEL)
@@ -1090,7 +1090,7 @@ public class TdlibNotificationStyle implements TdlibNotificationStyleDelegate, F
     }
 
     b.setAutoCancel(Config.NOTIFICATION_AUTO_CANCEL_SPECIFIC);
-    b.setSmallIcon(R.drawable.xgram_notification); // XGram
+    b.setSmallIcon(com.fahadali.xgram.XgramSettings.notificationSmallIcon()); // XGram: Appearance > Notification icon
     b.setWhen(timeMs);
     if (!Device.FLYME) {
       b.setNumber(badgeCount);
