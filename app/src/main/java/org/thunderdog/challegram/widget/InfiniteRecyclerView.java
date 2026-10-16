@@ -83,8 +83,80 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
     this.textPaint.setTextSize(Screen.dp(17f));
     this.itemPadding = Screen.dp(36f);
 
+    // XGram M3E: titleLarge rows (the selected one; the others are drawn scaled down), centered on the row
+    this.xgramM3 = com.fahadali.xgram.appearance.XgramM3Wheel.on();
+    if (xgramM3) {
+      com.fahadali.xgram.appearance.XgramM3Wheel.setupTextPaint(textPaint);
+      Paint.FontMetrics metrics = textPaint.getFontMetrics();
+      this.xgramTextOffset = -(metrics.ascent + metrics.descent) / 2f;
+    } else {
+      this.xgramTextOffset = 0f;
+    }
+
     setItemAnimator(null);
     setLayoutManager(this.manager = new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
+  }
+
+  // XGram M3E: selection band, titleLarge selected row, spring snapping (see XgramM3Wheel)
+
+  private final boolean xgramM3;
+  private final float xgramTextOffset;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramSnap;
+  private int xgramSnapApplied;
+
+  /** Scrolls by {@code dy} to snap a row to the center: a spring with Expressive design, smoothScrollBy otherwise. */
+  private void snapBy (int dy) {
+    if (!xgramM3) {
+      smoothScrollBy(0, dy);
+      return;
+    }
+    if (xgramSnap == null) {
+      // Standard spatial spring: no visible overshoot, so a snap that ends at the list's edge is not pushed back off it
+      xgramSnap = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, 0f, (s, value) -> {
+        int target = Math.round(value);
+        int delta = target - xgramSnapApplied;
+        if (delta != 0) {
+          xgramSnapApplied = target;
+          scrollBy(0, delta);
+        }
+      }).setThreshold(.5f).setEndListener(this::onSnapSettled);
+    }
+    xgramSnap.cancel();
+    xgramSnap.setValue(0f);
+    xgramSnapApplied = 0;
+    if (dy != 0) {
+      xgramSnap.animateTo(dy);
+    }
+  }
+
+  private void cancelSnap () {
+    if (xgramSnap != null) {
+      xgramSnap.cancel();
+    }
+  }
+
+  /** What the IDLE scroll state did after smoothScrollBy: settles the current index (and the last pixels). */
+  private void onSnapSettled () {
+    final int index = findCurrentIndex();
+    if (index == -1) {
+      return;
+    }
+    if (repeatItems) {
+      setCurrentIndex(index);
+    } else if (index != currentIndex) {
+      selectIndex(index, true);
+    } else {
+      int diff = scrollDiffTo(index);
+      if (diff != 0) {
+        scrollBy(0, diff);
+      }
+    }
+  }
+
+  @Override
+  public void stopScroll () {
+    super.stopScroll();
+    cancelSnap();
   }
 
   private int itemPadding;
@@ -187,6 +259,7 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
         public void onScrollStateChanged (RecyclerView recyclerView, int newState) {
           if (newState == SCROLL_STATE_DRAGGING) {
             scrollByUser = true;
+            cancelSnap(); // XGram M3E: the finger takes over a running snap
           }
           if (newState == SCROLL_STATE_IDLE) {
             scrollByUser = false;
@@ -201,9 +274,9 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
                     topItemHeight = topItemHeight % itemHeight;
 
                   if (topItemHeight <= itemHeight / 2) {
-                    smoothScrollBy(0, -topItemHeight); // scrolling up
+                    snapBy(-topItemHeight); // scrolling up
                   } else {
-                    smoothScrollBy(0, itemHeight - topItemHeight); // scrolling down
+                    snapBy(itemHeight - topItemHeight); // scrolling down
                   }
                 } else {
                   setCurrentIndex(findCurrentIndex());
@@ -256,6 +329,14 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
 
   @Override
   public void draw (Canvas c) {
+    if (xgramM3) {
+      // XGram M3E: the selected row's band under the rows, instead of two lines over them
+      if (needSeparators) {
+        com.fahadali.xgram.appearance.XgramM3Wheel.drawBand(c, 0, getMeasuredWidth(), getMeasuredHeight() / 2f, forcedTheme);
+      }
+      super.draw(c);
+      return;
+    }
     super.draw(c);
 
     if (needSeparators) {
@@ -279,7 +360,7 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
         }
         int index = (findCurrentIndex() + indexDiff) % items.size();
         setCurrentIndex(index);
-        smoothScrollBy(0, byHeights);
+        snapBy(byHeights);
         if (itemChangeListener != null) {
           itemChangeListener.onCurrentIndexFinalized(this, index);
         }
@@ -345,27 +426,20 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
     setCurrentIndex(targetIndex);
     if (targetIndex == -1)
       return;
-    int targetScrollTop;
     int viewTop;
     if (targetIndex > 0) {
       viewTop = getItemHeight() * visibleItemCount / 2 - getItemHeight() / 2;
-      targetScrollTop = getItemHeight() * targetIndex;
     } else {
-      targetScrollTop = viewTop = 0;
+      viewTop = 0;
     }
 
     stopScroll();
 
     int firstVisiblePosition = manager.findFirstVisibleItemPosition();
     if (firstVisiblePosition != -1) {
-      int currentScrollTop = getItemHeight() * firstVisiblePosition;
-      if (firstVisiblePosition > 0) {
-        currentScrollTop += getMeasuredHeight() / 2 - getItemHeight() / 2;
-      }
-      View topView = manager.findViewByPosition(firstVisiblePosition);
-      currentScrollTop += topView != null ? -manager.getDecoratedTop(topView) : 0;
-      if (currentScrollTop != targetScrollTop) {
-        smoothScrollBy(0, targetScrollTop - currentScrollTop);
+      int diff = scrollDiffTo(targetIndex);
+      if (diff != 0) {
+        snapBy(diff);
       }
     } else {
       manager.scrollToPositionWithOffset(targetIndex, viewTop);
@@ -374,6 +448,22 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
     if (itemChangeListener != null) {
       itemChangeListener.onCurrentIndexFinalized(this, targetIndex);
     }
+  }
+
+  /** Pixels to scroll (non-repeating lists) to center row {@code targetIndex}; 0 when nothing is laid out. */
+  private int scrollDiffTo (int targetIndex) {
+    int firstVisiblePosition = manager.findFirstVisibleItemPosition();
+    if (firstVisiblePosition == -1 || targetIndex < 0) {
+      return 0;
+    }
+    int targetScrollTop = targetIndex > 0 ? getItemHeight() * targetIndex : 0;
+    int currentScrollTop = getItemHeight() * firstVisiblePosition;
+    if (firstVisiblePosition > 0) {
+      currentScrollTop += getMeasuredHeight() / 2 - getItemHeight() / 2;
+    }
+    View topView = manager.findViewByPosition(firstVisiblePosition);
+    currentScrollTop += topView != null ? -manager.getDecoratedTop(topView) : 0;
+    return targetScrollTop - currentScrollTop;
   }
 
   public interface ItemChangeListener<T> {
@@ -481,6 +571,52 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
         }
       }
     }
+
+    /**
+     * XGram M3E: the row at the center is titleLarge in onSecondaryContainer (on the band); one row away it is
+     * bodyLarge in onSurfaceVariant, and further rows keep shrinking vertically and fading as before. Nothing is
+     * allocated here.
+     */
+    public void drawExpressive (Canvas c, int viewWidth, int viewHeight, int viewTop, InfiniteRecyclerView<?> owner) {
+      if (text == null || trimmedText == null) {
+        return;
+      }
+      final int itemHeight = getItemHeight();
+      final int parentHeight = visibleItemCount * itemHeight;
+      final int targetY = parentHeight / 2;
+      final int halfHeight = viewHeight / 2;
+      final int viewCy = viewTop + halfHeight;
+      final float distance = Math.abs(viewCy - targetY);
+      final float far = Math.min(distance / ((visibleItemCount / 2) * itemHeight + halfHeight), 1f); // as draw()
+      if (far >= 1f) {
+        return;
+      }
+      final float near = Math.min(distance / itemHeight, 1f);
+      final float drum = Math.min(Math.max(0f, (distance - itemHeight) / itemHeight), 1f); // past the first neighbour
+      final float neighbourScale = com.fahadali.xgram.appearance.XgramM3Wheel.neighbourScale();
+      final float scale = 1f - (1f - neighbourScale) * near;
+      final float scaleY = scale * (1f - .25f * drum);
+      final int color = me.vkryl.core.ColorUtils.fromToArgb(
+        com.fahadali.xgram.appearance.XgramM3Wheel.selectedTextColor(owner.forcedTheme),
+        com.fahadali.xgram.appearance.XgramM3Wheel.neighbourTextColor(owner.forcedTheme),
+        near
+      );
+      textPaint.setColor(color);
+      textPaint.setAlpha(Math.round(((color >>> 24) & 0xff) * (1f - far)));
+      final float cx = viewWidth / 2f;
+      final float cy = halfHeight;
+      final boolean scaled = scale != 1f || scaleY != 1f;
+      int saveCount = -1;
+      if (scaled) {
+        saveCount = c.save();
+        c.scale(scale, scaleY, cx, cy);
+      }
+      c.drawText(trimmedText, cx - trimmedTextWidth / 2f, cy + owner.xgramTextOffset, textPaint);
+      if (scaled) {
+        c.restoreToCount(saveCount);
+      }
+      textPaint.setAlpha(255);
+    }
   }
 
   // View
@@ -521,6 +657,11 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
     @Override
     protected void onDraw (Canvas c) {
       if (item != null) {
+        android.view.ViewParent parent = getParent();
+        if (parent instanceof InfiniteRecyclerView && ((InfiniteRecyclerView<?>) parent).xgramM3) {
+          item.drawExpressive(c, lastMeasuredWidth = getMeasuredWidth(), lastMeasuredHeight = getMeasuredHeight(), lastTop = getTop(), (InfiniteRecyclerView<?>) parent);
+          return;
+        }
         item.draw(c, lastMeasuredWidth = getMeasuredWidth(), lastMeasuredHeight = getMeasuredHeight(), lastTop = getTop(), 0, 0);
       }
     }

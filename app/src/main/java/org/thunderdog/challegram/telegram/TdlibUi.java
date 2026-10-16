@@ -8247,9 +8247,25 @@ public class TdlibUi extends Handler {
       month = c.get(Calendar.MONTH);
       year = 0;
     }
+    // XGram M3E: "Remove birthday" as the third action of the sheet when one is set
+    final boolean xgramRemove = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && currentBirthdate != null;
+    final org.thunderdog.challegram.util.ColumnDataPicker.CommitListener xgramRemoveListener = xgramRemove ? (picker, removeView) -> {
+      tdlib.send(new TdApi.SetBirthdate(null), (ok, error) -> controller.runOnUiThreadOptional(() -> {
+        if (error != null) {
+          if (picker.hasVisiblePopUp()) {
+            picker.popupLayout().showErrorTooltip(controller, removeView, TD.toErrorString(error));
+          }
+        } else {
+          picker.dismissPopup(true);
+        }
+      }));
+      return false;
+    } : null;
     controller.showCalendarDatePicker(
       Lang.getString(R.string.BirthdayPopupTitle),
       Lang.getString(R.string.Save),
+      xgramRemove ? Lang.getString(R.string.XgramM3eR4preSbRemoveBirthday) : null,
+      xgramRemoveListener,
       day,
       month,
       year,

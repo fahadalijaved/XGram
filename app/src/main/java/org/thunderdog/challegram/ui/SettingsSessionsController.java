@@ -77,22 +77,31 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
 
   private SettingsAdapter adapter;
 
+  /** XGram M3E: errorContainer circle of "Terminate all other sessions". */
+  private final com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier xgramErrorIcon = new com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier(R.drawable.baseline_cancel_24, com.fahadali.xgram.appearance.XgramM3Sessions.ICON_TOP_COMPACT);
+
   private void buildCells () {
     if (sessions == null || sessions.currentSession == null) {
       return;
     }
 
     ArrayList<ListItem> items = new ArrayList<>();
+    // XGram M3E: sentence case headers and rows, every row of the first group with a leading icon
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
 
     if (tdlib.allowQrLoginCamera()) {
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_qrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, R.string.ScanQR).setTextColorId(ColorId.textNeutral));
+      ListItem qrItem = new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_qrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, R.string.ScanQR);
+      if (!xgramM3) {
+        qrItem.setTextColorId(ColorId.textNeutral);
+      }
+      items.add(qrItem);
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     }
 
-    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_sessionTtl, 0, R.string.SessionTerminateTtl));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_sessionTtl, xgramM3 ? R.drawable.baseline_auto_delete_24 : 0, R.string.SessionTerminateTtl));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
-    items.add(new ListItem(items.isEmpty() ? ListItem.TYPE_HEADER_PADDED : ListItem.TYPE_HEADER, 0, 0, R.string.ThisDevice));
+    items.add(new ListItem(items.isEmpty() ? ListItem.TYPE_HEADER_PADDED : ListItem.TYPE_HEADER, 0, 0, xgramM3 ? R.string.XgramM3eR4preSbThisDevice : R.string.ThisDevice));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_SESSION, R.id.btn_currentSession, 0, 0));
 
@@ -101,7 +110,7 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
       items.add(new ListItem(ListItem.TYPE_SESSIONS_EMPTY));
     } else {
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_terminateAllSessions, R.drawable.baseline_cancel_24, R.string.TerminateAllSessions).setTextColorId(ColorId.textNegative));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_terminateAllSessions, R.drawable.baseline_cancel_24, xgramM3 ? R.string.XgramM3eR4preSbTerminateAll : R.string.TerminateAllSessions).setTextColorId(ColorId.textNegative));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
       boolean first = true;
@@ -109,7 +118,7 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
       // Incomplete login attempts
       for (TdApi.Session session : sessions.incompleteLoginAttempts) {
         if (first) {
-          items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.SessionsIncompleteTitle));
+          items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, xgramM3 ? R.string.XgramM3eR4preSbIncomplete : R.string.SessionsIncompleteTitle));
           items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
           first = false;
@@ -128,7 +137,13 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
       // Other sessions
       for (TdApi.Session session : sessions.otherActiveSessions) {
         if (first) {
-          items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, sessions.incompleteLoginAttempts.length > 0 ? R.string.ActiveDevices : R.string.OtherDevices));
+          final int headerRes;
+          if (xgramM3) {
+            headerRes = sessions.incompleteLoginAttempts.length > 0 ? R.string.XgramM3eR4preSbActiveDevices : R.string.XgramM3eR4preSbOtherDevices;
+          } else {
+            headerRes = sessions.incompleteLoginAttempts.length > 0 ? R.string.ActiveDevices : R.string.OtherDevices;
+          }
+          items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, headerRes));
           items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
           first = false;
@@ -262,6 +277,12 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
         }
         view.setIconColorId(iconColorId);
         final int itemId = item.getId();
+        // XGram M3E: the error row's icon sits in an errorContainer circle (SettingView rows are recycled: only this one)
+        if (itemId == R.id.btn_terminateAllSessions && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          view.addDrawModifier(xgramErrorIcon, false);
+        } else {
+          view.removeDrawModifier(xgramErrorIcon);
+        }
         if (itemId == R.id.btn_terminateAllSessions) {
           view.setData(R.string.ClearOtherSessionsHelp);
         } else if (itemId == R.id.btn_qrLogin) {
@@ -285,6 +306,11 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
             locationView.setText(Lang.getString(R.string.SessionUnknown));
           }
           progressView.forceFactor(0f);
+          if (com.fahadali.xgram.appearance.XgramM3Sessions.isRow(parent)) {
+            // XGram M3E: secondaryContainer tile, platform icon, filter chips
+            com.fahadali.xgram.appearance.XgramM3Sessions.bindRow(parent, sessions.currentSession, true, false);
+            return;
+          }
           iconView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_device_android_x_24));
           secretStateView.setVisibility(sessions.currentSession.canAcceptSecretChats ? View.VISIBLE : View.GONE);
           callsStateView.setVisibility(sessions.currentSession.canAcceptCalls ? View.VISIBLE : View.GONE);
@@ -311,6 +337,10 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
             progressView.animateFactor(inProgress ? 1f : 0f);
           } else {
             progressView.forceFactor(inProgress ? 1f : 0f);
+          }
+          if (com.fahadali.xgram.appearance.XgramM3Sessions.isRow(parent)) {
+            com.fahadali.xgram.appearance.XgramM3Sessions.bindRow(parent, session, false, inProgress); // XGram M3E
+            return;
           }
           iconView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(SessionIconKt.asIcon(session)));
           secretStateView.setVisibility((session.canAcceptSecretChats && !session.isPasswordPending) ? View.VISIBLE : View.GONE);
@@ -561,11 +591,63 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
     return true;
   }
 
+  // XGram M3E: the "Secret chats" and "Calls" filter chips of a session tile toggle the setting in place
+
+  private void xgramToggleSession (TdApi.Session session, boolean secretChats) {
+    if (sessions == null || session.isPasswordPending || terminatingAll || (terminatingSessions != null && terminatingSessions.get(session.id) != null)) {
+      return;
+    }
+    final boolean value = !(secretChats ? session.canAcceptSecretChats : session.canAcceptCalls);
+    xgramSetSessionAccepts(session, secretChats, value);
+    TdApi.Function<TdApi.Ok> function = secretChats ?
+      new TdApi.ToggleSessionCanAcceptSecretChats(session.id, value) :
+      new TdApi.ToggleSessionCanAcceptCalls(session.id, value);
+    tdlib.send(function, (ok, error) -> {
+      if (error != null) {
+        // TDLib callbacks arrive off the main thread
+        runOnUiThreadOptional(() -> {
+          xgramSetSessionAccepts(session, secretChats, !value);
+          UI.showError(error);
+        });
+      }
+    });
+  }
+
+  private void xgramSetSessionAccepts (TdApi.Session session, boolean secretChats, boolean value) {
+    if (secretChats) {
+      session.canAcceptSecretChats = value;
+    } else {
+      session.canAcceptCalls = value;
+    }
+    if (sessions == null || adapter == null) {
+      return;
+    }
+    final boolean current = session.isCurrent;
+    final int position = current ? adapter.indexOfViewById(R.id.btn_currentSession) : indexOfSessionInAdapter(session.id);
+    if (position == -1) {
+      return;
+    }
+    RecyclerView recyclerView = getRecyclerView();
+    View view = recyclerView != null && recyclerView.getLayoutManager() != null ? recyclerView.getLayoutManager().findViewByPosition(position) : null;
+    if (view instanceof RelativeLayout && view.getTag() == session && com.fahadali.xgram.appearance.XgramM3Sessions.isRow(view)) {
+      // in place, so the chip changes without the row being rebound
+      final boolean inProgress = !current && terminatingSessions != null && terminatingSessions.get(session.id) != null;
+      com.fahadali.xgram.appearance.XgramM3Sessions.bindRow((RelativeLayout) view, session, current, inProgress);
+    } else {
+      adapter.updateSessionByPosition(position);
+    }
+  }
+
   @Override
   public void onClick (View v) {
     final int viewId = v.getId();
-    if (viewId == R.id.btn_terminateAllSessions) {
-      showOptions(Lang.getString(R.string.AreYouSureSessions), new int[] {R.id.btn_terminateAllSessions, R.id.btn_cancel}, new String[] {Lang.getString(R.string.TerminateAllSessions), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_forever_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+    if (viewId == R.id.session_secret || viewId == R.id.session_calls) {
+      Object tag = v.getParent() instanceof View ? ((View) v.getParent()).getTag() : null;
+      if (tag instanceof TdApi.Session) {
+        xgramToggleSession((TdApi.Session) tag, viewId == R.id.session_secret);
+      }
+    } else if (viewId == R.id.btn_terminateAllSessions) {
+      showOptions(Lang.getString(R.string.AreYouSureSessions), new int[] {R.id.btn_terminateAllSessions, R.id.btn_cancel}, new String[] {Lang.getString(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.string.XgramM3eR4preSbTerminateAll : R.string.TerminateAllSessions), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_forever_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
         if (id == R.id.btn_terminateAllSessions) {
           terminateOtherSessions();
         }

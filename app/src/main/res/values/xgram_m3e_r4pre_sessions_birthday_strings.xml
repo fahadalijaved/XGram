@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram Material 3 Expressive: Devices list and the birthday picker (sentence case) -->
+<resources>
+  <string name="XgramM3eR4preSbThisDevice">This device</string>
+  <string name="XgramM3eR4preSbOtherDevices">Other devices</string>
+  <string name="XgramM3eR4preSbActiveDevices">Active devices</string>
+  <string name="XgramM3eR4preSbIncomplete">Incomplete login attempts</string>
+  <string name="XgramM3eR4preSbTerminateAll">Terminate all other sessions</string>
+  <string name="XgramM3eR4preSbSecretChats">Secret chats</string>
+  <string name="XgramM3eR4preSbCalls">Calls</string>
+  <string name="XgramM3eR4preSbRemoveBirthday">Remove birthday</string>
+  <string name="XgramM3eR4preSbIncomingCalls">Incoming calls</string>
+  <string name="XgramM3eR4preSbSessionDetails">Session details</string>
+  <string name="XgramM3eR4preSbAttemptDetails">Login attempt details</string>
+  <string name="XgramM3eR4preSbIpAddress">IP address</string>
+  <string name="XgramM3eR4preSbFirstLogin">First login</string>
+  <string name="XgramM3eR4preSbLoginAttempt">Login attempt</string>
+  <string name="XgramM3eR4preSbLastActivity">Last activity</string>
+</resources>

@@ -2916,7 +2916,13 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   public final ColumnDataPicker showCalendarDatePicker (CharSequence title, CharSequence commitButtonText, int day, int month, int year, boolean yearOptional, CalendarDatePickerListener listener) {
+    return showCalendarDatePicker(title, commitButtonText, null, null, day, month, year, yearOptional, listener);
+  }
+
+  /** XGram: {@code neutralText} and {@code neutralListener} add a third action at the start (Expressive design only). */
+  public final ColumnDataPicker showCalendarDatePicker (CharSequence title, CharSequence commitButtonText, @Nullable CharSequence neutralText, @Nullable ColumnDataPicker.CommitListener neutralListener, int day, int month, int year, boolean yearOptional, CalendarDatePickerListener listener) {
     ColumnDataPicker dataPicker = new ColumnDataPicker();
+    dataPicker.setNeutralAction(neutralText, neutralListener);
 
     Calendar c = Calendar.getInstance();
 
@@ -3089,10 +3095,12 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       int contentHeight = 0;
       int pickerHeight = InfiniteRecyclerView.getItemHeight() * 5;
 
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramM3Wheel.on(); // XGram M3E: band and bottom actions
+
       LinearLayout datePickerWrap = new LinearLayout(context);
       datePickerWrap.setOrientation(LinearLayout.HORIZONTAL);
       datePickerWrap.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerHeight));
-      ViewUtils.setBackground(datePickerWrap, new Drawable() {
+      ViewUtils.setBackground(datePickerWrap, xgramM3 ? new com.fahadali.xgram.appearance.XgramM3Wheel.BandDrawable(forcedTheme) : new Drawable() {
         @Override
         public void draw (@NonNull Canvas c) {
           Rect bounds = getBounds();
@@ -3135,7 +3143,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       final int startHour = c.get(Calendar.HOUR_OF_DAY);
       final int startMinute = c.get(Calendar.MINUTE);
 
-      final TextView sendView = new TextView(context);
+      final TextView sendView = xgramM3 ? com.fahadali.xgram.appearance.XgramM3Wheel.newConfirmButton(context, forcedTheme) : new TextView(context);
       final RunnableLong updateSendButton = targetMillis -> {
         String text;
         if (DateUtils.isToday(targetMillis, TimeUnit.MILLISECONDS)) {
@@ -3145,7 +3153,11 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         } else {
           text = Lang.getString(futureRes, Lang.getDate(targetMillis, TimeUnit.MILLISECONDS), Lang.time(targetMillis, TimeUnit.MILLISECONDS));
         }
-        Views.setMediumText(sendView, Lang.uppercase(text));
+        if (xgramM3) {
+          sendView.setText(text); // sentence case on the filled button
+        } else {
+          Views.setMediumText(sendView, Lang.uppercase(text));
+        }
       };
 
       int dayCount = 366;
@@ -3272,19 +3284,28 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       optionsWrap.addView(datePickerWrap);
       contentHeight += pickerHeight;
 
-      Views.setClickable(sendView);
-      sendView.setGravity(Gravity.CENTER);
-      sendView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
-      sendView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f)));
-      FillingDrawable drawable = ViewSupport.setThemedBackground(sendView, ColorId.fillingPositive, forcedTheme != null ? null : this);
-      drawable.setForcedTheme(forcedTheme);
-      if (forcedTheme != null) {
-        sendView.setTextColor(forcedTheme.getColor(ColorId.fillingPositiveContent));
+      final com.fahadali.xgram.appearance.XgramM3Wheel.Actions xgramActions;
+      if (xgramM3) {
+        // XGram M3E: [Cancel] [Send today at 10:00] at the end instead of the full-width uppercase bar
+        xgramActions = com.fahadali.xgram.appearance.XgramM3Wheel.newActions(context, forcedTheme, null, Lang.getString(R.string.Cancel), sendView);
+        xgramActions.cancel.setOnClickListener(v -> popupLayout.hideWindow(true));
+        contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT);
       } else {
-        sendView.setTextColor(Theme.getColor(ColorId.fillingPositiveContent));
-        addThemeTextColorListener(sendView, ColorId.fillingPositiveContent);
+        xgramActions = null;
+        Views.setClickable(sendView);
+        sendView.setGravity(Gravity.CENTER);
+        sendView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+        sendView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f)));
+        FillingDrawable drawable = ViewSupport.setThemedBackground(sendView, ColorId.fillingPositive, forcedTheme != null ? null : this);
+        drawable.setForcedTheme(forcedTheme);
+        if (forcedTheme != null) {
+          sendView.setTextColor(forcedTheme.getColor(ColorId.fillingPositiveContent));
+        } else {
+          sendView.setTextColor(Theme.getColor(ColorId.fillingPositiveContent));
+          addThemeTextColorListener(sendView, ColorId.fillingPositiveContent);
+        }
+        contentHeight += Screen.dp(56f);
       }
-      contentHeight += Screen.dp(56f);
       sendView.setOnClickListener(v -> {
         long millis = calculateDate.getLongValue();
         if (tdlib.currentTimeMillis() < millis) {
@@ -3293,7 +3314,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         }
       });
       listener.onCurrentIndexChanged(null, -1);
-      optionsWrap.addView(sendView);
+      optionsWrap.addView(xgramActions != null ? xgramActions.view : sendView);
       return contentHeight;
     }, forcedTheme);
   }
