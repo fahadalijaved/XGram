@@ -19,6 +19,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
@@ -296,6 +297,7 @@ public class VideoTimelineView extends View implements Destroyable, FactorAnimat
       boolean isSliding = slideMode != SLIDE_MODE_NONE;
       this.slideMode = slideMode;
       getParent().requestDisallowInterceptTouchEvent(isSliding);
+      xgramSetPressed(slideMode); // XGram: the held handle widens
     }
   }
 
@@ -639,8 +641,129 @@ public class VideoTimelineView extends View implements Destroyable, FactorAnimat
     }
   }
 
+  // XGram: Material 3 Expressive trimmer (the media viewer's video trim and the video message recorder). The filmstrip is
+  // clipped to 12dp corners on a surfaceContainerHighest track, a 60% scrim covers it outside the trim, 2dp primary
+  // borders run along the kept part, the handles are 16dp primary pills with 8dp corners and an onPrimary grip that widen
+  // to 20dp while held (spatial fast spring), and the playhead is a 4dp full-corner white bar. Over media (a forced theme)
+  // the colours come from the dark scheme. Nothing is allocated while drawing.
+
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramStartPress, xgramEndPress;
+  private final RectF xgramRect = new RectF();
+  private final Path xgramClip = new Path();
+  private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private int xgramClipLeft = -1, xgramClipTop = -1, xgramClipWidth = -1, xgramClipHeight = -1;
+
+  private static final float XGRAM_HANDLE_WIDTH = 16f, XGRAM_HANDLE_PRESSED_WIDTH = 20f, XGRAM_PLAYHEAD_WIDTH = 4f;
+
+  private void xgramSetPressed (int slideMode) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    if (xgramStartPress == null || xgramEndPress == null) {
+      xgramStartPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+      xgramEndPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+    }
+    xgramStartPress.animateTo(slideMode == SLIDE_MODE_START ? 1f : 0f);
+    xgramEndPress.animateTo(slideMode == SLIDE_MODE_END ? 1f : 0f);
+  }
+
+  private int xgramRole (int role) {
+    return forcedTheme != null ? com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(role) : com.fahadali.xgram.appearance.XgramExpressive.color(role);
+  }
+
+  private void xgramDrawHandle (Canvas c, float centerX, float top, float bottom, float pressed, int container, int content) {
+    final float width = Screen.dpf(XGRAM_HANDLE_WIDTH) + (Screen.dpf(XGRAM_HANDLE_PRESSED_WIDTH) - Screen.dpf(XGRAM_HANDLE_WIDTH)) * pressed;
+    xgramRect.set(centerX - width / 2f, top, centerX + width / 2f, bottom);
+    final float radius = Math.min(Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_S), width / 2f);
+    xgramPaint.setColor(container);
+    c.drawRoundRect(xgramRect, radius, radius, xgramPaint);
+    final float gripWidth = Screen.dpf(2f), gripHeight = Math.min(Screen.dpf(12f), (bottom - top) / 2f), centerY = (top + bottom) / 2f;
+    xgramRect.set(centerX - gripWidth / 2f, centerY - gripHeight / 2f, centerX + gripWidth / 2f, centerY + gripHeight / 2f);
+    xgramPaint.setColor(content);
+    c.drawRoundRect(xgramRect, gripWidth / 2f, gripWidth / 2f, xgramPaint);
+  }
+
+  private void xgramDraw (Canvas c) {
+    final int paddingLeft = getPaddingLeft() + getAddPaddingHorizontal();
+    final int paddingTop = getPaddingTop() + getAddPaddingVertical();
+    final int timelineWidth = getTimelineWidth();
+    final int timelineHeight = getTimelineHeight();
+    if (timelineWidth <= 0 || timelineHeight <= 0) {
+      return;
+    }
+    final float frameWidth = calculateFrameWidth();
+    final int primary = xgramRole(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+    final int onPrimary = xgramRole(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY);
+
+    if (xgramClipLeft != paddingLeft || xgramClipTop != paddingTop || xgramClipWidth != timelineWidth || xgramClipHeight != timelineHeight) {
+      xgramClipLeft = paddingLeft;
+      xgramClipTop = paddingTop;
+      xgramClipWidth = timelineWidth;
+      xgramClipHeight = timelineHeight;
+      final float radius = Math.min(Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M), timelineHeight / 2f);
+      xgramRect.set(paddingLeft, paddingTop, paddingLeft + timelineWidth, paddingTop + timelineHeight);
+      xgramClip.rewind();
+      xgramClip.addRoundRect(xgramRect, radius, radius, Path.Direction.CW);
+    }
+
+    final int startX = paddingLeft + (int) (timelineWidth * startFactor.getFactor());
+    final int endX = paddingLeft + (int) (timelineWidth * endFactor.getFactor());
+
+    final int saveCount = c.save();
+    c.clipPath(xgramClip);
+    xgramPaint.setColor(xgramRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST));
+    c.drawRect(paddingLeft, paddingTop, paddingLeft + timelineWidth, paddingTop + timelineHeight, xgramPaint);
+    float cx = paddingLeft;
+    for (Frame frame : frames) {
+      frame.setPosition(Math.max(paddingLeft, (int) cx), paddingTop, Math.min(paddingLeft + timelineWidth, (int) (cx + frameWidth)), paddingTop + timelineHeight, false);
+      frame.draw(c, (float) timelineHeight / frameWidth);
+      cx += frameWidth;
+    }
+    xgramPaint.setColor(0x99000000); // outside the trim: 60% scrim over the frames
+    if (startX > paddingLeft) {
+      c.drawRect(paddingLeft, paddingTop, startX, paddingTop + timelineHeight, xgramPaint);
+    }
+    if (endX < paddingLeft + timelineWidth) {
+      c.drawRect(endX, paddingTop, paddingLeft + timelineWidth, paddingTop + timelineHeight, xgramPaint);
+    }
+    c.restoreToCount(saveCount);
+
+    final float top = paddingTop - getAddPaddingVertical(), bottom = paddingTop + timelineHeight + getAddPaddingVertical();
+    // The kept part's borders, above and below the strip
+    xgramPaint.setColor(primary);
+    c.drawRect(startX, top, endX, paddingTop, xgramPaint);
+    c.drawRect(startX, paddingTop + timelineHeight, endX, bottom, xgramPaint);
+    xgramDrawHandle(c, startX, top, bottom, xgramStartPress != null ? xgramStartPress.getValue() : 0f, primary, onPrimary);
+    xgramDrawHandle(c, endX, top, bottom, xgramEndPress != null ? xgramEndPress.getValue() : 0f, primary, onPrimary);
+
+    final float sliderVisibility = this.sliderVisible.getFloatValue();
+    if (sliderVisibility > 0) {
+      int realStartX, realEndX;
+      if (normalizedStart == -1 || normalizedEnd == -1) {
+        realStartX = paddingLeft;
+        realEndX = paddingLeft + timelineWidth;
+      } else {
+        realStartX = paddingLeft + (int) ((double) timelineWidth * (normalizedStart / totalDuration));
+        realEndX = paddingLeft + (int) ((double) timelineWidth * (normalizedEnd / totalDuration));
+      }
+      final int x = Math.max(realStartX, Math.min(realEndX, realStartX + (int) ((realEndX - realStartX) * sliderProgress)));
+      final float alpha = sliderVisibility * (.5f + .5f * slideEnabled.getFloatValue());
+      final float width = Screen.dpf(XGRAM_PLAYHEAD_WIDTH), outline = Screen.dpf(1f);
+      xgramRect.set(x - width / 2f - outline, top - outline, x + width / 2f + outline, bottom + outline);
+      xgramPaint.setColor(ColorUtils.alphaColor(alpha * .24f, Color.BLACK)); // keeps the white bar visible on light frames
+      c.drawRoundRect(xgramRect, xgramRect.width() / 2f, xgramRect.width() / 2f, xgramPaint);
+      xgramRect.set(x - width / 2f, top, x + width / 2f, bottom);
+      xgramPaint.setColor(ColorUtils.alphaColor(alpha, Color.WHITE));
+      c.drawRoundRect(xgramRect, width / 2f, width / 2f, xgramPaint);
+    }
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c);
+      return;
+    }
     final int paddingLeft = getPaddingLeft() + getAddPaddingHorizontal();
     final int paddingTop = getPaddingTop() + getAddPaddingVertical();
     final int timelineWidth = getTimelineWidth();
