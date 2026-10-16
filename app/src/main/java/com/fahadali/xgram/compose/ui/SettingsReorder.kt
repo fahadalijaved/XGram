@@ -101,12 +101,17 @@ import kotlin.math.abs
 // A card group whose rows can be dragged into a new order (side menu items, message menu, chat actions): the
 // Android 16 Settings look of SettingsGroup, plus a drag handle on every row. Lists are short, so a plain Column.
 
-/** One row of a reorderable group. [checked] null: the row has no switch, it can only move. */
+/**
+ * One row of a reorderable group. [checked] null: the row has no switch, it can only move. [enabled] false greys
+ * the switch out (it does nothing until another setting is on; [subtitle] can say which); the row still moves.
+ */
 class ReorderRow(
   val key: String,
   val title: String,
   @DrawableRes val icon: Int = 0,
-  val checked: Boolean? = null
+  val checked: Boolean? = null,
+  val enabled: Boolean = true,
+  val subtitle: String? = null
 )
 
 /** Content type of a reorderable group in the page's list (PageBlock.TYPE_* leave 10 free for it). */
@@ -526,7 +531,9 @@ private fun ReorderItem(
   }
   val colors = settingsRowColors(id, rowKey)
   val checked = row.checked
+  val supporting: (@Composable () -> Unit)? = row.subtitle?.let { { Text(it) } }
   if (checked != null) {
+    // A disabled row only stops the switch: holding it (and its handle) still moves it.
     SegmentedListItem(
       onClick = {
         // Letting go of a row that was held without moving it must not flip its switch.
@@ -540,8 +547,10 @@ private fun ReorderItem(
         role = Role.Switch
         toggleableState = ToggleableState(checked)
       },
+      enabled = row.enabled,
       leadingContent = leading,
-      trailingContent = { SettingsSwitch(checked) },
+      trailingContent = { SettingsSwitch(checked, row.enabled) },
+      supportingContent = supporting,
       colors = colors,
       content = { Text(row.title) }
     )
@@ -550,6 +559,7 @@ private fun ReorderItem(
       shapes = shapes,
       modifier = modifier,
       leadingContent = leading,
+      supportingContent = supporting,
       colors = colors,
       content = { Text(row.title) }
     )

@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.fahadali.xgram.XgramComposeBridge
+import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.XgramUi
 import com.fahadali.xgram.appearance.XgramExpressive
@@ -39,6 +40,7 @@ import com.fahadali.xgram.layout.XgramWindow
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.ui.MessagesController
 import org.thunderdog.challegram.ui.SettingsCloudEmojiController
+import org.thunderdog.challegram.ui.SettingsThemeController
 
 /** Appearance: theme, Material You, Expressive design, icons and emoji; chat look; layout. */
 @Composable
@@ -55,11 +57,15 @@ fun AppearancePage() {
 
     header(R.string.XgramHeaderTheme)
     if (XgramMaterialYou.isAvailable()) {
+      // Expressive design draws with the Material You colors whatever the theme: Themes and Material You are locked
+      // (shown on, nothing saved), and night mode is what is left to pick. Expressive needs Android 13, so only here.
+      val themesLocked = XgramSettingDeps.themesLocked()
       group {
         themes(host, themeName)
         switch(
-          R.id.btn_xgramMaterialYou, s(R.string.XgramMaterialYou), s(R.string.XgramMaterialYouSub),
-          checked = XgramMaterialYou.isEnabled(), busy = materialYouBusy
+          R.id.btn_xgramMaterialYou, s(R.string.XgramMaterialYou),
+          s(if (themesLocked) R.string.XgramMaterialYouExpressive else R.string.XgramMaterialYouSub),
+          checked = themesLocked || XgramMaterialYou.isEnabled(), enabled = !themesLocked, busy = materialYouBusy
         ) {
           materialYouBusy = true
           XgramMaterialYou.toggle(host.controller) {
@@ -70,8 +76,14 @@ fun AppearancePage() {
             }
           }
         }
+        if (themesLocked) {
+          // Telegram X's night mode: its Themes page has Auto night mode (the side menu has the switch).
+          value(R.id.btn_xgramAutoNightMode, s(R.string.XgramAutoNightMode), s(XgramSettingDeps.autoNightModeName())) {
+            host.open(SettingsThemeController(host.activity, host.tdlib))
+          }
+        }
       }
-      description(R.string.XgramMaterialYouInfo)
+      description(if (themesLocked) R.string.XgramThemeExpressiveInfo else R.string.XgramMaterialYouInfo)
       expressive(host)
       group {
         iconPack(host)
@@ -124,18 +136,29 @@ fun AppearancePage() {
       }
     }
     description(R.string.XgramTwoPaneInfo)
-    // How wide the panes are: half each, or the width set with the handle on the line between them.
+    // How wide the panes are: half each, or the width set with the handle on the line between them. Both only with
+    // two panes; Split evenly leaves nothing to resize.
+    val twoPaneReason = XgramSettingDeps.twoPaneOptionReason()
+    val resizeReason = XgramSettingDeps.paneResizableReason()
     group {
-      switch(R.id.btn_xgramPaneSplitEvenly, s(R.string.XgramPaneSplitEvenly), s(R.string.XgramPaneSplitEvenlySub), checked = settings.paneSplitEvenly()) {
+      switch(
+        R.id.btn_xgramPaneSplitEvenly, s(R.string.XgramPaneSplitEvenly),
+        s(if (twoPaneReason != 0) twoPaneReason else R.string.XgramPaneSplitEvenlySub),
+        checked = settings.paneSplitEvenly(), enabled = XgramSettingDeps.twoPaneOptionsEnabled()
+      ) {
         settings.setPaneSplitEvenly(it)
         host.activity.xgramTwoPane()?.update()
       }
-      switch(R.id.btn_xgramPaneResizable, s(R.string.XgramPaneResizable), s(R.string.XgramPaneResizableSub), checked = settings.paneResizable()) {
+      switch(
+        R.id.btn_xgramPaneResizable, s(R.string.XgramPaneResizable),
+        s(if (resizeReason != 0) resizeReason else R.string.XgramPaneResizableSub),
+        checked = settings.paneResizable(), enabled = XgramSettingDeps.paneResizableEnabled()
+      ) {
         settings.setPaneResizable(it)
         host.activity.xgramTwoPane()?.update()
       }
     }
-    description(R.string.XgramPaneInfo)
+    description(XgramSettingDeps.paneInfo())
     group {
       switch(R.id.btn_xgramLimitMessageWidth, s(R.string.XgramLimitMessageWidth), s(R.string.XgramLimitMessageWidthSub), checked = settings.limitMessageWidth()) {
         settings.setLimitMessageWidth(it)
@@ -144,7 +167,11 @@ fun AppearancePage() {
     // Foldables: only where a fold can be reported (as the classic page).
     if (XgramWindow.isPostureSupported()) {
       group {
-        switch(R.id.btn_xgramFoldHingeSplit, s(R.string.XgramFoldHingeSplit), s(R.string.XgramFoldHingeSplitSub), checked = settings.foldHingeSplit()) {
+        switch(
+          R.id.btn_xgramFoldHingeSplit, s(R.string.XgramFoldHingeSplit),
+          s(if (twoPaneReason != 0) twoPaneReason else R.string.XgramFoldHingeSplitSub),
+          checked = settings.foldHingeSplit(), enabled = XgramSettingDeps.twoPaneOptionsEnabled()
+        ) {
           settings.setFoldHingeSplit(it)
           host.activity.xgramTwoPane()?.update()
         }
@@ -167,7 +194,9 @@ fun AppearancePage() {
 }
 
 private fun GroupScope.themes(host: XgramComposeHost, name: String) {
-  value(R.id.btn_xgramThemes, s(R.string.XgramThemes), name) {
+  // Locked with Expressive design (XgramSettingDeps.themesLocked): the reason instead of the theme's name.
+  val locked = XgramSettingDeps.themesLocked()
+  value(R.id.btn_xgramThemes, s(R.string.XgramThemes), if (locked) s(R.string.XgramThemesExpressive) else name, enabled = !locked) {
     host.open(XgramThemesController(host.activity, host.tdlib))
   }
 }

@@ -270,9 +270,20 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
             bindUpdateCheck(view, isUpdate);
           }
         } else if (id == R.id.btn_xgramThemes) {
-          view.setData(currentThemeName());
+          // Expressive design draws with the Material You colors whatever the theme: locked, the reason instead.
+          boolean locked = XgramSettingDeps.themesLocked();
+          view.setData(locked ? Lang.getString(R.string.XgramThemesExpressive) : currentThemeName());
+          view.setEnabled(!locked);
         } else if (id == R.id.btn_xgramMaterialYou) {
-          view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramMaterialYou.isEnabled(), isUpdate);
+          // Shown on and locked with Expressive design; the saved choice is kept for when it is off.
+          boolean locked = XgramSettingDeps.themesLocked();
+          view.getToggler().setRadioEnabled(locked || com.fahadali.xgram.appearance.XgramMaterialYou.isEnabled(), isUpdate);
+          if (locked) {
+            view.setData(R.string.XgramMaterialYouExpressive);
+          }
+          view.setEnabled(!locked);
+        } else if (id == R.id.btn_xgramAutoNightMode) {
+          view.setData(XgramSettingDeps.autoNightModeName());
         } else if (id == R.id.btn_xgramExpressive) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramExpressive.isEnabled(), isUpdate);
         } else if (id == R.id.btn_xgramEmojiSet) {
@@ -325,6 +336,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setEnabled(!settings.ghostDontType());
         } else if (id == R.id.btn_xgramGhostSilent) {
           view.getToggler().setRadioEnabled(settings.ghostSilent(), isUpdate);
+          setReason(view, XgramSettingDeps.ghostSilentReason());
         } else if (id == R.id.btn_xgramGhostScheduleSend) {
           view.getToggler().setRadioEnabled(settings.ghostScheduleSend(), isUpdate);
           view.setEnabled(settings.ghostOffline());
@@ -341,6 +353,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.historySaveEdits(), isUpdate);
         } else if (id == R.id.btn_xgramHistoryRedDeleted) {
           view.getToggler().setRadioEnabled(settings.historyRedDeleted(), isUpdate);
+          setReason(view, XgramSettingDeps.historyRedDeletedReason());
         } else if (id == R.id.btn_xgramHideSponsored) {
           view.getToggler().setRadioEnabled(settings.hideSponsored(), isUpdate);
         } else if (id == R.id.btn_xgramShowPeerIds) {
@@ -349,12 +362,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.limitMessageWidth(), isUpdate);
         } else if (id == R.id.btn_xgramFoldHingeSplit) {
           view.getToggler().setRadioEnabled(settings.foldHingeSplit(), isUpdate);
+          setReason(view, XgramSettingDeps.twoPaneOptionReason());
         } else if (id == R.id.btn_xgramFoldTabletop) {
           view.getToggler().setRadioEnabled(settings.foldTabletop(), isUpdate);
         } else if (id == R.id.btn_xgramPaneSplitEvenly) {
           view.getToggler().setRadioEnabled(settings.paneSplitEvenly(), isUpdate);
+          setReason(view, XgramSettingDeps.twoPaneOptionReason());
         } else if (id == R.id.btn_xgramPaneResizable) {
           view.getToggler().setRadioEnabled(settings.paneResizable(), isUpdate);
+          setReason(view, XgramSettingDeps.paneResizableReason());
         } else if (id == R.id.btn_xgramDragDrop) {
           view.getToggler().setRadioEnabled(settings.dragDrop(), isUpdate);
         } else if (id == R.id.btn_xgramOpenBeside) {
@@ -367,6 +383,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.connectionStatusAtStart(), isUpdate);
         } else if (id == R.id.btn_xgramAllChatsLabel) {
           view.getToggler().setRadioEnabled(settings.allChatsLabel(), isUpdate);
+          setReason(view, XgramSettingDeps.allChatsLabelReason(tdlib));
         } else if (id == R.id.btn_xgramHideFolders) {
           view.getToggler().setRadioEnabled(settings.hideFolders(tdlib.accountId()), isUpdate);
         } else if (id == R.id.btn_xgramPullToNext) {
@@ -408,7 +425,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramTrFallback) {
           view.getToggler().setRadioEnabled(settings.translateFallback(), isUpdate);
           // Only a third-party service can fail over to Telegram.
-          view.setEnabled(com.fahadali.xgram.translate.XgramTranslator.isThirdParty(settings.translateProvider()));
+          setReason(view, XgramSettingDeps.translateFallbackReason());
         } else if (id == R.id.btn_xgramTrProvider) {
           view.setData(com.fahadali.xgram.translate.XgramTranslator.name(settings.translateProvider()));
         } else if (id == R.id.btn_xgramTrTarget) {
@@ -419,18 +436,23 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(translateStyleName());
         } else if (id == R.id.btn_xgramTapToRecord) {
           view.getToggler().setRadioEnabled(settings.tapToRecord(), isUpdate);
+          setReason(view, XgramSettingDeps.tapToRecordReason());
         } else if (id == R.id.btn_xgramInlineVideo) {
           view.getToggler().setRadioEnabled(settings.inlineVideo(), isUpdate);
         } else if (id == R.id.btn_xgramInlineVideoStart) {
           view.setData(settings.inlineVideoStart() == XgramSettings.INLINE_VIDEO_START_TAP ? R.string.XgramInlineVideoStartTap : R.string.XgramInlineVideoStartAuto);
+          view.setEnabled(XgramSettingDeps.inlineVideoStartEnabled());
         } else if (id == R.id.btn_xgramEnterToSend) {
           view.setData(com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(settings.enterToSend()));
         } else if (id == R.id.btn_xgramProxyOffVpn) {
           view.getToggler().setRadioEnabled(settings.proxyOffOnVpn(), isUpdate);
+          view.setEnabled(XgramSettingDeps.proxyRulesEnabled()); // the note under them says why
         } else if (id == R.id.btn_xgramProxyOffWifi) {
           view.getToggler().setRadioEnabled(settings.proxyOffOnWifi(), isUpdate);
+          view.setEnabled(XgramSettingDeps.proxyRulesEnabled());
         } else if (id == R.id.btn_xgramProxyOffMobile) {
           view.getToggler().setRadioEnabled(settings.proxyOffOnMobile(), isUpdate);
+          view.setEnabled(XgramSettingDeps.proxyRulesEnabled());
         }
         // Settings search: results show where they live; locked switches stay tappable. Keep this last.
         XgramSettingsSearch.bindResult(item, view, isUpdate);
@@ -441,6 +463,24 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         if (item.getId() == R.id.btn_xgramDownloadBoostLevel) {
           XgramSettings.instance().setDownloadBoostLevel(XgramDownloadBoost.LEVEL_LOW + newValue);
           updateDownloadBoostInfo();
+        }
+      }
+
+      @Override
+      protected void setSliderValues (ListItem item, org.thunderdog.challegram.widget.SliderWrapView view) {
+        super.setSliderValues(item, view);
+        if (item.getId() == R.id.btn_xgramDownloadBoostLevel) {
+          // The strength is only read while boost is on: the knob can't be moved and the row is faded until then.
+          boolean enabled = XgramSettingDeps.downloadBoostLevelEnabled();
+          boolean animated = androidx.core.view.ViewCompat.isAttachedToWindow(view);
+          for (int i = 0; i < view.getChildCount(); i++) {
+            View child = view.getChildAt(i);
+            if (child instanceof org.thunderdog.challegram.mediaview.SliderView) {
+              ((org.thunderdog.challegram.mediaview.SliderView) child).setSlideEnabled(enabled, animated);
+            } else {
+              child.setAlpha(enabled ? 1f : .5f);
+            }
+          }
         }
       }
 
@@ -592,11 +632,16 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     pickers.add(link(R.id.btn_xgramEmojiSet, R.string.XgramEmoji));
     if (com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable()) {
       // Android 12+. Its note goes right under it, so the card is split there.
-      addRows(items,
-        link(R.id.btn_xgramThemes, R.string.XgramThemes),
-        toggle(R.id.btn_xgramMaterialYou, R.string.XgramMaterialYou, R.string.XgramMaterialYouSub)
-      );
-      items.add(description(R.string.XgramMaterialYouInfo));
+      List<ListItem> theme = new ArrayList<>();
+      theme.add(link(R.id.btn_xgramThemes, R.string.XgramThemes));
+      theme.add(toggle(R.id.btn_xgramMaterialYou, R.string.XgramMaterialYou, R.string.XgramMaterialYouSub));
+      // Expressive design (Android 13+) locks both (XgramSettingDeps.themesLocked): night mode is what is left to pick.
+      boolean themesLocked = XgramSettingDeps.themesLocked();
+      if (themesLocked) {
+        theme.add(link(R.id.btn_xgramAutoNightMode, R.string.XgramAutoNightMode));
+      }
+      addRows(items, theme.toArray(new ListItem[0]));
+      items.add(description(themesLocked ? R.string.XgramThemeExpressiveInfo : R.string.XgramMaterialYouInfo));
       addExpressiveRow(items);
     } else {
       pickers.add(0, link(R.id.btn_xgramThemes, R.string.XgramThemes));
@@ -621,7 +666,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramPaneSplitEvenly, R.string.XgramPaneSplitEvenly, R.string.XgramPaneSplitEvenlySub),
       toggle(R.id.btn_xgramPaneResizable, R.string.XgramPaneResizable, R.string.XgramPaneResizableSub)
     );
-    items.add(description(R.string.XgramPaneInfo));
+    // How to drag the handle, or why there is none while split evenly (updated with the switches).
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramPaneInfo, 0, XgramSettingDeps.paneInfo()));
     addRows(items, toggle(R.id.btn_xgramLimitMessageWidth, R.string.XgramLimitMessageWidth, R.string.XgramLimitMessageWidthSub));
     // Foldables: the posture rows only where a fold can be reported (androidx.window, minSdk 23 builds).
     if (com.fahadali.xgram.layout.XgramWindow.isPostureSupported()) {
@@ -818,7 +864,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramProxyOffWifi, R.string.XgramProxyOffWifi),
       toggle(R.id.btn_xgramProxyOffMobile, R.string.XgramProxyOffMobile)
     );
-    items.add(description(R.string.XgramProxyRulesInfo));
+    // What the rules do, or that there is no proxy for them yet (they are greyed then).
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramProxyRulesInfo, 0, XgramSettingDeps.proxyRulesInfo()));
     items.add(header(R.string.XgramHeaderConnection));
     addRows(items, toggle(R.id.btn_xgramPreferIpv6, R.string.XgramPreferIpv6, R.string.XgramPreferIpv6Sub));
   }
@@ -857,6 +904,32 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       adapter.getItems().get(index).setString(downloadBoostInfo());
       adapter.updateItem(index);
     }
+  }
+
+  // Settings that depend on other settings (XgramSettingDeps)
+
+  /** A row that only applies while another setting allows it: greyed, with the reason under its title (0: usable). */
+  private static void setReason (SettingView view, @StringRes int reason) {
+    if (reason != 0) {
+      view.setData(reason);
+    }
+    view.setEnabled(reason == 0);
+  }
+
+  /** A note whose text follows other settings. */
+  private void updateDescription (@IdRes int id, @StringRes int text) {
+    int index = adapter.indexOfViewById(id);
+    if (index != -1 && adapter.getItems().get(index).setStringIfChanged(text)) {
+      adapter.updateItem(index);
+    }
+  }
+
+  /** Two-pane layout and Split evenly lock the pane rows below them. */
+  private void updatePaneRows () {
+    adapter.updateValuedSettingById(R.id.btn_xgramPaneSplitEvenly);
+    adapter.updateValuedSettingById(R.id.btn_xgramPaneResizable);
+    adapter.updateValuedSettingById(R.id.btn_xgramFoldHingeSplit);
+    updateDescription(R.id.btn_xgramPaneInfo, XgramSettingDeps.paneInfo());
   }
 
   private void buildBackup (List<ListItem> items) {
@@ -1117,6 +1190,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       if (adapter.indexOfViewById(R.id.btn_xgramDownloadBoostInfo) != -1) {
         updateDownloadBoostInfo();
       }
+      // A proxy may have been added on Telegram X's proxy page.
+      updateDescription(R.id.btn_xgramPaneInfo, XgramSettingDeps.paneInfo());
+      updateDescription(R.id.btn_xgramProxyRulesInfo, XgramSettingDeps.proxyRulesInfo());
     }
   }
 
@@ -1272,6 +1348,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramGhostOffline) {
       settings.setGhostOffline(!settings.ghostOffline());
     } else if (id == R.id.btn_xgramGhostSilent) {
+      if (!XgramSettingDeps.ghostSilentEnabled()) {
+        return;
+      }
       settings.setGhostSilent(!settings.ghostSilent());
     } else if (id == R.id.btn_xgramGhostScheduleSend) {
       if (!settings.ghostOffline()) {
@@ -1281,6 +1360,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramHistorySaveDeleted) {
       settings.setHistorySaveDeleted(adapter.toggleView(v));
       adapter.updateValuedSettingById(R.id.btn_xgramHistorySaveMedia);
+      adapter.updateValuedSettingById(R.id.btn_xgramHistoryRedDeleted);
       return;
     } else if (id == R.id.btn_xgramHistorySaveMedia) {
       if (settings.historySaveDeleted()) {
@@ -1291,7 +1371,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       settings.setHistorySaveEdits(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramHistoryRedDeleted) {
-      settings.setHistoryRedDeleted(adapter.toggleView(v));
+      if (XgramSettingDeps.historyRedDeletedEnabled()) {
+        settings.setHistoryRedDeleted(adapter.toggleView(v));
+      }
       return;
     } else if (id == R.id.btn_xgramHideSponsored) {
       settings.setHideSponsored(adapter.toggleView(v));
@@ -1334,6 +1416,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       settings.setLimitMessageWidth(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramFoldHingeSplit) {
+      if (!XgramSettingDeps.twoPaneOptionsEnabled()) {
+        return;
+      }
       settings.setFoldHingeSplit(adapter.toggleView(v));
       if (context.xgramTwoPane() != null) {
         context.xgramTwoPane().update();
@@ -1343,12 +1428,19 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       settings.setFoldTabletop(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramPaneSplitEvenly) {
+      if (!XgramSettingDeps.twoPaneOptionsEnabled()) {
+        return;
+      }
       settings.setPaneSplitEvenly(adapter.toggleView(v));
       if (context.xgramTwoPane() != null) {
         context.xgramTwoPane().update();
       }
+      updatePaneRows();
       return;
     } else if (id == R.id.btn_xgramPaneResizable) {
+      if (!XgramSettingDeps.paneResizableEnabled()) {
+        return;
+      }
       settings.setPaneResizable(adapter.toggleView(v));
       if (context.xgramTwoPane() != null) {
         context.xgramTwoPane().update();
@@ -1366,6 +1458,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramDownloadBoost) {
       settings.setDownloadBoost(adapter.toggleView(v));
       updateDownloadBoostInfo();
+      adapter.updateItem(adapter.indexOfViewById(R.id.btn_xgramDownloadBoostLevel)); // the slider follows the switch
       return;
     } else if (id == R.id.btn_xgramDeleteForEveryone) {
       settings.setDeleteForEveryoneByDefault(adapter.toggleView(v));
@@ -1395,15 +1488,21 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       navigateTo(new org.thunderdog.challegram.ui.SettingsLanguageTranslateController(context, tdlib));
       return;
     } else if (id == R.id.btn_xgramTapToRecord) {
-      settings.setTapToRecord(adapter.toggleView(v));
+      if (XgramSettingDeps.tapToRecordEnabled()) {
+        settings.setTapToRecord(adapter.toggleView(v));
+      }
       return;
     } else if (id == R.id.btn_xgramInlineVideo) {
       settings.setInlineVideo(adapter.toggleView(v));
       if (!settings.inlineVideo()) {
         com.fahadali.xgram.chats.XgramInlineVideo.stop();
       }
+      adapter.updateValuedSettingById(R.id.btn_xgramInlineVideoStart);
       return;
     } else if (id == R.id.btn_xgramInlineVideoStart) {
+      if (!XgramSettingDeps.inlineVideoStartEnabled()) {
+        return;
+      }
       int[] modes = {XgramSettings.INLINE_VIDEO_START_AUTO, XgramSettings.INLINE_VIDEO_START_TAP};
       String[] titles = {Lang.getString(R.string.XgramInlineVideoStartAuto), Lang.getString(R.string.XgramInlineVideoStartTap)};
       showOptions(null, new int[] {1, 2}, titles, null, null, (itemView, optionId) -> {
@@ -1440,14 +1539,17 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramSideMenu) {
       navigateTo(new XgramDrawerItemsController(context, tdlib));
       return;
-    } else if (id == R.id.btn_xgramProxyOffVpn) {
-      settings.setProxyOffOnVpn(adapter.toggleView(v));
-      return;
-    } else if (id == R.id.btn_xgramProxyOffWifi) {
-      settings.setProxyOffOnWifi(adapter.toggleView(v));
-      return;
-    } else if (id == R.id.btn_xgramProxyOffMobile) {
-      settings.setProxyOffOnMobile(adapter.toggleView(v));
+    } else if (id == R.id.btn_xgramProxyOffVpn || id == R.id.btn_xgramProxyOffWifi || id == R.id.btn_xgramProxyOffMobile) {
+      if (!XgramSettingDeps.proxyRulesEnabled()) {
+        return; // no proxy for the rules to turn off
+      }
+      if (id == R.id.btn_xgramProxyOffVpn) {
+        settings.setProxyOffOnVpn(adapter.toggleView(v));
+      } else if (id == R.id.btn_xgramProxyOffWifi) {
+        settings.setProxyOffOnWifi(adapter.toggleView(v));
+      } else {
+        settings.setProxyOffOnMobile(adapter.toggleView(v));
+      }
       return;
     } else if (id == R.id.btn_xgramHideFab) {
       settings.setHideFab(adapter.toggleView(v));
@@ -1456,10 +1558,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       settings.setConnectionStatusAtStart(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramAllChatsLabel) {
-      settings.setAllChatsLabel(adapter.toggleView(v));
+      if (XgramSettingDeps.allChatsLabelEnabled(tdlib)) {
+        settings.setAllChatsLabel(adapter.toggleView(v));
+      }
       return;
     } else if (id == R.id.btn_xgramHideFolders) {
       settings.setHideFolders(tdlib.accountId(), adapter.toggleView(v));
+      adapter.updateValuedSettingById(R.id.btn_xgramAllChatsLabel);
       return;
     } else if (id == R.id.btn_xgramChatLook) {
       org.thunderdog.challegram.ui.MessagesController c = new org.thunderdog.challegram.ui.MessagesController(context, tdlib);
@@ -1478,6 +1583,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       if (context.xgramTwoPane() != null) {
         context.xgramTwoPane().update();
       }
+      updatePaneRows();
       return;
     } else if (id == R.id.btn_xgramExportSettings) {
       String json = XgramBackup.export();
@@ -1542,6 +1648,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       navigateTo(com.fahadali.xgram.chats.XgramFiltersController.people(context, tdlib));
       return;
     } else if (id == R.id.btn_xgramMaterialYou) {
+      if (XgramSettingDeps.themesLocked()) {
+        return; // Expressive design: always the Material You colors
+      }
       adapter.toggleView(v);
       com.fahadali.xgram.appearance.XgramMaterialYou.toggle(this, () -> {
         if (!isDestroyed()) {
@@ -1555,7 +1664,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       com.fahadali.xgram.appearance.XgramExpressive.setEnabled(this, !com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
       return;
     } else if (id == R.id.btn_xgramThemes) {
-      navigateTo(new com.fahadali.xgram.appearance.XgramThemesController(context, tdlib));
+      if (!XgramSettingDeps.themesLocked()) {
+        navigateTo(new com.fahadali.xgram.appearance.XgramThemesController(context, tdlib));
+      }
+      return;
+    } else if (id == R.id.btn_xgramAutoNightMode) {
+      // Telegram X's night mode settings (Auto night mode) are on its Themes page.
+      navigateTo(new org.thunderdog.challegram.ui.SettingsThemeController(context, tdlib));
       return;
     } else if (id == R.id.btn_xgramSectionAppearance) {
       navigateTo(section(context, tdlib, SECTION_APPEARANCE));

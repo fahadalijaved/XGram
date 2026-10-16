@@ -13,6 +13,7 @@ package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
 import com.fahadali.xgram.XgramReorder
+import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.chats.XgramMessageMenu
 import com.fahadali.xgram.compose.ui.ReorderRow
 import com.fahadali.xgram.compose.ui.SettingsPage
@@ -34,7 +35,12 @@ fun MessageMenuPage() {
       id = R.id.btn_xgramMenuItem,
       rows = XgramReorder.ordered(XgramReorder.MESSAGE_MENU, keys).mapNotNull { key ->
         options[key]?.let { option ->
-          ReorderRow(key = key, title = s(option.name), icon = option.icon, checked = !XgramMessageMenu.isHidden(key))
+          // Summarize and Edit history are only added while their setting is on.
+          val reason = XgramSettingDeps.messageMenuOptionReason(key)
+          ReorderRow(
+            key = key, title = s(option.name), icon = option.icon, checked = !XgramMessageMenu.isHidden(key),
+            enabled = reason == 0, subtitle = if (reason != 0) s(reason) else null
+          )
         }
       },
       onToggle = { key, shown -> XgramMessageMenu.setHidden(key, !shown) }

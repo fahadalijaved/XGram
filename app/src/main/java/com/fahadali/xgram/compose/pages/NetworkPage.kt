@@ -13,6 +13,7 @@ package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
 import com.fahadali.xgram.XgramDownloadBoost
+import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
@@ -33,11 +34,12 @@ fun NetworkPage() {
       switch(R.id.btn_xgramDownloadBoost, s(R.string.XgramDownloadBoost), s(R.string.XgramDownloadBoostSub), checked = settings.downloadBoost()) {
         settings.setDownloadBoost(it)
       }
-      // Always movable, as on the classic page: the strength is kept for when boost is on.
+      // Only read while boost is on (greyed otherwise, as on the classic page); the strength is kept for then.
       slider(
         R.id.btn_xgramDownloadBoostLevel, s(R.string.XgramBoostStrength),
         labels = XgramDownloadBoost.LEVEL_NAMES.map { s(it) },
-        index = settings.downloadBoostLevel() - XgramDownloadBoost.LEVEL_LOW
+        index = settings.downloadBoostLevel() - XgramDownloadBoost.LEVEL_LOW,
+        enabled = XgramSettingDeps.downloadBoostLevelEnabled()
       ) { index ->
         settings.setDownloadBoostLevel(XgramDownloadBoost.LEVEL_LOW + index)
       }
@@ -49,18 +51,20 @@ fun NetworkPage() {
     )
 
     header(R.string.XgramProxyRules)
+    // The rules turn a proxy off and back on: greyed until there is one (the note says so).
+    val proxyRules = XgramSettingDeps.proxyRulesEnabled()
     group {
-      switch(R.id.btn_xgramProxyOffVpn, s(R.string.XgramProxyOffVpn), checked = settings.proxyOffOnVpn()) {
+      switch(R.id.btn_xgramProxyOffVpn, s(R.string.XgramProxyOffVpn), checked = settings.proxyOffOnVpn(), enabled = proxyRules) {
         settings.setProxyOffOnVpn(it)
       }
-      switch(R.id.btn_xgramProxyOffWifi, s(R.string.XgramProxyOffWifi), checked = settings.proxyOffOnWifi()) {
+      switch(R.id.btn_xgramProxyOffWifi, s(R.string.XgramProxyOffWifi), checked = settings.proxyOffOnWifi(), enabled = proxyRules) {
         settings.setProxyOffOnWifi(it)
       }
-      switch(R.id.btn_xgramProxyOffMobile, s(R.string.XgramProxyOffMobile), checked = settings.proxyOffOnMobile()) {
+      switch(R.id.btn_xgramProxyOffMobile, s(R.string.XgramProxyOffMobile), checked = settings.proxyOffOnMobile(), enabled = proxyRules) {
         settings.setProxyOffOnMobile(it)
       }
     }
-    description(R.string.XgramProxyRulesInfo)
+    description(XgramSettingDeps.proxyRulesInfo())
 
     header(R.string.XgramHeaderConnection)
     group {

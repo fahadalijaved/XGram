@@ -15,6 +15,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import com.fahadali.xgram.XgramComposeBridge
 import com.fahadali.xgram.XgramReorder
+import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.chats.XgramInlineVideo
 import com.fahadali.xgram.chats.XgramInputButtonsController
@@ -108,7 +109,8 @@ fun MessagesPage() {
           s(R.string.XgramComposeInlineVideoAuto) to XgramSettings.INLINE_VIDEO_START_AUTO,
           s(R.string.XgramInlineVideoStartTap) to XgramSettings.INLINE_VIDEO_START_TAP
         ),
-        selected = settings.inlineVideoStart()
+        selected = settings.inlineVideoStart(),
+        enabled = XgramSettingDeps.inlineVideoStartEnabled() // only read for videos played in the message
       ) {
         settings.setInlineVideoStart(it)
       }
@@ -124,7 +126,13 @@ fun MessagesPage() {
       ) {
         host.openPage(XgramPage.INPUT_BUTTONS)
       }
-      switch(R.id.btn_xgramTapToRecord, s(R.string.XgramTapToRecord), s(R.string.XgramTapToRecordSub), checked = settings.tapToRecord()) {
+      // Changes the voice and video button, which the buttons above can hide.
+      val recordReason = XgramSettingDeps.tapToRecordReason()
+      switch(
+        R.id.btn_xgramTapToRecord, s(R.string.XgramTapToRecord),
+        s(if (recordReason != 0) recordReason else R.string.XgramTapToRecordSub),
+        checked = settings.tapToRecord(), enabled = recordReason == 0
+      ) {
         settings.setTapToRecord(it)
       }
     }

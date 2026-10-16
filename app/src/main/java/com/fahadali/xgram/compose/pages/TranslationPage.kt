@@ -13,6 +13,7 @@ package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
 import com.fahadali.xgram.XgramComposeBridge
+import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.chats.XgramTranslateTargetController
 import com.fahadali.xgram.compose.ChoiceSpec
@@ -51,9 +52,11 @@ fun TranslationPage() {
         )
       }
       // Only a third-party service can fail over to Telegram.
+      val fallbackReason = XgramSettingDeps.translateFallbackReason()
       switch(
-        R.id.btn_xgramTrFallback, s(R.string.XgramTrFallback), s(R.string.XgramTrFallbackSub),
-        checked = settings.translateFallback(), enabled = XgramTranslator.isThirdParty(provider)
+        R.id.btn_xgramTrFallback, s(R.string.XgramTrFallback),
+        s(if (fallbackReason != 0) fallbackReason else R.string.XgramTrFallbackSub),
+        checked = settings.translateFallback(), enabled = fallbackReason == 0
       ) {
         settings.setTranslateFallback(it)
       }
