@@ -35,7 +35,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.fahadali.xgram.appearance.XgramComposeSettingsIcons
+import com.fahadali.xgram.appearance.XgramListStateView
+import com.fahadali.xgram.appearance.XgramR5Lists
+import org.thunderdog.challegram.R
 import org.thunderdog.challegram.component.base.SettingView
+import org.thunderdog.challegram.core.Lang
 import org.thunderdog.challegram.theme.ColorId
 import org.thunderdog.challegram.theme.Theme
 import org.thunderdog.challegram.ui.ListItem
@@ -159,7 +163,9 @@ internal object TgxRead {
   /** Rows that sit on the page, never in a card: empty states, progress, the build number. */
   fun isStandaloneType(type: Int): Boolean = when (type) {
     ListItem.TYPE_EMPTY, ListItem.TYPE_ICONIZED_EMPTY, ListItem.TYPE_SESSIONS_EMPTY, ListItem.TYPE_WEBSITES_EMPTY,
-    ListItem.TYPE_SMART_EMPTY, ListItem.TYPE_PROGRESS, ListItem.TYPE_SMART_PROGRESS, ListItem.TYPE_BUILD_NO -> true
+    ListItem.TYPE_SMART_EMPTY, ListItem.TYPE_PROGRESS, ListItem.TYPE_SMART_PROGRESS, ListItem.TYPE_BUILD_NO,
+    // A page's call to action (Set password, Change number, Redeem): a centred filled button, as in the classic list
+    ListItem.TYPE_BUTTON -> true
     else -> false
   }
 
@@ -252,7 +258,12 @@ internal object TgxRead {
       ListItem.TYPE_DESCRIPTION, ListItem.TYPE_DESCRIPTION_SMALL, ListItem.TYPE_DESCRIPTION_CENTERED ->
         return if (view is TextView) TgxRowKind.DESCRIPTION else TgxRowKind.FALLBACK
       ListItem.TYPE_BUILD_NO -> return if (view is TextView) TgxRowKind.BUILD_NO else TgxRowKind.FALLBACK
-      ListItem.TYPE_EMPTY -> return if (view is TextView) TgxRowKind.EMPTY else TgxRowKind.FALLBACK
+      ListItem.TYPE_EMPTY -> return when (view) {
+        is TextView -> TgxRowKind.EMPTY
+        is XgramListStateView -> TgxRowKind.EMPTY_ICON
+        else -> TgxRowKind.FALLBACK
+      }
+      ListItem.TYPE_ICONIZED_EMPTY, ListItem.TYPE_WEBSITES_EMPTY, ListItem.TYPE_SESSIONS_EMPTY -> return TgxRowKind.EMPTY_ICON
       ListItem.TYPE_PROGRESS, ListItem.TYPE_SMART_PROGRESS -> return TgxRowKind.LOADING
       ListItem.TYPE_SLIDER -> {
         // The values the slider shows are on its view: setSliderValues puts the item's there, and pages such as
@@ -312,8 +323,9 @@ internal object TgxRead {
       kind, title = (view as? TextView)?.text, enabled = view.isEnabled, longClickable = view.isLongClickable
     )
     TgxRowKind.BUTTON -> TgxRowSnap(
-      kind, title = item.string ?: findText(view)?.text, enabled = view.isEnabled, longClickable = view.isLongClickable
+      kind, title = XgramR5Lists.label(item) ?: findText(view)?.text, enabled = view.isEnabled, longClickable = view.isLongClickable
     )
+    TgxRowKind.EMPTY_ICON -> readEmpty(item, type)
     TgxRowKind.SLIDER -> {
       val slider = view as? SliderWrapView
       val values = slider?.values
@@ -324,6 +336,19 @@ internal object TgxRead {
       )
     }
     TgxRowKind.LOADING, TgxRowKind.FALLBACK, TgxRowKind.HIDDEN -> TgxRowSnap(kind)
+  }
+
+  /** An empty state's icon, headline and text, as the classic list's M3E empty states show them (XgramR5Lists). */
+  private fun readEmpty(item: ListItem, type: Int): TgxRowSnap {
+    if (type == ListItem.TYPE_SESSIONS_EMPTY) {
+      return TgxRowSnap(
+        TgxRowKind.EMPTY_ICON, title = XgramR5Lists.label(R.string.NoOtherSessions),
+        subtitle = Lang.getString(R.string.NoOtherSessionsInfo), icon = R.drawable.baseline_devices_other_24
+      )
+    }
+    val icon = if (type == ListItem.TYPE_WEBSITES_EMPTY) R.drawable.baseline_language_24 else XgramR5Lists.emptyIcon(item.stringResource, item.iconResource)
+    val parts = XgramR5Lists.splitEmpty(item.string)
+    return TgxRowSnap(TgxRowKind.EMPTY_ICON, title = parts[0], subtitle = parts[1], icon = icon)
   }
 
   private fun readHeader(view: View, item: ListItem, type: Int): TgxRowSnap {

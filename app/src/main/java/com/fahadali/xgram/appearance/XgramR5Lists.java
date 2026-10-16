@@ -166,6 +166,13 @@ public final class XgramR5Lists {
    * is both, a short line is the headline alone, a long hint is the supporting text alone.
    */
   public static void bindEmpty (@NonNull XgramListStateView view, @DrawableRes int iconRes, @Nullable CharSequence s) {
+    final CharSequence[] parts = splitEmpty(s);
+    view.setEmpty(iconRes != 0 ? XgramIconPack.map(iconRes) : 0, parts[0], parts[1]);
+  }
+
+  /** {headline, supporting text} of an empty text, either may be null (see {@link #bindEmpty}). */
+  @NonNull
+  public static CharSequence[] splitEmpty (@Nullable CharSequence s) {
     CharSequence title = null, text = null;
     if (!TextUtils.isEmpty(s)) {
       final String str = s.toString();
@@ -182,7 +189,7 @@ public final class XgramR5Lists {
         text = s;
       }
     }
-    view.setEmpty(iconRes != 0 ? XgramIconPack.map(iconRes) : 0, title, text);
+    return new CharSequence[] {title, text};
   }
 
   /** {@link #bindEmpty(XgramListStateView, int, CharSequence)} for a SettingsAdapter item. */

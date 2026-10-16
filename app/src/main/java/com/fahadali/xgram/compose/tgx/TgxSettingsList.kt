@@ -21,16 +21,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemColors
@@ -63,8 +68,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -74,6 +81,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -82,6 +90,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fahadali.xgram.appearance.XgramExpressive
+import com.fahadali.xgram.appearance.XgramR5Lists
+import com.fahadali.xgram.appearance.XgramShapes
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.theme.XgramM3Theme
 import com.fahadali.xgram.compose.ui.SettingsDescription
@@ -196,13 +206,17 @@ internal fun TgxRowBlock(r: TgxSettingsRenderer, row: TgxRow, shapes: ListItemSh
       TgxRowKind.HEADER_ACTION -> TgxHeaderRow(r, row, s, headerTop, placed)
       TgxRowKind.DESCRIPTION -> TgxDescription(row, s)
       TgxRowKind.EMPTY -> SettingsEmpty(0, s.title?.toString().orEmpty())
+      TgxRowKind.EMPTY_ICON -> TgxEmptyState(s.icon, s.title, s.subtitle)
+      // A page's call to action on the page itself: centred, filled (primary for the page's main action) or tonal
+      TgxRowKind.BUTTON -> TgxCallToAction(r, row, s, placed)
       TgxRowKind.LOADING -> SettingsLoading()
       // The ripple stays in a card-shaped area (CornerLarge), not a full-bleed rectangle.
       TgxRowKind.BUILD_NO -> Text(
         s.title?.toString().orEmpty(),
-        modifier = placed.fillMaxWidth().clip(MaterialTheme.shapes.large).clickable(enabled = s.enabled) { r.click(row) }
+        modifier = placed.fillMaxWidth().padding(bottom = 12.dp).clip(MaterialTheme.shapes.large).clickable(enabled = s.enabled) { r.click(row) }
           .padding(vertical = 12.dp),
-        style = MaterialTheme.typography.bodySmall,
+        // labelMedium with tabular figures, 24dp of page below it
+        style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center
       )
@@ -229,9 +243,81 @@ private fun TgxGroupRow(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap, shap
     TgxRowKind.HEADER_ACTION -> TgxHeaderRow(r, row, s, 8.dp, placed)
     TgxRowKind.DESCRIPTION -> TgxDescription(row, s)
     TgxRowKind.LOADING -> SettingsLoading()
+    TgxRowKind.EMPTY_ICON -> TgxEmptyState(s.icon, s.title, s.subtitle)
     TgxRowKind.EMPTY, TgxRowKind.BUILD_NO, TgxRowKind.FALLBACK -> TgxFallback(
       r, row, placed.clip(shapes.shape).background(MaterialTheme.colorScheme.surfaceBright), segment
     )
+  }
+}
+
+/**
+ * An empty state with an icon, as XgramListStateView draws it in the classic list: the icon (48dp, onPrimaryContainer)
+ * on a 112dp soft burst in primaryContainer, the headline in titleLarge, the text in bodyMedium onSurfaceVariant,
+ * centred and at most 320dp wide.
+ */
+@Composable
+private fun TgxEmptyState(icon: Int, title: CharSequence?, text: CharSequence?) {
+  val cs = MaterialTheme.colorScheme
+  val density = LocalDensity.current
+  val burst = remember(density) {
+    val sizePx = with(density) { 112.dp.toPx() }
+    val path = android.graphics.Path()
+    XgramShapes.toPath(XgramShapes.SOFT_BURST, path)
+    XgramShapes.fit(path, sizePx / 2f, sizePx / 2f, sizePx, 0f, android.graphics.Matrix())
+    path.asComposePath()
+  }
+  Column(
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp),
+    horizontalAlignment = Alignment.CenterHorizontally
+  ) {
+    val container = cs.primaryContainer
+    Box(
+      modifier = Modifier.size(112.dp).drawBehind { drawPath(burst, container) },
+      contentAlignment = Alignment.Center
+    ) {
+      if (icon != 0) {
+        Icon(tgxIcon(icon), contentDescription = null, modifier = Modifier.size(48.dp), tint = cs.onPrimaryContainer)
+      }
+    }
+    if (!title.isNullOrEmpty()) {
+      Spacer(Modifier.height(16.dp))
+      Text(
+        title.toString(),
+        modifier = Modifier.widthIn(max = 320.dp),
+        style = MaterialTheme.typography.titleLarge,
+        color = cs.onSurface,
+        textAlign = TextAlign.Center
+      )
+    }
+    if (!text.isNullOrEmpty()) {
+      Spacer(Modifier.height(if (title.isNullOrEmpty()) 16.dp else 8.dp))
+      val styled = remember(text) { if (text is Spanned) TgxSpans.styled(text) else AnnotatedString(text.toString()) }
+      Text(
+        styled,
+        modifier = Modifier.widthIn(max = 320.dp),
+        style = MaterialTheme.typography.bodyMedium,
+        color = cs.onSurfaceVariant,
+        textAlign = TextAlign.Center
+      )
+    }
+  }
+}
+
+/** Telegram X's full-width text button as an M3 filled button (40dp, full corners morphing on press), centred. */
+@Composable
+private fun TgxCallToAction(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap, placed: Modifier) {
+  val onClick = remember(r, row) { { r.click(row) } }
+  val label = s.title?.toString().orEmpty()
+  Box(modifier = placed.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+    if (XgramR5Lists.isPrimaryButton(row.item.id)) {
+      Button(onClick = onClick, shapes = ButtonDefaults.shapes(), enabled = s.enabled, modifier = Modifier.widthIn(max = 400.dp)) {
+        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
+    } else {
+      FilledTonalButton(onClick = onClick, shapes = ButtonDefaults.shapes(), enabled = s.enabled, modifier = Modifier.widthIn(max = 400.dp)) {
+        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+      }
+    }
   }
 }
 
