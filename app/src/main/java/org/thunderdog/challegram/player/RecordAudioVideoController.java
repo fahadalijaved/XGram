@@ -166,7 +166,10 @@ public class RecordAudioVideoController implements
       return;
     }
 
-    this.inputOverlayView.setBackgroundColor(Theme.fillingColor());
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (!xgram) { // XGram M3E: the overlay keeps its field shape (below)
+      this.inputOverlayView.setBackgroundColor(Theme.fillingColor());
+    }
     this.slideHintView.setTextColor(Theme.textDecentColor());
     this.cancelView.setTextColor(Theme.getColor(ColorId.textNeutral));
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -181,7 +184,28 @@ public class RecordAudioVideoController implements
     }
     this.videoPlaceholderView.setBackgroundColor(Theme.fillingColor());
     this.deleteButton.setColorFilter(Theme.iconColor());
-    this.videoBackgroundView.setBackgroundColor(Theme.getColor(ColorId.previewBackground));
+    if (!xgram) { // XGram M3E: the scrim (below)
+      this.videoBackgroundView.setBackgroundColor(Theme.getColor(ColorId.previewBackground));
+    }
+    if (xgram) {
+      // XGram M3E: the overlay is the composer's own field shape, not a full-width bar; the video note sits on the
+      // 32% modal scrim; the delete action is a standard icon button. The drawables read their roles at draw time.
+      if (!(this.inputOverlayView.getBackground() instanceof com.fahadali.xgram.appearance.XgramR5Composer.RecordFieldDrawable)) {
+        this.inputOverlayView.setBackground(new com.fahadali.xgram.appearance.XgramR5Composer.RecordFieldDrawable());
+      } else {
+        this.inputOverlayView.invalidate();
+      }
+      if (!(this.videoBackgroundView.getBackground() instanceof com.fahadali.xgram.appearance.XgramM3Preview.ScrimDrawable)) {
+        this.videoBackgroundView.setBackground(new com.fahadali.xgram.appearance.XgramM3Preview.ScrimDrawable());
+      } else {
+        this.videoBackgroundView.invalidate();
+      }
+      this.deleteButton.setColorFilter(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      this.muteIcon.setColorFilter(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      if (xgramToolbar != null) {
+        xgramToolbar.invalidate();
+      }
+    }
 
     this.cornerView.invalidate();
     this.switchCameraButton.invalidate();
@@ -346,6 +370,11 @@ public class RecordAudioVideoController implements
       this.videoBottomShadowView.setSimpleBottomTransparentShadow(true);
       this.videoBottomShadowView.setLayoutParams(Views.newLayoutParams(videoBottomShadowView, Gravity.BOTTOM));
       this.rootLayout.addView(videoBottomShadowView);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: no shadow gradients above and under the overlay; surfaces are separated by tone
+        this.videoTopShadowView.setVisibility(View.GONE);
+        this.videoBottomShadowView.setVisibility(View.GONE);
+      }
 
       // Duration
       this.durationView = new RecordDurationView(context);
@@ -384,8 +413,18 @@ public class RecordAudioVideoController implements
         }
       });*/
       this.switchCameraButton.setIsSmall();
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the vertical floating toolbar behind the round video's tonal buttons (positioned in updateLockY)
+        this.xgramToolbar = new com.fahadali.xgram.appearance.XgramR5Composer.PillView(context);
+        this.xgramToolbar.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        this.xgramToolbar.setAlpha(0f);
+        this.rootLayout.addView(xgramToolbar);
+      }
       this.switchCameraButtonWrap = new RecordControllerButton(context);
       this.switchCameraButtonWrap.init(null);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        this.switchCameraButtonWrap.setContentDescription(Lang.getString(R.string.XgramR5ComposerSwitchCamera));
+      }
       this.switchCameraButtonWrap.setOnClickListener(v -> {
         if (ownedCamera != null) {
           ownedCamera.switchCamera();
@@ -398,6 +437,14 @@ public class RecordAudioVideoController implements
       this.disposableSwitchButton.init(null);
       this.disposableSwitchButton.setOnClickListener(v -> disposableSwitchButton.toggleActive(true));
       this.rootLayout.addView(disposableSwitchButton);
+      if (xgramToolbar != null) {
+        // XGram M3E: the buttons draw over the toolbar's pill (its level 3 elevation) without shadows of their own
+        final float z = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3) + Screen.dp(1f);
+        this.switchCameraButtonWrap.setOutlineProvider(null);
+        this.switchCameraButtonWrap.setTranslationZ(z);
+        this.disposableSwitchButton.setOutlineProvider(null);
+        this.disposableSwitchButton.setTranslationZ(z);
+      }
 
       this.lockView = new RecordLockView(context);
       Views.setSimpleStateListAnimator(lockView);
@@ -447,7 +494,11 @@ public class RecordAudioVideoController implements
         }
       });
       this.videoLayout.setTransparentOutline(false);
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the preview circle floats at elevation level 3
+        this.videoLayout.setTranslationZ(0f);
+        this.videoLayout.setElevation(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3));
+      } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         this.videoLayout.setTranslationZ(Screen.dp(1.5f));
         this.videoLayout.setElevation(Screen.dp(1f));
       }
@@ -488,7 +539,10 @@ public class RecordAudioVideoController implements
           videoTimelineView.performSliderUp(isEnd);
         }
       });
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the ring draws over the circle (it has no outline, so no shadow)
+        this.progressView.setTranslationZ(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3) + Screen.dp(1f));
+      } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         this.progressView.setTranslationZ(Screen.dp(2f));
         this.progressView.setElevation(Screen.dp(1.5f));
       }
@@ -503,6 +557,11 @@ public class RecordAudioVideoController implements
       this.deleteButton.setScaleType(ImageView.ScaleType.CENTER);
       this.deleteButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_delete_24));
       Views.setClickable(deleteButton);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: a standard icon button (a 40dp onSurfaceVariant state layer, full corners springing to 8dp)
+        com.fahadali.xgram.appearance.XgramAppMotion.iconButton(deleteButton);
+        this.deleteButton.setContentDescription(Lang.getString(R.string.XgramR5ComposerDeleteRecording));
+      }
       this.deleteButton.setOnClickListener(v -> {
         if (recordMode == RECORD_MODE_VIDEO_EDIT) {
           closeVideoEditMode(null);
@@ -602,7 +661,9 @@ public class RecordAudioVideoController implements
       this.muteIcon = new ImageView(context) {
         @Override
         protected void onDraw (Canvas c) {
-          c.drawCircle(getMeasuredWidth() / 2, getMeasuredHeight() / 2, Screen.dp(12f), Paints.fillingPaint(0x40000000));
+          // XGram M3E: the mute badge is a small surfaceContainerHigh chip (its icon in onSurfaceVariant, updateColors)
+          c.drawCircle(getMeasuredWidth() / 2, getMeasuredHeight() / 2, Screen.dp(12f), Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ?
+            com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH) : 0x40000000));
           super.onDraw(c);
         }
       };
@@ -732,6 +793,65 @@ public class RecordAudioVideoController implements
     disposableSwitchButton.setScaleY(scale);
 
     recordBackground.setExpand(recordFactor);
+    xgramSyncToolbar();
+  }
+
+  // XGram M3E: the round video controls' vertical floating toolbar (a pill around the visible tonal buttons, with
+  // their alpha and scale) and the preview circle's spring scale. Null / unused with Expressive design off.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramR5Composer.PillView xgramToolbar;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramCircleSpring;
+
+  private void xgramSyncToolbar () {
+    if (xgramToolbar == null) {
+      return;
+    }
+    float top = Float.MAX_VALUE, bottom = -Float.MAX_VALUE, left = 0f, right = 0f, alpha = 0f, scale = 1f;
+    boolean any = false;
+    final View[] buttons = xgramToolbarButtons;
+    buttons[0] = switchCameraButtonWrap;
+    buttons[1] = disposableSwitchButton;
+    for (View button : buttons) {
+      if (button == null || button.getVisibility() != View.VISIBLE || button.getAlpha() <= 0f || button.getMeasuredWidth() == 0) {
+        continue;
+      }
+      final float x = button.getLeft() + button.getTranslationX(), y = button.getTop() + button.getTranslationY();
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y + button.getMeasuredHeight());
+      left = x;
+      right = x + button.getMeasuredWidth();
+      alpha = Math.max(alpha, button.getAlpha());
+      scale = button.getScaleX();
+      any = true;
+    }
+    if (!any) {
+      xgramToolbar.setAlpha(0f);
+      xgramToolbar.setPill(0, 0, 0, 0);
+      return;
+    }
+    final float pad = Screen.dp(8f);
+    final float cx = (left + right) / 2f, cy = (top + bottom) / 2f;
+    final float halfWidth = ((right - left) / 2f + pad) * scale, halfHeight = ((bottom - top) / 2f + pad) * scale;
+    xgramToolbar.setPill(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight);
+    xgramToolbar.setAlpha(Math.min(1f, alpha));
+  }
+
+  private final View[] xgramToolbarButtons = new View[2];
+
+  /** The preview circle and its ring spring in from .4 (SPATIAL_DEFAULT) while the video note shows; Reduce motion snaps. */
+  private void xgramAnimateCircle (boolean visible) {
+    if (xgramCircleSpring == null) {
+      xgramCircleSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> xgramApplyCircleScale(value));
+    }
+    xgramCircleSpring.animateTo(visible ? 1f : 0f);
+  }
+
+  private void xgramApplyCircleScale (float value) {
+    final float scale = .4f + .6f * value;
+    videoLayout.setScaleX(scale);
+    videoLayout.setScaleY(scale);
+    progressView.setScaleX(scale);
+    progressView.setScaleY(scale);
   }
 
   private void updateVideoY () {
@@ -750,6 +870,22 @@ public class RecordAudioVideoController implements
     y -= Screen.dp(12) * editFactor;
 
     lockView.setTranslationY(y);
+    if (xgramToolbar != null) {
+      // XGram M3E: the 48dp tonal buttons stacked 8dp apart in their floating toolbar, which keeps 8dp from the lock
+      final int pad = Screen.dp(8f);
+      final int size = Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.TOOLBAR_BUTTON);
+      y -= (pad * 2 + size) * (recordingVideo ? lockView.getAlpha() : 1f);
+      y += Screen.dp(24f) * (1f - MathUtils.clamp(recordFactor)) * (1f - releaseFactor);
+      switchCameraButtonWrap.setTranslationY(y);
+      if (recordMode == RECORD_MODE_VIDEO_EDIT) {
+        y -= (size + pad) * switchCameraButtonWrap.getAlpha();
+      } else if (Views.isValid(switchCameraButtonWrap)) {
+        y -= size + pad;
+      }
+      disposableSwitchButton.setTranslationY(y);
+      xgramSyncToolbar();
+      return;
+    }
     y -= Screen.dp(5) + Screen.dp(50) * (recordingVideo ? lockView.getAlpha() : 1f);
     y += Screen.dp(24f) * (1f - MathUtils.clamp(recordFactor)) * (1f - releaseFactor);
 
@@ -1047,6 +1183,8 @@ public class RecordAudioVideoController implements
     } else {
       recordAnimator.setInterpolator(AnimatorUtils.ACCELERATE_INTERPOLATOR);
     }
+    // XGram M3E: the controls fade on the effects fast spring (the circle has its own spatial spring, xgramAnimateCircle)
+    com.fahadali.xgram.appearance.XgramAppMotion.use(recordAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true);
     this.recordAnimator.setValue(isRecording, animated);
     if (isRecording) {
       voiceVideoButtonView.setInVideoMode(mode == RECORD_MODE_VIDEO, recordFactor > 0f);
@@ -1347,17 +1485,23 @@ public class RecordAudioVideoController implements
     progressView.setAlpha(videoRange * Math.max(recordFactor, editFactor));
     progressView.setEditFactor(editAnimator.getFloatValue());
 
-    float videoScale = .4f + .6f * videoRange;
-    videoLayout.setScaleX(videoScale);
-    videoLayout.setScaleY(videoScale);
-    progressView.setScaleX(videoScale);
-    progressView.setScaleY(videoScale);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the circle scales on its own spring (SPATIAL_DEFAULT) while it fades with the controls
+      xgramAnimateCircle(videoRange > 0f && (recordAnimator.getValue() || editAnimator.getValue()));
+    } else {
+      float videoScale = .4f + .6f * videoRange;
+      videoLayout.setScaleX(videoScale);
+      videoLayout.setScaleY(videoScale);
+      progressView.setScaleX(videoScale);
+      progressView.setScaleY(videoScale);
+    }
     switchCameraButtonWrap.setAlpha(recordingVideo ? editRange : 0);
     disposableSwitchButton.setAlpha(editRange);
 
     updateMuteAlpha();
 
     updateVideoY();
+    xgramSyncToolbar();
   }
 
   private void setRecordFactor (float factor) {
