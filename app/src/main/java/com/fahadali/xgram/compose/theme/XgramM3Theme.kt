@@ -65,9 +65,12 @@ fun XgramM3Theme(dark: Boolean, themeVersion: Int, content: @Composable () -> Un
 }
 
 /**
- * The dark scheme with Pure black: background, surface, dim and lowest black, the other containers near-black steps
- * tinted very slightly with their own Material You hue ([XgramAmoled.pureBlack], the same colors as the views).
- * Content colors, outlines and the accent containers stay as they are.
+ * The dark scheme with Pure black, the same levels as the views ([XgramAmoled.pureBlack]): the page roles black
+ * (background, surface, dim, lowest, low: sheets, and surfaceContainer: SettingsPage and its app bar, the navigation
+ * bar), surfaceBright and surfaceContainerHigh the card step (settings rows, dialogs, the search bar) and
+ * surfaceContainerHighest the chip step (switch tracks), tinted very slightly with their own Material You hue.
+ * Content colors, outlines and the accent containers stay as they are. The surface tint is black too, so a component
+ * with tonal elevation on a black container (black equals surface here) stays black instead of turning primary-grey.
  */
 private fun pureBlackScheme(s: ColorScheme): ColorScheme {
   fun step(role: Int, c: Color) = Color(XgramAmoled.pureBlack(role, c.toArgb()))
@@ -75,11 +78,14 @@ private fun pureBlackScheme(s: ColorScheme): ColorScheme {
     background = step(XgramExpressive.SURFACE, s.background),
     surface = step(XgramExpressive.SURFACE, s.surface),
     surfaceDim = step(XgramExpressive.SURFACE_DIM, s.surfaceDim),
-    surfaceContainerLowest = step(XgramExpressive.SURFACE_CONTAINER_LOWEST, s.surfaceContainerLowest),
+    // For the views lowest is the chip step (a recessed chip in a bubble, see XgramAmoled); Compose has no such use,
+    // and its components read lowest as the darkest page level: black.
+    surfaceContainerLowest = step(XgramExpressive.SURFACE, s.surfaceContainerLowest),
     surfaceContainerLow = step(XgramExpressive.SURFACE_CONTAINER_LOW, s.surfaceContainerLow),
     surfaceContainer = step(XgramExpressive.SURFACE_CONTAINER, s.surfaceContainer),
     surfaceContainerHigh = step(XgramExpressive.SURFACE_CONTAINER_HIGH, s.surfaceContainerHigh),
     surfaceContainerHighest = step(XgramExpressive.SURFACE_CONTAINER_HIGHEST, s.surfaceContainerHighest),
-    surfaceBright = step(XgramExpressive.SURFACE_BRIGHT, s.surfaceBright)
+    surfaceBright = step(XgramExpressive.SURFACE_BRIGHT, s.surfaceBright),
+    surfaceTint = Color.Black
   )
 }

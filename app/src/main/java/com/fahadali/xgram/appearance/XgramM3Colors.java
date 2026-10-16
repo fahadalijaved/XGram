@@ -72,6 +72,12 @@ public final class XgramM3Colors {
   /** kind (4 bits) | role << 4 (6 bits) | base role << 10 (6 bits) | alpha << 16 (8 bits); 0 = not mapped. */
   private static final int[] TABLE = new int[SIZE];
 
+  /**
+   * Entries that replace TABLE's in the dark scheme while Pure black is on (XgramAmoled), for ids whose M3 role lands
+   * on the wrong pure black level; 0 = TABLE's entry. Same encoding.
+   */
+  private static final int[] PURE_BLACK = new int[SIZE];
+
   private static int alpha255 (float alpha) {
     return Math.max(0, Math.min(255, Math.round(alpha * 255f)));
   }
@@ -97,6 +103,15 @@ public final class XgramM3Colors {
     int entry = K_OVER | (role << 4) | (baseRole << 10) | (alpha255(alpha) << 16);
     for (int colorId : colorIds) {
       put(colorId, entry);
+    }
+  }
+
+  private static void pureBlackRole (int role, int... colorIds) {
+    int entry = K_ROLE | (role << 4) | (255 << 16);
+    for (int colorId : colorIds) {
+      if (colorId > 0 && colorId < SIZE) {
+        PURE_BLACK[colorId] = entry;
+      }
     }
   }
 
@@ -250,6 +265,10 @@ public final class XgramM3Colors {
       ColorId.bubbleOut_chatCorrectFilling, ColorId.bubbleOut_chatCorrectChosenFilling);
     harmonize(ColorId.messageAuthorPsa, ColorId.bubbleOut_messageAuthorPsa);
     harmonize(ColorId.headerBarCallIncoming, ColorId.headerBarCallActive, ColorId.headerBarCallMuted);
+
+    // Pure black: the light header (the select mode app bar, the bottom tab bar, sheet headers and their status bar)
+    // is an app bar, so it is black like headerBackground instead of the card step of surfaceContainerHigh.
+    pureBlackRole(SURFACE, ColorId.headerLightBackground);
   }
 
   /**
@@ -374,6 +393,9 @@ public final class XgramM3Colors {
 
   @ColorInt
   private static int resolve (ThemeDelegate theme, int colorId, int entry, boolean dark) {
+    if (dark && PURE_BLACK[colorId] != 0 && XgramAmoled.isEnabled()) {
+      entry = PURE_BLACK[colorId];
+    }
     int role = (entry >>> 4) & 0x3f;
     int alpha = (entry >>> 16) & 0xff;
     switch (entry & 0xf) {

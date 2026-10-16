@@ -796,6 +796,7 @@ public final class XgramExpressive {
     private int colorMode = COLOR_FIXED;
     private @ColorInt int fixedColor;
     private int colorRole;
+    private boolean floatingRole;
     private @ColorId int fromColorId, toColorId;
     private float colorFactor;
     private int alpha = 255;
@@ -846,9 +847,23 @@ public final class XgramExpressive {
 
     /** A role resolved at draw time, so it follows theme changes. */
     public void setColorRole (int role) {
-      if (colorMode != COLOR_ROLE || colorRole != role) {
+      setColorRole(role, false);
+    }
+
+    /**
+     * As {@link #setColorRole(int)} for a floating container (a menu or popup): with Pure black on in the dark theme it
+     * draws in the card step instead, as the page under it is black ({@link XgramAmoled#floatingRole}). Read at draw
+     * time, so the switch applies to a container already built.
+     */
+    public void setFloatingColorRole (int role) {
+      setColorRole(role, true);
+    }
+
+    private void setColorRole (int role, boolean floating) {
+      if (colorMode != COLOR_ROLE || colorRole != role || floatingRole != floating) {
         colorMode = COLOR_ROLE;
         colorRole = role;
+        floatingRole = floating;
         invalidateSelf();
       }
     }
@@ -876,7 +891,7 @@ public final class XgramExpressive {
       }
       switch (colorMode) {
         case COLOR_ROLE:
-          return color(colorRole);
+          return color(floatingRole ? XgramAmoled.floatingRole(colorRole) : colorRole);
         case COLOR_IDS:
           return me.vkryl.core.ColorUtils.fromToArgb(Theme.getColor(fromColorId), Theme.getColor(toColorId), colorFactor);
         case COLOR_FIXED:

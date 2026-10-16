@@ -18,12 +18,13 @@ import com.fahadali.xgram.XgramSettings;
 import org.thunderdog.challegram.theme.ThemeManager;
 
 /**
- * Pure black (AMOLED) night mode for Expressive design. While it is on and the app is dark, the Material You surfaces
- * are black and the containers above them near-black steps, so the M3 elevation order (lowest, low, container, high,
- * highest, bright) still reads. Content colors (onSurface, outlines) and the accent containers stay the dynamic
- * scheme's, and the light scheme is never changed. Everything drawn with the surface roles follows: Telegram X's colors
- * (XgramM3Colors through XgramExpressive.colorFor), the status and navigation bars, the panes, the rail, sheets, the
- * chat background without a wallpaper, and the Compose pages (XgramM3Theme).
+ * Pure black (AMOLED) night mode for Expressive design. While it is on and the app is dark, the surface roles fold into
+ * three levels: every page-level surface (pages, app bars, panes, the rail, sheets, the composer bar, the chat
+ * background without a wallpaper, the status and navigation bars) is black, cards on it (list tiles, incoming bubbles,
+ * text fields, dialogs, pinned and join request bars) one near-black step, and chips and pills inside those cards the
+ * next step, so nothing is grey on grey. Content colors (onSurface, outlines) and the accent containers stay the
+ * dynamic scheme's, and the light scheme is never changed. Everything drawn with the surface roles follows: Telegram X's
+ * colors (XgramM3Colors through XgramExpressive.colorFor) and the Compose pages (XgramM3Theme).
  */
 public final class XgramAmoled {
   private XgramAmoled () { }
@@ -53,6 +54,29 @@ public final class XgramAmoled {
     return isSaved() && XgramExpressive.isEnabled();
   }
 
+  /** Pure black is on and the current theme is dark, so the page roles draw black now. Cheap, safe in onDraw. */
+  public static boolean isActive () {
+    return isEnabled() && ThemeManager.instance().isCurrentThemeDark();
+  }
+
+  /**
+   * {@code pureBlackRole} while pure black draws ({@link #isActive()}), else {@code role}: for a call site whose M3
+   * role lands on the wrong level once the page roles are black, such as a filled text field drawn straight on the page
+   * (surfaceContainerHighest, a chip step with pure black, where a field is a card: surfaceContainerHigh).
+   */
+  public static int role (int role, int pureBlackRole) {
+    return isActive() ? pureBlackRole : role;
+  }
+
+  /**
+   * The role of a floating container (a menu, popup or rich tooltip) that M3 draws in {@code role}: surfaceContainer
+   * and surfaceContainerLow are black with pure black, like the page under the container, where no shadow shows, so it
+   * takes the card step (surfaceContainerHigh) instead.
+   */
+  public static int floatingRole (int role) {
+    return isActive() ? XgramExpressive.SURFACE_CONTAINER_HIGH : role;
+  }
+
   /**
    * Saves the switch and repaints the app at once with the new surfaces, as after a wallpaper color change: the role
    * caches are dropped and every theme listener (views, bars, Compose pages) is told the colors changed.
@@ -73,27 +97,37 @@ public final class XgramAmoled {
   /** Steps above black keep a trace of the Material You hue: half the dynamic surface's chroma, at most this (HCT). */
   private static final float TINT_CHROMA_MAX = 2f, TINT_CHROMA_SCALE = .5f;
 
+  /** The three pure black levels (sRGB grey): the page, a card on it, a chip inside a card. */
+  private static final int GREY_PAGE = 0x00, GREY_CARD = 0x12, GREY_CHIP = 0x1E;
+
   /**
    * The grey level (sRGB, the same in red, green and blue) of each surface role with pure black, or -1 where the role
-   * is not a surface. Black for the surface itself (and background, dim, lowest), then about the steps of the dark
-   * scheme's containers: #0B0B0B, #121212, #1A1A1A, #222222 and #262626 for bright.
+   * is not a surface. The roles fold by what they are drawn as, not by the M3 tone order (stepping each container up
+   * from black left the pages, app bars and sheets grey, #121212 to #262626, and the tiles on them lighter still):
+   * <ul>
+   * <li>Page, black: surface and dim (pages, the chat), surfaceContainerLow (sheets, the drawer, the emoji and keyboard
+   * panels) and surfaceContainer (the settings page under its tiles, app bars, the rail, the two-pane gap, the attach
+   * bar, the navigation and status bars).</li>
+   * <li>Card, #121212: surfaceBright (list tiles) and surfaceContainerHigh (incoming bubbles, text fields, the pinned
+   * and join request bars, chips on the chat background, dialogs, menus).</li>
+   * <li>Chip, #1E1E1E: surfaceContainerHighest (placeholders, muted badges, switch tracks, bot keyboard buttons) and
+   * surfaceContainerLowest. Nothing is darker than black, so lowest, which M3 uses for a recessed chip inside a raised
+   * container (reactions in a bubble), is the chip step above the card instead of a black hole in it.</li>
+   * </ul>
    */
   private static int greyOf (int role) {
     switch (role) {
       case XgramExpressive.SURFACE:
       case XgramExpressive.SURFACE_DIM:
-      case XgramExpressive.SURFACE_CONTAINER_LOWEST:
-        return 0x00;
       case XgramExpressive.SURFACE_CONTAINER_LOW:
-        return 0x0B;
       case XgramExpressive.SURFACE_CONTAINER:
-        return 0x12;
-      case XgramExpressive.SURFACE_CONTAINER_HIGH:
-        return 0x1A;
-      case XgramExpressive.SURFACE_CONTAINER_HIGHEST:
-        return 0x22;
+        return GREY_PAGE;
       case XgramExpressive.SURFACE_BRIGHT:
-        return 0x26;
+      case XgramExpressive.SURFACE_CONTAINER_HIGH:
+        return GREY_CARD;
+      case XgramExpressive.SURFACE_CONTAINER_HIGHEST:
+      case XgramExpressive.SURFACE_CONTAINER_LOWEST:
+        return GREY_CHIP;
       default:
         return -1;
     }
@@ -138,9 +172,9 @@ public final class XgramAmoled {
   private static final Step[] steps = new Step[XgramExpressive.ROLE_COUNT];
 
   /**
-   * The pure black color of {@code role} whatever the switch: black for the surface, a near-black step tinted very
-   * slightly with the hue of {@code dynamicColor} (the dark scheme's own color of the role) for the containers above
-   * it. Other roles keep {@code dynamicColor}.
+   * The pure black color of {@code role} whatever the switch: black for the page roles, the card or chip step tinted
+   * very slightly with the hue of {@code dynamicColor} (the dark scheme's own color of the role) for the others (see
+   * {@link #greyOf}). Other roles keep {@code dynamicColor}.
    */
   @ColorInt
   public static int pureBlack (int role, @ColorInt int dynamicColor) {
