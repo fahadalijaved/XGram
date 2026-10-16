@@ -109,4 +109,46 @@ public final class XgramWavyProgress {
     paint.setColor(indicatorColor);
     c.drawPath(path, paint);
   }
+
+  private static final long INDETERMINATE_TURN_MS = 1500L, INDETERMINATE_BREATH_MS = 3000L;
+  private static final float INDETERMINATE_MIN_SWEEP = 90f, INDETERMINATE_MAX_SWEEP = 270f;
+
+  /**
+   * Indeterminate ring for spots too small for the loading indicator: a flat arc that turns once every 1.5 s while
+   * its sweep breathes between 90 and 270 degrees, over a flat track with the 4dp gap at both ends.
+   *
+   * @param radius center line of the stroke
+   * @param elapsedMs time since the ring started
+   */
+  public static void drawCircularIndeterminate (Canvas c, float cx, float cy, float radius, float strokePx, @ColorInt int indicatorColor, @ColorInt int trackColor, long elapsedMs) {
+    if (radius <= 0f) {
+      return;
+    }
+    if (paint == null) {
+      paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      paint.setStyle(Paint.Style.STROKE);
+      paint.setStrokeCap(Paint.Cap.ROUND);
+      paint.setStrokeJoin(Paint.Join.ROUND);
+    }
+    final long t = Math.max(0L, elapsedMs);
+    final float turn = 360f * (float) (t % INDETERMINATE_TURN_MS) / (float) INDETERMINATE_TURN_MS;
+    final double breath = (1.0 - Math.cos(2.0 * Math.PI * (double) (t % INDETERMINATE_BREATH_MS) / INDETERMINATE_BREATH_MS)) / 2.0;
+    final float sweep = INDETERMINATE_MIN_SWEEP + (INDETERMINATE_MAX_SWEEP - INDETERMINATE_MIN_SWEEP) * (float) breath;
+    final float start = -90f + turn;
+    final float gapDeg = (float) Math.toDegrees((Screen.dp(GAP_DP) + strokePx) / radius);
+
+    paint.setStrokeWidth(strokePx);
+    arc.set(cx - radius, cy - radius, cx + radius, cy + radius);
+    if ((trackColor >>> 24) != 0) {
+      final float trackSweep = 360f - sweep - gapDeg * 2f;
+      if (trackSweep > 0f) {
+        paint.setColor(trackColor);
+        c.drawArc(arc, start + sweep + gapDeg, trackSweep, false, paint);
+      }
+    }
+    if ((indicatorColor >>> 24) != 0) {
+      paint.setColor(indicatorColor);
+      c.drawArc(arc, start, sweep, false, paint);
+    }
+  }
 }
