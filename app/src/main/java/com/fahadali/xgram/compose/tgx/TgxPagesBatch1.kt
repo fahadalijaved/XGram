@@ -11,11 +11,66 @@
  */
 package com.fahadali.xgram.compose.tgx
 
+import android.view.View
+import com.fahadali.xgram.chats.XgramCommunitySettingsController
+import org.thunderdog.challegram.R
+import org.thunderdog.challegram.component.base.SettingView
+import org.thunderdog.challegram.ui.EditRightsController
+import org.thunderdog.challegram.ui.EditSessionController
+import org.thunderdog.challegram.ui.ListItem
+import org.thunderdog.challegram.ui.PrivacyExceptionController
+import org.thunderdog.challegram.ui.RequestController
+import org.thunderdog.challegram.ui.Settings2FAController
+import org.thunderdog.challegram.ui.SettingsArchiveChatListController
+import org.thunderdog.challegram.ui.SettingsPhoneController
+import org.thunderdog.challegram.ui.SettingsPrivacyKeyController
+import org.thunderdog.challegram.ui.WaitForPremiumController
+
 /**
  * Batch 1 (privacy, security and account): one line per controller, its hints after `to`
  * (TgxPageHints.DEFAULT, or an object overriding kind/trailing/largeTitle). Only this batch edits this file.
+ *
+ * Rows the generic mapping keeps as real views on these pages: the public photo preview (PrivacyKey), chat rows
+ * (PrivacyException, EditRights, community chats), edit fields (2FA, EditRights, Request) and the iconized empty
+ * states (2FA, Phone, WaitForPremium), which keep their large icon and bold text.
  */
 internal object TgxPagesBatch1 {
   val pages: Map<Class<*>, TgxPageHints> = mapOf(
+    SettingsPrivacyKeyController::class.java to TgxPageHints.DEFAULT,
+    PrivacyExceptionController::class.java to TgxPageHints.DEFAULT,
+    Settings2FAController::class.java to TgxPageHints.DEFAULT,
+    EditRightsController::class.java to Batch1EditRightsHints,
+    SettingsPhoneController::class.java to TgxPageHints.DEFAULT,
+    WaitForPremiumController::class.java to TgxPageHints.DEFAULT,
+    SettingsArchiveChatListController::class.java to TgxPageHints.DEFAULT,
+    EditSessionController::class.java to TgxPageHints.DEFAULT,
+    RequestController::class.java to TgxPageHints.DEFAULT,
+    XgramCommunitySettingsController::class.java to TgxPageHints.DEFAULT,
   )
+}
+
+/**
+ * Admin rights, member restrictions and chat permissions.
+ * - A rights group row (Send media) has two targets: its toggler toggles the whole group, the rest of the row shows or
+ *   hides the group's rights. A Compose switch row has one tap, so the group row stays the real view.
+ * - A single right with Telegram X's negative-state toggler (red when off, green when on) is an M3 switch: its row tap
+ *   toggles it, or shows why it can't be changed (a tooltip at the toggler, lock shown).
+ */
+private object Batch1EditRightsHints : TgxPageHints {
+  override fun kind(item: ListItem, view: View): TgxRowKind? {
+    if (item.id == R.id.btn_togglePermissionGroup) {
+      return TgxRowKind.FALLBACK
+    }
+    if (item.viewType == ListItem.TYPE_RADIO_SETTING_WITH_NEGATIVE_STATE && view is SettingView && view.toggler != null) {
+      if (!view.drawModifiers.isNullOrEmpty()) {
+        return TgxRowKind.FALLBACK
+      }
+      val icon = view.iconResource
+      if ((icon == 0 && view.hasIcon()) || (icon != 0 && !TgxIcons.supported(view.context, icon))) {
+        return TgxRowKind.FALLBACK
+      }
+      return TgxRowKind.SWITCH
+    }
+    return null
+  }
 }
