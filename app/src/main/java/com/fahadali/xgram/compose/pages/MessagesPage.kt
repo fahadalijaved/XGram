@@ -99,9 +99,8 @@ fun MessagesPage() {
     group {
       switch(R.id.btn_xgramInlineVideo, s(R.string.XgramInlineVideo), s(R.string.XgramInlineVideoSub), checked = settings.inlineVideo()) {
         settings.setInlineVideo(it)
-        if (!settings.inlineVideo()) {
-          XgramInlineVideo.stop()
-        }
+        // Open chats are rebuilt too: whether a video message gets the player is decided when the message is made.
+        XgramInlineVideo.postSettingChanged()
       }
       buttons(
         R.id.btn_xgramInlineVideoStart, s(R.string.XgramInlineVideoStart),
@@ -115,7 +114,8 @@ fun MessagesPage() {
         settings.setInlineVideoStart(it)
       }
     }
-    description(R.string.XgramInlineVideoInfo)
+    // What the rows do, or that Telegram X's Autoplay GIFs keeps videos from starting by themselves.
+    description(XgramSettingDeps.inlineVideoInfo())
 
     header(R.string.XgramMessageBox)
     group {

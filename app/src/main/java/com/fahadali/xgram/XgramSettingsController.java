@@ -738,7 +738,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramInlineVideo, R.string.XgramInlineVideo, R.string.XgramInlineVideoSub),
       link(R.id.btn_xgramInlineVideoStart, R.string.XgramInlineVideoStart)
     );
-    items.add(description(R.string.XgramInlineVideoInfo));
+    // What the rows do, or that Telegram X's Autoplay GIFs keeps videos from starting by themselves (updated with them).
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramInlineVideoInfo, 0, XgramSettingDeps.inlineVideoInfo()));
 
     items.add(header(R.string.XgramMessageBox));
     addRows(items,
@@ -1193,6 +1194,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       // A proxy may have been added on Telegram X's proxy page.
       updateDescription(R.id.btn_xgramPaneInfo, XgramSettingDeps.paneInfo());
       updateDescription(R.id.btn_xgramProxyRulesInfo, XgramSettingDeps.proxyRulesInfo());
+      // Autoplay GIFs may have been changed on Telegram X's settings page.
+      updateDescription(R.id.btn_xgramInlineVideoInfo, XgramSettingDeps.inlineVideoInfo());
     }
   }
 
@@ -1494,10 +1497,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramInlineVideo) {
       settings.setInlineVideo(adapter.toggleView(v));
-      if (!settings.inlineVideo()) {
-        com.fahadali.xgram.chats.XgramInlineVideo.stop();
-      }
+      // Open chats are rebuilt too: whether a video message gets the player is decided when the message is made.
+      com.fahadali.xgram.chats.XgramInlineVideo.postSettingChanged();
       adapter.updateValuedSettingById(R.id.btn_xgramInlineVideoStart);
+      updateDescription(R.id.btn_xgramInlineVideoInfo, XgramSettingDeps.inlineVideoInfo());
       return;
     } else if (id == R.id.btn_xgramInlineVideoStart) {
       if (!XgramSettingDeps.inlineVideoStartEnabled()) {
@@ -1508,6 +1511,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       showOptions(null, new int[] {1, 2}, titles, null, null, (itemView, optionId) -> {
         settings.setInlineVideoStart(modes[optionId - 1]);
         adapter.updateValuedSettingById(R.id.btn_xgramInlineVideoStart);
+        updateDescription(R.id.btn_xgramInlineVideoInfo, XgramSettingDeps.inlineVideoInfo());
         return true;
       });
       return;

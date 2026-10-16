@@ -123,6 +123,20 @@ public final class XgramSettingDeps {
     return s().inlineVideo();
   }
 
+  /**
+   * Starting automatically also needs Telegram X's Autoplay GIFs (XgramInlineVideo.autoplay): with it off, videos
+   * only start on a tap. Nothing is changed or saved.
+   */
+  public static boolean inlineVideoAutoplayBlocked () {
+    XgramSettings settings = s();
+    return settings.inlineVideo() && settings.inlineVideoStart() == XgramSettings.INLINE_VIDEO_START_AUTO && !Settings.instance().needAutoplayGIFs();
+  }
+
+  /** The note under the video rows: what they do, or that Autoplay GIFs keeps videos from starting by themselves. */
+  public static @StringRes int inlineVideoInfo () {
+    return inlineVideoAutoplayBlocked() ? R.string.XgramInlineVideoInfoNoAutoplay : R.string.XgramInlineVideoInfo;
+  }
+
   /** Tap to record changes the voice and video button, which Message box buttons can hide (MessagesController). */
   public static boolean tapToRecordEnabled () {
     return !s().inputButtonHidden(XgramSettings.INPUT_BUTTON_VOICE);
