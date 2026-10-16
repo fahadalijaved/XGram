@@ -447,7 +447,7 @@ public class EmojiToneHelper implements FactorAnimator.Target {
       return false;
     }
 
-    emojiTonePicker = new EmojiToneListView(context);
+    emojiTonePicker = xgramMenuStyle(anchorView) ? new com.fahadali.xgram.appearance.XgramW2ToneListView(context) : new EmojiToneListView(context);
     emojiTonePicker.init(themeProvider, tdlib);
     emojiTonePicker.setEmoji(emoji, currentTone, emojiColorState);
     emojiTonePicker.setCustomEmoji(installedStickers, recommendedStickers);
@@ -469,6 +469,23 @@ public class EmojiToneHelper implements FactorAnimator.Target {
       emojiTonePicker.changeIndex(
         anchorView.getMeasuredWidth() / 2f - offsetLeft,
         anchorView.getMeasuredHeight() / 2f - offsetTop);
+    }
+    return true;
+  }
+
+  /**
+   * XGram M3E wave 2: the picker is an M3E menu surface (com.fahadali.xgram.appearance.XgramW2ToneListView) with
+   * Expressive design, except over the media viewer's dark emoji keyboard, which keeps Telegram X's dark bubble (the
+   * menu takes the app scheme's colours, as the Expressive emoji panel does).
+   */
+  private static boolean xgramMenuStyle (@Nullable View anchorView) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return false;
+    }
+    for (android.view.ViewParent parent = anchorView != null ? anchorView.getParent() : null; parent != null; parent = parent.getParent()) {
+      if (parent instanceof org.thunderdog.challegram.widget.EmojiLayout) {
+        return !((org.thunderdog.challegram.widget.EmojiLayout) parent).isUseDarkMode();
+      }
     }
     return true;
   }

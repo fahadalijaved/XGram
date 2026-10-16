@@ -219,18 +219,29 @@ public final class XgramW2Cards {
     c.drawRoundRect(rect, radius, radius, fill(color));
   }
 
+  /** The date separator chip's height (TGMessage.drawDate with Expressive design): one line is a 26dp pill. */
+  public static final float SERVICE_PILL_HEIGHT = 26f;
+
   /**
-   * The service chip around a laid out text: 12dp on both sides, 5dp above and 4dp below the text's line boxes (as
-   * Telegram X lays the pill out), corners of a 26dp pill (13dp), so one line is a full-corner pill like the date
-   * separators and more lines keep the same corner.
+   * The service chip around a laid out text: 12dp on both sides (the date chip's padding), 5dp above and 4dp below
+   * the text's line boxes (as Telegram X lays the pill out), at least the date chip's 26dp (grown evenly around the
+   * text), corners of the 26dp pill (13dp): one line is a full-corner pill like the date separators, more lines keep
+   * the same corner.
    */
   public static void drawServicePill (@NonNull Canvas c, float textLeft, float textTop, float textRight, float textBottom, @ColorInt int color) {
     if ((color >>> 24) == 0 || textRight <= textLeft) {
       return;
     }
     final float h = Screen.dpf(SERVICE_PADDING_H);
-    rect.set(textLeft - h, textTop - Screen.dpf(5f), textRight + h, textBottom + Screen.dpf(4f));
-    final float radius = Math.min(Screen.dpf(13f), rect.height() / 2f);
+    float top = textTop - Screen.dpf(5f), bottom = textBottom + Screen.dpf(4f);
+    final float minHeight = Screen.dpf(SERVICE_PILL_HEIGHT);
+    if (bottom - top < minHeight) {
+      final float grow = (minHeight - (bottom - top)) / 2f;
+      top -= grow;
+      bottom += grow;
+    }
+    rect.set(textLeft - h, top, textRight + h, bottom);
+    final float radius = Math.min(minHeight / 2f, rect.height() / 2f);
     c.drawRoundRect(rect, radius, radius, fill(color));
   }
 

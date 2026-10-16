@@ -606,7 +606,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       captionEmojiButton.setTranslationX(-captionEmojiButton.getMeasuredWidth() * (1f - factor));
       captionEmojiButton.setAlpha(factor);
       captionDoneButton.setAlpha(factor);
-      captionView.setTranslationX(-(Screen.dp(55f) - Screen.dp(14f)) * (1f - factor));
+      captionView.setTranslationX(-(Screen.dp(55f) - xgramCaptionTextStart()) * (1f - factor));
     }
   }
 
@@ -3408,6 +3408,18 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (mode == MODE_MESSAGES || mode == MODE_SIMPLE);
   }
 
+  // XGram M3E wave 2: the send screen (gallery mode): the edit actions in a floating toolbar next to the send FAB, the
+  // caption in a filled field, a bottom scrim instead of the bands (com.fahadali.xgram.appearance.XgramW2MediaViewer)
+
+  private boolean xgramGalleryToolbar () {
+    return com.fahadali.xgram.appearance.XgramW2MediaViewer.on() && mode == MODE_GALLERY;
+  }
+
+  /** Where the caption text starts while it is not being edited (Telegram X: 14dp; Expressive: 16dp inside the field). */
+  private int xgramCaptionTextStart () {
+    return Screen.dp(xgramGalleryToolbar() ? com.fahadali.xgram.appearance.XgramW2MediaViewer.FIELD_TEXT_START_DP : 14f);
+  }
+
   private static void xgramStyleCaptionCard (View v) {
     android.graphics.drawable.GradientDrawable card = new android.graphics.drawable.GradientDrawable();
     card.setColor(com.fahadali.xgram.appearance.XgramM3Content.ON_MEDIA_SCRIM);
@@ -5438,7 +5450,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
 
     bottomSpace = new FillingSpace(context);
-    if (xgramCaptionCard()) {
+    if (xgramCaptionCard() || xgramGalleryToolbar()) {
       // XGram: the navigation bar area continues the controls' bottom scrim (its 60% end) instead of a lighter band
       bottomSpace.setBackgroundColor(XGRAM_ON_MEDIA_SCRIM);
     } else {
@@ -9045,7 +9057,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     mediaView.setOffsets(0, 0, 0, 0, 0); // Screen.dp(56f)
     editWrap = new FrameLayoutFix(context);
+    if (xgramGalleryToolbar()) {
+      ViewUtils.setBackground(editWrap, new com.fahadali.xgram.appearance.XgramW2MediaViewer.BottomScrimDrawable()); // XGram: a scrim, no band
+    } else {
     editWrap.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+    }
     editWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f), Gravity.BOTTOM));
     Views.setBottomMargin(editWrap, controlsMargin);
 
@@ -9151,6 +9167,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     editButtons = new LinearLayout(context);
     editButtons.setOrientation(LinearLayout.HORIZONTAL);
     editButtons.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER_HORIZONTAL));
+    if (xgramGalleryToolbar()) {
+      ViewUtils.setBackground(editButtons, com.fahadali.xgram.appearance.XgramW2MediaViewer.newToolbarBackground()); // XGram: the floating toolbar
+    }
 
     cropOrStickerButton = new EditButton(context);
     cropOrStickerButton.setOnClickListener(this);
@@ -9300,7 +9319,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     captionView.setMaxLines(4);
     captionView.setId(R.id.input);
     captionView.setPadding(Screen.dp(55f), Screen.dp(15f), Screen.dp(55f), Screen.dp(14f));
-    captionView.setTranslationX(-(Screen.dp(55f) - Screen.dp(14f)));
+    captionView.setTranslationX(-(Screen.dp(55f) - xgramCaptionTextStart()));
     captionView.setHintTextColor(0xbaffffff);
     captionView.setTextColor(0xffffffff);
     captionView.setTypeface(Fonts.getRobotoRegular());
@@ -9362,7 +9381,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       }
     };
     captionWrapView.setOrientation(LinearLayout.VERTICAL);
+    if (xgramGalleryToolbar()) {
+      ViewUtils.setBackground(captionWrapView, com.fahadali.xgram.appearance.XgramW2MediaViewer.newCaptionFieldBackground()); // XGram: a filled field, no band
+    } else {
     captionWrapView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+    }
     captionWrapView.addView(captionView);
     captionWrapView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
     this.captionWrapView = captionWrapView;
