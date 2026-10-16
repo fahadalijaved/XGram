@@ -309,22 +309,42 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     });
   }
 
+  // XGram M3E: the bar is the chat's join requests card (XgramM3Chat.applyCard: surfaceContainerHigh, 20dp corners,
+  // 8dp side margins) on an 8dp band in the app bar color, as the card group over a group's messages, instead of a
+  // full-width strip in the list color with a shadow. The topics' rounded container starts under the band.
+  private static final float XGRAM_REQUESTS_BAND = 8f;
+
+  private static int requestsBarHeight () {
+    return Screen.dp(48f) + (XgramExpressive.isEnabled() ? Screen.dp(XGRAM_REQUESTS_BAND) * 2 : 0);
+  }
+
   private void createRequestsBar (Context context, ViewGroup parent) {
+    final boolean xgramCard = XgramExpressive.isEnabled();
     requestsView = new org.thunderdog.challegram.component.chat.JoinRequestsView(context, tdlib);
     requestsView.setLayoutParams(new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f)));
     requestsView.setOnClickListener(v -> org.thunderdog.challegram.component.popups.ModernActionedLayout.showJoinRequests(this, chat.id, requestsView.getInfo()));
     requestsView.setOnDismissRunnable(() -> tdlib.settings().dismissRequests(chat.id, requestsView.getInfo()));
-    org.thunderdog.challegram.support.RippleSupport.setSimpleWhiteBackground(requestsView, this);
+    if (xgramCard) {
+      com.fahadali.xgram.appearance.XgramM3Chat.applyCard(requestsView);
+      addThemeInvalidateListener(requestsView); // the card reads its color while drawing
+    } else {
+      org.thunderdog.challegram.support.RippleSupport.setSimpleWhiteBackground(requestsView, this);
+    }
     org.thunderdog.challegram.tool.Views.setClickable(requestsView);
-
-    org.thunderdog.challegram.widget.ShadowView shadowView = new org.thunderdog.challegram.widget.ShadowView(context);
-    shadowView.setSimpleBottomTransparentShadow(true);
 
     requestsWrap = new android.widget.LinearLayout(context);
     requestsWrap.setOrientation(android.widget.LinearLayout.VERTICAL);
     requestsWrap.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
     requestsWrap.addView(requestsView);
-    requestsWrap.addView(shadowView);
+    if (xgramCard) {
+      int band = Screen.dp(XGRAM_REQUESTS_BAND);
+      requestsWrap.setPadding(band, band, band, band);
+      org.thunderdog.challegram.support.ViewSupport.setThemedBackground(requestsWrap, ColorId.headerBackground, this);
+    } else {
+      org.thunderdog.challegram.widget.ShadowView shadowView = new org.thunderdog.challegram.widget.ShadowView(context);
+      shadowView.setSimpleBottomTransparentShadow(true);
+      requestsWrap.addView(shadowView);
+    }
     requestsWrap.setVisibility(View.GONE);
     parent.addView(requestsWrap);
 
@@ -350,7 +370,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     }
     if ((requestsWrap.getVisibility() == View.VISIBLE) != show) {
       requestsWrap.setVisibility(show ? View.VISIBLE : View.GONE);
-      org.thunderdog.challegram.tool.Views.setTopMargin(getRecyclerView(), show ? Screen.dp(48f) : 0);
+      org.thunderdog.challegram.tool.Views.setTopMargin(getRecyclerView(), show ? requestsBarHeight() : 0);
     }
   }
 

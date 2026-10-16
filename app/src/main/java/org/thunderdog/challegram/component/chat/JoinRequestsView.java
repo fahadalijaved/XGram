@@ -72,6 +72,7 @@ public class JoinRequestsView extends BaseView implements Destroyable, ComplexRe
   // onSurface, and the close button a standard icon button (24dp icon, 40dp state layer 28dp from the end, a 56dp
   // touch target) whose press no longer ripples the whole card. Nothing with Expressive design off.
   private static final float XGRAM_CLOSE_WIDTH = 56f;
+  private static final float XGRAM_LEADING_SHIFT = 4f; // the first avatar 16dp from the card's start (Telegram X: 12dp)
   private static final TextColorSet XGRAM_TITLE_COLORS = () -> com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
   private final @Nullable com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton xgramClose;
 
@@ -100,11 +101,13 @@ public class JoinRequestsView extends BaseView implements Destroyable, ComplexRe
   protected void onDraw (Canvas canvas) {
     super.onDraw(canvas);
 
-    int textStartX = Screen.dp(AVATAR_RADIUS) + Screen.dp(24f);
+    // XGram: the avatars start 16dp into the card (M3 list leading space), the title keeps its gap after them
+    final int xgramLead = xgramClose != null ? Screen.dp(XGRAM_LEADING_SHIFT) : 0;
+    int textStartX = Screen.dp(AVATAR_RADIUS) + Screen.dp(24f) + xgramLead;
 
     if (joinRequestEntries != null) {
       int cy = getMeasuredHeight() / 2;
-      int baseCx = Screen.dp(AVATAR_RADIUS) + Screen.dp(12f);
+      int baseCx = Screen.dp(AVATAR_RADIUS) + Screen.dp(12f) + xgramLead;
       int spacing = Screen.dp(AVATAR_RADIUS) * 2 - Screen.dp(AVATAR_SPACING);
       Views.saveLayerAlpha(canvas, 0, 0, getMeasuredWidth(), getMeasuredHeight(), 255, Canvas.ALL_SAVE_FLAG);
       for (int index = joinRequestEntries.size() - 1; index >= 0; index--) {
@@ -197,7 +200,7 @@ public class JoinRequestsView extends BaseView implements Destroyable, ComplexRe
   private void updateTitleMaxWidth () {
     if (!title.isEmpty() && getMeasuredWidth() > 0) {
       for (ListAnimator.Entry<Text> entry : title) {
-        entry.item.changeMaxWidth(getMeasuredWidth() - Screen.dp(AVATAR_RADIUS * 4f) - Screen.dp(xgramClose != null ? XGRAM_CLOSE_WIDTH : 48f));
+        entry.item.changeMaxWidth(getMeasuredWidth() - Screen.dp(AVATAR_RADIUS * 4f) - Screen.dp(xgramClose != null ? XGRAM_CLOSE_WIDTH + XGRAM_LEADING_SHIFT : 48f));
       }
     }
   }
