@@ -6758,7 +6758,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         selectionAnimators = new LongSparseArray<>();
       }
       if (targetAnimator == null) {
-        targetAnimator = new FactorAnimator(ANIMATOR_SELECT, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200l);
+        // XGram: check circle and content shift on SPATIAL_DEFAULT with Expressive design (clamped: the factor also feeds paint alpha)
+        targetAnimator = new FactorAnimator(ANIMATOR_SELECT, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 200l));
         targetAnimator.setLongValue(messageId);
         selectionAnimators.put(messageId, targetAnimator);
         onAnimatorAttachedToMessage(messageId, targetAnimator);
@@ -7168,6 +7169,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           quickRightReadyAnimator = readyAnimator;
         }
       }
+      // XGram: the reply / share icon pops on SPATIAL_FAST and fades back on EFFECTS_FAST with Expressive design
+      com.fahadali.xgram.appearance.XgramAppMotion.use(readyAnimator, factor > readyFactor ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, factor <= readyFactor);
       readyAnimator.animateTo(factor);
     } else {
       if (readyAnimator != null) {
@@ -7439,6 +7442,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     } else if (!dismissAnimator.isAnimating() && dismissFactor == toFactor) {
       return;
     }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(dismissAnimator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, true); // XGram: no overshoot when a swipe settles
     dismissAnimator.animateTo(toFactor);
   }
 

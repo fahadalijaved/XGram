@@ -631,12 +631,48 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
 
   private void xgramApplyFabSize () {
     FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) mainButton.getLayoutParams();
+    mainButton.xgramSetFabSize(xgramFabSize);
     if (params != null) {
-      params.width = params.height = Screen.dp(xgramFabSize);
+      params.height = Screen.dp(xgramFabSize);
+      params.width = mainButton.xgramLayoutWidth(); // the extended FAB's full width (the FAB size otherwise)
       params.leftMargin = params.rightMargin = params.bottomMargin = Screen.dp(xgramFabMargin);
     }
-    mainButton.xgramSetFabSize(xgramFabSize);
     xgramLayoutItems();
+  }
+
+  // Extended FAB: icon and label at the top of the chat list, the plain FAB once it has scrolled
+
+  private com.fahadali.xgram.appearance.XgramMotion.Value xgramExtend;
+  private boolean xgramExtended = true;
+
+  /** Gives the main FAB a label (null removes it). Expressive design only. */
+  public void xgramSetExtendedLabel (@androidx.annotation.Nullable CharSequence label) {
+    if (mainButton == null || !XgramExpressive.isEnabled()) {
+      return;
+    }
+    mainButton.xgramSetExtendedLabel(label);
+    mainButton.xgramSetExtendFactor(xgramExtend != null ? xgramExtend.getValue() : xgramExtended ? 1f : 0f);
+    FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) mainButton.getLayoutParams();
+    if (params != null && params.width != mainButton.xgramLayoutWidth()) {
+      params.width = mainButton.xgramLayoutWidth();
+      mainButton.setLayoutParams(params);
+    }
+  }
+
+  /** Width springs on SPATIAL_DEFAULT; the label fades before the container reaches the icon. */
+  public void xgramSetExtended (boolean extended) {
+    if (mainButton == null || !mainButton.xgramHasLabel() || this.xgramExtended == extended) {
+      return;
+    }
+    this.xgramExtended = extended;
+    if (xgramExtend == null) {
+      xgramExtend = new com.fahadali.xgram.appearance.XgramMotion.Value(XgramExpressive.SPATIAL_DEFAULT, extended ? 0f : 1f, (v, value, velocity) -> {
+        if (mainButton != null) {
+          mainButton.xgramSetExtendFactor(value);
+        }
+      }).setThreshold(.002f);
+    }
+    xgramExtend.animateTo(extended ? 1f : 0f);
   }
 
   private void xgramUpdateRtl () {

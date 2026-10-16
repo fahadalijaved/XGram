@@ -59,7 +59,8 @@ public class FormattedCounterAnimator<T extends TextDrawable> extends CounterAni
   public FormattedCounterAnimator (Callback<T> callback, long duration) {
     super(callback);
     this.callback = callback;
-    this.animator = new ListAnimator<>(listAnimator -> callback.onItemsChanged(this), AnimatorUtils.DECELERATE_INTERPOLATOR, duration);
+    // XGram: digits slide on SPATIAL_FAST with Expressive design
+    this.animator = new ListAnimator<>(listAnimator -> callback.onItemsChanged(this), com.fahadali.xgram.appearance.XgramAppMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), duration > 0 ? com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, duration) : duration);
   }
 
   @Override public float getWidth () {

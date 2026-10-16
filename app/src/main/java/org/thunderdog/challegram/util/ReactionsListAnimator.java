@@ -158,24 +158,25 @@ public final class ReactionsListAnimator implements Iterable<ReactionsListAnimat
       }
     }
 
+    // XGram: clamped, so a spring's overshoot moves the chips but never gives a negative size or alpha
     public float getTotalWidth () {
-      return totalWidth.get();
+      return Math.max(0f, totalWidth.get());
     }
 
     public float getLastLineWidth () {
-      return lastLineWidth.get();
+      return Math.max(0f, lastLineWidth.get());
     }
 
     public float getTotalHeight () {
-      return totalHeight.get();
+      return Math.max(0f, totalHeight.get());
     }
 
     public float getSize () {
-      return size.get();
+      return Math.max(0f, size.get());
     }
 
     public float getVisibility () {
-      return visibility.get();
+      return MathUtils.clamp(visibility.get());
     }
 
     public float getTimeHeightExpand () {

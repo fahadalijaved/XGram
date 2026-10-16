@@ -188,7 +188,7 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
     }
     recyclerView.setHasFixedSize(true);
     recyclerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-    recyclerView.setItemAnimator(null); // new CustomItemAnimator(Anim.DECELERATE_INTERPOLATOR, 180l));
+    recyclerView.setItemAnimator(com.fahadali.xgram.appearance.XgramAppMotion.listAnimator()); // new CustomItemAnimator(Anim.DECELERATE_INTERPOLATOR, 180l)); XGram: springs with Expressive design (members joining or leaving, media deleted)
     tdlib.ui().attachViewportToRecyclerView(messageViewport, recyclerView);
     adapter = new SettingsAdapter(this, needsDefaultOnClick() ? this : null, this) {
       @Override

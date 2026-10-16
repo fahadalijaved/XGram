@@ -75,6 +75,73 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     }
   }
 
+  // XGram: with Expressive design a sent, arrived or deleted message animates once on springs (the new bubble grows
+  // from its tail while older messages slide up), then the list runs without an item animator again, as in Telegram X,
+  // so history loads, edits and bubble merges never animate.
+
+  private @Nullable CustomItemAnimator xgramArmed;
+  private boolean xgramArmWaiting;
+  private final android.view.ViewTreeObserver.OnPreDrawListener xgramArmCheck = this::xgramCheckArmed;
+  private final ItemAnimator.ItemAnimatorFinishedListener xgramDisarm = () -> {
+    if (!xgramArmWaiting && xgramArmed != null && getItemAnimator() == xgramArmed) {
+      setItemAnimator(null);
+    }
+  };
+
+  /** Call right before the adapter inserts or removes one live message. */
+  public void xgramArmOnce () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || getWindowToken() == null || getWidth() == 0) {
+      return;
+    }
+    if (xgramArmed == null) {
+      xgramArmed = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, ITEM_ANIMATOR_DURATION) {
+        @Override
+        public boolean animateAdd (RecyclerView.ViewHolder holder) {
+          xgramTailPivot(holder.itemView);
+          return super.animateAdd(holder);
+        }
+
+        @Override
+        public void onAddFinished (RecyclerView.ViewHolder item) {
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            item.itemView.resetPivot();
+          }
+        }
+      };
+      xgramArmed.setSupportsChangeAnimations(false);
+    }
+    if (getItemAnimator() != xgramArmed) {
+      setItemAnimator(xgramArmed);
+    }
+    if (!xgramArmWaiting) {
+      xgramArmWaiting = true;
+      getViewTreeObserver().addOnPreDrawListener(xgramArmCheck);
+    }
+  }
+
+  private boolean xgramCheckArmed () {
+    if (isLayoutRequested() || hasPendingAdapterUpdates()) {
+      return true; // the pass that records the animations has not run yet
+    }
+    getViewTreeObserver().removeOnPreDrawListener(xgramArmCheck);
+    xgramArmWaiting = false;
+    if (xgramArmed != null && getItemAnimator() == xgramArmed) {
+      xgramArmed.isRunning(xgramDisarm);
+    }
+    return true;
+  }
+
+  /** The new bubble grows from its tail: the bottom corner on its own side. */
+  private static void xgramTailPivot (View view) {
+    org.thunderdog.challegram.component.chat.MessageView messageView = org.thunderdog.challegram.component.chat.MessagesHolder.findMessageView(view);
+    TGMessage msg = messageView != null ? messageView.getMessage() : null;
+    boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+    boolean right = msg != null && msg.useBubbles() ? msg.isOutgoingBubble() != rtl : rtl;
+    int w = view.getWidth();
+    view.setPivotX(right ? w - Screen.dp(16f) : Screen.dp(16f));
+    view.setPivotY(view.getHeight());
+  }
+
   private int prevWidth, prevHeight;
 
   @Override
