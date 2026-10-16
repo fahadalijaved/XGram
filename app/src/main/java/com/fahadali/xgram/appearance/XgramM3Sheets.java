@@ -58,11 +58,13 @@ public final class XgramM3Sheets {
   // Sheet top
 
   /**
-   * 1 while the sheet top is 28dp or more below the top of the window, 0 once it reaches it, so the 28dp corners
-   * square off as the sheet docks under the status bar (the rule of MessageOptionsPagerController).
+   * 1 while the sheet top is 28dp or more above the point where the status bar strip starts, 0 from there, so the 28dp
+   * corners square off as the sheet docks under the status bar. The strip (the sheets' LickView, square and full width)
+   * grows above the sheet over its last status bar height of travel ({@code sheetTop < 2 * topOffset}): the corners
+   * are square by then, so the strip never sits over rounded corners as a notched step.
    */
   public static float cornerFactor (float sheetTop) {
-    return MathUtils.clamp((sheetTop - HeaderView.getTopOffset()) / Screen.dpf(XgramExpressive.CORNER_XL));
+    return MathUtils.clamp((sheetTop - HeaderView.getTopOffset() * 2) / Screen.dpf(XgramExpressive.CORNER_XL));
   }
 
   /**

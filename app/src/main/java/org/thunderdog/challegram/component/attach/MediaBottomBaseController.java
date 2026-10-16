@@ -243,6 +243,9 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
         contentView.invalidate(); // XGram: the sheet top follows the list
       }
       onRecyclerTopUpdate(top);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramInvalidateSheetClip(); // XGram: the clipped corners follow the sheet top (after the views moved with it)
+      }
     }
   }
 
@@ -290,6 +293,9 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
     com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
     ViewSupport.setThemedBackground(recyclerView, getRecyclerBackgroundColorId());
+    // XGram: the list (its square background and the items at its top) is clipped to the sheet top's 28dp curve, which
+    // starts in the band above it (see xgramDrawSheetTop): one shape, no square list corners under the curve
+    xgramClipToSheet(recyclerView);
     addThemeInvalidateListener(recyclerView);
     recyclerView.setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 150l));
     recyclerView.setLayoutParams(params);
@@ -320,31 +326,100 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
 
   }
 
-  // XGram: Material 3 Expressive modal sheet top above the list: 28dp corners and a drag handle in a 16dp band, both
-  // fading out as the sheet reaches the top (where the header takes over)
+  // XGram: Material 3 Expressive modal sheet top above the list: 28dp corners and a drag handle in a 20dp band (8dp,
+  // the 4dp handle, 8dp to the list), both fading out as the sheet reaches the top (where the header takes over). The
+  // curve runs past the band into the list, which is clipped to it (see buildContentView): a band only 16dp tall drew
+  // a curve cut down to its height over the square list.
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramSheetTop;
 
+  private static final float XGRAM_SHEET_BAND = 20f;
+
+  private float xgramSheetCorner () {
+    return recyclerView != null ? me.vkryl.core.MathUtils.clamp(recyclerView.getTranslationY() / Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL)) : 0f;
+  }
+
+  private static float xgramSheetBand (float corner) {
+    return Screen.dp(XGRAM_SHEET_BAND) * corner;
+  }
+
+  /** XGram: true while the sheet top is drawn above the list (an opaque list color). */
+  private boolean xgramHasSheetTop () {
+    return recyclerView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (org.thunderdog.challegram.theme.Theme.getColor(getRecyclerBackgroundColorId()) >>> 24) != 0;
+  }
+
+  private @Nullable java.util.ArrayList<View> xgramSheetClipped;
+
+  /**
+   * XGram: clips {@code view}, the list or a view of {@link #contentView} that covers the list's top and moves with it
+   * (the location map), to the sheet top's curve: the outline starts at the top of the sheet (the band above the list)
+   * with its 28dp corners. It follows the list's moves; when the view moves on its own, call
+   * {@link View#invalidateOutline()}.
+   */
+  protected final void xgramClipToSheet (View view) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
+      return;
+    }
+    view.setOutlineProvider(new android.view.ViewOutlineProvider() {
+      @Override
+      public void getOutline (View v, android.graphics.Outline outline) {
+        final float corner = xgramHasSheetTop() ? xgramSheetCorner() : 0f;
+        final float sheetTop = recyclerView != null ? recyclerView.getTop() + recyclerView.getTranslationY() - xgramSheetBand(corner) : 0f;
+        com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable.bodyOutline(v, outline, v.getTop() + v.getTranslationY() - sheetTop, corner);
+      }
+    });
+    view.setClipToOutline(true);
+    if (view != recyclerView) {
+      if (xgramSheetClipped == null) {
+        xgramSheetClipped = new java.util.ArrayList<>();
+      }
+      xgramSheetClipped.add(view);
+    }
+  }
+
+  private void xgramInvalidateSheetClip () {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
+      return;
+    }
+    if (recyclerView != null) {
+      recyclerView.invalidateOutline();
+    }
+    if (xgramSheetClipped != null) {
+      for (View view : xgramSheetClipped) {
+        view.invalidateOutline();
+      }
+    }
+  }
+
   public void xgramDrawSheetTop (android.graphics.Canvas c, int width) {
-    if (recyclerView == null || recyclerView.getVisibility() != View.VISIBLE || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+    if (recyclerView == null || recyclerView.getVisibility() != View.VISIBLE || !xgramHasSheetTop()) {
       return;
     }
     int color = org.thunderdog.challegram.theme.Theme.getColor(getRecyclerBackgroundColorId());
-    if ((color >>> 24) == 0) {
-      return;
-    }
-    float corner = me.vkryl.core.MathUtils.clamp(recyclerView.getTranslationY() / Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL));
+    float corner = xgramSheetCorner();
     if (corner <= 0f) {
       return;
     }
     float top = recyclerView.getTop() + recyclerView.getTranslationY();
-    float band = Screen.dp(16f) * corner;
+    float band = xgramSheetBand(corner);
     if (xgramSheetTop == null) {
       xgramSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
     }
     xgramSheetTop.set(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(color, recyclerView.getAlpha()), corner);
     xgramSheetTop.setHandleAlpha(corner * recyclerView.getAlpha());
-    xgramSheetTop.setBounds(0, (int) (top - band), width, (int) Math.ceil(top) + 1);
-    xgramSheetTop.draw(c);
+    final boolean listClipped = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP;
+    if (listClipped) {
+      // the full curve (at least a radius tall), painted only above the list (1px into it, no seam): the clipped list
+      // continues the same curve below
+      final float radius = com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable.cornerRadius(corner);
+      xgramSheetTop.setBounds(0, (int) (top - band), width, (int) Math.ceil(top - band + radius) + 1);
+      final int saveCount = c.save();
+      c.clipRect(0, 0, width, (float) Math.ceil(top) + 1);
+      xgramSheetTop.draw(c);
+      c.restoreToCount(saveCount);
+    } else {
+      xgramSheetTop.setBounds(0, (int) (top - band), width, (int) Math.ceil(top) + 1);
+      xgramSheetTop.draw(c);
+    }
   }
 
   protected @ColorId int getRecyclerBackgroundColorId () {
