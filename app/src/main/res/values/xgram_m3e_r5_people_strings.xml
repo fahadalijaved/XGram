@@ -11,6 +11,10 @@
   <string name="XgramR5PeopleGlobalSearch">Global search</string>
   <string name="XgramR5PeopleNothingFoundHint">Try a different name, username or word.</string>
 
+  <!-- Join sheet -->
+  <string name="XgramR5PeopleJoinGroup">Join group</string>
+  <string name="XgramR5PeopleJoinChannel">Join channel</string>
+
   <!-- Contacts -->
   <string name="XgramR5PeopleNoContacts">No contacts</string>
   <string name="XgramR5PeopleNoContactsHint">Contacts who use Telegram show up here.</string>

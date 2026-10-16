@@ -36,6 +36,7 @@ import org.thunderdog.challegram.telegram.TdlibUi;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.ui.ListItem;
+import org.thunderdog.challegram.ui.SettingHolder;
 import org.thunderdog.challegram.ui.SettingsAdapter;
 import org.thunderdog.challegram.util.text.TextEntity;
 import org.thunderdog.challegram.widget.CustomTextView;
@@ -104,9 +105,14 @@ public class JoinDialogController extends MediaBottomBaseController<Void> implem
       @Override
       protected void setText (ListItem item, CustomTextView view, boolean isUpdate) {
         if (item.getId() == R.id.description) {
-          view.setPadding(DESCRIPTION_PADDING, DESCRIPTION_PADDING, DESCRIPTION_PADDING, DESCRIPTION_PADDING / 2);
+          if (xgram()) {
+            // XGram M3E: bodyMedium with the hero's 24dp sides
+            view.setPadding(Screen.dp(24f), Screen.dp(8f), Screen.dp(24f), Screen.dp(8f));
+          } else {
+            view.setPadding(DESCRIPTION_PADDING, DESCRIPTION_PADDING, DESCRIPTION_PADDING, DESCRIPTION_PADDING / 2);
+          }
           view.setText(item.getString(), TextEntity.valueOf(tdlib, item.getString().toString(), Td.findEntities(item.getString().toString()), new TdlibUi.UrlOpenParameters().tooltip(context().tooltipManager().builder(view))), false);
-          view.setTextSize(15f);
+          view.setTextSize(xgram() ? com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M) : 15f);
         } else {
           view.setPadding(0, 0, 0, 0);
           super.setText(item, view, isUpdate);
@@ -122,9 +128,39 @@ public class JoinDialogController extends MediaBottomBaseController<Void> implem
       protected void setRecyclerViewData (ListItem item, RecyclerView recyclerView, boolean isInitialization) {
         recyclerView.setAdapter(adapterMembers);
       }
+
+      @Override
+      protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == XGRAM_JOIN_ROW) {
+          // XGram M3E: the sheet's one call to action, a full-width filled button (no Cancel row: scrim, drag or back)
+          android.widget.FrameLayout row = com.fahadali.xgram.appearance.XgramR5People.newHeroButton(parent.getContext(), xgramJoinLabel(),
+            com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY, v -> {
+              mediaLayout.hide(false);
+              onJoinClicked.run();
+            });
+          row.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+          return new SettingHolder(row);
+        }
+        if (customViewType == XGRAM_NOTE_ROW) {
+          // XGram M3E: the request note in a surfaceContainerHigh card
+          View card = com.fahadali.xgram.appearance.XgramR5People.newNoteCard(parent.getContext());
+          return new SettingHolder(card);
+        }
+        return super.initCustom(parent, customViewType);
+      }
+
+      @Override
+      protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+        if (customViewType == XGRAM_NOTE_ROW) {
+          com.fahadali.xgram.appearance.XgramR5People.bindNoteCard(view, item.getString());
+        } else if (customViewType != XGRAM_JOIN_ROW) {
+          super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
+        }
+      }
     };
 
-    ViewSupport.setThemedBackground(recyclerView, ColorId.filling);
+    // XGram M3E: the sheet color (surfaceContainerLow), not Telegram X's filling
+    ViewSupport.setThemedBackground(recyclerView, xgram() ? ColorId.drawer : ColorId.filling);
 
     boolean isChannel = TD.isChannel(inviteLinkInfo.type);
 
@@ -150,11 +186,19 @@ public class JoinDialogController extends MediaBottomBaseController<Void> implem
     }
 
     if (inviteLinkInfo.createsJoinRequest) {
-      items.add(new ListItem(ListItem.TYPE_INFO, R.id.message, 0, Lang.getString(isChannel ? R.string.RequestToJoinChannelInfo : R.string.RequestToJoinGroupInfo), false));
+      if (xgram()) {
+        items.add(new ListItem(ListItem.TYPE_CUSTOM - XGRAM_NOTE_ROW, R.id.message, 0, Lang.getString(isChannel ? R.string.RequestToJoinChannelInfo : R.string.RequestToJoinGroupInfo), false));
+      } else {
+        items.add(new ListItem(ListItem.TYPE_INFO, R.id.message, 0, Lang.getString(isChannel ? R.string.RequestToJoinChannelInfo : R.string.RequestToJoinGroupInfo), false));
+      }
     }
 
-    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_join, R.drawable.baseline_person_add_24, inviteLinkInfo.createsJoinRequest ? Lang.getString(isChannel ? R.string.RequestJoinChannelBtn : R.string.RequestJoinGroupBtn) : Lang.getString(isChannel ? R.string.JoinChannel : R.string.JoinChat), false).setTextColorId(ColorId.textNeutral));
-    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_cancel, R.drawable.baseline_cancel_24, R.string.Cancel));
+    if (xgram()) {
+      items.add(new ListItem(ListItem.TYPE_CUSTOM - XGRAM_JOIN_ROW, R.id.btn_join)); // XGram M3E: the filled Join button
+    } else {
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_join, R.drawable.baseline_person_add_24, inviteLinkInfo.createsJoinRequest ? Lang.getString(isChannel ? R.string.RequestJoinChannelBtn : R.string.RequestJoinGroupBtn) : Lang.getString(isChannel ? R.string.JoinChannel : R.string.JoinChat), false).setTextColorId(ColorId.textNeutral));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_cancel, R.drawable.baseline_cancel_24, R.string.Cancel));
+    }
 
     FrameLayoutFix.LayoutParams params;
     params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -177,6 +221,24 @@ public class JoinDialogController extends MediaBottomBaseController<Void> implem
     setAdapter(adapter);
 
     return contentView;
+  }
+
+  // XGram M3E
+
+  private static final int XGRAM_JOIN_ROW = com.fahadali.xgram.appearance.XgramR5People.HERO_ROW;
+  private static final int XGRAM_NOTE_ROW = com.fahadali.xgram.appearance.XgramR5People.NOTE_ROW;
+
+  private static boolean xgram () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  /** "Join group", "Join channel", "Request to join" in sentence case (the English strings are Title Case). */
+  private String xgramJoinLabel () {
+    final boolean isChannel = TD.isChannel(inviteLinkInfo.type);
+    if (inviteLinkInfo.createsJoinRequest) {
+      return Lang.getString(isChannel ? R.string.RequestJoinChannelBtn : R.string.RequestJoinGroupBtn); // already in sentence case
+    }
+    return com.fahadali.xgram.appearance.XgramR5People.sentence(isChannel ? R.string.JoinChannel : R.string.JoinChat, isChannel ? R.string.XgramR5PeopleJoinChannel : R.string.XgramR5PeopleJoinGroup);
   }
 
   @Override

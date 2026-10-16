@@ -265,6 +265,52 @@ public final class XgramR5People {
   public static final int STATE_ROW = 9051;
   /** The custom view type of a loading row (the contained M3E loading indicator). */
   public static final int LOADING_ROW = 9052;
+  /** The custom view type of a sheet's or page's hero button row ({@link #newHeroButton}). */
+  public static final int HERO_ROW = 9053;
+  /** The custom view type of a note card row ({@link #newNoteCard}). */
+  public static final int NOTE_ROW = 9054;
+
+  /**
+   * A note in a card (a join request's terms): bodyMedium in onSurfaceVariant, 16dp padding, on a surfaceContainerHigh
+   * card with 16dp corners (the card step under Pure black), 16dp from the sheet's sides. Set the text with
+   * {@link #bindNoteCard}.
+   */
+  @NonNull
+  public static View newNoteCard (@NonNull Context context) {
+    FrameLayout frame = new FrameLayout(context);
+    frame.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    android.widget.TextView text = new android.widget.TextView(context) {
+      @Override
+      protected void onDraw (Canvas c) {
+        final int color = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+        if (getCurrentTextColor() != color) {
+          setTextColor(color);
+        }
+        super.onDraw(c);
+      }
+    };
+    XgramExpressive.applyText(text, XgramExpressive.TS_BODY_M, false);
+    text.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+    text.setLineSpacing(Screen.dp(XgramExpressive.lineHeightSp(XgramExpressive.TS_BODY_M) - XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_M)) / 2f, 1f);
+    final int padding = Screen.dp(16f);
+    text.setPadding(padding, padding, padding, padding);
+    text.setId(android.R.id.text1);
+    XgramExpressive.MorphDrawable card = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_L, Float.NaN);
+    card.setFloatingColorRole(XgramExpressive.SURFACE_CONTAINER_HIGH);
+    text.setBackground(card);
+    FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    params.leftMargin = params.rightMargin = Screen.dp(16f);
+    params.topMargin = params.bottomMargin = Screen.dp(8f);
+    frame.addView(text, params);
+    return frame;
+  }
+
+  public static void bindNoteCard (@NonNull View card, @Nullable CharSequence text) {
+    View view = card.findViewById(android.R.id.text1);
+    if (view instanceof android.widget.TextView) {
+      ((android.widget.TextView) view).setText(text);
+    }
+  }
 
   /** A state row: the M3E empty state or loading indicator, full height while alone in the list. */
   @NonNull
