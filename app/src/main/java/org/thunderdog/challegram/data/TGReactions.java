@@ -86,7 +86,8 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
     this.totalCount = 0;
     this.chosenReactions = new LinkedHashSet<>();
     this.tdlib = tdlib;
-    this.reactionsAnimator = new ReactionsListAnimator((a) -> parent.invalidate(), AnimatorUtils.DECELERATE_INTERPOLATOR, MessagesRecyclerView.ITEM_ANIMATOR_DURATION + 50L);
+    // XGram: a reaction chip pops in and its neighbours slide on SPATIAL_FAST with Expressive design
+    this.reactionsAnimator = new ReactionsListAnimator((a) -> parent.invalidate(), com.fahadali.xgram.appearance.XgramAppMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, MessagesRecyclerView.ITEM_ANIMATOR_DURATION + 50L));
     setReactions(reactions);
     updateCounterAnimators(false);
     resetReactionsAnimator(false);
@@ -839,7 +840,7 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
 
     private void animateSelectionFactor (float toFactor) {
       if (selectionAnimator == null) {
-        selectionAnimator = new FactorAnimator(SELECTION_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, ANIMATION_DURATION);
+        selectionAnimator = new FactorAnimator(SELECTION_ANIMATOR, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, ANIMATION_DURATION));
       }
       selectionAnimator.animateTo(toFactor);
     }
@@ -852,7 +853,7 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
         flags &= ~FLAG_ACTIVE;
       }
       if (fadeAnimator == null) {
-        fadeAnimator = new FactorAnimator(FADE_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, ANIMATION_DURATION);
+        fadeAnimator = new FactorAnimator(FADE_ANIMATOR, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, ANIMATION_DURATION));
       }
       flags |= FLAG_BLOCKED;
       fadeAnimator.animateTo(toFactor);

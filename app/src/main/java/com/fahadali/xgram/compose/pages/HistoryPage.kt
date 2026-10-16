@@ -12,6 +12,7 @@
 package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
+import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.compose.ChoiceSpec
 import com.fahadali.xgram.compose.LocalXgramHost
@@ -74,7 +75,13 @@ fun HistoryPage() {
 
     header(R.string.XgramHeaderDisplay)
     group {
-      switch(R.id.btn_xgramHistoryRedDeleted, s(R.string.XgramHistoryRedDeleted), s(R.string.XgramHistoryRedDeletedSub), checked = settings.historyRedDeleted()) {
+      // Deleted messages only stay in chats while they are saved.
+      val redReason = XgramSettingDeps.historyRedDeletedReason()
+      switch(
+        R.id.btn_xgramHistoryRedDeleted, s(R.string.XgramHistoryRedDeleted),
+        s(if (redReason != 0) redReason else R.string.XgramHistoryRedDeletedSub),
+        checked = settings.historyRedDeleted(), enabled = redReason == 0
+      ) {
         settings.setHistoryRedDeleted(it)
       }
     }

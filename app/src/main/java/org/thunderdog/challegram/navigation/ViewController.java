@@ -745,11 +745,12 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   protected Interpolator getSearchTransformInterpolator () {
-    return AnimatorUtils.DECELERATE_INTERPOLATOR;
+    // XGram: search and selection header transforms on SPATIAL_DEFAULT with Expressive design
+    return com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR);
   }
 
   protected long getSearchTransformDuration () {
-    return 200l;
+    return com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 200l);
   }
 
   @CallSuper

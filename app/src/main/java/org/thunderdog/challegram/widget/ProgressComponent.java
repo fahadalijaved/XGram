@@ -102,6 +102,11 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
   public void performDestroy () {
     context.removeSimpleStateListener(this);
     setUiResumed(false);
+    if (XgramExpressive.isEnabled() && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+      // XGram: a destroyed component leaves no frame callback behind
+      android.view.Choreographer.getInstance().removeFrameCallback(xgramFrame);
+      scheduled = false;
+    }
   }
 
   public void setViewProvider (@Nullable ViewProvider viewProvider) {
@@ -232,6 +237,16 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
         invalidate();
       }
       if (Color.alpha(getColor()) > 0) {
+        if (XgramExpressive.isEnabled() && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+          // XGram: redraw on vsync (120 Hz) instead of a handler delay
+          android.view.Choreographer choreographer = android.view.Choreographer.getInstance();
+          if (!byMyself || scheduled) {
+            choreographer.removeFrameCallback(xgramFrame);
+          }
+          scheduled = true;
+          choreographer.postFrameCallback(xgramFrame);
+          return;
+        }
         if (!byMyself || scheduled) {
           UI.getProgressHandler().removeCallbacks(this);
         }
@@ -258,6 +273,8 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
     scheduled = false;
     invalidate();
   }
+
+  private final android.view.Choreographer.FrameCallback xgramFrame = frameTimeNanos -> run();
 
   // Progress utils
 

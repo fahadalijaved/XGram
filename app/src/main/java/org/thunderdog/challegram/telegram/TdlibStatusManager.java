@@ -108,7 +108,7 @@ public class TdlibStatusManager implements CleanupStartupDelegate {
         this.isVisible = isVisible;
         if (animated) {
           if (visibleAnimator == null) {
-            visibleAnimator = new BoolAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, ANIMATION_DURATION, !isVisible);
+            visibleAnimator = new BoolAnimator(0, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, ANIMATION_DURATION), !isVisible); // XGram: typing status fades on EFFECTS_DEFAULT
           }
           visibleAnimator.setValue(isVisible, true);
         } else {

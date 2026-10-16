@@ -35,6 +35,7 @@ import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.support.ViewSupport;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.theme.ThemeInvalidateListener;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
 
@@ -44,7 +45,7 @@ import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.MathUtils;
 
-public class SnackBar extends RelativeLayout {
+public class SnackBar extends RelativeLayout implements ThemeInvalidateListener {
   public interface Callback {
     void onSnackBarTransition (SnackBar v, float factor);
     default void onDestroySnackBar (SnackBar v) { }
@@ -112,14 +113,31 @@ public class SnackBar extends RelativeLayout {
 
   private final boolean xgram = XgramExpressive.isEnabled();
   private int xgramBottomInset;
+  private RippleDrawable xgramActionRipple;
+
+  private void xgramApplyColors () {
+    textView.setTextColor(XgramExpressive.color(XgramExpressive.INVERSE_ON_SURFACE));
+    int inversePrimary = XgramExpressive.color(XgramExpressive.INVERSE_PRIMARY);
+    actionView.setTextColor(inversePrimary);
+    if (xgramActionRipple != null) {
+      xgramActionRipple.setColor(ColorStateList.valueOf(XgramExpressive.withAlpha(inversePrimary, XgramExpressive.STATE_PRESSED)));
+    }
+  }
+
+  @Override
+  public void onThemeInvalidate (boolean isTempUpdate) {
+    if (xgram) {
+      // The M3 inverse roles follow the theme here: Telegram X's snackbar colors are never bound in this mode
+      xgramApplyColors();
+    }
+    invalidate();
+  }
 
   private void xgramStyle () {
-    textView.setTextColor(XgramExpressive.color(XgramExpressive.INVERSE_ON_SURFACE));
     XgramExpressive.applyText(textView, XgramExpressive.TS_BODY_M, false);
     textView.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(8f), Screen.dp(14f));
     textView.setGravity(Gravity.CENTER_VERTICAL);
     actionView.setId(R.id.text_title);
-    actionView.setTextColor(XgramExpressive.color(XgramExpressive.INVERSE_PRIMARY));
     XgramExpressive.applyText(actionView, XgramExpressive.TS_LABEL_L, false);
     actionView.setPadding(Screen.dp(12f), Screen.dp(10f), Screen.dp(12f), Screen.dp(10f));
     RelativeLayout.LayoutParams actionParams = (RelativeLayout.LayoutParams) actionView.getLayoutParams();
@@ -128,7 +146,9 @@ public class SnackBar extends RelativeLayout {
     GradientDrawable actionMask = new GradientDrawable();
     actionMask.setColor(0xffffffff);
     actionMask.setCornerRadius(Screen.dp(100f));
-    actionView.setBackground(new RippleDrawable(ColorStateList.valueOf(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.INVERSE_PRIMARY), XgramExpressive.STATE_PRESSED)), null, actionMask));
+    xgramActionRipple = new RippleDrawable(ColorStateList.valueOf(0), null, actionMask);
+    actionView.setBackground(xgramActionRipple);
+    xgramApplyColors(); // text, action and ripple colors
 
     XgramExpressive.MorphDrawable background = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_XS, Float.NaN);
     background.setColorRole(XgramExpressive.INVERSE_SURFACE);
@@ -204,9 +224,11 @@ public class SnackBar extends RelativeLayout {
 
   public SnackBar addThemeListeners (@Nullable ViewController<?> themeProvider) {
     if (themeProvider != null) {
-      themeProvider.addThemeTextColorListener(actionView, ColorId.snackbarUpdateAction);
-      themeProvider.addThemeTextColorListener(textView, ColorId.snackbarUpdateText);
-      themeProvider.addThemeInvalidateListener(this);
+      if (!xgram) {
+        themeProvider.addThemeTextColorListener(actionView, ColorId.snackbarUpdateAction);
+        themeProvider.addThemeTextColorListener(textView, ColorId.snackbarUpdateText);
+      }
+      themeProvider.addThemeInvalidateListener(this); // onThemeInvalidate re-applies the M3 colors in xgram mode
     }
     return this;
   }

@@ -1724,7 +1724,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     });
     baseRecyclerView.setHasFixedSize(true);
     baseRecyclerView.addItemDecoration(new BaseItemsDecoration());
-    baseRecyclerView.setItemAnimator(null);
+    baseRecyclerView.setItemAnimator(com.fahadali.xgram.appearance.XgramAppMotion.listAnimator()); // XGram: rows appearing or going spring with Expressive design
     baseRecyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     baseRecyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
     com.fahadali.xgram.appearance.XgramMotion.stretch(baseRecyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);

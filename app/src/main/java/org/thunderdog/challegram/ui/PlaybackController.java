@@ -218,6 +218,7 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     imageView.setColorFilter(Theme.getColor(colorId));
     imageView.setOnClickListener(this);
     addThemeFilterListener(imageView, colorId);
+    com.fahadali.xgram.appearance.XgramAppMotion.iconButton(imageView); // XGram: icon button press morph with Expressive design
     return imageView;
   }
 

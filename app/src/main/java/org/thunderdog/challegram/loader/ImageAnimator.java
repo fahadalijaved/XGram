@@ -16,8 +16,13 @@ package org.thunderdog.challegram.loader;
 
 import android.os.Build;
 import android.os.Message;
+import android.view.Choreographer;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.N;
+
+import java.util.ArrayList;
 
 public class ImageAnimator  {
   private static final long DURATION = 120l;
@@ -59,6 +64,14 @@ public class ImageAnimator  {
   }
 
   public void onFrame (int tick) {
+    if (this.tick == tick && XgramExpressive.isEnabled()) {
+      // XGram: vsync frames and the EFFECTS_DEFAULT spring (about 186 ms) instead of a 12-14 ms handler loop
+      xgramStartNanos = System.nanoTime();
+      xgramTick = tick;
+      receiver.setAlpha(0f);
+      XgramVsync.add(this);
+      return;
+    }
     if (this.tick == tick) {
       float input;
 
@@ -88,4 +101,57 @@ public class ImageAnimator  {
     }
   }
 
+  // XGram: one Choreographer callback for every running fade
+
+  private long xgramStartNanos;
+  private int xgramTick;
+  private boolean xgramQueued;
+
+  /** False when this fade is over or was cancelled. */
+  private boolean xgramStep (long frameTimeNanos) {
+    if (this.tick != xgramTick) {
+      return false;
+    }
+    float t = (Math.max(frameTimeNanos, System.nanoTime()) - xgramStartNanos) / 1e9f;
+    float p = XgramExpressive.springProgress(XgramExpressive.EFFECTS_DEFAULT, t);
+    if (t >= .19f || p >= .995f) {
+      receiver.setAlpha(1f);
+      return false;
+    }
+    receiver.setAlpha(p <= 0f ? 0f : p);
+    return true;
+  }
+
+  private static final class XgramVsync implements Choreographer.FrameCallback {
+    private static final XgramVsync INSTANCE = new XgramVsync();
+    private final ArrayList<ImageAnimator> active = new ArrayList<>();
+    private boolean posted;
+
+    static void add (ImageAnimator a) {
+      if (!a.xgramQueued) {
+        a.xgramQueued = true;
+        INSTANCE.active.add(a);
+      }
+      if (!INSTANCE.posted) {
+        INSTANCE.posted = true;
+        Choreographer.getInstance().postFrameCallback(INSTANCE);
+      }
+    }
+
+    @Override
+    public void doFrame (long frameTimeNanos) {
+      posted = false;
+      for (int i = active.size() - 1; i >= 0; i--) {
+        ImageAnimator a = active.get(i);
+        if (!a.xgramStep(frameTimeNanos)) {
+          a.xgramQueued = false;
+          active.remove(i);
+        }
+      }
+      if (!active.isEmpty()) {
+        posted = true;
+        Choreographer.getInstance().postFrameCallback(this);
+      }
+    }
+  }
 }

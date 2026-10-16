@@ -138,6 +138,14 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
 
   @Override
   public boolean onTouchEvent (MotionEvent e) {
+    if (e.getAction() == MotionEvent.ACTION_DOWN && xgramHasLabel()) {
+      // XGram: an extended FAB is laid out at its full width; only its current container takes touches
+      final float containerW = Screen.dpf(xgramContainerDp(xgramSizeDp));
+      final float x = e.getX();
+      if ((Lang.rtl() ? x > containerW : x < getWidth() - containerW) || e.getY() > Screen.dpf(xgramSizeDp)) {
+        return false;
+      }
+    }
     return !(e.getAction() == MotionEvent.ACTION_DOWN && (getAlpha() == 0f || !isEnabled() || (getParent() != null && ((View) getParent()).getAlpha() == 0f))) && super.onTouchEvent(e);
   }
 
@@ -257,6 +265,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
       return;
     }
     this.xgramSizeDp = sizeDp;
+    xgramMeasureLabel();
     xgramApplyShape();
   }
 
@@ -265,6 +274,76 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
       this.xgramToggleFactor = factor;
       xgramApplyShape();
     }
+  }
+
+  // Extended FAB (icon and label): the view is laid out at the extended width once; the container's width springs
+  // inside it, anchored to the end edge, so nothing is laid out per frame.
+
+  private @Nullable String xgramLabel;
+  private @Nullable android.text.TextPaint xgramLabelPaint;
+  private float xgramLabelWidth, xgramExtend;
+
+  public boolean xgramHasLabel () {
+    return xgramLabel != null && xgramFab && xgramToggle;
+  }
+
+  /** Makes the toggle FAB an extended FAB with {@code label} (null: a plain FAB again). */
+  public void xgramSetExtendedLabel (@Nullable CharSequence label) {
+    if (xgramMorph == null || !xgramFab || !xgramToggle) {
+      return;
+    }
+    this.xgramLabel = StringUtils.isEmpty(label) ? null : label.toString();
+    xgramMeasureLabel();
+    xgramApplyShape();
+  }
+
+  private void xgramMeasureLabel () {
+    if (xgramLabel == null) {
+      xgramLabelWidth = 0f;
+      return;
+    }
+    final int ts = xgramSizeDp >= 80f ? XgramExpressive.TS_TITLE_M : XgramExpressive.TS_LABEL_L;
+    if (xgramLabelPaint == null) {
+      xgramLabelPaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+    }
+    xgramLabelPaint.setTypeface(XgramExpressive.typeface(ts, false));
+    xgramLabelPaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(ts)));
+    xgramLabelWidth = xgramLabelPaint.measureText(xgramLabel);
+    final Paint.FontMetrics fm = xgramLabelPaint.getFontMetrics();
+    xgramLabelBaseline = -(fm.ascent + fm.descent) / 2f;
+  }
+
+  private float xgramLabelBaseline;
+
+  /** Width in dp of the extended container: 16dp, the icon, 12dp, the label, 20dp. */
+  private float xgramExtendedDp () {
+    return 16f + xgramFabIcon(xgramSizeDp) + 12f + xgramLabelWidth / Screen.density() + 20f;
+  }
+
+  /** The width the view should be laid out at. */
+  public int xgramLayoutWidth () {
+    return xgramHasLabel() ? (int) Math.ceil(Screen.dpf(Math.max(xgramSizeDp, xgramExtendedDp()))) : Screen.dp(xgramSizeDp);
+  }
+
+  /** 0: the plain FAB, 1: extended. Opening the menu collapses it with the toggle morph. */
+  public void xgramSetExtendFactor (float factor) {
+    if (this.xgramExtend != factor) {
+      this.xgramExtend = factor;
+      xgramApplyShape();
+    }
+  }
+
+  private float xgramExtendNow () {
+    if (!xgramHasLabel()) {
+      return 0f;
+    }
+    return MathUtils.clamp(xgramExtend) * (1f - MathUtils.clamp(xgramToggleFactor));
+  }
+
+  /** The container's width in dp right now. */
+  private float xgramContainerDp (float size) {
+    final float e = xgramExtendNow();
+    return e > 0f ? size + (Math.max(size, xgramExtendedDp()) - size) * e : size;
   }
 
   private void xgramApplyShape () {
@@ -277,8 +356,9 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     final float corner = Math.max(0f, Math.min(size / 2f, fabCorner + (28f - fabCorner) * p));
     // The shrinking container stays in the top end corner of the FAB's box
     final int gravity = xgramToggle ? Gravity.TOP | (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) : Gravity.CENTER;
-    xgramMorph.setSize(size, size, gravity);
-    xgramMask.setSize(size, size, gravity);
+    final float containerW = xgramContainerDp(size); // XGram: an extended FAB is wider, anchored to the end
+    xgramMorph.setSize(containerW, size, gravity);
+    xgramMask.setSize(containerW, size, gravity);
     xgramMorph.setCornerTarget(corner, false);
     xgramMask.setCornerTarget(corner, false);
     xgramMorph.setPressedCorner(corner);
@@ -314,10 +394,32 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     if (drawable == null) {
       return;
     }
-    final float box = Screen.dpf(Math.min(xgramSizeDp, xgramSizeDp + (56f - xgramSizeDp) * p));
-    final float cx = Lang.rtl() ? box / 2f : width - box / 2f;
+    final float boxDp = Math.min(xgramSizeDp, xgramSizeDp + (56f - xgramSizeDp) * p);
+    final float box = Screen.dpf(boxDp);
     final float cy = box / 2f;
     final float fabIcon = xgramFabIcon(xgramSizeDp);
+    final float cx;
+    final float extend = xgramExtendNow();
+    if (extend > 0f && xgramLabel != null && xgramLabelPaint != null) {
+      // Extended: the icon sits 16dp in from the container's start and the label follows 12dp after it
+      final float containerW = Screen.dpf(xgramContainerDp(boxDp));
+      final float iconInset = box / 2f + (Screen.dpf(16f + fabIcon / 2f) - box / 2f) * extend;
+      final boolean rtl = Lang.rtl();
+      final float start = rtl ? containerW : width - containerW;
+      cx = rtl ? start - iconInset : start + iconInset;
+      final float labelAlpha = MathUtils.clamp((extend - .4f) / .6f);
+      if (labelAlpha > 0f) {
+        final float gap = Screen.dpf(fabIcon / 2f + 12f);
+        final float x = rtl ? cx - gap - xgramLabelWidth : cx + gap;
+        xgramLabelPaint.setColor(XgramExpressive.withAlpha(xgramIconColor(), labelAlpha));
+        c.save();
+        c.clipRect(rtl ? 0f : width - containerW, 0f, rtl ? containerW : width, box);
+        c.drawText(xgramLabel, x, cy + xgramLabelBaseline, xgramLabelPaint);
+        c.restore();
+      }
+    } else {
+      cx = Lang.rtl() ? box / 2f : width - box / 2f;
+    }
     final float iconDp = fabIcon + (20f - fabIcon) * f;
     final float replaceScale = (1f - (replaceFactor <= .5f ? replaceFactor / .5f : 1f - ((replaceFactor - .5f) / .5f))) * (1f - progressFactor);
     final int iconWidth = Math.max(1, drawable.getMinimumWidth());

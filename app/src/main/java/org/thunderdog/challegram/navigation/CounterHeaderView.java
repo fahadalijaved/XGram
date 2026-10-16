@@ -340,8 +340,9 @@ public class CounterHeaderView extends View {
     final float diffFactor = 1f - startFactor;
     animator = AnimatorUtils.simpleValueAnimator();
     animator.addUpdateListener(animation -> setFactor(startFactor + diffFactor * AnimatorUtils.getFraction(animation)));
-    animator.setDuration(SWITCH_DURATION);
-    animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+    // XGram: the selection count rolls on SPATIAL_FAST with Expressive design (clamped: the factor also drives paint alpha)
+    animator.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, SWITCH_DURATION));
+    animator.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
     animator.addListener(new AnimatorListenerAdapter() {
       @Override
       public void onAnimationEnd (Animator animation) {

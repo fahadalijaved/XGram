@@ -147,7 +147,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   ForceTouchView.PreviewDelegate, LiveLocationHelper.Callback,
   BaseView.LongPressInterceptor, TdlibCache.UserStatusChangeListener,
   Settings.ChatListModeChangeListener, CounterChangeListener,
-  TdlibSettingsManager.PreferenceChangeListener, SelectDelegate, MoreDelegate, DateChangeListener, ChatFolderListener {
+  TdlibSettingsManager.PreferenceChangeListener, SelectDelegate, MoreDelegate, DateChangeListener, ChatFolderListener,
+  com.fahadali.xgram.appearance.XgramTitleMorph.LeadingProvider {
 
   private static final int NO_CHAT_FOLDER_ID = 0;
 
@@ -616,7 +617,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     });
     // XGram: in the narrow chat list pane the last rows scroll clear of the compose button
     Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this));
-    chatsView.setItemAnimator(null);
+    chatsView.setItemAnimator(xgramIdleAnimator()); // XGram: reorders, pins and archive changes spring with Expressive design
     if (isInForceTouchMode()) {
       chatsView.setVerticalScrollBarEnabled(false);
     }
@@ -696,7 +697,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           adapter.savePinnedChats();
         }
         dragFrom = dragTo = -1;
-        chatsView.setItemAnimator(null);
+        chatsView.setItemAnimator(xgramIdleAnimator());
         setAnimatorFlag(ANIMATOR_FLAG_DRAGGING, false);
         if (viewHolder.getItemViewType() == ChatsAdapter.VIEW_TYPE_CHAT) {
           ((ChatView) viewHolder.itemView).setIsDragging(false);
@@ -1093,22 +1094,36 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       this.animatorFlags = flags;
       if (hadAnimator != hasAnimator) {
         if (hasAnimator) {
-          if (chatsAnimator == null) {
-            chatsAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l) {
-              @Override
-              protected void setAlpha (View view, float value) {
-                if ((animatorFlags & ANIMATOR_FLAG_LOCATION) == 0) {
-                  super.setAlpha(view, value);
-                }
-              }
-            };
-          }
-          chatsView.setItemAnimator(chatsAnimator);
+          chatsView.setItemAnimator(xgramChatsAnimator());
         } else {
-          chatsView.setItemAnimator(null);
+          chatsView.setItemAnimator(xgramIdleAnimator());
         }
       }
     }
+  }
+
+  private CustomItemAnimator xgramChatsAnimator () {
+    if (chatsAnimator == null) {
+      chatsAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l) {
+        @Override
+        protected void setAlpha (View view, float value) {
+          if ((animatorFlags & ANIMATOR_FLAG_LOCATION) == 0) {
+            super.setAlpha(view, value);
+          }
+        }
+      };
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: a row that only changed (new message, read, typing) redraws in place, no crossfade
+        chatsAnimator.setSupportsChangeAnimations(false);
+      }
+    }
+    return chatsAnimator;
+  }
+
+  /** XGram: the chat list keeps its spring animator with Expressive design; Telegram X runs without one. */
+  @Nullable
+  private CustomItemAnimator xgramIdleAnimator () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramChatsAnimator() : null;
   }
 
   @Override
@@ -1241,6 +1256,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   }
 
   public void updateNetworkStatus (int state) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: XgramConnection decides what the title shows (debounced, with a fade-through)
+      if (state == ConnectionState.CONNECTED) {
+        shareIntentIfReady();
+      }
+      xgramUpdateConnectionTitle(false);
+      return;
+    }
     if (state == ConnectionState.CONNECTED) {
       shareIntentIfReady();
       setName(getHeaderText());
@@ -2132,7 +2155,52 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
   @Override
   public boolean passNameToHeader () {
-    return true;
+    return !xgramSilentName;
+  }
+
+  // XGram M3E: the connection in the title of a chat list on its own page (Archive, a folder, a picker). Pages of
+  // MainController's pager keep their title: the chat list's pill shows the connection there.
+
+  private boolean xgramSilentName;
+  private int xgramLeading;
+  private com.fahadali.xgram.appearance.XgramConnection.Listener xgramConnListener;
+
+  @Override
+  public int xgramTitleLeading () {
+    return xgramLeading;
+  }
+
+  private void xgramUpdateConnectionTitle (boolean animated) {
+    final boolean standalone = getParentOrSelf() == this;
+    CharSequence text = null;
+    int leading = com.fahadali.xgram.appearance.XgramTitleMorph.LEADING_NONE;
+    if (standalone) {
+      com.fahadali.xgram.appearance.XgramConnection conn = com.fahadali.xgram.appearance.XgramConnection.instance();
+      if (xgramConnListener == null) {
+        xgramConnListener = (state, stateText, stateAnimated) -> xgramUpdateConnectionTitle(stateAnimated);
+        conn.addListener(xgramConnListener);
+      }
+      if (com.fahadali.xgram.appearance.XgramConnection.isProblem(conn.getState())) {
+        text = conn.getText();
+        leading = com.fahadali.xgram.appearance.XgramTitleMorph.leadingFor(conn.getState());
+      }
+    }
+    if (text == null) {
+      text = getHeaderText();
+    }
+    if (leading == xgramLeading && android.text.TextUtils.equals(getName(), text)) {
+      return;
+    }
+    xgramLeading = leading;
+    xgramSilentName = true;
+    try {
+      setName(text);
+    } finally {
+      xgramSilentName = false;
+    }
+    if (headerView != null && standalone) {
+      headerView.xgramMorphTitle(getId(), text, leading, animated);
+    }
   }
 
   @Override
@@ -2865,6 +2933,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   @Override
   public void destroy () {
     super.destroy();
+    if (xgramConnListener != null) {
+      com.fahadali.xgram.appearance.XgramConnection.instance().removeListener(xgramConnListener); // XGram
+    }
     if (liveLocationHelper != null) {
       liveLocationHelper.destroy();
     }

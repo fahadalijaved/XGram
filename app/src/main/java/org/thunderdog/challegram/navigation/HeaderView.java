@@ -1306,6 +1306,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       updateTextMargins(textTitle, item, 0, getCurrentHeaderOffset());
       textTitle.setId(item.getId());
       Views.setMediumText(textTitle, item.getName());
+      com.fahadali.xgram.appearance.XgramTitleMorph.reset(textTitle, item); // XGram: this page's leading element, if any
       newTitle = textTitle;
       if (XgramExpressive.isEnabled() && !previewOpened) {
         textTitle.setAlpha(item.xgramTitleAlpha); // XGram: the large title of the page may be on screen
@@ -1363,6 +1364,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       assert previewItem != null;
       textPreview.setId(previewItem.getId());
       Views.setMediumText(textPreview, previewItem.getName());
+      com.fahadali.xgram.appearance.XgramTitleMorph.reset(textPreview, previewItem); // XGram
       preview = textPreview;
     } else {
       dispatchOffset(preview);
@@ -1443,6 +1445,17 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     }
     if (textPreview != null && textPreview.getId() == id) {
       Views.setMediumText(textPreview, newTitle);
+    }
+  }
+
+  /** XGram M3E: changes the text title of page {@code id} with a fade-through and a leading element (XgramTitleMorph). */
+  public void xgramMorphTitle (int id, CharSequence text, int leading, boolean animated) {
+    animated = animated && !isAnimating && !previewOpened;
+    if (textTitle != null && textTitle.getId() == id) {
+      com.fahadali.xgram.appearance.XgramTitleMorph.morph(textTitle, text, leading, animated && title == textTitle);
+    }
+    if (textPreview != null && textPreview.getId() == id) {
+      com.fahadali.xgram.appearance.XgramTitleMorph.morph(textPreview, text, leading, false);
     }
   }
 

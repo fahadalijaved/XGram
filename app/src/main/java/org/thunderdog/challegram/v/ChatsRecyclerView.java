@@ -86,6 +86,11 @@ public class ChatsRecyclerView extends CustomRecyclerView implements ClickHelper
         }
       }
     });
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && isVerticalScrollBarEnabled()) {
+      // XGram: a draggable Material 3 thumb once the whole chat list is loaded (before that the length would lie)
+      com.fahadali.xgram.appearance.XgramScrollIndicator.install(this, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_DRAGGABLE)
+        .setDragCondition(() -> loadCallback == null || !loadCallback.ableToLoadMore());
+    }
   }
 
   private final ClickHelper helper = new ClickHelper(this);

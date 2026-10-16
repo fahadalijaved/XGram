@@ -1346,6 +1346,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramStyleInputIcon(scheduleButton);
       xgramStyleInputIcon(cameraButton);
       xgramStyleInputIcon(mediaButton);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(silentButton);
     }
 
     sendMenu = new HapticMenuHelper(this, this, getThemeListeners(), null).attachToView(sendButton);
@@ -6375,13 +6376,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return;
     float bottomButtonFactor = bottomBarVisible.getFloatValue();
     float detachFactor = scrollToBottomVisible.getFloatValue();
+    // XGram: the scroll button's spring overshoots past 1 with Expressive design: it moves the bar, but the collapse
+    // (colors, outline and icon alpha) and the bar's alpha take the clamped factor. The same value with it off.
+    float collapseFactor = MathUtils.clamp(detachFactor);
     int barHeight = Screen.dp(48f) + extraBottomInset;
     int baseY = needSearchControlsTranslate() ? (int) ((float) barHeight * MathUtils.clamp(searchControlsFactor)) : 0;
     float fromY = bottomButtonFactor == 1f ? baseY : baseY + (int) ((float) barHeight * (1f - bottomButtonFactor));
-    float alpha = (1f - 1f * detachFactor * (1f - bottomButtonFactor)) * (1f - searchControlsFactor);
+    float alpha = (1f - 1f * collapseFactor * (1f - bottomButtonFactor)) * (1f - searchControlsFactor);
     int moveBy = Screen.dp(74f) - Screen.dp(16f);
     float toY = -getButtonsOffset() - Screen.dp(16f) - moveBy - moveBy * mentionButtonFactor + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme); //  -getReplyOffset() - (Screen.dp(74f) - Screen.dp(48f)) / 2f;
-    bottomBar.setCollapseFactor(detachFactor);
+    bottomBar.setCollapseFactor(collapseFactor);
     bottomBar.setAlpha(alpha);
     int dx = (int) ((bottomBar.getMeasuredWidth() / 2f - Screen.dp(16f) - Screen.dp(48f) / 2f) * detachFactor);
     bottomBar.setTranslationY(bottomButtonFactor == 1f && detachFactor == 0f ? fromY : fromY + (toY - fromY) * detachFactor);
@@ -6393,7 +6397,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private static final int ANIMATOR_BOTTOM_BUTTON = 12;
-  private final BoolAnimator bottomBarVisible = new BoolAnimator(ANIMATOR_BOTTOM_BUTTON, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+  private final BoolAnimator bottomBarVisible = new BoolAnimator(ANIMATOR_BOTTOM_BUTTON, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 180l)); // XGram: SPATIAL_DEFAULT with Expressive design
 
   public int getBottomOffset () {
     return (int) (getReplyOffset() + getAttachedFilesOffset());
@@ -6642,7 +6646,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private static final int ANIMATOR_SCROLL_TO_BOTTOM = 6;
-  private final BoolAnimator scrollToBottomVisible = new BoolAnimator(ANIMATOR_SCROLL_TO_BOTTOM, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+  // XGram: the floating buttons pop in on SPATIAL_FAST with Expressive design
+  private final BoolAnimator scrollToBottomVisible = new BoolAnimator(ANIMATOR_SCROLL_TO_BOTTOM, this, com.fahadali.xgram.appearance.XgramAppMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 180l));
   private final BoolAnimator scrollToBottomReverse = new BoolAnimator(0, new FactorAnimator.Target() {
     @Override
     public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
@@ -6653,6 +6658,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void setScrollToBottomVisible (boolean isVisible, boolean isReverse, boolean animated) {
     if (messagesHidden || inTextSizeMode() || inWallpaperMode()) { // XGram: demo previews (Chat look, Message font size, wallpapers) rest at the bottom with no scroll button
       isVisible = false;
+    }
+    if (scrollToBottomVisible.getValue() != isVisible) {
+      // XGram: pops in on SPATIAL_FAST, leaves on EFFECTS_FAST clamped (no dip below its slot or negative collapse)
+      xgramPopMotion(scrollToBottomVisible, isVisible);
     }
     scrollToBottomVisible.setValue(isVisible, animated);
     scrollToBottomReverse.setValue(isReverse, animated && scrollToBottomVisible.getFloatValue() > 0f);
@@ -6684,8 +6693,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       final float toFactor = visible ? 1f : 0f;
       if (animated) {
         if (mentionButtonAnimator == null) {
-          mentionButtonAnimator = new FactorAnimator(ANIMATOR_MENTION_BUTTON, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.mentionButtonFactor);
+          mentionButtonAnimator = new FactorAnimator(ANIMATOR_MENTION_BUTTON, this, com.fahadali.xgram.appearance.XgramAppMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 180l), this.mentionButtonFactor);
         }
+        xgramPopMotion(mentionButtonAnimator, visible);
         mentionButtonAnimator.animateTo(toFactor);
       } else {
         if (mentionButtonAnimator != null) {
@@ -6714,8 +6724,32 @@ public class MessagesController extends ViewController<MessagesController.Argume
       this.mentionButtonFactor = factor;
       float range = MathUtils.clamp(factor);
       mentionButtonWrap.setAlpha(range);
+      xgramPopScale(mentionButtonWrap, factor);
       updateBottomBarStyle();
     }
+  }
+
+  /** XGram: a floating chat button grows from .6 with the spring's overshoot (Expressive design, not with Reduce motion). */
+  private static void xgramPopScale (@Nullable View view, float factor) {
+    if (view == null || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    // Reduce motion: full size, so a button hidden (at .6) before the switch does not come back small.
+    float scale = com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : .6f + .4f * Math.max(0f, factor);
+    view.setScaleX(scale);
+    view.setScaleY(scale);
+  }
+
+  /**
+   * XGram: a floating chat button pops in on SPATIAL_FAST (overshooting) and leaves on EFFECTS_FAST clamped, like
+   * XgramAppMotion.Bounce, so hiding never takes its factor below 0. Nothing with Expressive design off.
+   */
+  private static void xgramPopMotion (@Nullable FactorAnimator animator, boolean visible) {
+    com.fahadali.xgram.appearance.XgramAppMotion.use(animator, visible ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, !visible);
+  }
+
+  private static void xgramPopMotion (@Nullable BoolAnimator animator, boolean visible) {
+    com.fahadali.xgram.appearance.XgramAppMotion.use(animator, visible ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, !visible);
   }
 
 
@@ -6732,8 +6766,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       final float toFactor = visible ? 1f : 0f;
       if (animated) {
         if (reactionButtonAnimator == null) {
-          reactionButtonAnimator = new FactorAnimator(ANIMATOR_REACTION_BUTTON, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.reactionButtonFactor);
+          reactionButtonAnimator = new FactorAnimator(ANIMATOR_REACTION_BUTTON, this, com.fahadali.xgram.appearance.XgramAppMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 180l), this.reactionButtonFactor);
         }
+        xgramPopMotion(reactionButtonAnimator, visible);
         reactionButtonAnimator.animateTo(toFactor);
       } else {
         if (reactionButtonAnimator != null) {
@@ -6765,6 +6800,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       this.reactionButtonFactor = factor;
       float range = MathUtils.clamp(factor);
       reactionsButtonWrap.setAlpha(range);
+      xgramPopScale(reactionsButtonWrap, factor);
       updateBottomBarStyle();
     }
   }
@@ -7365,7 +7401,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         replyBarView.reset();
       }
     }
-  }, AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
+  }, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 200L)); // XGram: SPATIAL_DEFAULT with Expressive design
 
   private float getReplyOffset () {
     if (replyBarView == null) {
@@ -9169,6 +9205,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     switch (id) {
       case ANIMATOR_SCROLL_TO_BOTTOM: {
         scrollToBottomButtonWrap.setAlpha(MathUtils.clamp(factor));
+        xgramPopScale(scrollToBottomButtonWrap, factor);
         checkScrollButtonOffsets();
         break;
       }
@@ -10357,15 +10394,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
       float scale = .5f * factor;
 
       float scale1 = .5f + scale;
-      sendButton.setAlpha(factor);
+      float alpha = MathUtils.clamp(factor); // XGram: the spring overshoots the scale only
+      sendButton.setAlpha(alpha);
       sendButton.setScaleX(scale1);
       sendButton.setScaleY(scale1);
 
-      float scale2 = 1f - scale;
-      attachButtons.setAlpha(1f - factor);
+      float scale2 = Math.max(0f, 1f - scale);
+      attachButtons.setAlpha(1f - alpha);
       attachButtons.setScaleX(scale2);
       attachButtons.setScaleY(scale2);
-      messageSenderButton.setSendFactor(sendFactor);
+      messageSenderButton.setSendFactor(alpha);
 
       if (tooltipInfo != null && tooltipInfo.isVisible()) {
         tooltipInfo.reposition();
@@ -10375,7 +10413,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private static final int ANIMATOR_SEND = 9;
 
-  private final BoolAnimator sendShown = new BoolAnimator(ANIMATOR_SEND, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 150l);
+  private final BoolAnimator sendShown = new BoolAnimator(ANIMATOR_SEND, this, com.fahadali.xgram.appearance.XgramAppMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 150l)); // XGram: the send icon pops in on SPATIAL_FAST
 
   private void setSendVisible (boolean isVisible, boolean animated) {
     if (isVisible && sendButton != null && sendButton.getVisibility() != View.VISIBLE) { // fix
@@ -13204,8 +13242,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private float searchByUserTransformFactor;
   private static final int ANIMATOR_SEARCH_BY_USER = 21;
   private static final int ANIMATOR_SEARCH_NAVIGATION = 22;
-  private final BoolAnimator searchByUserTransformAnimator = new BoolAnimator(ANIMATOR_SEARCH_BY_USER, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200l);
-  private final BoolAnimator searchNavigationButtonVisibleAnimator = new BoolAnimator(ANIMATOR_SEARCH_NAVIGATION, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200l);
+  private final BoolAnimator searchByUserTransformAnimator = new BoolAnimator(ANIMATOR_SEARCH_BY_USER, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 200l));
+  private final BoolAnimator searchNavigationButtonVisibleAnimator = new BoolAnimator(ANIMATOR_SEARCH_NAVIGATION, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 200l));
 
   private void showSearchByUserView (boolean show, boolean animated) {
     searchByUserTransformAnimator.setValue(show, animated);

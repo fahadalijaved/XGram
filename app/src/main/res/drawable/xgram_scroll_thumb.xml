@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the system scrollbar thumb with Expressive design (API 24+ custom drawable; the theme overlay that uses it is only applied on Android 13+). -->
+<drawable xmlns:android="http://schemas.android.com/apk/res/android"
+  class="com.fahadali.xgram.appearance.XgramScrollThumbDrawable" />

@@ -1409,7 +1409,16 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   private float factor;
 
-  private final RecyclerView.ItemAnimator recyclerAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 160l);
+  private final RecyclerView.ItemAnimator recyclerAnimator = xgramDrawerAnimator();
+
+  /** XGram: with Expressive design accounts added or removed spring and plain row changes redraw in place. */
+  private static RecyclerView.ItemAnimator xgramDrawerAnimator () {
+    CustomItemAnimator animator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 160l);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      animator.setSupportsChangeAnimations(false);
+    }
+    return animator;
+  }
 
   public void setFactor (float factor) {
     if (this.factor != factor) {

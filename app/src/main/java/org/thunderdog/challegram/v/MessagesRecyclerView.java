@@ -75,6 +75,103 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     }
   }
 
+  // XGram: with Expressive design a sent, arrived or deleted message animates once on springs (the new bubble grows
+  // from its tail while older messages slide up), then the list runs without an item animator again, as in Telegram X,
+  // so history loads, edits and bubble merges never animate.
+
+  private @Nullable CustomItemAnimator xgramArmed;
+  private boolean xgramArmWaiting;
+  private @Nullable android.view.ViewTreeObserver xgramArmObserver; // the one xgramArmCheck is registered on
+  private final android.view.ViewTreeObserver.OnPreDrawListener xgramArmCheck = this::xgramCheckArmed;
+  private final Runnable xgramDisarmNow = this::xgramDisarmIfIdle;
+  // Never swapped from inside the animator's own callback: that can come from ItemAnimator.endAnimation in the middle
+  // of a layout pass, where RecyclerView keeps using the animator (NPE) and moves recorded on it would never run.
+  private final ItemAnimator.ItemAnimatorFinishedListener xgramDisarm = () -> {
+    removeCallbacks(xgramDisarmNow);
+    post(xgramDisarmNow);
+  };
+
+  private void xgramDisarmIfIdle () {
+    if (xgramArmWaiting || xgramArmed == null || getItemAnimator() != xgramArmed) {
+      return;
+    }
+    if (xgramArmed.isRunning()) {
+      xgramArmed.isRunning(xgramDisarm); // something new started in between: wait for it too
+    } else {
+      setItemAnimator(null);
+    }
+  }
+
+  /** Call right before the adapter inserts or removes one live message. */
+  public void xgramArmOnce () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !UI.inUiThread() || getWindowToken() == null || getWidth() == 0) {
+      return;
+    }
+    ItemAnimator current = getItemAnimator();
+    if (current != null && current != xgramArmed) {
+      return; // the list already has an animator of its own (event log)
+    }
+    removeCallbacks(xgramDisarmNow);
+    if (xgramArmed == null) {
+      xgramArmed = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, ITEM_ANIMATOR_DURATION) {
+        @Override
+        public boolean animateAdd (RecyclerView.ViewHolder holder) {
+          xgramTailPivot(holder.itemView);
+          return super.animateAdd(holder);
+        }
+
+        @Override
+        public void onAddFinished (RecyclerView.ViewHolder item) {
+          super.onAddFinished(item); // a no-op today: ItemSprings resets alpha and scale before it dispatches
+          if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            item.itemView.resetPivot();
+          }
+        }
+      };
+      xgramArmed.setSupportsChangeAnimations(false);
+    }
+    if (getItemAnimator() != xgramArmed) {
+      setItemAnimator(xgramArmed);
+    }
+    if (!xgramArmWaiting) {
+      xgramArmWaiting = true;
+      xgramArmObserver = getViewTreeObserver();
+      xgramArmObserver.addOnPreDrawListener(xgramArmCheck);
+    }
+  }
+
+  /** Takes xgramArmCheck off the observer it was added to (not whatever getViewTreeObserver returns by then). */
+  private void xgramRemoveArmCheck () {
+    android.view.ViewTreeObserver observer = xgramArmObserver;
+    xgramArmObserver = null;
+    xgramArmWaiting = false;
+    if (observer != null && observer.isAlive()) {
+      observer.removeOnPreDrawListener(xgramArmCheck); // xgramArmOnce only arms while attached: the window's observer
+    }
+  }
+
+  private boolean xgramCheckArmed () {
+    if (isLayoutRequested() || hasPendingAdapterUpdates()) {
+      return true; // the pass that records the animations has not run yet
+    }
+    xgramRemoveArmCheck();
+    if (xgramArmed != null && getItemAnimator() == xgramArmed) {
+      xgramArmed.isRunning(xgramDisarm);
+    }
+    return true;
+  }
+
+  /** The new bubble grows from its tail: the bottom corner on its own side. */
+  private static void xgramTailPivot (View view) {
+    org.thunderdog.challegram.component.chat.MessageView messageView = org.thunderdog.challegram.component.chat.MessagesHolder.findMessageView(view);
+    TGMessage msg = messageView != null ? messageView.getMessage() : null;
+    boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+    boolean right = msg != null && msg.useBubbles() ? msg.isOutgoingBubble() != rtl : rtl;
+    int w = view.getWidth();
+    view.setPivotX(right ? w - Screen.dp(16f) : Screen.dp(16f));
+    view.setPivotY(view.getHeight());
+  }
+
   private int prevWidth, prevHeight;
 
   @Override
@@ -113,6 +210,11 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
   public void setManager (MessagesManager manager) {
     this.manager = manager;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (xgramScroll = com.fahadali.xgram.appearance.XgramScrollIndicator.find(this)) != null) {
+      // XGram: history is paginated, so a fixed-length thumb that shows and hides with the date pill,
+      // clear of the 28dp corners of the messages container
+      xgramScroll.setFixedThumbLength(Screen.dp(40f)).setManualVisibility(true).setTopInset(Screen.dp(20f));
+    }
   }
 
   public void setController (MessagesController controller) {
@@ -192,9 +294,65 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
   private boolean startAnimatorOnAnimationEnd;
 
+  // XGram: with Expressive design the date pill fades on springs (in fast, out slow) and the scroll thumb follows it
+  private @Nullable com.fahadali.xgram.appearance.XgramScrollIndicator xgramScroll;
+  private @Nullable com.fahadali.xgram.appearance.XgramScrollIndicator.Anim xgramDateSpring;
+  private final Runnable xgramDateHide = () -> {
+    if (!this.isScrolling && xgramDateSpring != null) {
+      xgramDateSpring.animateTo(0f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_SLOW);
+      if (xgramScroll != null) {
+        xgramScroll.setShown(false);
+      }
+    }
+  };
+
+  private void xgramSetIsScrolling (boolean isScrolling) {
+    if (xgramDateSpring == null) {
+      xgramDateSpring = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(scrollFactor, .002f, () -> {
+        float factor = MathUtils.clamp(xgramDateSpring.getValue());
+        if (this.scrollFactor != factor) {
+          this.scrollFactor = factor;
+          invalidateDate();
+        }
+      });
+    }
+    removeCallbacks(xgramDateHide);
+    if (isScrolling) {
+      xgramDateSpring.animateTo(1f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST);
+      if (xgramScroll != null) {
+        xgramScroll.setShown(true);
+      }
+    } else {
+      postDelayed(xgramDateHide, 1500);
+    }
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow(); // ends running item animations and stops the scroll first
+    // XGram: nothing armed, pending or springing outlives the window (callbacks and the pre-draw listener hold the list)
+    if (xgramArmWaiting) {
+      xgramRemoveArmCheck();
+    }
+    removeCallbacks(xgramDisarmNow);
+    if (xgramArmed != null && getItemAnimator() == xgramArmed) {
+      setItemAnimator(null);
+    }
+    if (xgramDateSpring != null) {
+      removeCallbacks(xgramDateHide);
+      float factor = isScrolling ? 1f : 0f;
+      xgramDateSpring.setValue(factor);
+      scrollFactor = factor;
+    }
+  }
+
   public void setIsScrolling (boolean isScrolling) {
     if (this.isScrolling != isScrolling) {
       this.isScrolling = isScrolling;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramSetIsScrolling(isScrolling);
+        return;
+      }
       if (scrollAnimator == null) {
         scrollAnimator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.scrollFactor);
       }

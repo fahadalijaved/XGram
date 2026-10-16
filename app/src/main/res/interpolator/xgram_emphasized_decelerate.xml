@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: before Android 5 the closest built-in curve to M3 emphasized decelerate (see interpolator-v21). -->
+<decelerateInterpolator xmlns:android="http://schemas.android.com/apk/res/android"
+  android:factor="2.5" />
