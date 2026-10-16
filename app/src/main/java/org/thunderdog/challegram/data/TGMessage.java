@@ -2092,12 +2092,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       int bottom = getBadgeHeight() + top;
       final boolean xgramBadge = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
       if (xgramBadge) {
-        // XGram: Material 3 Expressive: a surfaceContainerHigh pill inset 16dp, no shadows, 26dp tall like the
-        // date and service chips
-        RectF badgeRect = Paints.getRectF();
-        badgeRect.set(Screen.dp(16f), top + Screen.dp(2f), width - Screen.dp(16f), bottom - Screen.dp(2f));
-        float badgeRadius = badgeRect.height() / 2f;
-        c.drawRoundRect(badgeRect, badgeRadius, badgeRadius, Paints.fillingPaint(getUnreadSeparatorBackgroundColor()));
+        // XGram: Material 3 Expressive: no full-width bar and no shadows; the divider (a centred chip between two
+        // hairlines) is drawn with its text below
       } else {
       float shadow = Theme.getBubbleUnreadShadow();
       if (shadow > 0f) {
@@ -2108,13 +2104,10 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       }
       int color = getUnreadSeparatorContentColor();
       if (xgramBadge) {
-        // XGram M3E: labelMedium like the date chip, centered in the pill
-        TextPaint badgePaint = com.fahadali.xgram.appearance.XgramM3Chat.datePaint(color);
-        float centerY = (top + bottom) / 2f;
-        c.drawText(uBadge.text, pBadgeX, centerY - (badgePaint.ascent() + badgePaint.descent()) / 2f, badgePaint);
-        if (isFirstUnread()) {
-          Drawables.draw(c, iBadge, pBadgeIconX, centerY - iBadge.getMinimumHeight() / 2f, Paints.getUnreadSeparationPaint(color));
-        }
+        // XGram M3E: a chip like the date chips (labelMedium, primary on surfaceContainerHigh, full corners) with an
+        // outlineVariant hairline on each side; the row keeps its height, so the scroll anchor is unchanged
+        com.fahadali.xgram.appearance.XgramM3UnreadDivider.draw(c, width, top, bottom, uBadge.text, pBadgeIconX - Screen.dp(2f) - pBadgeX,
+          isFirstUnread() ? iBadge : null, Paints.getUnreadSeparationPaint(color), getUnreadSeparatorBackgroundColor(), color);
       } else {
         TextPaint mBadge = getBadgePaint(uBadge.needFakeBold);
         mBadge.setColor(color);
@@ -6344,7 +6337,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       return Lang.getString(R.string.DiscussionStart);
     }
     if (isFirstUnread()) {
-      return Lang.getString(R.string.NewMessages);
+      return com.fahadali.xgram.appearance.XgramM3UnreadDivider.newMessages(); // XGram: sentence case with Expressive design
     }
     return "";
   }

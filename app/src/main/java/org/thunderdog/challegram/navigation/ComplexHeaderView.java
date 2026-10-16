@@ -634,6 +634,21 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
 
   private static final float XGRAM_TITLE_SCALE = 24f / 22f, XGRAM_SUBTITLE_SCALE = 14f / 12f;
 
+  // XGram M3E: the header row inside the long-press preview card (ForceTouchView): titleMedium name over a bodySmall
+  // status, centred on the 40dp avatar of the 56dp row
+  private static final float XGRAM_ROW_TITLE_TOP = 9f, XGRAM_ROW_SUBTITLE_TOP = 31f;
+  private boolean xgramPreviewRow;
+
+  /** XGram M3E: draws the name and the status in the preview card's header row styles. Set before the texts. */
+  public void xgramSetPreviewRow (boolean previewRow) {
+    if (this.xgramPreviewRow != previewRow) {
+      this.xgramPreviewRow = previewRow;
+      if (getMeasuredWidth() > 0) {
+        buildLayout();
+      }
+    }
+  }
+
   private boolean xgramCentered () {
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !(this instanceof ChatHeaderView) && parent != null &&
       parent.getMaximumHeaderHeight() >= Size.getHeaderBigPortraitSize(true);
@@ -862,7 +877,10 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   }
 
   /** XGram: Google Sans Flex titleLarge (22, weight 500) with Expressive design, Telegram X's 18dp bold otherwise. */
-  private static org.thunderdog.challegram.util.text.TextStyleProvider xgramTitleStyleProvider () {
+  private org.thunderdog.challegram.util.text.TextStyleProvider xgramTitleStyleProvider () {
+    if (xgramPreviewRow && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M));
+    }
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       return com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L, true, 22f);
     }
@@ -870,7 +888,10 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   }
 
   /** XGram: labelMedium (12) with Expressive design. */
-  private static org.thunderdog.challegram.util.text.TextStyleProvider xgramSubtitleStyleProvider () {
+  private org.thunderdog.challegram.util.text.TextStyleProvider xgramSubtitleStyleProvider () {
+    if (xgramPreviewRow && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S));
+    }
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       return com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, 12f);
     }
@@ -1070,8 +1091,8 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       }
 
       float baseTextLeft = innerLeftMargin + Screen.dp(4f) + Screen.dp(getBaseAvatarRadiusDp()) * 2 + Screen.dp(9f);
-      float baseTitleTop = currentHeaderOffset + Screen.dp(xgramM3 ? 6f : 7f);
-      float baseSubtitleTop = currentHeaderOffset + Screen.dp(xgramM3 ? 34f : 30f);
+      float baseTitleTop = currentHeaderOffset + Screen.dp(xgramM3 ? (xgramPreviewRow ? XGRAM_ROW_TITLE_TOP : 6f) : 7f);
+      float baseSubtitleTop = currentHeaderOffset + Screen.dp(xgramM3 ? (xgramPreviewRow ? XGRAM_ROW_SUBTITLE_TOP : 34f) : 30f);
       final float xgramCollapsedTextLeft = baseTextLeft;
       float xgramSubtitleLeft = baseTextLeft, xgramSubtitleScale = 1f;
       if (xgramCentered) {

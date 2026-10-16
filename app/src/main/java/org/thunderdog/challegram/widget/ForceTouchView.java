@@ -126,6 +126,17 @@ public class ForceTouchView extends FrameLayoutFix implements
   public static final float HEADER_HEIGHT = 56f;
   private static final float RADIUS = 4f;
 
+  /**
+   * XGram: Material 3 Expressive (see XgramM3Preview): an elevated 28dp card over a scrim with the header row inside
+   * it, the content clipped to the card, the actions in a floating toolbar under the card, and a spring scale and fade
+   * from the long-pressed row. Read once: the switch restarts the activity.
+   */
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+
+  private int cardRadius () {
+    return xgram ? com.fahadali.xgram.appearance.XgramM3Preview.cardRadius() : Screen.dp(RADIUS);
+  }
+
   // private static TextPaint hintTextPaint;
 
   private final ThemeListenerList themeListenerList;
@@ -175,14 +186,14 @@ public class ForceTouchView extends FrameLayoutFix implements
               drawingRect.set(sourceRect);
               if (path != null) {
                 path.reset();
-                path.addRoundRect(drawingRect, Screen.dp(RADIUS), Screen.dp(RADIUS), Path.Direction.CW);
+                path.addRoundRect(drawingRect, cardRadius(), cardRadius(), Path.Direction.CW);
               }
             }
           } else {
             drawingRect.set(targetRect);
             if (path != null) {
               path.reset();
-              path.addRoundRect(drawingRect, Screen.dp(RADIUS), Screen.dp(RADIUS), Path.Direction.CW);
+              path.addRoundRect(drawingRect, cardRadius(), cardRadius(), Path.Direction.CW);
             }
           }
         }
@@ -190,11 +201,17 @@ public class ForceTouchView extends FrameLayoutFix implements
 
       @Override
       public void draw (Canvas c) {
-        final boolean needClip = !forceTouchContext.needHeader || forceTouchContext.animationType == ForceTouchContext.ANIMATION_TYPE_EXPAND_VERTICALLY;
+        // XGram M3E: the card clips itself to its outline (setClipToOutline), no clip path per frame
+        final boolean needClip = !xgram && (!forceTouchContext.needHeader || forceTouchContext.animationType == ForceTouchContext.ANIMATION_TYPE_EXPAND_VERTICALLY);
         final int saveCount = needClip ? ViewSupport.clipPath(c, path) : Integer.MIN_VALUE;
         super.draw(c);
         if (needClip) {
           ViewSupport.restoreClipPath(c, saveCount);
+        }
+        if (xgram && targetHeaderView != null && forceTouchContext.contentView != null) {
+          // XGram M3E: the content under the header row has the chat container's rounded top corners
+          final View content = forceTouchContext.contentView;
+          com.fahadali.xgram.appearance.XgramM3Preview.drawContentCorners(c, content.getLeft(), content.getTop(), content.getRight(), com.fahadali.xgram.appearance.XgramM3Preview.cardColor());
         }
         if (path == null) {
           c.drawRect(drawingRect, Paints.strokeBigPaint(ColorUtils.alphaColor(.2f, Theme.textAccentColor())));
@@ -206,16 +223,22 @@ public class ForceTouchView extends FrameLayoutFix implements
         @Override
         @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
         public void getOutline (View view, android.graphics.Outline outline) {
-          outline.setRoundRect(Math.round(drawingRect.left), Math.round(drawingRect.top), Math.round(drawingRect.right), Math.round(drawingRect.bottom), Screen.dp(RADIUS));
+          outline.setRoundRect(Math.round(drawingRect.left), Math.round(drawingRect.top), Math.round(drawingRect.right), Math.round(drawingRect.bottom), cardRadius());
         }
       });
-      contentWrap.setElevation(Screen.dp(1f));
-      contentWrap.setTranslationZ(Screen.dp(1f));
+      if (xgram) {
+        // XGram M3E: an elevated card (level 3), clipped to its 28dp corners
+        contentWrap.setElevation(com.fahadali.xgram.appearance.XgramM3Preview.cardElevation());
+        contentWrap.setClipToOutline(true);
+      } else {
+        contentWrap.setElevation(Screen.dp(1f));
+        contentWrap.setTranslationZ(Screen.dp(1f));
+      }
     }
     ViewUtils.setBackground(contentWrap, new Drawable() {
       @Override
       public void draw (@NonNull Canvas c) {
-        c.drawRoundRect(drawingRect, Screen.dp(RADIUS), Screen.dp(RADIUS), Paints.fillingPaint(Theme.fillingColor()));
+        c.drawRoundRect(drawingRect, cardRadius(), cardRadius(), Paints.fillingPaint(xgram ? com.fahadali.xgram.appearance.XgramM3Preview.cardColor() : Theme.fillingColor()));
       }
 
       @Override
@@ -286,6 +309,10 @@ public class ForceTouchView extends FrameLayoutFix implements
 
     if (context.backgroundColor != 0) {
       backgroundView.setBackgroundColor(context.backgroundColor);
+    } else if (xgram) {
+      // XGram M3E: the M3 scrim (32% black) behind the card instead of an opaque backdrop
+      backgroundView.setBackground(new com.fahadali.xgram.appearance.XgramM3Preview.ScrimDrawable());
+      themeListenerList.addThemeInvalidateListener(backgroundView);
     } else {
       ViewSupport.setThemedBackground(backgroundView, ColorId.previewBackground);
       themeListenerList.addThemeInvalidateListener(backgroundView);
@@ -299,6 +326,12 @@ public class ForceTouchView extends FrameLayoutFix implements
         contentWrap.setClipToOutline(true);
         contentWrap.setElevation(Screen.dp(12f));
       }
+    }
+    if (xgram) {
+      // XGram M3E: the card springs open (scale and fade) from the long-pressed row instead of expanding vertically
+      context.animationType = ForceTouchContext.ANIMATION_TYPE_SCALE;
+      contentWrap.setElevation(com.fahadali.xgram.appearance.XgramM3Preview.cardElevation());
+      xgramRevealFrom = com.fahadali.xgram.appearance.XgramM3Preview.revealScale();
     }
     if (context.isMatchParent) {
       baseParams.leftMargin = baseParams.rightMargin = getMatchParentHorizontalMargin();
@@ -328,7 +361,13 @@ public class ForceTouchView extends FrameLayoutFix implements
         headerView = new ComplexHeaderView(getContext(), tdlib, null);
         headerView.setId(R.id.forceTouch_header);
         headerView.setIgnoreCustomHeight();
-        headerView.setInnerMargins(Screen.dp(8f), Screen.dp(8f));
+        if (xgram) {
+          // XGram M3E: the header row of the card: the 40dp avatar 16dp from the edge, titleMedium over bodySmall
+          headerView.xgramSetPreviewRow(true);
+          headerView.setInnerMargins(Screen.dp(com.fahadali.xgram.appearance.XgramM3Preview.HEADER_START), Screen.dp(com.fahadali.xgram.appearance.XgramM3Preview.HEADER_END));
+        } else {
+          headerView.setInnerMargins(Screen.dp(8f), Screen.dp(8f));
+        }
         headerView.setTextColors(Theme.textAccentColor(), Theme.textDecentColor());
         if (context.boundDataType != 0 && (context.boundDataId != 0 || context.boundDataType == DataType.ACCOUNT)) {
           switch (context.boundDataType) {
@@ -368,6 +407,9 @@ public class ForceTouchView extends FrameLayoutFix implements
       ViewUtils.setBackground(targetHeaderView, new Drawable() {
         @Override
         public void draw (@NonNull Canvas canvas) {
+          if (xgram) {
+            return; // XGram M3E: the header row sits on the card's own color
+          }
           Rect bounds = getBounds();
           int radius = Screen.dp(RADIUS);
           Path path = Paints.getPath();
@@ -401,16 +443,18 @@ public class ForceTouchView extends FrameLayoutFix implements
       });
       themeListenerList.addThemeDoubleTextColorListener(targetHeaderView, ColorId.text, ColorId.textLight);
 
-      params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(7f));
-      params.addRule(RelativeLayout.ALIGN_LEFT, R.id.forceTouch_content);
-      params.addRule(RelativeLayout.ALIGN_RIGHT, R.id.forceTouch_content);
-      params.addRule(RelativeLayout.ALIGN_TOP, R.id.forceTouch_content);
+      if (!xgram) { // XGram M3E: no shadows inside the card
+        params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(7f));
+        params.addRule(RelativeLayout.ALIGN_LEFT, R.id.forceTouch_content);
+        params.addRule(RelativeLayout.ALIGN_RIGHT, R.id.forceTouch_content);
+        params.addRule(RelativeLayout.ALIGN_TOP, R.id.forceTouch_content);
 
-      headerShadowView = new ShadowView(getContext());
-      headerShadowView.setSimpleBottomTransparentShadow(true);
-      headerShadowView.setLayoutParams(params);
-      contentWrap.addView(headerShadowView);
-      themeListenerList.addThemeInvalidateListener(headerShadowView);
+        headerShadowView = new ShadowView(getContext());
+        headerShadowView.setSimpleBottomTransparentShadow(true);
+        headerShadowView.setLayoutParams(params);
+        contentWrap.addView(headerShadowView);
+        themeListenerList.addThemeInvalidateListener(headerShadowView);
+      }
     }
 
     if (context.hasFooter()) {
@@ -419,20 +463,32 @@ public class ForceTouchView extends FrameLayoutFix implements
       params.addRule(RelativeLayout.ALIGN_RIGHT, R.id.forceTouch_content);
       params.addRule(RelativeLayout.BELOW, R.id.forceTouch_content);
       params.addRule(RelativeLayout.CENTER_HORIZONTAL);
-      if (context.isMatchParent) {
+      if (context.isMatchParent && !xgram) {
         contentParams.bottomMargin = params.height;
         params.topMargin = -contentParams.bottomMargin;
       }
 
+      if (xgram) {
+        // XGram M3E: the actions float under the card in a toolbar, a direct child laid out in onLayout
+        buttonsList = new com.fahadali.xgram.appearance.XgramM3Preview.ActionBar(getContext());
+        FrameLayoutFix.LayoutParams barParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(com.fahadali.xgram.appearance.XgramM3Preview.BAR_HEIGHT), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        barParams.leftMargin = barParams.rightMargin = baseParams.leftMargin;
+        buttonsList.setLayoutParams(barParams);
+        buttonsList.setId(R.id.forceTouch_footer);
+      } else {
       buttonsList = new LinearLayout(getContext());
       buttonsList.setId(R.id.forceTouch_footer);
       buttonsList.setOrientation(LinearLayout.HORIZONTAL);
       buttonsList.setGravity(Gravity.CENTER_HORIZONTAL);
       buttonsList.setLayoutParams(params);
+      }
 
       ViewUtils.setBackground(buttonsList, new Drawable() {
         @Override
         public void draw (@NonNull Canvas canvas) {
+          if (xgram) {
+            return; // XGram M3E: the toolbar draws its own pill
+          }
           Rect bounds = getBounds();
           int radius = Screen.dp(RADIUS);
           Path path = Paints.getPath();
@@ -469,7 +525,7 @@ public class ForceTouchView extends FrameLayoutFix implements
 
       final int offsetWeight = context.shrunkenFooter ? 4 : 1;
 
-      if (context.actionItems.size() > 1) {
+      if (context.actionItems.size() > 1 && !xgram) {
         offsetView = new View(getContext());
         offsetView.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, offsetWeight));
         buttonsList.addView(offsetView);
@@ -487,6 +543,13 @@ public class ForceTouchView extends FrameLayoutFix implements
       popupWrapView = new PopupWrapView(getContext());
       popupWrapView.setLayoutParams(params);
       // popupWrapView.setBackgroundColor(0x1cff0000);
+      if (xgram) {
+        // XGram M3E: the tooltips get the whole width above the toolbar (laid out in onLayout), drawn over the card
+        // and the toolbar without a shadow of their own
+        popupWrapView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(FOOTER_HEIGHT), Gravity.TOP));
+        popupWrapView.setOutlineProvider(null);
+        popupWrapView.setTranslationZ(com.fahadali.xgram.appearance.XgramM3Preview.cardElevation() + Screen.dp(2f));
+      }
 
       PopupContext[] popupContexts = new PopupContext[context.actionItems.size()];
       boolean rtl = Lang.rtl();
@@ -526,7 +589,7 @@ public class ForceTouchView extends FrameLayoutFix implements
           view = new ImageView(getContext());
         }
         view.setId(buttonId);
-        PopupContext popupContext = new PopupContext(popupWrapView, view, actionItem.title);
+        PopupContext popupContext = new PopupContext(popupWrapView, view, actionItem.title, xgram);
         view.setTag(popupContexts[i] = popupContext);
         view.setScaleType(ImageView.ScaleType.CENTER);
         themeListenerList.addThemeFilterListener(view, ColorId.icon);
@@ -534,19 +597,31 @@ public class ForceTouchView extends FrameLayoutFix implements
           view.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(actionItem.iconRes));
           view.setColorFilter(Theme.iconColor());
         }
-        view.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 2f));
+        view.setLayoutParams(xgram ? com.fahadali.xgram.appearance.XgramM3Preview.buttonParams() : new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 2f));
+        if (xgram) {
+          view.setContentDescription(actionItem.title);
+        }
 
         buttonsList.addView(view);
         remaining--;
       }
       popupWrapView.setItems(popupContexts);
 
-      if (context.actionItems.size() > 1) {
+      if (context.actionItems.size() > 1 && !xgram) {
         offsetView = new View(getContext());
         offsetView.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, offsetWeight));
         buttonsList.addView(offsetView);
       }
 
+      if (xgram) {
+        // XGram M3E: room under the card for the toolbar; getMatchParentBottomMargin already holds what it takes
+        // beyond Telegram X's 48dp footer, so the preview height MessagesController guesses stays right
+        baseParams.bottomMargin += context.isMatchParent ? Screen.dp(FOOTER_HEIGHT) : com.fahadali.xgram.appearance.XgramM3Preview.barSpace();
+        addView(buttonsList);
+        addView(popupWrapView);
+        themeListenerList.addThemeInvalidateListener(buttonsList);
+        themeListenerList.addThemeInvalidateListener(popupWrapView);
+      } else {
       contentWrap.addView(buttonsList);
       contentWrap.addView(popupWrapView);
 
@@ -560,6 +635,7 @@ public class ForceTouchView extends FrameLayoutFix implements
       footerShadowView.setLayoutParams(params);
       contentWrap.addView(footerShadowView);
       themeListenerList.addThemeInvalidateListener(footerShadowView);
+      }
     }
 
     revealFactor = 1f;
@@ -601,7 +677,7 @@ public class ForceTouchView extends FrameLayoutFix implements
       return 0;
     }
     float innerY = y + forceTouchContext.getAddY(this);
-    final int contentTop = contentWrap.getBottom() - Screen.dp(FOOTER_HEIGHT) - Screen.dp(48f) /*padding*/;
+    final int contentTop = xgram ? buttonsList.getTop() - Screen.dp(48f) /* XGram M3E: the toolbar under the card */ : contentWrap.getBottom() - Screen.dp(FOOTER_HEIGHT) - Screen.dp(48f) /*padding*/;
 
     return innerY > contentTop ? (int) (innerY - contentTop) : 0;
   }
@@ -646,6 +722,9 @@ public class ForceTouchView extends FrameLayoutFix implements
   }
 
   private ImageView findActionViewByPosition (int x, int y) {
+    if (xgram) {
+      return xgramFindActionView(x, y);
+    }
     final int contentBottom = contentWrap.getBottom();
 
     if (y > contentBottom || y < contentBottom - Screen.dp(FOOTER_HEIGHT) || buttonsList == null) {
@@ -670,10 +749,89 @@ public class ForceTouchView extends FrameLayoutFix implements
     return null;
   }
 
+  /**
+   * XGram M3E: the button of the floating toolbar under the finger ({@code x}, {@code y} in this view). The finger
+   * slides down from the row onto it, so the band reaches a little above the bar and further below it, and the end
+   * buttons take the bar's padding and a little beyond.
+   */
+  private @Nullable ImageView xgramFindActionView (int x, int y) {
+    if (buttonsList == null || buttonsList.getParent() != this || buttonsList.getChildCount() == 0) {
+      return null;
+    }
+    if (y < buttonsList.getTop() - Screen.dp(12f) || y > buttonsList.getBottom() + Screen.dp(32f)) {
+      return null;
+    }
+    final int innerX = x - buttonsList.getLeft();
+    final int childCount = buttonsList.getChildCount();
+    for (int i = 0; i < childCount; i++) {
+      View view = buttonsList.getChildAt(i);
+      if (view instanceof ImageView && innerX >= view.getLeft() && innerX <= view.getRight()) {
+        return (ImageView) view;
+      }
+    }
+    final int slop = Screen.dp(16f);
+    View first = buttonsList.getChildAt(0), last = buttonsList.getChildAt(childCount - 1);
+    if (first instanceof ImageView && innerX < first.getLeft() && innerX >= -slop) {
+      return (ImageView) first;
+    }
+    if (last instanceof ImageView && innerX > last.getRight() && innerX <= buttonsList.getWidth() + slop) {
+      return (ImageView) last;
+    }
+    return null;
+  }
+
+  @Override
+  protected void onLayout (boolean changed, int left, int top, int right, int bottom) {
+    super.onLayout(changed, left, top, right, bottom);
+    if (xgram) {
+      xgramLayoutActions();
+    }
+  }
+
+  /**
+   * XGram M3E: puts the toolbar under the card (and the tooltips above it), and makes the card and the toolbar scale
+   * about one point, on the long-pressed row (kept inside the card), so they open from the row as one piece.
+   */
+  private void xgramLayoutActions () {
+    if (forceTouchContext == null) {
+      return;
+    }
+    final boolean hasBar = buttonsList != null && buttonsList.getParent() == this;
+    if (hasBar) {
+      final int barWidth = buttonsList.getMeasuredWidth(), barHeight = buttonsList.getMeasuredHeight();
+      final int barLeft = (contentWrap.getLeft() + contentWrap.getRight() - barWidth) / 2;
+      final int barTop = contentWrap.getBottom() + com.fahadali.xgram.appearance.XgramM3Preview.barGap();
+      buttonsList.layout(barLeft, barTop, barLeft + barWidth, barTop + barHeight);
+      if (popupWrapView != null && popupWrapView.getParent() == this) {
+        popupWrapView.layout(0, barTop - popupWrapView.getMeasuredHeight(), getMeasuredWidth(), barTop);
+      }
+    }
+    final int cardWidth = contentWrap.getWidth(), cardHeight = contentWrap.getHeight();
+    if (cardWidth == 0 || cardHeight == 0) {
+      return;
+    }
+    final float pivotX = contentWrap.getLeft() + cardWidth / 2f;
+    float pivotY = contentWrap.getTop() + cardHeight / 2f;
+    final View source = forceTouchContext.sourceView;
+    if (source != null && source.getHeight() > 0 && source.isAttachedToWindow()) {
+      final int sourceY = Views.getLocationOnScreen(source)[1]; // a shared array: read before the next call
+      final int selfY = Views.getLocationOnScreen(this)[1];
+      pivotY = Math.max(contentWrap.getTop(), Math.min(contentWrap.getBottom(), sourceY - selfY + source.getHeight() / 2f));
+    }
+    contentWrap.setPivotX(pivotX - contentWrap.getLeft());
+    contentWrap.setPivotY(pivotY - contentWrap.getTop());
+    if (hasBar) {
+      buttonsList.setPivotX(pivotX - buttonsList.getLeft());
+      buttonsList.setPivotY(pivotY - buttonsList.getTop());
+    }
+  }
+
   // Reveal animation
 
   private static final float REVEAL_FACTOR = .7f;
   private float revealFactor;
+  /** XGram M3E: the scale the card opens from (1 with Reduce motion: a fade only), read once per preview. */
+  private float xgramRevealFrom = REVEAL_FACTOR;
 
   public void setBeforeMaximizeFactor (float factor) {
     if (revealFactor >= 1f) {
@@ -697,15 +855,21 @@ public class ForceTouchView extends FrameLayoutFix implements
         contentWrap.setScaleY(1f);
       } else {
         drawingRect.set(targetRect);
-        final float scale = REVEAL_FACTOR + (1f - REVEAL_FACTOR) * factor;
+        final float revealFrom = xgram ? xgramRevealFrom : REVEAL_FACTOR;
+        final float scale = revealFrom + (1f - revealFrom) * factor;
         contentWrap.setScaleX(scale);
         contentWrap.setScaleY(scale);
+        if (xgram && buttonsList != null && buttonsList.getParent() == this) {
+          // XGram M3E: the toolbar scales with the card, about the same point (see xgramLayoutActions)
+          buttonsList.setScaleX(scale);
+          buttonsList.setScaleY(scale);
+        }
       }
 
       if (forceTouchContext.animationType == ForceTouchContext.ANIMATION_TYPE_EXPAND_VERTICALLY) {
         if (path != null) {
           path.reset();
-          path.addRoundRect(drawingRect, Screen.dp(RADIUS), Screen.dp(RADIUS), Path.Direction.CW);
+          path.addRoundRect(drawingRect, cardRadius(), cardRadius(), Path.Direction.CW);
         }
         if (forceTouchContext.contentView != null) {
           forceTouchContext.contentView.setTranslationY(drawingRect.centerY() - targetRect.centerY());
@@ -740,6 +904,16 @@ public class ForceTouchView extends FrameLayoutFix implements
         float alpha = MathUtils.clamp(factor);
         contentWrap.setAlpha(alpha);
         backgroundView.setAlpha(alpha);
+      }
+      if (xgram) {
+        // XGram M3E: the toolbar and its tooltips are outside the card, so they fade with it here
+        final float alpha = contentWrap.getAlpha();
+        if (buttonsList != null && buttonsList.getParent() == this) {
+          buttonsList.setAlpha(alpha);
+        }
+        if (popupWrapView != null && popupWrapView.getParent() == this) {
+          popupWrapView.setAlpha(alpha);
+        }
       }
 
     }
@@ -812,25 +986,40 @@ public class ForceTouchView extends FrameLayoutFix implements
 
   // Popups
 
-  private static class PopupContext implements FactorAnimator.Target {
+  private static class PopupContext implements FactorAnimator.Target, com.fahadali.xgram.appearance.XgramM3Preview.Hover {
     private final PopupWrapView parent;
     private final View target;
 
     private final String text;
     private final boolean fakeBold;
     private final int width;
+    /** XGram M3E: an M3 plain tooltip, and the toolbar fills the button while it is under the finger. */
+    private final boolean xgram;
 
     private float factor;
 
-    public PopupContext (PopupWrapView parent, View target, String text) {
+    public PopupContext (PopupWrapView parent, View target, String text, boolean xgram) {
       this.parent = parent;
       this.target = target;
       this.text = text;
+      this.xgram = xgram;
       this.fakeBold = Text.needFakeBold(text);
-      this.width = (int) U.measureText(text, Paints.getMediumTextPaint(12f, fakeBold));
+      this.width = xgram ? com.fahadali.xgram.appearance.XgramM3Preview.measureTooltip(text) : (int) U.measureText(text, Paints.getMediumTextPaint(12f, fakeBold));
+    }
+
+    @Override
+    public float hoverFactor () {
+      return factor;
     }
 
     public void draw (Canvas c) {
+      if (factor != 0f && xgram) {
+        // XGram M3E: 8dp above the toolbar, centred on the button (this view spans the whole width, from x = 0)
+        final View bar = target.getParent() instanceof View ? (View) target.getParent() : null;
+        final float centerX = (bar != null ? bar.getLeft() : 0) + (target.getLeft() + target.getRight()) / 2f;
+        com.fahadali.xgram.appearance.XgramM3Preview.drawTooltip(c, text, width, centerX, parent.getMeasuredHeight() - Screen.dp(8f), parent.getMeasuredWidth(), factor);
+        return;
+      }
       if (factor != 0f) {
         int centerX = (target.getLeft() + target.getRight()) >> 1;
 
@@ -861,6 +1050,10 @@ public class ForceTouchView extends FrameLayoutFix implements
     public void setIsVisible (boolean isVisible) {
       if (this.isVisible != isVisible) {
         this.isVisible = isVisible;
+        if (xgram && target instanceof ImageView && ((ImageView) target).getDrawable() != null) {
+          // XGram M3E: onSecondaryContainer on the filled button (set once per change, not per frame)
+          ((ImageView) target).setColorFilter(com.fahadali.xgram.appearance.XgramM3Preview.iconColor(isVisible));
+        }
         animateFactor(isVisible ? 1f : 0f);
         if (isVisible) {
           UI.forceVibrate(target, false);
@@ -873,6 +1066,9 @@ public class ForceTouchView extends FrameLayoutFix implements
       if (this.factor != factor) {
         this.factor = factor;
         this.parent.invalidate();
+        if (xgram && target.getParent() instanceof View) {
+          ((View) target.getParent()).invalidate(); // XGram M3E: the toolbar draws the filled button
+        }
       }
     }
 
@@ -883,6 +1079,10 @@ public class ForceTouchView extends FrameLayoutFix implements
     private void animateFactor (float factor) {
       if (animator == null) {
         animator = new FactorAnimator(0, this, interpolator, 230l, this.factor);
+      }
+      if (xgram) {
+        // XGram M3E: springs in (a small overshoot), settles out fast without one
+        com.fahadali.xgram.appearance.XgramAppMotion.use(animator, factor > 0f ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, factor == 0f);
       }
       animator.animateTo(factor);
     }
@@ -946,6 +1146,12 @@ public class ForceTouchView extends FrameLayoutFix implements
   }
 
   private FactorAnimator scaleAnimator () {
+    if (xgram) {
+      // XGram M3E: the expressive spatial spring (a slight overshoot); its standard twin with Reduce motion (mapped by
+      // XgramMotion.token) and on devices that need less bounce
+      final int token = Device.NEED_REDUCE_BOUNCE ? com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT : com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT;
+      return new FactorAnimator(REVEAL_ANIMATOR, this, com.fahadali.xgram.appearance.XgramAppMotion.spring(token), com.fahadali.xgram.appearance.XgramAppMotion.springDuration(token));
+    }
     if (Device.NEED_REDUCE_BOUNCE || Settings.instance().needReduceMotion()) {
       return new FactorAnimator(REVEAL_ANIMATOR, this, new DecelerateInterpolator(1.46f), 140l);
     }
@@ -1007,6 +1213,11 @@ public class ForceTouchView extends FrameLayoutFix implements
       revealAnimator.animateTo(MAXIMIZE_FACTOR);
     } else {
       revealAnimator.setStartDelay(0);
+      if (xgram) {
+        // XGram M3E: closes on the fast-settling effects spring, no overshoot (scale back towards the row and fade)
+        revealAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.springClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT));
+        revealAnimator.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.springDuration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT));
+      }
       revealAnimator.animateTo(0f);
       performAction(false);
     }
@@ -1019,8 +1230,12 @@ public class ForceTouchView extends FrameLayoutFix implements
   }
 
   public static int getMatchParentBottomMargin () {
-    if (com.fahadali.xgram.chats.XgramChatLongPress.isCompact()) return com.fahadali.xgram.chats.XgramChatLongPress.compactVerticalMargin(); // XGram: compact preview
-    return HeaderView.getTopOffset() + (Device.NEED_LESS_PREVIEW_MARGINS ? Screen.dp(16f) : Screen.dp(20f));
+    // XGram M3E: the floating toolbar under the card takes more room than Telegram X's 48dp footer inside it; the
+    // part beyond 48dp is in this margin (initWithContext adds the 48dp), so MessagesController.getForcePreviewHeight,
+    // which takes this margin and FOOTER_HEIGHT away, still guesses the preview's height exactly
+    final int xgramExtra = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3Preview.barSpace() - Screen.dp(FOOTER_HEIGHT) : 0;
+    if (com.fahadali.xgram.chats.XgramChatLongPress.isCompact()) return com.fahadali.xgram.chats.XgramChatLongPress.compactVerticalMargin() + xgramExtra; // XGram: compact preview
+    return HeaderView.getTopOffset() + (Device.NEED_LESS_PREVIEW_MARGINS ? Screen.dp(16f) : Screen.dp(20f)) + xgramExtra;
   }
 
   public static int getMatchParentHorizontalMargin () {
