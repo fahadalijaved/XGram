@@ -91,8 +91,18 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
 
   private final MultipleViewProvider currentViews = new MultipleViewProvider();
   private final BounceAnimator isAnonymous = new BounceAnimator(currentViews);
-  private final int horizontalPadding = Screen.dp(72f) + Screen.dp(11f);
+  private final int horizontalPadding = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(XGRAM_TEXT_START) + Screen.dp(XGRAM_PADDING) : Screen.dp(72f) + Screen.dp(11f);
   private boolean forceSingleLine, allowSavedMessages;
+
+  // XGram: Material 3 list item (Compose ListTokens): 16dp padding, a 40dp leading avatar, the text from 72dp,
+  // headline bodyLarge in onSurface, supporting text bodyMedium in onSurfaceVariant (primary while online), the
+  // member tag as trailing supporting text (labelSmall), scam and fake marks as M3 large badges. Expressive only.
+
+  public static final float XGRAM_PADDING = 16f, XGRAM_AVATAR_SIZE = 40f, XGRAM_TEXT_START = 72f;
+
+  private static boolean xgramM3 () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
 
   public DoubleTextWrapper (Tdlib tdlib, TdApi.Chat chat) {
     this(tdlib, chat, /* needSubtitle */ true, false);
@@ -203,7 +213,14 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
   }
 
   private void setChatMark (boolean isScam, boolean isFake) {
-    if (isScam || isFake) {
+    if ((isScam || isFake) && xgramM3()) {
+      // XGram: the label of an M3 large badge (labelSmall in onError on error)
+      chatMark = new Text.Builder(Lang.getString(isFake ? R.string.FakeMark : R.string.ScamMark), 0, com.fahadali.xgram.appearance.XgramM3Profile.listTrailingProvider(), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_ERROR)
+        .singleLine()
+        .allBold()
+        .clipTextArea()
+        .build();
+    } else if (isScam || isFake) {
       chatMark = new Text.Builder(Lang.getString(isFake ? R.string.FakeMark : R.string.ScamMark), 0, Paints.robotoStyleProvider(10f), TextColorSets.Regular.NEGATIVE)
         .singleLine()
         .allBold()
@@ -497,15 +514,25 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
       }
     }
     if (!StringUtils.isEmpty(adminSign) && adminSignVisible) {
-      this.adminSign = new Text.Builder(adminSign, availWidth, Paints.robotoStyleProvider(13), TextColorSets.Regular.LIGHT).singleLine().build();
-      availWidth -= this.adminSign.getWidth() + Screen.dp(4f);
+      if (xgramM3()) {
+        // XGram: trailing supporting text, labelSmall in onSurfaceVariant (the owner's tag in primary, see draw)
+        this.adminSign = new Text.Builder(adminSign, availWidth, com.fahadali.xgram.appearance.XgramM3Profile.listTrailingProvider(), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE_VARIANT).singleLine().build();
+        availWidth -= this.adminSign.getWidth() + Screen.dp(XGRAM_PADDING);
+      } else {
+        this.adminSign = new Text.Builder(adminSign, availWidth, Paints.robotoStyleProvider(13), TextColorSets.Regular.LIGHT).singleLine().build();
+        availWidth -= this.adminSign.getWidth() + Screen.dp(4f);
+      }
     } else {
       this.adminSign = null;
     }
 
     if (chatMark != null) {
       chatMark.changeMaxWidth(availWidth);
-      availWidth -= chatMark.getWidth() + Screen.dp(8f);
+      if (xgramM3()) {
+        availWidth -= com.fahadali.xgram.appearance.XgramM3Profile.badgeWidth(chatMark.getWidth()) + Screen.dp(8f); // XGram: the badge and 8dp before it
+      } else {
+        availWidth -= chatMark.getWidth() + Screen.dp(8f);
+      }
     }
 
     emojiStatusDrawable = EmojiStatusHelper.makeDrawable(null, tdlib, user, new TextColorSetOverride(TextColorSets.Regular.NORMAL) {
@@ -522,6 +549,10 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
       return;
     }
 
+    if (xgramM3()) {
+      this.trimmedTitle = StringUtils.isEmpty(title) ? null : new Text.Builder(title, availWidth, com.fahadali.xgram.appearance.XgramM3Profile.listHeadlineProvider(), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE).allBold().singleLine().build(); // XGram: bodyLarge
+      return;
+    }
     this.trimmedTitle = StringUtils.isEmpty(title) ? null : new Text.Builder(title, availWidth, Paints.robotoStyleProvider(15), TextColorSets.Regular.NORMAL).allBold().singleLine().build();
   }
 
@@ -567,7 +598,9 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
     }
     if (!StringUtils.isEmpty(subtitle)) {
       // TODO: custom emoji support
-      trimmedSubtitle = new Text.Builder(tdlib, subtitle, null, availWidth, Paints.robotoStyleProvider(15), TextColorSets.Regular.LIGHT, null)
+      trimmedSubtitle = new Text.Builder(tdlib, subtitle, null, availWidth,
+        xgramM3() ? com.fahadali.xgram.appearance.XgramM3Profile.listSupportingProvider() : Paints.robotoStyleProvider(15), // XGram: bodyMedium
+        xgramM3() ? com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE_VARIANT : TextColorSets.Regular.LIGHT, null)
         .singleLine()
         .build();
     } else {
@@ -649,6 +682,11 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
       Drawables.draw(c, incognitoIcon, x, y - incognitoIcon.getMinimumHeight() / 2f, PorterDuffPaint.get(ColorId.text));
     }
 
+    if (xgramM3()) {
+      xgramDrawText(view, c, emojiStatusReceiver, Screen.dp(XGRAM_TEXT_START), viewWidth);
+      return;
+    }
+
     int titleY = Screen.dp(13f);
     int offset = 0;
     if (trimmedTitle != null) {
@@ -678,6 +716,38 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
       c.drawRoundRect(rct, Screen.dp(2f), Screen.dp(2f), Paints.getProgressPaint(Theme.getColor(ColorId.textNegative), Screen.dp(1.5f)));
       cmLeft += Screen.dp(4f);
       chatMark.draw(c, cmLeft, cmLeft + chatMark.getWidth(), 0, titleY + ((trimmedTitle.getLineHeight(false) - chatMark.getLineHeight(false)) / 2));
+    }
+  }
+
+  /** XGram: headline and supporting text centered as one block, the tag at the end, a scam / fake badge after the name. */
+  private void xgramDrawText (View view, Canvas c, ComplexReceiver emojiStatusReceiver, int left, int viewWidth) {
+    final int viewHeight = view.getMeasuredHeight();
+    final boolean twoLines = !forceSingleLine && trimmedSubtitle != null;
+    final int titleHeight = trimmedTitle != null ? trimmedTitle.getHeight() : 0;
+    final int subtitleHeight = twoLines ? trimmedSubtitle.getHeight() : 0;
+    final int titleY = (viewHeight - titleHeight - subtitleHeight) / 2;
+    int offset = 0;
+    if (trimmedTitle != null) {
+      trimmedTitle.draw(c, left, titleY);
+      offset += trimmedTitle.getWidth();
+    }
+    if (emojiStatusDrawable != null) {
+      emojiStatusDrawable.draw(c, left + offset + Screen.dp(6f), titleY, 1f, emojiStatusReceiver);
+      offset += emojiStatusDrawable.getWidth(Screen.dp(6f));
+    }
+    if (adminSign != null) {
+      final boolean isCreator = memberInfo != null && TD.isCreator(memberInfo.status);
+      adminSign.draw(c, viewWidth - Screen.dp(XGRAM_PADDING) - adminSign.getWidth(), viewHeight / 2 - adminSign.getHeight() / 2, isCreator ? com.fahadali.xgram.appearance.XgramM3Profile.TEXT_PRIMARY : null);
+    }
+    if (twoLines) {
+      trimmedSubtitle.draw(c, left, titleY + titleHeight, isOnline ? com.fahadali.xgram.appearance.XgramM3Profile.TEXT_PRIMARY : null);
+    }
+    if (trimmedTitle != null && chatMark != null) {
+      final int badgeLeft = left + offset + Screen.dp(8f);
+      final float centerY = titleY + titleHeight / 2f;
+      com.fahadali.xgram.appearance.XgramM3Profile.drawBadge(c, badgeLeft, centerY, chatMark.getWidth());
+      final int labelLeft = badgeLeft + (com.fahadali.xgram.appearance.XgramM3Profile.badgeWidth(chatMark.getWidth()) - chatMark.getWidth()) / 2;
+      chatMark.draw(c, labelLeft, labelLeft + chatMark.getWidth(), 0, Math.round(centerY - chatMark.getLineHeight(false) / 2f));
     }
   }
 

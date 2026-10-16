@@ -74,6 +74,73 @@ public final class XgramM3Profile {
     return provider;
   }
 
+  // M3 list item text (Compose ListTokens): label text bodyLarge in onSurface, supporting text bodyMedium in
+  // onSurfaceVariant, trailing supporting text labelSmall in onSurfaceVariant. Used by every shared media row on the
+  // profile (Docs, Music, Voice, Groups in common, Members) so all tabs read the same.
+
+  /** List item headline: bodyLarge (16sp, weight 400); allBold() keeps the weight. */
+  public static TextStyleProvider listHeadlineProvider () {
+    return flexProvider(XgramExpressive.TS_BODY_L, false, XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_L));
+  }
+
+  /** List item supporting text: bodyMedium (14sp, weight 400; entities in the emphasized weight). */
+  public static TextStyleProvider listSupportingProvider () {
+    return flexTextProvider(XgramExpressive.TS_BODY_M, XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_M));
+  }
+
+  /** Trailing supporting text and badge labels: labelSmall (11sp, weight 500). */
+  public static TextStyleProvider listTrailingProvider () {
+    return flexProvider(XgramExpressive.TS_LABEL_S, false, XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_S));
+  }
+
+  /** onSurface, resolved at draw time. */
+  public static final org.thunderdog.challegram.util.text.TextColorSet TEXT_ON_SURFACE = () -> XgramExpressive.color(XgramExpressive.ON_SURFACE);
+  /** onSurfaceVariant, resolved at draw time. */
+  public static final org.thunderdog.challegram.util.text.TextColorSet TEXT_ON_SURFACE_VARIANT = () -> XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+  /** primary (online status, the owner's tag), resolved at draw time. */
+  public static final org.thunderdog.challegram.util.text.TextColorSet TEXT_PRIMARY = () -> XgramExpressive.color(XgramExpressive.PRIMARY);
+  /** onError (the label of a large badge), resolved at draw time. */
+  public static final org.thunderdog.challegram.util.text.TextColorSet TEXT_ON_ERROR = () -> XgramExpressive.color(XgramExpressive.ON_ERROR);
+
+  private static @androidx.annotation.Nullable android.text.TextPaint trailingPaint;
+
+  /** labelSmall for trailing supporting text drawn with Canvas.drawText (a track's duration); the color is set per call. */
+  public static android.text.TextPaint trailingPaint (@ColorInt int color) {
+    android.text.TextPaint paint = trailingPaint;
+    if (paint == null) {
+      paint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+      paint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_S, false));
+      paint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_S)));
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        paint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_S) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_S));
+      }
+      trailingPaint = paint;
+    }
+    paint.setColor(color);
+    return paint;
+  }
+
+  // M3 badge (Compose BadgeTokens): large badge 16dp tall, full corners, error container, labelSmall in onError,
+  // 4dp horizontal padding
+
+  public static final float BADGE_LARGE_SIZE = 16f, BADGE_PADDING = 4f;
+
+  private static final RectF badgeRect = new RectF();
+  private static final Paint badgePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+  /** The width of a large badge around a label {@code labelWidth} wide. */
+  public static int badgeWidth (int labelWidth) {
+    return Math.max(Screen.dp(BADGE_LARGE_SIZE), labelWidth + Screen.dp(BADGE_PADDING) * 2);
+  }
+
+  /** Fills a large badge starting at {@code left}, centered on {@code centerY}; the caller draws the label in onError. */
+  public static void drawBadge (Canvas c, float left, float centerY, int labelWidth) {
+    final float half = Screen.dp(BADGE_LARGE_SIZE) / 2f;
+    badgeRect.set(left, centerY - half, left + badgeWidth(labelWidth), centerY + half);
+    badgePaint.setColor(XgramExpressive.color(XgramExpressive.ERROR));
+    c.drawRoundRect(badgeRect, half, half, badgePaint);
+  }
+
   // Segmented list grouping (the same rules as the list decoration, with EMPTY_OFFSET opening a group)
 
   private static boolean isFrameType (int type) {

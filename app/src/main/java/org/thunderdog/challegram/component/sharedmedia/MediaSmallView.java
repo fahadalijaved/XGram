@@ -113,6 +113,9 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
       }
     }
     this.item = item;
+    if (xgramPress != null) {
+      xgramPress.setValue(0f); // XGram: a rebound tile is not pressed
+    }
     if (item != null) {
       miniThumbnail.requestFile(item.getMiniThumbnail());
       if (item.hasSpoiler()) {
@@ -139,7 +142,63 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
 
   @Override
   public boolean onTouchEvent (MotionEvent e) {
+    if (helper != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramTrackPress(e); // XGram: M3 pressed state layer
+    }
     return helper != null && helper.onTouchEvent(this, e);
+  }
+
+  // XGram: Material 3 pressed state layer on a tile: onSurface at 10% in the tile's 4dp shape, faded in and out on
+  // the fast effects spring. A scroll (the list cancels the touch) or a move past the touch slop drops it.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress;
+  private float xgramDownX, xgramDownY;
+  private int xgramTouchSlop = -1;
+
+  private void xgramSetPressed (boolean pressed) {
+    if (xgramPress == null) {
+      if (!pressed) {
+        return;
+      }
+      xgramPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> invalidate());
+    }
+    xgramPress.animateTo(pressed ? 1f : 0f);
+  }
+
+  private void xgramTrackPress (MotionEvent e) {
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN: {
+        xgramDownX = e.getX();
+        xgramDownY = e.getY();
+        xgramSetPressed(true);
+        break;
+      }
+      case MotionEvent.ACTION_MOVE: {
+        if (xgramTouchSlop < 0) {
+          xgramTouchSlop = android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop();
+        }
+        if (Math.abs(e.getX() - xgramDownX) > xgramTouchSlop || Math.abs(e.getY() - xgramDownY) > xgramTouchSlop) {
+          xgramSetPressed(false);
+        }
+        break;
+      }
+      case MotionEvent.ACTION_UP:
+      case MotionEvent.ACTION_CANCEL: {
+        xgramSetPressed(false);
+        break;
+      }
+    }
+  }
+
+  private void xgramDrawPressLayer (Canvas c, float radius) {
+    final float factor = xgramPress != null ? Math.max(0f, Math.min(1f, xgramPress.getValue())) : 0f;
+    if (factor <= 0f) {
+      return;
+    }
+    RectF rect = Paints.getRectF();
+    rect.set(0, 0, getMeasuredWidth(), getMeasuredHeight());
+    final int color = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+    c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(color, com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED * factor)));
   }
 
   private float selectableFactor;
@@ -350,6 +409,10 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
 
     if (saved) {
       c.restore();
+    }
+
+    if (xgramM3) {
+      xgramDrawPressLayer(c, xgramRadius);
     }
 
     if (this.selectableFactor != 0f) {
