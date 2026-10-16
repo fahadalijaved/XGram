@@ -823,14 +823,14 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
       // XGram: two cards behind the photo, the community's other chats (as in Telegram).
       float radius = avatarReceiver.getDisplayRadius();
       int color = Theme.getColor(ColorId.text);
-      // M3E: a tonal stack that peeks out on the end side (the start side is clipped by the screen edge with the
-      // M3E avatar inset), in surface container highest behind secondary container.
+      // M3E: a single tonal card in secondary container that peeks 6dp out on the end side (the start side is clipped
+      // by the screen edge with the M3E avatar inset); a surface-toned second card would read as a smudge on the row.
       boolean m3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
-      for (int i = 2; i >= 1; i--) {
-        float shift = m3 ? Screen.dp(3.5f) * i * (rtl ? -1 : 1) : Screen.dp(4f) * i * (rtl ? 1 : -1), inset = Screen.dp(3.5f) * i;
+      for (int i = m3 ? 1 : 2; i >= 1; i--) {
+        float shift = m3 ? Screen.dp(6f) * (rtl ? -1 : 1) : Screen.dp(4f) * i * (rtl ? 1 : -1), inset = m3 ? Screen.dp(4f) : Screen.dp(3.5f) * i;
         xgramCardRect.set(avatarReceiver.getLeft() + shift, avatarReceiver.getTop() + inset, avatarReceiver.getRight() + shift, avatarReceiver.getBottom() - inset);
         int cardColor = m3 ?
-          com.fahadali.xgram.appearance.XgramExpressive.color(i == 1 ? com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST) :
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) :
           ColorUtils.alphaColor(i == 1 ? .14f : .07f, color);
         c.drawRoundRect(xgramCardRect, radius, radius, Paints.fillingPaint(cardColor));
       }

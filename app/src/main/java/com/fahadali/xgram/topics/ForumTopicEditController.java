@@ -13,7 +13,11 @@ package com.fahadali.xgram.topics;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -26,6 +30,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramShapes;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
@@ -65,7 +72,15 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
 
   private static final int SPAN_COUNT = 6;
   private static final int VIEW_TYPE_HEADER = 0, VIEW_TYPE_TITLE = 1, VIEW_TYPE_ICON = 2;
+  /** Adapter position of the first icon ("no icon"), after the header and the title. */
+  private static final int FIRST_ICON_POSITION = 2;
+  /** M3E: space under the list for the Done button (56dp, 16dp from the bottom) plus a 16dp gap. */
+  private static final float DONE_CLEARANCE = 88f;
+  /** M3E: space above the first and below the last row of icons inside their container. */
+  private static final float GRID_PADDING = 8f;
 
+  /** Expressive design when the page was built (it keeps that look until it is closed). */
+  private boolean expressive;
   private int color;
   private long customEmojiId;
   private String name = "";
@@ -100,6 +115,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
+    expressive = XgramExpressive.isEnabled();
     TdApi.ForumTopic topic = getArgumentsStrict().topic;
     if (topic != null) {
       name = topic.info.name;
@@ -121,6 +137,13 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     recyclerView.setLayoutManager(manager);
     recyclerView.setItemAnimator(null);
     recyclerView.setAdapter(adapter);
+    if (expressive) {
+      // M3E (until the page is drawn in Compose): the name in a surfaceBright card and the icons in a surfaceBright
+      // container, both 16dp from the edges; the list ends clear of the Done button.
+      recyclerView.addItemDecoration(new ExpressiveDecoration());
+      addThemeInvalidateListener(recyclerView);
+      applyExpressivePadding(recyclerView);
+    }
 
     if (!isGeneral()) {
       tdlib.send(new TdApi.GetForumTopicDefaultIcons(), (stickers, error) -> runOnUiThreadOptional(() -> {
@@ -151,6 +174,20 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     if (isCreating() && nameInput != null) {
       Keyboard.show(nameInput.getEditText());
     }
+  }
+
+  @Override
+  protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
+    super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
+    if (expressive && getRecyclerView() != null) {
+      applyExpressivePadding(getRecyclerView()); // the base class has just set the bottom padding to the inset alone
+    }
+  }
+
+  private void applyExpressivePadding (RecyclerView recyclerView) {
+    int inset = Screen.dp(XgramExpressive.LIST_INSET);
+    recyclerView.setPadding(inset, recyclerView.getPaddingTop(), inset, extraBottomInset + Screen.dp(DONE_CLEARANCE));
+    recyclerView.setClipToPadding(false);
   }
 
   private static long emojiIdOf (TdApi.Sticker sticker) {
@@ -249,6 +286,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     private AnimatedEmojiDrawable emoji;
     private long emojiId;
     private boolean isSelected, isAttached;
+    private Path selectedShape;
+    private Matrix selectedMatrix;
+    private float selectedShapeSize, selectedShapeX, selectedShapeY;
 
     IconView (Context context, Tdlib tdlib) {
       super(context);
@@ -345,7 +385,22 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       int size = Math.min(getMeasuredWidth(), getMeasuredHeight());
       int iconSize = (int) (size * .62f);
       int left = (getMeasuredWidth() - iconSize) / 2, top = (getMeasuredHeight() - iconSize) / 2;
-      if (isSelected) {
+      if (isSelected && XgramExpressive.isEnabled()) {
+        // M3E: the selected icon sits on a tonal cookie in secondary container instead of a ring
+        float shapeSize = size - Screen.dp(8f), x = getMeasuredWidth() / 2f, y = getMeasuredHeight() / 2f;
+        if (selectedShape == null) {
+          selectedShape = new Path();
+          selectedMatrix = new Matrix();
+        }
+        if (selectedShapeSize != shapeSize || selectedShapeX != x || selectedShapeY != y) {
+          selectedShapeSize = shapeSize;
+          selectedShapeX = x;
+          selectedShapeY = y;
+          XgramShapes.toPath(XgramShapes.COOKIE_12, selectedShape);
+          XgramShapes.fit(selectedShape, x, y, shapeSize, 0f, selectedMatrix);
+        }
+        c.drawPath(selectedShape, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER)));
+      } else if (isSelected) {
         Paint paint = Paints.getProgressPaint(Theme.getColor(ColorId.iconActive), Screen.dp(2f));
         c.drawCircle(getMeasuredWidth() / 2f, getMeasuredHeight() / 2f, size / 2f - Screen.dp(4f), paint);
       }
@@ -354,6 +409,79 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         d.setBounds(left, top, left + iconSize, top + iconSize);
         d.draw(c);
       }
+    }
+  }
+
+  /**
+   * M3E: 8dp above the name card, and a surfaceBright container (list corners) behind the icon grid with 8dp above
+   * its first and below its last row. The list's 16dp side padding insets the card, the title and the grid alike.
+   */
+  private final class ExpressiveDecoration extends RecyclerView.ItemDecoration {
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path path = new Path();
+    private final RectF rect = new RectF();
+    private final float[] radii = new float[8];
+
+    private int lastRow () {
+      return (adapter.getItemCount() - 1 - FIRST_ICON_POSITION) / SPAN_COUNT;
+    }
+
+    @Override
+    public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      outRect.set(0, 0, 0, 0);
+      int position = parent.getChildAdapterPosition(view);
+      if (position == RecyclerView.NO_POSITION || position >= adapter.getItemCount()) {
+        return;
+      }
+      int viewType = adapter.getItemViewType(position);
+      if (viewType == VIEW_TYPE_HEADER) {
+        outRect.top = Screen.dp(8f);
+      } else if (viewType == VIEW_TYPE_ICON) {
+        int row = (position - FIRST_ICON_POSITION) / SPAN_COUNT;
+        if (row == 0) {
+          outRect.top = Screen.dp(GRID_PADDING);
+        }
+        if (row == lastRow()) {
+          outRect.bottom = Screen.dp(GRID_PADDING);
+        }
+      }
+    }
+
+    @Override
+    public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      RecyclerView.LayoutManager manager = parent.getLayoutManager();
+      int itemCount = adapter.getItemCount();
+      if (manager == null || itemCount <= FIRST_ICON_POSITION) {
+        return;
+      }
+      final int lastRow = lastRow();
+      float top = Float.MAX_VALUE, bottom = -Float.MAX_VALUE;
+      boolean hasFirstRow = false, hasLastRow = false;
+      for (int i = 0; i < parent.getChildCount(); i++) {
+        View child = parent.getChildAt(i);
+        int position = parent.getChildAdapterPosition(child);
+        if (position < FIRST_ICON_POSITION || position >= itemCount) {
+          continue;
+        }
+        int row = (position - FIRST_ICON_POSITION) / SPAN_COUNT;
+        hasFirstRow |= row == 0;
+        hasLastRow |= row == lastRow;
+        top = Math.min(top, manager.getDecoratedTop(child) + child.getTranslationY());
+        bottom = Math.max(bottom, manager.getDecoratedBottom(child) + child.getTranslationY());
+      }
+      if (top >= bottom) {
+        return;
+      }
+      // Rows scrolled away keep their side of the container square, so it runs on past the screen edge.
+      float outer = Screen.dpf(XgramExpressive.LIST_OUTER_CORNER);
+      float topRadius = hasFirstRow ? outer : 0f, bottomRadius = hasLastRow ? outer : 0f;
+      radii[0] = radii[1] = radii[2] = radii[3] = topRadius;
+      radii[4] = radii[5] = radii[6] = radii[7] = bottomRadius;
+      rect.set(parent.getPaddingLeft(), top, parent.getWidth() - parent.getPaddingRight(), bottom);
+      path.rewind();
+      path.addRoundRect(rect, radii, Path.Direction.CW);
+      paint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_BRIGHT));
+      c.drawPath(path, paint);
     }
   }
 
@@ -384,9 +512,17 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           LinearLayout layout = new LinearLayout(context);
           layout.setOrientation(LinearLayout.HORIZONTAL);
           layout.setGravity(Gravity.CENTER_VERTICAL);
-          layout.setPadding(Screen.dp(12f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
           layout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-          RippleSupport.setSimpleWhiteBackground(layout);
+          if (expressive) {
+            // M3E: a surfaceBright card with list corners; the icon's glyph starts 16dp in
+            XgramExpressive.MorphDrawable card = new XgramExpressive.MorphDrawable(0, XgramExpressive.LIST_OUTER_CORNER, Float.NaN);
+            card.setColorRole(XgramExpressive.SURFACE_BRIGHT);
+            layout.setBackground(card);
+            layout.setPadding(Screen.dp(4f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
+          } else {
+            layout.setPadding(Screen.dp(12f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
+            RippleSupport.setSimpleWhiteBackground(layout);
+          }
 
           preview = new IconView(context, tdlib);
           preview.setOnClickListener(v -> onPreviewClicked());
@@ -414,6 +550,11 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           title.setTextColor(Theme.getColor(ColorId.textNeutral));
           addThemeTextColorListener(title, ColorId.textNeutral);
           title.setPadding(Screen.dp(16f), Screen.dp(16f), Screen.dp(16f), Screen.dp(8f));
+          if (expressive) {
+            // M3E: a labelLarge section header; textNeutral already resolves to primary
+            XgramExpressive.applyText(title, XgramExpressive.TS_LABEL_L, false);
+            title.setPadding(Screen.dp(16f), Screen.dp(20f), Screen.dp(16f), Screen.dp(8f));
+          }
           title.setText(Lang.getString(isCreating() ? R.string.XgramTopicIconCreateHint : R.string.XgramTopicIcon));
           title.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
           return new Holder(title);
@@ -422,7 +563,12 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         default: {
           IconView view = new IconView(context, tdlib);
           view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f)));
-          RippleSupport.setTransparentSelector(view);
+          if (expressive) {
+            // M3E: a round 48dp state layer instead of a full-cell rectangle
+            XgramExpressive.attachPressMorph(view, 0, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_FULL).setSize(48f, 48f, Gravity.CENTER);
+          } else {
+            RippleSupport.setTransparentSelector(view);
+          }
           view.setOnClickListener(v -> {
             Object tag = v.getTag();
             onIconSelected(tag instanceof Long ? (Long) tag : 0L);
