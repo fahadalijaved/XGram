@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the Expressive design call screen (XgramM3CallScreen) -->
+  <string name="XgramM3CallBranding">Telegram call</string>
+  <string name="XgramM3CallMute">Mute</string>
+  <string name="XgramM3CallSpeaker">Speaker</string>
+  <string name="XgramM3CallBluetooth">Bluetooth</string>
+  <string name="XgramM3CallMessage">Message</string>
+  <string name="XgramM3CallEnd">End call</string>
+  <string name="XgramM3CallAnswer">Answer</string>
+  <string name="XgramM3CallDecline">Decline</string>
+  <string name="XgramM3CallSwipeHint">Slide to answer or decline</string>
+  <string name="XgramM3CallClose">Close</string>
+  <string name="XgramM3CallAgain">Call again</string>
+  <string name="XgramM3CallKey">Encryption key</string>
+  <string name="XgramM3CallKeyShow">Show the encryption key</string>
+</resources>
