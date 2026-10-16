@@ -32,12 +32,14 @@ import org.thunderdog.challegram.widget.RootFrameLayout
  * plus the status bar); this view pulls itself up by that much, so the page spans the whole height and draws its own
  * Material 3 app bar behind the status bar and the see-through header. The top inset comes from the same place and
  * formula as NavigationLayout.applyTopInset, so both stay in step. The view has no background: Compose paints it.
+ * With [pullUnderHeader] false it stays below the header (Telegram X pages drawn in Compose).
  */
 @SuppressLint("ViewConstructor")
 class XgramComposeRoot(
   context: Context,
   owner: XgramComposeOwner,
   private val onTopInset: (Int) -> Unit,
+  private val pullUnderHeader: Boolean = true,
   content: @Composable () -> Unit
 ) : FrameLayoutFix(context), RootFrameLayout.InsetsChangeListener {
   private var rootFrame: RootFrameLayout? = null
@@ -96,6 +98,10 @@ class XgramComposeRoot(
 
   private fun applyTopInset(top: Int) {
     onTopInset(top)
+    if (!pullUnderHeader) {
+      // A Telegram X page drawn in Compose (compose.tgx): it keeps Telegram X's header and sits below it.
+      return
+    }
     val pull = HeaderView.getSize(false) + top
     val params = layoutParams as? ViewGroup.MarginLayoutParams ?: return
     if (params.topMargin != -pull) {

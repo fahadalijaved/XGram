@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -201,9 +202,29 @@ class GroupScope internal constructor() {
     }
   }
 
-  /** Anything else in the group's shape (use the given shapes for the corners). [id] lets search highlight it. */
-  fun custom(key: Any, id: Int = 0, content: @Composable (ListItemShapes) -> Unit) =
-    add(id, key.toString(), PageBlock.TYPE_CUSTOM, content)
+  /** One option of a multiple choice: a leading checkbox; the whole row toggles it. */
+  fun checkbox(
+    id: Int,
+    title: String,
+    checked: Boolean,
+    subtitle: String? = null,
+    enabled: Boolean = true,
+    key: String? = null,
+    onChange: (Boolean) -> Unit
+  ) = add(id, key, PageBlock.TYPE_CHECKBOX) { shapes ->
+    val host = LocalXgramHost.current
+    SettingsCheckboxRow(title, subtitle, checked, shapes, enabled, id, key) {
+      onChange(!checked)
+      host.changed()
+    }
+  }
+
+  /**
+   * Anything else in the group's shape (use the given shapes for the corners). [id] lets search highlight it. [type] is
+   * its content type in the list: rows drawn alike share one, so scrolling reuses them.
+   */
+  fun custom(key: Any, id: Int = 0, type: Int = PageBlock.TYPE_CUSTOM, content: @Composable (ListItemShapes) -> Unit) =
+    add(id, key.toString(), type, content)
 }
 
 /**
@@ -432,6 +453,33 @@ fun SettingsRadioRow(
     modifier = Modifier.semantics { role = Role.RadioButton },
     enabled = enabled,
     leadingContent = { RadioButton(selected = selected, onClick = null, enabled = enabled) },
+    supportingContent = subtitle?.let { { Text(it) } },
+    colors = settingsRowColors(id, key),
+    content = { Text(title) }
+  )
+}
+
+/** A checkbox row: the row is the toggle target, so the checkbox itself takes no clicks. */
+@Composable
+fun SettingsCheckboxRow(
+  title: String,
+  subtitle: String?,
+  checked: Boolean,
+  shapes: ListItemShapes,
+  enabled: Boolean = true,
+  id: Int = 0,
+  key: String? = null,
+  onClick: () -> Unit
+) {
+  SegmentedListItem(
+    onClick = onClick,
+    shapes = shapes,
+    modifier = Modifier.semantics {
+      role = Role.Checkbox
+      toggleableState = ToggleableState(checked)
+    },
+    enabled = enabled,
+    leadingContent = { Checkbox(checked = checked, onCheckedChange = null, enabled = enabled) },
     supportingContent = subtitle?.let { { Text(it) } },
     colors = settingsRowColors(id, key),
     content = { Text(title) }

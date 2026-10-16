@@ -782,6 +782,8 @@
   <string name="XgramExpressive">Expressive design</string>
   <string name="XgramExpressiveSub">Material 3 Expressive look</string>
   <string name="XgramExpressiveInfo">Shapes, motion and lists follow Material 3 Expressive. The app restarts to apply the change.</string>
+  <string name="XgramComposeTgx">New look for Telegram X pages</string>
+  <string name="XgramComposeTgxSub">Privacy, data, notifications and themes in Material 3 Expressive; off keeps the classic lists</string>
   <!-- XGram: adaptive part 1, foldables (Appearance > Layout) -->
   <string name="XgramFoldHingeSplit">Split panes at the fold</string>
   <string name="XgramFoldHingeSplitSub">When half open like a book</string>

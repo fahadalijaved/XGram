@@ -16,6 +16,8 @@ package com.fahadali.xgram.compose.ui
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +39,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MediumFlexibleTopAppBar
@@ -53,6 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -153,16 +159,40 @@ fun SettingsPage(
     val contentPadding = remember(padding, host, density) { PagePadding(padding, host, density) }
     CompositionLocalProvider(LocalXgramHighlight provides highlight) {
       Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        LazyColumn(
-          modifier = Modifier.fillMaxHeight().widthIn(max = MaxPageWidth).fillMaxWidth(),
-          state = listState,
-          contentPadding = contentPadding
-        ) {
-          items(blocks, key = { it.key }, contentType = { it.type }) { block ->
-            block.content()
-          }
-        }
+        SettingsList(blocks, listState, contentPadding)
         overlay()
+      }
+    }
+  }
+}
+
+/**
+ * The list of a settings page: one lazy item per block, at most [MaxPageWidth] wide (center it in a Box). Shared by
+ * [SettingsPage] and the Compose renderer of Telegram X pages (compose.tgx), which keeps Telegram X's header and has no
+ * app bar of its own. [animateItems]: blocks fade in and out and move when the page adds or removes rows.
+ */
+@Composable
+fun SettingsList(
+  blocks: List<PageBlock>,
+  listState: LazyListState,
+  contentPadding: PaddingValues,
+  modifier: Modifier = Modifier,
+  animateItems: Boolean = false
+) {
+  LazyColumn(
+    modifier = modifier.fillMaxHeight().widthIn(max = MaxPageWidth).fillMaxWidth(),
+    state = listState,
+    contentPadding = contentPadding
+  ) {
+    if (animateItems) {
+      items(blocks, key = { it.key }, contentType = { it.type }) { block ->
+        Box(Modifier.fillMaxWidth().animateItem()) {
+          block.content()
+        }
+      }
+    } else {
+      items(blocks, key = { it.key }, contentType = { it.type }) { block ->
+        block.content()
       }
     }
   }
@@ -227,6 +257,7 @@ class PageBlock internal constructor(
     const val TYPE_SLIDER = 12
     const val TYPE_RADIO = 13
     const val TYPE_CUSTOM = 14
+    const val TYPE_CHECKBOX = 15
   }
 }
 
@@ -261,6 +292,12 @@ class PageScope internal constructor() {
     add("h:$title", PageBlock.TYPE_HEADER, emptyList()) { SettingsHeader(title, icon, top) }
   }
 
+  /** A header whose text may change (Telegram X pages): [key] keeps it the same item. */
+  fun header(title: String, key: Any) {
+    val top = if (blocks.isEmpty()) 8.dp else 20.dp
+    add("h:$key", PageBlock.TYPE_HEADER, emptyList()) { SettingsHeader(title, 0, top) }
+  }
+
   /** One or two sentences under a group, in onSurfaceVariant. */
   fun description(@StringRes text: Int) = description(s(text), "d:$text")
 
@@ -268,6 +305,21 @@ class PageScope internal constructor() {
   fun description(text: CharSequence, key: Any) {
     val string = text.toString()
     add("d:$key", PageBlock.TYPE_DESCRIPTION, emptyList()) { SettingsDescription(string) }
+  }
+
+  /** A description with styles and links (LinkAnnotation.Clickable): Telegram X's spanned texts. */
+  fun description(text: AnnotatedString, key: Any) {
+    add("d:$key", PageBlock.TYPE_DESCRIPTION, emptyList()) { SettingsDescription(text) }
+  }
+
+  /** The empty state of a list: an icon (0: none) over a line of text, centered. */
+  fun empty(@DrawableRes icon: Int, text: String, key: Any = "empty") {
+    add("e:$key", PageBlock.TYPE_ITEM, emptyList()) { SettingsEmpty(icon, text) }
+  }
+
+  /** A list that is still loading: an M3 Expressive LoadingIndicator, centered. */
+  fun loading(key: Any = "loading") {
+    add("l:$key", PageBlock.TYPE_ITEM, emptyList()) { SettingsLoading() }
   }
 
   /**
@@ -317,4 +369,37 @@ fun SettingsDescription(text: String) {
     style = MaterialTheme.typography.bodyMedium,
     color = MaterialTheme.colorScheme.onSurfaceVariant
   )
+}
+
+@Composable
+fun SettingsDescription(text: AnnotatedString, centered: Boolean = false) {
+  Text(
+    text,
+    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+    style = MaterialTheme.typography.bodyMedium,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    textAlign = if (centered) TextAlign.Center else TextAlign.Start
+  )
+}
+
+@Composable
+fun SettingsEmpty(@DrawableRes icon: Int, text: String) {
+  val cs = MaterialTheme.colorScheme
+  Column(
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 48.dp),
+    horizontalAlignment = Alignment.CenterHorizontally
+  ) {
+    if (icon != 0) {
+      Icon(tgxIcon(icon), contentDescription = null, modifier = Modifier.size(48.dp), tint = cs.onSurfaceVariant)
+      Spacer(Modifier.height(16.dp))
+    }
+    Text(text, style = MaterialTheme.typography.bodyLarge, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
+  }
+}
+
+@Composable
+fun SettingsLoading() {
+  Box(Modifier.fillMaxWidth().padding(vertical = 48.dp), contentAlignment = Alignment.Center) {
+    LoadingIndicator()
+  }
 }

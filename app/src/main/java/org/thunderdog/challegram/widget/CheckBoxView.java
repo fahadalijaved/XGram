@@ -62,6 +62,14 @@ public class CheckBoxView extends View {
     isChecked.setValue(checked, animated);
   }
 
+  public boolean isChecked () { // XGram: read by the Compose renderer of Telegram X pages
+    return isChecked.getValue();
+  }
+
+  public boolean isPartiallyChecked () {
+    return isPartially.getValue();
+  }
+
   public void setHidden (boolean hidden, final boolean animated) {
     isHidden.setValue(hidden, animated);
   }

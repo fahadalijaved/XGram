@@ -208,6 +208,13 @@ private fun PageScope.expressive(host: XgramComposeHost) {
         }
       )
     }
+    if (XgramExpressive.isEnabled()) {
+      // Telegram X's own settings pages drawn in Compose (com.fahadali.xgram.compose.tgx); applies to pages opened next.
+      val settings = XgramSettings.instance()
+      switch(R.id.btn_xgramComposeTgx, s(R.string.XgramComposeTgx), s(R.string.XgramComposeTgxSub), checked = settings.composeTgxPages()) {
+        settings.setComposeTgxPages(it)
+      }
+    }
   }
   description(R.string.XgramExpressiveInfo)
 }

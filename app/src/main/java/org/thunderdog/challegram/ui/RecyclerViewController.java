@@ -64,6 +64,14 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
 
   private CustomRecyclerView recyclerView;
 
+  // XGram: with Expressive design, an allowlisted page draws its SettingsAdapter rows in Compose M3E
+  // (com.fahadali.xgram.compose.tgx); null on every other page and with Expressive design off (the classic list).
+  private com.fahadali.xgram.compose.tgx.TgxSettingsRenderer composeRenderer;
+
+  public final com.fahadali.xgram.compose.tgx.TgxSettingsRenderer xgramComposeRenderer () {
+    return composeRenderer;
+  }
+
   protected @ColorId
   int getRecyclerBackground () {
     return ColorId.background;
@@ -116,6 +124,9 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
     if (needRecyclerBottomInset()) {
       Views.applyBottomInset(recyclerView, extraBottomInset);
     }
+    if (composeRenderer != null) {
+      composeRenderer.setBottomInset(needRecyclerBottomInset() ? extraBottomInset : 0);
+    }
   }
 
   protected FrameLayout createFrameLayout (Context context) {
@@ -161,6 +172,7 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
     onCreateView(context, recyclerView);
     com.fahadali.xgram.appearance.XgramMotion.attachScrollLink(this, recyclerView, 0);
     wrap.addView(recyclerView);
+    composeRenderer = com.fahadali.xgram.compose.tgx.TgxSettingsRenderer.attachIfAllowed(this, wrap, recyclerView, -1, needRecyclerBottomInset() ? extraBottomInset : 0); // XGram: null keeps the classic list
     if (needPersistentScrollPosition()) {
       restorePersistentScrollPosition();
     }
@@ -182,6 +194,44 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
           nScroll = super.scrollVerticallyBy(dx, recycler, state);
         }
         return nScroll;
+      }
+
+      // XGram: on a Compose page (composeRenderer) the list is parked and empty; rows are the renderer's views.
+
+      @Override
+      public View findViewByPosition (int position) {
+        View view = super.findViewByPosition(position);
+        if (view == null && composeRenderer != null && getChildCount() == 0 && !recyclerView.isComputingLayout()) {
+          view = composeRenderer.viewAt(position);
+        }
+        return view;
+      }
+
+      @Override
+      public void scrollToPositionWithOffset (int position, int offset) {
+        if (composeRenderer != null) {
+          composeRenderer.scrollTo(position, offset, false);
+        } else {
+          super.scrollToPositionWithOffset(position, offset);
+        }
+      }
+
+      @Override
+      public void scrollToPosition (int position) {
+        if (composeRenderer != null) {
+          composeRenderer.scrollTo(position, 0, false);
+        } else {
+          super.scrollToPosition(position);
+        }
+      }
+
+      @Override
+      public void smoothScrollToPosition (RecyclerView rv, RecyclerView.State state, int position) {
+        if (composeRenderer != null) {
+          composeRenderer.scrollTo(position, 0, true);
+        } else {
+          super.smoothScrollToPosition(rv, state, position);
+        }
       }
     });
     recyclerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -232,6 +282,9 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
   protected void handleLanguageDirectionChange () {
     super.handleLanguageDirectionChange();
     Views.setScrollBarPosition(recyclerView);
+    if (composeRenderer != null) {
+      composeRenderer.onLanguageChanged();
+    }
   }
 
   @Override
@@ -240,10 +293,17 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
     if (adapterListener != null) {
       adapterListener.onLanguagePackEvent(event, arg1);
     }
+    if (composeRenderer != null) {
+      composeRenderer.onLanguageChanged();
+    }
   }
 
   @Override
   public void onScrollToTopRequested () {
+    if (composeRenderer != null) {
+      composeRenderer.scrollToTop();
+      return;
+    }
     if (recyclerView.getAdapter() != null) {
       try {
         LinearLayoutManager manager = (LinearLayoutManager) getRecyclerView().getLayoutManager();
@@ -275,7 +335,7 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
 
   @Override
   public View getViewForApplyingOffsets () {
-    return recyclerView;
+    return composeRenderer != null ? composeRenderer.getView() : recyclerView;
   }
 
   public CustomRecyclerView getRecyclerView () {
@@ -308,7 +368,37 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
   @Override
   public void destroy () {
     super.destroy();
+    if (composeRenderer != null) {
+      composeRenderer.destroy();
+      composeRenderer = null;
+    }
     Views.destroyRecyclerView(recyclerView);
+  }
+
+  // XGram: the Compose page's lifecycle and swipe-back areas (sliders)
+
+  @Override
+  public void onFocus () {
+    super.onFocus();
+    if (composeRenderer != null) {
+      composeRenderer.onFocus();
+    }
+  }
+
+  @Override
+  public void onBlur () {
+    super.onBlur();
+    if (composeRenderer != null) {
+      composeRenderer.onBlur();
+    }
+  }
+
+  @Override
+  public boolean canSlideBackFrom (org.thunderdog.challegram.navigation.NavigationController navigationController, float x, float y) {
+    if (composeRenderer != null && !composeRenderer.canSlideBackFrom(navigationController, x, y)) {
+      return false;
+    }
+    return super.canSlideBackFrom(navigationController, x, y);
   }
 
   // Search

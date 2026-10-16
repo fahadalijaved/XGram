@@ -1225,9 +1225,10 @@ public final class XgramExpressive {
     return morph;
   }
 
-  // Lists (SettingsAdapter)
+  // Lists (SettingsAdapter). The grouping helpers are public: the Compose renderer of Telegram X pages
+  // (com.fahadali.xgram.compose.tgx) groups rows exactly as the list decoration does.
 
-  private static boolean isFrameType (int type) {
+  public static boolean isFrameType (int type) {
     switch (type) {
       case ListItem.TYPE_SHADOW_TOP:
       case ListItem.TYPE_SHADOW_BOTTOM:
@@ -1246,7 +1247,7 @@ public final class XgramExpressive {
     return false;
   }
 
-  private static boolean isHeaderType (int type) {
+  public static boolean isHeaderType (int type) {
     switch (type) {
       case ListItem.TYPE_HEADER:
       case ListItem.TYPE_HEADER_PADDED:
@@ -1260,7 +1261,7 @@ public final class XgramExpressive {
   }
 
   /** A tile of a group (anything that is not a shadow, separator, header, description or spacing). */
-  private static boolean isRowType (int type) {
+  public static boolean isRowType (int type) {
     if (isFrameType(type)) {
       return false;
     }
@@ -1279,12 +1280,12 @@ public final class XgramExpressive {
   }
 
   /** Opens a group: a SHADOW_TOP, or the empty offset a list (profile, Settings) starts with before its first rows. */
-  private static boolean isGroupOpener (int type) {
+  public static boolean isGroupOpener (int type) {
     return type == ListItem.TYPE_SHADOW_TOP || type == ListItem.TYPE_EMPTY_OFFSET || type == ListItem.TYPE_EMPTY_OFFSET_SMALL;
   }
 
   /** Between a group opener (see {@link #isGroupOpener}) and a SHADOW_BOTTOM. */
-  private static boolean isInGroup (List<ListItem> items, int position) {
+  public static boolean isInGroup (List<ListItem> items, int position) {
     // The list start also opens a group: TGX pages such as Interface Options start straight
     // with rows (no SHADOW_TOP) and close them with a SHADOW_BOTTOM. A list made only of rows
     // (no SHADOW_BOTTOM at all) still stays flat, as before.
@@ -1309,7 +1310,7 @@ public final class XgramExpressive {
     return false;
   }
 
-  private static int segmentOf (List<ListItem> items, int position) {
+  public static int segmentOf (List<ListItem> items, int position) {
     if (!isRowType(items.get(position).getViewType()) || !isInGroup(items, position)) {
       return SEGMENT_NONE;
     }

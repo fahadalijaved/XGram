@@ -61,6 +61,9 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
   private FrameLayoutFix contentView;
   protected RecyclerView recyclerView;
   private DoneButton doneButton;
+  // XGram: with Expressive design, an allowlisted page draws its SettingsAdapter rows in Compose M3E
+  // (com.fahadali.xgram.compose.tgx); null on every other page and with Expressive design off (the classic list).
+  private com.fahadali.xgram.compose.tgx.TgxSettingsRenderer composeRenderer;
   protected RecyclerView.ItemAnimator itemAnimator;
 
   protected @ColorId int getRecyclerBackgroundColorId () {
@@ -81,6 +84,9 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
     Views.applyBottomInset(recyclerView, extraBottomInset);
     Views.setBottomMargin(doneButton, Screen.dp(16f) - Screen.dp(4f) + extraBottomInset);
+    if (composeRenderer != null) {
+      composeRenderer.setBottomInset(extraBottomInset);
+    }
   }
 
   @Override
@@ -112,6 +118,8 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
     contentView.addView(doneButton);
 
     onCreateView(context, contentView, recyclerView);
+    // XGram: the Compose list goes right above the list, so the Done button stays on top; null keeps the classic list.
+    composeRenderer = com.fahadali.xgram.compose.tgx.TgxSettingsRenderer.attachIfAllowed(this, contentView, recyclerView, contentView.indexOfChild(recyclerView) + 1, extraBottomInset);
 
     FrameLayoutFix wrapper = new FrameLayoutFix(context);
     wrapper.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -127,7 +135,45 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
     RecyclerView recyclerView = (RecyclerView) Views.inflate(context(), R.layout.recycler, contentView);
     recyclerView.setItemAnimator(itemAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
     recyclerView.setHasFixedSize(true);
-    recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
+    recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false) {
+      // XGram: on a Compose page (composeRenderer) the list is parked and empty; rows are the renderer's views.
+
+      @Override
+      public View findViewByPosition (int position) {
+        View view = super.findViewByPosition(position);
+        if (view == null && composeRenderer != null && getChildCount() == 0 && !recyclerView.isComputingLayout()) {
+          view = composeRenderer.viewAt(position);
+        }
+        return view;
+      }
+
+      @Override
+      public void scrollToPositionWithOffset (int position, int offset) {
+        if (composeRenderer != null) {
+          composeRenderer.scrollTo(position, offset, false);
+        } else {
+          super.scrollToPositionWithOffset(position, offset);
+        }
+      }
+
+      @Override
+      public void scrollToPosition (int position) {
+        if (composeRenderer != null) {
+          composeRenderer.scrollTo(position, 0, false);
+        } else {
+          super.scrollToPosition(position);
+        }
+      }
+
+      @Override
+      public void smoothScrollToPosition (RecyclerView rv, RecyclerView.State state, int position) {
+        if (composeRenderer != null) {
+          composeRenderer.scrollTo(position, 0, true);
+        } else {
+          super.smoothScrollToPosition(rv, state, position);
+        }
+      }
+    });
     recyclerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     return recyclerView;
   }
@@ -328,9 +374,39 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
     }
   }
 
+  // XGram: the Compose page's lifecycle and swipe-back areas (sliders)
+
+  @Override
+  public void onBlur () {
+    super.onBlur();
+    if (composeRenderer != null) {
+      composeRenderer.onBlur();
+    }
+  }
+
+  @Override
+  public boolean canSlideBackFrom (org.thunderdog.challegram.navigation.NavigationController navigationController, float x, float y) {
+    if (composeRenderer != null && !composeRenderer.canSlideBackFrom(navigationController, x, y)) {
+      return false;
+    }
+    return super.canSlideBackFrom(navigationController, x, y);
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    if (composeRenderer != null) {
+      composeRenderer.destroy();
+      composeRenderer = null;
+    }
+  }
+
   @Override
   public void onFocus () {
     super.onFocus();
+    if (composeRenderer != null) {
+      composeRenderer.onFocus();
+    }
     if (needDoneFadeIn) {
       needDoneFadeIn = false;
       FactorAnimator animator = new FactorAnimator(DONE_FADE_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
@@ -344,6 +420,9 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
     super.handleLanguageDirectionChange();
     if (Views.setGravity(doneButton, (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.BOTTOM)) {
       Views.updateLayoutParams(doneButton);
+    }
+    if (composeRenderer != null) {
+      composeRenderer.onLanguageChanged();
     }
   }
 
@@ -365,6 +444,9 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
           // Nothing to change
           break;
       }
+    }
+    if (composeRenderer != null) {
+      composeRenderer.onLanguageChanged();
     }
   }
 

@@ -629,14 +629,18 @@ public final class XgramMotion {
     }
 
     void update (RecyclerView rv, boolean animated) {
+      update(collapseRange > 0 ? offset(rv) : 0, rv.canScrollVertically(-1), animated);
+    }
+
+    /** {@code offset}: how far the list is scrolled from its top (Integer.MAX_VALUE: past the first item). */
+    void update (int offset, boolean canScrollUp, boolean animated) {
       float newCollapse = 0f;
       if (collapseRange > 0) {
-        int offset = offset(rv);
         newCollapse = offset == Integer.MAX_VALUE ? 1f : clamp01(offset / (float) collapseRange);
       }
       boolean collapseChanged = newCollapse != collapse;
       collapse = newCollapse;
-      float liftTarget = rv.canScrollVertically(-1) ? 1f : 0f;
+      float liftTarget = canScrollUp ? 1f : 0f;
       if (liftSpring.getTarget() != liftTarget) {
         if (animated) {
           liftSpring.animateTo(liftTarget);
@@ -685,6 +689,25 @@ public final class XgramMotion {
     rv.addOnScrollListener(link);
     rv.post(() -> link.update(rv, false));
     return link;
+  }
+
+  /**
+   * The page's list moved to Compose (com.fahadali.xgram.compose.tgx): {@code rv} stays parked, so it no longer drives
+   * the link; the Compose list does, through {@link #updateScrollLink}.
+   */
+  public static void detachScrollLinkFrom (@Nullable ViewController<?> owner, @Nullable RecyclerView rv) {
+    ScrollLink link = linkOf(owner);
+    if (link != null && rv != null) {
+      rv.removeOnScrollListener(link);
+    }
+  }
+
+  /** A Compose list's scroll for {@code owner}'s link (as a RecyclerView's onScrolled): offset from the top, can scroll up. */
+  public static void updateScrollLink (@Nullable ViewController<?> owner, int offset, boolean canScrollUp) {
+    ScrollLink link = linkOf(owner);
+    if (link != null) {
+      link.update(offset, canScrollUp, true);
+    }
   }
 
   @Nullable

@@ -145,8 +145,12 @@ public class TogglerView extends View implements FactorAnimator.Target, TooltipO
     }
   }
 
-  private boolean isDisabled () {
+  public boolean isDisabled () { // XGram: public, read by the Compose renderer of Telegram X pages
     return this.isDisabled != null && this.isDisabled.getValue();
+  }
+
+  public boolean isLockShown () {
+    return showLock;
   }
 
   private static final int ANIMATOR_DISABLE = 1;

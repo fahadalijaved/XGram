@@ -1125,6 +1125,26 @@ public final class XgramSettings {
     put(KEY_FOLD_TABLETOP, value);
   }
 
+  // Telegram X pages in Compose (Appearance, under Expressive design; see com.fahadali.xgram.compose.tgx). Off: every
+  // Telegram X page keeps its classic list. Read when a page is opened.
+
+  public static final String KEY_COMPOSE_TGX_PAGES = "xgram_compose_tgx";
+
+  private volatile Boolean composeTgxPages;
+
+  public boolean composeTgxPages () {
+    Boolean value = composeTgxPages;
+    if (value == null) {
+      composeTgxPages = value = pmc().getBoolean(KEY_COMPOSE_TGX_PAGES, true);
+    }
+    return value;
+  }
+
+  public void setComposeTgxPages (boolean value) {
+    composeTgxPages = value;
+    put(KEY_COMPOSE_TGX_PAGES, value);
+  }
+
   // Two panes (Appearance > Layout, see com.fahadali.xgram.layout.XgramTwoPane): how wide the chat list pane is.
   // Read while measuring the panes, so cached.
 

@@ -6971,7 +6971,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
         if (id == R.id.btn_xgramAutoTranslate) {
           xgramStopAutoTranslate();
         } else if (id == R.id.btn_xgramTrTarget) {
-          navigateTo(new com.fahadali.xgram.chats.XgramTranslateTargetController(context, tdlib));
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: the Compose page; classic without Expressive design
+            navigateTo(com.fahadali.xgram.compose.XgramComposeController.create(context, tdlib, com.fahadali.xgram.compose.XgramPage.TRANSLATE_TARGET));
+          } else {
+            navigateTo(new com.fahadali.xgram.chats.XgramTranslateTargetController(context, tdlib));
+          }
         }
         return true;
       });

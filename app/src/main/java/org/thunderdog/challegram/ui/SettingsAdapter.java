@@ -648,7 +648,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
       for (RecyclerView parentView : parentViews) {
         View view = parentView.getLayoutManager().findViewByPosition(position);
         if (view != null) {
-          RecyclerView.ViewHolder holder = parentView.getChildViewHolder(view);
+          RecyclerView.ViewHolder holder = view.getParent() == parentView ? parentView.getChildViewHolder(view) : null; // XGram: a Compose page's view is not the list's child
           if (holder != null && holder instanceof SettingHolder) {
             onBindViewHolder((SettingHolder) holder, position);
           } else {
@@ -786,7 +786,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
               }
             }
             if (!ok) {
-              SettingHolder holder = (SettingHolder) parentView.getChildViewHolder(view);
+              SettingHolder holder = view.getParent() == parentView ? (SettingHolder) parentView.getChildViewHolder(view) : null; // XGram: a Compose page's view is not the list's child
               int actualPosition = holder != null ? holder.getBindingAdapterPosition() : -1;
               if (actualPosition != RecyclerView.NO_POSITION) {
                 onBindViewHolder(holder, actualPosition);

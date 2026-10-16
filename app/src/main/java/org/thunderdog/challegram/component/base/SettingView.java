@@ -384,6 +384,53 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
     return itemName;
   }
 
+  // XGram: read back by the Compose renderer of Telegram X pages (com.fahadali.xgram.compose.tgx).
+
+  public CharSequence getData () {
+    return itemData;
+  }
+
+  /** The icon's drawable resource; 0 when there is none or it is a bitmap. */
+  public @DrawableRes int getIconResource () {
+    return lastIconResource;
+  }
+
+  public boolean hasIcon () {
+    return icon != null;
+  }
+
+  public @Nullable TextWrapper getTextWrapper () {
+    return text;
+  }
+
+  public @ColorId int getTextColorId () {
+    return textColorId;
+  }
+
+  public @ColorId int getDataColorId () {
+    return dataColorId;
+  }
+
+  public @ColorId int getColorDataId () {
+    return colorDataId;
+  }
+
+  public boolean isInProgress () {
+    return progressAnimator != null && progressAnimator.getValue();
+  }
+
+  public boolean isDataSwapped () {
+    return swapDataAndName;
+  }
+
+  public boolean isIconRotated () {
+    return iconRotated.getValue();
+  }
+
+  public boolean hasUnreadCounter () {
+    return counter != null && counter.getVisibility() > 0f;
+  }
+
   private int getCurrentHeight () {
     int height;
     if (text != null) {
