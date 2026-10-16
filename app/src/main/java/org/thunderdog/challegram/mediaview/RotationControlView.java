@@ -106,6 +106,18 @@ public class RotationControlView extends View implements FactorAnimator.Target {
     numberSmallPaint.setColor(0xffffffff);
     numberSmallPaint.setTypeface(Fonts.getRobotoRegular());
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: M3E type: the angle in labelLarge with tabular figures, the ruler's marks in labelSmall
+      numberPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false));
+      numberPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L)));
+      numberSmallPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S, false));
+      numberSmallPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S)));
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        numberPaint.setFontFeatureSettings("tnum");
+        numberSmallPaint.setFontFeatureSettings("tnum");
+      }
+    }
+
     degreeWidth = U.measureText("°", numberSmallPaint);
     width0 = U.measureText("0", numberSmallPaint);
     width15 = U.measureText("15", numberSmallPaint);
@@ -265,6 +277,32 @@ public class RotationControlView extends View implements FactorAnimator.Target {
   private static final int DISABLED_ALPHA = 0x33;
   private static final int DEFAULT_ALPHA = 0x80;
 
+  // XGram: Material 3 Expressive ruler slider. The marks run 8dp lower; at the centre a 4x20dp full-corner handle bar
+  // (the slider handle) in the dark scheme's primary, and above it the angle in labelLarge in a 24dp pill (surfaceContainerHigh
+  // at 60%, turning primary while held).
+
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+  private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint.FontMetrics xgramMetrics = new Paint.FontMetrics();
+
+  private void xgramDrawCenter (Canvas c, int cx, int cy, int dotsY) {
+    final float pillHeight = Screen.dp(24f);
+    final float pillWidth = Math.max(Screen.dp(48f), numberPaint.measureText(valueStr) + Screen.dp(24f));
+    final float pillCy = cy - Screen.dp(20f);
+    xgramRect.set(cx - pillWidth / 2f, pillCy - pillHeight / 2f, cx + pillWidth / 2f, pillCy + pillHeight / 2f);
+    final int primary = com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+    final int rest = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), .6f);
+    xgramPaint.setColor(ColorUtils.fromToArgb(rest, primary, activeFactor));
+    c.drawRoundRect(xgramRect, pillHeight / 2f, pillHeight / 2f, xgramPaint);
+    numberPaint.setColor(ColorUtils.fromToArgb(0xffffffff, com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY), activeFactor));
+    numberPaint.getFontMetrics(xgramMetrics);
+    c.drawText(valueStr, cx - valueWidth / 2, pillCy - (xgramMetrics.ascent + xgramMetrics.descent) / 2f, numberPaint);
+    final float barWidth = Screen.dp(4f), barHeight = Screen.dp(20f);
+    xgramRect.set(cx - barWidth / 2f, dotsY - barHeight / 2f, cx + barWidth / 2f, dotsY + barHeight / 2f);
+    xgramPaint.setColor(primary);
+    c.drawRoundRect(xgramRect, barWidth / 2f, barWidth / 2f, xgramPaint);
+  }
+
   @Override
   protected void onDraw (Canvas c) {
     int currentWidth = getMeasuredWidth() - getPaddingLeft() - getPaddingRight();
@@ -277,12 +315,18 @@ public class RotationControlView extends View implements FactorAnimator.Target {
     int chunkWidth = sideWidth / 2;
     int currentMaxDiff = chunkWidth * 3;
 
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final int dotsY = xgram ? cy + Screen.dp(8f) : cy;
+    if (xgram) {
+      xgramDrawCenter(c, cx, cy, dotsY); // XGram
+    } else {
     c.save();
     c.translate(cx - triangleView.getWidth() / 2, cy - Screen.dp(23f));
     triangleView.draw(c);
     c.restore();
 
     c.drawText(valueStr, cx - valueWidth / 2, cy + Screen.dp(5f), numberPaint);
+    }
 
     int startX = cx - sideWidth;
     int endX = cx + sideWidth;
@@ -325,7 +369,7 @@ public class RotationControlView extends View implements FactorAnimator.Target {
         } else {
           allowedAlpha = DEFAULT_ALPHA + (int) ((float) (0xff - DEFAULT_ALPHA) * activeFactor);
         }
-        c.drawCircle(x, cy, radius, Paints.fillingPaint(ColorUtils.color((int) (allowedAlpha * alpha), 0xffffff)));
+        c.drawCircle(x, dotsY, radius, Paints.fillingPaint(ColorUtils.color((int) (allowedAlpha * alpha), 0xffffff)));
       }
 
       x += spacing;
@@ -362,7 +406,7 @@ public class RotationControlView extends View implements FactorAnimator.Target {
         float allowedAlpha = degrees == 60 || degrees == -60 ? DISABLED_ALPHA : DEFAULT_ALPHA + (int) ((float) (0xff - DEFAULT_ALPHA) * activeFactor);
         int color = ColorUtils.color((int) (allowedAlpha * alpha), 0xffffff);
         numberSmallPaint.setColor(color);
-        c.drawText(text, textX, cy - Screen.dp(12f), numberSmallPaint);
+        c.drawText(text, textX, dotsY - Screen.dp(12f), numberSmallPaint);
       }
       degrees += 15;
       x += chunkWidth;
