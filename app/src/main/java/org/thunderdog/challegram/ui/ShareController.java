@@ -19,11 +19,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
+import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.text.TextPaint;
+import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -37,6 +40,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.DrawableRes;
@@ -109,6 +113,7 @@ import org.thunderdog.challegram.widget.EmojiLayout;
 import org.thunderdog.challegram.widget.FillingSpace;
 import org.thunderdog.challegram.widget.ForceTouchView;
 import org.thunderdog.challegram.widget.KeyboardFrameLayout;
+import org.thunderdog.challegram.widget.NoScrollTextView;
 import org.thunderdog.challegram.widget.PopupLayout;
 import org.thunderdog.challegram.widget.SeparatorView;
 import org.thunderdog.challegram.widget.TextFormattingLayout;
@@ -134,6 +139,7 @@ import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.ArrayUtils;
 import me.vkryl.core.ColorUtils;
 import me.vkryl.core.FileUtils;
+import me.vkryl.core.MathUtils;
 import me.vkryl.core.StringUtils;
 import me.vkryl.core.collection.IntList;
 import me.vkryl.core.collection.LongList;
@@ -934,9 +940,55 @@ public class ShareController extends TelegramViewController<ShareController.Args
       if (factor > 0f) {
         int bottom = getMeasuredHeight();
         int top = bottom - (int) ((float) bottom * factor);
-        c.drawRect(0, top, getMeasuredWidth(), bottom, Paints.fillingPaint(Theme.fillingColor()));
+        c.drawRect(0, top, getMeasuredWidth(), bottom, Paints.fillingPaint(xgramSheetColor())); // XGram: the sheet color
       }
     }
+  }
+
+  // XGram: Material 3 Expressive: the share sheet is surfaceContainerLow as every sheet (the message menu it opens from,
+  // the option and settings sheets), Telegram X's filling (surface) otherwise
+
+  /** The sheet color: its body, header sheet top, status bar strip, comment bar and send bar. */
+  private static int xgramSheetColor () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor() : Theme.fillingColor();
+  }
+
+  /** The color id of {@link #xgramSheetColor()} for themed backgrounds (ColorId.drawer is surfaceContainerLow). */
+  private static int xgramSheetColorId () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.filling;
+  }
+
+  /** The chat folder picker of the header is the M3E menu button (XgramM3Sheets.MenuTitleView). */
+  private boolean xgramFolderMenuTitle;
+
+  /** The header's sheet top at {@code headerTop}: the sheet color, corners that square off as it docks, the handle. */
+  private void xgramUpdateSheetTop (float headerTop) {
+    if (xgramSheetTop != null) {
+      final float corner = com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerTop);
+      xgramSheetTop.set(xgramSheetColor(), corner);
+      // the handle fades out with the corners (a docked sheet is full screen), and is left out where the folder menu
+      // button reaches it (M3 lets a sheet with a top app bar omit it): on the cover the button covered it
+      xgramSheetTop.setHandleAlpha(xgramHandleFits() ? corner : 0f);
+    }
+  }
+
+  /** False while the folder menu button of the header, and 8dp after it, reaches the centered 32dp drag handle. */
+  private boolean xgramHandleFits () {
+    if (!xgramFolderMenuTitle) {
+      return true;
+    }
+    if (headerCell == null || headerCell.getChildCount() == 0 || !(headerCell.getParent() instanceof View)) {
+      return false;
+    }
+    final View label = headerCell.getChildAt(0);
+    final int headerWidth = ((View) headerCell.getParent()).getWidth();
+    if (headerWidth <= 0 || label.getWidth() <= 0) {
+      return false;
+    }
+    final int buttonStart = Lang.rtl() ?
+      headerWidth - headerCell.getRight() + (headerCell.getWidth() - label.getRight()) :
+      headerCell.getLeft() + label.getLeft();
+    return buttonStart + label.getWidth() + Screen.dp(8f) <= headerWidth / 2 - Screen.dp(16f);
   }
 
   private DoubleHeaderView headerCell;
@@ -984,7 +1036,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
       headerView.resetColors(this, null);
     }
     if (xgramSheetTop != null && headerView != null) {
-      xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerView.getTranslationY())); // XGram
+      xgramUpdateSheetTop(headerView.getTranslationY()); // XGram
     }
   }
 
@@ -1007,7 +1059,17 @@ public class ShareController extends TelegramViewController<ShareController.Args
     // (XgramM3Sheets.MenuTitleView: 40dp, labelLarge in onSecondaryContainer, trailing expand_more)
     final boolean xgramMenuTitle = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() &&
       Settings.instance().chatFoldersEnabled() && TD.isChatListMain(displayingChatList) && tdlib.chatFolderCount() > 0;
+    xgramFolderMenuTitle = xgramMenuTitle;
     headerCell = xgramMenuTitle ? new com.fahadali.xgram.appearance.XgramM3Sheets.MenuTitleView(context) : new DoubleHeaderView(context);
+    if (xgramMenuTitle && headerCell.getChildCount() > 0) {
+      // XGram: the button (the title label) takes the folder name's width: whether the drag handle fits beside it is
+      // checked again when it is laid out
+      headerCell.getChildAt(0).addOnLayoutChangeListener((labelView, l, t, r, b, oldL, oldT, oldR, oldB) -> {
+        if (headerView != null && (l != oldL || r != oldR)) {
+          xgramUpdateSheetTop(headerView.getTranslationY());
+        }
+      });
+    }
     headerCell.setTitle(R.string.SendTo);
     headerCell.initWithMargin(Screen.dp(56f) * getMenuItemCount(), false);
     headerCell.setThemedTextColor(xgramMenuTitle ? ColorId.headerTabActiveText : ColorId.text, ColorId.textLight, this);
@@ -1058,10 +1120,11 @@ public class ShareController extends TelegramViewController<ShareController.Args
       @Override
       public void draw (Canvas c) {
         int top = detectTopRecyclerEdge();
+        final int sheetColor = xgramSheetColor(); // XGram: surfaceContainerLow with Expressive design
         if (top == 0) {
-          c.drawColor(Theme.fillingColor());
+          c.drawColor(sheetColor);
         } else {
-          c.drawRect(0, top, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.fillingColor()));
+          c.drawRect(0, top, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(sheetColor));
         }
         super.draw(c);
       }
@@ -1260,7 +1323,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
       spaceView = new FillingSpace(context);
       spaceView.setLayoutParams(rp);
       spaceView.setVisibility(View.INVISIBLE);
-      spaceView.setThemedBackground(ColorId.filling, this);
+      spaceView.setThemedBackground(xgramSheetColorId(), this); // XGram: the sheet color
       contentView.addView(spaceView);
     }
 
@@ -1333,7 +1396,14 @@ public class ShareController extends TelegramViewController<ShareController.Args
     inputView.setPadding(Screen.dp(60f), Screen.dp(12f), Screen.dp(55f), Screen.dp(12f));
     inputView.setHintTextColor(Theme.textPlaceholderColor());
     addThemeHintTextColorListener(inputView, ColorId.textPlaceholder);
-    ViewSupport.setThemedBackground(inputView, ColorId.filling, this);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive: the comment field as the M3E composer field, bodyLarge on a surfaceContainerHighest
+      // pill in the sheet colored bar; the emoji and send buttons sit inside the pill's ends
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(inputView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+      ViewUtils.setBackground(inputView, new XgramCommentFieldBackground());
+    } else {
+      ViewSupport.setThemedBackground(inputView, ColorId.filling, this);
+    }
     inputView.setHighlightColor(Theme.fillingTextSelectionColor());
     addThemeHighlightColorListener(inputView, ColorId.textSelectionHighlight);
     inputView.setMinimumHeight(Screen.dp(48f));
@@ -1406,6 +1476,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
       bottomShadow.setAlpha(0f);
     }
     bottomShadow.setLayoutParams(params);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      bottomShadow.setVisibility(View.GONE); // XGram: no divider above the comment and send bars, they are the sheet's color
+    }
     contentView.addView(bottomShadow);
 
     adapter = new SettingsAdapter(this) {
@@ -1427,7 +1500,8 @@ public class ShareController extends TelegramViewController<ShareController.Args
     getSearchHeaderView(headerView);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive modal sheet top: 28dp corners that square off at the window top, a drag handle
-      xgramSheetTop = com.fahadali.xgram.appearance.XgramM3Sheets.attachHeaderSheetTop(headerView, headerView.getFilling().getExtraHeight(), Theme.fillingColor());
+      xgramSheetTop = com.fahadali.xgram.appearance.XgramM3Sheets.attachHeaderSheetTop(headerView, headerView.getFilling().getExtraHeight(), xgramSheetColor());
+      xgramSheetTop.setHandleAlpha(xgramFolderMenuTitle ? 0f : 1f); // until the header is laid out (see xgramUpdateSheetTop)
       // the close button as an M3E standard icon button (40dp state layer), not Telegram X's rectangle highlight
       com.fahadali.xgram.appearance.XgramM3Sheets.applyNavigationButton(headerView.getBackButton(), Theme.getColor(getHeaderIconColorId()));
     }
@@ -1436,10 +1510,26 @@ public class ShareController extends TelegramViewController<ShareController.Args
     FrameLayout.LayoutParams fp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(6f));
     fp.topMargin = HeaderView.getSize(false) - Screen.dp(3f);
     fixView = new View(context);
-    ViewSupport.setThemedBackground(fixView, ColorId.filling, this);
+    ViewSupport.setThemedBackground(fixView, xgramSheetColorId(), this); // XGram: the sheet color
     fixView.setLayoutParams(fp);
 
-    wrapView = new FrameLayoutFix(context);
+    wrapView = new FrameLayoutFix(context) {
+      @Override
+      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          widthMeasureSpec = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidthSpec(widthMeasureSpec); // XGram: at most 640dp wide
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+      }
+
+      @Override
+      public void setLayoutParams (ViewGroup.LayoutParams params) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          com.fahadali.xgram.appearance.XgramM3Sheets.centerSheet(params); // XGram: centered when narrower than the window
+        }
+        super.setLayoutParams(params);
+      }
+    };
     wrapView.addView(fixView);
     wrapView.addView(contentView);
     chatSearchView = generateChatSearchView(wrapView);
@@ -1814,7 +1904,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
       headerView.setTranslationY(top);
       fixView.setTranslationY(top);
       if (xgramSheetTop != null) {
-        xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(top)); // XGram
+        xgramUpdateSheetTop(top); // XGram
       }
       final int topOffset = HeaderView.getTopOffset();
       top -= topOffset;
@@ -2233,7 +2323,11 @@ public class ShareController extends TelegramViewController<ShareController.Args
   private int calculateSpanCount () {
     if (UI.isLandscape()) {
       int itemWidth = Screen.smallestSide() / 4;
-      return Screen.currentWidth() / itemWidth;
+      int sheetWidth = Screen.currentWidth();
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        sheetWidth = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(sheetWidth); // XGram: the sheet is at most 640dp wide
+      }
+      return Math.max(1, sheetWidth / itemWidth);
     } else {
       return 4;
     }
@@ -2595,6 +2689,41 @@ public class ShareController extends TelegramViewController<ShareController.Args
     return item != null && item.getId() == android.R.id.empty;
   }
 
+  /**
+   * XGram: the comment field's background with Expressive design: the sheet color with a surfaceContainerHighest pill
+   * 8dp in from the sides and 4dp from the top and bottom (40dp tall on one line, 20dp corners), as the M3E composer.
+   */
+  private static final class XgramCommentFieldBackground extends Drawable {
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF rect = new RectF();
+
+    @Override
+    public void draw (@NonNull Canvas c) {
+      final Rect bounds = getBounds();
+      paint.setColor(xgramSheetColor());
+      c.drawRect(bounds, paint);
+      rect.set(bounds.left + Screen.dp(8f), bounds.top + Screen.dp(4f), bounds.right - Screen.dp(8f), bounds.bottom - Screen.dp(4f));
+      if (rect.width() <= 0f || rect.height() <= 0f) {
+        return;
+      }
+      final float radius = Math.min(rect.height() / 2f, Screen.dp(20f));
+      paint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST));
+      c.drawRoundRect(rect, radius, radius, paint);
+    }
+
+    @Override
+    public void setAlpha (int alpha) { }
+
+    @Override
+    public void setColorFilter (@Nullable ColorFilter colorFilter) { }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public int getOpacity () {
+      return PixelFormat.OPAQUE;
+    }
+  }
+
   // Button
 
   private static class SendButton extends FrameLayoutFix implements FactorAnimator.Target {
@@ -2622,11 +2751,70 @@ public class ShareController extends TelegramViewController<ShareController.Args
           return PixelFormat.UNKNOWN;
         }
       });
+      if (xgram) {
+        // XGram: Material 3 Expressive: the sheet action as the sticker set sheet's: a 40dp filled button 16dp from
+        // the sheet's sides in the sheet colored 56dp bar, its label in sentence case labelLarge, crossfading between
+        // "Copy link" and "Send" (no full-width slab, circular reveal or rectangular ripple). It is the first child:
+        // it takes the clicks, long presses and the send menu.
+        TextView label = new NoScrollTextView(context);
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(label, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+        label.setGravity(Gravity.CENTER);
+        label.setSingleLine(true);
+        label.setEllipsize(TextUtils.TruncateAt.END);
+        label.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
+        com.fahadali.xgram.appearance.XgramM3Sheets.attachFilledButton(label, com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+        Views.setClickable(label);
+        FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(40f), Gravity.TOP);
+        params.topMargin = Screen.dp(8f);
+        params.leftMargin = params.rightMargin = Screen.dp(16f);
+        label.setLayoutParams(params);
+        addView(label);
+        xgramLabel = label;
+        setSendText(Lang.getString(R.string.Send));
+        setShareText(Lang.getString(R.string.ShareBtnLink));
+        xgramSyncLabel();
+        return;
+      }
       View view = new View(context);
       RippleSupport.setTransparentSelector(view);
       Views.setClickable(view);
       view.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
       addView(view);
+    }
+
+    private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    private @Nullable TextView xgramLabel;
+
+    /** XGram: the label of the factor: "Copy link" up to .5, "Send" from there, faded out towards .5 (a crossfade). */
+    private void xgramSyncLabel () {
+      final TextView label = xgramLabel;
+      if (label == null) {
+        return;
+      }
+      if (sendText == null) {
+        setSendText(Lang.getString(R.string.Send));
+      }
+      if (copyText == null) {
+        setShareText(Lang.getString(R.string.ShareBtnLink));
+      }
+      final String text = factor >= .5f ? sendText : copyText;
+      if (!StringUtils.equalsOrBothEmpty(label.getText().toString(), text)) {
+        label.setText(text);
+      }
+      xgramSyncLabelColor();
+    }
+
+    /** XGram: onPrimary at the crossfade's opacity, re-read on every draw (theme changes). */
+    private void xgramSyncLabelColor () {
+      final TextView label = xgramLabel;
+      if (label == null) {
+        return;
+      }
+      final float alpha = MathUtils.clamp(Math.abs(factor - .5f) * 2f);
+      final int color = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY), alpha);
+      if (label.getCurrentTextColor() != color) {
+        label.setTextColor(color);
+      }
     }
 
     private boolean isReady;
@@ -2665,6 +2853,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
     private void setFactor (float factor) {
       if (this.factor != factor) {
         this.factor = factor;
+        xgramSyncLabel(); // XGram: the label of the Expressive button
         invalidate();
       }
     }
@@ -2678,15 +2867,21 @@ public class ShareController extends TelegramViewController<ShareController.Args
     private float copyWidth;
 
     public void setShareText (@NonNull String text) {
-      this.copyText = Lang.uppercase(text);
+      this.copyText = xgram ? text : Lang.uppercase(text); // XGram: M3 buttons are in sentence case
       this.copyTextFake = Text.needFakeBold(copyText);
       this.copyWidth = U.measureText(copyText, Paints.getTitleBigPaint(copyTextFake));
+      if (xgramLabel != null && factor < .5f && !StringUtils.equalsOrBothEmpty(xgramLabel.getText().toString(), copyText)) {
+        xgramLabel.setText(copyText);
+      }
     }
 
     public void setSendText (@NonNull String text) {
-      sendText = Lang.uppercase(text);
+      sendText = xgram ? text : Lang.uppercase(text); // XGram: M3 buttons are in sentence case
       sendTextFake = Text.needFakeBold(sendText);
       sendWidth = U.measureText(sendText, Paints.getTitleBigPaint(sendTextFake));
+      if (xgramLabel != null && factor >= .5f && !StringUtils.equalsOrBothEmpty(xgramLabel.getText().toString(), sendText)) {
+        xgramLabel.setText(sendText);
+      }
     }
 
     @Override
@@ -2701,6 +2896,12 @@ public class ShareController extends TelegramViewController<ShareController.Args
     }
 
     private void doDraw (Canvas c) {
+      if (xgram) {
+        // XGram: the bar in the sheet's color under the filled button (the button draws its own container)
+        c.drawColor(xgramSheetColor());
+        xgramSyncLabelColor(); // theme changes
+        return;
+      }
       final int width = getMeasuredWidth();
       final int height = getMeasuredHeight();
       final int buttonHeight = Screen.dp(56f);
