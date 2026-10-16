@@ -9,6 +9,9 @@
   <string name="XgramR5SheetsEditHistory">Edit history</string>
   <string name="XgramR5SheetsCurrent">Current</string>
   <string name="XgramR5SheetsCopyValue">Copy</string>
+  <string name="XgramR5SheetsIdLabel">ID</string>
+  <string name="XgramR5SheetsChatIdLabel">Chat ID</string>
+  <string name="XgramR5SheetsLinkLabel">Link</string>
   <string name="XgramR5SheetsReplyWithQuote">Reply with quote</string>
   <string name="XgramR5SheetsUpdateAvailable">Update available</string>
   <string name="XgramR5SheetsUpdateVersion">XGram %1$s · %2$s</string>

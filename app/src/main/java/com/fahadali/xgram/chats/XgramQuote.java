@@ -25,6 +25,7 @@ import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -33,6 +34,10 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Sheets;
+import com.fahadali.xgram.appearance.XgramR5Sheets;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
@@ -229,9 +234,22 @@ public final class XgramQuote {
       scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
       scrollView.setVerticalScrollBarEnabled(true);
       scrollView.addView(textView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      final boolean xgramM3 = XgramExpressive.isEnabled();
+      int measureWidth = Screen.currentWidth();
+      if (xgramM3) {
+        // XGram M3E r5: the text in a 16dp inset surfaceContainerHigh card with 16dp corners (the scroll clipped to it)
+        XgramR5Sheets.applyCard(scrollView, XgramExpressive.SURFACE_CONTAINER_HIGH, XgramExpressive.CORNER_L);
+        scrollView.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+        scrollView.setClipToOutline(true);
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardParams.leftMargin = cardParams.rightMargin = Screen.dp(16f);
+        cardParams.topMargin = Screen.dp(8f);
+        optionsLayout.addView(scrollView, cardParams);
+        measureWidth = XgramM3Sheets.sheetWidth(measureWidth) - Screen.dp(32f);
+      } else
       optionsLayout.addView(scrollView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-      textView.measure(View.MeasureSpec.makeMeasureSpec(Screen.currentWidth(), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+      textView.measure(View.MeasureSpec.makeMeasureSpec(measureWidth, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
       int totalHeight = Math.min(textView.getMeasuredHeight(), maxScrollHeight); // only used for the slide-in animation
 
       View.OnTouchListener onTouch = (v, e) -> {
@@ -257,6 +275,28 @@ public final class XgramQuote {
         dropSelection.run();
         popupLayout.hideWindow(true);
       };
+      if (xgramM3) {
+        // XGram M3E r5: the actions row, no Cancel (the sheet closes by its scrim, a drag or back): a tonal "Copy" and
+        // the filled "Reply with quote" at the end
+        TextView copy = null;
+        if (canCopy) {
+          copy = XgramR5Sheets.tonalButton(context, Lang.getString(R.string.Copy), null);
+          copy.setId(R.id.btn_copyText);
+          copy.setOnTouchListener(onTouch);
+          copy.setOnClickListener(onClick);
+        }
+        TextView replyButton = XgramR5Sheets.filledButton(context, Lang.getString(R.string.XgramQuoteReply), false, null);
+        replyButton.setId(R.id.btn_xgramQuoteReply);
+        replyButton.setOnTouchListener(onTouch);
+        replyButton.setOnClickListener(onClick);
+        LinearLayout actions = XgramR5Sheets.actionsRow(context, null, copy, replyButton);
+        LinearLayout.LayoutParams actionsParams = (LinearLayout.LayoutParams) actions.getLayoutParams();
+        actionsParams.topMargin = Screen.dp(8f);
+        actionsParams.bottomMargin = Screen.dp(8f);
+        actions.setLayoutParams(actionsParams);
+        optionsLayout.addView(actions);
+        return totalHeight + Screen.dp(8f) + actionsParams.height + actionsParams.topMargin + actionsParams.bottomMargin;
+      }
       ViewController.OptionItem[] items = canCopy ? new ViewController.OptionItem[] {
         new ViewController.OptionItem(R.id.btn_xgramQuoteReply, Lang.getString(R.string.XgramQuoteReply), ViewController.OptionColor.BLUE, R.drawable.baseline_format_quote_close_24),
         new ViewController.OptionItem(R.id.btn_copyText, Lang.getString(R.string.Copy), ViewController.OptionColor.NORMAL, R.drawable.baseline_content_copy_24),
@@ -388,6 +428,22 @@ public final class XgramQuote {
   }
 
   private static void setUpTextView (MessagesController m, TextView textView, CharSequence display) {
+    if (XgramExpressive.isEnabled()) {
+      // XGram M3E r5: bodyLarge at the chat's text size, 16dp padding inside the card, links in primary and the
+      // selection in primary at .3
+      textView.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_BODY_L, false));
+      textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, Settings.instance().getChatFontSize());
+      textView.setLineSpacing(Screen.dp(2f), 1f);
+      textView.setGravity(Gravity.START);
+      textView.setPadding(Screen.dp(16f), Screen.dp(16f), Screen.dp(16f), Screen.dp(16f));
+      textView.setTextColor(Theme.getColor(ColorId.text));
+      m.addThemeTextColorListener(textView, ColorId.text);
+      textView.setLinkTextColor(XgramExpressive.color(XgramExpressive.PRIMARY));
+      textView.setHighlightColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY), .3f));
+      textView.setTextIsSelectable(true);
+      textView.setText(display);
+      return;
+    }
     textView.setTypeface(Fonts.getRobotoRegular());
     textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, Settings.instance().getChatFontSize());
     textView.setLineSpacing(Screen.dp(2f), 1f);
