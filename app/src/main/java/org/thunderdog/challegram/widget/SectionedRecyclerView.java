@@ -77,6 +77,110 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
       xgramPress = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(0f, .002f, invalidate);
       xgramLabelAlpha = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(0f, .002f, invalidate);
       xgramLabelScale = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(1f, .002f, invalidate);
+      addItemDecoration(new XgramSectionGroups()); // XGram M3E: letter sections as segmented groups
+    }
+  }
+
+  // XGram M3E: each letter section is a segmented group (16dp inset, 20dp outer and 4dp inner corners, 2dp gaps; the
+  // rows give their MorphDrawable tile, see XgramR5People.bindTile, and this sets its segment) under a subheader in
+  // titleSmall and primary (8dp above the first one, 24dp above the others, 8dp under it, the text at the tiles'
+  // content edge). The 72dp letter gutter goes; the fast scroller keeps its letter label.
+
+  private static final float XGRAM_SUBHEADER_TOP_FIRST = 8f, XGRAM_SUBHEADER_TOP = 24f, XGRAM_SUBHEADER_BOTTOM = 8f;
+
+  private static int xgramSubheaderLine () {
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.lineHeightSp(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_S));
+  }
+
+  /** The space above the first row of section {@code section}: its subheader (or only the group's top gap without one). */
+  private int xgramSectionTop (int section) {
+    if (!showSections) {
+      return Screen.dp(section == 0 ? XGRAM_SUBHEADER_TOP_FIRST : XGRAM_SUBHEADER_TOP);
+    }
+    return Screen.dp((section == 0 ? XGRAM_SUBHEADER_TOP_FIRST : XGRAM_SUBHEADER_TOP) + XGRAM_SUBHEADER_BOTTOM) + xgramSubheaderLine();
+  }
+
+  /** The height the decoration adds to the list: every subheader and the 2dp gaps between the rows of a group. */
+  private int xgramExtraHeight () {
+    if (adapter == null || !adapter.isReady()) {
+      return 0;
+    }
+    int total = 0;
+    final int gap = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP);
+    for (int section = 0; section < adapter.getSectionCount(); section++) {
+      final int rows = adapter.xgramSectionEnd(section) - adapter.xgramSectionStart(section) + 1;
+      if (rows > 0) {
+        total += xgramSectionTop(section) + (rows - 1) * gap;
+      }
+    }
+    return total;
+  }
+
+  private final class XgramSectionGroups extends ItemDecoration {
+    @Override
+    public void getItemOffsets (@NonNull android.graphics.Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull State state) {
+      outRect.set(0, 0, 0, 0);
+      if (adapter == null || !adapter.isReady() || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return;
+      }
+      final int position = parent.getChildAdapterPosition(view);
+      if (position == NO_POSITION || adapter.isSeparator(position)) {
+        return;
+      }
+      final int section = adapter.getSectionForPosition(position);
+      if (section < 0) {
+        return;
+      }
+      final int inset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+      outRect.left = inset;
+      outRect.right = inset;
+      outRect.top = position == adapter.xgramSectionStart(section) ? xgramSectionTop(section) : Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP);
+    }
+
+    @Override
+    public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull State state) {
+      if (adapter == null || !adapter.isReady() || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return;
+      }
+      final boolean rtl = Lang.rtl();
+      final int width = getMeasuredWidth();
+      final int textInset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET + 16f);
+      final android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramR5People.subheaderPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+      final int line = xgramSubheaderLine();
+      final int childCount = parent.getChildCount();
+      for (int i = 0; i < childCount; i++) {
+        View child = parent.getChildAt(i);
+        final int position = parent.getChildAdapterPosition(child);
+        if (position == NO_POSITION || adapter.isSeparator(position)) {
+          continue;
+        }
+        final int section = adapter.getSectionForPosition(position);
+        if (section < 0) {
+          continue;
+        }
+        final int start = adapter.xgramSectionStart(section), end = adapter.xgramSectionEnd(section);
+        final int segment = start == end ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE :
+          position == start ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST :
+          position == end ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_LAST :
+          com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_MIDDLE;
+        com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.findMorph(child.getBackground());
+        if (morph != null) {
+          morph.setSegment(segment);
+        }
+        if (showSections && position == start) {
+          final String name = adapter.getSectionName(section);
+          if (name.isEmpty()) {
+            continue;
+          }
+          final float lineTop = child.getTop() + child.getTranslationY() - Screen.dp(XGRAM_SUBHEADER_BOTTOM) - line;
+          final float baseline = lineTop + line / 2f - (paint.descent() + paint.ascent()) / 2f;
+          final int alpha = Math.round(255 * Math.max(0f, Math.min(1f, child.getAlpha())));
+          final int saved = paint.getAlpha();
+          paint.setAlpha(alpha * saved / 255);
+          c.drawText(name, rtl ? width - textInset - paint.measureText(name) : textInset, baseline, paint);
+          paint.setAlpha(saved);
+        }
+      }
     }
   }
 
@@ -341,7 +445,7 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
     if (manager.findFirstVisibleItemPosition() == 0) {
       View view = manager.findViewByPosition(0);
       if (view != null) {
-        scrollY = -view.getTop();
+        scrollY = xgram ? -manager.getDecoratedTop(view) : -view.getTop(); // XGram M3E: the first subheader is a decoration offset
       } else {
         scrollY = 0;
       }
@@ -360,6 +464,9 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
           totalScrollY += adapter.getItemHeight(j);
           j++;
         }
+      }
+      if (xgram) {
+        totalScrollY += xgramExtraHeight(); // XGram M3E: subheaders and gaps
       }
     }
 
@@ -520,8 +627,8 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
   public void draw (Canvas c) {
     super.draw(c);
 
-    // Sections drawing
-    if (showSections) {
+    // Sections drawing (XGram M3E: the subheaders of XgramSectionGroups instead of the letter gutter)
+    if (showSections && !xgram) {
       letterPaint.setColor(Theme.textDecentColor());
       boolean rtl = Lang.rtl();
       int viewWidth = getMeasuredWidth();
@@ -734,6 +841,24 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
         return position - sections[section].startIndex - 1;
       else
         return position - sections[section].startIndex;
+    }
+
+    /** XGram M3E: the adapter position of the first row of {@code section} (after its separator, if any). */
+    public int xgramSectionStart (int section) {
+      if (sections == null || section < 0 || section >= sections.length) {
+        return -1;
+      }
+      final Section s = sections[section];
+      return needSeparators && section > 0 ? s.startIndex + 1 : s.startIndex;
+    }
+
+    /** XGram M3E: the adapter position of the last row of {@code section}. */
+    public int xgramSectionEnd (int section) {
+      if (sections == null || section < 0 || section >= sections.length) {
+        return -2;
+      }
+      final Section s = sections[section];
+      return s.startIndex + s.count - 1;
     }
 
     public int getSectionForPosition (int pos) {

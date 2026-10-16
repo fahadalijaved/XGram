@@ -20,6 +20,7 @@ import android.graphics.Rect;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.TextView;
 
 import androidx.annotation.CallSuper;
 import androidx.annotation.IdRes;
@@ -212,8 +213,9 @@ public abstract class TelegramViewController<T> extends ViewController<T> {
         }
       }
     });
-    chatSearchView.setBackgroundColor(Theme.backgroundColor());
-    addThemeBackgroundColorListener(chatSearchView, ColorId.background);
+    final int searchBackgroundColorId = xgramChatSearchBackgroundColorId(); // XGram M3E: a sheet's search list keeps the sheet color
+    chatSearchView.setBackgroundColor(Theme.getColor(searchBackgroundColorId));
+    addThemeBackgroundColorListener(chatSearchView, searchBackgroundColorId);
     chatSearchView.setLayoutManager(new LinearLayoutManager(context(), RecyclerView.VERTICAL, false));
     if (parent != null) {
       chatSearchView.setAlpha(0f);
@@ -432,6 +434,36 @@ public abstract class TelegramViewController<T> extends ViewController<T> {
           infoView.showInfo(Lang.pluralBold(R.string.xMessages, chatSearchManager.getFoundMessagesCount()));
         } else {
           infoView.showProgress();
+        }
+      }
+
+      @Override
+      protected void setHeaderText (ListItem item, TextView view, boolean isUpdate) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: the section subheaders in sentence case (while the strings are the bundled English ones)
+          final int res = item.getStringResource();
+          if (res == R.string.ChatsAndContacts || res == R.string.GlobalSearch) {
+            Views.setMediumText(view, com.fahadali.xgram.appearance.XgramR5People.sentence(res, res == R.string.GlobalSearch ? R.string.XgramR5PeopleGlobalSearch : R.string.XgramR5PeopleChatsAndContacts));
+            return;
+          }
+        }
+        super.setHeaderText(item, view, isUpdate);
+      }
+
+      @Override
+      protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == com.fahadali.xgram.appearance.XgramR5People.STATE_ROW) {
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramR5People.newStateView(parent.getContext())); // XGram M3E: "Nothing found"
+        }
+        return super.initCustom(parent, customViewType);
+      }
+
+      @Override
+      protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+        if (customViewType == com.fahadali.xgram.appearance.XgramR5People.STATE_ROW) {
+          com.fahadali.xgram.appearance.XgramR5People.bindState(view, getItems().size() == 1, R.drawable.baseline_search_96, Lang.getString(R.string.NothingFound), Lang.getString(R.string.XgramR5PeopleNothingFoundHint));
+        } else {
+          super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
         }
       }
     };
@@ -852,7 +884,9 @@ public abstract class TelegramViewController<T> extends ViewController<T> {
         chatSearchAdapter.updateValuedSettingById(R.id.search_counter);
         if (chatSearchAdapter.getItems().isEmpty()) {
           chatSearchAdapter.setItems(new ListItem[] {
-            new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.NothingFound)
+            com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ?
+              new ListItem(ListItem.TYPE_CUSTOM - com.fahadali.xgram.appearance.XgramR5People.STATE_ROW) : // XGram M3E: the empty state
+              new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.NothingFound)
           }, false);
         }
       }
@@ -880,7 +914,18 @@ public abstract class TelegramViewController<T> extends ViewController<T> {
     if (needChatSearchManagerPreparation()) {
       chatSearchManager.onPrepare(getChatMessagesSearchChatList(), getChatSearchInitialQuery());
     }
+    // XGram M3E: every search list (chats, contacts, share, hashtags...) gets the People row as a tile and Recent's
+    // Clear text button; attach is once per list, so the callers that attach it themselves are unaffected
+    com.fahadali.xgram.appearance.XgramM3ChatSearch.attach(this, chatSearchView);
     return chatSearchView;
+  }
+
+  /**
+   * XGram M3E: the color id of the search list's background: the page's (ColorId.background), or a sheet's color
+   * for a search shown inside a sheet (the share sheet), so the sheet stays one surface.
+   */
+  protected int xgramChatSearchBackgroundColorId () {
+    return ColorId.background;
   }
 
   protected final RecyclerView getChatSearchView () {
