@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the placement switch at the start of the topic tabs (Expressive design) -->
+  <string name="XgramM3TopicTabsOnSide">Show topics on the side</string>
+  <string name="XgramM3TopicTabsOnTop">Show topics on top</string>
+</resources>

@@ -17,17 +17,17 @@ package com.fahadali.xgram.appearance;
 
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
-import android.os.SystemClock;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewParent;
+import android.view.WindowInsets;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -41,8 +41,6 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.tool.Screen;
 
-import java.util.ArrayList;
-
 import me.vkryl.core.ColorUtils;
 
 /**
@@ -50,6 +48,9 @@ import me.vkryl.core.ColorUtils;
  * list scrolls and out shortly after it stops. {@link #MODE_DRAGGABLE} lists (fully loaded and at least three screens
  * long) can be grabbed: the thumb widens and turns primary, the list follows the finger and an optional label pill
  * shows where you are (a month, a letter).
+ *
+ * System edge gestures always win: no gesture exclusion is set, and a touch on the thumb inside the system gesture
+ * edge only grabs it once it moves vertically, so a swipe in from the edge stays the system's back gesture.
  *
  * The system scrollbar is silenced (transparent thumb) instead of disabled, so every Telegram X toggle of
  * {@link View#setVerticalScrollBarEnabled} still decides whether the indicator may show.
@@ -75,7 +76,7 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
   private static final float HIT_WIDTH_DP = 48f, HIT_SLOP_DP = 12f, CORNER_TRACK_INSET_DP = 20f;
   private static final float LABEL_HEIGHT_DP = 48f, LABEL_PADDING_DP = 16f, LABEL_GAP_DP = 12f;
   private static final float IDLE_OPACITY = .7f;
-  private static final long HIDE_DELAY_VISUAL = 400L, HIDE_DELAY_DRAG = 1200L, EXCLUSION_THROTTLE_MS = 120L;
+  private static final long HIDE_DELAY_VISUAL = 400L, HIDE_DELAY_DRAG = 1200L;
 
   /** The indicator of {@code rv} (installed once; a later call can only upgrade VISUAL to DRAGGABLE). */
   public static XgramScrollIndicator install (@NonNull RecyclerView rv, int mode) {
@@ -133,6 +134,11 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
   private float grabOffset, dragTop, dragLen, dragTrackTop, dragTrackBottom;
   private int dragSpan, lastPos = RecyclerView.NO_POSITION;
   private @Nullable CharSequence label;
+  // A touch on the thumb inside the system gesture edge: it becomes a drag only once it moves vertically
+  private boolean grabPending;
+  private float grabDownX, grabDownY;
+  private final int touchSlop;
+  private final int[] windowLocation = new int[2];
 
   private final Exclusion exclusion = new Exclusion();
 
@@ -141,6 +147,7 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
   private XgramScrollIndicator (RecyclerView rv, int mode) {
     this.rv = rv;
     this.mode = mode;
+    this.touchSlop = ViewConfiguration.get(rv.getContext()).getScaledTouchSlop();
     Runnable invalidate = rv::invalidate;
     this.alpha = new Anim(0f, .002f, invalidate);
     this.press = new Anim(0f, .002f, invalidate);
@@ -254,7 +261,7 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
         if (alpha.getTarget() > 0f) {
           dragAllowed = canDragNow();
           scheduleHide();
-          rv.invalidate(); // settles the back gesture exclusion on the resting thumb
+          rv.invalidate(); // redraws the resting thumb at its draggable length
         }
       } else {
         rv.removeCallbacks(hideRunnable);
@@ -282,6 +289,7 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
     rv.removeCallbacks(hideRunnable);
     dragging = false;
     releasePending = false;
+    grabPending = false;
     alpha.setValue(0f);
     press.setValue(0f);
     offset.setValue(0f);
@@ -386,14 +394,78 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
 
   @Override
   public boolean onInterceptTouchEvent (@NonNull RecyclerView recyclerView, @NonNull MotionEvent e) {
-    if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
-      if (mode == MODE_DRAGGABLE && drawn && drawnDraggable && alpha.getValue() >= .5f && allowed() && hitTest(e.getX(), e.getY())) {
-        startDrag(e.getY());
-        return true;
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN: {
+        grabPending = false;
+        if (mode == MODE_DRAGGABLE && drawn && drawnDraggable && alpha.getValue() >= .5f && allowed() && hitTest(e.getX(), e.getY())) {
+          if (inGestureEdge(e.getX())) {
+            // The system's edge: a swipe in is its back gesture (or the Edge panel), a vertical drag is the thumb's
+            grabPending = true;
+            grabDownX = e.getX();
+            grabDownY = e.getY();
+            return false;
+          }
+          startDrag(e.getY());
+          return true;
+        }
+        return false;
       }
-      return false;
+      case MotionEvent.ACTION_MOVE: {
+        if (grabPending && !dragging) {
+          float dx = Math.abs(e.getX() - grabDownX), dy = Math.abs(e.getY() - grabDownY);
+          if (dx > touchSlop && dx >= dy) {
+            grabPending = false; // sideways: the system's or the list's
+          } else if (dy > touchSlop) {
+            grabPending = false;
+            if (drawn && drawnDraggable && allowed()) {
+              startDrag(grabDownY);
+              moveDrag(e.getY());
+              return true;
+            }
+          }
+        }
+        break;
+      }
+      case MotionEvent.ACTION_UP:
+      case MotionEvent.ACTION_CANCEL:
+        grabPending = false;
+        break;
     }
     return dragging;
+  }
+
+  /**
+   * Whether {@code x} of the list is inside the system gesture edge on the thumb's side: the side back gesture (and on
+   * Samsung the Edge panel handle) owns it. Zero insets (three-button navigation, a window away from the edge) never are.
+   * Only asked on a touch down.
+   */
+  private boolean inGestureEdge (float x) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+      return false;
+    }
+    WindowInsets insets = rv.getRootWindowInsets();
+    if (insets == null) {
+      return false;
+    }
+    android.graphics.Insets gestures;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      gestures = insets.getInsets(WindowInsets.Type.systemGestures());
+    } else {
+      gestures = insets.getSystemGestureInsets();
+    }
+    boolean rtl = Lang.rtl();
+    int edge = rtl ? gestures.left : gestures.right;
+    if (edge <= 0) {
+      return false;
+    }
+    View root = rv.getRootView();
+    int windowWidth = root != null ? root.getWidth() : 0;
+    if (windowWidth <= 0) {
+      return false;
+    }
+    rv.getLocationInWindow(windowLocation);
+    float windowX = windowLocation[0] + x;
+    return rtl ? windowX < edge : windowX > windowWidth - edge;
   }
 
   @Override
@@ -530,7 +602,7 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
     }
   }
 
-  // System back gesture: the thumb sits on the edge the back swipe starts from
+  // System edge gestures: the thumb sits on the edge the back swipe (and the Edge panel handle) starts from. They win.
 
   private void updateExclusion (boolean active, boolean rtl, int width) {
     if (!active) {
@@ -548,44 +620,19 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
   }
 
   /**
-   * Keeps the system back gesture off a thumb on the screen edge (the Fold's gesture edge covers it otherwise): the
-   * 48dp wide hit area from 12dp above to 12dp below the thumb. Reuses one list and one rect; skips moves under 1dp
-   * and, while the list is moving, refreshes a few times a second (exactly once it rests).
+   * Gesture exclusion for a thumb on the screen edge, now never set: the system edge gestures always win. A 48dp
+   * exclusion strip around a showing thumb made the side back swipe and Samsung's Edge panel handle miss, or need
+   * several tries, and in two panes a list under the chat could hold one at the screen's right edge. A vertical drag
+   * that starts on a thumb inside the gesture edge still grabs it (the system only takes swipes inward), see
+   * XgramScrollIndicator#inGestureEdge. Kept, as no-ops, for the lists that call it (SectionedRecyclerView).
    */
   public static final class Exclusion {
-    private final ArrayList<Rect> rects = new ArrayList<>(1);
-    private final Rect rect = new Rect();
-    private boolean set;
-    private long time;
-
     public void update (@NonNull View view, @NonNull RectF thumb, boolean rtl, int width, boolean moving) {
-      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-        return;
-      }
-      int hit = Screen.dp(HIT_WIDTH_DP), slop = Screen.dp(HIT_SLOP_DP);
-      int l = rtl ? 0 : width - hit, r = rtl ? hit : width;
-      int t = (int) (thumb.top - slop), b = (int) (thumb.bottom + slop);
-      if (set && rect.left == l && rect.right == r && Math.abs(rect.top - t) <= Screen.dp(1f) && Math.abs(rect.bottom - b) <= Screen.dp(1f)) {
-        return;
-      }
-      long now = SystemClock.uptimeMillis();
-      if (set && moving && now - time < EXCLUSION_THROTTLE_MS) {
-        return;
-      }
-      rect.set(l, t, r, b);
-      rects.clear();
-      rects.add(rect);
-      view.setSystemGestureExclusionRects(rects);
-      set = true;
-      time = now;
+      // Nothing is excluded
     }
 
     public void clear (@NonNull View view) {
-      if (set && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        set = false;
-        rects.clear();
-        view.setSystemGestureExclusionRects(rects);
-      }
+      // Nothing was excluded
     }
   }
 
