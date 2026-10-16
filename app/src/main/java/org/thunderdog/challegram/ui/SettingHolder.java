@@ -1864,7 +1864,8 @@ public class SettingHolder extends RecyclerView.ViewHolder {
             if (myViewId == R.id.changePhoneText) {
               headerHeight = Screen.dp(310f);
             } else if (myViewId == R.id.inviteFriendsText) {
-              headerHeight = Screen.dp(120f);
+              // XGram M3E: the burst band and the texts of JoinedUsersView's empty state
+              headerHeight = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 250f : 120f);
             } else {
               headerHeight = Screen.dp(240f);
             }

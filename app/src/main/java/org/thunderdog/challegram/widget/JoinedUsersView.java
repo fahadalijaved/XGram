@@ -16,12 +16,17 @@ package org.thunderdog.challegram.widget;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 import android.text.Layout;
 import android.text.StaticLayout;
+import android.text.TextPaint;
 import android.view.MotionEvent;
 import android.view.View;
+
+import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
@@ -94,7 +99,9 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     int width = MeasureSpec.getSize(widthMeasureSpec);
-    int availWidth = Math.max(0, width - Screen.dp(12f) * 2);
+    int availWidth = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ?
+      Math.max(0, Math.min(width - Screen.dp(16f) * 2, Screen.dp(320f))) : // XGram M3E: at most 320dp, 16dp gutters
+      Math.max(0, width - Screen.dp(12f) * 2);
     if (this.lastAvailWidth != availWidth) {
       this.lastAvailWidth = availWidth;
       layoutTexts(availWidth);
@@ -104,7 +111,12 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
   }
 
   private int calculateHeight () {
-    return Screen.dp(92f) + Math.max(Screen.dp(84f), Math.max(inviteLayout != null ? inviteLayout.getHeight() + Screen.dp(26f) : 0, joinedLayout != null ? joinedLayout.getHeight() + Screen.dp(36f) : 0));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the burst (or the avatars) band, then the texts
+      int texts = Math.max(xgramInviteHeight(), xgramJoinedLayout != null ? xgramJoinedLayout.getHeight() : 0);
+      return Screen.dp(XGRAM_BAND) + Screen.dp(16f) + texts + Screen.dp(8f);
+    }
+    return Screen.dp(92f) +Math.max(Screen.dp(84f), Math.max(inviteLayout != null ? inviteLayout.getHeight() + Screen.dp(26f) : 0, joinedLayout != null ? joinedLayout.getHeight() + Screen.dp(36f) : 0));
   }
 
   public void setJoinedText (CharSequence text) {
@@ -121,10 +133,17 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
   }
 
   private void setJoinedTextImpl (int availWidth) {
-    this.joinedLayout = joinedText != null ? (new StaticLayout(joinedText, Paints.getTextPaint15(), availWidth, Layout.Alignment.ALIGN_CENTER, 1.0f, Screen.dp(2f), false)) : null;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramCheckPaints();
+      this.xgramJoinedLayout = joinedText != null && availWidth > 0 ? new StaticLayout(joinedText, xgramBodyPaint, availWidth, Layout.Alignment.ALIGN_CENTER, 1.0f, Screen.dp(4f), false) : null;
+    }
+    this.joinedLayout =joinedText != null ? (new StaticLayout(joinedText, Paints.getTextPaint15(), availWidth, Layout.Alignment.ALIGN_CENTER, 1.0f, Screen.dp(2f), false)) : null;
   }
 
   private void layoutTexts (int availWidth) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramLayoutInvite(availWidth);
+    }
     if (availWidth > 0) {
       this.inviteLayout = inviteText != null ? (new StaticLayout(inviteText, Paints.getTextPaint15(), availWidth, Layout.Alignment.ALIGN_CENTER, 1.0f, Screen.dp(2f), false)) : null;
       setJoinedTextImpl(availWidth);
@@ -191,7 +210,7 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
   }
 
   private ImageReceiver newReceiver () {
-    ImageReceiver receiver = new ImageReceiver(this, Screen.dp(AVATAR_RADIUS));
+    ImageReceiver receiver = new ImageReceiver(this, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? XGRAM_AVATAR_RADIUS : AVATAR_RADIUS));
     if (!isAttached) {
       receiver.detach();
     }
@@ -223,6 +242,7 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
 
   private void setCounter (String counter) {
     this.moreCounter = counter;
+    this.xgramCounterWidth = -1f;
     this.counterWidth = U.measureText(counter, Paints.whiteMediumPaint(COUNTER_MEDIUM_DP, false, true));
   }
 
@@ -322,6 +342,25 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
     if (avatarInfos == null || factor == 0f) {
       return;
     }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the overlapping 40dp avatars (a later avatar is on top of the one before it)
+      final int radius = Screen.dp(XGRAM_AVATAR_RADIUS);
+      final int count = avatarInfos.length;
+      final int maxCount = count - (moreCounter != null ? 1 : 0);
+      final int cy = Screen.dp(XGRAM_BAND) / 2;
+      for (int i = maxCount - 1; i >= 0; i--) {
+        if (avatarInfos[i] == null) {
+          continue;
+        }
+        final int cx = xgramAvatarCenterX(i, count);
+        if (x >= cx - radius && x <= cx + radius && y >= cy - radius && y <= cy + radius) {
+          tdlib.ui().openPrivateChat(ViewController.findRoot(this), avatarInfos[i].userId, null);
+          ViewUtils.onClick(this);
+          break;
+        }
+      }
+      return;
+    }
 
     int avatarRadius = Screen.dp(AVATAR_RADIUS);
     int avatarSpacing = Screen.dp(AVATAR_SPACING);
@@ -349,7 +388,7 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
   // Drawing
 
   private void drawPlaceholder (Canvas c, AvatarInfo info, int cx, int cy, float factor) {
-    c.drawCircle(cx, cy, Screen.dp(AVATAR_RADIUS), Paints.fillingPaint(ColorUtils.alphaColor(factor, info.accentColor.getPrimaryColor())));
+    c.drawCircle(cx, cy, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? XGRAM_AVATAR_RADIUS : AVATAR_RADIUS), Paints.fillingPaint(ColorUtils.alphaColor(factor, info.accentColor.getPrimaryColor())));
     Paint paint = Paints.whiteMediumPaint(15f, info.letters.needFakeBold, false);
     paint.setAlpha((int) (255f * factor));
     c.drawText(info.letters.text, cx - info.lettersWidth15dp / 2, cy + Screen.dp(5.5f), paint);
@@ -359,6 +398,10 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
   @Override
   protected void onDraw (Canvas c) {
     if (icon == null) {
+      return;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c);
       return;
     }
 
@@ -490,6 +533,234 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
 
   }
 
+
+  // XGram M3E: the chat list's empty state. The forum icon (48dp, onPrimaryContainer) on a soft burst in
+  // primaryContainer, "No chats to show" in titleLarge and the invite line in bodyMedium onSurfaceVariant; once contacts
+  // are known, the burst gives way to overlapping 40dp avatars with a 2dp surface ring and a "+N" secondaryContainer
+  // badge, and the line to who is using Telegram. Colors are roles read here, so the theme applies to the view as built.
+
+  private static final float XGRAM_BAND = 128f, XGRAM_BURST = 112f, XGRAM_AVATAR_RADIUS = 20f, XGRAM_AVATAR_OVERLAP = 8f, XGRAM_RING = 2f;
+
+  private @Nullable StaticLayout xgramTitleLayout, xgramBodyLayout, xgramJoinedLayout;
+  private @Nullable TextPaint xgramTitlePaint, xgramBodyPaint, xgramCounterPaint;
+  private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint xgramIconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+  private final Path xgramShape = new Path();
+  private final Matrix xgramMatrix = new Matrix();
+  private boolean xgramShapeReady;
+  private float xgramCounterWidth = -1f;
+
+  private void xgramCheckPaints () {
+    if (xgramTitlePaint == null) {
+      xgramTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+      xgramTitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L, false));
+      xgramTitlePaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L)));
+      xgramBodyPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+      xgramBodyPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false));
+      xgramBodyPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)));
+      xgramCounterPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+      xgramCounterPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false));
+      xgramCounterPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L)));
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        xgramCounterPaint.setFontFeatureSettings("tnum");
+      }
+    }
+  }
+
+  /** "No chats to show" and the invite line: Telegram X's text is "**Title**\n\nText". */
+  private void xgramLayoutInvite (int availWidth) {
+    xgramCheckPaints();
+    xgramTitleLayout = xgramBodyLayout = null;
+    if (availWidth <= 0) {
+      xgramJoinedLayout = null;
+      return;
+    }
+    if (inviteText == null) {
+      return;
+    }
+    final String str = inviteText.toString();
+    final int split = str.indexOf("\n\n");
+    CharSequence title = split > 0 ? str.substring(0, split).trim() : null;
+    CharSequence body = split > 0 ? inviteText.subSequence(split + 2, inviteText.length()) : inviteText;
+    if (title != null) {
+      xgramTitleLayout = new StaticLayout(title, xgramTitlePaint, availWidth, Layout.Alignment.ALIGN_CENTER, 1.0f, Screen.dp(4f), false);
+    }
+    if (body.length() > 0) {
+      xgramBodyLayout = new StaticLayout(body, xgramBodyPaint, availWidth, Layout.Alignment.ALIGN_CENTER, 1.0f, Screen.dp(4f), false);
+    }
+  }
+
+  private int xgramInviteHeight () {
+    int height = xgramTitleLayout != null ? xgramTitleLayout.getHeight() : 0;
+    if (xgramBodyLayout != null) {
+      height += (height > 0 ? Screen.dp(8f) : 0) + xgramBodyLayout.getHeight();
+    }
+    return height;
+  }
+
+  /** Centre x of avatar {@code i} of {@code count}, the row centred and mirrored for RTL (the first avatar at the start). */
+  private int xgramAvatarCenterX (int i, int count) {
+    final int radius = Screen.dp(XGRAM_AVATAR_RADIUS);
+    final int step = radius * 2 - Screen.dp(XGRAM_AVATAR_OVERLAP);
+    final int totalWidth = radius * 2 + step * Math.max(0, count - 1);
+    final int start = getMeasuredWidth() / 2 - totalWidth / 2 + radius;
+    final int cx = start + step * i;
+    return Lang.rtl() ? getMeasuredWidth() - cx : cx;
+  }
+
+  private void xgramDrawBurst (Canvas c, float cx, float cy, float scale, float alpha) {
+    if (!xgramShapeReady) {
+      com.fahadali.xgram.appearance.XgramShapes.toPath(com.fahadali.xgram.appearance.XgramShapes.SOFT_BURST, xgramShape);
+      com.fahadali.xgram.appearance.XgramShapes.fit(xgramShape, 0f, 0f, Screen.dp(XGRAM_BURST), 0f, xgramMatrix);
+      xgramShapeReady = true;
+    }
+    c.save();
+    c.translate(cx, cy);
+    if (scale != 1f) {
+      c.scale(scale, scale);
+    }
+    xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER), alpha));
+    c.drawPath(xgramShape, xgramPaint);
+    if (icon != null && icon.getMinimumWidth() > 0) {
+      final float iconScale = Screen.dp(48f) / (float) icon.getMinimumWidth();
+      c.scale(iconScale, iconScale);
+      final android.graphics.ColorFilter filter = Paints.getColorFilter(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
+      if (xgramIconPaint.getColorFilter() != filter) {
+        xgramIconPaint.setColorFilter(filter);
+      }
+      xgramIconPaint.setAlpha((int) (255f * Math.max(0f, Math.min(1f, alpha))));
+      Drawables.draw(c, icon, -icon.getMinimumWidth() / 2f, -icon.getMinimumHeight() / 2f, xgramIconPaint);
+    }
+    c.restore();
+  }
+
+  private void xgramDraw (Canvas c) {
+    final int viewWidth = getMeasuredWidth();
+    final int bandHeight = Screen.dp(XGRAM_BAND);
+    final float centerX = viewWidth / 2f;
+    final float centerY = bandHeight / 2f;
+    final int textTop = bandHeight + Screen.dp(16f);
+    final int onSurfaceVariant = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+
+    // Texts: the invite fades out over the first half, who is using Telegram fades in over the second
+    if (factor < .5f) {
+      final float alpha = 1f - factor / .5f;
+      float y = textTop;
+      if (xgramTitleLayout != null && xgramTitlePaint != null) {
+        c.save();
+        c.translate((viewWidth - xgramTitleLayout.getWidth()) / 2f, y);
+        xgramTitlePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), alpha));
+        xgramTitleLayout.draw(c);
+        c.restore();
+        y += xgramTitleLayout.getHeight() + Screen.dp(8f);
+      }
+      if (xgramBodyLayout != null && xgramBodyPaint != null) {
+        c.save();
+        c.translate((viewWidth - xgramBodyLayout.getWidth()) / 2f, y);
+        xgramBodyPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(onSurfaceVariant, alpha));
+        xgramBodyLayout.draw(c);
+        c.restore();
+      }
+    } else if (xgramJoinedLayout != null && xgramBodyPaint != null) {
+      c.save();
+      c.translate((viewWidth - xgramJoinedLayout.getWidth()) / 2f, textTop);
+      xgramBodyPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(onSurfaceVariant, (factor - .5f) / .5f));
+      xgramJoinedLayout.draw(c);
+      c.restore();
+    }
+
+    if (factor == 0f) {
+      xgramDrawBurst(c, centerX, centerY, 1f, 1f);
+      return;
+    }
+
+    final long totalDuration = animator.getDuration();
+    final long time = (long) (factor * (float) totalDuration);
+
+    if (time < ICON_DURATION) {
+      final float iconFactor = 1f - ((float) time / (float) ICON_DURATION);
+      xgramDrawBurst(c, centerX, centerY, com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : .6f + .4f * iconFactor, iconFactor);
+      return;
+    }
+
+    if (avatarInfos == null) {
+      return;
+    }
+
+    final int avatarRadius = Screen.dp(XGRAM_AVATAR_RADIUS);
+    final int ring = Screen.dp(XGRAM_RING);
+    final int surface = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE);
+    final int avatarCount = avatarInfos.length;
+    final int cy = (int) centerY;
+
+    int i = 0;
+    for (AvatarInfo info : avatarInfos) {
+      long startTime = ICON_DURATION + (START_DELAY * i);
+      if (time < startTime) {
+        break;
+      }
+      final float avatarFactor = time < (startTime + AVATAR_DURATION) ? (float) (time - startTime) / (float) AVATAR_DURATION : 1f;
+      final float scale = com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : .6f + .4f * avatarFactor;
+      final int cx = xgramAvatarCenterX(i, avatarCount);
+      if (scale != 1f) {
+        c.save();
+        c.scale(scale, scale, cx, cy);
+      }
+      // the ring in the page color keeps each avatar apart from the one it overlaps
+      c.drawCircle(cx, cy, avatarRadius + ring, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(surface, avatarFactor)));
+      if (i == 4 && moreCounter != null) {
+        c.drawCircle(cx, cy, avatarRadius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), avatarFactor)));
+        if (xgramCounterPaint != null) {
+          if (xgramCounterWidth < 0f) {
+            xgramCounterWidth = xgramCounterPaint.measureText(moreCounter);
+          }
+          xgramCounterPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), avatarFactor));
+          final int padding = Screen.dp(4f);
+          final float textScale = xgramCounterWidth > avatarRadius * 2 - padding ? (float) (avatarRadius * 2 - padding) / xgramCounterWidth : 1f;
+          if (textScale != 1f) {
+            c.save();
+            c.scale(textScale, textScale, cx, cy);
+          }
+          Paint.FontMetrics fm = xgramCounterPaint.getFontMetrics();
+          c.drawText(moreCounter, cx - xgramCounterWidth / 2f, cy - (fm.ascent + fm.descent) / 2f, xgramCounterPaint);
+          if (textScale != 1f) {
+            c.restore();
+          }
+        }
+      } else if (info.imageFile == null) {
+        drawPlaceholder(c, info, cx, cy, avatarFactor);
+      } else {
+        ImageReceiver receiver = receivers[i];
+        receiver.setBounds(cx - avatarRadius, cy - avatarRadius, cx + avatarRadius, cy + avatarRadius);
+        if (receiver.needPlaceholder()) {
+          if (info.letters != null && !TD.isFileLoaded(info.imageFile.getFile())) {
+            drawPlaceholder(c, info, cx, cy, avatarFactor);
+          } else {
+            Paint paint = Paints.getPlaceholderPaint();
+            int alpha = paint.getAlpha();
+            if (avatarFactor < 1f) {
+              paint.setAlpha((int) ((float) alpha * avatarFactor));
+            }
+            c.drawCircle(cx, cy, avatarRadius, paint);
+            if (avatarFactor < 1f) {
+              paint.setAlpha(alpha);
+            }
+          }
+        }
+        if (avatarFactor < 1f) {
+          receiver.setPaintAlpha(receiver.getAlpha() * avatarFactor);
+        }
+        receiver.draw(c);
+        if (avatarFactor < 1f) {
+          receiver.restorePaintAlpha();
+        }
+      }
+      if (scale != 1f) {
+        c.restore();
+      }
+      i++;
+    }
+  }
 
   // MainController access
 
