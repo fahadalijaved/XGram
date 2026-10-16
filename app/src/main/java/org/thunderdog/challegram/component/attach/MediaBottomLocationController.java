@@ -163,8 +163,17 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
         boolean res = super.onTouchEvent(event);
         return event.getAction() == MotionEvent.ACTION_DOWN || res;
       }
+
+      @Override
+      public void setTranslationY (float translationY) {
+        super.setTranslationY(translationY);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+          invalidateOutline(); // XGram: its sheet top clip (xgramClipToSheet) follows it
+        }
+      }
     };
     mapWrap.setLayoutParams(params);
+    xgramClipToSheet(mapWrap); // XGram: the map at the top of the sheet follows the sheet top's 28dp curve as the list does
 
     // Recycler
 

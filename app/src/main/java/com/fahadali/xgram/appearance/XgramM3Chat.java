@@ -504,9 +504,34 @@ public final class XgramM3Chat {
 
   /**
    * The top of a modal bottom sheet: the sheet color with 28dp top corners that square off as the sheet reaches the
-   * top of the screen, and a 32x4dp drag handle in onSurfaceVariant at .4.
+   * top of the screen, and a 32x4dp drag handle in onSurfaceVariant at .4, horizontally centered, its top
+   * {@link #HANDLE_TOP} below the sheet top. The sheet must be one shape: draw it over the whole sheet body, or give it
+   * at least the corner radius of height and clip the body below it to the same curve (see {@link #bodyOutline}). A
+   * short band over a square body shows the body's corners as a notch under the curve.
    */
   public static final class SheetTopDrawable extends Drawable {
+    /** Distance of the drag handle's top from the top of the sheet (dp). */
+    public static final float HANDLE_TOP = 8f;
+
+    /** The corner radius for {@code cornerFactor}: 28dp at 1, square at 0. */
+    public static float cornerRadius (float cornerFactor) {
+      return Screen.dpf(XgramExpressive.CORNER_XL) * Math.max(0f, Math.min(1f, cornerFactor));
+    }
+
+    /**
+     * The outline that clips a sheet body (a view whose top is {@code sheetTopOffset} px below the sheet's top) to the
+     * same 28dp curve as this drawable: rounded top corners, square bottom (the rounding is pushed below the view).
+     */
+    public static void bodyOutline (@NonNull View view, @NonNull Outline outline, float sheetTopOffset, float cornerFactor) {
+      final int width = view.getWidth(), height = view.getHeight();
+      final float radius = Math.min(cornerRadius(cornerFactor), width / 2f);
+      if (radius <= 0f || width <= 0 || height <= 0) {
+        outline.setRect(0, 0, Math.max(width, 0), Math.max(height, 0));
+      } else {
+        outline.setRoundRect(0, -Math.round(sheetTopOffset), width, height + (int) Math.ceil(radius), radius);
+      }
+    }
+
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     private final RectF rect = new RectF();
@@ -536,7 +561,9 @@ public final class XgramM3Chat {
     public void draw (@NonNull Canvas c) {
       Rect b = getBounds();
       rect.set(b);
-      float r = Math.min(rect.height() / 2f, Screen.dpf(XgramExpressive.CORNER_XL) * Math.max(0f, Math.min(1f, cornerFactor)));
+      // only the top corners are rounded: the radius may take the whole height (not half of it, which cut a short
+      // band's corners to a smaller curve than the 28dp one)
+      float r = Math.min(Math.min(rect.height(), rect.width() / 2f), cornerRadius(cornerFactor));
       paint.setColor(color);
       if (r <= 0f) {
         c.drawRect(rect, paint);
@@ -549,8 +576,8 @@ public final class XgramM3Chat {
       if (handleAlpha <= 0f) {
         return;
       }
-      float handleW = Screen.dpf(32f), handleH = Screen.dpf(4f);
-      rect.set(b.exactCenterX() - handleW / 2f, b.top + Screen.dpf(6f), b.exactCenterX() + handleW / 2f, b.top + Screen.dpf(6f) + handleH);
+      float handleW = Screen.dpf(32f), handleH = Screen.dpf(4f), handleTop = b.top + Screen.dpf(HANDLE_TOP);
+      rect.set(b.exactCenterX() - handleW / 2f, handleTop, b.exactCenterX() + handleW / 2f, handleTop + handleH);
       paint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), .4f * handleAlpha));
       c.drawRoundRect(rect, handleH / 2f, handleH / 2f, paint);
     }

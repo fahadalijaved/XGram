@@ -269,13 +269,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     headerView.initWithSingleController(this, false);
     headerView.getFilling().setShadowAlpha(0f);
     headerView.getBackButton().setIsReverse(true);
-    if (state.needShowReactionsPopupPicker) {
+    if (state.needShowReactionsPopupPicker || com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: in Material 3 Expressive the header stays transparent: the content view draws the whole sheet under it
+      // as one shape (BottomSheetViewController.xgramDrawSheet), a 54dp header band of its own left the content view's
+      // square body under its rounded corners
       headerView.setBackground(null);
-    } else if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable sheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable(); // XGram: updated in setHeaderBackgroundFactor
-      sheetTop.set(Theme.getColor(ColorId.background), 1f);
-      headerView.setBackground(sheetTop);
-      addThemeInvalidateListener(headerView);
     } else {
       ViewSupport.setThemedBackground(headerView, ColorId.background, this);
     }
@@ -368,7 +366,10 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
             if (reactionsPickerController != null) {
               corner *= 1f - reactionsPickerController.getTopHeaderVisibility() * reactionsPickerVisibility.getFloatValue();
             }
-            float band = Screen.dp(14f) * corner;
+            // the band holds the drag handle (8dp from the top, about 8dp above the reaction row's pill). The sheet top
+            // spans the picker's whole height, so its 28dp curve is never cut short; the content view's sheet under it
+            // starts at the reaction row and stays inside this curve.
+            float band = Screen.dp(XGRAM_HANDLE_BAND) * corner;
             if (xgramPickerSheetTop == null) {
               xgramPickerSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
             }
@@ -398,10 +399,27 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramPickerSheetTop;
 
-  /** XGram: 1 while the sheet top is 28dp or more below the top of the window, 0 once it reaches it. */
+  /** XGram: 1 while the sheet top is well below the status bar, 0 as it docks (see XgramM3Sheets.cornerFactor). */
   private static float xgramSheetCornerFactor (float sheetTop) {
     return com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(sheetTop); // the shared sheet chrome rule
   }
+
+  @Override
+  protected float xgramSheetHandleAlpha () {
+    // XGram: with the popup picker its sheet top (above the reaction row) has the handle, the content view's sheet
+    // under it only continues the shape. Without it the handle fades out with its band (as the picker's does).
+    return state.needShowReactionsPopupPicker ? 0f : xgramSheetCorners();
+  }
+
+  @Override
+  protected float xgramSheetBand () {
+    // XGram: without the popup picker the content view's sheet has the handle band above the 54dp header row (its
+    // reaction pill and tabs fill the row), as the picker's sheet top has
+    return state.needShowReactionsPopupPicker ? 0f : Screen.dp(XGRAM_HANDLE_BAND) * xgramSheetCorners();
+  }
+
+  /** XGram: the band above the header row that holds the drag handle: 8dp, the 4dp handle, 4dp to the row. */
+  private static final float XGRAM_HANDLE_BAND = 16f;
 
   private void invalidatePickerWrapper () {
     if (reactionsPickerWrapper != null) {
@@ -412,10 +430,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   @Override
   protected void setHeaderPosition (float y) {
-    super.setHeaderPosition(y);
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && headerView != null && headerView.getBackground() instanceof com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable) {
-      ((com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable) headerView.getBackground()).set(Theme.getColor(ColorId.background), xgramSheetCornerFactor(headerTranslationY)); // XGram
-    }
+    super.setHeaderPosition(y); // XGram: in Material 3 Expressive this also redraws the sheet (the content view)
     checkReactionPickerPosition();
   }
 
@@ -514,15 +529,15 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   protected void setHeaderBackgroundFactor (float headerBackgroundFactor) {
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive modal sheet: one tone with its pages (the background color id, a surface
-      // container role), 28dp top corners that square off at the top, a drag handle
+      // container role), 28dp top corners that square off at the top, a drag handle. The content view draws it as one
+      // shape (corners following the sheet top, not this factor); the header stays transparent over it.
       final int sheetColor = Theme.getColor(ColorId.background);
       setLickViewColor(sheetColor);
-      if (headerView != null && !state.needShowReactionsPopupPicker) {
-        if (!(headerView.getBackground() instanceof com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable)) {
-          headerView.setBackground(new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable());
-        }
-        // the corners follow the sheet top (not the header background factor): rounded until it reaches the window top
-        ((com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable) headerView.getBackground()).set(sheetColor, xgramSheetCornerFactor(headerTranslationY));
+      if (headerView != null && headerView.getBackground() != null) {
+        headerView.setBackground(null);
+      }
+      if (contentView != null) {
+        contentView.invalidate();
       }
       if (headerCell != null) {
         headerCell.updatePaints(sheetColor);

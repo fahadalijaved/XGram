@@ -80,11 +80,11 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
     contentView = new RelativeLayout(context) {
       @Override
       protected void onDraw (Canvas canvas) {
-        if (xgramSheetTop != null) {
-          // XGram: Material 3 Expressive: the page color as a modal sheet, with 28dp top corners and a drag handle
-          // behind the (transparent) header
-          xgramSheetTop.setBounds(0, (int) headerTranslationY, getMeasuredWidth(), getMeasuredHeight());
-          xgramSheetTop.draw(canvas);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: Material 3 Expressive: the page color as one modal sheet shape from its top to the bottom, with
+          // 28dp top corners and a drag handle behind the (transparent) header. Never a square body under the curve:
+          // that showed its corners as notches beside the rounded top (e.g. under the message menu's reaction row).
+          xgramDrawSheet(canvas, getMeasuredWidth(), getMeasuredHeight());
           super.onDraw(canvas);
           return;
         }
@@ -96,7 +96,12 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
       protected boolean drawChild (Canvas canvas, View child, long drawingTime) {
         if (child == pagerInFrameLayoutFix) {
           canvas.save();
-          canvas.clipRect(0, headerTranslationY + (headerView != null ? HeaderView.getTopOffset() : 0), getMeasuredWidth(), getMeasuredHeight());
+          float clipTop = headerTranslationY + (headerView != null ? HeaderView.getTopOffset() : 0);
+          if (headerView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram: the pages stay out of the rounded corners (the header band above them is the sheet's own surface)
+            clipTop = Math.max(clipTop, xgramSheetTopY() + com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable.cornerRadius(xgramSheetCorners()));
+          }
+          canvas.clipRect(0, clipTop, getMeasuredWidth(), getMeasuredHeight());
           boolean result = super.drawChild(canvas, child, drawingTime);
           canvas.restore();
           return result;
@@ -298,6 +303,8 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
       onUpdateLickViewFactor(factor);
       // headerView.getFilling().setShadowAlpha(factor);
       setHeaderBackgroundFactor(factor);
+    } else if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      setHeaderBackgroundFactor(headerBackgroundFactor); // XGram: keeps the header transparent over the sheet
     }
   }
 
@@ -308,15 +315,53 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
     }
   }
 
-  // XGram: Material 3 Expressive modal sheet top for the sheets that keep this header handling
-  // (MessageOptionsPagerController overrides setHeaderBackgroundFactor and draws its own)
+  // XGram: Material 3 Expressive modal sheet: the content view draws the whole sheet (see xgramDrawSheet) for every
+  // subclass, MessageOptionsPagerController included (it overrides setHeaderBackgroundFactor and keeps its header
+  // transparent the same way)
 
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramSheetTop;
 
+  /** XGram: the sheet's corner factor: 28dp corners until the sheet top nears the status bar, then square (M3 full screen). */
+  protected float xgramSheetCorners () {
+    return com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerTranslationY);
+  }
+
+  /** XGram: the drag handle's opacity on the sheet drawn by the content view (0 when a subclass draws its own). */
+  protected float xgramSheetHandleAlpha () {
+    return 1f;
+  }
+
+  /**
+   * XGram: how far above the header the sheet starts, 0 by default: a band for the drag handle over a header row
+   * whose controls leave it no room. Scale it with {@link #xgramSheetCorners()} so it is gone once docked.
+   */
+  protected float xgramSheetBand () {
+    return 0f;
+  }
+
+  /** XGram: the top of the sheet drawn by the content view. */
+  private float xgramSheetTopY () {
+    return headerTranslationY - Math.max(0f, xgramSheetBand());
+  }
+
+  /**
+   * XGram: the sheet in the page color, one shape from its top (the header's, or the band's above it) to the bottom of
+   * the content view: 28dp top corners that square off at the top of the window, and the drag handle.
+   */
+  private void xgramDrawSheet (Canvas c, int width, int height) {
+    if (xgramSheetTop == null) {
+      xgramSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
+    }
+    final int top = (int) xgramSheetTopY();
+    xgramSheetTop.set(Theme.getColor(getBackgroundColorId()), xgramSheetCorners());
+    xgramSheetTop.setHandleAlpha(xgramSheetHandleAlpha());
+    xgramSheetTop.setBounds(0, top, width, Math.max(top, height));
+    xgramSheetTop.draw(c);
+  }
+
   /**
    * One tone with the pages: the header loses Telegram X's filling (re-checked on every move, in case a page set it
-   * again), and the content view draws the page color under it as a sheet with 28dp top corners that square off at
-   * the top of the window, and a drag handle. The status bar strip takes the same color.
+   * again), so the sheet the content view draws under it shows through. The status bar strip takes the same color.
    */
   private void xgramUpdateSheetTop () {
     final HeaderView header = headerView;
@@ -326,13 +371,8 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
     if (header.getBackground() != null) {
       header.setBackground(null);
     }
-    if (xgramSheetTop == null) {
-      xgramSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
-    }
-    final int sheetColor = Theme.getColor(getBackgroundColorId());
-    xgramSheetTop.set(sheetColor, com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerTranslationY));
     if (lickView != null) {
-      lickView.setHeaderBackground(sheetColor);
+      lickView.setHeaderBackground(Theme.getColor(getBackgroundColorId()));
     }
     if (contentView != null) {
       contentView.invalidate();
@@ -342,7 +382,7 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
   @Override
   public void onThemeColorsChanged (boolean areTemp, ColorState state) {
     super.onThemeColorsChanged(areTemp, state);
-    if (xgramSheetTop != null && headerView != null) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && headerView != null) {
       xgramUpdateSheetTop(); // XGram: theme changes
     }
   }
@@ -506,7 +546,7 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
 
   protected void setLickViewColor (@ColorInt int color) {
     if (lickView != null) {
-      if (xgramSheetTop != null) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         color = Theme.getColor(getBackgroundColorId()); // XGram: the status bar strip continues the Expressive sheet
       }
       lickView.setHeaderBackground(color);
