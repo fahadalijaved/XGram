@@ -17,6 +17,7 @@ import android.os.Build
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import androidx.annotation.RequiresApi
 import me.vkryl.android.widget.FrameLayoutFix
 
 /** How a row view is measured in a container that is not a RecyclerView: the list's rules for its layout params. */
@@ -127,6 +128,8 @@ internal class TgxHeadlessHost(
   override fun generateDefaultLayoutParams(): LayoutParams =
     MarginLayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
 
+  // Called on Android 8 and newer; the renderer runs only on Android 13 and newer (Expressive design).
+  @RequiresApi(Build.VERSION_CODES.O)
   override fun onDescendantInvalidated(child: View, target: View) {
     super.onDescendantInvalidated(child, target)
     onInvalidated(child)
