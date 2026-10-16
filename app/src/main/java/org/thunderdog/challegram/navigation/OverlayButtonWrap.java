@@ -300,6 +300,13 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
 
   private boolean isOpen;
 
+  /** XGram: runs whenever the menu opens or closes. */
+  public Runnable xgramOnToggle;
+
+  public boolean xgramIsOpen () {
+    return isOpen;
+  }
+
   public void hideIfShowing () {
     if (isOpen) {
       toggle();
@@ -311,6 +318,9 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
       return;
     }
     isOpen = !isOpen;
+    if (xgramOnToggle != null) {
+      xgramOnToggle.run(); // XGram: the chat list hides its connection pill while the menu is open
+    }
     if (xgram) {
       xgramAnimateMenu();
       return;

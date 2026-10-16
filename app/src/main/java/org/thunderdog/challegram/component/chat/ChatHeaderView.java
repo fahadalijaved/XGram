@@ -143,6 +143,138 @@ public class ChatHeaderView extends ComplexHeaderView {
     attachChatStatus(chatId, topicId);
   }
 
+  // XGram M3E: while the app connects (or is offline, or stuck) the subtitle line shows it, with a loading indicator
+  // or an icon, instead of the status bar. Frames run only while the spring moves or the indicator is on screen.
+
+  private final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private final com.fahadali.xgram.appearance.XgramConnection.Listener xgramConnListener = this::xgramSetConnection;
+  private final org.thunderdog.challegram.util.text.TextColorSet xgramConnColors = () ->
+    com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+  private @Nullable com.fahadali.xgram.appearance.XgramMotion.Value xgramConnF;
+  private int xgramConnState = com.fahadali.xgram.appearance.XgramConnection.HIDDEN;
+  private String xgramConnString = "";
+  private @Nullable org.thunderdog.challegram.util.text.Text xgramConnText;
+  private int xgramConnTextMaxWidth;
+  private long xgramConnStart;
+  private @Nullable android.graphics.drawable.Drawable xgramConnIcon;
+  private int xgramConnIconState, xgramConnIconColor;
+
+  @Override
+  protected void onAttachedToWindow () {
+    super.onAttachedToWindow();
+    if (xgramM3) {
+      com.fahadali.xgram.appearance.XgramConnection conn = com.fahadali.xgram.appearance.XgramConnection.instance();
+      conn.addListener(xgramConnListener);
+      xgramSetConnection(conn.getState(), conn.getText(), false);
+    }
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow();
+    if (xgramM3) {
+      com.fahadali.xgram.appearance.XgramConnection.instance().removeListener(xgramConnListener);
+    }
+  }
+
+  private void xgramSetConnection (int state, CharSequence text, boolean animated) {
+    final boolean show = com.fahadali.xgram.appearance.XgramConnection.isProblem(state);
+    if (show) {
+      if (state == com.fahadali.xgram.appearance.XgramConnection.PROGRESS && xgramConnState != state) {
+        xgramConnStart = android.os.SystemClock.uptimeMillis();
+      }
+      xgramConnState = state;
+      String string = text != null ? text.toString() : "";
+      if (!string.equals(xgramConnString)) {
+        xgramConnString = string;
+        xgramReleaseConnText();
+      }
+    }
+    if (xgramConnF == null) {
+      if (!show) {
+        return;
+      }
+      xgramConnF = new com.fahadali.xgram.appearance.XgramMotion.Value(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 0f, (v, value, velocity) -> invalidate());
+    }
+    float target = show ? 1f : 0f;
+    if (animated && isAttachedToWindow() && getMeasuredWidth() > 0) {
+      xgramConnF.animateTo(target);
+    } else {
+      xgramConnF.setValue(target);
+    }
+    invalidate();
+  }
+
+  private void xgramReleaseConnText () {
+    if (xgramConnText != null) {
+      xgramConnText.performDestroy();
+      xgramConnText = null;
+    }
+  }
+
+  @Override
+  protected float xgramConnectionFactor () {
+    return xgramConnF != null ? Math.max(0f, Math.min(1f, xgramConnF.getValue())) : 0f;
+  }
+
+  @Override
+  protected void xgramDrawConnection (@androidx.annotation.NonNull android.graphics.Canvas c, float left, float subtitleTop, float avatarExpandFactor, int maxWidth) {
+    final float f = xgramConnectionFactor();
+    if (f <= 0f || xgramConnString.isEmpty()) {
+      return;
+    }
+    final int textMaxWidth = Math.max(Screen.dp(48f), maxWidth - Screen.dp(16f));
+    if (xgramConnText == null || xgramConnTextMaxWidth != textMaxWidth) {
+      xgramReleaseConnText();
+      xgramConnText = new org.thunderdog.challegram.util.text.Text.Builder(xgramConnString, textMaxWidth,
+        com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, 12f), xgramConnColors)
+        .singleLine()
+        .build();
+      xgramConnTextMaxWidth = textMaxWidth;
+    }
+    final float alpha = f * (1f - avatarExpandFactor);
+    final float cy = subtitleTop + xgramConnText.getLineHeight() / 2f;
+    final float leadCx = left + Screen.dp(6f);
+    final float scale = com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : .92f + .08f * f;
+    final int color = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    final int restore = c.save();
+    if (scale != 1f) {
+      c.scale(scale, scale, left, cy);
+    }
+    if (xgramConnState == com.fahadali.xgram.appearance.XgramConnection.PROGRESS) {
+      com.fahadali.xgram.appearance.XgramLoadingIndicator.draw(c, leadCx, cy, Screen.dp(12f) * com.fahadali.xgram.appearance.XgramLoadingIndicator.ACTIVE_INDICATOR_SCALE,
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(color, alpha), android.os.SystemClock.uptimeMillis() - xgramConnStart);
+    } else {
+      android.graphics.drawable.Drawable icon = xgramConnIcon(color);
+      if (icon != null) {
+        int size = Screen.dp(14f), x = Math.round(leadCx) - size / 2, y = Math.round(cy) - size / 2;
+        icon.setBounds(x, y, x + size, y + size);
+        icon.setAlpha(Math.round(255 * alpha));
+        icon.draw(c);
+      }
+    }
+    xgramConnText.draw(c, (int) (left + Screen.dp(16f)), (int) subtitleTop, null, alpha);
+    c.restoreToCount(restore);
+    if (xgramConnState == com.fahadali.xgram.appearance.XgramConnection.PROGRESS) {
+      postInvalidateOnAnimation();
+    }
+  }
+
+  @Nullable
+  private android.graphics.drawable.Drawable xgramConnIcon (int color) {
+    if (xgramConnIcon == null || xgramConnIconState != xgramConnState) {
+      int res = xgramConnState == com.fahadali.xgram.appearance.XgramConnection.OFFLINE ? org.thunderdog.challegram.R.drawable.xgram_cloud_off_24 : org.thunderdog.challegram.R.drawable.baseline_sync_problem_24;
+      xgramConnIcon = org.thunderdog.challegram.tool.Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(res));
+      xgramConnIconState = xgramConnState;
+      xgramConnIconColor = 0;
+    }
+    if (xgramConnIcon != null && xgramConnIconColor != color) {
+      xgramConnIconColor = color;
+      xgramConnIcon.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN));
+    }
+    return xgramConnIcon;
+  }
+
   // Updates (new)
 
   private Tdlib tdlib;
