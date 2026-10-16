@@ -407,6 +407,13 @@ public final class XgramR5Calls {
     }
   }
 
+  // Floating toolbars (chat preview, quick actions)
+
+  /** Whether a chat action is destructive (drawn in error in the floating toolbars). */
+  public static boolean isDestructiveAction (int id) {
+    return id == R.id.btn_removeChatFromListOrClearHistory;
+  }
+
   // Unsupported links
 
   /**

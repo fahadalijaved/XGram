@@ -592,10 +592,14 @@ public class ForceTouchView extends FrameLayoutFix implements
         PopupContext popupContext = new PopupContext(popupWrapView, view, actionItem.title, xgram);
         view.setTag(popupContexts[i] = popupContext);
         view.setScaleType(ImageView.ScaleType.CENTER);
-        themeListenerList.addThemeFilterListener(view, ColorId.icon);
+        final boolean xgramDestructive = xgram && com.fahadali.xgram.appearance.XgramR5Calls.isDestructiveAction(buttonId);
+        if (!xgramDestructive) {
+          themeListenerList.addThemeFilterListener(view, ColorId.icon);
+        }
         if (actionItem.iconRes != 0) {
           view.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(actionItem.iconRes));
-          view.setColorFilter(Theme.iconColor());
+          // XGram M3E: a destructive action (delete) in error
+          view.setColorFilter(xgramDestructive ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR) : Theme.iconColor());
         }
         view.setLayoutParams(xgram ? com.fahadali.xgram.appearance.XgramM3Preview.buttonParams() : new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 2f));
         if (xgram) {
@@ -1051,8 +1055,10 @@ public class ForceTouchView extends FrameLayoutFix implements
       if (this.isVisible != isVisible) {
         this.isVisible = isVisible;
         if (xgram && target instanceof ImageView && ((ImageView) target).getDrawable() != null) {
-          // XGram M3E: onSecondaryContainer on the filled button (set once per change, not per frame)
-          ((ImageView) target).setColorFilter(com.fahadali.xgram.appearance.XgramM3Preview.iconColor(isVisible));
+          // XGram M3E: onSecondaryContainer on the filled button (set once per change, not per frame); delete stays error
+          ((ImageView) target).setColorFilter(com.fahadali.xgram.appearance.XgramR5Calls.isDestructiveAction(target.getId()) ?
+            com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR) :
+            com.fahadali.xgram.appearance.XgramM3Preview.iconColor(isVisible));
         }
         animateFactor(isVisible ? 1f : 0f);
         if (isVisible) {
