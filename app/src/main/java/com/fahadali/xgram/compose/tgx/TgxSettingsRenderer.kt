@@ -741,7 +741,7 @@ class TgxSettingsRenderer private constructor(
       return true
     }
     val location = IntArray(2)
-    nav.value.getLocationInWindow(location)
+    nav.getValue().getLocationInWindow(location)
     val wx = (location[0] + x).toInt()
     val wy = (location[1] + y).toInt()
     for (bounds in noSwipeAreas.values) {
