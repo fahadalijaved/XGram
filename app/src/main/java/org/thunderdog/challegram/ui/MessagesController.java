@@ -6785,7 +6785,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (this.mentionButtonFactor != factor) {
       this.mentionButtonFactor = factor;
       float range = MathUtils.clamp(factor);
-      mentionButtonWrap.setAlpha(range);
+      xgramSetFabAlpha(mentionButtonWrap, mentionButton, range); // XGram: the M3 FAB fades itself
       xgramPopScale(mentionButtonWrap, factor);
       updateBottomBarStyle();
     }
@@ -6817,6 +6817,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (wraps[i] != null) {
         wraps[i].setPivotX(Screen.dp(118f) - size / 2f);
         wraps[i].setPivotY(Screen.dp(74f) - size / 2f);
+        // The FAB fades itself from now on (xgramSetFabAlpha): it takes over the wrap's current alpha
+        buttons[i].setAlpha(buttons[i].getAlpha() * wraps[i].getAlpha());
+        wraps[i].setAlpha(1f);
       }
     }
     for (View badge : new View[] {goToNextFoundMessageButtonBadge, goToPrevFoundMessageButtonBadge}) {
@@ -6825,6 +6828,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
         badgeParams.rightMargin = badgeParams.bottomMargin = Screen.dp(16f);
         badge.setLayoutParams(badgeParams);
       }
+    }
+  }
+
+  /**
+   * XGram M3E: a chat FAB fades itself, not its wrap. A wrap faded with alpha is drawn through a layer the size of
+   * its own bounds, which would cut the FAB's elevation shadow off at the wrap's right and bottom edges (the FAB sits
+   * in that corner) while it pops in and out; the FAB's own alpha fades its shadow with it. The wrap's alpha
+   * otherwise (Expressive design off).
+   */
+  private static void xgramSetFabAlpha (@NonNull View wrap, @Nullable CircleButton button, float alpha) {
+    if (button != null && button.xgramIsChatFab()) {
+      button.setAlpha(alpha);
+    } else {
+      wrap.setAlpha(alpha);
     }
   }
 
@@ -6904,7 +6921,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (this.reactionButtonFactor != factor) {
       this.reactionButtonFactor = factor;
       float range = MathUtils.clamp(factor);
-      reactionsButtonWrap.setAlpha(range);
+      xgramSetFabAlpha(reactionsButtonWrap, reactionsButton, range); // XGram: the M3 FAB fades itself
       xgramPopScale(reactionsButtonWrap, factor);
       updateBottomBarStyle();
     }
@@ -9334,7 +9351,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
     switch (id) {
       case ANIMATOR_SCROLL_TO_BOTTOM: {
-        scrollToBottomButtonWrap.setAlpha(MathUtils.clamp(factor));
+        xgramSetFabAlpha(scrollToBottomButtonWrap, scrollToBottomButton, MathUtils.clamp(factor)); // XGram: the M3 FAB fades itself
         xgramPopScale(scrollToBottomButtonWrap, factor);
         checkScrollButtonOffsets();
         break;

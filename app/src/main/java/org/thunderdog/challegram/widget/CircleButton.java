@@ -272,6 +272,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     xgramZ = needShadow ? Screen.dp(XgramExpressive.ELEVATION_3) : 0;
     setElevation(xgramZ);
     xgramSyncTagZ();
+    xgramUnclipShadow(); // already in its wrap (onAttachedToWindow covers the usual order)
     return true;
   }
 
@@ -366,6 +367,20 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     c.drawText(xgramBadgeText, xgramBadgeRect.centerX() - xgramBadgeTextWidth / 2f, xgramBadgeRect.centerY() - (paint.ascent() + paint.descent()) / 2f, paint);
     if (scaled) {
       Views.restore(c, saveCount);
+    }
+  }
+
+  /**
+   * XGram M3E: a chat FAB sits in the corner of a small wrap (MessagesController's scroll, mention and reaction wraps,
+   * the forum topics' mention wrap, the search arrows' CircleCounterBadgeView) with only 4dp (or no) room past the
+   * container, and a clipping wrap cut its elevation shadow off at the wrap's right and bottom edges: a hard-edged
+   * translucent rectangle around the button. Nothing else in those wraps draws outside them, so they stop clipping
+   * and the level 3 shadow falls around the rounded square (its outline is the container's, the view's padding
+   * paints nothing).
+   */
+  private void xgramUnclipShadow () {
+    if (xgramChatFab && xgramZ > 0 && getParent() instanceof android.view.ViewGroup) {
+      ((android.view.ViewGroup) getParent()).setClipChildren(false);
     }
   }
 
@@ -1041,6 +1056,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   protected void onAttachedToWindow () {
     super.onAttachedToWindow();
     xgramSyncTagZ();
+    xgramUnclipShadow();
     if (gifReceiver != null) {
       gifReceiver.attach();
     }

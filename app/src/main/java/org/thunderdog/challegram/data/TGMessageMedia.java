@@ -362,6 +362,7 @@ public class TGMessageMedia extends TGMessage {
       } else {
         this.wrapper = null;
       }
+      this.captionMeasuredWrapper = null; // getCaptionMediaWidth measures the new caption
       updateRounds();
       invalidateTextMediaReceiver();
       return true;
@@ -486,8 +487,15 @@ public class TGMessageMedia extends TGMessage {
       }
     }
 
+    // A caption wider than the media widens it, up to the widest a text bubble gets (getCaptionMediaWidth)
+    final int captionMediaWidth = needFullWidth ? 0 : getCaptionMediaWidth(Math.max(maxWidth, origMaxWidth));
+    if (captionMediaWidth > maxWidth) {
+      maxWidth = captionMediaWidth; // the media's own limit is narrower (landscape, the smallest screen side)
+    }
+
     minWidth = Math.min(minWidth, maxWidth);
     minHeight = Math.min(minHeight, maxHeight);
+    minWidth = Math.max(minWidth, captionMediaWidth);
 
     mosaicWrapper.build(maxWidth, maxHeight, minWidth, minHeight, needFullWidth ? MosaicWrapper.MODE_FIT_WIDTH : MosaicWrapper.MODE_FIT_AS_IS, false);
 
@@ -499,6 +507,39 @@ public class TGMessageMedia extends TGMessage {
       wrapper.prepare(useBubbles() ? mosaicWrapper.getWidth() - xBubblePadding * 2 : getRealContentMaxWidth());
     }
   }
+
+  /**
+   * The width a bubble's media is made at least as wide as, so its caption is not wrapped every few words at the
+   * width of a narrow (portrait) photo, video or GIF. As in Telegram: the caption is laid out at the widest the
+   * media may get (a text bubble's width), and the media grows to that caption's longest line plus its padding.
+   * A single item keeps its height and center crops to the wider cell (MosaicWrapper's minimum layout width), an
+   * album is stretched sideways; the cells' players and buttons follow the cells. A caption that fits the media
+   * changes nothing. 0 without a caption, outside bubbles and for self-destructing media.
+   */
+  private int getCaptionMediaWidth (int maxMediaWidth) {
+    final TextWrapper wrapper = this.wrapper;
+    if (wrapper == null || !useBubbles() || isHot()) {
+      return 0;
+    }
+    final int maxCaptionWidth = maxMediaWidth - xBubblePadding * 2;
+    if (maxCaptionWidth <= 0) {
+      return 0;
+    }
+    final int textSize = wrapper.getTextStyleProvider().getTextSizeInPixels();
+    if (captionMeasuredWrapper != wrapper || captionMeasuredMaxWidth != maxCaptionWidth || captionMeasuredTextSize != textSize) {
+      // Measured once per caption, width and text size: buildContent also runs on every frame of the inline
+      // comment button's animation, and the caption's final layout (at the media's width) stays cached in the wrapper
+      wrapper.prepare(maxCaptionWidth);
+      captionMeasuredWrapper = wrapper;
+      captionMeasuredMaxWidth = maxCaptionWidth;
+      captionMeasuredTextSize = textSize;
+      captionMeasuredWidth = wrapper.getWidth();
+    }
+    return captionMeasuredWidth > 0 ? Math.min(maxMediaWidth, captionMeasuredWidth + xBubblePadding * 2) : 0;
+  }
+
+  private @Nullable TextWrapper captionMeasuredWrapper;
+  private int captionMeasuredMaxWidth, captionMeasuredTextSize, captionMeasuredWidth;
 
   @Override
   protected void onAnimatorAttachedToMessage (long messageId, FactorAnimator animator) {

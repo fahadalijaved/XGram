@@ -738,6 +738,10 @@ public class MosaicWrapper implements FactorAnimator.Target, ComplexReceiver.Key
       }
     }
 
+    if (fitMode == MODE_FIT_AS_IS) {
+      stretchToMinWidth(itemInfos, minLayoutWidth, spacing);
+    }
+
     int mosaicWidth = 0;
     int mosaicHeight = 0;
     for (MosaicItemInfo info : itemInfos) {
@@ -749,6 +753,29 @@ public class MosaicWrapper implements FactorAnimator.Target, ComplexReceiver.Key
     }
 
     return setMosaic(mosaicWidth, mosaicHeight, itemInfos, fitMode, animateChanges, isRetry);
+  }
+
+  /**
+   * An album laid out narrower than {@code minWidth} (a caption that needs a wider bubble) is stretched sideways:
+   * every cell keeps its height and crops its media (center crop), and the spacing between cells stays the same.
+   */
+  private static void stretchToMinWidth (MosaicItemInfo[] items, int minWidth, float spacing) {
+    int width = 0;
+    for (MosaicItemInfo info : items) {
+      width = Math.max(width, info.x + info.width);
+    }
+    if (width <= 0 || width >= minWidth) {
+      return;
+    }
+    final float scale = (float) minWidth / (float) width;
+    for (MosaicItemInfo info : items) {
+      final int right = info.x + info.width;
+      // A cell after a gap keeps the gap: its left edge follows the scaled right edge of the cell before it
+      final int left = info.x <= 0 ? 0 : Math.round((info.x - spacing) * scale + spacing);
+      final int newRight = right >= width ? minWidth : Math.round(right * scale);
+      info.x = left;
+      info.width = Math.max(1, newRight - left);
+    }
   }
 
   private static float multiHeight (float[] ratios, int start, int end, int maxWidth, float spacing) {
