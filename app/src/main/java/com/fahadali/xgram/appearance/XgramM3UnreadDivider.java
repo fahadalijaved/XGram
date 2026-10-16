@@ -37,7 +37,7 @@ import org.thunderdog.challegram.unsorted.AppContext;
 public final class XgramM3UnreadDivider {
   private XgramM3UnreadDivider () { }
 
-  private static final float CHIP_HEIGHT = 26f, PADDING = 12f, ICON_GAP = 2f, ICON_END_PADDING = 4f,
+  private static final float CHIP_HEIGHT = XgramR5Chat.CHIP_HEIGHT, PADDING = XgramR5Chat.CHIP_PADDING, ICON_GAP = 2f, ICON_END_PADDING = 4f,
     LINE_INSET = 16f, LINE_GAP = 8f, LINE_WIDTH = 1f;
 
   /**
@@ -65,6 +65,28 @@ public final class XgramM3UnreadDivider {
    */
   public static void draw (@NonNull Canvas c, int width, int top, int bottom, @NonNull String text, float textWidth,
                            @Nullable Drawable icon, @Nullable Paint iconPaint, @ColorInt int chipColor, @ColorInt int textColor) {
+    draw(c, width, top, bottom, text, textWidth, icon, iconPaint, chipColor, textColor, 1f);
+  }
+
+  /**
+   * Round 5: the tonal chat chip (the date chip's size and type, {@code chipColor} secondaryContainer and
+   * {@code textColor} onSecondaryContainer) without the chevron, drawn at {@code alpha} (the divider fades out once
+   * the chat is read).
+   */
+  public static void draw (@NonNull Canvas c, int width, int top, int bottom, @NonNull String text, float textWidth,
+                           @ColorInt int chipColor, @ColorInt int textColor, float alpha) {
+    draw(c, width, top, bottom, text, textWidth, null, null, chipColor, textColor, alpha);
+  }
+
+  private static void draw (@NonNull Canvas c, int width, int top, int bottom, @NonNull String text, float textWidth,
+                            @Nullable Drawable icon, @Nullable Paint iconPaint, @ColorInt int chipColor, @ColorInt int textColor, float alpha) {
+    if (alpha <= 0f) {
+      return;
+    }
+    if (alpha < 1f) {
+      chipColor = XgramExpressive.withAlpha(chipColor, alpha);
+      textColor = XgramExpressive.withAlpha(textColor, alpha);
+    }
     final float centerY = (top + bottom) / 2f;
     final float halfHeight = Screen.dp(CHIP_HEIGHT) / 2f;
     final float contentWidth = textWidth + (icon != null ? Screen.dp(ICON_GAP) + icon.getMinimumWidth() : 0);
@@ -73,7 +95,7 @@ public final class XgramM3UnreadDivider {
 
     final int lineWidth = Math.max(1, Screen.dp(LINE_WIDTH));
     final float lineTop = Math.round(centerY - lineWidth / 2f);
-    final Paint linePaint = Paints.fillingPaint(XgramExpressive.color(XgramExpressive.OUTLINE_VARIANT));
+    final Paint linePaint = Paints.fillingPaint(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.OUTLINE_VARIANT), alpha));
     final float startLeft = Screen.dp(LINE_INSET), startRight = chipLeft - Screen.dp(LINE_GAP);
     if (startRight > startLeft) {
       c.drawRect(startLeft, lineTop, startRight, lineTop + lineWidth, linePaint);

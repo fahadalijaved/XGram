@@ -915,6 +915,28 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     return null;
   }
 
+  // XGram M3E: the "New messages" divider fades out a moment after the chat is read, once it has been seen
+  private static final long XGRAM_UNREAD_FADE_DELAY_MS = 2000L;
+  private final Runnable xgramFadeUnreadDivider = () -> {
+    if (adapter == null) {
+      return;
+    }
+    int index = indexOfFirstUnreadMessage();
+    TGMessage message = index != -1 ? adapter.getMessage(index) : null;
+    if (message != null) {
+      message.xgramFadeOutUnreadBadge();
+    }
+  };
+
+  /** XGram: the chat (not a thread or a forum topic, which keep their own counts) has no unread messages left. Main thread. */
+  public void xgramOnChatRead () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || loader.xgramTopicKey() != null || controller.isInForceTouchMode()) {
+      return;
+    }
+    UI.removePendingRunnable(xgramFadeUnreadDivider);
+    UI.post(xgramFadeUnreadDivider, XGRAM_UNREAD_FADE_DELAY_MS);
+  }
+
   public int indexOfFirstUnreadMessage () {
     if (adapter.getMessageCount() > 0) {
       for (int i = 0; i < adapter.getMessageCount(); i++) {

@@ -41,6 +41,13 @@ public final class XgramR5Chat {
     return XgramExpressive.isEnabled();
   }
 
+  // The chat chip: one spec for the date chips, merged forum topic headers, the unread divider and service pills
+
+  /** Height (dp) of a one-line chat chip: labelMedium centred in it, full corners. */
+  public static final float CHIP_HEIGHT = 26f;
+  /** Horizontal padding (dp) between the chip's edge and its label. */
+  public static final float CHIP_PADDING = 12f;
+
   // Strings
 
   /**

@@ -61,7 +61,7 @@ public final class XgramW2Cards {
   /** titleMedium and bodyMedium line heights. */
   public static final float TITLE_LINE = 24f, BODY_LINE = 20f;
   /** Service chip: horizontal padding around the text (the date separator's 12dp). */
-  public static final float SERVICE_PADDING_H = 12f;
+  public static final float SERVICE_PADDING_H = XgramR5Chat.CHIP_PADDING;
 
   // Colors
 
@@ -220,7 +220,7 @@ public final class XgramW2Cards {
   }
 
   /** The date separator chip's height (TGMessage.drawDate with Expressive design): one line is a 26dp pill. */
-  public static final float SERVICE_PILL_HEIGHT = 26f;
+  public static final float SERVICE_PILL_HEIGHT = XgramR5Chat.CHIP_HEIGHT;
 
   /**
    * The service chip around a laid out text: 12dp on both sides (the date chip's padding), 5dp above and 4dp below

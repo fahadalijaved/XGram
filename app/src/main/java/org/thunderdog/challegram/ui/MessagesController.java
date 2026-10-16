@@ -12347,6 +12347,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     tdlib.ui().post(() -> {
       if (getChatId() == chatId) {
         updateCounters(true);
+        if (unreadCount == 0 && messageThread == null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          manager.xgramOnChatRead(); // XGram: the "New messages" divider fades out
+        }
       }
     });
   }
