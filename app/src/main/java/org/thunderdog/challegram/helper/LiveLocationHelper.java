@@ -113,6 +113,40 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
     this.icon = Drawables.get(context.getResources(), R.drawable.baseline_location_on_18);
     this.handler = chatId != 0 ? new Handler(Looper.getMainLooper(), this) : null;
     this.clickHelper = chatId != 0 ? new ClickHelper(this) : null;
+    this.xgramClose = targetView != null && xgramM3() ? new com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton(targetView, R.drawable.baseline_close_24) : null;
+  }
+
+  // XGram: Material 3 Expressive bar, as the chat's other cards: the title in labelLarge onSurface and the text in
+  // bodyMedium onSurfaceVariant, one line centred on the 48dp bar, and the stop button a standard icon button (24dp
+  // close icon, its 40dp state layer 28dp from the end in a 56dp touch target) instead of Telegram X's 9dp cross.
+  // Nothing with Expressive design off.
+
+  private static final float XGRAM_CLOSE_WIDTH = 56f;
+  private final @Nullable com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton xgramClose;
+  private final Runnable xgramStop = this::xgramStopLiveLocations;
+  private static @Nullable TextPaint xgramBodyPaint;
+
+  private void xgramStopLiveLocations () {
+    stopLiveLocations(chatId, null);
+  }
+
+  private static boolean xgramM3 () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  /** labelLarge (the caller sets the colour). */
+  private static TextPaint xgramTitlePaint () {
+    return com.fahadali.xgram.appearance.XgramM3Chat.labelLargePaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
+  }
+
+  /** bodyMedium (the caller sets the colour). */
+  private static TextPaint xgramSubtitlePaint () {
+    if (xgramBodyPaint == null) {
+      xgramBodyPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+      xgramBodyPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false));
+    }
+    xgramBodyPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)));
+    return xgramBodyPaint;
   }
 
   public LiveLocationHelper init () {
@@ -217,7 +251,8 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
       return;
     }
     maxWidth = targetView.getMeasuredWidth();
-    float availWidth = maxWidth - Screen.dp(104f);
+    final boolean xgram = xgramM3();
+    float availWidth = maxWidth - Screen.dp(xgram ? 56f + XGRAM_CLOSE_WIDTH : 104f);
     Letters title;
     String subtitle;
     if (isSub) {
@@ -229,13 +264,14 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
     String trimmedTitle, trimmedSubtitle;
     float titleWidth = 0, subtitleWidth= 0;
     if (availWidth > 0f && title != null && subtitle != null) {
-      TextPaint titlePaint = Paints.getTitlePaint(title.needFakeBold);
+      TextPaint titlePaint = xgram ? xgramTitlePaint() : Paints.getTitlePaint(title.needFakeBold);
+      TextPaint subtitlePaint = xgram ? xgramSubtitlePaint() : Paints.getTextPaint15();
       trimmedTitle = TextUtils.ellipsize(title.text, titlePaint, availWidth, TextUtils.TruncateAt.END).toString();
       titleWidth = U.measureText(trimmedTitle, titlePaint);
       availWidth -= titleWidth;
       if (availWidth > 0) {
-        trimmedSubtitle = TextUtils.ellipsize(subtitle, Paints.getTextPaint15(), availWidth, TextUtils.TruncateAt.END).toString();
-        subtitleWidth = U.measureText(trimmedSubtitle, Paints.getTextPaint15());
+        trimmedSubtitle = TextUtils.ellipsize(subtitle, subtitlePaint, availWidth, TextUtils.TruncateAt.END).toString();
+        subtitleWidth = U.measureText(trimmedSubtitle, subtitlePaint);
       } else {
         trimmedSubtitle = null;
       }
@@ -420,7 +456,9 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
   // Draw
 
   public static int height () {
-    return Screen.dp(36f);
+    // XGram: 48dp with Expressive design: the chat's card group has 48dp cards (a 36dp card turned into a stadium),
+    // and the close button gets its 40dp state layer
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 48f : 36f);
   }
 
   public boolean isVisible () {
@@ -467,11 +505,19 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
       targetView.postInvalidateDelayed(delay, cx - horizontalRadius, cy - verticalRadius, cx + horizontalRadius, cy + verticalRadius);
     }
 
-    cx = viewWidth - Screen.dp(50f) / 2;
-    DrawAlgorithms.drawMark(c, cx, cy, 1f, Screen.dp(9f), Paints.getProgressPaint(ColorUtils.alphaColor(alphaFactor, iconColor),  Screen.dp(2f)));
+    if (xgramClose != null) {
+      xgramClose.setBounds(viewWidth - Screen.dp(XGRAM_CLOSE_WIDTH), startY, viewWidth, startY + height());
+      xgramClose.draw(c, alphaFactor);
+    } else {
+      cx = viewWidth - Screen.dp(50f) / 2;
+      DrawAlgorithms.drawMark(c, cx, cy, 1f, Screen.dp(9f), Paints.getProgressPaint(ColorUtils.alphaColor(alphaFactor, iconColor),  Screen.dp(2f)));
+    }
 
     int titleColor, subtitleColor;
-    if (onBackground) {
+    if (xgramM3()) {
+      titleColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+      subtitleColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    } else if (onBackground) {
       titleColor = Theme.textDecentColor();
       subtitleColor = Theme.textDecent2Color();
     } else {
@@ -498,6 +544,19 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
     }
     int textTop = startY + Screen.dp(23f);
     int textLeft = targetView.getMeasuredWidth() / 2 - (int) (titleWidth + subtitleWidth) / 2; // Screen.dp(72f);
+    if (xgramM3()) {
+      // XGram: labelLarge and bodyMedium on one baseline, the line centred on the bar
+      final TextPaint titlePaint = xgramTitlePaint(), subtitlePaint = xgramSubtitlePaint();
+      textTop = Math.round(startY + height() / 2f - (titlePaint.ascent() + titlePaint.descent()) / 2f);
+      if (trimmedTitle != null) {
+        titlePaint.setColor(ColorUtils.alphaColor(alpha, titleColor));
+        c.drawText(trimmedTitle, textLeft, textTop, titlePaint);
+      }
+      if (trimmedSubtitle != null) {
+        subtitlePaint.setColor(ColorUtils.alphaColor(alpha, subtitleColor));
+        c.drawText(trimmedSubtitle, textLeft + titleWidth, textTop, subtitlePaint);
+      }
+    } else {
     if (trimmedTitle != null) {
       Paint titlePaint = Paints.getTitlePaint(title.needFakeBold);
       final int sourceColor = titlePaint.getColor();
@@ -508,6 +567,7 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
     if (trimmedSubtitle != null) {
       c.drawText(trimmedSubtitle, textLeft + titleWidth, textTop, Paints.getTextPaint15(ColorUtils.alphaColor(alpha, subtitleColor)));
     }
+    }
     if (saved) {
       c.restore();
     }
@@ -516,6 +576,9 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
   // Actions
 
   public boolean onTouchEvent (MotionEvent e) {
+    if (xgramClose != null && clickHelper != null && xgramClose.onTouchEvent(e, xgramStop)) {
+      return true; // XGram: the stop button's own press (its state layer), not the bar's click
+    }
     return clickHelper != null && clickHelper.onTouchEvent(targetView, e);
   }
 
@@ -531,7 +594,7 @@ public class LiveLocationHelper implements LiveLocationManager.Listener, FactorA
 
   public void onClickAt (float x, float y) {
     if (targetView != null) {
-      if (x >= targetView.getMeasuredWidth() - Screen.dp(50f)) {
+      if (x >= targetView.getMeasuredWidth() - Screen.dp(xgramM3() ? XGRAM_CLOSE_WIDTH : 50f)) { // XGram: the stop button's 56dp touch target
         stopLiveLocations(chatId, null);
       } else {
         openLiveLocationList(false);

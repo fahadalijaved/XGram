@@ -12,9 +12,10 @@
 package com.fahadali.xgram.topics;
 
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
+import android.graphics.BitmapShader;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
@@ -45,7 +46,7 @@ import org.thunderdog.challegram.tool.Screen;
  * that fade while there is more to scroll to, and a spring that brings a picked tab to the middle. Along the side the
  * strip is a navigation rail: a 56 x 32dp indicator behind a 24dp icon, the label in labelMedium below.
  *
- * Main thread only. Everything is allocated once (the fade shader again only when the theme color changes); frames run
+ * Main thread only. Everything is allocated once (the fade ramp again only when the density changes); frames run
  * only while a spring moves or the strip scrolls; nothing here requests a layout. Reduce motion: springs snap.
  */
 final class XgramM3TopicTabs extends RecyclerView.ItemDecoration implements RecyclerView.OnItemTouchListener {
@@ -79,10 +80,13 @@ final class XgramM3TopicTabs extends RecyclerView.ItemDecoration implements Recy
   private boolean fadesReady;
 
   private final Paint pillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-  private final Paint fadePaint = new Paint();
+  private final Paint fadePaint = new Paint(Paint.FILTER_BITMAP_FLAG);
   private final RectF rect = new RectF();
-  private @Nullable LinearGradient fadeShader;
-  private int fadeColor, fadeLength;
+  /** An alpha ramp drawn in the paint's colour (see {@link #newFadeRamp}): a new fade colour is a setColor, not a new shader. */
+  private @Nullable BitmapShader fadeShader;
+  private int fadeLength;
+  /** The colour the strip sits on (the app bar's, as it changes); null: the strip's own background colour. */
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.ColorSource fadeColor;
 
   XgramM3TopicTabs (@NonNull RecyclerView rv, @NonNull LinearLayoutManager manager, boolean vertical, @NonNull Selection selection) {
     this.rv = rv;
@@ -281,6 +285,28 @@ final class XgramM3TopicTabs extends RecyclerView.ItemDecoration implements Recy
     c.drawRoundRect(rect, radius, radius, pillPaint);
   }
 
+  /** The colour the edges fade from: the colour the strip sits on (null: the strip's own background colour). */
+  void setFadeColor (@Nullable com.fahadali.xgram.appearance.XgramM3Chat.ColorSource source) {
+    this.fadeColor = source;
+    rv.invalidate();
+  }
+
+  /**
+   * The fade as an ALPHA_8 ramp ({@code length} px from opaque to clear, along the strip). An alpha-only bitmap shader
+   * draws in the paint's colour, so the colour can change every frame without a new shader.
+   */
+  private static BitmapShader newFadeRamp (int length, boolean vertical) {
+    length = Math.max(1, length);
+    final int[] pixels = new int[length];
+    for (int i = 0; i < length; i++) {
+      pixels[i] = Math.round(255f * (1f - (i + .5f) / length)) << 24;
+    }
+    final int width = vertical ? 1 : length, height = vertical ? length : 1;
+    final Bitmap ramp = Bitmap.createBitmap(width, height, Bitmap.Config.ALPHA_8);
+    ramp.setPixels(pixels, 0, width, 0, 0, width, height);
+    return new BitmapShader(ramp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+  }
+
   /** The fading edges, over the tabs, while there is more to scroll to on that side. */
   @Override
   public void onDrawOver (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
@@ -303,19 +329,19 @@ final class XgramM3TopicTabs extends RecyclerView.ItemDecoration implements Recy
       return;
     }
     int length = Screen.dp(FADE_DP);
-    int color = Theme.getColor(ColorId.background); // the strip's own background
-    if (fadeShader == null || fadeColor != color || fadeLength != length) {
-      fadeColor = color;
+    if (fadeShader == null || fadeLength != length) {
       fadeLength = length;
-      int clear = color & 0x00ffffff;
-      fadeShader = vertical ?
-        new LinearGradient(0, 0, 0, length, color, clear, Shader.TileMode.CLAMP) :
-        new LinearGradient(0, 0, length, 0, color, clear, Shader.TileMode.CLAMP);
+      fadeShader = newFadeRamp(length, vertical);
       fadePaint.setShader(fadeShader);
     }
+    // The colour the strip sits on: the app bar's (it changes frame by frame while the header fades into selection or
+    // search), else the strip's own background
+    int color = fadeColor != null ? fadeColor.color() : Theme.getColor(ColorId.background);
+    int colorAlpha = (color >>> 24) & 0xff;
+    fadePaint.setColor(color);
     int width = parent.getWidth(), height = parent.getHeight();
     if (a > 0f) {
-      fadePaint.setAlpha(Math.round(255 * a));
+      fadePaint.setAlpha(Math.round(colorAlpha * a));
       if (vertical) {
         c.drawRect(0, 0, width, length, fadePaint);
       } else {
@@ -323,7 +349,7 @@ final class XgramM3TopicTabs extends RecyclerView.ItemDecoration implements Recy
       }
     }
     if (b > 0f) {
-      fadePaint.setAlpha(Math.round(255 * b));
+      fadePaint.setAlpha(Math.round(colorAlpha * b));
       int save = c.save();
       if (vertical) {
         c.translate(0, height);

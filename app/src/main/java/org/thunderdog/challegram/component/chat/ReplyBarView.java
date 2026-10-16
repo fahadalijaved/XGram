@@ -178,14 +178,10 @@ public class ReplyBarView extends FrameLayoutFix implements View.OnClickListener
     });
     Views.setClickable(linkPreviewToggleView);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      linkPreviewToggleView.setBackground(xgramIconButtonBackground());
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(linkPreviewToggleView); // XGram: its state layer follows theme switches
     } else
     linkPreviewToggleView.setBackgroundResource(R.drawable.bg_btn_header);
     addView(linkPreviewToggleView);
-  }
-
-  private static android.graphics.drawable.Drawable xgramIconButtonBackground () {
-    return com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX);
   }
 
   private boolean animationsDisabled;
@@ -213,7 +209,7 @@ public class ReplyBarView extends FrameLayoutFix implements View.OnClickListener
     btn.setOnClickListener(this);
     Views.setClickable(btn);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      btn.setBackground(xgramIconButtonBackground()); // XGram: Material 3 Expressive standard icon button
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(btn); // XGram: Material 3 Expressive standard icon button, its state layer follows theme switches
     } else
     btn.setBackgroundResource(R.drawable.bg_btn_header);
     return btn;

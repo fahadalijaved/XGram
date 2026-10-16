@@ -13,6 +13,7 @@ import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.widget.CircleButton;
 
 import me.vkryl.android.AnimatorUtils;
@@ -83,6 +84,36 @@ public class CircleCounterBadgeView extends FrameLayout implements FactorAnimato
   /** XGram M3E: room for the FAB's shadow inside this view (see CircleButton.xgramMakeShadowRoom), after its final layout params. */
   public void xgramMakeShadowRoom () {
     circleButton.xgramMakeShadowRoom();
+  }
+
+  public CircleButton getCircleButton () {
+    return circleButton;
+  }
+
+  /**
+   * XGram M3E: sets this view's bottom margin as the distance of the FAB's slot from its parent's bottom, as before
+   * {@link #xgramMakeShadowRoom()}: the room it moved inside (the button's own bottom margin, 0 until then) comes off
+   * the margin, so a later margin change (the gallery's camera FAB over the system bar) does not lift the FAB by it.
+   */
+  public void xgramSetBottomMargin (int bottomMargin) {
+    final int inside = ((ViewGroup.MarginLayoutParams) circleButton.getLayoutParams()).bottomMargin;
+    Views.setBottomMargin(this, Math.max(0, bottomMargin - inside));
+  }
+
+  /**
+   * XGram M3E: a chat FAB fades itself (its shadow with it), not this view: a view faded with alpha is drawn through
+   * a layer of its own bounds, which cut the FAB's shadow off at them. This view's alpha otherwise (Expressive off).
+   */
+  public void xgramSetFadeAlpha (float alpha) {
+    if (circleButton.xgramIsChatFab()) {
+      if (getAlpha() != 1f) {
+        setAlpha(1f);
+      }
+      circleButton.setAlpha(alpha);
+      counterBadgeView.setAlpha(alpha);
+    } else {
+      setAlpha(alpha);
+    }
   }
 
   public void setEnabled (boolean enabled, boolean animated) {

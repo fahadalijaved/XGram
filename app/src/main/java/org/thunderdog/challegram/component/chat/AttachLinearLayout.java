@@ -43,6 +43,16 @@ public class AttachLinearLayout extends LinearLayout {
     return (ev.getAction() == MotionEvent.ACTION_DOWN && !Views.isValid(this)) || super.onInterceptTouchEvent(ev);
   }
 
+  private boolean reversed;
+
+  /**
+   * XGram: the buttons were added in reverse (RTL: the record button first, at the left edge), so the invisible slots
+   * sit at the right end and the visible buttons' centre is measured from the left.
+   */
+  public void setReversed (boolean reversed) {
+    this.reversed = reversed;
+  }
+
   public void updatePivot () {
     int totalWidth = 0;
     int width = 0;
@@ -64,7 +74,7 @@ public class AttachLinearLayout extends LinearLayout {
       }
     }
 
-    setPivotX(totalWidth - (int) ((float) width * .5f));
+    setPivotX(reversed ? (int) ((float) width * .5f) : totalWidth - (int) ((float) width * .5f));
     setPivotY((int) ((float) itemHeight * .5f));
   }
 

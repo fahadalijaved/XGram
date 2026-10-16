@@ -170,6 +170,24 @@ public final class XgramM3Chat {
       return segment;
     }
 
+    private float topInner = -1f, bottomInner = -1f;
+
+    /**
+     * Continuous corners while the neighbours slide in and out: 0 gives the edge the outer (20dp) corners, 1 the inner
+     * (4dp) ones, anything between a blend; {@code topInner} for the top edge (as far as there is a card above),
+     * {@code bottomInner} for the bottom edge. A negative value takes the edge's corners from the segment. True when
+     * the shape changed (the host then invalidates its outline).
+     */
+    public boolean setCornerFactors (float topInner, float bottomInner) {
+      if (this.topInner != topInner || this.bottomInner != bottomInner) {
+        this.topInner = topInner;
+        this.bottomInner = bottomInner;
+        invalidateSelf();
+        return true;
+      }
+      return false;
+    }
+
     private void build () {
       Rect b = getBounds();
       int inset = Screen.dp(XgramExpressive.LIST_GAP / 2f);
@@ -177,8 +195,10 @@ public final class XgramM3Chat {
       float outer = Screen.dpf(XgramExpressive.LIST_OUTER_CORNER), inner = Screen.dpf(XgramExpressive.LIST_INNER_CORNER);
       boolean roundTop = segment == XgramExpressive.SEGMENT_SINGLE || segment == XgramExpressive.SEGMENT_FIRST;
       boolean roundBottom = segment == XgramExpressive.SEGMENT_SINGLE || segment == XgramExpressive.SEGMENT_LAST;
+      float topFactor = topInner >= 0f ? Math.min(1f, topInner) : roundTop ? 0f : 1f;
+      float bottomFactor = bottomInner >= 0f ? Math.min(1f, bottomInner) : roundBottom ? 0f : 1f;
       float max = Math.max(0f, Math.min(rect.width(), rect.height()) / 2f);
-      float top = Math.min(max, roundTop ? outer : inner), bottom = Math.min(max, roundBottom ? outer : inner);
+      float top = Math.min(max, outer + (inner - outer) * topFactor), bottom = Math.min(max, outer + (inner - outer) * bottomFactor);
       setRadii(radii, top, top, bottom, bottom);
       path.rewind();
       if (rect.width() > 0f && rect.height() > 0f) {
@@ -338,6 +358,137 @@ public final class XgramM3Chat {
     shape.setHost(v);
     // The shape is also the (unfilled) content layer, so it gets the bounds and the pressed state the mask follows.
     v.setBackground(new RippleDrawable(ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(contentColor)), shape, shape.newMask()));
+  }
+
+  /**
+   * {@link #setTextButtonBackground(View, int)} whose state layer follows the Telegram X colour {@code contentColorId}
+   * (the button's text colour) through theme switches: a colour read once kept the old scheme's state layer after a
+   * day / night switch.
+   */
+  public static void setThemedTextButtonBackground (View v, @org.thunderdog.challegram.theme.ColorId int contentColorId) {
+    XgramExpressive.MorphDrawable shape = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S);
+    shape.setHost(v);
+    v.setBackground(XgramAppMotion.ThemedRipple.ofColorId(contentColorId, shape, shape.newMask()));
+  }
+
+  /** {@link #setThemedTextButtonBackground} for content in the M3 colour role {@code contentRole}. */
+  public static void setTextButtonBackgroundRole (View v, int contentRole) {
+    XgramExpressive.MorphDrawable shape = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S);
+    shape.setHost(v);
+    v.setBackground(XgramAppMotion.ThemedRipple.ofRole(contentRole, shape, shape.newMask()));
+  }
+
+  /**
+   * An M3 standard icon button that a view without child views draws itself (the close buttons of the chat's bars): a
+   * 24dp icon in onSurfaceVariant with a 40dp state layer around it, onSurfaceVariant at the pressed opacity, whose
+   * full corners spring to 8dp while pressed (as XgramAppMotion.iconButton). The host forwards its touches
+   * ({@link #onTouchEvent}) and draws it ({@link #draw}); a press on it never reaches the host's own click and ripple.
+   * Nothing is allocated per frame.
+   */
+  public static final class DrawnIconButton {
+    private final View host;
+    private final Drawable icon;
+    private final Paint layerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private @Nullable Paint iconPaint;
+    private int iconPaintColor;
+    private final RectF layerRect = new RectF();
+    private final Rect touchRect = new Rect();
+    private final XgramExpressive.Spring press, layer;
+    private float centerX, centerY;
+    private boolean consuming, inside;
+
+    public DrawnIconButton (@NonNull View host, @androidx.annotation.DrawableRes int iconRes) {
+      this.host = host;
+      this.icon = org.thunderdog.challegram.tool.Drawables.get(host.getResources(), XgramIconPack.map(iconRes));
+      XgramExpressive.Spring.Listener invalidate = (s, value) -> this.host.invalidate();
+      this.press = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, invalidate).setThreshold(.005f);
+      this.layer = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, invalidate).setThreshold(.005f);
+    }
+
+    /** The touch target (px, host coordinates); the icon and its state layer are centred in it. */
+    public void setBounds (int left, int top, int right, int bottom) {
+      touchRect.set(left, top, right, bottom);
+      centerX = touchRect.exactCenterX();
+      centerY = touchRect.exactCenterY();
+    }
+
+    public boolean contains (float x, float y) {
+      return touchRect.contains((int) x, (int) y);
+    }
+
+    private void setPressed (boolean pressed) {
+      press.animateTo(pressed ? 1f : 0f);
+      layer.animateTo(pressed ? 1f : 0f);
+    }
+
+    /** True while the gesture belongs to the button (it started on it); {@code onClick} runs on a release over it. */
+    public boolean onTouchEvent (@NonNull android.view.MotionEvent e, @Nullable Runnable onClick) {
+      final float x = e.getX(), y = e.getY();
+      switch (e.getActionMasked()) {
+        case android.view.MotionEvent.ACTION_DOWN: {
+          consuming = inside = contains(x, y);
+          if (consuming) {
+            setPressed(true);
+          }
+          return consuming;
+        }
+        case android.view.MotionEvent.ACTION_MOVE: {
+          if (consuming && inside) {
+            final float slop = Screen.getTouchSlop();
+            if (x < touchRect.left - slop || x > touchRect.right + slop || y < touchRect.top - slop || y > touchRect.bottom + slop) {
+              inside = false;
+              setPressed(false);
+            }
+          }
+          return consuming;
+        }
+        case android.view.MotionEvent.ACTION_UP: {
+          if (!consuming) {
+            return false;
+          }
+          final boolean click = inside;
+          consuming = inside = false;
+          setPressed(false);
+          if (click && onClick != null) {
+            host.playSoundEffect(android.view.SoundEffectConstants.CLICK);
+            onClick.run();
+          }
+          return true;
+        }
+        case android.view.MotionEvent.ACTION_CANCEL: {
+          if (!consuming) {
+            return false;
+          }
+          consuming = inside = false;
+          setPressed(false);
+          return true;
+        }
+      }
+      return consuming;
+    }
+
+    /** Draws the state layer and the icon at {@code alpha} (0..1). */
+    public void draw (@NonNull Canvas c, float alpha) {
+      if (alpha <= 0f || touchRect.isEmpty()) {
+        return;
+      }
+      final float layerAlpha = Math.max(0f, Math.min(1f, layer.getValue())) * alpha;
+      if (layerAlpha > 0f) {
+        final float size = Math.min(Screen.dpf(XgramExpressiveC.ICON_BUTTON_BOX), Math.min(touchRect.width(), touchRect.height()));
+        layerRect.set(centerX - size / 2f, centerY - size / 2f, centerX + size / 2f, centerY + size / 2f);
+        final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, press.getValue());
+        layerPaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), XgramExpressive.STATE_PRESSED * layerAlpha));
+        c.drawRoundRect(layerRect, radius, radius, layerPaint);
+      }
+      final int color = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+      if (iconPaint == null || iconPaintColor != color) {
+        iconPaintColor = color;
+        iconPaint = org.thunderdog.challegram.tool.Paints.createPorterDuffPaint(iconPaint, color);
+      }
+      iconPaint.setAlpha(Math.round(255f * Math.min(1f, alpha)));
+      org.thunderdog.challegram.tool.Drawables.draw(c, icon, centerX - icon.getMinimumWidth() / 2f, centerY - icon.getMinimumHeight() / 2f, iconPaint);
+      iconPaint.setAlpha(255);
+    }
   }
 
   // Bubbles (Google Messages: 20dp corners, 4dp on the sender side of grouped messages)

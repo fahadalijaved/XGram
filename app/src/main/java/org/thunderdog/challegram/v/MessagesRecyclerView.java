@@ -215,6 +215,7 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
       // clear of the 28dp corners of the messages container. Never grabbed: the chat's end edge belongs to the
       // system edge gestures (back swipe, Samsung's Edge panel), and to swipe-to-reply.
       xgramScroll.setFixedThumbLength(Screen.dp(40f)).setManualVisibility(true).setTopInset(Screen.dp(20f)).setCanDrag(false);
+      xgramScrollTopInset = -1; // below the bars over the list from the first draw on (xgramUpdateScrollTopInset)
     }
   }
 
@@ -453,8 +454,27 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     return super.dispatchTouchEvent(e);
   }
 
+  private int xgramScrollTopInset = -1;
+
+  /**
+   * XGram M3E: the scroll thumb's track starts 20dp below what covers the top of the list (the pinned message, join
+   * requests, translate and topic bars with their backing, the part hidden while the list moves up for a reply), where
+   * the date pill sits, not 20dp below the list's own top: the thumb went under the bars at the top of its travel.
+   * Only an int for the next draw of the indicator, set when it changes.
+   */
+  private void xgramUpdateScrollTopInset () {
+    if (xgramScroll != null && manager != null) {
+      int inset = getTopOffset() + Screen.dp(20f);
+      if (inset != xgramScrollTopInset) {
+        xgramScrollTopInset = inset;
+        xgramScroll.setTopInset(inset);
+      }
+    }
+  }
+
   @Override
   public void draw (android.graphics.Canvas c) {
+    xgramUpdateScrollTopInset(); // XGram: before the indicator (an item decoration) draws
     float offset = xgramPull != null ? xgramPull.getOffset() : 0f;
     if (offset > 0f) {
       int save = c.save();

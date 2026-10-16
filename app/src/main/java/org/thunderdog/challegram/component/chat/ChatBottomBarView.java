@@ -93,8 +93,8 @@ public class ChatBottomBarView extends BaseView {
         c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(0xff000000));
       }
     };
-    int rippleColor = com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER));
-    ViewUtils.setBackground(this, this.drawable = new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(rippleColor), content, mask));
+    // The onSecondaryContainer state layer follows theme switches (a colour read once kept the old scheme's)
+    ViewUtils.setBackground(this, this.drawable = com.fahadali.xgram.appearance.XgramAppMotion.ThemedRipple.ofRole(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER, content, mask));
     xgramPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> update());
     setOutlineProvider(new android.view.ViewOutlineProvider() {
       @Override

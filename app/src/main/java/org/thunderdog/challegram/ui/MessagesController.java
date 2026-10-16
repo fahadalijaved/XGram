@@ -863,7 +863,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     topBar.setLayoutParams(params);
     topBar.setTotalHeightChangeListener(listView -> onMessagesFrameChanged());
 
-    int liveLocationHeight = Screen.dp(36f);
+    // XGram: 48dp with Expressive design (LiveLocationHelper.height()), like the other cards of the group: a 36dp card
+    // became a full stadium (its 20dp corners clamped to 17dp) and cut its buttons' state layers flat
+    int liveLocationHeight = LiveLocationHelper.height();
     liveLocationView = new View(context) {
       @Override
       public boolean onTouchEvent (MotionEvent e) {
@@ -883,7 +885,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     liveLocationView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, liveLocationHeight));
     addThemeInvalidateListener(liveLocationView);
 
-    int actionBarHeight = Screen.dp(36f);
+    int actionBarHeight = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 48f : 36f); // XGram: 48dp cards, as above
     actionView = new TopBarView(context);
     actionView.setDismissListener(barView ->
       dismissActionBar()
@@ -937,6 +939,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     };
     pinnedMessagesBar.setAnimationsDisabled(true);
     pinnedMessagesBar.initialize(this);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: on its Material 3 Expressive card the list starts 8dp in, so the line keeps 20dp from the card's start
+      // and the text its 28dp (the chevron and the "Show pinned list" row stay on the card's edges)
+      pinnedMessagesBar.setPadding(Screen.dp(8f), 0, 0, 0);
+    }
     pinnedMessagesBar.setMessageListener(new PinnedMessagesBar.MessageListener() {
       @Override
       public void onMessageClick (PinnedMessagesBar view, TdApi.Message message, TdApi.InputTextQuote quote) {
@@ -1008,6 +1015,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramSideTabs.setLayoutParams(sideParams);
     xgramSideTabs.setVisibility(View.GONE);
     xgramSideTabs.setCallback(tabsCallback);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: both strips follow the app bar colour (selection and search included), as the card backing and the corners do
+      final com.fahadali.xgram.appearance.XgramM3Chat.ColorSource appBarColor = this::xgramAppBarColor;
+      xgramTabs.xgramSetAppBarColor(appBarColor);
+      xgramSideTabs.xgramSetAppBarColor(appBarColor);
+    }
 
     xgramTabsItem = new CollapseListView.ViewItem(xgramTabs, com.fahadali.xgram.topics.ForumTabsView.getBarHeight());
     topBar.xgramSetPlainItems(xgramTabsItem); // XGram: the topic tabs stay a full-width row above the Material 3 Expressive cards
@@ -1023,7 +1036,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }, this);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive: the cards sit on an opaque band in the app bar color
-      topBar.xgramSetBackingColor(() -> Theme.getColor(inSelectMode() ? getSelectHeaderColorId() : getHeaderColorId()));
+      topBar.xgramSetBackingColor(this::xgramAppBarColor);
       addThemeInvalidateListener(topBar);
     }
 
@@ -1122,7 +1135,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     reactionsButton.setId(R.id.btn_reaction);
     reactionsButton.setOnClickListener(this);
     addThemeInvalidateListener(reactionsButton);
-    reactionsButton.init(R.drawable.baseline_favorite_20, 48f, 4f, ColorId.circleButtonChat, ColorId.circleButtonChatIcon);
+    // XGram: the M3 FAB's 24dp icon, as the scroll and mention FABs stacked with it
+    reactionsButton.init(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.baseline_favorite_24 : R.drawable.baseline_favorite_20, 48f, 4f, ColorId.circleButtonChat, ColorId.circleButtonChatIcon);
     reactionsButton.setLayoutParams(fparams);
     reactionsButton.setOnClickListener(this);
     reactionsButton.setOnLongClickListener(v -> {
@@ -1247,6 +1261,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     });
 
     final float ATTACH_BUTTONS_WIDTH = 47f;
+    xgramAttachReversed = Lang.rtl(); // XGram: before updateSilentButton, which uses it
 
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Screen.dp(ATTACH_BUTTONS_WIDTH), Screen.dp(49f));
 
@@ -1307,20 +1322,29 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
 
     lp = new LinearLayout.LayoutParams(Screen.dp(ATTACH_BUTTONS_WIDTH), Screen.dp(49f));
-    lp.rightMargin = Screen.dp(2f);
+    // XGram: the record button keeps 2dp from the screen edge on its own side (the left one in a reversed, RTL row)
+    if (xgramAttachReversed) {
+      lp.leftMargin = Screen.dp(2f);
+    } else {
+      lp.rightMargin = Screen.dp(2f);
+    }
 
     recordButton = new VoiceVideoButtonView(context);
-    recordButton.setPadding(0, 0, Screen.dp(2f), 0);
+    if (xgramAttachReversed) {
+      recordButton.setPadding(Screen.dp(2f), 0, 0, 0);
+    } else {
+      recordButton.setPadding(0, 0, Screen.dp(2f), 0);
+    }
     recordButton.setHasTouchControls(true);
     addThemeInvalidateListener(recordButton);
     recordButton.setLayoutParams(lp);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive: a little more room between the record button and the icon buttons, so these
-      // sit inside the field. The record button's centre does not move.
+      // sit inside the field. The record button's centre does not move (mirrored in RTL).
       final float gap = com.fahadali.xgram.appearance.XgramM3Composer.RECORD_EXTRA_GAP;
       lp.width = Screen.dp(ATTACH_BUTTONS_WIDTH + gap);
-      if (Lang.rtl()) {
-        recordButton.setPadding(0, 0, Screen.dp(2f + gap), 0);
+      if (xgramAttachReversed) {
+        recordButton.setPadding(Screen.dp(2f), 0, Screen.dp(gap), 0);
       } else {
         recordButton.setPadding(Screen.dp(gap), 0, Screen.dp(2f), 0);
       }
@@ -1330,18 +1354,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     com.fahadali.xgram.XgramSettings.instance().addListener(xgramInputButtonsListener); // XGram
 
-    attachButtons.addView(commandButton);
-    if (silentButton != null) {
-      attachButtons.addView(silentButton);
+    // XGram: the row is laid out left to right (the root view is LTR), so in RTL it is built mirrored: the record
+    // button at the left edge, in the send button's slot (the send button morphs out of it), the command button at
+    // the far end. Telegram X added them in LTR order, which left the record button inside the field, ~120dp in.
+    final View[] attachOrder = {commandButton, silentButton, scheduleButton, cameraButton, mediaButton, recordButton};
+    for (int i = 0; i < attachOrder.length; i++) {
+      View button = attachOrder[xgramAttachReversed ? attachOrder.length - 1 - i : i];
+      if (button != null) {
+        attachButtons.addView(button);
+      }
     }
-    if (scheduleButton != null) {
-      attachButtons.addView(scheduleButton);
-    }
-    if (cameraButton != null) {
-      attachButtons.addView(cameraButton);
-    }
-    attachButtons.addView(mediaButton);
-    attachButtons.addView(recordButton);
+    attachButtons.setReversed(xgramAttachReversed);
     xgramUpdateAttachPadding();
     attachButtons.updatePivot();
 
@@ -1591,7 +1614,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     contentView.addView(topBar);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && previewMode == PREVIEW_MODE_NONE && !isInForceTouchMode()) {
       // XGram: Material 3 Expressive: the messages sit in a container with 28dp top corners under the app bar
-      xgramCornersView = new com.fahadali.xgram.appearance.XgramM3Chat.CornersView(context, () -> Theme.getColor(inSelectMode() ? getSelectHeaderColorId() : getHeaderColorId()));
+      xgramCornersView = new com.fahadali.xgram.appearance.XgramM3Chat.CornersView(context, this::xgramAppBarColor);
       xgramCornersView.setLayoutParams(new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.appearance.XgramM3Chat.cornersHeight()));
       addThemeInvalidateListener(xgramCornersView);
       contentView.addView(xgramCornersView);
@@ -1613,6 +1636,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
       toolbarParams.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
       toolbarParams.bottomMargin = Screen.dp(16f);
       xgramSelectionToolbar.setLayoutParams(toolbarParams);
+      // Its width follows the visible buttons and its centre the pane: it moves clear of the FAB again (a translation)
+      xgramSelectionToolbar.addOnLayoutChangeListener((xtv, xtl, xtt, xtr, xtb, xtol, xtot, xtor, xtob) -> {
+        if (xtl != xtol || xtr != xtor) {
+          xgramUpdateSelectionToolbarX();
+        }
+      });
       addThemeInvalidateListener(xgramSelectionToolbar);
       contentView.addView(xgramSelectionToolbar);
     }
@@ -1899,12 +1928,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (pagerContentView != null) {
       pagerContentView.setPagingEnabled(false);
     }
-    if (xgramCornersView != null) {
-      xgramCornersView.invalidate(); // XGram: corners in the selection app bar color
-    }
-    if (topBar != null) {
-      topBar.invalidate(); // XGram: the card backing follows the selection app bar color
-    }
+    xgramInvalidateAppBarColor(); // XGram: corners, card backing and top tabs in the selection app bar color (the fade itself: startHeaderTransformAnimator)
     xgramUpdateSelectionToolbar(true); // XGram
   }
 
@@ -1913,12 +1937,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (pagerContentView != null) {
       pagerContentView.setPagingEnabled(true);
     }
-    if (xgramCornersView != null) {
-      xgramCornersView.invalidate(); // XGram
-    }
-    if (topBar != null) {
-      topBar.invalidate(); // XGram
-    }
+    xgramInvalidateAppBarColor(); // XGram
     if (xgramSelectionToolbar != null) {
       xgramSelectionToolbar.setShown(false, true); // XGram
     }
@@ -3145,7 +3164,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     updateShadowColor();
     if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chat.id) && xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED))) {
-      commandButton.setTranslationX(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width);
+      commandButton.setTranslationX(xgramAttachShift(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width));
       attachButtons.updatePivot();
     }
 
@@ -7592,6 +7611,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (xgramSelectionToolbar != null) {
       boolean overBottomBar = bottomBar != null && bottomBar.getVisibility() == View.VISIBLE && bottomWrap.getVisibility() != View.VISIBLE;
       xgramSelectionToolbar.setTranslationY(offsetY - (overBottomBar ? Screen.dp(48f) : 0));
+      xgramUpdateSelectionToolbarX();
     }
     updateBottomBarStyle();
   }
@@ -8228,7 +8248,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     xgramSetCommandVisible(xgramCommandWanted, lastCmdResource);
     if (scheduleButton != null && chat != null && scheduleButton.setVisible(xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED) && messageThread == null && tdlib.chatHasScheduled(chat.id))) {
-      commandButton.setTranslationX(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width);
+      commandButton.setTranslationX(xgramAttachShift(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width));
     }
     recordButton.setVisibility(xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_VOICE) ? View.VISIBLE : View.GONE);
     xgramUpdateAttachPadding();
@@ -8856,7 +8876,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private void updateSilentButton (boolean visible) {
     if (Config.NEED_SILENT_BROADCAST) {
-      commandButton.setTranslationX(visible ? 0 : silentButton.getLayoutParams().width);
+      commandButton.setTranslationX(xgramAttachShift(visible ? 0 : silentButton.getLayoutParams().width));
       if (silentButton.setVisible(visible)) {
         attachButtons.updatePivot();
       }
@@ -11794,11 +11814,67 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
       messagesView.setLayoutParams(params);
     }
+    if (xgramCornersView != null) {
+      // The container's corners keep the messages' side margins: with the tabs along the side, the start notch sits
+      // at the tabs' edge (the container's own corner), not under the tabs
+      RelativeLayout.LayoutParams messagesParams = (RelativeLayout.LayoutParams) messagesView.getLayoutParams();
+      RelativeLayout.LayoutParams cornersParams = (RelativeLayout.LayoutParams) xgramCornersView.getLayoutParams();
+      if (cornersParams.leftMargin != messagesParams.leftMargin || cornersParams.rightMargin != messagesParams.rightMargin) {
+        cornersParams.leftMargin = messagesParams.leftMargin;
+        cornersParams.rightMargin = messagesParams.rightMargin;
+        xgramCornersView.setLayoutParams(cornersParams);
+      }
+    }
     xgramUpdateSideTabsOffset();
   }
 
   // XGram: Material 3 Expressive container corners, below the topic tabs when they are shown on top.
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.CornersView xgramCornersView;
+
+  /**
+   * XGram M3E: the app bar's colour right now, for everything painted in it under the app bar (the container's corner
+   * notches, the card group's backing, the top topic tabs and their edge fades). While the header fades into or out of
+   * selection or search, its filling holds the blend of this frame; otherwise the selection app bar, the search bar
+   * (the grey search header: surface) as far as search is open, or the normal app bar.
+   */
+  private @androidx.annotation.ColorInt int xgramAppBarColor () {
+    if (headerView != null && headerView.isAnimating() && inTransformMode()) {
+      return headerView.getFilling().getColor();
+    }
+    if (inSelectMode()) {
+      return getSelectHeaderColor();
+    }
+    final float search = MathUtils.clamp(getSearchTransformFactor());
+    final int color = Theme.getColor(getHeaderColorId());
+    return search > 0f ? me.vkryl.core.ColorUtils.fromToArgb(color, Theme.getColor(getSearchHeaderColorId()), search) : color;
+  }
+
+  /** XGram M3E: redraws what is painted in {@link #xgramAppBarColor()}; cheap enough for every frame of a header fade. */
+  private void xgramInvalidateAppBarColor () {
+    if (xgramCornersView != null) {
+      xgramCornersView.invalidate();
+    }
+    if (topBar != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      topBar.invalidate();
+    }
+    if (xgramTabs != null && xgramTabs.getVisibility() == View.VISIBLE) {
+      xgramTabs.xgramInvalidateAppBarColor();
+    }
+    if (xgramSideTabs != null && xgramSideTabs.getVisibility() == View.VISIBLE) {
+      xgramSideTabs.xgramInvalidateAppBarColor();
+    }
+  }
+
+  /** XGram M3E: the header's selection and search fades redraw the app bar colour under it every frame. */
+  private final android.animation.ValueAnimator.AnimatorUpdateListener xgramAppBarColorListener = animation -> xgramInvalidateAppBarColor();
+
+  @Override
+  protected void startHeaderTransformAnimator (android.animation.ValueAnimator animator, int mode, boolean open) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      animator.addUpdateListener(xgramAppBarColorListener);
+    }
+    super.startHeaderTransformAnimator(animator, mode, open);
+  }
 
   // XGram: Material 3 Expressive floating toolbar in message selection. It takes over reply, copy, share and delete
   // from the selection app bar, which keeps the count, close and the less common actions.
@@ -11839,6 +11915,35 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramSelectionToolbar.setShown(selecting && xgramSelectionToolbar.hasVisibleButtons(), animated);
   }
 
+  /**
+   * XGram M3E: the selection toolbar is centred, while the lowest chat FAB (scroll to bottom, or the mention or the
+   * reaction FAB in its place) takes the end of the same row: a centred toolbar ran under it in a narrow chat pane. As
+   * far as a FAB is there, the toolbar moves toward the start until it keeps 8dp from the FAB's container, but no
+   * closer than 16dp to the start edge. A translation only (called from checkScrollButtonOffsets, which the FAB
+   * animators drive, and when the toolbar's width or place changes), nothing is laid out.
+   */
+  private void xgramUpdateSelectionToolbarX () {
+    if (xgramSelectionToolbar == null) {
+      return;
+    }
+    final View parentView = (View) xgramSelectionToolbar.getParent();
+    final int width = parentView != null ? parentView.getWidth() : 0;
+    final int toolbarWidth = xgramSelectionToolbar.getWidth();
+    float dx = 0f;
+    if (width > 0 && toolbarWidth > 0) {
+      final float fab = MathUtils.clamp(Math.max(scrollToBottomVisible.getFloatValue(), Math.max(mentionButtonFactor, reactionButtonFactor)));
+      if (fab > 0f) {
+        final float fabStart = width - Screen.dp(16f + CircleButton.XGRAM_CHAT_FAB_DP + 8f);
+        final float toolbarEnd = (width + toolbarWidth) / 2f;
+        dx = Math.min(0f, fabStart - toolbarEnd) * fab;
+        dx = Math.min(0f, Math.max(dx, Screen.dp(16f) - (width - toolbarWidth) / 2f));
+      }
+    }
+    if (xgramSelectionToolbar.getTranslationX() != dx) {
+      xgramSelectionToolbar.setTranslationX(dx);
+    }
+  }
+
   private void xgramUpdateCorners () {
     if (xgramCornersView == null) {
       return;
@@ -11864,6 +11969,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
     final boolean recordVisible = recordButton != null && recordButton.getVisibility() != View.GONE;
     final float factor = sendButton != null && sendButton.getVisibility() == View.VISIBLE ? sendFactor : 0f;
     return com.fahadali.xgram.appearance.XgramM3Composer.fieldEndPx(recordVisible, factor);
+  }
+
+  /** XGram: the composer's button row was built mirrored for RTL (the record button at the left edge), see onCreateView. */
+  private boolean xgramAttachReversed;
+
+  /**
+   * XGram: the command button's shift over an invisible slot next to it: toward the record button, which is to the
+   * right in Telegram X's row and to the left in the mirrored RTL row.
+   */
+  private float xgramAttachShift (int shift) {
+    return xgramAttachReversed ? -shift : shift;
   }
 
   /** Without a record button the icon buttons keep the field's 8dp end margin, so they stay inside it. */
@@ -12195,7 +12311,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     tdlib.ui().post(() -> {
       if (getChatId() == chatId) {
         if (scheduleButton != null && scheduleButton.setVisible(messageThread == null && tdlib.chatHasScheduled(chatId) && xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_SCHEDULED))) {
-          commandButton.setTranslationX(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width);
+          commandButton.setTranslationX(xgramAttachShift(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width));
           attachButtons.updatePivot();
         }
         if (areScheduled && !hasScheduledMessages) {
@@ -12898,6 +13014,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
       com.fahadali.xgram.appearance.XgramAppMotion.iconButton(searchByButton);
       com.fahadali.xgram.appearance.XgramAppMotion.iconButton(searchJumpToDateButton);
       com.fahadali.xgram.appearance.XgramAppMotion.iconButton(searchSetTypeFilterButton);
+      // The results-only toggle and the chosen sender's avatar press like the others. The toggle's icon sat 12dp off its
+      // centre (its end padding): the padding becomes a 6dp end margin, so the icon and its 40dp state layer share their
+      // centre, 32dp from the end as before
+      searchShowOnlyFoundButton.setPadding(0, 0, 0, 0);
+      ((FrameLayoutFix.LayoutParams) searchShowOnlyFoundButton.getLayoutParams()).rightMargin = Screen.dp(6f);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(searchShowOnlyFoundButton);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(searchByAvatarView);
       com.fahadali.xgram.appearance.XgramExpressive.applyText(searchCounterView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
       FrameLayoutFix.LayoutParams loadingParams = FrameLayoutFix.newParams(Screen.dp(49f), Screen.dp(49f), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
       loadingParams.rightMargin = Screen.dp(60);
@@ -13073,6 +13196,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     topBar.setGlobalVisibility(1f - factor, false);
     updateReplyView();
     setSearchControlsFactor(factor);
+    xgramInvalidateAppBarColor(); // XGram: the corners and the backing follow the app bar into the search bar's colour
     // checkBottomOffsetFactor();
   }
 

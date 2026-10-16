@@ -176,33 +176,61 @@ public final class XgramAppMotion {
    * listener. Nothing with Expressive design off.
    */
   public static void iconButton (@Nullable View v) {
+    iconButton(v, XgramExpressive.ON_SURFACE_VARIANT);
+  }
+
+  /** {@link #iconButton(View)} whose state layer is in the colour role {@code contentRole} (the icon's colour). */
+  public static void iconButton (@Nullable View v, int contentRole) {
     if (v == null || !XgramExpressive.isEnabled()) {
       return;
     }
-    v.setBackground(new ThemedIconRipple(XgramExpressive.ON_SURFACE_VARIANT));
+    v.setBackground(ThemedRipple.ofRole(contentRole, null,
+      new XgramExpressiveC.PressMorphMask(XgramExpressiveC.ICON_BUTTON_BOX, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S)));
   }
 
-  private static final class ThemedIconRipple extends android.graphics.drawable.RippleDrawable {
-    private final int role;
+  /**
+   * A RippleDrawable whose state layer (the content colour at the pressed state-layer opacity) follows the theme: the
+   * colour is read again on every state change, so day / night, wallpaper and dynamic colour switches need no listener
+   * (a plain RippleDrawable keeps the colour of the theme it was built in: after a switch to dark its press showed the
+   * light scheme's colour). The content colour is an M3 role ({@link #ofRole}) or a Telegram X colour id
+   * ({@link #ofColorId}, e.g. a text button's own text colour).
+   */
+  public static final class ThemedRipple extends android.graphics.drawable.RippleDrawable {
+    private final int role, colorId;
     private int color;
+    /** False while RippleDrawable's constructor runs (the fields above are not set yet). */
+    private final boolean ready;
 
-    ThemedIconRipple (int role) {
-      this(role, XgramExpressive.color(role));
+    private ThemedRipple (int role, int colorId, int color, @Nullable android.graphics.drawable.Drawable content, @Nullable android.graphics.drawable.Drawable mask) {
+      super(android.content.res.ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(color)), content, mask);
+      this.role = role;
+      this.colorId = colorId;
+      this.color = color;
+      this.ready = true;
     }
 
-    private ThemedIconRipple (int role, int color) {
-      super(android.content.res.ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(color)), null,
-        new XgramExpressiveC.PressMorphMask(XgramExpressiveC.ICON_BUTTON_BOX, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S));
-      this.role = role;
-      this.color = color;
+    /** The state layer in the M3 colour role {@code role}. */
+    public static ThemedRipple ofRole (int role, @Nullable android.graphics.drawable.Drawable content, @Nullable android.graphics.drawable.Drawable mask) {
+      return new ThemedRipple(role, 0, XgramExpressive.color(role), content, mask);
+    }
+
+    /** The state layer in the Telegram X colour {@code colorId} (it follows Theme.getColor). */
+    public static ThemedRipple ofColorId (int colorId, @Nullable android.graphics.drawable.Drawable content, @Nullable android.graphics.drawable.Drawable mask) {
+      return new ThemedRipple(-1, colorId, org.thunderdog.challegram.theme.Theme.getColor(colorId), content, mask);
+    }
+
+    private int currentColor () {
+      return role >= 0 ? XgramExpressive.color(role) : org.thunderdog.challegram.theme.Theme.getColor(colorId);
     }
 
     @Override
-    protected boolean onStateChange (int[] stateSet) {
-      int now = XgramExpressive.color(role);
-      if (now != color) {
-        color = now;
-        setColor(android.content.res.ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(now)));
+    protected boolean onStateChange (@androidx.annotation.NonNull int[] stateSet) {
+      if (ready) {
+        int now = currentColor();
+        if (now != color) {
+          color = now;
+          setColor(android.content.res.ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(now)));
+        }
       }
       return super.onStateChange(stateSet);
     }

@@ -124,6 +124,63 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
     }
   }
 
+  /**
+   * XGram M3E: the strip is painted in the app bar's colour of the moment ({@code source}: MessagesController's, the
+   * selection and search fades included) instead of its own surfaceContainer, so it never shows as a band between the
+   * selection app bar and the card backing below it. On top, the strip has no fill of its own (the bar stack's backing,
+   * drawn in that colour, shows through); along the side it fills itself from {@code source}. Its edge fades take the
+   * same colour. Call {@link #xgramInvalidateAppBarColor()} when that colour changes. Nothing with Expressive design off.
+   */
+  public void xgramSetAppBarColor (@Nullable com.fahadali.xgram.appearance.XgramM3Chat.ColorSource source) {
+    if (xgramLook == null) {
+      return;
+    }
+    xgramLook.setFadeColor(source);
+    if (source == null) {
+      ViewSupport.setThemedBackground(this, ColorId.background, null);
+    } else if (vertical) {
+      setBackground(new XgramAppBarFill(source));
+    } else {
+      setBackground(null);
+    }
+    invalidate();
+  }
+
+  /** XGram M3E: redraws the fill and the fades in the app bar's current colour (see {@link #xgramSetAppBarColor}). */
+  public void xgramInvalidateAppBarColor () {
+    if (xgramLook != null) {
+      invalidate();
+    }
+  }
+
+  /** XGram M3E: the side strip's fill, read from its colour source on every draw (no allocation). */
+  private static final class XgramAppBarFill extends Drawable {
+    private final com.fahadali.xgram.appearance.XgramM3Chat.ColorSource source;
+    private final Paint paint = new Paint();
+
+    XgramAppBarFill (com.fahadali.xgram.appearance.XgramM3Chat.ColorSource source) {
+      this.source = source;
+    }
+
+    @Override
+    public void draw (@NonNull Canvas c) {
+      paint.setColor(source.color());
+      c.drawRect(getBounds(), paint);
+    }
+
+    @Override
+    public void setAlpha (int alpha) { }
+
+    @Override
+    public void setColorFilter (@Nullable android.graphics.ColorFilter colorFilter) { }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public int getOpacity () {
+      return android.graphics.PixelFormat.TRANSLUCENT;
+    }
+  }
+
   /** XGram: {@link #positionOf} of the selected tab, checked in O(1) on every frame, searched only when topics moved. */
   private int xgramSelectedPosition () {
     if (selectedTab == XgramForums.TAB_ALL) {

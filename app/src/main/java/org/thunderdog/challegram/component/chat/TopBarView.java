@@ -76,7 +76,7 @@ public class TopBarView extends FrameLayoutFix {
   public TopBarView (@NonNull Context context) {
     super(context);
 
-    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(36f)));
+    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 48f : 36f))); // XGram: a 48dp card with Expressive design
     if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: a card of the Material 3 Expressive group draws the background
       ViewSupport.setThemedBackground(this, ColorId.filling, null);
     }
@@ -102,7 +102,7 @@ public class TopBarView extends FrameLayoutFix {
     topDismissButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_close_18));
     topDismissButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(40f), ViewGroup.LayoutParams.MATCH_PARENT, Lang.gravity() | Gravity.TOP));
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      topDismissButton.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(topDismissButton); // XGram: the 40dp state layer, following theme switches
     } else
     topDismissButton.setBackgroundResource(R.drawable.bg_btn_header);
     Views.setClickable(topDismissButton);
@@ -145,6 +145,11 @@ public class TopBarView extends FrameLayoutFix {
       actionsList.addView(offsetView);
     }
     boolean canDismiss = false;
+    // XGram: Material 3 Expressive text buttons are 40dp tall, centred in the 48dp card, so their full-corner state
+    // layer stays clear of the card's outline (a full-height pill was cut flat by it)
+    final ViewGroup.LayoutParams barParams = getLayoutParams();
+    final int xgramButtonInset = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && barParams != null && barParams.height > 0 ?
+      Math.max(0, (barParams.height - Screen.dp(40f)) / 2) : 0;
     for (Item item : items) {
       if (!item.noDismiss) {
         canDismiss = true;
@@ -160,7 +165,7 @@ public class TopBarView extends FrameLayoutFix {
       button.setOnClickListener(item.onClickListener);
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram: Material 3 Expressive text button: labelLarge in sentence case, full-corner state layer
-        com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(button, Theme.getColor(textColorId));
+        com.fahadali.xgram.appearance.XgramM3Chat.setThemedTextButtonBackground(button, textColorId); // its state layer follows theme switches
         com.fahadali.xgram.appearance.XgramExpressive.applyText(button, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
         button.setText(Lang.getString(item.stringRes));
       } else {
@@ -168,7 +173,9 @@ public class TopBarView extends FrameLayoutFix {
       Views.setMediumText(button, Lang.uppercase(Lang.getString(item.stringRes)));
       }
       Views.setClickable(button);
-      button.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, 2f));
+      LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, 2f);
+      buttonParams.topMargin = buttonParams.bottomMargin = xgramButtonInset;
+      button.setLayoutParams(buttonParams);
       actionsList.addView(button);
     }
     if (items.length > 1) {

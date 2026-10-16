@@ -102,12 +102,12 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
         messageListener.onDismissRequest(this);
       }
     });
+    showAllButton.setLayoutParams(new ViewGroup.LayoutParams(LayoutParams.MATCH_PARENT, Screen.dp(36f))); // XGram: before the items, which size their buttons to it
     showAllButton.setItems(new TopBarView.Item(R.id.btn_showPinnedMessage, R.string.ShowPinnedList, v -> {
       if (messageListener != null) {
         messageListener.onShowAllRequest(this);
       }
     }));
-    showAllButton.setLayoutParams(new ViewGroup.LayoutParams(LayoutParams.MATCH_PARENT, Screen.dp(36f)));
     addView(showAllButton);
 
     recyclerView = (CustomRecyclerView) Views.inflate(context, R.layout.recycler_custom, null);
@@ -266,7 +266,7 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
       ViewSupport.setThemedBackground(this, ColorId.filling, null);
       ViewSupport.setThemedBackground(recyclerView, ColorId.filling, null);
     } else {
-      collapseButton.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(collapseButton); // XGram: the 40dp state layer, following theme switches
     }
     setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -408,13 +408,15 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     int newHeight = getTotalHeight();
     super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(newHeight, MeasureSpec.EXACTLY));
+    // XGram: the "Show pinned list" row spans the whole bar (its label is centred on it), the list stays inside the padding
+    final int fullWidthMeasureSpec = MeasureSpec.makeMeasureSpec(getMeasuredWidth(), MeasureSpec.EXACTLY);
     int horizontalPadding = getPaddingLeft() + getPaddingRight();
     if (horizontalPadding != 0) {
-      int width = getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec) - horizontalPadding;
+      int width = Math.max(0, getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec) - horizontalPadding);
       widthMeasureSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY);
     }
     recyclerView.measure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(getRecyclerHeight(), MeasureSpec.EXACTLY));
-    showAllButton.measure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(Screen.dp(36f), MeasureSpec.EXACTLY));
+    showAllButton.measure(fullWidthMeasureSpec, MeasureSpec.makeMeasureSpec(Screen.dp(36f), MeasureSpec.EXACTLY));
 
     collapseButton.measure(MeasureSpec.makeMeasureSpec(Screen.dp(40f), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(MathUtils.fromTo(SettingHolder.measureHeightForType(ListItem.TYPE_MESSAGE_PREVIEW), Screen.dp(36f), getExpandFactor()), MeasureSpec.EXACTLY));
     if (newHeight != lastKnownViewHeight) {
@@ -425,16 +427,14 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
   @Override
   protected void onLayout (boolean changed, int l, int t, int r, int b) {
-    l += getPaddingLeft();
-    r -= getPaddingRight();
-    showAllButton.layout(l, b - Screen.dp(36f), r, b);
-    recyclerView.layout(l, t, r, getRecyclerHeight());
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      final int xgramRight = getMeasuredWidth() - getPaddingRight(), xgramBottom = getMeasuredHeight(); // XGram: local coordinates (the M3E card is 8dp in)
-      collapseButton.layout(xgramRight - collapseButton.getMeasuredWidth(), xgramBottom - collapseButton.getMeasuredHeight(), xgramRight, xgramBottom);
-    } else {
-      collapseButton.layout(r - collapseButton.getMeasuredWidth(), b - collapseButton.getMeasuredHeight(), r, b);
-    }
+    // XGram: children are laid out in this view's own coordinates. l..r is where the bar sits in its parent: Telegram X
+    // used it as is, which only worked while the bar sat at its parent's left edge (8dp in as a Material 3 Expressive
+    // card, or 55dp in the RTL composer's reply block, it shifted the list by that much and cut its end off).
+    final int width = r - l, height = b - t;
+    final int left = getPaddingLeft(), right = width - getPaddingRight();
+    showAllButton.layout(0, height - Screen.dp(36f), width, height);
+    recyclerView.layout(left, 0, right, getRecyclerHeight());
+    collapseButton.layout(right - collapseButton.getMeasuredWidth(), height - collapseButton.getMeasuredHeight(), right, height);
   }
 
   private void updateContentInset (MessagePreviewView view, int position) {
