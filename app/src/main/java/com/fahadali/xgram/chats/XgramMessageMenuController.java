@@ -57,7 +57,14 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
         }
         Object data = item.getData();
         if (data instanceof XgramMessageMenu.Option) {
-          view.getToggler().setRadioEnabled(!XgramMessageMenu.isHidden(((XgramMessageMenu.Option) data).key), isUpdate);
+          String key = ((XgramMessageMenu.Option) data).key;
+          view.getToggler().setRadioEnabled(!XgramMessageMenu.isHidden(key), isUpdate);
+          // Summarize and Edit history are only added while their setting is on: greyed, but still touchable, as the
+          // row's handle drags it (a disabled view gets no touches). onClick ignores the tap.
+          boolean usable = com.fahadali.xgram.XgramSettingDeps.messageMenuOptionEnabled(key);
+          view.setIgnoreEnabled(true);
+          view.setVisuallyEnabled(usable, isUpdate);
+          view.getToggler().setDisabled(!usable, isUpdate);
         }
       }
     };
@@ -99,6 +106,9 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
       adapter.setItems(buildItems(), false);
     } else if (v.getId() == R.id.btn_xgramMenuItem && tag instanceof ListItem && ((ListItem) tag).getData() instanceof XgramMessageMenu.Option) {
       XgramMessageMenu.Option option = (XgramMessageMenu.Option) ((ListItem) tag).getData();
+      if (!com.fahadali.xgram.XgramSettingDeps.messageMenuOptionEnabled(option.key)) {
+        return; // greyed: does nothing until its setting is on
+      }
       boolean shown = adapter.toggleView(v);
       XgramMessageMenu.setHidden(option.key, !shown);
     }

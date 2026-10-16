@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: settings that depend on other settings (XgramSettingDeps) -->
+  <item type="id" name="btn_xgramAutoNightMode" />
+  <item type="id" name="btn_xgramPaneInfo" />
+  <item type="id" name="btn_xgramProxyRulesInfo" />
+</resources>

@@ -12,6 +12,7 @@
 package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
+import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.ui.SettingsPage
@@ -88,7 +89,13 @@ fun PrivacyPage() {
 
     header(R.string.XgramHeaderSending)
     group {
-      switch(R.id.btn_xgramGhostSilent, s(R.string.XgramGhostSilent), s(R.string.XgramGhostSilentSub), checked = settings.ghostSilent()) {
+      // Only while not reading, not typing or offline is on.
+      val silentReason = XgramSettingDeps.ghostSilentReason()
+      switch(
+        R.id.btn_xgramGhostSilent, s(R.string.XgramGhostSilent),
+        s(if (silentReason != 0) silentReason else R.string.XgramGhostSilentSub),
+        checked = settings.ghostSilent(), enabled = silentReason == 0
+      ) {
         ghost(settings) { settings.setGhostSilent(it) }
       }
     }

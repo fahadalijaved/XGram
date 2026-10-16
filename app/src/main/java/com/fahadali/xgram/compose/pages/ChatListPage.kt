@@ -13,6 +13,7 @@ package com.fahadali.xgram.compose.pages
 
 import androidx.compose.runtime.Composable
 import com.fahadali.xgram.XgramReorder
+import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.chats.XgramChatLongPress
 import com.fahadali.xgram.chats.XgramCommunities
@@ -40,7 +41,13 @@ fun ChatListPage() {
     }
     description(R.string.XgramChatListFoldersInfo)
     group {
-      switch(R.id.btn_xgramAllChatsLabel, s(R.string.XgramAllChatsLabel), s(R.string.XgramAllChatsLabelSub), checked = settings.allChatsLabel()) {
+      // The first folder tab's label: none while the tabs are hidden or show icons only.
+      val labelReason = XgramSettingDeps.allChatsLabelReason(host.tdlib)
+      switch(
+        R.id.btn_xgramAllChatsLabel, s(R.string.XgramAllChatsLabel),
+        s(if (labelReason != 0) labelReason else R.string.XgramAllChatsLabelSub),
+        checked = settings.allChatsLabel(), enabled = labelReason == 0
+      ) {
         settings.setAllChatsLabel(it)
       }
     }
