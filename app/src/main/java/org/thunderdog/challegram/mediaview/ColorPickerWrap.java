@@ -50,9 +50,14 @@ public class ColorPickerWrap extends FrameLayoutFix implements View.OnClickListe
     colorsWrap = new LinearLayout(context);
     colorsWrap.setOrientation(LinearLayout.HORIZONTAL);
 
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgram) {
+      nameView.xgramStyleOnMedia(); // XGram
+    }
     for (int ignored : FiltersState.SHADOWS_TINT_COLOR_IDS) {
       LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-      CheckCircle circle = new CheckCircle(context);
+      // XGram: M3E 32dp swatches (the selected one morphs to 12dp corners with a ring) instead of check circles
+      View circle = xgram ? new com.fahadali.xgram.appearance.XgramR5Media.Swatch(context) : new CheckCircle(context);
       circle.setLayoutParams(lp);
       circle.setOnClickListener(this);
       colorsWrap.addView(circle);
@@ -84,16 +89,33 @@ public class ColorPickerWrap extends FrameLayoutFix implements View.OnClickListe
     int i = 0;
     int foundActiveIndex = -1;
     for (int colorId : colorIds) {
-      CheckCircle circle = (CheckCircle) colorsWrap.getChildAt(i);
-      circle.setColorId(colorId == 0 ? ColorId.white : colorId);
+      View circle = colorsWrap.getChildAt(i);
       boolean isChecked = colorId == selectedColor;
-      circle.setChecked(isChecked, false);
+      if (circle instanceof com.fahadali.xgram.appearance.XgramR5Media.Swatch) {
+        ((com.fahadali.xgram.appearance.XgramR5Media.Swatch) circle).setColorId(colorId == 0 ? ColorId.white : colorId);
+        ((com.fahadali.xgram.appearance.XgramR5Media.Swatch) circle).setChecked(isChecked, false);
+      } else {
+      ((CheckCircle) circle).setColorId(colorId == 0 ? ColorId.white : colorId);
+      ((CheckCircle) circle).setChecked(isChecked, false);
+      }
       if (isChecked) {
         foundActiveIndex = i;
       }
       i++;
     }
     activeIndex = foundActiveIndex;
+  }
+
+  /** XGram: checks a Telegram X check circle or an M3E swatch. */
+  private static void xgramSetChecked (View v, boolean checked) {
+    if (v instanceof com.fahadali.xgram.appearance.XgramR5Media.Swatch) {
+      ((com.fahadali.xgram.appearance.XgramR5Media.Swatch) v).setChecked(checked, true);
+      if (checked) {
+        me.vkryl.android.ViewUtils.onClick(v); // a tick on the toggle
+      }
+    } else if (v instanceof CheckCircle) {
+      ((CheckCircle) v).setChecked(checked, true);
+    }
   }
 
   @Override
@@ -104,11 +126,10 @@ public class ColorPickerWrap extends FrameLayoutFix implements View.OnClickListe
     int i = colorsWrap.indexOfChild(v);
     if (i != -1 && i != activeIndex) {
       if (activeIndex != -1) {
-        CheckCircle oldCircle = (CheckCircle) colorsWrap.getChildAt(activeIndex);
-        oldCircle.setChecked(false, true);
+        xgramSetChecked(colorsWrap.getChildAt(activeIndex), false);
       }
       activeIndex = i;
-      ((CheckCircle) v).setChecked(true, true);
+      xgramSetChecked(v, true);
       if (listener != null) {
         listener.onColorChanged(this, colorIds[i]);
       }

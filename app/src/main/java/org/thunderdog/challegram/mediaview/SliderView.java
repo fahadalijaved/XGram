@@ -432,6 +432,19 @@ public class SliderView extends View implements FactorAnimator.Target {
     setXgramColors(activeColor, inactiveColor, inactiveColor);
   }
 
+  private boolean xgramCenterStop;
+
+  /**
+   * XGram, Expressive design only: a stop indicator at 0 (the track's centre) on a slider anchored in the centre (the
+   * photo editor's adjust rows). Off by default, so no other slider changes.
+   */
+  public void setXgramCenterStop (boolean centerStop) {
+    if (this.xgramCenterStop != centerStop) {
+      this.xgramCenterStop = centerStop;
+      invalidate();
+    }
+  }
+
   /** {@link #setXgramColors(int, int)} with its own colour for the buffered part. */
   public void setXgramColors (int activeColor, int inactiveColor, int secondaryColor) {
     if (!xgramHasColors || xgramActiveColor != activeColor || xgramInactiveColor != inactiveColor || xgramSecondaryColor != secondaryColor) {
@@ -559,6 +572,10 @@ public class SliderView extends View implements FactorAnimator.Target {
         float startX = left + outer;
         if (cx - startX >= hideDistance) {
           c.drawCircle(startX, cy, dotRadius, Paints.fillingPaint(color));
+        }
+        if (xgramCenterStop && Math.abs(cx - centerX) >= hideDistance) {
+          // the stop at 0: on the active part's end it takes the inactive colour, as the ticks do
+          c.drawCircle(centerX, cy, dotRadius, Paints.fillingPaint(inactiveColor));
         }
       }
     }

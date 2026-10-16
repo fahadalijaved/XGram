@@ -2634,6 +2634,14 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
   }
 
+  /** XGram: the picture in picture window's 40% scrim, in its 16dp corners. */
+  private static android.graphics.drawable.Drawable xgramPipScrim () {
+    android.graphics.drawable.GradientDrawable scrim = new android.graphics.drawable.GradientDrawable();
+    scrim.setColor(0x66000000);
+    scrim.setCornerRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L));
+    return scrim;
+  }
+
   private boolean getPipSize (int[] out) {
     int viewWidth = mediaView.getMeasuredWidth();
     int viewHeight = mediaView.getMeasuredHeight();
@@ -2771,7 +2779,16 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       updatePipLayout(mediaView.getMeasuredWidth(), mediaView.getMeasuredHeight(), false, false);
 
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: ELEVATION_3 (6dp with the view's 2dp), clipped to its rounded outline while it is a window
+          mediaView.setTranslationZ(factor * Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3 - 2f));
+          boolean clip = factor > 0f;
+          if (mediaView.getClipToOutline() != clip) {
+            mediaView.setClipToOutline(clip);
+          }
+        } else {
         mediaView.setTranslationZ(factor * (float) Screen.dp(1f));
+        }
       }
 
       pipItem.setComponentsAlpha(1f - factor);
@@ -2847,6 +2864,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   private void setPipUpFactor (float factor) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        mediaView.setTranslationZ(Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3 - 2f) + Screen.dpf(2f) * factor); // XGram: lifted while dragged
+        return;
+      }
       mediaView.setTranslationZ(Screen.dp(1f) + (float) Screen.dp(2f) * factor);
     }
   }
@@ -2972,6 +2993,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     if (pipPositionAnimator == null) {
       pipPositionAnimator = new FactorAnimator(ANIMATOR_PIP_POSITION, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: the window snaps to its corner on the spatial default spring (standard with Reduce motion)
+        pipPositionAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpolator(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT));
+        pipPositionAnimator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT));
+      }
     } else {
       pipPositionAnimator.forceFactor(0f);
     }
@@ -3070,7 +3096,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     pipOpenButton.setAlpha(alpha);
     pipCloseButton.setAlpha(alpha);
     pipPlayPauseButton.setAlpha(alpha);
-    pipBackgroundView.setAlpha(alpha * .7f);
+    pipBackgroundView.setAlpha(alpha * (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 1f : .7f)); // XGram: a flat 40% scrim
 
     pipOpenButton.setEnabled(alpha == 1f);
     pipCloseButton.setEnabled(alpha == 1f);
@@ -3167,8 +3193,25 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       }
     }
 
+    private final RectF xgramRect = new RectF();
+
     @Override
     protected void onDraw (Canvas c) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: docked at the edge (24dp showing), a full-corner handle pill with the chevron, centred in the visible strip
+        final float visible = Screen.dpf(24f), pillWidth = Screen.dpf(20f), pillHeight = Math.min(Screen.dpf(48f), getMeasuredHeight() - Screen.dpf(16f));
+        final float cx = isLeft ? getMeasuredWidth() - visible / 2f : visible / 2f, cy = getMeasuredHeight() / 2f;
+        xgramRect.set(cx - pillWidth / 2f, cy - pillHeight / 2f, cx + pillWidth / 2f, cy + pillHeight / 2f);
+        c.drawRoundRect(xgramRect, pillWidth / 2f, pillWidth / 2f, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), .6f)));
+        final int saveCount = c.save();
+        c.scale(.75f, .75f, cx, cy);
+        if (isLeft) {
+          c.rotate(180, cx, cy);
+        }
+        Drawables.draw(c, backIcon, cx - backIcon.getMinimumWidth() / 2f, cy - backIcon.getMinimumHeight() / 2f, Paints.whitePorterDuffPaint());
+        c.restoreToCount(saveCount);
+        return;
+      }
       int y = getMeasuredHeight() / 2 - backIcon.getMinimumHeight() / 2;
       if (isLeft) {
         c.save();
@@ -3407,6 +3450,15 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   private boolean xgramCaptionCard () {
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (mode == MODE_MESSAGES || mode == MODE_SIMPLE);
+  }
+
+  /**
+   * XGram M3E round 5: scrims instead of Telegram X's flat transparentEditor bands in every viewer mode (profile photos
+   * included): the album strip and the navigation bar area take the scrims' 60% end, and nothing over media casts a shadow
+   * (the elevations stay for the drawing order, their outlines go).
+   */
+  private boolean xgramScrims () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && mode != MODE_GALLERY;
   }
 
   // XGram M3E wave 2: the send screen (gallery mode): the edit actions in a floating toolbar next to the send FAB, the
@@ -4248,6 +4300,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     thumbsRecyclerView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
     if (xgramCaptionCard()) {
       thumbsRecyclerView.setBackgroundColor(XGRAM_ON_MEDIA_SCRIM); // XGram: the scrims' 60% end, as the navigation bar area
+    } else if (xgramScrims()) {
+      // XGram: profile photos have no controls above the strip: the strip is the bottom scrim (clear, 50%, 60%), not a band
+      ViewUtils.setBackground(thumbsRecyclerView, new com.fahadali.xgram.appearance.XgramW2MediaViewer.BottomScrimDrawable());
     }
     thumbsRecyclerView.setLayoutManager(thumbsLayoutManager);
     thumbsRecyclerView.setAdapter(thumbsAdapter);
@@ -4257,7 +4312,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     Views.setBottomMargin(thumbsRecyclerView, controlsMargin);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
       thumbsRecyclerView.setElevation(Screen.dp(3f));
-      if (xgramCaptionCard()) {
+      if (xgramScrims()) {
         thumbsRecyclerView.setOutlineProvider(null); // XGram: no shadow through the 60% strip (see bottomSpace)
       }
     }
@@ -4288,7 +4343,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   private int calculateThumbWidth () {
-    return Screen.dp((mode == MediaViewController.MODE_PROFILE || mode == MediaViewController.MODE_CHAT_PROFILE) ? THUMBS_WIDTH_BIG : THUMBS_WIDTH_SMALL) + Screen.dp(THUMBS_SPACING_BETWEEN);
+    return Screen.dp((mode == MediaViewController.MODE_PROFILE || mode == MediaViewController.MODE_CHAT_PROFILE) ? THUMBS_WIDTH_BIG : THUMBS_WIDTH_SMALL) + xgramThumbSpacing();
+  }
+
+  /** XGram: the gap between album thumbnails: 2dp between the rounded M3E tiles, Telegram X's 1dp otherwise. */
+  private static int xgramThumbSpacing () {
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 2f : THUMBS_SPACING_BETWEEN);
   }
 
   // Called when recyclerView width has been changed
@@ -4687,7 +4747,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     private int thumbStartWidth, thumbEndWidth, thumbHeight;
 
     private boolean layoutImage () {
-      int totalPaddingHorizontal = Screen.dp(THUMBS_SPACING_BETWEEN);
+      int totalPaddingHorizontal = xgramThumbSpacing();
       int paddingVertical = Screen.dp(THUMBS_PADDING);
       int width = getMeasuredWidth();
       int height = getMeasuredHeight();
@@ -4732,6 +4792,33 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       }
       int startX = centerX - thumbWidth / 2;
       preview.setBounds(startX, startY, startX + thumbWidth, startY + thumbHeight);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: M3E carousel tiles: 4dp corners, the current (expanded) one 8dp, following its expansion
+        final float radius = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS + (com.fahadali.xgram.appearance.XgramExpressive.CORNER_S - com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS) * MathUtils.clamp(expandFactor));
+        final boolean clip = preview == avatarReceiver;
+        int saveCount = -1;
+        if (clip) {
+          // the avatar receiver manages its own (here square) corners: clip it to the tile instead
+          xgramRect.set(startX, startY, startX + thumbWidth, startY + thumbHeight);
+          xgramPath.rewind();
+          xgramPath.addRoundRect(xgramRect, radius, radius, Path.Direction.CW);
+          saveCount = c.save();
+          c.clipPath(xgramPath);
+        } else {
+          preview.setRadius(radius);
+        }
+        if (preview.needPlaceholder()) {
+          preview.drawPlaceholderRounded(c, radius, 0x10ffffff);
+        }
+        preview.draw(c);
+        if (clip) {
+          c.restoreToCount(saveCount);
+        }
+        if (alpha != 1f) {
+          preview.restorePaintAlpha();
+        }
+        return;
+      }
       if (preview.needPlaceholder()) {
         preview.drawPlaceholderRounded(c, 0, 0x10ffffff);
       }
@@ -4741,6 +4828,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         preview.restorePaintAlpha();
       }
     }
+
+    private final RectF xgramRect = new RectF();
+    private final Path xgramPath = new Path();
   }
 
   private static class ThumbViewHolder extends RecyclerView.ViewHolder {
@@ -5343,6 +5433,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       headerView = new HeaderView(context);
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && (mode == MODE_MESSAGES || mode == MODE_SIMPLE) && !Config.DISABLE_VIEWER_ELEVATION) {
         headerView.setElevation(Screen.dp(3f));
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          headerView.setOutlineProvider(null); // XGram: no 3dp shadow over media (the elevation keeps it above the media view)
+        }
       }
       attachHeaderViewWithoutNavigation(headerView);
       headerView.initWithSingleController(this, useEdgeToEdge() || ((SET_FULLSCREEN_ON_OPEN || canRunFullscreen()) && !Config.CUTOUT_ENABLED));
@@ -5415,10 +5508,21 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         pipBackgroundView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (Screen.dp(45f) * 1.2f), Gravity.BOTTOM));
         pipBackgroundView.setAlpha(.7f);
         ViewUtils.setBackground(pipBackgroundView, ScrimUtil.makeCubicGradientScrimDrawable(0xff000000, 2, Gravity.BOTTOM, false));
+        final boolean xgramPip = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+        if (xgramPip) {
+          // XGram: M3E window controls, centred on a 40% scrim over the whole window with its 16dp corners
+          pipBackgroundView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+          pipBackgroundView.setAlpha(1f);
+          ViewUtils.setBackground(pipBackgroundView, xgramPipScrim());
+        }
         pipControlsWrap.addView(pipBackgroundView);
 
         fp = FrameLayoutFix.newParams(Screen.dp(45f), Screen.dp(45f), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         fp.rightMargin = Screen.dp(45f);
+        if (xgramPip) {
+          fp = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER);
+          fp.rightMargin = Screen.dp(56f); // XGram: 48dp targets 8dp apart, centred
+        }
         pipOpenButton = new EditButton(context);
         pipOpenButton.setOnClickListener(this);
         pipOpenButton.setId(R.id.btn_inlineOpen);
@@ -5428,15 +5532,25 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         pipControlsWrap.addView(pipOpenButton);
 
         fp = FrameLayoutFix.newParams(Screen.dp(45f), Screen.dp(45f), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        if (xgramPip) {
+          fp = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER);
+        }
         pipPlayPauseButton = new PlayPauseButton(context);
         pipPlayPauseButton.setIsPlaying(isPlayingVideo, false);
         pipPlayPauseButton.setOnClickListener(this);
         pipPlayPauseButton.setId(R.id.btn_inlinePlayPause);
         pipPlayPauseButton.setLayoutParams(fp);
+        if (xgramPip) {
+          com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(pipPlayPauseButton); // XGram
+        }
         pipControlsWrap.addView(pipPlayPauseButton);
 
         fp = FrameLayoutFix.newParams(Screen.dp(45f), Screen.dp(45f), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         fp.leftMargin = Screen.dp(45f);
+        if (xgramPip) {
+          fp = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER);
+          fp.leftMargin = Screen.dp(56f);
+        }
         pipCloseButton = new EditButton(context);
         pipCloseButton.setOnClickListener(this);
         pipCloseButton.setId(R.id.btn_inlineClose);
@@ -5447,7 +5561,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
         pipOverlayView = new PipOverlayView(context);
         pipOverlayView.setAlpha(0f);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          ViewUtils.setBackground(pipOverlayView, xgramPipScrim()); // XGram: the 40% scrim in the window's corners
+        } else {
         pipOverlayView.setBackgroundColor(0x77000000);
+        }
         pipOverlayView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         pipControlsWrap.addView(pipOverlayView);
 
@@ -5461,6 +5579,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         checkBottomWrapY();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
           bottomWrap.setElevation(Screen.dp(3f));
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            bottomWrap.setOutlineProvider(null); // XGram: no 3dp shadow over media (the elevation keeps the drawing order)
+          }
         }
         if (xgramCaptionCard()) {
           xgramInitBottomScrim(); // XGram: the controls' scrim behind the caption card (see xgramUpdateBottomScrim)
@@ -5537,7 +5658,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
 
     bottomSpace = new FillingSpace(context);
-    if (xgramCaptionCard() || xgramGalleryToolbar()) {
+    if (xgramCaptionCard() || xgramGalleryToolbar() || xgramScrims()) {
       // XGram: the navigation bar area continues the controls' bottom scrim (its 60% end) instead of a lighter band
       bottomSpace.setBackgroundColor(XGRAM_ON_MEDIA_SCRIM);
     } else {
@@ -5549,7 +5670,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     bottomSpace.setVisibility(bottomInnerMargin > 0 ? View.VISIBLE : View.GONE);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
       bottomSpace.setElevation(Screen.dp(3f));
-      if (xgramCaptionCard() || xgramGalleryToolbar()) {
+      if (xgramCaptionCard() || xgramGalleryToolbar() || xgramScrims()) {
         // XGram: the strip continues the scrims' 60% end: a translucent caster would show its own shadow through it
         // (a darker seam at its top, a strip darker than the scrim above). The elevation stays for the drawing order.
         bottomSpace.setOutlineProvider(null);
@@ -5624,7 +5745,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     if (this.topOffset != topOffset) {
       this.topOffset = topOffset;
       Views.setPaddingTop(othersView, topOffset);
-      if (receiverView != null) {
+      if (receiverView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        FrameLayout.LayoutParams fp = (FrameLayout.LayoutParams) receiverView.getLayoutParams();
+        xgramPlaceReceiverChip(fp); // XGram: the receiver chip
+        receiverView.setLayoutParams(fp);
+      } else if (receiverView != null) {
         FrameLayout.LayoutParams fp = (FrameLayout.LayoutParams) receiverView.getLayoutParams();
         if (topOffset > 0) {
           fp.leftMargin = Screen.dp(8f);
@@ -5747,6 +5872,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
     if (sendButton != null) {
       sendButton.destroySlowModeCounterController();
+    }
+    if (xgramReceiverAvatar != null) {
+      xgramReceiverAvatar.performDestroy(); // XGram: the receiver chip's avatar
+      xgramReceiverAvatar = null;
     }
     subscribeToChatId(0);
   }
@@ -6329,14 +6458,22 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           TextView textView = Views.newTextView(context(), 14f, Theme.getColor(ColorId.white), Gravity.LEFT, Views.TEXT_FLAG_SINGLE_LINE);
           textView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP, Screen.dp(15f), Screen.dp(10f), Screen.dp(15f), 0));
           textView.setText(Lang.getString(R.string.QualityWorse));
+          com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, .7f); // XGram: end label
           qualityControlWrap.addView(textView);
           textView = Views.newTextView(context(), 14f, Theme.getColor(ColorId.white), Gravity.RIGHT, Views.TEXT_FLAG_SINGLE_LINE);
           textView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.RIGHT | Gravity.TOP, Screen.dp(15f), Screen.dp(10f), Screen.dp(15f), 0));
           textView.setText(Lang.getString(R.string.QualityBetter));
+          com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, .7f); // XGram: end label
           qualityControlWrap.addView(textView);
 
           qualityInfo = Views.newTextView(context(), 15f, Theme.getColor(ColorId.white), Gravity.CENTER, Views.TEXT_FLAG_SINGLE_LINE);
           qualityInfo.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM, 0, 0, 0, Screen.dp(8f)));
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram: the M3E discrete slider (stops at each quality) in the dark scheme's primary, the value in labelLarge
+            com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(qualityInfo, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, 1f);
+            com.fahadali.xgram.appearance.XgramR5Media.tabular(qualityInfo);
+            qualitySlider.setXgramColors(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), com.fahadali.xgram.appearance.XgramM3MediaChrome.white(com.fahadali.xgram.appearance.XgramM3MediaChrome.TRACK_INACTIVE_ALPHA));
+          }
           qualityControlWrap.addView(qualityInfo);
         }
         bottomWrap.addView(qualityControlWrap);
@@ -9136,6 +9273,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
               int right = width / 2 + size[0] / 2;
               int top = height / 2 - size[1] / 2;
               int bottom = height / 2 + size[1] / 2;
+              if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+                // XGram: the picture in picture window is a 16dp-corner card (the view is scaled down, so is its outline)
+                float scale = Math.max(.01f, view.getScaleX());
+                outline.setRoundRect(left, top, right, bottom, Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L) * pipFactor / scale);
+                return;
+              }
               outline.setRect(left, top, right, bottom);
             } else {
               outline.setEmpty();
@@ -9316,6 +9459,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       stopwatchButton.setOnClickListener(this);
       stopwatchButton.setLayoutParams(new LinearLayout.LayoutParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT));
       com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(stopwatchButton); // XGram
+      stopwatchButton.xgramSetOnMedia(true); // XGram: its value badge in the dark scheme's primary
       editButtons.addView(stopwatchButton);
     }
 
@@ -9670,6 +9814,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     final @DrawableRes int icon = args.receiverRowIcon != 0 ? args.receiverRowIcon : R.drawable.baseline_arrow_upward_18;
     final CharSequence text = StringUtils.isEmpty(args.receiverRowText) ? (chat != null ? tdlib.chatTitle(chat) : null) : args.receiverRowText;
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return xgramBuildReceiverChip(args.receiverRowIcon == 0 ? chat : null, icon, text);
+    }
+
     FrameLayoutFix.LayoutParams fp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.getStatusBarHeight());
     if (topOffset > 0) {
       fp.leftMargin = Screen.dp(8f);
@@ -9712,6 +9860,80 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
 
     return receiverView;
+  }
+
+  // XGram M3E round 5: the send screen's receiver row is an on-media assist chip: 32dp, full corners, the dark scheme's
+  // surfaceContainerHigh at 60%, the chat's 18dp avatar (or the row's icon) 8dp in, then the chat in white labelLarge
+  // and 16dp to the end. It sits at the top start, centred on the selection check's row.
+
+  private static final float XGRAM_RECEIVER_CHIP_HEIGHT = 32f;
+  private @Nullable org.thunderdog.challegram.widget.AvatarView xgramReceiverAvatar;
+
+  private LinearLayout xgramBuildReceiverChip (@Nullable TdApi.Chat chat, @DrawableRes int icon, @Nullable CharSequence text) {
+    FrameLayoutFix.LayoutParams fp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(XGRAM_RECEIVER_CHIP_HEIGHT), Gravity.TOP | Gravity.LEFT);
+    xgramPlaceReceiverChip(fp);
+
+    LinearLayout chip = new LinearLayout(context);
+    chip.setOrientation(LinearLayout.HORIZONTAL);
+    chip.setGravity(Gravity.CENTER_VERTICAL);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+      chip.setLayoutDirection(Lang.rtl() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+    }
+    chip.setAlpha(0f);
+    chip.setLayoutParams(fp);
+    android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+    background.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), .6f));
+    background.setCornerRadius(Screen.dp(XGRAM_RECEIVER_CHIP_HEIGHT) / 2f);
+    chip.setBackground(background);
+    final boolean hasText = !StringUtils.isEmpty(text);
+    final int start = Screen.dp(8f), end = Screen.dp(hasText ? 16f : 8f);
+    chip.setPadding(Lang.rtl() ? end : start, 0, Lang.rtl() ? start : end, 0);
+
+    final int leadSize = Screen.dp(18f);
+    if (chat != null) {
+      org.thunderdog.challegram.widget.AvatarView avatarView = new org.thunderdog.challegram.widget.AvatarView(context);
+      avatarView.setLayoutParams(new LinearLayout.LayoutParams(leadSize, leadSize));
+      avatarView.setChat(tdlib, chat);
+      chip.addView(avatarView);
+      if (xgramReceiverAvatar != null) {
+        xgramReceiverAvatar.performDestroy();
+      }
+      xgramReceiverAvatar = avatarView;
+    } else {
+      ImageView imageView = new ImageView(context);
+      imageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+      imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(icon));
+      imageView.setColorFilter(0xffffffff);
+      imageView.setLayoutParams(new LinearLayout.LayoutParams(leadSize, leadSize));
+      chip.addView(imageView);
+    }
+
+    if (hasText) {
+      TextView textView = new NoScrollTextView(context);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      textView.setTextColor(0xffffffff);
+      textView.setSingleLine(true);
+      textView.setEllipsize(TextUtils.TruncateAt.END);
+      textView.setIncludeFontPadding(false);
+      // clear of the selection check and the counter at the top end
+      textView.setMaxWidth(Math.max(Screen.dp(96f), Screen.currentWidth() - Screen.dp(16f + 8f + 18f + 8f + 16f + 148f)));
+      textView.setText(text);
+      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      if (Lang.rtl()) {
+        lp.rightMargin = Screen.dp(8f);
+      } else {
+        lp.leftMargin = Screen.dp(8f);
+      }
+      textView.setLayoutParams(lp);
+      chip.addView(textView);
+    }
+    return chip;
+  }
+
+  /** Top start, 16dp in, centred on the selection check (its centre is 41dp + topOffset / 2 down, see setTopOffset). */
+  private void xgramPlaceReceiverChip (FrameLayout.LayoutParams fp) {
+    fp.leftMargin = Screen.dp(16f);
+    fp.topMargin = Math.max(topOffset + Screen.dp(4f), Screen.dp(41f) + topOffset / 2 - Screen.dp(XGRAM_RECEIVER_CHIP_HEIGHT) / 2);
   }
 
   /* * */

@@ -238,6 +238,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
     durationView.setTextColor(0xffffffff);
     durationView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
     Views.setSimpleShadow(durationView);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramStyleDuration(durationView); // XGram: the record timer pill
+    }
     resetDuration();
 
     rootLayout = new CameraQrCodeRootLayout(context);
@@ -255,6 +258,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
 
     contentShadow = new ShadowView(context);
     contentShadow.setSimpleBottomTransparentShadow(true);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      contentShadow.setVisibility(View.GONE); // XGram: no bottom shadow gradient
+    }
     rootLayout.addView(contentShadow);
 
     if (needLegacy()) {
@@ -498,6 +504,31 @@ public class CameraController extends ViewController<Void> implements CameraDele
     updateContentScale();
   }*/
 
+  /**
+   * XGram: the record timer as an M3E pill: an 8dp error dot, then the time in white labelLarge with tabular figures, on
+   * the dark scheme's surfaceContainerHigh at 60%, full corners, 12dp and 6dp padding. No text shadow.
+   */
+  private static void xgramStyleDuration (TextView v) {
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(v, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+    com.fahadali.xgram.appearance.XgramR5Media.tabular(v);
+    v.setShadowLayer(0f, 0f, 0f, 0);
+    v.setTextColor(0xffffffff);
+    v.setIncludeFontPadding(false);
+    v.setGravity(Gravity.CENTER_VERTICAL);
+    v.setBackground(com.fahadali.xgram.appearance.XgramR5Media.onMediaPill());
+    v.setPadding(Screen.dp(12f), Screen.dp(6f), Screen.dp(14f), Screen.dp(6f));
+    android.graphics.drawable.GradientDrawable dot = new android.graphics.drawable.GradientDrawable();
+    dot.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+    dot.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ERROR));
+    dot.setBounds(0, 0, Screen.dp(8f), Screen.dp(8f));
+    v.setCompoundDrawablePadding(Screen.dp(8f));
+    if (org.thunderdog.challegram.core.Lang.rtl()) {
+      v.setCompoundDrawables(null, null, dot, null);
+    } else {
+      v.setCompoundDrawables(dot, null, null, null);
+    }
+  }
+
   private boolean setMargins (View view, FrameLayoutFix.LayoutParams params, int anchorGravity, int margin, int oppositeMargin) {
     switch (anchorGravity) {
       case Gravity.TOP:
@@ -563,7 +594,8 @@ public class CameraController extends ViewController<Void> implements CameraDele
     int topGravityCentered = makeCenter(topGravity);
 
     setLayoutParams(durationView, topGravity, topGravityCentered, Screen.dp(18f), 0);
-    setLayoutParams(button, bottomGravity, bottomGravityCentered, Screen.dp(40f), 0);
+    // XGram: the 80dp M3E shutter (no padding) is centred on the 56dp side buttons' line
+    setLayoutParams(button, bottomGravity, bottomGravityCentered, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 40f + 28f - CameraButton.XGRAM_SIZE / 2f : 40f), 0);
     setLayoutParams(blurView, bottomGravity, bottomGravityCentered, Screen.dp(18f), 0);
     setLayoutParams(switchCameraButtonParent, bottomGravity, bottomGravityCentered, Screen.dp(40f), 0);
     setLayoutParams(flashButton, bottomGravity, bottomGravityCentered, Screen.dp(40f), 0);
@@ -602,6 +634,19 @@ public class CameraController extends ViewController<Void> implements CameraDele
       errorView.setGravity(Gravity.CENTER);
       errorView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
       Views.setSimpleShadow(errorView);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: the error on a dark M3 card (the dark scheme's surfaceContainerHigh, 16dp corners), white bodyMedium
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(errorView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+        errorView.setShadowLayer(0f, 0f, 0f, 0);
+        android.graphics.drawable.GradientDrawable card = new android.graphics.drawable.GradientDrawable();
+        card.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH));
+        card.setCornerRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L));
+        errorView.setBackground(card);
+        errorView.setPadding(Screen.dp(20f), Screen.dp(16f), Screen.dp(20f), Screen.dp(16f));
+        errorView.setMaxWidth(Screen.dp(320f));
+        FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) errorView.getLayoutParams();
+        params.leftMargin = params.rightMargin = Screen.dp(24f);
+      }
     }
 
     if (errorView.getParent() == null) {

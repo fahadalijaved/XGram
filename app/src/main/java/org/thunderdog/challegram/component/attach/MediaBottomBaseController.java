@@ -237,7 +237,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
 
   private void updateRecyclerTop (int height) {
     if (recyclerView != null) {
-      float top = height - currentHeight;
+      float top = height - (xgramTransitionHeight >= 0 ? xgramTransitionHeight : currentHeight); // XGram: a tab switch's interpolated height
       recyclerView.setTranslationY(top);
       if (contentView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         contentView.invalidate(); // XGram: the sheet top follows the list
@@ -390,8 +390,124 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     }
   }
 
+  // XGram: Material 3 Expressive tab switch (MediaLayout#onBottomPrepareSectionChange). Both pages sit at one
+  // interpolated sheet height, MediaLayout draws the one sheet (top, handle and body) under them, the pages crossfade
+  // over it, item animations are frozen and a start height that grows meanwhile waits for the end.
+
+  private int xgramTransitionHeight = -1;
+  private boolean xgramSwitching;
+  private @Nullable RecyclerView.ItemAnimator xgramFrozenAnimator;
+  private @Nullable MeasuredAdapterDelegate xgramPendingExpand;
+
+  /** XGram: true between {@code xgramSetSwitching(true)} and {@code xgramSetSwitching(false)}. */
+  public final boolean xgramIsSwitching () {
+    return xgramSwitching;
+  }
+
+  /**
+   * XGram: starts or ends a tab switch. While switching the list keeps no item animator, the sheet top is not drawn here
+   * and a start height expansion waits; at the end the page goes back to its own height.
+   */
+  public final void xgramSetSwitching (boolean switching) {
+    if (this.xgramSwitching == switching) {
+      return;
+    }
+    this.xgramSwitching = switching;
+    if (recyclerView != null) {
+      if (switching) {
+        xgramFrozenAnimator = recyclerView.getItemAnimator();
+        if (xgramFrozenAnimator != null) {
+          recyclerView.setItemAnimator(null);
+        }
+      } else {
+        if (xgramFrozenAnimator != null && recyclerView.getItemAnimator() == null) {
+          recyclerView.setItemAnimator(xgramFrozenAnimator);
+        }
+        xgramFrozenAnimator = null;
+      }
+    }
+    xgramOnSwitch(switching);
+    if (!switching) {
+      xgramTransitionHeight = -1;
+      updateRecyclerTop();
+      MeasuredAdapterDelegate pending = xgramPendingExpand;
+      xgramPendingExpand = null;
+      if (pending != null) {
+        xgramExpandStartHeight(pending);
+      }
+    }
+  }
+
+  /** XGram: the sheet height to show during a tab switch (does not touch the media layout's bar or header factors). */
+  public final void xgramSetTransitionHeight (int height) {
+    if (this.xgramTransitionHeight != height) {
+      this.xgramTransitionHeight = height;
+      updateRecyclerTop();
+    }
+  }
+
+  /** XGram: the list's top in this page's view (the sheet edge, under the 20dp handle band). */
+  public final float xgramListTop () {
+    return recyclerView != null ? recyclerView.getTop() + recyclerView.getTranslationY() : 0f;
+  }
+
+  /** XGram: the sheet color of this page (its list's background). */
+  public final @androidx.annotation.ColorInt int xgramSheetColor () {
+    return org.thunderdog.challegram.theme.Theme.getColor(getRecyclerBackgroundColorId());
+  }
+
+  /**
+   * XGram: during a tab switch, draws the whole sheet (28dp top corners, the handle and the body down to
+   * {@code height}) in {@code color} at full opacity, at this page's current sheet top. Canvas in this page's view
+   * coordinates.
+   */
+  public final void xgramDrawSwitchSheet (android.graphics.Canvas c, int width, int height, @androidx.annotation.ColorInt int color) {
+    if (recyclerView == null || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    float corner = xgramSheetCorner();
+    float top = recyclerView.getTop() + recyclerView.getTranslationY() - xgramSheetBand(corner);
+    if (top >= height) {
+      return;
+    }
+    if (xgramSheetTop == null) {
+      xgramSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
+    }
+    xgramSheetTop.set(color, corner);
+    xgramSheetTop.setHandleAlpha(corner);
+    xgramSheetTop.setBounds(0, (int) top, width, height);
+    xgramSheetTop.draw(c);
+  }
+
+  /** XGram: called when a tab switch starts and ends (e.g. a map drops its outline clip meanwhile). */
+  protected void xgramOnSwitch (boolean switching) {
+    // override
+  }
+
+  /** XGram: {@link #expandStartHeight} after a tab switch, on the standard spatial spring (snaps with Reduce motion). */
+  private void xgramExpandStartHeight (MeasuredAdapterDelegate adapter) {
+    this.contentHeight = adapter.measureHeight(-1);
+    int newStartHeight = getMaxStartHeight();
+    if (newStartHeight <= startHeight) {
+      return;
+    }
+    if (isMoving || animatingHeight || currentHeight > startHeight) {
+      startHeight = newStartHeight;
+      return;
+    }
+    final float fromHeight = startHeight;
+    final float heightDiff = newStartHeight - startHeight;
+    com.fahadali.xgram.appearance.XgramExpressive.Spring spring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, 0f, (s, value) -> {
+      if (!xgramSwitching && !isMoving && !animatingHeight) {
+        applyStartHeight(Math.round(fromHeight + heightDiff * value));
+      }
+    });
+    spring.setThreshold(.5f / Math.max(1f, Math.abs(heightDiff)));
+    spring.animateTo(1f);
+  }
+
   public void xgramDrawSheetTop (android.graphics.Canvas c, int width) {
-    if (recyclerView == null || recyclerView.getVisibility() != View.VISIBLE || !xgramHasSheetTop()) {
+    if (recyclerView == null || recyclerView.getVisibility() != View.VISIBLE || !xgramHasSheetTop() || xgramSwitching) {
       return;
     }
     int color = org.thunderdog.challegram.theme.Theme.getColor(getRecyclerBackgroundColorId());
@@ -609,6 +725,10 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   }
 
   protected void expandStartHeight (MeasuredAdapterDelegate adapter) {
+    if (xgramSwitching) {
+      xgramPendingExpand = adapter; // XGram: applied when the tab switch ends, on its spring
+      return;
+    }
     this.contentHeight = adapter.measureHeight(-1);
     int newStartHeight = getMaxStartHeight();
 
@@ -710,7 +830,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   // Height expanding
 
   public boolean isAnimating () {
-    return animatingHeight || useBottomBarChange;
+    return animatingHeight || useBottomBarChange || xgramSwitching; // XGram: no drags during a tab switch
   }
 
   public boolean isInsideRecyclerView (float x, float y) {

@@ -134,6 +134,11 @@ public class CameraControlButton extends View implements FactorAnimator.Target {
   public void spinAround (boolean forward, boolean toFrontFace) {
     if (spinAnimator == null) {
       spinAnimator = new FactorAnimator(ANIMATOR_SPIN, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 360l);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: the switch turns on the spatial default spring
+        spinAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpolator(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT));
+        spinAnimator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT));
+      }
     } else if (spinForward == forward && spinAnimator.isAnimating()) {
       return;
     }
@@ -249,6 +254,8 @@ public class CameraControlButton extends View implements FactorAnimator.Target {
     }
   }
 
+  private Paint xgramContainerPaint;
+
   private float componentRotation;
   public void setComponentRotation (float rotation) {
     if (this.componentRotation != rotation) {
@@ -270,6 +277,15 @@ public class CameraControlButton extends View implements FactorAnimator.Target {
 
     int cx = viewWidth / 2;
     int cy = viewHeight / 2;
+
+    if (!isSmall && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: a 48dp full-corner container in the dark scheme's surfaceContainerHigh at 60%
+      if (xgramContainerPaint == null) {
+        xgramContainerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      }
+      xgramContainerPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), .6f));
+      c.drawCircle(cx, cy, Math.min(Screen.dp(24f), Math.min(viewWidth, viewHeight) / 2f), xgramContainerPaint);
+    }
 
     final float rotation = componentRotation;
     final boolean saved = rotation != 0f || scale != 1f;

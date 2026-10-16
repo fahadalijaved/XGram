@@ -136,6 +136,7 @@ public class CropAreaView extends View implements FactorAnimator.Target {
 
   public void setMode (int mode, boolean animateValue) {
     if (this.mode != mode) {
+      xgramSetGridVisible(mode == MODE_NORMAL || mode == MODE_PRECISE, true); // XGram: always fades (snaps with Reduce motion)
       boolean isActive = mode != MODE_NONE;
       this.effectiveMode = isActive ? MODE_NONE : this.mode;
       this.mode = mode;
@@ -251,6 +252,79 @@ public class CropAreaView extends View implements FactorAnimator.Target {
   private final Rect dstRect = new Rect();
   private final Path roundClipPath = new Path();
 
+  // XGram: Material 3 Expressive crop frame: a 2dp white frame, 24dp corner handles with round caps (4dp strokes) just
+  // outside it, and the thirds grid (or the precise grid while rotating) in white at 40% only while dragging, fading on
+  // the effects default spring (snaps with Reduce motion). Nothing is allocated while drawing.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramGrid;
+  private final Paint xgramFramePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Path xgramCorners = new Path();
+  private int xgramGridCount = 2;
+
+  private void xgramSetGridVisible (boolean visible, boolean animated) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    if (xgramGrid == null) {
+      xgramGrid = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> invalidate());
+    }
+    if (animated) {
+      xgramGrid.animateTo(visible ? 1f : 0f);
+    } else {
+      xgramGrid.setValue(visible ? 1f : 0f);
+      invalidate();
+    }
+  }
+
+  private void xgramDrawFrame (Canvas c, int mode) {
+    final int left = dstRect.left, top = dstRect.top, right = dstRect.right, bottom = dstRect.bottom;
+    // the grid
+    final float grid = xgramGrid != null ? Math.max(0f, Math.min(1f, xgramGrid.getValue())) : 0f;
+    if (mode != MODE_INVISIBLE && mode != MODE_NONE) {
+      xgramGridCount = mode == MODE_PRECISE ? 7 : 2;
+    }
+    if (grid > 0f && xgramGridCount > 0) {
+      final int count = xgramGridCount;
+      final float chunkWidth = (float) (right - left) / (count + 1), chunkHeight = (float) (bottom - top) / (count + 1);
+      linePaint.setColor(ColorUtils.alphaColor(.4f * grid, 0xffffffff));
+      linePaint.setStrokeWidth(Math.max(1, Screen.dp(1f)));
+      for (int i = 1; i <= count; i++) {
+        final float y = top + chunkHeight * i, x = left + chunkWidth * i;
+        c.drawLine(left, y, right, y, linePaint);
+        c.drawLine(x, top, x, bottom, linePaint);
+      }
+    }
+    // the 2dp frame, inside the crop edges
+    final float frame = Screen.dp(2f);
+    xgramFramePaint.setStyle(Paint.Style.STROKE);
+    xgramFramePaint.setStrokeCap(Paint.Cap.BUTT);
+    xgramFramePaint.setStrokeJoin(Paint.Join.MITER);
+    xgramFramePaint.setStrokeWidth(frame);
+    xgramFramePaint.setColor(0xffffffff);
+    c.drawRect(left + frame / 2f, top + frame / 2f, right - frame / 2f, bottom - frame / 2f, xgramFramePaint);
+    // the corner handles, their 4dp strokes centred 1dp outside the frame
+    final float stroke = Screen.dp(4f), arm = Math.min(Screen.dp(24f), Math.min(right - left, bottom - top) / 2f);
+    final float o = stroke / 2f - Screen.dp(1f);
+    final float l = left - o, t = top - o, r = right + o, b = bottom + o;
+    xgramCorners.rewind();
+    xgramCorners.moveTo(l, t + arm);
+    xgramCorners.lineTo(l, t);
+    xgramCorners.lineTo(l + arm, t);
+    xgramCorners.moveTo(r - arm, t);
+    xgramCorners.lineTo(r, t);
+    xgramCorners.lineTo(r, t + arm);
+    xgramCorners.moveTo(r, b - arm);
+    xgramCorners.lineTo(r, b);
+    xgramCorners.lineTo(r - arm, b);
+    xgramCorners.moveTo(l + arm, b);
+    xgramCorners.lineTo(l, b);
+    xgramCorners.lineTo(l, b - arm);
+    xgramFramePaint.setStrokeWidth(stroke);
+    xgramFramePaint.setStrokeCap(Paint.Cap.ROUND);
+    xgramFramePaint.setStrokeJoin(Paint.Join.ROUND);
+    c.drawPath(xgramCorners, xgramFramePaint);
+  }
+
   @Override
   protected void onDraw (Canvas c) {
     if (targetWidth == 0 || targetHeight == 0) {
@@ -302,6 +376,22 @@ public class CropAreaView extends View implements FactorAnimator.Target {
     int centerX = dstRect.centerX();
     int centerY = dstRect.centerY();
     int radius = Math.min(dstRect.width(), dstRect.height()) / 2;
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      if (profilePhotoMode) {
+        roundClipPath.reset();
+        roundClipPath.addRect(dstRect.left, dstRect.top, dstRect.right, dstRect.bottom, Path.Direction.CW);
+        roundClipPath.addCircle(centerX, centerY, radius, Path.Direction.CCW);
+        roundClipPath.close();
+        final int s = Views.save(c);
+        c.clipPath(roundClipPath);
+        c.drawRect(dstRect, Paints.fillingPaint(ColorUtils.alphaColor(Color.alpha(overlayColor) / 300f, overlayColor)));
+        Views.restore(c, s);
+        c.drawCircle(centerX, centerY, radius, Paints.strokeSmallPaint(OUTER_LINE_COLOR));
+      }
+      xgramDrawFrame(c, mode); // XGram
+      return;
+    }
 
     int cornerWidth = Screen.dp(2f);
     int cornerHeight = Screen.dp(16f);

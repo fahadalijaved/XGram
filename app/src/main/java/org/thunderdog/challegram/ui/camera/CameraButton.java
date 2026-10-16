@@ -61,6 +61,64 @@ public class CameraButton extends View implements FactorAnimator.Target, Runnabl
     cameraIcon = Drawables.toBitmap(Drawables.get(R.drawable.baseline_camera_alt_24));
     closeIcon = Drawables.toBitmap(Drawables.get(R.drawable.baseline_close_24));
     stopIcon = Drawables.toBitmap(Drawables.get(R.drawable.baseline_stop_24));
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: the M3E (Pixel camera) shutter: 80dp, no shadowed white circle behind it
+      setBackground(null);
+      setPadding(0, 0, 0, 0);
+      setLayoutParams(FrameLayoutFix.newParams(Screen.dp(XGRAM_SIZE), Screen.dp(XGRAM_SIZE)));
+      xgramPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+      setContentDescription(org.thunderdog.challegram.core.Lang.getString(R.string.XgramR5MediaShutter));
+    }
+  }
+
+  // XGram: Material 3 Expressive shutter. An 80dp control: a 4dp white ring (outer edge at 40dp) around a 64dp white
+  // disc; pressed, the disc shrinks a little (spatial fast); while recording it morphs into a 36dp error square with
+  // 12dp (CORNER_M) corners, on the record animator, which runs on the spatial default spring (clamped). In QR scan
+  // mode the control is the close button: a 56dp on-media container with the close icon.
+
+  public static final float XGRAM_SIZE = 80f;
+  private static final float XGRAM_RING_WIDTH = 4f, XGRAM_DISC = 64f, XGRAM_RECORD_SQUARE = 36f, XGRAM_PRESSED_SCALE = .9f;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress;
+  private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+
+  @Override
+  public void setPressed (boolean pressed) {
+    super.setPressed(pressed);
+    if (xgramPress != null) {
+      xgramPress.animateTo(pressed && !isInRecordMode ? 1f : 0f);
+    }
+  }
+
+  private void xgramDraw (Canvas c, int cx, int cy) {
+    if (parent.isInQrScanMode()) {
+      final float alpha = Math.max(0f, 1f - recordFactor / .5f);
+      xgramPaint.setStyle(Paint.Style.FILL);
+      xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), .6f * alpha));
+      c.drawCircle(cx, cy, Screen.dp(28f), xgramPaint);
+      Paint iconPaint = Paints.whitePorterDuffPaint();
+      int iconAlpha = iconPaint.getAlpha();
+      iconPaint.setAlpha((int) (255f * alpha));
+      c.drawBitmap(closeIcon, cx - closeIcon.getWidth() / 2f, cy - closeIcon.getHeight() / 2f, iconPaint);
+      iconPaint.setAlpha(iconAlpha);
+      return;
+    }
+    final float ring = Screen.dp(XGRAM_RING_WIDTH);
+    xgramPaint.setStyle(Paint.Style.STROKE);
+    xgramPaint.setStrokeWidth(ring);
+    xgramPaint.setColor(0xffffffff);
+    c.drawCircle(cx, cy, Screen.dp(XGRAM_SIZE) / 2f - ring / 2f, xgramPaint);
+
+    final float record = MathUtils.clamp(recordFactor);
+    final float press = xgramPress != null ? MathUtils.clamp(xgramPress.getValue()) : 0f;
+    final float discSize = Screen.dp(XGRAM_DISC) * (1f - (1f - XGRAM_PRESSED_SCALE) * press);
+    final float size = discSize + (Screen.dp(XGRAM_RECORD_SQUARE) - discSize) * record;
+    final float radius = size / 2f + (Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M) - size / 2f) * record;
+    xgramRect.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
+    xgramPaint.setStyle(Paint.Style.FILL);
+    xgramPaint.setColor(me.vkryl.core.ColorUtils.fromToArgb(0xffffffff, com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ERROR), record));
+    c.drawRoundRect(xgramRect, radius, radius, xgramPaint);
   }
 
   public void setParent (CameraController parent) {
@@ -146,6 +204,14 @@ public class CameraButton extends View implements FactorAnimator.Target, Runnabl
       this.isInRecordMode = inRecordMode;
       if (recordAnimator == null) {
         recordAnimator = new FactorAnimator(ANIMATOR_RECORD, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.recordFactor);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: the shutter morphs on the spatial default spring (clamped: the controls fade with the same factor)
+          recordAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR));
+          recordAnimator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT));
+        }
+      }
+      if (inRecordMode && xgramPress != null) {
+        xgramPress.animateTo(0f);
       }
       recordAnimator.animateTo(inRecordMode ? 1f : 0f);
       if (inRecordMode) {
@@ -161,9 +227,11 @@ public class CameraButton extends View implements FactorAnimator.Target, Runnabl
     if (this.recordFactor != factor) {
       this.recordFactor = factor;
       blurView.setExpandFactor(factor);
+      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: the disc morphs instead
       float scale = .85f + .15f * (1f - factor);
       setScaleX(scale);
       setScaleY(scale);
+      }
       parent.setVideoFactor(factor);
       invalidate();
     }
@@ -301,6 +369,11 @@ public class CameraButton extends View implements FactorAnimator.Target, Runnabl
 
     int cx = viewWidth / 2;
     int cy = viewHeight / 2;
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c, cx, cy); // XGram
+      return;
+    }
 
     /*if (componentRotation != 0f) {
       c.save();

@@ -890,6 +890,10 @@ public class MediaLayout extends FrameLayoutFix implements
     to = getControllerForIndex(toIndex);
     toView = to.getValue();
     toHeight = to.getStartHeight();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramBeginSwitch(to); // XGram: Material 3 Expressive crossfade on one sheet
+      return true;
+    }
     toView.setTranslationY(toHeight);
     if (to.isPaused()) {
       to.onActivityResume();
@@ -898,6 +902,135 @@ public class MediaLayout extends FrameLayoutFix implements
     addView(toView, 1);
 
     return true;
+  }
+
+  // XGram: Material 3 Expressive tab switch. MediaBottomBar drives it with one spring (standard spatial default) that
+  // also moves its indicator. The incoming page is added in place (translation 0, alpha 0) and laid out before its first
+  // frame. One sheet, drawn here under both pages, goes from the outgoing page's height to the incoming one's; the
+  // outgoing page fades out by .35 (shared axis fade through), the incoming one fades in after it and grows from .92
+  // about the sheet top. The outgoing page pauses once it is invisible; the location map resumes only after the fade
+  // passes .35. Reduce motion: a 150ms crossfade at the incoming height. Expressive design off keeps Telegram X's slide.
+
+  private boolean xgramSwitching, xgramSwitchReduce, xgramFromPausedEarly, xgramResumePending;
+  private @Nullable MediaBottomBaseController<?> xgramSwitchTo;
+  private float xgramSwitchProgress;
+
+  private void xgramBeginSwitch (MediaBottomBaseController<?> to) {
+    xgramSwitching = true;
+    xgramSwitchTo = to;
+    xgramSwitchReduce = com.fahadali.xgram.appearance.XgramMotion.reduce();
+    xgramFromPausedEarly = false;
+    xgramResumePending = false;
+    xgramSwitchProgress = 0f;
+    toView.setTranslationY(0f);
+    toView.setAlpha(0f);
+    toView.setScaleX(1f);
+    toView.setScaleY(1f);
+    if (to.isPaused()) {
+      if (to instanceof MediaBottomLocationController) {
+        xgramResumePending = true;
+      } else {
+        to.onActivityResume();
+      }
+    }
+    from.xgramSetSwitching(true);
+    to.xgramSetSwitching(true);
+    addView(toView, 1);
+    xgramLayoutNow(toView);
+    xgramApplySwitch(0f);
+  }
+
+  /** Measures and lays out a page just added, so its first frame is complete. */
+  private void xgramLayoutNow (View v) {
+    final int width = getMeasuredWidth(), height = getMeasuredHeight();
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    ViewGroup.LayoutParams params = v.getLayoutParams();
+    int marginLeft = 0, marginTop = 0, marginRight = 0, marginBottom = 0;
+    if (params instanceof MarginLayoutParams) {
+      MarginLayoutParams margins = (MarginLayoutParams) params;
+      marginLeft = margins.leftMargin;
+      marginTop = margins.topMargin;
+      marginRight = margins.rightMargin;
+      marginBottom = margins.bottomMargin;
+    }
+    final int childWidth = Math.max(0, width - getPaddingLeft() - getPaddingRight() - marginLeft - marginRight);
+    final int childHeight = Math.max(0, height - getPaddingTop() - getPaddingBottom() - marginTop - marginBottom);
+    v.measure(MeasureSpec.makeMeasureSpec(childWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(childHeight, MeasureSpec.EXACTLY));
+    final int left = getPaddingLeft() + marginLeft, top = getPaddingTop() + marginTop;
+    v.layout(left, top, left + childWidth, top + childHeight);
+  }
+
+  private void xgramApplySwitch (float factor) {
+    final MediaBottomBaseController<?> to = xgramSwitchTo;
+    if (to == null || from == null || toView == null || fromView == null) {
+      return;
+    }
+    final float p = com.fahadali.xgram.appearance.XgramMotion.clamp01(factor);
+    xgramSwitchProgress = p;
+    final int targetHeight = to.getCurrentHeight();
+    final int height = xgramSwitchReduce ? targetHeight : Math.round(fromHeight + (targetHeight - fromHeight) * factor);
+    from.xgramSetTransitionHeight(height);
+    to.xgramSetTransitionHeight(height);
+    final float outAlpha = xgramSwitchReduce ? 1f - p : com.fahadali.xgram.appearance.XgramNavMotion.outAlpha(p);
+    final float inAlpha = xgramSwitchReduce ? p : com.fahadali.xgram.appearance.XgramNavMotion.inAlpha(p);
+    fromView.setAlpha(outAlpha);
+    toView.setAlpha(inAlpha);
+    final float scale = xgramSwitchReduce ? 1f : .92f + .08f * factor;
+    toView.setPivotX(toView.getWidth() / 2f);
+    toView.setPivotY(to.xgramListTop());
+    toView.setScaleX(scale);
+    toView.setScaleY(scale);
+    if (!xgramFromPausedEarly && outAlpha <= 0f) {
+      xgramFromPausedEarly = true;
+      from.onActivityPause(); // the gallery camera, the map: nothing renders unseen
+    }
+    if (xgramResumePending && p >= com.fahadali.xgram.appearance.XgramNavMotion.FADE_THRESHOLD) {
+      xgramResumePending = false;
+      to.onActivityResume();
+    }
+    invalidate();
+  }
+
+  private void xgramEndSwitch () {
+    final MediaBottomBaseController<?> to = xgramSwitchTo;
+    xgramSwitching = false;
+    xgramSwitchTo = null;
+    if (fromView != null) {
+      fromView.setAlpha(1f);
+    }
+    if (toView != null) {
+      toView.setAlpha(1f);
+      toView.setScaleX(1f);
+      toView.setScaleY(1f);
+    }
+    if (from != null) {
+      from.xgramSetSwitching(false);
+    }
+    if (to != null) {
+      if (xgramResumePending) {
+        to.onActivityResume();
+      }
+      to.xgramSetSwitching(false);
+    }
+    xgramResumePending = false;
+    invalidate();
+  }
+
+  @Override
+  protected void dispatchDraw (android.graphics.Canvas c) {
+    final MediaBottomBaseController<?> to = xgramSwitchTo;
+    if (xgramSwitching && to != null && from != null && toView != null && toView.getParent() == this) {
+      // XGram: the one sheet of a tab switch, under both pages
+      final float p = xgramSwitchProgress;
+      final int color = ColorUtils.fromToArgb(from.xgramSheetColor(), to.xgramSheetColor(), p);
+      final int saveCount = c.save();
+      c.translate(toView.getLeft(), toView.getTop() + toView.getTranslationY());
+      to.xgramDrawSwitchSheet(c, toView.getWidth(), toView.getHeight(), color);
+      c.restoreToCount(saveCount);
+    }
+    super.dispatchDraw(c);
   }
 
   public interface MediaViewArgumentsEditor {
@@ -920,6 +1053,9 @@ public class MediaLayout extends FrameLayoutFix implements
 
   @Override
   public void onBottomSectionChanged (int index) {
+    if (xgramSwitching) {
+      xgramEndSwitch(); // XGram
+    }
     removeView(fromView);
     from.resetState();
     from.onActivityPause();
@@ -933,6 +1069,11 @@ public class MediaLayout extends FrameLayoutFix implements
 
   @Override
   public void onBottomFactorChanged (float factor) {
+    if (xgramSwitching) {
+      xgramApplySwitch(factor); // XGram
+      onCurrentColorChanged();
+      return;
+    }
     fromView.setTranslationY(fromY + Math.round((float) fromHeight * factor));
     toView.setTranslationY(toHeight - Math.round(toHeight * factor));
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {

@@ -510,6 +510,11 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
     this.fromItem = items[this.index];
     this.toItem = items[index];
 
+    if (xgramM3()) {
+      xgramStartSwitch(index); // XGram: one spring drives the page switch and the indicator
+      return true;
+    }
+
     ValueAnimator obj;
     obj = AnimatorUtils.simpleValueAnimator();
     obj.addUpdateListener(animation -> setFactor(AnimatorUtils.getFraction(animation)));
@@ -534,11 +539,67 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
     return true;
   }
 
+  // XGram: Material 3 Expressive tab switch. One spring (standard spatial default) moves the page fraction and the
+  // indicator together, so the indicator lands as the incoming page settles. Reduce motion: a 150ms linear crossfade.
+
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramSwitchSpring;
+  private int xgramSwitchTo = -1;
+
+  private void xgramStartSwitch (final int toIndex) {
+    xgramSwitchTo = toIndex;
+    if (com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+      ValueAnimator obj = AnimatorUtils.simpleValueAnimator();
+      obj.addUpdateListener(animation -> setFactor(AnimatorUtils.getFraction(animation)));
+      obj.addListener(new AnimatorListenerAdapter() {
+        @Override
+        public void onAnimationEnd (Animator animation) {
+          xgramFinishSwitch(toIndex);
+        }
+      });
+      obj.setDuration(150L);
+      obj.setInterpolator(AnimatorUtils.LINEAR_INTERPOLATOR);
+      obj.start();
+      return;
+    }
+    if (xgramSwitchSpring == null) {
+      xgramSwitchSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, 0f, (s, value) -> setFactor(value));
+    }
+    xgramSwitchSpring.setEndListener(() -> xgramFinishSwitch(toIndex));
+    xgramSwitchSpring.setValue(0f);
+    xgramSwitchSpring.animateTo(1f);
+  }
+
+  private void xgramFinishSwitch (int toIndex) {
+    if (!isAnimating || xgramSwitchTo != toIndex) {
+      return;
+    }
+    if (fromItem != null) {
+      fromItem.factor = 0f;
+    }
+    if (toItem != null) {
+      toItem.factor = 1f;
+    }
+    factor = 0f;
+    MediaBottomBar.this.index = toIndex;
+    xgramSwitchTo = -1;
+    if (xgramIndicator != null) {
+      xgramIndicator.setValue(toIndex);
+    }
+    invalidate();
+    if (callback != null) {
+      callback.onBottomSectionChanged(toIndex);
+    }
+    isAnimating = false;
+  }
+
   private void setFactor (float factor) {
     if (this.factor != factor) {
       this.factor = factor;
       this.fromItem.factor = 1f - factor;
       this.toItem.factor = factor;
+      if (xgramSwitchTo != -1 && xgramIndicator != null) {
+        xgramIndicator.setValue(index + (xgramSwitchTo - index) * factor); // XGram: on the page switch's spring
+      }
       invalidate();
       if (callback != null) {
         callback.onBottomFactorChanged(factor);

@@ -86,10 +86,12 @@ public class CameraOverlayView extends View implements FactorAnimator.Target {
       int horizontalStep = viewWidth / 3;
       int verticalStep = viewHeight / 3;
       int cx = 0, cy = 0;
+      // XGram: white at 30%, fading with the grid switch
+      final int gridColor = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorUtils.alphaColor(gridAlphaFactor, 0x4dffffff) : 0x4affffff;
       for (int i = 0; i < 2; i++) {
         cx += horizontalStep; cy += verticalStep;
-        c.drawLine(cx, 0, cx, viewHeight, Paints.getProgressPaint(0x4affffff, Screen.dp(1f)));
-        c.drawLine(0, cy, viewWidth, cy, Paints.getProgressPaint(0x4affffff, Screen.dp(1f)));
+        c.drawLine(cx, 0, cx, viewHeight, Paints.getProgressPaint(gridColor, Screen.dp(1f)));
+        c.drawLine(0, cy, viewWidth, cy, Paints.getProgressPaint(gridColor, Screen.dp(1f)));
       }
     }
     alpha = (int) (255f * flashFactor * MAX_FLASH_ALPHA);

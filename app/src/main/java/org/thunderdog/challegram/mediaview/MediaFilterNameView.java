@@ -110,6 +110,19 @@ public class MediaFilterNameView extends FrameLayoutFix implements FactorAnimato
 
   private @ColorId int nameColorId, valueColorId;
 
+  /**
+   * XGram: Material 3 Expressive over media (the photo editor's adjust rows): the name in white labelLarge, the value
+   * shown while dragging as a labelMedium chip with tabular figures in the dark scheme's primary (no Telegram X blue).
+   * Nothing with Expressive design off; views on app pages (SliderWrapView) keep their own colours.
+   */
+  public void xgramStyleOnMedia () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(name, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, 1f);
+    com.fahadali.xgram.appearance.XgramR5Media.onMediaValueChip(value);
+  }
+
   public void addThemeListeners (@Nullable ViewController<?> themeProvider) {
     if (themeProvider != null) {
       if (nameColorId != 0) {

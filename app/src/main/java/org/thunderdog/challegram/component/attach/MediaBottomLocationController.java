@@ -549,6 +549,17 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
   }
 
   @Override
+  protected void xgramOnSwitch (boolean switching) {
+    // XGram: no outline clip on the map while the tab switch fades it (MediaLayout#xgramBeginSwitch)
+    if (mapWrap != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+      mapWrap.setClipToOutline(!switching);
+      if (!switching) {
+        mapWrap.invalidateOutline();
+      }
+    }
+  }
+
+  @Override
   public void destroy () {
     super.destroy();
     mapView.onDestroyMap();
