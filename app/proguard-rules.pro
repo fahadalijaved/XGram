@@ -95,3 +95,7 @@
   android.widget.Scroller mScroller;
   boolean mFirstLayout;
 }
+# XGram: scrollbar thumb inflated by class name from res/drawable/xgram_scroll_thumb.xml
+-keep public class com.fahadali.xgram.appearance.XgramScrollThumbDrawable {
+  public <init>();
+}

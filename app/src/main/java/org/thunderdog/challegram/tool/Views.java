@@ -374,7 +374,12 @@ public class Views {
   }
 
   public static View inflate (Context context, int resource, ViewGroup contentView) {
-    return LayoutInflater.from(context).inflate(resource, contentView, false);
+    View view = LayoutInflater.from(context).inflate(resource, contentView, false);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && view instanceof androidx.recyclerview.widget.RecyclerView && view.isVerticalScrollBarEnabled()) {
+      // XGram: Material 3 Expressive scroll indicator instead of the system scrollbar (its flag still decides visibility)
+      com.fahadali.xgram.appearance.XgramScrollIndicator.install((androidx.recyclerview.widget.RecyclerView) view, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL);
+    }
+    return view;
   }
 
   public static int save (Canvas c) {

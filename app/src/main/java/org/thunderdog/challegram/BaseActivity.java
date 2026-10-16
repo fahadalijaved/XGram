@@ -915,6 +915,10 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
 
   public void updateWindowContextTheme() {
     getWindow().getContext().getTheme().applyStyle(Theme.isDark() ? R.style.AppTheme_Dark : R.style.AppTheme, true);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: rounded, auto-hiding Material 3 scrollbars instead of the Holo ones (over the theme, so day/night keeps them)
+      getWindow().getContext().getTheme().applyStyle(R.style.XgramScrollbars, true);
+    }
   }
 
   public void setWindowDecorSystemUiVisibility (int visibility, boolean remember) {
