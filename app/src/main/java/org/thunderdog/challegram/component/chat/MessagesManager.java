@@ -1951,8 +1951,22 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   /** XGram: one live message (not history, not sponsored) animates in with Expressive design. */
   private void xgramArmMessageAnimation (TGMessage message) {
-    if (!message.isOld() && !message.isSponsoredMessage() && !loader.isLoading()) {
-      controller.getMessagesView().xgramArmOnce();
+    if (!message.isOld() && !message.isSponsoredMessage()) {
+      xgramArmListAnimation();
+    }
+  }
+
+  /**
+   * XGram: arms the one-shot spring item animator for a live insert or removal. Not while history loads, and not in
+   * the event log, which keeps Telegram X's own permanent item animator (arming would swap it out and then drop it).
+   */
+  private void xgramArmListAnimation () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || loader.isLoading() || loader.getSpecialMode() == MessagesLoader.SPECIAL_MODE_EVENT_LOG) {
+      return;
+    }
+    MessagesRecyclerView messagesView = controller.getMessagesView();
+    if (messagesView != null) {
+      messagesView.xgramArmOnce();
     }
   }
 
@@ -2391,9 +2405,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
             }
           }
           case TGMessage.REMOVE_COMPLETELY: {
-            if (!loader.isLoading()) {
-              controller.getMessagesView().xgramArmOnce(); // XGram: the message fades out and the gap closes on a spring
-            }
+            xgramArmListAnimation(); // XGram: the message fades out and the gap closes on a spring
             TGMessage removed = adapter.removeItem(index);
             if (controller.unselectMessage(messageId, removed)) {
               selectedCount--;
