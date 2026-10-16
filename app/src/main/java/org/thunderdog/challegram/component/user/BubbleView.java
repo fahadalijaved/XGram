@@ -140,6 +140,7 @@ public class BubbleView implements AttachDelegate, Destroyable {
     this.context = context;
     this.entry = entry;
     this.isDeleting = new BoolAnimator(context, AnimatorUtils.DECELERATE_INTERPOLATOR, 120l);
+    com.fahadali.xgram.appearance.XgramAppMotion.use(this.isDeleting, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram M3E
 
     paddingLeft = Screen.dp(7f);
     int paddingRight = Screen.dp(11f);
@@ -150,7 +151,101 @@ public class BubbleView implements AttachDelegate, Destroyable {
 
     setName(entry.name, entry.shortName, maxTextWidth);
 
-    width = getNameWidth() + paddingLeft + paddingRight + avatarSize;
+    if (xgram) {
+      // XGram M3E: the M3 input chip: 4dp, a 24dp avatar, 8dp, the label, 8dp, an 18dp close icon, 8dp
+      width = getNameWidth() + Screen.dp(XGRAM_AVATAR_INSET + XGRAM_AVATAR + XGRAM_GAP + XGRAM_GAP + XGRAM_CLOSE + XGRAM_GAP);
+    } else {
+      width = getNameWidth() + paddingLeft + paddingRight + avatarSize;
+    }
+  }
+
+  // XGram M3E: picked chats are M3 input chips (InputChipTokens): 32dp tall, small (8dp) corners, a 1dp outlineVariant
+  // outline, a 24dp avatar, the label in labelLarge and onSurfaceVariant, a trailing close icon. Pressed (the chip about
+  // to be removed) it fills with errorContainer, its content in onErrorContainer. Chips come in and go out with a
+  // spring scale and fade (a fade only with Reduce motion).
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private static final float XGRAM_AVATAR = 24f, XGRAM_AVATAR_INSET = 4f, XGRAM_GAP = 8f, XGRAM_CLOSE = 18f;
+  private static @Nullable android.graphics.drawable.Drawable xgramCloseIcon;
+  private @Nullable android.graphics.Paint xgramIconPaint;
+  private int xgramIconColor;
+
+  private int xgramContentColor () {
+    final float deleting = isDeleting.getFloatValue();
+    final int rest = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    return deleting > 0f ? ColorUtils.fromToArgb(rest, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR_CONTAINER), deleting) : rest;
+  }
+
+  private void xgramDraw (Canvas c, View parentView, int cx, int cy, float scale) {
+    final float alpha = Math.max(0f, Math.min(1f, scale));
+    final float drawScale = (flags & (FLAG_SHOWING | FLAG_HIDING)) != 0 && !com.fahadali.xgram.appearance.XgramMotion.reduce() ? .8f + .2f * scale : 1f;
+    final boolean rtl = Lang.rtl();
+    if (rtl) {
+      cx = parentView.getMeasuredWidth() - cx - width;
+    }
+    final int saveCount = drawScale != 1f ? Views.save(c) : -1;
+    if (drawScale != 1f) {
+      c.scale(drawScale, drawScale, cx + width / 2f, cy + avatarSize / 2f);
+    }
+    final float deleting = isDeleting.getFloatValue();
+    final RectF rect = Paints.getRectF();
+    rect.set(cx, cy, cx + width, cy + avatarSize);
+    if (deleting > 0f) {
+      final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_S);
+      context.paint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR_CONTAINER), deleting * alpha));
+      c.drawRoundRect(rect, radius, radius, context.paint);
+    }
+    if (deleting < 1f) {
+      com.fahadali.xgram.appearance.XgramM3Sheets.drawAssistChipOutline(c, rect, alpha * (1f - deleting));
+    }
+
+    xgramLayoutReceiver(cx, cy);
+    receiver.setPaintAlpha(alpha);
+    if (receiver.needPlaceholder()) {
+      receiver.drawPlaceholder(c);
+    }
+    receiver.draw(c);
+    receiver.restorePaintAlpha();
+
+    final int content = xgramContentColor();
+    if (displayName != null) {
+      final int textStart = Screen.dp(XGRAM_AVATAR_INSET + XGRAM_AVATAR + XGRAM_GAP);
+      final int startX = rtl ? cx + width - textStart - displayName.getWidth() : cx + textStart;
+      final int startY = cy + avatarSize / 2 - displayName.getLineHeight(false) / 2;
+      displayName.draw(c, startX, startY, null, alpha);
+    }
+
+    if (xgramCloseIcon == null) {
+      xgramCloseIcon = org.thunderdog.challegram.tool.Drawables.get(com.fahadali.xgram.appearance.XgramIconPack.map(org.thunderdog.challegram.R.drawable.baseline_close_18));
+    }
+    if (xgramCloseIcon != null) {
+      if (xgramIconPaint == null) {
+        xgramIconPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.FILTER_BITMAP_FLAG);
+      }
+      final int opaque = content | 0xff000000;
+      if (xgramIconColor != opaque || xgramIconPaint.getColorFilter() == null) {
+        xgramIconColor = opaque;
+        xgramIconPaint.setColorFilter(Paints.getColorFilter(opaque));
+      }
+      xgramIconPaint.setAlpha(Math.round(255f * alpha));
+      final int iconSize = Screen.dp(XGRAM_CLOSE);
+      final int iconEnd = Screen.dp(XGRAM_GAP);
+      final float iconX = rtl ? cx + iconEnd : cx + width - iconEnd - iconSize;
+      final float iconY = cy + (avatarSize - iconSize) / 2f;
+      org.thunderdog.challegram.tool.Drawables.draw(c, xgramCloseIcon, iconX, iconY, xgramIconPaint);
+    }
+
+    if (saveCount != -1) {
+      Views.restore(c, saveCount);
+    }
+  }
+
+  /** The 24dp avatar 4dp in from the chip's start, centred; {@code chipLeft} is the chip's left edge on screen. */
+  private void xgramLayoutReceiver (int chipLeft, int chipTop) {
+    final int size = Screen.dp(XGRAM_AVATAR), inset = Screen.dp(XGRAM_AVATAR_INSET);
+    final int left = Lang.rtl() ? chipLeft + width - inset - size : chipLeft + inset;
+    final int top = chipTop + (avatarSize - size) / 2;
+    receiver.setBounds(left, top, left + size, top + size);
   }
 
   public Entry getEntry () {
@@ -162,8 +257,12 @@ public class BubbleView implements AttachDelegate, Destroyable {
   }
 
   private void setName (String name, @Nullable String shorterName, int maxWidth) {
-    TextStyleProvider textStyleProvider = Paints.robotoStyleProvider(14f);
-    TextColorSet textColorSet = () ->
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    // XGram M3E: labelLarge in onSurfaceVariant (onErrorContainer while the chip is about to be removed)
+    TextStyleProvider textStyleProvider = xgram ?
+      com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L)) :
+      Paints.robotoStyleProvider(14f);
+    TextColorSet textColorSet = xgram ? this::xgramContentColor : () ->
       Theme.getColor(ColorId.headerText);
     displayName = new Text.Builder(name, maxWidth, textStyleProvider, textColorSet)
       .singleLine()
@@ -219,6 +318,10 @@ public class BubbleView implements AttachDelegate, Destroyable {
     if (receiver != null) {
       int cx = x + (int) ((float) diffX * factor);
       int cy = y + (int) ((float) diffY * factor);
+      if (xgram) {
+        xgramLayoutReceiver(Lang.rtl() ? context.getMeasuredWidth() - cx - width : cx, cy); // XGram M3E: the input chip's avatar
+        return;
+      }
       if (Lang.rtl()) {
         cx = context.getMeasuredWidth() - cx - avatarSize;
       }
@@ -289,6 +392,11 @@ public class BubbleView implements AttachDelegate, Destroyable {
       }
       cx = x;
       cy = y;
+    }
+
+    if (xgram) {
+      xgramDraw(c, parentView, cx, cy, scale);
+      return;
     }
 
     if (Lang.rtl()) {

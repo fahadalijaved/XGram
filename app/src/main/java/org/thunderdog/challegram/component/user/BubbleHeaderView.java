@@ -109,10 +109,26 @@ public class BubbleHeaderView extends FrameLayoutFix implements RtlCheckListener
     }
     editText = HeaderEditText.create(this, false, null);
     editText.setPadding(Screen.dp(5f), 0, Screen.dp(5f), 0);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the input is the M3 search bar pill (surfaceContainerHigh, bodyLarge), 12dp clear of the end; the
+      // picked chats above it are M3 input chips (BubbleView)
+      HeaderEditText.xgramApplySearchBar(editText, com.fahadali.xgram.appearance.XgramExpressive.surfaceHeader(), null);
+      if (Lang.rtl()) {
+        params.leftMargin = Screen.dp(XGRAM_END_MARGIN);
+      } else {
+        params.rightMargin = Screen.dp(XGRAM_END_MARGIN);
+      }
+    }
     editText.addTextChangedListener(this);
     editText.setImeOptions(EditorInfo.IME_ACTION_DONE);
     editText.setLayoutParams(params);
     addView(editText);
+  }
+
+  private static final float XGRAM_END_MARGIN = 12f;
+
+  private static int xgramEndMargin () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(XGRAM_END_MARGIN) : 0;
   }
 
   private int currentTopOffset;
@@ -129,7 +145,7 @@ public class BubbleHeaderView extends FrameLayoutFix implements RtlCheckListener
   public void checkRtl () {
     if (editText != null && editText.getGravity() != (Lang.gravity() | Gravity.CENTER_VERTICAL)) {
       editText.checkRtl();
-      if (Views.setMargins((FrameLayout.LayoutParams) editText.getLayoutParams(), Lang.rtl() ? 0 : Screen.dp(68f), currentTopOffset, Lang.rtl() ? Screen.dp(68f) : 0, 0)) {
+      if (Views.setMargins((FrameLayout.LayoutParams) editText.getLayoutParams(), Lang.rtl() ? xgramEndMargin() : Screen.dp(68f), currentTopOffset, Lang.rtl() ? Screen.dp(68f) : xgramEndMargin(), 0)) {
         Views.updateLayoutParams(editText);
       }
     }

@@ -155,8 +155,9 @@ public class BubbleWrapView extends View {
         obj = AnimatorUtils.simpleValueAnimator();
         // FIXME via implements
         obj.addUpdateListener(animation -> setFactor(AnimatorUtils.getFraction(animation)));
-        obj.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-        obj.setDuration(150l);
+        // XGram M3E: the chip and the header height follow the spatial fast spring (clamped: it feeds layout)
+        obj.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
+        obj.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 150l));
         obj.setStartDelay(20l);
         obj.addListener(new AnimatorListenerAdapter() {
           @Override
@@ -217,8 +218,9 @@ public class BubbleWrapView extends View {
     obj = AnimatorUtils.simpleValueAnimator();
     // FIXME via implements
     obj.addUpdateListener(animation -> setFactor(AnimatorUtils.getFraction(animation)));
-    obj.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-    obj.setDuration(150l);
+    // XGram M3E: the spatial fast spring (clamped: it feeds layout)
+    obj.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
+    obj.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 150l));
     obj.addListener(new AnimatorListenerAdapter() {
       @Override
       public void onAnimationEnd (Animator animation) {
@@ -416,6 +418,9 @@ public class BubbleWrapView extends View {
 
           if (startX >= cx - spacing && startX < cx + w + spacing && startY >= cy - spacing && startY < cy + h + spacing) {
             caughtIndex = i;
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP); // XGram M3E: the chip turns errorContainer
+            }
             deleteIconStroke = Screen.dp(1f);
             deleteIconWidth = Screen.dp(7f);
             view.setIsDeleting(true, true);
