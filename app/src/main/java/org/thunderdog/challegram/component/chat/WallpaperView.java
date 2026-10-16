@@ -418,12 +418,13 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   }
 
   /**
-   * XGram: the background is the theme's own (none, the built-in cats, the legacy built-ins, or the theme's default
-   * wallpaper), not one the user picked. The default's name is compared without its parameters ("slug?intensity=..",
-   * how themes store it) on both sides.
+   * XGram: the background is the theme's own (none, the legacy built-in cats every Telegram X theme defaults to, or
+   * the theme's default wallpaper), not one the user picked. The default's name is compared without its parameters
+   * ("slug?intensity=..", how themes store it) on both sides. Other legacy wallpapers are photos the user picks from
+   * the picker, so they still draw.
    */
   private static boolean xgramIsDefault (@Nullable TGBackground background) {
-    if (background == null || background.isEmpty() || background.isBuiltIn() || background.isCat() || background.isLegacy()) {
+    if (background == null || background.isEmpty() || background.isBuiltIn() || background.isCat()) {
       return true;
     }
     if (background.isCustom()) {

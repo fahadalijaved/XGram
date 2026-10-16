@@ -94,7 +94,74 @@ public class WallpaperParametersView extends View implements ClickHelper.Delegat
 
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDrawFilterChip(c, getWidth() / 2f, getHeight() / 2f, Lang.getString(R.string.ChatBackgroundBlur), isBlurEnabled.getFloatValue());
+      return;
+    }
     drawButton(c, getWidth() / 2, getHeight() / 2, blurRect, Lang.getString(R.string.ChatBackgroundBlur), isBlurEnabled);
+  }
+
+  // XGram M3E: Blur is an M3 filter chip over the wallpaper preview: 32dp, 8dp corners, labelLarge; unselected an
+  // elevated chip (surfaceContainerLow with an outlineVariant border, opaque so it reads over any photo), selected
+  // secondaryContainer with a leading 18dp check in onSecondaryContainer. The touch target is 48dp tall.
+
+  private static android.text.TextPaint xgramLabelPaint;
+  private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final android.graphics.Path xgramCheckPath = new android.graphics.Path();
+
+  private static android.text.TextPaint xgramLabelPaint () {
+    if (xgramLabelPaint == null) {
+      xgramLabelPaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+      xgramLabelPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false));
+    }
+    xgramLabelPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L)));
+    return xgramLabelPaint;
+  }
+
+  private void xgramDrawFilterChip (Canvas c, float centerX, float centerY, String text, float selected) {
+    final float f = Math.max(0f, Math.min(1f, selected));
+    final android.text.TextPaint label = xgramLabelPaint();
+    final float textWidth = label.measureText(text);
+    final float icon = Screen.dp(18f);
+    final boolean rtl = Lang.rtl();
+    final float leading = Screen.dp(16f) + icon * f; // 16dp, or 8dp + the check + 8dp
+    final float width = leading + textWidth + Screen.dp(16f), height = Screen.dp(32f);
+    final float left = centerX - width / 2f, top = centerY - height / 2f;
+    blurRect.set(left, centerY - Screen.dp(24f), left + width, centerY + Screen.dp(24f)); // the 48dp touch target
+    final RectF chip = Paints.getRectF();
+    chip.set(left, top, left + width, top + height);
+    final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_S);
+    final int low = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
+    final int tonal = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    xgramPaint.setStyle(Paint.Style.FILL);
+    xgramPaint.setColor(me.vkryl.core.ColorUtils.fromToArgb(low, tonal, f));
+    c.drawRoundRect(chip, radius, radius, xgramPaint);
+    if (f < 1f) {
+      final float stroke = Math.max(1f, Screen.dp(1f));
+      xgramPaint.setStyle(Paint.Style.STROKE);
+      xgramPaint.setStrokeWidth(stroke);
+      xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT), 1f - f));
+      chip.inset(stroke / 2f, stroke / 2f);
+      c.drawRoundRect(chip, radius, radius, xgramPaint);
+    }
+    final int content = me.vkryl.core.ColorUtils.fromToArgb(
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT),
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), f);
+    if (f > 0f) {
+      final float iconLeft = rtl ? left + width - Screen.dp(8f) - icon : left + Screen.dp(8f), iconTop = centerY - icon / 2f;
+      xgramCheckPath.rewind();
+      xgramCheckPath.moveTo(iconLeft + icon * .18f, iconTop + icon * .53f);
+      xgramCheckPath.lineTo(iconLeft + icon * .40f, iconTop + icon * .74f);
+      xgramCheckPath.lineTo(iconLeft + icon * .82f, iconTop + icon * .30f);
+      xgramPaint.setStyle(Paint.Style.STROKE);
+      xgramPaint.setStrokeWidth(Screen.dp(2f));
+      xgramPaint.setStrokeCap(Paint.Cap.ROUND);
+      xgramPaint.setStrokeJoin(Paint.Join.ROUND);
+      xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(content, f));
+      c.drawPath(xgramCheckPath, xgramPaint);
+    }
+    label.setColor(content);
+    c.drawText(text, rtl ? left + Screen.dp(16f) : left + leading, centerY - (label.ascent() + label.descent()) / 2f, label);
   }
 
   private void drawButton (Canvas c, int centerX, int centerY, RectF buttonRect, String text, BoolAnimator selectAnimator) {
@@ -133,6 +200,9 @@ public class WallpaperParametersView extends View implements ClickHelper.Delegat
   @Override
   public void onClickAt (View view, float x, float y) {
     if (blurRect.contains(x, y)) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // XGram M3E: a tick on the toggle
+      }
       isBlurEnabled.toggleValue(true);
       if (listener != null) listener.onBlurValueChanged(isBlurred());
     }

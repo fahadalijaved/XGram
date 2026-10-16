@@ -117,6 +117,9 @@ public final class XgramChatLook {
       rebuild.run();
     });
     tail.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(52f)));
+    if (XgramExpressive.isEnabled()) {
+      XgramR5Chat.applyTile(tail, XgramExpressive.SEGMENT_LAST, true); // XGram M3E: the group's last tile
+    }
     bottomWrap.addView(tail);
   }
 
@@ -149,16 +152,23 @@ public final class XgramChatLook {
     LinearLayout row = new LinearLayout(context);
     row.setOrientation(LinearLayout.VERTICAL);
     row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    final boolean xgramM3 = XgramExpressive.isEnabled();
+    if (xgramM3) {
+      XgramR5Chat.applyTile(row, XgramExpressive.SEGMENT_MIDDLE, false); // XGram M3E: a tile of the text size group
+    } else
     ViewSupport.setThemedBackground(row, ColorId.filling, c);
 
     // Title on the start side, the value on the end side.
     FrameLayoutFix labels = new FrameLayoutFix(context);
-    labels.setPadding(Screen.dp(20f), Screen.dp(12f), Screen.dp(20f), 0);
+    labels.setPadding(Screen.dp(xgramM3 ? 16f : 20f), Screen.dp(12f), Screen.dp(xgramM3 ? 16f : 20f), 0);
     TextView title = new NoScrollTextView(context);
     title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
     title.setTextColor(Theme.textAccentColor());
     c.addThemeTextAccentColorListener(title);
     title.setText(Lang.getString(titleRes));
+    if (xgramM3) {
+      XgramExpressive.applyText(title, XgramExpressive.TS_BODY_L, false); // XGram M3E: bodyLarge label
+    }
     labels.addView(title, FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Lang.gravity()));
     TextView value = new NoScrollTextView(context);
     value.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f);
@@ -166,6 +176,11 @@ public final class XgramChatLook {
     value.setTextColor(Theme.getColor(ColorId.textLink));
     c.addThemeTextColorListener(value, ColorId.textLink);
     value.setText(valueText(setting.get(), kind));
+    if (xgramM3) {
+      // XGram M3E: the value in labelLarge primary, tabular figures so it does not jitter while sliding
+      XgramExpressive.applyText(value, XgramExpressive.TS_LABEL_L, false);
+      value.setFontFeatureSettings("tnum");
+    }
     labels.addView(value, FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.CENTER_VERTICAL));
     row.addView(labels, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 

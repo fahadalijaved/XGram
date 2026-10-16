@@ -112,9 +112,52 @@ public final class XgramR5Chat {
     note.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
     int side = Screen.dp(16f);
     note.setPadding(side, Screen.dp(8f), side, Screen.dp(4f));
-    ViewSupport.setThemedBackground(note, ColorId.filling, themeProvider);
+    ViewSupport.setThemedBackground(note, ColorId.drawer, themeProvider); // the picker's sheet color
     note.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     return note;
+  }
+
+  // Text size and Chat look (PREVIEW_MODE_FONT_SIZE)
+
+  /**
+   * Makes {@code row} (in a vertical LinearLayout) a segmented list tile: surfaceBright (the card step with Pure black),
+   * 20dp outer and 4dp inner corners by {@code segment}, 16dp from the sides, 2dp from its neighbours, 16dp above the
+   * first and below the last. {@code pressable} rows morph to the pressed corner while pressed.
+   */
+  public static void applyTile (@NonNull View row, int segment, boolean pressable) {
+    XgramExpressive.MorphDrawable tile = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_NONE, pressable ? XgramExpressive.LIST_PRESSED_CORNER : Float.NaN);
+    tile.setColorRole(XgramExpressive.SURFACE_BRIGHT);
+    tile.setSegment(segment);
+    tile.setHost(row);
+    row.setBackground(tile);
+    ViewGroup.LayoutParams params = row.getLayoutParams();
+    if (params instanceof ViewGroup.MarginLayoutParams) {
+      ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
+      margins.leftMargin = margins.rightMargin = Screen.dp(XgramExpressive.LIST_INSET);
+      final boolean first = segment == XgramExpressive.SEGMENT_FIRST || segment == XgramExpressive.SEGMENT_SINGLE;
+      final boolean last = segment == XgramExpressive.SEGMENT_LAST || segment == XgramExpressive.SEGMENT_SINGLE;
+      margins.topMargin = first ? Screen.dp(16f) : Screen.dp(XgramExpressive.LIST_GAP);
+      margins.bottomMargin = last ? Screen.dp(16f) : 0;
+      row.setLayoutParams(params);
+    }
+  }
+
+  /** The text size icon at {@code sizeDp} (small at the slider's start, large at its end), onSurfaceVariant. */
+  @NonNull
+  public static android.widget.ImageView newTextSizeIcon (@NonNull Context context, @Nullable ViewController<?> themeProvider, float sizeDp, int gravity) {
+    android.widget.ImageView icon = new android.widget.ImageView(context);
+    icon.setImageResource(R.drawable.xgram_r5_chat_text_size_24);
+    icon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+    icon.setColorFilter(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+    if (themeProvider != null) {
+      themeProvider.addThemeFilterListener(icon, ColorId.icon); // onSurfaceVariant
+    }
+    final int width = Screen.dp(46f);
+    final int padding = Math.max(0, (width - Screen.dp(sizeDp)) / 2);
+    icon.setPadding(padding, 0, padding, 0);
+    icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    icon.setLayoutParams(new android.widget.FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.MATCH_PARENT, gravity));
+    return icon;
   }
 
   // Floating menu anchored to a view (the link preview editor)

@@ -1416,6 +1416,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
               outRect.top = outRect.bottom = spacing;
               RecyclerView.ViewHolder holder = parent.getChildViewHolder(view);
               int position = holder != null ? holder.getBindingAdapterPosition() : RecyclerView.NO_POSITION;
+              if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+                // XGram M3E: 8dp between the tiles, 16dp before the first and after the last, 12dp above and below
+                outRect.top = outRect.bottom = Screen.dp(12f);
+                if (holder == null || holder.getItemViewType() != 0 || position == RecyclerView.NO_POSITION) {
+                  outRect.left = outRect.right = 0;
+                  return;
+                }
+                final int gap = Screen.dp(WallpaperAdapter.WallpaperView.XGRAM_TILE_GAP), inset = Screen.dp(WallpaperAdapter.WallpaperView.XGRAM_TILE_INSET);
+                final int start = position == 0 ? inset : gap;
+                final int end = position == parent.getAdapter().getItemCount() - 1 ? inset : 0;
+                outRect.left = Lang.rtl() ? end : start;
+                outRect.right = Lang.rtl() ? start : end;
+                return;
+              }
               if (holder == null || holder.getItemViewType() != 0 || position == RecyclerView.NO_POSITION) {
                 outRect.left = outRect.right = 0;
               } else {
@@ -1429,8 +1443,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
               }
             }
           });
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E: the 136dp tiles with 12dp above and below, on the sheet color
+            wallpapersList.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(WallpaperAdapter.WallpaperView.XGRAM_TILE_HEIGHT) + Screen.dp(12f) * 2));
+            ViewSupport.setThemedBackground(wallpapersList, ColorId.drawer, this);
+          } else {
           wallpapersList.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(105f) + Screen.dp(3f) * 2));
           ViewSupport.setThemedBackground(wallpapersList, ColorId.filling, this);
+          }
           TextView xgramPureBlackNote = com.fahadali.xgram.appearance.XgramR5Chat.newPureBlackNote(context, this); // XGram: Pure black draws color backgrounds black
           if (xgramPureBlackNote != null) {
             bottomWrap.addView(xgramPureBlackNote);
@@ -1467,6 +1487,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
           addThemeTextDecentColorListener(tv2);
           tv2.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(46f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT));
           textWrap.addView(tv2);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E: the small and the large text size icon instead of the bold 'T's; the panel is a group of
+            // segmented tiles (this row, the Chat look sliders and the bubble tail) on the page color
+            tv1.setVisibility(View.GONE);
+            tv2.setVisibility(View.GONE);
+            textWrap.addView(com.fahadali.xgram.appearance.XgramR5Chat.newTextSizeIcon(context, this, 16f, Gravity.LEFT));
+            textWrap.addView(com.fahadali.xgram.appearance.XgramR5Chat.newTextSizeIcon(context, this, 24f, Gravity.RIGHT));
+            com.fahadali.xgram.appearance.XgramR5Chat.applyTile(textWrap, com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST, false);
+            ViewSupport.setThemedBackground(bottomWrap, ColorId.background, this);
+          }
 
           fontSliderView = new SliderView(context);
           addThemeInvalidateListener(fontSliderView);
@@ -1537,6 +1567,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
         params = new RelativeLayout.LayoutParams(RelativeLayout.LayoutParams.MATCH_PARENT, height);
         params.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
         backgroundParamsView.setLayoutParams(params);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          addThemeInvalidateListener(backgroundParamsView); // XGram M3E: the Blur filter chip reads its roles while drawing
+        }
 
         wallpaperViewBlurPreview = new WallpaperView(context, manager, tdlib);
         wallpaperViewBlurPreview.setLayoutParams(new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
