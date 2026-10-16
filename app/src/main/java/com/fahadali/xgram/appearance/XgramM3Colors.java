@@ -111,7 +111,8 @@ public final class XgramM3Colors {
       ColorId.headerPickerBackground, ColorId.unread, ColorId.bubble_unread, ColorId.bubble_unread_noWallpaper,
       ColorId.iv_preBlockBackground, ColorId.iv_textCodeBackground, ColorId.iv_chatLinkBackground);
     role(SURFACE_CONTAINER_HIGHEST, ColorId.placeholder, ColorId.headerPlaceholder, ColorId.badgeMuted,
-      ColorId.messageSwipeBackground, ColorId.sectionedScrollBar, ColorId.iv_textCodeBackgroundPressed);
+      ColorId.messageSwipeBackground, ColorId.sectionedScrollBar, ColorId.iv_textCodeBackgroundPressed,
+      ColorId.chatKeyboardButton);
     roleAlpha(SURFACE_CONTAINER_HIGH, .92f, ColorId.bubble_date, ColorId.bubble_overlay);
     transparent(ColorId.bubble_date_noWallpaper, ColorId.bubble_overlay_noWallpaper, ColorId.statusBar,
       ColorId.tooltip_outline, ColorId.bubbleIn_outline, ColorId.bubbleOut_outline);
@@ -126,7 +127,7 @@ public final class XgramM3Colors {
       ColorId.background_textLight, ColorId.background_icon, ColorId.icon, ColorId.headerLightIcon,
       ColorId.chatListIcon, ColorId.controlInactive, ColorId.inputInactive, ColorId.playerButton,
       ColorId.statusBarContent, ColorId.statusBarLegacyContent, ColorId.passcodeIcon, ColorId.headerTabInactiveText,
-      ColorId.chatKeyboardButton, ColorId.badgeMutedText, ColorId.messageSwipeContent, ColorId.bubble_dateText,
+      ColorId.badgeMutedText, ColorId.messageSwipeContent, ColorId.bubble_dateText,
       ColorId.bubble_dateText_noWallpaper, ColorId.bubble_overlayText, ColorId.bubble_overlayText_noWallpaper,
       ColorId.bubble_messageCheckOutline, ColorId.bubble_messageCheckOutlineNoWallpaper, ColorId.bubbleIn_time,
       ColorId.iv_pageSubtitle, ColorId.iv_pageAuthor, ColorId.iv_pageFooter, ColorId.iv_caption, ColorId.iv_icon);

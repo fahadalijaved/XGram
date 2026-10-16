@@ -199,7 +199,7 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
           }
           final int fillColor, backgroundColor;
           if (xgramM3) {
-            fillColor = ColorUtils.alphaColor(alpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+            fillColor = ColorUtils.alphaColor(alpha, xgramSegmentColor(entry, dataPosition));
             backgroundColor = ColorUtils.alphaColor(.3f * alpha, fillColor);
           } else if (entry != null && entry.accentColor != null) {
             fillColor = ColorUtils.alphaColor(alpha, entry.accentColor.getVerticalLineColor());
@@ -301,6 +301,21 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
       return; // XGram: the Material 3 Expressive card is the background
     }
     c.drawRect(0, getRecyclerHeight(), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.fillingColor()));
+  }
+
+  /**
+   * XGram M3E: the segment takes the colour MessagePreviewView gives the author's name (the sender's accent when the
+   * preview has no forced title, otherwise the author role, which is primary), so the line and the name always match,
+   * in the pinned bar and in the composer's reply preview.
+   */
+  private int xgramSegmentColor (@Nullable Entry entry, int dataPosition) {
+    if (entry != null && entry.isMessage() && entry.accentColor != null && messagesAdapter != null && dataPosition >= 0 && dataPosition < messagesAdapter.getItems().size()) {
+      ListItem item = messagesAdapter.getItems().get(dataPosition);
+      if (StringUtils.isEmpty(item.getStringValue())) {
+        return entry.accentColor.getNameColor();
+      }
+    }
+    return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
   }
 
   private int getContentInset () {

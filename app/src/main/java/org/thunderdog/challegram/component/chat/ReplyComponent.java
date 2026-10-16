@@ -282,6 +282,59 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
   private Path path;
   private Path xgramBlockPath; // XGram: Material 3 Expressive reply block
+
+  // XGram M3E: the reply above a media-only message (separateReplyFromContent) is a tonal block like the date chip
+
+  private Path xgramMediaPath;
+  private float xgramMediaLeft, xgramMediaTop, xgramMediaRight, xgramMediaBottom, xgramMediaRadius = -1f;
+
+  private static final TextColorSet XGRAM_MEDIA_TITLE = () -> com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+
+  private static final TextColorSet XGRAM_MEDIA_CONTENT = new TextColorSet() {
+    @Override
+    public int defaultTextColor () {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    }
+
+    @Override
+    public int clickableTextColor (boolean isPressed) {
+      return defaultTextColor();
+    }
+  };
+
+  /** The date chip tone: surfaceContainerHigh at 92%. */
+  private static int xgramMediaBlockColor () {
+    return com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), .92f);
+  }
+
+  private int xgramMediaLineColor () {
+    return useAccentColor() ? accentColor.getVerticalLineColor() : com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+  }
+
+  private TextColorSet xgramMediaTitleColorSet () {
+    if (isPsa()) {
+      return parent.getChatAuthorPsaColorSet();
+    }
+    return useAccentColor() ? accentColorSet() : XGRAM_MEDIA_TITLE;
+  }
+
+  /** Rebuilds the clip path only when the block moves or resizes. */
+  private void xgramLayoutMediaBlock (RectF rect, float radius) {
+    if (xgramMediaPath == null) {
+      xgramMediaPath = new Path();
+      xgramMediaRadius = -1f;
+    }
+    if (xgramMediaLeft != rect.left || xgramMediaTop != rect.top || xgramMediaRight != rect.right || xgramMediaBottom != rect.bottom || xgramMediaRadius != radius) {
+      xgramMediaLeft = rect.left;
+      xgramMediaTop = rect.top;
+      xgramMediaRight = rect.right;
+      xgramMediaBottom = rect.bottom;
+      xgramMediaRadius = radius;
+      xgramMediaPath.rewind();
+      xgramMediaPath.addRoundRect(rect, radius, radius, Path.Direction.CW);
+    }
+  }
+
   private int pathLeft, pathTop, pathRight, pathBottom, pathRadius;
 
   private void layoutPath (int left, int top, int right, int bottom) {
@@ -319,6 +372,8 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
   private TextColorSet getTitleColorSet () {
     if (parent != null) {
+      if (parent.separateReplyFromContent() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled())
+        return xgramMediaTitleColorSet(); // XGram M3E: the name in the accent (or primary) colour on the tonal block
       if (parent.separateReplyFromContent())
         return parent::getBubbleMediaReplyTextColor;
       if (isPsa())
@@ -351,6 +406,9 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
   private TextColorSet getContentColorSet () {
     if (parent != null) {
+      if (parent.separateReplyFromContent() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return XGRAM_MEDIA_CONTENT; // XGram M3E: onSurfaceVariant text on the tonal block
+      }
       return parent.separateReplyFromContent() ? new TextColorSet() {
         @Override
         public int defaultTextColor () {
@@ -406,7 +464,11 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
     final boolean isOutBubble = isOutBubble();
     final @ColorInt int lineColor;
     if (isMessageComponent()) {
-      lineColor = isWhite ? parent.getBubbleMediaReplyTextColor() : isOutBubble ? Theme.getColor(ColorId.bubbleOut_chatVerticalLine) : useAccentColor() ? accentColor.getVerticalLineColor() : Theme.getColor(ColorId.messageVerticalLine);
+      if (isWhite && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        lineColor = xgramMediaLineColor(); // XGram M3E: the accent (or primary) line, as in the other reply blocks
+      } else {
+        lineColor = isWhite ? parent.getBubbleMediaReplyTextColor() : isOutBubble ? Theme.getColor(ColorId.bubbleOut_chatVerticalLine) : useAccentColor() ? accentColor.getVerticalLineColor() : Theme.getColor(ColorId.messageVerticalLine);
+      }
     } else {
       lineColor = useAccentColor() ? accentColor.getVerticalLineColor() : Theme.getColor(ColorId.messageVerticalLine);
     }
@@ -416,6 +478,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
     cornerPositionY = startY;
 
     RectF rectF = Paints.getRectF();
+    int xgramShiftX = 0; // XGram M3E: how far the media reply's content moves towards the block's start edge
     if (isWhite) {
       int padding = Screen.dp(8f);
       int paddingHorizontal = Screen.dp(12f);
@@ -424,7 +487,19 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
       rectF.left = startX - paddingHorizontal;
       rectF.right = startX + width;
       float mergeRadius = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(12f) : Theme.getBubbleMergeRadius();
-      c.drawRoundRect(rectF, mergeRadius, mergeRadius, Paints.fillingPaint(parent.getBubbleMediaReplyBackgroundColor()));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: a tonal block in the date chip tone, still aligned with the media below. The line runs along its
+        // start edge (clipped below), so the content moves to that edge too and keeps the in-bubble reply spacing.
+        if (!rtl) {
+          xgramShiftX = paddingHorizontal;
+          rectF.right -= paddingHorizontal;
+          cornerPositionX -= paddingHorizontal;
+        }
+        c.drawRoundRect(rectF, mergeRadius, mergeRadius, Paints.fillingPaint(xgramMediaBlockColor()));
+        xgramLayoutMediaBlock(rectF, mergeRadius);
+      } else {
+        c.drawRoundRect(rectF, mergeRadius, mergeRadius, Paints.fillingPaint(parent.getBubbleMediaReplyBackgroundColor()));
+      }
     }
 
     final boolean xgramBlock = isMessageComponent() && !isWhite && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
@@ -456,6 +531,9 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
       } else {
         imageX += startX;
       }
+      if (xgramShiftX != 0) {
+        imageX -= xgramShiftX;
+      }
       if (isMessageComponent()) {
         receiver.setBounds(imageX, startY, imageX + mHeight, startY + mHeight);
       } else {
@@ -485,6 +563,9 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
     if (isMessageComponent()) {
       int textLeft = getTextLeft();
+      if (xgramShiftX != 0) {
+        textLeft -= xgramShiftX;
+      }
 
       if (trimmedTitle != null) {
         trimmedTitle.draw(c, startX + textLeft, startX + textLeft + trimmedTitle.getWidth(), 0, startY + Screen.dp(1f));
@@ -492,6 +573,19 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
 
       if (trimmedContent != null) {
         trimmedContent.draw(c, startX + textLeft, startX + textLeft + trimmedContent.getWidth(), 0, startY + Screen.dp(22f), null, 1f, textMediaReceiver);
+      }
+
+      if (isWhite && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramMediaPath != null) {
+        // XGram M3E: the line runs along the media block's start edge and follows its rounded corners
+        int saveCount = c.save();
+        c.clipPath(xgramMediaPath);
+        if (rtl) {
+          c.drawRect(xgramMediaRight - lineWidth, xgramMediaTop, xgramMediaRight, xgramMediaBottom, Paints.fillingPaint(lineColor));
+        } else {
+          c.drawRect(xgramMediaLeft, xgramMediaTop, xgramMediaLeft + lineWidth, xgramMediaBottom, Paints.fillingPaint(lineColor));
+        }
+        c.restoreToCount(saveCount);
+        return;
       }
 
       if (xgramBlock) {
