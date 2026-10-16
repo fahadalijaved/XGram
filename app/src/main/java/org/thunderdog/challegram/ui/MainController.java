@@ -1129,6 +1129,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       return;
     }
     xgramConnPill = com.fahadali.xgram.appearance.XgramConnectionPill.attach(pagerWrap);
+    addThemeInvalidateListener(xgramConnPill); // a theme switch redraws it in the new colors
     com.fahadali.xgram.appearance.XgramConnection conn = com.fahadali.xgram.appearance.XgramConnection.instance();
     conn.addListener(xgramConnListener);
     xgramConnPill.setDisplay(conn.getState(), conn.getText(), false);
@@ -1186,7 +1187,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       bar.setCallback(new SnackBar.Callback() {
         @Override
         public void onSnackBarTransition (SnackBar v, float factor) {
-          if (composeWrap != null) {
+          if (composeWrap != null && updateSnackBar == null) { // the update snackbar moves the FAB while it is up
             composeWrap.setTranslationY(-(v.getMeasuredHeight() + Screen.dp(4f)) * factor);
           }
         }
@@ -1205,9 +1206,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       Views.setPaddingBottom(bar, xgramConnSnackInset());
       mainWrap.addView(bar);
       com.fahadali.xgram.appearance.XgramConnectionPill.attachSwipeDismiss(bar, () -> {
-        xgramConnSnackDismissed = true;
-        if (xgramConnSnackBar != null) {
-          xgramConnSnackBar.dismissSnackBar(false);
+        if (xgramConnSnackBar == bar) { // not one already gone on connect (that would hold back the next episode's)
+          xgramConnSnackDismissed = true;
+          bar.dismissSnackBar(false);
           xgramConnRemoveSnackBar();
         }
       });
@@ -1299,6 +1300,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       updateSnackBar.addThemeListeners(this);
       updateSnackBar.setText(Lang.getString(R.string.AppUpdateReady));
       mainWrap.addView(updateSnackBar);
+      xgramConnHideSnackBar(); // XGram M3E: one snackbar at a time, the update one wins
     }
     updateSnackBar.setAction(Lang.getString(isApk ? R.string.AppUpdateInstall : R.string.AppUpdateRestart), context().appUpdater()::installUpdate, !isApk);
     updateSnackBar.showSnackBar(!immediate && isFocused());

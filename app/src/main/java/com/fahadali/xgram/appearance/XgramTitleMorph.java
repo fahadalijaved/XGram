@@ -108,6 +108,7 @@ public final class XgramTitleMorph {
     private boolean out;
     private @Nullable XgramLoadingIndicatorDrawable indicator;
     private @Nullable Drawable offlineIcon, stuckIcon;
+    private int offlineTint, stuckTint;
 
     Morph (TextView view) {
       this.view = view;
@@ -188,6 +189,8 @@ public final class XgramTitleMorph {
       if (this.leading == leading) {
         if (leading == LEADING_PROGRESS && indicator != null && !indicator.isRunning()) {
           indicator.start();
+        } else if (leading == LEADING_OFFLINE || leading == LEADING_STUCK) {
+          tint(leading == LEADING_OFFLINE ? offlineIcon : stuckIcon); // the theme may have changed since
         }
         return;
       }
@@ -238,9 +241,20 @@ public final class XgramTitleMorph {
       return d;
     }
 
-    private static void tint (@Nullable Drawable d) {
-      if (d != null) {
-        d.setColorFilter(new PorterDuffColorFilter(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), PorterDuff.Mode.SRC_IN));
+    private void tint (@Nullable Drawable d) {
+      if (d == null) {
+        return;
+      }
+      final int color = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+      final boolean offline = d == offlineIcon;
+      if ((offline ? offlineTint : stuckTint) != color || d.getColorFilter() == null) {
+        if (offline) {
+          offlineTint = color;
+        } else {
+          stuckTint = color;
+        }
+        d.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+        view.invalidate();
       }
     }
   }

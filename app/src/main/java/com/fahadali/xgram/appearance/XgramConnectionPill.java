@@ -202,6 +202,24 @@ public final class XgramConnectionPill extends View {
     slot.pillWidth = padStartLeading + box + gap + slot.textWidth + padEnd;
   }
 
+  @Override
+  protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+    super.onSizeChanged(w, h, oldw, oldh);
+    if (w != oldw && current.state != XgramConnection.HIDDEN) {
+      // The text was ellipsized for another width (a fill before the first layout measures against the screen)
+      final long start = progressStart;
+      fill(current, current.state, current.fullText);
+      progressStart = start;
+      if (width.isRunning()) {
+        width.animateTo(current.pillWidth);
+      } else {
+        width.setValue(current.pillWidth);
+        invalidateOutline();
+      }
+      invalidate();
+    }
+  }
+
   private void updateShown (boolean animated) {
     boolean show = state != XgramConnection.HIDDEN && !suppressed;
     if (shown == show) {
