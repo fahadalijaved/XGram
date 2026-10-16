@@ -1456,6 +1456,21 @@ public class MediaLayout extends FrameLayoutFix implements
     return Screen.dp(55f) + Screen.dp(48f) + (allowSpoiler ? Screen.dp(48f) : 0);
   }
 
+  /**
+   * XGram: the selection count and its hint ("as one message") end before the caption button, so a long hint
+   * ellipsizes instead of running under it (Telegram X's 56dp end margin let it reach the send button's slot). The
+   * caption button shows only on the gallery tab; elsewhere the old margin stays.
+   */
+  private void xgramUpdateCounterMargins () {
+    final int rightMargin = xgramCaptionView != null && xgramAllowCaption() ? xgramCaptionMargin() + Screen.dp(48f) : Screen.dp(56f);
+    if (counterView != null) {
+      Views.setRightMargin(counterView, rightMargin);
+    }
+    if (counterHintView != null) {
+      Views.setRightMargin(counterHintView, rightMargin);
+    }
+  }
+
   private void xgramUpdateCaptionButton () {
     if (xgramCaptionView == null) {
       return;
@@ -1699,6 +1714,7 @@ public class MediaLayout extends FrameLayoutFix implements
     setAllowSpoiler(getCurrentController().allowSpoiler());
     hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
     xgramUpdateCaptionButton();
+    xgramUpdateCounterMargins();
     if (counterView != null) {
       counterView.setTranslationY(0f);
       checkSuffix(false);
@@ -1731,6 +1747,7 @@ public class MediaLayout extends FrameLayoutFix implements
       if (xgramCaptionView != null) {
         Views.setRightMargin(xgramCaptionView, xgramCaptionMargin());
       }
+      xgramUpdateCounterMargins();
     }
   }
 
@@ -1869,6 +1886,11 @@ public class MediaLayout extends FrameLayoutFix implements
       groupMediaView.setAlpha(alpha);
       counterHintView.setAlpha(alpha);
       counterView.setTranslationY(-Screen.dp(9f) * translateFactor);
+      if (xgramCaptionView != null) {
+        // XGram: the caption button slides into the album button's slot while that one is hidden (one item, or a tab
+        // without grouping), so no empty 48dp gap opens between them. Absolute: the bar is not mirrored.
+        xgramCaptionView.setTranslationX(Screen.dp(48f) * (1f - translateFactor));
+      }
     }
   }
 
@@ -2033,7 +2055,8 @@ public class MediaLayout extends FrameLayoutFix implements
   }
 
   public int getCameraButtonOffset () {
-    return Screen.dp(60);
+    // XGram: the camera FAB clears the 64dp Expressive bar by its 16dp margin (60dp was the 56dp bar + 4)
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? MediaBottomBar.getBarHeight() : Screen.dp(60);
   }
 
   public static HapticMenuHelper.MenuItem createHapticSenderItem (Tdlib tdlib, @NonNull TdApi.Chat chat) {

@@ -61,9 +61,24 @@ public class MediaHeaderView extends RecyclerView {
   }
   
   public void init (EmojiLayout emojiLayout, ViewController<?> themeProvider, View.OnClickListener onClickListener) {
-    this.emojiLayout = emojiLayout;
-    setAdapter(mediaAdapter = new MediaAdapter(getContext(), emojiLayout, onClickListener, emojiLayout.isAnimatedEmojiOnly() ? 8 : emojiLayout.getEmojiSectionsSize(), !emojiLayout.isAnimatedEmojiOnly() && Settings.instance().getEmojiMediaSection() == EmojiMediaType.GIF, themeProvider, emojiLayout.isAnimatedEmojiOnly()));
+    init(emojiLayout, themeProvider, onClickListener, false);
   }
+
+  /**
+   * XGram: {@code xgramTypeGroup} (Expressive design): the panel's Emoji / Stickers / GIFs button group switches the
+   * type, so the strip leaves out Telegram X's emoji (-1) and GIF (-2) section buttons, as the emoji header leaves out
+   * its media switch: no duplicates, 88dp more for the sticker sets. Trending (-3) stays.
+   */
+  public void init (EmojiLayout emojiLayout, ViewController<?> themeProvider, View.OnClickListener onClickListener, boolean xgramTypeGroup) {
+    this.emojiLayout = emojiLayout;
+    this.xgramTypeGroup = xgramTypeGroup && !emojiLayout.isAnimatedEmojiOnly();
+    setAdapter(mediaAdapter = new MediaAdapter(getContext(), emojiLayout, onClickListener, emojiLayout.isAnimatedEmojiOnly() ? 8 : emojiLayout.getEmojiSectionsSize(), !emojiLayout.isAnimatedEmojiOnly() && Settings.instance().getEmojiMediaSection() == EmojiMediaType.GIF, themeProvider, emojiLayout.isAnimatedEmojiOnly(), this.xgramTypeGroup));
+  }
+
+  private boolean xgramTypeGroup;
+
+  /** XGram: header positions callers pass for the fixed sections (Telegram X: 0 emoji, 1 GIFs, 2 trending). */
+  private static final int XGRAM_HIDDEN_SECTIONS = 2;
 
   public boolean hasRecents () {
     return mediaAdapter.hasRecents;
@@ -80,6 +95,10 @@ public class MediaHeaderView extends RecyclerView {
     }
     if (isStickerSection) {
       i += mediaAdapter.headerItems.size() - mediaAdapter.getAddItemCount(false);
+    } else if (xgramTypeGroup) {
+      // XGram: callers pass Telegram X's positions (1 GIFs, 2 trending); without the emoji and GIF buttons GIFs select
+      // nothing in the strip (the button group shows them) and trending is the first item
+      i -= XGRAM_HIDDEN_SECTIONS;
     }
     setCurrentStickerSection(mediaAdapter.getObject(i), animated);
   }
@@ -167,7 +186,7 @@ public class MediaHeaderView extends RecyclerView {
   }
 
   private void setCurrentStickerSection (Object obj, boolean animated) {
-    if (mediaAdapter.setSelectedObject(obj, animated, getLayoutManager())) {
+    if (mediaAdapter.setSelectedObject(obj, animated, getLayoutManager()) && obj != null) {
       scrollToSelectedObj(obj, animated);
     }
   }
@@ -220,15 +239,17 @@ public class MediaHeaderView extends RecyclerView {
     private Object selectedObject;
     private boolean hasRecents, hasFavorite;
 
-    public MediaAdapter (Context context, EmojiLayout parent, OnClickListener onClickListener, int sectionItemCount, boolean selectedIsGifs, @Nullable ViewController<?> themeProvider, boolean hideSectionsExceptRecent) {
+    public MediaAdapter (Context context, EmojiLayout parent, OnClickListener onClickListener, int sectionItemCount, boolean selectedIsGifs, @Nullable ViewController<?> themeProvider, boolean hideSectionsExceptRecent, boolean xgramTypeGroup) {
       this.context = context;
       this.parent = parent;
       this.onClickListener = onClickListener;
       this.themeProvider = themeProvider;
       this.headerItems = new ArrayList<>();
       if (!hideSectionsExceptRecent) {
-        this.headerItems.add(new EmojiSection(parent, -1, R.drawable.baseline_emoticon_outline_24, 0).setActiveDisabled());
-        this.headerItems.add(new EmojiSection(parent, -2, R.drawable.deproko_baseline_gif_24, R.drawable.deproko_baseline_gif_filled_24));
+        if (!xgramTypeGroup) {
+          this.headerItems.add(new EmojiSection(parent, -1, R.drawable.baseline_emoticon_outline_24, 0).setActiveDisabled());
+          this.headerItems.add(new EmojiSection(parent, -2, R.drawable.deproko_baseline_gif_24, R.drawable.deproko_baseline_gif_filled_24));
+        }
         this.headerItems.add(new EmojiSection(parent, -3, R.drawable.outline_whatshot_24, R.drawable.baseline_whatshot_24).setMakeFirstTransparent());
       }
       // this.favoriteSection = new EmojiSection(parent, -4, R.drawable.baseline_star_border_24, R.drawable.baseline_star_24).setMakeFirstTransparent();
@@ -236,11 +257,15 @@ public class MediaHeaderView extends RecyclerView {
       this.trendingSection = new EmojiSection(parent, -5, R.drawable.outline_whatshot_24, R.drawable.baseline_whatshot_24).setMakeFirstTransparent();
       this.trendingSection.setIsTrending();
 
-      this.selectedObject = selectedIsGifs ? headerItems.get(1) : recentSection;
-      if (selectedIsGifs) {
-        this.headerItems.get(1).setFactor(1f, false);
+      if (selectedIsGifs && xgramTypeGroup) {
+        this.selectedObject = null; // XGram: GIFs have no button in the strip
       } else {
-        this.recentSection.setFactor(1f, false);
+        this.selectedObject = selectedIsGifs ? headerItems.get(1) : recentSection;
+        if (selectedIsGifs) {
+          this.headerItems.get(1).setFactor(1f, false);
+        } else {
+          this.recentSection.setFactor(1f, false);
+        }
       }
 
       this.sectionItemCount = sectionItemCount;

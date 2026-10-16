@@ -170,14 +170,21 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
     final float videoFactor = inVideoMode.getFloatValue();
     final float searchFactor = inSearchMode.getFloatValue();
 
-    final boolean xgramExpressive = hasTouchControls && XgramExpressive.isEnabled();
-    if (xgramExpressive) {
+    // XGram: the glyph is the Expressive one in both copies of this view: the input bar's (which also draws its 40dp
+    // primary container) and the recording overlay's (no touch controls), whose glyph sits on RecordButton's primary
+    // disk. Both are onPrimary on primary: Telegram X's circleButtonRegularIcon (onPrimaryContainer) was nearly invisible
+    // on that disk in a dark theme, and the mic no longer switches to the old Telegram X glyph when recording starts.
+    final boolean xgramGlyph = XgramExpressive.isEnabled();
+    final boolean xgramContainer = xgramGlyph && hasTouchControls;
+    if (xgramContainer) {
       xgramDrawContainer(c, cx, cy);
+    }
+    if (xgramGlyph) {
       xgramLoadIcons();
     }
-    final Drawable micIcon = xgramExpressive ? xgramMicIcon : this.micIcon;
-    final Drawable videoIcon = xgramExpressive ? xgramVideoIcon : this.videoIcon;
-    final Paint paint = xgramExpressive ? xgramIconPaint() : hasTouchControls ? Paints.getIconGrayPorterDuffPaint() : getIconPaint();
+    final Drawable micIcon = xgramGlyph ? xgramMicIcon : this.micIcon;
+    final Drawable videoIcon = xgramGlyph ? xgramVideoIcon : this.videoIcon;
+    final Paint paint = xgramGlyph ? xgramIconPaint() : hasTouchControls ? Paints.getIconGrayPorterDuffPaint() : getIconPaint();
     final int savedAlpha = paint.getAlpha();
     final float generalFactor = (1f - sendFactor);
     if (generalFactor > 0f) {

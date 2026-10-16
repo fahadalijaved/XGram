@@ -1957,7 +1957,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void updateTitleMargins () {
     if (headerCell != null) {
       int rightMargin = measureButtonsPadding();
-      int leftMargin = Screen.dp(68f);
+      int leftMargin = DoubleHeaderView.xgramStartMargin(); // XGram: 56dp with Expressive design
       if (Views.setMargins((FrameLayout.LayoutParams) headerCell.getLayoutParams(), Lang.rtl() ? rightMargin : leftMargin, headerView.getEffectiveTopOffset(), Lang.rtl() ? leftMargin : rightMargin, 0)) {
         Views.updateLayoutParams(headerCell);
       }
@@ -2006,6 +2006,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       }
       bottomSpace.setAlpha(alpha);
     }
+    xgramUpdateBottomScrim(); // every change of the controls' alpha ends here
   }
 
   private void updateSliderAlpha () {
@@ -3415,6 +3416,85 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     return com.fahadali.xgram.appearance.XgramW2MediaViewer.on() && mode == MODE_GALLERY;
   }
 
+  // XGram: the scrim behind the bottom controls is bottomWrap's background, not the video controls' own drawing, so it
+  // sits behind the caption card and the caption field instead of over them. It shows with the video controls only (their
+  // alpha times their inner alpha: nothing for photos and GIFs, whose controls stay 56dp down at alpha 1) and, on the send
+  // screen, with an open edit section (its band, fading in at its top, in place of Telegram X's flat 44% bands). It ends at 60%
+  // where the bar below goes on: the navigation bar area and the album strip at the same alpha, or the send screen's
+  // action row, whose scrim then starts at that 60% instead of clear (XgramW2MediaViewer.BottomScrimDrawable.setTopFactor).
+
+  private @Nullable com.fahadali.xgram.appearance.XgramW2MediaViewer.BottomScrimDrawable xgramEditScrim;
+
+  private void xgramInitBottomScrim () {
+    ViewUtils.setBackground(bottomWrap, new com.fahadali.xgram.appearance.XgramW2MediaViewer.ControlsScrimDrawable());
+  }
+
+  /** The current bottomWrap's scrim (the force edit mode swaps bottomWrap and back), or null. */
+  private @Nullable com.fahadali.xgram.appearance.XgramW2MediaViewer.ControlsScrimDrawable xgramBottomScrim () {
+    final android.graphics.drawable.Drawable background = bottomWrap != null ? bottomWrap.getBackground() : null;
+    return background instanceof com.fahadali.xgram.appearance.XgramW2MediaViewer.ControlsScrimDrawable ? (com.fahadali.xgram.appearance.XgramW2MediaViewer.ControlsScrimDrawable) background : null;
+  }
+
+  private void xgramUpdateBottomScrim () {
+    final com.fahadali.xgram.appearance.XgramW2MediaViewer.ControlsScrimDrawable scrim = xgramBottomScrim();
+    if (scrim == null) {
+      return;
+    }
+    int section = SECTION_CAPTION;
+    float sectionAlpha = 0f;
+    if (mode == MODE_GALLERY) {
+      final float fromAlpha = xgramSectionAlpha(fromSection), toAlpha = xgramSectionAlpha(currentSection);
+      if (toAlpha >= fromAlpha) {
+        section = currentSection;
+        sectionAlpha = toAlpha;
+      } else {
+        section = fromSection;
+        sectionAlpha = fromAlpha;
+      }
+    }
+    final float factor;
+    if (sectionAlpha > 0f) {
+      factor = sectionAlpha;
+      scrim.setSection(xgramSectionBandHeight(section), factor);
+    } else {
+      factor = videoSliderView != null && videoSliderView.getParent() == bottomWrap && videoSliderView.getVisibility() == View.VISIBLE ? videoSliderView.getAlpha() * videoSliderView.getInnerAlpha() : 0f;
+      scrim.setControls(factor);
+    }
+    if (xgramEditScrim != null && mode == MODE_GALLERY) {
+      xgramEditScrim.setTopFactor(factor);
+    }
+  }
+
+  /** XGram: the alpha of an edit section's controls while they are in bottomWrap (0 for the caption section). */
+  private float xgramSectionAlpha (int section) {
+    final View view;
+    switch (section) {
+      case SECTION_FILTERS:
+        view = filtersView;
+        break;
+      case SECTION_QUALITY:
+        view = qualityControlWrap;
+        break;
+      case SECTION_CROP:
+        view = cropControlsWrap;
+        break;
+      case SECTION_PAINT:
+        view = paintControlsWrap;
+        break;
+      default:
+        return 0f;
+    }
+    return Views.isValid(view) ? view.getAlpha() : 0f;
+  }
+
+  /** XGram: the height of an edit section's band at the bottom of bottomWrap (paint: its colour picker row). */
+  private static int xgramSectionBandHeight (int section) {
+    if (section == SECTION_PAINT) {
+      return Screen.dp(12f) + Screen.dp(18f) * 2;
+    }
+    return getSectionHeight(section);
+  }
+
   /** Where the caption text starts while it is not being edited (Telegram X: 14dp; Expressive: 16dp inside the field). */
   private int xgramCaptionTextStart () {
     return Screen.dp(xgramGalleryToolbar() ? com.fahadali.xgram.appearance.XgramW2MediaViewer.FIELD_TEXT_START_DP : 14f);
@@ -4177,6 +4257,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     Views.setBottomMargin(thumbsRecyclerView, controlsMargin);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
       thumbsRecyclerView.setElevation(Screen.dp(3f));
+      if (xgramCaptionCard()) {
+        thumbsRecyclerView.setOutlineProvider(null); // XGram: no shadow through the 60% strip (see bottomSpace)
+      }
     }
 
     checkBottomWrapY();
@@ -5270,7 +5353,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         ViewUtils.setBackground(headerView, new com.fahadali.xgram.appearance.XgramM3MediaChrome.TopScrimDrawable());
         com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(headerView.getBackButton());
       }
-      int leftMargin = Screen.dp(68f);
+      int leftMargin = DoubleHeaderView.xgramStartMargin(); // XGram: 56dp with Expressive design, as initWithMargin and checkRtlMargin
       int rightMargin = measureButtonsPadding();
       Views.setMargins((FrameLayout.LayoutParams) headerCell.getLayoutParams(), Lang.rtl() ? rightMargin : leftMargin, headerView.getEffectiveTopOffset(), Lang.rtl() ? leftMargin : rightMargin, 0);
       contentView.addView(headerView);
@@ -5379,6 +5462,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
           bottomWrap.setElevation(Screen.dp(3f));
         }
+        if (xgramCaptionCard()) {
+          xgramInitBottomScrim(); // XGram: the controls' scrim behind the caption card (see xgramUpdateBottomScrim)
+        }
 
         CustomTextView captionView = new CustomTextView(context, tdlib) {
           @Override
@@ -5432,6 +5518,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         videoSliderView.setTranslationY(Screen.dp(56f));
         videoSliderView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         videoSliderView.setSlideEnabled(stack.getCurrent().canSeekVideo());
+        videoSliderView.setXgramDrawScrim(xgramBottomScrim() == null); // XGram: bottomWrap draws it, behind the caption
         bottomWrap.addView(videoSliderView);
 
         contentView.addView(bottomWrap);
@@ -5462,6 +5549,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     bottomSpace.setVisibility(bottomInnerMargin > 0 ? View.VISIBLE : View.GONE);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
       bottomSpace.setElevation(Screen.dp(3f));
+      if (xgramCaptionCard() || xgramGalleryToolbar()) {
+        // XGram: the strip continues the scrims' 60% end: a translucent caster would show its own shadow through it
+        // (a darker seam at its top, a strip darker than the scrim above). The elevation stays for the drawing order.
+        bottomSpace.setOutlineProvider(null);
+      }
     }
     contentView.addView(bottomSpace);
 
@@ -5876,7 +5968,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         return 0; // Screen.dp(56f);
       }
       case SECTION_QUALITY: {
-        return getSectionHeight(section) + Screen.dp(12f) + add;
+        // XGram: above the quality controls and the action row, as the other sections (Telegram X let the video run
+        // under its translucent band)
+        return getSectionHeight(section) + (xgramGalleryToolbar() ? Screen.dp(56f) : Screen.dp(12f)) + add;
       }
       case SECTION_FILTERS: {
         return Screen.dp(220f) + add;
@@ -6167,7 +6261,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           });
           filtersView.setLayoutManager(manager);
           filtersView.setAdapter(filtersAdapter);
-          filtersView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+          if (!xgramGalleryToolbar()) { // XGram: on bottomWrap's scrim instead of a flat band (xgramUpdateBottomScrim)
+            filtersView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+          }
           filtersView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, getSectionHeight(SECTION_FILTERS), Gravity.BOTTOM));
           filtersView.setTranslationY(getSectionHeight(SECTION_FILTERS));
           filtersView.setAlpha(0f);
@@ -6187,7 +6283,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           int infoHeight = Screen.dp(18f);
 
           qualityControlWrap = new FrameLayoutFix(context());
-          qualityControlWrap.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+          if (!xgramGalleryToolbar()) { // XGram: on bottomWrap's scrim instead of a flat band
+            qualityControlWrap.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+          }
           qualityControlWrap.setAlpha(0f);
           qualityControlWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, totalHeight, Gravity.BOTTOM));
 
@@ -6254,7 +6352,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
           cropControlsWrap = new FrameLayoutFix(context());
           cropControlsWrap.setPadding(0, Screen.dp(CROP_PADDING_TOP), 0, 0);
-          cropControlsWrap.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+          if (!xgramGalleryToolbar()) { // XGram: on bottomWrap's scrim instead of a flat band
+            cropControlsWrap.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+          }
           cropControlsWrap.setLayoutParams(params);
           cropControlsWrap.setAlpha(0f);
 
@@ -6321,7 +6421,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
           params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(12f) + padding * 2, Gravity.BOTTOM);
           View backgroundView = new View(context());
-          backgroundView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+          if (!xgramGalleryToolbar()) { // XGram: on bottomWrap's scrim instead of a flat band (xgramSectionBandHeight)
+            backgroundView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+          }
           backgroundView.setLayoutParams(params);
           paintControlsWrap.addView(backgroundView);
 
@@ -7768,6 +7870,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
 
     mediaView.setOffsets(currentHorOffset, 0, currentTopOffset, 0, currentBottomOffset);
+    xgramUpdateBottomScrim(); // XGram: the sections' scrim follows their alpha
   }
 
   private float mainSectionDisappearFactor;
@@ -9058,7 +9161,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     mediaView.setOffsets(0, 0, 0, 0, 0); // Screen.dp(56f)
     editWrap = new FrameLayoutFix(context);
     if (xgramGalleryToolbar()) {
-      ViewUtils.setBackground(editWrap, new com.fahadali.xgram.appearance.XgramW2MediaViewer.BottomScrimDrawable()); // XGram: a scrim, no band
+      xgramEditScrim = new com.fahadali.xgram.appearance.XgramW2MediaViewer.BottomScrimDrawable();
+      ViewUtils.setBackground(editWrap, xgramEditScrim); // XGram: a scrim, no band
     } else {
     editWrap.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
     }
@@ -9243,6 +9347,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     bottomWrap = new FrameLayoutFix(context);
     bottomWrap.setLayoutParams(fp);
     checkBottomWrapY();
+    if (xgramGalleryToolbar()) {
+      xgramInitBottomScrim(); // XGram: the controls' and the edit sections' scrim, behind the caption field
+    }
 
     InputView captionView = new InputView(context, tdlib, this) {
       @Override
@@ -9414,6 +9521,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     videoSliderView.setTranslationY(Screen.dp(56f));
     videoSliderView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     videoSliderView.setSlideEnabled(stack.getCurrent().canSeekVideo());
+    videoSliderView.setXgramDrawScrim(xgramBottomScrim() == null); // XGram: bottomWrap draws it, behind the caption field
     bottomWrap.addView(videoSliderView);
     if (needTrim()) {
       videoSliderView.addTrim(new VideoTimelineView.TimelineDelegate() {

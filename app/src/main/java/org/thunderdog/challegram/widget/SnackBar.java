@@ -45,7 +45,7 @@ import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.MathUtils;
 
-public class SnackBar extends RelativeLayout implements ThemeInvalidateListener {
+public class SnackBar extends RelativeLayout implements ThemeInvalidateListener, Lang.Listener {
   public interface Callback {
     void onSnackBarTransition (SnackBar v, float factor);
     default void onDestroySnackBar (SnackBar v) { }
@@ -135,16 +135,12 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener 
 
   private void xgramStyle () {
     XgramExpressive.applyText(textView, XgramExpressive.TS_BODY_M, false);
-    // 14dp + 20sp line + 14dp: 48dp for one line, 68dp for two
-    textView.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(8f), Screen.dp(14f));
-    textView.setGravity(Lang.gravity() | Gravity.CENTER_VERTICAL);
     textView.setMaxLines(2);
     textView.setEllipsize(android.text.TextUtils.TruncateAt.END);
     // the text spans from the bar's start to the action (it used to wrap its content and hug the action).
-    // Absolute rules only, like the action's ALIGN_PARENT_RIGHT: a start rule would override them under an RTL system locale.
+    // Absolute rules only (xgramApplyDirection), like the action's: a start rule would override them under an RTL system locale.
     RelativeLayout.LayoutParams textParams = (RelativeLayout.LayoutParams) textView.getLayoutParams();
     textParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
-    textParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
     textParams.addRule(RelativeLayout.CENTER_VERTICAL);
     textParams.topMargin = textParams.bottomMargin = 0;
     textView.setLayoutParams(textParams);
@@ -153,7 +149,7 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener 
     actionView.setPadding(Screen.dp(12f), Screen.dp(10f), Screen.dp(12f), Screen.dp(10f));
     RelativeLayout.LayoutParams actionParams = (RelativeLayout.LayoutParams) actionView.getLayoutParams();
     actionParams.addRule(RelativeLayout.CENTER_VERTICAL);
-    actionParams.rightMargin = Screen.dp(8f);
+    xgramApplyDirection(true);
     GradientDrawable actionMask = new GradientDrawable();
     actionMask.setColor(0xffffffff);
     actionMask.setCornerRadius(Screen.dp(100f));
@@ -170,10 +166,76 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener 
     xgramUpdateMargins();
   }
 
+  /**
+   * M3 puts the action at the end of the bar: the right in a left-to-right language, the left in Arabic or Hebrew, with
+   * the text on the other side, aligned to its start. Absolute rules and paddings (the layout direction stays LTR, see
+   * xgramStyle); applied again when the language direction changes while the bar exists.
+   */
+  private boolean xgramRtl;
+
+  private void xgramApplyDirection (boolean force) {
+    final boolean rtl = Lang.rtl();
+    if (!force && rtl == xgramRtl) {
+      return;
+    }
+    xgramRtl = rtl;
+    RelativeLayout.LayoutParams textParams = (RelativeLayout.LayoutParams) textView.getLayoutParams();
+    RelativeLayout.LayoutParams actionParams = (RelativeLayout.LayoutParams) actionView.getLayoutParams();
+    // 14dp + 20sp line + 14dp: 48dp for one line, 68dp for two; 16dp from the bar's edge, 8dp to the action
+    if (rtl) {
+      textParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT, 0);
+      textParams.addRule(RelativeLayout.LEFT_OF, 0);
+      textParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+      textParams.addRule(RelativeLayout.RIGHT_OF, R.id.text_title);
+      textView.setPadding(Screen.dp(8f), Screen.dp(14f), Screen.dp(16f), Screen.dp(14f));
+      actionParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT, 0);
+      actionParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+      actionParams.leftMargin = Screen.dp(8f);
+      actionParams.rightMargin = 0;
+    } else {
+      textParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT, 0);
+      textParams.addRule(RelativeLayout.RIGHT_OF, 0);
+      textParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+      textParams.addRule(RelativeLayout.LEFT_OF, R.id.text_title);
+      textView.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(8f), Screen.dp(14f));
+      actionParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT, 0);
+      actionParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+      actionParams.leftMargin = Screen.dp(2f);
+      actionParams.rightMargin = Screen.dp(8f);
+    }
+    textView.setGravity(Lang.gravity() | Gravity.CENTER_VERTICAL);
+    textView.setLayoutParams(textParams);
+    actionView.setLayoutParams(actionParams);
+  }
+
+  @Override
+  public void onLanguagePackEvent (int event, int arg1) {
+    if (xgram && (event == Lang.EVENT_DIRECTION_CHANGED || event == Lang.EVENT_PACK_CHANGED)) {
+      xgramApplyDirection(false);
+    }
+  }
+
+  @Override
+  protected void onAttachedToWindow () {
+    super.onAttachedToWindow();
+    if (xgram) {
+      Lang.addLanguageListener(this);
+      xgramApplyDirection(false);
+    }
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    if (xgram) {
+      Lang.removeLanguageListener(this);
+    }
+    super.onDetachedFromWindow();
+  }
+
   private void xgramUpdateMargins () {
     if (getLayoutParams() instanceof MarginLayoutParams) {
       MarginLayoutParams params = (MarginLayoutParams) getLayoutParams();
-      int margin = Screen.dp(12f);
+      int margin = Screen.dp(com.fahadali.xgram.appearance.XgramSnackbar.BOTTOM_GAP_DP);
       int bottom = margin + xgramBottomInset;
       if (params.leftMargin != margin || params.rightMargin != margin || params.bottomMargin != bottom) {
         params.leftMargin = params.rightMargin = margin;
@@ -256,7 +318,7 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener 
   private void updateTranslation () {
     float y = getMeasuredHeight() * (1f - isShowing.getFloatValue());
     if (xgram) {
-      y = (getMeasuredHeight() + Screen.dp(12f) + xgramBottomInset) * (1f - isShowing.getFloatValue());
+      y = (getMeasuredHeight() + Screen.dp(com.fahadali.xgram.appearance.XgramSnackbar.BOTTOM_GAP_DP) + xgramBottomInset) * (1f - isShowing.getFloatValue());
       setAlpha(MathUtils.clamp(isShowing.getFloatValue()));
     }
     if (getTranslationY() != y || y == 0) {

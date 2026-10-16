@@ -358,7 +358,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
     if (allowMedia || animatedEmojiOnly) {
       mediaSectionsView = new MediaHeaderView(getContext());
-      mediaSectionsView.init(this, themeProvider, this);
+      mediaSectionsView.init(this, themeProvider, this, xgramGroup); // XGram: no emoji / GIF buttons next to the button group
       headerView.addView(mediaSectionsView);
     } else {
       mediaSectionsView = null;

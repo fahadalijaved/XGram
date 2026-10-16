@@ -107,7 +107,8 @@ public class DoubleHeaderView extends FrameLayoutFix implements RtlCheckListener
     }
   }
 
-  private static int xgramStartMargin () {
+  /** XGram: where the title starts after the 56dp navigation icon: Material 3 Expressive app bars 56dp, Telegram X 68dp. */
+  public static int xgramStartMargin () {
     return Screen.dp(XgramExpressive.isEnabled() ? 56f : 68f);
   }
 

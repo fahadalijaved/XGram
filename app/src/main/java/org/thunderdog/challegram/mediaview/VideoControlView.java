@@ -135,9 +135,11 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
     timelineView.setShowSlider(true, false);
     timelineView.setColors(ColorId.white, ColorId.black, ColorId.transparentEditor);
     if (xgramLayout) {
-      // XGram: the same 16dp insets as the controls row
+      // XGram: the frame sits between the time labels: past the 48dp play target and the 56dp time box at the start
+      // (16 + 48 + 56 = 120dp, the frame's stroke then starts at 121dp, clear of the time text) and before the 56dp
+      // total box at the end (16 + 56 = 72dp). addTrim always shows the play button, so the time box stays shifted.
       int edge = Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.EDGE_DP);
-      timelineView.setPadding(Screen.dp(54f) + Screen.dp(32f) + edge, Screen.dp(6f), Screen.dp(54f) + edge, Screen.dp(6f));
+      timelineView.setPadding(Screen.dp(56f) + Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.PLAY_TARGET_WIDTH_DP) + edge, Screen.dp(6f), Screen.dp(56f) + edge, Screen.dp(6f));
     } else {
       timelineView.setPadding(Screen.dp(54f) + Screen.dp(32f), Screen.dp(6f), Screen.dp(54f), Screen.dp(6f));
     }
@@ -212,6 +214,9 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
   }
 
   public void setInnerAlpha (float alpha) {
+    if (xgramDrawScrim && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && sliderView.getAlpha() != alpha) {
+      invalidate(); // XGram: the scrim follows the controls' alpha (onDraw)
+    }
     sliderView.setAlpha(alpha);
     if (timelineView != null) {
       timelineView.setAlpha(alpha);
@@ -349,19 +354,38 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
     }
   }
 
-  // XGram: Material 3 Expressive: the controls sit on a vertical scrim gradient instead of a flat band
+  // XGram: Material 3 Expressive: the controls sit on a vertical scrim gradient instead of a flat band. It shows with
+  // the controls only (their inner alpha, the video factor): photos and GIFs keep the view at alpha 1, moved 56dp down,
+  // and its top would otherwise stay on screen as a band with a hard edge.
   private @androidx.annotation.Nullable android.graphics.Paint xgramScrimPaint;
   private int xgramScrimHeight;
+  private boolean xgramDrawScrim = true;
+
+  /**
+   * XGram: false when the parent draws the scrim itself behind its other bottom views (the media viewer does, see
+   * XgramW2MediaViewer.ControlsScrimDrawable), so it never covers the caption.
+   */
+  public void setXgramDrawScrim (boolean drawScrim) {
+    if (this.xgramDrawScrim != drawScrim) {
+      this.xgramDrawScrim = drawScrim;
+      invalidate();
+    }
+  }
 
   @Override
   protected void onDraw (Canvas c) {
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      final float alpha = sliderView.getAlpha();
+      if (!xgramDrawScrim || alpha <= 0f) {
+        return;
+      }
       int scrimHeight = Screen.dp(96f);
       if (xgramScrimPaint == null || xgramScrimHeight != scrimHeight) {
         xgramScrimHeight = scrimHeight;
         xgramScrimPaint = new android.graphics.Paint(android.graphics.Paint.DITHER_FLAG);
         xgramScrimPaint.setShader(new android.graphics.LinearGradient(0, 0, 0, scrimHeight, new int[] {0x00000000, 0x59000000, 0x99000000}, new float[] {0f, .55f, 1f}, android.graphics.Shader.TileMode.CLAMP));
       }
+      xgramScrimPaint.setAlpha(Math.round(255f * Math.min(1f, alpha))); // the paint alpha scales the shader
       c.save();
       c.translate(0, getMeasuredHeight() - scrimHeight);
       c.drawRect(0, 0, getMeasuredWidth(), scrimHeight, xgramScrimPaint);

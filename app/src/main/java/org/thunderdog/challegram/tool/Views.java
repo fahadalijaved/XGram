@@ -758,7 +758,13 @@ public class Views {
 
   public static View simpleProgressView (Context context, ViewGroup.LayoutParams params) {
     View view;
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: the Material 3 Expressive contained loading indicator (48dp container, 38dp indicator), as the chat list,
+      // instead of the framework's Holo spinner (the activity theme is Holo)
+      com.fahadali.xgram.appearance.XgramListStateView stateView = new com.fahadali.xgram.appearance.XgramListStateView(context);
+      stateView.setLoading(true, com.fahadali.xgram.appearance.XgramM3MediaChrome.LOADING_ACTIVE_DP);
+      view = stateView;
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       android.widget.ProgressBar bar = new android.widget.ProgressBar(context);
       bar.setIndeterminate(true);
       view = bar;

@@ -35,11 +35,18 @@ import java.lang.ref.WeakReference;
 
 /**
  * Material 3 snackbar in place of the system toast (experimental): an inverse surface bar with 4dp corners floating
- * 16dp above the navigation bar or the keyboard, bodyMedium text, 2 or 3.5 seconds, swipe sideways to dismiss. Shown
- * only while a BaseActivity is resumed and no popup window covers it; otherwise the caller falls back to a Toast.
+ * {@link #BOTTOM_GAP_DP} above the navigation bar or the keyboard, bodyMedium text, 2 or 3.5 seconds, swipe sideways to
+ * dismiss. Shown only while a BaseActivity is resumed and no popup window covers it; otherwise the caller falls back to
+ * a Toast.
  */
 @SuppressLint("ViewConstructor")
 public final class XgramSnackbar extends TextView {
+  /**
+   * The gap between a floating snackbar and the screen's bottom (above the navigation bar or the keyboard) and its
+   * sides, shared by this toast replacement and the in-app SnackBar (update, connection), so both float at the same
+   * height. The chat list lifts its FABs over the in-app one by this gap.
+   */
+  public static final float BOTTOM_GAP_DP = 12f;
   private static final long SHORT_MS = 2000L, LONG_MS = 3500L;
   private static final float MAX_WIDTH_DP = 560f;
 
@@ -93,7 +100,7 @@ public final class XgramSnackbar extends TextView {
     if (isNew) {
       bar = new XgramSnackbar(activity);
       FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-      params.leftMargin = params.rightMargin = Screen.dp(12f);
+      params.leftMargin = params.rightMargin = Screen.dp(BOTTOM_GAP_DP);
       parent.addView(bar, params);
       current = new WeakReference<>(bar);
     }
@@ -121,7 +128,7 @@ public final class XgramSnackbar extends TextView {
       inset = Math.max(0, inset - Math.max(0, gap));
     }
     FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) getLayoutParams();
-    int bottom = inset + Screen.dp(16f);
+    int bottom = inset + Screen.dp(BOTTOM_GAP_DP);
     if (params.bottomMargin != bottom) {
       params.bottomMargin = bottom;
       setLayoutParams(params);
