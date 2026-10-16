@@ -1428,6 +1428,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
           });
           wallpapersList.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(105f) + Screen.dp(3f) * 2));
           ViewSupport.setThemedBackground(wallpapersList, ColorId.filling, this);
+          TextView xgramPureBlackNote = com.fahadali.xgram.appearance.XgramR5Chat.newPureBlackNote(context, this); // XGram: Pure black draws color backgrounds black
+          if (xgramPureBlackNote != null) {
+            bottomWrap.addView(xgramPureBlackNote);
+          }
           bottomWrap.addView(wallpapersList);
           break;
         }

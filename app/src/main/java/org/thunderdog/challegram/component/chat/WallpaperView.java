@@ -161,6 +161,13 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   @Override
   public void onThemeColorsChanged (boolean areTemp, ColorState state) {
     requestFiles(receiver, this.wallpaper);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Pure black or the dynamic colors changed: the surface under the chat and every pill on it repaint
+      if (manager.useBubbles() && manager.getAdapter() != null) {
+        manager.getAdapter().invalidateAllMessages();
+      }
+      invalidate();
+    }
   }
 
   @Override
@@ -232,15 +239,16 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
       return 1f;
     }
     if (animator != null && animator.isAnimating()) {
-      if (previewWallpaper == null) {
+      // XGram: a background drawn as the solid surface (xgramCovered) counts as no wallpaper
+      if (previewWallpaper == null || xgramCovered(previewWallpaper)) {
         return factor;
-      } else if (wallpaper == null) {
+      } else if (wallpaper == null || xgramCovered(wallpaper)) {
         return 1f - factor;
       } else {
         return 0f;
       }
     }
-    return wallpaper != null ? 0f : 1f;
+    return wallpaper != null && !xgramCovered(wallpaper) ? 0f : 1f;
   }
 
   @Override
@@ -277,6 +285,11 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   }
 
   private static int getWallpaperBackground (ThemeDelegate theme) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: the placeholder under a loading wallpaper (and an unknown fill) is the M3 surface of the theme's scheme,
+      // black with Pure black, never the theme's own baked grey
+      return com.fahadali.xgram.appearance.XgramExpressive.colorFor(com.fahadali.xgram.appearance.XgramExpressive.SURFACE, theme.isDark());
+    }
     return ColorUtils.compositeColor(theme.getColor(ColorId.background), theme.getColor(ColorId.bubble_chatBackground));
   }
 
@@ -371,21 +384,61 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
     if (inSetupMode || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       return false;
     }
-    if (isAnimatingChanges() && !xgramIsDefault(previewWallpaper)) {
+    if (isAnimatingChanges() && !xgramCovered(previewWallpaper)) {
       return false;
     }
-    return xgramIsDefault(wallpaper);
+    return xgramCovered(wallpaper);
   }
 
+  /**
+   * XGram: Expressive design draws {@code background} as the solid surface: the theme's own wallpaper
+   * ({@link #xgramIsDefault}) and, with Pure black, every color background ({@link #xgramPureBlack}). Never in the
+   * wallpaper picker or a wallpaper preview (setup mode), which show the real colors. Cheap, allocation free.
+   */
+  private boolean xgramCovered (@Nullable TGBackground background) {
+    if (inSetupMode || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return false;
+    }
+    return xgramIsDefault(background) || xgramPureBlack(background);
+  }
+
+  /**
+   * XGram: Pure black is drawing (on, and the theme is dark) and {@code background} is empty, a fill, a pattern or the
+   * theme's default: the chat is then the black surface, so nothing grey or tinted shows around the bubbles. Photo
+   * and custom (gallery) backgrounds still draw as picked.
+   */
+  private boolean xgramPureBlack (@Nullable TGBackground background) {
+    if (inSetupMode || !com.fahadali.xgram.appearance.XgramAmoled.isActive()) {
+      return false;
+    }
+    if (background == null || background.isEmpty() || background.isFill() || background.isPattern()) {
+      return true;
+    }
+    return xgramIsDefault(background);
+  }
+
+  /**
+   * XGram: the background is the theme's own (none, the built-in cats, the legacy built-ins, or the theme's default
+   * wallpaper), not one the user picked. The default's name is compared without its parameters ("slug?intensity=..",
+   * how themes store it) on both sides.
+   */
   private static boolean xgramIsDefault (@Nullable TGBackground background) {
-    if (background == null || background.isEmpty() || background.isBuiltIn()) {
+    if (background == null || background.isEmpty() || background.isBuiltIn() || background.isCat() || background.isLegacy()) {
       return true;
     }
     if (background.isCustom()) {
       return false;
     }
-    String name = background.getName();
-    return name != null && name.equals(Theme.getDefaultWallpaper());
+    return org.thunderdog.challegram.telegram.TdlibWallpaperManager.isSameWallpaperName(background.getName(), Theme.getDefaultWallpaper());
+  }
+
+  /** XGram: one wallpaper layer, or the solid surface in its place when Expressive design covers it. */
+  private void xgramDrawLayer (Canvas c, @Nullable TGBackground background, ThemeDelegate theme, DoubleImageReceiver receiver, float alpha) {
+    if (xgramCovered(background)) {
+      c.drawColor(ColorUtils.alphaColor(alpha, com.fahadali.xgram.appearance.XgramExpressive.colorFor(com.fahadali.xgram.appearance.XgramExpressive.SURFACE, theme.isDark())));
+    } else {
+      drawWallpaper(background, c, gradientCache, theme, receiver, alpha);
+    }
   }
 
   @Override
@@ -397,14 +450,14 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
     if (manager.useBubbles()) {
       layoutReceivers();
       if (!isAnimatingChanges()) {
-        drawWallpaper(wallpaper, c, gradientCache, ThemeManager.instance().currentTheme(), receiver, 1f);
+        xgramDrawLayer(c, wallpaper, ThemeManager.instance().currentTheme(), receiver, 1f);
       } else if (factor == 0f) {
-        drawWallpaper(wallpaper, c, gradientCache, ThemeManager.instance().previousTheme(), receiver, 1f);
+        xgramDrawLayer(c, wallpaper, ThemeManager.instance().previousTheme(), receiver, 1f);
       } else if (factor == 1f) {
-        drawWallpaper(previewWallpaper, c, gradientCache, ThemeManager.instance().appliedTheme(), preview, 1f);
+        xgramDrawLayer(c, previewWallpaper, ThemeManager.instance().appliedTheme(), preview, 1f);
       } else {
-        drawWallpaper(wallpaper, c, gradientCache, ThemeManager.instance().previousTheme(), receiver, 1f);
-        drawWallpaper(previewWallpaper, c, gradientCache, ThemeManager.instance().appliedTheme(), preview, factor);
+        xgramDrawLayer(c, wallpaper, ThemeManager.instance().previousTheme(), receiver, 1f);
+        xgramDrawLayer(c, previewWallpaper, ThemeManager.instance().appliedTheme(), preview, factor);
       }
     } else {
       c.drawColor(Theme.getColor(ColorId.chatBackground));

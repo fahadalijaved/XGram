@@ -63,7 +63,9 @@ public class TdlibWallpaperManager {
         TGBackground currentBackground = tdlib.settings().getWallpaper(newWallpaperUsageId, true);
         if (StringUtils.isEmpty(oldWallpaper) && (currentBackground == null || currentBackground.isEmpty())) {
           fetchBackground(newThemeId, true);
-        } else if (!StringUtils.isEmpty(oldWallpaper) && currentBackground != null && oldWallpaper.equals(extractWallpaperName(currentBackground.getName()))) {
+        } else if (!StringUtils.isEmpty(oldWallpaper) && currentBackground != null && (oldWallpaper.equals(extractWallpaperName(currentBackground.getName())) ||
+          // XGram: a theme's default with parameters ("slug?intensity=..", the XGram theme packs) is the same wallpaper
+          (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !currentBackground.isCustom() && isSameWallpaperName(oldWallpaper, currentBackground.getName())))) {
           fetchBackground(newThemeId, true);
         }
       }
@@ -131,6 +133,26 @@ public class TdlibWallpaperManager {
       return i != -1 ? wallpaper.substring(0, i) : wallpaper;
     }
     return null;
+  }
+
+  /**
+   * XGram: whether {@code a} and {@code b} name the same wallpaper, the parameters after '?' ignored on both sides:
+   * {@code extractWallpaperName(a).equals(extractWallpaperName(b))} without allocating (it runs while the chat draws).
+   * False when either is empty.
+   */
+  public static boolean isSameWallpaperName (@Nullable String a, @Nullable String b) {
+    if (StringUtils.isEmpty(a) || StringUtils.isEmpty(b)) {
+      return false;
+    }
+    int lengthA = a.indexOf('?');
+    if (lengthA == -1) {
+      lengthA = a.length();
+    }
+    int lengthB = b.indexOf('?');
+    if (lengthB == -1) {
+      lengthB = b.length();
+    }
+    return lengthA > 0 && lengthA == lengthB && a.regionMatches(0, b, 0, lengthA);
   }
 
   private final SparseArrayCompat<List<Callback>> callbacks = new SparseArrayCompat<>();
