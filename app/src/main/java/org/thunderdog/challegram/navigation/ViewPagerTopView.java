@@ -1139,6 +1139,16 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
     }
   }
 
+  private boolean xgramOverlayOnSheet;
+
+  /**
+   * XGram: the strip sits on the profile's docked media sheet (Expressive design), so the overlay that covers the tabs
+   * while select mode comes in is the sheet's color, not the filling's (a lighter slab on surfaceContainerLow).
+   */
+  public void setXgramOverlayOnSheet (boolean onSheet) {
+    this.xgramOverlayOnSheet = onSheet;
+  }
+
   private int selectionLeft, selectionWidth;
   private int lastCallSelectionLeft, lastCallSelectionWidth;
   private float lastCallSelectionFactor;
@@ -1293,7 +1303,7 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
 
       c.save();
       c.translate(0, (float) viewHeight * (1f - overlayFactor));
-      c.drawRect(0, 0, viewWidth, viewHeight, Paints.fillingPaint(Theme.fillingColor()));
+      c.drawRect(0, 0, viewWidth, viewHeight, Paints.fillingPaint(xgramOverlayOnSheet && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3SharedMedia.sheetColor() : Theme.fillingColor()));
       c.restore();
 
       /*float fromX = selectionFactor * itemWidth + itemWidth / 2;

@@ -40,6 +40,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
@@ -626,7 +627,8 @@ private fun DragHandle(rowKey: String, state: ReorderState) {
       tgxIcon(R.drawable.baseline_drag_handle_24),
       contentDescription = null,
       modifier = Modifier.size(24.dp),
-      tint = MaterialTheme.colorScheme.onSurfaceVariant
+      // the leading slot's content color: onSurfaceVariant at rest, the dragged and disabled colors like the row icon
+      tint = LocalContentColor.current
     )
   }
 }

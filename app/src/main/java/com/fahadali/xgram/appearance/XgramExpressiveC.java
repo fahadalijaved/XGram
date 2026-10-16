@@ -61,8 +61,8 @@ public final class XgramExpressiveC {
   // Android 13, where the framework ripple draws its color's alpha as is (androidx.compose.material.ripple doubles the
   // alpha only below API 28), so .10 shows as .10, like Compose's own ripples on the Compose settings pages.
 
-  /** List tile press, the shape of XgramM3Profile.drawSelectionTile: inset 8dp / 2dp, large (16dp) corners. */
-  private static final float TILE_INSET_X = 8f, TILE_INSET_Y = 2f;
+  /** List tile press, the shape of XgramM3Profile.drawSelectionTile: inset 4dp / 2dp, large (16dp) corners. */
+  private static final float TILE_INSET_X = 4f, TILE_INSET_Y = 2f;
 
   /**
    * A ripple in the M3 pressed state layer. Its content color is read again on every state change, so day/night,

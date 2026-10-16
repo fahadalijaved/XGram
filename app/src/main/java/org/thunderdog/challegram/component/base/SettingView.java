@@ -720,7 +720,11 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
       }
     }
 
-    pIconTop = (flags & FLAG_CENTER_ICON) != 0 && icon != null ?  (totalHeight / 2f - icon.getMinimumHeight() / 2f) : Screen.dp(type == TYPE_INFO || type == TYPE_INFO_COMPACT || type == TYPE_INFO_MULTILINE ? 20f : 16f);
+    // XGram M3E: a two-line info row (Phone, Username, ID, Notifications; 76dp) centres its 40dp leading circle on
+    // the row, as M3 two-line list items do (26dp: the circle spans 18..58dp around the text block); the multiline
+    // rows stay top-aligned
+    final boolean xgramCenterIcon = type == TYPE_INFO && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    pIconTop = ((flags & FLAG_CENTER_ICON) != 0 || xgramCenterIcon) && icon != null ?  (totalHeight / 2f - icon.getMinimumHeight() / 2f) : Screen.dp(type == TYPE_INFO || type == TYPE_INFO_COMPACT || type == TYPE_INFO_MULTILINE ? 20f : 16f);
     pIconLeft = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 24f : 18f); // XGram M3E: the 40dp leading circle 16dp inside the tile
   }
 

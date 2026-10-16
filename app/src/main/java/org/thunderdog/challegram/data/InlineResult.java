@@ -359,6 +359,37 @@ public abstract class InlineResult <T> implements MessageSourceProvider {
     invalidate();
   }
 
+  /** XGram: the tile fill of a row drawn on a segmented list tile (its jump highlight, its selected state). */
+  private static final android.graphics.Paint xgramTilePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+  /** XGram: the tile the current {@link #draw} call paints on, or null on a plain row. */
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramDrawTile;
+
+  /**
+   * XGram: Material 3 Expressive shared media rows (Docs, Music, Voice, Links) are segmented list tiles: a
+   * MorphDrawable background with 20dp outer and 4dp inner corners, inset 16dp. Null on any other row.
+   */
+  @Nullable
+  private static com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramTileOf (View view) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return null;
+    }
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.findMorph(view.getBackground());
+    return morph != null && morph.getSegment() != com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_NONE ? morph : null;
+  }
+
+  /**
+   * The color the selection check's outer ring cuts out of: the row under it in its selected state. On a segmented
+   * list tile (Expressive) that is the surfaceBright tile under its secondaryContainer selected fill; on Telegram X's
+   * rows the filling under the selection wash. Valid inside {@link #onDrawSelectionOver}.
+   */
+  protected final int getSelectionRingColor (float selectFactor) {
+    if (xgramDrawTile != null) {
+      return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT),
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), selectFactor);
+    }
+    return ColorUtils.compositeColor(Theme.fillingColor(), Theme.chatSelectionColor());
+  }
+
   public final void draw (CustomResultView view, Canvas c, ComplexReceiver receiver, int viewWidth, int viewHeight, float anchorTouchX, float anchorTouchY, float selectFactor, int selectionIndex, @Nullable SimplestCheckBox checkBox) {
     int startY = 0;
     if (needSeparator()) {
@@ -368,23 +399,36 @@ public abstract class InlineResult <T> implements MessageSourceProvider {
       c.drawRect(width, 0, viewWidth, height, Paints.fillingPaint(Theme.separatorColor()));
       startY += height;
     }
-    if (highlightAnimator != null) {
-      float highlightFactor = highlightAnimator.getFactor();
-      if (highlightFactor > 0f) {
-        if (highlightFactor == 1f && !highlightAnimator.isAnimating()) {
-          highlightAnimator.animateTo(0f);
-        }
+    final float highlightFactor = highlightAnimator != null ? highlightAnimator.getFactor() : 0f;
+    // XGram: on a segmented list tile the highlight and the selected state fill the tile's own shape (its path is in
+    // the view's bounds), never a square over its rounded corners; selected is the M3 selected container
+    final com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable tile = highlightFactor > 0f || selectFactor != 0f ? xgramTileOf(view) : null;
+    xgramDrawTile = tile;
+    if (highlightFactor > 0f) {
+      if (highlightFactor == 1f && !highlightAnimator.isAnimating()) {
+        highlightAnimator.animateTo(0f);
+      }
+      if (tile != null) {
+        xgramTilePaint.setColor(ColorUtils.alphaColor(highlightFactor, 0x28a0a0a0));
+        c.drawPath(tile.getPath(), xgramTilePaint);
+      } else {
         c.drawRect(0, startY, viewWidth, viewHeight, Paints.fillingPaint(ColorUtils.alphaColor(highlightFactor, 0x28a0a0a0)));
       }
     }
     if (selectFactor != 0f) {
-      c.drawRect(0, startY, viewWidth, viewHeight, Paints.fillingPaint(ColorUtils.alphaColor(selectFactor, Theme.chatSelectionColor())));
+      if (tile != null) {
+        xgramTilePaint.setColor(ColorUtils.alphaColor(selectFactor, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER)));
+        c.drawPath(tile.getPath(), xgramTilePaint);
+      } else {
+        c.drawRect(0, startY, viewWidth, viewHeight, Paints.fillingPaint(ColorUtils.alphaColor(selectFactor, Theme.chatSelectionColor())));
+      }
     }
     drawInternal(view, c, receiver, viewWidth, viewHeight, startY);
     if (selectFactor != 0f) {
       String counter = selectionIndex != -1 ? Integer.toString(selectionIndex + 1) : null;
       onDrawSelectionOver(c, receiver, viewWidth, viewHeight, anchorTouchX, anchorTouchY, selectFactor, counter, checkBox);
     }
+    xgramDrawTile = null;
   }
 
   public void onDrawSelectionOver (Canvas c, ComplexReceiver receiver, int viewWidth, int viewHeight, float anchorTouchX, float anchorTouchY, float selectFactor, String counter, @Nullable SimplestCheckBox checkBox) {

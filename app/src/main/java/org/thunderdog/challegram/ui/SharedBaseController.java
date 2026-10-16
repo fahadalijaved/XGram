@@ -160,6 +160,15 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
     tdlib.listeners().subscribeToMessageUpdates(chatId, this);
   }
 
+  /**
+   * XGram: a tab page of a profile or of Saved Messages' media tabs never gets a large title of its own (the tab
+   * strip names it); Saved Messages' pages are not wrapped in a parent, so the default check alone would let one in.
+   */
+  @Override
+  public boolean xgramAllowsLargeTitle () {
+    return parent == null && alternateParent == null && super.xgramAllowsLargeTitle();
+  }
+
   @Override
   public boolean supportsBottomInset () {
     return true;
@@ -250,9 +259,15 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
     recyclerView.setAdapter(adapter);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: draggable thumb once everything is loaded, with the month under the finger
-      com.fahadali.xgram.appearance.XgramScrollIndicator.install(recyclerView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_DRAGGABLE)
+      com.fahadali.xgram.appearance.XgramScrollIndicator indicator = com.fahadali.xgram.appearance.XgramScrollIndicator.install(recyclerView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_DRAGGABLE)
         .setDragCondition(() -> !isLoading && !canLoadMore())
         .setLabelProvider(needDateSectionSplitting() ? this::xgramSectionLabel : null);
+      if (parent != null) {
+        // On the profile the page fills the pager from its top, under the docked tab strip: the track starts 4dp
+        // under the docked sheet's bottom (the 56dp strip and 3dp of sheet), so the thumb and its month label are
+        // never hidden or ungrabbable under the tabs
+        indicator.setTopInset(SettingHolder.measureHeightForType(ListItem.TYPE_FAKE_PAGER_TOPVIEW) + Screen.dp(3f + 4f));
+      }
     }
     loadInitialChunk();
     return recyclerView;

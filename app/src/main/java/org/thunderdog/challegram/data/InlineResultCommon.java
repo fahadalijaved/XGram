@@ -816,7 +816,7 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
     int radius = Screen.dp(11f);
     rectF.set(x - radius, y - radius, x + radius, y + radius);
 
-    c.drawArc(rectF, 135f, 170f * selectFactor, false, Paints.getOuterCheckPaint(ColorUtils.compositeColor(Theme.fillingColor(), Theme.chatSelectionColor())));
+    c.drawArc(rectF, 135f, 170f * selectFactor, false, Paints.getOuterCheckPaint(getSelectionRingColor(selectFactor))); // XGram: the selected tile's color on a segmented list tile
   }
 
   // Files stuff

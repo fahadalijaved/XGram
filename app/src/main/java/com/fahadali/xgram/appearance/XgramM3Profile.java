@@ -177,52 +177,31 @@ public final class XgramM3Profile {
     return true;
   }
 
-  private static boolean isGroupOpener (int type) {
-    return type == ListItem.TYPE_SHADOW_TOP || type == ListItem.TYPE_EMPTY_OFFSET || type == ListItem.TYPE_EMPTY_OFFSET_SMALL;
-  }
-
-  /** A tile of a group: a row between a group opener (SHADOW_TOP, EMPTY_OFFSET) and a SHADOW_BOTTOM. */
+  /**
+   * A tile of a group, by the list decoration's own rule (XgramExpressive.isInGroup): a row between a group opener
+   * (SHADOW_TOP, EMPTY_OFFSET) or the list start and a SHADOW_BOTTOM.
+   */
   public static boolean isGroupedRow (List<ListItem> items, int position) {
     if (position < 0 || position >= items.size() || !isRowType(items.get(position).getViewType())) {
       return false;
     }
-    boolean top = false;
-    for (int i = position - 1; i >= 0; i--) {
-      int type = items.get(i).getViewType();
-      if (isGroupOpener(type)) {
-        top = true;
-        break;
-      }
-      if (type == ListItem.TYPE_SHADOW_BOTTOM) {
-        return false;
-      }
-    }
-    if (!top) {
-      return false;
-    }
-    for (int i = position + 1; i < items.size(); i++) {
-      int type = items.get(i).getViewType();
-      if (type == ListItem.TYPE_SHADOW_BOTTOM) {
-        return true;
-      }
-      if (type == ListItem.TYPE_SHADOW_TOP) {
-        return false;
-      }
-    }
-    return false;
+    return XgramExpressive.isInGroup(items, position);
   }
 
-  /** The 2dp gap the segmented decoration adds above a grouped row that directly follows another row. */
+  /**
+   * The top offset the segmented decoration gives the row at {@code position}, exactly: 2dp after another row, 24dp
+   * under the collapsing header's offset, 8dp for a group opened by the list start (an edit page starts with its
+   * rows), 0 otherwise.
+   */
   public static int groupGapPx (List<ListItem> items, int position) {
-    if (position > 0 && isGroupedRow(items, position) && isRowType(items.get(position - 1).getViewType())) {
-      return Screen.dp(XgramExpressive.LIST_GAP);
-    }
-    return 0;
+    return XgramExpressive.listTopOffsetPx(items, position);
   }
 
-  /** Width a row gets inside a segmented list: grouped rows are inset 16dp on both sides. */
+  /** Width a row gets inside a segmented list: grouped rows, headers and descriptions are inset 16dp on both sides. */
   public static int rowWidth (List<ListItem> items, int position, int width) {
-    return isGroupedRow(items, position) ? Math.max(0, width - Screen.dp(XgramExpressive.LIST_INSET) * 2) : width;
+    final boolean inset = isGroupedRow(items, position) ||
+      (position >= 0 && position < items.size() && isFrameType(items.get(position).getViewType()));
+    return inset ? Math.max(0, width - Screen.dp(XgramExpressive.LIST_INSET) * 2) : width;
   }
 
   // Chat list and topic list rows
@@ -230,12 +209,16 @@ public final class XgramM3Profile {
   private static final RectF tileRect = new RectF();
   private static final Paint tilePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-  /** Selected or open chat: a SECONDARY_CONTAINER tile inset 8dp / 2dp with 16dp corners, at {@code factor} alpha. */
+  /**
+   * Selected or open chat: a SECONDARY_CONTAINER tile inset 4dp / 2dp with 16dp corners, at {@code factor} alpha. The
+   * avatar starts 7dp in and a community avatar's ring 5dp in, so both stay inside the tile's straight start edge.
+   * XgramExpressiveC's list tile press mask has the same shape.
+   */
   public static void drawSelectionTile (Canvas c, int width, int height, float factor) {
     if (factor <= 0f) {
       return;
     }
-    float insetX = Screen.dp(8f), insetY = Screen.dp(2f), radius = Screen.dp(XgramExpressive.CORNER_L);
+    float insetX = Screen.dp(4f), insetY = Screen.dp(2f), radius = Screen.dp(XgramExpressive.CORNER_L);
     tileRect.set(insetX, insetY, width - insetX, height - insetY);
     tilePaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER), Math.min(1f, factor)));
     c.drawRoundRect(tileRect, radius, radius, tilePaint);

@@ -1437,7 +1437,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (topWrap.getTranslationY() != y) {
       topWrap.setTranslationY(y);
       float headerHeight = HeaderView.getSize(true);
-      lickView.setTranslationY(y - headerHeight + getTopViewTopPadding());
+      // XGram: the lick ends where the docked sheet's rounded top starts, never over its corners
+      lickView.setTranslationY(y - headerHeight + (xgramSheet != null ? xgramSheet.getTopInset() : getTopViewTopPadding()));
       lickShadow.setTranslationY(y - (headerHeight * expandFactor));
       if (getSearchTransformFactor() != 0f) {
         View editText = getSearchHeaderView(headerView).view();
@@ -1454,7 +1455,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private @Nullable com.fahadali.xgram.appearance.XgramM3SharedMedia.BackdropDrawable xgramSheetBackdrop;
   private @Nullable com.fahadali.xgram.appearance.XgramM3SharedMedia.SharedAxisTransformer xgramAxis;
 
-  /** The sheet starts 16dp after the last info card (the list's group gap); its bottom clears the first row's top. */
+  /**
+   * The sheet starts 16dp after the last info card (the list's group gap). It is 61dp tall (topWrap's 68dp less these
+   * insets): the tab strip's 56dp from its 2dp, and 3dp more. The pages' first row starts right at its bottom (see
+   * {@link #xgramContentTopExtra}); docked, 2dp below it, on the backdrop of the same color.
+   */
   private static int xgramSheetTopInset () {
     return getTopViewTopPadding() - Screen.dp(2f);
   }
@@ -1816,6 +1821,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       topCellView.getRecyclerView().setClipToPadding(false);
       topCellView.setFadingEdgeLength(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
       topCellView.setXgramCenterSelected(true); // XGram: the selected tab is scrolled into view on a spring
+      topView.setXgramOverlayOnSheet(xgramSheet != null); // XGram: select mode's overlay in the sheet's color
     }
     topView.setItems(getPagerTitles());
     topCellView.getRecyclerView().setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -2393,7 +2399,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           button.setLayoutParams(params);
           pseudoHeaderWrap.addView(button);
           button.setOnClickListener(this);
-          RippleSupport.setSimpleWhiteBackground(button);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram: M3 standard icon buttons on the docked sheet (a 40dp state layer, like the dismiss button), not
+            // a slab of surface-filled rectangles
+            RippleSupport.setTransparentSelector(button);
+          } else {
+            RippleSupport.setSimpleWhiteBackground(button);
+          }
           switch (i) {
             case 0: {
               shareButton = button;
@@ -2553,8 +2565,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     ArrayList<com.fahadali.xgram.appearance.XgramButtonGroupView.Action> actions = new ArrayList<>(4);
     final boolean isSelf = user != null && tdlib.isSelfUserId(user.id);
     final boolean muted = !isSelf && xgramIsMuted();
+    // XGram: Mute / Unmute is an action like its neighbours (its label says what a tap does, its icon shows the state),
+    // so it keeps the group's one tonal role (secondaryContainer) and connected shape: never the checked secondary fill,
+    // which in dark themes is a near-white block next to the dark tonal buttons, and reads as "Unmute is on"
     com.fahadali.xgram.appearance.XgramButtonGroupView.Action mute = new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileMute,
-      muted ? R.drawable.baseline_notifications_off_24 : R.drawable.baseline_notifications_24, Lang.getString(muted ? R.string.Unmute : R.string.Mute), muted);
+      muted ? R.drawable.baseline_notifications_off_24 : R.drawable.baseline_notifications_24, Lang.getString(muted ? R.string.Unmute : R.string.Mute), false);
     com.fahadali.xgram.appearance.XgramButtonGroupView.Action search = new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileSearch,
       R.drawable.baseline_search_24, Lang.getString(R.string.Search), false);
     com.fahadali.xgram.appearance.XgramButtonGroupView.Action share = new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileShare,
@@ -5896,7 +5911,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       topCellView.getTopView().resetFromTo();
     }
     if (xgramAxis != null && state != ViewPager.SCROLL_STATE_SETTLING) {
-      xgramAxis.setActive(false); // XGram: a finger swipe keeps the plain slide
+      xgramAxis.stop(pager); // XGram: a finger swipe keeps the plain slide; at rest every page is in place again
     }
   }
 
@@ -5904,12 +5919,21 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   public void onPagerItemClick (int index) {
     invalidateCachedPosition();
     if (pager.getCurrentItem() != index) {
-      topCellView.getTopView().setFromTo(pager.getCurrentItem(), index);
+      final int from = pager.getCurrentItem();
+      topCellView.getTopView().setFromTo(from, index);
       checkContentScrollY(checkedBasePosition = index);
       if (xgramAxis != null) {
-        xgramAxis.setActive(!com.fahadali.xgram.appearance.XgramMotion.reduce()); // XGram: M3 shared axis X for a tab tap
+        xgramAxis.stop(pager);
       }
       pager.setCurrentItem(index, true);
+      if (xgramAxis != null && !com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+        // XGram: M3 shared axis X for a tab tap, between the two pages only (the pages scrolled past stay hidden);
+        // the target page exists now, setCurrentItem has populated it, and the scroll's first frame comes later
+        xgramAxis.start(from, index, position -> {
+          ViewController<?> c = pagerAdapter.findCachedControllerByPosition(position);
+          return c != null ? c.getValue() : null;
+        });
+      }
     }
   }
 
@@ -5986,6 +6010,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         throw new UnsupportedOperationException();
       }
       case ListItem.TYPE_DESCRIPTION: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          return xgramDescriptionHeight(item, width);
+        }
         if (textCache == null) {
           textCache = new HashMap<>();
         }
@@ -6002,6 +6029,50 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       }
     }
     return SettingHolder.measureHeightForType(item.getViewType());
+  }
+
+  private @Nullable android.widget.TextView xgramDescriptionMeasure;
+  /** Keyed by the text object itself: a spanned text's hashCode builds a String, and this is asked on every frame. */
+  private @Nullable java.util.IdentityHashMap<CharSequence, int[]> xgramDescriptionHeights;
+
+  /**
+   * XGram: a description's height as the list draws it with Expressive design: the description view itself
+   * (bodyMedium in Google Sans Flex, 16dp padding each side plus the item's own, 6dp above and 12dp below), measured at
+   * the width the list decoration leaves it ({@code width} is already inset 16dp each side, see XgramM3Profile.rowWidth).
+   * Measured once per text and width (the scroll sync asks on every frame), so the docked sheet and the tab strip
+   * follow the real rows.
+   */
+  private int xgramDescriptionHeight (ListItem item, int width) {
+    final CharSequence text = item.getString();
+    final int paddingLeft = Screen.dp(16f) + item.getTextPaddingLeft();
+    final int paddingRight = Screen.dp(16f) + item.getTextPaddingRight();
+    if (text == null || width <= 0) {
+      return Screen.dp(6f) + Screen.dp(12f);
+    }
+    if (xgramDescriptionHeights == null) {
+      xgramDescriptionHeights = new java.util.IdentityHashMap<>();
+    }
+    int[] cached = xgramDescriptionHeights.get(text);
+    if (cached != null && cached[0] == width && cached[1] == paddingLeft && cached[2] == paddingRight) {
+      return cached[3];
+    }
+    if (xgramDescriptionMeasure == null) {
+      xgramDescriptionMeasure = SettingHolder.createDescription(context(), ListItem.TYPE_DESCRIPTION, ColorId.background_textLight, null, null);
+    }
+    final android.widget.TextView view = xgramDescriptionMeasure;
+    view.setPadding(paddingLeft, view.getPaddingTop(), paddingRight, view.getPaddingBottom());
+    view.setText(text);
+    view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+    final int height = view.getMeasuredHeight();
+    if (cached == null) {
+      cached = new int[4];
+      xgramDescriptionHeights.put(text, cached);
+    }
+    cached[0] = width;
+    cached[1] = paddingLeft;
+    cached[2] = paddingRight;
+    cached[3] = height;
+    return height;
   }
 
   private int cachedItemsWidth, cachedItemsHeight;
@@ -6239,7 +6310,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   public int maxItemsScrollYOffset () {
-    return maxItemsScrollY() - getPagerTopViewHeight() - getTopViewTopPadding();
+    // XGram: the pages start xgramContentTopExtra() lower, so the scroll that shows a page's first header under the
+    // docked tabs is that much more (the header lands where it did)
+    return maxItemsScrollY() - getPagerTopViewHeight() - getTopViewTopPadding() + xgramContentTopExtra();
   }
 
   public int getItemsBound () {
@@ -6247,7 +6320,18 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private int contentTop () {
-    return getTopItemsHeight() - getPagerTopViewHeight() + getTopViewTopPadding() - ShadowView.simpleTopShadowHeight();
+    return getTopItemsHeight() - getPagerTopViewHeight() + getTopViewTopPadding() - ShadowView.simpleTopShadowHeight() + xgramContentTopExtra();
+  }
+
+  /**
+   * XGram: with the Expressive docked sheet the pages start 8dp lower, so the first row of every tab (Media, Docs,
+   * Links, GIFs, Voice, Music, Members, Groups) starts at the opaque sheet's bottom instead of 8dp under it (where its
+   * rounded top was cut flat): the page's hidden first header (32dp) and SHADOW_TOP (8dp) end exactly at the sheet's
+   * bottom (see {@link #xgramSheetBottomInset}), 11dp under the tab pills. Every page offset and the scroll sync go
+   * through {@link #contentTop}, so they stay in step.
+   */
+  private int xgramContentTopExtra () {
+    return xgramSheet != null ? Screen.dp(8f) : 0; // the sheet exists with Expressive design and tabs only
   }
 
   // Shared stuff

@@ -29,7 +29,6 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.loader.ComplexReceiver;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccentColor;
-import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.util.text.Letters;
@@ -41,7 +40,6 @@ import org.thunderdog.challegram.widget.SimplestCheckBox;
 
 import java.net.URLDecoder;
 
-import me.vkryl.core.ColorUtils;
 import me.vkryl.core.StringUtils;
 import tgx.td.Td;
 import tgx.td.TdExt;
@@ -327,6 +325,6 @@ public class XgramM3LinkResult extends InlineResult<TdApi.InlineQueryResult> imp
 
     RectF rectF = Paints.getRectF();
     rectF.set(x - radius, y - radius, x + radius, y + radius);
-    c.drawArc(rectF, 135f, 170f * selectFactor, false, Paints.getOuterCheckPaint(ColorUtils.compositeColor(Theme.fillingColor(), Theme.chatSelectionColor())));
+    c.drawArc(rectF, 135f, 170f * selectFactor, false, Paints.getOuterCheckPaint(getSelectionRingColor(selectFactor))); // the selected tile under the check
   }
 }
