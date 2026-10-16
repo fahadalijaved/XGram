@@ -531,7 +531,12 @@ private fun ReorderItem(
   }
   val colors = settingsRowColors(id, rowKey)
   val checked = row.checked
-  val supporting: (@Composable () -> Unit)? = row.subtitle?.let { { Text(it) } }
+  val subtitle = row.subtitle
+  val supporting: (@Composable () -> Unit)? = if (subtitle != null) {
+    { Text(subtitle) }
+  } else {
+    null
+  }
   if (checked != null) {
     // A disabled row only stops the switch: holding it (and its handle) still moves it.
     SegmentedListItem(

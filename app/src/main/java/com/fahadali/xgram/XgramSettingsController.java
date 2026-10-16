@@ -470,17 +470,16 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       @Override
       protected void setSliderValues (ListItem item, org.thunderdog.challegram.widget.SliderWrapView view) {
         super.setSliderValues(item, view);
-        if (item.getId() == R.id.btn_xgramDownloadBoostLevel) {
-          // The strength is only read while boost is on: the knob can't be moved and the row is faded until then.
-          boolean enabled = XgramSettingDeps.downloadBoostLevelEnabled();
-          boolean animated = androidx.core.view.ViewCompat.isAttachedToWindow(view);
-          for (int i = 0; i < view.getChildCount(); i++) {
-            View child = view.getChildAt(i);
-            if (child instanceof org.thunderdog.challegram.mediaview.SliderView) {
-              ((org.thunderdog.challegram.mediaview.SliderView) child).setSlideEnabled(enabled, animated);
-            } else {
-              child.setAlpha(enabled ? 1f : .5f);
-            }
+        // The strength is only read while boost is on: the knob can't be moved and the row is faded until then.
+        // Every slider row sets its state, so a recycled view never keeps another row's.
+        boolean enabled = item.getId() != R.id.btn_xgramDownloadBoostLevel || XgramSettingDeps.downloadBoostLevelEnabled();
+        boolean animated = androidx.core.view.ViewCompat.isAttachedToWindow(view);
+        for (int i = 0; i < view.getChildCount(); i++) {
+          View child = view.getChildAt(i);
+          if (child instanceof org.thunderdog.challegram.mediaview.SliderView) {
+            ((org.thunderdog.challegram.mediaview.SliderView) child).setSlideEnabled(enabled, animated);
+          } else {
+            child.setAlpha(enabled ? 1f : .5f);
           }
         }
       }
