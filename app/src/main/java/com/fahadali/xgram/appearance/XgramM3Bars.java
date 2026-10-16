@@ -180,29 +180,53 @@ public final class XgramM3Bars {
       invalidate();
     }
 
+    /** The side margins set with {@link #setSideInset}, in px. */
+    public int getSideInset () {
+      return sideInset;
+    }
+
+    /**
+     * The corners and side margins go right over the anchor, so children added after it (the folder filter menu, the
+     * bottom folder tabs and their space) are drawn over them, not cut by them. Without an anchor in this layout, over
+     * every child.
+     */
+    @Override
+    protected boolean drawChild (Canvas canvas, View child, long drawingTime) {
+      boolean result = super.drawChild(canvas, child, drawingTime);
+      if (child == anchor && XgramExpressive.isEnabled()) {
+        drawDecor(canvas);
+      }
+      return result;
+    }
+
     @Override
     protected void dispatchDraw (Canvas canvas) {
       super.dispatchDraw(canvas);
-      if (XgramExpressive.isEnabled()) {
-        int top = 0, bottom = getHeight();
-        View anchor = this.anchor;
-        if (anchor != null && anchor.getParent() == this) {
-          if (anchor.getVisibility() != View.VISIBLE) {
-            return;
-          }
-          int dy = Math.round(anchor.getTranslationY());
-          top = anchor.getTop() + dy;
-          bottom = anchor.getBottom() + dy;
+      View anchor = this.anchor;
+      if ((anchor == null || anchor.getParent() != this) && XgramExpressive.isEnabled()) {
+        drawDecor(canvas);
+      }
+    }
+
+    private void drawDecor (Canvas canvas) {
+      int top = 0, bottom = getHeight();
+      View anchor = this.anchor;
+      if (anchor != null && anchor.getParent() == this) {
+        if (anchor.getVisibility() != View.VISIBLE) {
+          return;
         }
-        int inset = sideInset;
-        if (inset > 0 && getWidth() > inset * 2 && bottom > top) {
-          sidePaint.setColor(Theme.getColor(ColorId.headerBackground));
-          canvas.drawRect(0, top, inset, bottom, sidePaint);
-          canvas.drawRect(getWidth() - inset, top, getWidth(), bottom, sidePaint);
-          corners.draw(canvas, inset, top, getWidth() - inset);
-        } else {
-          corners.draw(canvas, 0, top, getWidth());
-        }
+        int dy = Math.round(anchor.getTranslationY());
+        top = anchor.getTop() + dy;
+        bottom = anchor.getBottom() + dy;
+      }
+      int inset = sideInset;
+      if (inset > 0 && getWidth() > inset * 2 && bottom > top) {
+        sidePaint.setColor(Theme.getColor(ColorId.headerBackground));
+        canvas.drawRect(0, top, inset, bottom, sidePaint);
+        canvas.drawRect(getWidth() - inset, top, getWidth(), bottom, sidePaint);
+        corners.draw(canvas, inset, top, getWidth() - inset);
+      } else {
+        corners.draw(canvas, 0, top, getWidth());
       }
     }
   }

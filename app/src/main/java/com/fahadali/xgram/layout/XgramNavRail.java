@@ -59,6 +59,7 @@ import org.thunderdog.challegram.navigation.NavigationStack;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.CounterChangeListener;
 import org.thunderdog.challegram.telegram.GlobalCallListener;
+import org.thunderdog.challegram.telegram.GlobalCountersListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccount;
 import org.thunderdog.challegram.telegram.TdlibBadgeCounter;
@@ -240,6 +241,15 @@ public final class XgramNavRail {
     }
   };
 
+  // The chat folder badge settings (count messages, muted, archived) changed: the Chats badge counts again. They are
+  // global (Config.CHAT_FOLDERS_APPEARANCE_IS_GLOBAL), so they come as a global badge reset, not a chat list change.
+  private final GlobalCountersListener badgeSettingsListener = new GlobalCountersListener() {
+    @Override
+    public void onBadgeSettingsChanged () {
+      onCounterChanged(ChatPosition.CHAT_LIST_MAIN); // posted, at most once per frame
+    }
+  };
+
   // Repaints with the colors of a day/night switch while it runs (every color is read when drawn).
   private final ThemeChangeListener themeListener = new ThemeChangeListener() {
     @Override
@@ -265,6 +275,7 @@ public final class XgramNavRail {
     this.rail = new RailView(context);
     ThemeManager.instance().addThemeListener(themeListener);
     TdlibManager.instance().global().addCallListener(callListener);
+    TdlibManager.instance().global().addCountersListener(badgeSettingsListener);
   }
 
   // API for XgramTwoPane and the settings pages
@@ -334,6 +345,7 @@ public final class XgramNavRail {
     }
     MainController root = owner.railRoot();
     setBadgeTdlib(root != null ? root.tdlib() : null);
+    updateUnreadBadge(); // cheap, repaints only on a change (badge settings changed on a screen that just closed)
     setSelected(computeSelected(), rail.isLaidOut());
     refreshMissedCalls(false);
   }
@@ -359,6 +371,7 @@ public final class XgramNavRail {
     UI.cancel(badgeUpdate);
     ThemeManager.instance().removeThemeListener(themeListener);
     TdlibManager.instance().global().removeCallListener(callListener);
+    TdlibManager.instance().global().removeCountersListener(badgeSettingsListener);
   }
 
   private void invalidateAll () {
@@ -383,7 +396,9 @@ public final class XgramNavRail {
   private void setSelected (int dest, boolean animated) {
     selected = dest;
     rail.setSelected(dest, animated);
-    if (dest == DEST_CALLS) {
+    // The pill can stay on Calls under a screen, and a call list opened as a screen never takes it: what counts as
+    // seen is the call list being on screen
+    if (owner.isCallListOnScreen()) {
       markCallsSeen();
     }
   }
@@ -501,10 +516,11 @@ public final class XgramNavRail {
         }
         XgramSettings settings = XgramSettings.instance();
         int seen = settings.railCallsSeen(tdlib.id());
-        if (seen == 0 && newestDate > 0) {
-          // Never looked before: what is in the history now was there before the rail
-          settings.setRailCallsSeen(tdlib.id(), newestDate);
-          seen = newestDate;
+        if (seen == 0) {
+          // Never looked before: what is in the history now was there before the rail. With no missed call at all
+          // yet, now (the server's clock, as message dates), so the first one to come in still counts.
+          seen = newestDate > 0 ? newestDate : (int) (tdlib.currentTimeMillis() / 1000L);
+          settings.setRailCallsSeen(tdlib.id(), seen);
         }
         int count = 0;
         for (TdApi.Message message : messages) {
@@ -513,7 +529,7 @@ public final class XgramNavRail {
           }
         }
         newestMissed = Math.max(newestMissed, newestDate);
-        if (selected == DEST_CALLS) {
+        if (owner.isCallListOnScreen()) {
           markCallsSeen();
         } else if (count != missedCount) {
           missedCount = count;
@@ -538,8 +554,9 @@ public final class XgramNavRail {
     if (tdlib != null) {
       XgramSettings settings = XgramSettings.instance();
       int stored = settings.railCallsSeen(tdlib.id());
-      // The newest missed call known; before the first look, now (nothing older counts then)
-      int seen = newestMissed > 0 ? newestMissed : stored == 0 ? (int) (System.currentTimeMillis() / 1000L) : stored;
+      // Everything up to now is seen: the newest missed call known, or the server's clock (message dates are the
+      // server's) if that is later, as the list just shown may hold calls the last lookup has not seen yet
+      int seen = Math.max(newestMissed, (int) (tdlib.currentTimeMillis() / 1000L));
       if (seen > stored) {
         settings.setRailCallsSeen(tdlib.id(), seen);
       }
@@ -736,6 +753,11 @@ public final class XgramNavRail {
     });
     expandedPopup = popup;
     expandedLayout = layout;
+    // A modal side menu: the keyboard of the field under it (the chat's input, the list's search) goes, in either pane
+    View focus = context.getCurrentFocus();
+    if (focus != null) {
+      org.thunderdog.challegram.tool.Keyboard.hide(focus);
+    }
     popup.showAnimatedPopupView(layout, layout);
   }
 
@@ -1142,6 +1164,14 @@ public final class XgramNavRail {
       this.icon = restIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]);
       this.activeIcon = activeIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]);
       setOnClickListener(v -> onDestinationClick(this.dest));
+      if (dest == DEST_CHATS) {
+        // The Chats tab's filters (Unread, Groups, Archive...) had only its slide-off menu, gone with the tabs: a long
+        // press opens them (instead of the label's tooltip) while the list has no folders
+        setOnLongClickListener(v -> {
+          MainController list = owner.railChatList();
+          return list != null && canNavigate() && list.xgramShowRailFilters();
+        });
+      }
       updateLabel();
     }
 
@@ -1272,17 +1302,28 @@ public final class XgramNavRail {
       return params;
     }
 
-    private void buildRows (Context context) {
+    /**
+     * The rows start past the rail's start inset (a cutout, a side navigation bar) and end above the navigation bar.
+     * Both move on rotation, which this popup outlives: set again on every measure, applied only when they changed.
+     */
+    private void applyListPadding () {
       final boolean rtl = Lang.rtl();
       final int inset = rail.startInset;
-      final Resources res = context.getResources();
-      final int match = ViewGroup.LayoutParams.MATCH_PARENT;
       int bottom = 0;
       androidx.core.view.WindowInsetsCompat insets = androidx.core.view.ViewCompat.getRootWindowInsets(rail);
       if (insets != null) {
         bottom = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars()).bottom;
       }
-      list.setPadding(rtl ? 0 : inset, 0, rtl ? inset : 0, bottom + Screen.dp(16f));
+      int left = rtl ? 0 : inset, right = rtl ? inset : 0, paddingBottom = bottom + Screen.dp(16f);
+      if (list.getPaddingLeft() != left || list.getPaddingRight() != right || list.getPaddingBottom() != paddingBottom || list.getPaddingTop() != 0) {
+        list.setPadding(left, 0, right, paddingBottom);
+      }
+    }
+
+    private void buildRows (Context context) {
+      final Resources res = context.getResources();
+      final int match = ViewGroup.LayoutParams.MATCH_PARENT;
+      applyListPadding();
 
       // The menu button (closes), where the rail has it: the panel starts below the status bar
       MenuView menu = new MenuView(context, true);
@@ -1475,6 +1516,7 @@ public final class XgramNavRail {
       int inset = rail.startInset;
       int content = Math.max(Screen.dp(EXPANDED_MIN), Math.min(Screen.dp(EXPANDED_MAX), width - inset - Screen.dp(EXPANDED_SCRIM_MIN)));
       panelWidth = Math.min(width, content + inset);
+      applyListPadding(); // after a rotation the cutout and the navigation bar may be elsewhere
       measureExactly(panel, panelWidth, height - panelTop);
     }
 

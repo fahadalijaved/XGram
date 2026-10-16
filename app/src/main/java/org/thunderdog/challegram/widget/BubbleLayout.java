@@ -116,6 +116,36 @@ public class BubbleLayout extends AnimatedLinearLayout implements FactorAnimator
     }*/
   }
 
+  // XGram M3E: an opt-in Material 3 menu container (the chat list's folder filter menu): surfaceContainerLow, large
+  // corners, elevation level 2 and 8dp of vertical padding, no arrow. Off by default (EmojiToneHelper keeps the bubble).
+
+  private boolean xgramMenu;
+  private @Nullable Drawable xgramBubbleBackground;
+
+  public void xgramSetMaterialMenu (boolean enabled) {
+    if (this.xgramMenu == enabled) {
+      return;
+    }
+    this.xgramMenu = enabled;
+    if (enabled) {
+      xgramBubbleBackground = getBackground();
+      com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable container = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+      container.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
+      ViewUtils.setBackground(this, container);
+      setMinimumWidth(Screen.dp(112f));
+    } else {
+      ViewUtils.setBackground(this, xgramBubbleBackground);
+      xgramBubbleBackground = null;
+      setMinimumWidth(0);
+    }
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+      setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+      setElevation(enabled ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_2) : 0f);
+    }
+    setDefaultPadding();
+    requestLayout();
+  }
+
   @Override
   public boolean onInterceptTouchEvent (MotionEvent ev) {
     return super.onInterceptTouchEvent(ev) || getAlpha() == 0f;
@@ -199,7 +229,9 @@ public class BubbleLayout extends AnimatedLinearLayout implements FactorAnimator
     if (!cornerCenterChanged) {
       setPivotX(getMeasuredWidth() / 2f);
     }
-    if (top) {
+    if (xgramMenu) {
+      setPivotY(top ? 0f : getMeasuredHeight()); // grows from the edge next to its tab
+    } else if (top) {
       setPivotY(Screen.dp(8f) / 2f + Screen.dp(1f));
     } else {
       setPivotY(getMeasuredHeight() - Screen.dp(8f) / 2f - Screen.dp(1f));
@@ -224,6 +256,10 @@ public class BubbleLayout extends AnimatedLinearLayout implements FactorAnimator
   }
 
   public void setDefaultPadding () {
+    if (xgramMenu) {
+      setPadding(0, Screen.dp(8f), 0, Screen.dp(8f));
+      return;
+    }
     int paddingTop = Screen.dp(2);
     int paddingBottom = Screen.dp(4f) + Screen.dp(8f) + Screen.dp(1f);
     if (top) {

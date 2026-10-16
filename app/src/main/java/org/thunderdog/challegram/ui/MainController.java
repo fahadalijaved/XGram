@@ -195,7 +195,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (composeWrap != null) {
       checkComposeWrapPaddings();
     }
-    Views.setPaddingBottom(updateSnackBar, extraBottomInsetWithoutIme);
+    // XGram M3E: the update snackbar floats above the bottom folder tabs too, as the connection one does
+    Views.setPaddingBottom(updateSnackBar, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramConnSnackInset() : extraBottomInsetWithoutIme);
     if (xgramConnSnackBar != null) {
       Views.setPaddingBottom(xgramConnSnackBar, xgramConnSnackInset()); // XGram
     }
@@ -205,7 +206,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private void updateBottomBarMargins () {
     if (bottomBar != null) {
-      int height = Math.round(extraBottomInsetWithoutIme * (1f - (updateSnackBar != null ? updateSnackBar.getVisibilityFactor() : 0)));
+      // XGram M3E: the floating update snackbar leaves the bottom bar where it is, above the navigation bar
+      float snackFactor = updateSnackBar != null && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? updateSnackBar.getVisibilityFactor() : 0f;
+      int height = Math.round(extraBottomInsetWithoutIme * (1f - snackFactor));
       Views.setBottomMargin(bottomBar, height);
       bottomBarSpace.setLayoutHeight(height, true);
     }
@@ -235,6 +238,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     mainWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     mainWrap.addView(pagerWrap);
     generateChatSearchView(mainWrap);
+    com.fahadali.xgram.appearance.XgramM3ChatSearch.attach(this, getChatSearchView()); // XGram M3E: People row as a tile, Clear button
 
     contentView.addView(mainWrap);
 
@@ -325,6 +329,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           if (composeWrap != null && displayTabsAtBottom()) {
             composeWrap.hide();
           }
+          xgramFolderMenu = true; // XGram M3E: the connection pill (3dp up) would draw over the folder menu
+          xgramConnUpdateSuppressed();
         }
 
         @Override
@@ -341,6 +347,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           }
           setMenuVisible(view, selectedPagerItemId, false);
           selectedPagerItemId = INVALID_PAGER_ITEM_ID;
+          xgramFolderMenu = false;
+          xgramConnUpdateSuppressed();
         }
 
         @Override
@@ -517,6 +525,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (!useGlobalFilter() || filter != globalFilter || filter == FILTER_NONE) {
       setSelectedFilter(pagerItemId, filter);
       replaceSectionItem(pagerItemId, pagerItemPosition);
+      if (getCurrentPagerItemPosition() == pagerItemPosition) {
+        // XGram M3E: the app bar title of the navigation rail follows (moving to the page shown fires no page change)
+        xgramRailPageChanged();
+      }
     }
     replaceController(pagerItemId, chatsController);
     if (getCurrentPagerItemPosition() == pagerItemPosition) {
@@ -650,7 +662,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     int viewWidth = headerCell.getTopView().getItemWidth(view);
     float translationX = x - menuWidth / 2 + viewWidth / 2;
     int dx = displayTabsAtBottom ? 0 : Screen.dp(7f);
-    menu.setTranslationX(MathUtils.clamp(translationX, dx, Screen.currentWidth() - menuWidth - dx));
+    // XGram: kept inside its own parent (the chat list pane of the two-pane layout is narrower than the screen), and
+    // with Expressive design clear of the pane's side margins
+    View menuParent = (View) menu.getParent();
+    int parentWidth = menuParent != null && menuParent.getWidth() > 0 ? menuParent.getWidth() : Screen.currentWidth();
+    int sideInset = pagerWrap instanceof com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout ? ((com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout) pagerWrap).getSideInset() : 0;
+    int minX = dx + sideInset;
+    menu.setTranslationX(MathUtils.clamp(translationX, minX, Math.max(minX, parentWidth - menuWidth - dx - sideInset)));
     int cornerCenterX = menuWidth / 2 + Math.round(translationX - menu.getTranslationX());
     menu.setCornerCenterX(MathUtils.clamp(cornerCenterX, Screen.dp(18f), menuWidth - Screen.dp(18f)));
   }
@@ -673,6 +691,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     View parent = null;
     if (menu == null) {
       boolean top = !displayTabsAtBottom();
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
       menu = new BubbleLayout(context, this, top) {
         @Override
         protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
@@ -682,11 +701,17 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           }
         }
       };
+      if (xgramM3) {
+        menu.xgramSetMaterialMenu(true); // XGram M3E: a Material 3 menu, not the sticker panel's bubble with an arrow
+      }
       int gravity = (top ? Gravity.TOP : Gravity.BOTTOM) | Gravity.LEFT;
       int marginBottom = top ? 0 : getHeaderHeight();
       menu.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, gravity, 0, 0, 0, marginBottom));
 
-      menu.setPadding(menu.getPaddingLeft(), menu.getPaddingTop() + Screen.dp(14f), menu.getPaddingRight(), menu.getPaddingBottom() + Screen.dp(13f));
+      if (!xgramM3) {
+        menu.setPadding(menu.getPaddingLeft(), menu.getPaddingTop() + Screen.dp(14f), menu.getPaddingRight(), menu.getPaddingBottom() + Screen.dp(13f));
+      }
+      xgramMenuPills = xgramM3 ? new android.graphics.drawable.GradientDrawable[FILTERS.length] : null;
       for (int filter : FILTERS) {
         int filterName = getFilterName(filter);
         int filterIcon = getFilterIcon(filter, false);
@@ -698,6 +723,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
         sectionView.setId(R.id.btn_filter);
         sectionView.setLayoutParams(params);
+        if (xgramM3) {
+          sectionView.setTag(R.id.btn_filter, filter);
+          sectionView.setOnClickListener(v -> { });
+          xgramStyleFilterRow(sectionView, filter, filterName, filterIcon);
+          menu.addView(sectionView);
+          continue;
+        }
         sectionView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
         sectionView.setGravity(Lang.gravity(Gravity.CENTER_VERTICAL));
         sectionView.setPadding(Screen.dp(Lang.rtl()  ? 24f : 16f), Screen.dp(11.5f), Screen.dp(Lang.rtl() ? 16f : 24f), Screen.dp(11.5f));
@@ -748,6 +780,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         } else {
           isSelected = selectedFilter == filter;
         }
+        if (xgramMenuPills != null) {
+          xgramColorFilterRow(sectionView, filter, isSelected);
+          continue;
+        }
         int textColorId = isSelected ? ColorId.textNeutral : ColorId.textLight;
         sectionView.setTextColor(Theme.getColor(textColorId));
         int iconColorId = isSelected ? ColorId.iconActive : ColorId.iconLight;
@@ -762,6 +798,60 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       }
     }
     menu.setBubbleVisible(visible, parent);
+  }
+
+  /** XGram M3E: the folder filter menu's selected-row pills, by filter (null: Telegram X's bubble menu). */
+  private @Nullable android.graphics.drawable.GradientDrawable[] xgramMenuPills;
+
+  /**
+   * XGram M3E: a folder filter menu row as the other Material 3 menus (MenuMoreWrap): bodyLarge, a 24dp icon, 12dp
+   * paddings and icon gap, at least 48dp tall, a press ripple and a secondaryContainer pill (selected) 4dp inside it
+   * with medium corners.
+   */
+  private void xgramStyleFilterRow (TextView row, @Filter int filter, @StringRes int filterName, @DrawableRes int filterIcon) {
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(row, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+    row.setGravity(Lang.gravity(Gravity.CENTER_VERTICAL));
+    row.setSingleLine(true);
+    row.setMinHeight(Screen.dp(48f));
+    row.setCompoundDrawablePadding(Screen.dp(12f));
+    int icon = com.fahadali.xgram.appearance.XgramIconPack.map(filterIcon);
+    if (!Lang.rtl()) {
+      row.setCompoundDrawablesWithIntrinsicBounds(icon, ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL);
+    } else {
+      row.setCompoundDrawablesWithIntrinsicBounds(ResourcesCompat.ID_NULL, ResourcesCompat.ID_NULL, icon, ResourcesCompat.ID_NULL);
+    }
+    row.setText(Lang.getString(bindLocaleChanger(filterName, row, false, false)));
+    final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
+    final int inset = Screen.dp(4f);
+    android.graphics.drawable.GradientDrawable pill = new android.graphics.drawable.GradientDrawable();
+    pill.setCornerRadius(radius);
+    pill.setColor(0);
+    android.graphics.drawable.GradientDrawable mask = new android.graphics.drawable.GradientDrawable();
+    mask.setColor(0xffffffff);
+    mask.setCornerRadius(radius);
+    android.graphics.drawable.RippleDrawable ripple = new android.graphics.drawable.RippleDrawable(
+      ColorStateList.valueOf(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED)),
+      new android.graphics.drawable.InsetDrawable(pill, inset), new android.graphics.drawable.InsetDrawable(mask, inset));
+    row.setBackground(ripple);
+    row.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0); // after the background: it would take the 4dp inset as padding
+    if (xgramMenuPills != null && filter >= 0 && filter < xgramMenuPills.length) {
+      xgramMenuPills[filter] = pill;
+    }
+  }
+
+  /** XGram M3E: colors of a folder filter menu row each time the menu opens (they follow the theme then). */
+  private void xgramColorFilterRow (TextView row, @Filter int filter, boolean isSelected) {
+    final int onSurface = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+    final int onSelected = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+    row.setTextColor(isSelected ? onSelected : onSurface);
+    int iconColor = isSelected ? onSelected : com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    TextViewCompat.setCompoundDrawableTintList(row, ColorStateList.valueOf(iconColor));
+    if (xgramMenuPills != null && filter >= 0 && filter < xgramMenuPills.length && xgramMenuPills[filter] != null) {
+      xgramMenuPills[filter].setColor(isSelected ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : 0);
+    }
+    if (row.getBackground() instanceof android.graphics.drawable.RippleDrawable) {
+      ((android.graphics.drawable.RippleDrawable) row.getBackground()).setColor(ColorStateList.valueOf(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(onSurface, com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED)));
+    }
   }
 
   // Language
@@ -1017,23 +1107,39 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (composeWrap.getMainButtonId() != R.id.btn_float_compose) {
         composeWrap.replaceMainButton(R.id.btn_float_compose, R.drawable.baseline_create_24);
       }
+      xgramSetFabLabel(R.string.XgramFabNewChat);
       return;
     }
     switch (position) {
       case POSITION_CHATS: {
         composeWrap.replaceMainButton(R.id.btn_float_compose, R.drawable.baseline_create_24);
+        xgramSetFabLabel(R.string.XgramFabNewChat);
         break;
       }
       case POSITION_CALLS: {
         composeWrap.replaceMainButton(R.id.btn_float_call, R.drawable.baseline_phone_24);
+        xgramSetFabLabel(R.string.Call);
         break;
       }
       case POSITION_PEOPLE: {
         composeWrap.replaceMainButton(R.id.btn_float_addContact, R.drawable.baseline_person_add_24);
+        xgramSetFabLabel(0);
         break;
       }
     }
     context.notifyBackPressAvailabilityChanged();
+  }
+
+  /** XGram M3E: the extended FAB's label, the page's own action ("New chat", "Call"); 0 for a plain FAB. */
+  private @StringRes int xgramFabLabelRes = R.string.XgramFabNewChat;
+
+  private void xgramSetFabLabel (@StringRes int labelRes) {
+    if (composeWrap == null || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || xgramFabLabelRes == labelRes) {
+      return;
+    }
+    xgramFabLabelRes = labelRes;
+    composeWrap.xgramSetExtendedLabel(labelRes != 0 ? Lang.getString(labelRes) : null);
+    com.fahadali.xgram.appearance.XgramMotion.notifyActive(getCurrentPagerItem()); // the page's lift again: extended at its top
   }
 
   @Override
@@ -1073,7 +1179,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private void checkPagerMargins () {
     if (!Config.CHAT_FOLDERS_HIDE_BOTTOM_BAR_ON_SCROLL && displayTabsAtBottom()) {
       Views.setBottomMargin(getViewPager(), getHeaderHeight());
-      Views.setBottomMargin(pagerWrap, updateSnackBar != null ? Math.round(updateSnackBar.getHeight() * updateSnackBar.getVisibilityFactor()) : 0); // FIXME
+      // XGram M3E: the floating update snackbar does not push the content up
+      Views.setBottomMargin(pagerWrap, updateSnackBar != null && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Math.round(updateSnackBar.getHeight() * updateSnackBar.getVisibilityFactor()) : 0); // FIXME
     } else {
       Views.setBottomMargin(getViewPager(), 0);
       Views.setBottomMargin(pagerWrap, 0);
@@ -1189,7 +1296,35 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         band.invalidateSelf();
         pagerWrap.invalidate(); // the container's top corners are drawn by pagerWrap at the pager's moved top
       }
+      // The moved pager keeps its height, so its bottom goes past the screen: the pages scroll that much further
+      // while the pill is in (one relayout as it starts to come in, one once it is gone, none per frame)
+      xgramSetPillRoom(offset > 0f ? reserved : 0);
     });
+  }
+
+  /** Bottom padding the pages add while the connection pill is in (the pager is moved down by it). */
+  private int xgramPillRoom;
+
+  private void xgramSetPillRoom (int px) {
+    if (xgramPillRoom == px) {
+      return;
+    }
+    xgramPillRoom = px;
+    SparseArrayCompat<ViewController<?>> controllers = getAllCachedControllers();
+    if (controllers != null) {
+      for (int i = 0; i < controllers.size(); i++) {
+        xgramApplyPillRoom(controllers.valueAt(i));
+      }
+    }
+    xgramApplyPillRoom(pendingChatsController);
+  }
+
+  private void xgramApplyPillRoom (@Nullable ViewController<?> c) {
+    if (c instanceof ChatsController) {
+      ((ChatsController) c).xgramSetPillRoom(xgramPillRoom);
+    } else if (c instanceof CallListController) {
+      ((CallListController) c).xgramSetPillRoom(xgramPillRoom);
+    }
   }
 
   private void xgramConnDestroy () {
@@ -1201,7 +1336,44 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private void xgramConnUpdateSuppressed () {
     if (xgramConnPill != null) {
-      xgramConnPill.setSuppressed(xgramSearching || xgramSelecting || (composeWrap != null && composeWrap.xgramIsOpen()), true);
+      xgramConnPill.setSuppressed(xgramSearching || xgramSelecting || xgramFolderMenu || (composeWrap != null && composeWrap.xgramIsOpen()), true);
+    }
+  }
+
+  /** The folder tab's filter menu is open (press and drag on a tab). */
+  private boolean xgramFolderMenu;
+
+  /** XGram M3E: how far the FAB goes up for a floating snackbar: 8dp above it (it floats 12dp above the same inset). */
+  private float xgramFabLiftFor (SnackBar v) {
+    int fabMargin = composeWrap != null ? composeWrap.xgramFabMarginPx() : Screen.dp(16f);
+    return v.getMeasuredHeight() + Screen.dp(12f + 8f) - fabMargin;
+  }
+
+  /** The connection snackbar swiped away: it goes at once, the FAB springs back down instead of jumping. */
+  private @Nullable SnackBar xgramConnSwiped;
+  private boolean xgramFabSettling;
+
+  private void xgramSettleFab () {
+    if (composeWrap == null || updateSnackBar != null || composeWrap.getTranslationY() == 0f) {
+      return;
+    }
+    xgramFabSettling = true;
+    composeWrap.animate().cancel();
+    composeWrap.animate()
+      .translationY(0f)
+      .setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpolator(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT))
+      .setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT))
+      .withEndAction(() -> xgramFabSettling = false)
+      .start();
+  }
+
+  /** A snackbar moves the FAB again: the spring back from a swiped one stops where it is. */
+  private void xgramStopFabSettle () {
+    if (xgramFabSettling) {
+      xgramFabSettling = false;
+      if (composeWrap != null) {
+        composeWrap.animate().cancel();
+      }
     }
   }
 
@@ -1240,14 +1412,16 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       bar.setCallback(new SnackBar.Callback() {
         @Override
         public void onSnackBarTransition (SnackBar v, float factor) {
-          if (composeWrap != null && updateSnackBar == null) { // the update snackbar moves the FAB while it is up
-            composeWrap.setTranslationY(-(v.getMeasuredHeight() + Screen.dp(4f)) * factor);
+          // The update snackbar moves the FAB while it is up; a swiped one leaves it to its spring back
+          if (composeWrap != null && updateSnackBar == null && v != xgramConnSwiped) {
+            xgramStopFabSettle();
+            composeWrap.setTranslationY(-xgramFabLiftFor(v) * factor); // the same lift as for the update snackbar
           }
         }
 
         @Override
         public void onDestroySnackBar (SnackBar v) {
-          if (composeWrap != null && updateSnackBar == null) {
+          if (composeWrap != null && updateSnackBar == null && v != xgramConnSwiped) {
             composeWrap.setTranslationY(0f);
           }
           if (xgramConnSnackBar == v) {
@@ -1261,10 +1435,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       com.fahadali.xgram.appearance.XgramConnectionPill.attachSwipeDismiss(bar, () -> {
         if (xgramConnSnackBar == bar) { // not one already gone on connect (that would hold back the next episode's)
           xgramConnSnackDismissed = true;
+          xgramConnSwiped = bar;
+          xgramSettleFab();
           bar.dismissSnackBar(false);
           xgramConnRemoveSnackBar();
         }
       });
+      xgramConnSwiped = null;
       xgramConnSnackBar = bar;
       xgramConnSnackState = 0;
     }
@@ -1306,7 +1483,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       xgramConnSnackState = 0;
       mainWrap.removeView(bar);
       bar.removeThemeListeners(this);
-      if (composeWrap != null && updateSnackBar == null) {
+      if (composeWrap != null && updateSnackBar == null && bar != xgramConnSwiped) {
         composeWrap.setTranslationY(0f);
       }
     }
@@ -1317,10 +1494,18 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private void onAppUpdateAvailable (boolean isApk, boolean immediate) {
     if (updateSnackBar == null) {
       updateSnackBar = new SnackBar(context);
-      Views.setPaddingBottom(updateSnackBar, extraBottomInsetWithoutIme);
+      // XGram M3E: it floats above the bottom folder tabs as the connection snackbar does (see onBottomInsetChanged)
+      Views.setPaddingBottom(updateSnackBar, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramConnSnackInset() : extraBottomInsetWithoutIme);
       updateSnackBar.setCallback(new SnackBar.Callback() {
         @Override
         public void onSnackBarTransition (SnackBar v, float factor) {
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E: the floating snackbar leaves the bottom bar and the list where they are: only the FAB makes
+            // room, 8dp above it, as for the connection snackbar
+            xgramStopFabSettle();
+            composeWrap.setTranslationY(-xgramFabLiftFor(v) * factor);
+            return;
+          }
           float offsetBySnackBar = v.getMeasuredHeight() * factor;
           composeWrap.setTranslationY(-offsetBySnackBar);
           boolean tabsAtBottom = displayTabsAtBottom();
@@ -1710,9 +1895,89 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       return;
     }
     int current = getCurrentPagerItemPosition();
+    if (!calls && scrollIfShown && current == POSITION_CHATS && xgramHasRailFilter()) {
+      // Chats again, on Chats, while a filter (Unread, Groups...) or the archive shows: back to all chats, as there are
+      // no tabs to slide it off from here (a screen closed on the way keeps it). requestChatsFilter keeps the page.
+      requestChatsFilter(FILTER_NONE, MAIN_PAGER_ITEM_ID);
+      return;
+    }
     int position = hasFolders() ? current : calls ? POSITION_CALLS : POSITION_CHATS;
     if (position != current || scrollIfShown) {
       onPagerItemClick(position);
+    }
+  }
+
+  /** XGram M3E: the Chats page shows a filter or the archive (set from its tab, or from the rail's Chats). */
+  private boolean xgramHasRailFilter () {
+    return !hasFolders() && !useGlobalFilter() && (getSelectedFilter(MAIN_PAGER_ITEM_ID) != FILTER_NONE || menuNeedArchive);
+  }
+
+  /**
+   * XGram M3E: long press on the navigation rail's Chats while there are no tabs (no folders): the filters of the
+   * Chats tab's slide-off menu (Archive and Unread only when there are some, as there). False when it does not apply.
+   */
+  public boolean xgramShowRailFilters () {
+    if (getViewPager() == null || hasFolders() || useGlobalFilter() || isDestroyed()) {
+      return false;
+    }
+    final int selectedFilter = getSelectedFilter(MAIN_PAGER_ITEM_ID);
+    final boolean needArchive = menuNeedArchive || (!xgramArchiveTabEnabled() && tdlib.hasArchivedChats());
+    final boolean needUnread = selectedFilter == FILTER_UNREAD || tdlib.hasUnreadChats(menuNeedArchive ? ChatPosition.CHAT_LIST_ARCHIVE : ChatPosition.CHAT_LIST_MAIN);
+    IntList ids = new IntList(FILTERS.length);
+    StringList strings = new StringList(FILTERS.length);
+    IntList icons = new IntList(FILTERS.length);
+    IntList colors = new IntList(FILTERS.length);
+    for (int filter : FILTERS) {
+      if ((filter == FILTER_ARCHIVE && !needArchive) || (filter == FILTER_UNREAD && !needUnread)) {
+        continue;
+      }
+      boolean isSelected;
+      if (filter == FILTER_NONE) {
+        isSelected = selectedFilter == FILTER_NONE && !menuNeedArchive;
+      } else if (filter == FILTER_ARCHIVE) {
+        isSelected = menuNeedArchive;
+      } else {
+        isSelected = selectedFilter == filter;
+      }
+      ids.append(XGRAM_RAIL_FILTER_ID + filter);
+      strings.append(getFilterName(filter));
+      icons.append(getFilterIcon(filter, false));
+      colors.append(isSelected ? OptionColor.BLUE : OptionColor.NORMAL);
+    }
+    showOptions(null, ids.get(), strings.get(), colors.get(), icons.get(), (itemView, id) -> {
+      int filter = id - XGRAM_RAIL_FILTER_ID;
+      if (filter >= FILTER_NONE && filter <= FILTER_UNREAD && !isDestroyed()) {
+        if (getCurrentPagerItemPosition() != POSITION_CHATS) {
+          setCurrentPagerPosition(POSITION_CHATS, true);
+        }
+        requestChatsFilter(filter, MAIN_PAGER_ITEM_ID);
+      }
+      return true;
+    });
+    return true;
+  }
+
+  /** Option ids of {@link #xgramShowRailFilters}: this plus the filter (an option id of 0 would read as none). */
+  private static final int XGRAM_RAIL_FILTER_ID = 1000;
+
+  @Override
+  protected int getSelectHeaderColorId () {
+    // XGram M3E: the selection app bar stays on the app bar's layer, so the container corners and the side margins
+    // under it (XgramM3Bars.CornerFrameLayout, also headerBackground) keep its tone
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.headerBackground : super.getSelectHeaderColorId();
+  }
+
+  @Override
+  public void handleLanguagePackEvent (int event, int arg1) {
+    super.handleLanguagePackEvent(event, arg1);
+    if (event == Lang.EVENT_PACK_CHANGED || event == Lang.EVENT_STRING_CHANGED) {
+      // XGram M3E: the app bar title of the navigation rail (Chats, Calls) is a text title of getName(), not a tab
+      if (xgramRailTitle() && headerView != null && !inTransformMode()) {
+        headerView.xgramMorphTitle(getId(), getName(), com.fahadali.xgram.appearance.XgramTitleMorph.LEADING_NONE, false);
+      }
+      if (composeWrap != null && xgramFabLabelRes != 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        composeWrap.xgramSetExtendedLabel(Lang.getString(xgramFabLabelRes));
+      }
     }
   }
 
@@ -2133,6 +2398,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         }
       });
     }
+    xgramApplyPillRoom(c); // XGram M3E: a page made while the connection pill is in gets its room too
   }
 
   @Override
@@ -3286,7 +3552,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       int bottomMargin = displayTabsAtBottom ? getHeaderHeight() : 0;
       if (menu.setTop(!displayTabsAtBottom)) {
         menu.setDefaultPadding();
-        menu.setPadding(menu.getPaddingLeft(), menu.getPaddingTop() + Screen.dp(14f), menu.getPaddingRight(), menu.getPaddingBottom() + Screen.dp(13f));
+        if (xgramMenuPills == null) { // XGram M3E: the Material 3 menu keeps its own 8dp padding
+          menu.setPadding(menu.getPaddingLeft(), menu.getPaddingTop() + Screen.dp(14f), menu.getPaddingRight(), menu.getPaddingBottom() + Screen.dp(13f));
+        }
       }
       if (gravity != layoutParams.gravity || bottomMargin != layoutParams.bottomMargin) {
         layoutParams.gravity = gravity;
@@ -3395,6 +3663,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       checkMargins();
       showFoldersSetupSuggestion();
       xgramReapplyHeader(); // XGram M3E: with the navigation rail, folder tabs or the page's title
+      com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+      if (twoPane != null) {
+        twoPane.onRailDestinationsChanged(); // Calls is a page of this list only without folders
+      }
     }
   }
 

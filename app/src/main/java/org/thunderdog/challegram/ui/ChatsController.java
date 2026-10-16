@@ -353,7 +353,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         } else if (viewType == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
           offsetTop = (int) view.getTranslationY();
           right = view.getWidth();
-          c.drawRect(view.getX(), view.getY(), view.getX() + view.getWidth(), view.getY() + view.getHeight(), Paints.fillingPaint(Theme.backgroundColor()));
+          // XGram M3E: on the app bar's layer with the 12dp gap below it, where the chats' container opens (onDrawOver)
+          float suggestedBottom = view.getY() + view.getHeight() + (xgramM3 ? Screen.dp(12f) : 0);
+          c.drawRect(view.getX(), view.getY(), view.getX() + view.getWidth(), suggestedBottom, Paints.fillingPaint(xgramM3 ? Theme.getColor(ColorId.headerBackground) : Theme.backgroundColor()));
         } else {
           offsetTop = (int) view.getTranslationY();
           right = view.getWidth();
@@ -415,6 +417,20 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         return;
       }
       final int childCount = parent.getChildCount();
+      final boolean dragging = (context.animatorFlags & ANIMATOR_FLAG_DRAGGING) != 0;
+      // A pinned chat being dragged moves over the splits (laid out where it was): no corners over it
+      int dragTop = 0, dragBottom = 0;
+      if (dragging) {
+        for (int i = 0; i < childCount; i++) {
+          View view = parent.getChildAt(i);
+          if (view instanceof ChatView && ((ChatView) view).isDragging()) {
+            dragTop = Math.round(view.getTop() + view.getTranslationY());
+            dragBottom = Math.round(view.getBottom() + view.getTranslationY());
+            break;
+          }
+        }
+      }
+      final int cornerReach = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
       for (int i = 0; i < childCount; i++) {
         View view = parent.getChildAt(i);
         if (!(view instanceof ChatView)) {
@@ -425,15 +441,22 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         if (chat == null || adapterPosition == RecyclerView.NO_POSITION) {
           continue;
         }
+        final int offsetTop = ((ChatView) view).isDragging() || dragging ? 0 : (int) view.getTranslationY();
+        final int right = view.getMeasuredWidth();
+        if (adapterPosition > 0 && context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
+          // The chats' container opens below the suggested chats of a shared folder, as at every other split
+          xgramCorners.draw(c, 0, view.getTop() + offsetTop, right);
+        }
         TGChat nextChat = context.adapter.getChatByItemPosition(adapterPosition + 1);
         if (nextChat == null || (chat.isArchive() == nextChat.isArchive() && chat.isPinnedOrSpecial() == nextChat.isPinnedOrSpecial())) {
           continue;
         }
-        final int offsetTop = ((ChatView) view).isDragging() || (context.animatorFlags & ANIMATOR_FLAG_DRAGGING) != 0 ? 0 : (int) view.getTranslationY();
-        final int right = view.getMeasuredWidth();
         final int top = view.getBottom() + offsetTop;
         View nextView = parent.getLayoutManager().findViewByPosition(adapterPosition + 1);
         final int bottom = (nextView != null ? nextView.getTop() : parent.getLayoutManager().getDecoratedBottom(view)) + offsetTop;
+        if (dragBottom > dragTop && top - cornerReach < dragBottom && bottom + cornerReach > dragTop) {
+          continue;
+        }
         xgramCorners.drawBottom(c, 0, top, right);
         xgramCorners.draw(c, 0, bottom, right);
       }
@@ -449,6 +472,12 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
       TGChat current = context.adapter.getChatByItemPosition(position);
       if (current == null) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && context.adapter.getItemViewType(position) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
+          // XGram M3E: the 12dp gap of a group split between the suggested chats and the chats' container
+          outRect.top = context.liveLocationHelper != null && context.liveLocationHelper.isVisible() && position == context.getLiveLocationPosition() ? LiveLocationHelper.height() : 0;
+          outRect.bottom = Screen.dp(12f);
+          return;
+        }
         if (context.adapter.getItemCount() > 0 && context.adapter.hasArchive() && context.hideArchive && position == context.adapter.getItemCount() - 1) {
           outRect.bottom = Math.max(0, parent.getMeasuredHeight() - context.calculateTotalScrollContentHeight());
         } else {
@@ -578,7 +607,25 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   @Override
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
-    Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this)); // XGram
+    Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this) + xgramPillRoom); // XGram
+  }
+
+  /** XGram M3E: MainController moves its pager down while the connection pill is in: the list scrolls that much more. */
+  private int xgramPillRoom;
+
+  public void xgramSetPillRoom (int px) {
+    if (xgramPillRoom != px) {
+      xgramPillRoom = px;
+      if (chatsView != null) {
+        Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this) + px);
+      }
+    }
+  }
+
+  @Override
+  protected int getSelectHeaderColorId () {
+    // XGram M3E: the selection app bar stays on the app bar's layer, as the container corners under it
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.headerBackground : super.getSelectHeaderColorId();
   }
 
   @Override
@@ -616,13 +663,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       }
     });
     // XGram: in the narrow chat list pane the last rows scroll clear of the compose button
-    Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this));
+    Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this) + xgramPillRoom);
     chatsView.setItemAnimator(xgramIdleAnimator()); // XGram: reorders, pins and archive changes spring with Expressive design
     if (isInForceTouchMode()) {
       chatsView.setVerticalScrollBarEnabled(false);
     }
     chatsView.setHasFixedSize(true);
-    chatsView.addItemDecoration(new ChatPinSeparatorDecoration(this));
+    // First: the M3E scroll thumb (installed by ChatsRecyclerView) draws over the group corners, not under them
+    chatsView.addItemDecoration(new ChatPinSeparatorDecoration(this), 0);
     ViewSupport.setThemedBackground(chatsView, ColorId.filling, this);
     com.fahadali.xgram.layout.XgramDragDrop.attachChatList(this, chatsView); // XGram: drop onto a chat row to send there
 
@@ -727,6 +775,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
     if (!isBaseController()) {
       generateChatSearchView(contentView);
+      com.fahadali.xgram.appearance.XgramM3ChatSearch.attach(this, getChatSearchView()); // XGram M3E: People row as a tile, Clear button
     }
 
     updateNetworkStatus(tdlib.connectionState());
