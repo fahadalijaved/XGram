@@ -20,11 +20,18 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+
+import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -51,11 +58,30 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
 
   private static final float MIN_SCALE = .4f;
 
+  // XGram: with Expressive design this is the Material 3 FAB. Values are the Compose material3 tokens:
+  // FabBaselineTokens (56dp container, CornerLarge 16dp, 24dp icon), FabPrimaryContainerTokens (PrimaryContainer
+  // container, OnPrimaryContainer icon, Level3 6dp elevation at rest and pressed), the ButtonMedium (56dp) press
+  // morph (CornerLarge 16dp -> PressedContainerShape CornerMedium 12dp on FastSpatial) with an OnPrimaryContainer
+  // state layer at .10, and Modifier.animateFloatingActionButton for show / hide (scale from
+  // FloatingActionButtonDefaults.ShowHideTargetScale .2 on the FastSpatial spring, alpha on FastEffects).
+  // With Expressive design off nothing here changes Telegram X.
+  private final boolean xgram;
+  private static final float XGRAM_HIDDEN_SCALE = .2f;
+  private static final float XGRAM_SIZE_DP = 56f;
+  private @Nullable Paint xgramIconPaint;
+  private int xgramIconColor;
+  private @Nullable XgramExpressive.Spring xgramScaleSpring, xgramAlphaSpring;
+
   public FloatingButton (Context context) {
     super(context);
+    this.xgram = XgramExpressive.isEnabled();
 
     heightDiff = -Size.getMaximumHeaderSizeDifference();
-    RippleSupport.setCircleBackground(this, 56f, 4f, ColorId.headerButton, true, null);
+    if (xgram) {
+      xgramInitBackground();
+    } else {
+      RippleSupport.setCircleBackground(this, 56f, 4f, ColorId.headerButton, true, null);
+    }
 
     int padding = Screen.dp(4f);
     int size = Screen.dp(56f);
@@ -73,8 +99,38 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
 
     setTranslationY(heightDiff);
     setAlpha(0f);
-    setScaleX(MIN_SCALE);
-    setScaleY(MIN_SCALE);
+    setScaleX(minScale());
+    setScaleY(minScale());
+  }
+
+  private float minScale () {
+    return xgram ? XGRAM_HIDDEN_SCALE : MIN_SCALE;
+  }
+
+  /** XGram: a 56dp rounded square (16dp, 12dp while pressed) in primaryContainer, with a Level3 shadow from its outline. */
+  private void xgramInitBackground () {
+    XgramExpressive.MorphDrawable morph = XgramExpressive.attachPressMorph(this, XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), XgramExpressive.CORNER_L, XgramExpressive.CORNER_M);
+    morph.setColorRole(XgramExpressive.PRIMARY_CONTAINER); // follows theme changes
+    morph.setSize(XGRAM_SIZE_DP, XGRAM_SIZE_DP, Gravity.CENTER); // the view keeps Telegram X's 4dp shadow padding
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      setStateListAnimator(null); // Level3 at rest and pressed: no elevation change on press
+      setTranslationZ(0f);
+      setElevation(Screen.dp(XgramExpressive.ELEVATION_3));
+    }
+    xgramIconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+  }
+
+  private Paint getIconPaint () {
+    if (!xgram || xgramIconPaint == null) {
+      return Paints.getHeaderFloatIconPorterDuffPaint();
+    }
+    int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
+    if (xgramIconPaint.getColorFilter() == null || xgramIconColor != color) {
+      // Only when the theme changes
+      xgramIconColor = color;
+      xgramIconPaint.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_IN));
+    }
+    return xgramIconPaint;
   }
 
   private RootFrameLayout rootView;
@@ -110,6 +166,7 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
       rootView.removeInsetsChangeListener(this);
       rootView = null;
     }
+    xgramCancelSprings();
   }
 
   private Drawable leftIcon, rightIcon;
@@ -216,13 +273,21 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
         if (heightFactor == 0f) {
           if (isShowing) {
             isShowing = false;
-            Views.animate(this, 0f, 0f, 0f, OVERSHOOT_DURATION, AnimatorUtils.ANTICIPATE_OVERSHOOT_INTERPOLATOR, getHideListener());
+            if (xgram) {
+              xgramHide();
+            } else {
+              Views.animate(this, 0f, 0f, 0f, OVERSHOOT_DURATION, AnimatorUtils.ANTICIPATE_OVERSHOOT_INTERPOLATOR, getHideListener());
+            }
           }
         } else {
           if (!isShowing) {
             isShowing = true;
             setTouchEnabled(true);
-            Views.animate(this, 1f, 1f, 1f, OVERSHOOT_DURATION, AnimatorUtils.ANTICIPATE_OVERSHOOT_INTERPOLATOR, null);
+            if (xgram) {
+              xgramAnimateVisible(true);
+            } else {
+              Views.animate(this, 1f, 1f, 1f, OVERSHOOT_DURATION, AnimatorUtils.ANTICIPATE_OVERSHOOT_INTERPOLATOR, null);
+            }
           }
         }
       } else {
@@ -242,14 +307,28 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
           Logger.w("%f %f", origH, heightFactor);
         }*/
 
+        if (xgram) {
+          xgramCancelSprings(); // the transition owns the button now
+        }
         float realAlpha = MathUtils.clamp(scaleFactor);
         setAlpha(realAlpha);
-        float scale = MIN_SCALE + (1f - MIN_SCALE) * scaleFactor;
+        float scale = minScale() + (1f - minScale()) * scaleFactor;
         setScaleX(scale);
         setScaleY(scale);
         setTouchEnabled(isShowing = realAlpha != 0f);
       }
     }
+  }
+
+  /**
+   * HeaderView: true when the button of the screen that leaves is already hidden (its header collapsed under it, or
+   * {@link #hide()}), so a transition must not bring it back.
+   */
+  boolean isHiddenForSwitch () {
+    if (xgram) {
+      return !isShowing;
+    }
+    return getScaleX() == 0 && getScaleY() == 0;
   }
 
   private float getIconTop (int resource, Drawable icon) {
@@ -285,9 +364,9 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
   @Override
   protected void onDraw (Canvas c) {
     if (icon != null) {
-      draw(c, iconRes, icon, center, iconTop, Paints.getHeaderFloatIconPorterDuffPaint(), 1f);
+      draw(c, iconRes, icon, center, iconTop, getIconPaint(), 1f);
     } else if (leftIcon != null || rightIcon != null) {
-      Paint paint = Paints.getHeaderFloatIconPorterDuffPaint();
+      Paint paint = getIconPaint();
       if (leftIcon != null)
         draw(c, leftIconRes, leftIcon, center, leftIconTop, paint, 1f - MathUtils.clamp(factor));
       if (rightIcon != null)
@@ -321,7 +400,7 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
     if (this.showFactor != factor) {
       this.showFactor = factor;
       setAlpha(MathUtils.clamp(factor));
-      final float scale = MIN_SCALE + (1f - MIN_SCALE) * factor;
+      final float scale = minScale() + (1f - minScale()) * factor;
       setScaleX(scale);
       setScaleY(scale);
     }
@@ -343,6 +422,12 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
     setIcons(0, icon);
     setTranslationY((1f - heightFactor) * heightDiff);
 
+    if (xgram) {
+      showFactor = 1f;
+      xgramAnimateVisible(true);
+      return;
+    }
+
     showFactor = 0f;
 
     ValueAnimator obj;
@@ -358,6 +443,12 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
     if (isShowing) {
       isShowing = false;
 
+      if (xgram) {
+        showFactor = 0f;
+        xgramHide();
+        return;
+      }
+
       showFactor = 1f;
 
       ValueAnimator obj;
@@ -368,6 +459,208 @@ public class FloatingButton extends View implements Destroyable, RootFrameLayout
       obj.setDuration(OVERSHOOT_DURATION);
       obj.addListener(getHideListener());
       obj.start();
+    }
+  }
+
+  // XGram: show / hide springs (Expressive design only)
+
+  private void xgramEnsureSprings () {
+    if (xgramScaleSpring == null || xgramAlphaSpring == null) {
+      xgramScaleSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> xgramApplyScale(value));
+      xgramAlphaSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> setAlpha(MathUtils.clamp(value)));
+      xgramAlphaSpring.setEndListener(() -> {
+        if (!isShowing) {
+          setTouchEnabled(false);
+        }
+      });
+    }
+  }
+
+  /** {@code visible} 0: hidden (ShowHideTargetScale), 1: full size. May overshoot (FastSpatial). */
+  private void xgramApplyScale (float visible) {
+    float scale = XGRAM_HIDDEN_SCALE + (1f - XGRAM_HIDDEN_SCALE) * visible;
+    setScaleX(scale);
+    setScaleY(scale);
+  }
+
+  private boolean xgramSpringsRunning () {
+    return (xgramScaleSpring != null && xgramScaleSpring.isRunning()) || (xgramAlphaSpring != null && xgramAlphaSpring.isRunning());
+  }
+
+  /** Springs in or out from where the button is now; a running spring keeps its velocity. */
+  private void xgramAnimateVisible (boolean visible) {
+    xgramEnsureSprings();
+    if (!xgramScaleSpring.isRunning()) {
+      xgramScaleSpring.setValue(MathUtils.clamp((getScaleX() - XGRAM_HIDDEN_SCALE) / (1f - XGRAM_HIDDEN_SCALE)));
+    }
+    if (!xgramAlphaSpring.isRunning()) {
+      xgramAlphaSpring.setValue(MathUtils.clamp(getAlpha()));
+    }
+    float target = visible ? 1f : 0f;
+    xgramScaleSpring.animateTo(target);
+    xgramAlphaSpring.animateTo(target);
+  }
+
+  private void xgramHide () {
+    if (getAlpha() == 0f && !xgramSpringsRunning()) {
+      // Already invisible: nothing to animate (a settled spring would not report its end)
+      xgramApplyScale(0f);
+      setTouchEnabled(false);
+      return;
+    }
+    xgramAnimateVisible(false);
+  }
+
+  private void xgramCancelSprings () {
+    if (xgramScaleSpring != null) {
+      xgramScaleSpring.cancel();
+    }
+    if (xgramAlphaSpring != null) {
+      xgramAlphaSpring.cancel();
+    }
+  }
+
+  /** Jumps a running show / hide to its end. */
+  private void xgramFinishSprings () {
+    if (xgramScaleSpring == null || xgramAlphaSpring == null || !xgramSpringsRunning()) {
+      return;
+    }
+    float scaleTarget = xgramScaleSpring.getTarget(), alphaTarget = xgramAlphaSpring.getTarget();
+    xgramScaleSpring.setValue(scaleTarget);
+    xgramAlphaSpring.setValue(alphaTarget);
+    xgramApplyScale(scaleTarget);
+    setAlpha(MathUtils.clamp(alphaTarget));
+    if (!isShowing) {
+      setTouchEnabled(false);
+    }
+  }
+
+  /**
+   * XGram: hides the button when the screen that is now current has none (NavigationController and HeaderView call
+   * this after a navigation or a header reset with Expressive design on). No-op while a back card holds it.
+   */
+  public void xgramHideIfShown () {
+    if (cardState != CARD_NONE) {
+      return;
+    }
+    isShowing = false;
+    if (getAlpha() == 0f && !xgramSpringsRunning()) {
+      setTouchEnabled(false);
+      return;
+    }
+    if (xgram) {
+      xgramAnimateVisible(false);
+    } else {
+      setAlpha(0f);
+      setScaleX(minScale());
+      setScaleY(minScale());
+      setTouchEnabled(false);
+    }
+  }
+
+  // XGram: predictive back card (XgramNavMotion, Expressive design). The button belongs to the closing screen: while
+  // the card follows the gesture the button keeps its look and moves, shrinks and fades with the card. When the gesture
+  // commits it takes the state the app bar gave it for the previous screen (hidden when that screen has no button,
+  // springing in when it has one); when it is cancelled it goes back exactly as it was.
+
+  private static final int CARD_NONE = 0, CARD_CAPTURED = 1, CARD_HOLDING = 2;
+  private static final int S_ALPHA = 0, S_SCALE_X = 1, S_SCALE_Y = 2, S_TX = 3, S_TY = 4, S_FACTOR = 5, S_HEIGHT = 6, S_SCALE_FACTOR = 7, S_COUNT = 8;
+
+  private int cardState = CARD_NONE;
+  private final float[] cardFrom = new float[S_COUNT], cardTo = new float[S_COUNT];
+  private boolean cardFromShowing, cardFromTouch, cardToShowing, cardToTouch;
+
+  private void captureState (float[] out) {
+    out[S_ALPHA] = getAlpha();
+    out[S_SCALE_X] = getScaleX();
+    out[S_SCALE_Y] = getScaleY();
+    out[S_TX] = getTranslationX();
+    out[S_TY] = getTranslationY();
+    out[S_FACTOR] = factor;
+    out[S_HEIGHT] = heightFactor;
+    out[S_SCALE_FACTOR] = scaleFactor;
+  }
+
+  private void restoreState (float[] in) {
+    setAlpha(in[S_ALPHA]);
+    setScaleX(in[S_SCALE_X]);
+    setScaleY(in[S_SCALE_Y]);
+    setTranslationX(in[S_TX]);
+    setTranslationY(in[S_TY]);
+    if (factor != in[S_FACTOR]) {
+      factor = in[S_FACTOR];
+      invalidate();
+    }
+    heightFactor = in[S_HEIGHT];
+    scaleFactor = in[S_SCALE_FACTOR];
+  }
+
+  /** Before the app bar moves to the previous screen: remembers the closing screen's button. */
+  public void xgramCardBegin () {
+    xgramFinishSprings();
+    captureState(cardFrom);
+    cardFromShowing = isShowing;
+    cardFromTouch = touchEnabled;
+    cardState = CARD_CAPTURED;
+  }
+
+  /** After the app bar moved to the previous screen: keeps that state for the end and puts the closing screen's button back. */
+  public void xgramCardHold () {
+    if (cardState != CARD_CAPTURED) {
+      return;
+    }
+    xgramFinishSprings(); // both screens with a button: the app bar may have started a show / hide
+    captureState(cardTo);
+    cardToShowing = isShowing;
+    cardToTouch = touchEnabled;
+    restoreState(cardFrom);
+    isShowing = cardFromShowing;
+    setTouchEnabled(false); // no taps on a closing screen
+    cardState = CARD_HOLDING;
+  }
+
+  /**
+   * The closing card is scaled by {@code scale} around ({@code pivotX}, {@code pivotY}) (parent coordinates), moved
+   * by ({@code dx}, {@code dy}) and drawn at {@code alpha}: the button does the same.
+   */
+  public void xgramCardTransform (float pivotX, float pivotY, float scale, float dx, float dy, float alpha) {
+    if (cardState != CARD_HOLDING) {
+      return;
+    }
+    float tx = cardFrom[S_TX], ty = cardFrom[S_TY];
+    float px = getLeft() + getPivotX() + tx, py = getTop() + getPivotY() + ty;
+    float nx = pivotX + (px - pivotX) * scale + dx, ny = pivotY + (py - pivotY) * scale + dy;
+    setTranslationX(tx + (nx - px));
+    setTranslationY(ty + (ny - py));
+    setScaleX(cardFrom[S_SCALE_X] * scale);
+    setScaleY(cardFrom[S_SCALE_Y] * scale);
+    setAlpha(MathUtils.clamp(cardFrom[S_ALPHA] * alpha));
+  }
+
+  /** {@code navigated}: the previous screen became current. Safe to call on every finish path. */
+  public void xgramCardEnd (boolean navigated) {
+    int state = cardState;
+    cardState = CARD_NONE;
+    if (state == CARD_NONE) {
+      return;
+    }
+    if (navigated && state == CARD_HOLDING) {
+      restoreState(cardTo);
+      isShowing = cardToShowing;
+      if (xgram && cardToShowing && cardTo[S_ALPHA] > 0f) {
+        // The previous screen has its own button: it comes in where its app bar puts it.
+        setTouchEnabled(true);
+        xgramCancelSprings();
+        setAlpha(0f);
+        xgramApplyScale(0f);
+        xgramAnimateVisible(true);
+      } else {
+        setTouchEnabled(cardToTouch);
+      }
+    } else {
+      restoreState(cardFrom);
+      isShowing = cardFromShowing;
+      setTouchEnabled(cardFromTouch);
     }
   }
 }
