@@ -383,6 +383,54 @@ public final class XgramR5Security {
     return button;
   }
 
+  // Password field
+
+  /**
+   * The trailing visibility toggle of a filled password field (a 40dp standard icon button in onSurfaceVariant, 48dp
+   * target): it switches the input between dots and plain text and keeps the cursor where it was.
+   */
+  public static android.widget.ImageView attachVisibilityToggle (org.thunderdog.challegram.widget.MaterialEditTextGroup group) {
+    final boolean rtl = Lang.rtl();
+    final android.widget.EditText input = group.getEditText();
+    input.setPadding(input.getPaddingLeft() + (rtl ? Screen.dp(40f) : 0), input.getPaddingTop(), input.getPaddingRight() + (rtl ? 0 : Screen.dp(40f)), input.getPaddingBottom());
+    final boolean[] revealed = {false};
+    android.widget.ImageView toggle = new android.widget.ImageView(group.getContext()) {
+      private int tint;
+
+      @Override
+      protected void onDraw (Canvas c) {
+        final int color = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+        if (tint != color) {
+          tint = color;
+          setColorFilter(color);
+        }
+        super.onDraw(c);
+      }
+    };
+    toggle.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+    toggle.setBackground(XgramExpressiveC.iconButtonRipple(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), 40f));
+    final Runnable sync = () -> {
+      toggle.setImageResource(XgramIconPack.map(revealed[0] ? org.thunderdog.challegram.R.drawable.baseline_eye_off_24 : org.thunderdog.challegram.R.drawable.baseline_visibility_24));
+      toggle.setContentDescription(Lang.getString(revealed[0] ? org.thunderdog.challegram.R.string.XgramR5SecurityHidePassword : org.thunderdog.challegram.R.string.XgramR5SecurityShowPassword));
+    };
+    sync.run();
+    toggle.setOnClickListener(v -> {
+      revealed[0] = !revealed[0];
+      sync.run();
+      final int selection = input.getSelectionEnd();
+      input.setTransformationMethod(revealed[0] ? null : android.text.method.PasswordTransformationMethod.getInstance());
+      if (selection >= 0 && selection <= input.length()) {
+        input.setSelection(selection);
+      }
+      v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+    });
+    android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(Screen.dp(48f), Screen.dp(48f), android.view.Gravity.TOP | (rtl ? android.view.Gravity.LEFT : android.view.Gravity.RIGHT));
+    params.topMargin = Screen.dp(16f);
+    params.leftMargin = params.rightMargin = Screen.dp(4f);
+    group.addView(toggle, params);
+    return toggle;
+  }
+
   // Connected button group (modes under an app bar)
 
   /**

@@ -14,4 +14,15 @@
   <string name="XgramR5SecurityInvalidPassword">Invalid password</string>
   <string name="XgramR5SecurityInvalidPattern">Invalid pattern</string>
   <string name="XgramR5SecurityInvalidGesture">Invalid gesture</string>
+  <string name="XgramR5SecurityChangePassword">Change password</string>
+  <string name="XgramR5SecurityYourPassword">Your password</string>
+  <string name="XgramR5SecurityYourEmail">Your email</string>
+  <string name="XgramR5SecurityEnterPassword">Enter password</string>
+  <string name="XgramR5SecurityTransferOwnership">Transfer ownership</string>
+  <string name="XgramR5SecurityTwoStepVerification">Two-step verification</string>
+  <string name="XgramR5SecurityPasswordRecovery">Password recovery</string>
+  <string name="XgramR5SecurityConfirmationCode">Confirmation code</string>
+  <string name="XgramR5SecurityCancelAccountReset">Cancel account reset</string>
+  <string name="XgramR5SecurityChangeRecoveryEmail">Change recovery email</string>
+  <string name="XgramR5SecurityLoginEmail">Login email</string>
 </resources>
