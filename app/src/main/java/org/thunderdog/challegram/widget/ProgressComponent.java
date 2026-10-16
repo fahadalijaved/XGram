@@ -419,10 +419,17 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
     final float startAngle, sweepAngle;
     final boolean isTimer = isTimer();
 
-    if (!isTimer && !isPrecise && radius >= Screen.dp(10f) && XgramExpressive.isEnabled()) {
-      // XGram M3E: the expressive loading indicator; the old spinner diameter stands for its 38dp active indicator
+    if (!isTimer && !isPrecise && radius >= Screen.dp(3f) && XgramExpressive.isEnabled()) {
+      // XGram M3E: the expressive loading indicator for every indeterminate spinner of 3dp and more (round 5: the
+      // small ones too); the old spinner diameter stands for its active indicator, at least 16dp, but never larger
+      // than the box it was given when that box is smaller
+      float activeSize = Math.max(radius * 2f, Screen.dpf(16f));
+      final int boxSize = Math.min(drawingRect.width(), drawingRect.height());
+      if (boxSize > 0 && boxSize < activeSize) {
+        activeSize = Math.max(radius * 2f, boxSize);
+      }
       final int indicatorColor = ColorUtils.alphaColor(alpha, colorForced ? this.color : XgramExpressive.color(XgramExpressive.PRIMARY));
-      XgramLoadingIndicator.draw(c, arcRect.centerX(), arcRect.centerY(), radius * 2f, indicatorColor, timeMs);
+      XgramLoadingIndicator.draw(c, arcRect.centerX(), arcRect.centerY(), activeSize, indicatorColor, timeMs);
       if (!scheduled && isActive()) {
         scheduleInvalidateIfNeeded(true, true);
       }

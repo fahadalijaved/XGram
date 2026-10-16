@@ -30,6 +30,7 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramAppMotion;
 import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.drinkless.tdlib.TdApi;
@@ -853,17 +854,25 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     }
     this.inProgress = inProgress;
     if (progress == null) {
-      progress = new ProgressComponent(UI.getContext(getContext()), Screen.dp(8f));
+      final boolean xgram = XgramExpressive.isEnabled();
+      // XGram M3E: a 24dp loading indicator (ProgressComponent draws it for a 12dp radius) in the button's content
+      // colour (onPrimaryContainer on the FAB; onDraw keeps it in sync), not Telegram X's white 8dp arc
+      progress = new ProgressComponent(UI.getContext(getContext()), Screen.dp(xgram ? 12f : 8f));
       progress.setUseLargerPaint();
       progress.setSlowerDurations();
-      progress.forceColor(0xffffffff);
+      progress.forceColor(xgram ? xgramIconColor() : 0xffffffff);
       progress.setAlpha(0f);
-      progress.setBounds(0, 0, getLayoutParams().width, getLayoutParams().height);
+      if (xgram && getWidth() > 0 && getHeight() > 0) {
+        progress.setBounds(0, 0, getWidth(), getHeight());
+      } else {
+        progress.setBounds(0, 0, getLayoutParams().width, getLayoutParams().height);
+      }
       progress.attachToView(this);
     }
     if (progressAnimator == null) {
       progressAnimator = new FactorAnimator(PROGRESS_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 220l);
     }
+    XgramAppMotion.use(progressAnimator, XgramExpressive.EFFECTS_DEFAULT, true); // XGram M3E: the icon fades through on a spring
     progressAnimator.animateTo(inProgress ? 1f : 0f);
   }
 

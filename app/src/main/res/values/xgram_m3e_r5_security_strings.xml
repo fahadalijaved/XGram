@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 5: appearance pages, passcode and login (XgramR5Security) -->
+  <string name="XgramR5SecurityTurnOffExpressive">Turn off Expressive design</string>
+  <string name="XgramR5SecurityEnterPasscode">Enter passcode</string>
+  <string name="XgramR5SecurityUnlock">Unlock</string>
+  <string name="XgramR5SecurityBackspace">Delete</string>
+  <string name="XgramR5SecurityBiometrics">Unlock with biometrics</string>
+  <string name="XgramR5SecurityShowPassword">Show password</string>
+  <string name="XgramR5SecurityHidePassword">Hide password</string>
+  <!-- Sentence case of Telegram X's title case strings, used while the language is Telegram X's English -->
+  <string name="XgramR5SecurityInvalidPassword">Invalid password</string>
+  <string name="XgramR5SecurityInvalidPattern">Invalid pattern</string>
+  <string name="XgramR5SecurityInvalidGesture">Invalid gesture</string>
+</resources>

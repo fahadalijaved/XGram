@@ -71,6 +71,10 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
     selected = XgramAppIcons.current(context);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramCreateView(context, recyclerView);
+      return;
+    }
     GridLayoutManager manager = new GridLayoutManager(context, 3);
     manager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
       @Override
@@ -92,7 +96,12 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
     try {
       XgramAppIcons.apply(context, icon);
       selected = icon;
-      adapter.notifyDataSetChanged();
+      if (xgram) {
+        // XGram M3E: the holders are rebound in place (no item animator), so the cards spring between the two states
+        adapter.notifyItemRangeChanged(0, rows.size(), XGRAM_SELECTION);
+      } else {
+        adapter.notifyDataSetChanged();
+      }
       UI.showToast(R.string.XgramAppIconChanged, android.widget.Toast.LENGTH_LONG);
       if (com.fahadali.xgram.XgramSettings.instance().iconTheme()) {
         com.fahadali.xgram.appearance.XgramThemePack.applyForIcon(this, icon);
@@ -103,6 +112,159 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
   }
 
   private static final float CORNER = .3f;
+
+  // XGram M3E (round 5): a large title over an adaptive grid (at least 3 columns of 112dp, about 6 on the unfolded
+  // Fold), "Theme too" as one segmented tile with its switch, titleSmall section headers and the icons as selectable
+  // cards (surfaceBright, secondaryContainer with a check badge when chosen). Colours are read at bind and draw time.
+
+  private boolean xgram;
+  private static final Object XGRAM_SELECTION = new Object();
+  private static final float XGRAM_MIN_CELL = 112f;
+
+  private void xgramCreateView (Context context, CustomRecyclerView recyclerView) {
+    xgram = true;
+    final GridLayoutManager manager = new GridLayoutManager(context, com.fahadali.xgram.appearance.XgramR5Security.spanCount(Screen.currentWidth(), XGRAM_MIN_CELL, 3));
+    manager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
+      @Override
+      public int getSpanSize (int position) {
+        return rows.get(position) instanceof XgramAppIcons.Icon ? 1 : manager.getSpanCount();
+      }
+    });
+    recyclerView.setLayoutManager(manager);
+    recyclerView.setItemAnimator(null);
+    recyclerView.setPadding(0, 0, 0, Screen.dp(16f));
+    recyclerView.setClipToPadding(false);
+    com.fahadali.xgram.appearance.XgramR5Security.attachAdaptiveGrid(recyclerView, manager, XGRAM_MIN_CELL, 3);
+    recyclerView.setAdapter(adapter = new Adapter());
+    com.fahadali.xgram.appearance.XgramM3Bars.attachLargeTitle(this, recyclerView);
+  }
+
+  private View xgramNewThemeSwitch (Context context) {
+    FrameLayout frame = new FrameLayout(context);
+    RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    params.leftMargin = params.rightMargin = Screen.dp(16f);
+    params.topMargin = Screen.dp(8f);
+    frame.setLayoutParams(params);
+    frame.setMinimumHeight(Screen.dp(72f));
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable tile = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.LIST_PRESSED_CORNER);
+    tile.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+    tile.setSegment(com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE);
+    tile.setHost(frame);
+    frame.setBackground(com.fahadali.xgram.appearance.XgramAppMotion.ThemedRipple.ofRole(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE, tile, tile.newMask()));
+    frame.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+
+    LinearLayout texts = new LinearLayout(context);
+    texts.setOrientation(LinearLayout.VERTICAL);
+    frame.addView(texts, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+
+    TextView title = new TextView(context);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(title, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+    title.setText(Lang.getString(R.string.XgramIconThemeToggle));
+    texts.addView(title);
+    TextView subtitle = new TextView(context);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(subtitle, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+    subtitle.setText(Lang.getString(R.string.XgramIconThemeToggleInfo));
+    texts.addView(subtitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    org.thunderdog.challegram.component.base.TogglerView toggler = new org.thunderdog.challegram.component.base.TogglerView(context);
+    toggler.init(com.fahadali.xgram.XgramSettings.instance().iconTheme());
+    frame.addView(toggler, new FrameLayout.LayoutParams(Screen.dp(66f), Screen.dp(48f), Gravity.CENTER_VERTICAL));
+    frame.setTag(toggler);
+
+    frame.setOnClickListener(v -> {
+      com.fahadali.xgram.XgramSettings settings = com.fahadali.xgram.XgramSettings.instance();
+      boolean enabled = !settings.iconTheme();
+      settings.setIconTheme(enabled);
+      xgramBindThemeSwitch(v, true);
+      v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      if (enabled && selected != null) {
+        com.fahadali.xgram.appearance.XgramThemePack.applyForIcon(this, selected);
+      }
+    });
+    return frame;
+  }
+
+  private void xgramBindThemeSwitch (View view, boolean animated) {
+    ViewGroup frame = (ViewGroup) view;
+    final boolean rtl = Lang.rtl();
+    ViewGroup texts = (ViewGroup) frame.getChildAt(0);
+    FrameLayout.LayoutParams textParams = (FrameLayout.LayoutParams) texts.getLayoutParams();
+    textParams.leftMargin = Screen.dp(rtl ? 78f : 16f);
+    textParams.rightMargin = Screen.dp(rtl ? 16f : 78f);
+    textParams.topMargin = textParams.bottomMargin = Screen.dp(12f);
+    texts.setLayoutParams(textParams);
+    View togglerView = frame.getChildAt(1);
+    FrameLayout.LayoutParams togglerParams = (FrameLayout.LayoutParams) togglerView.getLayoutParams();
+    togglerParams.gravity = Gravity.CENTER_VERTICAL | (rtl ? Gravity.LEFT : Gravity.RIGHT);
+    togglerParams.leftMargin = togglerParams.rightMargin = Screen.dp(6f);
+    togglerView.setLayoutParams(togglerParams);
+    TextView title = (TextView) texts.getChildAt(0);
+    TextView subtitle = (TextView) texts.getChildAt(1);
+    title.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
+    subtitle.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+    title.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
+    subtitle.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
+    ((org.thunderdog.challegram.component.base.TogglerView) frame.getTag()).setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().iconTheme(), animated);
+  }
+
+  /** XGram M3E: an icon as a selectable card: the 64dp icon, its name in labelLarge, the check badge at its top end. */
+  private static final class XgramIconCell extends LinearLayout {
+    private final ImageView iconView;
+    private final TextView nameView;
+    private final com.fahadali.xgram.appearance.XgramR5Security.SelectableCard card;
+
+    XgramIconCell (Context context) {
+      super(context);
+      setOrientation(VERTICAL);
+      setGravity(Gravity.CENTER_HORIZONTAL);
+      setPadding(Screen.dp(8f), Screen.dp(16f), Screen.dp(8f), Screen.dp(12f));
+      setMinimumHeight(Screen.dp(48f));
+      card = com.fahadali.xgram.appearance.XgramR5Security.attachSelectableCard(this);
+
+      iconView = new ImageView(context);
+      iconView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+      iconView.setOutlineProvider(new ViewOutlineProvider() {
+        @Override
+        public void getOutline (View view, Outline outline) {
+          outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), view.getWidth() * CORNER);
+        }
+      });
+      iconView.setClipToOutline(true);
+      iconView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+      addView(iconView, new LayoutParams(Screen.dp(64f), Screen.dp(64f)));
+
+      nameView = new TextView(context);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(nameView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      nameView.setGravity(Gravity.CENTER);
+      nameView.setMaxLines(2);
+      nameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      LayoutParams nameParams = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      nameParams.topMargin = Screen.dp(8f);
+      addView(nameView, nameParams);
+      setWillNotDraw(false);
+    }
+
+    void bind (XgramAppIcons.Icon icon, boolean isSelected, boolean animated) {
+      iconView.setImageResource(icon.iconRes);
+      String name = Lang.getString(icon.nameRes);
+      nameView.setText(name);
+      setContentDescription(name);
+      setSelected(isSelected);
+      card.setChecked(isSelected, animated);
+      nameView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(isSelected ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
+      invalidate();
+    }
+
+    @Override
+    protected void dispatchDraw (Canvas c) {
+      super.dispatchDraw(c);
+      if (card.badgeFactor() > 0f) {
+        final float inset = Screen.dpf(4f);
+        final float cx = Lang.rtl() ? iconView.getLeft() + inset : iconView.getRight() - inset;
+        card.drawBadge(c, cx, iconView.getTop() + inset);
+      }
+    }
+  }
 
   /** The "theme too" switch, section titles (string ids) and icons, in grid order. */
   private final java.util.List<Object> rows = buildRows();
@@ -257,6 +419,9 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
     @NonNull
     @Override
     public Holder onCreateViewHolder (@NonNull ViewGroup parent, int viewType) {
+      if (xgram) {
+        return xgramCreateHolder(parent, viewType);
+      }
       if (viewType == 2) {
         return new Holder(newThemeSwitch(parent.getContext()));
       }
@@ -280,9 +445,51 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
       return new Holder(cell);
     }
 
+    private Holder xgramCreateHolder (@NonNull ViewGroup parent, int viewType) {
+      if (viewType == 2) {
+        return new Holder(xgramNewThemeSwitch(parent.getContext()));
+      }
+      if (viewType == 1) {
+        return new Holder(com.fahadali.xgram.appearance.XgramR5Security.newSectionHeader(parent.getContext()));
+      }
+      XgramIconCell cell = new XgramIconCell(parent.getContext());
+      cell.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      cell.setOnClickListener(v -> {
+        Object tag = v.getTag();
+        if (tag instanceof XgramAppIcons.Icon) {
+          v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+          select((XgramAppIcons.Icon) tag);
+        }
+      });
+      return new Holder(cell);
+    }
+
+    @Override
+    public void onBindViewHolder (@NonNull Holder holder, int position, @NonNull java.util.List<Object> payloads) {
+      if (xgram && !payloads.isEmpty() && holder.itemView instanceof XgramIconCell) {
+        XgramAppIcons.Icon icon = (XgramAppIcons.Icon) rows.get(position);
+        holder.itemView.setTag(icon);
+        ((XgramIconCell) holder.itemView).bind(icon, icon == selected, true);
+        return;
+      }
+      super.onBindViewHolder(holder, position, payloads);
+    }
+
     @Override
     public void onBindViewHolder (@NonNull Holder holder, int position) {
       Object row = rows.get(position);
+      if (xgram) {
+        if (row == SWITCH) {
+          xgramBindThemeSwitch(holder.itemView, false);
+        } else if (row instanceof Integer) {
+          com.fahadali.xgram.appearance.XgramR5Security.bindSectionHeader((TextView) holder.itemView, Lang.getString((Integer) row), position == 0);
+        } else if (holder.itemView instanceof XgramIconCell) {
+          XgramAppIcons.Icon icon = (XgramAppIcons.Icon) row;
+          holder.itemView.setTag(icon);
+          ((XgramIconCell) holder.itemView).bind(icon, icon == selected, false);
+        }
+        return;
+      }
       if (row == SWITCH) {
         bindThemeSwitch(holder.itemView, false);
         return;
