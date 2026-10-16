@@ -525,6 +525,21 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     animator.start();
   }
 
+  /**
+   * After a navigation finishes (pushed, popped, swipe back committed or cancelled): the shared floating button never
+   * stays on a screen that has none. The app bar's switch hides it on every normal path; this is the backstop for the
+   * paths that skip the switch. Expressive design only.
+   */
+  private void xgramCheckFloatingButton () {
+    if (xgramNav == null || floatingButton == null) {
+      return;
+    }
+    ViewController<?> current = getStack().getCurrent();
+    if (current == null || (!current.inCustomMode() && current.getFloatingButtonId() == 0)) {
+      floatingButton.xgramHideIfShown();
+    }
+  }
+
   /** Part of the width past which a swipe back commits. */
   public float xgramDropFactor () {
     return xgramNav != null && xgramNav.getMode() == XgramNavMotion.MODE_CARD_FINGER ? XgramNavMotion.FINGER_COMMIT : Size.NAVIGATION_DROP_FACTOR;
@@ -1126,6 +1141,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
           setLayerType(View.LAYER_TYPE_NONE, left, right);
         }
         updateHackyViews();
+        xgramCheckFloatingButton();
       } else {
         finishTransaction(FINISH_NAVIGATION);
       }
@@ -1495,6 +1511,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     rightWrap = null;
 
     updateHackyViews();
+    xgramCheckFloatingButton();
   }
 
   void applyPreview (float velocity) {

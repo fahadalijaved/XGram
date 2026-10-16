@@ -20,6 +20,8 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+
 import org.thunderdog.challegram.unsorted.Size;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
@@ -117,6 +119,19 @@ public class ComplexRecyclerView extends CustomRecyclerView implements Runnable 
     updateScrollFactor(true);
   }
 
+  /**
+   * XGram: with Expressive design only the current screen, while no transition runs, moves the shared floating button.
+   * A list that scrolls (a fling) or lays out during a transition or a back gesture, or after its screen left, would
+   * otherwise spring the button back in over the screen that comes in. The app bar's switch owns it meanwhile.
+   */
+  private boolean xgramMayMoveFloatingButton () {
+    if (!XgramExpressive.isEnabled()) {
+      return true;
+    }
+    NavigationController navigation = target.navigationController();
+    return navigation == null || (!navigation.isAnimating() && navigation.getCurrentStackItem() == target);
+  }
+
   private void updateScrollFactor (boolean updateFilling) {
     if (target.inCustomMode() && (flags & FLAG_FORCE) == 0) {
       return;
@@ -128,7 +143,7 @@ public class ComplexRecyclerView extends CustomRecyclerView implements Runnable 
     scrollFactor = MathUtils.clamp(factor);
     if ((flags & FLAG_FORCE) == 0) {
       headerView.setScaleFactor(scrollFactor, scrollFactor, scrollFactor, true);
-      if (floatingButton != null && target.getFloatingButtonId() != 0) {
+      if (floatingButton != null && target.getFloatingButtonId() != 0 && xgramMayMoveFloatingButton()) {
         floatingButton.setHeightFactor(scrollFactor, 0f, true);
       }
       if (updateFilling && target.headerView != null) {

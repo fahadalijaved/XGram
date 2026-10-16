@@ -39,6 +39,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.Log;
+import org.thunderdog.challegram.navigation.FloatingButton;
 import org.thunderdog.challegram.navigation.HeaderView;
 import org.thunderdog.challegram.theme.ThemeManager;
 import org.thunderdog.challegram.tool.Screen;
@@ -56,6 +57,11 @@ import org.thunderdog.challegram.tool.Screen;
  * never covers the bar. The closing screen's app bar is a snapshot drawn on the closing card, and the live bar is cut
  * out where the card is, so the card stays above it. Nothing swaps when the gesture ends. NavigationController feeds
  * the raw factor and calls {@link #end(boolean)} on every finish path.
+ * <p>
+ * The shared floating button belongs to the closing screen in the card modes: it keeps its look and moves, shrinks and
+ * fades with the card. The app bar's switch to the previous screen gives the button that screen's state (hidden when it
+ * has none); the button takes it when the gesture commits and goes back as it was when it is cancelled (see
+ * FloatingButton#xgramCardBegin).
  */
 public final class XgramNavMotion {
   public static final int MODE_NONE = 0, MODE_SHARED_AXIS = 1, MODE_CARD_SYSTEM = 2, MODE_CARD_FINGER = 3;
@@ -181,7 +187,7 @@ public final class XgramNavMotion {
 
   private final ViewGroup rootView, contentWrapper;
   private final HeaderView headerView;
-  private final @Nullable View floatingButton;
+  private final @Nullable FloatingButton floatingButton;
   private final ColorDrawable backdrop;
 
   private boolean active, released, commit;
@@ -193,7 +199,6 @@ public final class XgramNavMotion {
   private float touchStartY, touchY;
   private float p0, closingScale0, closingX0, closingY0, scrim0;
   private float rightTx, leftTx;
-  private float fabAlpha = 1f;
   private boolean clipChildrenWas = true;
   private boolean headerMoved;
   private float headerTranslation0;
@@ -206,7 +211,7 @@ public final class XgramNavMotion {
   private @Nullable EnteringOverlay overlay;
   private @Nullable ClosingHeader closingHeader;
 
-  public XgramNavMotion (@NonNull ViewGroup rootView, @NonNull ViewGroup contentWrapper, @NonNull HeaderView headerView, @Nullable View floatingButton) {
+  public XgramNavMotion (@NonNull ViewGroup rootView, @NonNull ViewGroup contentWrapper, @NonNull HeaderView headerView, @Nullable FloatingButton floatingButton) {
     this.rootView = rootView;
     this.contentWrapper = contentWrapper;
     this.headerView = headerView;
@@ -298,7 +303,9 @@ public final class XgramNavMotion {
         backdrop.setColor(surface);
       } else {
         this.radius = cornerRadius();
-        fabAlpha = floatingButton != null ? floatingButton.getAlpha() : 1f;
+        if (floatingButton != null) {
+          floatingButton.xgramCardBegin(); // the closing screen's button, as it is now
+        }
         int[] leftPos = positionInRoot(left), rightPos = positionInRoot(right), headerPos = positionInRoot(headerView);
         this.headerX = headerPos[0];
         this.headerY = headerPos[1];
@@ -315,6 +322,10 @@ public final class XgramNavMotion {
         // The live app bar shows the previous screen right away, untransformed.
         headerView.setTranslation(1f);
         headerMoved = true;
+        if (floatingButton != null) {
+          // The app bar just gave the button the previous screen's state: kept for the end, the closing one goes on the card.
+          floatingButton.xgramCardHold();
+        }
         int barColor = headerView.getFilling().getColor();
         // Shows through the fading card under the bar: the bar's own colour, not a darkened surface.
         backdrop.setColor(Color.alpha(barColor) == 255 ? barColor : surface);
@@ -467,7 +478,8 @@ public final class XgramNavMotion {
     cardHole.addRoundRect(cardRect, r, r, Path.Direction.CW);
     headerView.xgramSetCardHole(cardHole, alpha);
     if (floatingButton != null) {
-      floatingButton.setAlpha(fabAlpha * alpha * (1f - XgramMotion.clamp01((1f - scale) / ((1f - MIN_SCALE) / 2f))));
+      // On the card: same pivot (the screen centre, see prepareCard), scale, offset and alpha.
+      floatingButton.xgramCardTransform(width / 2f, height / 2f, scale, x, y, alpha);
     }
     rightTx = x;
   }
@@ -640,7 +652,8 @@ public final class XgramNavMotion {
       }
       if (card) {
         if (floatingButton != null) {
-          floatingButton.setAlpha(fabAlpha);
+          // Navigated: the previous screen's state from the app bar (hidden when it has no button); otherwise as before.
+          floatingButton.xgramCardEnd(navigated);
         }
         if (contentWrapper.getClipChildren() != clipChildrenWas) {
           contentWrapper.setClipChildren(clipChildrenWas);

@@ -1572,14 +1572,14 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       }
 
       if (useFloatSwitch != 0) {
-        floatSwitch.setHeightFactor(heightFactor, baseHasFloat ? 1f - raptor : raptor, useFloatSwitch != 1);
+        floatSwitch.setHeightFactor(heightFactor, xgramFloatFactor(raptor), useFloatSwitch != 1);
         if (translationMode == MODE_VERTICAL) {
           float changeFactor = translateForward ? getHeightFactor(fromHeight) : getHeightFactor(fromHeight + heightDiff);
           floatSwitch.setTranslationY(floatSwitch.getTranslationY() - (Size.getHeaderPortraitSize() * changeFactor) * (1f - heightFactor));
         }
       }
     } else if (useFloatSwitch == 1) {
-      floatSwitch.setHeightFactor(getHeightFactor(fromHeight), baseHasFloat ? 1f - raptor : raptor, false);
+      floatSwitch.setHeightFactor(getHeightFactor(fromHeight), xgramFloatFactor(raptor), false);
     }
 
     switch (translationMode) {
@@ -2263,6 +2263,12 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
         FloatingButton button = navigation.getFloatingButton();
         button.setIcons(0, floatingButtonId);
         button.initHeightFactor(getHeightFactor(), 0f, 1f, false, false);
+      } else if (XgramExpressive.isEnabled() && !item.inCustomMode()) {
+        // XGram: a screen set without a transition and without a button never keeps the previous screen's one
+        FloatingButton button = navigation.getFloatingButton();
+        if (button != null) {
+          button.xgramHideIfShown();
+        }
       }
     }
     filling.setColor(item.getHeaderColor());
@@ -2599,7 +2605,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
       baseHasFloat = useFloatSwitch == 1 && baseItemButtonId != 0;
 
-      if (baseHasFloat && previewItemButtonId == 0 && floatSwitch != null && floatSwitch.getScaleX() == 0 && floatSwitch.getScaleY() == 0) { // float button is hidden
+      if (baseHasFloat && previewItemButtonId == 0 && xgramFloatHidden()) { // float button is hidden
         useFloatSwitch = 0;
       } else if (!baseHasFloat && previewItemButtonId != 0 && !useHeightSwitch && heightFactor == 0f) {
         useFloatSwitch = 0;
@@ -2878,6 +2884,31 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
   public static int getFloatingButtonId (ViewController<?> c) {
     return c == null ? 0 : c.getFloatingButtonId();
+  }
+
+  /** The floating button of the screen that leaves is hidden already (Telegram X: scaled to 0 by its header). */
+  private boolean xgramFloatHidden () {
+    if (floatSwitch != null) {
+      return floatSwitch.isHiddenForSwitch();
+    }
+    // XGram: before the first switch floatSwitch is not set yet; with Expressive design ask the button itself
+    if (XgramExpressive.isEnabled() && navigation != null) {
+      FloatingButton button = navigation.getFloatingButton();
+      return button != null && button.isHiddenForSwitch();
+    }
+    return false;
+  }
+
+  /**
+   * Visibility of the switching floating button at {@code raptor} (0: base screen, 1: preview screen). XGram: during
+   * the Expressive shared axis it fades through like the screens (out by .35, in from .35), so the button of a screen
+   * that leaves never lingers over the one that comes in.
+   */
+  private float xgramFloatFactor (float raptor) {
+    if (xgramSharedAxis && useFloatSwitch == 1) {
+      return baseHasFloat ? com.fahadali.xgram.appearance.XgramNavMotion.outAlpha(raptor) : com.fahadali.xgram.appearance.XgramNavMotion.inAlpha(raptor);
+    }
+    return baseHasFloat ? 1f - raptor : raptor;
   }
 
   public static int getHeaderColor (ViewController<?> c, boolean allowTransform) {
