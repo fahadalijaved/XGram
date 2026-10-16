@@ -237,6 +237,14 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     return xgram ? Screen.dp(XGRAM_BAR) : HeaderView.getPlayerSize();
   }
 
+  /**
+   * XGram: the height of the ongoing call / audio band under the app bar for code outside the header (the round video
+   * PiP margin): {@link HeaderView#getPlayerSize()}, or 64dp with Expressive design.
+   */
+  public static int playerBandSize () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(XGRAM_BAR) : HeaderView.getPlayerSize();
+  }
+
   public void setCollapsed (boolean collapsed) {
     if (collapsed) {
       if (showFactor != 0f) {

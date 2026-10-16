@@ -217,7 +217,7 @@ public final class XgramM3Wheel {
     return forcedTheme != null ? forcedTheme.getColor(org.thunderdog.challegram.theme.ColorId.filling) : XgramM3Sheets.sheetColor();
   }
 
-  /** A picker sheet's title (rule e: a hero sheet title in headlineSmall, onSurface), 16dp from the sides, 16dp above the wheel. */
+  /** A picker sheet's title (a hero sheet title in headlineSmall, onSurface), 16dp from the sides, 8dp above the wheel. */
   public static TextView newTitle (Context context, CharSequence title, @Nullable ThemeDelegate forcedTheme) {
     TextView view = new NoScrollTextView(context);
     XgramExpressive.applyText(view, XgramExpressive.TS_HEADLINE_S, false);
