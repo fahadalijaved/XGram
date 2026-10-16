@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the unread divider in a chat with Expressive design (XgramM3UnreadDivider), English only; translations keep Telegram&#160;X's own string -->
+  <string name="XgramM3NewMessages">New messages</string>
+</resources>
