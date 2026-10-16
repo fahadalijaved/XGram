@@ -151,10 +151,19 @@ public class SharedCommonController extends SharedBaseController<InlineResult<?>
     TdApi.Message message = (TdApi.Message) object;
     InlineResult<?> result;
 
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final int xgramInset = org.thunderdog.challegram.tool.Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
     if (filter != null && filter.getConstructor() == TdApi.SearchMessagesFilterUrl.CONSTRUCTOR) {
-      result = new InlineResultMultiline(context, tdlib, message);
+      if (xgramM3) {
+        result = new org.thunderdog.challegram.data.XgramM3LinkResult(context, tdlib, message, xgramInset); // XGram: an M3E list item tile
+      } else {
+        result = new InlineResultMultiline(context, tdlib, message);
+      }
     } else {
       result = InlineResult.valueOf(context, tdlib, message);
+      if (xgramM3 && result instanceof InlineResultCommon) {
+        ((InlineResultCommon) result).setXgramListInset(xgramInset); // XGram: the row is a tile inset 16dp
+      }
     }
     if (result != null) {
       result.setQueryId(message.id);

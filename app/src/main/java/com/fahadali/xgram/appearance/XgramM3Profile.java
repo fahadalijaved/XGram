@@ -23,9 +23,7 @@ import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
 import android.util.SparseArray;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
-import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
@@ -35,7 +33,6 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.ui.ListItem;
-import org.thunderdog.challegram.ui.SettingsAdapter;
 import org.thunderdog.challegram.util.text.TextStyleProvider;
 
 import java.util.List;
@@ -229,8 +226,9 @@ public final class XgramM3Profile {
   }
 
   /**
-   * Shared media lists hosted by a profile: no segmented decoration (the profile's scroll sync assumes none) and no
-   * large-title decoration; rows draw flat on SURFACE, date headers in PRIMARY.
+   * Shared media lists hosted by a profile: the profile's own segmented decoration (tiles, insets and painted gaps,
+   * but no vertical offsets: the profile's scroll sync measures items by type) in place of the settings one, and no
+   * large-title decoration. The pages draw no fill: the docked sheet behind the pager does.
    */
   public static void prepareProfileList (@NonNull RecyclerView recyclerView) {
     XgramExpressive.detachListDecoration(recyclerView);
@@ -242,62 +240,9 @@ public final class XgramM3Profile {
       }
     }
     if (recyclerView.getTag(org.thunderdog.challegram.R.id.xgram_m3e_p3_surface) == null) {
-      SurfaceDecoration decoration = new SurfaceDecoration();
+      XgramM3SharedMedia.ProfileListDecoration decoration = new XgramM3SharedMedia.ProfileListDecoration();
       recyclerView.addItemDecoration(decoration, 0);
       recyclerView.setTag(org.thunderdog.challegram.R.id.xgram_m3e_p3_surface, decoration);
-    }
-  }
-
-  /** Fills SURFACE behind the list from its first item down, so the gaps between rows are not the page layer. */
-  private static final class SurfaceDecoration extends RecyclerView.ItemDecoration {
-    private final Paint paint = new Paint();
-
-    @Override
-    public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
-      int childCount = parent.getChildCount();
-      if (childCount == 0) {
-        return;
-      }
-      float top = parent.getHeight();
-      boolean hasFirst = false;
-      for (int i = 0; i < childCount; i++) {
-        View child = parent.getChildAt(i);
-        int position = parent.getChildAdapterPosition(child);
-        if (position == 0) {
-          hasFirst = true;
-          top = Math.min(top, child.getTop() + child.getTranslationY());
-        }
-      }
-      if (!hasFirst) {
-        top = 0;
-      }
-      paint.setColor(XgramExpressive.color(XgramExpressive.SURFACE));
-      c.drawRect(0, Math.max(0, top), parent.getWidth(), parent.getHeight(), paint);
-      RecyclerView.Adapter<?> adapter = parent.getAdapter();
-      if (adapter instanceof SettingsAdapter) {
-        List<ListItem> items = ((SettingsAdapter) adapter).getItems();
-        int primary = XgramExpressive.color(XgramExpressive.PRIMARY);
-        for (int i = 0; i < childCount; i++) {
-          View child = parent.getChildAt(i);
-          int position = parent.getChildAdapterPosition(child);
-          if (position >= 0 && position < items.size() && items.get(position).getViewType() == ListItem.TYPE_HEADER) {
-            TextView text = findText(child);
-            if (text != null && text.getCurrentTextColor() != primary) {
-              text.setTextColor(primary);
-            }
-          }
-        }
-      }
-    }
-
-    private static TextView findText (View child) {
-      if (child instanceof TextView) {
-        return (TextView) child;
-      }
-      if (child instanceof ViewGroup && ((ViewGroup) child).getChildCount() > 0 && ((ViewGroup) child).getChildAt(0) instanceof TextView) {
-        return (TextView) ((ViewGroup) child).getChildAt(0);
-      }
-      return null;
     }
   }
 }

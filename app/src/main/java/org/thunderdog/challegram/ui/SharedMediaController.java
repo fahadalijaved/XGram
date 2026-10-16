@@ -149,7 +149,11 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
 
     spanCount = calculateSpanCount(Screen.currentWidth(), Screen.currentHeight());
     decoration = new GridSpacingItemDecoration(spanCount, xgramSpacing(), false, true, true);
-    decoration.setNeedDraw(true, ListItem.TYPE_SMALL_MEDIA);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      decoration.setNeedDraw(false, ListItem.TYPE_SMALL_MEDIA); // XGram: the 2dp gaps and the 4dp tile corners show the sheet behind
+    } else {
+      decoration.setNeedDraw(true, ListItem.TYPE_SMALL_MEDIA);
+    }
     decoration.setDrawColorId(ColorId.filling);
     decoration.setSpanSizeLookup(lookup);
     GridLayoutManager manager = new RtlGridLayoutManager(context, spanCount);

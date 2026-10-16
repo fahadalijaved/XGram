@@ -67,6 +67,14 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
     this.preview = new ImageReceiver(this, 0);
     this.imageReceiver = new ImageReceiver(this, 0);
     this.gifReceiver = new GifReceiver(this);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive 4dp tiles, as in the attach gallery
+      final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS);
+      this.miniThumbnail.setRadius(radius);
+      this.preview.setRadius(radius);
+      this.imageReceiver.setRadius(radius);
+      this.gifReceiver.setRadius(radius);
+    }
   }
 
   public void setListener (FileProgressComponent.SimpleListener listener) {
@@ -258,10 +266,19 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
     }
 
     final float selectionFactor = this.selectionFactor * this.selectableFactor;
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final float xgramRadius = xgramM3 ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS) : 0f;
 
     final boolean saved = selectionFactor != 0f;
     if (saved) {
-      c.drawRect(preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom(), Paints.fillingPaint(Theme.chatSelectionColor()));
+      if (xgramM3) {
+        // XGram: a selected tile sits on a secondaryContainer tile with the same 4dp corners
+        RectF tile = Paints.getRectF();
+        tile.set(preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom());
+        c.drawRoundRect(tile, xgramRadius, xgramRadius, Paints.fillingPaint(ColorUtils.alphaColor(selectionFactor, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER))));
+      } else {
+        c.drawRect(preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom(), Paints.fillingPaint(Theme.chatSelectionColor()));
+      }
       c.save();
       final float scale = 1f - (selectionFactor * SCALE);
       c.scale(scale, scale, preview.centerX(), preview.centerY());
@@ -278,7 +295,11 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
     if (receiver.needPlaceholder()) {
       if (preview.needPlaceholder()) {
         if (miniThumbnail.needPlaceholder()) {
-          miniThumbnail.drawPlaceholder(c);
+          if (xgramM3) {
+            miniThumbnail.drawPlaceholderRounded(c, xgramRadius, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST)); // XGram
+          } else {
+            miniThumbnail.drawPlaceholder(c);
+          }
         }
         miniThumbnail.draw(c);
       }
@@ -290,8 +311,8 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
     }
 
     if (item.hasSpoiler()) {
-      DrawAlgorithms.drawRoundRect(c, 0, preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom(), Paints.fillingPaint(Theme.getColor(ColorId.spoilerMediaOverlay)));
-      DrawAlgorithms.drawParticles(c, 0, preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom(), 1f);
+      DrawAlgorithms.drawRoundRect(c, xgramRadius, preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom(), Paints.fillingPaint(Theme.getColor(ColorId.spoilerMediaOverlay)));
+      DrawAlgorithms.drawParticles(c, xgramRadius, preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom(), 1f);
     }
 
     boolean isStreamingUI = item.isVideo() && Config.VIDEO_CLOUD_PLAYBACK_AVAILABLE;
@@ -310,7 +331,7 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
         textTop + (isStreamingUI ? MathUtils.fromTo(Screen.dp(15f), Screen.dp(21f), dlFactor) : Screen.dp(15f))
       );
 
-      c.drawRoundRect(rectF, Screen.dp(4f), Screen.dp(4f), Paints.fillingPaint(0x4c000000));
+      c.drawRoundRect(rectF, Screen.dp(4f), Screen.dp(4f), Paints.fillingPaint(xgramM3 ? 0x80000000 : 0x4c000000)); // XGram: the M3 on-media scrim
       c.drawText(text, textLeft + (isStreamingUI ? Screen.dp(22f) * dlFactor : 0), textTop + Screen.dp(11f) + (isStreamingUI ? Screen.dp(3.5f) * dlFactor : 0), Paints.whiteMediumPaint(12f, false, false)); // TODO
 
       item.getFileProgress().setDownloadedIconRes(FileProgressComponent.PLAY_ICON);
