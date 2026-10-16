@@ -145,6 +145,21 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
   public static final float RECYCLER_VIEW_LEFT_RIGHT_PADDING = 9.5f;
   private static final float DEFAULT_STICKER_PADDING_DP = 5.5f;
 
+  // XGram: Material 3 Expressive reaction grid: 48dp targets (the M3 minimum touch target) in at least 7 columns, 12dp
+  // side padding (so 7 columns are exactly 48dp on a 360dp screen), the emoji drawn in a 36dp box (custom emoji 28dp,
+  // they have no transparent margins), and a 4dp section title inset (16dp from the sheet edge with the padding)
+  private static final float XGRAM_ITEM_SIZE = 48f, XGRAM_SIDE_PADDING = 12f;
+  private static final int XGRAM_MIN_SPAN_COUNT = 7;
+  private static final float XGRAM_REACTION_PADDING_DP = 6f, XGRAM_STICKER_PADDING_DP = 10f;
+
+  private static boolean xgramM3 () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  private static float recyclerSidePadding () {
+    return xgramM3() ? XGRAM_SIDE_PADDING : RECYCLER_VIEW_LEFT_RIGHT_PADDING;
+  }
+
   public CustomRecyclerView onCreateRecyclerView () {
     reactionsController = new EmojiLayoutRecyclerController(context, tdlib, R.id.controller_emojiLayoutReactions);
     reactionsController.setStickerObjModifier(this::modifyStickerObj);
@@ -155,7 +170,12 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
         int type = getItemViewType(position);
         if (type == StickerHolder.TYPE_STICKER) {
           TGStickerObj stickerObj = getSticker(position);
-          ((StickerSmallView) holder.itemView).setPadding(Screen.dp(stickerObj != null && stickerObj.isEmojiReaction() ? 0: DEFAULT_STICKER_PADDING_DP));
+          final boolean isEmojiReaction = stickerObj != null && stickerObj.isEmojiReaction();
+          if (xgramM3()) {
+            ((StickerSmallView) holder.itemView).setPadding(Screen.dp(isEmojiReaction ? XGRAM_REACTION_PADDING_DP : XGRAM_STICKER_PADDING_DP));
+          } else {
+            ((StickerSmallView) holder.itemView).setPadding(Screen.dp(isEmojiReaction ? 0: DEFAULT_STICKER_PADDING_DP));
+          }
           ((StickerSmallView) holder.itemView).setChosen(stickerObj != null && state.chosenReactions != null && stickerObj.getReactionType() != null && state.chosenReactions.contains(TD.makeReactionKey(stickerObj.getReactionType())));
         }
 
@@ -166,19 +186,23 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
 
     adapter.setLayoutParams(new MediaStickersAdapter.LayoutParams(
       (int) (HeaderView.getSize(true) + MessageOptionsPagerController.getPickerTopPadding()),
-      Screen.dp(RECYCLER_VIEW_LEFT_RIGHT_PADDING),
+      Screen.dp(recyclerSidePadding()),
       Screen.dp(8f),
-      Screen.dp(21 - 9.5f),
+      xgramM3() ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET - XGRAM_SIDE_PADDING) : Screen.dp(21 - 9.5f),
       getItemHeight()
     ));
     adapter.setRepaintingColorId(ColorId.text);
 
     reactionsController.setArguments(this);
     reactionsController.setAdapter(adapter);
-    reactionsController.setItemWidth(9, 38);
+    if (xgramM3()) {
+      reactionsController.setItemWidth(XGRAM_MIN_SPAN_COUNT, (int) XGRAM_ITEM_SIZE);
+    } else {
+      reactionsController.setItemWidth(9, 38);
+    }
 
     CustomRecyclerView recyclerView = (CustomRecyclerView) reactionsController.getValue();
-    recyclerView.setPadding(Screen.dp(RECYCLER_VIEW_LEFT_RIGHT_PADDING), 0, Screen.dp(RECYCLER_VIEW_LEFT_RIGHT_PADDING), 0);
+    recyclerView.setPadding(Screen.dp(recyclerSidePadding()), 0, Screen.dp(recyclerSidePadding()), 0);
     return recyclerView;
   }
 
@@ -191,7 +215,7 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
   }
 
   public int getItemHeight () {
-    return Screen.dp(45);
+    return Screen.dp(xgramM3() ? XGRAM_ITEM_SIZE : 45); // XGram: square 48dp cells
   }
 
   public float getTopHeaderVisibility () {
@@ -394,12 +418,14 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
 
   @Override
   protected int getHeaderColorId () {
-    return ColorId.filling;
+    // XGram: Material 3 Expressive: the small top app bar of the expanded sheet is in the sheet color (the message
+    // menu sheet's ColorId.background), not a white Telegram X bar over the grey grid
+    return xgramM3() ? ColorId.background : ColorId.filling;
   }
 
   @Override
   protected int getHeaderIconColorId () {
-    return ColorId.icon;
+    return xgramM3() ? ColorId.text : ColorId.icon; // XGram: TopAppBarSmallTokens.LeadingIconColor: onSurface
   }
 
   @Override
@@ -688,11 +714,21 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
     headerView.initWithSingleController(this, false);
     headerView.setBackgroundHeight(Screen.dp(56));
     headerView.getBackButton().setIsReverse(true);
+    if (xgramM3()) {
+      headerView.getFilling().setShadowAlpha(0f); // XGram: M3 app bars have no shadow, the sheet continues under it
+      // XGram: the close button as an M3E standard icon button (40dp onSurface state layer), not Telegram X's rectangle
+      com.fahadali.xgram.appearance.XgramM3Sheets.applyNavigationButton(headerView.getBackButton(), Theme.getColor(ColorId.text));
+    }
     addThemeInvalidateListener(headerView);
 
     View lickView = new View(context) {
       @Override
       protected void dispatchDraw (Canvas canvas) {
+        if (xgramM3()) {
+          // XGram: the status bar strip of the full-screen sheet is the sheet (and app bar) color
+          canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.getColor(ColorId.background)));
+          return;
+        }
         canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(),
           Paints.fillingPaint(ColorUtils.compositeColors(Theme.getColor(ColorId.statusBar), Theme.getColor(ColorId.headerLightBackground))));
       }
@@ -1010,7 +1046,13 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
     } else if (id == TOP_HEADER_IS_VISIBILITY) {
       topHeaderViewGroup.setTranslationY(-HeaderView.getSize(true) * (1f - factor));
       topHeaderViewGroup.setAlpha(factor);
+      onTopHeaderVisibilityChanged(factor);
     }
+  }
+
+  /** XGram: the top app bar moved in or out (the sheet under it squares its corners as it comes in). */
+  protected void onTopHeaderVisibilityChanged (float factor) {
+
   }
 
   @Override

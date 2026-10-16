@@ -101,6 +101,14 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
     this.counters = new ViewPagerTopView.Item[getPagerItemCount()];
 
+    // XGram: Material 3 Expressive header counters: labelLarge (14sp, 500) with an 8dp icon gap and 16dp on each side
+    // of the content: assist chips on the options page (AssistChipTokens: 8dp leading space with the icon, 16dp
+    // trailing space, drawn by the header cell), tabs with the 16dp-padded secondaryContainer pill on the other pages
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final float counterTextSize = xgramM3 ? 14f : 13f;
+    final float counterIconMargin = xgramM3 ? 8f : 6f;
+    final int counterAddWidth = Screen.dp(xgramM3 ? 32f : 16f);
+
     int i = 0;
     if (state.needShowMessageOptions) {
       OPTIONS_POSITION = i++;
@@ -112,11 +120,13 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     if (state.needShowMessageReactionSenders) {
       ALL_REACTED_POSITION = i++;
       counters[ALL_REACTED_POSITION] = new ViewPagerTopView.Item(new Counter.Builder()
-        .noBackground().allBold(true).textSize(13f).colorSet(this).callback(this)
-        .drawable(R.drawable.baseline_favorite_16, 16f, 6f, Gravity.LEFT)
-        .build(), this, Screen.dp(16));
+        .noBackground().allBold(true).textSize(counterTextSize).colorSet(xgramM3 ? new XgramCounterColors(ALL_REACTED_POSITION) : this).callback(this)
+        .drawable(R.drawable.baseline_favorite_16, 16f, counterIconMargin, Gravity.LEFT)
+        .build(), this, counterAddWidth);
       counters[ALL_REACTED_POSITION].counter.setCount(message.getMessageReactions().getTotalCount(), false);
-      state.headerAlwaysVisibleCountersWidth += counters[ALL_REACTED_POSITION].calculateWidth(null, Screen.dp(ViewPagerTopView.DEFAULT_ITEM_SPACING));
+      int itemWidth = counters[ALL_REACTED_POSITION].calculateWidth(null, Screen.dp(ViewPagerTopView.DEFAULT_ITEM_SPACING));
+      state.headerAlwaysVisibleCountersWidth += itemWidth;
+      state.xgramChipWidths[state.xgramChipCount++] = itemWidth;
     } else {
       ALL_REACTED_POSITION = -1;
     }
@@ -124,13 +134,14 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     if (state.needShowMessageViews) {
       SEEN_POSITION = i++;
       counters[SEEN_POSITION] = new ViewPagerTopView.Item(new Counter.Builder()
-        .noBackground().allBold(true).textSize(13f).colorSet(this).callback(this).visibleIfZero()
-        .drawable(R.drawable.baseline_visibility_16, 16f, 6f, Gravity.LEFT)
-        .build(), this, Screen.dp(16));
+        .noBackground().allBold(true).textSize(counterTextSize).colorSet(xgramM3 ? new XgramCounterColors(SEEN_POSITION) : this).callback(this).visibleIfZero()
+        .drawable(R.drawable.baseline_visibility_16, 16f, counterIconMargin, Gravity.LEFT)
+        .build(), this, counterAddWidth);
       counters[SEEN_POSITION].counter.setCount(1, false);
       int itemWidth = counters[SEEN_POSITION].calculateWidth(null, Screen.dp(ViewPagerTopView.DEFAULT_ITEM_SPACING)); // - Screen.dp(16);
       state.headerAlwaysVisibleCountersWidth += itemWidth;
-      counters[SEEN_POSITION].setStaticWidth(itemWidth - Screen.dp(16));
+      state.xgramChipWidths[state.xgramChipCount++] = itemWidth;
+      counters[SEEN_POSITION].setStaticWidth(itemWidth - counterAddWidth);
       counters[SEEN_POSITION].counter.setCount(Tdlib.CHAT_LOADING, false);
       getMessageOptions();
     } else {
@@ -142,8 +153,8 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       for (TdApi.MessageReaction reaction : state.messageReactions.reactions) {
         TGReaction tgReaction = tdlib.getReaction(reaction.type);
         counters[i] = new ViewPagerTopView.Item(tgReaction, new Counter.Builder()
-          .noBackground().allBold(true).textSize(13f).colorSet(this).callback(this)
-          .build(), this, Screen.dp(9));
+          .noBackground().allBold(true).textSize(counterTextSize).colorSet(xgramM3 ? new XgramCounterColors(i) : this).callback(this)
+          .build(), this, xgramM3 ? counterAddWidth : Screen.dp(9));
         counters[i].counter.setCount(reaction.totalCount, false);
         if (Td.equalsTo(reaction.type, defaultReactionType)) {
           startPage = i;
@@ -156,8 +167,62 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
     if (!state.needShowMessageOptions) {
       state.headerAlwaysVisibleCountersWidth = 0;
+      state.xgramChipCount = 0;
+    }
+    xgramPagerSelection = startPage;
+  }
+
+  // XGram: Material 3 Expressive counter colors, from the pager position (onPageScrolled)
+
+  private float xgramPagerSelection;
+
+  /**
+   * The label and icon color of a header counter: onSurface on its assist chip (the options page), onSecondaryContainer
+   * while it is the selected tab (on the secondaryContainer pill), onSurfaceVariant otherwise, blended while the pager moves.
+   */
+  private final class XgramCounterColors implements TextColorSet {
+    private final int index;
+
+    XgramCounterColors (int index) {
+      this.index = index;
+    }
+
+    @Override
+    public int defaultTextColor () {
+      final float selection = xgramPagerSelection;
+      final float selected = MathUtils.clamp(1f - Math.abs(selection - index));
+      int color = ColorUtils.blendARGB(
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT),
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER),
+        selected
+      );
+      if (OPTIONS_POSITION == 0) {
+        final float chip = MathUtils.clamp(1f - selection);
+        if (chip > 0f) {
+          color = ColorUtils.blendARGB(color, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), chip);
+        }
+      }
+      return color;
     }
   }
+
+  /** XGram: M3 tabs and chips show their content at full opacity (Telegram X dims unselected counters to .5). */
+  private static final ViewPagerTopView.CounterAlphaProvider XGRAM_OPAQUE_COUNTERS = new ViewPagerTopView.CounterAlphaProvider() {
+    @Override
+    public float getTextAlpha (Counter counter, float alphaFactor) {
+      return 1f;
+    }
+
+    @Override
+    public float getDrawableAlpha (Counter counter, float alphaFactor) {
+      return 1f;
+    }
+
+    @Override
+    public float getBackgroundAlpha (Counter counter, float alphaFactor) {
+      return 1f;
+    }
+  };
 
   private ViewPagerHeaderViewReactionsCompact headerCell;
 
@@ -275,6 +340,9 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
         }
 
         private boolean needIgnoreTouchEvent (MotionEvent ev) {
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !reactionsPickerVisibility.getValue()) {
+            return true; // XGram: the collapsed grid is hidden: the header's reaction strip takes the touches
+          }
           return (ev.getAction() == MotionEvent.ACTION_DOWN && !between(ev.getY(), getPickerTop()
             - HeaderView.getSize(true) * reactionsPickerController.getTopHeaderVisibility() * reactionsPickerVisibility.getFloatValue(),
             getPickerBottom()));
@@ -292,8 +360,14 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
           if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
             // XGram: Material 3 Expressive modal sheet over the reaction row too: 28dp top corners and a drag handle
-            // in a band above the row, both kept until the sheet reaches the top of the window
+            // in a band above the row, both kept until the sheet reaches the top of the window, or until the picker's
+            // top app bar shows (the sheet is then full screen: square under the bar, no corner gaps). The reaction row
+            // itself is the header's strip (its own pill): the grid only shows while the picker expands (its alpha
+            // follows the expansion, see onFactorChanged).
             float corner = xgramSheetCornerFactor(top);
+            if (reactionsPickerController != null) {
+              corner *= 1f - reactionsPickerController.getTopHeaderVisibility() * reactionsPickerVisibility.getFloatValue();
+            }
             float band = Screen.dp(14f) * corner;
             if (xgramPickerSheetTop == null) {
               xgramPickerSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
@@ -302,17 +376,6 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
             xgramPickerSheetTop.setHandleAlpha(corner);
             xgramPickerSheetTop.setBounds(0, (int) (top - band), getMeasuredWidth(), (int) Math.ceil(bottom));
             xgramPickerSheetTop.draw(canvas);
-            // the reaction row as a surfaceContainerHigh pill (fades out as the full picker opens)
-            float pillAlpha = 1f - reactionsPickerVisibility.getFloatValue();
-            if (pillAlpha > 0f) {
-              xgramPillRect.set(Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_SIDE), top + Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_TOP),
-                getMeasuredWidth() - Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_SIDE), top + Screen.dp(ViewPagerHeaderViewReactionsCompact.XGRAM_PILL_BOTTOM));
-              float pr = xgramPillRect.height() / 2f;
-              canvas.drawRoundRect(xgramPillRect, pr, pr, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), pillAlpha)));
-            }
-            if (headerCell != null) {
-              headerCell.xgramSetTopEndRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL) * corner);
-            }
             canvas.save();
             canvas.clipRect(0, top, getMeasuredWidth(), bottom);
             super.dispatchDraw(canvas);
@@ -334,11 +397,10 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   }
 
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramPickerSheetTop;
-  private final android.graphics.RectF xgramPillRect = new android.graphics.RectF();
 
   /** XGram: 1 while the sheet top is 28dp or more below the top of the window, 0 once it reaches it. */
   private static float xgramSheetCornerFactor (float sheetTop) {
-    return MathUtils.clamp((sheetTop - HeaderView.getTopOffset()) / Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL));
+    return com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(sheetTop); // the shared sheet chrome rule
   }
 
   private void invalidatePickerWrapper () {
@@ -381,6 +443,21 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     if (headerCell.getMoreButton() != null) {
       headerCell.getMoreButton().setOnClickListener(v -> showReactionPicker());
     }
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive tabs: full opacity content, each reaction tab's content (drawn from its start by
+      // ViewPagerTopView) centered in the item so the pill has 16dp on both sides; a swipe up on the reaction strip
+      // expands the popup picker
+      headerCell.getTopView().setCounterAlphaProvider(XGRAM_OPAQUE_COUNTERS);
+      if (REACTED_START_POSITION != -1) {
+        for (int i = REACTED_START_POSITION; i < counters.length; i++) {
+          headerCell.getTopView().setItemTranslationX(i, Screen.dp(16f));
+        }
+      }
+      if (state.needShowReactionsPopupPicker) {
+        headerCell.xgramSetOnExpandRequest(this::showReactionPicker);
+      }
+    }
   }
 
   @Override
@@ -402,6 +479,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     }
     currentMediaPosition = position;
     currentPositionOffset = positionOffset;
+    xgramPagerSelection = position + positionOffset; // XGram: counter colors
     setIgnoreAnyPagerScrollEventsBecauseOfMovements(positionOffset != 0f);
 
     if (headerCell != null) {
@@ -767,6 +845,13 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       protected void onBottomHeaderLeaveSearchMode () {
         reactionPickerTopDecoration.enableDecorationOffset();
       }
+
+      @Override
+      protected void onTopHeaderVisibilityChanged (float factor) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && reactionsPickerWrapper != null) {
+          reactionsPickerWrapper.invalidate(); // XGram: the sheet top's corners follow the top app bar
+        }
+      }
     };
     reactionsPickerController.setArguments(state);
     reactionsPickerController.setBottomInset(extraBottomInset, extraBottomInsetWithoutIme);
@@ -774,6 +859,9 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
     reactionsPickerRecyclerView = reactionsPickerController.getRecyclerView();
     reactionsPickerRecyclerView.setClipToPadding(false);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      reactionsPickerRecyclerView.setAlpha(0f); // XGram: hidden until expanded (the header's strip is the collapsed row)
+    }
 
     reactionPickerTopDecoration = ItemDecorationFirstViewTop.attach(reactionsPickerRecyclerView, this::getReactionPickerOffsetTopReal);
     reactionsPickerRecyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
@@ -954,6 +1042,9 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       if (headerView != null) {
         headerView.setAlpha(1f - factor);
       }
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        reactionsPickerRecyclerView.setAlpha(factor); // XGram: the grid fades in as the header's strip fades out
+      }
       float alpha = factor * (state.isPremium ? 1f: 0f);
       reactionsPickerBottomHeaderView.setAlpha(alpha);
       reactionsPickerBottomHeaderView.setVisibility(alpha > 0f ? View.VISIBLE: View.GONE);
@@ -1006,6 +1097,9 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   }
 
   public static float getPickerTopPadding () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Screen.dp(3f); // XGram: (54dp header - 48dp grid rows) / 2, see ReactionsPickerController.getItemHeight
+    }
     return Screen.dp(4.5f); // ((getHeaderHeight() - Screen.dp(45)) / 2f);
   }
 
@@ -1113,6 +1207,10 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     public final int headerButtonsVisibleWidth;
 
     public int headerAlwaysVisibleCountersWidth;
+
+    /** XGram: item widths of the counters shown on the options page (all reactions, views), for their M3E assist chips. */
+    public int xgramChipCount;
+    public final int[] xgramChipWidths = new int[2];
 
     public interface OnReactionClickListener {
       void onReactionClick (View v, TGReaction reaction, boolean isLongClick);

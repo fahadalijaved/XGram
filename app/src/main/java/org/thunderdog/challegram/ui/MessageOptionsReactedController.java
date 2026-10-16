@@ -114,6 +114,10 @@ public class MessageOptionsReactedController extends BottomSheetViewController.B
   }
 
   private void processNewAddedReactions (TdApi.AddedReactions addedReactions) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramProcessNewAddedReactions(addedReactions);
+      return;
+    }
     final TdApi.AddedReaction[] reactions = addedReactions.reactions;
     final List<ListItem> items = adapter.getItems();
     final int itemsCount = items.size();
@@ -156,6 +160,71 @@ public class MessageOptionsReactedController extends BottomSheetViewController.B
     } else {
       adapter.notifyItemRangeChanged(itemsCount, items.size() - itemsCount);
     }
+  }
+
+  /**
+   * XGram: Material 3 Expressive: the senders form one segmented list group (16dp inset tiles, 20dp outer and 4dp inner
+   * corners) from the first page on. Telegram X closes the list with its SHADOW_BOTTOM only after the last page, so
+   * the rows laid out for a first page that has a next offset kept the full-width, ungrouped insets (the first row was
+   * a rectangle while the next ones were tiles). Here the group is closed on every page: the closing SHADOW_BOTTOM moves
+   * to the end as pages arrive, and the item decorations are recomputed. The rows are 72dp two-line items (TYPE_USER:
+   * avatar, titleMedium name, bodyMedium status) instead of Telegram X's 63dp ones.
+   */
+  private void xgramProcessNewAddedReactions (TdApi.AddedReactions addedReactions) {
+    final List<ListItem> items = adapter.getItems();
+    final int oldCount = items.size();
+    int insertAt = oldCount;
+    if (insertAt > 0 && items.get(insertAt - 1).getViewType() == ListItem.TYPE_SHADOW_BOTTOM) {
+      insertAt--;
+      items.remove(insertAt);
+    }
+    boolean hasRows = insertAt > 0;
+    StringList reactionKeys = new StringList(3);
+    TdApi.AddedReaction lastReaction = null;
+    for (TdApi.AddedReaction reaction : addedReactions.reactions) {
+      if (lastReaction != null && !Td.equalsTo(reaction.senderId, lastReaction.senderId)) {
+        hasRows = xgramAddSender(items, lastReaction, reactionKeys.get(), hasRows);
+        reactionKeys.clear();
+      }
+      lastReaction = reaction;
+      reactionKeys.append(TD.makeReactionKey(lastReaction.type));
+    }
+    if (lastReaction != null) {
+      hasRows = xgramAddSender(items, lastReaction, reactionKeys.get(), hasRows);
+    }
+    final boolean isLastPage = addedReactions.nextOffset.length() == 0;
+    if (hasRows || isLastPage) {
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    }
+    if (isLastPage) {
+      items.add(new ListItem(ListItem.TYPE_LIST_INFO_VIEW));
+    }
+
+    final int newCount = items.size();
+    final int changedCount = Math.min(oldCount, newCount) - insertAt;
+    if (changedCount > 0) {
+      adapter.notifyItemRangeChanged(insertAt, changedCount);
+    }
+    if (newCount > oldCount) {
+      adapter.notifyItemRangeInserted(oldCount, newCount - oldCount);
+    } else if (newCount < oldCount) {
+      adapter.notifyItemRangeRemoved(newCount, oldCount - newCount);
+    }
+    RecyclerView recyclerView = getRecyclerView();
+    if (recyclerView != null) {
+      recyclerView.invalidateItemDecorations();
+    }
+  }
+
+  private static boolean xgramAddSender (List<ListItem> items, TdApi.AddedReaction reaction, String[] reactionKeys, boolean hasRows) {
+    if (hasRows) {
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    }
+    items.add(new ListItem(ListItem.TYPE_USER, R.id.sender)
+      .setData(reaction.senderId)
+      .setIntValue(reaction.date)
+      .setSliderInfo(reactionKeys, 0));
+    return true;
   }
 
   @Override

@@ -19,6 +19,8 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.Shader;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -31,9 +33,13 @@ import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramM3Sheets;
+
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.config.Config;
+import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
@@ -102,9 +108,20 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
   private final boolean needReactionSelector;
   private final boolean needShowReactions, needShowViews;
 
+  // XGram: Material 3 Expressive layout of the options page header row (16dp sheet insets, 8dp between controls):
+  // [reaction pill: 40dp targets side by side] [40dp filled tonal expand_more button] [assist chip per counter].
+  // The counters are the tab strip's items (their content with 16dp on each side, see MessageOptionsPagerController):
+  // their chips are drawn under them here and fade out while the pager moves to the reaction pages, where they are tabs.
+  private final boolean xgramM3;
+  /** The sheet's side inset, the gap between the controls of the row, and the reaction strip's own pill inset. */
+  private static final float XGRAM_INSET = XgramExpressive.LIST_INSET, XGRAM_GAP = 8f, XGRAM_STRIP_PILL_INSET = 4f;
+  private float xgramSelection;
+  private final RectF xgramRect = new RectF();
+
   public ViewPagerHeaderViewReactionsCompact (Context context, MessageOptionsPagerController.State state) {
     super(context);
     this.state = state;
+    this.xgramM3 = XgramExpressive.isEnabled();
 
     this.needReactionSelector = state.needShowMessageOptions;
     this.needShowReactions = state.needShowMessageReactionSenders;
@@ -122,16 +139,35 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     adapter = new A(topView);
 
     if (this.needReactionSelector) {
-      final int rightOffsetR = state.headerAlwaysVisibleCountersWidth + Screen.dp(needShowMoreButton ? 56: 0);
       reactionsSelectorRecyclerView = new ReactionsSelectorRecyclerView(context, state);
-      reactionsSelectorRecyclerView.setLayoutParams(FrameLayoutFix.newParams(
-        ViewGroup.LayoutParams.MATCH_PARENT,
-        ViewGroup.LayoutParams.MATCH_PARENT,
-        Gravity.CENTER_VERTICAL, 0, 0, rightOffsetR, 0));
-      reactionsSelectorRecyclerView.setNeedDrawBorderGradient(rightOffset > 0);
-      addView(reactionsSelectorRecyclerView);
-      if (state.needShowReactionsPopupPicker) {
-        reactionsSelectorRecyclerView.setVisibility(GONE);
+      if (xgramM3) {
+        // XGram: the reactions in their own surfaceContainerHigh pill from the 16dp inset to 8dp before the expand button
+        // (or the first chip), the 40dp reaction targets side by side. It also stays with the popup picker: the picker's
+        // grid only shows once it is expanded.
+        reactionsSelectorRecyclerView.setLayoutParams(FrameLayoutFix.newParams(
+          ViewGroup.LayoutParams.MATCH_PARENT,
+          ViewGroup.LayoutParams.MATCH_PARENT,
+          Gravity.CENTER_VERTICAL, Screen.dp(XGRAM_INSET - XGRAM_STRIP_PILL_INSET), 0, xgramStripEndMargin(needShowMoreButton), 0));
+        reactionsSelectorRecyclerView.setNeedDrawBorderGradient(true);
+        reactionsSelectorRecyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
+          @Override
+          public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State rvState) {
+            // cancels the strip's own -1dp overlap of its 40dp reaction views: a 40dp pitch, no overlapping state layers
+            outRect.set(Screen.dp(1f), 0, Screen.dp(1f), 0);
+          }
+        });
+        addView(reactionsSelectorRecyclerView);
+      } else {
+        final int rightOffsetR = state.headerAlwaysVisibleCountersWidth + Screen.dp(needShowMoreButton ? 56: 0);
+        reactionsSelectorRecyclerView.setLayoutParams(FrameLayoutFix.newParams(
+          ViewGroup.LayoutParams.MATCH_PARENT,
+          ViewGroup.LayoutParams.MATCH_PARENT,
+          Gravity.CENTER_VERTICAL, 0, 0, rightOffsetR, 0));
+        reactionsSelectorRecyclerView.setNeedDrawBorderGradient(rightOffset > 0);
+        addView(reactionsSelectorRecyclerView);
+        if (state.needShowReactionsPopupPicker) {
+          reactionsSelectorRecyclerView.setVisibility(GONE);
+        }
       }
     } else {
       reactionsSelectorRecyclerView = null;
@@ -140,20 +176,30 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     backButton = new BackHeaderButton(context);
     backButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
     backButton.setButtonFactor(this.needReactionSelector ? BackHeaderButton.TYPE_BACK : BackHeaderButton.TYPE_CLOSE);
-    RippleSupport.setTransparentSelector(backButton);
+    if (xgramM3) {
+      backButton.setButtonBackground(R.drawable.bg_btn_header); // XGram: HeaderButton's M3E standard icon button state layer (40dp)
+    } else {
+      RippleSupport.setTransparentSelector(backButton);
+    }
     Views.setClickable(backButton);
     addView(backButton);
 
     if (needShowMoreButton) {
       moreButton = new ImageView(context);
-      moreButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
-      moreButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_small_arrow_down_24));
-      moreButton.setScaleType(ImageView.ScaleType.CENTER);
-      moreButton.setColorFilter(Paints.getColorFilter(Theme.getColor(ColorId.icon)));
-      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-        // XGram: Material 3 Expressive standard icon button (40dp state layer)
-        moreButton.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(Theme.getColor(ColorId.icon), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+      if (xgramM3) {
+        // XGram: Material 3 Expressive small filled tonal icon button: 40dp secondaryContainer circle (8dp while
+        // pressed) in a 48dp target, the 24dp expand_more icon in onSecondaryContainer
+        moreButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(XgramM3Sheets.TOUCH_TARGET), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
+        moreButton.setImageResource(R.drawable.xgram_w2_menu_sheets_expand_more_24);
+        moreButton.setScaleType(ImageView.ScaleType.CENTER);
+        moreButton.setColorFilter(Paints.getColorFilter(XgramM3Sheets.tonalContentColor()));
+        moreButton.setContentDescription(Lang.getString(R.string.XgramM3W2MoreReactions));
+        XgramM3Sheets.attachTonalIconButton(moreButton);
       } else {
+        moreButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
+        moreButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_small_arrow_down_24));
+        moreButton.setScaleType(ImageView.ScaleType.CENTER);
+        moreButton.setColorFilter(Paints.getColorFilter(Theme.getColor(ColorId.icon)));
         RippleSupport.setTransparentSelector(moreButton);
       }
       Views.setClickable(moreButton);
@@ -204,6 +250,9 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     });
     recyclerView.setAdapter(adapter);
     addView(recyclerView);
+    if (xgramM3 && moreButton != null) {
+      moreButton.bringToFront(); // XGram: its 48dp target overlaps the strip's start by 4dp: the button keeps those touches
+    }
 
     setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(54)));
     updatePaints(Theme.backgroundColor());
@@ -211,65 +260,130 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
 
   private float getReactionPickerHiddenZoneLeft () {
     final int x = (int) (reactionsSelectorRecyclerView != null ? reactionsSelectorRecyclerView.getTranslationX() : 0);
-    if (xgramButtonsShift() > 0) {
-      // XGram: Material 3 Expressive: the expand button and the counters sit inside the 16dp-inset pill's end,
-      // so the zone they cover grows by whole emoji columns (no reaction is cut in half under the fill)
-      return getMeasuredWidth() - xgramReactionsPickerRightHiddenWidth() + x;
-    }
     final float width = MessageOptionsPagerController.getReactionsPickerRightHiddenWidth(state);
     return getMeasuredWidth() - width + x;
   }
 
-  /** XGram: how far the expand button and the counters move start-wards from Telegram X's place (8dp from the edge), so they end where the reaction pill ends. */
-  private int xgramButtonsShift () {
-    return state.needShowReactionsPopupPicker && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(XGRAM_PILL_SIDE - 8f) : 0;
+  // XGram: geometry of the Expressive options page row (see the field comment)
+
+  /**
+   * Where the tab strip starts on the options page: its counters (whose chips span from 8dp after this point to the end
+   * of their items) end at the 16dp inset. The expand button ends here, 8dp before the first chip.
+   */
+  private int xgramChipsOrigin (int width) {
+    return width - Screen.dp(XGRAM_INSET) - state.headerAlwaysVisibleCountersWidth;
   }
 
-  /** XGram: {@link MessageOptionsPagerController#getReactionsPickerRightHiddenWidth} for buttons that are {@link #xgramButtonsShift()} wider. */
-  private float xgramReactionsPickerRightHiddenWidth () {
-    final int buttonsWidth = state.getRightViewsWidth() + xgramButtonsShift();
-    final int emojiPickerWidthWithoutPadding = Screen.currentWidth() - Screen.dp(org.thunderdog.challegram.ui.ReactionsPickerController.RECYCLER_VIEW_LEFT_RIGHT_PADDING * 2);
-    final int emojiPickerSpanCount = org.thunderdog.challegram.widget.emoji.EmojiLayoutRecyclerController.calculateSpanCount(emojiPickerWidthWithoutPadding, 9, Screen.dp(38));
-    final float emojiPickerItemSize = (float) emojiPickerWidthWithoutPadding / emojiPickerSpanCount;
-    return (float) Math.ceil(((float) buttonsWidth - Screen.dp(12)) / emojiPickerItemSize)
-      * emojiPickerItemSize + Screen.dp(org.thunderdog.challegram.ui.ReactionsPickerController.RECYCLER_VIEW_LEFT_RIGHT_PADDING) + Screen.dp(1);
+  /** End margin of the reaction strip, so its pill ends 8dp before the expand button (or the first chip, or the inset). */
+  private int xgramStripEndMargin (boolean needShowMoreButton) {
+    return Screen.dp(XGRAM_INSET) + state.headerAlwaysVisibleCountersWidth
+      + (needShowMoreButton ? Screen.dp(XgramM3Sheets.ICON_BUTTON_SIZE + XGRAM_GAP) : 0)
+      - Screen.dp(XGRAM_STRIP_PILL_INSET);
   }
 
-  // XGram: Material 3 Expressive: the sheet's rounded top-end corner, so the fill behind the expand button keeps it
-  private float xgramTopEndRadius;
-  private final android.graphics.Path xgramPath = new android.graphics.Path();
-  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
-  private final float[] xgramRadii = new float[8];
-  private final float[] xgramPillRadii = new float[8];
-
-  /** The reaction pill row, in dp from the top of the row: the popup picker's first row draws it under the same bounds. */
-  public static final float XGRAM_PILL_TOP = 4f, XGRAM_PILL_BOTTOM = 50f, XGRAM_PILL_SIDE = com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET;
-
-  public void xgramSetTopEndRadius (float radius) {
-    if (this.xgramTopEndRadius != radius) {
-      this.xgramTopEndRadius = radius;
-      invalidate();
+  private void xgramLayoutForPage (int width, int position, float positionOffset) {
+    if (position == 0) {
+      final float remaining = 1f - positionOffset;
+      final int origin = xgramChipsOrigin(width);
+      final float offset = (origin - Screen.dp(56)) * remaining;
+      recyclerView.setTranslationX(offset);
+      if (reactionsSelectorRecyclerView != null) {
+        reactionsSelectorRecyclerView.setTranslationX(-width * positionOffset);
+      }
+      backButton.setTranslationX(offset);
+      if (moreButton != null) {
+        // the 40dp circle ends at the origin, centered in the 48dp view
+        moreButton.setTranslationX((origin - Screen.dp((XgramM3Sheets.ICON_BUTTON_SIZE + XgramM3Sheets.TOUCH_TARGET) / 2f)) * remaining);
+      }
+      setBackButtonAlpha(positionOffset);
+      isScrollEnabled = false;
+    } else {
+      recyclerView.setTranslationX(0);
+      if (reactionsSelectorRecyclerView != null) {
+        reactionsSelectorRecyclerView.setTranslationX(-width);
+      }
+      backButton.setTranslationX(0);
+      if (moreButton != null) {
+        moreButton.setTranslationX(0);
+      }
+      setBackButtonAlpha(1f);
+      isScrollEnabled = true;
     }
+  }
+
+  /** The assist chips of the counters on the options page: 32dp, centered, 8dp leading space, 16dp trailing space. */
+  private void xgramDrawChips (Canvas c) {
+    if (!state.needShowMessageOptions || state.xgramChipCount == 0) {
+      return;
+    }
+    final float alpha = MathUtils.clamp(1f - xgramSelection) * recyclerView.getAlpha();
+    if (alpha <= 0f) {
+      return;
+    }
+    final View strip = recyclerView.getChildCount() > 0 ? recyclerView.getChildAt(0) : null;
+    float x = recyclerView.getLeft() + recyclerView.getTranslationX() + (strip != null ? strip.getLeft() : 0);
+    final float height = Screen.dp(XgramM3Sheets.CHIP_HEIGHT);
+    final float top = recyclerView.getTop() + recyclerView.getTranslationY() + (recyclerView.getMeasuredHeight() - height) / 2f;
+    // the tab strip's first item (the options page) is empty: the counters start at its origin
+    for (int i = 0; i < state.xgramChipCount; i++) {
+      final int itemWidth = state.xgramChipWidths[i];
+      xgramRect.set(x + Screen.dp(XgramM3Sheets.CHIP_LEADING_ICON_SPACE), top, x + itemWidth, top + height);
+      XgramM3Sheets.drawAssistChipOutline(c, xgramRect, alpha);
+      x += itemWidth;
+    }
+  }
+
+  // XGram: with the popup picker's grid hidden until expanded, a swipe up on the reaction strip expands it (the picker
+  // did this for drags on its first row)
+
+  private @Nullable Runnable xgramExpandRequest;
+  private boolean xgramExpandTracking, xgramExpandConsumed;
+  private float xgramDownX, xgramDownY;
+
+  public void xgramSetOnExpandRequest (@Nullable Runnable request) {
+    this.xgramExpandRequest = request;
+  }
+
+  private boolean xgramTrackExpand (MotionEvent e) {
+    if (!xgramM3 || xgramExpandRequest == null || !state.needShowReactionsPopupPicker || xgramSelection != 0f || reactionsSelectorRecyclerView == null) {
+      xgramExpandTracking = false;
+      return false;
+    }
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN: {
+        xgramDownX = e.getX();
+        xgramDownY = e.getY();
+        xgramExpandTracking = e.getX() < reactionsSelectorRecyclerView.getRight() + reactionsSelectorRecyclerView.getTranslationX();
+        break;
+      }
+      case MotionEvent.ACTION_MOVE: {
+        if (xgramExpandTracking) {
+          final float dx = e.getX() - xgramDownX;
+          final float dy = e.getY() - xgramDownY;
+          final float slop = Screen.getTouchSlop();
+          if (Math.abs(dx) > slop && Math.abs(dx) >= Math.abs(dy)) {
+            xgramExpandTracking = false;
+          } else if (-dy > slop && -dy > Math.abs(dx)) {
+            xgramExpandTracking = false;
+            xgramExpandRequest.run();
+            return true;
+          }
+        }
+        break;
+      }
+      case MotionEvent.ACTION_UP:
+      case MotionEvent.ACTION_CANCEL: {
+        xgramExpandTracking = false;
+        break;
+      }
+    }
+    return false;
   }
 
   @Override
   protected void dispatchDraw (Canvas c) {
-    if (state.needShowReactionsPopupPicker && xgramTopEndRadius > 0f && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      xgramRect.set(getReactionPickerHiddenZoneLeft(), 0, getMeasuredWidth(), getMeasuredHeight());
-      float r = Math.min(xgramTopEndRadius, Math.min(xgramRect.width(), xgramRect.height()));
-      xgramRadii[2] = xgramRadii[3] = r;
-      xgramPath.rewind();
-      xgramPath.addRoundRect(xgramRect, xgramRadii, android.graphics.Path.Direction.CW);
-      c.drawPath(xgramPath, Paints.fillingPaint(Theme.backgroundColor()));
-      // the end of the reaction pill continues under the expand button
-      xgramRect.set(getReactionPickerHiddenZoneLeft() - 1, Screen.dp(XGRAM_PILL_TOP), getMeasuredWidth() - Screen.dp(XGRAM_PILL_SIDE), Screen.dp(XGRAM_PILL_BOTTOM));
-      if (xgramRect.width() > 0f) {
-        float pr = Math.min(xgramRect.height() / 2f, xgramRect.width());
-        xgramPillRadii[2] = xgramPillRadii[3] = xgramPillRadii[4] = xgramPillRadii[5] = pr;
-        xgramPath.rewind();
-        xgramPath.addRoundRect(xgramRect, xgramPillRadii, android.graphics.Path.Direction.CW);
-        c.drawPath(xgramPath, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
-      }
+    if (xgramM3) {
+      xgramDrawChips(c);
     } else if (state.needShowReactionsPopupPicker) {
       c.drawRect(getReactionPickerHiddenZoneLeft(), 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.backgroundColor()));
     }
@@ -301,22 +415,15 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
 
   public void onPageScrolled (int position, float positionOffset) {
     adapter.topView.setSelectionFactor((float) position + positionOffset);
+    xgramSelection = (float) position + positionOffset;
 
     if (needReactionSelector && reactionsSelectorRecyclerView != null) {
       int width = getMeasuredWidth();
-      if (position == 0) {
+      if (xgramM3) {
+        xgramLayoutForPage(width, position, positionOffset);
+      } else if (position == 0) {
         float offset = (width - state.headerAlwaysVisibleCountersWidth - Screen.dp(56)) * (1f - positionOffset);
-        final int xgramShift = xgramButtonsShift();
-        if (xgramShift > 0) {
-          // XGram: Material 3 Expressive: the counters and the expand button end inside the 16dp-inset pill
-          final int itemShift = (int) ((Screen.dp(-8) - xgramShift) * (1f - positionOffset));
-          if (needShowReactions && needShowViews) {
-            getTopView().setItemTranslationX(1, itemShift);
-            getTopView().setItemTranslationX(2, itemShift);
-          } else if (needShowReactions || needShowViews) {
-            getTopView().setItemTranslationX(1, itemShift);
-          }
-        } else if (needShowReactions && needShowViews) {
+        if (needShowReactions && needShowViews) {
           getTopView().setItemTranslationX(1, (int) (Screen.dp(-8) * (1f - positionOffset)));
           getTopView().setItemTranslationX(2, (int) (Screen.dp(-8) * (1f - positionOffset)));
         } else if (needShowReactions || needShowViews) {
@@ -326,11 +433,7 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
         reactionsSelectorRecyclerView.setTranslationX(-width * positionOffset);
         backButton.setTranslationX(offset);
         if (moreButton != null) {
-          if (xgramShift > 0) {
-            moreButton.setTranslationX(offset - xgramShift * (1f - positionOffset)); // XGram
-          } else {
-            moreButton.setTranslationX(offset);
-          }
+          moreButton.setTranslationX(offset);
         }
         setBackButtonAlpha(positionOffset);
         isScrollEnabled = false;
@@ -379,6 +482,9 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
 
   @Override
   public void onThemeInvalidate (boolean isTempUpdate) {
+    if (xgramM3 && moreButton != null) {
+      moreButton.setColorFilter(Paints.getColorFilter(XgramM3Sheets.tonalContentColor())); // XGram: theme changes
+    }
     if (reactionsSelectorRecyclerView != null) {
       reactionsSelectorRecyclerView.invalidate();
     }
@@ -479,6 +585,18 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
 
   @Override
   public boolean onTouchEvent (MotionEvent e) {
+    if (xgramExpandConsumed) {
+      // XGram: the rest of the swipe that expanded the picker
+      final int action = e.getActionMasked();
+      if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+        xgramExpandConsumed = false;
+      }
+      return true;
+    }
+    if (xgramM3) {
+      // XGram: no hidden picker zone to guard: the collapsed picker grid takes no touches
+      return !(e.getAction() == MotionEvent.ACTION_DOWN && !canTouchAt(e.getX(), e.getY())) && super.onTouchEvent(e);
+    }
     return !(e.getAction() == MotionEvent.ACTION_DOWN && !canTouchAt(e.getX(), e.getY())) && super.onTouchEvent(e)
       || (state.needShowReactionsPopupPicker && (e.getX() > getReactionPickerHiddenZoneLeft()));
   }
@@ -490,6 +608,10 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
 
   @Override
   public boolean onInterceptTouchEvent (MotionEvent e) {
+    if (xgramTrackExpand(e)) {
+      xgramExpandConsumed = true;
+      return true;
+    }
     return (e.getAction() == MotionEvent.ACTION_DOWN && !canTouchAt(e.getX(), e.getY())) || super.onInterceptTouchEvent(e);
   }
 
