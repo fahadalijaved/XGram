@@ -88,6 +88,7 @@ fun AppearancePage() {
       group {
         iconPack(host)
         appIcon(host)
+        notificationIcon(host)
         emojiSet(host, emojiSetName)
       }
     } else {
@@ -95,6 +96,7 @@ fun AppearancePage() {
         themes(host, themeName)
         iconPack(host)
         appIcon(host)
+        notificationIcon(host)
         emojiSet(host, emojiSetName)
       }
       expressive(host)
@@ -210,6 +212,28 @@ private fun GroupScope.iconPack(host: XgramComposeHost) {
 private fun GroupScope.appIcon(host: XgramComposeHost) {
   value(R.id.btn_xgramAppIcon, s(R.string.XgramAppIcon), s(XgramAppIcons.current(host.activity).nameRes)) {
     host.open(XgramAppIconsController(host.activity, host.tdlib))
+  }
+}
+
+/** XGram's X or Telegram X's original glyph in the status bar, apart from the app icon. New notifications use it. */
+private fun GroupScope.notificationIcon(host: XgramComposeHost) {
+  val settings = XgramSettings.instance()
+  val current = settings.notificationIcon()
+  val options = listOf(
+    s(R.string.XgramNotificationIconXgram) to XgramSettings.NOTIFICATION_ICON_XGRAM,
+    s(R.string.XgramNotificationIconTelegramX) to XgramSettings.NOTIFICATION_ICON_TELEGRAM_X
+  )
+  value(R.id.btn_xgramNotificationIcon, s(R.string.XgramNotificationIcon), options.first { it.second == current }.first) {
+    host.choose(
+      ChoiceSpec(
+        title = s(R.string.XgramNotificationIcon),
+        info = s(R.string.XgramNotificationIconInfo),
+        options = options,
+        selected = current
+      ) { icon ->
+        settings.setNotificationIcon(icon)
+      }
+    )
   }
 }
 

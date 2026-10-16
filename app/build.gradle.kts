@@ -417,7 +417,8 @@ android {
     val sourcesUrl = config.sourceCodeUrl.takeIf {
       it.isNotEmpty()
     } ?: tgxGit.remoteUrl
-    buildConfigString("REMOTE_URL", tgxGit.remoteUrl)
+    // XGram: app.sources_url (local.properties) wins, so in-app source links can follow the GitLab mirror while GitHub is down.
+    buildConfigString("REMOTE_URL", config.sourceCodeUrl.takeIf { it.isNotEmpty() }?.trimEnd('/') ?: tgxGit.remoteUrl)
     buildConfigString("COMMIT_URL", tgxGit.commitUrl)
     buildConfigString("COMMIT", tgxGit.commitHashShort)
     buildConfigString("COMMIT_FULL", tgxGit.commitHashLong)

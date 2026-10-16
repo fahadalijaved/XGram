@@ -821,4 +821,9 @@
   <string name="XgramKeyNextFolder">Next folder</string>
   <string name="XgramKeyPreviousFolder">Previous folder</string>
   <string name="XgramKeyBack">Close or go back</string>
+  <!-- XGram: Notification icon (Appearance > Theme), separate from the app icon -->
+  <string name="XgramNotificationIcon">Notification icon</string>
+  <string name="XgramNotificationIconXgram">XGram</string>
+  <string name="XgramNotificationIconTelegramX">Telegram&#160;X</string>
+  <string name="XgramNotificationIconInfo">Shown in the status bar for new messages, separate from the app icon.</string>
 </resources>

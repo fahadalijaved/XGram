@@ -175,9 +175,12 @@ data class AppBuildInfo(
     @JvmStatic fun tdlibChangesUrl (olderCommitHash: String?, newerCommitHash: String?): String? =
       changesUrl(BuildConfig.TDLIB_REMOTE_URL, olderCommitHash, newerCommitHash)
 
+    // XGram: GitLab puts repository pages under /-/ (…/-/tree/<sha>, …/-/compare/a...b).
+    private fun gitLabDash (remoteUrl: String): String = if (remoteUrl.contains("://gitlab.")) "/-" else ""
+
     @JvmStatic fun commitUrl (remoteUrl: String, commitHashFull: String?): String? {
       return if (!commitHashFull.isNullOrEmpty()) {
-        return "${remoteUrl}/tree/${commitHashFull}"
+        return "${remoteUrl}${gitLabDash(remoteUrl)}/tree/${commitHashFull}"
       } else {
         null
       }
@@ -185,7 +188,7 @@ data class AppBuildInfo(
 
     @JvmStatic fun changesUrl (remoteUrl: String, olderCommitHash: String?, newerCommitHash: String?): String? {
       return if (!olderCommitHash.isNullOrEmpty() && !newerCommitHash.isNullOrEmpty()) {
-        "${remoteUrl}/compare/${olderCommitHash}...${newerCommitHash}"
+        "${remoteUrl}${gitLabDash(remoteUrl)}/compare/${olderCommitHash}...${newerCommitHash}"
       } else {
         null
       }

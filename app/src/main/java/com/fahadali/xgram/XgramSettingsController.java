@@ -29,6 +29,7 @@ import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.component.base.TogglerView;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.navigation.SettingsWrapBuilder;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
@@ -293,6 +294,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(days == 0 ? Lang.getString(R.string.XgramRetentionForever) : Lang.getString(R.string.XgramRetentionDays, days));
         } else if (id == R.id.btn_xgramAppIcon) {
           view.setData(Lang.getString(com.fahadali.xgram.appicons.XgramAppIcons.current(context).nameRes));
+        } else if (id == R.id.btn_xgramNotificationIcon) {
+          view.setData(notificationIconName(settings.notificationIcon()));
         } else if (id == R.id.btn_xgramAboutVersion) {
           view.setData(Lang.getAppBuildAndVersion(tdlib));
         } else if (id == R.id.btn_xgramAboutBasedOn) {
@@ -629,6 +632,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     List<ListItem> pickers = new ArrayList<>();
     pickers.add(link(R.id.btn_xgramIconPack, R.string.XgramIconPack));
     pickers.add(link(R.id.btn_xgramAppIcon, R.string.XgramAppIcon));
+    pickers.add(link(R.id.btn_xgramNotificationIcon, R.string.XgramNotificationIcon));
     pickers.add(link(R.id.btn_xgramEmojiSet, R.string.XgramEmoji));
     if (com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable()) {
       // Android 12+. Its note goes right under it, so the card is split there.
@@ -993,6 +997,28 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case Settings.TRANSLATE_MODE_POPUP:
       default: return R.string.ChatTranslateStyle1;
     }
+  }
+
+  private static @StringRes int notificationIconName (int icon) {
+    return icon == XgramSettings.NOTIFICATION_ICON_TELEGRAM_X ? R.string.XgramNotificationIconTelegramX : R.string.XgramNotificationIconXgram;
+  }
+
+  /** XGram's X or Telegram X's original glyph in the status bar, apart from the app icon. New notifications use it. */
+  private void showNotificationIconOptions () {
+    boolean telegramX = XgramSettings.instance().notificationIcon() == XgramSettings.NOTIFICATION_ICON_TELEGRAM_X;
+    showSettings(new SettingsWrapBuilder(R.id.btn_xgramNotificationIcon)
+      .addHeaderItem(Lang.getString(R.string.XgramNotificationIconInfo))
+      .setRawItems(new ListItem[] {
+        new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_xgramNotificationIconXgram, 0, R.string.XgramNotificationIconXgram, R.id.btn_xgramNotificationIcon, !telegramX),
+        new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_xgramNotificationIconTelegramX, 0, R.string.XgramNotificationIconTelegramX, R.id.btn_xgramNotificationIcon, telegramX)
+      })
+      .setIntDelegate((settingsId, result) -> {
+        int picked = result.get(R.id.btn_xgramNotificationIcon);
+        XgramSettings.instance().setNotificationIcon(picked == R.id.btn_xgramNotificationIconTelegramX ? XgramSettings.NOTIFICATION_ICON_TELEGRAM_X : XgramSettings.NOTIFICATION_ICON_XGRAM);
+        if (adapter != null && !isDestroyed()) {
+          adapter.updateValuedSettingById(R.id.btn_xgramNotificationIcon);
+        }
+      }));
   }
 
   static int messageMenuHiddenCount () { // XGram: package, for XgramComposeBridge
@@ -1722,6 +1748,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramAppIcon) {
       navigateTo(new com.fahadali.xgram.appicons.XgramAppIconsController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramNotificationIcon) {
+      showNotificationIconOptions();
       return;
     } else if (id == R.id.btn_xgramWhatsNew) {
       navigateTo(new XgramWhatsNewController(context, tdlib));
