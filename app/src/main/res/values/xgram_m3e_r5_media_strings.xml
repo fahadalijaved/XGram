@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 5, media and attach (com.fahadali.xgram.appearance.XgramR5Media and the media screens) -->
+  <string name="XgramR5MediaShutter">Shutter</string>
+  <string name="XgramR5MediaDirections">Directions</string>
+  <string name="XgramR5MediaViewOnce">View once</string>
+</resources>

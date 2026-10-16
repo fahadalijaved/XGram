@@ -81,7 +81,10 @@ public class CameraBlurView extends View implements FactorAnimator.Target {
     int cy = viewHeight / 2;
 
     int radius = Screen.dp(40f + 10f * factor);
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (!xgram) { // XGram: the M3E shutter has its own ring: no halo, only the capture flash below
     c.drawCircle(cx, cy, radius, Paints.fillingPaint(COLOR));
+    }
 
     if (successAnimator != null) {
       float factor = successAnimator.getFactor();
@@ -89,7 +92,7 @@ public class CameraBlurView extends View implements FactorAnimator.Target {
         float expandFactor = factor < .5f ? factor / .5f : 1f;
         float alpha = factor >= .4f ? 1f - ((factor - .4f) / .6f) : 1f;
         if (alpha != 0f) {
-          c.drawCircle(cx, cy, radius * expandFactor, Paints.fillingPaint(ColorUtils.alphaColor(alpha, COLOR)));
+          c.drawCircle(cx, cy, radius * expandFactor, Paints.fillingPaint(ColorUtils.alphaColor(alpha, xgram ? 0x4dffffff : COLOR)));
         }
       }
     }
