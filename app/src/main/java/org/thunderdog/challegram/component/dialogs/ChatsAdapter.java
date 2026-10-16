@@ -201,6 +201,17 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
         break;
       }
       case VIEW_TYPE_EMPTY: {
+        if (holder.itemView instanceof com.fahadali.xgram.appearance.XgramListStateView) {
+          // XGram M3E: blank until the end is reached (ChatsController shows the loading indicator), then the chat bubble
+          // on a soft burst and "You have no chats"
+          com.fahadali.xgram.appearance.XgramListStateView stateView = (com.fahadali.xgram.appearance.XgramListStateView) holder.itemView;
+          if (context.isEndReached()) {
+            com.fahadali.xgram.appearance.XgramR5Lists.bindEmpty(stateView, R.drawable.baseline_chat_bubble_24, Lang.getString(R.string.NoChats));
+          } else {
+            stateView.setNone();
+          }
+          break;
+        }
         ((TextView) holder.itemView).setText(context.isEndReached() ? Lang.getString(R.string.NoChats) : "");
         break;
       }

@@ -99,8 +99,9 @@ public class SimpleViewPagerController extends ViewPagerController<Object> {
     if (sections != null)
       return sections;
     String[] result = new String[controllers.length];
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled(); // XGram M3E: tab labels in sentence case
     for (int i = 0; i < result.length; i++) {
-      result[i] = Lang.uppercase(controllers[i].getName().toString());
+      result[i] = xgramM3 ? controllers[i].getName().toString() : Lang.uppercase(controllers[i].getName().toString());
     }
     return result;
   }

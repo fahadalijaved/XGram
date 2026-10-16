@@ -75,11 +75,13 @@ public final class XgramM3Sessions {
       return;
     }
     SessionRow row = (SessionRow) parent;
-    row.setCurrent(current);
+    row.setState(current, !current && session.isPasswordPending);
     row.icon.setImageResource(XgramIconPack.map(iconOf(session)));
     final boolean chips = !session.isPasswordPending;
     row.secret.setVisibility(chips ? View.VISIBLE : View.GONE);
     row.calls.setVisibility(chips ? View.VISIBLE : View.GONE);
+    // An incomplete login attempt: an "Unconfirmed" assist chip in the chips' place
+    row.unconfirmed.setVisibility(chips ? View.GONE : View.VISIBLE);
     row.secret.setChecked(session.canAcceptSecretChats, current);
     row.calls.setChecked(session.canAcceptCalls, current);
     row.secret.setEnabled(!inProgress);
@@ -131,7 +133,8 @@ public final class XgramM3Sessions {
     final ProgressComponentView progress;
     final IconView icon;
     final ChipView secret, calls;
-    private boolean current, bound;
+    final AssistChipView unconfirmed;
+    private boolean current, pending, bound;
 
     SessionRow (Context context, View.OnClickListener onClickListener, @Nullable ViewController<?> themeProvider) {
       super(context);
@@ -230,7 +233,18 @@ public final class XgramM3Sessions {
       calls.setLayoutParams(params);
       addView(calls);
 
+      // 8: "Unconfirmed" (incomplete login attempts), after the children SettingsAdapter reads by index
+      unconfirmed = new AssistChipView(context, R.string.XgramR5ListsUnconfirmed, R.drawable.baseline_warning_18);
+      params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(CHIP_HEIGHT));
+      params.addRule(RelativeLayout.BELOW, R.id.session_location);
+      params.addRule(rtl ? RelativeLayout.ALIGN_RIGHT : RelativeLayout.ALIGN_LEFT, R.id.session_title);
+      params.topMargin = Screen.dp(8f);
+      unconfirmed.setLayoutParams(params);
+      unconfirmed.setVisibility(View.GONE);
+      addView(unconfirmed);
+
       if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(unconfirmed);
         // Roles are re-read in onDraw: a theme change only has to redraw every part
         themeProvider.addThemeInvalidateListener(this);
         themeProvider.addThemeInvalidateListener(time);
@@ -252,11 +266,29 @@ public final class XgramM3Sessions {
 
     /** This device: a secondaryContainer tile with on-container text and a primary icon. */
     void setCurrent (boolean current) {
-      if (bound && this.current == current) {
+      setState(current, false);
+    }
+
+    /**
+     * This device: a secondaryContainer tile with on-container text and a primary icon. An incomplete login attempt
+     * ({@code pending}): an errorContainer tile, the device name in error, an error icon circle.
+     */
+    void setState (boolean current, boolean pending) {
+      if (bound && this.current == current && this.pending == pending) {
         return;
       }
       this.bound = true;
       this.current = current;
+      this.pending = pending;
+      if (pending) {
+        tile.setColorRole(XgramExpressive.ERROR_CONTAINER);
+        title.setRole(XgramExpressive.ERROR);
+        app.setRole(XgramExpressive.ON_ERROR_CONTAINER);
+        location.setRole(XgramExpressive.ON_ERROR_CONTAINER);
+        time.setRole(XgramExpressive.ON_ERROR_CONTAINER);
+        icon.setRoles(XgramExpressive.ERROR, XgramExpressive.ON_ERROR);
+        return;
+      }
       tile.setColorRole(current ? XgramExpressive.SECONDARY_CONTAINER : XgramExpressive.SURFACE_BRIGHT);
       final int content = current ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE;
       final int variant = current ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE_VARIANT;
@@ -438,6 +470,55 @@ public final class XgramM3Sessions {
       super.onInitializeAccessibilityNodeInfo(info);
       info.setCheckable(true);
       info.setChecked(checked);
+    }
+  }
+
+  /**
+   * An M3 assist chip that only tells a state (AssistChipTokens: 32dp, 8dp corners, labelLarge, an 18dp leading icon,
+   * a 1dp outline), on the errorContainer tile of an incomplete login attempt: outline and icon in error, the label in
+   * onErrorContainer. Not clickable: the row's tap opens the attempt.
+   */
+  static final class AssistChipView extends NoScrollTextView {
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF rect = new RectF();
+    private final @Nullable Drawable icon;
+
+    AssistChipView (Context context, @StringRes int textRes, @DrawableRes int iconRes) {
+      super(context);
+      XgramExpressive.applyText(this, XgramExpressive.TS_LABEL_L, false);
+      setAllCaps(false);
+      setSingleLine(true);
+      setGravity(Gravity.CENTER_VERTICAL);
+      setText(Lang.getString(textRes));
+      setClickable(false);
+      setFocusable(false);
+      icon = Drawables.get(getResources(), XgramIconPack.map(iconRes));
+      final int start = Screen.dp(CHIP_ICON_START + CHIP_ICON + CHIP_ICON_GAP), end = Screen.dp(CHIP_SPACE);
+      final boolean rtl = Lang.rtl();
+      setPadding(rtl ? end : start, 0, rtl ? start : end, 0);
+      paint.setStyle(Paint.Style.STROKE);
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      final int outline = XgramExpressive.color(XgramExpressive.ERROR);
+      final int content = XgramExpressive.color(XgramExpressive.ON_ERROR_CONTAINER);
+      final float stroke = Screen.dpf(1f);
+      final float radius = Screen.dpf(XgramExpressive.CORNER_S);
+      paint.setColor(outline);
+      paint.setStrokeWidth(stroke);
+      rect.set(stroke / 2f, stroke / 2f, getWidth() - stroke / 2f, getHeight() - stroke / 2f);
+      c.drawRoundRect(rect, radius - stroke / 2f, radius - stroke / 2f, paint);
+      if (icon != null) {
+        final int size = Screen.dp(CHIP_ICON);
+        final float x = Lang.rtl() ? getWidth() - Screen.dp(CHIP_ICON_START) - size : Screen.dp(CHIP_ICON_START);
+        final float y = (getHeight() - size) / 2f;
+        Drawables.draw(c, icon, x, y, Paints.getPorterDuffPaint(outline));
+      }
+      if (getCurrentTextColor() != content) {
+        setTextColor(content);
+      }
+      super.onDraw(c);
     }
   }
 

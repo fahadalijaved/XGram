@@ -104,6 +104,9 @@ public class SeparatorView extends View {
 
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return; // XGram M3E: no hairlines between surfaces, tone tells them apart (the view keeps its size)
+    }
     int width = getMeasuredWidth();
     if (useFilling) {
       c.drawColor(forcedFillingColor != 0 ? forcedFillingColor : Theme.fillingColor());

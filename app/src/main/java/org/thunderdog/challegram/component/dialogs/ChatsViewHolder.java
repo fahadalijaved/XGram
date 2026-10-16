@@ -116,6 +116,12 @@ public class ChatsViewHolder extends RecyclerView.ViewHolder {
         return new ChatsViewHolder(view);
       }
       case ChatsAdapter.VIEW_TYPE_EMPTY: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: blank while the list loads (ChatsController shows the loading indicator), then the empty state (ChatsAdapter binds it)
+          com.fahadali.xgram.appearance.XgramListStateView stateView = com.fahadali.xgram.appearance.XgramR5Lists.newEmptyPage(context, null, themeProvider);
+          stateView.setNone();
+          return new ChatsViewHolder(stateView);
+        }
         TextView textView = new NoScrollTextView(context);
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
         textView.setTypeface(Fonts.getRobotoRegular());
