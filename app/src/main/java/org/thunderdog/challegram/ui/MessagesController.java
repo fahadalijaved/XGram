@@ -811,6 +811,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         inputView.setBackground(new XgramInputFieldBackground()); // XGram: Material 3 Expressive input field
         addThemeInvalidateListener(inputView);
+        inputView.xgramSetM3Composer(); // bodyLarge, centred line, 16dp end gap, primary cursor
       } else
       ViewSupport.setThemedBackground(inputView, ColorId.filling, this);
       inputView.setHighlightColor(Theme.fillingTextSelectionColor());
@@ -831,7 +832,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
       replyBarView = new ReplyBarView(context(), tdlib);
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram: Material 3 Expressive: the reply preview is a block joined to the composer field
-        replyBarView.setBackground(new com.fahadali.xgram.appearance.XgramM3Chat.ComposerBlockDrawable(this::xgramHasTrailingButton));
+        replyBarView.setBackground(new com.fahadali.xgram.appearance.XgramM3Chat.ComposerBlockDrawable(new com.fahadali.xgram.appearance.XgramM3Chat.TrailingSource() {
+          @Override
+          public boolean hasTrailingButton () {
+            return xgramHasTrailingButton();
+          }
+
+          @Override
+          public float fieldEndPx () {
+            return xgramFieldEndPx();
+          }
+        }));
         int blockInset = com.fahadali.xgram.appearance.XgramM3Chat.composerBlockEndInset();
         replyBarView.setPadding(Lang.rtl() ? blockInset : 0, 0, Lang.rtl() ? 0 : blockInset, 0);
         addThemeInvalidateListener(replyBarView);
@@ -1302,6 +1313,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
     recordButton.setHasTouchControls(true);
     addThemeInvalidateListener(recordButton);
     recordButton.setLayoutParams(lp);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive: a little more room between the record button and the icon buttons, so these
+      // sit inside the field. The record button's centre does not move.
+      final float gap = com.fahadali.xgram.appearance.XgramM3Composer.RECORD_EXTRA_GAP;
+      lp.width = Screen.dp(ATTACH_BUTTONS_WIDTH + gap);
+      if (Lang.rtl()) {
+        recordButton.setPadding(0, 0, Screen.dp(2f + gap), 0);
+      } else {
+        recordButton.setPadding(Screen.dp(gap), 0, Screen.dp(2f), 0);
+      }
+    }
     if (!xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_VOICE)) {
       recordButton.setVisibility(View.GONE); // XGram: Message box buttons
     }
@@ -1319,6 +1341,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     attachButtons.addView(mediaButton);
     attachButtons.addView(recordButton);
+    xgramUpdateAttachPadding();
     attachButtons.updatePivot();
 
     params = new RelativeLayout.LayoutParams(Screen.dp(55f), Screen.dp(49f));
@@ -6418,6 +6441,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private int actionMode;
 
   public void showActionButton (int resource, int mode) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      showActionButton(Lang.getString(resource), mode, true); // XGram: Material 3 Expressive buttons are in sentence case
+      return;
+    }
     showActionButton(Lang.uppercase(Lang.getString(resource)), mode, true);
   }
 
@@ -6442,6 +6469,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public void showActionDeleteChatButton () {
     if (ChatId.isBasicGroup(getChatId()) && chat.lastMessage != null && chat.lastMessage.content.getConstructor() == TdApi.MessageChatUpgradeTo.CONSTRUCTOR) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        showActionButton(Lang.getString(R.string.OpenSupergroup), ACTION_OPEN_SUPERGROUP); // XGram: sentence case
+      } else
       showActionButton(Lang.uppercase(Lang.getString(R.string.OpenSupergroup)), ACTION_OPEN_SUPERGROUP);
     } else {
       showActionButton(R.string.DeleteChat, ACTION_DELETE_CHAT);
@@ -6479,7 +6509,22 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   }
 
+  // XGram: Material 3 Expressive chat action button (Join, Start, Restart, Unblock…): a full-width filled tonal
+  // button on the composer's surface; a status that cannot be tapped sits in a field-coloured pill.
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramActionShape;
+
   private void updateActionButton (CharSequence text, int mode, boolean isActive) {
+    if (xgramActionShape != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      actionMode = mode;
+      actionButton.setEnabled(isActive);
+      final int colorId = isActive ? ColorId.fillingActiveContent : ColorId.textLight;
+      actionButton.setTextColor(Theme.getColor(colorId));
+      removeThemeListenerByTarget(actionButton);
+      addThemeTextColorListener(actionButton, colorId);
+      com.fahadali.xgram.appearance.XgramM3Composer.setActionButtonActive(xgramActionShape, isActive);
+      Views.setMediumText(actionButton, text);
+      return;
+    }
     actionMode = mode;
     actionButton.setEnabled(isActive);
     actionButton.setTextColor(isActive ? Theme.textLinkColor() : Theme.textAccentColor());
@@ -6512,6 +6557,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
       actionButton.setEllipsize(TextUtils.TruncateAt.END);
       actionButton.setGravity(Gravity.CENTER);
       actionButton.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramActionShape = com.fahadali.xgram.appearance.XgramM3Composer.styleActionButton(actionButtonWrap, actionButton);
+        addThemeInvalidateListener(actionButtonWrap);
+        if (mode == ACTION_EVENT_LOG_SETTINGS) {
+          ((FrameLayout.LayoutParams) actionButton.getLayoutParams()).rightMargin = Screen.dp(16f + 49f); // room for the help button
+        }
+      }
 
       actionButtonWrap.addView(actionButton);
 
@@ -7817,6 +7869,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (this.inputBlockFlags != flags) {
       boolean prevIsBlocked = this.inputBlockFlags != 0;
       this.inputBlockFlags = flags;
+      if (inputView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive disabled field (container and hint) while the chat does not let the user write.
+        // It redraws the field only when that flag changes.
+        inputView.xgramSetDisabledLook(BitwiseUtils.hasFlag(flags, FLAG_INPUT_TEXT_DISABLED));
+      }
       boolean nowIsBlocked = flags != 0;
       if (prevIsBlocked != nowIsBlocked && inputView != null) {
         inputView.setInputBlocked(nowIsBlocked);
@@ -8096,6 +8153,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
       commandButton.setTranslationX(scheduleButton.isVisible() ? 0 : scheduleButton.getLayoutParams().width);
     }
     recordButton.setVisibility(xgramInputButtonShown(com.fahadali.xgram.XgramSettings.INPUT_BUTTON_VOICE) ? View.VISIBLE : View.GONE);
+    xgramUpdateAttachPadding();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramApplySendMorph(sendFactor, MathUtils.clamp(sendFactor)); // the field's end and the morph follow the new buttons
+      if (inputView != null) {
+        inputView.invalidate();
+      }
+    }
     updateSelectMessageSenderInterface(false); // camera
     attachButtons.updatePivot();
   }
@@ -8256,8 +8320,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   // XGram: Material 3 Expressive input bar. The bar keeps the surface color; the emoji button,
   // the text and the attach buttons sit on a surfaceContainerHigh field (40dp tall on one line,
-  // 20dp corners, 8dp side margins). The trailing record or send button is a 40dp filled circle
-  // outside the field.
+  // 20dp corners that stay 20dp as it grows, 8dp side margins). The text is bodyLarge, one line
+  // centred, and keeps 16dp from the field's end (XgramM3Composer). The trailing record or send
+  // button is a 40dp filled circle outside the field; the record button morphs into the send one.
 
   private final class XgramInputFieldBackground extends android.graphics.drawable.Drawable {
     private final android.graphics.RectF rect = new android.graphics.RectF();
@@ -8267,10 +8332,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
       Rect bounds = getBounds();
       c.drawRect(bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE)));
       final float verticalInset = (Screen.dp(49f) - Screen.dp(com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX)) / 2f;
-      final boolean hasTrailingButton = xgramHasTrailingButton();
       final float start = com.fahadali.xgram.appearance.XgramM3Chat.fieldStart();
-      final float end = com.fahadali.xgram.appearance.XgramM3Chat.fieldEnd(hasTrailingButton);
+      // The end follows the send button in when there is no record button (the text keeps its 16dp from the send slot)
+      final float end = xgramFieldEndPx();
       final boolean rtl = Lang.rtl();
+      // The M3 disabled field while the chat does not let the user write
+      final int fieldColor = com.fahadali.xgram.appearance.XgramM3Composer.fieldColor(BitwiseUtils.hasFlag(inputBlockFlags, FLAG_INPUT_TEXT_DISABLED));
       // While the reply, edit or link preview block shows above, the field joins it: 2dp gap, 4dp top corners.
       final float connect = replyBarView != null ? MathUtils.clamp(getReplyOffset() / (float) Screen.dp(48f)) : 0f;
       final float topInset = verticalInset + (Screen.dp(2f) - verticalInset) * connect;
@@ -8278,16 +8345,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (rect.width() <= 0f || rect.height() <= 0f) {
         return;
       }
-      final float radius = Math.min(Screen.dp(20f), rect.height() / 2f);
+      // 20dp corners: a full pill on one line (40dp), the same 20dp corners as the field grows, not a stretched pill
+      final float radius = Math.min(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L_INC), rect.height() / 2f);
       if (connect <= 0f) {
-        c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+        c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(fieldColor));
       } else {
         final float topRadius = radius + (Math.min(Screen.dp(4f), radius) - radius) * connect;
         radii[0] = radii[1] = radii[2] = radii[3] = topRadius;
         radii[4] = radii[5] = radii[6] = radii[7] = radius;
         path.rewind();
         path.addRoundRect(rect, radii, android.graphics.Path.Direction.CW);
-        c.drawPath(path, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+        c.drawPath(path, Paints.fillingPaint(fieldColor));
       }
     }
 
@@ -8312,7 +8380,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       return;
     }
     final int contentColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
-    view.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(contentColor, com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+    // M3E standard icon button: a 40dp onSurfaceVariant state layer, full corners springing to 8dp while pressed.
+    // The themed helper re-reads the role on every press, so day / night switches keep the right state layer.
+    com.fahadali.xgram.appearance.XgramAppMotion.iconButton(view);
     if (com.fahadali.xgram.appearance.XgramExpressive.surfaceHeader()) {
       view.setColorFilter(contentColor);
     }
@@ -8699,6 +8769,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // Silent mode
 
   public int getHorizontalInputPadding () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive: the icon buttons keep the field's end margin when there is no record button
+      return attachButtons.getVisibleChildrenWidth() + attachButtons.getPaddingLeft() + attachButtons.getPaddingRight() + (canSelectSender() ? Screen.dp(47) : 0);
+    }
     return attachButtons.getVisibleChildrenWidth() + (canSelectSender() ? Screen.dp(47) : 0);
   }
 
@@ -10398,6 +10472,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       sendButton.setAlpha(alpha);
       sendButton.setScaleX(scale1);
       sendButton.setScaleY(scale1);
+      xgramApplySendMorph(factor, alpha); // XGram: Material 3 Expressive icon morph from the record button
 
       float scale2 = Math.max(0f, 1f - scale);
       attachButtons.setAlpha(1f - alpha);
@@ -11704,6 +11779,71 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return (recordButton != null && recordButton.getVisibility() != View.GONE) || (sendButton != null && sendButton.getVisibility() == View.VISIBLE);
   }
 
+  // XGram: Material 3 Expressive composer geometry, computed at draw time (no layout pass while it animates).
+
+  /** End margin of the composer field (px): the send slot with a record button, else it follows the send button in. */
+  private float xgramFieldEndPx () {
+    final boolean recordVisible = recordButton != null && recordButton.getVisibility() != View.GONE;
+    final float factor = sendButton != null && sendButton.getVisibility() == View.VISIBLE ? sendFactor : 0f;
+    return com.fahadali.xgram.appearance.XgramM3Composer.fieldEndPx(recordVisible, factor);
+  }
+
+  /** Without a record button the icon buttons keep the field's 8dp end margin, so they stay inside it. */
+  private void xgramUpdateAttachPadding () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || attachButtons == null || recordButton == null) {
+      return;
+    }
+    final int padding = recordButton.getVisibility() == View.GONE ? Screen.dp(com.fahadali.xgram.appearance.XgramM3Composer.ATTACH_END_PADDING) : 0;
+    final boolean rtl = Lang.rtl();
+    final int left = rtl ? padding : 0, right = rtl ? 0 : padding;
+    if (attachButtons.getPaddingLeft() != left || attachButtons.getPaddingRight() != right) {
+      attachButtons.setPadding(left, 0, right, 0);
+    }
+  }
+
+  /** The record button's centre minus the send button's centre (px), so the morph starts exactly over the record button. */
+  private float xgramRecordOffsetX () {
+    if (recordButton.getWidth() == 0 || sendButton.getWidth() == 0) {
+      return 0f;
+    }
+    final int recordCx = attachButtons.getLeft() + recordButton.getLeft() + recordButton.getPaddingLeft() + (recordButton.getWidth() - recordButton.getPaddingLeft() - recordButton.getPaddingRight()) / 2;
+    final int sendCx = sendButton.getLeft() + sendButton.getWidth() / 2;
+    return recordCx - sendCx;
+  }
+
+  /**
+   * M3E icon morph between the record button and the send button: while the record button shows, the send button
+   * stays opaque over it and draws the morph (one circle, mic or camera to send), and the record button hides; the
+   * other icon buttons fade and shrink as before. Without a record button the send button scales in as before and
+   * the field's end follows it. Only invalidates: nothing is laid out per frame.
+   */
+  private void xgramApplySendMorph (float factor, float alpha) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || sendButton == null || recordButton == null || attachButtons == null) {
+      return;
+    }
+    final boolean morph = recordButton.getVisibility() == View.VISIBLE && attachButtons.getVisibility() == View.VISIBLE;
+    if (morph) {
+      sendButton.setAlpha(alpha > 0f ? 1f : 0f);
+      sendButton.setScaleX(1f);
+      sendButton.setScaleY(1f);
+      sendButton.xgramSetRecordMorph(factor, Settings.instance().preferVideoMode(), xgramRecordOffsetX());
+      recordButton.setAlpha(alpha > 0f ? 0f : 1f);
+    } else {
+      sendButton.xgramClearRecordMorph();
+      if (recordButton.getAlpha() != 1f) {
+        recordButton.setAlpha(1f);
+      }
+    }
+    if (recordButton.getVisibility() == View.GONE) {
+      if (inputView != null) {
+        inputView.invalidate();
+      }
+      if (replyBarView != null) {
+        replyBarView.invalidate();
+      }
+    }
+  }
+
   /** Side tabs start below the bars above the messages (pinned message, join requests…). */
   private void xgramUpdateSideTabsOffset () {
     if (xgramSideTabs != null && xgramTabsOnSide && topBar != null) {
@@ -12348,6 +12488,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // Messages search
 
   private FrameLayoutFix searchControlsLayout;
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Composer.RoleDrawable xgramSearchBackground; // XGram
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Composer.ContainedLoadingView xgramSearchLoading; // XGram
   private RippleRevealView searchControlsReveal;
   private ImageView searchByButton;
   private ImageView searchJumpToDateButton;
@@ -12375,6 +12517,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       searchShowOnlyFoundButton.setVisibility(isVisible ? View.VISIBLE : View.GONE);
       searchCounterView.setTranslationX(isVisible ? 0 : Screen.dp(42.5f));
       searchProgressView.setTranslationX(isVisible ? 0 : Screen.dp(42.5f));
+      if (xgramSearchLoading != null) {
+        xgramSearchLoading.setTranslationX(searchProgressView.getTranslationX()); // XGram
+      }
     }
     if (!isVisible) {
       onSetSearchFilteredShowMode(false);
@@ -12664,6 +12809,27 @@ public class MessagesController extends ViewController<MessagesController.Argume
     searchControlsLayout.addView(searchProgressView);
     addThemeInvalidateListener(searchProgressView);
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive in-chat search bar: a surfaceContainer bar that fades in over the composer (no
+      // ripple reveal), standard icon buttons, the "x of y" counter in labelLarge and the contained loading indicator.
+      xgramSearchBackground = new com.fahadali.xgram.appearance.XgramM3Composer.RoleDrawable(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER);
+      xgramSearchBackground.setFactor(0f);
+      searchControlsLayout.setBackground(xgramSearchBackground);
+      addThemeInvalidateListener(searchControlsLayout);
+      searchControlsReveal.setVisibility(View.GONE);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(searchByButton);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(searchJumpToDateButton);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(searchSetTypeFilterButton);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(searchCounterView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      FrameLayoutFix.LayoutParams loadingParams = FrameLayoutFix.newParams(Screen.dp(49f), Screen.dp(49f), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+      loadingParams.rightMargin = Screen.dp(60);
+      xgramSearchLoading = new com.fahadali.xgram.appearance.XgramM3Composer.ContainedLoadingView(context, com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX);
+      xgramSearchLoading.setLayoutParams(loadingParams);
+      xgramSearchLoading.setAlpha(0f);
+      searchControlsLayout.addView(xgramSearchLoading);
+      searchProgressView.setVisibility(View.GONE);
+    }
+
     setSearchInProgress(0f);
     setSearchControlsFactor(0f);
     updateSearchControlsInset();
@@ -12769,6 +12935,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       searchProgressView.setAlpha(progressAlpha);
       searchProgressView.setScaleX(progressScale);
       searchProgressView.setScaleY(progressScale);
+      if (xgramSearchLoading != null) {
+        xgramSearchLoading.setTranslationX(searchProgressView.getTranslationX());
+        xgramSearchLoading.setShown(progressAlpha, progressScale);
+      }
     }
   }
 
@@ -12789,6 +12959,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
       boolean translate = needSearchControlsTranslate();
       searchControlsReveal.setRevealFactor(translate ? 1f : factor);
+      if (xgramSearchBackground != null) {
+        xgramSearchBackground.setFactor(translate ? 1f : factor); // XGram: the M3E bar fades in instead
+      }
       searchControlsLayout.setTranslationY(translate ? (Screen.dp(49f) + extraBottomInset) * (1f - factor) : 0f);
       if (translate) {
         checkScrollButtonOffsets();

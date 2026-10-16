@@ -938,6 +938,10 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
   public void checkPlaceholderWidth () {
     if ((lastPlaceholderRes != 0 || !StringUtils.isEmpty(placeholderTitleText) || placeholderIcon != null) && controller != null) {
       int availWidth = Math.max(0, getMeasuredWidth() - controller.getHorizontalInputPadding() - getPaddingLeft() - Screen.dp(placeholderIcon != null ? 20 : 0));
+      if (xgramM3Composer) {
+        // XGram: Material 3 Expressive: the hint keeps a gap before the icon buttons inside the field
+        availWidth = Math.max(0, availWidth - Screen.dp(com.fahadali.xgram.appearance.XgramM3Composer.HINT_END_GAP));
+      }
       if (this.lastPlaceholderAvailWidth != availWidth) {
         this.lastPlaceholderAvailWidth = availWidth;
 
@@ -1361,10 +1365,46 @@ public class InputView extends NoClipEditText implements InlineSearchContext.Cal
     }
   }
 
+  // XGram: Material 3 Expressive composer field (MessagesController's input only): bodyLarge text, paddings that
+  // centre one line and keep 16dp from the field's end, a primary cursor and selection handles that follow theme
+  // switches, and a dimmed hint while the chat does not let the user write.
+  private boolean xgramM3Composer, xgramDisabledLook;
+  private int xgramPrimary;
+
+  public void xgramSetM3Composer () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    xgramM3Composer = true;
+    xgramPrimary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+    com.fahadali.xgram.appearance.XgramM3Composer.styleInput(this, paint);
+    lastPlaceholderAvailWidth = 0;
+    checkPlaceholderWidth();
+  }
+
+  public void xgramSetDisabledLook (boolean disabled) {
+    disabled = disabled && xgramM3Composer;
+    if (xgramDisabledLook != disabled) {
+      xgramDisabledLook = disabled;
+      invalidate();
+    }
+  }
+
+  private void xgramCheckTint () {
+    if (xgramM3Composer) {
+      int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      if (primary != xgramPrimary) {
+        xgramPrimary = primary;
+        com.fahadali.xgram.appearance.XgramM3Composer.tintInput(this, primary);
+      }
+    }
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    xgramCheckTint();
     final int x = getPaddingLeft() + Screen.dp(placeholderIcon != null ? 20 : 0);
-    final float alpha = showPlaceholder.getFloatValue();
+    final float alpha = xgramDisabledLook ? showPlaceholder.getFloatValue() * com.fahadali.xgram.appearance.XgramM3Composer.DISABLED_HINT_ALPHA : showPlaceholder.getFloatValue();
     final int offset = (int) (hasSubPlaceholder.getFloatValue() * (getTextSize() / 18 * 8));
     final int baseline = getBaseline();
 

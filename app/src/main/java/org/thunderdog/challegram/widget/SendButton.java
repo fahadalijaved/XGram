@@ -179,13 +179,119 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
   private void xgramDrawContainer (Canvas c, int cx, int cy, float visibility, float disabledFactor) {
     final float scale = Config.DEFAULT_ICON_SWITCH_SCALE + (1f - Config.DEFAULT_ICON_SWITCH_SCALE) * visibility;
     final float size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight()) * scale;
-    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
+    // M3E filled icon button: the circle springs to a 12dp rounded square while pressed
+    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_M, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
     int color = XgramExpressive.color(XgramExpressive.PRIMARY);
     if (disabledFactor > 0f) {
       color = ColorUtils.fromToArgb(color, XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTAINER), disabledFactor);
     }
     xgramRect.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
     c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(visibility, color)));
+  }
+
+  // XGram: M3E icon morph from the record button. While the composer's send factor runs (0 to 1, overshooting on
+  // the SPATIAL_FAST spring) and the record button is shown, this button stays opaque over it and draws the morph
+  // itself: the record button's primaryContainer circle turns primary without resizing, the mic (or camera) turns
+  // and shrinks away while the send icon turns and grows in. The record button is hidden meanwhile, so the two
+  // never show at once. 1 = no morph (normal drawing).
+  private float xgramMorph = 1f;
+  private float xgramMorphOffsetX;
+  private boolean xgramMorphVideo;
+  private Drawable xgramMicIcon, xgramVideoIcon;
+  private Paint xgramRecordIconPaint;
+
+  /**
+   * Composer only: {@code factor} is the raw send factor, {@code offsetX} the record button's centre minus this
+   * button's centre (px), {@code video} whether the record button shows the camera.
+   */
+  public void xgramSetRecordMorph (float factor, boolean video, float offsetX) {
+    if (this.xgramMorph != factor || this.xgramMorphVideo != video || this.xgramMorphOffsetX != offsetX) {
+      this.xgramMorph = factor;
+      this.xgramMorphVideo = video;
+      this.xgramMorphOffsetX = offsetX;
+      invalidate();
+    }
+  }
+
+  public void xgramClearRecordMorph () {
+    if (this.xgramMorph != 1f) {
+      this.xgramMorph = 1f;
+      invalidate();
+    }
+  }
+
+  private Paint xgramRecordIconPaint () {
+    int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
+    if (xgramRecordIconPaint == null || xgramRecordIconPaint.getColor() != color)
+      xgramRecordIconPaint = Paints.createPorterDuffPaint(xgramRecordIconPaint, color);
+    return xgramRecordIconPaint;
+  }
+
+  private void xgramLoadRecordIcons () {
+    if (xgramMicIcon == null) {
+      // The record button's own icons: an icon pack keeps its mic and camera, Telegram X icons get Material Symbols
+      boolean pack = com.fahadali.xgram.appearance.XgramIconPack.current() != com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X;
+      xgramMicIcon = Drawables.get(getResources(), pack ? R.drawable.baseline_mic_24 : R.drawable.xgram_m3e_s4_chat_mic);
+      xgramVideoIcon = Drawables.get(getResources(), pack ? R.drawable.baseline_videocam_24 : R.drawable.xgram_m3e_s4_chat_videocam);
+    }
+  }
+
+  private void xgramDrawMorph (Canvas c, int cx, int cy, float editFactor, float activeFactor) {
+    final float f = xgramMorph;
+    final float t = MathUtils.clamp(f);
+    final float x = cx + xgramMorphOffsetX * (1f - t);
+
+    // Container: one circle, recoloured
+    final float size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight());
+    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_M, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
+    int to = XgramExpressive.color(XgramExpressive.PRIMARY);
+    final float disabledFactor = editFactor * (1f - activeFactor);
+    if (disabledFactor > 0f) {
+      to = ColorUtils.fromToArgb(to, XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTAINER), disabledFactor);
+    }
+    xgramRect.set(x - size / 2f, cy - size / 2f, x + size / 2f, cy + size / 2f);
+    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), to, t)));
+
+    // Outgoing: the mic or camera turns a quarter and shrinks as it fades
+    if (t < 1f) {
+      xgramLoadRecordIcons();
+      final Drawable icon = xgramMorphVideo ? xgramVideoIcon : xgramMicIcon;
+      final Paint paint = xgramRecordIconPaint();
+      final int s = Views.save(c);
+      final float scale = 1f - .4f * t;
+      c.rotate(90f * t, x, cy);
+      c.scale(scale, scale, x, cy);
+      paint.setAlpha((int) (255f * (1f - t)));
+      Drawables.drawCentered(c, icon, x, cy, paint);
+      paint.setAlpha(255);
+      Views.restore(c, s);
+    }
+
+    // Incoming: the send icon (or the edit check) turns in from a quarter turn and grows, overshooting with the spring
+    if (t > 0f) {
+      final int s = Views.save(c);
+      final float scale = .6f + .4f * f;
+      c.rotate(-90f * (1f - t), x, cy);
+      c.scale(scale, scale, x, cy);
+      if (editFactor < .5f) {
+        if (Lang.rtl()) {
+          c.scale(-1f, 1f, x, cy);
+        }
+        final Paint paint = xgramIconPaint(false);
+        paint.setAlpha((int) (255f * t));
+        Drawables.drawCentered(c, sendIcon, x, cy, paint);
+        paint.setAlpha(255);
+      } else {
+        final int color = ColorUtils.alphaColor(t, ColorUtils.fromToArgb(xgramInactiveContentColor(), XgramExpressive.color(XgramExpressive.ON_PRIMARY), activeFactor));
+        final float lineSize = Screen.dp(2f), line1Width = Screen.dp(17f), line2Height = Screen.dp(6.5f);
+        c.translate(Screen.dp(2f), 0);
+        c.rotate(-45f, x, cy);
+        final float left = x - line1Width / 2f;
+        c.drawRect(left, cy - lineSize / 2f, x + line1Width / 2f, cy + lineSize / 2f, Paints.fillingPaint(color));
+        c.drawRect(left, cy - line2Height, left + lineSize, cy, Paints.fillingPaint(color));
+      }
+      Views.restore(c, s);
+    }
   }
 
   @Override
@@ -199,6 +305,13 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
     final float editFactor = inEditModeAnimator.getFloatValue();
 
     final boolean xgramExpressive = xgramUseFilled();
+    if (xgramExpressive && xgramMorph != 1f && inlineFactor == 0f) {
+      xgramDrawMorph(c, cx, cy, editFactor, activeFactor);
+      if (slowModeCounterController != null) {
+        slowModeCounterController.draw(c, avatarReceiver, cx, cy, 1f);
+      }
+      return;
+    }
     if (xgramExpressive && sendScale > 0f) {
       xgramDrawContainer(c, cx, cy, sendScale, editFactor * (1f - activeFactor));
     }

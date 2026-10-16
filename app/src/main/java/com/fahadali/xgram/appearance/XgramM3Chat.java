@@ -253,6 +253,11 @@ public final class XgramM3Chat {
 
   public interface TrailingSource {
     boolean hasTrailingButton ();
+
+    /** End margin of the composer field in px, possibly mid-animation (see XgramM3Composer.fieldEndPx). */
+    default float fieldEndPx () {
+      return fieldEnd(hasTrailingButton());
+    }
   }
 
   /** Start margin of the composer field. */
@@ -288,7 +293,8 @@ public final class XgramM3Chat {
       paint.setColor(XgramExpressive.color(XgramExpressive.SURFACE));
       c.drawRect(b, paint);
       boolean rtl = Lang.rtl();
-      int start = fieldStart(), end = fieldEnd(trailing.hasTrailingButton());
+      // The block follows the field's end, also while the field makes room for the send button.
+      float start = fieldStart(), end = trailing.fieldEndPx();
       rect.set(b.left + (rtl ? end : start), b.top + Screen.dp(4f), b.right - (rtl ? start : end), b.bottom);
       if (rect.width() <= 0f || rect.height() <= 0f) {
         return;
