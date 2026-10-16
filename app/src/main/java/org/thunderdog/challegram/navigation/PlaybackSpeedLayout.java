@@ -107,7 +107,18 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
 
     backgroundDrawable = ViewSupport.getDrawableFilter(getContext(), R.drawable.bg_popup_fixed, new PorterDuffColorFilter(Theme.getColor(ColorId.filling), PorterDuff.Mode.MULTIPLY));
     backgroundDrawable.getPadding(tmpRect);
-    setPadding(tmpRect.left, tmpRect.top, tmpRect.right, tmpRect.bottom);
+    setPadding(tmpRect.left, tmpRect.top, tmpRect.right, tmpRect.bottom); // XGram: kept with Expressive design, the touch math depends on it
+    if (xgram) {
+      // XGram M3E: an M3 menu container (drawn in dispatchDraw) with a level 2 shadow along its outline
+      setOutlineProvider(new android.view.ViewOutlineProvider() {
+        @Override
+        public void getOutline (View view, android.graphics.Outline outline) {
+          xgramCardRect(xgramOutlineRect);
+          outline.setRoundRect(xgramOutlineRect.left, xgramOutlineRect.top, xgramOutlineRect.right, xgramOutlineRect.bottom, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L));
+        }
+      });
+      setElevation(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_2));
+    }
 
     slider = new Slider(context);
     slider.setText(Lang.getString(R.string.PlaybackSpeed));
@@ -126,6 +137,11 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
     shadowView2.setSimpleTopShadow(true);
     shadowView2.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(6f)));
     addView(shadowView2);
+    if (xgram) {
+      // XGram M3E: an outlineVariant divider in the gap instead of the two shadows (the gap keeps its height)
+      shadowView1.setVisibility(View.INVISIBLE);
+      shadowView2.setVisibility(View.INVISIBLE);
+    }
 
     buttons[0] = addButton(R.id.btn_playback_speed_0_5, R.string.PlaybackSpeed50, R.drawable.baseline_playback_speed_0_5_24, 50);
     buttons[1] = addButton(R.id.btn_playback_speed_0_7, R.string.PlaybackSpeed70, R.drawable.baseline_playback_speed_0_7_24, 70);
@@ -133,6 +149,43 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
     buttons[3] = addButton(R.id.btn_playback_speed_1_2, R.string.PlaybackSpeed120, R.drawable.baseline_playback_speed_1_2_24, 120);
     buttons[4] = addButton(R.id.btn_playback_speed_1_5, R.string.PlaybackSpeed150, R.drawable.baseline_playback_speed_1_5_24, 150);
     buttons[5] = addButton(R.id.btn_playback_speed_2_0, R.string.PlaybackSpeed200, R.drawable.baseline_playback_speed_2_0_24, 200);
+  }
+
+  // XGram M3E: the menu container (surfaceContainer, the chip step with Pure black; CORNER_L; elevation 2), M3 menu
+  // items (bodyLarge, CORNER_M state layers, the current speed on a secondaryContainer pill with a primary check) and
+  // an Expressive slider (a 40dp full-corner track in primary, error below 0.5x, with stops at 0.5x, 1x, 1.5x and 2x)
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private final android.graphics.Rect xgramOutlineRect = new android.graphics.Rect();
+  private final RectF xgramRect = new RectF();
+  private final android.graphics.Paint xgramPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+  /** The container's box: the content area (inside the old 9-patch's shadow padding), as tall as the fade leaves it. */
+  private void xgramCardRect (android.graphics.Rect out) {
+    final float fadeFactor = fade.getFloatValue();
+    final int bottom = (int) MathUtils.fromTo(getMeasuredHeight() - getPaddingBottom(), getPaddingTop() + Screen.dp(48), fadeFactor);
+    out.set(getPaddingLeft(), getPaddingTop() - Screen.dp(8f), getMeasuredWidth() - getPaddingRight(), bottom + Screen.dp(8f));
+    if (out.top < 0) {
+      out.top = 0;
+    }
+    if (out.bottom > getMeasuredHeight()) {
+      out.bottom = getMeasuredHeight();
+    }
+  }
+
+  private void xgramDrawContainer (Canvas canvas) {
+    xgramCardRect(xgramOutlineRect);
+    xgramRect.set(xgramOutlineRect);
+    final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+    xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.floatingRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER)));
+    canvas.drawRoundRect(xgramRect, radius, radius, xgramPaint);
+    final float fadeFactor = fade.getFloatValue();
+    if (fadeFactor < 1f) {
+      // the divider between the slider and the presets, in the middle of their 12dp gap
+      final float y = getPaddingTop() + Screen.dp(48 + 6);
+      xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT), 1f - fadeFactor));
+      canvas.drawRect(xgramRect.left, y, xgramRect.right, y + Math.max(1, Screen.dp(1f)), xgramPaint);
+    }
   }
 
   public void init (ThemeListenerList themeListeners, Listener listener, int currentSpeed) {
@@ -450,11 +503,18 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
     private final Counter counter;
     private final Path path = new Path();
 
+    private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    private final android.graphics.Paint xgramPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
     public Slider (Context context) {
       super(context);
 
-      setTypeface(Fonts.getRobotoRegular());
-      setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+      if (xgram) {
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(this, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      } else {
+        setTypeface(Fonts.getRobotoRegular());
+        setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+      }
 
       setGravity(Gravity.CENTER_VERTICAL | Lang.gravity());
       setSingleLine(true);
@@ -493,11 +553,85 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
 
     private boolean inFillingMode;
     private int getTextColor () {
+      if (xgram) {
+        if (inFillingMode) {
+          return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR), isRed.getFloatValue());
+        }
+        return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+      }
       return Theme.getColor(inFillingMode ? ColorId.fillingPositiveContent : ColorId.text);
+    }
+
+    private static final int[] XGRAM_STOPS = {50, 100, 150, 200};
+
+    /** XGram M3E: the track 4dp in from the row's top and bottom and 8dp from its sides, the label inside it. */
+    private void xgramDraw (Canvas canvas, Layout layout) {
+      final float inset = Screen.dp(8f), vInset = Screen.dp(4f);
+      final float left = inset, right = getMeasuredWidth() - inset, top = vInset, bottom = getMeasuredHeight() - vInset;
+      if (right <= left) {
+        return;
+      }
+      final float radius = (bottom - top) / 2f;
+      final float position = left + (right - left) * MathUtils.clamp(value.getFactor());
+      final int active = ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR), isRed.getFloatValue());
+      final int inactive = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+
+      // Inactive track, then the active part clipped to the track's shape
+      tmpRect.set(left, top, right, bottom);
+      xgramPaint.setColor(inactive);
+      canvas.drawRoundRect(tmpRect, radius, radius, xgramPaint);
+      path.reset();
+      path.addRoundRect(tmpRect, radius, radius, Path.Direction.CW);
+      int s = Views.save(canvas);
+      canvas.clipPath(path);
+      xgramPaint.setColor(active);
+      canvas.drawRect(left, top, position, bottom, xgramPaint);
+      // Stops: 4dp dots in the content color of the part they sit on
+      final float dot = Screen.dp(2f);
+      for (int stop : XGRAM_STOPS) {
+        final float x = left + (right - left) * valueFromSpeed(stop);
+        if (x <= left + radius || x >= right - radius) {
+          continue;
+        }
+        xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(x <= position ?
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY) :
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), .6f));
+        canvas.drawCircle(x, bottom - Screen.dp(6f), dot, xgramPaint);
+      }
+      Views.restore(canvas, s);
+
+      // The label and the speed, in the content color of the part under them
+      final android.text.TextPaint textPaint = getPaint();
+      final float baseline = (getMeasuredHeight() - layout.getHeight()) / 2f + layout.getLineBaseline(0);
+      final String text = getText().toString();
+      final float textX = getPaddingLeft(); // as Telegram X, the speed sits at the end in both directions
+      tmpRect.set(0, 0, position, getMeasuredHeight());
+      s = Views.save(canvas);
+      canvas.clipRect(tmpRect);
+      inFillingMode = true;
+      textPaint.setColor(getTextColor());
+      canvas.drawText(text, textX, baseline, textPaint);
+      counter.draw(canvas, getMeasuredWidth() - Screen.dp(28), getMeasuredHeight() / 2f, Gravity.CENTER, 1f);
+      Views.restore(canvas, s);
+      tmpRect.set(position, 0, getMeasuredWidth(), getMeasuredHeight());
+      s = Views.save(canvas);
+      canvas.clipRect(tmpRect);
+      inFillingMode = false;
+      textPaint.setColor(getTextColor());
+      canvas.drawText(text, textX, baseline, textPaint);
+      counter.draw(canvas, getMeasuredWidth() - Screen.dp(28), getMeasuredHeight() / 2f, Gravity.CENTER, 1f);
+      Views.restore(canvas, s);
     }
 
     @Override
     protected void onDraw (Canvas canvas) {
+      if (xgram) {
+        final Layout layout = getLayout();
+        if (layout != null) {
+          xgramDraw(canvas, layout);
+        }
+        return;
+      }
       final int color = ColorUtils.fromToArgb(Theme.getColor(ColorId.fillingPositive), Theme.getColor(ColorId.fillingNegative), isRed.getFloatValue());
       final float position = getMeasuredWidth() * value.getFactor();
       final Layout layout = getLayout();
@@ -542,14 +676,24 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
     private Drawable drawable;
     private int speed;
 
+    private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    private final RectF xgramRect = new RectF();
+    private final android.graphics.Paint xgramPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    private Drawable xgramCheck;
+
     public Button (Context context) {
       super(context);
 
       this.isActive = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
       this.isSelected = new BoolAnimator(this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
 
-      setTypeface(Fonts.getRobotoRegular());
-      setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+      if (xgram) {
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(this, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+        xgramCheck = Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_check_24));
+      } else {
+        setTypeface(Fonts.getRobotoRegular());
+        setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+      }
 
       setGravity(Gravity.CENTER_VERTICAL | Lang.gravity());
       setSingleLine(true);
@@ -574,8 +718,43 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
       drawable = Drawables.get(getResources(), drawableRes);
     }
 
+    /** XGram M3E: the current speed on a secondaryContainer pill (CORNER_M, 8dp in) with a primary check; a press is a state layer. */
+    private void xgramDraw (Canvas canvas) {
+      final float inset = Screen.dp(8f), vInset = Screen.dp(2f);
+      xgramRect.set(inset, vInset, getMeasuredWidth() - inset, getMeasuredHeight() - vInset);
+      final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
+      final float active = isActive.getFloatValue();
+      if (active > 0f) {
+        xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), active));
+        canvas.drawRoundRect(xgramRect, radius, radius, xgramPaint);
+      }
+      final float selected = isSelected.getFloatValue();
+      if (selected > 0f) {
+        xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED * selected));
+        canvas.drawRoundRect(xgramRect, radius, radius, xgramPaint);
+      }
+      final int textColor = ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), active);
+      if (getCurrentTextColor() != textColor) {
+        setTextColor(textColor);
+      }
+      super.onDraw(canvas);
+      final float iconX = Lang.rtl() ? Screen.dp(12) : getMeasuredWidth() - Screen.dp(36);
+      if (drawable != null && active < 1f) {
+        final int color = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), 1f - active);
+        Drawables.draw(canvas, drawable, iconX, Screen.dp(12), Paints.getPorterDuffPaint(color));
+      }
+      if (xgramCheck != null && active > 0f) {
+        final int color = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), active);
+        Drawables.draw(canvas, xgramCheck, iconX, Screen.dp(12), Paints.getPorterDuffPaint(color));
+      }
+    }
+
     @Override
     protected void onDraw (Canvas canvas) {
+      if (xgram) {
+        xgramDraw(canvas);
+        return;
+      }
       final float selected = isSelected.getFloatValue();
       if (selected > 0) {
         canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(selected, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : Theme.RIPPLE_COLOR))); // XGram M3E: selected menu item container
@@ -628,6 +807,20 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
 
   @Override
   protected void dispatchDraw (@NonNull Canvas canvas) {
+    if (xgram) {
+      xgramDrawContainer(canvas);
+      final boolean clip = fade.getFloatValue() != 0f;
+      int saveCount = -1;
+      if (clip) {
+        saveCount = Views.save(canvas);
+        canvas.clipRect(xgramOutlineRect);
+      }
+      super.dispatchDraw(canvas);
+      if (clip) {
+        Views.restore(canvas, saveCount);
+      }
+      return;
+    }
     final float fadeFactor = fade.getFloatValue();
     final boolean needClip = fadeFactor != 0f;
 
@@ -714,6 +907,9 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
         button.setAlpha(alpha);
       }
 
+      if (xgram) {
+        invalidateOutline(); // XGram M3E: the container's shadow follows its height
+      }
       invalidate();
     }
   }
@@ -741,7 +937,12 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
     addItem(menuItem);
 
     Views.setClickable(menuItem);
-    RippleSupport.setTransparentSelector(menuItem);
+    if (xgram) {
+      // XGram M3E: a CORNER_M state layer on the item's pill, 8dp in from the container's sides
+      menuItem.setBackground(new android.graphics.drawable.InsetDrawable(com.fahadali.xgram.appearance.XgramExpressiveC.transparentSelector(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M), Screen.dp(8f), Screen.dp(2f), Screen.dp(8f), Screen.dp(2f)));
+    } else {
+      RippleSupport.setTransparentSelector(menuItem);
+    }
 
     buttonSparseArray.append(speed, menuItem);
     return menuItem;
