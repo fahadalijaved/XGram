@@ -52,8 +52,12 @@ public final class XgramW2MediaViewer {
   public static final float TOOLBAR_INSET_DP = 4f;
   /** Caption field: side inset, vertical inset, corner. */
   public static final float FIELD_INSET_H_DP = 8f, FIELD_INSET_V_DP = 2f, FIELD_CORNER_DP = 24f;
-  /** Where the caption text starts while the caption is not being edited: 16dp inside the field. */
-  public static final float FIELD_TEXT_START_DP = FIELD_INSET_H_DP + 16f;
+  /**
+   * Where the caption text starts while the caption is not being edited, from the caption view's start: 16dp inside
+   * the field. The field's insets pad the caption row (an InsetDrawable background pads its view by its insets), so
+   * the caption view starts at the field's edge.
+   */
+  public static final float FIELD_TEXT_START_DP = 16f;
 
   /** The floating toolbar container, set as the background of the edit buttons row. */
   @NonNull

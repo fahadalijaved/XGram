@@ -9169,6 +9169,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     editButtons.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER_HORIZONTAL));
     if (xgramGalleryToolbar()) {
       ViewUtils.setBackground(editButtons, com.fahadali.xgram.appearance.XgramW2MediaViewer.newToolbarBackground()); // XGram: the floating toolbar
+      // Its 4dp insets pad the row (InsetDrawable): the buttons are 48dp tall inside the 48dp container
+      final int toolbarInset = Screen.dp(com.fahadali.xgram.appearance.XgramW2MediaViewer.TOOLBAR_INSET_DP);
+      editButtons.setPadding(0, toolbarInset, 0, toolbarInset);
     }
 
     cropOrStickerButton = new EditButton(context);
@@ -9383,6 +9386,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     captionWrapView.setOrientation(LinearLayout.VERTICAL);
     if (xgramGalleryToolbar()) {
       ViewUtils.setBackground(captionWrapView, com.fahadali.xgram.appearance.XgramW2MediaViewer.newCaptionFieldBackground()); // XGram: a filled field, no band
+      // The field's insets pad the row (as its InsetDrawable background does on its own), so the input sits inside the field
+      final int fieldInsetH = Screen.dp(com.fahadali.xgram.appearance.XgramW2MediaViewer.FIELD_INSET_H_DP), fieldInsetV = Screen.dp(com.fahadali.xgram.appearance.XgramW2MediaViewer.FIELD_INSET_V_DP);
+      captionWrapView.setPadding(fieldInsetH, fieldInsetV, fieldInsetH, fieldInsetV);
     } else {
     captionWrapView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
     }
