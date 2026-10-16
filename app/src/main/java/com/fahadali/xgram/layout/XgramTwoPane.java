@@ -49,9 +49,10 @@ import org.thunderdog.challegram.ui.MainController;
  * {@link NavigationController} is shown on the left, and while the right pane is at its root (Telegram X's chat list)
  * a "select a chat" placeholder covers it. Folding or unfolding only shows or hides the left pane.
  *
- * With Material 3 Expressive the window also gets the navigation rail ({@link XgramNavRail}) at its start when it is
- * at least 600dp wide or shows two panes: rail, chat list pane, the 24dp pane spacer with its drag handle, chat. The
- * rail takes over the side menu, its swipe and the chat list's compose button.
+ * With Material 3 Expressive the window also gets the navigation rail ({@link XgramNavRail}) at its start when it
+ * shows two panes or is at least 600 x 480dp (never a phone or a Fold's cover screen, in either orientation), unless
+ * the Navigation rail setting is off: rail, chat list pane, the 24dp pane spacer with its drag handle, chat. The rail
+ * takes over the side menu and its swipe, and the chat list's Chats and Calls tabs; the list keeps its compose button.
  */
 public final class XgramTwoPane implements NavigationStack.ChangeListener {
   /**
@@ -256,7 +257,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     MainController root = mainRoot();
     boolean isAllowed = root != null && XgramSettings.instance().twoPaneLayout() && !navigation.isDestroyed();
     boolean needActive = isAllowed && isWideEnough(context, isActive);
-    // The rail first: the chat list pane built below already knows it has no ☰ and no compose button
+    // The rail first: the chat list pane built below already knows it has no ☰ and no Chats / Calls tabs
     try {
       setRailShown(needRail(root, needActive));
     } catch (Throwable t) {
@@ -292,6 +293,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
     updatePlaceholder();
     updateHighlight();
+    if (root != null) {
+      root.xgramUpdatePaneInset(); // beside the rail the root keeps clear of it, unless it is hidden under two panes
+    }
     syncRootHeader();
     syncLeftHeader();
     syncRail();
@@ -299,15 +303,31 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
 
   // Navigation rail (Material 3 Expressive)
 
-  /** Expressive design, past login, a window at least 600dp wide (or two panes), tall enough for the rail's items. */
+  /**
+   * Expressive design and the Navigation rail setting, past login, two panes or a window two panes would fit by size
+   * (at least 600 x 480dp: so never a phone or the cover screen, also in landscape where they are wide but low), tall
+   * enough for the rail's destinations above the navigation bar.
+   */
   private boolean needRail (@Nullable MainController root, boolean twoPanes) {
-    if (root == null || navigation.isDestroyed() || !XgramExpressive.isEnabled()) {
+    if (root == null || navigation.isDestroyed() || !XgramExpressive.isEnabled() || !XgramSettings.instance().navRail()) {
       return false;
     }
-    if (!twoPanes && windowWidthDp(context) < MIN_WIDTH_DP - (railShown ? HYSTERESIS_DP : 0)) {
-      return false;
+    if (!twoPanes) {
+      int slack = railShown ? HYSTERESIS_DP : 0;
+      if (windowWidthDp(context) < MIN_WIDTH_DP - slack || windowHeightDp(context) < MIN_HEIGHT_DP - slack) {
+        return false;
+      }
     }
-    return XgramNavRail.fits(XgramNavRail.destinations(root.tdlib(), false).length, windowHeightDp(context));
+    return XgramNavRail.fits(XgramNavRail.destinations(root).length, windowHeightDp(context), bottomInsetDp());
+  }
+
+  /** The navigation bar (or other system bar) at the bottom of the window, in dp. */
+  private int bottomInsetDp () {
+    androidx.core.view.WindowInsetsCompat insets = androidx.core.view.ViewCompat.getRootWindowInsets(container);
+    if (insets == null) {
+      return 0;
+    }
+    return Math.round(insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars()).bottom / Screen.density());
   }
 
   private void setRailShown (boolean show) {
@@ -333,7 +353,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
         drawer.xgramSetSwipeEnabled(!show);
       }
       container.requestLayout();
-      // The ☰ and the compose button of the chat lists come or go
+      // The ☰, the Chats and Calls tabs and the side insets of the chat lists come or go
       MainController root = mainRoot();
       if (root != null) {
         root.xgramOnNavRailChanged();
@@ -344,22 +364,25 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
   }
 
-  /** The rail's destinations (with the archive while there is room) and the one on screen. */
+  /** The rail's destinations, the one on screen and its badges' account. */
   private void syncRail () {
     XgramNavRail rail = this.rail;
     MainController root = mainRoot();
     if (!railShown || rail == null || root == null) {
       return;
     }
-    Tdlib tdlib = root.tdlib();
-    int[] destinations = XgramNavRail.destinations(tdlib, true);
-    if (!XgramNavRail.fits(destinations.length, windowHeightDp(context))) {
-      destinations = XgramNavRail.destinations(tdlib, false);
-    }
-    rail.sync(destinations);
+    rail.sync(XgramNavRail.destinations(railChatList()));
   }
 
-  /** The navigation rail is on screen: the side menu, its swipe and the chat list's compose button are on it. */
+  /** The chat list {@code c} shows another page (Chats or Calls, a folder): the rail's pill follows the one on screen. */
+  public void onRailPageChanged (@Nullable MainController c) {
+    XgramNavRail rail = this.rail;
+    if (railShown && rail != null && c != null && c == railChatList()) {
+      rail.onPageChanged();
+    }
+  }
+
+  /** The navigation rail is on screen: the side menu, its swipe and the Chats and Calls tabs are on it. */
   public boolean isRailShown () {
     return railShown;
   }
@@ -487,15 +510,11 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   }
 
   /**
-   * Space under the last chat of a chat list page in the narrow pane, so the compose button doesn't cover it. None
-   * while the navigation rail shows: the compose button is the rail's FAB then.
+   * Space under the last chat of a chat list page in the narrow pane, so the compose button doesn't cover it (also
+   * with the navigation rail: the chat list keeps its own extended FAB at the bottom end of its pane).
    */
   public static int fabSpace (@Nullable ViewController<?> c) {
     if (c == null) {
-      return 0;
-    }
-    XgramTwoPane twoPane = c.context().xgramTwoPane();
-    if (twoPane != null && twoPane.railShown) {
       return 0;
     }
     return isPaneChatList(c.getParentOrSelf()) ? Screen.dp(56f + 16f + 8f) : 0;

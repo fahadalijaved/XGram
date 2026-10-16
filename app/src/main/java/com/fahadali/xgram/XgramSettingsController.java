@@ -380,6 +380,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.openBeside(), isUpdate);
         } else if (id == R.id.btn_xgramTwoPane) {
           view.getToggler().setRadioEnabled(settings.twoPaneLayout(), isUpdate);
+        } else if (id == R.id.btn_xgramNavRail) {
+          view.getToggler().setRadioEnabled(settings.navRail(), isUpdate);
+          setReason(view, com.fahadali.xgram.layout.XgramNavRail.settingReason());
         } else if (id == R.id.btn_xgramHideFab) {
           view.getToggler().setRadioEnabled(settings.hideFab(), isUpdate);
         } else if (id == R.id.btn_xgramConnectionStatusStart) {
@@ -664,7 +667,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     );
 
     items.add(header(R.string.XgramLayout));
-    addRows(items, toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the navigation rail of wide windows (only with Expressive design)
+      addRows(items,
+        toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub),
+        toggle(R.id.btn_xgramNavRail, R.string.XgramNavRailOption, R.string.XgramNavRailOptionSub)
+      );
+    } else {
+      addRows(items, toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub));
+    }
     items.add(description(R.string.XgramTwoPaneInfo));
     addRows(items,
       toggle(R.id.btn_xgramPaneSplitEvenly, R.string.XgramPaneSplitEvenly, R.string.XgramPaneSplitEvenlySub),
@@ -1616,6 +1627,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         context.xgramTwoPane().update();
       }
       updatePaneRows();
+      return;
+    } else if (id == R.id.btn_xgramNavRail) {
+      if (com.fahadali.xgram.layout.XgramNavRail.settingReason() != 0) {
+        return;
+      }
+      settings.setNavRail(adapter.toggleView(v));
+      if (context.xgramTwoPane() != null) {
+        context.xgramTwoPane().update(); // the rail comes or goes at once, and the chat list's header with it
+      }
       return;
     } else if (id == R.id.btn_xgramExportSettings) {
       String json = XgramBackup.export();

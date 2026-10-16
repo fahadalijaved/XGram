@@ -11,6 +11,7 @@
  */
 package com.fahadali.xgram.layout;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
@@ -23,9 +24,10 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.os.Build;
+import android.os.SystemClock;
 import android.text.TextPaint;
 import android.text.TextUtils;
-import android.annotation.SuppressLint;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -37,6 +39,7 @@ import android.widget.ScrollView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.core.content.res.ResourcesCompat;
 
 import com.fahadali.xgram.XgramReorder;
@@ -49,15 +52,17 @@ import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.TogglerView;
 import org.thunderdog.challegram.core.Lang;
-import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.loader.AvatarReceiver;
 import org.thunderdog.challegram.navigation.HeaderView;
 import org.thunderdog.challegram.navigation.NavigationController;
 import org.thunderdog.challegram.navigation.NavigationStack;
 import org.thunderdog.challegram.navigation.ViewController;
+import org.thunderdog.challegram.telegram.CounterChangeListener;
+import org.thunderdog.challegram.telegram.GlobalCallListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibAccount;
 import org.thunderdog.challegram.telegram.TdlibBadgeCounter;
+import org.thunderdog.challegram.telegram.TdlibCounter;
 import org.thunderdog.challegram.telegram.TdlibManager;
 import org.thunderdog.challegram.telegram.TdlibUi;
 import org.thunderdog.challegram.theme.ColorState;
@@ -72,9 +77,6 @@ import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.CallListController;
-import org.thunderdog.challegram.ui.ChatsController;
-import org.thunderdog.challegram.ui.ContactsController;
-import org.thunderdog.challegram.ui.CreateChannelController;
 import org.thunderdog.challegram.ui.MainController;
 import org.thunderdog.challegram.ui.PeopleController;
 import org.thunderdog.challegram.ui.SettingsController;
@@ -85,7 +87,7 @@ import org.thunderdog.challegram.widget.RootFrameLayout;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import me.vkryl.core.ColorUtils;
+import me.vkryl.core.BitwiseUtils;
 import me.vkryl.core.MathUtils;
 import me.vkryl.core.lambda.Destroyable;
 import tgx.td.ChatId;
@@ -93,39 +95,47 @@ import tgx.td.ChatPosition;
 
 /**
  * The Material 3 Expressive navigation rail of wide windows (a Fold unfolded, tablets, desktop windows), at the start
- * of the window, before the chat list pane. {@link XgramTwoPane} owns it: it decides when it shows (Expressive design,
- * a window at least 600dp wide or two panes), lays it out and keeps its destination in step with what is on screen.
+ * of the window, right before the chat list pane. {@link XgramTwoPane} owns it: it decides when it shows (Expressive
+ * design, the Navigation rail setting, a window that gets two panes or is at least 600 x 480dp), lays it out and tells
+ * it when the screens or the chat list's page change.
  * <ul>
- *   <li>Collapsed rail: the menu button, the "New chat" FAB (the chat list's own compose button moves here), then the
- *   destinations (Chats, Contacts, Calls, Saved, Settings, Archive, as the side menu settings allow), the active one in
- *   a tonal pill that springs between them.</li>
- *   <li>Modal expanded rail (the menu button): slides in over the content with a scrim and holds the whole side
- *   menu: the destinations with their labels, the accounts, XGram's own pages and the switches.</li>
- *   <li>FAB menu (the FAB): new chat, group, channel or secret chat, unfolding below the FAB.</li>
+ *   <li>Collapsed rail, 72dp: the menu button in the app bar row, then icon-only destinations (labels are their
+ *   descriptions and tooltips). Chats and Calls are the chat list's two pages (they replace its Chats / Calls tabs, so
+ *   the list shows a plain title) and the active one sits in a 56 x 32dp tonal pill that springs between them.
+ *   Contacts, Saved messages and Settings open a screen, as from the side menu, and never take the pill. Chats has an
+ *   unread badge, Calls a missed calls one.</li>
+ *   <li>Modal expanded rail (the menu button): slides in over the content with a scrim, below the status bar, and
+ *   holds the whole side menu: the destinations with their labels, the accounts, XGram's own pages and the switches.
+ *   Back, the scrim or the menu button close it.</li>
  * </ul>
- * Values are androidx.compose.material3 1.5.0-beta01 tokens: NavigationRailCollapsedTokens, NavigationRailExpandedTokens,
- * NavigationRailVerticalItemTokens, NavigationRailHorizontalItemTokens, NavigationRailColorTokens, WideNavigationRail,
- * FabBaselineTokens, ExtendedFabSmallTokens, FabMenuBaselineTokens and SmallIconButtonTokens. Everything is drawn with
- * properties and springs: nothing is laid out again while it moves.
+ * There is no FAB on the rail: the chat list keeps its own extended "New chat" FAB and FAB menu at the bottom end of
+ * its pane. Values are androidx.compose.material3 tokens: NavigationRailCollapsedTokens and
+ * NavigationRailVerticalItemTokens (indicator, icon), NavigationRailExpandedTokens and
+ * NavigationRailHorizontalItemTokens (expanded rail), BadgeTokens and SmallIconButtonTokens.
  */
 public final class XgramNavRail {
   // Collapsed rail
 
-  /** NavigationRailCollapsedTokens.ContainerWidth. */
-  static final float WIDTH = 96f;
-  /** WideNavigationRail item horizontal padding: the indicator starts 20dp in, collapsed and expanded alike. */
-  private static final float ITEM_PADDING = 20f;
-  /** NavigationRailVerticalItemTokens: 56 x 32dp full-corner indicator, 24dp icon, 4dp to the labelMedium label. */
-  private static final float INDICATOR_WIDTH = 56f, INDICATOR_HEIGHT = 32f, ICON = 24f, ICON_LABEL_SPACE = 4f, LABEL_LINE = 16f;
-  /** WideNavigationRail TopIconItemMinHeight, and NavigationRailCollapsedTokens.ItemVerticalSpace. */
-  private static final float ITEM_HEIGHT = 64f, ITEM_SPACE = 4f;
-  private static final float ITEM_CONTENT = INDICATOR_HEIGHT + ICON_LABEL_SPACE + LABEL_LINE;
-  /** WideNavigationRail header padding: from the header (menu button, FAB) to the first destination. */
-  private static final float HEADER_PADDING = 40f;
-  /** The menu button sits in the 56dp app bar band of the panes, with the 40dp state layer of a small icon button. */
+  /**
+   * Rail width: the 56dp indicator with 8dp on each side. Material 3 rails are at most 80dp (96dp for the Expressive
+   * one with labels); without labels or a FAB nothing needs more, and the chat list pane starts right after it.
+   */
+  static final float WIDTH = 72f;
+  /** NavigationRailVerticalItemTokens: 56 x 32dp full-corner indicator, 24dp icon. */
+  private static final float INDICATOR_WIDTH = 56f, INDICATOR_HEIGHT = 32f, ICON = 24f;
+  /** A destination: the whole 72 x 56dp cell is the touch target, the indicator centered in it (12dp above and below). */
+  private static final float ITEM_HEIGHT = 56f;
+  /** The menu button sits in the 56dp app bar row of the panes, with the 40dp state layer of a small icon button. */
   private static final float BAND = 56f, MENU_STATE = 40f;
-  /** FabBaselineTokens: 56dp, CornerLarge. Lowered (level 0) inside the rail; 4dp under the app bar band. */
-  private static final float FAB_SIZE = 56f, FAB_CORNER = 16f, FAB_GAP = 4f;
+  /** From the app bar row to the first destination, so the menu button doesn't read as one of them. */
+  private static final float HEADER_GAP = 8f;
+  /** Kept free under the last destination (with the navigation bar) for the rail to show at all. */
+  private static final float BOTTOM_GAP = 16f;
+  /**
+   * BadgeTokens: the small badge is a 6dp dot at the icon's top end corner (18dp from its start edge); the large one
+   * is 16dp tall, at least 16dp wide, 4dp of padding around labelSmall, 12dp from the icon's start and 2dp above it.
+   */
+  private static final float BADGE_SMALL = 6f, BADGE_SMALL_START = 18f, BADGE_LARGE = 16f, BADGE_PADDING = 4f, BADGE_LARGE_START = 12f, BADGE_LARGE_TOP = -2f;
 
   // Modal expanded rail
 
@@ -133,59 +143,102 @@ public final class XgramNavRail {
   private static final float EXPANDED_MIN = 220f, EXPANDED_MAX = 360f, EXPANDED_CORNER = 16f;
   /** At least this much scrim stays visible next to the panel on a narrow window. */
   private static final float EXPANDED_SCRIM_MIN = 56f;
-  /** NavigationRailHorizontalItemTokens: 56dp full-corner indicator, 16dp leading, 8dp icon to labelLarge, 16dp trailing. */
+  /**
+   * Rows start where the collapsed indicator does (8dp), so their 24dp icons sit exactly over the collapsed rail's
+   * (36dp from the start); NavigationRailHorizontalItemTokens: 56dp full-corner rows, 16dp leading, 8dp icon to
+   * labelLarge, 16dp trailing.
+   */
+  private static final float ROW_PADDING = (WIDTH - INDICATOR_WIDTH) / 2f;
   private static final float ROW_HEIGHT = 56f, ROW_LEADING = 16f, ROW_ICON_LABEL = 8f, ROW_TRAILING = 16f;
-  private static final float AVATAR = 32f, SECTION_HEIGHT = 48f, SECTION_GAP = 8f, DIVIDER_HEIGHT = 17f, SWITCH_RESERVE = 52f + 8f;
-  private static final float TEXT_START = ITEM_PADDING + ROW_LEADING + ICON + ROW_ICON_LABEL;
-  private static final float AVATAR_TEXT_START = ITEM_PADDING + ROW_LEADING + ICON / 2f + AVATAR / 2f + ROW_ICON_LABEL;
-  /** ExtendedFabSmallTokens: 16dp leading, 24dp icon, 8dp to the labelLarge label, 16dp trailing. */
-  private static final float EXTENDED_FAB_LEADING = 16f, EXTENDED_FAB_ICON_LABEL = 8f, EXTENDED_FAB_TRAILING = 16f;
+  private static final float AVATAR = 32f, SECTION_HEIGHT = 48f, SECTION_GAP = 8f, DIVIDER_HEIGHT = 17f, SWITCH_RESERVE = 52f + 8f, SWITCH_END = 20f;
+  private static final float TEXT_START = ROW_PADDING + ROW_LEADING + ICON + ROW_ICON_LABEL;
+  private static final float AVATAR_TEXT_START = ROW_PADDING + ROW_LEADING + ICON / 2f + AVATAR / 2f + ROW_ICON_LABEL;
   /** The panel's background runs this far past its start edge, so the opening spring's overshoot never shows a gap. */
   private static final float OVERSHOOT_COVER = 64f;
 
-  // FAB menu: FabMenuBaselineTokens
-
-  private static final float MENU_ITEM_HEIGHT = 56f, MENU_ITEM_SPACE = 4f, MENU_CLOSE_GAP = 8f, MENU_ITEM_PADDING = 24f, MENU_ICON_LABEL = 8f, MENU_CLOSE_ICON = 20f;
-  /** Each item starts unfolding this much (of the spring's travel) after the one above it. */
-  private static final float MENU_STAGGER = .08f;
-
   // Destinations
 
-  static final int DEST_CHATS = 0, DEST_CONTACTS = 1, DEST_CALLS = 2, DEST_SAVED = 3, DEST_SETTINGS = 4, DEST_ARCHIVE = 5;
+  static final int DEST_CHATS = 0, DEST_CALLS = 1, DEST_CONTACTS = 2, DEST_SAVED = 3, DEST_SETTINGS = 4;
 
   /** Filled (the active destination) Material icons; with another icon pack, that pack's drawing of them. */
   private static final int[] DEST_FILLED = {
-    R.drawable.baseline_chat_bubble_24, R.drawable.baseline_perm_contact_calendar_24, R.drawable.baseline_call_24,
-    R.drawable.baseline_bookmark_24, R.drawable.baseline_settings_24, R.drawable.baseline_archive_24
+    R.drawable.baseline_chat_bubble_24, R.drawable.baseline_call_24, R.drawable.baseline_perm_contact_calendar_24,
+    R.drawable.baseline_bookmark_24, R.drawable.baseline_settings_24
   };
   /** Outlined (every other destination): the XGram Line family, as the rest of Material 3 Expressive with the Classic pack. */
   private static final int[] DEST_OUTLINED = {
-    R.drawable.xgl_chat_bubble, R.drawable.xgl_contacts, R.drawable.xgl_phone,
-    R.drawable.xgl_bookmark, R.drawable.xgl_settings, R.drawable.xgl_archive
+    R.drawable.xgl_chat_bubble, R.drawable.xgl_phone, R.drawable.xgl_contacts,
+    R.drawable.xgl_bookmark, R.drawable.xgl_settings
   };
-  /** Collapsed labels: short enough for a 96dp rail. */
-  private static final int[] DEST_SHORT = {R.string.Chats, R.string.Contacts, R.string.Calls, R.string.XgramNavRailSaved, R.string.Settings, R.string.XgramNavRailArchive};
-  private static final int[] DEST_LONG = {R.string.Chats, R.string.Contacts, R.string.Calls, R.string.XgramNavRailSavedMessages, R.string.Settings, R.string.XgramNavRailArchivedChats};
+  private static final int[] DEST_LABEL = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramNavRailSavedMessages, R.string.Settings};
   /** Side menu keys (XgramDrawerItemsController): hidden there, hidden here, and in the same order. */
-  private static final String[] DEST_KEY = {null, "contacts", "calls", "saved", "settings", null};
+  private static final String[] DEST_KEY = {null, "calls", "contacts", "saved", "settings"};
 
-  private static final int[] FAB_MENU_IDS = {R.id.btn_float_newChat, R.id.btn_float_newGroup, R.id.btn_float_newChannel, R.id.btn_float_newSecretChat};
-  private static final int[] FAB_MENU_FILLED = {R.drawable.baseline_person_24, R.drawable.baseline_group_24, R.drawable.baseline_bullhorn_24, R.drawable.baseline_lock_24};
-  private static final int[] FAB_MENU_OUTLINED = {R.drawable.xgl_person, R.drawable.xgl_group, R.drawable.xgl_bullhorn, R.drawable.xgl_lock};
-  private static final int[] FAB_MENU_LABELS = {R.string.XgramFabNewChat, R.string.XgramNavRailNewGroup, R.string.XgramNavRailNewChannel, R.string.XgramNavRailNewSecretChat};
+  /** Missed calls are looked up again at most this often while screens change (a missed call looks them up at once). */
+  private static final long MISSED_CHECK_INTERVAL_MS = 30_000L;
+  private static final int MISSED_FETCH = 20;
 
   private final BaseActivity context;
   private final XgramTwoPane owner;
-  private final TextPaint labelMedium, labelLarge, titleSmall, titleMedium;
-  private final float labelMediumCenter, labelLargeCenter, titleSmallCenter, titleMediumCenter;
+  private final TextPaint labelLarge, labelSmall, titleSmall;
+  private final float labelLargeCenter, labelSmallCenter, titleSmallCenter;
   private final RailView rail;
 
   private int[] destinations = new int[0];
   private int selected = DEST_CHATS;
+  private boolean destroyed;
 
-  @Nullable private PopupLayout expandedPopup, fabMenuPopup;
+  @Nullable private PopupLayout expandedPopup;
   @Nullable private ExpandedLayout expandedLayout;
-  @Nullable private FabMenuLayout fabMenuLayout;
+
+  // Badges: the account they count for, its unread chats and its missed calls since the call list was last seen.
+
+  @Nullable private Tdlib badgeTdlib;
+  private int unreadCount, missedCount, newestMissed, missedRequest;
+  private boolean unreadDot;
+  private long missedCheckedAt;
+  private volatile boolean badgePosted;
+
+  private final CounterChangeListener counterListener = new CounterChangeListener() {
+    @Override
+    public void onChatCounterChanged (@NonNull TdApi.ChatList chatList, TdlibCounter counter, boolean availabilityChanged, int totalCount, int unreadCount, int unreadUnmutedCount) {
+      onCounterChanged(chatList);
+    }
+
+    @Override
+    public void onMessageCounterChanged (@NonNull TdApi.ChatList chatList, TdlibCounter counter, int unreadCount, int unreadUnmutedCount) {
+      onCounterChanged(chatList);
+    }
+  };
+
+  private final Runnable badgeUpdate = () -> {
+    badgePosted = false;
+    if (!destroyed) {
+      updateUnreadBadge();
+    }
+  };
+
+  private final Runnable missedCheck = () -> {
+    if (!destroyed) {
+      refreshMissedCalls(true);
+    }
+  };
+
+  // A call that ended unanswered: look the missed calls up again once its message is in the history.
+  private final GlobalCallListener callListener = new GlobalCallListener() {
+    @Override
+    public void onUpdateCall (Tdlib tdlib, TdApi.UpdateCall update) {
+      TdApi.Call call = update != null ? update.call : null;
+      if (call != null && !call.isOutgoing && call.state != null && call.state.getConstructor() == TdApi.CallStateDiscarded.CONSTRUCTOR) {
+        UI.post(() -> {
+          if (!destroyed && tdlib == badgeTdlib) {
+            UI.cancel(missedCheck);
+            UI.post(missedCheck, 1500L);
+          }
+        });
+      }
+    }
+  };
 
   // Repaints with the colors of a day/night switch while it runs (every color is read when drawn).
   private final ThemeChangeListener themeListener = new ThemeChangeListener() {
@@ -203,25 +256,24 @@ public final class XgramNavRail {
   XgramNavRail (BaseActivity context, XgramTwoPane owner) {
     this.context = context;
     this.owner = owner;
-    this.labelMedium = newPaint(XgramExpressive.TS_LABEL_M);
     this.labelLarge = newPaint(XgramExpressive.TS_LABEL_L);
+    this.labelSmall = newPaint(XgramExpressive.TS_LABEL_S);
     this.titleSmall = newPaint(XgramExpressive.TS_TITLE_S);
-    this.titleMedium = newPaint(XgramExpressive.TS_TITLE_M);
-    this.labelMediumCenter = centerOffset(labelMedium);
     this.labelLargeCenter = centerOffset(labelLarge);
+    this.labelSmallCenter = centerOffset(labelSmall);
     this.titleSmallCenter = centerOffset(titleSmall);
-    this.titleMediumCenter = centerOffset(titleMedium);
     this.rail = new RailView(context);
     ThemeManager.instance().addThemeListener(themeListener);
+    TdlibManager.instance().global().addCallListener(callListener);
   }
 
-  // API for XgramTwoPane
+  // API for XgramTwoPane and the settings pages
 
   View view () {
     return rail;
   }
 
-  /** Width of the rail view: the 96dp rail and the system inset on its side (a cutout, a side navigation bar). */
+  /** Width of the rail view: the 72dp rail and the system inset on its side (a cutout, a side navigation bar). */
   int width () {
     return Screen.dp(WIDTH) + rail.startInset;
   }
@@ -230,41 +282,49 @@ public final class XgramNavRail {
     rail.setStartInset(px);
   }
 
-  /** The destinations this account and the side menu settings allow, in the side menu's order (Chats first). */
-  static int[] destinations (@Nullable Tdlib tdlib, boolean withArchive) {
-    XgramSettings xgram = XgramSettings.instance();
-    ArrayList<Integer> list = new ArrayList<>();
-    list.add(DEST_CHATS);
-    if (!xgram.drawerItemHidden("contacts")) {
-      list.add(DEST_CONTACTS);
-    }
-    // As in the side menu: without folders Calls is a tab of the chat list itself.
-    if (Settings.instance().chatFoldersEnabled() && !xgram.drawerItemHidden("calls")) {
-      list.add(DEST_CALLS);
-    }
-    if (!xgram.drawerItemHidden("saved")) {
-      list.add(DEST_SAVED);
-    }
-    list.add(DEST_SETTINGS);
-    XgramReorder.sort(XgramReorder.DRAWER, list, dest -> DEST_KEY[dest]);
-    if (withArchive && tdlib != null && tdlib.hasArchivedChats()) {
-      list.add(DEST_ARCHIVE);
-    }
-    int[] result = new int[list.size()];
-    for (int i = 0; i < result.length; i++) {
-      result[i] = list.get(i);
-    }
-    return result;
+  /** Why the Navigation rail setting can't be changed (Appearance > Layout), or 0. */
+  public static @StringRes int settingReason () {
+    return XgramExpressive.isEnabled() ? 0 : R.string.XgramNavRailNeedsExpressive;
   }
 
-  /** Whether the header and {@code count} destinations fit a window {@code heightDp} tall. */
-  static boolean fits (int count, int heightDp) {
+  /**
+   * The destinations, in this order: Chats and Calls (the chat list's pages; with folders Calls is a screen, as in the
+   * side menu, and the side menu settings can hide it then), then Contacts, Saved messages and Settings as the side
+   * menu has them (hidden there, hidden here; in its order).
+   */
+  static int[] destinations (@Nullable MainController list) {
+    XgramSettings xgram = XgramSettings.instance();
+    ArrayList<Integer> result = new ArrayList<>();
+    result.add(DEST_CHATS);
+    boolean callsPage = list == null || list.xgramHasCallsPage();
+    if (callsPage || !xgram.drawerItemHidden("calls")) {
+      result.add(DEST_CALLS);
+    }
+    ArrayList<Integer> screens = new ArrayList<>();
+    if (!xgram.drawerItemHidden("contacts")) {
+      screens.add(DEST_CONTACTS);
+    }
+    if (!xgram.drawerItemHidden("saved")) {
+      screens.add(DEST_SAVED);
+    }
+    screens.add(DEST_SETTINGS);
+    XgramReorder.sort(XgramReorder.DRAWER, screens, dest -> DEST_KEY[dest]);
+    result.addAll(screens);
+    int[] array = new int[result.size()];
+    for (int i = 0; i < array.length; i++) {
+      array[i] = result.get(i);
+    }
+    return array;
+  }
+
+  /** Whether the menu button and {@code count} destinations fit a window {@code heightDp} tall above its bottom inset. */
+  static boolean fits (int count, int heightDp, int bottomInsetDp) {
     float statusBarDp = HeaderView.getTopOffset() / Screen.density();
-    float needed = statusBarDp + BAND + FAB_GAP + FAB_SIZE + HEADER_PADDING + count * ITEM_HEIGHT + Math.max(0, count - 1) * ITEM_SPACE + 24f;
+    float needed = statusBarDp + BAND + HEADER_GAP + count * ITEM_HEIGHT + BOTTOM_GAP + Math.max(0, bottomInsetDp);
     return heightDp >= needed;
   }
 
-  /** New destinations (when they changed) and the one on screen now. */
+  /** New destinations (when they changed), the one on screen now, and the badges' account. */
   void sync (int[] destinations) {
     if (!Arrays.equals(this.destinations, destinations)) {
       this.destinations = destinations;
@@ -272,40 +332,39 @@ public final class XgramNavRail {
     } else {
       rail.updateLabels();
     }
+    MainController root = owner.railRoot();
+    setBadgeTdlib(root != null ? root.tdlib() : null);
     setSelected(computeSelected(), rail.isLaidOut());
+    refreshMissedCalls(false);
   }
 
   void onThemeChanged () {
     invalidateAll();
   }
 
-  /** Closes the expanded rail and the FAB menu at once (the rail is going away). */
+  /** Closes the expanded rail at once (the rail is going away). */
   void dismissPopups () {
     if (expandedPopup != null) {
       expandedPopup.hideWindow(false);
       expandedPopup = null;
       expandedLayout = null;
     }
-    if (fabMenuPopup != null) {
-      fabMenuPopup.hideWindow(false);
-      fabMenuPopup = null;
-      fabMenuLayout = null;
-    }
-    rail.fab.setVisibility(View.VISIBLE);
   }
 
   void destroy () {
+    destroyed = true;
     dismissPopups();
+    setBadgeTdlib(null);
+    UI.cancel(missedCheck);
+    UI.cancel(badgeUpdate);
     ThemeManager.instance().removeThemeListener(themeListener);
+    TdlibManager.instance().global().removeCallListener(callListener);
   }
 
   private void invalidateAll () {
     invalidateTree(rail);
     if (expandedLayout != null) {
       invalidateTree(expandedLayout);
-    }
-    if (fabMenuLayout != null) {
-      invalidateTree(fabMenuLayout);
     }
   }
 
@@ -319,56 +378,20 @@ public final class XgramNavRail {
     }
   }
 
-  // Destination on screen
+  // Destination on screen: the chat list's page (Chats or Calls). Screens opened from the rail never take the pill.
 
   private void setSelected (int dest, boolean animated) {
     selected = dest;
     rail.setSelected(dest, animated);
+    if (dest == DEST_CALLS) {
+      markCallsSeen();
+    }
   }
 
   private int computeSelected () {
-    MainController root = owner.railRoot();
-    Tdlib tdlib = root != null ? root.tdlib() : null;
-    NavigationController navigation = context.navigation();
-    NavigationStack stack = navigation != null ? navigation.getStack() : null;
-    ViewController<?> first = stack != null && stack.size() > 1 ? stack.get(1) : null;
-    int dest = destinationOf(first, tdlib);
-    if (dest == DEST_CHATS) {
-      // Two panes: the archive open in the chat list pane
-      NavigationController left = owner.railLeftNavigation();
-      if (left != null && isArchive(left.getCurrentStackItem())) {
-        dest = DEST_ARCHIVE;
-      }
-    }
+    MainController list = owner.railChatList();
+    int dest = list != null && list.xgramOnCallsPage() ? DEST_CALLS : DEST_CHATS;
     return indexOf(destinations, dest) != -1 ? dest : DEST_CHATS;
-  }
-
-  /** The destination a screen opened above the chat list belongs to (anything else, a chat for one, is Chats). */
-  private static int destinationOf (@Nullable ViewController<?> c, @Nullable Tdlib tdlib) {
-    if (c == null) {
-      return DEST_CHATS;
-    }
-    if (c instanceof PeopleController) {
-      return DEST_CONTACTS;
-    }
-    if (c instanceof CallListController) {
-      return DEST_CALLS;
-    }
-    if (c instanceof SettingsController) {
-      return DEST_SETTINGS;
-    }
-    if (isArchive(c)) {
-      return DEST_ARCHIVE;
-    }
-    long chatId = c.getChatId();
-    if (chatId != 0 && tdlib != null && tdlib.isSelfChat(chatId)) {
-      return DEST_SAVED;
-    }
-    return DEST_CHATS;
-  }
-
-  private static boolean isArchive (@Nullable ViewController<?> c) {
-    return c instanceof ChatsController && TD.isChatListArchive(((ChatsController) c).chatList());
   }
 
   private static int indexOf (int[] array, int value) {
@@ -380,6 +403,153 @@ public final class XgramNavRail {
     return -1;
   }
 
+  // Badges
+
+  private void setBadgeTdlib (@Nullable Tdlib tdlib) {
+    if (badgeTdlib == tdlib) {
+      return;
+    }
+    if (badgeTdlib != null) {
+      badgeTdlib.listeners().removeTotalChatCounterListener(counterListener);
+    }
+    badgeTdlib = tdlib;
+    newestMissed = 0;
+    missedCount = 0;
+    missedCheckedAt = 0;
+    missedRequest++;
+    if (tdlib != null) {
+      tdlib.listeners().addTotalChatCounterListener(counterListener);
+    }
+    updateUnreadBadge();
+    updateMissedBadge();
+  }
+
+  private void onCounterChanged (TdApi.ChatList chatList) {
+    int constructor = chatList.getConstructor();
+    if (constructor != TdApi.ChatListMain.CONSTRUCTOR && constructor != TdApi.ChatListArchive.CONSTRUCTOR) {
+      return;
+    }
+    if (!badgePosted) {
+      badgePosted = true;
+      UI.post(badgeUpdate);
+    }
+  }
+
+  /**
+   * As the chat list's own counters count (MainController#updateCounter, the folder badge settings): a count while
+   * there are unread chats (or messages) that aren't muted, a dot when only muted ones are unread.
+   */
+  private void updateUnreadBadge () {
+    Tdlib tdlib = badgeTdlib;
+    int count = 0;
+    boolean dot = false;
+    if (tdlib != null) {
+      int flags = tdlib.settings().getChatFolderBadgeFlags();
+      boolean messages = BitwiseUtils.hasFlag(flags, Settings.BADGE_FLAG_MESSAGES);
+      TdlibCounter main = tdlib.getCounter(ChatPosition.CHAT_LIST_MAIN);
+      int total = Math.max(0, messages ? main.messageCount : main.chatCount);
+      int unmuted = Math.max(0, messages ? main.messageUnmutedCount : main.chatUnmutedCount);
+      if (BitwiseUtils.hasFlag(flags, Settings.BADGE_FLAG_ARCHIVED)) {
+        TdlibCounter archive = tdlib.getCounter(ChatPosition.CHAT_LIST_ARCHIVE);
+        total += Math.max(0, messages ? archive.messageCount : archive.chatCount);
+        unmuted += Math.max(0, messages ? archive.messageUnmutedCount : archive.chatUnmutedCount);
+      }
+      if (unmuted > 0) {
+        count = BitwiseUtils.hasFlag(flags, Settings.BADGE_FLAG_MUTED) ? total : unmuted;
+      } else {
+        dot = total > 0;
+      }
+    }
+    if (count != unreadCount || dot != unreadDot) {
+      unreadCount = count;
+      unreadDot = dot;
+      rail.setBadge(DEST_CHATS, count, dot);
+    }
+  }
+
+  private void updateMissedBadge () {
+    rail.setBadge(DEST_CALLS, missedCount, false);
+  }
+
+  /** The newest missed calls: those after the last one seen in the call list count. The first look counts none. */
+  private void refreshMissedCalls (boolean force) {
+    final Tdlib tdlib = badgeTdlib;
+    if (tdlib == null || destroyed || indexOf(destinations, DEST_CALLS) == -1) {
+      return;
+    }
+    long now = SystemClock.uptimeMillis();
+    if (!force && missedCheckedAt != 0 && now - missedCheckedAt < MISSED_CHECK_INTERVAL_MS) {
+      return;
+    }
+    missedCheckedAt = now;
+    final int request = ++missedRequest;
+    tdlib.send(new TdApi.SearchCallMessages(null, MISSED_FETCH, true), (found, error) -> {
+      if (found == null || found.messages == null) {
+        return;
+      }
+      int newest = 0;
+      for (TdApi.Message message : found.messages) {
+        if (isMissedCall(message)) {
+          newest = Math.max(newest, message.date);
+        }
+      }
+      final int newestDate = newest;
+      final TdApi.Message[] messages = found.messages;
+      UI.post(() -> {
+        if (destroyed || tdlib != badgeTdlib || request != missedRequest) {
+          return;
+        }
+        XgramSettings settings = XgramSettings.instance();
+        int seen = settings.railCallsSeen(tdlib.id());
+        if (seen == 0 && newestDate > 0) {
+          // Never looked before: what is in the history now was there before the rail
+          settings.setRailCallsSeen(tdlib.id(), newestDate);
+          seen = newestDate;
+        }
+        int count = 0;
+        for (TdApi.Message message : messages) {
+          if (isMissedCall(message) && message.date > seen) {
+            count++;
+          }
+        }
+        newestMissed = Math.max(newestMissed, newestDate);
+        if (selected == DEST_CALLS) {
+          markCallsSeen();
+        } else if (count != missedCount) {
+          missedCount = count;
+          updateMissedBadge();
+        }
+      });
+    });
+  }
+
+  /** An incoming call nobody answered (not one declined here). */
+  private static boolean isMissedCall (@Nullable TdApi.Message message) {
+    if (message == null || message.isOutgoing || message.content == null || message.content.getConstructor() != TdApi.MessageCall.CONSTRUCTOR) {
+      return false;
+    }
+    TdApi.CallDiscardReason reason = ((TdApi.MessageCall) message.content).discardReason;
+    return reason != null && reason.getConstructor() == TdApi.CallDiscardReasonMissed.CONSTRUCTOR;
+  }
+
+  /** The call list is on screen: every missed call so far is seen. */
+  private void markCallsSeen () {
+    Tdlib tdlib = badgeTdlib;
+    if (tdlib != null) {
+      XgramSettings settings = XgramSettings.instance();
+      int stored = settings.railCallsSeen(tdlib.id());
+      // The newest missed call known; before the first look, now (nothing older counts then)
+      int seen = newestMissed > 0 ? newestMissed : stored == 0 ? (int) (System.currentTimeMillis() / 1000L) : stored;
+      if (seen > stored) {
+        settings.setRailCallsSeen(tdlib.id(), seen);
+      }
+    }
+    if (missedCount != 0) {
+      missedCount = 0;
+      updateMissedBadge();
+    }
+  }
+
   // Actions (the side menu's, see DrawerController#onClick)
 
   private boolean canNavigate () {
@@ -387,7 +557,7 @@ public final class XgramNavRail {
     return navigation != null && !navigation.isAnimating() && !navigation.isDestroyed();
   }
 
-  /** A destination screen replaces whatever the right pane (or the single pane) shows above the chat list. */
+  /** A screen replaces whatever the right pane (or the single pane) shows above the chat list. */
   private boolean open (ViewController<?> c) {
     NavigationController navigation = context.navigation();
     if (navigation == null || navigation.isAnimating()) {
@@ -400,27 +570,21 @@ public final class XgramNavRail {
     return navigation.navigateTo(c);
   }
 
-  /** The indicator moves on the tap; the stack change that follows confirms it (or puts it back). */
-  private void openDestination (int dest, ViewController<?> c) {
-    if (open(c)) {
-      setSelected(dest, true);
-    }
-  }
-
   /** Back to {@code index} in {@code navigation}: the screens between are dropped, the top one animates away. */
-  private static void popTo (NavigationController navigation, int index) {
+  private static boolean popTo (NavigationController navigation, int index) {
     if (navigation.isAnimating()) {
-      return;
+      return false;
     }
     NavigationStack stack = navigation.getStack();
     int current = stack.getCurrentIndex();
     if (current <= index) {
-      return;
+      return false;
     }
     for (int i = current - 1; i > index; i--) {
       stack.destroy(i);
     }
     navigation.navigateBack();
+    return true;
   }
 
   void onDestinationClick (int dest) {
@@ -430,77 +594,51 @@ public final class XgramNavRail {
       return;
     }
     final Tdlib tdlib = root.tdlib();
-    final NavigationController left = owner.railLeftNavigation();
-    if (dest == selected && dest != DEST_CHATS) {
-      // The destination again: back to its first screen
-      if (dest == DEST_ARCHIVE && left != null) {
-        popTo(left, 1);
-      } else {
-        popTo(navigation, 1);
-      }
-      return;
-    }
     switch (dest) {
-      case DEST_CHATS: {
-        if (left != null && left.getStackSize() > 1) {
-          popTo(left, 0); // the archive in the chat list pane
-          setSelected(DEST_CHATS, true);
+      case DEST_CHATS:
+      case DEST_CALLS: {
+        final boolean calls = dest == DEST_CALLS;
+        MainController list = owner.railChatList();
+        if (list == null) {
           return;
         }
-        NavigationStack stack = navigation.getStack();
-        ViewController<?> first = stack.size() > 1 ? stack.get(1) : null;
-        boolean chatBeside = left != null && first != null && destinationOf(first, tdlib) == DEST_CHATS;
-        if (stack.size() > 1 && !chatBeside) {
-          popTo(navigation, 0);
-          setSelected(DEST_CHATS, true);
-        } else {
-          MainController list = owner.railChatList();
-          if (list != null) {
-            list.scrollToFirstPosition();
+        if (calls && !list.xgramHasCallsPage()) {
+          // Folders: the chat list's pages are the folders, so Calls is a screen, as in the side menu
+          if (open(new CallListController(context, tdlib))) {
+            markCallsSeen();
           }
+          return;
         }
+        // Back to the chat list first: the archive open in the chat list pane, or with one pane what is above it
+        NavigationController left = owner.railLeftNavigation();
+        boolean popped = left != null ? popTo(left, 0) : popTo(navigation, 0);
+        // The same page again scrolls it to the top, as a second tap on its tab did
+        list.xgramShowRailPage(calls, !popped);
+        setSelected(computeSelected(), true); // the page the pager went to (none while chats are selected)
         break;
       }
       case DEST_CONTACTS: {
         tdlib.contacts().startSyncIfNeeded(context, true, () -> {
           PeopleController c = new PeopleController(context, tdlib);
           c.setNeedSearch();
-          openDestination(DEST_CONTACTS, c);
+          open(c);
         });
-        break;
-      }
-      case DEST_CALLS: {
-        openDestination(DEST_CALLS, new CallListController(context, tdlib));
         break;
       }
       case DEST_SAVED: {
         openSavedMessages(tdlib);
-        setSelected(DEST_SAVED, true);
         break;
       }
       case DEST_SETTINGS: {
-        openDestination(DEST_SETTINGS, new SettingsController(context, tdlib));
-        break;
-      }
-      case DEST_ARCHIVE: {
-        ChatsController c = new ChatsController(context, tdlib);
-        c.setArguments(new ChatsController.Arguments(ChatPosition.CHAT_LIST_ARCHIVE).setNeedMessagesSearch(true));
-        if (left != null) {
-          // A chat list: it opens in the chat list pane, as from the Archived chats row
-          if (!left.isAnimating()) {
-            if (left.getStackSize() > 1) {
-              left.setControllerAnimated(c, true, true);
-            } else {
-              left.navigateTo(c);
-            }
-            setSelected(DEST_ARCHIVE, true);
-          }
-        } else {
-          openDestination(DEST_ARCHIVE, c);
-        }
+        open(new SettingsController(context, tdlib));
         break;
       }
     }
+  }
+
+  /** The chat list's page changed (a tab, a swipe, the rail): the pill follows it. */
+  void onPageChanged () {
+    setSelected(computeSelected(), rail.isLaidOut());
   }
 
   private void openSavedMessages (Tdlib tdlib) {
@@ -574,41 +712,10 @@ public final class XgramNavRail {
     }
   }
 
-  private void onFabMenuAction (int id) {
-    MainController root = owner.railRoot();
-    if (root == null || !canNavigate()) {
-      return;
-    }
-    Tdlib tdlib = root.tdlib();
-    if (id == R.id.btn_float_newChannel) {
-      open(new CreateChannelController(context, tdlib));
-      return;
-    }
-    int mode;
-    if (id == R.id.btn_float_newGroup) {
-      mode = ContactsController.MODE_NEW_GROUP;
-    } else if (id == R.id.btn_float_newSecretChat) {
-      mode = ContactsController.MODE_NEW_SECRET_CHAT;
-    } else {
-      mode = ContactsController.MODE_NEW_CHAT;
-    }
-    ContactsController c = new ContactsController(context, tdlib);
-    c.initWithMode(mode);
-    open(c);
-  }
-
-  // Popups
+  // Expanded rail
 
   private static boolean isShowing (@Nullable PopupLayout popup) {
     return popup != null && !popup.isWindowHidden() && !popup.isDestroyed();
-  }
-
-  private PopupLayout newPopup () {
-    PopupLayout popup = new PopupLayout(context);
-    popup.setOverlayStatusBar(true);
-    popup.init(true);
-    popup.setNeedFullScreen(Settings.instance().useEdgeToEdge());
-    return popup;
   }
 
   /** The menu button: the modal expanded rail. */
@@ -616,10 +723,10 @@ public final class XgramNavRail {
     if (isShowing(expandedPopup) || owner.railRoot() == null || context.isActivityBusyWithSomething()) {
       return;
     }
-    if (isShowing(fabMenuPopup)) {
-      fabMenuPopup.hideWindow(true);
-    }
-    PopupLayout popup = newPopup();
+    PopupLayout popup = new PopupLayout(context);
+    popup.setOverlayStatusBar(true);
+    popup.init(true);
+    popup.setNeedFullScreen(Settings.instance().useEdgeToEdge());
     ExpandedLayout layout = new ExpandedLayout(context);
     popup.setDismissListener(p -> {
       if (expandedPopup == p) {
@@ -629,26 +736,6 @@ public final class XgramNavRail {
     });
     expandedPopup = popup;
     expandedLayout = layout;
-    popup.showAnimatedPopupView(layout, layout);
-  }
-
-  /** The FAB: what to start, unfolding below it. */
-  void openFabMenu () {
-    if (isShowing(fabMenuPopup) || owner.railRoot() == null || context.isActivityBusyWithSomething()) {
-      return;
-    }
-    PopupLayout popup = newPopup();
-    popup.setHideBackground(true); // no scrim (Compose FloatingActionButtonMenu): a touch outside closes it
-    FabMenuLayout layout = new FabMenuLayout(context);
-    popup.setDismissListener(p -> {
-      if (fabMenuPopup == p) {
-        fabMenuPopup = null;
-        fabMenuLayout = null;
-      }
-      rail.fab.setVisibility(View.VISIBLE);
-    });
-    fabMenuPopup = popup;
-    fabMenuLayout = layout;
     popup.showAnimatedPopupView(layout, layout);
   }
 
@@ -691,6 +778,14 @@ public final class XgramNavRail {
       return Drawables.get(res, outlined);
     }
     return Drawables.get(res, filled);
+  }
+
+  /** Content description and (Android 8+) tooltip: the rail shows no labels. */
+  private static void setLabel (View view, String label) {
+    view.setContentDescription(label);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      view.setTooltipText(label);
+    }
   }
 
   private static final Paint ICON_PAINT = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
@@ -751,9 +846,27 @@ public final class XgramNavRail {
     view.measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, width), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(Math.max(0, height), View.MeasureSpec.EXACTLY));
   }
 
+  /** A badge count as the expanded rail's trailing text (and the descriptions): null for none. */
+  @Nullable
+  private static String badgeText (int count) {
+    return count > 0 ? Strings.buildCounter(count) : null;
+  }
+
+  /** "Chats, 5 unread" / "Calls, 2 missed" for screen readers. */
+  private static String describe (int dest, int count, boolean dot) {
+    String label = Lang.getString(DEST_LABEL[dest]);
+    if (count > 0) {
+      return Lang.getString(dest == DEST_CALLS ? R.string.XgramNavRailMissed : R.string.XgramNavRailUnread, label, Strings.buildCounter(count));
+    }
+    if (dot) {
+      return Lang.getString(R.string.XgramNavRailUnreadMuted, label);
+    }
+    return label;
+  }
+
   /**
    * A view with an M3 state layer (ripple: hover, focus and press) on a shape inside it: the indicator of a
-   * destination, the circle of an icon button, the container of a FAB. The state layer is the content color at 10%.
+   * destination, the circle of an icon button, a row. The state layer is the content color at 10%.
    */
   private abstract static class StateView extends View {
     private final GradientDrawable mask;
@@ -829,9 +942,12 @@ public final class XgramNavRail {
 
   // Collapsed rail
 
+  /**
+   * The 72dp rail: surfaceContainer (the app bar's layer, so it runs on from the panes' app bars and the status bar),
+   * the menu button in the app bar row below the status bar, then a 56dp cell per destination 8dp lower.
+   */
   private final class RailView extends ViewGroup {
     private final MenuView menu;
-    private final FabView fab;
     private final ArrayList<ItemView> items = new ArrayList<>();
     private final RectF indicator = new RectF();
     /** Position of the active indicator, in items (springs between them: spatial fast). */
@@ -843,13 +959,9 @@ public final class XgramNavRail {
       super(context);
       setWillNotDraw(false);
       menu = new MenuView(context, false);
-      menu.setContentDescription(Lang.getString(R.string.XgramNavRailOpenMenu));
+      setLabel(menu, Lang.getString(R.string.XgramNavRailOpenMenu));
       menu.setOnClickListener(v -> expand());
       addView(menu);
-      fab = new FabView(context);
-      fab.setContentDescription(Lang.getString(R.string.XgramFabNewChat));
-      fab.setOnClickListener(v -> openFabMenu());
-      addView(fab);
       indicatorSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate()).setThreshold(.002f);
     }
 
@@ -865,6 +977,11 @@ public final class XgramNavRail {
       items.clear();
       for (int dest : destinations) {
         ItemView item = new ItemView(getContext(), dest);
+        if (dest == DEST_CHATS) {
+          item.setBadge(unreadCount, unreadDot);
+        } else if (dest == DEST_CALLS) {
+          item.setBadge(missedCount, false);
+        }
         items.add(item);
         addView(item);
       }
@@ -874,6 +991,14 @@ public final class XgramNavRail {
     void updateLabels () {
       for (ItemView item : items) {
         item.updateLabel();
+      }
+    }
+
+    void setBadge (int dest, int count, boolean dot) {
+      for (ItemView item : items) {
+        if (item.dest == dest) {
+          item.setBadge(count, dot);
+        }
       }
     }
 
@@ -902,11 +1027,7 @@ public final class XgramNavRail {
     }
 
     private int itemsTop () {
-      return HeaderView.getTopOffset() + Screen.dp(BAND + FAB_GAP + FAB_SIZE + HEADER_PADDING);
-    }
-
-    private int pitch () {
-      return Screen.dp(ITEM_HEIGHT) + Screen.dp(ITEM_SPACE);
+      return HeaderView.getTopOffset() + Screen.dp(BAND + HEADER_GAP);
     }
 
     @Override
@@ -915,7 +1036,6 @@ public final class XgramNavRail {
       setMeasuredDimension(width, height);
       int contentWidth = Screen.dp(WIDTH);
       measureExactly(menu, contentWidth, Screen.dp(BAND));
-      measureExactly(fab, Screen.dp(FAB_SIZE), Screen.dp(FAB_SIZE));
       for (ItemView item : items) {
         measureExactly(item, contentWidth, Screen.dp(ITEM_HEIGHT));
       }
@@ -927,13 +1047,10 @@ public final class XgramNavRail {
       int left = contentLeft(r - l);
       int top = HeaderView.getTopOffset();
       menu.layout(left, top, left + contentWidth, top + Screen.dp(BAND));
-      int fabTop = top + Screen.dp(BAND + FAB_GAP);
-      int fabLeft = left + Screen.dp((WIDTH - FAB_SIZE) / 2f);
-      fab.layout(fabLeft, fabTop, fabLeft + Screen.dp(FAB_SIZE), fabTop + Screen.dp(FAB_SIZE));
-      int y = itemsTop(), pitch = pitch(), itemHeight = Screen.dp(ITEM_HEIGHT);
+      int y = itemsTop(), itemHeight = Screen.dp(ITEM_HEIGHT);
       for (ItemView item : items) {
         item.layout(left, y, left + contentWidth, y + itemHeight);
-        y += pitch;
+        y += itemHeight;
       }
     }
 
@@ -958,7 +1075,7 @@ public final class XgramNavRail {
       if (!items.isEmpty() && indexOfItem(selectedDest) != -1) {
         ItemView first = items.get(0);
         float left = first.getLeft() + (Screen.dpf(WIDTH) - Screen.dpf(INDICATOR_WIDTH)) / 2f;
-        float top = first.getTop() + Screen.dpf((ITEM_HEIGHT - ITEM_CONTENT) / 2f) + indicatorSpring.getValue() * pitch();
+        float top = first.getTop() + (Screen.dpf(ITEM_HEIGHT) - Screen.dpf(INDICATOR_HEIGHT)) / 2f + indicatorSpring.getValue() * Screen.dp(ITEM_HEIGHT);
         indicator.set(left, top, left + Screen.dpf(INDICATOR_WIDTH), top + Screen.dpf(INDICATOR_HEIGHT));
         float radius = indicator.height() / 2f;
         c.drawRoundRect(indicator, radius, radius, Paints.fillingPaint(color(XgramExpressive.SECONDARY_CONTAINER)));
@@ -976,7 +1093,7 @@ public final class XgramNavRail {
     }
   }
 
-  /** The menu button (open: the expanded rail's, which closes it): a 24dp glyph in a 40dp state layer, 48dp from the start. */
+  /** The menu button (open: the expanded rail's, which closes it): a 24dp glyph in a 40dp state layer, 36dp from the start. */
   private final class MenuView extends StateView {
     private final boolean open;
 
@@ -1002,42 +1119,21 @@ public final class XgramNavRail {
     }
   }
 
-  /** The rail's FAB: 56dp, 16dp corners, primaryContainer with the compose icon in onPrimaryContainer. */
-  private final class FabView extends StateView {
-    private final Drawable icon;
-    private final RectF rect = new RectF();
-
-    FabView (Context context) {
-      super(context);
-      icon = restIcon(context.getResources(), R.drawable.baseline_create_24, R.drawable.xgl_edit);
-    }
-
-    @Override
-    protected int stateLayerColor () {
-      return color(XgramExpressive.ON_PRIMARY_CONTAINER);
-    }
-
-    @Override
-    protected void onDraw (Canvas c) {
-      float radius = Screen.dpf(FAB_CORNER);
-      rect.set(0, 0, getWidth(), getHeight());
-      c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(color(XgramExpressive.PRIMARY_CONTAINER)));
-      setStateShape(0, 0, getWidth(), getHeight(), radius);
-      drawState(c);
-      drawIcon(c, icon, getWidth() / 2f, getHeight() / 2f, Screen.dpf(ICON), color(XgramExpressive.ON_PRIMARY_CONTAINER), 1f);
-    }
-  }
-
   /**
-   * A destination of the collapsed rail: the 24dp icon in the 56 x 32dp indicator area, the labelMedium label 4dp
-   * below (secondary when active, onSurfaceVariant otherwise). The rail draws the indicator itself, so it can spring.
+   * A destination of the collapsed rail: the 24dp icon centered in the 56 x 32dp indicator area (filled and
+   * onSecondaryContainer when active, outlined and onSurfaceVariant otherwise), and its badge. No label. The rail draws
+   * the indicator itself, so it can spring.
    */
   private final class ItemView extends StateView {
     final int dest;
     private final Drawable icon, activeIcon;
-    private String label = "", drawnLabel = "";
-    private float drawnLabelWidth;
+    private final RectF badgeRect = new RectF();
+    private String label = "";
     private boolean active;
+    private int badgeCount;
+    private boolean badgeDot;
+    @Nullable private String badge;
+    private float badgeWidth;
 
     ItemView (Context context, int dest) {
       super(context);
@@ -1050,11 +1146,23 @@ public final class XgramNavRail {
     }
 
     void updateLabel () {
-      String label = Lang.getString(DEST_SHORT[dest]);
+      String label = Lang.getString(DEST_LABEL[dest]);
       if (!label.equals(this.label)) {
         this.label = label;
-        setContentDescription(Lang.getString(DEST_LONG[dest]));
-        layoutLabel(getWidth());
+        setLabel(this, label);
+        setContentDescription(describe(dest, badgeCount, badgeDot));
+      }
+    }
+
+    void setBadge (int count, boolean dot) {
+      count = Math.max(0, count);
+      dot = dot && count == 0;
+      if (badgeCount != count || badgeDot != dot) {
+        badgeCount = count;
+        badgeDot = dot;
+        badge = badgeText(count);
+        badgeWidth = badge != null ? labelSmall.measureText(badge) : 0f;
+        setContentDescription(describe(dest, count, dot));
         invalidate();
       }
     }
@@ -1067,18 +1175,6 @@ public final class XgramNavRail {
       }
     }
 
-    private void layoutLabel (int width) {
-      float available = (width > 0 ? width : Screen.dp(WIDTH)) - Screen.dpf(8f);
-      drawnLabel = TextUtils.ellipsize(label, labelMedium, available, TextUtils.TruncateAt.END).toString();
-      drawnLabelWidth = labelMedium.measureText(drawnLabel);
-    }
-
-    @Override
-    protected void onSizeChanged (int w, int h, int oldw, int oldh) {
-      super.onSizeChanged(w, h, oldw, oldh);
-      layoutLabel(w);
-    }
-
     @Override
     protected int stateLayerColor () {
       return color(XgramExpressive.ON_SECONDARY_CONTAINER); // NavigationRailColorTokens pressed / hovered state layer
@@ -1086,15 +1182,32 @@ public final class XgramNavRail {
 
     @Override
     protected void onDraw (Canvas c) {
-      float cx = getWidth() / 2f;
-      float top = Screen.dpf((ITEM_HEIGHT - ITEM_CONTENT) / 2f);
-      float halfWidth = Screen.dpf(INDICATOR_WIDTH) / 2f, height = Screen.dpf(INDICATOR_HEIGHT);
-      setStateShape(cx - halfWidth, top, cx + halfWidth, top + height, height / 2f);
+      final boolean rtl = Lang.rtl();
+      float cx = getWidth() / 2f, cy = getHeight() / 2f;
+      float halfWidth = Screen.dpf(INDICATOR_WIDTH) / 2f, halfHeight = Screen.dpf(INDICATOR_HEIGHT) / 2f;
+      setStateShape(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight, halfHeight);
       drawState(c);
-      drawIcon(c, active ? activeIcon : icon, cx, top + height / 2f, Screen.dpf(ICON), color(active ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE_VARIANT), 1f);
-      labelMedium.setColor(color(active ? XgramExpressive.SECONDARY : XgramExpressive.ON_SURFACE_VARIANT));
-      float lineTop = top + height + Screen.dpf(ICON_LABEL_SPACE);
-      c.drawText(drawnLabel, cx - drawnLabelWidth / 2f, lineTop + Screen.dpf(LABEL_LINE) / 2f + labelMediumCenter, labelMedium);
+      drawIcon(c, active ? activeIcon : icon, cx, cy, Screen.dpf(ICON), color(active ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE_VARIANT), 1f);
+
+      float iconStart = rtl ? cx + Screen.dpf(ICON / 2f) : cx - Screen.dpf(ICON / 2f);
+      float iconTop = cy - Screen.dpf(ICON / 2f);
+      if (badge != null) {
+        float height = Screen.dpf(BADGE_LARGE);
+        float width = Math.max(height, badgeWidth + Screen.dpf(BADGE_PADDING * 2f));
+        float start = Screen.dpf(BADGE_LARGE_START);
+        float left = rtl ? iconStart - start - width : iconStart + start;
+        float top = iconTop + Screen.dpf(BADGE_LARGE_TOP);
+        badgeRect.set(left, top, left + width, top + height);
+        c.drawRoundRect(badgeRect, height / 2f, height / 2f, Paints.fillingPaint(color(XgramExpressive.ERROR)));
+        labelSmall.setColor(color(XgramExpressive.ON_ERROR));
+        c.drawText(badge, badgeRect.centerX() - badgeWidth / 2f, badgeRect.centerY() + labelSmallCenter, labelSmall);
+      } else if (badgeDot) {
+        // Only muted chats are unread: the small badge, in the muted tone
+        float size = Screen.dpf(BADGE_SMALL);
+        float start = Screen.dpf(BADGE_SMALL_START);
+        float left = rtl ? iconStart - start - size : iconStart + start;
+        c.drawCircle(left + size / 2f, iconTop + size / 2f, size / 2f, Paints.fillingPaint(color(XgramExpressive.OUTLINE)));
+      }
     }
   }
 
@@ -1113,15 +1226,17 @@ public final class XgramNavRail {
     }
   }
 
+  /**
+   * The modal expanded rail: the panel over the collapsed rail, from below the status bar to the bottom, with the
+   * PopupLayout's scrim over everything else (and the status bar). The panel slides in from the start edge.
+   */
   private final class ExpandedLayout extends FrameLayout implements PopupLayout.AnimatedPopupProvider, RootFrameLayout.MarginModifier {
     private final PanelView panel;
     private final LinearLayout list;
     private final XgramExpressive.Spring spring;
     @Nullable private PopupLayout popup;
-    /** Above the menu button: the rail's own top inset, as seen from this window. */
-    @Nullable private View topSpacer;
     private float factor;
-    private int panelWidth, railLeft;
+    private int panelWidth, panelTop, railLeft;
     private boolean closing, finished, shown;
 
     ExpandedLayout (Context context) {
@@ -1148,16 +1263,11 @@ public final class XgramNavRail {
       Views.setMargins(params, 0, 0, 0, 0); // placed over the rail itself, insets included
     }
 
-    private LinearLayout.LayoutParams params (int width, int height, int topMargin, boolean startAligned, int startMargin) {
+    private LinearLayout.LayoutParams params (int width, int height, int topMargin, boolean startAligned) {
       LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, height);
       params.topMargin = topMargin;
       if (startAligned) {
         params.gravity = Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT;
-      }
-      if (Lang.rtl()) {
-        params.rightMargin = startMargin;
-      } else {
-        params.leftMargin = startMargin;
       }
       return params;
     }
@@ -1174,35 +1284,29 @@ public final class XgramNavRail {
       }
       list.setPadding(rtl ? 0 : inset, 0, rtl ? inset : 0, bottom + Screen.dp(16f));
 
-      // Status bar, then the header: the menu button (closes) and the extended FAB, where the rail has them
-      topSpacer = new View(context);
-      list.addView(topSpacer, params(match, HeaderView.getTopOffset(), 0, false, 0));
+      // The menu button (closes), where the rail has it: the panel starts below the status bar
       MenuView menu = new MenuView(context, true);
-      menu.setContentDescription(Lang.getString(R.string.XgramNavRailCloseMenu));
+      setLabel(menu, Lang.getString(R.string.XgramNavRailCloseMenu));
       menu.setOnClickListener(v -> close());
-      list.addView(menu, params(Screen.dp(WIDTH), Screen.dp(BAND), 0, true, 0));
-      ExtendedFabView fab = new ExtendedFabView(context);
-      fab.setOnClickListener(v -> {
-        close();
-        openFabMenu();
-      });
-      list.addView(fab, params(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(FAB_SIZE), Screen.dp(FAB_GAP), true, Screen.dp(ITEM_PADDING)));
+      list.addView(menu, params(Screen.dp(WIDTH), Screen.dp(BAND), 0, true));
 
-      // Destinations
+      // Destinations: each row exactly over its collapsed one
       for (int i = 0; i < destinations.length; i++) {
         final int dest = destinations[i];
-        RowView row = new RowView(context, dest, true, restIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]), activeIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]), Lang.getString(DEST_LONG[dest]), null);
+        String badge = dest == DEST_CHATS ? badgeText(unreadCount) : dest == DEST_CALLS ? badgeText(missedCount) : null;
+        RowView row = new RowView(context, true, restIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]), activeIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]), Lang.getString(DEST_LABEL[dest]), badge);
+        row.setContentDescription(describe(dest, dest == DEST_CHATS ? unreadCount : dest == DEST_CALLS ? missedCount : 0, dest == DEST_CHATS && unreadDot));
         row.setActive(dest == selected);
         row.setOnClickListener(v -> {
           markShown();
           onDestinationClick(dest);
           close();
         });
-        list.addView(row, params(match, Screen.dp(ROW_HEIGHT), Screen.dp(i == 0 ? HEADER_PADDING : ITEM_SPACE), false, 0));
+        list.addView(row, params(match, Screen.dp(ROW_HEIGHT), i == 0 ? Screen.dp(HEADER_GAP) : 0, false));
       }
 
       // Accounts
-      list.addView(new SectionView(context, Lang.getString(R.string.XgramNavRailAccounts)), params(match, Screen.dp(SECTION_HEIGHT), Screen.dp(SECTION_GAP), false, 0));
+      list.addView(new SectionView(context, Lang.getString(R.string.XgramNavRailAccounts)), params(match, Screen.dp(SECTION_HEIGHT), Screen.dp(SECTION_GAP), false));
       ArrayList<TdlibAccount> accounts = TdlibManager.instance().getActiveAccounts();
       for (final TdlibAccount account : accounts) {
         boolean current = account.id == account.context().preferredAccountId();
@@ -1217,9 +1321,9 @@ public final class XgramNavRail {
           }
           close();
         });
-        list.addView(row, params(match, Screen.dp(ROW_HEIGHT), 0, false, 0));
+        list.addView(row, params(match, Screen.dp(ROW_HEIGHT), 0, false));
       }
-      list.addView(actionRow(context, new Entry(null, R.id.btn_addAccount, R.drawable.baseline_add_24, R.drawable.xgl_add, R.string.XgramNavRailAddAccount), true), params(match, Screen.dp(ROW_HEIGHT), 0, false, 0));
+      list.addView(actionRow(context, new Entry(null, R.id.btn_addAccount, R.drawable.baseline_add_24, R.drawable.xgl_add, R.string.XgramNavRailAddAccount)), params(match, Screen.dp(ROW_HEIGHT), 0, false));
 
       // The rest of the side menu, in its order (destinations are above), then its switches
       XgramSettings xgram = XgramSettings.instance();
@@ -1252,34 +1356,32 @@ public final class XgramNavRail {
       }
       XgramReorder.sort(XgramReorder.DRAWER, toggles, entry -> entry.key);
       if (!entries.isEmpty() || !toggles.isEmpty()) {
-        list.addView(new DividerView(context), params(match, Screen.dp(DIVIDER_HEIGHT), Screen.dp(SECTION_GAP), false, 0));
+        list.addView(new DividerView(context), params(match, Screen.dp(DIVIDER_HEIGHT), Screen.dp(SECTION_GAP), false));
       }
       for (Entry entry : entries) {
         View row;
         if (entry.id == R.id.btn_proxy) {
           row = switchRow(context, entry, Settings.instance().getEffectiveProxyId() != Settings.PROXY_ID_NONE);
         } else {
-          row = actionRow(context, entry, true);
+          row = actionRow(context, entry);
         }
-        list.addView(row, params(match, Screen.dp(ROW_HEIGHT), 0, false, 0));
+        list.addView(row, params(match, Screen.dp(ROW_HEIGHT), 0, false));
       }
       for (Entry entry : toggles) {
         boolean checked = entry.id == R.id.btn_night ? Theme.isDark() : xgram.isAnyGhostEnabled();
-        list.addView(switchRow(context, entry, checked), params(match, Screen.dp(ROW_HEIGHT), 0, false, 0));
+        list.addView(switchRow(context, entry, checked), params(match, Screen.dp(ROW_HEIGHT), 0, false));
       }
     }
 
     /** A side menu entry that opens something (and closes the rail). */
-    private RowView actionRow (Context context, Entry entry, boolean closes) {
+    private RowView actionRow (Context context, Entry entry) {
       Resources res = context.getResources();
-      RowView row = new RowView(context, entry.id, false, restIcon(res, entry.filled, entry.outlined), null, Lang.getString(entry.label), null);
+      RowView row = new RowView(context, false, restIcon(res, entry.filled, entry.outlined), null, Lang.getString(entry.label), null);
       final int id = entry.id;
       row.setOnClickListener(v -> {
         markShown();
         onMenuAction(id);
-        if (closes) {
-          close();
-        }
+        close();
       });
       return row;
     }
@@ -1293,16 +1395,16 @@ public final class XgramNavRail {
       final boolean rtl = Lang.rtl();
       final int id = entry.id;
       FrameLayout wrap = new FrameLayout(context);
-      RowView row = new RowView(context, id, false, restIcon(res, entry.filled, entry.outlined), null, Lang.getString(entry.label), null);
+      RowView row = new RowView(context, false, restIcon(res, entry.filled, entry.outlined), null, Lang.getString(entry.label), null);
       row.setTrailingReserve(Screen.dp(SWITCH_RESERVE));
       wrap.addView(row, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
       final TogglerView toggler = new TogglerView(context);
       toggler.init(checked);
       FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(Screen.dp(74f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER_VERTICAL | (rtl ? Gravity.LEFT : Gravity.RIGHT));
       if (rtl) {
-        params.leftMargin = Screen.dp(ITEM_PADDING);
+        params.leftMargin = Screen.dp(SWITCH_END);
       } else {
-        params.rightMargin = Screen.dp(ITEM_PADDING);
+        params.rightMargin = Screen.dp(SWITCH_END);
       }
       wrap.addView(toggler, params);
       if (id == R.id.btn_proxy) {
@@ -1362,25 +1464,40 @@ public final class XgramNavRail {
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
       int width = MeasureSpec.getSize(widthMeasureSpec), height = MeasureSpec.getSize(heightMeasureSpec);
       setMeasuredDimension(width, height);
-      // Where the rail is, seen from this window (edge to edge or not): the panel lies exactly over it
-      int[] own = Views.getLocationOnScreen(this);
-      int[] railLocation = Views.getLocationOnScreen(rail);
-      railLeft = railLocation[0] - own[0];
-      int spacer = Math.max(0, railLocation[1] - own[1] + HeaderView.getTopOffset());
-      if (topSpacer != null && topSpacer.getLayoutParams() != null && topSpacer.getLayoutParams().height != spacer) {
-        topSpacer.getLayoutParams().height = spacer; // before the measure below, so no new layout
-      }
+      // Where the rail is, seen from this window (edge to edge or not): the panel lies exactly over it, below the
+      // status bar. Views.getLocationOnScreen hands out one shared array: copy each value before the next call.
+      int[] location = Views.getLocationOnScreen(this);
+      int ownX = location[0], ownY = location[1];
+      location = Views.getLocationOnScreen(rail);
+      int railX = location[0], railY = location[1];
+      railLeft = railX - ownX;
+      panelTop = Math.max(0, Math.min(height, railY - ownY + HeaderView.getTopOffset()));
       int inset = rail.startInset;
       int content = Math.max(Screen.dp(EXPANDED_MIN), Math.min(Screen.dp(EXPANDED_MAX), width - inset - Screen.dp(EXPANDED_SCRIM_MIN)));
       panelWidth = Math.min(width, content + inset);
-      measureExactly(panel, panelWidth, height);
+      measureExactly(panel, panelWidth, height - panelTop);
     }
 
     @Override
     protected void onLayout (boolean changed, int l, int t, int r, int b) {
       int left = Lang.rtl() ? railLeft + rail.getWidth() - panelWidth : railLeft;
-      panel.layout(left, 0, left + panelWidth, b - t);
+      panel.layout(left, panelTop, left + panelWidth, b - t);
       applyFactor();
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
+    public boolean onTouchEvent (MotionEvent e) {
+      // The scrim: a touch anywhere off the panel closes the rail, even while it is still opening
+      if (e.getActionMasked() == MotionEvent.ACTION_DOWN && !closing) {
+        float x = e.getX(), y = e.getY();
+        float left = panel.getLeft() + panel.getTranslationX();
+        boolean onPanel = x >= left && x < left + panel.getWidth() && y >= panel.getTop() && y < panel.getBottom();
+        if (!onPanel) {
+          close();
+        }
+      }
+      return true;
     }
 
     private void applyFactor () {
@@ -1487,7 +1604,7 @@ public final class XgramNavRail {
   /**
    * A row of the expanded rail, 56dp: the 24dp icon (or a 32dp avatar) 16dp into the indicator, the labelLarge label
    * 8dp after it, an optional trailing count. A destination's indicator hugs its content; other rows fill the width.
-   * The active one (the destination on screen, the current account) is secondaryContainer with onSecondaryContainer.
+   * The active one (the chat list's page, the current account) is secondaryContainer with onSecondaryContainer.
    */
   private final class RowView extends StateView implements Destroyable {
     private final boolean destination;
@@ -1502,7 +1619,7 @@ public final class XgramNavRail {
     private boolean active;
     private int trailingReserve;
 
-    RowView (Context context, int id, boolean destination, @Nullable Drawable icon, @Nullable Drawable activeIcon, String label, @Nullable String badge) {
+    RowView (Context context, boolean destination, @Nullable Drawable icon, @Nullable Drawable activeIcon, String label, @Nullable String badge) {
       super(context);
       this.destination = destination;
       this.icon = icon;
@@ -1548,7 +1665,7 @@ public final class XgramNavRail {
       if (width <= 0) {
         return;
       }
-      float available = width - textStart() - Screen.dpf(ITEM_PADDING + ROW_TRAILING) - trailingReserve - (badge != null ? badgeWidth + Screen.dpf(ROW_ICON_LABEL) : 0f);
+      float available = width - textStart() - Screen.dpf(ROW_PADDING + ROW_TRAILING) - trailingReserve - (badge != null ? badgeWidth + Screen.dpf(ROW_ICON_LABEL) : 0f);
       drawnLabel = available > 0 ? TextUtils.ellipsize(label, labelLarge, available, TextUtils.TruncateAt.END).toString() : "";
       drawnLabelWidth = labelLarge.measureText(drawnLabel);
     }
@@ -1591,8 +1708,8 @@ public final class XgramNavRail {
     protected void onDraw (Canvas c) {
       final boolean rtl = Lang.rtl();
       final int width = getWidth(), height = getHeight();
-      final float padding = Screen.dpf(ITEM_PADDING);
-      float end = destination ? padding + Screen.dpf(ROW_LEADING + ICON + ROW_ICON_LABEL) + drawnLabelWidth + Screen.dpf(ROW_TRAILING) : width - padding;
+      final float padding = Screen.dpf(ROW_PADDING);
+      float end = destination ? textStart() + drawnLabelWidth + (badge != null ? Screen.dpf(ROW_ICON_LABEL) + badgeWidth : 0f) + Screen.dpf(ROW_TRAILING) : width - padding;
       end = Math.min(end, width - padding);
       rect.set(rtl ? width - end : padding, 0, rtl ? width - padding : end, height);
       float radius = height / 2f;
@@ -1621,9 +1738,9 @@ public final class XgramNavRail {
       float x = rtl ? width - textStart - drawnLabelWidth : textStart;
       c.drawText(drawnLabel, x, cy + labelLargeCenter, labelLarge);
       if (badge != null) {
-        labelLarge.setColor(color(XgramExpressive.ON_SURFACE_VARIANT));
-        float trailing = padding + Screen.dpf(ROW_TRAILING);
-        c.drawText(badge, rtl ? trailing : width - trailing - badgeWidth, cy + labelLargeCenter, labelLarge);
+        labelLarge.setColor(color(destination ? content : XgramExpressive.ON_SURFACE_VARIANT));
+        float badgeStart = destination ? textStart + drawnLabelWidth + Screen.dpf(ROW_ICON_LABEL) : width - padding - Screen.dpf(ROW_TRAILING) - badgeWidth;
+        c.drawText(badge, rtl ? width - badgeStart - badgeWidth : badgeStart, cy + labelLargeCenter, labelLarge);
       }
     }
   }
@@ -1640,7 +1757,7 @@ public final class XgramNavRail {
     @Override
     protected void onDraw (Canvas c) {
       titleSmall.setColor(color(XgramExpressive.ON_SURFACE_VARIANT));
-      float start = Screen.dpf(ITEM_PADDING + ROW_LEADING);
+      float start = Screen.dpf(ROW_PADDING + ROW_LEADING);
       float width = titleSmall.measureText(text);
       c.drawText(text, Lang.rtl() ? getWidth() - start - width : start, getHeight() / 2f + titleSmallCenter, titleSmall);
     }
@@ -1654,335 +1771,10 @@ public final class XgramNavRail {
 
     @Override
     protected void onDraw (Canvas c) {
-      float inset = Screen.dpf(ITEM_PADDING + ROW_LEADING);
+      float inset = Screen.dpf(ROW_PADDING + ROW_LEADING);
       float thickness = Math.max(1f, Screen.dpf(1f));
       float top = (getHeight() - thickness) / 2f;
       c.drawRect(inset, top, getWidth() - inset, top + thickness, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.OUTLINE_VARIANT)));
-    }
-  }
-
-  /** The expanded rail's extended FAB: 56dp, 16dp corners, primaryContainer, the icon where the rail's FAB has it. */
-  private final class ExtendedFabView extends StateView {
-    private final Drawable icon;
-    private final String label;
-    private final float labelWidth;
-    private final RectF rect = new RectF();
-
-    ExtendedFabView (Context context) {
-      super(context);
-      icon = restIcon(context.getResources(), R.drawable.baseline_create_24, R.drawable.xgl_edit);
-      label = Lang.getString(R.string.XgramFabNewChat);
-      labelWidth = labelLarge.measureText(label);
-      setContentDescription(label);
-    }
-
-    @Override
-    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-      int width = (int) Math.ceil(Screen.dpf(EXTENDED_FAB_LEADING + ICON + EXTENDED_FAB_ICON_LABEL + EXTENDED_FAB_TRAILING) + labelWidth);
-      setMeasuredDimension(Math.max(width, Screen.dp(FAB_SIZE)), Screen.dp(FAB_SIZE));
-    }
-
-    @Override
-    protected int stateLayerColor () {
-      return color(XgramExpressive.ON_PRIMARY_CONTAINER);
-    }
-
-    @Override
-    protected void onDraw (Canvas c) {
-      final boolean rtl = Lang.rtl();
-      final int width = getWidth(), height = getHeight();
-      float radius = Screen.dpf(FAB_CORNER);
-      rect.set(0, 0, width, height);
-      c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(color(XgramExpressive.PRIMARY_CONTAINER)));
-      setStateShape(0, 0, width, height, radius);
-      drawState(c);
-      int content = color(XgramExpressive.ON_PRIMARY_CONTAINER);
-      float iconCenter = Screen.dpf(EXTENDED_FAB_LEADING + ICON / 2f);
-      drawIcon(c, icon, rtl ? width - iconCenter : iconCenter, height / 2f, Screen.dpf(ICON), content, 1f);
-      labelLarge.setColor(content);
-      float textStart = Screen.dpf(EXTENDED_FAB_LEADING + ICON + EXTENDED_FAB_ICON_LABEL);
-      c.drawText(label, rtl ? width - textStart - labelWidth : textStart, height / 2f + labelLargeCenter, labelLarge);
-    }
-  }
-
-  // FAB menu
-
-  private final class FabMenuLayout extends FrameLayout implements PopupLayout.AnimatedPopupProvider, RootFrameLayout.MarginModifier {
-    private final CloseView close;
-    private final FabMenuItemView[] items;
-    private final XgramExpressive.Spring spatial, effects;
-    @Nullable private PopupLayout popup;
-    private boolean closing, finished, shown;
-
-    FabMenuLayout (Context context) {
-      super(context);
-      setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-      Resources res = context.getResources();
-      items = new FabMenuItemView[FAB_MENU_IDS.length];
-      for (int i = 0; i < items.length; i++) {
-        final int id = FAB_MENU_IDS[i];
-        FabMenuItemView item = new FabMenuItemView(context, restIcon(res, FAB_MENU_FILLED[i], FAB_MENU_OUTLINED[i]), Lang.getString(FAB_MENU_LABELS[i]));
-        item.setOnClickListener(v -> {
-          if (!closing) {
-            markShown();
-            onFabMenuAction(id);
-            dismiss();
-          }
-        });
-        items[i] = item;
-        addView(item);
-      }
-      close = new CloseView(context);
-      close.setContentDescription(Lang.getString(R.string.XgramNavRailCloseFabMenu));
-      close.setOnClickListener(v -> dismiss());
-      addView(close);
-      // FloatingActionButtonMenu: the items unfold with the fast spatial spring and fade with the fast effects one
-      spatial = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> apply()).setThreshold(.002f);
-      effects = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> apply()).setThreshold(.004f);
-    }
-
-    @Override
-    public void onApplyMarginInsets (View child, FrameLayout.LayoutParams params, Rect legacyInsets, Rect insets, Rect insetsWithoutIme) {
-      Views.setMargins(params, 0, 0, 0, 0);
-    }
-
-    void dismiss () {
-      if (popup != null) {
-        popup.hideWindow(true);
-      }
-    }
-
-    private void markShown () {
-      if (!shown && popup != null) {
-        shown = true;
-        popup.onCustomShowComplete();
-      }
-    }
-
-    @Override
-    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-      setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec));
-      measureExactly(close, Screen.dp(FAB_SIZE), Screen.dp(FAB_SIZE));
-      for (FabMenuItemView item : items) {
-        measureExactly(item, item.desiredWidth(), Screen.dp(MENU_ITEM_HEIGHT));
-      }
-    }
-
-    @Override
-    protected void onLayout (boolean changed, int l, int t, int r, int b) {
-      int[] own = Views.getLocationOnScreen(this);
-      int[] fab = Views.getLocationOnScreen(rail.fab);
-      int size = Screen.dp(FAB_SIZE);
-      int fabLeft = fab[0] - own[0], fabTop = fab[1] - own[1];
-      close.layout(fabLeft, fabTop, fabLeft + size, fabTop + size);
-      boolean rtl = Lang.rtl();
-      int y = fabTop + size + Screen.dp(MENU_CLOSE_GAP);
-      int itemHeight = Screen.dp(MENU_ITEM_HEIGHT), space = Screen.dp(MENU_ITEM_SPACE);
-      for (FabMenuItemView item : items) {
-        int width = item.getMeasuredWidth();
-        int left = rtl ? fabLeft + size - width : fabLeft;
-        item.layout(left, y, left + width, y + itemHeight);
-        y += itemHeight + space;
-      }
-    }
-
-    private void apply () {
-      if (finished) {
-        return;
-      }
-      float s = spatial.getValue(), e = MathUtils.clamp(effects.getValue());
-      close.setMorph(MathUtils.clamp(s));
-      int count = items.length;
-      float span = 1f - MENU_STAGGER * (count - 1);
-      for (int i = 0; i < count; i++) {
-        float reveal = MathUtils.clamp((s - MENU_STAGGER * i) / span);
-        items[i].setReveal(reveal, Math.min(e, reveal > 0f ? 1f : 0f));
-      }
-      if (popup != null) {
-        popup.setRevealFactor(MathUtils.clamp(s));
-      }
-      if (!closing && s >= .9f) {
-        markShown();
-      }
-      if (closing && s <= 0f && e <= 0f) {
-        finishHide();
-      }
-    }
-
-    private void onSpringEnd () {
-      if (closing) {
-        if (!spatial.isRunning() && !effects.isRunning()) {
-          finishHide();
-        }
-      } else if (popup != null && !finished) {
-        popup.setRevealFactor(1f);
-        markShown();
-      }
-    }
-
-    private void finishHide () {
-      if (!finished) {
-        finished = true;
-        if (popup != null) {
-          popup.onCustomHideAnimationComplete();
-        }
-      }
-    }
-
-    @Override
-    public void prepareShowAnimation () {
-      apply();
-    }
-
-    @Override
-    public void launchShowAnimation (PopupLayout popup) {
-      this.popup = popup;
-      rail.fab.setVisibility(View.INVISIBLE); // the close button takes its place, looking the same at the start
-      spatial.setEndListener(this::onSpringEnd);
-      effects.setEndListener(null);
-      spatial.animateTo(1f);
-      effects.animateTo(1f);
-    }
-
-    @Override
-    public boolean launchHideAnimation (PopupLayout popup, me.vkryl.android.animator.FactorAnimator originalAnimator) {
-      this.popup = popup;
-      closing = true;
-      spatial.setEndListener(this::onSpringEnd);
-      effects.setEndListener(this::onSpringEnd);
-      if (!spatial.isRunning() && !effects.isRunning() && spatial.getValue() <= 0f && effects.getValue() <= 0f) {
-        finishHide(); // never opened: nothing would move, and the window must still go
-      } else {
-        spatial.animateTo(0f);
-        effects.animateTo(0f);
-      }
-      return true;
-    }
-  }
-
-  /** The FAB turning into the menu's close button: 16dp corners to a circle, primaryContainer to primary, pen to 20dp X. */
-  private final class CloseView extends StateView {
-    private final Drawable fabIcon, closeIcon;
-    private final RectF rect = new RectF();
-    private float morph;
-
-    CloseView (Context context) {
-      super(context);
-      Resources res = context.getResources();
-      fabIcon = restIcon(res, R.drawable.baseline_create_24, R.drawable.xgl_edit);
-      closeIcon = restIcon(res, R.drawable.baseline_close_24, R.drawable.xgl_close);
-    }
-
-    void setMorph (float morph) {
-      if (this.morph != morph) {
-        this.morph = morph;
-        invalidate();
-      }
-    }
-
-    @Override
-    protected int stateLayerColor () {
-      return ColorUtils.fromToArgb(color(XgramExpressive.ON_PRIMARY_CONTAINER), color(XgramExpressive.ON_PRIMARY), morph);
-    }
-
-    @Override
-    protected void onDraw (Canvas c) {
-      final int width = getWidth(), height = getHeight();
-      float radius = Screen.dpf(FAB_CORNER) + (Math.min(width, height) / 2f - Screen.dpf(FAB_CORNER)) * morph;
-      rect.set(0, 0, width, height);
-      c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(ColorUtils.fromToArgb(color(XgramExpressive.PRIMARY_CONTAINER), color(XgramExpressive.PRIMARY), morph)));
-      setStateShape(0, 0, width, height, radius);
-      drawState(c);
-      float cx = width / 2f, cy = height / 2f;
-      drawIcon(c, fabIcon, cx, cy, Screen.dpf(ICON), color(XgramExpressive.ON_PRIMARY_CONTAINER), 1f - morph);
-      int saveCount = c.save();
-      c.rotate(-90f * (1f - morph), cx, cy);
-      drawIcon(c, closeIcon, cx, cy, Screen.dpf(MENU_CLOSE_ICON), color(XgramExpressive.ON_PRIMARY), morph);
-      c.restoreToCount(saveCount);
-    }
-  }
-
-  /**
-   * An item of the FAB menu: a 56dp full-corner pill in primaryContainer, 24dp padding, the 24dp icon 8dp before a
-   * titleMedium label, level 3 shadow. It unfolds from the start edge, under the FAB.
-   */
-  private final class FabMenuItemView extends StateView {
-    private final Drawable icon;
-    private final String label;
-    private final float labelWidth;
-    private final RectF rect = new RectF();
-    private float reveal;
-
-    FabMenuItemView (Context context, Drawable icon, String label) {
-      super(context);
-      this.icon = icon;
-      this.label = label;
-      this.labelWidth = titleMedium.measureText(label);
-      setContentDescription(label);
-      setElevation(Screen.dp(XgramExpressive.ELEVATION_3));
-      setAlpha(0f);
-      setOutlineProvider(new ViewOutlineProvider() {
-        @Override
-        public void getOutline (View view, Outline outline) {
-          updateRect();
-          if (rect.width() <= 0f || rect.height() <= 0f) {
-            outline.setEmpty();
-          } else {
-            outline.setRoundRect(Math.round(rect.left), Math.round(rect.top), Math.round(rect.right), Math.round(rect.bottom), rect.height() / 2f);
-          }
-        }
-      });
-    }
-
-    int desiredWidth () {
-      return (int) Math.ceil(Screen.dpf(MENU_ITEM_PADDING + ICON + MENU_ICON_LABEL + MENU_ITEM_PADDING) + labelWidth);
-    }
-
-    void setReveal (float reveal, float alpha) {
-      setAlpha(alpha);
-      setEnabled(reveal >= 1f);
-      if (this.reveal != reveal) {
-        this.reveal = reveal;
-        invalidate();
-        invalidateOutline();
-      }
-    }
-
-    private void updateRect () {
-      float width = getWidth() * reveal;
-      if (Lang.rtl()) {
-        rect.set(getWidth() - width, 0, getWidth(), getHeight());
-      } else {
-        rect.set(0, 0, width, getHeight());
-      }
-    }
-
-    @Override
-    protected int stateLayerColor () {
-      return color(XgramExpressive.ON_PRIMARY_CONTAINER);
-    }
-
-    @Override
-    protected void onDraw (Canvas c) {
-      updateRect();
-      if (rect.width() <= 0f) {
-        return;
-      }
-      final boolean rtl = Lang.rtl();
-      final int width = getWidth(), height = getHeight();
-      float radius = height / 2f;
-      int saveCount = c.save();
-      c.clipRect(rect);
-      c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(color(XgramExpressive.PRIMARY_CONTAINER)));
-      setStateShape(rect.left, rect.top, rect.right, rect.bottom, radius);
-      drawState(c);
-      int content = color(XgramExpressive.ON_PRIMARY_CONTAINER);
-      float iconCenter = Screen.dpf(MENU_ITEM_PADDING + ICON / 2f);
-      drawIcon(c, icon, rtl ? width - iconCenter : iconCenter, height / 2f, Screen.dpf(ICON), content, 1f);
-      titleMedium.setColor(content);
-      float textStart = Screen.dpf(MENU_ITEM_PADDING + ICON + MENU_ICON_LABEL);
-      c.drawText(label, rtl ? width - textStart - labelWidth : textStart, height / 2f + titleMediumCenter, titleMedium);
-      c.restoreToCount(saveCount);
     }
   }
 }
