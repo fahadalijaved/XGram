@@ -334,6 +334,10 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
     counter.draw(c, x, y, Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT, (1f - checkFactor));
 
     if (checkFactor > 0f) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive selection: a circle checkbox at the avatar's bottom-end, ringed in the sheet color
+        com.fahadali.xgram.appearance.XgramM3Sheets.drawAvatarCheck(c, avatarReceiver, checkFactor, Theme.fillingColor());
+      } else
       DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, checkFactor);
     }
 

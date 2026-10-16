@@ -135,8 +135,19 @@ public class SnackBar extends RelativeLayout implements ThemeInvalidateListener 
 
   private void xgramStyle () {
     XgramExpressive.applyText(textView, XgramExpressive.TS_BODY_M, false);
+    // 14dp + 20sp line + 14dp: 48dp for one line, 68dp for two
     textView.setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(8f), Screen.dp(14f));
-    textView.setGravity(Gravity.CENTER_VERTICAL);
+    textView.setGravity(Lang.gravity() | Gravity.CENTER_VERTICAL);
+    textView.setMaxLines(2);
+    textView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    // the text spans from the bar's start to the action (it used to wrap its content and hug the action).
+    // Absolute rules only, like the action's ALIGN_PARENT_RIGHT: a start rule would override them under an RTL system locale.
+    RelativeLayout.LayoutParams textParams = (RelativeLayout.LayoutParams) textView.getLayoutParams();
+    textParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+    textParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+    textParams.addRule(RelativeLayout.CENTER_VERTICAL);
+    textParams.topMargin = textParams.bottomMargin = 0;
+    textView.setLayoutParams(textParams);
     actionView.setId(R.id.text_title);
     XgramExpressive.applyText(actionView, XgramExpressive.TS_LABEL_L, false);
     actionView.setPadding(Screen.dp(12f), Screen.dp(10f), Screen.dp(12f), Screen.dp(10f));

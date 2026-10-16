@@ -2702,7 +2702,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     }
   }
 
-  /** Sentence-case text buttons ("Cancel", "Save") at the end of the sheet footer, like M3 dialog actions. */
+  /** Sheet footer actions at the end, like M3 dialog actions: "Cancel" as a text button, "Save" as a filled S button. */
   private void xgramAddSheetActions (FrameLayout footerView, SettingsWrapBuilder b, SettingsWrap settings, View.OnClickListener onClickListener) {
     LinearLayout actions = new LinearLayout(context);
     actions.setOrientation(LinearLayout.HORIZONTAL);
@@ -2712,16 +2712,26 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     actions.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f), Gravity.BOTTOM));
     for (int i = 0; i < 2; i++) {
       final boolean isSave = Lang.rtl() ? i == 0 : i == 1;
-      TextView button = new NoScrollTextView(context);
-      com.fahadali.xgram.appearance.XgramExpressive.applyText(button, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
       final int colorId = isSave ? b.saveColorId : b.cancelColorId;
-      final int color = com.fahadali.xgram.appearance.XgramExpressive.color(colorId == ColorId.textNegative ? com.fahadali.xgram.appearance.XgramExpressive.ERROR : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
-      button.setTextColor(color);
-      com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(button, color);
-      button.setGravity(Gravity.CENTER);
-      button.setSingleLine(true);
-      button.setMinWidth(Screen.dp(48f));
-      button.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
+      final boolean isNegative = colorId == ColorId.textNegative;
+      final TextView button;
+      if (isSave) {
+        // 40dp, full corners that morph to 8dp while pressed, labelLarge, 16dp side padding; error roles for a destructive save.
+        // A disabled one is onSurface at .12 with onSurface text at .38 (FilledButton.setEnabled).
+        button = new com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton(context,
+          isNegative ? com.fahadali.xgram.appearance.XgramExpressive.ERROR : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY,
+          isNegative ? com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR : com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY);
+      } else {
+        button = new NoScrollTextView(context);
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(button, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+        final int color = com.fahadali.xgram.appearance.XgramExpressive.color(isNegative ? com.fahadali.xgram.appearance.XgramExpressive.ERROR : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+        button.setTextColor(color);
+        com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(button, color);
+        button.setGravity(Gravity.CENTER);
+        button.setSingleLine(true);
+        button.setMinWidth(Screen.dp(48f));
+        button.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
+      }
       button.setOnClickListener(onClickListener);
       LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f));
       if (i == 1) {

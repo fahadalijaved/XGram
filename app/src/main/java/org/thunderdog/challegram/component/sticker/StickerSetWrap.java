@@ -132,7 +132,9 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
     bottomWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f) + Screen.dp(7f), Gravity.BOTTOM));
     ShadowView shadowView = new ShadowView(context);
     shadowView.setSimpleTopShadow(true);
-    bottomWrap.addView(shadowView);
+    if (!xgram) { // XGram: Expressive sheets have no shadow above the action bar
+      bottomWrap.addView(shadowView);
+    }
     themeListener.addThemeInvalidateListener(shadowView);
 
     buttonWrap = new FrameLayoutFix(context);
@@ -141,8 +143,15 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
     buttonWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f), Gravity.BOTTOM));
 
     button = new RelativeLayout(context);
-    button.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-    button.setBackgroundResource(R.drawable.bg_btn_header);
+    if (xgram) {
+      // XGram: Material 3 Expressive: a 40dp filled pill inset 16dp in the sheet-colored 56dp bar (the container is set by xgramApplyButtonColors)
+      FrameLayoutFix.LayoutParams buttonParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(40f), Gravity.CENTER_VERTICAL);
+      buttonParams.leftMargin = buttonParams.rightMargin = Screen.dp(16f);
+      button.setLayoutParams(buttonParams);
+    } else {
+      button.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      button.setBackgroundResource(R.drawable.bg_btn_header);
+    }
     button.setOnClickListener(this);
     Views.setClickable(button);
 
@@ -175,6 +184,13 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
     button.addView(progressView);
     buttonWrap.addView(button);
 
+    if (xgram) {
+      // XGram: labelLarge in sentence case on the filled pill (primary to add, error container to remove)
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(textButton, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      textButton.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
+      xgramApplyButtonColors(true);
+    }
+
     bottomWrap.addView(buttonWrap);
 
     this.headerView = new HeaderView(context);
@@ -200,7 +216,47 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
   @Override
   public void invalidate () {
     headerView.resetColors(stickersController, null);
+    if (xgram) {
+      xgramSyncColors(); // XGram: theme changes
+    }
     super.invalidate();
+  }
+
+  // XGram: Material 3 Expressive sheet (sheet top with a drag handle, filled action button, no shadows)
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramSheetTop;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramButtonContainer;
+  private int xgramButtonContainerRole = -1;
+  private boolean xgramButtonPositive = true;
+
+  private void xgramApplyButtonColors (boolean positive) {
+    xgramButtonPositive = positive;
+    final int containerRole = positive ? com.fahadali.xgram.appearance.XgramExpressive.PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.ERROR_CONTAINER;
+    if (xgramButtonContainer == null || xgramButtonContainerRole != containerRole) {
+      // a new container only when add and remove swap, so the state layer takes the matching on-role
+      xgramButtonContainer = com.fahadali.xgram.appearance.XgramM3Sheets.attachFilledButton(button, containerRole);
+      xgramButtonContainerRole = containerRole;
+    }
+    xgramSyncButtonContent();
+  }
+
+  private void xgramSyncButtonContent () {
+    if (textButton == null || progressView == null) {
+      return;
+    }
+    final int content = com.fahadali.xgram.appearance.XgramExpressive.color(xgramButtonPositive ? com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR_CONTAINER);
+    if (textButton.getCurrentTextColor() != content) {
+      textButton.setTextColor(content);
+      progressView.setProgressColor(content);
+    }
+  }
+
+  private void xgramSyncColors () {
+    xgramSyncButtonContent();
+    if (xgramSheetTop != null && headerView != null) {
+      xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerView.getTranslationY()));
+    }
   }
 
   @Override
@@ -296,6 +352,9 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
     int topOffset = HeaderView.getTopOffset();
     int top = Math.max(topOffset, getHeaderTop());
     this.headerView.setTranslationY(top);
+    if (xgramSheetTop != null) {
+      xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(top)); // XGram
+    }
     if (topLick != null) {
       topLick.setTranslationY(top - HeaderView.getTopOffset());
     }
@@ -332,6 +391,12 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
 
   @Override
   public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+    if (xgram && factor >= .5f && pendingText != null) {
+      // XGram: the label and the container swap while the label is hidden
+      textButton.setText(pendingText);
+      xgramApplyButtonColors(pendingTextColorId != ColorId.textNegative);
+      pendingText = null;
+    }
     if (factor >= .5f && pendingText != null) {
       Views.setMediumText(textButton, pendingText);
       themeListener.removeThemeListenerByTarget(textButton);
@@ -510,6 +575,26 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
   }
 
   private void updateButton (String str, boolean positive, boolean animated) {
+    if (xgram) {
+      // XGram: Material 3 Expressive: sentence case, and the container (not the text color) tells add from remove
+      if (!textButton.getText().toString().equals(str) || xgramButtonPositive != positive) {
+        if (animated) {
+          if (animator == null) {
+            animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
+          } else {
+            animator.forceFactor(0f);
+          }
+          pendingText = str;
+          pendingTextColorId = positive ? ColorId.textNeutral : ColorId.textNegative;
+          pendingProgressFactor = progressView.cancelPendingAnimation();
+          animator.animateTo(1f);
+        } else {
+          textButton.setText(str);
+          xgramApplyButtonColors(positive);
+        }
+      }
+      return;
+    }
     str = Lang.uppercase(str);
     int colorId = positive ? ColorId.textNeutral : ColorId.textNegative;
     if (!textButton.getText().toString().equals(str) || textButton.getCurrentTextColor() != Theme.getColor(colorId)) {
@@ -564,8 +649,15 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
 
   private void addViews () {
     headerView.initWithSingleController(stickersController, false);
+    if (xgram) {
+      // XGram: Material 3 Expressive modal sheet top: 28dp corners that square off at the window top, a drag handle
+      xgramSheetTop = com.fahadali.xgram.appearance.XgramM3Sheets.attachHeaderSheetTop(headerView, headerView.getFilling().getExtraHeight(), Theme.fillingColor());
+      xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerView.getTranslationY()));
+    }
     addView(stickersController.getValue());
-    addView(topShadow);
+    if (!xgram) { // XGram: no shadow above an Expressive sheet top
+      addView(topShadow);
+    }
     if (topLick != null) {
       addView(topLick);
     }
@@ -575,6 +667,12 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
 
   @Override
   protected void dispatchDraw (Canvas canvas) {
+    if (xgramSheetTop != null) {
+      // XGram: the sheet color starts under the header's rounded corners (the header draws the sheet top)
+      canvas.drawRect(0, provideOffset() - stickersController.getOffsetScroll() + Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.fillingColor()));
+      super.dispatchDraw(canvas);
+      return;
+    }
     canvas.drawRect(0, provideOffset() - stickersController.getOffsetScroll(), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.fillingColor()));
     super.dispatchDraw(canvas);
   }
