@@ -1806,12 +1806,15 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       if (xgramSheet == null) {
         com.fahadali.xgram.appearance.XgramM3Profile.roundTopCorners(topCellView, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL); // XGram: tabs and media read as one container
       }
-      // XGram: the tab strip is inset so the first and last pills sit 16dp from the sheet's edges, in line with the
-      // 16dp-inset cards above, clear of the 28dp corner (a pill starts 3dp inside its tab); scrolled tabs still run to
-      // the sheet's edge (no fading edge), the media stays full width
-      int tabsInset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET) - (Screen.dp(ViewPagerTopView.DEFAULT_ITEM_PADDING) - Screen.dp(16f));
+      // XGram: the chat list's folder tabs: labels only, 16dp each side so the secondaryContainer pill is the tab
+      // itself; the strip is inset 16dp so the first and last pills line up with the 16dp-inset cards and the media
+      // grid, and the strip fades out over its last 16dp at either edge (as the chat list tabs do) instead of cutting
+      // a tab flat when the tabs scroll
+      topView.setItemPadding(Screen.dp(ViewPagerTopView.xgramCompactItemPadding()));
+      int tabsInset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
       topCellView.getRecyclerView().setPadding(tabsInset, 0, tabsInset, 0);
       topCellView.getRecyclerView().setClipToPadding(false);
+      topCellView.setFadingEdgeLength(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
       topCellView.setXgramCenterSelected(true); // XGram: the selected tab is scrolled into view on a spring
     }
     topView.setItems(getPagerTitles());
@@ -1856,9 +1859,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       @Override
       protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
         if (customViewType == XGRAM_ACTIONS_TYPE) {
-          com.fahadali.xgram.appearance.XgramButtonGroupView view = new com.fahadali.xgram.appearance.XgramButtonGroupView(context());
-          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.appearance.XgramButtonGroupView.getViewHeight()));
+          // XGram: Material 3 Expressive connected button group (2dp gaps, full outer and 8dp inner corners, tonal)
+          com.fahadali.xgram.appearance.XgramW2ProfileActions view = new com.fahadali.xgram.appearance.XgramW2ProfileActions(context());
+          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.appearance.XgramW2ProfileActions.getViewHeight()));
           view.setCallback((v, actionId) -> xgramOnAction(actionId));
+          ProfileController.this.addThemeInvalidateListener(view);
           return new SettingHolder(view);
         }
         return super.initCustom(parent, customViewType);
@@ -1866,8 +1871,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
       @Override
       protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
-        if (customViewType == XGRAM_ACTIONS_TYPE && view instanceof com.fahadali.xgram.appearance.XgramButtonGroupView) {
-          xgramActionsView = (com.fahadali.xgram.appearance.XgramButtonGroupView) view;
+        if (customViewType == XGRAM_ACTIONS_TYPE && view instanceof com.fahadali.xgram.appearance.XgramW2ProfileActions) {
+          xgramActionsView = (com.fahadali.xgram.appearance.XgramW2ProfileActions) view;
           xgramActionsView.setActions(xgramBuildActions());
         } else {
           super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
@@ -2504,11 +2509,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private int baseHeaderItemCount;
 
-  // XGram: Material 3 Expressive actions row (a connected button group, Google Contacts style) under the header.
+  // XGram: Material 3 Expressive actions row (a connected button group, Medium size) under the header.
 
   private static final int XGRAM_ACTIONS_TYPE = 88;
   private boolean xgramHasActions;
-  private @Nullable com.fahadali.xgram.appearance.XgramButtonGroupView xgramActionsView;
+  private @Nullable com.fahadali.xgram.appearance.XgramW2ProfileActions xgramActionsView;
 
   private boolean xgramNeedActions () {
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isEditing();
@@ -3030,8 +3035,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private static ViewPagerTopView.Item newItem (SharedBaseController<?> c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive tabs as in the chat list: a sentence case titleSmall label in the pill, no icon
+      return new ViewPagerTopView.Item(c.getName().toString(), 0, null);
+    }
     return new ViewPagerTopView.Item(
-      com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? c.getName().toString() : Lang.uppercase(c.getName().toString()), // XGram: sentence case tabs
+      Lang.uppercase(c.getName().toString()),
       c.getIcon(),
       null
     );
@@ -5948,7 +5957,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   private int calculateHeight (int position, int width, ListItem item) {
     final int itemId = item.getId();
     if (item.getViewType() == ListItem.TYPE_CUSTOM - XGRAM_ACTIONS_TYPE) {
-      return com.fahadali.xgram.appearance.XgramButtonGroupView.getViewHeight();
+      return com.fahadali.xgram.appearance.XgramW2ProfileActions.getViewHeight();
     }
     switch (item.getViewType()) {
       case ListItem.TYPE_INFO_MULTILINE: {

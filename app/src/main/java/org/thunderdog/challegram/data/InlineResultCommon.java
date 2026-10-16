@@ -199,6 +199,7 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
     this.fileProgress.setBackgroundColorId(ColorId.file);
     this.trackDuration = Strings.buildDuration(audio.duration);
     this.trackDurationWidth = U.measureText(trackDuration, Paints.getRegularTextPaint(11f));
+    this.xgramTrackDurationWidth = -1f; // XGram: measured again in labelSmall
   }
 
   private void setPlayFactor (float factor) {
@@ -290,8 +291,9 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
       availWidth -= Screen.dp(28f);
     }
     lastAvailWidth = Math.max(Screen.dp(24f), availWidth);
-    trimmedTitle = !StringUtils.isEmpty(title) ? new Text.Builder(title, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3SharedMedia.titleProvider(), TextColorSets.Regular.NORMAL).singleLine().allBold().build() : null;
-    trimmedDesc = !StringUtils.isEmpty(description) ? new Text.Builder(description, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3SharedMedia.bodyProvider(), TextColorSets.Regular.LIGHT).singleLine().build() : null;
+    // M3 list item text: headline bodyLarge in onSurface, supporting text bodyMedium in onSurfaceVariant
+    trimmedTitle = !StringUtils.isEmpty(title) ? new Text.Builder(title, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3Profile.listHeadlineProvider(), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE).singleLine().allBold().build() : null;
+    trimmedDesc = !StringUtils.isEmpty(description) ? new Text.Builder(description, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3Profile.listSupportingProvider(), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE_VARIANT).singleLine().build() : null;
   }
 
   private void xgramDraw (CustomResultView view, Canvas c, ComplexReceiver receiver, int viewWidth, int startY) {
@@ -360,12 +362,19 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
       trimmedTitle.draw(c, textLeft, textTop);
     }
     if (trackDuration != null) {
-      c.drawText(trackDuration, viewWidth - Screen.dp(16f) - trackDurationWidth, textTop + Screen.dp(16f), Paints.getRegularTextPaint(11f, Theme.textDecentColor()));
+      // trailing supporting text: labelSmall in onSurfaceVariant, on the headline's baseline band
+      android.text.TextPaint durationPaint = com.fahadali.xgram.appearance.XgramM3Profile.trailingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      if (xgramTrackDurationWidth < 0f) {
+        xgramTrackDurationWidth = durationPaint.measureText(trackDuration);
+      }
+      c.drawText(trackDuration, viewWidth - Screen.dp(16f) - xgramTrackDurationWidth, textTop + Screen.dp(16f), durationPaint);
     }
     if (trimmedDesc != null) {
       trimmedDesc.draw(c, textLeft, textTop + titleHeight + gap);
     }
   }
+
+  private float xgramTrackDurationWidth = -1f;
 
   @Override
   public boolean setThumbLocation (MediaViewThumbLocation location, View view, int index, MediaItem mediaItem) {
@@ -817,7 +826,7 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
       this.description = description;
       if (lastAvailWidth > 0) {
         if (xgramM3()) {
-          trimmedDesc = new Text.Builder(description, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3SharedMedia.bodyProvider(), TextColorSets.Regular.LIGHT).singleLine().build(); // XGram: bodyMedium
+          trimmedDesc = new Text.Builder(description, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3Profile.listSupportingProvider(), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE_VARIANT).singleLine().build(); // XGram: bodyMedium
         } else {
           trimmedDesc = new Text.Builder(description, lastAvailWidth, Paints.getSubtitleStyleProvider(), TextColorSets.Regular.LIGHT).singleLine().build();
         }

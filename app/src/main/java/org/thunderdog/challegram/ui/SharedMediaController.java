@@ -123,7 +123,9 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
       final int newSpanCount = calculateSpanCount(width, height);
       if (spanCount != newSpanCount) {
         spanCount = newSpanCount;
-        decoration.setSpanCount(spanCount);
+        if (decoration != null) {
+          decoration.setSpanCount(spanCount);
+        } // XGram: the Expressive grid reads the span count from the layout manager
         recyclerView1.invalidateItemDecorations();
         ((GridLayoutManager) recyclerView1.getLayoutManager()).setSpanCount(spanCount);
       }
@@ -148,19 +150,22 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
     lookup.setSpanIndexCacheEnabled(true);
 
     spanCount = calculateSpanCount(Screen.currentWidth(), Screen.currentHeight());
-    decoration = new GridSpacingItemDecoration(spanCount, xgramSpacing(), false, true, true);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      decoration.setNeedDraw(false, ListItem.TYPE_SMALL_MEDIA); // XGram: the 2dp gaps and the 4dp tile corners show the sheet behind
+      // XGram: Material 3 Expressive grid: inset 16dp like the list tiles, 2dp gaps, 4dp tiles, 20dp group corners
+      xgramGrid = new com.fahadali.xgram.appearance.XgramW2ProfileGrid(ListItem.TYPE_SMALL_MEDIA, parent != null);
     } else {
+      decoration = new GridSpacingItemDecoration(spanCount, xgramSpacing(), false, true, true);
       decoration.setNeedDraw(true, ListItem.TYPE_SMALL_MEDIA);
+      decoration.setDrawColorId(ColorId.filling);
+      decoration.setSpanSizeLookup(lookup);
     }
-    decoration.setDrawColorId(ColorId.filling);
-    decoration.setSpanSizeLookup(lookup);
     GridLayoutManager manager = new RtlGridLayoutManager(context, spanCount);
     manager.setSpanSizeLookup(lookup);
-    recyclerView.addItemDecoration(decoration);
+    recyclerView.addItemDecoration(decoration != null ? decoration : xgramGrid);
     recyclerView.setLayoutManager(manager);
   }
+
+  private @Nullable com.fahadali.xgram.appearance.XgramW2ProfileGrid xgramGrid;
 
   @Override
   protected void handleLanguageDirectionChange () {
@@ -195,10 +200,55 @@ public class SharedMediaController extends SharedBaseController<MediaItem> imple
     }
   }
 
+  /**
+   * XGram: rows of the Expressive grid are a tile tall, plus the 2dp gap above every row but a group's first. The
+   * result is the top of the item's own view (its gap is a decoration above it), as the scroll math compares it with
+   * the view's top.
+   */
+  private int xgramCalculateScrollY (int position) {
+    final List<ListItem> items = adapter.getItems();
+    final int itemCount = items.size();
+    final int width = recyclerView.getMeasuredWidth();
+    int scrollY = 0;
+    int runStart = -1;
+    for (int i = 0; i < position && i < itemCount; i++) {
+      final int viewType = items.get(i).getViewType();
+      if (viewType == ListItem.TYPE_SMALL_MEDIA) {
+        final boolean firstRow = i == 0 || items.get(i - 1).getViewType() != ListItem.TYPE_SMALL_MEDIA;
+        if (firstRow) {
+          runStart = i;
+        }
+        int remainCount = spanCount - 1;
+        while (remainCount > 0 && i + 1 < position && i + 1 < itemCount && items.get(i + 1).getViewType() == ListItem.TYPE_SMALL_MEDIA) {
+          i++;
+          remainCount--;
+        }
+        scrollY += com.fahadali.xgram.appearance.XgramW2ProfileGrid.rowHeight(width, spanCount, firstRow);
+      } else {
+        runStart = -1;
+        if (viewType == ListItem.TYPE_SMART_EMPTY || viewType == ListItem.TYPE_SMART_PROGRESS) {
+          scrollY += measureBaseItemHeight(viewType);
+        } else {
+          scrollY += SettingHolder.measureHeightForType(viewType);
+        }
+      }
+    }
+    if (runStart >= 0 && spanCount > 0 && position < itemCount && items.get(position).getViewType() == ListItem.TYPE_SMALL_MEDIA) {
+      final int indexInRun = position - runStart;
+      if (indexInRun >= spanCount && indexInRun % spanCount == 0) {
+        scrollY += org.thunderdog.challegram.tool.Screen.dp(com.fahadali.xgram.appearance.XgramW2ProfileGrid.GAP); // the gap above this row
+      }
+    }
+    return scrollY;
+  }
+
   @Override
   protected int calculateScrollY (int position) {
     if (position == 0 || recyclerView == null) {
       return 0;
+    }
+    if (xgramGrid != null) {
+      return xgramCalculateScrollY(position);
     }
 
     int scrollY = 0;

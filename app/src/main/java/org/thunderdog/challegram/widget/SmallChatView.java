@@ -65,6 +65,13 @@ public class SmallChatView extends BaseView implements AttachDelegate, TooltipOv
     int viewWidth = getMeasuredWidth();
     if (viewWidth == 0)
       return;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: M3 list item leading avatar: 40dp, 16dp from the start, centered on the row
+      viewHeight = getMeasuredHeight() > 0 ? getMeasuredHeight() : viewHeight;
+      radius = Screen.dp(DoubleTextWrapper.XGRAM_AVATAR_SIZE) / 2;
+      left = Screen.dp(DoubleTextWrapper.XGRAM_PADDING);
+      right = left + radius * 2;
+    }
     if (Lang.rtl()) {
       this.avatarReceiver.setBounds(viewWidth - right, viewHeight / 2 - radius, viewWidth - left, viewHeight / 2 + radius);
     } else {
