@@ -13,8 +13,4 @@
   <string name="XgramR5ComposerSwitchCamera">Switch camera</string>
   <string name="XgramR5ComposerViewOnce">View once</string>
   <string name="XgramR5ComposerDeleteRecording">Delete recording</string>
-  <string name="XgramR5ComposerClearRecentStickers">Clear recent stickers</string>
-  <string name="XgramR5ComposerArchivedStickers">Archived stickers</string>
-  <string name="XgramR5ComposerTrendingStickers">Trending stickers</string>
-  <string name="XgramR5ComposerMasks">Masks</string>
 </resources>
