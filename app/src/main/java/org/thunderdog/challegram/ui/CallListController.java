@@ -149,6 +149,7 @@ public class CallListController extends RecyclerViewController<Void> implements
     adapter = new SettingsAdapter(this) {
       @Override
       protected void setInfo (ListItem item, int position, ListInfoView infoView) {
+        infoView.xgramSetTextStyle(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M); // XGram M3E: the footer in labelMedium
         if (endReached) {
           infoView.showInfo(Lang.pluralBold(R.string.xCalls, messages.size()));
         } else {
