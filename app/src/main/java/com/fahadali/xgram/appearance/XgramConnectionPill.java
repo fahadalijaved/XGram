@@ -87,6 +87,14 @@ public final class XgramConnectionPill extends View {
   private final XgramMotion.Value width, swap, slide, flash;
   private final XgramMotion.Value translation, scale, alpha;
 
+  /** How far the pill is in (0 gone, 1 fully in), for content that moves down to make room for it. */
+  public interface OffsetListener {
+    void onPillOffset (float shown);
+  }
+
+  private @Nullable OffsetListener offsetListener;
+  private float lastOffset = -1f;
+
   public XgramConnectionPill (Context context) {
     super(context);
     textPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_L, false));
@@ -102,7 +110,10 @@ public final class XgramConnectionPill extends View {
     swap = new XgramMotion.Value(XgramExpressive.EFFECTS_DEFAULT, 1f, (v, value, velocity) -> invalidate());
     slide = new XgramMotion.Value(XgramExpressive.SPATIAL_FAST, 1f, (v, value, velocity) -> invalidate());
     flash = new XgramMotion.Value(XgramExpressive.EFFECTS_DEFAULT, 0f, (v, value, velocity) -> invalidate());
-    translation = new XgramMotion.Value(XgramExpressive.SPATIAL_DEFAULT, -travel, (v, value, velocity) -> setTranslationY(value)).setThreshold(.5f);
+    translation = new XgramMotion.Value(XgramExpressive.SPATIAL_DEFAULT, -travel, (v, value, velocity) -> {
+      setTranslationY(value);
+      dispatchOffset(value);
+    }).setThreshold(.5f);
     scale = new XgramMotion.Value(XgramExpressive.SPATIAL_DEFAULT, .8f, (v, value, velocity) -> {
       setScaleX(value);
       setScaleY(value);
@@ -144,6 +155,36 @@ public final class XgramConnectionPill extends View {
   @Override
   public boolean hasOverlappingRendering () {
     return false;
+  }
+
+  // Room for the pill
+
+  /** The room content needs to give the pill when it is fully in: its height and 8dp above and below. */
+  public int getReservedHeight () {
+    return height + Screen.dp(16f);
+  }
+
+  /**
+   * {@code listener} follows the pill in and out on its own spring (0 when hidden or suppressed), and gets the current
+   * value now. Calls come only when the value changes.
+   */
+  public void setOffsetListener (@Nullable OffsetListener listener) {
+    this.offsetListener = listener;
+    this.lastOffset = -1f;
+    dispatchOffset(translation.getValue());
+  }
+
+  private void dispatchOffset (float translationY) {
+    final OffsetListener listener = offsetListener;
+    if (listener == null) {
+      return;
+    }
+    // A hide with Reduce motion (or without animation) fades in place: the content goes back at once
+    final float offset = !shown && !translation.isRunning() ? 0f : clamp(1f + translationY / travel);
+    if (offset != lastOffset) {
+      lastOffset = offset;
+      listener.onPillOffset(offset);
+    }
   }
 
   // State
@@ -239,6 +280,7 @@ public final class XgramConnectionPill extends View {
       setScaleY(scale.getValue());
       setAlpha(alpha.getValue());
       setVisibility(show ? View.VISIBLE : View.INVISIBLE);
+      dispatchOffset(translation.getValue());
       return;
     }
     final boolean reduce = XgramMotion.reduce();
@@ -261,6 +303,7 @@ public final class XgramConnectionPill extends View {
       }
       alpha.animateTo(0f);
     }
+    dispatchOffset(translation.getValue()); // Reduce motion: no spring moves the translation, so the content snaps
   }
 
   private void updateAccessibility (CharSequence text) {

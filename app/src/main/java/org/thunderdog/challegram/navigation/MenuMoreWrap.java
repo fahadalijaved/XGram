@@ -255,16 +255,16 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       protected void onDraw (Canvas canvas) {
         super.onDraw(canvas);
         if (menuItem.isCheckbox && XgramExpressive.isEnabled()) {
-          // XGram: checked items sit on a tertiaryContainer pill (medium corners, 4dp inset).
+          // XGram: checked items sit on a secondaryContainer pill (the standard menu colors; medium corners, 4dp inset).
           float checkedFactor = menuItem.isCheckboxSelectedAnimated != null ? menuItem.isCheckboxSelectedAnimated.getFloatValue() : menuItem.isCheckboxSelected ? 1f : 0f;
           if (forcedTheme == null) {
-            int textColor = ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.color(XgramExpressive.ON_TERTIARY_CONTAINER), checkedFactor);
+            int textColor = ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER), checkedFactor);
             if (titleTextItemRef[0] != null && titleTextItemRef[0].getCurrentTextColor() != textColor) {
               titleTextItemRef[0].setTextColor(textColor);
             }
           }
           if (checkedFactor > 0f) {
-            int pillColor = forcedTheme != null ? ColorUtils.alphaColor(.12f, forcedTheme.getColor(ColorId.text)) : XgramExpressive.color(XgramExpressive.TERTIARY_CONTAINER);
+            int pillColor = forcedTheme != null ? ColorUtils.alphaColor(.12f, forcedTheme.getColor(ColorId.text)) : XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER);
             xgramDrawItemPill(canvas, getMeasuredWidth(), getMeasuredHeight(), ColorUtils.alphaColor(checkedFactor, pillColor));
           }
         }
@@ -398,7 +398,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     final boolean xgramExpressive = XgramExpressive.isEnabled();
     titleTextItemRef[0] = titleTextItem;
     if (xgramExpressive) {
-      XgramExpressive.applyText(titleTextItem, XgramExpressive.TS_LABEL_L, false);
+      XgramExpressive.applyText(titleTextItem, XgramExpressive.TS_BODY_L, false); // XGram: menu item labels are bodyLarge
     }
     if (forcedTheme != null) {
       titleTextItem.setTextColor(forcedTheme.getColor(ColorId.text));
@@ -438,7 +438,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     menuItem.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
     final boolean xgramExpressive = XgramExpressive.isEnabled();
     if (xgramExpressive) {
-      XgramExpressive.applyText(menuItem, XgramExpressive.TS_LABEL_L, false);
+      XgramExpressive.applyText(menuItem, XgramExpressive.TS_BODY_L, false); // XGram: menu item labels are bodyLarge
     }
     if (forcedTheme != null) {
       menuItem.setTextColor(forcedTheme.getColor(ColorId.text));

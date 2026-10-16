@@ -823,9 +823,11 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
       // XGram: two cards behind the photo, the community's other chats (as in Telegram).
       float radius = avatarReceiver.getDisplayRadius();
       int color = Theme.getColor(ColorId.text);
-      // M3E: a single tonal card in secondary container that peeks 6dp out on the end side (the start side is clipped
-      // by the screen edge with the M3E avatar inset); a surface-toned second card would read as a smudge on the row.
+      // M3E: a single tonal card, see xgramDrawCommunityStack.
       boolean m3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      if (m3) {
+        xgramDrawCommunityStack(c, radius, rtl);
+      } else
       for (int i = m3 ? 1 : 2; i >= 1; i--) {
         float shift = m3 ? Screen.dp(6f) * (rtl ? -1 : 1) : Screen.dp(4f) * i * (rtl ? 1 : -1), inset = m3 ? Screen.dp(4f) : Screen.dp(3.5f) * i;
         xgramCardRect.set(avatarReceiver.getLeft() + shift, avatarReceiver.getTop() + inset, avatarReceiver.getRight() + shift, avatarReceiver.getBottom() - inset);
@@ -842,6 +844,25 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
     DrawAlgorithms.drawIcon(c, avatarReceiver, 315f, chat.getScheduleAnimator().getFloatValue(), Theme.fillingColor(), getSparseDrawable(R.drawable.baseline_watch_later_10, ColorId.badgeMuted), PorterDuffPaint.get(ColorId.badgeMuted, chat.getScheduleAnimator().getFloatValue()));
     DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, isSelected.getFloatValue());
+  }
+
+  /**
+   * XGram M3E: the community's stack: one tonal card the size of the photo, 4dp up and 4dp toward the end (the start
+   * side is clipped by the screen edge with the M3E avatar inset), and a 2dp ring in the row's surface color around the
+   * photo, so the card reads as a card behind it rather than a stray shadow. On the selection tile (secondaryContainer,
+   * the card's own color) the two colors swap: a surface card and a ring in the tile's color.
+   */
+  private void xgramDrawCommunityStack (Canvas c, float radius, boolean rtl) {
+    final float shift = Screen.dp(4f) * (rtl ? -1 : 1), lift = Screen.dp(4f), ring = Screen.dp(2f);
+    final int surface = Theme.fillingColor();
+    final int tonal = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    final float onTile = isDragging ? 0f : com.fahadali.xgram.layout.XgramTwoPane.isHighlighted(tdlib, chat.getChatId()) ? 1f : Math.max(0f, Math.min(1f, isSelected.getFloatValue()));
+    final int cardColor = ColorUtils.fromToArgb(tonal, surface, onTile);
+    final int ringColor = ColorUtils.fromToArgb(surface, tonal, onTile);
+    xgramCardRect.set(avatarReceiver.getLeft() + shift, avatarReceiver.getTop() - lift, avatarReceiver.getRight() + shift, avatarReceiver.getBottom() - lift);
+    c.drawRoundRect(xgramCardRect, radius, radius, Paints.fillingPaint(cardColor));
+    xgramCardRect.set(avatarReceiver.getLeft() - ring, avatarReceiver.getTop() - ring, avatarReceiver.getRight() + ring, avatarReceiver.getBottom() + ring);
+    c.drawRoundRect(xgramCardRect, radius + ring, radius + ring, Paints.fillingPaint(ringColor));
   }
 
   @Override

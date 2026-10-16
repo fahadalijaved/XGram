@@ -19,6 +19,79 @@ final class XgramIconPackTable {
   static final int[] PREVIEW_MINGCUTE = {R.drawable.xgm_search, R.drawable.xgm_chat_bubble, R.drawable.xgm_phone, R.drawable.xgm_settings, R.drawable.xgm_bookmark, R.drawable.xgm_edit, R.drawable.xgm_delete, R.drawable.xgm_send, R.drawable.xgm_notifications, R.drawable.xgm_person};
   static final int[] PREVIEW_PIXEL = {R.drawable.xgp_search, R.drawable.xgp_chat_bubble, R.drawable.xgp_phone, R.drawable.xgp_settings, R.drawable.xgp_bookmark, R.drawable.xgp_edit, R.drawable.xgp_delete, R.drawable.xgp_send, R.drawable.xgp_notifications, R.drawable.xgp_person};
 
+  /**
+   * Material 3 Expressive with the Classic pack: the message sheet, the selection bar, the new chat menu and the
+   * profile's media tabs in the XGram Line family (outlined, rounded), so a sheet no longer mixes filled Telegram X icons
+   * with outlined ones. Written by hand, not by build.py: keep it when this file is regenerated. The filled
+   * baseline_star_24 stays Telegram X's, as the bookmarked state next to the outlined star.
+   */
+  static final int[] M3E_CLASSIC = {
+    // Message sheet
+    R.drawable.outline_forum_24, R.drawable.xgl_forum,
+    R.drawable.baseline_forum_24, R.drawable.xgl_forum,
+    R.drawable.baseline_reply_24, R.drawable.xgl_reply,
+    R.drawable.baseline_format_quote_close_24, R.drawable.xgl_format_quote_close,
+    R.drawable.baseline_forward_24, R.drawable.xgl_forward,
+    R.drawable.baseline_share_arrow_24, R.drawable.xgl_forward,
+    R.drawable.deproko_baseline_pin_24, R.drawable.xgl_pin,
+    R.drawable.deproko_baseline_pin_undo_24, R.drawable.xgl_unpin,
+    R.drawable.baseline_bar_chart_24, R.drawable.xgl_poll,
+    R.drawable.baseline_edit_24, R.drawable.xgl_edit,
+    R.drawable.baseline_link_24, R.drawable.xgl_link,
+    R.drawable.baseline_done_all_24, R.drawable.xgl_done_all,
+    R.drawable.baseline_info_24, R.drawable.xgl_info,
+    R.drawable.baseline_bookmark_24, R.drawable.xgl_bookmark,
+    R.drawable.baseline_star_border_24, R.drawable.xgl_star,
+    R.drawable.baseline_repeat_24, R.drawable.xgl_repeat,
+    R.drawable.baseline_format_text_24, R.drawable.xgl_format_text,
+    R.drawable.baseline_format_list_bulleted_type_24, R.drawable.xgl_format_list_bulleted_type,
+    R.drawable.baseline_history_24, R.drawable.xgl_history,
+    R.drawable.baseline_person_24, R.drawable.xgl_person,
+    R.drawable.baseline_block_24, R.drawable.xgl_block,
+    R.drawable.baseline_content_copy_24, R.drawable.xgl_copy,
+    R.drawable.baseline_translate_24, R.drawable.xgl_translate,
+    R.drawable.baseline_translate_off_24, R.drawable.xgl_translate_off,
+    R.drawable.deproko_baseline_stickers_24, R.drawable.xgl_stickers,
+    R.drawable.baseline_file_download_24, R.drawable.xgl_download,
+    R.drawable.baseline_cloud_download_24, R.drawable.xgl_cloud_download,
+    R.drawable.baseline_cloud_pause_24, R.drawable.xgl_cloud_pause,
+    R.drawable.templarian_baseline_broom_24, R.drawable.xgl_broom,
+    R.drawable.baseline_report_24, R.drawable.xgl_report,
+    R.drawable.baseline_delete_24, R.drawable.xgl_delete,
+    R.drawable.baseline_delete_forever_24, R.drawable.xgl_delete,
+    R.drawable.baseline_delete_sweep_24, R.drawable.xgl_delete,
+    R.drawable.baseline_more_horiz_24, R.drawable.xgl_more_horiz,
+    R.drawable.baseline_image_24, R.drawable.xgl_image,
+    R.drawable.baseline_palette_24, R.drawable.xgl_palette,
+    R.drawable.baseline_playlist_add_24, R.drawable.xgl_playlist_add,
+    R.drawable.baseline_queue_music_24, R.drawable.xgl_queue_music,
+    R.drawable.baseline_language_24, R.drawable.xgl_language,
+    R.drawable.baseline_music_note_24, R.drawable.xgl_music_note,
+    R.drawable.baseline_cancel_24, R.drawable.xgl_cancel,
+    R.drawable.baseline_visibility_24, R.drawable.xgl_visibility,
+    R.drawable.baseline_check_circle_24, R.drawable.xgl_check_circle,
+    // Profile media tabs
+    R.drawable.baseline_videocam_24, R.drawable.xgl_videocam,
+    R.drawable.baseline_camera_alt_24, R.drawable.xgl_camera,
+    R.drawable.deproko_baseline_gif_24, R.drawable.xgl_gif,
+    R.drawable.deproko_baseline_msg_video_24, R.drawable.xgl_msg_video,
+    R.drawable.baseline_insert_drive_file_24, R.drawable.xgl_file,
+    R.drawable.baseline_mic_24, R.drawable.xgl_mic,
+    R.drawable.baseline_group_24, R.drawable.xgl_group,
+    R.drawable.baseline_bullhorn_24, R.drawable.xgl_bullhorn,
+    R.drawable.deproko_baseline_bots_24, R.drawable.xgl_bots,
+    R.drawable.baseline_stars_24, R.drawable.xgl_stars,
+    R.drawable.baseline_gavel_24, R.drawable.xgl_gavel,
+    // New chat menu (its other icons are above)
+    R.drawable.baseline_create_24, R.drawable.xgl_edit,
+    R.drawable.baseline_lock_24, R.drawable.xgl_lock,
+  };
+
+  /** The table of the Classic pack: {@link #M3E_CLASSIC} with Material 3 Expressive on, otherwise null (no mapping). */
+  static int[] classic () {
+    return XgramExpressive.isEnabled() ? M3E_CLASSIC : null;
+  }
+
   /** XGram Line */
   static final int[] LINE = {
     R.drawable.andrejsharapov_baseline_message_check_16, R.drawable.xgl_message_check_16,

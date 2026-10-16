@@ -1130,6 +1130,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
     xgramConnPill = com.fahadali.xgram.appearance.XgramConnectionPill.attach(pagerWrap);
     addThemeInvalidateListener(xgramConnPill); // a theme switch redraws it in the new colors
+    xgramConnSetupOffset(xgramConnPill);
     com.fahadali.xgram.appearance.XgramConnection conn = com.fahadali.xgram.appearance.XgramConnection.instance();
     conn.addListener(xgramConnListener);
     xgramConnPill.setDisplay(conn.getState(), conn.getText(), false);
@@ -1137,6 +1138,47 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       composeWrap.xgramOnToggle = this::xgramConnUpdateSuppressed;
     }
     xgramConnCheckSnackBar();
+  }
+
+  /**
+   * While the pill is in, the chat list moves down by its room (pill height and 8dp above and below) instead of being
+   * covered, following the pill's own spring. Only the pager's translation changes: no padding or layout per frame and no
+   * layer (the list keeps changing while it moves). The strip it uncovers takes the app bar color, under the pill: it is
+   * pagerWrap's background, so the order of pagerWrap's children (the folder menu goes in right above the pager) stays.
+   */
+  private void xgramConnSetupOffset (com.fahadali.xgram.appearance.XgramConnectionPill pill) {
+    final View pagerView = getViewPager();
+    final int reserved = pill.getReservedHeight();
+    final android.graphics.drawable.Drawable band = new android.graphics.drawable.Drawable() {
+      @Override
+      public void draw (@NonNull android.graphics.Canvas c) {
+        final int top = pagerView.getTop();
+        final float bottom = top + pagerView.getTranslationY();
+        if (bottom > top) {
+          c.drawRect(getBounds().left, top, getBounds().right, bottom, Paints.fillingPaint(Theme.getColor(ColorId.headerBackground)));
+        }
+      }
+
+      @Override
+      public void setAlpha (int alpha) { }
+
+      @Override
+      public void setColorFilter (@Nullable android.graphics.ColorFilter colorFilter) { }
+
+      @Override
+      public int getOpacity () {
+        return android.graphics.PixelFormat.TRANSLUCENT;
+      }
+    };
+    pagerWrap.setBackground(band); // nothing is drawn while the pill is out (a theme switch invalidates pagerWrap)
+    pill.setOffsetListener(offset -> {
+      final float translationY = Math.round(offset * reserved);
+      if (pagerView.getTranslationY() != translationY) {
+        pagerView.setTranslationY(translationY);
+        band.invalidateSelf();
+        pagerWrap.invalidate(); // the container's top corners are drawn by pagerWrap at the pager's moved top
+      }
+    });
   }
 
   private void xgramConnDestroy () {
