@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the expand button after the reaction row of the message menu (Expressive design) -->
+  <string name="XgramM3W2MoreReactions">More reactions</string>
+</resources>

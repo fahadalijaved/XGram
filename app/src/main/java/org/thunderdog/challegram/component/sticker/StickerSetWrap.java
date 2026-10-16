@@ -369,7 +369,7 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
     }
 
     if (headerView.getFilling() != null) {
-      headerView.getFilling().setShadowAlpha(factor);
+      headerView.getFilling().setShadowAlpha(xgram ? 0f : factor); // XGram: M3 app bars cast no shadow, docked or not
     }
 
     super.invalidate();

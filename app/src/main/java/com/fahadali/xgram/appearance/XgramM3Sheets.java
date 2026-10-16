@@ -13,18 +13,27 @@ package com.fahadali.xgram.appearance;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.InsetDrawable;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.loader.AvatarReceiver;
+import org.thunderdog.challegram.navigation.DoubleHeaderView;
 import org.thunderdog.challegram.navigation.HeaderView;
+import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.widget.NoScrollTextView;
@@ -34,10 +43,12 @@ import me.vkryl.core.MathUtils;
 
 /**
  * Material 3 Expressive for Telegram X's own bottom sheets (share, sticker set, the {@code BottomSheetViewController}
- * sheets and the settings sheets): the 28dp sheet top with its drag handle, the filled S button of the sheet actions
- * and the selected-chat check on avatars. Values follow the material3 1.5 tokens (BottomSheet: 28dp corners, 32x4dp
- * handle; Button S: 40dp, full corners, 8dp while pressed, labelLarge). Main thread only, and only used while
- * {@link XgramExpressive#isEnabled()} is true.
+ * sheets with the message menu, and the settings sheets): the 28dp sheet top with its drag handle, the filled S button
+ * of the sheet actions, the filled tonal icon button, the flat assist chip, the menu button title of a sheet header and
+ * the selected-chat check on avatars. Values follow the material3 1.5 tokens (SheetBottomTokens: CornerExtraLargeTop
+ * 28dp, 32x4dp handle in onSurfaceVariant; ButtonSmallTokens and SmallIconButtonTokens: 40dp, full corners, CornerSmall
+ * 8dp while pressed; AssistChipTokens: 32dp, CornerSmall, 1dp outlineVariant, labelLarge). Main thread only, and only
+ * used while {@link XgramExpressive#isEnabled()} is true.
  */
 public final class XgramM3Sheets {
   private XgramM3Sheets () { }
@@ -139,6 +150,113 @@ public final class XgramM3Sheets {
       }
       if (getCurrentTextColor() != text) {
         setTextColor(text);
+      }
+    }
+  }
+
+  // Icon buttons, chips and the menu button of sheet headers (androidx.compose.material3 1.5 tokens)
+
+  /** SmallIconButtonTokens: 40dp container, full corners at rest ({@code ContainerShapeRound}), 8dp while pressed. */
+  public static final float ICON_BUTTON_SIZE = 40f;
+  /** The touch target around a 40dp icon button. */
+  public static final float TOUCH_TARGET = 48f;
+  /** AssistChipTokens: 32dp container, CornerSmall (8dp), 1dp FlatOutline in outlineVariant, labelLarge, 18dp icon. */
+  public static final float CHIP_HEIGHT = 32f, CHIP_LEADING_ICON_SPACE = 8f, CHIP_TRAILING_SPACE = 16f;
+  /** ButtonSmallTokens: 40dp container, 16dp leading and trailing space, 20dp icon, 8dp between icon and label. */
+  public static final float BUTTON_HEIGHT = 40f, BUTTON_SPACE = 16f, BUTTON_ICON_SIZE = 20f, BUTTON_ICON_LABEL_SPACE = 8f;
+
+  /** The icon color of a filled tonal button: onSecondaryContainer. */
+  @ColorInt
+  public static int tonalContentColor () {
+    return XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
+  }
+
+  /**
+   * A small filled tonal icon button on {@code v} (FilledTonalIconButtonTokens): a 40dp secondaryContainer circle
+   * centered in the view (the touch target), corners morphing to 8dp while pressed, an onSecondaryContainer state
+   * layer at .10. The container follows theme changes; the caller tints the icon with {@link #tonalContentColor()}.
+   */
+  public static XgramExpressive.MorphDrawable attachTonalIconButton (@NonNull View v) {
+    XgramExpressive.MorphDrawable container = XgramExpressive.attachPressMorph(v, XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER), XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S);
+    container.setColorRole(XgramExpressive.SECONDARY_CONTAINER);
+    container.setSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE, Gravity.CENTER);
+    return container;
+  }
+
+  /**
+   * The container of a flat assist chip in {@code rect} (32dp tall): the 1dp outlineVariant outline with 8dp corners,
+   * drawn inside the bounds. {@code rect} is restored before returning.
+   */
+  public static void drawAssistChipOutline (@NonNull Canvas c, @NonNull RectF rect, float alpha) {
+    if (alpha <= 0f || rect.width() <= 0f || rect.height() <= 0f) {
+      return;
+    }
+    final float half = Screen.dp(1f) / 2f; // Paints.strokeSmallPaint is 1dp wide
+    rect.inset(half, half);
+    final float radius = Math.max(0f, Screen.dpf(XgramExpressive.CORNER_S) - half);
+    c.drawRoundRect(rect, radius, radius, Paints.strokeSmallPaint(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.OUTLINE_VARIANT), MathUtils.clamp(alpha))));
+    rect.inset(-half, -half);
+  }
+
+  /**
+   * The title of a sheet header that opens a menu (the share sheet's chat list picker): an M3E small filled tonal button
+   * (ButtonSmallTokens + FilledTonalButtonTokens): 40dp, full corners morphing to 8dp while pressed, 16dp leading space,
+   * the label in labelLarge and onSecondaryContainer (give it a theme color id that maps to that role, e.g.
+   * {@code ColorId.headerTabActiveText}), then an 8dp gap, a 20dp expand_more icon and 16dp trailing space, centered in
+   * the 56dp header. The subtitle line is not shown, and only the button takes touches.
+   */
+  public static class MenuTitleView extends DoubleHeaderView {
+    private final TextView label;
+    private final @Nullable Drawable icon;
+
+    public MenuTitleView (Context context) {
+      super(context);
+      this.label = (TextView) getChildAt(0);
+      getChildAt(1).setVisibility(View.GONE);
+      XgramExpressive.applyText(label, XgramExpressive.TS_LABEL_L, false);
+      label.setDuplicateParentStateEnabled(true);
+      XgramExpressive.MorphDrawable container = XgramExpressive.attachPressMorph(label, XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER), XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S);
+      container.setColorRole(XgramExpressive.SECONDARY_CONTAINER);
+      this.icon = Drawables.get(R.drawable.xgram_w2_menu_sheets_expand_more_20);
+      layoutLabel();
+    }
+
+    private void layoutLabel () {
+      final boolean rtl = Lang.rtl();
+      FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) label.getLayoutParams();
+      params.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+      params.height = Screen.dp(BUTTON_HEIGHT);
+      params.topMargin = 0;
+      params.gravity = Gravity.CENTER_VERTICAL | (rtl ? Gravity.RIGHT : Gravity.LEFT);
+      label.setLayoutParams(params);
+      label.setGravity(Gravity.CENTER_VERTICAL | (rtl ? Gravity.RIGHT : Gravity.LEFT));
+      final int leading = Screen.dp(BUTTON_SPACE);
+      final int trailing = Screen.dp(BUTTON_ICON_LABEL_SPACE + BUTTON_ICON_SIZE + BUTTON_SPACE);
+      label.setPadding(rtl ? trailing : leading, 0, rtl ? leading : trailing, 0);
+    }
+
+    @Override
+    public void checkRtl () {
+      super.checkRtl();
+      layoutLabel(); // DoubleHeaderView puts the title back at the top
+    }
+
+    @Override
+    public boolean onTouchEvent (MotionEvent e) {
+      if (e.getActionMasked() == MotionEvent.ACTION_DOWN && !(e.getX() >= label.getLeft() && e.getX() < label.getRight() && e.getY() >= label.getTop() && e.getY() < label.getBottom())) {
+        return false;
+      }
+      return super.onTouchEvent(e);
+    }
+
+    @Override
+    protected void dispatchDraw (Canvas c) {
+      super.dispatchDraw(c);
+      if (icon != null && label.getVisibility() == View.VISIBLE && label.getWidth() > 0) {
+        final int size = Screen.dp(BUTTON_ICON_SIZE);
+        final float x = Lang.rtl() ? label.getLeft() + Screen.dp(BUTTON_SPACE) : label.getRight() - Screen.dp(BUTTON_SPACE) - size;
+        final float y = label.getTop() + (label.getHeight() - size) / 2f;
+        Drawables.draw(c, icon, x, y, Paints.getPorterDuffPaint(XgramExpressive.withAlpha(label.getCurrentTextColor(), label.getAlpha())));
       }
     }
   }

@@ -1003,14 +1003,20 @@ public class ShareController extends TelegramViewController<ShareController.Args
   protected View onCreateView (Context context) {
     canShareLink = canShareLink();
 
-    headerCell = new DoubleHeaderView(context);
+    // XGram: Material 3 Expressive: the chat list picker of the sheet header is a small filled tonal menu button
+    // (XgramM3Sheets.MenuTitleView: 40dp, labelLarge in onSecondaryContainer, trailing expand_more)
+    final boolean xgramMenuTitle = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() &&
+      Settings.instance().chatFoldersEnabled() && TD.isChatListMain(displayingChatList) && tdlib.chatFolderCount() > 0;
+    headerCell = xgramMenuTitle ? new com.fahadali.xgram.appearance.XgramM3Sheets.MenuTitleView(context) : new DoubleHeaderView(context);
     headerCell.setTitle(R.string.SendTo);
     headerCell.initWithMargin(Screen.dp(56f) * getMenuItemCount(), false);
-    headerCell.setThemedTextColor(ColorId.text, ColorId.textLight, this);
+    headerCell.setThemedTextColor(xgramMenuTitle ? ColorId.headerTabActiveText : ColorId.text, ColorId.textLight, this);
     updateHeader();
     if (Settings.instance().chatFoldersEnabled() && TD.isChatListMain(displayingChatList) && tdlib.chatFolderCount() > 0) {
       headerCell.setTitle(R.string.CategoryMain);
-      headerCell.setTitleIcon(R.drawable.baseline_keyboard_arrow_down_20);
+      if (!xgramMenuTitle) {
+        headerCell.setTitleIcon(R.drawable.baseline_keyboard_arrow_down_20);
+      }
       headerCell.setOnClickListener(v -> {
         if (!inSearchMode()) {
           showFolderSelector();
@@ -1816,7 +1822,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
         lickView.setTranslationY(top);
         float factor = top > topOffset ? 0f : 1f - ((float) top / (float) topOffset);
         lickView.setFactor(factor);
-        headerView.getFilling().setShadowAlpha(factor);
+        headerView.getFilling().setShadowAlpha(xgramSheetTop != null ? 0f : factor); // XGram: M3 app bars cast no shadow
       }
       if (top == 0 && needUpdateSearchMode) {
         super.updateSearchMode(true);
