@@ -286,6 +286,8 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
     press.setValue(0f);
     offset.setValue(0f);
     labelAlpha.setValue(0f);
+    labelScale.setValue(1f);
+    labelPillWidth.setValue(labelPillWidth.getTarget());
     clearExclusion();
   }
 

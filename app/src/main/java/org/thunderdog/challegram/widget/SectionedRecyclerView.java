@@ -111,6 +111,20 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
     }
   }
 
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow();
+    if (xgram) {
+      // XGram: no hide callback or spring outlives the window
+      removeCallbacks(xgramHide);
+      xgramAlpha.setValue(0f);
+      xgramPress.setValue(0f);
+      xgramLabelAlpha.setValue(0f);
+      xgramLabelScale.setValue(1f);
+      xgramExclusion.clear(this);
+    }
+  }
+
   private void xgramCheckLabel () {
     String key = visibleSections > 0 ? largeKeys[0] : null;
     if (key != null && !key.equals(xgramLabel)) {
