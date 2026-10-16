@@ -155,6 +155,89 @@ public final class XgramR5People {
     return morph;
   }
 
+  /**
+   * Segmented groups for a plain RecyclerView adapter: every run of consecutive items of {@code tileViewType} is one
+   * group (16dp inset, 2dp gaps); the tiles' MorphDrawable backgrounds ({@link #bindTile}) get their segment corners.
+   */
+  public static final class TileGroupDecoration extends RecyclerView.ItemDecoration {
+    private final int tileViewType;
+
+    public TileGroupDecoration (int tileViewType) {
+      this.tileViewType = tileViewType;
+    }
+
+    private boolean isTile (@NonNull RecyclerView parent, int position) {
+      RecyclerView.Adapter<?> adapter = parent.getAdapter();
+      return adapter != null && position >= 0 && position < adapter.getItemCount() && adapter.getItemViewType(position) == tileViewType;
+    }
+
+    @Override
+    public void getItemOffsets (@NonNull android.graphics.Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      outRect.set(0, 0, 0, 0);
+      if (!on()) {
+        return;
+      }
+      final int position = parent.getChildAdapterPosition(view);
+      if (!isTile(parent, position)) {
+        return;
+      }
+      final int inset = Screen.dp(XgramExpressive.LIST_INSET);
+      outRect.left = inset;
+      outRect.right = inset;
+      if (isTile(parent, position - 1)) {
+        outRect.top = Screen.dp(XgramExpressive.LIST_GAP);
+      }
+    }
+
+    @Override
+    public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      if (!on()) {
+        return;
+      }
+      final int childCount = parent.getChildCount();
+      for (int i = 0; i < childCount; i++) {
+        View child = parent.getChildAt(i);
+        final int position = parent.getChildAdapterPosition(child);
+        if (!isTile(parent, position)) {
+          continue;
+        }
+        XgramExpressive.MorphDrawable morph = XgramExpressive.findMorph(child.getBackground());
+        if (morph == null) {
+          continue;
+        }
+        final boolean first = !isTile(parent, position - 1), last = !isTile(parent, position + 1);
+        morph.setSegment(first && last ? XgramExpressive.SEGMENT_SINGLE : first ? XgramExpressive.SEGMENT_FIRST : last ? XgramExpressive.SEGMENT_LAST : XgramExpressive.SEGMENT_MIDDLE);
+      }
+    }
+  }
+
+  /**
+   * A list subheader ("3 members"): titleSmall in primary, at the tiles' content edge (16dp inset + 16dp), 24dp above
+   * (8dp when {@code first}) and 8dp below. Its color follows the theme at draw time.
+   */
+  @NonNull
+  public static android.widget.TextView newSubheader (@NonNull Context context, boolean first) {
+    android.widget.TextView view = new android.widget.TextView(context) {
+      @Override
+      protected void onDraw (Canvas c) {
+        final int color = XgramExpressive.color(XgramExpressive.PRIMARY);
+        if (getCurrentTextColor() != color) {
+          setTextColor(color);
+        }
+        super.onDraw(c);
+      }
+    };
+    XgramExpressive.applyText(view, XgramExpressive.TS_TITLE_S, false);
+    view.setTextColor(XgramExpressive.color(XgramExpressive.PRIMARY));
+    view.setSingleLine(true);
+    view.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    view.setGravity(Gravity.CENTER_VERTICAL | (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT));
+    final int side = Screen.dp(XgramExpressive.LIST_INSET + 16f);
+    view.setPadding(side, Screen.dp(first ? 8f : 24f), side, Screen.dp(8f));
+    view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    return view;
+  }
+
   /** A ripple in {@code contentRole} at the pressed state-layer opacity, re-read on every state change. */
   private static final class StateRipple extends RippleDrawable {
     private final int contentRole;

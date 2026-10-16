@@ -62,7 +62,7 @@ public class EditHeaderView extends FrameLayoutFix implements RtlCheckListener, 
 
   public EditHeaderView (Context context, ViewController<?> parent) {
     super(context);
-    this.icon = Drawables.get(getResources(), R.drawable.baseline_camera_alt_24);
+    this.icon = Drawables.get(getResources(), xgram ? com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_camera_alt_24) : R.drawable.baseline_camera_alt_24);
     this.parent = parent;
 
     setWillNotDraw(false);
@@ -97,6 +97,9 @@ public class EditHeaderView extends FrameLayoutFix implements RtlCheckListener, 
       new CodePointCountFilter(TdConstants.MAX_CHAT_TITLE_LENGTH),
       new CharacterStyleFilter()
     });
+    if (xgram) {
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(input, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L, false); // XGram M3E
+    }
     addView(input);
   }
 
@@ -267,9 +270,67 @@ public class EditHeaderView extends FrameLayoutFix implements RtlCheckListener, 
     clipPath.close();
   }
 
+  // XGram M3E: the photo picker is an M3 avatar picker: a primaryContainer circle holding the camera (icon pack) in
+  // onPrimaryContainer, the picked photo in the same shape; pressed, its corners spring from full to 16dp
+  // (SPATIAL_FAST, a snap with Reduce motion); an "add" badge (a primary circle with an onPrimary plus, ringed in the
+  // app bar color) at its bottom end. The name is typed in titleLarge.
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private final Path xgramShape = new Path();
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress;
+
+  private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress () {
+    if (xgramPress == null) {
+      xgramPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+      xgramPress.setThreshold(.005f);
+    }
+    return xgramPress;
+  }
+
+  private void xgramSetPressed (boolean pressed) {
+    if (xgram) {
+      xgramPress().animateTo(pressed ? 1f : 0f);
+    }
+  }
+
+  private void xgramDraw (Canvas c) {
+    final float size = avatarRadius * 2f;
+    xgramRect.set(receiver.getLeft(), receiver.getTop(), receiver.getLeft() + size, receiver.getTop() + size);
+    final float press = xgramPress != null ? xgramPress.getValue() : 0f;
+    final float radius = com.fahadali.xgram.appearance.XgramExpressiveC.morphCorner(com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L, size, size, press);
+    xgramShape.rewind();
+    xgramShape.addRoundRect(xgramRect, radius, radius, Path.Direction.CW);
+    final boolean hasPhoto = file != null;
+    if (hasPhoto) {
+      int s = Views.save(c);
+      c.clipPath(xgramShape);
+      receiver.draw(c);
+      Views.restore(c, s);
+    } else {
+      c.drawPath(xgramShape, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER)));
+      final float cx = xgramRect.centerX(), cy = xgramRect.centerY();
+      Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER)));
+    }
+    // The "add" badge at the bottom end
+    final float badge = Screen.dp(20f), ring = Screen.dp(2f);
+    final float bx = Lang.rtl() ? xgramRect.left + badge / 2f - ring : xgramRect.right - badge / 2f + ring;
+    final float by = xgramRect.bottom - badge / 2f + ring;
+    c.drawCircle(bx, by, badge / 2f + ring, Paints.fillingPaint(org.thunderdog.challegram.theme.Theme.headerColor()));
+    c.drawCircle(bx, by, badge / 2f, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY)));
+    final float arm = Screen.dp(5f), stroke = Screen.dp(1f);
+    final android.graphics.Paint plus = Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY));
+    c.drawRect(bx - arm, by - stroke, bx + arm, by + stroke, plus);
+    c.drawRect(bx - stroke, by - arm, bx + stroke, by + arm, plus);
+  }
+
   @Override
   protected void onDraw (Canvas c) {
     layoutReceiver();
+    if (xgram) {
+      xgramDraw(c);
+      return;
+    }
     int s = Views.save(c);
     c.clipPath(clipPath);
     receiver.draw(c);
@@ -292,7 +353,7 @@ public class EditHeaderView extends FrameLayoutFix implements RtlCheckListener, 
   }
 
   public void setIcon (@DrawableRes int iconRes, @PorterDuffColorId int colorId) {
-    icon = Drawables.get(getResources(), iconRes);
+    icon = Drawables.get(getResources(), xgram ? com.fahadali.xgram.appearance.XgramIconPack.map(iconRes) : iconRes);
     iconColorId = colorId;
     invalidate();
   }
@@ -329,6 +390,7 @@ public class EditHeaderView extends FrameLayoutFix implements RtlCheckListener, 
           caughtPhoto = true;
           cx = x;
           cy = y;
+          xgramSetPressed(true);
           return true;
         } else {
           caughtPhoto = false;
@@ -339,6 +401,7 @@ public class EditHeaderView extends FrameLayoutFix implements RtlCheckListener, 
         if (caughtPhoto) {
           if (Math.max(Math.abs(e.getX() - cx), Math.abs(e.getY() - cy)) > Screen.getTouchSlop()) {
             caughtPhoto = false;
+            xgramSetPressed(false);
           }
         }
         break;
@@ -348,10 +411,12 @@ public class EditHeaderView extends FrameLayoutFix implements RtlCheckListener, 
           onPhotoClicked();
           caughtPhoto = false;
         }
+        xgramSetPressed(false);
         break;
       }
       case MotionEvent.ACTION_CANCEL: {
         caughtPhoto = false;
+        xgramSetPressed(false);
         break;
       }
     }

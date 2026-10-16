@@ -208,7 +208,19 @@ public class AvatarPickerManager extends MediaLayoutManager {
       }
 
 
-      if (!StringUtils.isEmpty(customButtonText)) {
+      if (!StringUtils.isEmpty(customButtonText) && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: "Remove photo" is a sentence-case filled tonal button in errorContainer, centred on the sheet
+        // color (no full-width uppercase bar), as tall as the media sheet's bottom bar
+        android.widget.FrameLayout bar = new android.widget.FrameLayout(context.context());
+        org.thunderdog.challegram.support.ViewSupport.setThemedBackground(bar, ColorId.drawer, context);
+        com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton button = new com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton(context.context(),
+          com.fahadali.xgram.appearance.XgramExpressive.ERROR_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR_CONTAINER);
+        button.setText(customButtonText);
+        button.setOnClickListener(v -> customButtonCallback.run());
+        bar.addView(button, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(com.fahadali.xgram.appearance.XgramM3Sheets.BUTTON_HEIGHT), Gravity.CENTER));
+        mediaLayout.setCustomBottomBar(bar);
+        bar.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, org.thunderdog.challegram.component.attach.MediaBottomBar.getBarHeight(), Gravity.BOTTOM));
+      } else if (!StringUtils.isEmpty(customButtonText)) {
         TextView button = Views.newTextView(context.context(), 16, Theme.getColor(customButtonColorId), Gravity.CENTER, Views.TEXT_FLAG_BOLD | Views.TEXT_FLAG_HORIZONTAL_PADDING);
         context.addThemeTextColorListener(button, customButtonColorId);
 
