@@ -295,4 +295,6 @@
   <item type="id" name="btn_xgramNotificationIcon" />
   <item type="id" name="btn_xgramNotificationIconXgram" />
   <item type="id" name="btn_xgramNotificationIconTelegramX" />
+  <!-- Message menu > Reaction bar -->
+  <item type="id" name="btn_xgramReactionBar" />
 </resources>

@@ -818,6 +818,39 @@ public final class XgramSettings {
     putInt(KEY_ENTER_TO_SEND, value);
   }
 
+  // Reaction bar of the message menu (Messages > Message menu, see com.fahadali.xgram.chats.XgramReactionBar)
+
+  public static final String KEY_REACTION_BAR = "xgram_reaction_bar";
+  /** The quick reactions at the top of the message menu, as in Telegram X. */
+  public static final int REACTION_BAR_TOP = 0;
+  /** The quick reactions under the options, just above Delete. */
+  public static final int REACTION_BAR_BOTTOM = 1;
+  /** No quick reactions: who reacted and who viewed stay at the top of the menu. */
+  public static final int REACTION_BAR_OFF = 2;
+
+  private volatile int reactionBar = -1; // -1: not read yet
+
+  /** {@link #REACTION_BAR_TOP}, {@link #REACTION_BAR_BOTTOM} or {@link #REACTION_BAR_OFF}. */
+  public int reactionBar () {
+    int value = reactionBar;
+    if (value < 0) {
+      value = pmc().getInt(KEY_REACTION_BAR, REACTION_BAR_TOP);
+      if (value != REACTION_BAR_BOTTOM && value != REACTION_BAR_OFF) {
+        value = REACTION_BAR_TOP;
+      }
+      reactionBar = value;
+    }
+    return value;
+  }
+
+  public void setReactionBar (int value) {
+    if (value != REACTION_BAR_BOTTOM && value != REACTION_BAR_OFF) {
+      value = REACTION_BAR_TOP;
+    }
+    reactionBar = value;
+    putInt(KEY_REACTION_BAR, value);
+  }
+
   // Notification icon (Appearance > Theme, next to App icon). Separate from the app icon.
 
   public static final String KEY_NOTIFICATION_ICON = "xgram_notification_icon";

@@ -826,4 +826,11 @@
   <string name="XgramNotificationIconXgram">XGram</string>
   <string name="XgramNotificationIconTelegramX">Telegram&#160;X</string>
   <string name="XgramNotificationIconInfo">Shown in the status bar for new messages, separate from the app icon.</string>
+  <!-- Message menu > Reaction bar -->
+  <string name="XgramReactionBar">Reaction bar</string>
+  <string name="XgramReactionBarTop">Top</string>
+  <string name="XgramReactionBarBottom">Bottom</string>
+  <string name="XgramReactionBarOff">Off</string>
+  <string name="XgramReactionBarInfo">Where the quick reactions show when you long-press a message. Bottom puts them under the options, above Delete. With Off, who reacted and who viewed stay at the top.</string>
+  <string name="XgramMoreReactions">More reactions</string>
 </resources>

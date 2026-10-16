@@ -96,7 +96,8 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
       protected boolean drawChild (Canvas canvas, View child, long drawingTime) {
         if (child == pagerInFrameLayoutFix) {
           canvas.save();
-          float clipTop = headerTranslationY + (headerView != null ? HeaderView.getTopOffset() : 0);
+          // XGram: never below the header's bottom, where the pages start (the message sheet may have no header row)
+          float clipTop = headerTranslationY + (headerView != null ? Math.min(HeaderView.getTopOffset(), getHeaderHeight()) : 0);
           if (headerView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
             // XGram: the pages stay out of the rounded corners (the header band above them is the sheet's own surface)
             clipTop = Math.max(clipTop, xgramSheetTopY() + com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable.cornerRadius(xgramSheetCorners()));
