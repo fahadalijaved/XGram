@@ -169,11 +169,17 @@ public class MessageOptionsReactedController extends BottomSheetViewController.B
    * a rectangle while the next ones were tiles). Here the group is closed on every page: the closing SHADOW_BOTTOM moves
    * to the end as pages arrive, and the item decorations are recomputed. The rows are 72dp two-line items (TYPE_USER:
    * avatar, titleMedium name, bodyMedium status) instead of Telegram X's 63dp ones.
+   *
+   * The notifications use the adapter's counts, not the list's size: while its list is empty SettingsAdapter shows a
+   * TYPE_PROGRESS placeholder (getItemCount() is 1), so the first page replaces that row (a change at 0, then an
+   * insertion after it). Inserting the first page at 0 left the placeholder's holder in the RecyclerView, offset past
+   * the new rows (position N of N items): the predictive layout of the item animator then threw "Inconsistency
+   * detected. Invalid view holder adapter position" as soon as the reactions page opened.
    */
   private void xgramProcessNewAddedReactions (TdApi.AddedReactions addedReactions) {
     final List<ListItem> items = adapter.getItems();
-    final int oldCount = items.size();
-    int insertAt = oldCount;
+    final int oldCount = adapter.getItemCount(); // what the RecyclerView holds, the progress placeholder included
+    int insertAt = items.size();
     if (insertAt > 0 && items.get(insertAt - 1).getViewType() == ListItem.TYPE_SHADOW_BOTTOM) {
       insertAt--;
       items.remove(insertAt);
@@ -200,7 +206,7 @@ public class MessageOptionsReactedController extends BottomSheetViewController.B
       items.add(new ListItem(ListItem.TYPE_LIST_INFO_VIEW));
     }
 
-    final int newCount = items.size();
+    final int newCount = adapter.getItemCount(); // 1 (the placeholder again) if the list stayed empty
     final int changedCount = Math.min(oldCount, newCount) - insertAt;
     if (changedCount > 0) {
       adapter.notifyItemRangeChanged(insertAt, changedCount);
