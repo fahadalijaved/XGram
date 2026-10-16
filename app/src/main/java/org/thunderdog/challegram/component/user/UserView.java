@@ -26,6 +26,8 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramR5People;
+
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.core.Lang;
@@ -115,10 +117,10 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
   private void layoutReceiver () {
     int centerY = height / 2;
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram: M3 list item avatar 40dp centred in the 50dp slot: 16dp from the tile edge, text stays at 72dp
-      final int radius = Screen.dp(20f);
-      final int centerX = Lang.rtl() ? getMeasuredWidth() - offsetLeft - avatarRadius : offsetLeft + avatarRadius;
-      avatarReceiver.setBounds(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+      // XGram M3E: the M3 list item's 40dp avatar 16dp from the tile edge whatever the offsetLeft (the text at 72dp)
+      final int size = Screen.dp(XgramR5People.AVATAR);
+      final int left = Lang.rtl() ? getMeasuredWidth() - Screen.dp(XgramR5People.PADDING) - size : Screen.dp(XgramR5People.PADDING);
+      avatarReceiver.setBounds(left, centerY - size / 2, left + size, centerY - size / 2 + size);
       return;
     }
     if (Lang.rtl()) {
@@ -132,8 +134,83 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
   public void setOffsetLeft (int offset) {
     if (this.offsetLeft != offset) {
       this.offsetLeft = offset;
+      if (xgram()) {
+        layoutReceiver();
+        return;
+      }
       int centerY = height / 2;
       avatarReceiver.setBounds(offsetLeft, centerY - avatarRadius, offsetLeft + avatarRadius * 2, centerY + avatarRadius);
+    }
+  }
+
+  // XGram M3E: the M3 list item, as DoubleTextWrapper.xgramDrawText: the name in bodyLarge and onSurface, the status
+  // in bodyMedium and onSurfaceVariant (primary while online), centred as one block, the text 16 + 40 + 16dp from the
+  // tile edge (mirrored for RTL), no separator of its own (tiles are separated by their gaps).
+
+  private static boolean xgram () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  private static @Nullable TextPaint xgramStatusPaint;
+
+  private static TextPaint xgramStatusPaint () {
+    if (xgramStatusPaint == null) {
+      TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+      paint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false));
+      paint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)));
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        paint.setLetterSpacing(com.fahadali.xgram.appearance.XgramExpressive.trackingSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M) / com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M));
+      }
+      xgramStatusPaint = paint;
+    }
+    return xgramStatusPaint;
+  }
+
+  /** The text start: 72dp in Expressive design, Telegram X's offset and margin otherwise. */
+  private int textStart () {
+    return xgram() ? Screen.dp(XgramR5People.TEXT_START) : offsetLeft + textLeftMargin;
+  }
+
+  private void xgramDraw (Canvas c) {
+    final boolean rtl = Lang.rtl();
+    final int viewWidth = getMeasuredWidth();
+    final int start = textStart();
+    final int nameHeight = trimmedName != null ? trimmedName.getHeight() : 0;
+    final int statusLine = trimmedStatus != null ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.lineHeightSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)) : 0;
+    final int nameTop = (height - nameHeight - statusLine) / 2;
+    if (trimmedName != null) {
+      final int nameX = rtl ? viewWidth - start - trimmedName.getWidth() : start;
+      trimmedName.draw(c, nameX, nameTop);
+      final int statusX = rtl ? nameX - Screen.dp(6f) - emojiStatusHelper.getWidth() : nameX + trimmedName.getWidth() + Screen.dp(6f);
+      emojiStatusHelper.draw(c, statusX, nameTop);
+    }
+    if (trimmedStatus != null) {
+      final TextPaint paint = xgramStatusPaint();
+      final boolean online = user != null && user.isOnline();
+      paint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(online ? com.fahadali.xgram.appearance.XgramExpressive.PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      final float baseline = nameTop + nameHeight + statusLine / 2f - (paint.descent() + paint.ascent()) / 2f;
+      c.drawText(trimmedStatus, rtl ? viewWidth - start - trimmedStatusWidth : start, baseline, paint);
+    }
+    if (user != null || unregisteredContact != null) {
+      float checkFactor = checkBoxHelper != null ? checkBoxHelper.getCheckFactor() : 0f;
+      avatarReceiver.forceAllowOnline(checkBoxHelper == null || !checkBoxHelper.isChecked(), 1f - checkFactor);
+      layoutReceiver();
+      if (avatarReceiver.needPlaceholder()) {
+        avatarReceiver.drawPlaceholder(c);
+      }
+      avatarReceiver.draw(c);
+    }
+    if (unregisteredContact != null) {
+      // The invite action: a plus in primary, centred where a 40dp trailing icon button sits
+      final int size = Screen.dp(14f), stroke = Screen.dp(2f);
+      final float cx = rtl ? Screen.dp(XgramR5People.PADDING + 20f) : viewWidth - Screen.dp(XgramR5People.PADDING + 20f);
+      final float cy = height / 2f;
+      final Paint paint = Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+      c.drawRect(cx - size / 2f, cy - stroke / 2f, cx + size / 2f, cy + stroke / 2f, paint);
+      c.drawRect(cx - stroke / 2f, cy - size / 2f, cx + stroke / 2f, cy + size / 2f, paint);
+    }
+    if (checkBoxHelper != null) {
+      com.fahadali.xgram.appearance.XgramM3Sheets.drawAvatarCheck(c, avatarReceiver, checkBoxHelper.getCheckFactor(), XgramR5People.rowColor(this)); // the M3 checkbox
     }
   }
 
@@ -184,6 +261,11 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
       statusWidth = 0;
     }
     float availWidth = getMeasuredWidth() - textLeftMargin - offsetLeft - paddingRight - (unregisteredContact != null ? Screen.dp(32f) : 0);
+    final TextPaint measurePaint = xgram() ? xgramStatusPaint() : statusPaint; // XGram M3E: bodyMedium
+    if (xgram()) {
+      availWidth = getMeasuredWidth() - Screen.dp(XgramR5People.TEXT_START) - Screen.dp(XgramR5People.PADDING) - (unregisteredContact != null ? Screen.dp(40f + 8f) : 0);
+      statusWidth = status != null ? U.measureText(status, measurePaint) : 0;
+    }
     if (drawModifiers != null) {
       int maxWidth = 0;
       for (DrawModifier modifier : drawModifiers) {
@@ -194,8 +276,8 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
     if (availWidth > 0) {
       sourceStatus = status;
       if (statusWidth > availWidth) {
-        trimmedStatus = TextUtils.ellipsize(sourceStatus, statusPaint, availWidth, TextUtils.TruncateAt.END).toString();
-        trimmedStatusWidth = U.measureText(trimmedStatus, statusPaint);
+        trimmedStatus = TextUtils.ellipsize(sourceStatus, measurePaint, availWidth, TextUtils.TruncateAt.END).toString();
+        trimmedStatusWidth = U.measureText(trimmedStatus, measurePaint);
       } else {
         trimmedStatus = sourceStatus;
         trimmedStatusWidth = statusWidth;
@@ -221,6 +303,9 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
       name = null;
     }
     float availWidth = getMeasuredWidth() - textLeftMargin - offsetLeft - paddingRight - (unregisteredContact != null ? Screen.dp(32f) : 0);
+    if (xgram()) {
+      availWidth = getMeasuredWidth() - Screen.dp(XgramR5People.TEXT_START) - Screen.dp(XgramR5People.PADDING) - (unregisteredContact != null ? Screen.dp(40f + 8f) : 0);
+    }
     if (drawModifiers != null) {
       int maxWidth = 0;
       for (DrawModifier modifier : drawModifiers) {
@@ -240,7 +325,12 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
 
     if (availWidth > 0) {
       sourceName = name;
-      trimmedName = StringUtils.isEmpty(name) ? null : new Text.Builder(name, (int) availWidth, Paints.robotoStyleProvider(16), TextColorSets.Regular.NORMAL).singleLine().allBold().build();
+      if (xgram()) {
+        // XGram M3E: bodyLarge at its own weight in onSurface (no allBold, so no fake bold)
+        trimmedName = StringUtils.isEmpty(name) ? null : new Text.Builder(name, (int) availWidth, com.fahadali.xgram.appearance.XgramM3Profile.listHeadlineProvider(), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE).singleLine().build();
+      } else {
+        trimmedName = StringUtils.isEmpty(name) ? null : new Text.Builder(name, (int) availWidth, Paints.robotoStyleProvider(16), TextColorSets.Regular.NORMAL).singleLine().allBold().build();
+      }
     }
   }
 
@@ -329,6 +419,18 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
 
   @Override
   protected void onDraw (Canvas c) {
+    if (xgram()) {
+      removeHelper.save(c);
+      xgramDraw(c);
+      removeHelper.restore(c);
+      removeHelper.draw(c);
+      if (drawModifiers != null) {
+        for (int i = drawModifiers.size() - 1; i >= 0; i--) {
+          drawModifiers.get(i).afterDraw(this, c);
+        }
+      }
+      return;
+    }
     removeHelper.save(c);
     int centerY = height / 2;
     boolean rtl = Lang.rtl();
