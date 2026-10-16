@@ -19,13 +19,21 @@ import android.os.Build;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramLoadingIndicatorDrawable;
+import com.fahadali.xgram.appearance.XgramR5Sheets;
+
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.support.ViewSupport;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
@@ -50,6 +58,11 @@ public class ProgressWrap extends FrameLayoutFix {
 
   public ProgressWrap (Context context) {
     super(context);
+
+    if (XgramExpressive.isEnabled()) {
+      xgramBuild(context);
+      return;
+    }
 
     int width = Math.min(Screen.smallestSide() - Screen.dp(56f), Screen.dp(300f));
     int height = Screen.dp(94f);
@@ -95,5 +108,93 @@ public class ProgressWrap extends FrameLayoutFix {
 
   public @Nullable ProgressBar getProgress () {
     return progressBar;
+  }
+
+  // XGram M3E r5: the progress popup as an M3 dialog. A 28dp surfaceContainerHigh card (the card step with Pure black)
+  // with 24dp padding: the 48dp loading indicator in primary, the message in bodyLarge onSurface beside it, and a
+  // "Cancel" text button at the end while the caller can cancel (xgramSetCancel).
+
+  private @Nullable TextView xgramCancel;
+
+  private static final class IndicatorView extends ImageView {
+    private final XgramLoadingIndicatorDrawable indicator;
+
+    IndicatorView (Context context) {
+      super(context);
+      indicator = new XgramLoadingIndicatorDrawable(48f, XgramExpressive.PRIMARY);
+      setImageDrawable(indicator);
+      setScaleType(ScaleType.CENTER);
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      indicator.start();
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      indicator.stop();
+      super.onDetachedFromWindow();
+    }
+  }
+
+  private void xgramBuild (Context context) {
+    final int padding = Screen.dp(24f);
+    final int width = Math.min(Screen.smallestSide() - Screen.dp(48f), Screen.dp(400f));
+
+    XgramR5Sheets.applyCard(this, XgramExpressive.SURFACE_CONTAINER_HIGH, XgramExpressive.CORNER_XL);
+
+    LinearLayout column = new LinearLayout(context);
+    column.setOrientation(LinearLayout.VERTICAL);
+    column.setPadding(padding, padding, padding, padding);
+    column.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    LinearLayout row = new LinearLayout(context);
+    row.setOrientation(LinearLayout.HORIZONTAL);
+    row.setGravity(Gravity.CENTER_VERTICAL);
+    row.setLayoutDirection(Lang.rtl() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+    row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    IndicatorView indicator = new IndicatorView(context);
+    row.addView(indicator, new LinearLayout.LayoutParams(Screen.dp(48f), Screen.dp(48f)));
+
+    textView = new NoScrollTextView(context);
+    XgramExpressive.applyText(textView, XgramExpressive.TS_BODY_L, false);
+    textView.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
+    textView.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+    textView.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    textView.setEllipsize(TextUtils.TruncateAt.END);
+    textView.setMaxLines(3);
+    LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    textParams.setMarginStart(Screen.dp(16f));
+    row.addView(textView, textParams);
+    column.addView(row);
+
+    xgramCancel = XgramR5Sheets.textButton(context, Lang.getString(R.string.Cancel), XgramExpressive.PRIMARY, null);
+    xgramCancel.setVisibility(View.GONE);
+    LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f));
+    cancelParams.gravity = Gravity.END;
+    cancelParams.topMargin = Screen.dp(16f);
+    // the label's own 12dp padding stays inside the 24dp card padding: the pill ends at the card's content edge
+    cancelParams.setMarginEnd(-Screen.dp(12f));
+    column.addView(xgramCancel, cancelParams);
+
+    addView(column);
+    setLayoutParams(FrameLayoutFix.newParams(width, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+  }
+
+  /** XGram M3E: shows the "Cancel" text button while {@code onCancel} is set (a cancellable progress). */
+  public void xgramSetCancel (@Nullable Runnable onCancel) {
+    if (xgramCancel == null) {
+      return;
+    }
+    if (onCancel != null) {
+      xgramCancel.setOnClickListener(v -> onCancel.run());
+      xgramCancel.setVisibility(View.VISIBLE);
+    } else {
+      xgramCancel.setOnClickListener(null);
+      xgramCancel.setVisibility(View.GONE);
+    }
   }
 }

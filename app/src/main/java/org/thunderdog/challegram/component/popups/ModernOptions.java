@@ -12,9 +12,13 @@
  */
 package org.thunderdog.challegram.component.popups;
 
+import android.content.Context;
+import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
@@ -30,6 +34,8 @@ import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.util.OptionDelegate;
 import org.thunderdog.challegram.util.Permissions;
+import org.thunderdog.challegram.util.text.Text;
+import org.thunderdog.challegram.widget.NoScrollTextView;
 import org.thunderdog.challegram.widget.PopupLayout;
 
 public class ModernOptions {
@@ -64,6 +70,10 @@ public class ModernOptions {
     }
     Lang.SpanCreator firstItalicCreator = (target, argStart, argEnd, spanIndex, needFakeBold) -> spanIndex == 1 ? Lang.newItalicSpan(needFakeBold) : null;
     CharSequence desc = Lang.getString(R.string.format_doubleLines, firstItalicCreator, firstLine, secondLine);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramShowHeroConfirm(context, R.drawable.baseline_location_on_48, Lang.getString(R.string.XgramR5SheetsLocationTitle), desc, onCancel, onAgree);
+      return;
+    }
 
     addBigColoredHeader(context.showOptions(
       desc,
@@ -93,6 +103,87 @@ public class ModernOptions {
         }
       }
     ), R.drawable.baseline_location_on_48);
+  }
+
+  /**
+   * XGram M3E r5: the big colored header sheet as an M3E hero sheet. Under the handle a 96dp 9-sided cookie in
+   * primaryContainer holds the icon in onPrimaryContainer, then the headlineSmall title and the bodyMedium text
+   * (onSurfaceVariant), centered, and the actions row: "Privacy policy" as a text button at the start, then "Cancel"
+   * and the filled "Continue" at the end. The scrim does not close it (as Telegram X's), so Cancel stays.
+   */
+  private static void xgramShowHeroConfirm (ViewController<?> context, @DrawableRes int icon, CharSequence title, CharSequence text, Runnable onCancel, Runnable onAgree) {
+    PopupLayout popup = context.showPopup(null, false, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsLayout) -> {
+      final Context ctx = optionsLayout.getContext();
+      final int width = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(context.context().getControllerWidth(optionsLayout));
+
+      com.fahadali.xgram.appearance.XgramR5Sheets.ShapeIconView hero = new com.fahadali.xgram.appearance.XgramR5Sheets.ShapeIconView(ctx, 96f, 48f).setIcon(icon);
+      hero.setContentDescription(title);
+      hero.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+      TextView titleView = new NoScrollTextView(ctx);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(titleView, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S, false);
+      titleView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
+      titleView.setGravity(Gravity.CENTER_HORIZONTAL);
+      titleView.setText(title);
+      titleView.setPadding(Screen.dp(24f), 0, Screen.dp(24f), 0);
+      LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      titleParams.topMargin = Screen.dp(16f);
+      titleView.setLayoutParams(titleParams);
+
+      TextView textView = new NoScrollTextView(ctx);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+      textView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      textView.setGravity(Gravity.CENTER_HORIZONTAL);
+      textView.setText(text);
+      textView.setPadding(Screen.dp(24f), 0, Screen.dp(24f), 0);
+      LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      textParams.topMargin = Screen.dp(8f);
+      textView.setLayoutParams(textParams);
+
+      TextView privacy = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(ctx,
+        com.fahadali.xgram.appearance.XgramR5Sheets.sentenceCase(R.string.PrivacyPolicy, R.string.XgramR5SheetsPrivacyPolicy),
+        com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+      privacy.setOnClickListener(v -> {
+        popupLayout.hideWindow(true);
+        onCancel.run();
+        context.tdlib().ui().openUrl(context, Lang.getStringSecure(R.string.url_privacyPolicy), new TdlibUi.UrlOpenParameters().forceInstantView());
+      });
+      TextView cancel = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(ctx, Lang.getString(R.string.Cancel), com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+      cancel.setOnClickListener(v -> {
+        popupLayout.hideWindow(true);
+        onCancel.run();
+      });
+      TextView agree = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(ctx, Lang.getString(R.string.Continue), false, null);
+      agree.setOnClickListener(v -> {
+        popupLayout.hideWindow(true);
+        onAgree.run();
+      });
+      LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(ctx, privacy, cancel, agree);
+      LinearLayout.LayoutParams actionsParams = (LinearLayout.LayoutParams) actions.getLayoutParams();
+      actionsParams.topMargin = Screen.dp(16f);
+      actionsParams.bottomMargin = Screen.dp(8f);
+      actions.setLayoutParams(actionsParams);
+
+      optionsLayout.addView(hero);
+      optionsLayout.addView(titleView);
+      optionsLayout.addView(textView);
+      optionsLayout.addView(actions);
+
+      // the height the sheet slides in by: every part measured at the sheet's width
+      int height = 0;
+      final int widthSpec = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY);
+      final int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+      View[] parts = {hero, titleView, textView};
+      for (View part : parts) {
+        part.measure(widthSpec, heightSpec);
+        height += part.getMeasuredHeight() + ((LinearLayout.LayoutParams) part.getLayoutParams()).topMargin;
+      }
+      height += actionsParams.height + actionsParams.topMargin + actionsParams.bottomMargin;
+      return height;
+    }, null, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S);
+    if (popup != null) {
+      popup.setDisableCancelOnTouchDown(true);
+    }
   }
 
   private static void addBigColoredHeader (PopupLayout layout, @DrawableRes int icon) {

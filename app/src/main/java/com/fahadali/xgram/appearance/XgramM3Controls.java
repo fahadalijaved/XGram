@@ -20,18 +20,25 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PathMeasure;
 import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowManager;
+import android.widget.CheckedTextView;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.Nullable;
 
+import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.theme.ThemeDelegate;
 import org.thunderdog.challegram.theme.ThemeManager;
 import org.thunderdog.challegram.tool.Screen;
@@ -158,7 +165,10 @@ public final class XgramM3Controls {
 
   // Dialogs (DialogTokens)
 
-  /** True when M3E is on and {@code theme} is the theme in use (theme previews keep Telegram X's own dialog). */
+  /**
+   * True when M3E is on and {@code theme} is the theme in use. A dialog in another theme (theme previews, the media
+   * viewer) takes {@link #styleAlert(Context, AlertDialog, ThemeDelegate)} with that theme instead.
+   */
   public static boolean dialogsEnabled (@Nullable ThemeDelegate theme) {
     return XgramExpressive.isEnabled() && (theme == null || theme.getId() == ThemeManager.instance().currentThemeId());
   }
@@ -168,29 +178,84 @@ public final class XgramM3Controls {
    * onSurfaceVariant, sentence case labelLarge text buttons in primary with a pill state layer, bodyLarge list items.
    */
   public static void styleAlert (Context context, AlertDialog dialog) {
+    styleAlert(context, dialog, null);
+  }
+
+  /** The window dim behind an M3 dialog (the modal scrim: black at 32%). */
+  public static final float DIALOG_DIM = .32f;
+  /** DialogTokens: 24dp padding; 8dp between the action buttons. */
+  private static final float DIALOG_PADDING = 24f, BUTTON_GAP = 8f;
+
+  /**
+   * {@link #styleAlert(Context, AlertDialog)} in the light or dark scheme of {@code forcedTheme} (a dialog over the
+   * media viewer or a theme preview, whose theme is not the one in use), or of the current theme when it is null.
+   * Message links and the selection are primary, the window dims to 32%, the action buttons are end aligned 8dp apart
+   * 24dp from the edges, and every color is an M3 role (no Telegram X blue from the dialog theme).
+   */
+  public static void styleAlert (Context context, AlertDialog dialog, @Nullable ThemeDelegate forcedTheme) {
     final Window window = dialog.getWindow();
     if (window != null) {
-      GradientDrawable shape = new GradientDrawable();
-      shape.setColor(role(XgramExpressive.SURFACE_CONTAINER_HIGH));
-      shape.setCornerRadius(Screen.dp(XgramExpressive.CORNER_XL));
+      final Drawable shape;
+      if (forcedTheme == null) {
+        // read at draw time: a day / night switch while the dialog is open repaints it
+        XgramExpressive.MorphDrawable morph = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_XL, Float.NaN);
+        morph.setColorRole(XgramExpressive.SURFACE_CONTAINER_HIGH);
+        shape = morph;
+      } else {
+        GradientDrawable fixed = new GradientDrawable();
+        fixed.setColor(role(XgramExpressive.SURFACE_CONTAINER_HIGH, forcedTheme));
+        fixed.setCornerRadius(Screen.dp(XgramExpressive.CORNER_XL));
+        shape = fixed;
+      }
       window.setBackgroundDrawable(new InsetDrawable(shape, Screen.dp(16f)));
+      window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+      window.setDimAmount(DIALOG_DIM);
     }
 
-    final int onSurface = role(XgramExpressive.ON_SURFACE);
-    final int onSurfaceVariant = role(XgramExpressive.ON_SURFACE_VARIANT);
+    final int onSurface = role(XgramExpressive.ON_SURFACE, forcedTheme);
+    final int onSurfaceVariant = role(XgramExpressive.ON_SURFACE_VARIANT, forcedTheme);
+    final int primary = role(XgramExpressive.PRIMARY, forcedTheme);
 
     styleText(dialog.findViewById(android.R.id.title), XgramExpressive.TS_HEADLINE_S, onSurface);
     styleText(Views.tryFindAndroidView(context, dialog, "alertTitle"), XgramExpressive.TS_HEADLINE_S, onSurface);
-    styleText(dialog.findViewById(android.R.id.message), XgramExpressive.TS_BODY_M, onSurfaceVariant);
+    View message = dialog.findViewById(android.R.id.message);
+    styleText(message, XgramExpressive.TS_BODY_M, onSurfaceVariant);
+    if (message instanceof TextView) {
+      // links in primary, pressed with a primary highlight at .2
+      ((TextView) message).setLinkTextColor(primary);
+      ((TextView) message).setHighlightColor(XgramExpressive.withAlpha(primary, .2f));
+    }
+    View titleTemplate = Views.tryFindAndroidView(context, dialog, "title_template");
+    if (titleTemplate != null) {
+      titleTemplate.setPaddingRelative(Screen.dp(DIALOG_PADDING), Screen.dp(DIALOG_PADDING), Screen.dp(DIALOG_PADDING), titleTemplate.getPaddingBottom());
+    }
 
     final int[] which = {DialogInterface.BUTTON_POSITIVE, DialogInterface.BUTTON_NEUTRAL, DialogInterface.BUTTON_NEGATIVE};
     final int[] fallbackIds = {android.R.id.button1, android.R.id.button3, android.R.id.button2};
+    ViewGroup buttonBar = null;
     for (int i = 0; i < which.length; i++) {
       View button = dialog.getButton(which[i]);
       if (button == null) {
         button = dialog.findViewById(fallbackIds[i]);
       }
-      styleButton(button);
+      // a caller that made a button red before (Telegram X's textNegative, or the error role) keeps it destructive
+      final boolean destructive = button instanceof TextView && isNegativeColor(((TextView) button).getCurrentTextColor());
+      styleButton(button, destructive, forcedTheme);
+      if (button != null && button.getVisibility() == View.VISIBLE) {
+        if (buttonBar == null && button.getParent() instanceof ViewGroup) {
+          buttonBar = (ViewGroup) button.getParent();
+        }
+        // 8dp between the neutral, negative and positive buttons (the neutral one sits at the start)
+        if (which[i] != DialogInterface.BUTTON_NEUTRAL && button.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+          ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) button.getLayoutParams();
+          params.setMarginStart(Screen.dp(BUTTON_GAP));
+          button.setLayoutParams(params);
+        }
+      }
+    }
+    if (buttonBar != null) {
+      // the 40dp pills (in 48dp touch targets) 24dp from the dialog's sides and bottom
+      buttonBar.setPaddingRelative(Screen.dp(DIALOG_PADDING), Screen.dp(8f), Screen.dp(DIALOG_PADDING), Screen.dp(DIALOG_PADDING - 4f));
     }
 
     final ListView list = dialog.getListView();
@@ -199,15 +264,58 @@ public final class XgramM3Controls {
       list.setOnHierarchyChangeListener(new ViewGroup.OnHierarchyChangeListener() {
         @Override
         public void onChildViewAdded (View parent, View child) {
-          styleListItem(child);
+          styleListItem(child, forcedTheme);
         }
 
         @Override
         public void onChildViewRemoved (View parent, View child) { }
       });
       for (int i = 0; i < list.getChildCount(); i++) {
-        styleListItem(list.getChildAt(i));
+        styleListItem(list.getChildAt(i), forcedTheme);
       }
+    }
+
+    if (window != null) {
+      styleInputs(window.getDecorView(), primary);
+    }
+  }
+
+  @ColorInt
+  private static int role (int role, @Nullable ThemeDelegate forcedTheme) {
+    return forcedTheme != null ? XgramExpressive.colorFor(role, forcedTheme.isDark()) : XgramExpressive.color(role);
+  }
+
+  private static boolean isNegativeColor (@ColorInt int color) {
+    try {
+      return (color | 0xff000000) == (Theme.getColor(ColorId.textNegative) | 0xff000000) ||
+        (color | 0xff000000) == (XgramExpressive.color(XgramExpressive.ERROR) | 0xff000000);
+    } catch (Throwable t) {
+      return false;
+    }
+  }
+
+  /** Text fields inside a dialog (a custom view): the cursor, the selection handles and the selection in primary. */
+  private static void styleInputs (@Nullable View view, @ColorInt int primary) {
+    if (view instanceof EditText) {
+      EditText editText = (EditText) view;
+      editText.setHighlightColor(XgramExpressive.withAlpha(primary, .3f));
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        tint(editText.getTextCursorDrawable(), primary);
+        tint(editText.getTextSelectHandle(), primary);
+        tint(editText.getTextSelectHandleLeft(), primary);
+        tint(editText.getTextSelectHandleRight(), primary);
+      }
+    } else if (view instanceof ViewGroup) {
+      ViewGroup group = (ViewGroup) view;
+      for (int i = 0; i < group.getChildCount(); i++) {
+        styleInputs(group.getChildAt(i), primary);
+      }
+    }
+  }
+
+  private static void tint (@Nullable Drawable drawable, @ColorInt int color) {
+    if (drawable != null) {
+      drawable.mutate().setTint(color);
     }
   }
 
@@ -220,7 +328,7 @@ public final class XgramM3Controls {
     }
   }
 
-  private static void styleListItem (@Nullable View child) {
+  private static void styleListItem (@Nullable View child, @Nullable ThemeDelegate forcedTheme) {
     TextView textView = null;
     if (child instanceof TextView) {
       textView = (TextView) child;
@@ -232,12 +340,33 @@ public final class XgramM3Controls {
     }
     if (textView != null) {
       XgramExpressive.applyText(textView, XgramExpressive.TS_BODY_L, false);
-      textView.setTextColor(role(XgramExpressive.ON_SURFACE));
+      textView.setTextColor(role(XgramExpressive.ON_SURFACE, forcedTheme));
+      if (textView instanceof CheckedTextView) {
+        // single and multiple choice lists: the radio / check in primary, onSurfaceVariant while unchecked
+        ((CheckedTextView) textView).setCheckMarkTintList(new ColorStateList(
+          new int[][] {new int[] {android.R.attr.state_checked}, new int[0]},
+          new int[] {role(XgramExpressive.PRIMARY, forcedTheme), role(XgramExpressive.ON_SURFACE_VARIANT, forcedTheme)}
+        ));
+      }
     }
   }
 
   /** M3 text button: sentence case labelLarge, primary (error when the caller made it red), 40dp pill state layer. */
   public static void styleButton (@Nullable View view) {
+    styleButton(view, false, null);
+  }
+
+  /** {@link #styleButton(View)}, in error when {@code destructive}. */
+  public static void styleButton (@Nullable View view, boolean destructive) {
+    styleButton(view, destructive, null);
+  }
+
+  /**
+   * The M3 text button of a dialog: labelLarge in primary (error when {@code destructive}), onSurface at .38 while
+   * disabled (a ColorStateList, so a button the caller enables later, as the call rating's OK, changes with it), a 40dp
+   * pill state layer inside a 48dp touch target, 12dp side padding.
+   */
+  public static void styleButton (@Nullable View view, boolean destructive, @Nullable ThemeDelegate forcedTheme) {
     if (!(view instanceof TextView)) {
       return;
     }
@@ -245,14 +374,21 @@ public final class XgramM3Controls {
     button.setAllCaps(false);
     button.setPaintFlags(button.getPaintFlags() & ~Paint.FAKE_BOLD_TEXT_FLAG);
     XgramExpressive.applyText(button, XgramExpressive.TS_LABEL_L, false);
-    button.setTextColor(role(XgramExpressive.PRIMARY));
-    button.setMinHeight(Screen.dp(40f));
-    button.setMinimumHeight(Screen.dp(40f));
+    final int content = role(destructive ? XgramExpressive.ERROR : XgramExpressive.PRIMARY, forcedTheme);
+    final int disabled = XgramExpressive.withAlpha(role(XgramExpressive.ON_SURFACE, forcedTheme), XgramExpressive.DISABLED_CONTENT);
+    button.setTextColor(new ColorStateList(
+      new int[][] {new int[] {-android.R.attr.state_enabled}, new int[0]},
+      new int[] {disabled, content}
+    ));
+    button.setMinHeight(Screen.dp(48f));
+    button.setMinimumHeight(Screen.dp(48f));
+    button.setMinWidth(Screen.dp(48f));
+    button.setMinimumWidth(Screen.dp(48f));
     button.setPadding(Screen.dp(12f), button.getPaddingTop(), Screen.dp(12f), button.getPaddingBottom());
     GradientDrawable mask = new GradientDrawable();
     mask.setColor(0xffffffff);
     mask.setCornerRadius(Screen.dp(100f));
-    int ripple = XgramExpressive.withAlpha(role(XgramExpressive.PRIMARY), XgramExpressive.STATE_PRESSED);
+    int ripple = XgramExpressive.withAlpha(content, XgramExpressive.STATE_PRESSED);
     button.setBackground(new RippleDrawable(ColorStateList.valueOf(ripple), null, new InsetDrawable(mask, 0, Screen.dp(4f), 0, Screen.dp(4f))));
   }
 }

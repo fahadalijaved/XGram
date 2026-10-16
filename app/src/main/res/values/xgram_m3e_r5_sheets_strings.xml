@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E round 5: dialogs, sheets and the XGram popups (sentence case) -->
+<resources>
+  <string name="XgramR5SheetsUndo">Undo</string>
+  <string name="XgramR5SheetsCopied">Copied</string>
+  <string name="XgramR5SheetsUnsavedTitle">Discard unsaved changes?</string>
+  <string name="XgramR5SheetsLocationTitle">Allow location access</string>
+  <string name="XgramR5SheetsPrivacyPolicy">Privacy policy</string>
+  <string name="XgramR5SheetsEditHistory">Edit history</string>
+  <string name="XgramR5SheetsCurrent">Current</string>
+  <string name="XgramR5SheetsCopyValue">Copy</string>
+  <string name="XgramR5SheetsReplyWithQuote">Reply with quote</string>
+  <string name="XgramR5SheetsUpdateAvailable">Update available</string>
+  <string name="XgramR5SheetsUpdateVersion">XGram %1$s · %2$s</string>
+  <string name="XgramR5SheetsUpdateVersionNoSize">XGram %1$s</string>
+  <string name="XgramR5SheetsDownload">Download</string>
+  <string name="XgramR5SheetsWhatsNew">What\'s new</string>
+  <string name="XgramR5SheetsLater">Later</string>
+  <string name="XgramR5SheetsOpenInBrowser">Open in browser</string>
+  <string name="XgramR5SheetsRetry">Retry</string>
+  <string name="XgramR5SheetsGotIt">Got it</string>
+  <string name="XgramR5SheetsLearnMore">Learn more</string>
+  <string name="XgramR5SheetsDropToSend">Drop to send</string>
+</resources>
