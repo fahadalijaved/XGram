@@ -167,6 +167,9 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     }
 
     this.fileProgress = new FileProgressComponent(context, tdlib, TdlibFilesManager.DOWNLOAD_FLAG_PHOTO, !isHot(), chatId, messageId);
+    if (isHot()) {
+      this.fileProgress.setXgramScrim(true); // XGram M3E: self-destructing media keep the dark overlay
+    }
     this.fileProgress.setSimpleListener(this);
     this.fileProgress.setFallbackFileProvider(this);
 
@@ -254,6 +257,9 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     }
 
     this.fileProgress = new FileProgressComponent(context, tdlib, TdlibFilesManager.DOWNLOAD_FLAG_VIDEO, !isHot(), chatId, messageId);
+    if (isHot()) {
+      this.fileProgress.setXgramScrim(true); // XGram M3E: self-destructing media keep the dark overlay
+    }
     this.fileProgress.setDownloadedIconRes(isHot() ? (source != null && source.isHotDone() ? R.drawable.baseline_check_24 : R.drawable.deproko_baseline_whatshot_24) : FileProgressComponent.PLAY_ICON);
     this.fileProgress.setSimpleListener(this);
 
@@ -332,6 +338,9 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     }
 
     this.fileProgress = new FileProgressComponent(context, tdlib, TdlibFilesManager.DOWNLOAD_FLAG_GIF, true, chatId, messageId);
+    if (isHot()) {
+      this.fileProgress.setXgramScrim(true); // XGram M3E: self-destructing media keep the dark overlay
+    }
     this.fileProgress.setSimpleListener(this);
     setNativeEmbed(nativeEmbed, true);
     if (isHot()) {
@@ -1008,6 +1017,9 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     fileProgress.setBounds(cellLeft, cellTop, cellRight, cellBottom);
 
     DrawAlgorithms.drawReceiver(c, preview, receiver, false, true, cellLeft, cellTop, cellRight, cellBottom);
+    if (video != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (preview == null || preview.isEmpty()) && (receiver == null || receiver.isEmpty())) {
+      xgramDrawNoThumbnail(view, c, cellLeft, cellTop, cellRight, cellBottom, alpha); // XGram M3E: a video with no thumbnail
+    }
     float spoilerFactor = spoilerOverlayVisible.getFloatValue();
     if (spoilerFactor > 0f) {
       Receiver spoilerReceiver;
@@ -1092,6 +1104,7 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       int fpRadius = !isVideo() || !isDoubleLine ? 0 : downloadedAnimator.isAnimating() ? Screen.dp(FileProgressComponent.DEFAULT_STREAMING_RADIUS) : getFileProgress().getRadius();
       int doubleFpRadius = fpRadius * 2;
 
+      final boolean xgramChip = com.fahadali.xgram.appearance.XgramExpressive.isEnabled(); // XGram M3E: full corner chip on the 50% scrim
       int pDurationCorners = isDoubleLine ? MathUtils.fromTo(Screen.dp(4f), Screen.dp(12f), dlFactor) : Screen.dp(4f);
       int pDurationTop = cellTop + Screen.dp(8f) + (needTopOffset ? Screen.dp(16f) : 0);
       int pDurationLeft = cellLeft + Screen.dp(12f);
@@ -1116,7 +1129,12 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
         getFileProgress().setVideoStreamingOptions(needTopOffset, false, isSmallStreamingUI ? FileProgressComponent.STREAMING_UI_MODE_SMALL : FileProgressComponent.STREAMING_UI_MODE_LARGE, durationRect, downloadedAnimator);
       //}
 
-      c.drawRoundRect(durationRect, pDurationCorners, pDurationCorners, Paints.fillingPaint(ColorUtils.alphaColor(alpha * (1f - selectionFactor), 0x4c000000)));
+      if (xgramChip) {
+        final float xgramCorners = durationRect.height() / 2f;
+        c.drawRoundRect(durationRect, xgramCorners, xgramCorners, Paints.fillingPaint(ColorUtils.alphaColor(alpha * (1f - selectionFactor), com.fahadali.xgram.appearance.XgramM3MediaButton.CHIP_SCRIM)));
+      } else {
+        c.drawRoundRect(durationRect, pDurationCorners, pDurationCorners, Paints.fillingPaint(ColorUtils.alphaColor(alpha * (1f - selectionFactor), 0x4c000000)));
+      }
 
       // This is set to fix text visible outside the rounded rect during the animation
       durationRect.right -= pDurationCorners / 2f;
@@ -1124,9 +1142,9 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       Paint paint;
 
       if (isDoubleLine) {
-        paint = Paints.getRegularTextPaint(13f, Color.WHITE);
+        paint = xgramChip ? com.fahadali.xgram.appearance.XgramM3MediaButton.chipBodyPaint() : Paints.getRegularTextPaint(13f, Color.WHITE);
       } else {
-        paint = Paints.whiteMediumPaint(13f, false, false);
+        paint = xgramChip ? com.fahadali.xgram.appearance.XgramM3MediaButton.chipLabelPaint() : Paints.whiteMediumPaint(13f, false, false);
       }
       int existingAlpha = paint.getAlpha();
 
@@ -1137,9 +1155,12 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       if (isDoubleLine) {
         int textBaseline = pDurationLeft + (int) MathUtils.fromTo(0, (durationDx = doubleFpRadius + Screen.dp(6f)), dlFactor);
         int textYBaseline = (int) MathUtils.fromTo(pDurationTop + durationOffset(), pDurationTop + (((pDurationTop + doubleFpRadius + Screen.dp(8f)) - pDurationTop) / 2f), dlFactor);
-        Paint mediumPaint = Paints.whiteMediumPaint(13f, false, false);
+        Paint mediumPaint = xgramChip ? com.fahadali.xgram.appearance.XgramM3MediaButton.chipLabelPaint() : Paints.whiteMediumPaint(13f, false, false);
         mediumPaint.setAlpha(paint.getAlpha());
         paint.setAlpha((int) (paint.getAlpha() * dlFactor));
+        if (xgramChip) {
+          paint.setAlpha((int) (paint.getAlpha() * .8f)); // XGram M3E: the size line is bodySmall at 80 %
+        }
         c.drawText(durationShort, textBaseline, textYBaseline - Screen.dp(4f), mediumPaint);
         c.drawText(duration, textBaseline, textYBaseline + Screen.dp(13f), paint);
       } else {
@@ -1187,7 +1208,13 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       int paddingTop = Screen.dp(nativeEmbed.getPaddingTop());
       int paddingBottom = Screen.dp(nativeEmbed.getPaddingBottom());
       rectF.set(receiver.getRight() - marginRight - paddingHorizontal - embedIcon.getMinimumWidth() - paddingHorizontal, receiver.getBottom() - marginBottom - paddingTop - embedIcon.getMinimumHeight() - paddingBottom, receiver.getRight() - marginRight, receiver.getBottom() - marginBottom);
-      c.drawRoundRect(rectF, Screen.dp(3f), Screen.dp(3f), Paints.fillingPaint(ColorUtils.alphaColor(alpha, 0x66000000)));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: full corner chip on the 50% scrim
+        final float xgramCorners = rectF.height() / 2f;
+        c.drawRoundRect(rectF, xgramCorners, xgramCorners, Paints.fillingPaint(ColorUtils.alphaColor(alpha, com.fahadali.xgram.appearance.XgramM3MediaButton.CHIP_SCRIM)));
+      } else {
+        c.drawRoundRect(rectF, Screen.dp(3f), Screen.dp(3f), Paints.fillingPaint(ColorUtils.alphaColor(alpha, 0x66000000)));
+      }
       Paint paint = Paints.getBitmapPaint();
       if (alpha != 1f) {
         paint.setAlpha((int) (255f * alpha));
@@ -1209,8 +1236,15 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       thumbLocation.setNoBounce();
     }
 
-    int radius1 = Screen.dp(Theme.getBubbleMergeRadius()); // TGMessage.IMAGE_CONTENT_DEFAULT_RADIUS;
-    int radius2 = useBubbles() ? (int) ((float) Screen.dp(Theme.getBubbleDefaultRadius()) / 1.5f) : 0;
+    final int radius1, radius2;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the viewer zoom starts and ends with the corners the bubble uses (TGMessage bubble path)
+      radius1 = Screen.dp(com.fahadali.xgram.appearance.XgramM3Chat.bubbleMergeRadius());
+      radius2 = useBubbles() ? (int) ((float) Screen.dp(com.fahadali.xgram.appearance.XgramM3Chat.bubbleRadius()) / 1.5f) : 0;
+    } else {
+      radius1 = Screen.dp(Theme.getBubbleMergeRadius()); // TGMessage.IMAGE_CONTENT_DEFAULT_RADIUS;
+      radius2 = useBubbles() ? (int) ((float) Screen.dp(Theme.getBubbleDefaultRadius()) / 1.5f) : 0;
+    }
     thumbLocation.setRoundings(
       (roundings & ROUND_TOP_LEFT) != 0 ? radius1 : radius2,
       (roundings & ROUND_TOP_RIGHT) != 0 ? radius1 : radius2,
@@ -1356,6 +1390,31 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     return spoilerOverlayVisible.getValue();
   }
 
+  // XGram M3E: a video with no thumbnail is a tonal cell instead of a black one, with a video glyph when no button
+  // covers the center
+
+  private static final float XGRAM_NO_THUMB_GLYPH_DP = 32f;
+
+  private <T extends View & DrawableProvider> void xgramDrawNoThumbnail (T view, Canvas c, int left, int top, int right, int bottom, float alpha) {
+    c.drawRect(left, top, right, bottom, Paints.fillingPaint(ColorUtils.alphaColor(alpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST))));
+    if (!hideLoader) {
+      return; // the play or download button sits in the center
+    }
+    Drawable glyph = view.getSparseDrawable(R.drawable.baseline_videocam_24, 0);
+    if (glyph == null || glyph.getMinimumWidth() <= 0) {
+      return;
+    }
+    final float scale = Screen.dp(XGRAM_NO_THUMB_GLYPH_DP) / (float) glyph.getMinimumWidth();
+    final float cx = (left + right) / 2f, cy = (top + bottom) / 2f;
+    final Paint paint = Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+    paint.setAlpha((int) (255f * alpha));
+    final int saveCount = c.save();
+    c.scale(scale, scale, cx, cy);
+    Drawables.draw(c, glyph, cx - glyph.getMinimumWidth() / 2f, cy - glyph.getMinimumHeight() / 2f, paint);
+    c.restoreToCount(saveCount);
+    paint.setAlpha(255);
+  }
+
   // Video stuff
 
   private String duration;
@@ -1475,10 +1534,17 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       this.duration = twLineHeader;
       this.durationShort = twLineSubheader;
       this.durationAlternative = twAlternativeHeader;
-      TextPaint paint = Paints.getRegularTextPaint(13f);
-      this.durationWidthFull = (int) U.measureText(twLineHeader, paint);
-      this.durationWidthShort = (int) U.measureText(twLineSubheader, paint);
-      this.durationAlternativeWidth = (int) U.measureText(twAlternativeHeader, paint);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the chip text is 12sp labelMedium / bodySmall (measured in the wider label style)
+        this.durationWidthFull = com.fahadali.xgram.appearance.XgramM3MediaButton.measureChipText(twLineHeader);
+        this.durationWidthShort = com.fahadali.xgram.appearance.XgramM3MediaButton.measureChipText(twLineSubheader);
+        this.durationAlternativeWidth = com.fahadali.xgram.appearance.XgramM3MediaButton.measureChipText(twAlternativeHeader);
+      } else {
+        TextPaint paint = Paints.getRegularTextPaint(13f);
+        this.durationWidthFull = (int) U.measureText(twLineHeader, paint);
+        this.durationWidthShort = (int) U.measureText(twLineSubheader, paint);
+        this.durationAlternativeWidth = (int) U.measureText(twAlternativeHeader, paint);
+      }
       this.durationWidth = Math.max(this.durationWidthFull, this.durationWidthShort);
       this.durationTrimmed = this.duration;
       trimDoubleDuration(this.durationAlternative, this.durationAlternativeWidth);
@@ -1488,9 +1554,15 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     if (twLineHeader == null && !StringUtils.equalsOrBothEmpty(this.duration, text)) {
       this.duration = text;
       this.durationShort = textShort;
-      TextPaint paint = Paints.whiteMediumPaint(13f, false, true);
-      this.durationWidthFull = (int) U.measureText(text, paint);
-      this.durationWidthShort = (int) U.measureText(textShort, paint);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the chip text is 12sp labelMedium
+        this.durationWidthFull = com.fahadali.xgram.appearance.XgramM3MediaButton.measureChipText(text);
+        this.durationWidthShort = com.fahadali.xgram.appearance.XgramM3MediaButton.measureChipText(textShort);
+      } else {
+        TextPaint paint = Paints.whiteMediumPaint(13f, false, true);
+        this.durationWidthFull = (int) U.measureText(text, paint);
+        this.durationWidthShort = (int) U.measureText(textShort, paint);
+      }
       trimDuration();
       return true;
     }

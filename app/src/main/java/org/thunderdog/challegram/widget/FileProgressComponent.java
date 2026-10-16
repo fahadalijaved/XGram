@@ -32,7 +32,10 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramAppMotion;
 import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramLoadingIndicator;
+import com.fahadali.xgram.appearance.XgramM3MediaButton;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
@@ -323,6 +326,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
   public void setBackgroundColor (int color) {
     this.backgroundColorIsId = false;
     this.backgroundColor = color;
+    xgramResolveStyle(); // XGram M3E
   }
 
   private boolean backgroundColorIsId;
@@ -330,6 +334,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
   public void setBackgroundColorId (@ColorId int colorId) {
     this.backgroundColorIsId = true;
     this.backgroundColor = colorId;
+    xgramResolveStyle(); // XGram M3E
   }
 
   public void updateMessageId (long oldMessageId, long newMessageId, boolean success) {
@@ -460,6 +465,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       this.isPlaying = isPlaying;
       boolean animated = allowAnimation && shouldAnimate();
       setPlayPauseFactor(isPlaying ? 1f : 0f, animated);
+      xgramRetargetCorner(animated); // XGram M3E: a playing voice or music button is a rounded square
     }
   }
 
@@ -468,6 +474,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       if (playPauseAnimator == null) {
         playPauseAnimator = new FactorAnimator(ANIMATOR_PLAY_PAUSE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 138l, this.playPauseFactor);
       }
+      XgramAppMotion.use(playPauseAnimator, XgramExpressive.SPATIAL_FAST, true); // XGram M3E
       playPauseAnimator.animateTo(factor);
     } else {
       if (playPauseAnimator != null) {
@@ -608,7 +615,12 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
   private void checkProgressStyles () {
     if (progress != null) {
       boolean isCloud = (Config.useCloudPlayback(playPauseFile) && !noCloud) || (isVideoStreaming() && isVideoStreamingCloudNeeded);
-      progress.setUseLargerPaint((isVideoStreaming() && isVideoStreamingSmallUi()) ? Screen.dp(1.5f) : !isSendingMessage && isCloud ? Screen.dp(isTrack ? 2f : 1.5f) : Screen.dp(3f));
+      if (xgramStyle() != XgramM3MediaButton.NONE && !isTrack && !isCloud) {
+        // XGram M3E: a 4dp ring in the button, 2dp in the video streaming chip
+        progress.setUseLargerPaint(isVideoStreaming() ? Screen.dp(2f) : Screen.dp(4f));
+      } else {
+        progress.setUseLargerPaint((isVideoStreaming() && isVideoStreamingSmallUi()) ? Screen.dp(1.5f) : !isSendingMessage && isCloud ? Screen.dp(isTrack ? 2f : 1.5f) : Screen.dp(3f));
+      }
     }
   }
 
@@ -644,13 +656,21 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
 
           progress.setRadius(originRadius - Screen.dp(2f));
         }
+        if (!isTrack && xgramStyle() != XgramM3MediaButton.NONE) {
+          // XGram M3E: the mini ring inside the 16dp badge
+          progress.setRadius(Screen.dp(XgramM3MediaButton.BADGE_PROGRESS_RADIUS));
+        }
         progress.setBounds(x - originRadius, y - originRadius, x + originRadius, y + originRadius);
       } else if (isVideoStreaming()) {
         updateVsRect();
         progress.setRadius(getRadius() - Screen.dp(4f));
         progress.setBounds(vsDownloadRect.left, vsDownloadRect.top, vsDownloadRect.right, vsDownloadRect.bottom);
       } else {
-        progress.setRadius(getRadius() - Screen.dp(4f));
+        if (xgramStyle() != XgramM3MediaButton.NONE) {
+          progress.setRadius(getRadius() - Screen.dp(XgramM3MediaButton.RING_INSET)); // XGram M3E: the 4dp ring sits 2dp inside the button
+        } else {
+          progress.setRadius(getRadius() - Screen.dp(4f));
+        }
         progress.setBounds(left, top, right, bottom);
       }
     }
@@ -678,6 +698,11 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
   public int getRadius () {
     if (isVideoStreaming()) {
       return Math.min(Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_LARGE ? DEFAULT_STREAMING_RADIUS : DEFAULT_SMALL_STREAMING_RADIUS), Math.min(right - left, bottom - top) / 2);
+    }
+
+    if (xgramMediaDisk()) {
+      // XGram M3E: photos, videos, GIFs and round videos get the 48dp button (files keep theirs)
+      return Math.min(Screen.dp(XgramM3MediaButton.MEDIA_RADIUS), Math.min(right - left, bottom - top) / 2);
     }
 
     return Math.min(Screen.dp(fileType == TdlibFilesManager.DOWNLOAD_FLAG_FILE || fileType == TdlibFilesManager.DOWNLOAD_FLAG_MUSIC || fileType == TdlibFilesManager.DOWNLOAD_FLAG_VOICE ? DEFAULT_FILE_RADIUS : DEFAULT_RADIUS), Math.min(right - left, bottom - top) / 2);
@@ -718,16 +743,24 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       case MotionEvent.ACTION_DOWN: {
         this.startX = (int) x;
         this.startY = (int) y;
+        if (xgramStyle() != XgramM3MediaButton.NONE) {
+          // XGram M3E: the button's corners spring to 12dp while it is pressed
+          isTouchCaught = x >= left && x <= right && y >= top && y <= bottom && (!isTrack || currentState != TdlibFilesManager.STATE_DOWNLOADED_OR_UPLOADED);
+          xgramSetPressed(isTouchCaught);
+          return isTouchCaught;
+        }
         return isTouchCaught = x >= left && x <= right && y >= top && y <= bottom && (!isTrack || currentState != TdlibFilesManager.STATE_DOWNLOADED_OR_UPLOADED);
       }
       case MotionEvent.ACTION_MOVE: {
         if (isTouchCaught && Math.max(Math.abs(startX - x), Math.abs(startY - y)) > Screen.getTouchSlop()) {
           isTouchCaught = false;
+          xgramSetPressed(false); // XGram M3E
           return true;
         }
         break;
       }
       case MotionEvent.ACTION_CANCEL: {
+        xgramSetPressed(false); // XGram M3E
         if (isTouchCaught) {
           isTouchCaught = false;
           return true;
@@ -735,6 +768,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         break;
       }
       case MotionEvent.ACTION_UP: {
+        xgramSetPressed(false); // XGram M3E
         if (isTouchCaught) {
           if (performClick(view) && viewProvider != null) {
             viewProvider.performClickSoundFeedback();
@@ -751,6 +785,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
   public boolean performLongPress (View view) {
     // TODO 3D touch
     isTouchCaught = false;
+    xgramSetPressed(false); // XGram M3E
 
     return false;
   }
@@ -848,6 +883,10 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         setCloudReverseHideFactor(1f - factor);
         break;
       }
+      case ANIMATOR_XGRAM_QUEUED: {
+        invalidate(); // XGram M3E: queued indicator crossfade
+        break;
+      }
     }
   }
 
@@ -915,6 +954,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         bitmapAnimator.forceFactor(0f);
         this.bitmapChangeFactor = 0f;
       }
+      XgramAppMotion.use(bitmapAnimator, XgramExpressive.EFFECTS_DEFAULT, true); // XGram M3E
       bitmapAnimator.animateTo(1f);
     } else {
       if (bitmapAnimator != null) {
@@ -936,6 +976,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       if (alphaAnimator == null) {
         alphaAnimator = new FactorAnimator(ANIMATOR_ALPHA, this, AnimatorUtils.DECELERATE_INTERPOLATOR, ALPHA_DURATION, this.alpha);
       }
+      XgramAppMotion.use(alphaAnimator, XgramExpressive.EFFECTS_FAST, true); // XGram M3E
       alphaAnimator.animateTo(alpha);
     } else {
       if (alphaAnimator != null) {
@@ -968,21 +1009,257 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     }
   }
 
-  // XGram M3E: theme file circles (documents, voice, music) are primary with onPrimary content and a wavy progress ring
+  // XGram M3E: the media and file button (XgramM3MediaButton). Theme file circles are primary, APKs tertiary, archives
+  // secondary and PDFs error; photos, videos and GIFs a tonal primaryContainer disk; self-destructing media and pictures
+  // the button covers keep their overlay with white content. A wavy ring, a shape that springs, and the contained
+  // loading indicator while queued. NONE (Expressive design off) runs every Telegram X branch unchanged.
 
-  private boolean xgramRoleCircle () {
-    return backgroundColorIsId && (backgroundColor == ColorId.file || backgroundColor == ColorId.bubbleOut_file) && XgramExpressive.isEnabled();
+  private int xgramStyleRaw = XgramM3MediaButton.MEDIA; // the default background is an overlay color
+  private boolean xgramScrim;
+  private boolean xgramPressed;
+  private @Nullable XgramExpressive.Spring xgramCornerSpring;
+  private float xgramLastCornerPx = -1f;
+  private @Nullable RectF xgramRect;
+
+  private static final int ANIMATOR_XGRAM_QUEUED = 5;
+  private @Nullable BoolAnimator xgramQueuedAnimator;
+
+  private void xgramResolveStyle () {
+    xgramStyleRaw = XgramM3MediaButton.resolve(backgroundColorIsId, backgroundColor, xgramScrim);
+  }
+
+  /** Self-destructing media: keeps the dark overlay and white content. */
+  public void setXgramScrim (boolean scrim) {
+    if (this.xgramScrim != scrim) {
+      this.xgramScrim = scrim;
+      xgramResolveStyle();
+      invalidate();
+    }
+  }
+
+  private int xgramStyle () {
+    return XgramExpressive.isEnabled() ? xgramStyleRaw : XgramM3MediaButton.NONE;
+  }
+
+  /** The 48dp media button: overlay styles on photos, videos, GIFs and round videos. */
+  private boolean xgramMediaDisk () {
+    final int style = xgramStyle();
+    return (style == XgramM3MediaButton.MEDIA || style == XgramM3MediaButton.SCRIM) &&
+      fileType != TdlibFilesManager.DOWNLOAD_FLAG_FILE && fileType != TdlibFilesManager.DOWNLOAD_FLAG_MUSIC && fileType != TdlibFilesManager.DOWNLOAD_FLAG_VOICE;
+  }
+
+  /** The button covers its whole cell: a document thumbnail, a music cover or an inline result preview. */
+  private boolean xgramCoversCell () {
+    final int size = Math.min(right - left, bottom - top);
+    return size > 0 && getRadius() * 2 >= size - Screen.dp(2f);
+  }
+
+  /** A media style button over a picture it covers keeps the overlay color, so the picture stays visible. */
+  private boolean xgramOverPicture (int style) {
+    return style == XgramM3MediaButton.MEDIA && !isVideoStreaming() && xgramCoversCell();
+  }
+
+  /** The progress sits in the small badge (voice and music playback, streaming without the duration chip). */
+  private boolean xgramCloudLayout () {
+    return (playPauseFile != null && Config.useCloudPlayback(playPauseFile) && !noCloud) || (isVideoStreaming() && isVideoStreamingCloudNeeded);
+  }
+
+  private int xgramContainerColor (int style) {
+    if (currentState == TdlibFilesManager.STATE_FAILED) {
+      return XgramExpressive.color(XgramExpressive.ERROR_CONTAINER);
+    }
+    if (style == XgramM3MediaButton.SCRIM || xgramOverPicture(style)) {
+      return backgroundColorIsId ? Theme.getColor(backgroundColor) : backgroundColor;
+    }
+    return XgramM3MediaButton.containerColor(style);
   }
 
   private int xgramContentColor () {
-    return xgramRoleCircle() ? XgramExpressive.color(XgramExpressive.ON_PRIMARY) : 0xffffffff;
+    final int style = xgramStyle();
+    if (style == XgramM3MediaButton.NONE) {
+      return 0xffffffff;
+    }
+    if (isTrack) {
+      // Playlist tracks: the owner draws the circle or the cover overlay under the play glyph
+      return style == XgramM3MediaButton.ROLE ? XgramExpressive.color(XgramExpressive.ON_PRIMARY) : 0xffffffff;
+    }
+    if (currentState == TdlibFilesManager.STATE_FAILED) {
+      return XgramExpressive.color(XgramExpressive.ON_ERROR_CONTAINER);
+    }
+    if (style == XgramM3MediaButton.SCRIM || xgramOverPicture(style)) {
+      return 0xffffffff;
+    }
+    return XgramM3MediaButton.contentColor(style);
+  }
+
+  /** Drawn radius of the button: the media button grows to the 56dp play button once the download ring is gone. */
+  private float xgramDiskRadius () {
+    final int radius = getRadius();
+    if (!xgramMediaDisk() || isVideoStreaming() || radius < Screen.dp(XgramM3MediaButton.MEDIA_RADIUS)) {
+      return radius;
+    }
+    final int icon = pendingBitmapRes != 0 ? pendingBitmapRes : currentBitmapRes;
+    if (icon != PLAY_ICON) {
+      return radius;
+    }
+    final int playRadius = Math.min(Screen.dp(XgramM3MediaButton.PLAY_RADIUS), Math.min(right - left, bottom - top) / 2);
+    return radius + (playRadius - radius) * (1f - progressFactor);
+  }
+
+  /** Radius of the shape the corner spring morphs: the streaming play button, or the button itself. */
+  private float xgramShapeRadius () {
+    if (isVideoStreaming()) {
+      return Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_LARGE ? DEFAULT_RADIUS : DEFAULT_STREAMING_RADIUS);
+    }
+    return xgramDiskRadius();
+  }
+
+  /** The corner token for the current state. */
+  private float xgramShapeToken () {
+    if (xgramOverPicture(xgramStyle())) {
+      return XgramExpressive.CORNER_FULL; // follows the round picture under it
+    }
+    if (xgramPressed) {
+      return XgramExpressive.CORNER_M;
+    }
+    if (fileType == TdlibFilesManager.DOWNLOAD_FLAG_FILE && !isVideoStreaming()) {
+      // Documents are a rounded square that turns into a circle around the ring while loading
+      return isInProgress ? XgramExpressive.CORNER_FULL : XgramExpressive.CORNER_L;
+    }
+    if (playPauseFile != null && isPlaying) {
+      return XgramExpressive.CORNER_L; // selected M toggle
+    }
+    return XgramExpressive.CORNER_FULL;
+  }
+
+  private void xgramSetPressed (boolean pressed) {
+    if (this.xgramPressed != pressed) {
+      this.xgramPressed = pressed;
+      xgramRetargetCorner(true);
+    }
+  }
+
+  /** Springs the corner to the current state (SPATIAL_FAST). Off the main thread the next draw takes the state as is. */
+  private void xgramRetargetCorner (boolean animated) {
+    if (xgramStyle() == XgramM3MediaButton.NONE || Looper.myLooper() != Looper.getMainLooper()) {
+      return;
+    }
+    final float radius = xgramShapeRadius();
+    if (radius <= 0f) {
+      return;
+    }
+    final float target = XgramExpressive.cornerPx(xgramShapeToken(), radius * 2f, radius * 2f);
+    final boolean animate = animated && shouldAnimate();
+    if (xgramCornerSpring == null) {
+      if (!animate) {
+        invalidate();
+        return;
+      }
+      xgramCornerSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, xgramLastCornerPx >= 0f ? xgramLastCornerPx : target, (spring, value) -> invalidate()).setThreshold(.5f);
+    } else if (!xgramCornerSpring.isRunning() && xgramLastCornerPx >= 0f) {
+      xgramCornerSpring.setValue(xgramLastCornerPx);
+    }
+    if (animate) {
+      xgramCornerSpring.animateTo(target);
+    } else {
+      xgramCornerSpring.setValue(target);
+      invalidate();
+    }
+  }
+
+  /** The corner to draw for a shape of {@code radius}. */
+  private float xgramCornerPx (float radius) {
+    float corner;
+    if (xgramCornerSpring != null && xgramCornerSpring.isRunning()) {
+      corner = xgramCornerSpring.getValue();
+    } else {
+      corner = XgramExpressive.cornerPx(xgramShapeToken(), radius * 2f, radius * 2f);
+    }
+    corner = Math.max(0f, Math.min(radius, corner));
+    xgramLastCornerPx = corner;
+    return corner;
+  }
+
+  private void xgramDrawShape (Canvas c, float cx, float cy, float radius, int color) {
+    if (xgramRect == null) {
+      xgramRect = new RectF();
+    }
+    XgramM3MediaButton.drawShape(c, cx, cy, radius, xgramCornerPx(radius), color, xgramRect);
+  }
+
+  /** Queued (in progress at 0 %): the contained loading indicator stands in for the ring and the X. */
+  private void xgramUpdateQueued (boolean animated) {
+    if (xgramStyle() == XgramM3MediaButton.NONE) {
+      return;
+    }
+    final boolean queued = isInProgress && visualProgress <= 0f;
+    if (xgramQueuedAnimator == null) {
+      if (!queued) {
+        return;
+      }
+      xgramQueuedAnimator = new BoolAnimator(ANIMATOR_XGRAM_QUEUED, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 150L);
+      XgramAppMotion.use(xgramQueuedAnimator, XgramExpressive.EFFECTS_FAST, true);
+    }
+    xgramQueuedAnimator.setValue(queued, animated && shouldAnimate() && Looper.myLooper() == Looper.getMainLooper());
+  }
+
+  private float xgramQueuedFactor () {
+    return xgramQueuedAnimator != null ? xgramQueuedAnimator.getFloatValue() : 0f;
+  }
+
+  /** Ring tokens: 4dp with a 1.6dp wave in the button, 2dp with a 1dp wave (flat in the small chip) when streaming. */
+  private void xgramSetupRing (@NonNull ProgressComponent progress) {
+    final boolean streaming = isVideoStreaming();
+    final boolean small = streaming && isVideoStreamingSmallUi();
+    progress.setXgramTrackColor(XgramExpressive.withAlpha(xgramContentColor(), .24f * progressFactor * alpha));
+    progress.setXgramAmplitude(small ? 0f : Screen.dpf(streaming ? 1f : 1.6f));
+    progress.setXgramQueued(xgramQueuedFactor(), small ? 0f : getRadius() * 2f * XgramLoadingIndicator.ACTIVE_INDICATOR_SCALE);
+  }
+
+  /** Voice, music and streaming downloads: a 16dp large badge at the same spot as Telegram X's cloud. */
+  private void xgramDrawCloudBadge (Canvas c, float alpha) {
+    final float hideFactor = calculateCloudHideFactor();
+    if (hideFactor == 1f) {
+      return;
+    }
+    int x = centerX();
+    int y = centerY();
+    if (isVideoStreaming()) {
+      int radius = Screen.dp(20f);
+      x += radius;
+      y += radius;
+    } else {
+      double radians = Math.toRadians(45f);
+      int radius = (right - left) / 2;
+      x += (int) ((double) radius * Math.sin(radians));
+      y += (int) ((double) radius * Math.cos(radians));
+    }
+    final float scale = 1f - hideFactor;
+    final float badgeAlpha = alpha * scale;
+    final float badgeRadius = Screen.dp(XgramM3MediaButton.BADGE_RADIUS) * scale;
+    final int ringColor = backgroundColorProvider != null ? backgroundColorProvider.getContentReplaceColor() : Theme.fillingColor();
+    c.drawCircle(x, y, badgeRadius + Screen.dp(XgramM3MediaButton.BADGE_RING) * scale, Paints.fillingPaint(ColorUtils.alphaColor(badgeAlpha, ringColor)));
+    c.drawCircle(x, y, badgeRadius, Paints.fillingPaint(ColorUtils.alphaColor(badgeAlpha, XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER))));
+
+    final float glyphAlpha = alpha * (1f - progressFactor) * (1f - hideFactor);
+    if (glyphAlpha <= 0f) {
+      return;
+    }
+    final int glyphColor = ColorUtils.alphaColor(glyphAlpha, XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER));
+    final float glyphSize = Screen.dp(XgramM3MediaButton.BADGE_GLYPH) * scale;
+    if (currentState == TdlibFilesManager.STATE_DOWNLOADED_OR_UPLOADED) {
+      XgramM3MediaButton.drawCheck(c, x, y, glyphSize, glyphColor, calculateCloudDoneFactor());
+    } else {
+      XgramM3MediaButton.drawDownload(c, x, y, glyphSize, glyphColor);
+    }
   }
 
   private int getProgressColor () {
     if (isTrack) {
       return ColorUtils.alphaColor(progressFactor * alpha, Theme.getColor(backgroundColor));
-    } else if (xgramRoleCircle()) {
-      return ColorUtils.alphaColor(progressFactor * alpha, xgramContentColor());
+    } else if (xgramStyle() != XgramM3MediaButton.NONE) {
+      // XGram M3E: the ring in the button's content color; in the badge, onPrimaryContainer
+      return ColorUtils.alphaColor(progressFactor * alpha, xgramCloudLayout() ? XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER) : xgramContentColor());
     } else {
       return ((int) (255f * progressFactor * alpha) << 24) | 0xffffff;
     }
@@ -1016,6 +1293,9 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         }
         setProgressFactor(inProgress ? 1f : 0f);
       }
+      // XGram M3E: documents become a circle around the ring; queued downloads show the loading indicator
+      xgramRetargetCorner(animated);
+      xgramUpdateQueued(animated);
     }
   }
 
@@ -1040,6 +1320,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       if (listener != null && currentState == TdlibFilesManager.STATE_IN_PROGRESS) {
         listener.onProgress(file, progress);
       }
+      xgramUpdateQueued(shouldAnimate() && alpha > 0f); // XGram M3E: the ring takes over at the first bytes
     }
   }
 
@@ -1218,6 +1499,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         cloudHideAnimator.forceFactor(0f);
       }
       cloudReverseHideFactor = 1f;
+      XgramAppMotion.use(cloudHideAnimator, XgramExpressive.EFFECTS_FAST, true); // XGram M3E
       cloudHideAnimator.animateTo(1f);
     } else {
       if (cloudHideAnimator != null) {
@@ -1238,6 +1520,10 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
   private static Path triangleSmall, triangleBig;
 
   private void drawCloudState (Canvas c, float alpha) {
+    if (!isTrack && xgramStyle() != XgramM3MediaButton.NONE) {
+      xgramDrawCloudBadge(c, alpha); // XGram M3E: a large badge instead of the cloud
+      return;
+    }
     float hideFactor = calculateCloudHideFactor();
     if (hideFactor == 1f) {
       return;
@@ -1471,6 +1757,16 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     final float alpha = this.alpha * (isVideoStreaming() ? cloudAlpha : requestedAlpha);
     final boolean drawContent = file != null && alpha > 0f && !isTrack;
     boolean isCanvasAltered = false;
+    final int xgramMode = xgramStyle(); // XGram M3E: the media and file button
+    final int xgramSaveCount;
+    if (xgramMode != XgramM3MediaButton.NONE && this.alpha < 1f && !isVideoStreaming()) {
+      // The button shrinks as it fades (to .6) instead of only fading
+      xgramSaveCount = Views.save(c);
+      final float xgramScale = .6f + .4f * this.alpha;
+      c.scale(xgramScale, xgramScale, centerX(), centerY());
+    } else {
+      xgramSaveCount = -1;
+    }
     if (drawContent) {
       int cx = centerX();
       int cy = centerY();
@@ -1485,9 +1781,9 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       }
 
       final int fillingColor;
-      final boolean xgramCircle = xgramRoleCircle();
+      final boolean xgramCircle = xgramMode != XgramM3MediaButton.NONE;
       if (xgramCircle) {
-        fillingColor = ColorUtils.alphaColor(playPauseAlpha, XgramExpressive.color(XgramExpressive.PRIMARY));
+        fillingColor = ColorUtils.alphaColor(playPauseAlpha, xgramContainerColor(xgramMode));
       } else if (playPauseAlpha == 1f) {
         fillingColor = backgroundColorIsId ? Theme.getColor(backgroundColor) : backgroundColor;
       } else {
@@ -1495,7 +1791,12 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       }
 
       if (isVideoStreaming()) {
-        c.drawCircle(centerX(), centerY(), Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_LARGE ? DEFAULT_RADIUS : DEFAULT_STREAMING_RADIUS), Paints.fillingPaint(fillingColor));
+        if (xgramCircle) {
+          // XGram M3E: the play button is a tonal 56dp icon button whose corners spring to 12dp on press
+          xgramDrawShape(c, centerX(), centerY(), Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_LARGE ? DEFAULT_RADIUS : DEFAULT_STREAMING_RADIUS), fillingColor);
+        } else {
+          c.drawCircle(centerX(), centerY(), Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_LARGE ? DEFAULT_RADIUS : DEFAULT_STREAMING_RADIUS), Paints.fillingPaint(fillingColor));
+        }
         drawPlayPause(c, centerX(), centerY(), playPauseAlpha, true);
 
         if (!vsClipRect.isEmpty() && !isVideoStreamingCloudNeeded) {
@@ -1508,6 +1809,8 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         if (isVideoStreamingCloudNeeded) {
           drawCloudState(c, playPauseAlpha);
         }
+      } else if (xgramCircle) {
+        xgramDrawShape(c, cx, cy, xgramDiskRadius(), fillingColor); // XGram M3E
       } else {
         c.drawCircle(cx, cy, getRadius(), Paints.fillingPaint(fillingColor));
       }
@@ -1516,13 +1819,17 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         drawPlayPause(c, cx, cy, playPauseAlpha, true);
       } else if (currentBitmapRes != 0 && (currentBitmapRes != downloadedIconRes || !hideDownloadedIcon) && !(isVideoStreaming() && isVideoStreamingCloudNeeded)) {
         boolean ignoreScale = isVideoStreaming() && !isVideoStreamingSmallUi() && vsOnDownloadedAnimator != null && vsOnDownloadedAnimator.isAnimating();
+        if (xgramCircle && isVideoStreaming()) {
+          // XGram M3E: the download button in the duration chip is an opaque tonal disk
+          c.drawCircle(cx, cy, getRadius(), Paints.fillingPaint(ColorUtils.alphaColor(alpha, XgramExpressive.color(currentState == TdlibFilesManager.STATE_FAILED ? XgramExpressive.ERROR_CONTAINER : XgramExpressive.PRIMARY_CONTAINER))));
+        }
         Paint bitmapPaint = xgramCircle ? Paints.getPorterDuffPaint(xgramContentColor()) : Paints.whitePorterDuffPaint();
 
         final float initScaleFactor = bitmapChangeFactor <= .5f ? (bitmapChangeFactor / .5f) : (1f - (bitmapChangeFactor - .5f) / .5f);
         final float scaleFactor = (ignoreScale) ? 0f : initScaleFactor;
-        final float bitmapAlpha = alpha * (1f - initScaleFactor);
+        final float bitmapAlpha = xgramCircle ? alpha * (1f - initScaleFactor) * (1f - xgramQueuedFactor()) : alpha * (1f - initScaleFactor);
 
-        if (bitmapAlpha != 1f) {
+        if (bitmapAlpha != 1f || xgramCircle) {
           bitmapPaint.setAlpha((int) (255f * bitmapAlpha));
         }
         int saveCount = -1;
@@ -1572,11 +1879,19 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     if (progress != null && !isVideoStreamingProgressHidden) {
       progress.setAlpha(alpha);
       progress.forceColor(getProgressColor());
-      progress.setXgramWavy(!isTrack && !cloudPlayback && !isVideoStreaming() && xgramRoleCircle());
+      // XGram M3E: every button ring is wavy (flat in the badge and in the small streaming chip)
+      final boolean xgramRing = xgramMode != XgramM3MediaButton.NONE && !isTrack && !cloudPlayback && !(isVideoStreaming() && isVideoStreamingCloudNeeded);
+      progress.setXgramWavy(xgramRing);
+      if (xgramRing) {
+        xgramSetupRing(progress);
+      }
       progress.draw(c);
     }
     if (isCanvasAltered) {
       c.restore();
+    }
+    if (xgramSaveCount != -1) {
+      Views.restore(c, xgramSaveCount);
     }
   }
 

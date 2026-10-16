@@ -17,6 +17,7 @@ package org.thunderdog.challegram.widget;
 import android.animation.ValueAnimator;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.SystemClock;
@@ -26,6 +27,7 @@ import android.view.animation.Interpolator;
 
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramAppMotion;
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramLoadingIndicator;
 import com.fahadali.xgram.appearance.XgramWavyProgress;
@@ -137,6 +139,45 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
       this.xgramWavy = wavy;
       invalidate();
     }
+  }
+
+  // Set by FileProgressComponent right before each draw (no invalidation of their own)
+  private boolean xgramTrackSet;
+  private int xgramTrackColor;
+  private float xgramAmplitude = -1f;
+  private float xgramQueued, xgramQueuedSize;
+
+  /** Track of the wavy ring (alpha is multiplied by the component alpha), instead of the indicator at 30 %. */
+  public void setXgramTrackColor (int color) {
+    this.xgramTrackSet = true;
+    this.xgramTrackColor = color;
+  }
+
+  /** Peak wave amplitude in px (0: a flat ring), instead of min(1.5dp, stroke x .4). */
+  public void setXgramAmplitude (float amplitudePx) {
+    this.xgramAmplitude = amplitudePx;
+  }
+
+  /**
+   * Queued (0 %) crossfade of the wavy ring: at {@code factor} 1 the contained loading indicator of
+   * {@code indicatorSizePx} (or, when that is 0, an indeterminate flat arc on the ring) replaces the ring.
+   */
+  public void setXgramQueued (float factor, float indicatorSizePx) {
+    this.xgramQueued = Math.max(0f, Math.min(1f, factor));
+    this.xgramQueuedSize = indicatorSizePx;
+  }
+
+  private static Paint xgramSpinnerPaint;
+
+  private static Paint xgramSpinnerPaint (int color, float strokeWidth) {
+    if (xgramSpinnerPaint == null) {
+      xgramSpinnerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+      xgramSpinnerPaint.setStyle(Paint.Style.STROKE);
+      xgramSpinnerPaint.setStrokeCap(Paint.Cap.ROUND);
+    }
+    xgramSpinnerPaint.setStrokeWidth(strokeWidth);
+    xgramSpinnerPaint.setColor(color);
+    return xgramSpinnerPaint;
   }
 
   public void setIsPrecise () {
@@ -289,6 +330,7 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
       if (preciseAnimator == null) {
         preciseAnimator = new FactorAnimator(PRECISE_ANIMATOR, this, DECELERATE_INTERPOLATOR, 180l, preciseFactor); // 400
       }
+      XgramAppMotion.use(preciseAnimator, XgramExpressive.EFFECTS_DEFAULT, true); // XGram M3E: progress moves on a spring
       preciseAnimator.animateTo(progress);
     } else {
       if (preciseAnimator != null) {
@@ -316,6 +358,9 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
   private void setPreciseFactor (float factor) {
     if (this.preciseFactor != factor) {
       this.preciseFactor = factor;
+      if (isPrecise && XgramExpressive.isEnabled()) {
+        invalidate(); // XGram M3E: precise rings are not redrawn every frame, so the animated value redraws itself
+      }
       // invalidate();
       // No invalidate since it's scheduled?
     }
@@ -385,10 +430,50 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
     }
 
     if (xgramWavy && isPrecise && !isTimer && XgramExpressive.isEnabled()) {
-      // XGram M3E: wavy determinate ring with a flat track (track = indicator color at 30 %)
+      // XGram M3E: wavy determinate ring with a flat track (the track color set by the owner, or the indicator at 30 %).
+      // At 0 % (queued) the contained loading indicator, or a flat indeterminate arc where it would be too small, fades in.
       final int indicatorColor = ColorUtils.alphaColor(alpha, colorForced ? this.color : Theme.progressColor());
       final float stroke = useLargerPaint ? strokeWidth : Screen.dp(2f);
-      XgramWavyProgress.drawCircular(c, arcRect.centerX(), arcRect.centerY(), radius, stroke, preciseFactor, indicatorColor, XgramExpressive.withAlpha(indicatorColor, .3f), Math.min(Screen.dp(1.5f), stroke * .4f));
+      final int trackColor = xgramTrackSet ? ColorUtils.alphaColor(alpha, xgramTrackColor) : XgramExpressive.withAlpha(indicatorColor, .3f);
+      final float amplitude = xgramAmplitude >= 0f ? xgramAmplitude : Math.min(Screen.dp(1.5f), stroke * .4f);
+      final float queued = xgramQueued;
+      final float cx = arcRect.centerX(), cy = arcRect.centerY();
+      if (queued < 1f) {
+        XgramWavyProgress.drawCircular(c, cx, cy, radius, stroke, preciseFactor,
+          queued > 0f ? ColorUtils.alphaColor(1f - queued, indicatorColor) : indicatorColor,
+          queued > 0f ? ColorUtils.alphaColor(1f - queued, trackColor) : trackColor,
+          amplitude);
+      }
+      if (queued > 0f) {
+        if (xgramQueuedSize > 0f) {
+          XgramLoadingIndicator.draw(c, cx, cy, xgramQueuedSize, ColorUtils.alphaColor(queued, indicatorColor), timeMs);
+        } else {
+          XgramWavyProgress.drawCircularIndeterminate(c, cx, cy, radius, stroke, ColorUtils.alphaColor(queued, indicatorColor), ColorUtils.alphaColor(queued, trackColor), timeMs);
+        }
+      }
+      // Frames only while something moves: the queued indicator, the traveling wave, or the progress spring
+      final boolean needFrames = queued > 0f ||
+        (amplitude > 0f && preciseFactor > 0f && preciseFactor < 1f && !org.thunderdog.challegram.unsorted.Settings.instance().needReduceMotion()) ||
+        (preciseAnimator != null && preciseAnimator.isAnimating());
+      if (needFrames && !scheduled && isActive()) {
+        scheduleInvalidateIfNeeded(true, true);
+      }
+      return;
+    }
+
+    if (!isTimer && !isPrecise && XgramExpressive.isEnabled()) {
+      // XGram M3E: spinners under 10dp keep Telegram X's sweep, with round caps over a full track
+      final long time = timeMs % totalAnimationTime;
+      final long timeStart1 = timeBetweenSweep;
+      final long timeStart2 = timePerSweep + timeBetweenSweep + timeBetweenSweep;
+      final float factor1 = time < timeStart1 ? 0f : time > timeStart1 + timePerSweep ? 1f : AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation((float) (time - timeStart1) / (float) timePerSweep);
+      final float factor2 = time < timeStart2 ? 0f : time > timeStart2 + timePerSweep ? 1f : AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation((float) (time - timeStart2) / (float) timePerSweep);
+      final float spinnerStart = (270f * factor2 + (360f + 90f) * ((float) time / (float) totalAnimationTime) + (360f * ((float) (timeMs % repeatTime) / (float) repeatTime))) % 360f;
+      final float spinnerSweep = (radius >= Screen.dp(18f) ? MIN_DEGREES_BIG : radius >= Screen.dp(10f) ? MIN_DEGREES_10DP : MIN_DEGREES) + factor1 * 270f * (1f - factor2);
+      final int spinnerColor = ColorUtils.alphaColor(alpha, colorForced ? this.color : XgramExpressive.color(XgramExpressive.PRIMARY));
+      final float spinnerStroke = Math.max(Screen.dpf(1.5f), radius / 5f);
+      c.drawCircle(arcRect.centerX(), arcRect.centerY(), radius, xgramSpinnerPaint(XgramExpressive.withAlpha(spinnerColor, .24f), spinnerStroke));
+      c.drawArc(arcRect, spinnerStart, spinnerSweep, false, xgramSpinnerPaint(spinnerColor, spinnerStroke));
       if (!scheduled && isActive()) {
         scheduleInvalidateIfNeeded(true, true);
       }
@@ -399,7 +484,11 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
       sweepAngle = 360f * getTimerValue();
       startAngle = 270f - sweepAngle;
     } else if (isPrecise) {
-      startAngle = (360f * ((float) (timeMs % repeatTime) / (float) repeatTime)) % 360f;
+      if (XgramExpressive.isEnabled()) {
+        startAngle = -90f; // XGram M3E: determinate rings never spin, they start at 12 o'clock
+      } else {
+        startAngle = (360f * ((float) (timeMs % repeatTime) / (float) repeatTime)) % 360f;
+      }
       sweepAngle = MIN_DEGREES_10DP + (360f - MIN_DEGREES_10DP) * preciseFactor;
     } else {
       final long time = timeMs % totalAnimationTime;
@@ -431,6 +520,14 @@ public class ProgressComponent implements Runnable, FactorAnimator.Target, Destr
         timerParticles = new TimerParticles();
       }
       timerParticles.draw(c, color, strokeWidth, arcRect, 360f - sweepAngle, alpha);
+    }
+
+    if (isPrecise && !isTimer && XgramExpressive.isEnabled()) {
+      // XGram M3E: a ring that does not spin needs frames only while its progress animates
+      if (preciseAnimator != null && preciseAnimator.isAnimating() && !scheduled && isActive()) {
+        scheduleInvalidateIfNeeded(true, true);
+      }
+      return;
     }
 
     if (!scheduled && isActive()) {
