@@ -144,7 +144,11 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
     /*if (lastBarWidth != 0 && lastBarWidth == getMeasuredWidth() && false) {
       return lastBarWidth;
     }*/
-    int barWidth = Screen.currentWidth();
+    return getCurrentBarWidth(Screen.currentWidth());
+  }
+
+  /** XGram: the same for a bar {@code barWidth} wide (the sheet kept within its pane, see MediaLayout#xgramPaneView). */
+  public int getCurrentBarWidth (int barWidth) {
     int maxItemWidth = Screen.dp(168f);
     int itemWidth = barWidth / items.length;
     return itemWidth > maxItemWidth ? maxItemWidth * items.length : barWidth;

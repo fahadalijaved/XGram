@@ -163,8 +163,131 @@ public class MediaLayout extends FrameLayoutFix implements
 
   @Override
   public void onApplyMarginInsets (View child, LayoutParams params, Rect legacyInsets, Rect insets, Rect insetsWithoutIme) {
-    Views.setMargins(params, legacyInsets.left, legacyInsets.top, legacyInsets.right, 0);
+    int left = legacyInsets.left, right = legacyInsets.right;
+    if (xgramFindPaneMargins()) {
+      // XGram: within its pane (see xgramPaneView)
+      left = Math.max(left, xgramPaneLeft);
+      right = Math.max(right, xgramPaneRight);
+    }
+    Views.setMargins(params, left, legacyInsets.top, right, 0);
     setExtraBottomInset(insets.bottom, insetsWithoutIme.bottom);
+  }
+
+  // XGram: with two panes (or the navigation rail) the sheet covers only the pane it was opened from (the chat), not
+  // the chat list beside it nor the rail: its corners, handle, lists and navigation bar are as wide as that pane, while
+  // the popup's scrim still dims the whole window (a tap on it closes the sheet). Its margins are set on every measure
+  // of the popup (onApplyMarginInsets) from where the pane was laid out; when the pane moves (fold, unfold, the rail
+  // coming or going) the popup measures again. Telegram X's single pane and the cover screen keep the full width.
+
+  private int xgramPaneLeft, xgramPaneRight;
+  private @Nullable View xgramWatchedPane;
+  private @Nullable View.OnLayoutChangeListener xgramPaneListener;
+  private @Nullable Runnable xgramRelayout;
+
+  /** The pane (a navigation's view) the sheet belongs to while it is kept within it, else null. */
+  private @Nullable View xgramPaneView () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return null;
+    }
+    BaseActivity activity = UI.getContext(getContext());
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = activity != null ? activity.xgramTwoPane() : null;
+    if (twoPane == null || !(twoPane.isActive() || twoPane.isRailShown())) {
+      return null;
+    }
+    NavigationController navigation = parent != null && !parent.isDestroyed() ? parent.getParentOrSelf().navigationController() : null;
+    if (navigation == null || navigation.isDestroyed()) {
+      navigation = activity.navigation();
+    }
+    View pane = navigation != null && !navigation.isDestroyed() ? navigation.getValue() : null;
+    return pane != null && pane.getParent() != null && pane.getWidth() > 0 ? pane : null;
+  }
+
+  /**
+   * Sets {@link #xgramPaneLeft} and {@link #xgramPaneRight}: the space between the popup's sides and the pane's, from
+   * the pane's last layout (absolute, so a right-to-left layout with the chat on the left needs nothing more). False
+   * when the sheet takes the popup's whole width.
+   */
+  private boolean xgramFindPaneMargins () {
+    View pane = xgramPaneView();
+    View host = getParent() instanceof View ? (View) getParent() : null;
+    if (pane == null || host == null || !(host.getParent() instanceof View)) {
+      return false;
+    }
+    View root = (View) host.getParent();
+    int left = pane.getLeft();
+    android.view.ViewParent p = pane.getParent();
+    while (p instanceof View && p != root) {
+      left += ((View) p).getLeft();
+      p = p.getParent();
+    }
+    if (p != root) {
+      return false; // the pane is not under the popup's parent
+    }
+    final boolean hostLaidOut = host.getWidth() > 0;
+    final int hostWidth = hostLaidOut ? host.getWidth() : root.getWidth();
+    left -= hostLaidOut ? host.getLeft() : 0;
+    final int right = hostWidth - (left + pane.getWidth());
+    if (left <= 0 && right <= 0) {
+      return false;
+    }
+    xgramPaneLeft = Math.max(0, left);
+    xgramPaneRight = Math.max(0, right);
+    return true;
+  }
+
+  @Override
+  protected void onAttachedToWindow () {
+    super.onAttachedToWindow();
+    xgramWatchPane();
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow();
+    xgramUnwatchPane();
+  }
+
+  /** Measures the popup again whenever the pane moves sideways or changes width. */
+  private void xgramWatchPane () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    BaseActivity activity = UI.getContext(getContext());
+    NavigationController navigation = parent != null && !parent.isDestroyed() ? parent.getParentOrSelf().navigationController() : null;
+    if (navigation == null && activity != null) {
+      navigation = activity.navigation();
+    }
+    View pane = navigation != null && !navigation.isDestroyed() ? navigation.getValue() : null;
+    if (pane == null || pane == xgramWatchedPane) {
+      return;
+    }
+    xgramUnwatchPane();
+    if (xgramPaneListener == null) {
+      xgramRelayout = () -> {
+        View host = getParent() instanceof View ? (View) getParent() : null;
+        if (host != null) {
+          host.requestLayout();
+        }
+      };
+      xgramPaneListener = (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+        if (left != oldLeft || right != oldRight) {
+          removeCallbacks(xgramRelayout);
+          post(xgramRelayout); // not during the layout pass that moved the pane
+        }
+      };
+    }
+    pane.addOnLayoutChangeListener(xgramPaneListener);
+    xgramWatchedPane = pane;
+  }
+
+  private void xgramUnwatchPane () {
+    if (xgramWatchedPane != null && xgramPaneListener != null) {
+      xgramWatchedPane.removeOnLayoutChangeListener(xgramPaneListener);
+    }
+    xgramWatchedPane = null;
+    if (xgramRelayout != null) {
+      removeCallbacks(xgramRelayout);
+    }
   }
 
   public Tdlib tdlib () {
@@ -440,6 +563,11 @@ public class MediaLayout extends FrameLayoutFix implements
   }
 
   public int getCurrentContentWidth () {
+    View pane = xgramPaneView();
+    if (pane != null) {
+      // XGram: kept within its pane, the sheet is as wide as that pane, not the window
+      return bottomBar != null ? bottomBar.getCurrentBarWidth(pane.getWidth()) : pane.getWidth();
+    }
     return bottomBar != null ? bottomBar.getCurrentBarWidth() : Screen.currentWidth();
   }
 
@@ -2041,7 +2169,11 @@ public class MediaLayout extends FrameLayoutFix implements
       this.visible = visible;
       NavigationController c = UI.getNavigation();
       if (c != null) {
-        c.getValue().setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+        // XGram: a sheet kept within another pane (the chat list's) does not cover the chat: it stays on screen
+        View pane = visible ? null : xgramPaneView();
+        if (pane == null || pane == c.getValue()) {
+          c.getValue().setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+        }
       }
     }
   }
