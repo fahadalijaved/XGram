@@ -1649,6 +1649,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     HeaderButton moreButton = header.addMoreButton(menu, null, ColorId.white);
     moreButton.setBackgroundResource(R.drawable.bg_btn_header_light);
+    com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButtons(menu); // XGram: on-media icon button state layers with Expressive design
   }
 
   private void openMoreMenu () {
@@ -2054,7 +2055,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       case MODE_SIMPLE: {
         String currentIndex = Strings.buildCounter(stack.getEstimatedIndex() + 1);
         String totalIndex = Strings.buildCounter(stack.getEstimatedSize());
-        if (getArgumentsStrict().noLoadMore && stack.getEstimatedSize() == 1) {
+        // XGram: Material 3 Expressive viewer header: the sender is the title, the date and the position are below
+        final String xgramTitle = xgramHeaderTitle();
+        if (xgramTitle != null) {
+          headerCell.setTitle(xgramTitle);
+          com.fahadali.xgram.appearance.XgramM3MediaChrome.restoreTitleTypeface(headerCell, xgramTitle);
+        } else if (getArgumentsStrict().noLoadMore && stack.getEstimatedSize() == 1) {
           TdApi.SponsoredMessage sponsoredMessage = stack.getCurrent().getSourceSponsoredMessage();
           if (sponsoredMessage != null) {
             headerCell.setTitle(sponsoredMessage.isRecommended ? R.string.MediaRecommendation : R.string.MediaAd);
@@ -2129,6 +2135,31 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     return null;
   }
 
+  /**
+   * XGram: with Expressive design, the title of the messages viewer is the sender (or chat) of the current item; null
+   * keeps Telegram X's title (other modes, ads, items without a sender).
+   */
+  private @Nullable String xgramHeaderTitle () {
+    if (mode != MODE_MESSAGES || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return null;
+    }
+    MediaItem item = stack.getCurrent();
+    if (item == null || item.getSourceSponsoredMessage() != null) {
+      return null;
+    }
+    String author = getAuthorText(item);
+    return StringUtils.isEmpty(author) ? null : author;
+  }
+
+  /** XGram: the subtitle under the sender: the date, then the position when there is more than one item. */
+  private String xgramHeaderSubtitle (@Nullable String time) {
+    String position = stack.getEstimatedSize() > 1 ? getXofY() : null;
+    if (time != null && position != null) {
+      return Lang.getString(R.string.XgramViewerDateAndPosition, time, position);
+    }
+    return time != null ? time : position != null ? position : "";
+  }
+
   private CharSequence genSubtitle () {
     String customSubtitle = getArgumentsStrict().customSubtitle;
     if (!StringUtils.isEmpty(customSubtitle)) {
@@ -2148,6 +2179,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
             }
             return messageText.linkPreview.displayUrl;
           }
+        }
+        if (xgramHeaderTitle() != null) {
+          return xgramHeaderSubtitle(time);
         }
         String authorText = getAuthorText(item);
         if (authorText != null) {
@@ -5167,6 +5201,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       headerCell = new DoubleHeaderView(context);
       headerCell.setThemedTextColor(this);
       headerCell.initWithMargin(measureButtonsPadding(), true);
+      com.fahadali.xgram.appearance.XgramM3MediaChrome.styleHeader(headerCell); // XGram: titleMedium over bodySmall with Expressive design
       if (mode == MODE_PROFILE) {
         MediaItem item = stack.getCurrent();
         headerCell.setTitle(tdlib.senderName(item.getSourceSender()));
@@ -5184,6 +5219,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       attachHeaderViewWithoutNavigation(headerView);
       headerView.initWithSingleController(this, useEdgeToEdge() || ((SET_FULLSCREEN_ON_OPEN || canRunFullscreen()) && !Config.CUTOUT_ENABLED));
       headerView.getFilling().setShadowAlpha(0f);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive: the header floats on a top scrim (the mirror of the controls' bottom scrim)
+        // instead of a flat band, and its icons get the on-media icon button state layer
+        ViewUtils.setBackground(headerView, new com.fahadali.xgram.appearance.XgramM3MediaChrome.TopScrimDrawable());
+        com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(headerView.getBackButton());
+      }
       int leftMargin = Screen.dp(68f);
       int rightMargin = measureButtonsPadding();
       Views.setMargins((FrameLayout.LayoutParams) headerCell.getLayoutParams(), Lang.rtl() ? rightMargin : leftMargin, headerView.getEffectiveTopOffset(), Lang.rtl() ? leftMargin : rightMargin, 0);

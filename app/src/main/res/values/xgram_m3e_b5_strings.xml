@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Material 3 Expressive media viewer, player and recording (batch 5) -->
+  <!-- Viewer header subtitle: the date of the item, then its position, e.g. "2 Oct at 5:51 am · 516 of 516" -->
+  <string name="XgramViewerDateAndPosition">%1$s · %2$s</string>
+</resources>

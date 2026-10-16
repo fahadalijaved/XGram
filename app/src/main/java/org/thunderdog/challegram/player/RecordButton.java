@@ -142,6 +142,7 @@ public class RecordButton extends View implements FactorAnimator.Target, ClickHe
             return;
           }
           this.animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 190l, volume);
+          com.fahadali.xgram.appearance.XgramAppMotion.use(animator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, false); // XGram: the halo breathes on a spring with Expressive design
         }
         currentToVolume = toVolume;
         if (toVolume >= currentToVolume || toVolume > 0 || !animator.isAnimating()) {
@@ -179,8 +180,53 @@ public class RecordButton extends View implements FactorAnimator.Target, ClickHe
     }
   }
 
+  // XGram: Material 3 Expressive recording button. The disk keeps the input bar's tonal role (the mic on top of it is
+  // VoiceVideoButtonView's onPrimaryContainer glyph); the volume halo is a primary soft burst at 30% that turns once
+  // every 12 seconds (not with Reduce motion). The burst path is built once in unit size: frames only move the canvas.
+  private static final int XGRAM_DISK_ROLE = com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER;
+  private static final long XGRAM_HALO_TURN_MS = 12000L;
+  private @Nullable android.graphics.Path xgramHalo;
+  private float xgramHaloCenterX, xgramHaloCenterY, xgramHaloUnit;
+
+  private void xgramDraw (Canvas c) {
+    final float haloSize = (radius + radiusAdd * volume) * expand * 2f;
+    if (volume > 0f && haloSize > 0f) {
+      if (xgramHalo == null) {
+        xgramHalo = new android.graphics.Path();
+        com.fahadali.xgram.appearance.XgramShapes.toPath(com.fahadali.xgram.appearance.XgramShapes.SOFT_BURST, xgramHalo);
+        android.graphics.RectF bounds = new android.graphics.RectF();
+        xgramHalo.computeBounds(bounds, true);
+        xgramHaloCenterX = bounds.centerX();
+        xgramHaloCenterY = bounds.centerY();
+        float extent = Math.max(bounds.width(), bounds.height());
+        xgramHaloUnit = extent > 0f ? 1f / extent : 1f;
+      }
+      final boolean reduceMotion = org.thunderdog.challegram.unsorted.Settings.instance().needReduceMotion();
+      final float angle = reduceMotion ? 0f : (float) (android.os.SystemClock.uptimeMillis() % XGRAM_HALO_TURN_MS) / (float) XGRAM_HALO_TURN_MS * 360f;
+      final float scale = haloSize * xgramHaloUnit;
+      final int haloColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), .3f);
+      c.save();
+      c.translate(center, center);
+      if (angle != 0f) {
+        c.rotate(angle);
+      }
+      c.scale(scale, scale);
+      c.translate(-xgramHaloCenterX, -xgramHaloCenterY);
+      c.drawPath(xgramHalo, Paints.fillingPaint(haloColor));
+      c.restore();
+      if (!reduceMotion) {
+        postInvalidateOnAnimation(); // only while the halo shows, i.e. while recording with sound
+      }
+    }
+    c.drawCircle(center, center, radius * expand, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(XGRAM_DISK_ROLE)));
+  }
+
   @Override
   public void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c);
+      return;
+    }
     int color = Theme.getColor(ColorId.circleButtonRegular);
     c.drawCircle(center, center, (radius + radiusAdd * volume) * expand, Paints.fillingPaint(ColorUtils.alphaColor(.3f, color)));
     c.drawCircle(center, center, radius * expand, Paints.fillingPaint(color));

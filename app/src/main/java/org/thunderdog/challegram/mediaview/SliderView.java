@@ -423,6 +423,26 @@ public class SliderView extends View implements FactorAnimator.Target {
   private Path xgramPath;
   private float[] xgramRadii;
 
+  // Fixed colours instead of the color ids, for sliders on media (the video seek bar); unused until set
+  private boolean xgramHasColors;
+  private int xgramActiveColor, xgramInactiveColor, xgramSecondaryColor;
+
+  /** Expressive design only: the active track and handle, the inactive track and the buffered part in fixed colours. */
+  public void setXgramColors (int activeColor, int inactiveColor) {
+    setXgramColors(activeColor, inactiveColor, inactiveColor);
+  }
+
+  /** {@link #setXgramColors(int, int)} with its own colour for the buffered part. */
+  public void setXgramColors (int activeColor, int inactiveColor, int secondaryColor) {
+    if (!xgramHasColors || xgramActiveColor != activeColor || xgramInactiveColor != inactiveColor || xgramSecondaryColor != secondaryColor) {
+      this.xgramHasColors = true;
+      this.xgramActiveColor = activeColor;
+      this.xgramInactiveColor = inactiveColor;
+      this.xgramSecondaryColor = secondaryColor;
+      invalidate();
+    }
+  }
+
   private void xgramAddSegment (Path path, float left, float top, float right, float bottom, float leftRadius, float rightRadius) {
     if (right - left <= 0f) {
       return;
@@ -472,12 +492,24 @@ public class SliderView extends View implements FactorAnimator.Target {
     final float dotRadius = Screen.dp(2f);
 
     final float overlayAlpha = (1f - enableFactor) * .65f;
-    final int origColor = colorAnimator == null || !colorAnimator.isAnimating() ? Theme.getColor(colorId) : ColorUtils.fromToArgb(Theme.getColor(fromColorId), Theme.getColor(toColorId), colorAnimator.getFactor());
+    final int origColor;
+    if (xgramHasColors) {
+      origColor = xgramActiveColor;
+    } else {
+      origColor = colorAnimator == null || !colorAnimator.isAnimating() ? Theme.getColor(colorId) : ColorUtils.fromToArgb(Theme.getColor(fromColorId), Theme.getColor(toColorId), colorAnimator.getFactor());
+    }
     final int color = overlayAlpha > 0f ? ColorUtils.compositeColor(origColor, ColorUtils.color((int) (255f * overlayAlpha), 0)) : origColor;
     // sliderInactive is the generic inactive track of the in-app sliders: it becomes secondaryContainer.
-    // Other forced colors (media viewer) stay as they are.
-    final int inactiveColor = forceBackgroundColorId != 0 && forceBackgroundColorId != ColorId.sliderInactive ? Theme.getColor(forceBackgroundColorId) : XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER);
-    final int secondaryColor = forceSecondaryColorId != 0 ? Theme.getColor(forceSecondaryColorId) : XgramExpressive.withAlpha(color, XgramExpressive.DISABLED_CONTENT);
+    // Other forced colors (media viewer) stay as they are, unless fixed colours were set (setXgramColors).
+    final int inactiveColor;
+    final int secondaryColor;
+    if (xgramHasColors) {
+      inactiveColor = xgramInactiveColor;
+      secondaryColor = xgramSecondaryColor;
+    } else {
+      inactiveColor = forceBackgroundColorId != 0 && forceBackgroundColorId != ColorId.sliderInactive ? Theme.getColor(forceBackgroundColorId) : XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER);
+      secondaryColor = forceSecondaryColorId != 0 ? Theme.getColor(forceSecondaryColorId) : XgramExpressive.withAlpha(color, XgramExpressive.DISABLED_CONTENT);
+    }
 
     final float cx = findCenterX();
     final float activeEnd = cx - handleWidth / 2f - gap;

@@ -50,11 +50,15 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
   private final TextView totalView;
   private final SliderView sliderView;
   private final PlayPauseButton playPauseButton;
+  // XGram: Material 3 Expressive controls row, fixed when the view is built: 16dp start and end insets, a 48dp play
+  // target, dark-scheme colours on the media (see XgramM3MediaChrome)
+  private final boolean xgramLayout;
 
   public VideoControlView (Context context) {
     super(context);
 
     setWillNotDraw(false);
+    xgramLayout = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
 
     FrameLayoutFix.LayoutParams params;
     params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f), Gravity.BOTTOM);
@@ -65,12 +69,25 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
     sliderView.setForceSecondaryColorId(ColorId.videoSliderInactive);
     sliderView.setSlideEnabled(true, false);
     sliderView.setColorId(ColorId.videoSliderActive, false);
-    sliderView.setPadding(Screen.dp(56f), 0, Screen.dp(56f), 0);
+    if (xgramLayout) {
+      int edge = Screen.dp(56f) + Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.EDGE_DP);
+      sliderView.setPadding(edge, 0, edge, 0);
+      sliderView.setXgramColors(
+        com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY),
+        com.fahadali.xgram.appearance.XgramM3MediaChrome.white(com.fahadali.xgram.appearance.XgramM3MediaChrome.TRACK_INACTIVE_ALPHA),
+        com.fahadali.xgram.appearance.XgramM3MediaChrome.white(com.fahadali.xgram.appearance.XgramM3MediaChrome.TRACK_BUFFERED_ALPHA)
+      );
+    } else {
+      sliderView.setPadding(Screen.dp(56f), 0, Screen.dp(56f), 0);
+    }
     sliderView.setLayoutParams(params);
     addView(sliderView);
 
     params = FrameLayoutFix.newParams(Screen.dp(56f), Screen.dp(56f), Gravity.LEFT | Gravity.BOTTOM);
     // params.leftMargin = Screen.dp(2f);
+    if (xgramLayout) {
+      params.leftMargin = Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.EDGE_DP);
+    }
 
     this.nowView = new NoScrollTextView(context);
     styleText(nowView);
@@ -79,6 +96,9 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
 
     params = FrameLayoutFix.newParams(Screen.dp(56f), Screen.dp(56f), Gravity.RIGHT | Gravity.BOTTOM);
     // params.rightMargin = Screen.dp(2f);
+    if (xgramLayout) {
+      params.rightMargin = Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.EDGE_DP);
+    }
 
     this.totalView = new NoScrollTextView(context);
     styleText(totalView);
@@ -86,9 +106,21 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
     addView(totalView);
 
     playPauseButton = new PlayPauseButton(context);
-    playPauseButton.setTranslationX(-Screen.dp(44f));
-    playPauseButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(44f), Screen.dp(56f), Gravity.LEFT | Gravity.BOTTOM));
+    if (xgramLayout) {
+      playPauseButton.setTranslationX(-xgramPlayHiddenX());
+      params = FrameLayoutFix.newParams(Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.PLAY_TARGET_WIDTH_DP), Screen.dp(56f), Gravity.LEFT | Gravity.BOTTOM);
+      params.leftMargin = Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.EDGE_DP);
+      playPauseButton.setLayoutParams(params);
+    } else {
+      playPauseButton.setTranslationX(-Screen.dp(44f));
+      playPauseButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(44f), Screen.dp(56f), Gravity.LEFT | Gravity.BOTTOM));
+    }
     addView(playPauseButton);
+  }
+
+  /** XGram: how far the play button slides out to hide: its 48dp target plus the 16dp inset. */
+  private static int xgramPlayHiddenX () {
+    return Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.PLAY_TARGET_WIDTH_DP + com.fahadali.xgram.appearance.XgramM3MediaChrome.EDGE_DP);
   }
 
   private @Nullable VideoTimelineView timelineView;
@@ -102,7 +134,13 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
     timelineView = new VideoTimelineView(getContext());
     timelineView.setShowSlider(true, false);
     timelineView.setColors(ColorId.white, ColorId.black, ColorId.transparentEditor);
-    timelineView.setPadding(Screen.dp(54f) + Screen.dp(32f), Screen.dp(6f), Screen.dp(54f), Screen.dp(6f));
+    if (xgramLayout) {
+      // XGram: the same 16dp insets as the controls row
+      int edge = Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.EDGE_DP);
+      timelineView.setPadding(Screen.dp(54f) + Screen.dp(32f) + edge, Screen.dp(6f), Screen.dp(54f) + edge, Screen.dp(6f));
+    } else {
+      timelineView.setPadding(Screen.dp(54f) + Screen.dp(32f), Screen.dp(6f), Screen.dp(54f), Screen.dp(6f));
+    }
     timelineView.setLayoutParams(params);
     timelineView.setDelegate(delegate);
     timelineView.setForcedTheme(forcedTheme);
@@ -134,12 +172,24 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
 
   public void setShowPlayPause (boolean show, boolean animated) {
     if (timelineView == null) {
+      if (xgramLayout && animated) {
+        // XGram: the button slides in on the spatial spring (clamped: the track padding follows it) and out on effects
+        com.fahadali.xgram.appearance.XgramAppMotion.use(showPlayPause, show ? com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true);
+      }
       showPlayPause.setValue(show || timelineVisible, animated);
     }
   }
 
   @Override
   public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+    if (xgramLayout) {
+      // XGram: the time and the track make room for the whole 48dp play target
+      int dx = (int) ((float) Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.PLAY_TARGET_WIDTH_DP) * factor);
+      nowView.setTranslationX(dx);
+      sliderView.setAddPaddingLeft(dx);
+      playPauseButton.setTranslationX(-xgramPlayHiddenX() * (1f - factor));
+      return;
+    }
     int dx = (int) ((float) Screen.dp(32f) * factor);
     nowView.setTranslationX(dx);
     sliderView.setAddPaddingLeft(dx);
