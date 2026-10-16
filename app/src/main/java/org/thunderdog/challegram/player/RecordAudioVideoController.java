@@ -159,6 +159,8 @@ public class RecordAudioVideoController implements
     updateColors();
   }
 
+  private int xgramCancelStateColor; // XGram: the colour of the Cancel text button's state layer
+
   private void updateColors () {
     if (rootLayout == null) {
       return;
@@ -167,6 +169,16 @@ public class RecordAudioVideoController implements
     this.inputOverlayView.setBackgroundColor(Theme.fillingColor());
     this.slideHintView.setTextColor(Theme.textDecentColor());
     this.cancelView.setTextColor(Theme.getColor(ColorId.textNeutral));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      this.slideHintView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      this.cancelView.setTextColor(primary);
+      if (xgramCancelStateColor != primary || this.cancelView.getBackground() == null) {
+        // only when the colour changes: theme transitions call this every frame
+        xgramCancelStateColor = primary;
+        com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(this.cancelView, primary);
+      }
+    }
     this.videoPlaceholderView.setBackgroundColor(Theme.fillingColor());
     this.deleteButton.setColorFilter(Theme.iconColor());
     this.videoBackgroundView.setBackgroundColor(Theme.getColor(ColorId.previewBackground));
@@ -282,6 +294,10 @@ public class RecordAudioVideoController implements
       this.slideHintView.setText(Lang.getString(R.string.slideToCancel));
       this.slideHintView.setTypeface(Fonts.getRobotoRegular());
       this.slideHintView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: bodyLarge in onSurfaceVariant (updateColors), the type scale of the timer next to it
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(this.slideHintView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+      }
       this.slideHintView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
       this.inputOverlayView.addView(slideHintView);
 
@@ -312,6 +328,13 @@ public class RecordAudioVideoController implements
         }
       });
       this.cancelView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: an M3E text button: labelLarge in sentence case, primary (updateColors), a 40dp full-corner primary
+        // state layer, as the other Expressive text buttons
+        this.cancelView.setText(Lang.getString(R.string.Cancel));
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(this.cancelView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+        this.cancelView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f), Gravity.CENTER));
+      }
       this.inputOverlayView.addView(cancelView);
 
       this.videoTopShadowView = new ShadowView(context);

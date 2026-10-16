@@ -343,7 +343,9 @@ public class EmojiToneHelper implements FactorAnimator.Target {
       float factor = positionFactor / (float) (EmojiData.emojiColors.length - 1);
       int buttonWidth = applyButton.getMeasuredWidth();
       int margin = itemWidth / 2 + Screen.dp(EmojiToneListView.VIEW_PADDING_HORIZONTAL + EmojiToneListView.ITEM_PADDING);
-      applyButton.setCornerCenterX(margin + (int) ((float) (buttonWidth - margin * 2) * factor));
+      if (!xgramApplySurface) {
+        applyButton.setCornerCenterX(margin + (int) ((float) (buttonWidth - margin * 2) * factor));
+      }
       applyButton.setTranslationX((float) (totalWidth - buttonWidth) * factor);
     }
   }
@@ -386,7 +388,12 @@ public class EmojiToneHelper implements FactorAnimator.Target {
         updateApplyPosition();
       }
     };
-    applyButton.setCornerCenterX(itemWidth / 2);
+    xgramApplySurface = xgramMenuStyle(anchorView);
+    if (xgramApplySurface) {
+      xgramStyleApplySurface(applyButton);
+    } else {
+      applyButton.setCornerCenterX(itemWidth / 2);
+    }
     applyButton.setMaxAllowedVisibility(visibilityAnimator != null ? visibilityAnimator.getFloatValue() : 0f);
     applyButton.setBubbleVisible(true, applyButton);
 
@@ -471,6 +478,22 @@ public class EmojiToneHelper implements FactorAnimator.Target {
         anchorView.getMeasuredHeight() / 2f - offsetTop);
     }
     return true;
+  }
+
+  // XGram M3E wave 2: with the menu style, "Apply to all" above the tone menu is the same M3E surface (surfaceContainer,
+  // the menu's 16dp corners, elevation level 2, no pointer) instead of Telegram X's bubble with a pointer that follows
+  // the tone. BubbleLayout keeps its geometry (its paddings were the bubble's shadow and pointer: the surface is drawn
+  // inside them, where the bubble's body was) and its show / hide animation; only its background changes.
+  private boolean xgramApplySurface;
+
+  private static void xgramStyleApplySurface (BubbleLayout applyButton) {
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable surface = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramW2ToneListView.MENU_CORNER, com.fahadali.xgram.appearance.XgramW2ToneListView.MENU_CORNER);
+    surface.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER);
+    applyButton.setBackground(new android.graphics.drawable.InsetDrawable(surface, applyButton.getPaddingLeft(), applyButton.getPaddingTop(), applyButton.getPaddingRight(), applyButton.getPaddingBottom()));
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+      applyButton.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+      applyButton.setElevation(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_2));
+    }
   }
 
   /**

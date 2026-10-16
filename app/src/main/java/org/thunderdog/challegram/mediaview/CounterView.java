@@ -31,8 +31,10 @@ import org.thunderdog.challegram.tool.Views;
 public class CounterView extends CounterHeaderView {
   public CounterView (Context context) {
     super(context);
-    // XGram: Material 3 Expressive: onSurface text on a surfaceContainerHighest pill (see drawSpecial)
-    init(14f, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.text : ColorId.white, Screen.dp(16f), 0, Screen.dp(9f) + Screen.dp(10f));
+    // XGram: Material 3 Expressive: white text on the dark scheme's surfaceContainerHighest pill (see drawSpecial). The
+    // counter sits on the media, which stays dark whatever the app theme, like the rest of the on-media chrome
+    // (XgramM3MediaChrome.onMedia), so neither follows a light app theme.
+    init(14f, ColorId.white, Screen.dp(16f), 0, Screen.dp(9f) + Screen.dp(10f));
     if (Config.HARDWARE_CLIP_PATH_FIX) {
       Views.setLayerType(this, LAYER_TYPE_HARDWARE);
     }
@@ -66,7 +68,7 @@ public class CounterView extends CounterHeaderView {
     float right = viewWidth - strokeWidth / 2;
     rectF.set(left, strokeWidth / 2, right, viewHeight - strokeWidth / 2);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST), .9f)));
+      c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST), .9f)));
     } else {
       c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(0xa0000000));
       c.drawRoundRect(rectF, radius, radius, Paints.getProgressPaint(0xffffffff, strokeWidth));

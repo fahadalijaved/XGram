@@ -119,9 +119,18 @@ public final class XgramListStateView extends View {
       startTime = now;
     }
     XgramLoadingIndicator.draw(c, cx, cy, Screen.dp(indicatorDp), indicatorColor, now - startTime);
-    if (getWindowToken() != null && getVisibility() == View.VISIBLE) {
+    // Not while faded out (a progress view some callers keep at alpha 0 once loaded): onSetAlpha restarts the frames
+    if (getWindowToken() != null && getVisibility() == View.VISIBLE && getAlpha() > 0f) {
       postInvalidateOnAnimation();
     }
+  }
+
+  @Override
+  protected boolean onSetAlpha (int alpha) {
+    if (alpha > 0 && state == STATE_LOADING && getAlpha() > 0f) {
+      invalidate(); // back from alpha 0: the loading frames stopped there
+    }
+    return super.onSetAlpha(alpha);
   }
 
   private void checkLayouts (int width) {

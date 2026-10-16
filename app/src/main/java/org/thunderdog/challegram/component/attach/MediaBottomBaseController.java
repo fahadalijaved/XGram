@@ -486,6 +486,34 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     if (emptyView != null) {
       emptyView.setAlpha(0f);
     }
+    if (xgramEmptyView != null) {
+      xgramEmptyView.setAlpha(0f);
+    }
+  }
+
+  // XGram: with Expressive design the empty / error state is the M3E one (XgramListStateView: an icon on a soft burst,
+  // a titleLarge headline), as the chat list's, instead of Telegram X's EmptyTextView. It is centred on the visible part
+  // of the sheet like the progress view (findYForStaticView with its fixed height).
+  private @Nullable com.fahadali.xgram.appearance.XgramListStateView xgramEmptyView;
+  private static final float XGRAM_EMPTY_HEIGHT = 216f;
+
+  /** XGram: the icon of this tab's empty / error state. */
+  protected @androidx.annotation.DrawableRes int xgramErrorIcon () {
+    return org.thunderdog.challegram.R.drawable.baseline_search_96;
+  }
+
+  private View xgramShowError (String error) {
+    if (xgramEmptyView == null) {
+      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(XGRAM_EMPTY_HEIGHT), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+      params.topMargin = HeaderView.getSize(false);
+      xgramEmptyView = new com.fahadali.xgram.appearance.XgramListStateView(context());
+      xgramEmptyView.setLayoutParams(params);
+      xgramEmptyView.setTranslationY(findYForStaticView(Screen.dp(XGRAM_EMPTY_HEIGHT)));
+      addThemeInvalidateListener(xgramEmptyView);
+      contentView.addView(xgramEmptyView);
+    }
+    xgramEmptyView.setEmpty(xgramErrorIcon(), error, null);
+    return xgramEmptyView;
   }
 
   // Called when removed from view tree
@@ -494,23 +522,32 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   }
 
   protected void showError (String error, @Nullable String resolveButtonText, @Nullable View.OnClickListener onResolveButtonClick, boolean animated) {
-    if (emptyView == null) {
-      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-      params.topMargin = HeaderView.getSize(false);
-
-      emptyView = new EmptyTextView(context());
-      emptyView.setLayoutParams(params);
-      emptyView.setTranslationY(findYForStaticView(Screen.dp(18f)));
-      contentView.addView(emptyView);
+    final View errorView;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      if (xgramEmptyView != null) {
+        animated = false;
+      }
+      errorView = xgramShowError(error);
     } else {
-      animated = false;
+      if (emptyView == null) {
+        FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        params.topMargin = HeaderView.getSize(false);
+
+        emptyView = new EmptyTextView(context());
+        emptyView.setLayoutParams(params);
+        emptyView.setTranslationY(findYForStaticView(Screen.dp(18f)));
+        contentView.addView(emptyView);
+      } else {
+        animated = false;
+      }
+      emptyView.setText(error);
+      errorView = emptyView;
     }
-    emptyView.setText(error);
     if (!animated || progressView == null) {
-      emptyView.setAlpha(1f);
+      errorView.setAlpha(1f);
       return;
     }
-    emptyView.setAlpha(0f);
+    errorView.setAlpha(0f);
     ValueAnimator animator = AnimatorUtils.simpleValueAnimator();
     animator.addUpdateListener(animation -> {
       float factor = AnimatorUtils.getFraction(animation);
@@ -522,7 +559,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
           progressView.setAlpha(0f);
         }
         factor = AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation((factor - .5f) / .5f);
-        emptyView.setAlpha(factor);
+        errorView.setAlpha(factor);
       }
     });
     animator.addListener(new AnimatorListenerAdapter() {
@@ -808,6 +845,9 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     }
     if (emptyView != null) {
       emptyView.setTranslationY(findYForStaticView(Screen.dp(18f)));
+    }
+    if (xgramEmptyView != null) {
+      xgramEmptyView.setTranslationY(findYForStaticView(Screen.dp(XGRAM_EMPTY_HEIGHT)));
     }
     // Use to align overlay views
   }

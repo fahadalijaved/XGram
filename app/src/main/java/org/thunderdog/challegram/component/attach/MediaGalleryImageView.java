@@ -186,7 +186,11 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
       } else {
         duration = Strings.buildDuration(totalDuration);
       }
-      durationWidth = (int) U.measureText(duration, Paints.whiteMediumPaint(12f, false, true));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        durationWidth = com.fahadali.xgram.appearance.XgramM3MediaButton.measureChipText(duration); // XGram: labelMedium
+      } else {
+        durationWidth = (int) U.measureText(duration, Paints.whiteMediumPaint(12f, false, true));
+      }
     } else {
       duration = null;
     }
@@ -330,6 +334,23 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
     }
   }
 
+  // XGram: the video duration as the chat media's chip: a full-corner pill on the 50% chip scrim, labelMedium white,
+  // 6dp side padding, 4dp from the tile's corner (XgramM3MediaButton.CHIP_SCRIM, chipLabelPaint)
+  private final android.graphics.Paint.FontMetrics xgramChipMetrics = new android.graphics.Paint.FontMetrics();
+
+  private void xgramDrawDuration (Canvas c) {
+    final android.text.TextPaint textPaint = com.fahadali.xgram.appearance.XgramM3MediaButton.chipLabelPaint();
+    textPaint.getFontMetrics(xgramChipMetrics);
+    final int paddingH = Screen.dp(6f), margin = Screen.dp(4f), height = Screen.dp(20f);
+    final int left = receiver.getLeft() + margin, top = receiver.getTop() + margin;
+    RectF rectF = Paints.getRectF();
+    rectF.set(left, top, left + paddingH + durationWidth + paddingH, top + height);
+    final float radius = rectF.height() / 2f;
+    c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramM3MediaButton.CHIP_SCRIM));
+    final float baseline = rectF.centerY() - (xgramChipMetrics.ascent + xgramChipMetrics.descent) / 2f;
+    c.drawText(duration, left + paddingH, baseline, textPaint);
+  }
+
   @Override
   protected void onDraw (Canvas c) {
     final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
@@ -354,7 +375,9 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
       Drawable drawable = getSparseDrawable(R.drawable.baseline_favorite_12, ColorId.white);
       Drawables.draw(c, drawable, receiver.getLeft() + Screen.dp(6f), receiver.getBottom() - drawable.getMinimumHeight() - Screen.dp(6f), PorterDuffPaint.get(ColorId.white, .95f));
     }
-    if (duration != null && !duration.isEmpty()) {
+    if (duration != null && !duration.isEmpty() && xgramM3) {
+      xgramDrawDuration(c);
+    } else if (duration != null && !duration.isEmpty()) {
       int textLeft = receiver.getLeft() + Screen.dp(7f);
       int textTop = receiver.getTop() + Screen.dp(5f);
       RectF rectF = Paints.getRectF();

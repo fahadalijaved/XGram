@@ -378,6 +378,11 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
     showGallery(true);
   }
 
+  @Override
+  protected int xgramErrorIcon () {
+    return R.drawable.baseline_image_96; // XGram: no media yet, no gallery access
+  }
+
   private static String getErrorString (boolean hasAccess) {
     return hasAccess ? Lang.getString(R.string.NoMediaYet) : Lang.getString(R.string.NoGalleryAccess);
   }
