@@ -74,6 +74,8 @@ public final class XgramExpressiveC {
     private final int backgroundColorId;
     private final @Nullable FillingDrawable filling;
     private int contentColor;
+    /** False while RippleDrawable's constructor runs (the fields above are not set yet). */
+    private final boolean ready;
 
     private StateLayerRipple (int fallbackRole, int backgroundColorId, @Nullable FillingDrawable filling, @Nullable Drawable content, @Nullable Drawable mask) {
       this(fallbackRole, backgroundColorId, filling, content, mask, contentColorOf(fallbackRole, filling != null ? filling.getColorId() : backgroundColorId));
@@ -85,10 +87,14 @@ public final class XgramExpressiveC {
       this.backgroundColorId = backgroundColorId;
       this.filling = filling;
       this.contentColor = contentColor;
+      this.ready = true;
     }
 
     @Override
     protected boolean onStateChange (@NonNull int[] stateSet) {
+      if (!ready) {
+        return super.onStateChange(stateSet);
+      }
       int now = contentColorOf(fallbackRole, filling != null ? filling.getColorId() : backgroundColorId);
       if (now != contentColor) {
         contentColor = now;
