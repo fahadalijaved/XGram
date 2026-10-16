@@ -32,6 +32,7 @@ import com.fahadali.xgram.compose.XgramComposeRoot
 import com.fahadali.xgram.compose.ui.PageBlock
 import com.fahadali.xgram.compose.ui.PageScope
 import org.thunderdog.challegram.R
+import org.thunderdog.challegram.component.base.SettingView
 import org.thunderdog.challegram.navigation.HeaderView
 import org.thunderdog.challegram.navigation.NavigationController
 import org.thunderdog.challegram.navigation.ViewController
@@ -40,6 +41,7 @@ import org.thunderdog.challegram.theme.Theme
 import org.thunderdog.challegram.theme.ThemeChangeListener
 import org.thunderdog.challegram.theme.ThemeDelegate
 import org.thunderdog.challegram.theme.ThemeManager
+import org.thunderdog.challegram.ui.EditBaseController
 import org.thunderdog.challegram.ui.ListItem
 import org.thunderdog.challegram.ui.SettingsAdapter
 import org.thunderdog.challegram.widget.SliderWrapView
@@ -85,6 +87,9 @@ class TgxSettingsRenderer private constructor(
       }
       val adapter = rv.adapter as? SettingsAdapter ?: return null
       val hints = TgxComposePages.hints(c) ?: return null
+      if (!hints.allow(c)) {
+        return null
+      }
       return try {
         TgxSettingsRenderer(c, rv, adapter, hints, bottomInset).also { it.attach(parent, index) }
       } catch (t: Throwable) {
@@ -100,6 +105,8 @@ class TgxSettingsRenderer private constructor(
   internal val composeHost = TgxComposeHost(this)
   internal val listState = LazyListState()
   internal val largeTitle: Boolean = hints.largeTitle(controller)
+  /** Telegram X's floating Done button sits over the list's end (EditBaseController): the list leaves room for it. */
+  internal val floatingClearance: Boolean = controller is EditBaseController<*>
 
   internal val structureVersion = mutableIntStateOf(0)
   internal val langVersion = mutableIntStateOf(0)
@@ -366,7 +373,10 @@ class TgxSettingsRenderer private constructor(
 
   private fun readNow(row: TgxRow): TgxRowSnap {
     val holder = row.holder ?: return TgxRowSnap.HIDDEN
-    return TgxRead.read(row.kind, holder.itemView, row.item, row.holderType)
+    val view = holder.itemView
+    val kind = row.kind
+    val partial = (kind == TgxRowKind.SWITCH || kind == TgxRowKind.SPLIT_SWITCH) && hints.isPartial(controller, row.item, view)
+    return TgxRead.read(kind, view, row.item, row.holderType, partial)
   }
 
   private fun reread(row: TgxRow) {
@@ -546,19 +556,58 @@ class TgxSettingsRenderer private constructor(
     }
   }
 
-  /** A slider moved to [index]: the slider view's own path (adapter.onSliderValueChanged, the page's listeners). */
-  internal fun slide(row: TgxRow, index: Int) {
+  /**
+   * A tap on the switch of a two-target row (SPLIT_SWITCH): the toggler's own click, which toggles, where a tap on the
+   * rest of the row expands or opens. Tooltips anchor to the toggler, as on the classic row.
+   */
+  internal fun clickToggler(row: TgxRow) {
     if (destroyed) {
       return
     }
-    val view = row.holder?.itemView as? SliderWrapView ?: return
-    val count = row.item.sliderValues?.size ?: return
+    val view = row.holder?.itemView as? SettingView ?: return
+    val toggler = view.toggler ?: return
+    if (!view.isEnabled) {
+      return
+    }
+    syncAnchor(row, view)
+    if (toggler.hasOnClickListeners()) {
+      toggler.performClick()
+    } else {
+      view.performClick()
+    }
+    if (!destroyed) {
+      reread(row)
+      rereadAllSoon()
+    }
+  }
+
+  private fun sliderOf(row: TgxRow): SliderWrapView? = if (destroyed) null else row.holder?.itemView as? SliderWrapView
+
+  /**
+   * The slider of [row] is dragged over [index]: the path a drag on the slider view takes. A new step calls the
+   * adapter's callback (onSliderValueChanged), so a page that follows the slider live (EditChatLinkController's limit
+   * rows) updates while the thumb moves, as in Telegram X.
+   */
+  internal fun slideTo(row: TgxRow, index: Int) {
+    val view = sliderOf(row) ?: return
+    val count = view.values?.size ?: return
     if (count < 2) {
       return
     }
-    view.onValueChanged(null, index.coerceIn(0, count - 1) / (count - 1f))
+    val i = index.coerceIn(0, count - 1)
+    if (view.valueIndex != i) {
+      view.onValueChanged(null, i / (count - 1f))
+    }
+  }
+
+  /** The drag ended on [index]: the last step, then the slider view's release (its real-time listener's last call). */
+  internal fun slideEnd(row: TgxRow, index: Int) {
+    val view = sliderOf(row) ?: return
+    slideTo(row, index)
     view.onSetStateChanged(null, false)
-    reread(row)
+    if (!destroyed) {
+      reread(row)
+    }
   }
 
   /**
@@ -664,9 +713,13 @@ class TgxSettingsRenderer private constructor(
   internal suspend fun applyPendingScroll() {
     val request = pendingScroll ?: return
     pendingScroll = null
-    val index = if (request.row == null) 0 else blockIndexOf(request.row)
+    var index = if (request.row == null) 0 else blockIndexOf(request.row)
     if (index < 0) {
       return
+    }
+    // The page's first row with a large title above it: the title too, as the classic list shows it.
+    if (largeTitle && index == 1 && request.offset == 0) {
+      index = 0
     }
     if (request.smooth) {
       listState.animateScrollToItem(index, -request.offset)
@@ -766,6 +819,8 @@ class TgxSettingsRenderer private constructor(
     if (!destroyed) {
       checkDark()
       themeVersion.intValue++
+      // Colors read from the views (a theme's radio color) follow the new theme.
+      rereadAllSoon()
     }
   }
 

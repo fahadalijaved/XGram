@@ -241,6 +241,16 @@ public class SliderWrapView extends LinearLayout implements SliderView.Listener,
     this.sliderView.setValueCount(values.length);
   }
 
+  // XGram: the values set on the view (pages such as EditChatLinkController keep them off the ListItem),
+  // read by the Compose renderer of Telegram X pages
+  public @Nullable String[] getValues () {
+    return values;
+  }
+
+  public int getValueIndex () {
+    return valueIndex;
+  }
+
   private Callback callback;
 
   public void setCallback (Callback callback) {
