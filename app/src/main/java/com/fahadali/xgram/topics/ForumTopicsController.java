@@ -392,7 +392,8 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     // As Telegram X's chat list: rows change in place with no item animator, so counter and order updates never
     // animate on top of a slide in or out; the animator only runs while a pinned topic is dragged.
-    recyclerView.setItemAnimator(null);
+    // With Expressive design new topics, reorders and removals spring (plain changes redraw in place).
+    recyclerView.setItemAnimator(xgramIdleAnimator());
     recyclerView.setAdapter(adapter);
     new ItemTouchHelper(new ReorderCallback()).attachToRecyclerView(recyclerView);
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -466,8 +467,18 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       }
       recyclerView.setItemAnimator(dragAnimator);
     } else {
-      recyclerView.setItemAnimator(null);
+      recyclerView.setItemAnimator(xgramIdleAnimator());
     }
+  }
+
+  private RecyclerView.ItemAnimator idleAnimator;
+
+  /** Null as in Telegram X's chat list; a permanent spring animator with Expressive design. */
+  private RecyclerView.ItemAnimator xgramIdleAnimator () {
+    if (idleAnimator == null) {
+      idleAnimator = com.fahadali.xgram.appearance.XgramAppMotion.listAnimator();
+    }
+    return idleAnimator;
   }
 
   // Slide in once the first page is there (like chats do), unless the forum is already cached.

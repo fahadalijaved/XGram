@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: system AlertDialog window motion with Expressive design (XgramAppMotion.dialogWindow). -->
+  <style name="XgramDialogAnim">
+    <item name="android:windowEnterAnimation">@anim/xgram_dialog_in</item>
+    <item name="android:windowExitAnimation">@anim/xgram_dialog_out</item>
+  </style>
+
+  <!-- With Reduce motion: fades only. -->
+  <style name="XgramDialogFade">
+    <item name="android:windowEnterAnimation">@anim/xgram_dialog_fade_in</item>
+    <item name="android:windowExitAnimation">@anim/xgram_dialog_fade_out</item>
+  </style>
+</resources>

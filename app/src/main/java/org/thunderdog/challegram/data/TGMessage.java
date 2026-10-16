@@ -7169,6 +7169,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
           quickRightReadyAnimator = readyAnimator;
         }
       }
+      // XGram: the reply / share icon pops on SPATIAL_FAST and fades back on EFFECTS_FAST with Expressive design
+      com.fahadali.xgram.appearance.XgramAppMotion.use(readyAnimator, factor > readyFactor ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, factor <= readyFactor);
       readyAnimator.animateTo(factor);
     } else {
       if (readyAnimator != null) {
@@ -7440,6 +7442,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     } else if (!dismissAnimator.isAnimating() && dismissFactor == toFactor) {
       return;
     }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(dismissAnimator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, true); // XGram: no overshoot when a swipe settles
     dismissAnimator.animateTo(toFactor);
   }
 

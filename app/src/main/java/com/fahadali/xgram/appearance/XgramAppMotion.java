@@ -160,6 +160,62 @@ public final class XgramAppMotion {
     return animator;
   }
 
+  // Icon buttons
+
+  /**
+   * The M3 standard icon button press morph (a 40dp state layer whose full corners spring to 8dp on press) as the
+   * background of {@code v}, in onSurfaceVariant. The color is checked on every press, so theme switches need no
+   * listener. Nothing with Expressive design off.
+   */
+  public static void iconButton (@Nullable View v) {
+    if (v == null || !XgramExpressive.isEnabled()) {
+      return;
+    }
+    v.setBackground(new ThemedIconRipple(XgramExpressive.ON_SURFACE_VARIANT));
+  }
+
+  private static final class ThemedIconRipple extends android.graphics.drawable.RippleDrawable {
+    private final int role;
+    private int color;
+
+    ThemedIconRipple (int role) {
+      this(role, XgramExpressive.color(role));
+    }
+
+    private ThemedIconRipple (int role, int color) {
+      super(android.content.res.ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(color)), null,
+        new XgramExpressiveC.PressMorphMask(XgramExpressiveC.ICON_BUTTON_BOX, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S));
+      this.role = role;
+      this.color = color;
+    }
+
+    @Override
+    protected boolean onStateChange (int[] stateSet) {
+      int now = XgramExpressive.color(role);
+      if (now != color) {
+        color = now;
+        setColor(android.content.res.ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(now)));
+      }
+      return super.onStateChange(stateSet);
+    }
+  }
+
+  // Dialogs
+
+  /**
+   * M3 dialog window motion: scale .85 to 1 with a quick fade on emphasized decelerate (350 ms) in, fade and scale
+   * to .95 on emphasized accelerate (150 ms) out. Window animations cannot use springs. Reduce motion: fades only.
+   */
+  public static void dialogWindow (@Nullable android.app.Dialog dialog) {
+    if (dialog == null || !XgramExpressive.isEnabled()) {
+      return;
+    }
+    android.view.Window window = dialog.getWindow();
+    if (window != null) {
+      window.setWindowAnimations(XgramMotion.reduce() ? org.thunderdog.challegram.R.style.XgramDialogFade : org.thunderdog.challegram.R.style.XgramDialogAnim);
+    }
+  }
+
   // Entrances
 
   /**
