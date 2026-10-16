@@ -253,8 +253,132 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
 
   }
 
+  // XGram: Material 3 Expressive list item (shared Docs / Music / Voice tabs, inline bot results, file pickers): 16dp
+  // padding, a 40dp leading element (a 12dp-corner thumbnail or cover, a tonal tile or circle, the file's download
+  // state), titleMedium headline in onSurface, bodyMedium supporting text in onSurfaceVariant. Queued tracks (the
+  // player's playlist) keep their own layout.
+
+  private int xgramListInset;
+  private @Nullable RectF xgramRect;
+  private float xgramLettersWidth = -1f;
+
+  /** The horizontal inset of the segmented list this row is a tile of (the row is measured at the list's width). */
+  public void setXgramListInset (int insetPx) {
+    this.xgramListInset = insetPx;
+  }
+
+  private boolean xgramM3 () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !trackIsQueued;
+  }
+
+  private int xgramLeadingTop () {
+    return getStartY() + (getContentHeight() - Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.LEADING_SIZE)) / 2;
+  }
+
+  /** Thumbnails and covers: 12dp corners; contacts: a circle. */
+  private int xgramLeadingCorner () {
+    final int size = Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.LEADING_SIZE);
+    return getType() == TYPE_CONTACT ? size / 2 : Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.LEADING_CORNER);
+  }
+
+  private void xgramLayout (int contentWidth) {
+    int availWidth = contentWidth - xgramListInset * 2 - Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.TEXT_START) - Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.ROW_PADDING);
+    if (isTrack()) {
+      availWidth -= Screen.dp(23f) + Screen.dp(9f) + Screen.dp(8f); // the duration and the download state at the end
+    }
+    if (needCloseButton) {
+      availWidth -= Screen.dp(28f);
+    }
+    lastAvailWidth = Math.max(Screen.dp(24f), availWidth);
+    trimmedTitle = !StringUtils.isEmpty(title) ? new Text.Builder(title, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3SharedMedia.titleProvider(), TextColorSets.Regular.NORMAL).singleLine().allBold().build() : null;
+    trimmedDesc = !StringUtils.isEmpty(description) ? new Text.Builder(description, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3SharedMedia.bodyProvider(), TextColorSets.Regular.LIGHT).singleLine().build() : null;
+  }
+
+  private void xgramDraw (CustomResultView view, Canvas c, ComplexReceiver receiver, int viewWidth, int startY) {
+    final int size = Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.LEADING_SIZE);
+    final int left = Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.ROW_PADDING);
+    final int top = xgramLeadingTop();
+    final int corner = xgramLeadingCorner();
+    final int cx = left + size / 2, cy = top + size / 2;
+    if (xgramRect == null) {
+      xgramRect = new RectF();
+    }
+    final RectF rect = xgramRect;
+    rect.set(left, top, left + size, top + size);
+    final MediaPreview preview = getMediaPreview();
+    final boolean track = fileProgress != null && fileProgress.isTrack();
+
+    if (fileProgress != null) {
+      if (track) {
+        fileProgress.setBounds(viewWidth - Screen.dp(16f) * 2 - Screen.dp(18f), startY, viewWidth + Screen.dp(4f), startY + getContentHeight() + Screen.dp(20f));
+      } else {
+        fileProgress.setBounds(left, top, left + size, top + size);
+      }
+    }
+
+    if (isCustom) {
+      com.fahadali.xgram.appearance.XgramM3SharedMedia.drawIconTile(c, rect, size / 2f, com.fahadali.xgram.appearance.XgramM3SharedMedia.tonalIndex(customColorId), customIcon);
+    } else if (track) {
+      if (preview == null) {
+        c.drawCircle(cx, cy, size / 2f, Paints.fillingPaint(Theme.getColor(ColorId.file)));
+      } else {
+        if (preview.needPlaceholder(receiver)) {
+          c.drawRoundRect(rect, corner, corner, Paints.fillingPaint(Theme.getColor(ColorId.playerCoverPlaceholder)));
+          Drawable drawable = view.getSparseDrawable(R.drawable.baseline_music_note_24, ColorId.NONE);
+          Drawables.draw(c, drawable, cx - drawable.getMinimumWidth() / 2f, cy - drawable.getMinimumHeight() / 2f, Paints.getNotePorterDuffPaint());
+        }
+        preview.draw(view, c, receiver, left, top, size, size, corner, 1f);
+        c.drawRoundRect(rect, corner, corner, Paints.fillingPaint(Config.COVER_OVERLAY));
+      }
+      fileProgress.drawPlayPause(c, cx, cy, 1f, true);
+    } else if (fileProgress == null || preview != null) {
+      if (preview != null) {
+        preview.draw(view, c, receiver, left, top, size, size, corner, 1f);
+      } else if (avatarPlaceholder != null) {
+        AvatarPlaceholder.Metadata metadata = avatarPlaceholder.metadata;
+        xgramLettersWidth = com.fahadali.xgram.appearance.XgramM3SharedMedia.drawLetterTile(c, rect, corner,
+          com.fahadali.xgram.appearance.XgramM3SharedMedia.tonalIndex(metadata != null ? metadata.accentColor.getId() : 0),
+          metadata != null && metadata.letters != null ? metadata.letters.text : null, xgramLettersWidth);
+      }
+    }
+
+    if (fileProgress != null) {
+      fileProgress.draw(view, c);
+    }
+
+    if (needCloseButton) {
+      Drawable drawable = view.getSparseDrawable(R.drawable.baseline_close_20, ColorId.NONE);
+      Drawables.draw(c, drawable, viewWidth - Screen.dp(16f) - drawable.getMinimumWidth(), cy - drawable.getMinimumHeight() / 2f, Paints.getIconGrayPorterDuffPaint());
+    }
+
+    final int titleHeight = trimmedTitle != null ? trimmedTitle.getHeight() : 0;
+    final int descHeight = trimmedDesc != null ? trimmedDesc.getHeight() : 0;
+    final int gap = titleHeight > 0 && descHeight > 0 ? Screen.dp(2f) : 0;
+    final int textLeft = Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.TEXT_START);
+    final int textTop = startY + Math.max(0, (getContentHeight() - titleHeight - gap - descHeight) / 2);
+    if (trimmedTitle != null) {
+      trimmedTitle.draw(c, textLeft, textTop);
+    }
+    if (trackDuration != null) {
+      c.drawText(trackDuration, viewWidth - Screen.dp(16f) - trackDurationWidth, textTop + Screen.dp(16f), Paints.getRegularTextPaint(11f, Theme.textDecentColor()));
+    }
+    if (trimmedDesc != null) {
+      trimmedDesc.draw(c, textLeft, textTop + titleHeight + gap);
+    }
+  }
+
   @Override
   public boolean setThumbLocation (MediaViewThumbLocation location, View view, int index, MediaItem mediaItem) {
+    if (xgramM3()) {
+      final int size = Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.LEADING_SIZE);
+      location.left += Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.ROW_PADDING);
+      location.top += xgramLeadingTop();
+      location.right = location.left + size;
+      location.bottom = location.top + size;
+      location.setClip(0, 0, 0, 0);
+      location.setRoundings(xgramLeadingCorner());
+      return getMediaPreview() != null;
+    }
     RectF rectF = Paints.getRectF();
     rectF.set(Screen.dp(11f), getPaddingVertical(), Screen.dp(11f) + Screen.dp(50f), view.getMeasuredHeight() - getPaddingVertical());
 
@@ -537,6 +661,10 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
 
   @Override
   protected void layoutInternal (int contentWidth) {
+    if (xgramM3()) {
+      xgramLayout(contentWidth); // XGram
+      return;
+    }
     lastAvailWidth = contentWidth - Screen.dp(11f) * 2 - Screen.dp(50f) - Screen.dp(15f);
     if (isTrack()) {
       lastAvailWidth -= Screen.dp(16f) + Screen.dp(23f) + Screen.dp(9f);
@@ -573,6 +701,10 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
 
   @Override
   protected void drawInternal (CustomResultView view, Canvas c, ComplexReceiver receiver, int viewWidth, int viewHeight, int startY) {
+    if (xgramM3()) {
+      xgramDraw(view, c, receiver, viewWidth, startY); // XGram
+      return;
+    }
     int radius = trackIsQueued ? Screen.dp(3f) : Screen.dp(50f) / 2;
 
     RectF rectF = Paints.getRectF();
@@ -658,8 +790,16 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
   public void onDrawSelectionOver (Canvas c, ComplexReceiver receiver, int viewWidth, int viewHeight, float anchorTouchX, float anchorTouchY, float selectFactor, String counter, @Nullable SimplestCheckBox checkBox) {
     final double radians = Math.toRadians(45f);
 
-    final int x = Screen.dp(11f) + Screen.dp(50f) / 2 + (int) ((float) Screen.dp(50f) / 2f * Math.sin(radians));
-    final int y = getPaddingVertical() + Screen.dp(50f) / 2 + (int) ((float) Screen.dp(50f) / 2f * Math.cos(radians));
+    final int x, y;
+    if (xgramM3()) {
+      // XGram: on the 40dp leading element's edge
+      final int half = Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.LEADING_SIZE) / 2;
+      x = Screen.dp(com.fahadali.xgram.appearance.XgramM3SharedMedia.ROW_PADDING) + half + (int) ((float) half * Math.sin(radians));
+      y = xgramLeadingTop() + half + (int) ((float) half * Math.cos(radians));
+    } else {
+      x = Screen.dp(11f) + Screen.dp(50f) / 2 + (int) ((float) Screen.dp(50f) / 2f * Math.sin(radians));
+      y = getPaddingVertical() + Screen.dp(50f) / 2 + (int) ((float) Screen.dp(50f) / 2f * Math.cos(radians));
+    }
 
     SimplestCheckBox.draw(c, x, y, selectFactor, counter, checkBox);
 
@@ -676,7 +816,11 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
     if (!ignoreDescriptionUpdates && (this.description == null || !this.description.equals(description))) {
       this.description = description;
       if (lastAvailWidth > 0) {
-        trimmedDesc = new Text.Builder(description, lastAvailWidth, Paints.getSubtitleStyleProvider(), TextColorSets.Regular.LIGHT).singleLine().build();
+        if (xgramM3()) {
+          trimmedDesc = new Text.Builder(description, lastAvailWidth, com.fahadali.xgram.appearance.XgramM3SharedMedia.bodyProvider(), TextColorSets.Regular.LIGHT).singleLine().build(); // XGram: bodyMedium
+        } else {
+          trimmedDesc = new Text.Builder(description, lastAvailWidth, Paints.getSubtitleStyleProvider(), TextColorSets.Regular.LIGHT).singleLine().build();
+        }
         invalidate();
       }
     }

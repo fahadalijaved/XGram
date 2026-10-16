@@ -199,6 +199,9 @@ public class ViewPagerHeaderViewCompact extends FrameLayoutFix implements PagerH
       @Override
       public void onScrollStateChanged (@NonNull RecyclerView recyclerView, int newState) {
         dragging = newState == RecyclerView.SCROLL_STATE_DRAGGING;
+        if (dragging && xgramScrollSpring != null) {
+          xgramScrollSpring.cancel(); // XGram: the finger wins over the tab spring
+        }
         if (newState == RecyclerView.SCROLL_STATE_IDLE) {
           if (resetUserInteraction) {
             resetUserInteraction();
@@ -228,6 +231,51 @@ public class ViewPagerHeaderViewCompact extends FrameLayoutFix implements PagerH
     if (fadingEdgeLength != length) {
       fadingEdgeLength = length;
       recyclerView.invalidate();
+    }
+  }
+
+  // XGram: Material 3 Expressive scrollable tabs (the profile's media tabs)
+
+  private boolean xgramCenterSelected;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramScrollSpring;
+
+  /** Keeps the selected tab centred while the strip can scroll and springs it there on a tap. Expressive design only. */
+  public void setXgramCenterSelected (boolean centerSelected) {
+    this.xgramCenterSelected = centerSelected && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  private void xgramScrollTo (int targetLeft, int currentLeft, boolean animated) {
+    cancelSmoothScroll();
+    if (animated) {
+      recyclerView.stopScroll();
+      if (xgramScrollSpring == null) {
+        xgramScrollSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, currentLeft, (s, value) -> xgramApplyScroll(value));
+        xgramScrollSpring.setThreshold(.5f);
+        xgramScrollSpring.setEndListener(this::resetUserInteraction);
+      } else if (!xgramScrollSpring.isRunning()) {
+        xgramScrollSpring.setValue(currentLeft);
+      }
+      xgramScrollSpring.animateTo(targetLeft);
+      return;
+    }
+    if (xgramScrollSpring != null && xgramScrollSpring.isRunning()) {
+      xgramScrollSpring.animateTo(targetLeft);
+      return;
+    }
+    if (targetLeft != currentLeft) {
+      recyclerView.scrollBy(currentLeft - targetLeft, 0);
+    }
+    resetUserInteraction();
+  }
+
+  private void xgramApplyScroll (float left) {
+    View view = recyclerView.getLayoutManager() != null ? recyclerView.getLayoutManager().findViewByPosition(0) : null;
+    if (view == null) {
+      return;
+    }
+    int dx = view.getLeft() - Math.round(left);
+    if (dx != 0) {
+      recyclerView.scrollBy(dx, 0);
     }
   }
 
@@ -306,6 +354,19 @@ public class ViewPagerHeaderViewCompact extends FrameLayoutFix implements PagerH
       return;
     }
     if (recyclerView.isComputingLayout()) {
+      return;
+    }
+
+    if (xgramCenterSelected) {
+      // XGram: Material 3 scrollable tabs keep the selected tab centred, clamped to the strip's ends (so the first tab
+      // rests at the start, the last one is fully reachable); a tap springs the strip there
+      final float selectionCenter = Lang.rtl() ? viewWidth - (selectionLeft + selectionWidth / 2f) : selectionLeft + selectionWidth / 2f;
+      final int desiredViewLeft = MathUtils.clamp(Math.round(parentWidthAfterLayout / 2f - selectionCenter), minViewLeft, maxViewLeft);
+      final int currentViewLeft = view.getLeft();
+      xgramScrollTo(desiredViewLeft, currentViewLeft, animated || (hasUserInteraction && Math.abs(desiredViewLeft - currentViewLeft) >= Screen.dp(2f)));
+      if (animated && topViewTranslationX != 0f) {
+        animateTopViewTranslationX(topViewTranslationX, interpolator, computeScrollDuration(topViewTranslationX, parentWidthAfterLayout));
+      }
       return;
     }
 

@@ -195,6 +195,11 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
       protected void setInfo (ListItem item, int position, ListInfoView infoView) {
         if (isLoading || canLoadMore()) {
           infoView.showProgress();
+        } else if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: the counter footer in bodySmall, onSurfaceVariant (no bold count)
+          CharSequence totalCount = buildTotalCount(isSearching() ? searchData : data);
+          infoView.showInfo(totalCount != null ? totalCount.toString() : null);
+          com.fahadali.xgram.appearance.XgramM3SharedMedia.styleFooter(infoView);
         } else {
           infoView.showInfo(buildTotalCount(isSearching() ? searchData : data));
         }
@@ -445,7 +450,11 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
           forceSeparator = false;
         }
         if (inlineResults) {
-          ((InlineResult<?>) item).setForceSeparator(forceSeparator);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            ((InlineResult<?>) item).setForceSeparator(false); // XGram: segmented tiles with gaps, no divider lines
+          } else {
+            ((InlineResult<?>) item).setForceSeparator(forceSeparator);
+          }
         }
       } else {
         if (offset == 0 && i == 0) {

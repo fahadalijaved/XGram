@@ -1202,6 +1202,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (expandAnimator == null) {
       expandAnimator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 218l, expandFactor);
     }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(expandAnimator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, true); // XGram: the tabs dock on a spring (nothing with Expressive design off)
     expandAnimator.animateTo(factor);
   }
 
@@ -1443,6 +1444,35 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         editText.setTranslationY(Math.max(0f, lickShadow.getTranslationY() - HeaderView.getSize(false)));
       }
     }
+    xgramUpdateSheet(); // XGram: nothing with Expressive design off
+  }
+
+  // XGram: Material 3 Expressive docked media sheet. topWrap draws its top (the tab strip sits on it, its 28dp corners
+  // flatten as the tabs dock under the app bar), the pager's backdrop the rest, so the pages need no fill of their own.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramM3SharedMedia.DockedSheetDrawable xgramSheet;
+  private @Nullable com.fahadali.xgram.appearance.XgramM3SharedMedia.BackdropDrawable xgramSheetBackdrop;
+  private @Nullable com.fahadali.xgram.appearance.XgramM3SharedMedia.SharedAxisTransformer xgramAxis;
+
+  /** The sheet starts 16dp after the last info card (the list's group gap); its bottom clears the first row's top. */
+  private static int xgramSheetTopInset () {
+    return getTopViewTopPadding() - Screen.dp(2f);
+  }
+
+  private static int xgramSheetBottomInset () {
+    return Screen.dp(3f);
+  }
+
+  private void xgramUpdateSheet () {
+    if (xgramSheet == null || topWrap == null) {
+      return;
+    }
+    final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL) * (1f - me.vkryl.core.MathUtils.clamp(expandFactor));
+    xgramSheet.setRadius(radius);
+    if (xgramSheetBackdrop != null) {
+      // below the corners: the rounded top is topWrap's, and nothing square may show past it
+      xgramSheetBackdrop.setTop(topWrap.getTranslationY() + xgramSheet.getTopInset() + radius);
+    }
   }
 
   @Override
@@ -1648,6 +1678,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     pager.addOnPageChangeListener(this);
     pager.setAdapter(pagerAdapter = new ViewControllerPagerAdapter(this));
     pager.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && needTabs()) {
+      // XGram: the docked sheet behind the pages, and the M3 shared axis on a tab tap
+      xgramSheetBackdrop = new com.fahadali.xgram.appearance.XgramM3SharedMedia.BackdropDrawable();
+      pager.setBackground(xgramSheetBackdrop);
+      xgramAxis = new com.fahadali.xgram.appearance.XgramM3SharedMedia.SharedAxisTransformer();
+      pager.setPageTransformer(false, xgramAxis, View.LAYER_TYPE_NONE);
+    }
     contentView.addView(pager);
 
     // Base recycler that's on top and not related to shared media
@@ -1738,13 +1775,23 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
     topWrap = new FrameLayoutFix(context);
     topWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, getPagerTopViewHeight() + getTopViewTopPadding() + Screen.dp(6f)));
+    if (xgramSheetBackdrop != null) {
+      // XGram: the sheet's rounded top under the tab strip
+      xgramSheet = new com.fahadali.xgram.appearance.XgramM3SharedMedia.DockedSheetDrawable(xgramSheetTopInset(), xgramSheetBottomInset());
+      xgramSheet.setRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL));
+      topWrap.setBackground(xgramSheet);
+      addThemeInvalidateListener(topWrap);
+      addThemeInvalidateListener(pager);
+    }
 
     FrameLayoutFix.LayoutParams params;
     params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, getPagerTopViewHeight());
     params.topMargin = getTopViewTopPadding();
 
     topCellView = new ViewPagerHeaderViewCompact(context);
-    ViewSupport.setThemedBackground(topCellView, ColorId.filling, this);
+    if (xgramSheet == null) {
+      ViewSupport.setThemedBackground(topCellView, ColorId.filling, this);
+    } // XGram: else the strip has no background of its own, it sits on the docked sheet
     ViewPagerTopView topView = topCellView.getTopView();
     topView.setUseDarkBackground();
     /*if (!UI.isTablet) {
@@ -1756,12 +1803,16 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     addThemeInvalidateListener(topView);
     topView.setShowLabelOnActiveOnly(!isEditing() && !Settings.instance().needReduceMotion() && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      com.fahadali.xgram.appearance.XgramM3Profile.roundTopCorners(topCellView, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL); // XGram: tabs and media read as one container
-      // XGram: the tab strip is inset so the pills line up with the 16dp-inset cards above and clear the 28dp corner
-      // (a pill starts 3dp inside its tab); scrolled tabs still run to the container edge, the media stays full width
+      if (xgramSheet == null) {
+        com.fahadali.xgram.appearance.XgramM3Profile.roundTopCorners(topCellView, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL); // XGram: tabs and media read as one container
+      }
+      // XGram: the tab strip is inset so the first and last pills sit 16dp from the sheet's edges, in line with the
+      // 16dp-inset cards above, clear of the 28dp corner (a pill starts 3dp inside its tab); scrolled tabs still run to
+      // the sheet's edge (no fading edge), the media stays full width
       int tabsInset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET) - (Screen.dp(ViewPagerTopView.DEFAULT_ITEM_PADDING) - Screen.dp(16f));
       topCellView.getRecyclerView().setPadding(tabsInset, 0, tabsInset, 0);
       topCellView.getRecyclerView().setClipToPadding(false);
+      topCellView.setXgramCenterSelected(true); // XGram: the selected tab is scrolled into view on a spring
     }
     topView.setItems(getPagerTitles());
     topCellView.getRecyclerView().setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -3598,7 +3649,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   private void addMediaItems (ArrayList<ListItem> items) {
     if (needTabs()) {
-      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP, R.id.shadowTop));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: the same 8dp, but not a group opener, so the segmented list draws no card under the docked tabs
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM, R.id.shadowTop));
+      } else {
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP, R.id.shadowTop));
+      }
       items.add(new ListItem(ListItem.TYPE_FAKE_PAGER_TOPVIEW));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM, R.id.shadowBottom));
     } else {
@@ -5830,6 +5886,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (topCellView != null && state != ViewPager.SCROLL_STATE_SETTLING) {
       topCellView.getTopView().resetFromTo();
     }
+    if (xgramAxis != null && state != ViewPager.SCROLL_STATE_SETTLING) {
+      xgramAxis.setActive(false); // XGram: a finger swipe keeps the plain slide
+    }
   }
 
   @Override
@@ -5838,6 +5897,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (pager.getCurrentItem() != index) {
       topCellView.getTopView().setFromTo(pager.getCurrentItem(), index);
       checkContentScrollY(checkedBasePosition = index);
+      if (xgramAxis != null) {
+        xgramAxis.setActive(!com.fahadali.xgram.appearance.XgramMotion.reduce()); // XGram: M3 shared axis X for a tab tap
+      }
       pager.setCurrentItem(index, true);
     }
   }
