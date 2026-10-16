@@ -82,17 +82,35 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
   private @Nullable CustomItemAnimator xgramArmed;
   private boolean xgramArmWaiting;
   private final android.view.ViewTreeObserver.OnPreDrawListener xgramArmCheck = this::xgramCheckArmed;
+  private final Runnable xgramDisarmNow = this::xgramDisarmIfIdle;
+  // Never swapped from inside the animator's own callback: that can come from ItemAnimator.endAnimation in the middle
+  // of a layout pass, where RecyclerView keeps using the animator (NPE) and moves recorded on it would never run.
   private final ItemAnimator.ItemAnimatorFinishedListener xgramDisarm = () -> {
-    if (!xgramArmWaiting && xgramArmed != null && getItemAnimator() == xgramArmed) {
+    removeCallbacks(xgramDisarmNow);
+    post(xgramDisarmNow);
+  };
+
+  private void xgramDisarmIfIdle () {
+    if (xgramArmWaiting || xgramArmed == null || getItemAnimator() != xgramArmed) {
+      return;
+    }
+    if (xgramArmed.isRunning()) {
+      xgramArmed.isRunning(xgramDisarm); // something new started in between: wait for it too
+    } else {
       setItemAnimator(null);
     }
-  };
+  }
 
   /** Call right before the adapter inserts or removes one live message. */
   public void xgramArmOnce () {
-    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || getWindowToken() == null || getWidth() == 0) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !UI.inUiThread() || getWindowToken() == null || getWidth() == 0) {
       return;
     }
+    ItemAnimator current = getItemAnimator();
+    if (current != null && current != xgramArmed) {
+      return; // the list already has an animator of its own (event log)
+    }
+    removeCallbacks(xgramDisarmNow);
     if (xgramArmed == null) {
       xgramArmed = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, ITEM_ANIMATOR_DURATION) {
         @Override
@@ -294,6 +312,26 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
       }
     } else {
       postDelayed(xgramDateHide, 1500);
+    }
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow(); // ends running item animations and stops the scroll first
+    // XGram: nothing armed, pending or springing outlives the window (callbacks and the pre-draw listener hold the list)
+    if (xgramArmWaiting) {
+      xgramArmWaiting = false;
+      getViewTreeObserver().removeOnPreDrawListener(xgramArmCheck);
+    }
+    removeCallbacks(xgramDisarmNow);
+    if (xgramArmed != null && getItemAnimator() == xgramArmed) {
+      setItemAnimator(null);
+    }
+    if (xgramDateSpring != null) {
+      removeCallbacks(xgramDateHide);
+      float factor = isScrolling ? 1f : 0f;
+      xgramDateSpring.setValue(factor);
+      scrollFactor = factor;
     }
   }
 
