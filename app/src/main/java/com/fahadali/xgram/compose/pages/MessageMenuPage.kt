@@ -14,7 +14,9 @@ package com.fahadali.xgram.compose.pages
 import androidx.compose.runtime.Composable
 import com.fahadali.xgram.XgramReorder
 import com.fahadali.xgram.XgramSettingDeps
+import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.chats.XgramMessageMenu
+import com.fahadali.xgram.chats.XgramReactionBar
 import com.fahadali.xgram.compose.ui.ReorderRow
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.reorderGroup
@@ -26,8 +28,25 @@ import org.thunderdog.challegram.R
 @Composable
 fun MessageMenuPage() {
   SettingsPage(title = str(R.string.XgramMessageMenu)) {
+    val settings = XgramSettings.instance()
     val options = XgramMessageMenu.OPTIONS.associateBy { it.key }
     val keys = XgramMessageMenu.OPTIONS.map { it.key }.toTypedArray()
+
+    // Where the quick reactions go: above the list of options, which can be long.
+    group {
+      buttons(
+        R.id.btn_xgramReactionBar, s(R.string.XgramReactionBar),
+        listOf(
+          XgramSettings.REACTION_BAR_TOP,
+          XgramSettings.REACTION_BAR_BOTTOM,
+          XgramSettings.REACTION_BAR_OFF
+        ).map { XgramReactionBar.modeName(it) to it },
+        selected = settings.reactionBar()
+      ) {
+        settings.setReactionBar(it)
+      }
+    }
+    description(R.string.XgramReactionBarInfo)
 
     description(R.string.XgramMessageMenuInfo)
     reorderGroup(

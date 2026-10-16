@@ -55,6 +55,10 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
         if (reorder != null) {
           reorder.bind(item, view);
         }
+        if (item.getId() == R.id.btn_xgramReactionBar) {
+          view.setData(XgramReactionBar.modeName(com.fahadali.xgram.XgramSettings.instance().reactionBar()));
+          return;
+        }
         Object data = item.getData();
         if (data instanceof XgramMessageMenu.Option) {
           String key = ((XgramMessageMenu.Option) data).key;
@@ -76,6 +80,12 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
   /** Rows of this page. The settings search indexes these too. */
   public static List<ListItem> buildItems () {
     List<ListItem> items = new ArrayList<>();
+    // Where the quick reactions go (top, under the options, or off): above the list, which can be long.
+    items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramReactionBar, R.drawable.baseline_emoticon_outline_24, R.string.XgramReactionBar));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramReactionBarInfo));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramMessageMenuInfo));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     // One list (Telegram X's options and XGram's mixed, as in the menu); no separator rows, they would be dragged along.
@@ -101,7 +111,18 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
   @Override
   public void onClick (View v) {
     Object tag = v.getTag();
-    if (v.getId() == R.id.btn_xgramResetOrder) {
+    if (v.getId() == R.id.btn_xgramReactionBar) {
+      int[] modes = {com.fahadali.xgram.XgramSettings.REACTION_BAR_TOP, com.fahadali.xgram.XgramSettings.REACTION_BAR_BOTTOM, com.fahadali.xgram.XgramSettings.REACTION_BAR_OFF};
+      String[] titles = new String[modes.length];
+      for (int i = 0; i < modes.length; i++) {
+        titles[i] = XgramReactionBar.modeName(modes[i]);
+      }
+      showOptions(null, new int[] {1, 2, 3}, titles, null, null, (itemView, optionId) -> {
+        com.fahadali.xgram.XgramSettings.instance().setReactionBar(modes[optionId - 1]);
+        adapter.updateValuedSettingById(R.id.btn_xgramReactionBar);
+        return true;
+      });
+    } else if (v.getId() == R.id.btn_xgramResetOrder) {
       XgramReorder.reset(XgramReorder.MESSAGE_MENU);
       adapter.setItems(buildItems(), false);
     } else if (v.getId() == R.id.btn_xgramMenuItem && tag instanceof ListItem && ((ListItem) tag).getData() instanceof XgramMessageMenu.Option) {

@@ -242,7 +242,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     HeaderView headerView = new HeaderView(context) {
       @Override
       protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(Screen.dp(54f), MeasureSpec.EXACTLY));
+        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(MessageOptionsPagerController.this.getHeaderHeight(), MeasureSpec.EXACTLY)); // XGram: 54dp, or none (see getHeaderHeight)
       }
 
       @Override
@@ -269,10 +269,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     headerView.initWithSingleController(this, false);
     headerView.getFilling().setShadowAlpha(0f);
     headerView.getBackButton().setIsReverse(true);
-    if (state.needShowReactionsPopupPicker || com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+    if (state.xgramPickerInHeader || com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: in Material 3 Expressive the header stays transparent: the content view draws the whole sheet under it
       // as one shape (BottomSheetViewController.xgramDrawSheet), a 54dp header band of its own left the content view's
-      // square body under its rounded corners
+      // square body under its rounded corners. Telegram X: the popup picker's collapsed row draws the header's color;
+      // with the reaction bar at the bottom it draws nothing while collapsed, so the header keeps its own (else branch).
       headerView.setBackground(null);
     } else {
       ViewSupport.setThemedBackground(headerView, ColorId.background, this);
@@ -338,8 +339,10 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
         }
 
         private boolean needIgnoreTouchEvent (MotionEvent ev) {
-          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !reactionsPickerVisibility.getValue()) {
-            return true; // XGram: the collapsed grid is hidden: the header's reaction strip takes the touches
+          if ((com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !state.xgramPickerInHeader) && !reactionsPickerVisibility.getValue()) {
+            // XGram: the collapsed grid is hidden: the header's reaction strip (or, with the reaction bar at the bottom,
+            // the options list's bar row) takes the touches
+            return true;
           }
           return (ev.getAction() == MotionEvent.ACTION_DOWN && !between(ev.getY(), getPickerTop()
             - HeaderView.getSize(true) * reactionsPickerController.getTopHeaderVisibility() * reactionsPickerVisibility.getFloatValue(),
@@ -352,6 +355,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
         @Override
         protected void dispatchDraw (Canvas canvas) {
+          if (!state.xgramPickerInHeader && reactionsPickerVisibility.getFloatValue() == 0f) {
+            // XGram: reaction bar at the bottom: the collapsed picker has no row in the header (the sheet under it draws
+            // the header row, its handle band included), it shows only while it opens from the bar's expand button
+            return;
+          }
           float top = getPickerTop();
           float bottom = getPickerBottom();
           if (bottom <= top) return;
@@ -369,7 +377,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
             // the band holds the drag handle (8dp from the top, about 8dp above the reaction row's pill). The sheet top
             // spans the picker's whole height, so its 28dp curve is never cut short; the content view's sheet under it
             // starts at the reaction row and stays inside this curve.
-            float band = Screen.dp(XGRAM_HANDLE_BAND) * corner;
+            float band = xgramHandleBand() * corner;
             if (xgramPickerSheetTop == null) {
               xgramPickerSheetTop = new com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable();
             }
@@ -406,20 +414,31 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   @Override
   protected float xgramSheetHandleAlpha () {
-    // XGram: with the popup picker its sheet top (above the reaction row) has the handle, the content view's sheet
-    // under it only continues the shape. Without it the handle fades out with its band (as the picker's does).
-    return state.needShowReactionsPopupPicker ? 0f : xgramSheetCorners();
+    // XGram: with the popup picker in the header row its sheet top (above the reaction row) has the handle, the content
+    // view's sheet under it only continues the shape. Without it (or with the reaction bar at the bottom, where the
+    // collapsed picker draws nothing) the handle fades out with its band (as the picker's does).
+    return state.xgramPickerInHeader ? 0f : xgramSheetCorners();
   }
 
   @Override
   protected float xgramSheetBand () {
-    // XGram: without the popup picker the content view's sheet has the handle band above the 54dp header row (its
-    // reaction pill and tabs fill the row), as the picker's sheet top has
-    return state.needShowReactionsPopupPicker ? 0f : Screen.dp(XGRAM_HANDLE_BAND) * xgramSheetCorners();
+    // XGram: without the popup picker in the header row the content view's sheet has the handle band above the 54dp
+    // header row (its reaction pill and tabs fill the row), as the picker's sheet top has; or above the options list
+    // when the sheet has no header row
+    return state.xgramPickerInHeader ? 0f : xgramHandleBand() * xgramSheetCorners();
   }
 
   /** XGram: the band above the header row that holds the drag handle: 8dp, the 4dp handle, 4dp to the row. */
   private static final float XGRAM_HANDLE_BAND = 16f;
+  /**
+   * XGram: the band without a header row (reaction bar at the bottom or off, no counters): 8dp, the handle, 8dp to the
+   * list, whose first tile starts 8dp lower, where the 28dp curve ends (the pages are clipped above it).
+   */
+  private static final float XGRAM_HANDLE_BAND_NO_ROW = 20f;
+
+  private float xgramHandleBand () {
+    return Screen.dp(state.xgramNoHeaderRow ? XGRAM_HANDLE_BAND_NO_ROW : XGRAM_HANDLE_BAND);
+  }
 
   private void invalidatePickerWrapper () {
     if (reactionsPickerWrapper != null) {
@@ -469,7 +488,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
           headerCell.getTopView().setItemTranslationX(i, Screen.dp(16f));
         }
       }
-      if (state.needShowReactionsPopupPicker) {
+      if (state.xgramPickerInHeader) {
         headerCell.xgramSetOnExpandRequest(this::showReactionPicker);
       }
     }
@@ -551,7 +570,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       headerBackgroundFactor
     );
     setLickViewColor(headerBackground);
-    if (headerView != null && !state.needShowReactionsPopupPicker) {
+    if (headerView != null && !state.xgramPickerInHeader) { // XGram: the collapsed picker draws it only in the header row
       headerView.setBackgroundColor(headerBackground);
     }
     if (headerCell != null) {
@@ -584,6 +603,14 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   private int getOptionItemsHeight () {
     int optionItemsHeight = state.options.items != null ? Screen.dp(54) * state.options.items.length : 0;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && state.options.items != null && state.options.items.length > 0) {
+      // XGram: the Expressive list is taller than Telegram X's 54dp rows (56dp tiles in groups, see MessageOptionsController):
+      // counted as 54dp rows the sheet opened with its last group (Delete, or the reaction bar above it) below the screen
+      optionItemsHeight = MessageOptionsController.xgramTilesHeight(state.options.items);
+    }
+    if (state.xgramReactionsInList) {
+      optionItemsHeight += com.fahadali.xgram.chats.XgramReactionBar.rowSpace(); // XGram: the reaction bar row (Bottom)
+    }
     int hintHeight;
     if (!StringUtils.isEmpty(state.options.info)) {
       int availWidth = Screen.currentWidth() - Screen.dp(16f) * 2; // FIXME: rely on parent view width
@@ -613,7 +640,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   protected int getContentOffset () {
     if (state.needShowMessageOptions) {
       return (getTargetHeight()
-        - (Screen.dp(54) + HeaderView.getTopOffset())
+        - (getHeaderHeight() + HeaderView.getTopOffset()) // XGram: 54dp, or no header row (see getHeaderHeight)
         - getOptionItemsHeight()
         - Screen.dp(1)
         - (Settings.instance().useEdgeToEdge() ? context().getRootView().getSystemInsetsWithoutIme().bottom : 0)
@@ -644,7 +671,9 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       };
 
       MessageOptionsController c = new MessageOptionsController(context, this.tdlib, getThemeListeners());
-      c.setArguments(new MessageOptionsController.Args(state.options, onClickListener, state.message.getFirstEmojiId(), state.emojiPackIds, () -> hidePopupWindow(true)));
+      c.setArguments(new MessageOptionsController.Args(state.options, onClickListener, state.message.getFirstEmojiId(), state.emojiPackIds, () -> hidePopupWindow(true))
+        // XGram: Reaction bar: Bottom: the reactions as a row of the options, its expand button opens the popup picker
+        .xgramReactionBar(state.xgramReactionsInList ? state : null, state.xgramReactionsInList && state.needShowReactionsPopupPicker ? this::showReactionPicker : null));
       c.getValue();
       setHeaderPosition(getContentOffset() + HeaderView.getTopOffset());
       setDefaultListenersAndDecorators(c);
@@ -706,6 +735,13 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   @Override
   protected int getHeaderHeight () {
+    // XGram: no header row when it would be empty: the reaction bar is at the bottom or off, and there are no counters
+    // (nor pages to switch to). The sheet then starts with the options, under the handle band.
+    return state.xgramNoHeaderRow ? 0 : Screen.dp(54);
+  }
+
+  /** XGram: the popup picker's collapsed row is a 54dp row at the sheet top, also on a sheet without a header row. */
+  private static int xgramPickerRowHeight () {
     return Screen.dp(54);
   }
 
@@ -874,8 +910,10 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
     reactionsPickerRecyclerView = reactionsPickerController.getRecyclerView();
     reactionsPickerRecyclerView.setClipToPadding(false);
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      reactionsPickerRecyclerView.setAlpha(0f); // XGram: hidden until expanded (the header's strip is the collapsed row)
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !state.xgramPickerInHeader) {
+      // XGram: hidden until expanded (the header's strip is the collapsed row, or the options list's bar row when the
+      // reaction bar is at the bottom)
+      reactionsPickerRecyclerView.setAlpha(0f);
     }
 
     reactionPickerTopDecoration = ItemDecorationFirstViewTop.attach(reactionsPickerRecyclerView, this::getReactionPickerOffsetTopReal);
@@ -978,7 +1016,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       ((LinearLayoutManager) reactionsPickerRecyclerView.getLayoutManager()).scrollToPositionWithOffset(0, (int) y);
     }
 
-    reactionsPickerRecyclerView.setTranslationY((headerTranslationY - Math.max(getHeaderHeight(), getContentOffset()) - HeaderView.getTopOffset())
+    reactionsPickerRecyclerView.setTranslationY((headerTranslationY - Math.max(xgramPickerRowHeight(), getContentOffset()) - HeaderView.getTopOffset())
       * (1f - reactionsPickerVisibility.getFloatValue()));
     invalidatePickerWrapper();
     checkReactionPickerHeaderTopVisibility();
@@ -1057,8 +1095,8 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       if (headerView != null) {
         headerView.setAlpha(1f - factor);
       }
-      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-        reactionsPickerRecyclerView.setAlpha(factor); // XGram: the grid fades in as the header's strip fades out
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !state.xgramPickerInHeader) {
+        reactionsPickerRecyclerView.setAlpha(factor); // XGram: the grid fades in as the header's strip fades out (or the options slide away)
       }
       float alpha = factor * (state.isPremium ? 1f: 0f);
       reactionsPickerBottomHeaderView.setAlpha(alpha);
@@ -1108,7 +1146,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       return headerTranslationY + getHeaderHeight();
     }
 
-    return MathUtils.fromTo(headerTranslationY + getHeaderHeight(), reactionsPickerWrapper.getMeasuredHeight(), reactionsPickerVisibility.getFloatValue());
+    return MathUtils.fromTo(headerTranslationY + xgramPickerRowHeight(), reactionsPickerWrapper.getMeasuredHeight(), reactionsPickerVisibility.getFloatValue());
   }
 
   public static float getPickerTopPadding () {
@@ -1121,7 +1159,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   private int lastReactionPickerOffsetReal;
 
   private int getReactionPickerOffsetTopReal () {
-    int offset = Math.max(0, getContentOffset() - HeaderView.getSize(false) - EmojiLayout.getHeaderPadding() + ((getHeaderHeight() - reactionsPickerController.getItemHeight()) / 2));
+    int offset = Math.max(0, getContentOffset() - HeaderView.getSize(false) - EmojiLayout.getHeaderPadding() + ((xgramPickerRowHeight() - reactionsPickerController.getItemHeight()) / 2));
     if (offset != lastReactionPickerOffsetReal) {
       lastReactionPickerOffsetReal = offset;
       if (reactionsPickerRecyclerView != null) {
@@ -1227,6 +1265,19 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     public int xgramChipCount;
     public final int[] xgramChipWidths = new int[2];
 
+    // XGram: Messages > Message menu > Reaction bar (com.fahadali.xgram.chats.XgramReactionBar)
+
+    /** XgramSettings.REACTION_BAR_TOP, _BOTTOM or _OFF; Top on a sheet without the options page. */
+    public final int xgramReactionBar;
+    /** The quick reaction strip sits in the header row on the options page, as in Telegram X (Top). */
+    public final boolean xgramReactionsInHeader;
+    /** The quick reaction strip is a row of the options list, just above Delete (Bottom). */
+    public final boolean xgramReactionsInList;
+    /** The popup picker opens from the header row: its expand button there, its collapsed row is the header's (Top). */
+    public final boolean xgramPickerInHeader;
+    /** The header row would be empty (no reactions, counters or pages in it): the sheet has none (Bottom, Off). */
+    public final boolean xgramNoHeaderRow;
+
     public interface OnReactionClickListener {
       void onReactionClick (View v, TGReaction reaction, boolean isLongClick);
     }
@@ -1244,11 +1295,17 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       this.availableReactions = message.getMessageAvailableReactions();
       this.needShowMessageViews = !(!message.canGetViewers() || message.isUnread() || message.noUnread());
       this.needShowMessageOptions = options != null;
+      // XGram: Reaction bar: the quick reactions at the top (Telegram X), under the options, or off (no popup picker)
+      this.xgramReactionBar = com.fahadali.xgram.chats.XgramReactionBar.mode(needShowMessageOptions);
+      this.xgramReactionsInHeader = xgramReactionBar == com.fahadali.xgram.XgramSettings.REACTION_BAR_TOP;
+      this.xgramReactionsInList = needShowMessageOptions && xgramReactionBar == com.fahadali.xgram.XgramSettings.REACTION_BAR_BOTTOM;
 
-      this.needShowReactionsPopupPicker = needShowMessageOptions && message.needShowReactionPopupPicker();
+      this.needShowReactionsPopupPicker = needShowMessageOptions && xgramReactionBar != com.fahadali.xgram.XgramSettings.REACTION_BAR_OFF && message.needShowReactionPopupPicker();
+      this.xgramPickerInHeader = needShowReactionsPopupPicker && xgramReactionsInHeader;
       this.needShowMessageReactionSenders = !Td.isEmpty(messageReactions) && message.canGetAddedReactions() && message.getMessageReactions().getTotalCount() > 0;
+      this.xgramNoHeaderRow = needShowMessageOptions && !xgramReactionsInHeader && !needShowMessageViews && !needShowMessageReactionSenders;
 
-      this.headerButtonsVisibleWidth = needShowReactionsPopupPicker ? Screen.dp(56): 0;
+      this.headerButtonsVisibleWidth = xgramPickerInHeader ? Screen.dp(56): 0; // XGram: the expand button is in the header row only at the top
       this.needShowCustomEmojiInsidePicker = isPremium && message.isCustomEmojiReactionsAvailable();
 
       boolean hasNonSelectedCustomReactions = false;

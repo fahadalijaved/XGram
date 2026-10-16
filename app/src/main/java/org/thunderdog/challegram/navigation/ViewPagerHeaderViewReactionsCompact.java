@@ -127,7 +127,7 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     this.needShowReactions = state.needShowMessageReactionSenders;
     this.needShowViews = state.needShowMessageViews;
 
-    final boolean needShowMoreButton = state.needShowReactionsPopupPicker;
+    final boolean needShowMoreButton = state.xgramPickerInHeader; // XGram: the reaction bar's expand button is in this row only at the top
     final int rightOffset = state.headerAlwaysVisibleCountersWidth;
 
     ViewPagerTopView topView = new ViewPagerTopView(context);
@@ -168,6 +168,11 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
         if (state.needShowReactionsPopupPicker) {
           reactionsSelectorRecyclerView.setVisibility(GONE);
         }
+      }
+      if (!state.xgramReactionsInHeader) {
+        // XGram: Reaction bar at the bottom (a row of the options list) or off: this row keeps only the counters,
+        // from the 16dp inset (see xgramChipsOrigin and onPageScrolled)
+        reactionsSelectorRecyclerView.setVisibility(GONE);
       }
     } else {
       reactionsSelectorRecyclerView = null;
@@ -271,6 +276,10 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
    * of their items) end at the 16dp inset. The expand button ends here, 8dp before the first chip.
    */
   private int xgramChipsOrigin (int width) {
+    if (!state.xgramReactionsInHeader) {
+      // the reaction bar is at the bottom or off: the counters alone, their first chip at the 16dp inset
+      return Screen.dp(XGRAM_INSET - XgramM3Sheets.CHIP_LEADING_ICON_SPACE);
+    }
     return width - Screen.dp(XGRAM_INSET) - state.headerAlwaysVisibleCountersWidth;
   }
 
@@ -345,7 +354,7 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
   }
 
   private boolean xgramTrackExpand (MotionEvent e) {
-    if (!xgramM3 || xgramExpandRequest == null || !state.needShowReactionsPopupPicker || xgramSelection != 0f || reactionsSelectorRecyclerView == null) {
+    if (!xgramM3 || xgramExpandRequest == null || !state.xgramPickerInHeader || xgramSelection != 0f || reactionsSelectorRecyclerView == null) {
       xgramExpandTracking = false;
       return false;
     }
@@ -384,7 +393,7 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
   protected void dispatchDraw (Canvas c) {
     if (xgramM3) {
       xgramDrawChips(c);
-    } else if (state.needShowReactionsPopupPicker) {
+    } else if (state.xgramPickerInHeader) {
       c.drawRect(getReactionPickerHiddenZoneLeft(), 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.backgroundColor()));
     }
     super.dispatchDraw(c);
@@ -422,7 +431,9 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
       if (xgramM3) {
         xgramLayoutForPage(width, position, positionOffset);
       } else if (position == 0) {
-        float offset = (width - state.headerAlwaysVisibleCountersWidth - Screen.dp(56)) * (1f - positionOffset);
+        // XGram: with the reaction bar at the bottom or off the counters start at the 16dp inset instead of ending at the edge
+        final int countersStart = state.xgramReactionsInHeader ? width - state.headerAlwaysVisibleCountersWidth : Screen.dp(16f);
+        float offset = (countersStart - Screen.dp(56)) * (1f - positionOffset);
         if (needShowReactions && needShowViews) {
           getTopView().setItemTranslationX(1, (int) (Screen.dp(-8) * (1f - positionOffset)));
           getTopView().setItemTranslationX(2, (int) (Screen.dp(-8) * (1f - positionOffset)));
@@ -598,7 +609,7 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
       return !(e.getAction() == MotionEvent.ACTION_DOWN && !canTouchAt(e.getX(), e.getY())) && super.onTouchEvent(e);
     }
     return !(e.getAction() == MotionEvent.ACTION_DOWN && !canTouchAt(e.getX(), e.getY())) && super.onTouchEvent(e)
-      || (state.needShowReactionsPopupPicker && (e.getX() > getReactionPickerHiddenZoneLeft()));
+      || (state.xgramPickerInHeader && (e.getX() > getReactionPickerHiddenZoneLeft()));
   }
 
   private boolean canTouchAt (float x, float y) {
