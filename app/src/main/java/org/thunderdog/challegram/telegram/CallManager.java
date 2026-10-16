@@ -301,7 +301,7 @@ debugCall id:long debug:string = Ok;
       intent.setData(uri);
       context.startActivity(intent);
     });
-    BaseActivity.modifyAlert(context, b.show(), null);
+    com.fahadali.xgram.appearance.XgramR5Calls.showAlert(context, b); // XGram: BaseActivity.showAlert with Expressive design
   }
 
   public void acceptIncomingCall (Tdlib tdlib, int callId) {
@@ -358,7 +358,7 @@ debugCall id:long debug:string = Ok;
         b.setMessage(Lang.getString(R.string.SomeCallInProgressDesc));
         b.setNeutralButton(Lang.getString(R.string.HangUp), (dialog, which) -> hangUpCurrentCall());
         b.setPositiveButton(Lang.getOK(), (dialog, which) -> dialog.dismiss());
-        BaseActivity.modifyAlert(context, b.show(), null);
+        com.fahadali.xgram.appearance.XgramR5Calls.showAlert(context, b); // XGram: BaseActivity.showAlert with Expressive design
       }
       return true;
     }
@@ -449,7 +449,7 @@ debugCall id:long debug:string = Ok;
         b.setTitle(Lang.getString(R.string.VoipOfflineTitle));
         b.setMessage(Lang.getString(R.string.VoipOffline));
       }
-      BaseActivity.modifyAlert(context.context(), b.show(), null);
+      com.fahadali.xgram.appearance.XgramR5Calls.showAlert(context.context(), b); // XGram: BaseActivity.showAlert with Expressive design
       return;
     }
     if (userFull == null) {
@@ -510,7 +510,7 @@ debugCall id:long debug:string = Ok;
       }
     }
     if (b != null) {
-      try { BaseActivity.modifyAlert(context, b.show(), null); } catch (Throwable ignored) { }
+      try { com.fahadali.xgram.appearance.XgramR5Calls.showAlert(context, b); } catch (Throwable ignored) { } // XGram: BaseActivity.showAlert with Expressive design
       return false;
     }
     return true;

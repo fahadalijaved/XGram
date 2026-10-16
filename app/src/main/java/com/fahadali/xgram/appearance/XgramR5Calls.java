@@ -407,6 +407,24 @@ public final class XgramR5Calls {
     }
   }
 
+  // Dialogs
+
+  /**
+   * Shows {@code b} as Telegram X's {@code BaseActivity.modifyAlert(context, b.show(), null)} sites do; with Expressive
+   * design, through {@code BaseActivity.showAlert} when {@code context} is the activity, so the M3 window motion is set
+   * before the dialog shows and covers its entrance.
+   */
+  @Nullable
+  public static android.app.AlertDialog showAlert (@NonNull android.content.Context context, @NonNull android.app.AlertDialog.Builder b) {
+    if (on()) {
+      final org.thunderdog.challegram.BaseActivity activity = org.thunderdog.challegram.tool.UI.getContext(context);
+      if (activity != null) {
+        return activity.showAlert(b);
+      }
+    }
+    return org.thunderdog.challegram.BaseActivity.modifyAlert(context, b.show(), null);
+  }
+
   // Floating toolbars (chat preview, quick actions)
 
   /** Whether a chat action is destructive (drawn in error in the floating toolbars). */
@@ -425,9 +443,24 @@ public final class XgramR5Calls {
       return false;
     }
     try {
-      return XgramSnackbar.show(Lang.getString(miniApp ? R.string.XgramR5CallsMiniAppsUnsupported : R.string.XgramR5CallsLinkUnsupported), android.widget.Toast.LENGTH_LONG);
+      // Telegram X's own (translated) text for the other links
+      return XgramSnackbar.show(Lang.getString(miniApp ? R.string.XgramR5CallsMiniAppsUnsupported : R.string.InternalUrlUnsupported), android.widget.Toast.LENGTH_LONG);
     } catch (Throwable t) {
       return false;
     }
+  }
+
+  /** A link to a Mini App (a web app, the main app of a bot, an attachment menu bot). */
+  public static boolean isMiniAppLink (@Nullable org.drinkless.tdlib.TdApi.InternalLinkType linkType) {
+    if (linkType == null) {
+      return false;
+    }
+    switch (linkType.getConstructor()) {
+      case org.drinkless.tdlib.TdApi.InternalLinkTypeWebApp.CONSTRUCTOR:
+      case org.drinkless.tdlib.TdApi.InternalLinkTypeMainWebApp.CONSTRUCTOR:
+      case org.drinkless.tdlib.TdApi.InternalLinkTypeAttachmentMenuBot.CONSTRUCTOR:
+        return true;
+    }
+    return false;
   }
 }

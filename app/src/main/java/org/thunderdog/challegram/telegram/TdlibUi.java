@@ -977,7 +977,7 @@ public class TdlibUi extends Handler {
     c.showPopup(null, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
       int contentHeight = 0;
       final Context ctx = c.context();
-      TextView titleView = com.fahadali.xgram.appearance.XgramM3Wheel.newTitle(ctx, Lang.getString(R.string.MessageLifetime), forcedTheme);
+      TextView titleView = com.fahadali.xgram.appearance.XgramM3Wheel.newTitle(ctx, com.fahadali.xgram.appearance.XgramR5Calls.sentence(R.string.MessageLifetime, R.string.XgramR5CallsSelfDestructTimer), forcedTheme);
       optionsWrap.addView(titleView);
       contentHeight += com.fahadali.xgram.appearance.XgramM3Wheel.measureHeight(titleView, c.context().getControllerWidth(titleView));
       if (message != 0) {
@@ -3659,6 +3659,10 @@ public class TdlibUi extends Handler {
       return;
     }
     Runnable unsupported = () -> {
+      // XGram M3E: an M3 snackbar ("Mini apps aren't supported yet" for Mini App links) instead of the warning tooltip
+      if (com.fahadali.xgram.appearance.XgramR5Calls.showUnsupported(com.fahadali.xgram.appearance.XgramR5Calls.isMiniAppLink(linkType))) {
+        return;
+      }
       showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
     };
     boolean ok = true;
@@ -3879,7 +3883,9 @@ public class TdlibUi extends Handler {
             case TdApi.SettingsSectionDevices.CONSTRUCTOR: {
               SettingsSessionsController sessions = new SettingsSessionsController(context.context(), context.tdlib());
               SettingsWebsitesController websites = new SettingsWebsitesController(context.context(), context.tdlib());
-              result = new SimpleViewPagerController(context.context(), context.tdlib(), new ViewController<?>[] {sessions, websites}, new String[] {Lang.uppercase(Lang.getString(R.string.Devices)), Lang.getString(R.string.Websites)}, false);
+              // XGram M3E: sentence case tabs (no upper-cased "DEVICES")
+              final String xgramDevices = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Lang.getString(R.string.Devices) : Lang.uppercase(Lang.getString(R.string.Devices));
+              result = new SimpleViewPagerController(context.context(), context.tdlib(), new ViewController<?>[] {sessions, websites}, new String[] {xgramDevices, Lang.getString(R.string.Websites)}, false);
               break;
             }
             case TdApi.SettingsSectionLanguage.CONSTRUCTOR: {
