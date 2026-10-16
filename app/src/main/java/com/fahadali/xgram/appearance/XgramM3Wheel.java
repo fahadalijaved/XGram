@@ -209,12 +209,13 @@ public final class XgramM3Wheel {
   // Round 5: sheet colour, headlineSmall title, supporting text and the optional column chip
 
   /**
-   * The colour of the sheet a picker sits in (the fade mask over its rows): surfaceContainerLow, or the forced theme's
-   * filling, as OptionsLayout draws the sheet with a forced theme.
+   * The colour of the sheet a picker sits in (the fade mask over its rows): surfaceContainerLow, in the forced theme's
+   * scheme with a forced theme (camera, media viewer). OptionsLayout draws its sheet with this same colour, so the two
+   * always stay in step.
    */
   @ColorInt
   public static int sheetColor (@Nullable ThemeDelegate forcedTheme) {
-    return forcedTheme != null ? forcedTheme.getColor(org.thunderdog.challegram.theme.ColorId.filling) : XgramM3Sheets.sheetColor();
+    return forcedTheme != null ? XgramR5Sheets.role(XgramExpressive.SURFACE_CONTAINER_LOW, forcedTheme) : XgramM3Sheets.sheetColor();
   }
 
   /** A picker sheet's title (a hero sheet title in headlineSmall, onSurface), 16dp from the sides, 8dp above the wheel. */

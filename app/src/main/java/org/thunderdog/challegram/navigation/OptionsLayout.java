@@ -159,7 +159,8 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
       path.reset();
       path.addRoundRect(rect, radii, Path.Direction.CW);
       // XGram M3E r5: a forced theme (camera, media viewer) draws the same sheet in that theme's scheme
-      final int surfaceColor = com.fahadali.xgram.appearance.XgramR5Sheets.role(XgramExpressive.SURFACE_CONTAINER_LOW, forcedTheme);
+      // (the wheel pickers fade their rows into this same colour: XgramM3Wheel.sheetColor)
+      final int surfaceColor = com.fahadali.xgram.appearance.XgramM3Wheel.sheetColor(forcedTheme);
       c.drawPath(path, Paints.fillingPaint(surfaceColor));
 
       final int handleColor = XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramR5Sheets.role(XgramExpressive.ON_SURFACE_VARIANT, forcedTheme), .4f);

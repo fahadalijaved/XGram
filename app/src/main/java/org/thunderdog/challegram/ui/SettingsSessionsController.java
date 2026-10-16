@@ -101,7 +101,12 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_sessionTtl, xgramM3 ? R.drawable.baseline_auto_delete_24 : 0, R.string.SessionTerminateTtl));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
-    items.add(new ListItem(items.isEmpty() ? ListItem.TYPE_HEADER_PADDED : ListItem.TYPE_HEADER, 0, 0, xgramM3 ? R.string.XgramM3eR4preSbThisDevice : R.string.ThisDevice));
+    // XGram M3E: the sentence-case labels only replace Telegram X's bundled English (a translation keeps its own)
+    if (xgramM3) {
+      items.add(new ListItem(items.isEmpty() ? ListItem.TYPE_HEADER_PADDED : ListItem.TYPE_HEADER, 0, 0, com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.ThisDevice, R.string.XgramM3eR4preSbThisDevice)));
+    } else {
+    items.add(new ListItem(items.isEmpty() ? ListItem.TYPE_HEADER_PADDED : ListItem.TYPE_HEADER, 0, 0, R.string.ThisDevice));
+    }
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_SESSION, R.id.btn_currentSession, 0, 0));
 
@@ -110,7 +115,11 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
       items.add(new ListItem(ListItem.TYPE_SESSIONS_EMPTY));
     } else {
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_terminateAllSessions, R.drawable.baseline_cancel_24, xgramM3 ? R.string.XgramM3eR4preSbTerminateAll : R.string.TerminateAllSessions).setTextColorId(ColorId.textNegative));
+      if (xgramM3) {
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_terminateAllSessions, R.drawable.baseline_cancel_24, 0, com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.TerminateAllSessions, R.string.XgramM3eR4preSbTerminateAll), 0, false).setTextColorId(ColorId.textNegative));
+      } else {
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_terminateAllSessions, R.drawable.baseline_cancel_24, R.string.TerminateAllSessions).setTextColorId(ColorId.textNegative));
+      }
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
       boolean first = true;
@@ -118,7 +127,11 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
       // Incomplete login attempts
       for (TdApi.Session session : sessions.incompleteLoginAttempts) {
         if (first) {
-          items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, xgramM3 ? R.string.XgramM3eR4preSbIncomplete : R.string.SessionsIncompleteTitle));
+          if (xgramM3) {
+            items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionsIncompleteTitle, R.string.XgramM3eR4preSbIncomplete)));
+          } else {
+          items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.SessionsIncompleteTitle));
+          }
           items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
           first = false;
@@ -137,13 +150,13 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
       // Other sessions
       for (TdApi.Session session : sessions.otherActiveSessions) {
         if (first) {
-          final int headerRes;
+          final int headerRes = sessions.incompleteLoginAttempts.length > 0 ? R.string.ActiveDevices : R.string.OtherDevices;
           if (xgramM3) {
-            headerRes = sessions.incompleteLoginAttempts.length > 0 ? R.string.XgramM3eR4preSbActiveDevices : R.string.XgramM3eR4preSbOtherDevices;
+            final int sentenceRes = sessions.incompleteLoginAttempts.length > 0 ? R.string.XgramM3eR4preSbActiveDevices : R.string.XgramM3eR4preSbOtherDevices;
+            items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, com.fahadali.xgram.appearance.XgramR5Lists.sentence(headerRes, sentenceRes)));
           } else {
-            headerRes = sessions.incompleteLoginAttempts.length > 0 ? R.string.ActiveDevices : R.string.OtherDevices;
-          }
           items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, headerRes));
+          }
           items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
 
           first = false;
@@ -700,7 +713,7 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
         xgramToggleSession((TdApi.Session) tag, viewId == R.id.session_secret);
       }
     } else if (viewId == R.id.btn_terminateAllSessions) {
-      showOptions(Lang.getString(R.string.AreYouSureSessions), new int[] {R.id.btn_terminateAllSessions, R.id.btn_cancel}, new String[] {Lang.getString(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.string.XgramM3eR4preSbTerminateAll : R.string.TerminateAllSessions), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_forever_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+      showOptions(Lang.getString(R.string.AreYouSureSessions), new int[] {R.id.btn_terminateAllSessions, R.id.btn_cancel}, new String[] {com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.TerminateAllSessions, R.string.XgramM3eR4preSbTerminateAll), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_forever_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
         if (id == R.id.btn_terminateAllSessions) {
           terminateOtherSessions();
         }

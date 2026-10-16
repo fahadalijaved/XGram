@@ -439,15 +439,40 @@ public final class XgramR5Calls {
    * when no snackbar could be shown, so the caller keeps its Telegram X feedback.
    */
   public static boolean showUnsupported (boolean miniApp) {
+    return showUnsupported(miniApp, null);
+  }
+
+  /**
+   * {@link #showUnsupported(boolean)} with an "Open in browser" action while the link has a web address
+   * ({@code originalUrl}, http or https or a bare t.me link; never a tg: link, which would only come back here).
+   */
+  public static boolean showUnsupported (boolean miniApp, @Nullable String originalUrl) {
     if (!on()) {
       return false;
     }
     try {
       // Telegram X's own (translated) text for the other links
-      return XgramSnackbar.show(Lang.getString(miniApp ? R.string.XgramR5CallsMiniAppsUnsupported : R.string.InternalUrlUnsupported), android.widget.Toast.LENGTH_LONG);
+      final CharSequence text = Lang.getString(miniApp ? R.string.XgramR5CallsMiniAppsUnsupported : R.string.InternalUrlUnsupported);
+      final android.net.Uri webUri = webUri(originalUrl);
+      if (webUri != null) {
+        return XgramSnackbar.show(text, android.widget.Toast.LENGTH_LONG, Lang.getString(R.string.XgramR5SheetsOpenInBrowser), () ->
+          org.thunderdog.challegram.tool.Intents.openUriInBrowser(webUri)
+        );
+      }
+      return XgramSnackbar.show(text, android.widget.Toast.LENGTH_LONG);
     } catch (Throwable t) {
       return false;
     }
+  }
+
+  @Nullable
+  private static android.net.Uri webUri (@Nullable String url) {
+    if (TextUtils.isEmpty(url)) {
+      return null;
+    }
+    final android.net.Uri uri = org.thunderdog.challegram.tool.Strings.wrapHttps(url);
+    final String scheme = uri != null ? uri.getScheme() : null;
+    return "https".equals(scheme) || "http".equals(scheme) ? uri : null;
   }
 
   /** A link to a Mini App (a web app, the main app of a bot, an attachment menu bot). */

@@ -132,7 +132,7 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
     if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) {
       measuredWidth = MeasureSpec.getSize(widthMeasureSpec);
     } else {
-      measuredWidth = textWidth + Screen.dp(15f) * 2 + getPaddingLeft() + getPaddingRight();
+      measuredWidth = (xgramAddStyle ? Math.max(textWidth, xgramDoneTextWidth) : textWidth) + Screen.dp(15f) * 2 + getPaddingLeft() + getPaddingRight();
     }
     int measuredHeight = getDefaultSize(getSuggestedMinimumHeight(), heightMeasureSpec);
     setMeasuredDimension(measuredWidth, measuredHeight);
@@ -201,6 +201,60 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
     final float pressed = Screen.dpf(rect.height() >= Screen.dpf(48f) ? XgramExpressive.CORNER_M : XgramExpressive.CORNER_S);
     final float factor = xgramPress != null ? xgramPress.getValue() : 0f;
     return Math.max(0f, Math.min(full, full + (pressed - full) * factor));
+  }
+
+  // XGram M3E r5: an opt-in Add / Added style (a sticker pack's button, TrendingPackHeaderView): a filled tonal "Add"
+  // (secondaryContainer, onSecondaryContainer label) that turns into an outlined "Added" (outlineVariant, onSurfaceVariant
+  // label) instead of Telegram X's check mark once the pack is added. Expressive design only.
+
+  private boolean xgramAddStyle;
+  private @Nullable Letters xgramDoneText;
+  private int xgramDoneTextWidth;
+
+  public void xgramSetAddStyle (@StringRes int doneRes) {
+    if (!xgram) {
+      return;
+    }
+    xgramAddStyle = true;
+    xgramDoneText = new Letters(Lang.getString(doneRes));
+    xgramDoneTextWidth = (int) U.measureText(xgramDoneText.text, Paints.getBoldPaint15(xgramDoneText.needFakeBold));
+    requestLayout();
+    invalidate();
+  }
+
+  private void xgramDrawAddStyle (Canvas c, int width, int height) {
+    final float stroke = Math.max(1, Screen.dp(1f));
+    final RectF rectF = Paints.getRectF();
+    rectF.set(stroke / 2f, stroke / 2f, width - stroke / 2f, height - stroke / 2f);
+    final float radius = xgramCornerPx(rectF);
+    final float done = doneFactor;
+    final int content = ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER), XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), done);
+
+    if (done < 1f) {
+      c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(innerAlpha * (1f - done), XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER))));
+    }
+    if (done > 0f) {
+      c.drawRoundRect(rectF, radius, radius, Paints.getProgressPaint(ColorUtils.alphaColor(innerAlpha * done, XgramExpressive.color(XgramExpressive.OUTLINE_VARIANT)), (int) stroke));
+    }
+    final float pressed = (forceActive ? 1f : pressedFactor) * (1f - fadeFactor);
+    if (pressed > 0f) {
+      c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(innerAlpha * pressed * XgramExpressive.STATE_PRESSED, content)));
+    }
+
+    if (progress != null) {
+      progress.forceColor(ColorUtils.alphaColor(innerAlpha * progressFactor, content));
+      progress.draw(c);
+    }
+
+    // The label crossfades from "Add" to "Added" around the middle of the change
+    final boolean showDone = done >= .5f && xgramDoneText != null;
+    final Letters label = showDone ? xgramDoneText : text;
+    if (label != null) {
+      final float labelAlpha = done < .5f ? 1f - done / .5f : (done - .5f) / .5f;
+      final int labelWidth = showDone ? xgramDoneTextWidth : textWidth;
+      final int color = ColorUtils.alphaColor(innerAlpha * labelAlpha, content);
+      c.drawText(label.text, width / 2f - labelWidth / 2f, height / 2f + Screen.dp(5f), Paints.getBoldPaint15(label.needFakeBold, color));
+    }
   }
 
   @Override
@@ -457,6 +511,11 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
   protected void onDraw (Canvas c) {
     int width = getMeasuredWidth();
     int height = getMeasuredHeight();
+
+    if (xgramAddStyle) {
+      xgramDrawAddStyle(c, width, height);
+      return;
+    }
 
     final float buttonFactor = doneFactor >= .5f ? 0f : 1f - (doneFactor / .5f);
     final int outlineColor = Theme.inlineOutlineColor(false);

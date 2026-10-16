@@ -3660,7 +3660,7 @@ public class TdlibUi extends Handler {
     }
     Runnable unsupported = () -> {
       // XGram M3E: an M3 snackbar ("Mini apps aren't supported yet" for Mini App links) instead of the warning tooltip
-      if (com.fahadali.xgram.appearance.XgramR5Calls.showUnsupported(com.fahadali.xgram.appearance.XgramR5Calls.isMiniAppLink(linkType))) {
+      if (com.fahadali.xgram.appearance.XgramR5Calls.showUnsupported(com.fahadali.xgram.appearance.XgramR5Calls.isMiniAppLink(linkType), originalUrl)) { // with "Open in browser" for a web link
         return;
       }
       showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);

@@ -18,4 +18,6 @@
   <!-- Contacts -->
   <string name="XgramR5PeopleNoContacts">No contacts</string>
   <string name="XgramR5PeopleNoContactsHint">Contacts who use Telegram show up here.</string>
+  <!-- Sticker packs: the outlined button of an added pack -->
+  <string name="XgramR5PeopleAdded">Added</string>
 </resources>

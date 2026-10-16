@@ -12,4 +12,5 @@
   <string name="XgramR5CallsMiniAppsUnsupported">Mini apps aren\'t supported yet</string>
   <string name="XgramR5CallsRateTitle">Rate this call</string>
   <string name="XgramR5CallsStar">%1$d of 5 stars</string>
+  <string name="XgramR5CallsRepeatNotifications">Repeat notifications</string>
 </resources>

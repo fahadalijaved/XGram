@@ -142,6 +142,7 @@ public class TrendingPackHeaderView extends RelativeLayout {
       xgramBadge = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, Float.NaN);
       xgramBadge.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER);
       newView.setBackground(xgramBadge);
+      button.xgramSetAddStyle(R.string.XgramR5PeopleAdded); // a filled tonal "Add", an outlined "Added" once added
       xgramSyncColors();
     }
 

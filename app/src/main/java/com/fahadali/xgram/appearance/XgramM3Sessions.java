@@ -208,7 +208,8 @@ public final class XgramM3Sessions {
       addView(icon);
 
       // 6, 7: filter chips
-      secret = new ChipView(context, R.string.XgramM3eR4preSbSecretChats);
+      // the sentence-case labels only over Telegram X's bundled English (a translation keeps its own)
+      secret = new ChipView(context, XgramR5Lists.sentence(R.string.SessionSecretChats, R.string.XgramM3eR4preSbSecretChats));
       secret.setId(R.id.session_secret);
       secret.setOnClickListener(onClickListener);
       params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(CHIP_HEIGHT));
@@ -218,7 +219,7 @@ public final class XgramM3Sessions {
       secret.setLayoutParams(params);
       addView(secret);
 
-      calls = new ChipView(context, R.string.XgramM3eR4preSbCalls);
+      calls = new ChipView(context, XgramR5Lists.sentence(R.string.SessionCalls, R.string.XgramM3eR4preSbCalls));
       calls.setId(R.id.session_calls);
       calls.setOnClickListener(onClickListener);
       params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(CHIP_HEIGHT));
@@ -489,13 +490,13 @@ public final class XgramM3Sessions {
     private final @Nullable Drawable check;
     private boolean checked, onTile;
 
-    ChipView (Context context, @StringRes int textRes) {
+    ChipView (Context context, CharSequence text) {
       super(context);
       XgramExpressive.applyText(this, XgramExpressive.TS_LABEL_L, false);
       setAllCaps(false);
       setSingleLine(true);
       setGravity(Gravity.CENTER_VERTICAL);
-      setText(Lang.getString(textRes));
+      setText(text);
       Views.setClickable(this);
       check = Drawables.get(getResources(), R.drawable.baseline_check_18);
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

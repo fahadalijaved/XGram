@@ -299,7 +299,13 @@ public class CameraControlButton extends View implements FactorAnimator.Target {
       }
     }
 
-    Paint paint = isSmall ? Paints.getIconGrayPorterDuffPaint() : Paints.whitePorterDuffPaint();
+    final Paint paint;
+    if (isSmall && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the round video's switch camera icon sits on its filled tonal button: onSecondaryContainer
+      paint = Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramR5Composer.tonalContentColor(0f));
+    } else {
+      paint = isSmall ? Paints.getIconGrayPorterDuffPaint() : Paints.whitePorterDuffPaint();
+    }
     if (changeFactor == 0f) {
       Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2, cy - icon.getMinimumHeight() / 2, paint);
     } else {

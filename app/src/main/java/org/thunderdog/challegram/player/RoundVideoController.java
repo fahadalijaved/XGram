@@ -733,7 +733,7 @@ public class RoundVideoController extends BasePlaybackController implements
     int gravity = Settings.instance().getPipGravity();
 
     FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(pipSize, pipSize, gravity);
-    params.topMargin = HeaderView.getSize(true) + HeaderView.getPlayerSize() + getPlayerPipMargin();
+    params.topMargin = HeaderView.getSize(true) + org.thunderdog.challegram.navigation.HeaderFilling.playerBandSize() + getPlayerPipMargin(); // XGram M3E: the 64dp Expressive band (Telegram X's 36dp bar otherwise)
     params.rightMargin = params.bottomMargin = params.leftMargin = getPlayerPipMargin();
 
     return params;
@@ -1419,7 +1419,7 @@ public class RoundVideoController extends BasePlaybackController implements
     int navigationWidth = navigation.getValue().getMeasuredWidth();
     int navigationHeight = navigation.getValue().getMeasuredHeight();
 
-    return totalX > -playerSize && totalX < navigationWidth && totalY >= -playerSize + HeaderView.getPlayerSize() && totalY < navigationHeight;
+    return totalX > -playerSize && totalX < navigationWidth && totalY >= -playerSize + org.thunderdog.challegram.navigation.HeaderFilling.playerBandSize() && totalY < navigationHeight; // XGram M3E: the Expressive band
   }
 
   private void setMargins (int top, int bottom) {

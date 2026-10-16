@@ -1896,6 +1896,8 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (passcodeController != null) {
       this.dismissingPasscodeController = passcodeController;
       this.passcodeController = null;
+      // XGram M3E r5: the layer fades out on the default effects spring (the lock column plays its own scale and fade first)
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
       FactorAnimator animator = new FactorAnimator(0, new FactorAnimator.Target() {
         @Override
         public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
@@ -1912,7 +1914,8 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
           }
           updateNavigationBarColor();
         }
-      }, AnimatorUtils.DECELERATE_INTERPOLATOR, 100l);
+      }, xgramM3 ? com.fahadali.xgram.appearance.XgramAppMotion.springClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT) : AnimatorUtils.DECELERATE_INTERPOLATOR,
+        xgramM3 ? com.fahadali.xgram.appearance.XgramAppMotion.springDuration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT) : 100l);
       animator.animateTo(1f);
     }
 

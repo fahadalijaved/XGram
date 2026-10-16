@@ -167,7 +167,11 @@ public class EditSessionController extends EditBaseController<EditSessionControl
       headerCell = new DoubleHeaderView(context());
       headerCell.setThemedTextColor(this);
       headerCell.initWithMargin(Screen.dp(49f), true);
-      headerCell.setTitle(xgramM3 ? R.string.XgramM3eR4preSbSessionDetails : R.string.SessionDetails);
+      if (xgramM3) {
+        headerCell.setTitle(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionDetails, R.string.XgramM3eR4preSbSessionDetails)); // XGram M3E: sentence case over the bundled English only
+      } else {
+      headerCell.setTitle(R.string.SessionDetails);
+      }
       headerCell.setSubtitle(Lang.getRelativeDate(
         session.lastActiveDate, TimeUnit.SECONDS,
         tdlib.currentTimeMillis(), TimeUnit.MILLISECONDS,
@@ -202,15 +206,23 @@ public class EditSessionController extends EditBaseController<EditSessionControl
         } else if (itemId == R.id.btn_sessionCountry) {
           view.setData(R.string.SessionLocation);
         } else if (itemId == R.id.btn_sessionIp) {
-          view.setData(xgramM3() ? R.string.XgramM3eR4preSbIpAddress : R.string.SessionIP);
+          if (xgramM3()) {
+            view.setData(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionIP, R.string.XgramM3eR4preSbIpAddress));
+          } else {
+          view.setData(R.string.SessionIP);
+          }
         } else if (itemId == R.id.btn_sessionFirstLogin) {
           if (xgramM3()) {
-            view.setData(session.isPasswordPending ? R.string.XgramM3eR4preSbLoginAttempt : R.string.XgramM3eR4preSbFirstLogin);
+            view.setData(session.isPasswordPending ? com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionAttempt, R.string.XgramM3eR4preSbLoginAttempt) : com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionFirstLogin, R.string.XgramM3eR4preSbFirstLogin));
           } else {
             view.setData(session.isPasswordPending ? R.string.SessionAttempt : R.string.SessionFirstLogin);
           }
         } else if (itemId == R.id.btn_sessionLastLogin) {
-          view.setData(xgramM3() ? R.string.XgramM3eR4preSbLastActivity : R.string.SessionLastLogin);
+          if (xgramM3()) {
+            view.setData(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionLastLogin, R.string.XgramM3eR4preSbLastActivity));
+          } else {
+          view.setData(R.string.SessionLastLogin);
+          }
         } else if (itemId == R.id.btn_sessionLogout) {
           view.setData((session.isCurrent || session.isPasswordPending) ? null : Lang.getReverseRelativeDateBold(
             session.lastActiveDate + TimeUnit.DAYS.toSeconds(getArgumentsStrict().inactiveSessionTtlDays), TimeUnit.SECONDS,
@@ -245,9 +257,17 @@ public class EditSessionController extends EditBaseController<EditSessionControl
     if (!session.isPasswordPending) {
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.SessionAccepts));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptSecretChats, R.drawable.baseline_lock_24, xgramM3 ? R.string.XgramM3eR4preSbSecretChats : R.string.SessionSecretChats));
+      if (xgramM3) {
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptSecretChats, R.drawable.baseline_lock_24, 0, com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionSecretChats, R.string.XgramM3eR4preSbSecretChats), 0, false));
+      } else {
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptSecretChats, R.drawable.baseline_lock_24, R.string.SessionSecretChats));
+      }
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptCalls, R.drawable.baseline_call_24, xgramM3 ? R.string.XgramM3eR4preSbIncomingCalls : R.string.SessionCalls));
+      if (xgramM3) {
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptCalls, R.drawable.baseline_call_24, 0, com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionCalls, R.string.XgramM3eR4preSbIncomingCalls), 0, false));
+      } else {
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptCalls, R.drawable.baseline_call_24, R.string.SessionCalls));
+      }
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     }
 
@@ -297,7 +317,7 @@ public class EditSessionController extends EditBaseController<EditSessionControl
   @Override
   public CharSequence getName () {
     if (xgramM3()) {
-      return Lang.getString(session.isPasswordPending ? R.string.XgramM3eR4preSbAttemptDetails : R.string.XgramM3eR4preSbSessionDetails);
+      return session.isPasswordPending ? com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionAttemptDetails, R.string.XgramM3eR4preSbAttemptDetails) : com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionDetails, R.string.XgramM3eR4preSbSessionDetails);
     }
     return Lang.getString(session.isPasswordPending ? R.string.SessionAttemptDetails : R.string.SessionDetails);
   }
