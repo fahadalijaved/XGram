@@ -276,6 +276,61 @@ public final class XgramR5Sheets {
     markDestructive(dialog, DialogInterface.BUTTON_POSITIVE);
   }
 
+  // Loading
+
+  /**
+   * The M3E loading indicator (in primary by default) as a view: it runs only while attached and visible, the frames
+   * asked for by its drawable after each draw.
+   */
+  public static final class IndicatorView extends android.widget.ImageView {
+    private final XgramLoadingIndicatorDrawable indicator;
+
+    public IndicatorView (Context context, float boxDp, int colorRole) {
+      super(context);
+      indicator = new XgramLoadingIndicatorDrawable(boxDp, colorRole);
+      setImageDrawable(indicator);
+      setScaleType(ScaleType.CENTER);
+      setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+    }
+
+    private void sync () {
+      if (indicator == null) {
+        return; // a call from the View constructor
+      }
+      if (isAttachedToWindow() && getVisibility() == View.VISIBLE && getAlpha() > 0f) {
+        indicator.start();
+      } else {
+        indicator.stop();
+      }
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      sync();
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      if (indicator != null) {
+        indicator.stop();
+      }
+      super.onDetachedFromWindow();
+    }
+
+    @Override
+    public void setVisibility (int visibility) {
+      super.setVisibility(visibility);
+      sync();
+    }
+
+    @Override
+    public void setAlpha (float alpha) {
+      super.setAlpha(alpha);
+      sync();
+    }
+  }
+
   // Hero
 
   /**

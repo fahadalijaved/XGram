@@ -2585,6 +2585,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       appUpdater.onGooglePlayFlowActivityResult(resultCode, data);
       return;
     }
+    if (requestCode == Intents.ACTIVITY_RESULT_XGRAM_PARTIAL_TAB) {
+      return; // XGram M3E r5: the partial in-app browser closed; nothing to hand on
+    }
     final int handlerIndex = activityResultHandlers.indexOfKey(requestCode);
     if (handlerIndex >= 0) {
       ActivityResultHandler handler = activityResultHandlers.valueAt(handlerIndex);

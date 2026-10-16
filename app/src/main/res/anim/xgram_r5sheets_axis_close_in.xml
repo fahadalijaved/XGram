@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E r5: M3 shared axis (X) back, the app coming back in from the start. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+  android:shareInterpolator="false">
+  <translate
+    android:duration="300"
+    android:fromXDelta="-8%"
+    android:interpolator="@interpolator/xgram_emphasized_decelerate"
+    android:toXDelta="0%" />
+  <alpha
+    android:duration="210"
+    android:startOffset="90"
+    android:fromAlpha="0.0"
+    android:interpolator="@android:interpolator/decelerate_quad"
+    android:toAlpha="1.0" />
+</set>

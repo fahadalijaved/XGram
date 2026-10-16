@@ -129,6 +129,11 @@ public class WebViewPreviewLayout extends PreviewLayout {
       }
     });
 
+    if (xgramSheet) {
+      // XGram M3E r5: the M3E loading indicator while the page loads
+      previewProgress = new com.fahadali.xgram.appearance.XgramR5Sheets.IndicatorView(getContext(), 48f, com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      previewProgress.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER));
+    } else
     previewProgress = Views.simpleProgressView(getContext(), FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER));
     progressVisibility.setValue(true, false);
 
@@ -142,6 +147,16 @@ public class WebViewPreviewLayout extends PreviewLayout {
     container = new FrameLayout(getContext());
     container.addView(preview);
     container.addView(previewProgress);
+    if (xgramSheet) {
+      // XGram M3E r5: the page clipped to 16dp corners, 16dp in from the sheet's sides
+      container.setOutlineProvider(new android.view.ViewOutlineProvider() {
+        @Override
+        public void getOutline (View view, android.graphics.Outline outline) {
+          outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L));
+        }
+      });
+      container.setClipToOutline(true);
+    }
 
     addView(container);
     addView(containerFullscreen);
@@ -164,9 +179,25 @@ public class WebViewPreviewLayout extends PreviewLayout {
 
   @Override
   protected int computeHeight (int currentWidth) {
+    if (xgramSheet) {
+      // XGram M3E r5: under the 48dp handle band, 16dp in from the sides (the sheet is at most 640dp wide)
+      final int inset = Screen.dp(16f);
+      final int sheetWidth = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(currentWidth);
+      lastHeight = getWebViewHeight(Math.max(1, sheetWidth - inset * 2));
+      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, lastHeight, Gravity.TOP);
+      params.topMargin = Screen.dp(XGRAM_BAND_DP);
+      params.leftMargin = params.rightMargin = inset;
+      container.setLayoutParams(params);
+      return inFullScreen() ? Screen.currentHeight() : (Screen.dp(XGRAM_BAND_DP) + lastHeight + footerHeight);
+    }
     lastHeight = getWebViewHeight(currentWidth);
     container.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, lastHeight, Gravity.TOP));
     return inFullScreen() ? Screen.currentHeight() : (footerHeight + lastHeight);
+  }
+
+  @Override
+  protected boolean xgramIsFullscreen () {
+    return inFullScreen();
   }
 
   @Override

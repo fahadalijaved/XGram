@@ -752,11 +752,23 @@ public class Intents {
         share.setAction(Intent.ACTION_SEND);
 
         CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
+        final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+        final boolean xgramPartial = xgramM3 && xgramStyleCustomTab(context, builder);
+        if (!xgramM3) {
         builder.setToolbarColor(Theme.getColor(ColorId.headerBackground));
         builder.setSecondaryToolbarColor(Theme.getColor(ColorId.headerText));
+        }
         builder.setShowTitle(true);
+        if (!xgramM3) {
         builder.setActionButton(Drawables.getBitmap(R.drawable.baseline_share_24), Lang.getString(R.string.Share), PendingIntent.getBroadcast(UI.getContext(), 0, share, Intents.mutabilityFlags(true)), true);
+        }
         CustomTabsIntent intent = builder.build();
+        if (xgramPartial && !TD.isTelegramMeHost(uri)) {
+          // XGram M3E r5: the partial Custom Tab of the cover screen only works when started for a result, in this task
+          intent.intent.setData(uri);
+          context.startActivityForResult(intent.intent, ACTIVITY_RESULT_XGRAM_PARTIAL_TAB, intent.startAnimationBundle);
+          return true;
+        }
         intent.intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         com.fahadali.xgram.layout.XgramOpenBeside.apply(intent.intent); // XGram: open beside XGram (split screen)
         if (TD.isTelegramMeHost(uri)) {
@@ -774,6 +786,70 @@ public class Intents {
       Log.e("Cant launch CustomTabs client", t);
     }
     return false;
+  }
+
+  /** XGram M3E r5: the request code of the partial Custom Tab (its result is ignored). */
+  public static final int ACTIVITY_RESULT_XGRAM_PARTIAL_TAB = 10051;
+
+  /**
+   * XGram M3E r5: the in-app browser in the M3 colors: the toolbar and the navigation bar in surfaceContainer of the
+   * light and the dark scheme (Pure black included), following the system or the app's own day / night; the browser's
+   * own share (no bitmap action), an arrow back close icon in onSurface and M3 shared axis (X) motion (none with
+   * Reduce motion). On a compact screen (the cover screen) it is a partial tab, 70% of the height with 16dp toolbar
+   * corners: returns true then, the caller starting it for a result.
+   */
+  private static boolean xgramStyleCustomTab (Activity context, CustomTabsIntent.Builder builder) {
+    final int lightBar = com.fahadali.xgram.appearance.XgramExpressive.colorFor(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER, false);
+    final int darkBar = com.fahadali.xgram.appearance.XgramExpressive.colorFor(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER, true);
+    builder.setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_LIGHT, new androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
+      .setToolbarColor(lightBar)
+      .setSecondaryToolbarColor(lightBar)
+      .setNavigationBarColor(lightBar)
+      .build());
+    builder.setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_DARK, new androidx.browser.customtabs.CustomTabColorSchemeParams.Builder()
+      .setToolbarColor(darkBar)
+      .setSecondaryToolbarColor(darkBar)
+      .setNavigationBarColor(darkBar)
+      .build());
+    final boolean appDark = Theme.isDark();
+    final boolean systemDark = (context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+    // the system's scheme, unless the app is in the other one (its own night mode)
+    builder.setColorScheme(appDark == systemDark ? CustomTabsIntent.COLOR_SCHEME_SYSTEM : appDark ? CustomTabsIntent.COLOR_SCHEME_DARK : CustomTabsIntent.COLOR_SCHEME_LIGHT);
+    builder.setShareState(CustomTabsIntent.SHARE_STATE_ON);
+    android.graphics.Bitmap close = xgramCloseIcon(com.fahadali.xgram.appearance.XgramExpressive.colorFor(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE, appDark));
+    if (close != null) {
+      builder.setCloseButtonIcon(close);
+    }
+    if (!com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+      builder.setStartAnimations(context, R.anim.xgram_r5sheets_axis_open_in, R.anim.xgram_r5sheets_axis_open_out);
+      builder.setExitAnimations(context, R.anim.xgram_r5sheets_axis_close_in, R.anim.xgram_r5sheets_axis_close_out);
+    }
+    final boolean compact = Screen.smallestActualSide() < Screen.dp(600f);
+    if (compact) {
+      builder.setInitialActivityHeightPx(Math.round(Screen.currentHeight() * .7f));
+      builder.setToolbarCornerRadiusDp(16);
+    }
+    return compact;
+  }
+
+  @Nullable
+  private static android.graphics.Bitmap xgramCloseIcon (int color) {
+    try {
+      android.graphics.drawable.Drawable icon = Drawables.get(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_arrow_back_24));
+      if (icon == null) {
+        return null;
+      }
+      final int size = Screen.dp(24f);
+      android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888);
+      android.graphics.Canvas c = new android.graphics.Canvas(bitmap);
+      icon.setBounds(0, 0, size, size);
+      icon.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN));
+      icon.draw(c);
+      c.setBitmap(null);
+      return bitmap;
+    } catch (Throwable t) {
+      return null;
+    }
   }
 
   public static int mutabilityFlags (boolean isMutable) {
