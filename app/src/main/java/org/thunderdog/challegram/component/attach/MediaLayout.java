@@ -1524,6 +1524,10 @@ public class MediaLayout extends FrameLayoutFix implements
       params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(53f), Gravity.LEFT | Gravity.TOP);
       params.leftMargin = Screen.dp(56f + 18f);
       params.rightMargin = Screen.dp(56f);
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      if (xgramM3) {
+        params.topMargin = MediaBottomBar.xgramContentOffset(); // XGram: centred in the 64dp bar
+      }
       counterView = new CounterHeaderView(getContext());
       counterView.setFactorChangeListener(v -> checkCounterHint());
       counterView.initDefault(ColorId.text);
@@ -1537,12 +1541,17 @@ public class MediaLayout extends FrameLayoutFix implements
       params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(53f), Gravity.LEFT | Gravity.TOP);
       params.leftMargin = Screen.dp(56f + 18f);
       params.rightMargin = Screen.dp(56f);
-      params.topMargin = Screen.dp(28f);
+      params.topMargin = Screen.dp(28f) + MediaBottomBar.xgramContentOffset();
       counterHintView = new NoScrollTextView(getContext());
       counterHintView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13f);
       counterHintView.setTextColor(Theme.textDecentColor());
       themeListeners.addThemeTextDecentColorListener(counterView);
       counterHintView.setTypeface(Fonts.getRobotoRegular());
+      if (xgramM3) {
+        // XGram: supporting text in bodySmall (12sp), onSurfaceVariant, following theme changes
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(counterHintView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, false);
+        themeListeners.addThemeTextDecentColorListener(counterHintView);
+      }
       counterHintView.setEllipsize(TextUtils.TruncateAt.END);
       counterHintView.setSingleLine(true);
       counterHintView.setLayoutParams(params);
@@ -1559,6 +1568,9 @@ public class MediaLayout extends FrameLayoutFix implements
       sendButton.setId(R.id.btn_send);
       sendButton.getSlowModeCounterController(tdlib()).setCurrentChat(getTargetChatId());
       themeListeners.addThemeFilterListener(sendButton, ColorId.chatSendButton);
+      if (xgramM3) {
+        sendButton.setXgramFilled(true); // XGram: the composer's M3E filled icon button (40dp primary, onPrimary icon)
+      }
       sendButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(55f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT));
       Views.setClickable(sendButton);
       sendButton.setOnClickListener(this);
@@ -1616,6 +1628,7 @@ public class MediaLayout extends FrameLayoutFix implements
       hotMediaView.setColorFilter(Theme.getColor(needSpoiler ? ColorId.iconActive : ColorId.icon));
       themeListeners.addThemeFilterListener(hotMediaView, needSpoiler ? ColorId.iconActive : ColorId.icon);
       hotMediaView.setLayoutParams(params);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(hotMediaView); // XGram: M3E standard icon toggle (40dp state layer)
       bottomBar.addView(hotMediaView);
 
       params = FrameLayoutFix.newParams(Screen.dp(55f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT);
@@ -1634,6 +1647,7 @@ public class MediaLayout extends FrameLayoutFix implements
       groupMediaView.setColorFilter(Theme.getColor(colorId));
       themeListeners.addThemeFilterListener(groupMediaView, colorId);
       groupMediaView.setLayoutParams(params);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(groupMediaView); // XGram
       bottomBar.addView(groupMediaView);
 
       params = FrameLayoutFix.newParams(Screen.dp(48f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT);
@@ -1652,6 +1666,7 @@ public class MediaLayout extends FrameLayoutFix implements
       themeListeners.addThemeFilterListener(xgramCaptionView, ColorId.icon);
       xgramCaptionView.setLayoutParams(params);
       xgramCaptionView.setAlpha(0f);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(xgramCaptionView); // XGram
       bottomBar.addView(xgramCaptionView);
 
       closeButton = new BackHeaderButton(getContext()) {
@@ -1662,6 +1677,7 @@ public class MediaLayout extends FrameLayoutFix implements
       };
       closeButton.setId(R.id.btn_close);
       RippleSupport.setTransparentSelector(closeButton);
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(closeButton); // XGram: M3E standard icon button
       closeButton.setButtonFactor(BackHeaderButton.TYPE_CLOSE);
       closeButton.setOnClickListener(this);
       closeButton.setColor(Theme.iconColor());

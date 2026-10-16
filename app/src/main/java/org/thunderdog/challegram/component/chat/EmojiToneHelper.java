@@ -289,6 +289,8 @@ public class EmojiToneHelper implements FactorAnimator.Target {
           visibilityAnimator.setDuration(100l);
         }
       }
+      // XGram: M3E menus enter on the spatial fast spring (the scale may overshoot a little) and leave on effects fast
+      com.fahadali.xgram.appearance.XgramAppMotion.use(visibilityAnimator, isVisible ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, !isVisible);
       boolean byLayout = prepareWrap(anchorView);
       visibilityAnimator.setValue(isVisible, true, byLayout ? emojiTonePicker : null);
     }
@@ -408,6 +410,12 @@ public class EmojiToneHelper implements FactorAnimator.Target {
     /*if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       sendView.setOutlineProvider(applyButton.getOutlineProvider());
     }*/
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: an M3E text button: labelLarge in sentence case, primary, a full-corner primary state layer at 10%
+      Views.setMediumText(sendView, Lang.getString(R.string.ApplyToAll));
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(sendView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(sendView, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+    }
     sendView.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
     sendView.setGravity(Gravity.CENTER);
     sendView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -439,7 +447,7 @@ public class EmojiToneHelper implements FactorAnimator.Target {
       return false;
     }
 
-    emojiTonePicker = new EmojiToneListView(context);
+    emojiTonePicker = xgramMenuStyle(anchorView) ? new com.fahadali.xgram.appearance.XgramW2ToneListView(context) : new EmojiToneListView(context);
     emojiTonePicker.init(themeProvider, tdlib);
     emojiTonePicker.setEmoji(emoji, currentTone, emojiColorState);
     emojiTonePicker.setCustomEmoji(installedStickers, recommendedStickers);
@@ -461,6 +469,23 @@ public class EmojiToneHelper implements FactorAnimator.Target {
       emojiTonePicker.changeIndex(
         anchorView.getMeasuredWidth() / 2f - offsetLeft,
         anchorView.getMeasuredHeight() / 2f - offsetTop);
+    }
+    return true;
+  }
+
+  /**
+   * XGram M3E wave 2: the picker is an M3E menu surface (com.fahadali.xgram.appearance.XgramW2ToneListView) with
+   * Expressive design, except over the media viewer's dark emoji keyboard, which keeps Telegram X's dark bubble (the
+   * menu takes the app scheme's colours, as the Expressive emoji panel does).
+   */
+  private static boolean xgramMenuStyle (@Nullable View anchorView) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return false;
+    }
+    for (android.view.ViewParent parent = anchorView != null ? anchorView.getParent() : null; parent != null; parent = parent.getParent()) {
+      if (parent instanceof org.thunderdog.challegram.widget.EmojiLayout) {
+        return !((org.thunderdog.challegram.widget.EmojiLayout) parent).isUseDarkMode();
+      }
     }
     return true;
   }
