@@ -58,6 +58,7 @@ import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.util.CustomTypefaceSpan;
@@ -196,6 +197,8 @@ public class CallController extends ViewController<CallController.Arguments> imp
   private @Nullable TdApi.User user;
   private CallSettings callSettings;
   private boolean hadEmojiSinceStart;
+  // XGram: the Material 3 Expressive call screen; null with Expressive design off (Telegram X's views are used then)
+  private @Nullable com.fahadali.xgram.appearance.XgramM3CallScreen xgramScreen;
 
   @Override
   public void setArguments (Arguments args) {
@@ -278,6 +281,13 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   @Override
   protected void applyCustomHeaderAnimations (float factor) {
+    if (xgramScreen != null) { // XGram
+      if (lastHeaderFactor != factor) {
+        lastHeaderFactor = factor;
+        xgramScreen.setEnterFactor(factor);
+      }
+      return;
+    }
     if (lastHeaderFactor != factor) {
       lastHeaderFactor = factor;
       updateControlsAlpha();
@@ -293,6 +303,11 @@ public class CallController extends ViewController<CallController.Arguments> imp
   private static final int ANIMATOR_STRENGTH = 6;
 
   private void updateCallStrength () {
+    if (xgramScreen != null) { // XGram: the bars in the branding chip
+      boolean visible = callStrength >= 0 && call != null && call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR && callDuration >= 0;
+      xgramScreen.setCallBars(callStrength, visible, isFocused());
+      return;
+    }
     boolean isVisible = callStrength >= 0 && call != null && call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR && callDuration >= 0;
     if (!isVisible == (strengthAnimator != null && strengthAnimator.getValue())) {
       if (strengthAnimator == null) {
@@ -322,6 +337,10 @@ public class CallController extends ViewController<CallController.Arguments> imp
   @Override
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
+    if (xgramScreen != null) { // XGram
+      xgramScreen.setBottomInset(extraBottomInset);
+      return;
+    }
     Views.setPaddingBottom(buttonWrap, extraBottomInset);
     Views.setLayoutHeight(buttonWrap, Screen.dp(76f) + extraBottomInset);
     Views.setPaddingBottom(callControlsLayout, extraBottomInset);
@@ -329,6 +348,10 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   @Override
   public void onStatusBarHeightChanged (int newHeight) {
+    if (xgramScreen != null) { // XGram
+      xgramScreen.setTopInset(newHeight);
+      return;
+    }
     int startMargin = Math.max(Screen.dp(18f) + newHeight, Screen.dp(42f));
     Views.setTopMargin(brandWrap, startMargin);
     Views.setTopMargin(nameView, startMargin + Screen.dp(34f));
@@ -337,6 +360,9 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   @Override
   protected View onCreateView (final Context context) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return xgramCreateView(context); // XGram: Material 3 Expressive call screen
+    }
     final FrameLayoutFix contentView = new FrameLayoutFix(context) {
       @Override
       protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
@@ -671,7 +697,184 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
 
+  // XGram: Material 3 Expressive call screen (com.fahadali.xgram.appearance.XgramM3CallScreen). Every Telegram X
+  // method below that touches a view checks xgramScreen first; the call logic (settings, accept, hang up, redial,
+  // emoji, rating) stays Telegram X's.
+
+  private View xgramCreateView (Context context) {
+    final com.fahadali.xgram.appearance.XgramM3CallScreen screen = new com.fahadali.xgram.appearance.XgramM3CallScreen(context, tdlib, xgramCallback);
+    xgramScreen = screen;
+    screen.setTopInset(Screen.getStatusBarHeight());
+    screen.setBottomInset(extraBottomInset);
+    screen.setBrandClickable(Log.checkLogLevel(Log.LEVEL_INFO) || BuildConfig.EXPERIMENTAL);
+    addThemeInvalidateListener(screen);
+    Screen.addStatusBarHeightListener(this);
+
+    // Tabletop posture
+    screen.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+        v.post(this::xgramUpdateFold);
+      }
+    });
+    if (context().xgramWindow() != null) {
+      context().xgramWindow().addListener(xgramWindowListener);
+    }
+
+    // Data
+    tdlib.cache().subscribeToCallUpdates(call.id, this);
+    tdlib.cache().addUserDataListener(call.userId, this);
+    this.callSettings = tdlib.cache().getCallSettings(call.id);
+
+    screen.setCall(call, false);
+    setTexts();
+    updateCallState();
+    updateCallButtons();
+    return screen;
+  }
+
+  private final com.fahadali.xgram.appearance.XgramM3CallScreen.Callback xgramCallback = new com.fahadali.xgram.appearance.XgramM3CallScreen.Callback() {
+    @Override
+    public void onMuteClick () {
+      if (!TD.isFinished(call)) {
+        if (callSettings == null) {
+          callSettings = new CallSettings(tdlib, call.id);
+        }
+        boolean muted = !callSettings.isMicMuted();
+        if (xgramScreen != null) {
+          xgramScreen.setMuted(muted, true);
+        }
+        callSettings.setMicMuted(muted);
+      }
+    }
+
+    @Override
+    public void onSpeakerClick () {
+      if (!TD.isFinished(call)) {
+        if (callSettings == null) {
+          callSettings = new CallSettings(tdlib, call.id);
+        }
+        if (callSettings.isSpeakerModeEnabled()) {
+          callSettings.setSpeakerMode(CallSettings.SPEAKER_MODE_EARPIECE);
+        } else {
+          callSettings.toggleSpeakerMode(CallController.this);
+        }
+      }
+    }
+
+    @Override
+    public void onMessageClick () {
+      tdlib.ui().openPrivateChat(CallController.this, call.userId, null);
+    }
+
+    @Override
+    public void onBrandClick () {
+      xgramToggleDebug();
+    }
+
+    @Override
+    public boolean onAnswer () {
+      // Without the microphone permission it is asked for first, and the call is answered once it is granted
+      if (!tdlib.context().calls().checkRecordPermissions(context(), tdlib, call, call.userId, null)) {
+        return false;
+      }
+      CallController.this.onCallAccept(call);
+      return true;
+    }
+
+    @Override
+    public void onDecline (boolean isHangUp) {
+      CallController.this.onCallDecline(call, isHangUp);
+    }
+
+    @Override
+    public void onRedial () {
+      CallController.this.onCallRestart(call);
+    }
+
+    @Override
+    public void onDismiss () {
+      CallController.this.onCallClose(call);
+    }
+  };
+
+  /** The call log overlay of debug builds, as Telegram X's branding click, in the M3 roles. */
+  private void xgramToggleDebug () {
+    final com.fahadali.xgram.appearance.XgramM3CallScreen screen = xgramScreen;
+    if (screen == null) {
+      return;
+    }
+    TGCallService.markLogViewed();
+    if (debugView != null) {
+      screen.removeView(debugView);
+      debugView = null;
+      return;
+    }
+    final TextView view = new TextView(context());
+    view.setScrollDisabled(true);
+    view.setBackgroundColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST), .94f));
+    view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
+    view.setGravity(Gravity.CENTER_VERTICAL);
+    view.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
+    view.setPadding(Screen.dp(16f), Screen.dp(16f), Screen.dp(16f), Screen.dp(16f));
+    view.post(new Runnable() {
+      @Override
+      public void run () {
+        TGCallService service = TGCallService.currentInstance();
+        SpannableStringBuilder b = new SpannableStringBuilder();
+        if (service != null) {
+          b.append(service.getLibraryNameAndVersion());
+        } else {
+          b.append("service unavailable");
+        }
+        b.setSpan(new CustomTypefaceSpan(Fonts.getRobotoBold(), 0), 0, b.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        if (service != null) {
+          CharSequence log = service.getDebugString();
+          if (!StringUtils.isEmpty(log)) {
+            b.append("\n\n");
+            b.append(log);
+          }
+        }
+        view.setText(b);
+        if (view.getParent() != null) {
+          view.postDelayed(this, 500l);
+        }
+      }
+    });
+    debugView = view;
+    screen.addView(debugView);
+  }
+
+  /** Pending (both ways), exchanging keys, or ready but not connected yet. */
+  private boolean xgramInProgress () {
+    switch (call.state.getConstructor()) {
+      case TdApi.CallStatePending.CONSTRUCTOR:
+      case TdApi.CallStateExchangingKeys.CONSTRUCTOR:
+        return true;
+      case TdApi.CallStateReady.CONSTRUCTOR:
+        return callDuration < 0;
+    }
+    return false;
+  }
+
+  /** The status in sentence case (no upper case), with an ellipsis while an outgoing call is being set up. */
+  private String xgramStatus (String str) {
+    boolean incoming = call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && !call.isOutgoing;
+    if (xgramInProgress() && !incoming && !StringUtils.isEmpty(str) && !str.endsWith(Strings.ELLIPSIS) && !str.endsWith("...")) {
+      return str + Strings.ELLIPSIS;
+    }
+    return str;
+  }
+
   private void setTexts () {
+    if (xgramScreen != null) { // XGram
+      TdApi.User fresh = tdlib.cache().user(call.userId);
+      if (fresh != null) {
+        user = fresh;
+      }
+      xgramScreen.setUser(user);
+      xgramScreen.setKeyHint(Lang.getString(R.string.CallEmojiHint, TD.getUserSingleName(call.userId, user)));
+      return;
+    }
     if (emojiStatusHelper != null) {
       this.emojiStatusHelper.updateEmoji(tdlib, user, new TextColorSetOverride(TextColorSets.Regular.NORMAL) {
         @Override
@@ -748,6 +951,12 @@ public class CallController extends ViewController<CallController.Arguments> imp
   };
 
   private void xgramUpdateFold () {
+    if (xgramScreen != null) {
+      if (!isDestroyed()) {
+        xgramScreen.setFoldTop(com.fahadali.xgram.layout.XgramWindow.tabletopFoldTop(xgramScreen));
+      }
+      return;
+    }
     if (avatarView == null || isDestroyed() || !(avatarView.getParent() instanceof View)) {
       return;
     }
@@ -921,6 +1130,8 @@ public class CallController extends ViewController<CallController.Arguments> imp
     updateCallStrength();
     if (TD.isCancelled(call) || TD.isAcceptedOnOtherDevice(call) || TD.isDeclined(call) || (prevIsActive && callEnded) || TD.isMissed(call) || call.state.getConstructor() == TdApi.CallStateHangingUp.CONSTRUCTOR) {
       closeCall();
+    } else if (xgramScreen != null) { // XGram
+      xgramScreen.setCall(call, navigationController != null);
     } else {
       callControlsLayout.setCall(tdlib, call, navigationController != null);
     }
@@ -1001,8 +1212,13 @@ public class CallController extends ViewController<CallController.Arguments> imp
         }
       }
     }
-    stateView.setText(Lang.uppercase(str));
-    setButtonsVisible(!TD.isFinished(call) && !(call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && !call.isOutgoing), isFocused());
+    if (xgramScreen != null) { // XGram
+      xgramScreen.setStatus(xgramStatus(str), xgramInProgress());
+      xgramScreen.setTogglesVisible(!TD.isFinished(call) && !(call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && !call.isOutgoing), isFocused());
+    } else {
+      stateView.setText(Lang.uppercase(str));
+      setButtonsVisible(!TD.isFinished(call) && !(call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && !call.isOutgoing), isFocused());
+    }
     updateEmoji();
     updateFlashing();
     updateCallStrength();
@@ -1011,6 +1227,11 @@ public class CallController extends ViewController<CallController.Arguments> imp
   private boolean hadFocus;
 
   private void updateFlashing () {
+    if (xgramScreen != null) { // XGram: the avatar halo pulses instead of the status flashing
+      hadFocus = isFocused() || hadFocus;
+      xgramScreen.setRinging(TD.getCallNeedsFlashing(call), isFocused());
+      return;
+    }
     hadFocus = isFocused() || hadFocus;
     setFlashing(TD.getCallNeedsFlashing(call) && hadFocus);
   }
@@ -1027,6 +1248,11 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
   private void updateCallButtons () {
+    if (xgramScreen != null) { // XGram
+      xgramScreen.setMuted(callSettings != null && callSettings.isMicMuted(), isFocused());
+      xgramScreen.setAudioRoute(callSettings != null && callSettings.getSpeakerMode() == CallSettings.SPEAKER_MODE_BLUETOOTH, callSettings != null && callSettings.isSpeakerModeEnabled(), isFocused());
+      return;
+    }
     if (buttonWrap != null) {
       muteButtonView.setIsActive(callSettings != null && callSettings.isMicMuted(), isFocused());
       speakerButtonView.setIsActive(callSettings != null && callSettings.isSpeakerModeEnabled(), isFocused());
@@ -1034,6 +1260,19 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
   private void updateEmoji () {
+    if (xgramScreen != null) { // XGram: the key chip and card
+      boolean visible = call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR;
+      boolean newKey = false;
+      if (visible && !xgramScreen.hasKey()) {
+        xgramScreen.setKey(((TdApi.CallStateReady) call.state).emojis);
+        newKey = xgramScreen.hasKey();
+      }
+      xgramScreen.setKeyVisible(visible, isFocused());
+      if (newKey && !hadEmojiSinceStart) {
+        showEmojiTooltip();
+      }
+      return;
+    }
     boolean emojiVisible = (call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR);
     if (emojiVisible && StringUtils.isEmpty(emojiViewSmall.getText())) {
 
@@ -1061,7 +1300,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
   private void showEmojiTooltip () {
-    context().tooltipManager().builder(emojiViewSmall).controller(this).show(tdlib, Lang.getStringBold(R.string.CallEmojiHint, TD.getUserSingleName(call.userId, user)));
+    context().tooltipManager().builder(xgramScreen != null ? xgramScreen.getKeyAnchor() : emojiViewSmall).controller(this).show(tdlib, Lang.getStringBold(R.string.CallEmojiHint, TD.getUserSingleName(call.userId, user)));
   }
 
   private boolean isEmojiVisible;
@@ -1192,6 +1431,9 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   @Override
   protected int getPopupRestoreColor () {
+    if (xgramScreen != null) { // XGram
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE);
+    }
     return 0xff000000;
   }
 
@@ -1219,7 +1461,11 @@ public class CallController extends ViewController<CallController.Arguments> imp
     }
     tdlib.cache().unsubscribeFromCallUpdates(call.id, this);
     tdlib.cache().removeUserDataListener(call.userId, this);
-    avatarView.performDestroy();
+    if (xgramScreen != null) { // XGram
+      xgramScreen.performDestroy();
+    } else {
+      avatarView.performDestroy();
+    }
   }
 
   @Override
