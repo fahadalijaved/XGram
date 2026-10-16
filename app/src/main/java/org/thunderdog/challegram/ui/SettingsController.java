@@ -669,7 +669,7 @@ public class SettingsController extends ViewController<Void> implements
 
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     // XGram: Telegram X's "Check for updates" and "Subscribe to beta" point to Telegram X's own releases.
-    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_sourceCode, R.drawable.baseline_github_24, R.string.ViewSourceCode));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_sourceCode, BuildConfig.REMOTE_URL.contains("github.com") ? R.drawable.baseline_github_24 : R.drawable.baseline_code_24, R.string.ViewSourceCode));
     this.previousBuildInfo = Settings.instance().getPreviousBuildInformation();
     if (this.previousBuildInfo != null) {
       items.add(new ListItem(ListItem.TYPE_SEPARATOR));
