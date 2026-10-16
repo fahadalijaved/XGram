@@ -17,6 +17,7 @@ package org.thunderdog.challegram.navigation;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.text.TextPaint;
 import android.view.ViewGroup;
 
@@ -236,6 +237,11 @@ public class StopwatchHeaderButton extends HeaderButton implements FactorAnimato
     final int cx = getPaddingLeft() + (getMeasuredWidth() - getPaddingLeft() - getPaddingRight()) / 2;
     final int cy = getPaddingTop() + (getMeasuredHeight() - getPaddingBottom() - getPaddingTop()) / 2;
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c, cx, cy); // XGram: a standard icon button with the value in a badge
+      return;
+    }
+
     if (visibilityFactor != 1f) {
       final float scale = VISIBILITY_MIN_FACTOR + (1f - VISIBILITY_MIN_FACTOR) * visibilityFactor;
       c.save();
@@ -343,6 +349,111 @@ public class StopwatchHeaderButton extends HeaderButton implements FactorAnimato
     }
 
     if (visibilityFactor != 1f) {
+      c.restore();
+    }
+  }
+
+  // XGram: Material 3 Expressive. The stopwatch stays a plain icon (it still ticks when a value is set) and the value
+  // (5s) goes in an M3 large badge at the icon's top end: 16dp tall, full corners, labelSmall with tabular figures, in
+  // primary (the dark scheme's over media, see xgramSetOnMedia). The badge grows in after the tick and shrinks through
+  // a value change. Nothing is allocated while drawing.
+
+  private boolean xgramOnMedia;
+  private @Nullable TextPaint xgramBadgePaint;
+  private final Paint xgramBadgeFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final RectF xgramBadgeRect = new RectF();
+  private final Paint.FontMetrics xgramBadgeMetrics = new Paint.FontMetrics();
+
+  /** XGram: true when the button sits over media (the media viewer): the badge takes the dark scheme's primary. */
+  public void xgramSetOnMedia (boolean onMedia) {
+    if (this.xgramOnMedia != onMedia) {
+      this.xgramOnMedia = onMedia;
+      invalidate();
+    }
+  }
+
+  private void xgramDraw (Canvas c, int cx, int cy) {
+    final float visibility = Math.max(0f, Math.min(1f, visibilityFactor));
+    final boolean scaled = visibilityFactor != 1f;
+    if (scaled) {
+      final float scale = VISIBILITY_MIN_FACTOR + (1f - VISIBILITY_MIN_FACTOR) * visibilityFactor;
+      c.save();
+      c.scale(scale, scale, cx, cy);
+    }
+
+    float pressure = 0f, tick = 0f, badge = stopwatchFactor;
+    if (useClockAnimation && stopwatchFactor < 1f) {
+      final float time = (float) STOPWATCH_DURATION * stopwatchFactor;
+      pressure = time <= STOPWATCH_PRESSURE_DURATION ? AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(time / (float) STOPWATCH_PRESSURE_DURATION) : 1f;
+      tick = time >= STOPWATCH_TICK_START + STOPWATCH_TICK_DURATION ? 1f : time > STOPWATCH_TICK_START ? AnimatorUtils.NAVIGATION_INTERPOLATOR.getInterpolation((time - STOPWATCH_TICK_START) / (float) STOPWATCH_TICK_DURATION) : 0f;
+      badge = time >= STOPWATCH_TRANSFORM_START + STOPWATCH_TRANSFORM_DURATION ? 1f : time > STOPWATCH_TRANSFORM_START ? AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation((time - STOPWATCH_TRANSFORM_START) / (float) STOPWATCH_TRANSFORM_DURATION) : 0f;
+    }
+
+    // The glyph (Telegram X's stopwatch)
+    final int color = me.vkryl.core.ColorUtils.alphaColor(visibility, getColor(0xffffffff));
+    final Paint fillingPaint = Paints.fillingPaint(color);
+    final int width = Screen.dp(2f);
+    final int radius = Screen.dp(8f);
+    final int left = cx - width / 2, right = cx + width / 2;
+    final int pressWidth = Screen.dp(6f);
+    final int pressOffset = (int) ((float) width * (pressure < .5f ? pressure / .5f : 1f - (pressure - .5f) / .5f));
+    c.drawRect(cx - pressWidth / 2, cy - radius - width - width + pressOffset, cx + pressWidth / 2, cy - radius - width + pressOffset, fillingPaint);
+    final boolean rotate = tick != 0f && tick != 1f;
+    if (rotate) {
+      c.save();
+      c.rotate(360f * tick, cx, cy);
+    }
+    c.drawRect(left, cy - width / 2 - Screen.dp(4f), right, cy + width / 2, fillingPaint);
+    if (rotate) {
+      c.restore();
+    }
+    circlePaint.setColor(color);
+    c.drawCircle(cx, cy, radius, circlePaint);
+    c.save();
+    c.rotate(45f, cx, cy);
+    c.drawRect(left, cy - radius - width - width / 2, right, cy - radius, fillingPaint);
+    c.restore();
+
+    // The badge
+    if (value != null && badge > 0f) {
+      final float change = replaceFactor < .5f ? 1f - (replaceFactor / .5f) : (replaceFactor - .5f) / .5f;
+      final float appear = Math.max(0f, Math.min(1f, badge)) * visibility;
+      if (xgramBadgePaint == null) {
+        xgramBadgePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        xgramBadgePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S, false));
+        xgramBadgePaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S)));
+        xgramBadgePaint.setTextAlign(Paint.Align.CENTER);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+          xgramBadgePaint.setFontFeatureSettings("tnum");
+        }
+      }
+      final float h = Screen.dp(16f);
+      final float w = Math.max(h, xgramBadgePaint.measureText(value.text) + Screen.dp(8f));
+      final boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+      final int viewWidth = getMeasuredWidth();
+      final float badgeLeft;
+      if (rtl) {
+        badgeLeft = Math.max(Screen.dp(1f), cx - Screen.dp(4f) - w);
+      } else {
+        badgeLeft = Math.max(0f, Math.min(cx + Screen.dp(4f), viewWidth - w - Screen.dp(1f)));
+      }
+      final float badgeTop = cy - Screen.dp(14f);
+      xgramBadgeRect.set(badgeLeft, badgeTop, badgeLeft + w, badgeTop + h);
+      final float scale = (.6f + .4f * appear) * (TRANSFORM_MIN_FACTOR + (1f - TRANSFORM_MIN_FACTOR) * change);
+      final int saveCount = c.save();
+      c.scale(scale, scale, xgramBadgeRect.centerX(), xgramBadgeRect.centerY());
+      final int container = xgramOnMedia ? com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY) : com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      final int content = xgramOnMedia ? com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY) : com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY);
+      xgramBadgeFill.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(container, appear));
+      c.drawRoundRect(xgramBadgeRect, h / 2f, h / 2f, xgramBadgeFill);
+      xgramBadgePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(content, appear * change));
+      xgramBadgePaint.getFontMetrics(xgramBadgeMetrics);
+      final float baseline = xgramBadgeRect.centerY() - (xgramBadgeMetrics.ascent + xgramBadgeMetrics.descent) / 2f;
+      c.drawText(value.text, xgramBadgeRect.centerX(), baseline, xgramBadgePaint);
+      c.restoreToCount(saveCount);
+    }
+
+    if (scaled) {
       c.restore();
     }
   }

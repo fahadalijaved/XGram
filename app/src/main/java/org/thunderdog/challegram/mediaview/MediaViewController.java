@@ -5677,7 +5677,11 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     if (this.topOffset != topOffset) {
       this.topOffset = topOffset;
       Views.setPaddingTop(othersView, topOffset);
-      if (receiverView != null) {
+      if (receiverView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        FrameLayout.LayoutParams fp = (FrameLayout.LayoutParams) receiverView.getLayoutParams();
+        xgramPlaceReceiverChip(fp); // XGram: the receiver chip
+        receiverView.setLayoutParams(fp);
+      } else if (receiverView != null) {
         FrameLayout.LayoutParams fp = (FrameLayout.LayoutParams) receiverView.getLayoutParams();
         if (topOffset > 0) {
           fp.leftMargin = Screen.dp(8f);
@@ -5800,6 +5804,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
     if (sendButton != null) {
       sendButton.destroySlowModeCounterController();
+    }
+    if (xgramReceiverAvatar != null) {
+      xgramReceiverAvatar.performDestroy(); // XGram: the receiver chip's avatar
+      xgramReceiverAvatar = null;
     }
     subscribeToChatId(0);
   }
@@ -9369,6 +9377,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       stopwatchButton.setOnClickListener(this);
       stopwatchButton.setLayoutParams(new LinearLayout.LayoutParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT));
       com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(stopwatchButton); // XGram
+      stopwatchButton.xgramSetOnMedia(true); // XGram: its value badge in the dark scheme's primary
       editButtons.addView(stopwatchButton);
     }
 
@@ -9723,6 +9732,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     final @DrawableRes int icon = args.receiverRowIcon != 0 ? args.receiverRowIcon : R.drawable.baseline_arrow_upward_18;
     final CharSequence text = StringUtils.isEmpty(args.receiverRowText) ? (chat != null ? tdlib.chatTitle(chat) : null) : args.receiverRowText;
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return xgramBuildReceiverChip(args.receiverRowIcon == 0 ? chat : null, icon, text);
+    }
+
     FrameLayoutFix.LayoutParams fp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.getStatusBarHeight());
     if (topOffset > 0) {
       fp.leftMargin = Screen.dp(8f);
@@ -9765,6 +9778,80 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
 
     return receiverView;
+  }
+
+  // XGram M3E round 5: the send screen's receiver row is an on-media assist chip: 32dp, full corners, the dark scheme's
+  // surfaceContainerHigh at 60%, the chat's 18dp avatar (or the row's icon) 8dp in, then the chat in white labelLarge
+  // and 16dp to the end. It sits at the top start, centred on the selection check's row.
+
+  private static final float XGRAM_RECEIVER_CHIP_HEIGHT = 32f;
+  private @Nullable org.thunderdog.challegram.widget.AvatarView xgramReceiverAvatar;
+
+  private LinearLayout xgramBuildReceiverChip (@Nullable TdApi.Chat chat, @DrawableRes int icon, @Nullable CharSequence text) {
+    FrameLayoutFix.LayoutParams fp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(XGRAM_RECEIVER_CHIP_HEIGHT), Gravity.TOP | Gravity.LEFT);
+    xgramPlaceReceiverChip(fp);
+
+    LinearLayout chip = new LinearLayout(context);
+    chip.setOrientation(LinearLayout.HORIZONTAL);
+    chip.setGravity(Gravity.CENTER_VERTICAL);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+      chip.setLayoutDirection(Lang.rtl() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+    }
+    chip.setAlpha(0f);
+    chip.setLayoutParams(fp);
+    android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+    background.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), .6f));
+    background.setCornerRadius(Screen.dp(XGRAM_RECEIVER_CHIP_HEIGHT) / 2f);
+    chip.setBackground(background);
+    final boolean hasText = !StringUtils.isEmpty(text);
+    final int start = Screen.dp(8f), end = Screen.dp(hasText ? 16f : 8f);
+    chip.setPadding(Lang.rtl() ? end : start, 0, Lang.rtl() ? start : end, 0);
+
+    final int leadSize = Screen.dp(18f);
+    if (chat != null) {
+      org.thunderdog.challegram.widget.AvatarView avatarView = new org.thunderdog.challegram.widget.AvatarView(context);
+      avatarView.setLayoutParams(new LinearLayout.LayoutParams(leadSize, leadSize));
+      avatarView.setChat(tdlib, chat);
+      chip.addView(avatarView);
+      if (xgramReceiverAvatar != null) {
+        xgramReceiverAvatar.performDestroy();
+      }
+      xgramReceiverAvatar = avatarView;
+    } else {
+      ImageView imageView = new ImageView(context);
+      imageView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+      imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(icon));
+      imageView.setColorFilter(0xffffffff);
+      imageView.setLayoutParams(new LinearLayout.LayoutParams(leadSize, leadSize));
+      chip.addView(imageView);
+    }
+
+    if (hasText) {
+      TextView textView = new NoScrollTextView(context);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      textView.setTextColor(0xffffffff);
+      textView.setSingleLine(true);
+      textView.setEllipsize(TextUtils.TruncateAt.END);
+      textView.setIncludeFontPadding(false);
+      // clear of the selection check and the counter at the top end
+      textView.setMaxWidth(Math.max(Screen.dp(96f), Screen.currentWidth() - Screen.dp(16f + 8f + 18f + 8f + 16f + 148f)));
+      textView.setText(text);
+      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      if (Lang.rtl()) {
+        lp.rightMargin = Screen.dp(8f);
+      } else {
+        lp.leftMargin = Screen.dp(8f);
+      }
+      textView.setLayoutParams(lp);
+      chip.addView(textView);
+    }
+    return chip;
+  }
+
+  /** Top start, 16dp in, centred on the selection check (its centre is 41dp + topOffset / 2 down, see setTopOffset). */
+  private void xgramPlaceReceiverChip (FrameLayout.LayoutParams fp) {
+    fp.leftMargin = Screen.dp(16f);
+    fp.topMargin = Math.max(topOffset + Screen.dp(4f), Screen.dp(41f) + topOffset / 2 - Screen.dp(XGRAM_RECEIVER_CHIP_HEIGHT) / 2);
   }
 
   /* * */
