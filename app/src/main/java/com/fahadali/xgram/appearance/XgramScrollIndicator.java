@@ -788,6 +788,7 @@ public final class XgramScrollIndicator extends RecyclerView.ItemDecoration impl
     }
 
     @Override
+    @SuppressWarnings ("rawtypes") // the androidx listener declares a raw DynamicAnimation
     public void onAnimationUpdate (DynamicAnimation animation, float value, float velocity) {
       onUpdate.run();
     }
