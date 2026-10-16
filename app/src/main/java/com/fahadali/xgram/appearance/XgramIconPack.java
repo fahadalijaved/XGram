@@ -46,6 +46,8 @@ public final class XgramIconPack {
   public static final int[] PACKS = {PACK_TELEGRAM_X, PACK_DUOTONE, PACK_SOLAR, PACK_PHOSPHOR, PACK_MINGCUTE, PACK_PIXEL, PACK_LINE};
 
   private static volatile SparseIntArray map;
+  /** The Expressive switch the map was built for: the Classic table depends on it (XgramIconPackTable.classic). */
+  private static volatile boolean mapExpressive;
 
   public static int current () {
     int pack = Settings.instance().pmc().getInt(KEY, PACK_TELEGRAM_X);
@@ -77,7 +79,9 @@ public final class XgramIconPack {
       case PACK_PHOSPHOR: return R.string.XgramIconPackPhosphorInfo;
       case PACK_MINGCUTE: return R.string.XgramIconPackMingCuteInfo;
       case PACK_PIXEL: return R.string.XgramIconPackPixelInfo;
-      default: return R.string.XgramIconPackClassicInfo;
+      default:
+        // Material 3 Expressive draws the Classic pack outlined (XgramIconPackTable.classic)
+        return XgramExpressive.isEnabled() ? R.string.XgramM3eW2IconPackClassicInfo : R.string.XgramIconPackClassicInfo;
     }
   }
 
@@ -102,21 +106,22 @@ public final class XgramIconPack {
       case PACK_PHOSPHOR: return XgramIconPackTable.PREVIEW_PHOSPHOR;
       case PACK_MINGCUTE: return XgramIconPackTable.PREVIEW_MINGCUTE;
       case PACK_PIXEL: return XgramIconPackTable.PREVIEW_PIXEL;
-      default: return XgramIconPackTable.PREVIEW_TGX;
+      default: return XgramIconPackTable.classicPreview();
     }
   }
 
   /** The drawable to load instead of {@code res}, or {@code res} itself. */
   public static int map (int res) {
     SparseIntArray map = XgramIconPack.map;
-    if (map == null) {
+    if (map == null || mapExpressive != XgramExpressive.isEnabled()) {
       map = build();
     }
     return map.size() == 0 ? res : map.get(res, res);
   }
 
   private static synchronized SparseIntArray build () {
-    if (map != null) {
+    boolean expressive = XgramExpressive.isEnabled();
+    if (map != null && mapExpressive == expressive) {
       return map;
     }
     SparseIntArray result = new SparseIntArray();
@@ -126,6 +131,7 @@ public final class XgramIconPack {
         result.put(table[i], table[i + 1]);
       }
     }
+    mapExpressive = expressive;
     map = result;
     return result;
   }

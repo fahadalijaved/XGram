@@ -22,6 +22,9 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramExpressiveC;
+
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
@@ -34,48 +37,88 @@ import java.util.ArrayList;
 import me.vkryl.android.ViewUtils;
 
 public class RippleSupport {
+  // XGram: with Material 3 Expressive on, every selector here is an M3 state layer instead of Telegram X's grey ripple
+  // (0x50a0a0a0 / 0x40a0a0a0 / 0x30ffffff): the content color of the surface under it at .10 (XgramExpressiveC), with
+  // the shape of the component. Off, everything below stays Telegram X's.
+
+  private static boolean xgram () {
+    return XgramExpressive.isEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP;
+  }
+
+  /** Chat list rows press in the shape of their selection tile; other rows keep a full-bounds layer. */
+  private static boolean xgramIsTileRow (View view) {
+    return view instanceof org.thunderdog.challegram.component.dialogs.ChatView;
+  }
+
+  /** Standalone icons (an ImageView or a header button with a transparent selector) are M3 standard icon buttons. */
+  private static boolean xgramIsIconButton (View view) {
+    return view instanceof android.widget.ImageView || view instanceof org.thunderdog.challegram.navigation.HeaderButton;
+  }
+
+  private static Drawable xgramFillingSelector (View view, @ColorId int backgroundColorId, float radius) {
+    if (radius == 0f && xgramIsTileRow(view)) {
+      return XgramExpressiveC.fillingTileSelector(backgroundColorId);
+    }
+    return XgramExpressiveC.fillingSelector(backgroundColorId, radius);
+  }
+
+  private static Drawable xgramTransparentSelector (View view, float radius) {
+    if (radius == 0f) {
+      if (xgramIsTileRow(view)) {
+        return XgramExpressiveC.listTileSelector();
+      }
+      if (xgramIsIconButton(view)) {
+        return XgramExpressiveC.iconButtonSelector();
+      }
+    }
+    return XgramExpressiveC.transparentSelector(radius);
+  }
+
   public static void setSimpleWhiteBackground (@NonNull View view) {
     setSimpleWhiteBackground(view, null);
   }
 
   public static void setSimpleWhiteBackground (@NonNull View view, @Nullable ViewController<?> themeProvider) {
-    ViewUtils.setBackground(view, Theme.fillingSelector());
+    ViewUtils.setBackground(view, xgram() ? xgramFillingSelector(view, ColorId.filling, 0f) : Theme.fillingSelector());
     if (themeProvider != null) {
       themeProvider.addThemeInvalidateListener(view);
     }
   }
 
   public static void setSimpleWhiteBackground (@NonNull View view, @ColorId int backgroundColorId, @Nullable ViewController<?> themeProvider) {
-    ViewUtils.setBackground(view, Theme.fillingSelector(backgroundColorId));
+    ViewUtils.setBackground(view, xgram() ? xgramFillingSelector(view, backgroundColorId, 0f) : Theme.fillingSelector(backgroundColorId));
     if (themeProvider != null) {
       themeProvider.addThemeInvalidateListener(view);
     }
   }
 
   public static void setSimpleWhiteBackground (@NonNull View view, @ColorId int backgroundColorId, float radius, @Nullable ViewController<?> themeProvider) {
-    ViewUtils.setBackground(view, Theme.fillingSelector(backgroundColorId, radius));
+    ViewUtils.setBackground(view, xgram() ? xgramFillingSelector(view, backgroundColorId, radius) : Theme.fillingSelector(backgroundColorId, radius));
     if (themeProvider != null) {
       themeProvider.addThemeInvalidateListener(view);
     }
   }
 
   public static void setTransparentSelector (View view) {
-    ViewUtils.setBackground(view, Theme.transparentSelector());
+    ViewUtils.setBackground(view, xgram() ? xgramTransparentSelector(view, 0f) : Theme.transparentSelector());
   }
 
   public static void setTransparentSelector (View view, float radius, @Nullable ViewController<?> themeProvider) {
-    ViewUtils.setBackground(view, Theme.transparentRoundSelector(radius));
+    ViewUtils.setBackground(view, xgram() ? xgramTransparentSelector(view, radius) : Theme.transparentRoundSelector(radius));
     if (themeProvider != null) {
       themeProvider.addThemeInvalidateListener(view);
     }
   }
 
   public static void setTransparentBlackSelector (View view) {
-    ViewUtils.setBackground(view, Theme.transparentBlackSelector());
+    // Telegram X's selector for light (white) bars; under Expressive every bar is a surface, so it's the surface's
+    // content color like any transparent selector.
+    ViewUtils.setBackground(view, xgram() ? xgramTransparentSelector(view, 0f) : Theme.transparentBlackSelector());
   }
 
   public static void setTransparentWhiteSelector (View view) {
-    ViewUtils.setBackground(view, Theme.transparentWhiteSelector());
+    // Telegram X's selector for dark (colored) bars; see setTransparentBlackSelector.
+    ViewUtils.setBackground(view, xgram() ? xgramTransparentSelector(view, 0f) : Theme.transparentWhiteSelector());
   }
 
   public static void invalidateRipple (Drawable drawable) {
@@ -144,7 +187,7 @@ public class RippleSupport {
   }
 
   public static void setCircleBackground (View view, float size, float padding, @ColorId int colorId, boolean needShadow, @Nullable ViewController<?> themeProvider) {
-    ViewUtils.setBackground(view, Theme.circleSelector(size, colorId));
+    ViewUtils.setBackground(view, xgram() ? XgramExpressiveC.circleSelector(size, colorId) : Theme.circleSelector(size, colorId));
     if (SimpleShapeDrawable.USE_SOFTWARE_SHADOW) {
       view.setLayerType(View.LAYER_TYPE_SOFTWARE, Views.getLayerPaint());
     }
@@ -161,7 +204,7 @@ public class RippleSupport {
   }
 
   public static void setRectBackground (View view, float size, float padding, @ColorId int colorId, @Nullable ViewController<?> themeProvider) {
-    ViewUtils.setBackground(view, Theme.rectSelector(size, padding, colorId));
+    ViewUtils.setBackground(view, xgram() ? XgramExpressiveC.rectSelector(size, padding, colorId) : Theme.rectSelector(size, padding, colorId));
     if (SimpleShapeDrawable.USE_SOFTWARE_SHADOW) {
       view.setLayerType(View.LAYER_TYPE_SOFTWARE, Views.getLayerPaint());
     }

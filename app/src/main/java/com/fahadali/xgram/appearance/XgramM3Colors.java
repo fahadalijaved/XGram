@@ -17,22 +17,30 @@ import static com.fahadali.xgram.appearance.XgramExpressive.INVERSE_ON_SURFACE;
 import static com.fahadali.xgram.appearance.XgramExpressive.INVERSE_PRIMARY;
 import static com.fahadali.xgram.appearance.XgramExpressive.INVERSE_SURFACE;
 import static com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR;
+import static com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR_CONTAINER;
 import static com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY;
 import static com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER;
+import static com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY;
 import static com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER;
 import static com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE;
 import static com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT;
+import static com.fahadali.xgram.appearance.XgramExpressive.ON_TERTIARY;
 import static com.fahadali.xgram.appearance.XgramExpressive.ON_TERTIARY_CONTAINER;
 import static com.fahadali.xgram.appearance.XgramExpressive.OUTLINE;
 import static com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT;
 import static com.fahadali.xgram.appearance.XgramExpressive.PRIMARY;
 import static com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER;
+import static com.fahadali.xgram.appearance.XgramExpressive.SECONDARY;
 import static com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER;
 import static com.fahadali.xgram.appearance.XgramExpressive.SURFACE;
+import static com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT;
 import static com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER;
 import static com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH;
 import static com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST;
 import static com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW;
+import static com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOWEST;
+import static com.fahadali.xgram.appearance.XgramExpressive.SURFACE_DIM;
+import static com.fahadali.xgram.appearance.XgramExpressive.TERTIARY;
 import static com.fahadali.xgram.appearance.XgramExpressive.TERTIARY_CONTAINER;
 
 import androidx.annotation.ColorInt;
@@ -57,6 +65,9 @@ public final class XgramM3Colors {
 
   private static final int K_ROLE = 1, K_OVER = 2, K_TRANSPARENT = 3, K_HARMONIZE = 4;
   private static final int SIZE = 512;
+
+  /** M3 state layer opacities (androidx.compose.material3 StateTokens): pressed .10, dragged .16. */
+  private static final float STATE_LAYER_PRESSED = XgramExpressive.STATE_PRESSED, STATE_LAYER_DRAGGED = XgramExpressive.STATE_DRAGGED;
 
   /** kind (4 bits) | role << 4 (6 bits) | base role << 10 (6 bits) | alpha << 16 (8 bits); 0 = not mapped. */
   private static final int[] TABLE = new int[SIZE];
@@ -116,7 +127,8 @@ public final class XgramM3Colors {
     roleAlpha(SURFACE_CONTAINER_HIGH, .92f, ColorId.bubble_date, ColorId.bubble_overlay);
     transparent(ColorId.bubble_date_noWallpaper, ColorId.bubble_overlay_noWallpaper, ColorId.statusBar,
       ColorId.tooltip_outline, ColorId.bubbleIn_outline, ColorId.bubbleOut_outline);
-    over(ON_SURFACE, .10f, SURFACE, ColorId.fillingPressed);
+    // Pressed rows that swap their fill (state list drawables): onSurface .10 over the surface, opaque.
+    over(ON_SURFACE, STATE_LAYER_PRESSED, SURFACE, ColorId.fillingPressed);
 
     // Text and icons
     role(ON_SURFACE, ColorId.text, ColorId.headerText, ColorId.headerIcon, ColorId.headerLightText,
@@ -147,21 +159,25 @@ public final class XgramM3Colors {
       ColorId.bubble_unreadText_noWallpaper, ColorId.messageVerticalLine, ColorId.messageNeutralFillingContent,
       ColorId.messageAuthor, ColorId.file, ColorId.fileAttach, ColorId.waveformActive, ColorId.blockQuoteLine,
       ColorId.introSectionActive, ColorId.headerTabActive, ColorId.fillingPositive, ColorId.iv_textLink,
-      ColorId.iv_blockQuoteLine, ColorId.bubbleIn_progress, ColorId.bubbleIn_textLink, ColorId.bubbleIn_fillingActive,
+      ColorId.iv_blockQuoteLine, ColorId.bubbleIn_progress, ColorId.bubbleIn_textLink,
       ColorId.bubbleIn_fillingPositive, ColorId.bubbleIn_blockQuoteLine, ColorId.bubbleOut_textLink,
       ColorId.bubbleOut_chatVerticalLine, ColorId.bubbleOut_inlineIcon, ColorId.bubbleOut_inlineOutline,
       ColorId.bubbleOut_waveformActive, ColorId.bubbleOut_file, ColorId.bubbleOut_ticks, ColorId.bubbleOut_ticksRead,
-      ColorId.bubbleOut_messageAuthor, ColorId.bubbleOut_fillingActive, ColorId.bubbleOut_fillingPositive,
+      ColorId.bubbleOut_messageAuthor, ColorId.bubbleOut_fillingPositive,
       ColorId.bubbleOut_blockQuoteLine);
-    roleAlpha(PRIMARY, .30f, ColorId.textSelectionHighlight);
-    roleAlpha(PRIMARY, .20f, ColorId.textLinkPressHighlight, ColorId.iv_textLinkPressHighlight,
+    // State layers and highlights (M3 state layer tokens: hover .08, focus .10, pressed .10, dragged .16)
+    // Text selection: Compose material3 TextSelectionColors, primary at .40.
+    roleAlpha(PRIMARY, .40f, ColorId.textSelectionHighlight);
+    // A pressed link is a pressed state layer in the link's own color (primary) at .10.
+    roleAlpha(PRIMARY, STATE_LAYER_PRESSED, ColorId.textLinkPressHighlight, ColorId.iv_textLinkPressHighlight,
       ColorId.bubbleIn_textLinkPressHighlight, ColorId.bubbleOut_textLinkPressHighlight);
-    roleAlpha(PRIMARY, .12f, ColorId.messageSelection, ColorId.bubble_messageSelection,
+    // Selected messages and the jump-to-message flash share these ids: primary at .16 (the dragged/selected layer).
+    roleAlpha(PRIMARY, STATE_LAYER_DRAGGED, ColorId.messageSelection, ColorId.bubble_messageSelection,
       ColorId.bubble_messageSelectionNoWallpaper);
     role(ON_PRIMARY, ColorId.controlContent, ColorId.checkContent, ColorId.togglerPositiveContent,
       ColorId.inlineContentActive, ColorId.badgeText, ColorId.fillingPositiveContent, ColorId.fileContent,
-      ColorId.bubbleIn_fillingActiveContent, ColorId.bubbleIn_fillingPositiveContent, ColorId.bubbleOut_fileContent,
-      ColorId.bubbleOut_fillingActiveContent, ColorId.bubbleOut_fillingPositiveContent);
+      ColorId.bubbleIn_fillingPositiveContent, ColorId.bubbleOut_fileContent,
+      ColorId.bubbleOut_fillingPositiveContent);
     role(PRIMARY_CONTAINER, ColorId.circleButtonRegular, ColorId.circleButtonActive, ColorId.circleButtonTheme,
       ColorId.circleButtonNewChat, ColorId.circleButtonNewGroup, ColorId.circleButtonNewChannel,
       ColorId.circleButtonNewSecret, ColorId.headerButton, ColorId.promo, ColorId.bubbleOut_background);
@@ -173,21 +189,27 @@ public final class XgramM3Colors {
     roleAlpha(ON_PRIMARY_CONTAINER, .70f, ColorId.bubbleOut_time, ColorId.bubbleOut_progress);
     roleAlpha(ON_PRIMARY_CONTAINER, .30f, ColorId.bubbleOut_waveformInactive);
     roleAlpha(ON_PRIMARY_CONTAINER, .20f, ColorId.bubbleOut_separator);
-    over(ON_PRIMARY_CONTAINER, .10f, PRIMARY_CONTAINER, ColorId.bubbleOut_pressed);
+    over(ON_PRIMARY_CONTAINER, STATE_LAYER_PRESSED, PRIMARY_CONTAINER, ColorId.bubbleOut_pressed);
     role(SURFACE_CONTAINER_HIGH, ColorId.bubbleIn_background);
-    over(ON_SURFACE, .10f, SURFACE_CONTAINER_HIGH, ColorId.bubbleIn_pressed);
+    over(ON_SURFACE, STATE_LAYER_PRESSED, SURFACE_CONTAINER_HIGH, ColorId.bubbleIn_pressed);
     // Surface small FAB: container high, primary icon
     role(SURFACE_CONTAINER_HIGH, ColorId.circleButtonChat, ColorId.circleButtonOverlay);
     role(PRIMARY, ColorId.circleButtonChatIcon, ColorId.circleButtonOverlayIcon);
 
-    // Secondary
+    // Secondary: selected containers (filter chips, chosen reactions, nav and tab indicators) are secondaryContainer
+    // with onSecondaryContainer content, in and out of bubbles alike.
     role(SECONDARY_CONTAINER, ColorId.sliderInactive, ColorId.seekEmpty, ColorId.fillingActive,
+      ColorId.bubbleIn_fillingActive, ColorId.bubbleOut_fillingActive,
       ColorId.profileSectionActive, ColorId.sectionedScrollBarActive, ColorId.bubble_button,
       ColorId.bubble_button_noWallpaper);
-    role(ON_SECONDARY_CONTAINER, ColorId.fillingActiveContent, ColorId.headerTabActiveText,
+    role(ON_SECONDARY_CONTAINER, ColorId.fillingActiveContent, ColorId.bubbleIn_fillingActiveContent,
+      ColorId.bubbleOut_fillingActiveContent, ColorId.headerTabActiveText,
       ColorId.profileSectionActiveContent, ColorId.sectionedScrollBarActiveContent, ColorId.bubble_buttonText,
       ColorId.bubble_buttonText_noWallpaper);
-    roleAlpha(ON_SECONDARY_CONTAINER, .10f, ColorId.bubble_buttonRipple, ColorId.bubble_buttonRipple_noWallpaper);
+    roleAlpha(ON_SECONDARY_CONTAINER, STATE_LAYER_PRESSED, ColorId.bubble_buttonRipple,
+      ColorId.bubble_buttonRipple_noWallpaper);
+    // Switch, unselected: track surfaceContainerHighest (handle outline is togglerInactive above).
+    role(SURFACE_CONTAINER_HIGHEST, ColorId.togglerInactiveBackground);
 
     // Error and inverse
     role(ERROR, ColorId.textNegative, ColorId.iconNegative, ColorId.inputNegative, ColorId.togglerNegative,
@@ -198,7 +220,7 @@ public final class XgramM3Colors {
     role(INVERSE_SURFACE, ColorId.snackbarUpdate, ColorId.tooltip);
     role(INVERSE_ON_SURFACE, ColorId.snackbarUpdateText, ColorId.tooltip_text);
     role(INVERSE_PRIMARY, ColorId.snackbarUpdateAction, ColorId.tooltip_textLink);
-    roleAlpha(INVERSE_PRIMARY, .20f, ColorId.tooltip_textLinkPressHighlight);
+    roleAlpha(INVERSE_PRIMARY, STATE_LAYER_PRESSED, ColorId.tooltip_textLinkPressHighlight);
     role(TERTIARY_CONTAINER, ColorId.iv_textMarkedBackground);
     role(ON_TERTIARY_CONTAINER, ColorId.iv_textMarked);
 
@@ -250,6 +272,54 @@ public final class XgramM3Colors {
   /** Whether the id resolves to a role while Expressive design is on. Cheap. */
   public static boolean isMapped (int colorId) {
     return colorId > 0 && colorId < SIZE && TABLE[colorId] != 0;
+  }
+
+  // Content colors, for state layers (a ripple is the content color of the surface it sits on)
+
+  /** The M3 content role drawn on the container or surface role {@code role}, or -1 when {@code role} is no container. */
+  public static int onRole (int role) {
+    switch (role) {
+      case PRIMARY: return ON_PRIMARY;
+      case PRIMARY_CONTAINER: return ON_PRIMARY_CONTAINER;
+      case SECONDARY: return ON_SECONDARY;
+      case SECONDARY_CONTAINER: return ON_SECONDARY_CONTAINER;
+      case TERTIARY: return ON_TERTIARY;
+      case TERTIARY_CONTAINER: return ON_TERTIARY_CONTAINER;
+      case ERROR: return ON_ERROR;
+      case ERROR_CONTAINER: return ON_ERROR_CONTAINER;
+      case INVERSE_SURFACE: return INVERSE_ON_SURFACE;
+      case SURFACE:
+      case SURFACE_DIM:
+      case SURFACE_BRIGHT:
+      case SURFACE_CONTAINER_LOWEST:
+      case SURFACE_CONTAINER_LOW:
+      case SURFACE_CONTAINER:
+      case SURFACE_CONTAINER_HIGH:
+      case SURFACE_CONTAINER_HIGHEST:
+        return ON_SURFACE;
+      default:
+        return -1;
+    }
+  }
+
+  /**
+   * The content role of the background {@code colorId} resolves to while Expressive design is on (onSurface for the
+   * surfaces, onPrimary for primary and so on), or -1 when the id is not a container in the table. An id drawn as a
+   * layer over a base role (K_OVER) takes the content role of that base.
+   */
+  public static int contentRoleOf (int colorId) {
+    if (colorId <= 0 || colorId >= SIZE) {
+      return -1;
+    }
+    int entry = TABLE[colorId];
+    switch (entry & 0xf) {
+      case K_ROLE:
+        return ((entry >>> 16) & 0xff) == 255 ? onRole((entry >>> 4) & 0x3f) : -1;
+      case K_OVER:
+        return onRole((entry >>> 10) & 0x3f);
+      default:
+        return -1;
+    }
   }
 
   // Theme darkness

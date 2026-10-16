@@ -87,9 +87,81 @@ final class XgramIconPackTable {
     R.drawable.baseline_lock_24, R.drawable.xgl_lock,
   };
 
-  /** The table of the Classic pack: {@link #M3E_CLASSIC} with Material 3 Expressive on, otherwise null (no mapping). */
+  /**
+   * Material 3 Expressive with the Classic pack, wave 2: one outlined family for every icon at rest. The Classic table
+   * is the whole {@link #LINE} table (outlined, rounded) plus {@link #M3E_CLASSIC} and {@link #M3E_EXTRA}, without the
+   * icons below, which stay filled because their fill means something: a selected or active state, a status badge,
+   * a glyph on a filled control, or no icon at all. Written by hand, not by build.py: keep it when regenerating.
+   */
+  private static final int[] M3E_KEEP_FILLED = {
+    // Selected state next to its outlined twin baseline_star_border_24 (favorite sticker, bookmarked message, rating)
+    R.drawable.baseline_star_24,
+    // Status badge
+    R.drawable.deproko_baseline_verify_24, R.drawable.deproko_baseline_verify_chat_24,
+    // Sets the Line pack draws alike: its moon would stand for the brightness sun (SliderWrapView), one die for six faces
+    R.drawable.baseline_brightness_5_24,
+    R.drawable.belledeboheme_baseline_dice_1_16, R.drawable.belledeboheme_baseline_dice_2_16,
+    R.drawable.belledeboheme_baseline_dice_3_16, R.drawable.belledeboheme_baseline_dice_4_16,
+    R.drawable.belledeboheme_baseline_dice_5_16, R.drawable.belledeboheme_baseline_dice_6_16,
+    // Media transport and volume on filled buttons and over video (players, file and voice buttons)
+    R.drawable.baseline_play_arrow_36_white, R.drawable.baseline_pause_36_white,
+    R.drawable.baseline_play_circle_filled_24_white, R.drawable.baseline_pause_24, R.drawable.baseline_stop_24,
+    R.drawable.baseline_stop_24_white, R.drawable.baseline_skip_next_24_white, R.drawable.baseline_skip_previous_24_white,
+    R.drawable.round_skip_next_36, R.drawable.round_skip_previous_36, R.drawable.baseline_fast_forward_24,
+    R.drawable.baseline_volume_off_24_white, R.drawable.baseline_volume_up_24_white,
+    // Glyphs on the filled accept / decline call buttons
+    R.drawable.baseline_phone_24_white, R.drawable.round_call_24_white, R.drawable.round_call_end_24_white,
+    // Not icons: the map marker and the giveaway particles
+    R.drawable.ic_map_pin_44, R.drawable.giveaway_particle_1, R.drawable.giveaway_particle_2,
+  };
+
+  /** Classic-only pairs with Material 3 Expressive on: XGram's own filled M3E icons and their outlined forms. */
+  private static final int[] M3E_EXTRA = {
+    // User ID / Peer ID row (ProfileController, SettingsController): Material Icons Outlined "badge"
+    R.drawable.xgram_m3e_s4_badge_24, R.drawable.xgram_m3e_w2_icons_badge_24,
+  };
+
+  private static volatile int[] m3eClassic;
+
+  /** The table of the Classic pack: the outlined Material 3 Expressive table with Expressive on, otherwise null (no mapping). */
   static int[] classic () {
-    return XgramExpressive.isEnabled() ? M3E_CLASSIC : null;
+    if (!XgramExpressive.isEnabled()) {
+      return null;
+    }
+    int[] table = m3eClassic;
+    if (table == null) {
+      table = buildM3eClassic();
+      m3eClassic = table;
+    }
+    return table;
+  }
+
+  private static int[] buildM3eClassic () {
+    android.util.SparseBooleanArray keep = new android.util.SparseBooleanArray(M3E_KEEP_FILLED.length);
+    for (int res : M3E_KEEP_FILLED) {
+      keep.put(res, true);
+    }
+    int[][] sources = {LINE, M3E_CLASSIC, M3E_EXTRA};
+    int size = 0;
+    for (int[] source : sources) {
+      size += source.length;
+    }
+    int[] result = new int[size];
+    int count = 0;
+    for (int[] source : sources) {
+      for (int i = 0; i + 1 < source.length; i += 2) {
+        if (!keep.get(source[i])) {
+          result[count++] = source[i];
+          result[count++] = source[i + 1];
+        }
+      }
+    }
+    return java.util.Arrays.copyOf(result, count);
+  }
+
+  /** Picker preview of the Classic pack: what it draws, the Line icons with Material 3 Expressive on. */
+  static int[] classicPreview () {
+    return XgramExpressive.isEnabled() ? PREVIEW_LINE : PREVIEW_TGX;
   }
 
   /** XGram Line */
