@@ -780,12 +780,38 @@ public class TGCallService extends Service implements
 
   private static final @DrawableRes int CALL_ICON_RES = R.drawable.baseline_phone_24_white;
 
+  // XGram M3E: on Android 12 and newer the call notifications use Notification.CallStyle (a person with the
+  // circular avatar, the system's decline / answer and hang up buttons, a chronometer from the moment the call
+  // connects). Telegram X's builder stays below Android 12 and with Expressive design off.
+
+  private boolean xgramOngoingConnected;
+
+  private static boolean xgramCallStyle () {
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  @androidx.annotation.RequiresApi(Build.VERSION_CODES.S)
+  private android.app.Person xgramPerson (@Nullable Bitmap avatar) {
+    String name = user != null ? TD.getUserName(user) : null;
+    if (StringUtils.isEmpty(name)) {
+      name = Lang.getString(R.string.XgramM3CallBranding);
+    }
+    android.app.Person.Builder person = new android.app.Person.Builder().setName(name).setImportant(true);
+    if (avatar != null) {
+      person.setIcon(android.graphics.drawable.Icon.createWithBitmap(avatar));
+    }
+    return person.build();
+  }
+
   private void showNotification () {
     boolean needNotification = call != null && (call.isOutgoing || call.state.getConstructor() == TdApi.CallStateExchangingKeys.CONSTRUCTOR || call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR) && !TD.isFinished(call);
+    // XGram: the CallStyle notification is built again once the call connects, to start its chronometer
+    final boolean xgramConnected = needNotification && xgramCallStyle() && call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR && getCallDuration() >= 0;
 
-    if (needNotification == (ongoingCallNotification != null)) {
+    if (needNotification == (ongoingCallNotification != null) && (!needNotification || xgramConnected == xgramOngoingConnected)) {
       return;
     }
+    xgramOngoingConnected = xgramConnected;
 
     if (!needNotification) {
       cleanupChannels((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE));
@@ -827,11 +853,17 @@ public class TGCallService extends Service implements
         builder.setSubText(shortName);
       }
     }
+    final boolean xgramStyle = xgramCallStyle();
+    PendingIntent xgramHangUp = null;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       Intent endIntent = new Intent();
       Intents.secureIntent(endIntent, false);
       endIntent.setAction(Intents.ACTION_END_CALL);
-      builder.addAction(R.drawable.round_call_end_24_white, Lang.getString(R.string.VoipEndCall), PendingIntent.getBroadcast(this, 0, endIntent, Intents.mutabilityFlags(false)));
+      if (xgramStyle) {
+        xgramHangUp = PendingIntent.getBroadcast(this, 0, endIntent, Intents.mutabilityFlags(false)); // the CallStyle's own button
+      } else {
+        builder.addAction(R.drawable.round_call_end_24_white, Lang.getString(R.string.VoipEndCall), PendingIntent.getBroadcast(this, 0, endIntent, Intents.mutabilityFlags(false)));
+      }
       builder.setPriority(Notification.PRIORITY_MAX);
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
@@ -843,6 +875,16 @@ public class TGCallService extends Service implements
     Bitmap bitmap = TdlibNotificationUtils.buildLargeIcon(tdlib, user.profilePhoto != null ? user.profilePhoto.small : null, tdlib.cache().userAccentColor(user), TD.getLetters(user), false, true);
     if (bitmap != null) {
       builder.setLargeIcon(bitmap);
+    }
+    if (xgramStyle && xgramHangUp != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      builder.setStyle(Notification.CallStyle.forOngoingCall(xgramPerson(bitmap), xgramHangUp));
+      builder.setCategory(Notification.CATEGORY_CALL);
+      builder.setOngoing(true);
+      if (xgramConnected) {
+        builder.setWhen(System.currentTimeMillis() - getCallDuration());
+        builder.setShowWhen(true);
+        builder.setUsesChronometer(true);
+      }
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       ongoingCallNotification = builder.build();
@@ -930,25 +972,33 @@ public class TGCallService extends Service implements
         builder.setSubText(shortName);
       }
     }
+    final boolean xgramStyle = xgramCallStyle();
+    PendingIntent xgramDecline = null, xgramAnswer = null;
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       Intent endIntent = new Intent();
       Intents.secureIntent(endIntent, false);
       endIntent.setAction(Intents.ACTION_DECLINE_CALL);
-      CharSequence endTitle = Lang.getString(R.string.DeclineCall);
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        endTitle = new SpannableString(endTitle);
-        ((SpannableString) endTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonNegative)), 0, endTitle.length(), 0);
-      }
-      builder.addAction(R.drawable.round_call_end_24_white, endTitle, PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
       Intent answerIntent = new Intent();
       Intents.secureIntent(answerIntent, false);
       answerIntent.setAction(Intents.ACTION_ANSWER_CALL);
-      CharSequence answerTitle = Lang.getString(R.string.AnswerCall);
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        answerTitle = new SpannableString(answerTitle);
-        ((SpannableString) answerTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonPositive)), 0, answerTitle.length(), 0);
+      if (xgramStyle) {
+        // XGram M3E: the CallStyle's own decline and answer buttons, no coloured spans
+        xgramDecline = PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false));
+        xgramAnswer = PendingIntent.getBroadcast(this, 0, answerIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false));
+      } else {
+        CharSequence endTitle = Lang.getString(R.string.DeclineCall);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+          endTitle = new SpannableString(endTitle);
+          ((SpannableString) endTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonNegative)), 0, endTitle.length(), 0);
+        }
+        builder.addAction(R.drawable.round_call_end_24_white, endTitle, PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
+        CharSequence answerTitle = Lang.getString(R.string.AnswerCall);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+          answerTitle = new SpannableString(answerTitle);
+          ((SpannableString) answerTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonPositive)), 0, answerTitle.length(), 0);
+        }
+        builder.addAction(R.drawable.round_call_24_white, answerTitle, PendingIntent.getBroadcast(this, 0, answerIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
       }
-      builder.addAction(R.drawable.round_call_24_white, answerTitle, PendingIntent.getBroadcast(this, 0, answerIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
       builder.setPriority(Notification.PRIORITY_MAX);
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
@@ -963,6 +1013,9 @@ public class TGCallService extends Service implements
     Bitmap bitmap = user != null ? TdlibNotificationUtils.buildLargeIcon(tdlib, user.profilePhoto != null ? user.profilePhoto.small : null, tdlib.cache().userAccentColor(user), TD.getLetters(user), false, true) : null;
     if (bitmap != null) {
       builder.setLargeIcon(bitmap);
+    }
+    if (xgramStyle && xgramDecline != null && xgramAnswer != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      builder.setStyle(Notification.CallStyle.forIncomingCall(xgramPerson(bitmap), xgramDecline, xgramAnswer));
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       incomingNotification = builder.build();

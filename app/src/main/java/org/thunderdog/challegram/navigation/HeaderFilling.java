@@ -131,6 +131,7 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   private final ClickHelper helper;
 
   public HeaderFilling (HeaderView parent, @Nullable NavigationController navigationController) {
+    this.xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     this.headerView = parent;
     this.navigationController = navigationController;
 
@@ -149,6 +150,12 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     this.speedIsActive = new BoolAnimator(0, (a, b, c, d) -> invalidate(), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
 
     this.textLeft = Screen.dp(72f);
+
+    if (xgram) {
+      xgramPhoneIcon = Drawables.get(parent.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_phone_24));
+      xgramMusicIcon = Drawables.get(parent.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_music_note_24));
+      xgramClose = new com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton(parent, R.drawable.baseline_close_24);
+    }
 
     if (navigationController != null) {
       this.speedCounter = new Counter.Builder()
@@ -171,6 +178,12 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   }
 
   private void updateSpeedCounter (int speed, boolean animated) {
+    if (xgram && (xgramSpeedText == null || xgramSpeed != speed)) {
+      xgramSpeed = speed;
+      xgramSpeedText = PlaybackSpeedLayout.getSpeedText(speed) + "×";
+      xgramSpeedTextWidth = com.fahadali.xgram.appearance.XgramR5Calls.measurePaint(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M).measureText(xgramSpeedText);
+      invalidateOngoingBar();
+    }
     if (speedCounter != null) {
       speedIsActive.setValue(speed != TGPlayerController.PLAY_SPEED_NORMAL, animated);
       speedCounter.setCount(speed, false, PlaybackSpeedLayout.getSpeedText(speed), animated);
@@ -189,6 +202,7 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   @Override
   public void performDestroy () {
     TGLegacyManager.instance().removeEmojiListener(this);
+    UI.removePendingRunnable(xgramPulseNext); // XGram
   }
 
   // Component stuff
@@ -211,11 +225,24 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   }
 
   public int getBottom () {
-    return height + (int) (HeaderView.getPlayerSize() * showFactor);
+    return height + (int) (playerSize() * showFactor);
   }
 
   public int getPlayerOffset () {
-    return (int) (HeaderView.getPlayerSize() * showFactor);
+    return (int) (playerSize() * showFactor);
+  }
+
+  /** The ongoing bar's height: Telegram X's 36dp bar, or the Expressive call chip and mini player's 64dp. */
+  private int playerSize () {
+    return xgram ? Screen.dp(XGRAM_BAR) : HeaderView.getPlayerSize();
+  }
+
+  /**
+   * XGram: the height of the ongoing call / audio band under the app bar for code outside the header (the round video
+   * PiP margin): {@link HeaderView#getPlayerSize()}, or 64dp with Expressive design.
+   */
+  public static int playerBandSize () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(XGRAM_BAR) : HeaderView.getPlayerSize();
   }
 
   public void setCollapsed (boolean collapsed) {
@@ -242,7 +269,7 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
         }
       } else {
         float x = px - playerTop;
-        hideFactor = x <= 0 ? 1f : x >= HeaderView.getPlayerSize() ? 0f : 1f - (x / (float) HeaderView.getPlayerSize());
+        hideFactor = x <= 0 ? 1f : x >= playerSize() ? 0f : 1f - (x / (float) playerSize());
 
         if (px > fillingBottom) {
           fillFactor = 1f;
@@ -282,7 +309,7 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
       layoutOngoingBar();
     } else {
       fillingBottom = shadowTop = playerBottom = height;
-      playerTop = playerBottom - Size.getHeaderPlayerSize();
+      playerTop = playerBottom - (xgram ? playerSize() : Size.getHeaderPlayerSize());
     }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -307,7 +334,7 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   public void layout () {
     layoutOngoingBar();
     if (navigationController != null) {
-      navigationController.applyPlayerOffset(showFactor, (float) HeaderView.getPlayerSize() * showFactor);
+      navigationController.applyPlayerOffset(showFactor, (float) playerSize() * showFactor);
     }
   }
 
@@ -323,8 +350,8 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   }
 
   private void layoutOngoingBar () {
-    playerBottom = height + (int) ((float) HeaderView.getPlayerSize() * (showFactor - MathUtils.clamp((float) (height - HeaderView.getSize(true)) / (float) Size.getHeaderSizeDifference(false))) * playerAllowance);
-    playerTop = playerBottom - HeaderView.getPlayerSize();
+    playerBottom = height + (int) ((float) playerSize() * (showFactor - MathUtils.clamp((float) (height - HeaderView.getSize(true)) / (float) Size.getHeaderSizeDifference(false))) * playerAllowance);
+    playerTop = playerBottom - playerSize();
 
     fillingBottom = height;
     shadowTop = Math.max(fillingBottom, playerBottom);
@@ -458,7 +485,7 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   }
 
   private void drawOngoingBar (Canvas c) {
-    int hide = (int) ((float) HeaderView.getPlayerSize() * hideFactor);
+    int hide = (int) ((float) playerSize() * hideFactor);
     int playerTop = this.playerTop - hide;
     int playerBottom = this.playerBottom - hide;
     float rectWidth;
@@ -467,6 +494,15 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
       rectWidth = width - restorePixels;
     } else {
       rectWidth = width;
+    }
+
+    if (xgram) { // XGram M3E: the call chip and the mini player card
+      if (isCurrentSection(SECTION_CALL)) {
+        xgramDrawCall(c, playerTop, rectWidth, playerBottom);
+      } else if (isCurrentSection(SECTION_AUDIO)) {
+        xgramDrawAudio(c, playerTop, rectWidth, playerBottom);
+      }
+      return;
     }
 
     if (isCurrentSection(SECTION_CALL)) {
@@ -626,6 +662,16 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
       fileName = audio.fileName;
     }
 
+    if (xgram) { // XGram M3E: title over the supporting line, not one "title — subtitle" line
+      xgramAudioVoice = playingMessage.content.getConstructor() != TdApi.MessageAudio.CONSTRUCTOR;
+      String xgramTitle = title != null ? title.trim() : null;
+      String xgramSubtitle = subtitle != null ? subtitle.trim() : null;
+      if (StringUtils.isEmpty(xgramTitle) && fileName != null) {
+        xgramTitle = fileName.trim();
+      }
+      xgramSetAudioText(xgramTitle, xgramSubtitle);
+    }
+
     if (title != null) {
       title = title.trim();
     }
@@ -740,7 +786,9 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     if (this.isAudioPlaying != isPlaying) {
       this.isAudioPlaying = isPlaying;
       final float toFactor = isPlaying ? 1f : 0f;
-      if (animated) {
+      if (xgram) {
+        xgramAnimate(ANIMATOR_PLAY_ID, toFactor, animated);
+      } else if (animated) {
         if (playAnimator == null) {
           playAnimator = new FactorAnimator(ANIMATOR_PLAY_ID, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 160l, this.playPauseFactor);
         }
@@ -830,6 +878,9 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
       callState = TD.getCallState(call, TdlibManager.instance().calls().getCallDuration(callTdlib, call.id), true);
     }
     setText(TD.getUserName(user), "  " + callState, textLeft * 2);
+    if (xgram) {
+      xgramSetCallText(TD.getUserName(user), callState);
+    }
     if (!TD.isFinished(call)) {
       CallSettings settings = callTdlib.cache().getCallSettings(call.id);
       setCallMuted(settings != null && settings.isMicMuted(), isOngoingBarVisible());
@@ -907,7 +958,9 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     if (this.isCallActive != isActive) {
       this.isCallActive = isActive;
       final float toFactor = isActive ? 1f : 0f;
-      if (animated) {
+      if (xgram) {
+        xgramAnimate(ANIMATOR_CALL_ACTIVE_ID, toFactor, animated);
+      } else if (animated) {
         if (callActiveAnimator == null) {
           callActiveAnimator = new FactorAnimator(ANIMATOR_CALL_ACTIVE_ID, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.callActiveFactor);
         }
@@ -937,7 +990,9 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     if (this.isCallPendingIncoming != isIncoming) {
       this.isCallPendingIncoming = isIncoming;
       final float toFactor = isIncoming ? 1f : 0f;
-      if (animated) {
+      if (xgram) {
+        xgramAnimate(ANIMATOR_CALL_INCOMING_ID, toFactor, animated);
+      } else if (animated) {
         if (callIncomingAnimator == null) {
           callIncomingAnimator = new FactorAnimator(ANIMATOR_CALL_INCOMING_ID, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.callIncomingFactor);
         }
@@ -966,6 +1021,10 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   private void setCallFlashing (boolean isCallFlashing) {
     if (this.isCallFlashing != isCallFlashing) {
       this.isCallFlashing = isCallFlashing;
+      if (xgram) {
+        xgramSetPulsing(isCallFlashing);
+        return;
+      }
       if (isCallFlashing) {
         if (callFlashAnimator == null) {
           callFlashAnimator = new FactorAnimator(ANIMATOR_CALL_FLASH_ID, this, AnimatorUtils.DECELERATE_INTERPOLATOR, CallController.CALL_FLASH_DURATION);
@@ -1001,7 +1060,9 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     if (this.isCallMuted != isCallMuted) {
       this.isCallMuted = isCallMuted;
       final float toFactor = isCallMuted ? 1f : 0f;
-      if (animated) {
+      if (xgram) {
+        xgramAnimate(ANIMATOR_CALL_MUTE_ID, toFactor, animated);
+      } else if (animated) {
         if (callMuteAnimator == null) {
           callMuteAnimator = new FactorAnimator(ANIMATOR_CALL_MUTE_ID, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.callMuteFactor);
         }
@@ -1140,7 +1201,9 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
       ViewController<?> c = navigationController != null ? navigationController.getCurrentStackItem() : null;
       boolean allowAnimation = c != null && !c.usePopupMode();
       final float toFactor = show ? 1f : 0f;
-      if (allowAnimation) {
+      if (xgram) {
+        xgramAnimate(ANIMATOR_SHOW_ID, toFactor, allowAnimation); // a spring, snapped with Reduce motion
+      } else if (allowAnimation) {
         if (barShowAnimator == null) {
           barShowAnimator = new FactorAnimator(ANIMATOR_SHOW_ID, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200l, this.showFactor);
         }
@@ -1229,6 +1292,11 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   }
 
   public boolean onTouchEvent (MotionEvent e) {
+    // XGram M3E: the mini player's close button takes the gestures that start on it
+    if (xgram && xgramClose != null && xgramCloseVisible && hasVisibleOngoingBar() && !isCurrentSection(SECTION_CALL) && isCurrentSection(SECTION_AUDIO) &&
+      xgramClose.onTouchEvent(e, xgramStopPlayback)) {
+      return true;
+    }
     return helper != null && helper.onTouchEvent(headerView, e);
   }
 
@@ -1243,6 +1311,9 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   public boolean needLongPress (float x, float y) {
     if (BitwiseUtils.hasFlag(ongoingSections, SECTION_CALL)) {
       return false;
+    }
+    if (xgram) {
+      return BitwiseUtils.hasFlag(ongoingSections, SECTION_AUDIO) && xgramInSpeedChip(x);
     }
     if (BitwiseUtils.hasFlag(ongoingSections, SECTION_AUDIO)) {
       int rIndex = getRightButtonIndex(width, x);
@@ -1283,6 +1354,10 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
 
   @Override
   public void onClickAt (View view, float x, float y) {
+    if (xgram) {
+      xgramOnClickAt(x);
+      return;
+    }
     final boolean isAudio = BitwiseUtils.hasFlag(ongoingSections, SECTION_AUDIO);
     int rIndex = getRightButtonIndex(width, x);
 
@@ -1386,6 +1461,387 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     }
   }
 
+  // XGram M3E (round 5): the ongoing call is a 48dp full-corner chip and the audio player a 56dp mini player card,
+  // both in a 64dp band under the app bar (its color). Springs drive every state; colors are roles read at draw time.
+
+  private final boolean xgram;
+  private static final float XGRAM_BAR = 64f, XGRAM_CHIP = 48f, XGRAM_CARD = 56f, XGRAM_MAX_WIDTH = 640f, XGRAM_BUTTON = 40f;
+  private final com.fahadali.xgram.appearance.XgramExpressive.Spring[] xgramSprings = new com.fahadali.xgram.appearance.XgramExpressive.Spring[7];
+  private float xgramPlayShape, xgramMuteShape;
+  private @Nullable Drawable xgramPhoneIcon, xgramMusicIcon;
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton xgramClose;
+  private boolean xgramCloseVisible;
+  private final Runnable xgramStopPlayback = () -> TdlibManager.instance().player().stopPlayback(true);
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+
+  private int xgramSpeed;
+  private @Nullable String xgramSpeedText;
+  private float xgramSpeedTextWidth;
+
+  private @Nullable String xgramCallName, xgramCallState, xgramCallNameDrawn;
+  private float xgramCallNameWidth, xgramCallStateWidth;
+  private int xgramCallLayoutWidth = -1;
+
+  private @Nullable String xgramAudioTitle, xgramAudioSubtitle, xgramAudioTitleDrawn, xgramAudioSubtitleDrawn;
+  private float xgramAudioTitleWidth, xgramAudioSubtitleWidth;
+  private int xgramAudioLayoutWidth = -1;
+  private boolean xgramAudioVoice;
+
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPulse;
+  private float xgramPulseValue;
+  private final Runnable xgramPulseNext = this::xgramPulseNextStep;
+
+  private void xgramAnimate (final int id, float to, boolean animated) {
+    com.fahadali.xgram.appearance.XgramExpressive.Spring spring = xgramSprings[id];
+    if (spring == null) {
+      final int token;
+      switch (id) {
+        case ANIMATOR_SHOW_ID:
+          token = com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT;
+          break;
+        case ANIMATOR_PLAY_ID:
+        case ANIMATOR_CALL_MUTE_ID:
+          token = com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST;
+          break;
+        default:
+          token = com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT;
+          break;
+      }
+      spring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(token, xgramFactor(id), (s, value) -> xgramOnSpring(id, value));
+      xgramSprings[id] = spring;
+    } else if (!spring.isRunning() && spring.getValue() != xgramFactor(id) && id != ANIMATOR_PLAY_ID && id != ANIMATOR_CALL_MUTE_ID) {
+      spring.setValue(xgramFactor(id)); // the factor was forced (a forced show or hide) since the spring last ran
+    }
+    if (animated) {
+      spring.animateTo(to);
+    } else {
+      spring.setValue(to);
+      xgramOnSpring(id, to);
+    }
+  }
+
+  private float xgramFactor (int id) {
+    switch (id) {
+      case ANIMATOR_SHOW_ID: return showFactor;
+      case ANIMATOR_PLAY_ID: return playPauseFactor;
+      case ANIMATOR_CALL_MUTE_ID: return callMuteFactor;
+      case ANIMATOR_CALL_ACTIVE_ID: return callActiveFactor;
+      case ANIMATOR_CALL_INCOMING_ID: return callIncomingFactor;
+    }
+    return 0f;
+  }
+
+  private void xgramOnSpring (int id, float value) {
+    final float clamped = MathUtils.clamp(value);
+    switch (id) {
+      case ANIMATOR_PLAY_ID:
+        xgramPlayShape = value; // the button's shape may overshoot, the icon may not
+        setPlayPauseFactor(clamped);
+        invalidateOngoingBar();
+        break;
+      case ANIMATOR_CALL_MUTE_ID:
+        xgramMuteShape = value;
+        setCallMuteFactor(clamped);
+        invalidateOngoingBar();
+        break;
+      default:
+        onFactorChanged(id, clamped, clamped, null);
+        break;
+    }
+  }
+
+  /** The tone pulse of a ringing call: the chip's state layer breathes in and out (EFFECTS_DEFAULT, a pause at each end). */
+  private void xgramSetPulsing (boolean pulsing) {
+    UI.removePendingRunnable(xgramPulseNext);
+    if (pulsing && !com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+      if (xgramPulse == null) {
+        xgramPulse = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> {
+          xgramPulseValue = MathUtils.clamp(value);
+          invalidateOngoingBar();
+        }).setEndListener(() -> {
+          if (isCallFlashing) {
+            UI.post(xgramPulseNext, 450L);
+          }
+        });
+      }
+      xgramPulse.animateTo(1f);
+    } else if (xgramPulse != null) {
+      xgramPulse.animateTo(0f);
+    }
+  }
+
+  private void xgramPulseNextStep () {
+    if (isCallFlashing && xgramPulse != null) {
+      xgramPulse.animateTo(xgramPulse.getTarget() >= 1f ? 0f : 1f);
+    }
+  }
+
+  private void xgramSetCallText (@Nullable String name, @Nullable String state) {
+    if (!StringUtils.equalsOrBothEmpty(xgramCallName, name) || !StringUtils.equalsOrBothEmpty(xgramCallState, state)) {
+      xgramCallName = name;
+      xgramCallState = state;
+      xgramCallLayoutWidth = -1;
+    }
+  }
+
+  private void xgramSetAudioText (@Nullable String title, @Nullable String subtitle) {
+    xgramAudioTitle = title;
+    xgramAudioSubtitle = subtitle;
+    xgramAudioLayoutWidth = -1;
+  }
+
+  /** Mirrors {@code x} in the current box (xgramRect) for RTL languages. */
+  private float xgramMx (float x) {
+    return Lang.rtl() ? xgramRect.left + xgramRect.right - x : x;
+  }
+
+  /** The chip (call) or card (audio) of the bar between {@code playerTop} and {@code playerBottom}, into xgramRect. */
+  private void xgramBox (boolean audio, int playerTop, int playerBottom, float rectWidth) {
+    final float inset = Screen.dp(audio ? 8f : 16f);
+    float left = inset, right = rectWidth - inset;
+    final float maxWidth = Screen.dp(XGRAM_MAX_WIDTH);
+    if (right - left > maxWidth) {
+      final float cx = (left + right) / 2f;
+      left = cx - maxWidth / 2f;
+      right = cx + maxWidth / 2f;
+    }
+    final float height = Screen.dp(audio ? XGRAM_CARD : XGRAM_CHIP);
+    final float cy = (playerTop + playerBottom) / 2f;
+    xgramRect.set(left, cy - height / 2f, right, cy + height / 2f);
+  }
+
+  // Audio card geometry (LTR, from the card's end): close 4dp in, play 4dp before it, the speed chip 8dp before play
+
+  private float xgramCloseCenter () {
+    return xgramRect.right - Screen.dp(4f + XGRAM_BUTTON / 2f);
+  }
+
+  private float xgramPlayCenter () {
+    return xgramRect.right - Screen.dp(4f + XGRAM_BUTTON + 4f + XGRAM_BUTTON / 2f);
+  }
+
+  private float xgramSpeedChipRight () {
+    return xgramPlayCenter() - Screen.dp(XGRAM_BUTTON / 2f + 8f);
+  }
+
+  private float xgramSpeedChipWidth () {
+    return xgramSpeedTextWidth + Screen.dp(12f) * 2;
+  }
+
+  private boolean xgramInSpeedChip (float x) {
+    xgramBox(true, playerTop, playerBottom, width);
+    final float right = xgramSpeedChipRight() + Screen.dp(4f), left = xgramSpeedChipRight() - xgramSpeedChipWidth() - Screen.dp(4f);
+    final float a = xgramMx(left), b = xgramMx(right);
+    return x >= Math.min(a, b) && x <= Math.max(a, b);
+  }
+
+  private void xgramOnClickAt (float x) {
+    if (BitwiseUtils.hasFlag(ongoingSections, SECTION_CALL)) {
+      performSoundFeedback();
+      xgramBox(false, playerTop, playerBottom, width);
+      final float muteCx = xgramMx(xgramRect.right - Screen.dp(4f + XGRAM_BUTTON / 2f));
+      if (Math.abs(x - muteCx) <= Screen.dp(24f) && isCallActive && !isCallPendingIncoming) {
+        toggleCallMute();
+      } else {
+        openCall();
+      }
+    } else if (BitwiseUtils.hasFlag(ongoingSections, SECTION_AUDIO)) {
+      xgramBox(true, playerTop, playerBottom, width);
+      if (Math.abs(x - xgramMx(xgramPlayCenter())) <= Screen.dp(24f)) {
+        performSoundFeedback();
+        if (!playPause()) {
+          openPlayer();
+        }
+      } else if (xgramInSpeedChip(x)) {
+        onPlaybackSpeedClick();
+      } else {
+        performSoundFeedback();
+        openPlayer();
+      }
+    }
+  }
+
+  private void xgramDrawBand (Canvas c, int playerTop, int playerBottom) {
+    c.drawRect(0, playerTop, width, playerBottom, Paints.fillingPaint(ColorUtils.alphaColor(dropShadowAlpha, color)));
+  }
+
+  private void xgramDrawCall (Canvas c, int playerTop, float rectWidth, int playerBottom) {
+    xgramCloseVisible = false;
+    xgramDrawBand(c, playerTop, playerBottom);
+    xgramBox(false, playerTop, playerBottom, rectWidth);
+    final float left = xgramRect.left, top = xgramRect.top, right = xgramRect.right, bottom = xgramRect.bottom;
+    final float cy = (top + bottom) / 2f;
+    final float alpha = dropShadowAlpha;
+
+    // primaryContainer while active, tertiaryContainer while an incoming call rings, surfaceContainerHighest muted or ended
+    final float live = (1f - callMuteFactor) * callActiveFactor;
+    final int container = ColorUtils.fromToArgb(
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST),
+      ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.TERTIARY_CONTAINER), callIncomingFactor),
+      live);
+    final int content = ColorUtils.fromToArgb(
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE),
+      ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_TERTIARY_CONTAINER), callIncomingFactor),
+      live);
+    int fill = container;
+    if (xgramPulseValue > 0f) {
+      fill = androidx.core.graphics.ColorUtils.compositeColors(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(content, .12f * xgramPulseValue), container | 0xff000000);
+    }
+    com.fahadali.xgram.appearance.XgramR5Calls.drawRoundRect(c, left, top, right, bottom, (bottom - top) / 2f, com.fahadali.xgram.appearance.XgramExpressive.withAlpha(fill, alpha));
+    final int contentColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(content, alpha);
+
+    // 24dp phone icon 16dp in
+    com.fahadali.xgram.appearance.XgramR5Calls.drawIcon(c, xgramPhoneIcon, xgramMx(left + Screen.dp(16f + 12f)), cy, contentColor);
+
+    // Mute toggle (40dp, tonal; muted: primary, its corners morphing from full to 12dp)
+    final float toggleAlpha = alpha * callActiveFactor * (1f - callIncomingFactor);
+    final boolean hasToggle = toggleAlpha > 0f;
+    final float toggleCx = xgramMx(right - Screen.dp(4f + XGRAM_BUTTON / 2f));
+    if (hasToggle) {
+      final int off = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(content, .12f * toggleAlpha);
+      final int on = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), toggleAlpha);
+      com.fahadali.xgram.appearance.XgramR5Calls.drawToggleButton(c, toggleCx, cy, Screen.dp(XGRAM_BUTTON), xgramMuteShape, 0f, off, on, content);
+      final int iconColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(ColorUtils.fromToArgb(content, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY), callMuteFactor), toggleAlpha);
+      com.fahadali.xgram.appearance.XgramR5Calls.drawIcon(c, micIcon, toggleCx, cy, iconColor);
+      if (callMuteFactor > 0f) {
+        final int behind = ColorUtils.fromToArgb(androidx.core.graphics.ColorUtils.compositeColors(off, fill | 0xff000000), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), callMuteFactor);
+        DrawAlgorithms.drawCross(c, toggleCx, cy, callMuteFactor, iconColor, behind);
+      }
+    }
+
+    // Name in labelLarge, then the duration or status in titleSmall with tabular figures
+    final float textStart = left + Screen.dp(16f + 24f + 12f);
+    final float textEnd = hasToggle ? right - Screen.dp(4f + XGRAM_BUTTON + 8f) : right - Screen.dp(16f);
+    final int available = (int) Math.max(0f, textEnd - textStart);
+    if (xgramCallLayoutWidth != available) {
+      xgramCallLayoutWidth = available;
+      final android.text.TextPaint statePaint = com.fahadali.xgram.appearance.XgramR5Calls.measureTabularTitlePaint();
+      xgramCallStateWidth = !StringUtils.isEmpty(xgramCallState) ? statePaint.measureText(xgramCallState) : 0f;
+      final float nameSpace = available - (xgramCallStateWidth > 0f ? xgramCallStateWidth + Screen.dp(8f) : 0f);
+      final android.text.TextPaint namePaint = com.fahadali.xgram.appearance.XgramR5Calls.measurePaint(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L);
+      xgramCallNameDrawn = com.fahadali.xgram.appearance.XgramR5Calls.ellipsize(xgramCallName, namePaint, nameSpace);
+      xgramCallNameWidth = xgramCallNameDrawn != null ? namePaint.measureText(xgramCallNameDrawn) : 0f;
+    }
+    float x = textStart;
+    if (xgramCallNameDrawn != null) {
+      final android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramR5Calls.labelLargePaint(contentColor);
+      c.drawText(xgramCallNameDrawn, Lang.rtl() ? xgramMx(x) - xgramCallNameWidth : x, com.fahadali.xgram.appearance.XgramR5Calls.baseline(paint, cy), paint);
+      x += xgramCallNameWidth + Screen.dp(8f);
+    }
+    if (xgramCallState != null && xgramCallStateWidth > 0f && x + xgramCallStateWidth <= textEnd + 1f) {
+      final android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramR5Calls.titleSmallTabularPaint(contentColor);
+      c.drawText(xgramCallState, Lang.rtl() ? xgramMx(x) - xgramCallStateWidth : x, com.fahadali.xgram.appearance.XgramR5Calls.baseline(paint, cy), paint);
+    }
+  }
+
+  private void xgramDrawAudio (Canvas c, int playerTop, float rectWidth, int playerBottom) {
+    xgramDrawBand(c, playerTop, playerBottom);
+    xgramBox(true, playerTop, playerBottom, rectWidth);
+    final float left = xgramRect.left, top = xgramRect.top, right = xgramRect.right, bottom = xgramRect.bottom;
+    final float alpha = dropShadowAlpha;
+    final boolean rtl = Lang.rtl();
+
+    // The card: surfaceContainerHigh, the chip step with Pure black (it floats over the black page)
+    final int cardRole = com.fahadali.xgram.appearance.XgramAmoled.floatingRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH);
+    com.fahadali.xgram.appearance.XgramR5Calls.drawRoundRect(c, left, top, right, bottom, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L),
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(cardRole), alpha));
+
+    // 40dp CORNER_M tile: a mic (voice and video notes) or a music note on secondaryContainer; 2dp above centre for the wave
+    final float tile = Screen.dp(XGRAM_BUTTON);
+    final float contentCy = top + Screen.dp(XGRAM_CARD / 2f - 2f);
+    final float tileLeft = left + Screen.dp(8f);
+    final float tileL = rtl ? xgramMx(tileLeft + tile) : tileLeft;
+    com.fahadali.xgram.appearance.XgramR5Calls.drawRoundRect(c, tileL, contentCy - tile / 2f, tileL + tile, contentCy + tile / 2f, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M),
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), alpha));
+    com.fahadali.xgram.appearance.XgramR5Calls.drawIcon(c, xgramAudioVoice ? micIcon : xgramMusicIcon, tileL + tile / 2f, contentCy,
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), alpha));
+
+    // Play / pause: a 40dp primaryContainer circle that morphs to a 12dp rounded square while playing
+    final float playCx = xgramMx(xgramPlayCenter());
+    final float half = tile / 2f;
+    final float corner = half + (Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M) - half) * Math.max(0f, Math.min(1.2f, xgramPlayShape));
+    com.fahadali.xgram.appearance.XgramR5Calls.drawRoundRect(c, playCx - half, contentCy - half, playCx + half, contentCy + half, MathUtils.clamp(corner, 0f, half),
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER), alpha));
+    final TdApi.File file = playingMessage != null ? TD.getFile(playingMessage) : null;
+    if (playPausePath == null) {
+      playPausePath = new Path();
+    }
+    DrawAlgorithms.drawPlayPause(c, (int) playCx, (int) contentCy, Screen.dp(9f), playPausePath, playPauseDrawFactor, playPauseDrawFactor = playPauseFactor, file != null ? TD.getFileProgress(file) : 1f,
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), alpha));
+
+    // Close: a standard icon button with a 48dp target
+    if (xgramClose != null) {
+      final float closeCx = xgramMx(xgramCloseCenter());
+      xgramClose.setBounds((int) (closeCx - Screen.dp(24f)), (int) (contentCy - Screen.dp(24f)), (int) (closeCx + Screen.dp(24f)), (int) (contentCy + Screen.dp(24f)));
+      xgramClose.draw(c, alpha);
+      xgramCloseVisible = alpha > 0f && hideFactor < 1f;
+    }
+
+    // Speed: an outlined labelMedium chip, secondaryContainer when the speed is not 1x
+    final float chipRight = xgramSpeedChipRight();
+    final float chipLeft = chipRight - xgramSpeedChipWidth();
+    final float chipHalf = Screen.dp(16f);
+    final float cl = rtl ? xgramMx(chipRight) : chipLeft, cr = rtl ? xgramMx(chipLeft) : chipRight;
+    final boolean fast = xgramSpeed != TGPlayerController.PLAY_SPEED_NORMAL;
+    final float chipCorner = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_S);
+    if (fast) {
+      com.fahadali.xgram.appearance.XgramR5Calls.drawRoundRect(c, cl, contentCy - chipHalf, cr, contentCy + chipHalf, chipCorner,
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), alpha));
+    } else {
+      com.fahadali.xgram.appearance.XgramR5Calls.drawOutline(c, cl, contentCy - chipHalf, cr, contentCy + chipHalf, chipCorner,
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT), alpha));
+    }
+    if (xgramSpeedText != null) {
+      final android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramR5Calls.labelMediumPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(
+        com.fahadali.xgram.appearance.XgramExpressive.color(fast ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), alpha));
+      c.drawText(xgramSpeedText, (cl + cr) / 2f - xgramSpeedTextWidth / 2f, com.fahadali.xgram.appearance.XgramR5Calls.baseline(paint, contentCy), paint);
+    }
+
+    // Title (titleSmall) over the supporting line (bodySmall, onSurfaceVariant)
+    final float textStart = tileLeft + tile + Screen.dp(12f);
+    final float textEnd = chipLeft - Screen.dp(8f);
+    final int available = (int) Math.max(0f, textEnd - textStart);
+    if (xgramAudioLayoutWidth != available) {
+      xgramAudioLayoutWidth = available;
+      final android.text.TextPaint titlePaint = com.fahadali.xgram.appearance.XgramR5Calls.measurePaint(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_S);
+      final android.text.TextPaint subtitlePaint = com.fahadali.xgram.appearance.XgramR5Calls.measurePaint(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S);
+      xgramAudioTitleDrawn = com.fahadali.xgram.appearance.XgramR5Calls.ellipsize(xgramAudioTitle, titlePaint, available);
+      xgramAudioTitleWidth = xgramAudioTitleDrawn != null ? titlePaint.measureText(xgramAudioTitleDrawn) : 0f;
+      xgramAudioSubtitleDrawn = com.fahadali.xgram.appearance.XgramR5Calls.ellipsize(xgramAudioSubtitle, subtitlePaint, available);
+      xgramAudioSubtitleWidth = xgramAudioSubtitleDrawn != null ? subtitlePaint.measureText(xgramAudioSubtitleDrawn) : 0f;
+    }
+    final boolean twoLines = xgramAudioSubtitleDrawn != null;
+    if (xgramAudioTitleDrawn != null) {
+      final android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramR5Calls.titleSmallPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), alpha));
+      final float lineCy = twoLines ? contentCy - Screen.dp(8f) : contentCy;
+      c.drawText(xgramAudioTitleDrawn, rtl ? xgramMx(textStart) - xgramAudioTitleWidth : textStart, com.fahadali.xgram.appearance.XgramR5Calls.baseline(paint, lineCy), paint);
+    }
+    if (twoLines) {
+      final android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramR5Calls.bodySmallPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), alpha));
+      final float lineCy = xgramAudioTitleDrawn != null ? contentCy + Screen.dp(10f) : contentCy;
+      c.drawText(xgramAudioSubtitleDrawn, rtl ? xgramMx(textStart) - xgramAudioSubtitleWidth : textStart, com.fahadali.xgram.appearance.XgramR5Calls.baseline(paint, lineCy), paint);
+    }
+
+    // Progress in the card's bottom inset: wavy while playing, flat when paused (mirrored for RTL)
+    final float amplitude = Screen.dpf(1.5f) * playPauseFactor;
+    final float waveLeft = left + Screen.dp(16f), waveRight = right - Screen.dp(16f), waveCy = bottom - Screen.dp(4f);
+    int saveCount = -1;
+    if (rtl) {
+      saveCount = c.save();
+      c.scale(-1f, 1f, (waveLeft + waveRight) / 2f, waveCy);
+    }
+    com.fahadali.xgram.appearance.XgramWavyLinear.draw(c, waveLeft, waveRight, waveCy, seekFactor,
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), alpha),
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), alpha),
+      Screen.dpf(3f), amplitude, Screen.dpf(24f), Screen.dpf(3f), true);
+    if (saveCount != -1) {
+      c.restoreToCount(saveCount);
+    }
+    if (isAudioPlaying && alpha > 0f && com.fahadali.xgram.appearance.XgramWavyLinear.isWaveMoving(seekFactor, amplitude)) {
+      headerView.postInvalidateOnAnimation(0, playerTop, width, playerBottom);
+    }
+  }
+
   // Drawable utils
 
   @Override
@@ -1461,6 +1917,13 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
       .builder(headerView)
       .locate((targetView, outRect) -> {
         final int width = targetView.getMeasuredWidth();
+        if (xgram) { // XGram M3E: under the speed chip
+          xgramBox(true, playerTop, playerBottom, width);
+          final float chipRight = xgramSpeedChipRight();
+          final float chipLeft = chipRight - xgramSpeedChipWidth();
+          outRect.set((int) xgramMx(Lang.rtl() ? chipRight : chipLeft), 0, (int) xgramMx(Lang.rtl() ? chipLeft : chipRight), playerBottom - Screen.dp(12f));
+          return;
+        }
         outRect.set(getRightButtonLeft(width, 2), 0, getRightButtonRight(width, 2), playerBottom);
       })
       .maxWidth(300)
@@ -1484,7 +1947,12 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
       }
     }, TdlibManager.instance().player().getSpeed());
     playbackSpeedLayout.setTranslationY((playerTop + playerBottom) / 2f - Screen.dp(24 + 8));
-    playbackSpeedLayout.setTranslationX(getRightButtonCenter(0, 2) + Screen.dp( 24 + 8));
+    if (xgram) { // XGram M3E: over the speed chip
+      xgramBox(true, playerTop, playerBottom, width);
+      playbackSpeedLayout.setTranslationX(xgramSpeedChipRight() - xgramSpeedChipWidth() / 2f - width + Screen.dp(24 + 8));
+    } else {
+      playbackSpeedLayout.setTranslationX(getRightButtonCenter(0, 2) + Screen.dp( 24 + 8));
+    }
     playbackSpeedLayout.processTouchEvent(MotionEvent.ACTION_DOWN, touchX, touchY, playbackOffsetY, true);
 
     playbackSpeedPopup.init(true);

@@ -197,6 +197,80 @@ public final class XgramChatLongPress {
     private int highlighted = -1;
     private int actionId;
 
+    // XGram M3E: the floating toolbar of the chat preview (XgramM3Preview): 64dp, 48dp slots, the slot under the finger
+    // on a secondaryContainer pill that springs from slot to slot, a plain tooltip, a 32% scrim; it opens with a
+    // SPATIAL_FAST scale from .8 about the touch point and an EFFECTS_FAST fade (only a fade with Reduce motion)
+    private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramAlpha, xgramScale, xgramHoverX, xgramHover;
+    private @Nullable String xgramTooltip;
+    private int xgramTooltipWidth;
+
+    private int padding () {
+      return Screen.dp(xgram ? com.fahadali.xgram.appearance.XgramM3Preview.BAR_PADDING : PADDING);
+    }
+
+    private int button () {
+      return Screen.dp(BUTTON);
+    }
+
+    private int pillHeight () {
+      return Screen.dp(xgram ? com.fahadali.xgram.appearance.XgramM3Preview.BAR_HEIGHT : HEIGHT);
+    }
+
+    private float xgramHoverFactor () {
+      return xgramHover != null ? Math.max(0f, Math.min(1.2f, xgramHover.getValue())) : 0f;
+    }
+
+    private void xgramApply () {
+      final float alpha = xgramAlpha != null ? Math.max(0f, Math.min(1f, xgramAlpha.getValue())) : 0f;
+      final float scale = xgramScale != null ? xgramScale.getValue() : 1f;
+      this.factor = alpha;
+      pill.setScaleX(scale);
+      pill.setScaleY(scale);
+      pill.setAlpha(alpha);
+      invalidate();
+    }
+
+    private void xgramOnSettled () {
+      if (xgramAlpha == null) {
+        return;
+      }
+      if (xgramAlpha.getTarget() >= 1f) {
+        if (popup != null) {
+          popup.onCustomShowComplete();
+        }
+      } else if (closing) {
+        if (popup != null) {
+          popup.onCustomHideAnimationComplete();
+        }
+        if (actionId != 0) {
+          listener.onAfterForceTouchAction(context, actionId, null);
+        }
+      }
+    }
+
+    private void xgramSetHover (int index) {
+      if (xgramHover == null) {
+        com.fahadali.xgram.appearance.XgramExpressive.Spring.Listener redraw = (s, value) -> {
+          pill.invalidate();
+          invalidate();
+        };
+        xgramHover = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, redraw);
+        xgramHoverX = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, Math.max(0, index), redraw).setThreshold(.002f);
+      }
+      if (index != -1 && xgramHoverX != null) {
+        if (xgramHover.getValue() <= .01f && !xgramHover.isRunning()) {
+          xgramHoverX.setValue(index); // a new press starts on its slot
+        } else {
+          xgramHoverX.animateTo(index);
+        }
+        String text = items.get(itemAt(index)).title;
+        xgramTooltip = text != null && !text.isEmpty() ? text : null;
+        xgramTooltipWidth = xgramTooltip != null ? com.fahadali.xgram.appearance.XgramM3Preview.measureTooltip(xgramTooltip) : 0;
+      }
+      xgramHover.animateTo(index != -1 ? 1f : 0f);
+    }
+
     QuickActionsView (Context context, BaseView source, ForceTouchView.ForceTouchContext forceTouchContext, ForceTouchView.ActionListener listener, ArrayList<BaseView.ActionItem> items, float x, float y) {
       super(context);
       this.source = source;
@@ -227,7 +301,7 @@ public final class XgramChatLongPress {
     @Override
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
       setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec));
-      pill.measure(MeasureSpec.makeMeasureSpec(Screen.dp(PADDING) * 2 + Screen.dp(BUTTON) * items.size(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Screen.dp(HEIGHT), MeasureSpec.EXACTLY));
+      pill.measure(MeasureSpec.makeMeasureSpec(padding() * 2 + button() * items.size(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(pillHeight(), MeasureSpec.EXACTLY));
     }
 
     @Override
@@ -246,10 +320,11 @@ public final class XgramChatLongPress {
       }
       int left = Math.max(minLeft, Math.min(cx - pw / 2, maxRight - pw));
       int topLimit = Math.max(margin, HeaderView.getTopOffset() - own[1] + margin);
-      int top = row.top - Screen.dp(6f) - ph;
+      final int anchorGap = Screen.dp(xgram ? 8f : 6f); // XGram M3E: 8dp from the anchor
+      int top = row.top - anchorGap - ph;
       pillBelow = top < topLimit;
       if (pillBelow) {
-        top = Math.max(topLimit, Math.min(row.bottom + Screen.dp(6f), height - ph - margin));
+        top = Math.max(topLimit, Math.min(row.bottom + anchorGap, height - ph - margin));
       }
       pill.layout(left, top, left + pw, top + ph);
       pill.setPivotX(Math.max(0, Math.min(pw, cx - left)));
@@ -259,6 +334,23 @@ public final class XgramChatLongPress {
     @Override
     protected void dispatchDraw (Canvas c) {
       int width = getMeasuredWidth(), height = getMeasuredHeight();
+      if (xgram) {
+        Paint scrim = Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3Preview.scrimColor(), factor));
+        c.drawRect(0, 0, width, row.top, scrim);
+        c.drawRect(0, row.bottom, width, height, scrim);
+        c.drawRect(0, row.top, row.left, row.bottom, scrim);
+        c.drawRect(row.right, row.top, width, row.bottom, scrim);
+        super.dispatchDraw(c);
+        final float hover = Math.min(1f, xgramHoverFactor());
+        if (xgramTooltip != null && hover > 0f && factor > 0f && xgramHoverX != null) {
+          final float slot = xgramHoverX.getValue();
+          final float centerX = pill.getLeft() + padding() + button() * slot + button() / 2f;
+          final float gap = Screen.dp(8f);
+          final float bottom = pillBelow ? pill.getBottom() + gap + Screen.dp(24f) : pill.getTop() - gap;
+          com.fahadali.xgram.appearance.XgramM3Preview.drawTooltip(c, xgramTooltip, xgramTooltipWidth, centerX, bottom, width, hover * factor);
+        }
+        return;
+      }
       Paint dim = Paints.fillingPaint(ColorUtils.alphaColor(factor * (Theme.isDark() ? .45f : .22f), 0xff000000));
       c.drawRect(0, 0, width, row.top, dim);
       c.drawRect(0, row.bottom, width, height, dim);
@@ -289,7 +381,7 @@ public final class XgramChatLongPress {
       if (x < pill.getLeft() || x > pill.getRight() || y < pill.getTop() - slop || y > pill.getBottom() + slop) {
         return -1;
       }
-      int index = (int) ((x - pill.getLeft() - Screen.dp(PADDING)) / Screen.dp(BUTTON));
+      int index = (int) ((x - pill.getLeft() - padding()) / button());
       return Math.max(0, Math.min(items.size() - 1, index));
     }
 
@@ -298,6 +390,9 @@ public final class XgramChatLongPress {
         highlighted = index;
         if (index != -1) {
           UI.forceVibrate(pill, false);
+        }
+        if (xgram) {
+          xgramSetHover(index);
         }
         pill.invalidate();
         invalidate();
@@ -386,11 +481,24 @@ public final class XgramChatLongPress {
 
     @Override
     public void prepareShowAnimation () {
+      if (xgram) {
+        final float from = com.fahadali.xgram.appearance.XgramM3Preview.revealScale();
+        xgramAlpha = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> xgramApply()).setEndListener(this::xgramOnSettled);
+        xgramScale = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, from, (s, value) -> xgramApply()).setThreshold(.002f);
+        pill.setScaleX(from);
+        pill.setScaleY(from);
+        return;
+      }
       animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
     }
 
     @Override
     public void launchShowAnimation (PopupLayout popup) {
+      if (xgram && xgramAlpha != null && xgramScale != null) {
+        xgramScale.animateTo(1f);
+        xgramAlpha.animateTo(1f);
+        return;
+      }
       animator.animateTo(1f);
     }
 
@@ -400,6 +508,11 @@ public final class XgramChatLongPress {
       tracking = false;
       if (actionId != 0) {
         listener.onForceTouchAction(context, actionId, null);
+      }
+      if (xgram && xgramAlpha != null && xgramScale != null) {
+        xgramScale.animateTo(com.fahadali.xgram.appearance.XgramM3Preview.revealScale());
+        xgramAlpha.animateTo(0f);
+        return true;
       }
       animator.setDuration(140L);
       animator.animateTo(0f);
@@ -435,6 +548,9 @@ public final class XgramChatLongPress {
     private static final float PADDING = 4f, BUTTON = 48f, HEIGHT = 52f;
 
     private final class PillView extends View {
+      private final RectF xgramRect = new RectF();
+      private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
       PillView (Context context) {
         super(context);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -444,12 +560,54 @@ public final class XgramChatLongPress {
               outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), view.getHeight() / 2f);
             }
           });
-          setElevation(Screen.dp(6f));
+          setElevation(xgram ? com.fahadali.xgram.appearance.XgramM3Preview.cardElevation() : Screen.dp(6f));
+        }
+      }
+
+      /** XGram M3E: the preview's floating toolbar look. */
+      private void xgramDraw (Canvas c) {
+        final int width = getWidth(), height = getHeight();
+        xgramRect.set(0, 0, width, height);
+        xgramPaint.setColor(com.fahadali.xgram.appearance.XgramM3Preview.cardColor());
+        c.drawRoundRect(xgramRect, height / 2f, height / 2f, xgramPaint);
+        final float cy = height / 2f;
+        final int pad = padding(), slot = button();
+        final float hover = xgramHoverFactor();
+        if (hover > 0f && xgramHoverX != null) {
+          final float cx = pad + slot * xgramHoverX.getValue() + slot / 2f;
+          final float scale = .7f + .3f * hover;
+          final float halfWidth = Math.max(0f, slot / 2f - Screen.dp(2f)) * scale;
+          final float halfHeight = Screen.dp(com.fahadali.xgram.appearance.XgramM3Preview.BUTTON_HEIGHT) / 2f * scale;
+          xgramRect.set(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight);
+          xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), Math.min(1f, hover)));
+          c.drawRoundRect(xgramRect, halfHeight, halfHeight, xgramPaint);
+        }
+        for (int i = 0; i < items.size(); i++) {
+          final int itemIndex = itemAt(i);
+          final Drawable icon = icons[itemIndex];
+          if (icon == null) {
+            continue;
+          }
+          final float cx = pad + slot * i + slot / 2f;
+          final int iconColor = com.fahadali.xgram.appearance.XgramR5Calls.isDestructiveAction(items.get(itemIndex).id) ?
+            com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR) :
+            com.fahadali.xgram.appearance.XgramM3Preview.iconColor(i == highlighted);
+          final boolean mirror = Drawables.needMirror(items.get(itemIndex).iconRes);
+          final int saveCount = c.save();
+          if (mirror) {
+            c.scale(-1f, 1f, cx, cy);
+          }
+          Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(iconColor));
+          c.restoreToCount(saveCount);
         }
       }
 
       @Override
       protected void onDraw (Canvas c) {
+        if (xgram) {
+          xgramDraw(c);
+          return;
+        }
         int width = getWidth(), height = getHeight();
         RectF rect = Paints.getRectF();
         rect.set(0, 0, width, height);

@@ -926,6 +926,10 @@ public class TdlibUi extends Handler {
       i++;
     }
 
+    if (com.fahadali.xgram.appearance.XgramM3Wheel.on() && xgramShowTTLSheet(context, ttlOptions, foundIndex, useDarkMode, message, callback)) {
+      return; // XGram M3E: the picker in an M3 sheet
+    }
+
     final InfiniteRecyclerView<TTLOption> infiniteView = new InfiniteRecyclerView<>(context, true);
     if (useDarkMode) {
       infiniteView.forceDarkMode();
@@ -945,6 +949,73 @@ public class TdlibUi extends Handler {
     });
     builder.setView(infiniteView);
     UI.getContext(context).showAlert(builder, useDarkMode ? ThemeSet.getBuiltinTheme(ThemeId.NIGHT_BLACK) : null);
+  }
+
+  /** The controller an M3 sheet opened from {@code context} belongs to (the navigation's current page), or null. */
+  @Nullable
+  private static ViewController<?> xgramSheetHost (Context context) {
+    final BaseActivity activity = UI.getContext(context);
+    if (activity == null) {
+      return null;
+    }
+    final NavigationController navigation = activity.navigation();
+    final ViewController<?> c = navigation != null ? navigation.getCurrentStackItem() : null;
+    return c != null && !c.isDestroyed() ? c : null;
+  }
+
+  /**
+   * XGram M3E: the self-destruct timer in an M3 sheet: a headlineSmall title, the explanation in bodyMedium, the band
+   * wheel and Cancel / Done. With the media viewer's dark forced theme every color is the dark scheme's
+   * (XgramM3Wheel.color). False when there is no page to open the sheet from (the dialog is shown then).
+   */
+  private boolean xgramShowTTLSheet (Context context, List<TTLOption> options, int foundIndex, boolean useDarkMode, @StringRes int message, @Nullable RunnableData<TTLOption> callback) {
+    final ViewController<?> c = xgramSheetHost(context);
+    if (c == null) {
+      return false;
+    }
+    final ThemeDelegate forcedTheme = useDarkMode ? ThemeSet.getBuiltinTheme(ThemeId.NIGHT_BLACK) : null;
+    c.showPopup(null, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
+      int contentHeight = 0;
+      final Context ctx = c.context();
+      TextView titleView = com.fahadali.xgram.appearance.XgramM3Wheel.newTitle(ctx, com.fahadali.xgram.appearance.XgramR5Calls.sentence(R.string.MessageLifetime, R.string.XgramR5CallsSelfDestructTimer), forcedTheme);
+      optionsWrap.addView(titleView);
+      contentHeight += com.fahadali.xgram.appearance.XgramM3Wheel.measureHeight(titleView, c.context().getControllerWidth(titleView));
+      if (message != 0) {
+        TextView textView = com.fahadali.xgram.appearance.XgramM3Wheel.newSupportingText(ctx, Lang.getString(message), forcedTheme);
+        optionsWrap.addView(textView);
+        contentHeight += com.fahadali.xgram.appearance.XgramM3Wheel.measureHeight(textView, c.context().getControllerWidth(textView));
+      }
+
+      final InfiniteRecyclerView<TTLOption> wheel = new InfiniteRecyclerView<>(ctx, false);
+      if (forcedTheme != null) {
+        wheel.setForcedTheme(forcedTheme);
+      } else {
+        wheel.addThemeListeners(c);
+      }
+      wheel.initWithItems(options, foundIndex);
+      wheel.setLayoutParams(new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, InfiniteRecyclerView.getItemHeight() * 5));
+      if (forcedTheme == null) {
+        c.addThemeInvalidateListener(wheel);
+      }
+      optionsWrap.addView(wheel);
+      contentHeight += InfiniteRecyclerView.getItemHeight() * 5;
+
+      final TextView done = com.fahadali.xgram.appearance.XgramM3Wheel.newConfirmButton(ctx, forcedTheme);
+      done.setText(Lang.getString(R.string.Done));
+      final com.fahadali.xgram.appearance.XgramM3Wheel.Actions actions = com.fahadali.xgram.appearance.XgramM3Wheel.newActions(ctx, forcedTheme, null, Lang.getString(R.string.Cancel), done);
+      actions.cancel.setOnClickListener(v -> popupLayout.hideWindow(true));
+      done.setOnClickListener(v -> {
+        TTLOption option = wheel.getCurrentItem();
+        popupLayout.hideWindow(true);
+        if (option != null && callback != null) {
+          callback.runWithData(option);
+        }
+      });
+      optionsWrap.addView(actions.view);
+      contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT);
+      return contentHeight;
+    }, forcedTheme);
+    return true;
   }
 
   public static final int MUTE_ENABLE = 0;
@@ -3588,6 +3659,10 @@ public class TdlibUi extends Handler {
       return;
     }
     Runnable unsupported = () -> {
+      // XGram M3E: an M3 snackbar ("Mini apps aren't supported yet" for Mini App links) instead of the warning tooltip
+      if (com.fahadali.xgram.appearance.XgramR5Calls.showUnsupported(com.fahadali.xgram.appearance.XgramR5Calls.isMiniAppLink(linkType))) {
+        return;
+      }
       showLinkTooltip(tdlib, R.drawable.baseline_warning_24, Lang.getString(R.string.InternalUrlUnsupported), openParameters);
     };
     boolean ok = true;
@@ -3808,7 +3883,9 @@ public class TdlibUi extends Handler {
             case TdApi.SettingsSectionDevices.CONSTRUCTOR: {
               SettingsSessionsController sessions = new SettingsSessionsController(context.context(), context.tdlib());
               SettingsWebsitesController websites = new SettingsWebsitesController(context.context(), context.tdlib());
-              result = new SimpleViewPagerController(context.context(), context.tdlib(), new ViewController<?>[] {sessions, websites}, new String[] {Lang.uppercase(Lang.getString(R.string.Devices)), Lang.getString(R.string.Websites)}, false);
+              // XGram M3E: sentence case tabs (no upper-cased "DEVICES")
+              final String xgramDevices = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Lang.getString(R.string.Devices) : Lang.uppercase(Lang.getString(R.string.Devices));
+              result = new SimpleViewPagerController(context.context(), context.tdlib(), new ViewController<?>[] {sessions, websites}, new String[] {xgramDevices, Lang.getString(R.string.Websites)}, false);
               break;
             }
             case TdApi.SettingsSectionLanguage.CONSTRUCTOR: {

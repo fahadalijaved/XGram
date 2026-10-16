@@ -146,11 +146,22 @@ public final class ColumnDataPicker implements Destroyable {
   public void showPopup (ViewController<?> c, CharSequence title, CharSequence commitButtonText, @Nullable ThemeDelegate forcedTheme, @Nullable CommitListener commitListener) {
     if (popupLayout != null)
       throw new IllegalStateException();
-    this.popupLayout = c.showPopup(title, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
+    final boolean xgramSheet = com.fahadali.xgram.appearance.XgramM3Wheel.on();
+    // XGram M3E: the sheet title is drawn here in headlineSmall, so the sheet's own (titleLarge) one stays empty
+    this.popupLayout = c.showPopup(xgramSheet ? null : title, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
       int contentHeight = 0;
       final int pickerHeight = InfiniteRecyclerView.getItemHeight() * 5;
 
       final boolean xgramM3 = com.fahadali.xgram.appearance.XgramM3Wheel.on();
+
+      if (xgramM3 && !android.text.TextUtils.isEmpty(title)) {
+        TextView titleView = com.fahadali.xgram.appearance.XgramM3Wheel.newTitle(c.context(), title, forcedTheme);
+        optionsWrap.addView(titleView);
+        contentHeight += com.fahadali.xgram.appearance.XgramM3Wheel.measureHeight(titleView, c.context().getControllerWidth(titleView));
+      }
+
+      // XGram M3E: an optional column (its last row is a blank "—", the birthday's year) gets a Show year chip instead
+      final Column optionalColumn = xgramM3 ? xgramFindOptionalColumn() : null;
 
       LinearLayout columnWrap = new LinearLayout(c.context());
       columnWrap.setOrientation(LinearLayout.HORIZONTAL);
@@ -186,13 +197,32 @@ public final class ColumnDataPicker implements Destroyable {
         if (column.style.noPadding) {
           picker.setItemPadding(0);
         }
-        picker.initWithItems(column.rows, column.index);
+        if (column == optionalColumn) {
+          // the wheel never shows the blank row: the chip stands for it
+          final List<SimpleStringItem> rows = column.rows.subList(0, column.rows.size() - 1);
+          final boolean hasValue = column.index >= 0 && column.index < rows.size();
+          picker.setTrimItems(false);
+          picker.initWithItems(rows, hasValue ? column.index : Math.max(0, rows.size() - 1 - XGRAM_DEFAULT_YEARS_BACK));
+          xgramOptionalShown = hasValue;
+          if (!hasValue) {
+            picker.setVisibility(View.GONE);
+          }
+        } else {
+          picker.initWithItems(column.rows, column.index);
+        }
         picker.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, column.style.weight));
         columnWrap.addView(picker);
         column.view = picker;
       }
       optionsWrap.addView(columnWrap);
       contentHeight += pickerHeight;
+
+      if (optionalColumn != null) {
+        final LinearLayout chipRow = com.fahadali.xgram.appearance.XgramM3Wheel.newColumnChip(c.context(), R.string.XgramR5CallsShowYear, xgramOptionalShown,
+          checked -> xgramSetOptionalShown(optionalColumn, columnWrap, checked));
+        optionsWrap.addView(chipRow);
+        contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.CHIP_ROW_HEIGHT);
+      }
 
       if (spacingEnd > 0) {
         View emptyView = new View(c.context());
@@ -229,6 +259,125 @@ public final class ColumnDataPicker implements Destroyable {
 
       return contentHeight;
     }, forcedTheme);
+  }
+
+  // XGram M3E: the optional column (Show year). Hiding it fades it out, then the other columns move to their new
+  // places from where they were (they are laid out once, then only translated on a spring); showing it does the
+  // reverse. Reduce motion snaps both.
+
+  private static final int XGRAM_DEFAULT_YEARS_BACK = 25;
+  private boolean xgramOptionalShown;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramOptionalAlpha, xgramOptionalMove;
+  private @Nullable View[] xgramMoveViews;
+  private @Nullable float[] xgramMoveFrom, xgramMoveDelta;
+
+  @Nullable
+  private Column xgramFindOptionalColumn () {
+    if (columns == null) {
+      return null;
+    }
+    for (Column column : columns) {
+      final int size = column.rows != null ? column.rows.size() : 0;
+      if (size > 1 && "—".equals(column.rows.get(size - 1).toString())) {
+        return column;
+      }
+    }
+    return null;
+  }
+
+  private void xgramSetOptionalShown (Column column, LinearLayout wrap, boolean show) {
+    final InfiniteRecyclerView<SimpleStringItem> view = column.view;
+    if (view == null || xgramOptionalShown == show) {
+      return;
+    }
+    xgramOptionalShown = show;
+    // The value: the wheel's row, or the blank last row while the column is hidden
+    final int index = show ? view.getCurrentIndex() : column.rows.size() - 1;
+    final InfiniteRecyclerView.ItemChangeListener<SimpleStringItem> listener = column.itemChangeListener;
+    if (listener != null) {
+      listener.onCurrentIndexChanged(view, index);
+      listener.onCurrentIndexFinalized(view, index);
+    } else {
+      column.index = index;
+    }
+    if (xgramOptionalAlpha == null) {
+      xgramOptionalAlpha = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, show ? 0f : 1f, (s, value) -> {
+        final float alpha = me.vkryl.core.MathUtils.clamp(value);
+        view.setAlpha(alpha);
+        final float scale = .9f + .1f * alpha;
+        view.setScaleX(scale);
+        view.setScaleY(scale);
+      });
+    }
+    if (show) {
+      view.setAlpha(0f);
+      xgramMoveColumns(wrap, view, true);
+      xgramOptionalAlpha.setEndListener(null);
+      xgramOptionalAlpha.setValue(0f);
+      xgramOptionalAlpha.animateTo(1f);
+    } else {
+      xgramOptionalAlpha.setEndListener(() -> {
+        if (!xgramOptionalShown && view.getVisibility() == View.VISIBLE) {
+          xgramMoveColumns(wrap, view, false);
+        }
+      });
+      xgramOptionalAlpha.animateTo(0f);
+    }
+  }
+
+  /** Lays the columns out with {@code optional} shown or gone, then springs the others from their old places. */
+  private void xgramMoveColumns (LinearLayout wrap, View optional, boolean show) {
+    final int count = wrap.getChildCount();
+    if (xgramMoveViews == null || xgramMoveViews.length != count) {
+      xgramMoveViews = new View[count];
+      xgramMoveFrom = new float[count];
+      xgramMoveDelta = new float[count];
+    }
+    for (int i = 0; i < count; i++) {
+      View child = wrap.getChildAt(i);
+      xgramMoveViews[i] = child;
+      xgramMoveFrom[i] = child.getLeft() + child.getWidth() / 2f + child.getTranslationX();
+      xgramMoveDelta[i] = 0f;
+    }
+    optional.setVisibility(show ? View.VISIBLE : View.GONE);
+    wrap.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+      @Override
+      public boolean onPreDraw () {
+        wrap.getViewTreeObserver().removeOnPreDrawListener(this);
+        final View[] views = xgramMoveViews;
+        final float[] from = xgramMoveFrom, delta = xgramMoveDelta;
+        if (views == null || from == null || delta == null) {
+          return true;
+        }
+        for (int i = 0; i < views.length; i++) {
+          View child = views[i];
+          if (child == null || child == optional || child.getVisibility() != View.VISIBLE || child.getWidth() == 0) {
+            delta[i] = 0f;
+            continue;
+          }
+          delta[i] = from[i] - (child.getLeft() + child.getWidth() / 2f);
+          child.setTranslationX(delta[i]);
+        }
+        if (xgramOptionalMove == null) {
+          xgramOptionalMove = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> {
+            final View[] moving = xgramMoveViews;
+            final float[] moveDelta = xgramMoveDelta;
+            if (moving == null || moveDelta == null) {
+              return;
+            }
+            for (int i = 0; i < moving.length; i++) {
+              if (moving[i] != null && moveDelta[i] != 0f) {
+                moving[i].setTranslationX(moveDelta[i] * value);
+              }
+            }
+          });
+        }
+        xgramOptionalMove.setValue(1f);
+        xgramOptionalMove.animateTo(0f);
+        return true;
+      }
+    });
+    wrap.requestLayout();
   }
 
   private static EmojiTextView newCommitButton (ViewController<?> c, @Nullable ThemeDelegate forcedTheme) {

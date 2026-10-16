@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 5: calls, audio and pickers (XgramR5Calls). The sentence-case labels replace a Telegram&#160;X
+       title-case string only while the language is Telegram&#160;X's English; a translation keeps its own string. -->
+  <string name="XgramR5CallsOutgoingCall">Outgoing call</string>
+  <string name="XgramR5CallsIncomingCall">Incoming call</string>
+  <string name="XgramR5CallsMissedCall">Missed call</string>
+  <string name="XgramR5CallsCanceledCall">Canceled call</string>
+  <string name="XgramR5CallsDeclinedCall">Declined call</string>
+  <string name="XgramR5CallsSelfDestructTimer">Self-destruct timer</string>
+  <string name="XgramR5CallsShowYear">Show year</string>
+  <string name="XgramR5CallsMiniAppsUnsupported">Mini apps aren\'t supported yet</string>
+  <string name="XgramR5CallsRateTitle">Rate this call</string>
+  <string name="XgramR5CallsStar">%1$d of 5 stars</string>
+</resources>

@@ -1244,6 +1244,8 @@ public class TGInlineKeyboard {
         case TdApi.InlineKeyboardButtonTypeBuy.CONSTRUCTOR:
         case TdApi.InlineKeyboardButtonTypeWebApp.CONSTRUCTOR:
           // TODO
+          // XGram M3E: a snackbar says the button can't be used yet, instead of a tap that does nothing
+          com.fahadali.xgram.appearance.XgramR5Calls.showUnsupported(type.getConstructor() == TdApi.InlineKeyboardButtonTypeWebApp.CONSTRUCTOR);
           break;
 
         case TdApi.InlineKeyboardButtonTypeCallbackWithPassword.CONSTRUCTOR: {

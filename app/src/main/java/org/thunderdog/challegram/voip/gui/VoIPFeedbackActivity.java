@@ -53,24 +53,43 @@ public class VoIPFeedbackActivity extends Activity {
     View bgView = new View(this);
     setContentView(bgView);
 
+    // XGram M3E: an M3 dialog: "Rate this call" (headlineSmall, styled by XgramM3Controls), the prompt in bodyMedium
+    // onSurfaceVariant, 48dp star toggles and the filled comment field, 24dp from the dialog's sides
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+
     LinearLayout ll = new LinearLayout(this);
     ll.setOrientation(LinearLayout.VERTICAL);
     ll.setGravity(Gravity.CENTER_HORIZONTAL);
     int pad = Screen.dp(16f);
-    ll.setPadding(pad, pad, pad, pad);
+    if (xgram) {
+      ll.setPadding(Screen.dp(24f), Screen.dp(4f), Screen.dp(24f), 0);
+    } else {
+      ll.setPadding(pad, pad, pad, pad);
+    }
 
     final int textColor = Theme.textAccentColor();
 
     TextView text = new NoScrollTextView(this);
-    text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-    text.setTextColor(textColor);
-    text.setGravity(Gravity.CENTER);
+    if (xgram) {
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(text, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+      text.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      text.setGravity(Gravity.START);
+      text.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    } else {
+      text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+      text.setTextColor(textColor);
+      text.setGravity(Gravity.CENTER);
+    }
     text.setText(Lang.getString(R.string.VoipRateCallAlert));
-    ll.addView(text);
+    if (xgram) {
+      ll.addView(text, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    } else {
+      ll.addView(text);
+    }
 
     final BetterRatingView bar = new BetterRatingView(this);
     LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL);
-    params.topMargin = Screen.dp(16f);
+    params.topMargin = Screen.dp(xgram ? 12f : 16f);
     ll.addView(bar, params);
 
     int accountId = getIntent().getIntExtra("account_id", TdlibAccount.NO_ID);
@@ -86,8 +105,8 @@ public class VoIPFeedbackActivity extends Activity {
     params.topMargin = Screen.dp(16f);
     ll.addView(commentBox, params);
 
-    AlertDialog alert = new AlertDialog.Builder(this, Theme.dialogTheme())
-      .setTitle(Lang.getString(R.string.AppName))
+    AlertDialog.Builder builder = new AlertDialog.Builder(this, Theme.dialogTheme())
+      .setTitle(Lang.getString(xgram ? R.string.XgramR5CallsRateTitle : R.string.AppName))
       .setView(ll)
       .setPositiveButton(Lang.getOK(), (dialog, which) -> {
         int rating = bar.getRating();
@@ -99,8 +118,16 @@ public class VoIPFeedbackActivity extends Activity {
       .setNegativeButton(Lang.getString(R.string.Cancel), (dialog, which) -> {
         Log.i(Log.TAG_VOIP, "User denied to give feedback");
         finishDelayed();
-      })
-      .show();
+      });
+    final AlertDialog alert;
+    if (xgram) {
+      // XGram M3E: as BaseActivity.showAlert, the M3 window motion is set before the dialog shows (this is no BaseActivity)
+      alert = builder.create();
+      com.fahadali.xgram.appearance.XgramAppMotion.dialogWindow(alert);
+      alert.show();
+    } else {
+      alert = builder.show();
+    }
     BaseActivity.modifyAlert(this, alert, null);
     alert.setCanceledOnTouchOutside(true);
     alert.setOnCancelListener(dialog -> finish());
