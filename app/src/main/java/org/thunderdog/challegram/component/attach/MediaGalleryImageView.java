@@ -72,9 +72,8 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
     receiver = new ImageReceiver(this, 0);
     receiver.prepareToBeCropped();
     receiver.setAnimationDisabled(true);
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      receiver.setRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS)); // XGram: Material 3 Expressive 4dp tiles
-    }
+    // XGram: Material 3 Expressive 4dp tiles are clipped in xgramDraw (the receiver's own radius rounds the cropped
+    // bitmap's rect, so a photo that is not square kept square corners)
 
     setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
   }
@@ -111,6 +110,10 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
   public void onClickAt (View view, float x, float y) {
     if (listener != null) {
       int size = Screen.dp(24f) * 2;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && Lang.rtl()) {
+        listener.onClick(view, y <= size && x <= size); // XGram: the M3E check sits at the tile's top end
+        return;
+      }
       listener.onClick(view, y <= size && x >= getMeasuredWidth() - size);
     }
   }
@@ -236,6 +239,10 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
   private void setChecked (boolean isChecked, boolean animated) {
     if (this.isChecked != isChecked) {
       this.isChecked = isChecked;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramSetSelected(isChecked, animated); // XGram: the M3E selection springs (see xgramDraw)
+        return;
+      }
       if (animated) {
         animateFactor(isChecked ? 1f : 0f);
       } else {
@@ -301,48 +308,195 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
   }
 
   public int getReceiverOffset () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Math.round(xgramInset(me.vkryl.core.MathUtils.clamp(xgramSelected))); // XGram: the photo inside its frame
+    }
     return factor != 0f ? (receiver.getWidth() - (int) ((float) receiver.getWidth() * (1f - factor * SCALE))) / 2 : 0;
   }
 
-  // XGram: Material 3 Expressive check: a primary circle with the onPrimary selection number, an outline circle
-  // (white on a light scrim, over the photo) when not selected
-  private @Nullable android.text.TextPaint xgramCheckText;
+  // XGram: Material 3 Expressive photo picker selection, as Google Photos and the system photo picker. Not selected: a
+  // 24dp circle with a 2dp white outline (onSurfaceVariant on an empty tile) over a soft scrim at the tile's top end.
+  // Selected: the circle fills with primary and shows the onPrimary selection number (or a check), and the photo
+  // shrinks into its tile with 12dp corners on a secondaryContainer frame. One fast spatial spring drives it all (it
+  // overshoots a little); nothing is allocated while it runs. Telegram X's white ring and SimplestCheckBox stay off.
 
-  private void xgramDrawCheck (Canvas c, int centerX, int centerY) {
-    final float radius = Screen.dp(11f);
-    if (factor < 1f) {
-      float alpha = 1f - factor;
-      c.drawCircle(centerX, centerY, radius, Paints.fillingPaint(ColorUtils.alphaColor(alpha, 0x33000000)));
-      c.drawCircle(centerX, centerY, radius - Screen.dp(1f), Paints.getProgressPaint(ColorUtils.alphaColor(alpha, 0xffffffff), Screen.dp(2f)));
-    }
-    if (factor > 0f) {
-      float r = radius * (.6f + .4f * factor);
-      int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
-      c.drawCircle(centerX, centerY, r + Screen.dp(1.5f) * factor, Paints.fillingPaint(ColorUtils.alphaColor(factor, 0xffffffff)));
-      c.drawCircle(centerX, centerY, r, Paints.fillingPaint(ColorUtils.alphaColor(factor, primary)));
-      if (selectionIndexStr != null) {
-        if (xgramCheckText == null) {
-          xgramCheckText = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-          xgramCheckText.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, true));
-          xgramCheckText.setTextAlign(android.graphics.Paint.Align.CENTER);
-        }
-        xgramCheckText.setTextSize(Screen.dp(12f) * (.6f + .4f * factor));
-        xgramCheckText.setColor(ColorUtils.alphaColor(factor, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY)));
-        android.graphics.Paint.FontMetrics fm = xgramCheckText.getFontMetrics();
-        c.drawText(selectionIndexStr, centerX, centerY - (fm.ascent + fm.descent) / 2f, xgramCheckText);
+  private static final float XGRAM_CHECK_RADIUS = 12f, XGRAM_CHECK_MARGIN = 8f, XGRAM_CHECK_STROKE = 2f,
+    XGRAM_SCRIM_RADIUS = 40f, XGRAM_SELECTED_INSET = 10f, XGRAM_SELECTED_INSET_MAX = .08f;
+
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramSelection;
+  /** The spring's value: 0 not selected, 1 selected. */
+  private float xgramSelected;
+  private @Nullable android.text.TextPaint xgramCheckText;
+  private @Nullable android.graphics.Paint.FontMetrics xgramCheckMetrics;
+  private @Nullable android.graphics.Path xgramClip;
+  private @Nullable RectF xgramClipRect;
+  private float xgramClipInset = -1f, xgramClipRadius = -1f;
+  private int xgramClipWidth = -1, xgramClipHeight = -1;
+
+  private static @Nullable android.graphics.Paint xgramScrimPaint;
+  private static float xgramScrimPaintRadius;
+
+  private void xgramSetSelected (boolean selected, boolean animated) {
+    final float target = selected ? 1f : 0f;
+    if (animated) {
+      if (xgramSelection == null) {
+        xgramSelection = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, xgramSelected, (s, value) -> {
+          xgramSelected = value;
+          invalidate();
+        });
+      }
+      xgramSelection.animateTo(target);
+    } else {
+      if (xgramSelection != null) {
+        xgramSelection.setValue(target);
+      }
+      if (xgramSelected != target) {
+        xgramSelected = target;
+        invalidate();
       }
     }
   }
 
+  /** How far the photo moves in from each side of its tile at {@code k} (0..1 and a little past it). */
+  private float xgramInset (float k) {
+    return Math.min(Screen.dp(XGRAM_SELECTED_INSET), Math.min(width, height) * XGRAM_SELECTED_INSET_MAX) * k;
+  }
+
+  /** The photo's rounded clip, rebuilt only when its size, inset or corner changed. */
+  private android.graphics.Path xgramClipPath (float inset, float radius) {
+    if (xgramClip == null) {
+      xgramClip = new android.graphics.Path();
+      xgramClipRect = new RectF();
+    }
+    if (inset != xgramClipInset || radius != xgramClipRadius || width != xgramClipWidth || height != xgramClipHeight) {
+      xgramClipInset = inset;
+      xgramClipRadius = radius;
+      xgramClipWidth = width;
+      xgramClipHeight = height;
+      xgramClipRect.set(inset, inset, width - inset, height - inset);
+      xgramClip.rewind();
+      xgramClip.addRoundRect(xgramClipRect, radius, radius, android.graphics.Path.Direction.CW);
+    }
+    return xgramClip;
+  }
+
+  /** One radial scrim for every tile (32% black under the check, fading out), made again only if the density changes. */
+  private static android.graphics.Paint xgramScrimPaint (float radius) {
+    if (xgramScrimPaint == null || xgramScrimPaintRadius != radius) {
+      if (xgramScrimPaint == null) {
+        xgramScrimPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.DITHER_FLAG);
+      }
+      xgramScrimPaint.setShader(new android.graphics.RadialGradient(0f, 0f, radius,
+        new int[] {0x52000000, 0x29000000, 0x00000000}, new float[] {0f, .5f, 1f}, android.graphics.Shader.TileMode.CLAMP));
+      xgramScrimPaintRadius = radius;
+    }
+    return xgramScrimPaint;
+  }
+
+  private float xgramCheckCenterX () {
+    final float offset = Screen.dp(XGRAM_CHECK_MARGIN) + Screen.dp(XGRAM_CHECK_RADIUS);
+    return Lang.rtl() ? offset : width - offset; // the top end
+  }
+
+  private float xgramCheckCenterY () {
+    return Screen.dp(XGRAM_CHECK_MARGIN) + Screen.dp(XGRAM_CHECK_RADIUS);
+  }
+
+  private void xgramDraw (Canvas c) {
+    final float s = xgramSelected;
+    final float k = Math.max(0f, s), alpha = me.vkryl.core.MathUtils.clamp(s);
+    final boolean placeholder = receiver.needPlaceholder();
+    final boolean hasCheck = !isInvisible && !isAlwaysInvisible;
+    final float rest = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS);
+
+    if (k > 0f || placeholder) {
+      RectF tile = Paints.getRectF();
+      tile.set(0, 0, width, height);
+      c.drawRoundRect(tile, rest, rest, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(k > 0f ? com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST)));
+    }
+
+    final float inset = xgramInset(k);
+    final float radius = rest + (Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M) - rest) * k;
+    final int clipSave = c.save();
+    c.clipPath(xgramClipPath(inset, radius));
+    final boolean scaled = inset > 0f && width > 0;
+    final int scaleSave = scaled ? c.save() : -1;
+    if (scaled) {
+      final float scale = (width - inset * 2f) / width;
+      c.scale(scale, scale, width / 2f, height / 2f);
+    }
+    receiver.draw(c);
+    final boolean rtl = Lang.rtl();
+    if (showFavorite) {
+      Drawable drawable = getSparseDrawable(R.drawable.baseline_favorite_12, ColorId.white);
+      final int favoriteX = rtl ? receiver.getRight() - drawable.getMinimumWidth() - Screen.dp(6f) : receiver.getLeft() + Screen.dp(6f); // the bottom start
+      Drawables.draw(c, drawable, favoriteX, receiver.getBottom() - drawable.getMinimumHeight() - Screen.dp(6f), PorterDuffPaint.get(ColorId.white, .95f));
+    }
+    if (duration != null && !duration.isEmpty()) {
+      xgramDrawDuration(c, rtl);
+    }
+    if (scaled) {
+      c.restoreToCount(scaleSave);
+    }
+    if (hasCheck && !placeholder && alpha < 1f) {
+      // the scrim stays on the photo (inside its clip), so its corner is not darkened outside it
+      final float scrimRadius = Screen.dp(XGRAM_SCRIM_RADIUS);
+      final android.graphics.Paint scrim = xgramScrimPaint(scrimRadius);
+      scrim.setAlpha((int) (255f * (1f - alpha)));
+      final int scrimSave = c.save();
+      c.translate(xgramCheckCenterX(), xgramCheckCenterY());
+      c.drawCircle(0f, 0f, scrimRadius, scrim);
+      c.restoreToCount(scrimSave);
+    }
+    c.restoreToCount(clipSave);
+
+    if (hasCheck) {
+      xgramDrawCheck(c, s, placeholder);
+    }
+  }
+
+  private void xgramDrawCheck (Canvas c, float s, boolean placeholder) {
+    final float k = Math.max(0f, s), alpha = me.vkryl.core.MathUtils.clamp(s);
+    final float cx = xgramCheckCenterX(), cy = xgramCheckCenterY();
+    final float radius = Screen.dp(XGRAM_CHECK_RADIUS), stroke = Screen.dp(XGRAM_CHECK_STROKE);
+    if (k > 0f) {
+      // the fill grows out of the circle's centre, a little past the outline as the spring overshoots
+      final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      c.drawCircle(cx, cy, Math.min(radius + Screen.dp(1f), radius * k), Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(primary, Math.min(1f, k * 2f))));
+    }
+    final int outline = placeholder ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT) : 0xffffffff;
+    c.drawCircle(cx, cy, radius - stroke / 2f, Paints.getProgressPaint(outline, stroke));
+    if (alpha <= 0f) {
+      return;
+    }
+    final int onPrimary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY);
+    if (selectionIndexStr != null) {
+      if (xgramCheckText == null) {
+        xgramCheckText = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG | android.graphics.Paint.SUBPIXEL_TEXT_FLAG);
+        xgramCheckText.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, true));
+        xgramCheckText.setTextAlign(android.graphics.Paint.Align.CENTER);
+        xgramCheckMetrics = new android.graphics.Paint.FontMetrics();
+      }
+      // labelMedium, popping in with the fill
+      xgramCheckText.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M)) * (.5f + .5f * Math.min(k, 1.15f)));
+      xgramCheckText.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(onPrimary, alpha));
+      xgramCheckText.getFontMetrics(xgramCheckMetrics);
+      c.drawText(selectionIndexStr, cx, cy - (xgramCheckMetrics.ascent + xgramCheckMetrics.descent) / 2f, xgramCheckText);
+    } else {
+      com.fahadali.xgram.appearance.XgramM3MediaButton.drawCheck(c, cx, cy, Screen.dp(20f), onPrimary, alpha);
+    }
+  }
+
   // XGram: the video duration as the chat media's chip: a full-corner pill on the 50% chip scrim, labelMedium white,
-  // 6dp side padding, 4dp from the tile's corner (XgramM3MediaButton.CHIP_SCRIM, chipLabelPaint)
+  // 6dp side padding, 4dp from the tile's top start corner (XgramM3MediaButton.CHIP_SCRIM, chipLabelPaint)
   private final android.graphics.Paint.FontMetrics xgramChipMetrics = new android.graphics.Paint.FontMetrics();
 
-  private void xgramDrawDuration (Canvas c) {
+  private void xgramDrawDuration (Canvas c, boolean rtl) {
     final android.text.TextPaint textPaint = com.fahadali.xgram.appearance.XgramM3MediaButton.chipLabelPaint();
     textPaint.getFontMetrics(xgramChipMetrics);
     final int paddingH = Screen.dp(6f), margin = Screen.dp(4f), height = Screen.dp(20f);
-    final int left = receiver.getLeft() + margin, top = receiver.getTop() + margin;
+    final int chipWidth = paddingH + durationWidth + paddingH;
+    final int left = rtl ? receiver.getRight() - margin - chipWidth : receiver.getLeft() + margin, top = receiver.getTop() + margin;
     RectF rectF = Paints.getRectF();
     rectF.set(left, top, left + paddingH + durationWidth + paddingH, top + height);
     final float radius = rectF.height() / 2f;
@@ -353,13 +507,11 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
 
   @Override
   protected void onDraw (Canvas c) {
-    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
-    if (xgramM3 && (factor != 0f || receiver.needPlaceholder())) {
-      RectF tile = Paints.getRectF();
-      tile.set(0, 0, width, height);
-      float r = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS);
-      c.drawRoundRect(tile, r, r, Paints.fillingPaint(factor != 0f ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST)));
-    } else if (factor != 0f || receiver.needPlaceholder()) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c); // XGram: Material 3 Expressive tile and selection
+      return;
+    }
+    if (factor != 0f || receiver.needPlaceholder()) {
       c.drawRect(0, 0, width, height, Paints.fillingPaint(Theme.chatSelectionColor()));
     }
 
@@ -375,9 +527,7 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
       Drawable drawable = getSparseDrawable(R.drawable.baseline_favorite_12, ColorId.white);
       Drawables.draw(c, drawable, receiver.getLeft() + Screen.dp(6f), receiver.getBottom() - drawable.getMinimumHeight() - Screen.dp(6f), PorterDuffPaint.get(ColorId.white, .95f));
     }
-    if (duration != null && !duration.isEmpty() && xgramM3) {
-      xgramDrawDuration(c);
-    } else if (duration != null && !duration.isEmpty()) {
+    if (duration != null && !duration.isEmpty()) {
       int textLeft = receiver.getLeft() + Screen.dp(7f);
       int textTop = receiver.getTop() + Screen.dp(5f);
       RectF rectF = Paints.getRectF();
@@ -394,11 +544,6 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
       final int centerX = receiver.centerX() + (int) ((float) receiver.getWidth() * (1f - SCALE)) / 2;
       final int centerY = receiver.centerY() - (int) ((float) receiver.getHeight() * (1f - SCALE)) / 2;
       final int radius = Screen.dp(9f + 2f * factor);
-
-      if (xgramM3) {
-        xgramDrawCheck(c, centerX, centerY);
-        return;
-      }
 
       final int toColor = ColorUtils.compositeColor(Theme.fillingColor(), Theme.chatSelectionColor());
       c.drawCircle(centerX, centerY, radius, Paints.getOuterCheckPaint(ColorUtils.alphaColor(1f, ColorUtils.fromToArgb(0xffffffff, toColor, factor))));
@@ -417,5 +562,9 @@ public class MediaGalleryImageView extends BaseView implements Destroyable, Fact
       checkBox = null;
     }
     factor = 0f;
+    if (xgramSelection != null) {
+      xgramSelection.setValue(0f); // XGram
+    }
+    xgramSelected = 0f;
   }
 }
