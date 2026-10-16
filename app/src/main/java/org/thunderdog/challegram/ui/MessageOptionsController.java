@@ -82,7 +82,7 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
 
   @Override
   protected int getRecyclerBackground () {
-    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.background : ColorId.filling; // XGram: one tone with the sheet header
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.filling; // XGram: one tone with the sheet (surfaceContainerLow)
   }
 
   @Override

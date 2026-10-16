@@ -30,6 +30,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.annotation.DrawableRes;
@@ -77,6 +78,11 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
 
     headerView = new CustomTextView(context, parent.tdlib());
     headerView.setTextSize(18f);
+    if (xgramExpressive) {
+      // XGram: the sheet title in titleLarge (onSurface, regular weight), not Telegram X's bold 18sp; a shared style
+      // (its size is never changed here)
+      headerView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(XgramExpressive.TS_TITLE_L, false, XgramExpressive.textSizeSp(XgramExpressive.TS_TITLE_L)));
+    }
     headerView.setPadding(Screen.dp(16f), Screen.dp(xgramExpressive ? 0f : 18f), Screen.dp(16f), Screen.dp(6f));
     headerView.setTextColorId(ColorId.text);
     headerView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -200,6 +206,14 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
       if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED && MeasureSpec.getSize(widthMeasureSpec) > maxWidth) {
         widthMeasureSpec = MeasureSpec.makeMeasureSpec(maxWidth, MeasureSpec.EXACTLY);
       }
+      // XGram: never taller than the window less the status bar, so the rounded top and the handle band stay below it.
+      // The option rows then scroll in their container (xgramAddRowsContainer) instead of every child moving up by the
+      // overflow (below), which put the band, title and first rows above the window
+      final int topOffset = HeaderView.getTopOffset();
+      final int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+      if (heightMode != MeasureSpec.UNSPECIFIED && topOffset > 0) {
+        heightMeasureSpec = MeasureSpec.makeMeasureSpec(Math.max(0, MeasureSpec.getSize(heightMeasureSpec) - topOffset), heightMode);
+      }
     }
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
 
@@ -259,12 +273,21 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
       if (themeProvider != null)
         themeProvider.addThemeColorListener(text, textColorId);
     }
+    if (forcedTheme == null && xgramExpressive && textColor == ViewController.OptionColor.NORMAL && themeProvider != null) {
+      themeProvider.addThemeColorListener(text, ColorId.text); // XGram: onSurface follows theme changes (ColorId.text maps to it)
+    }
     text.setOnClickListener(onClickListener);
     text.setSingleLine(true);
     text.setEllipsize(TextUtils.TruncateAt.END);
     text.setGravity(Lang.rtl() ? Gravity.RIGHT | Gravity.CENTER_VERTICAL : Gravity.LEFT | Gravity.CENTER_VERTICAL);
-    text.setPadding(Screen.dp(17f), Screen.dp(1f), Screen.dp(17f), 0);
-    text.setCompoundDrawablePadding(Screen.dp(18f));
+    if (xgramExpressive) {
+      // XGram: the M3 list item spec of the message menu's tiles: 16dp padding and 16dp between icon and label
+      text.setPadding(Screen.dp(16f), Screen.dp(1f), Screen.dp(16f), 0);
+      text.setCompoundDrawablePadding(Screen.dp(16f));
+    } else {
+      text.setPadding(Screen.dp(17f), Screen.dp(1f), Screen.dp(17f), 0);
+      text.setCompoundDrawablePadding(Screen.dp(18f));
+    }
     if (icon != 0) {
       Drawable drawable = Drawables.get(context.getResources(), icon);
       if (drawable != null) {
@@ -278,6 +301,9 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
         }
         if (forcedTheme == null && xgramExpressive && iconColor == ViewController.OptionColor.NORMAL) {
           drawable.setColorFilter(Paints.getColorFilter(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT)));
+          if (themeProvider != null) {
+            themeProvider.addThemeFilterListener(drawable, ColorId.icon); // XGram: onSurfaceVariant follows theme changes (ColorId.icon maps to it)
+          }
         } else {
           drawable.setColorFilter(Paints.getColorFilter(forcedTheme != null ? forcedTheme.getColor(drawableColorId) : Theme.getColor(drawableColorId)));
           if (themeProvider != null) {
@@ -304,11 +330,42 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
 
   public void setHeader (CharSequence text) {
     if (!StringUtils.isEmpty(text)) {
-      headerView.setBoldText(text, null, false);
+      if (XgramExpressive.isEnabled()) {
+        headerView.setText(text, null, false); // XGram: titleLarge is regular weight
+      } else {
+        headerView.setBoldText(text, null, false);
+      }
       headerView.setVisibility(View.VISIBLE);
     } else {
       headerView.setVisibility(View.GONE);
     }
+  }
+
+  // XGram M3E: the option rows of showOptions
+
+  /**
+   * Whether two neighbouring options share a tile group: as in the message menu (XgramMessageMenu.sameMenuGroup, so the
+   * message actions shown here group the same way there), and a destructive (red) option never joins a normal one.
+   */
+  public static boolean xgramSameGroup (@NonNull ViewController.OptionItem a, @NonNull ViewController.OptionItem b) {
+    return com.fahadali.xgram.chats.XgramMessageMenu.sameMenuGroup(a.id, b.id) &&
+      (a.textColor == ViewController.OptionColor.RED) == (b.textColor == ViewController.OptionColor.RED);
+  }
+
+  /**
+   * The container of the option rows, added after the band, title, subtitle and info: a ScrollView, so a sheet taller
+   * than the window keeps those (and its rounded top) on screen and scrolls the rows (see onMeasure).
+   */
+  public LinearLayout xgramAddRowsContainer () {
+    ScrollView scrollView = new ScrollView(getContext());
+    scrollView.setVerticalScrollBarEnabled(false);
+    scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+    scrollView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    LinearLayout rows = new LinearLayout(getContext());
+    rows.setOrientation(LinearLayout.VERTICAL);
+    scrollView.addView(rows, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    addView(scrollView);
+    return rows;
   }
 
   public static void updateSubtitle (EmojiTextView text, CharSequence name, @DrawableRes int icon, int color, @Nullable ThemeDelegate forcedTheme, @Nullable ViewController<?> themeProvider) {
@@ -356,6 +413,11 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
     text.setTypeface(Fonts.getRobotoRegular());
     text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
     text.setGravity(Lang.rtl() ? Gravity.RIGHT | Gravity.CENTER_VERTICAL : Gravity.LEFT | Gravity.CENTER_VERTICAL);
+    if (XgramExpressive.isEnabled()) {
+      // XGram: bodyMedium with the sheet's 16dp side padding, as the info text under the title
+      XgramExpressive.applyText(text, XgramExpressive.TS_BODY_M, false);
+      text.setPadding(Screen.dp(16f), Screen.dp(6f), Screen.dp(16f), 0);
+    } else
     text.setPadding(Screen.dp(17f), Screen.dp(6f), Screen.dp(17f), 0);
     text.setCompoundDrawablePadding(Screen.dp(8f));
     text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -383,6 +445,21 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
   }
 
   public void setInfo (String text, TextEntity[] entities, boolean isTitle, int maxLineCount) {
+    if (!StringUtils.isEmpty(text) && XgramExpressive.isEnabled()) {
+      // XGram: a title in titleLarge (onSurface), info in bodyMedium (onSurfaceVariant); shared styles, whose size is
+      // never changed here
+      textView.setVisibility(View.VISIBLE);
+      textView.setMaxLineCount(maxLineCount);
+      if (isTitle) {
+        textView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(XgramExpressive.TS_TITLE_L, XgramExpressive.textSizeSp(XgramExpressive.TS_TITLE_L)));
+        textView.setTextColorId(ColorId.text);
+      } else {
+        textView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(XgramExpressive.TS_BODY_M, XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_M)));
+        textView.setTextColorId(ColorId.textLight);
+      }
+      textView.setText(text, entities, false);
+      return;
+    }
     if (!StringUtils.isEmpty(text)) {
       textView.setVisibility(View.VISIBLE);
       textView.setMaxLineCount(maxLineCount);
@@ -402,7 +479,11 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
 
   public int getTextHeight () {
     if (textView.getVisibility() == View.VISIBLE) {
-      return textView.getCurrentHeight(UI.getContext(getContext()).getControllerWidth(textView));
+      int width = UI.getContext(getContext()).getControllerWidth(textView);
+      if (XgramExpressive.isEnabled()) {
+        width = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(width); // XGram: the sheet is at most 640dp wide
+      }
+      return textView.getCurrentHeight(width);
     } else {
       return 0;
     }

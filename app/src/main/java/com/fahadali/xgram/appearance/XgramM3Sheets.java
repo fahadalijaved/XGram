@@ -79,6 +79,46 @@ public final class XgramM3Sheets {
     return sheetTop;
   }
 
+  /**
+   * The sheet color of every modal bottom sheet (SheetBottomTokens.DockedContainerColor): surfaceContainerLow. The
+   * option and settings sheets, the message menu, the share and the sticker set sheets all use it, so a sheet opened
+   * from another one never changes tone.
+   */
+  @ColorInt
+  public static int sheetColor () {
+    return XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_LOW);
+  }
+
+  // Sheet width (M3: a bottom sheet is at most 640dp wide and centered, e.g. on the unfolded Fold or a tablet)
+
+  /** The maximum width of a modal bottom sheet (dp). */
+  public static final float SHEET_MAX_WIDTH = 640f;
+
+  /** The width a sheet gets in {@code availableWidth} (px), for layout math done before it is measured. */
+  public static int sheetWidth (int availableWidth) {
+    return Math.min(availableWidth, Screen.dp(SHEET_MAX_WIDTH));
+  }
+
+  /** {@code widthMeasureSpec} of a sheet root limited to {@link #SHEET_MAX_WIDTH} (exactly that wide when it is capped). */
+  public static int sheetWidthSpec (int widthMeasureSpec) {
+    if (View.MeasureSpec.getMode(widthMeasureSpec) != View.MeasureSpec.UNSPECIFIED) {
+      final int maxWidth = Screen.dp(SHEET_MAX_WIDTH);
+      if (View.MeasureSpec.getSize(widthMeasureSpec) > maxWidth) {
+        return View.MeasureSpec.makeMeasureSpec(maxWidth, View.MeasureSpec.EXACTLY);
+      }
+    }
+    return widthMeasureSpec;
+  }
+
+  /** Centers a sheet root horizontally in its popup (a FrameLayout), keeping its vertical gravity. */
+  public static void centerSheet (@Nullable ViewGroup.LayoutParams params) {
+    if (params instanceof FrameLayout.LayoutParams) {
+      FrameLayout.LayoutParams frameParams = (FrameLayout.LayoutParams) params;
+      final int vertical = frameParams.gravity == -1 ? Gravity.TOP : (frameParams.gravity & Gravity.VERTICAL_GRAVITY_MASK);
+      frameParams.gravity = (vertical != 0 ? vertical : Gravity.TOP) | Gravity.CENTER_HORIZONTAL;
+    }
+  }
+
   // Buttons
 
   /**

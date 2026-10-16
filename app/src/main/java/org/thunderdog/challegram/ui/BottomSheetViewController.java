@@ -3,7 +3,9 @@ package org.thunderdog.challegram.ui;
 import android.animation.Animator;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Path;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -101,6 +103,17 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
           if (headerView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
             // XGram: the pages stay out of the rounded corners (the header band above them is the sheet's own surface)
             clipTop = Math.max(clipTop, xgramSheetTopY() + com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable.cornerRadius(xgramSheetCorners()));
+          } else if (headerView == null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram: a sheet without a header (the folder suggestions) starts with its page, which is clipped to the
+            // sheet's 28dp top corners instead of a square slab over the rounded sheet
+            final float radius = com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable.cornerRadius(xgramSheetCorners());
+            if (radius > 0f) {
+              xgramPageClipRadii[0] = xgramPageClipRadii[1] = xgramPageClipRadii[2] = xgramPageClipRadii[3] = radius;
+              xgramPageClipRect.set(0, Math.max(clipTop, xgramSheetTopY()), getMeasuredWidth(), getMeasuredHeight());
+              xgramPageClip.rewind();
+              xgramPageClip.addRoundRect(xgramPageClipRect, xgramPageClipRadii, Path.Direction.CW);
+              canvas.clipPath(xgramPageClip);
+            }
           }
           canvas.clipRect(0, clipTop, getMeasuredWidth(), getMeasuredHeight());
           boolean result = super.drawChild(canvas, child, drawingTime);
@@ -120,18 +133,48 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
     fixView = new View(context);
     ViewSupport.setThemedBackground(fixView, ColorId.background, this);
     fixView.setLayoutParams(fp);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: the content view draws the sheet under the header in one piece, so the strip that hid a gap between
+      // header and content is not needed; at the top of a sheet without a header row its square corners peeked out
+      // beside the rounded ones
+      fixView.setVisibility(View.GONE);
+    }
 
     wrapView = new FrameLayoutFix(context) {
       @Override
       public boolean onInterceptTouchEvent (MotionEvent e) {
-        boolean b = (e.getAction() == MotionEvent.ACTION_DOWN && e.getY() < (getTopEdge() + HeaderView.getTopOffset()));
+        // XGram: a touch above the sheet goes to the popup (it closes the sheet). The handle band the Expressive sheet
+        // draws above its header is part of the sheet: it is not taken here, so a drag on the handle reaches the page
+        // under it (and drags the sheet), and a tap on it never closes the sheet (see onTouchEvent).
+        boolean b = (e.getAction() == MotionEvent.ACTION_DOWN && e.getY() < (getTopEdge() + HeaderView.getTopOffset()) - xgramSheetOverhang());
         return b || super.onInterceptTouchEvent(e);
       }
 
       @Override
       public boolean onTouchEvent (MotionEvent e) {
-        boolean b = (e.getAction() == MotionEvent.ACTION_DOWN && e.getY() < (getTopEdge() + HeaderView.getTopOffset()));
+        final float edge = getTopEdge() + HeaderView.getTopOffset();
+        final float sheetTop = edge - xgramSheetOverhang();
+        if (e.getAction() == MotionEvent.ACTION_DOWN && e.getY() >= sheetTop && e.getY() < edge) {
+          return true; // XGram: the handle band, where nothing under it took the touch: kept, the sheet stays open
+        }
+        boolean b = (e.getAction() == MotionEvent.ACTION_DOWN && e.getY() < sheetTop);
         return b && super.onTouchEvent(e);
+      }
+
+      @Override
+      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          widthMeasureSpec = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidthSpec(widthMeasureSpec); // XGram: at most 640dp wide
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+      }
+
+      @Override
+      public void setLayoutParams (ViewGroup.LayoutParams params) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          com.fahadali.xgram.appearance.XgramM3Sheets.centerSheet(params); // XGram: centered when narrower than the window
+        }
+        super.setLayoutParams(params);
       }
 
       private int oldHeight = -1;
@@ -210,7 +253,9 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
 
 
   protected int getBackgroundColorId () {
-    return ColorId.background;
+    // XGram: Material 3 Expressive: every modal sheet is surfaceContainerLow (ColorId.drawer maps to it), the tone of
+    // the option, settings, share and sticker set sheets, so a sheet opened from this one keeps its color
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.background;
   }
 
   private boolean ignoreAnyPagerScrollEventsBecauseOfMovements;
@@ -321,15 +366,32 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
   // transparent the same way)
 
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramSheetTop;
+  /** XGram: the rounded clip of a headerless sheet's page (see the content view's drawChild), reused every frame. */
+  private final Path xgramPageClip = new Path();
+  private final RectF xgramPageClipRect = new RectF();
+  private final float[] xgramPageClipRadii = new float[8];
 
   /** XGram: the sheet's corner factor: 28dp corners until the sheet top nears the status bar, then square (M3 full screen). */
   protected float xgramSheetCorners () {
     return com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerTranslationY);
   }
 
-  /** XGram: the drag handle's opacity on the sheet drawn by the content view (0 when a subclass draws its own). */
+  /**
+   * XGram: the drag handle's opacity on the sheet drawn by the content view (0 when a subclass draws its own). It fades
+   * out with the corners: a sheet docked under the status bar is full screen and has no handle (as the message menu and
+   * the attach sheet).
+   */
   protected float xgramSheetHandleAlpha () {
-    return 1f;
+    return xgramSheetCorners();
+  }
+
+  /**
+   * XGram: how far the drawn sheet reaches above {@code getTopEdge() + HeaderView.getTopOffset()}, the edge used for
+   * touches and for the slide in and out: the handle band of an Expressive sheet ({@link #xgramSheetBand()} here). A
+   * touch in it belongs to the sheet, and the sheet slides that much further, so the band starts and ends off screen.
+   */
+  protected float xgramSheetOverhang () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Math.max(0f, xgramSheetBand()) : 0f;
   }
 
   /**
@@ -399,7 +461,8 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
 
   @Override
   public int getCurrentPopupHeight () {
-    return (getTargetHeight() - getTopEdge() - (int) ((float) HeaderView.getTopOffset())) + Math.max(wrapView.getMeasuredHeight() - getTargetHeight(), 0);
+    return (getTargetHeight() - getTopEdge() - (int) ((float) HeaderView.getTopOffset())) + Math.max(wrapView.getMeasuredHeight() - getTargetHeight(), 0)
+      + (int) Math.ceil(xgramSheetOverhang()); // XGram: the handle band above the header leaves the screen too
   }
 
   public int maxItemsScrollYOffset () {
@@ -426,7 +489,8 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
   }
 
   protected int calculateTotalHeight () {
-    return getTargetHeight() - (getContentOffset() + HeaderView.getTopOffset());
+    return getTargetHeight() - (getContentOffset() + HeaderView.getTopOffset())
+      + (int) Math.ceil(xgramSheetOverhang()); // XGram: the sheet opens from fully below the window, its handle band included
   }
 
   protected void checkContentScrollY (int position) {

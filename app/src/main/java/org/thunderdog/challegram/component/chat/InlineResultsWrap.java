@@ -859,6 +859,9 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
   }
 
   public void updatePosition (boolean needTranslate) {
+    if (xgramUpdatePaneMargins()) {
+      requestLayout(); // XGram: the root applies the new side margins (onApplyMarginInsets)
+    }
     if (offsetProvider != null) {
       setBottomMargin(offsetProvider.provideOffset(this));
     } else {
@@ -950,13 +953,45 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
     return false;
   }
 
+  // XGram: two panes, or one pane next to the navigation rail: the suggestions (and inline bot results) open over the
+  // chat pane, where the input bar is, 8dp in from its edges, not across the whole window over the chat list and rail
+
+  private int xgramPaneLeft, xgramPaneRight;
+
+  /** The room left and right of the chat pane in the root view; true when it changed. */
+  private boolean xgramUpdatePaneMargins () {
+    int left = 0, right = 0;
+    final RootFrameLayout root = rootView;
+    if (offsetProvider == null && root != null) {
+      final org.thunderdog.challegram.BaseActivity context = UI.getContext(getContext());
+      final com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+      final NavigationController navigation = context.navigation();
+      final View pane = navigation != null ? navigation.getValue() : null;
+      if (twoPane != null && (twoPane.isActive() || twoPane.isRailShown()) && pane != null && pane.getWidth() > 0 && pane.getParent() instanceof View && root.getMeasuredWidth() > 0) {
+        // the pane's layout bounds in the root (Views.getLocationInWindow shares one array: copied right away)
+        final int containerX = Views.getLocationInWindow((View) pane.getParent())[0];
+        final int rootX = Views.getLocationInWindow(root)[0];
+        final int paneLeft = containerX - rootX + pane.getLeft();
+        left = Math.max(0, paneLeft);
+        right = Math.max(0, root.getMeasuredWidth() - (paneLeft + pane.getWidth()));
+      }
+    }
+    if (xgramPaneLeft != left || xgramPaneRight != right) {
+      xgramPaneLeft = left;
+      xgramPaneRight = right;
+      return true;
+    }
+    return false;
+  }
+
   @Override
   public void onApplyMarginInsets (View child, LayoutParams params, Rect legacyInsets, Rect insets, Rect insetsWithoutIme) {
     boolean changed;
+    xgramUpdatePaneMargins();
     changed = Views.setMargins(params,
-      legacyInsets.left,
+      Math.max(legacyInsets.left, xgramPaneLeft), // XGram: within the chat pane
       legacyInsets.top,
-      legacyInsets.right,
+      Math.max(legacyInsets.right, xgramPaneRight),
       insets.bottom + lastBottomMargin
     );
     changed = setInsets(insets.top, insets.bottom) || changed;

@@ -989,6 +989,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       };
     }
     moreWrap.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_HEADER);
+    moreWrap.xgramSetAnchorView(this, 0); // XGram: opens at this header (two panes, navigation rail), not at the window's start
     moreWrap.setTranslationY(getTranslationY() + getCurrentHeaderOffset());
     showMore(null, options, null, onToggleItemClick, false, getThemeListeners());
   }
@@ -1108,6 +1109,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     }
     moreWrap.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_RIGHT);
     moreWrap.setRightNumber(buttonIndex);
+    moreWrap.xgramSetAnchorView(this, buttonIndex); // XGram: opens at this header's end (two panes, navigation rail), not at the window's
     moreWrap.setTranslationY(getTranslationY() + getCurrentHeaderOffset());
     showMore(ids, titles, icons, onMoreItemClick, isLayered, themeListenerList);
   }

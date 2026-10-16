@@ -208,6 +208,14 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     Drawable drawable = icon != 0 ? Drawables.get(getResources(), icon) : null;
     menuItem.setGravity(Gravity.CENTER_VERTICAL | Lang.gravity());
     menuItem.setVisibility(View.VISIBLE);
+    if (XgramExpressive.isEnabled() && forcedTheme == null) {
+      // XGram: the label and the press state layer in the current theme's onSurface (the menu is reused for the header's
+      // lifetime: the theme may have changed since this row was created)
+      menuItem.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
+      if (menuItem.getBackground() instanceof RippleDrawable) {
+        ((RippleDrawable) menuItem.getBackground()).setColor(ColorStateList.valueOf(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.STATE_PRESSED)));
+      }
+    }
     if (drawable != null) {
       drawable.setColorFilter(Paints.getColorFilter(Theme.getColor(ColorId.icon)));
       if (themeProvider != null) {
@@ -404,6 +412,11 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       titleTextItem.setTextColor(forcedTheme.getColor(ColorId.text));
     } else if (xgramExpressive) {
       titleTextItem.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
+      if (themeListeners != null && !menuItem.isCheckbox) {
+        // XGram: follows theme changes (ColorId.text is onSurface with Expressive design); a checkbox row sets its
+        // label color while drawing (onSecondaryContainer when checked)
+        themeListeners.addThemeColorListener(titleTextItem, ColorId.text);
+      }
     } else {
       titleTextItem.setTextColor(Theme.textAccentColor());
       if (themeListeners != null) {
@@ -444,6 +457,11 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       menuItem.setTextColor(forcedTheme.getColor(ColorId.text));
     } else if (xgramExpressive) {
       menuItem.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
+      if (themeListeners != null) {
+        // XGram: the label follows theme changes (ColorId.text is onSurface with Expressive design), as the container
+        // and the icons do: set once, the labels kept the old theme's tone (dark labels on the dark container)
+        themeListeners.addThemeColorListener(menuItem, ColorId.text);
+      }
     } else {
       menuItem.setTextColor(Theme.textAccentColor());
       if (themeListeners != null) {
@@ -549,6 +567,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
   @Override
   protected void onLayout (boolean changed, int l, int t, int r, int b) {
     super.onLayout(changed, l, t, r, b);
+    xgramApplyAnchor(); // XGram: before the first frame (the reveal starts below)
     if (pendingAction != null) {
       pendingAction.run();
       pendingAction = null;
@@ -566,16 +585,82 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     int innerX = sourceX - location[0];
     int innerY = sourceY - location[1];
 
+    // XGram: the slot under the finger among the visible rows. Hidden rows (e.g. Send when online) take no room in the
+    // menu (getItemsHeight), so counting them put the highlight one row off and released on the hidden item.
     int index = Math.floorDiv(innerY - Screen.dp(PADDING), Screen.dp(ITEM_HEIGHT));
-    setSelectedIndex(index == MathUtils.clamp(index, 0, getChildCount() - 1) ? index : -1);
+    setSelectedIndex(index >= 0 && index < getVisibleItemCount() ? index : -1);
 
     // Log.i("HAPTIC INNER", String.format("INDEX %d", index));
   }
 
+  /** XGram: the rows that take room in the menu. */
+  private int getVisibleItemCount () {
+    int count = 0;
+    final int childCount = getChildCount();
+    for (int i = 0; i < childCount; i++) {
+      View v = getChildAt(i);
+      if (v != null && v.getVisibility() != View.GONE) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   public void onApply () {
     if (lastSelectedIndex != -1) {
-      View v = getChildAt(lastSelectedIndex);
-      if (v != null) v.callOnClick();
+      // XGram: lastSelectedIndex is a slot among the visible rows
+      int slot = 0;
+      final int childCount = getChildCount();
+      for (int i = 0; i < childCount; i++) {
+        View v = getChildAt(i);
+        if (v == null || v.getVisibility() == View.GONE) {
+          continue;
+        }
+        if (slot == lastSelectedIndex) {
+          v.callOnClick();
+          break;
+        }
+        slot++;
+      }
+    }
+  }
+
+  // XGram: the view that opened this menu (a header), so the menu opens at it and not at the window's edge: in two panes
+  // or next to the navigation rail the header is narrower than the window the menu's popup covers
+
+  private @Nullable View xgramAnchorView;
+  private int xgramAnchorButtonIndex;
+
+  /** Anchors the menu to {@code anchor}: its end (ANCHOR_MODE_RIGHT, less {@code buttonIndex} buttons) or start (ANCHOR_MODE_HEADER). */
+  public void xgramSetAnchorView (@Nullable View anchor, int buttonIndex) {
+    this.xgramAnchorView = anchor;
+    this.xgramAnchorButtonIndex = buttonIndex;
+  }
+
+  /** Moves the laid out menu to its anchor view (screen positions: the menu's popup may be a window of its own). */
+  private void xgramApplyAnchor () {
+    final View anchor = xgramAnchorView;
+    if (anchor == null || !(getParent() instanceof View) || anchor.getWindowToken() == null || anchor.getMeasuredWidth() <= 0) {
+      return;
+    }
+    if (anchorMode != ANCHOR_MODE_RIGHT && anchorMode != ANCHOR_MODE_HEADER) {
+      return;
+    }
+    // Views.getLocationOnScreen shares one array: each value is copied right away
+    final int anchorLeft = Views.getLocationOnScreen(anchor)[0];
+    final int anchorRight = anchorLeft + anchor.getMeasuredWidth();
+    final int parentLeft = Views.getLocationOnScreen((View) getParent())[0];
+    final int left = parentLeft + getLeft(), right = parentLeft + getRight(); // the menu's place without translation
+    final boolean rtl = Lang.rtl();
+    final float translationX;
+    if (anchorMode == ANCHOR_MODE_RIGHT) {
+      final int buttons = Screen.dp(49f) * xgramAnchorButtonIndex;
+      translationX = rtl ? anchorLeft + buttons - left : anchorRight - buttons - right;
+    } else {
+      translationX = rtl ? anchorRight - Screen.dp(46f) - right : anchorLeft + Screen.dp(46f) - left;
+    }
+    if (getTranslationX() != translationX) {
+      setTranslationX(translationX);
     }
   }
 
@@ -644,7 +729,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       // XGram: the drag-to-select highlight is the same rounded state layer as a press.
       final int baseColor = forcedTheme != null ? forcedTheme.getColor(ColorId.text) : XgramExpressive.color(XgramExpressive.ON_SURFACE);
       final int itemWidth = getMeasuredWidth() - Screen.dp(PADDING) * 2;
-      int childCount = getChildCount();
+      int childCount = getVisibleItemCount(); // XGram: slots of the visible rows (see processMoveEvent)
       for (int i = 0; i < childCount; i++) {
         final float alpha = MathUtils.clamp(1f - Math.abs(factorAnimator.getFactor() - i));
         if (alpha > 0f) {
@@ -655,7 +740,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
         }
       }
     } else if (lastSelectedIndex != -1 && itemsLayout == this) {
-      int childCount = getChildCount();
+      int childCount = getVisibleItemCount(); // XGram: slots of the visible rows (see processMoveEvent)
       for (int i = 0; i < childCount; i++) {
         final float alpha = MathUtils.clamp(1f - Math.abs(factorAnimator.getFactor() - i));
         if (alpha > 0f) {

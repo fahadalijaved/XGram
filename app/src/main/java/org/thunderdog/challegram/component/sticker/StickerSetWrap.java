@@ -110,9 +110,17 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
       if (factor > 0f) {
         int bottom = getMeasuredHeight();
         int top = bottom - (int) ((float) bottom * factor);
-        c.drawRect(0, top, getMeasuredWidth(), bottom, Paints.fillingPaint(Theme.fillingColor()));
+        c.drawRect(0, top, getMeasuredWidth(), bottom, Paints.fillingPaint(xgramSheetColor())); // XGram: the sheet color
       }
     }
+  }
+
+  /**
+   * XGram: the sheet color: surfaceContainerLow with Expressive design, as every sheet (the message menu, the share,
+   * option and settings sheets), Telegram X's filling otherwise.
+   */
+  private static int xgramSheetColor () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor() : Theme.fillingColor();
   }
 
   private final ThemeListenerList themeListener = new ThemeListenerList();
@@ -138,7 +146,7 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
     themeListener.addThemeInvalidateListener(shadowView);
 
     buttonWrap = new FrameLayoutFix(context);
-    ViewSupport.setThemedBackground(buttonWrap, ColorId.filling);
+    ViewSupport.setThemedBackground(buttonWrap, xgram ? ColorId.drawer : ColorId.filling); // XGram: the sheet color (ColorId.drawer is surfaceContainerLow)
     themeListener.addThemeInvalidateListener(buttonWrap);
     buttonWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f), Gravity.BOTTOM));
 
@@ -255,7 +263,16 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
   private void xgramSyncColors () {
     xgramSyncButtonContent();
     if (xgramSheetTop != null && headerView != null) {
-      xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerView.getTranslationY()));
+      xgramUpdateSheetTop(headerView.getTranslationY());
+    }
+  }
+
+  /** XGram: the header's sheet top at {@code headerTop}: the sheet color, corners and handle that go as it docks. */
+  private void xgramUpdateSheetTop (float headerTop) {
+    if (xgramSheetTop != null) {
+      final float corner = com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerTop);
+      xgramSheetTop.set(xgramSheetColor(), corner);
+      xgramSheetTop.setHandleAlpha(corner); // a sheet docked under the status bar is full screen: no handle
     }
   }
 
@@ -353,7 +370,7 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
     int top = Math.max(topOffset, getHeaderTop());
     this.headerView.setTranslationY(top);
     if (xgramSheetTop != null) {
-      xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(top)); // XGram
+      xgramUpdateSheetTop(top); // XGram
     }
     if (topLick != null) {
       topLick.setTranslationY(top - HeaderView.getTopOffset());
@@ -619,8 +636,19 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+    if (xgram) {
+      widthMeasureSpec = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidthSpec(widthMeasureSpec); // XGram: at most 640dp wide
+    }
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     updateHeader();
+  }
+
+  @Override
+  public void setLayoutParams (ViewGroup.LayoutParams params) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      com.fahadali.xgram.appearance.XgramM3Sheets.centerSheet(params); // XGram: centered when narrower than the window
+    }
+    super.setLayoutParams(params);
   }
 
   public void initWithInfo (TdApi.StickerSetInfo info) {
@@ -651,8 +679,8 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
     headerView.initWithSingleController(stickersController, false);
     if (xgram) {
       // XGram: Material 3 Expressive modal sheet top: 28dp corners that square off at the window top, a drag handle
-      xgramSheetTop = com.fahadali.xgram.appearance.XgramM3Sheets.attachHeaderSheetTop(headerView, headerView.getFilling().getExtraHeight(), Theme.fillingColor());
-      xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerView.getTranslationY()));
+      xgramSheetTop = com.fahadali.xgram.appearance.XgramM3Sheets.attachHeaderSheetTop(headerView, headerView.getFilling().getExtraHeight(), xgramSheetColor());
+      xgramUpdateSheetTop(headerView.getTranslationY());
     }
     addView(stickersController.getValue());
     if (!xgram) { // XGram: no shadow above an Expressive sheet top
@@ -669,7 +697,7 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
   protected void dispatchDraw (Canvas canvas) {
     if (xgramSheetTop != null) {
       // XGram: the sheet color starts under the header's rounded corners (the header draws the sheet top)
-      canvas.drawRect(0, provideOffset() - stickersController.getOffsetScroll() + Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.fillingColor()));
+      canvas.drawRect(0, provideOffset() - stickersController.getOffsetScroll() + Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(xgramSheetColor()));
       super.dispatchDraw(canvas);
       return;
     }

@@ -320,6 +320,35 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     }
   }
 
+  private int xgramLastPosition;
+  private float xgramLastPositionOffset;
+
+  /**
+   * The counters' width changed (the views count arrived, see MessageOptionsPagerController.xgramMeasureSeenChip): the
+   * reaction strip's end, the expand button and the chips move to the new origin.
+   */
+  public void xgramOnCountersWidthChanged () {
+    if (!xgramM3) {
+      return;
+    }
+    if (reactionsSelectorRecyclerView != null) {
+      ViewGroup.LayoutParams params = reactionsSelectorRecyclerView.getLayoutParams();
+      if (params instanceof MarginLayoutParams) {
+        final int endMargin = xgramStripEndMargin(state.xgramPickerInHeader);
+        if (((MarginLayoutParams) params).rightMargin != endMargin) {
+          ((MarginLayoutParams) params).rightMargin = endMargin;
+          reactionsSelectorRecyclerView.setLayoutParams(params);
+        }
+      }
+    }
+    final int width = getMeasuredWidth();
+    if (needReactionSelector && reactionsSelectorRecyclerView != null && width > 0) {
+      xgramLayoutForPage(width, xgramLastPosition, xgramLastPositionOffset);
+    }
+    recyclerView.invalidate();
+    invalidate();
+  }
+
   /** The assist chips of the counters on the options page: 32dp, centered, 8dp leading space, 16dp trailing space. */
   private void xgramDrawChips (Canvas c) {
     if (!state.needShowMessageOptions || state.xgramChipCount == 0) {
@@ -425,6 +454,8 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
   public void onPageScrolled (int position, float positionOffset) {
     adapter.topView.setSelectionFactor((float) position + positionOffset);
     xgramSelection = (float) position + positionOffset;
+    xgramLastPosition = position;
+    xgramLastPositionOffset = positionOffset;
 
     if (needReactionSelector && reactionsSelectorRecyclerView != null) {
       int width = getMeasuredWidth();

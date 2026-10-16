@@ -90,9 +90,15 @@ public class MessageOptionsReactedController extends BottomSheetViewController.B
         }
       }
     });
-    ViewSupport.setThemedBackground(recyclerView, ColorId.background);
+    // XGram: Material 3 Expressive: the sheet's color (surfaceContainerLow, see BottomSheetViewController.getBackgroundColorId)
+    ViewSupport.setThemedBackground(recyclerView, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.background);
     addThemeInvalidateListener(recyclerView);
     loadMore();
+  }
+
+  @Override
+  protected int getRecyclerBackground () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : super.getRecyclerBackground(); // XGram: the sheet's color
   }
 
   private void loadMore () {
@@ -101,7 +107,13 @@ public class MessageOptionsReactedController extends BottomSheetViewController.B
     }
     isLoadingMore = true;
     tdlib.client().send(new TdApi.GetMessageAddedReactions(message.getChatId(), message.getSmallestId(), reactionType, offset, 50), (obj) -> {
-      if (obj.getConstructor() != TdApi.AddedReactions.CONSTRUCTOR) return;
+      if (obj.getConstructor() != TdApi.AddedReactions.CONSTRUCTOR) {
+        // XGram: an error (the message was deleted while the sheet is open, reactions hidden, flood wait, no network):
+        // the list stops loading. Telegram X returned here, so the first page's progress row spun forever and no other
+        // page could load; the rows already shown stay, an empty list shows its count instead of the spinner.
+        runOnUiThreadOptional(this::onLoadError);
+        return;
+      }
       runOnUiThreadOptional(() -> {
         TdApi.AddedReactions reactions = (TdApi.AddedReactions) obj;
         offset = reactions.nextOffset;
@@ -111,6 +123,31 @@ public class MessageOptionsReactedController extends BottomSheetViewController.B
         processNewAddedReactions(reactions);
       });
     });
+  }
+
+  /** XGram: a page of senders could not be loaded: stop loading, and close an empty list (see loadMore). */
+  private void onLoadError () {
+    isLoadingMore = false;
+    canLoadMore = false;
+    if (adapter == null || !adapter.getItems().isEmpty()) {
+      return; // the senders loaded so far stay
+    }
+    if (totalCount == 0) {
+      // nothing was loaded yet: the count the message itself knows
+      totalCount = reactionType != null ?
+        message.getMessageReactions().getTdMessageReaction(reactionType).totalCount :
+        message.getMessageReactions().getTotalCount();
+    }
+    final TdApi.AddedReactions empty = new TdApi.AddedReactions(totalCount, new TdApi.AddedReaction[0], "");
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramProcessNewAddedReactions(empty); // replaces the progress placeholder (a change at 0, then an insertion)
+      return;
+    }
+    // Telegram X layout: its notifications assume rows were there, so the placeholder is replaced with a full reset
+    final List<ListItem> items = new java.util.ArrayList<>(2);
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_LIST_INFO_VIEW));
+    adapter.setItems(items, false);
   }
 
   private void processNewAddedReactions (TdApi.AddedReactions addedReactions) {

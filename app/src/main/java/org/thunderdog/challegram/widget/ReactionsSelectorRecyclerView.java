@@ -77,9 +77,21 @@ public class ReactionsSelectorRecyclerView extends RecyclerView {
   @Override
   protected void dispatchDraw (Canvas canvas) {
     final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    int xgramPillRight = getMeasuredWidth();
     if (xgramM3) {
       int inset = Screen.dp(4f);
-      xgramPillRect.set(inset, inset, getMeasuredWidth() - inset, getMeasuredHeight() - inset);
+      int right = getMeasuredWidth() - inset;
+      final int childCount = getChildCount();
+      if (childCount > 0 && computeHorizontalScrollRange() <= computeHorizontalScrollExtent()) {
+        // XGram: a short reaction list (it does not scroll) gets a pill that ends after its last reaction, with the
+        // gap it has at the start (the pill 4dp in, the first reaction at the 9dp padding), not a long empty tail
+        final View last = getChildAt(childCount - 1);
+        if (last != null) {
+          right = Math.min(right, (int) (last.getRight() + last.getTranslationX()) + Screen.dp(5f));
+        }
+      }
+      xgramPillRight = right + inset;
+      xgramPillRect.set(inset, inset, right, getMeasuredHeight() - inset);
       float r = xgramPillRect.height() / 2f;
       xgramPill.rewind();
       xgramPill.addRoundRect(xgramPillRect, r, r, android.graphics.Path.Direction.CW);
@@ -100,7 +112,7 @@ public class ReactionsSelectorRecyclerView extends RecyclerView {
     int alpha = (int) (MathUtils.clamp(s / Screen.dp(20f)) * 255);
 
     gradientDrawableRight.setAlpha(alpha);
-    gradientDrawableRight.setBounds(getMeasuredWidth() - Screen.dp(35), 0, getMeasuredWidth(), getMeasuredHeight());
+    gradientDrawableRight.setBounds(xgramPillRight - Screen.dp(35), 0, xgramPillRight, getMeasuredHeight()); // XGram: the pill's end
     gradientDrawableRight.draw(canvas);
     if (xgramM3) {
       canvas.restore();
