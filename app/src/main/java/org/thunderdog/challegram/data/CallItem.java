@@ -200,6 +200,45 @@ public class CallItem {
     return b.toString();
   }
 
+  /**
+   * XGram M3E: the supporting text of a recent call row, "Incoming · 2 min" (the direction icon goes before it):
+   * each kind of call once, its count in brackets when merged, the duration of a single answered call after a middle
+   * dot.
+   */
+  public String xgramSubtitle () {
+    if (messages.size() > 1) {
+      Collections.sort(messages, (o1, o2) -> Integer.compare(((TdApi.MessageCall) o1.content).discardReason.getConstructor(), ((TdApi.MessageCall) o2.content).discardReason.getConstructor()));
+    }
+    StringBuilder b = new StringBuilder();
+    int count = 0;
+    TdApi.Message groupMessage = null;
+    for (int i = 0; i <= messages.size(); i++) {
+      TdApi.Message msg = i < messages.size() ? messages.get(i) : null;
+      if (groupMessage != null && (msg == null || ((TdApi.MessageCall) msg.content).discardReason.getConstructor() != ((TdApi.MessageCall) groupMessage.content).discardReason.getConstructor())) {
+        if (b.length() > 0) {
+          b.append(", ");
+        }
+        TdApi.MessageCall call = (TdApi.MessageCall) groupMessage.content;
+        b.append(Lang.getString(TD.getCallName(call, groupMessage.isOutgoing, false)));
+        if (count != 1) {
+          b.append(" (").append(Strings.buildCounter(count)).append(")");
+        } else if (call.duration != 0) {
+          b.append(" · ");
+          b.append(call.duration >= 60 ? Lang.plural(R.string.xMin, Math.round((float) call.duration / 60f)) : Lang.plural(R.string.xSec, call.duration));
+        }
+        count = 0;
+        groupMessage = null;
+      }
+      if (msg != null) {
+        if (groupMessage == null) {
+          groupMessage = msg;
+        }
+        count++;
+      }
+    }
+    return b.toString();
+  }
+
   public static String getSubtitle (TdApi.Message msg, boolean isFull, int messageCount) {
     TdApi.MessageCall call = (TdApi.MessageCall) msg.content;
 

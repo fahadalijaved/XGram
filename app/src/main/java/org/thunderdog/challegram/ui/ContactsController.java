@@ -129,7 +129,7 @@ public class ContactsController extends TelegramViewController<ContactsControlle
   private FrameLayoutFix contentView;
   private SectionedRecyclerView recyclerView;
   private View spinnerView;
-  private TextView emptyView;
+  private View emptyView;
 
   private SenderPickerDelegate delegate;
   private UserPickerMultiDelegate multiDelegate;
@@ -287,7 +287,8 @@ public class ContactsController extends TelegramViewController<ContactsControlle
   @Override
   protected View onCreateView (Context context) {
     contentView = new FrameLayoutFix(context);
-    ViewSupport.setThemedBackground(contentView, ColorId.filling, this);
+    // XGram M3E: the page tone under the letter groups' surfaceBright tiles
+    ViewSupport.setThemedBackground(contentView, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.background : ColorId.filling, this);
 
     recyclerView = new SectionedRecyclerView(context);
     Views.applyBottomInset(recyclerView, extraBottomInset);
@@ -335,6 +336,15 @@ public class ContactsController extends TelegramViewController<ContactsControlle
 
       searchView = HeaderEditText.create(UI.getContext(context).navigation().getHeaderView(), false, this);
       searchView.setPadding(Screen.dp(5f), 0, Screen.dp(5f), 0);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the search field is the M3 search bar pill (bodyLarge, 16dp padding), 12dp clear of the end
+        HeaderEditText.xgramApplySearchBar(searchView, com.fahadali.xgram.appearance.XgramExpressive.surfaceHeader(), this);
+        if (Lang.rtl()) {
+          params.leftMargin = canAddContacts() ? Screen.dp(49f) : Screen.dp(12f);
+        } else {
+          params.rightMargin = canAddContacts() ? Screen.dp(49f) : Screen.dp(12f);
+        }
+      }
       searchView.setHint(Lang.getString(bindLocaleChanger(mode == MODE_NEW_SECRET_CHAT ? R.string.NewSecretChatWith : R.string.Search, searchView, true, false)));
       searchView.addTextChangedListener(this);
       searchView.setLayoutParams(params);
@@ -394,12 +404,21 @@ public class ContactsController extends TelegramViewController<ContactsControlle
   private void showEmptyView () {
     this.showingEmptyView = true;
     if (emptyView == null) {
-      emptyView = new NoScrollTextView(context());
-      emptyView.setText(Lang.getString(R.string.NoContacts));
-      emptyView.setTextColor(0xff8a8a8a);
-      emptyView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
-      emptyView.setTypeface(Fonts.getRobotoRegular());
-      emptyView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the empty state (people on a soft burst, "No contacts", a supporting line), centred
+        com.fahadali.xgram.appearance.XgramListStateView stateView = new com.fahadali.xgram.appearance.XgramListStateView(context());
+        stateView.setEmpty(R.drawable.baseline_group_96, Lang.getString(R.string.XgramR5PeopleNoContacts), Lang.getString(R.string.XgramR5PeopleNoContactsHint));
+        stateView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        emptyView = stateView;
+      } else {
+        TextView textView = new NoScrollTextView(context());
+        textView.setText(Lang.getString(R.string.NoContacts));
+        textView.setTextColor(0xff8a8a8a);
+        textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+        textView.setTypeface(Fonts.getRobotoRegular());
+        textView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        emptyView = textView;
+      }
       if (isChatSearchOpen()) {
         emptyView.setVisibility(View.GONE);
       }
@@ -1222,7 +1241,13 @@ public class ContactsController extends TelegramViewController<ContactsControlle
       userView.setOffsetLeft(Screen.dp(72f));
 
       userView.setOnClickListener(this);
-      RippleSupport.setSimpleWhiteBackground(userView, controller);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: a tile of its letter's group (SectionedRecyclerView sets the segment)
+        com.fahadali.xgram.appearance.XgramR5People.bindTile(userView);
+        controller.addThemeInvalidateListener(userView);
+      } else {
+        RippleSupport.setSimpleWhiteBackground(userView, controller);
+      }
       Views.setClickable(userView);
       return userView;
     }

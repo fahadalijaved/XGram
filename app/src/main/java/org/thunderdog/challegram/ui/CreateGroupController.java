@@ -90,7 +90,8 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     FrameLayoutFix contentView;
 
     contentView = new FrameLayoutFix(context);
-    ViewSupport.setThemedBackground(contentView, ColorId.filling, this);
+    // XGram M3E: the page tone under the members' surfaceBright tiles
+    ViewSupport.setThemedBackground(contentView, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.background : ColorId.filling, this);
     contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
     FrameLayoutFix.LayoutParams params;
@@ -101,6 +102,10 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     recyclerView = new RecyclerView(context);
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     recyclerView.setAdapter(adapter = new MembersAdapter(context, this));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the members as one segmented group under a "3 members" subheader
+      recyclerView.addItemDecoration(new com.fahadali.xgram.appearance.XgramR5People.TileGroupDecoration(MemberViewHolder.TYPE_USER));
+    }
     recyclerView.setLayoutParams(params);
 
     contentView.addView(recyclerView);
@@ -268,14 +273,28 @@ public class CreateGroupController extends ViewController<Void> implements EditH
           UserView view = new UserView(context, controller.tdlib);
           view.setOffsetLeft(Screen.dp(22f));
           Views.setClickable(view);
-          RippleSupport.setSimpleWhiteBackground(view);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            com.fahadali.xgram.appearance.XgramR5People.bindTile(view); // XGram M3E: a tile of the members group
+            controller.addThemeInvalidateListener(view);
+          } else {
+            RippleSupport.setSimpleWhiteBackground(view);
+          }
           view.setOnClickListener(this);
           return new MemberViewHolder(view);
         }
         case MemberViewHolder.TYPE_INFO: {
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E: the count is the subheader's, this is the space under the group
+            View view = new View(context);
+            view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(16f)));
+            return new MemberViewHolder(view);
+          }
           return new MemberViewHolder(new ListInfoView(context));
         }
         case MemberViewHolder.TYPE_HEADER: {
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            return new MemberViewHolder(com.fahadali.xgram.appearance.XgramR5People.newSubheader(context, false)); // XGram M3E: "3 members"
+          }
           View view = new View(context);
           view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(11f)));
           return new MemberViewHolder(view);
@@ -292,7 +311,15 @@ public class CreateGroupController extends ViewController<Void> implements EditH
           break;
         }
         case MemberViewHolder.TYPE_INFO: {
-          ((ListInfoView) holder.itemView).showInfo(Lang.pluralBold(R.string.xMembers, controller.members.size()));
+          if (holder.itemView instanceof ListInfoView) {
+            ((ListInfoView) holder.itemView).showInfo(Lang.pluralBold(R.string.xMembers, controller.members.size()));
+          }
+          break;
+        }
+        case MemberViewHolder.TYPE_HEADER: {
+          if (holder.itemView instanceof android.widget.TextView) {
+            ((android.widget.TextView) holder.itemView).setText(Lang.plural(R.string.xMembers, controller.members.size())); // XGram M3E
+          }
           break;
         }
       }

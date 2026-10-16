@@ -21,11 +21,19 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.text.SpannableStringBuilder;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.SoundEffectConstants;
 import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramIconPack;
+import com.fahadali.xgram.appearance.XgramM3Profile;
+import com.fahadali.xgram.appearance.XgramM3Sheets;
+import com.fahadali.xgram.appearance.XgramR5People;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
@@ -157,6 +165,7 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
   public void setCallItem (CallItem item) {
     long userId = item.getUserId();
     TdApi.User user = tdlib.cache().user(userId);
+    xgramCallRow = true; // XGram M3E: room for the call-back button
 
     setPreviewChatId(null, item.getChatId(), null, new MessageId(item.getChatId(), item.getLatestMessageId()), null);
 
@@ -164,7 +173,7 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
     setTitle(TD.getUserName(userId, user), null);
     setEmojiStatus(user);
     setSubtitleIcon(item.getSubtitleIcon(), item.getSubtitleIconColorId());
-    setSubtitle(item.getSubtitle());
+    setSubtitle(xgram() ? item.xgramSubtitle() : item.getSubtitle()); // XGram M3E: "Incoming · 2 min"
     avatarReceiver.requestUser(tdlib, userId, AvatarReceiver.Options.SHOW_ONLINE);
     invalidate();
   }
@@ -186,6 +195,15 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
   }
 
   private void layoutReceiver (int width) {
+    if (xgram()) {
+      // XGram M3E: the M3 list item's 40dp leading avatar, 16dp from the tile edge, centred in the row
+      final int size = Screen.dp(XgramR5People.AVATAR);
+      final int height = getMeasuredHeight() > 0 ? getMeasuredHeight() : Screen.dp(XgramR5People.ROW_HEIGHT);
+      final int left = Lang.rtl() ? width - Screen.dp(XgramR5People.PADDING) - size : Screen.dp(XgramR5People.PADDING);
+      final int top = (height - size) / 2;
+      avatarReceiver.setBounds(left, top, left + size, top + size);
+      return;
+    }
     if (Lang.rtl()) {
       int x = Screen.dp(11f);
       int avatarWidth = Screen.dp(52f);
@@ -198,7 +216,7 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
   public void setTime (String time) {
     if (!StringUtils.equalsOrBothEmpty(this.time, time)) {
       this.time = time;
-      float newTimeWidth = U.measureText(time, ChatView.getTimePaint());
+      float newTimeWidth = U.measureText(time, xgram() ? XgramR5People.metaPaint(0) : ChatView.getTimePaint()); // XGram: labelSmall, tabular
       if (this.timeWidth != newTimeWidth) {
         this.timeWidth = newTimeWidth;
         setTrimmedTitle();
@@ -287,6 +305,10 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
   }
 
   private void setTrimmedTitle () {
+    if (xgram()) {
+      xgramSetTrimmedTitle();
+      return;
+    }
     int width = getMeasuredWidth();
     float avail = width - Screen.dp(72f) - ChatView.getTimePaddingRight();
     if (timeWidth != 0) {
@@ -346,6 +368,9 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
       avail -= Screen.dp(18f);
     }
     avail -= counter.getScaledWidth(Screen.dp(8f) + Screen.dp(23f));
+    if (xgram()) {
+      avail = xgramSubtitleAvail(width);
+    }
 
     if (avail <= 0 || subtitle == null || subtitle.isEmpty()) {
       this.displaySubtitle = null;
@@ -356,8 +381,8 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
     this.displaySubtitle = new Text.Builder(
       subtitle,
       (int) avail,
-      Paints.robotoStyleProvider(16f),
-      TextColorSets.Regular.LIGHT,
+      xgram() ? XgramM3Profile.listSupportingProvider() : Paints.robotoStyleProvider(16f), // XGram: bodyMedium
+      xgram() ? XgramM3Profile.TEXT_ON_SURFACE_VARIANT : TextColorSets.Regular.LIGHT,
       (text, specificMedia) -> {
         if (this.displaySubtitle == text) {
           if (!text.invalidateMediaContent(subtitleMediaReceiver, specificMedia)) {
@@ -378,6 +403,12 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
 
   @Override
   public void getTargetBounds (View targetView, Rect outRect) {
+    if (displayTitle != null && xgram()) {
+      final int titleTop = xgramTitleTop();
+      final int titleLeft = xgramTextX(getMeasuredWidth(), displayTitle.getWidth(), xgramTitleStartOffset());
+      outRect.set(titleLeft, titleTop, titleLeft + displayTitle.getWidth(), titleTop + displayTitle.getHeight());
+      return;
+    }
     if (displayTitle != null) {
       int titleLeft = Screen.dp(72f);
       int titleTop = Screen.dp(28f) + Screen.dp(1f) - Screen.dp(16f);
@@ -398,6 +429,15 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
     final boolean rtl = Lang.rtl();
 
     layoutReceiver(width);
+
+    if (xgram()) {
+      xgramDraw(c, width, rtl);
+      if (removeHelper != null) {
+        removeHelper.restore(c);
+        removeHelper.draw(c);
+      }
+      return;
+    }
 
     if (avatarReceiver.needPlaceholder()) {
       avatarReceiver.drawPlaceholder(c);
@@ -452,6 +492,217 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
       removeHelper.restore(c);
       removeHelper.draw(c);
     }
+  }
+
+  // XGram M3E: the M3 list item, as DoubleTextWrapper's: a 40dp avatar 16dp from the tile edge, the text from 72dp
+  // (mirrored for RTL), the headline in bodyLarge and onSurface, the supporting text in bodyMedium and onSurfaceVariant
+  // (primary while online, the query highlighted in primary), the time in labelSmall with tabular figures at the end
+  // of the headline line, the unread counter at the end of the supporting line, a secret chat's lock in primary and,
+  // on a recent call, the call direction in error (missed) or primary and a trailing filled tonal call-back button.
+
+  private static boolean xgram () {
+    return XgramExpressive.isEnabled();
+  }
+
+  private @Nullable View.OnClickListener xgramCallAction;
+  private boolean xgramCallRow, xgramButtonCaught;
+  private @Nullable XgramR5People.RowIconButton xgramCallButton;
+
+  /** Recent calls: the action of the trailing call-back button (Expressive design only); null hides the button. */
+  public void xgramSetCallAction (@Nullable View.OnClickListener action) {
+    if (this.xgramCallAction != action) {
+      final boolean had = xgramHasCallButton();
+      this.xgramCallAction = action;
+      if (had != xgramHasCallButton()) {
+        setTrimmedTitle();
+        setTrimmedSubtitle();
+        invalidate();
+      }
+    }
+  }
+
+  private boolean xgramHasCallButton () {
+    return xgramCallRow && xgramCallAction != null && xgram();
+  }
+
+  /** The room the trailing call-back button takes: the 40dp button and 12dp before it. */
+  private int xgramTrailingRoom () {
+    return xgramHasCallButton() ? Screen.dp(XgramM3Sheets.ICON_BUTTON_SIZE + 12f) : 0;
+  }
+
+  /** A secret chat's lock (16dp) and the 4dp after it, before the name. */
+  private int xgramTitleStartOffset () {
+    return (flags & FLAG_SECRET) != 0 ? Screen.dp(16f + 4f) : 0;
+  }
+
+  /** The x of a text {@code textWidth} wide that starts {@code startOffset} after the 72dp text start, mirrored for RTL. */
+  private static int xgramTextX (int width, int textWidth, int startOffset) {
+    final int start = Screen.dp(XgramR5People.TEXT_START) + startOffset;
+    return Lang.rtl() ? width - start - textWidth : start;
+  }
+
+  private boolean xgramTwoLines () {
+    return !BitwiseUtils.hasFlag(flags, FLAG_NO_SUBTITLE) && displaySubtitle != null;
+  }
+
+  /** The headline's top: the headline and the supporting text are centred in the row as one block. */
+  private int xgramTitleTop () {
+    final int titleHeight = displayTitle != null ? displayTitle.getHeight() : 0;
+    final int subtitleHeight = xgramTwoLines() ? displaySubtitle.getHeight() : 0;
+    return (getMeasuredHeight() - titleHeight - subtitleHeight) / 2;
+  }
+
+  private void xgramSetTrimmedTitle () {
+    final int width = getMeasuredWidth();
+    float avail = width - Screen.dp(XgramR5People.TEXT_START) - Screen.dp(XgramR5People.PADDING) - xgramTrailingRoom() - xgramTitleStartOffset();
+    if (timeWidth != 0) {
+      avail -= timeWidth + Screen.dp(8f);
+    }
+    if (emojiStatusHelper.needDrawEmojiStatus()) {
+      avail -= emojiStatusHelper.getWidth() + Screen.dp(6);
+    }
+    if (avail <= 0 || title == null || title.isEmpty()) {
+      displayTitle = null;
+      return;
+    }
+    // bodyLarge at its own weight: no allBold (and so no fake bold)
+    this.displayTitle = new Text.Builder(
+      title,
+      (int) avail,
+      XgramM3Profile.listHeadlineProvider(),
+      XgramM3Profile.TEXT_ON_SURFACE,
+      null
+    ).singleLine()
+     .highlight(titleHighlight)
+     .ignoreNewLines()
+     .ignoreContinuousNewLines()
+     .viewProvider(new SingleViewProvider(this))
+     .noClickable()
+     .build();
+  }
+
+  private float xgramSubtitleAvail (int width) {
+    float avail = width - Screen.dp(XgramR5People.TEXT_START) - Screen.dp(XgramR5People.PADDING) - xgramTrailingRoom();
+    if (subtitleIcon != 0) {
+      avail -= Screen.dp(18f + 4f);
+    }
+    avail -= counter.getScaledWidth(Screen.dp(8f));
+    return avail;
+  }
+
+  private void xgramDraw (Canvas c, int width, boolean rtl) {
+    final int height = getMeasuredHeight();
+    final int padding = Screen.dp(XgramR5People.PADDING);
+    final int trailing = xgramTrailingRoom();
+
+    if (avatarReceiver.needPlaceholder()) {
+      avatarReceiver.drawPlaceholder(c);
+    }
+    avatarReceiver.draw(c);
+    final float checkFactor = checkBoxHelper != null ? checkBoxHelper.getCheckFactor() : 0f;
+    if (checkFactor > 0f) {
+      XgramM3Sheets.drawAvatarCheck(c, avatarReceiver, checkFactor, XgramR5People.rowColor(this)); // the M3 checkbox
+    }
+
+    final int titleTop = xgramTitleTop();
+    final int titleHeight = displayTitle != null ? displayTitle.getHeight() : 0;
+    final float titleCenterY = displayTitle != null ? titleTop + titleHeight / 2f : height / 2f;
+    if (displayTitle != null) {
+      if ((flags & FLAG_SECRET) != 0) {
+        Drawable lock = getSparseDrawable(R.drawable.baseline_lock_16, ColorId.NONE);
+        final int lockX = rtl ? width - Screen.dp(XgramR5People.TEXT_START) - lock.getMinimumWidth() : Screen.dp(XgramR5People.TEXT_START);
+        Drawables.draw(c, lock, lockX, titleCenterY - lock.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(XgramExpressive.color(XgramExpressive.PRIMARY)));
+      }
+      final int titleX = xgramTextX(width, displayTitle.getWidth(), xgramTitleStartOffset());
+      displayTitle.draw(c, titleX, titleTop);
+      final int statusX = rtl ? titleX - Screen.dp(6) - emojiStatusHelper.getWidth() : titleX + displayTitle.getWidth() + Screen.dp(6);
+      emojiStatusHelper.draw(c, statusX, titleTop);
+    }
+
+    float counterCenterY = height / 2f;
+    if (xgramTwoLines()) {
+      final int subtitleTop = titleTop + titleHeight;
+      final float subtitleCenterY = subtitleTop + displaySubtitle.getHeight() / 2f;
+      counterCenterY = subtitleCenterY;
+      int iconRoom = 0;
+      if (subtitleIcon != 0 && subtitleIconDrawable != null) {
+        // The call direction: error when missed or declined, primary otherwise
+        final int role = subtitleIconColorId == ColorId.iconNegative ? XgramExpressive.ERROR : XgramExpressive.PRIMARY;
+        final int iconX = rtl ? width - Screen.dp(XgramR5People.TEXT_START) - subtitleIconDrawable.getMinimumWidth() : Screen.dp(XgramR5People.TEXT_START);
+        Drawables.draw(c, subtitleIconDrawable, iconX, subtitleCenterY - subtitleIconDrawable.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(XgramExpressive.color(role)));
+        iconRoom = Screen.dp(18f + 4f);
+      }
+      final TextColorSet colorSet = BitwiseUtils.hasFlag(flags, FLAG_ONLINE) ? XgramM3Profile.TEXT_PRIMARY : null;
+      displaySubtitle.draw(c, xgramTextX(width, displaySubtitle.getWidth(), iconRoom), subtitleTop, colorSet, 1f, subtitleMediaReceiver);
+    }
+
+    if (time != null) {
+      final Paint paint = XgramR5People.metaPaint(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+      final float baseline = titleCenterY - (paint.descent() + paint.ascent()) / 2f;
+      c.drawText(time, rtl ? padding + trailing : width - padding - trailing - timeWidth, baseline, paint);
+    }
+
+    final int counterRadius = ChatView.getCounterRadius();
+    counter.draw(c, rtl ? padding + trailing + counterRadius : width - padding - trailing - counterRadius, counterCenterY, rtl ? Gravity.LEFT : Gravity.RIGHT, 1f);
+
+    if (xgramHasCallButton()) {
+      if (xgramCallButton == null) {
+        xgramCallButton = new XgramR5People.RowIconButton(this, true);
+      }
+      final float half = Screen.dp(XgramM3Sheets.ICON_BUTTON_SIZE) / 2f;
+      xgramCallButton.layout(rtl ? padding + half : width - padding - half, height / 2f);
+      xgramCallButton.draw(c, getSparseDrawable(XgramIconPack.map(R.drawable.baseline_call_24), ColorId.NONE), XgramExpressive.ON_SECONDARY_CONTAINER);
+    } else if (xgramCallButton != null) {
+      xgramCallButton.hide();
+    }
+  }
+
+  @Override
+  public boolean onTouchEvent (MotionEvent e) {
+    // XGram M3E: the call-back button takes its own taps (the row keeps the rest)
+    if (xgramCallButton != null && xgramHasCallButton()) {
+      switch (e.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN: {
+          if (xgramCallButton.contains(e.getX(), e.getY())) {
+            xgramButtonCaught = true;
+            xgramCallButton.setPressed(true);
+            return true;
+          }
+          break;
+        }
+        case MotionEvent.ACTION_MOVE: {
+          if (xgramButtonCaught) {
+            if (!xgramCallButton.contains(e.getX(), e.getY())) {
+              xgramCallButton.setPressed(false);
+            }
+            return true;
+          }
+          break;
+        }
+        case MotionEvent.ACTION_UP: {
+          if (xgramButtonCaught) {
+            xgramButtonCaught = false;
+            final boolean inside = xgramCallButton.contains(e.getX(), e.getY());
+            xgramCallButton.setPressed(false);
+            if (inside && xgramCallAction != null) {
+              playSoundEffect(SoundEffectConstants.CLICK);
+              xgramCallAction.onClick(this);
+            }
+            return true;
+          }
+          break;
+        }
+        case MotionEvent.ACTION_CANCEL: {
+          if (xgramButtonCaught) {
+            xgramButtonCaught = false;
+            xgramCallButton.setPressed(false);
+            return true;
+          }
+          break;
+        }
+      }
+    }
+    return super.onTouchEvent(e);
   }
 
   // Found chat
@@ -546,6 +797,7 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
     if (chat == lastChat) {
       return;
     }
+    xgramCallRow = false;
     if (lastMessage != null) {
       setMessageImpl(null);
     }
@@ -723,6 +975,7 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
       return;
     }
     setMessageImpl(foundMessage);
+    xgramCallRow = false;
     if (foundMessage != null) {
       TdApi.Message message = foundMessage.getMessage();
       flags = BitwiseUtils.setFlag(flags, FLAG_SELF_CHAT, foundMessage.getChat().isSelfChat());

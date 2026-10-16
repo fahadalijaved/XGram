@@ -16,6 +16,7 @@ package org.thunderdog.challegram.ui;
 
 import android.content.Context;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -148,6 +149,7 @@ public class CallListController extends RecyclerViewController<Void> implements
     adapter = new SettingsAdapter(this) {
       @Override
       protected void setInfo (ListItem item, int position, ListInfoView infoView) {
+        infoView.xgramSetTextStyle(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M); // XGram M3E: the footer in labelMedium
         if (endReached) {
           infoView.showInfo(Lang.pluralBold(R.string.xCalls, messages.size()));
         } else {
@@ -159,7 +161,11 @@ public class CallListController extends RecyclerViewController<Void> implements
       protected void setHeaderText (ListItem item, TextView view, boolean isUpdate) {
         if (item.getData() instanceof CallSection) {
           CharSequence text = ((CallSection) item.getData()).getName();
-          Views.setMediumText(view, text);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            view.setText(text); // XGram M3E: the subheader keeps its titleSmall, no Medium swap
+          } else {
+            Views.setMediumText(view, text);
+          }
         } else {
           super.setHeaderText(item, view, isUpdate);
         }
@@ -168,6 +174,31 @@ public class CallListController extends RecyclerViewController<Void> implements
       @Override
       protected void setChatData (ListItem item, int position, BetterChatView chatView) {
         chatView.setCallItem((CallItem) item.getData());
+        chatView.xgramSetCallAction(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramCallBack : null); // XGram M3E: trailing call-back button
+      }
+
+      @Override
+      protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == com.fahadali.xgram.appearance.XgramR5People.STATE_ROW) {
+          // XGram M3E: the empty state (a phone on a soft burst, "No recent calls") with a tonal "Start a call"
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramR5People.newStateViewWithAction(parent.getContext(),
+            Lang.getString(R.string.XgramR5PeopleStartCall), v -> xgramStartCall()));
+        }
+        if (customViewType == com.fahadali.xgram.appearance.XgramR5People.LOADING_ROW) {
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramR5People.newStateView(parent.getContext())); // XGram M3E: the loading indicator
+        }
+        return super.initCustom(parent, customViewType);
+      }
+
+      @Override
+      protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+        if (customViewType == com.fahadali.xgram.appearance.XgramR5People.STATE_ROW) {
+          com.fahadali.xgram.appearance.XgramR5People.bindState(view, true, R.drawable.baseline_phone_24, Lang.getString(R.string.XgramR5PeopleNoCalls), Lang.getString(R.string.XgramR5PeopleNoCallsHint));
+        } else if (customViewType == com.fahadali.xgram.appearance.XgramR5People.LOADING_ROW) {
+          com.fahadali.xgram.appearance.XgramR5People.bindState(view, true, 0, null, null);
+        } else {
+          super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
+        }
       }
 
       @Override
@@ -366,7 +397,9 @@ public class CallListController extends RecyclerViewController<Void> implements
   private void buildCells () {
     ArrayList<ListItem> items = new ArrayList<>();
     if (sections == null) {
-      items.add(new ListItem(ListItem.TYPE_PROGRESS));
+      items.add(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ?
+        new ListItem(ListItem.TYPE_CUSTOM - com.fahadali.xgram.appearance.XgramR5People.LOADING_ROW) : // XGram M3E
+        new ListItem(ListItem.TYPE_PROGRESS));
     } else {
       boolean firstSection = true;
       if (!sections.isEmpty() && topChats != null && !topChats.isEmpty()) {
@@ -395,7 +428,9 @@ public class CallListController extends RecyclerViewController<Void> implements
         }
         items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
       }
-      if (items.isEmpty()) {
+      if (items.isEmpty() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        items.add(new ListItem(ListItem.TYPE_CUSTOM - com.fahadali.xgram.appearance.XgramR5People.STATE_ROW)); // XGram M3E: the empty state
+      } else if (items.isEmpty()) {
         items.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.NoCalls));
       } else {
         items.add(new ListItem(ListItem.TYPE_LIST_INFO_VIEW, R.id.btn_calls));
@@ -665,8 +700,29 @@ public class CallListController extends RecyclerViewController<Void> implements
     ListItem item = (ListItem) v.getTag();
     if (item != null && item.getViewType() == ListItem.TYPE_CHAT_BETTER) {
       CallItem call = (CallItem) item.getData();
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the row opens the chat, its trailing button calls back (as Telegram's call list)
+        tdlib.ui().openChat(CallListController.this, call.getChatId(), null);
+        return;
+      }
       tdlib.context().calls().makeCall(CallListController.this, call.getUserId(), null);
     }
+  }
+
+  /** XGram M3E: the call-back button of a recent call row. */
+  private final View.OnClickListener xgramCallBack = v -> {
+    Object tag = v.getTag();
+    if (tag instanceof ListItem && ((ListItem) tag).getData() instanceof CallItem) {
+      CallItem call = (CallItem) ((ListItem) tag).getData();
+      tdlib.context().calls().makeCall(CallListController.this, call.getUserId(), null);
+    }
+  };
+
+  /** XGram M3E: the empty state's "Start a call": the contact picker in call mode, as the header's phone button. */
+  private void xgramStartCall () {
+    ContactsController c = new ContactsController(context, tdlib);
+    c.initWithMode(ContactsController.MODE_CALL);
+    getParentOrSelf().navigateTo(c);
   }
 
   @Override

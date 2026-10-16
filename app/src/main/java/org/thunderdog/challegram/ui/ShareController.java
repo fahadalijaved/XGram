@@ -958,6 +958,12 @@ public class ShareController extends TelegramViewController<ShareController.Args
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : ColorId.filling;
   }
 
+  /** XGram M3E: the search results lie on the sheet color, so the sheet stays one continuous surface. */
+  @Override
+  protected int xgramChatSearchBackgroundColorId () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramSheetColorId() : super.xgramChatSearchBackgroundColorId();
+  }
+
   /** The chat folder picker of the header is the M3E menu button (XgramM3Sheets.MenuTitleView). */
   private boolean xgramFolderMenuTitle;
 

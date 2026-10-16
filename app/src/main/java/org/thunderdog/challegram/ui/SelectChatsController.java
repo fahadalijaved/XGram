@@ -1114,6 +1114,16 @@ class Chip extends Drawable implements FlowListAnimator.Measurable, Drawable.Cal
 
   private Text buildLabel (String text) {
     int maxWidth = (Screen.currentWidth() - Screen.dp(8f) * 3) / 2 - getIntrinsicWidth(/* labelWidth */ 0, /* hasIcon */ isSecretChat); // (´・ᴗ・ ` )
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the input chip label in labelLarge at its own weight, as BubbleView's chips
+      return new Text.Builder(text, maxWidth, com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L)), this)
+        .noClickable()
+        .ignoreNewLines()
+        .ignoreContinuousNewLines()
+        .clipTextArea()
+        .singleLine()
+        .build();
+    }
     return new Text.Builder(text, maxWidth, Paints.robotoStyleProvider(14f), this)
       .noClickable()
       .ignoreNewLines()
@@ -1227,7 +1237,7 @@ class Chip extends Drawable implements FlowListAnimator.Measurable, Drawable.Cal
       Drawable secureDrawable = Icons.getSecureDrawable();
       int secureIconX = labelX - Screen.dp(7f);
       int secureIconY = bounds.centerY() - secureDrawable.getMinimumHeight() / 2;
-      Drawables.draw(canvas, secureDrawable, secureIconX, secureIconY, Paints.getGreenPorterDuffPaint());
+      Drawables.draw(canvas, secureDrawable, secureIconX, secureIconY, xgram ? Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY)) : Paints.getGreenPorterDuffPaint()); // XGram M3E: the lock in primary
       labelX += Screen.dp(15f);
     }
     label.draw(canvas, labelX, labelY);
