@@ -117,6 +117,137 @@ public final class XgramR5Chat {
     return note;
   }
 
+  // Floating menu anchored to a view (the link preview editor)
+
+  /** One row of {@link #showMenu}. */
+  public static final class MenuEntry {
+    final int id;
+    final CharSequence title;
+    final @androidx.annotation.DrawableRes int iconRes;
+    final Runnable action;
+    boolean destructive, dividerAbove, checkbox, checked;
+
+    public MenuEntry (int id, @NonNull CharSequence title, @androidx.annotation.DrawableRes int iconRes, @NonNull Runnable action) {
+      this.id = id;
+      this.title = title;
+      this.iconRes = iconRes;
+      this.action = action;
+    }
+
+    /** The label and icon in error (a removal). */
+    public MenuEntry destructive () {
+      this.destructive = true;
+      return this;
+    }
+
+    /** An outlineVariant divider line at the top of the row, which starts a new group. */
+    public MenuEntry dividerAbove () {
+      this.dividerAbove = true;
+      return this;
+    }
+
+    /** A choice among others: the chosen one sits on the secondaryContainer pill with its check. */
+    public MenuEntry choice (boolean chosen) {
+      this.checkbox = true;
+      this.checked = chosen;
+      return this;
+    }
+  }
+
+  /**
+   * The M3E menu (MenuMoreWrap: CORNER_L container in the floating role, 12dp item insets, CORNER_M state layers) for
+   * {@code entries}, opening 8dp above {@code anchor} and at least 8dp from the window's sides. A tap on a row closes
+   * the menu, then runs its action. Main thread.
+   */
+  public static void showMenu (@NonNull View anchor, @Nullable org.thunderdog.challegram.theme.ThemeListenerList themeListeners, @NonNull java.util.List<MenuEntry> entries) {
+    if (entries.isEmpty() || anchor.getWindowToken() == null) {
+      return;
+    }
+    final Context context = anchor.getContext();
+    final org.thunderdog.challegram.navigation.MenuMoreWrap moreWrap = new org.thunderdog.challegram.navigation.MenuMoreWrap(context);
+    moreWrap.init(themeListeners, null);
+    final org.thunderdog.challegram.widget.PopupLayout popup = new org.thunderdog.challegram.widget.PopupLayout(context);
+    for (MenuEntry entry : entries) {
+      final View.OnClickListener listener = v -> {
+        popup.hideWindow(true);
+        entry.action.run();
+      };
+      final View item;
+      if (entry.checkbox) {
+        org.thunderdog.challegram.util.HapticMenuHelper.MenuItem menuItem = new org.thunderdog.challegram.util.HapticMenuHelper.MenuItem(entry.id, entry.title, 0).setIsCheckbox(true, entry.checked);
+        item = moreWrap.addItem(null, menuItem, listener);
+      } else {
+        TextView textItem = moreWrap.addItem(entry.id, entry.title, entry.iconRes, null, listener);
+        if (entry.destructive) {
+          final int error = XgramExpressive.color(XgramExpressive.ERROR);
+          textItem.setTextColor(error);
+          for (android.graphics.drawable.Drawable d : textItem.getCompoundDrawables()) {
+            if (d != null) {
+              d.setColorFilter(org.thunderdog.challegram.tool.Paints.getColorFilter(error));
+            }
+          }
+        }
+        item = textItem;
+      }
+      if (entry.dividerAbove && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+        item.setForeground(new TopDividerDrawable());
+      }
+    }
+    moreWrap.setAnchorMode(org.thunderdog.challegram.navigation.MenuMoreWrap.ANCHOR_MODE_RIGHT);
+    moreWrap.setShouldPivotBottom(true);
+    moreWrap.setRightNumber(0);
+    moreWrap.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      final android.view.ViewParent parent = v.getParent();
+      if (!(parent instanceof ViewGroup) || anchor.getWindowToken() == null) {
+        return;
+      }
+      final int width = v.getMeasuredWidth(), height = v.getMeasuredHeight();
+      final int parentWidth = ((ViewGroup) parent).getMeasuredWidth();
+      if (width <= 0 || height <= 0 || parentWidth <= 0) {
+        return;
+      }
+      // Views.getLocationInWindow shares one array: copy the values at once
+      int[] location = org.thunderdog.challegram.tool.Views.getLocationInWindow(anchor);
+      final int anchorCenterX = location[0] + anchor.getMeasuredWidth() / 2, anchorTop = location[1];
+      location = org.thunderdog.challegram.tool.Views.getLocationInWindow(v);
+      final int menuLeft = location[0] - Math.round(v.getTranslationX()), menuTop = location[1] - Math.round(v.getTranslationY());
+      final int edge = Screen.dp(8f);
+      final int targetLeft = Math.max(edge, Math.min(parentWidth - edge - width, anchorCenterX - width / 2));
+      final int targetTop = Math.max(edge, anchorTop - edge - height);
+      v.setTranslationX(targetLeft - menuLeft);
+      v.setTranslationY(targetTop - menuTop);
+    });
+    popup.init(false);
+    popup.setNeedRootInsets();
+    popup.setOverlayStatusBar(true);
+    popup.showMoreView(moreWrap);
+  }
+
+  /** The 1dp outlineVariant divider of a menu group, along the top of a row, 12dp from its sides. */
+  private static final class TopDividerDrawable extends android.graphics.drawable.Drawable {
+    private final android.graphics.Paint paint = new android.graphics.Paint();
+
+    @Override
+    public void draw (@NonNull android.graphics.Canvas c) {
+      final android.graphics.Rect b = getBounds();
+      paint.setColor(XgramExpressive.color(XgramExpressive.OUTLINE_VARIANT));
+      final int inset = Screen.dp(12f);
+      c.drawRect(b.left + inset, b.top, b.right - inset, b.top + Math.max(1, Screen.dp(1f)), paint);
+    }
+
+    @Override
+    public void setAlpha (int alpha) { }
+
+    @Override
+    public void setColorFilter (@Nullable android.graphics.ColorFilter colorFilter) { }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public int getOpacity () {
+      return android.graphics.PixelFormat.TRANSLUCENT;
+    }
+  }
+
   // Empty chat (MessagesHolder TYPE_CHAT_EMPTY with Expressive design)
 
   /** Whether the language is Telegram X's bundled English one (checked on one of its strings). */

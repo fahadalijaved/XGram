@@ -15,6 +15,13 @@
   <string name="XgramR5ChatEmptyRemindersTitle">No reminders</string>
   <string name="XgramR5ChatEmptyRemindersText">Hold the send button to set a reminder.</string>
   <string name="XgramR5ChatEmptySearchTitle">No messages found</string>
+  <!-- The link preview editor menu (the composer's link preview) -->
+  <string name="XgramR5ChatPreviewAbove">Show above text</string>
+  <string name="XgramR5ChatPreviewBelow">Show below text</string>
+  <string name="XgramR5ChatPreviewLarger">Larger media</string>
+  <string name="XgramR5ChatPreviewSmaller">Smaller media</string>
+  <string name="XgramR5ChatPreviewChooseLink">Choose link</string>
+  <string name="XgramR5ChatPreviewRemove">Remove preview</string>
   <!-- Jump to date (Compose date picker): the confirm button -->
   <string name="XgramR5ChatGo">Go</string>
   <!-- Night mode schedule (Compose time picker) -->

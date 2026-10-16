@@ -126,6 +126,11 @@ public class ReplyBarView extends FrameLayoutFix implements View.OnClickListener
 
       @Override
       public boolean onToggleLargeMedia (PinnedMessagesBar view, MessagePreviewView previewView, MessagesController.MessageInputContext messageContext, LinkPreview linkPreview) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: a tap on the preview opens the link preview menu (larger or smaller media is one of its rows)
+          xgramShowLinkPreviewMenu(previewView);
+          return false;
+        }
         if (callback != null && callback.onRequestToggleLargeMedia(ReplyBarView.this, previewView, messageContext, linkPreview)) {
           updateLinkPreviewSettings(true);
           return true;
@@ -171,17 +176,113 @@ public class ReplyBarView extends FrameLayoutFix implements View.OnClickListener
     linkPreviewToggleView.setLayoutParams(params);
     linkPreviewToggleView.setVisibility(View.GONE);
     linkPreviewToggleView.addThemeListeners(themeProvider);
+    xgramThemeProvider = themeProvider;
     linkPreviewToggleView.setOnClickListener(v -> {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramShowLinkPreviewMenu(v); // XGram M3E: the link preview menu instead of flipping above / below at once
+        return;
+      }
       if (callback != null && inputContext != null && callback.onRequestToggleShowAbove(ReplyBarView.this, v, inputContext)) {
         updateLinkPreviewSettings(true);
       }
     });
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      linkPreviewToggleView.setContentDescription(Lang.getString(R.string.LinkPreview));
+    }
     Views.setClickable(linkPreviewToggleView);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       com.fahadali.xgram.appearance.XgramAppMotion.iconButton(linkPreviewToggleView); // XGram: its state layer follows theme switches
     } else
     linkPreviewToggleView.setBackgroundResource(R.drawable.bg_btn_header);
     addView(linkPreviewToggleView);
+  }
+
+  // XGram M3E: the link preview editor menu
+
+  private @Nullable ViewController<?> xgramThemeProvider;
+
+  /**
+   * XGram M3E: the link preview menu, opened by the toggle or a tap on the preview: show above / below the text,
+   * larger / smaller media (when the preview has media), choose link (when the text has more than one), then, after
+   * a divider, remove preview in error. Each row applies at once, without the info tooltip.
+   */
+  private void xgramShowLinkPreviewMenu (@NonNull View anchor) {
+    final MessagesController.MessageInputContext context = inputContext;
+    if (callback == null || context == null) {
+      return;
+    }
+    final TdApi.LinkPreviewOptions options = context.takeOutputLinkPreviewOptions(false);
+    final LinkPreview linkPreview = context.getSelectedLinkPreview();
+    final List<com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry> entries = new ArrayList<>();
+    if (!options.isDisabled) {
+      entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(0,
+        Lang.getString(options.showAboveText ? R.string.XgramR5ChatPreviewBelow : R.string.XgramR5ChatPreviewAbove),
+        options.showAboveText ? R.drawable.baseline_arrow_downward_24 : R.drawable.baseline_arrow_upward_24, () -> {
+          if (callback != null && inputContext == context && callback.onRequestToggleShowAbove(ReplyBarView.this, anchor, context)) {
+            updateLinkPreviewSettings(true);
+          }
+        }));
+      if (linkPreview != null && linkPreview.hasMedia()) {
+        final boolean large = linkPreview.getOutputShowLargeMedia();
+        entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(0,
+          Lang.getString(large ? R.string.XgramR5ChatPreviewSmaller : R.string.XgramR5ChatPreviewLarger),
+          large ? R.drawable.baseline_image_24 : R.drawable.baseline_zoom_in_24, () -> {
+            if (callback != null && inputContext == context && callback.onRequestToggleLargeMedia(ReplyBarView.this, anchor, context, linkPreview)) {
+              xgramUpdatePreviewMedia(pinnedMessagesBar);
+              updateLinkPreviewSettings(true);
+            }
+          }));
+      }
+    }
+    final FoundUrls foundUrls = context.getFoundUrls();
+    if (foundUrls != null && foundUrls.urls.length > 1) {
+      entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(0, Lang.getString(R.string.XgramR5ChatPreviewChooseLink), R.drawable.baseline_link_24,
+        () -> xgramShowChooseLinkMenu(anchor, context)));
+    }
+    com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry remove = new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(0,
+      Lang.getString(R.string.XgramR5ChatPreviewRemove), R.drawable.baseline_link_off_24, () -> {
+        if (callback != null && inputContext == context) {
+          callback.onDismissReplyBar(ReplyBarView.this);
+        }
+      }).destructive();
+    if (!entries.isEmpty()) {
+      remove.dividerAbove();
+    }
+    entries.add(remove);
+    com.fahadali.xgram.appearance.XgramR5Chat.showMenu(anchor, xgramThemeProvider != null ? xgramThemeProvider.getThemeListeners() : null, entries);
+  }
+
+  /** XGram M3E: the found links as choices, the one in the preview checked. */
+  private void xgramShowChooseLinkMenu (@NonNull View anchor, @NonNull MessagesController.MessageInputContext context) {
+    final FoundUrls foundUrls = context.getFoundUrls();
+    if (callback == null || inputContext != context || foundUrls == null) {
+      return;
+    }
+    final LinkPreview selected = context.getSelectedLinkPreview();
+    final TdApi.LinkPreviewOptions options = context.takeOutputLinkPreviewOptions(false);
+    final String selectedUrl = selected != null ? selected.url : !me.vkryl.core.StringUtils.isEmpty(options.url) ? options.url : foundUrls.urls.length > 0 ? foundUrls.urls[0] : null;
+    final List<com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry> entries = new ArrayList<>(foundUrls.urls.length);
+    for (String url : foundUrls.urls) {
+      entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(0, url, 0, () -> {
+        if (callback != null && inputContext == context) {
+          callback.onSelectLinkPreviewUrl(ReplyBarView.this, context, url);
+          updateLinkPreviewSettings(true);
+        }
+      }).choice(url.equals(selectedUrl)));
+    }
+    com.fahadali.xgram.appearance.XgramR5Chat.showMenu(anchor, xgramThemeProvider != null ? xgramThemeProvider.getThemeListeners() : null, entries);
+  }
+
+  /** XGram M3E: the shown link previews pick up a media size changed from the menu (the preview's own tap did it before). */
+  private static void xgramUpdatePreviewMedia (@Nullable View view) {
+    if (view instanceof MessagePreviewView) {
+      ((MessagePreviewView) view).updateShowSmallMedia(true);
+    } else if (view instanceof ViewGroup) {
+      ViewGroup group = (ViewGroup) view;
+      for (int i = 0; i < group.getChildCount(); i++) {
+        xgramUpdatePreviewMedia(group.getChildAt(i));
+      }
+    }
   }
 
   private boolean animationsDisabled;

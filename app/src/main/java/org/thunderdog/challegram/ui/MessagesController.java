@@ -9554,6 +9554,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private TooltipOverlayView.TooltipInfo linkPreviewHint;
 
   private void showLinkPreviewHint (CharSequence text) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return; // XGram M3E: the link preview menu row says what it does and the preview shows the change: no tooltip
+    }
     if (linkPreviewHint == null) {
       linkPreviewHint = context().tooltipManager().builder(replyBarView.getLinkPreviewToggleView()).locate((targetView, rect) -> replyBarView.getLinkPreviewToggleView().getTargetBounds(targetView, rect))
         .icon(R.drawable.baseline_info_24)
