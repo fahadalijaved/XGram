@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E wave 2, state layers and icons -->
+<resources>
+  <!-- Icon pack picker: what the Classic pack draws with Material 3 Expressive on -->
+  <string name="XgramM3eW2IconPackClassicInfo">Outlined icons, filled only when selected</string>
+</resources>
