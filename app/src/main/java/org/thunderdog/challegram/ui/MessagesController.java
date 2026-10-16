@@ -6793,8 +6793,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   /**
    * XGram M3E: the floating chat buttons are M3 FABs (CircleButton draws the 56dp, 16dp-corner secondaryContainer
-   * container). Each is laid out at 64dp so its M3 badge fits on the container's corner; the wrap keeps its 12dp
-   * margins, which puts the container 16dp from the screen edge and 16dp above the input bar (the M3 FAB margins).
+   * container). Each is laid out at 64dp so its M3 badge fits on the container's corner; the wrap's 12dp margins
+   * (moved inside it for the shadow's room) put the container 16dp from the screen edge and 16dp above the input bar
+   * (the M3 FAB margins).
    * The counts move from Telegram X's counter views into those badges, and the wraps pop in and out from the FAB's
    * own centre. The search arrows get 16dp margins for their 56dp FABs. Nothing with Expressive design off.
    */
@@ -6821,21 +6822,25 @@ public class MessagesController extends ViewController<MessagesController.Argume
         buttons[i].setAlpha(buttons[i].getAlpha() * wraps[i].getAlpha());
         wraps[i].setAlpha(1f);
       }
+      // The wrap's 12dp margins move inside it (the wrap grows to the screen edge and the input bar, the FAB stays
+      // put), so the shadow has 16dp of room in the wrap: the content view clips each wrap to its bounds. The
+      // pivots above are from the wrap's left and top, which stay where they were.
+      buttons[i].xgramMakeShadowRoom();
     }
-    for (View badge : new View[] {goToNextFoundMessageButtonBadge, goToPrevFoundMessageButtonBadge}) {
+    for (CircleCounterBadgeView badge : new CircleCounterBadgeView[] {goToNextFoundMessageButtonBadge, goToPrevFoundMessageButtonBadge}) {
       if (badge != null && badge.getLayoutParams() instanceof RelativeLayout.LayoutParams) {
         RelativeLayout.LayoutParams badgeParams = (RelativeLayout.LayoutParams) badge.getLayoutParams();
         badgeParams.rightMargin = badgeParams.bottomMargin = Screen.dp(16f);
         badge.setLayoutParams(badgeParams);
+        badge.xgramMakeShadowRoom(); // the 16dp margins move inside it: the 56dp FAB had no room past its container
       }
     }
   }
 
   /**
    * XGram M3E: a chat FAB fades itself, not its wrap. A wrap faded with alpha is drawn through a layer the size of
-   * its own bounds, which would cut the FAB's elevation shadow off at the wrap's right and bottom edges (the FAB sits
-   * in that corner) while it pops in and out; the FAB's own alpha fades its shadow with it. The wrap's alpha
-   * otherwise (Expressive design off).
+   * its own bounds; the FAB's own alpha fades its shadow with it (the shadow's room is inside the wrap either way,
+   * CircleButton.xgramMakeShadowRoom). The wrap's alpha otherwise (Expressive design off).
    */
   private static void xgramSetFabAlpha (@NonNull View wrap, @Nullable CircleButton button, float alpha) {
     if (button != null && button.xgramIsChatFab()) {
