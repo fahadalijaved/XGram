@@ -308,6 +308,24 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
           view.setClickBait(false, 0, isUpdate);
         }
       }
+
+      @NonNull
+      @Override
+      public org.thunderdog.challegram.ui.SettingHolder onCreateViewHolder (@NonNull ViewGroup parent, int viewType) {
+        org.thunderdog.challegram.ui.SettingHolder holder = super.onCreateViewHolder(parent, viewType);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          xgramStyleRow(holder.itemView, viewType);
+        }
+        return holder;
+      }
+
+      @Override
+      public void onBindViewHolder (org.thunderdog.challegram.ui.SettingHolder holder, int position) {
+        super.onBindViewHolder(holder, position);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && position >= 0 && position < getItems().size()) {
+          xgramBindRow(holder.itemView, getItems().get(position));
+        }
+      }
     };
     adapter.setOnLongClickListener(this);
     adapter.setItems(items, true);
@@ -322,6 +340,36 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
           outRect.top = outRect.bottom = Screen.dp(8f);
         } else {
           outRect.top = outRect.bottom = 0;
+        }
+      }
+
+      // XGram: Material 3 navigation drawer divider between the sections (accounts, destinations, switches):
+      // 1dp outlineVariant, 28dp in from both sides, 8dp above and below. With Expressive design a separator row is
+      // only an empty gap, so the line is drawn here. Nothing with Expressive design off.
+      private final Paint xgramDividerPaint = new Paint();
+
+      @Override
+      public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+        if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          return;
+        }
+        final int inset = Screen.dp(28f);
+        final int left = parent.getPaddingLeft() + inset, right = parent.getWidth() - parent.getPaddingRight() - inset;
+        if (right <= left) {
+          return;
+        }
+        final int lineHeight = Math.max(1, Screen.dp(1f));
+        final int color = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT);
+        final int childCount = parent.getChildCount();
+        for (int i = 0; i < childCount; i++) {
+          View child = parent.getChildAt(i);
+          RecyclerView.ViewHolder holder = child != null ? parent.getChildViewHolder(child) : null;
+          if (holder == null || holder.getItemViewType() != ListItem.TYPE_SEPARATOR_FULL) {
+            continue;
+          }
+          int top = Math.round(child.getTop() + child.getTranslationY()) + (child.getHeight() - lineHeight) / 2;
+          xgramDividerPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(color, child.getAlpha()));
+          c.drawRect(left, top, right, top + lineHeight, xgramDividerPaint);
         }
       }
     });
@@ -473,6 +521,18 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
         // c.drawRect(left, top, right, bottom, Paints.fillingPaint(U.alphaColor(dragFactor, 0xffff0000)));
 
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: Material 3 dragged state instead of shadows and lines: the row's pill (12dp in, full corners) in the
+          // drawer's surfaceContainerLow with the 16% onSurface dragged state layer.
+          final int surface = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
+          final int layer = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), com.fahadali.xgram.appearance.XgramExpressive.STATE_DRAGGED);
+          final int pillColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(ColorUtils.compositeColor(surface, layer), dragFactor);
+          android.graphics.RectF pill = Paints.getRectF();
+          pill.set(left + Screen.dp(12f), top, right - Screen.dp(12f), bottom);
+          c.drawRoundRect(pill, pill.height() / 2f, pill.height() / 2f, Paints.fillingPaint(pillColor));
+          return;
+        }
+
         final float maxAlpha = Theme.getShadowDepth();
         float lineFactor = Theme.getSeparatorReplacement();
         float shadowFactor = 1f - lineFactor;
@@ -556,6 +616,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       ListItem item = adapter.getItems().get(newItem);
       adapter.setToggled(item, newTheme.isDark());
     }
+    xgramRefreshRowRipples(); // XGram
   }
 
   @Override
@@ -803,6 +864,95 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       /*if (BuildConfig.DEBUG) {
         items.add(new SettingItem(SettingItem.TYPE_DRAWER_ITEM, R.id.btn_submitCrash, R.drawable.baseline_bug_report_24, "Crash app", false));
       }*/
+    }
+  }
+
+  // XGram: Material 3 Expressive side menu rows (the modal navigation drawer / expanded navigation rail item):
+  // 56dp high, a full-corner pill 12dp in from both sides (secondaryContainer when active, onSurface 10% when
+  // pressed), 24dp icon at 28dp centred in the row, labelLarge label at 64dp. The switch rows (Night mode, Ghost mode,
+  // Proxy) press as the same pill instead of Telegram X's full-width gray highlight, with the switch's end at 28dp,
+  // mirroring the icon. Only with Expressive design on.
+
+  private static final float XGRAM_ITEM_HEIGHT = 56f, XGRAM_ICON_SIZE = 24f, XGRAM_ITEM_INSET = 12f;
+
+  private static boolean xgramIsSwitchRow (int viewType) {
+    return viewType == ListItem.TYPE_DRAWER_ITEM_WITH_RADIO || viewType == ListItem.TYPE_DRAWER_ITEM_WITH_RADIO_SEPARATED;
+  }
+
+  private static void xgramSetHeight (View view, int height) {
+    ViewGroup.LayoutParams params = view.getLayoutParams();
+    if (params != null && params.height != height) {
+      params.height = height;
+      view.setLayoutParams(params);
+    }
+  }
+
+  /** Once per row view, when it is created. */
+  private static void xgramStyleRow (View row, int viewType) {
+    final int height = Screen.dp(XGRAM_ITEM_HEIGHT);
+    if (viewType == ListItem.TYPE_DRAWER_ITEM || viewType == ListItem.TYPE_DRAWER_ITEM_WITH_AVATAR) {
+      xgramSetHeight(row, height);
+    } else if (xgramIsSwitchRow(viewType) && row instanceof ViewGroup) {
+      xgramSetHeight(row, height);
+      ViewGroup wrap = (ViewGroup) row;
+      for (int i = 0; i < wrap.getChildCount(); i++) {
+        View child = wrap.getChildAt(i);
+        if (child instanceof DrawerItemView) {
+          xgramSetHeight(child, height);
+        } else if (child instanceof TogglerView && child.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+          // The switch keeps its own 16dp end padding inside the pill: 12 + 16 = 28dp from the edge.
+          ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) child.getLayoutParams();
+          params.leftMargin = params.rightMargin = Screen.dp(XGRAM_ITEM_INSET);
+          child.setLayoutParams(params);
+        }
+      }
+      me.vkryl.android.ViewUtils.setBackground(row, com.fahadali.xgram.appearance.XgramM3Profile.drawerItemBackground(0));
+    }
+  }
+
+  /** After every bind: Telegram X sets the icon for a 52dp row on each bind. */
+  private static void xgramBindRow (View row, ListItem item) {
+    final int iconTop = Screen.dp((XGRAM_ITEM_HEIGHT - XGRAM_ICON_SIZE) / 2f);
+    final int viewType = item.getViewType();
+    if (viewType == ListItem.TYPE_DRAWER_ITEM) {
+      if (row instanceof DrawerItemView && !((DrawerItemView) row).hasAvatar()) {
+        ((DrawerItemView) row).setIcon(Screen.dp(18f), iconTop, item.getIconResource());
+      }
+    } else if (xgramIsSwitchRow(viewType) && row instanceof ViewGroup && ((ViewGroup) row).getChildCount() > 0 && ((ViewGroup) row).getChildAt(0) instanceof DrawerItemView) {
+      DrawerItemView view = (DrawerItemView) ((ViewGroup) row).getChildAt(0);
+      view.setIcon(Screen.dp(18f), iconTop, item.getIconResource());
+      // The row's own pill shows the press: the label's pill (set again by each setText) would press too.
+      me.vkryl.android.ViewUtils.setBackground(view, null);
+    }
+  }
+
+  /** The pressed state layer follows the theme (night mode is switched from this menu): onSurface at 10%. */
+  private void xgramRefreshRowRipples () {
+    if (recyclerView == null || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
+      return;
+    }
+    android.content.res.ColorStateList ripple = android.content.res.ColorStateList.valueOf(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE),
+      com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED));
+    for (int i = 0; i < recyclerView.getChildCount(); i++) {
+      View row = recyclerView.getChildAt(i);
+      xgramSetRippleColor(row.getBackground(), ripple);
+      if (row instanceof ViewGroup && ((ViewGroup) row).getChildCount() > 0) {
+        xgramSetRippleColor(((ViewGroup) row).getChildAt(0).getBackground(), ripple);
+      }
+    }
+    recyclerView.getRecycledViewPool().clear(); // rows made later take the new colors
+  }
+
+  private static void xgramSetRippleColor (@Nullable android.graphics.drawable.Drawable drawable, android.content.res.ColorStateList color) {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) {
+      return;
+    }
+    if (drawable instanceof android.graphics.drawable.InsetDrawable) {
+      drawable = ((android.graphics.drawable.InsetDrawable) drawable).getDrawable();
+    }
+    if (drawable instanceof android.graphics.drawable.RippleDrawable) {
+      ((android.graphics.drawable.RippleDrawable) drawable).setColor(color);
     }
   }
 
@@ -1156,12 +1306,15 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   }
 
   public void open () {
-    ViewController<?> c = UI.getCurrentStackItem(context());
     // XGram: with two panes the menu button of the chat list pane opens the drawer whatever is open on the right.
-    boolean twoPane = context().xgramTwoPane() != null && context().xgramTwoPane().isActive();
+    boolean twoPane = xgramTwoPane() != null;
+    ViewController<?> c = twoPane ? xgramOwner() : UI.getCurrentStackItem(context());
     if (c != null && (c.useDrawer() || twoPane) && !c.isIntercepted()) {
-      prepare();
-      open(0f);
+      boolean prepared = prepare();
+      // XGram: never "open" a menu that is not shown (the next tap anywhere would only close it).
+      if (prepared || !twoPane) {
+        open(0f);
+      }
     }
   }
 
@@ -1352,8 +1505,45 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   // private int currentScreenWidth;
 
   public boolean isNeeded () {
-    ViewController<?> c = context.navigation().getCurrentStackItem();
+    ViewController<?> c = xgramOwner();
     return c != null && c.useDrawer();
+  }
+
+  // XGram: two panes (XgramTwoPane). The side menu belongs to the chat list pane: it opens over it from the screen
+  // edge whatever is open in the chat pane, by its menu button or by a swipe that starts in it
+  // (NavigationGestureController). With one pane everything is as in Telegram X.
+
+  @Nullable
+  private com.fahadali.xgram.layout.XgramTwoPane xgramTwoPane () {
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+    return twoPane != null && twoPane.isActive() ? twoPane : null;
+  }
+
+  /** The screen the side menu opens for: the chat list pane's top screen with two panes, else the top screen. */
+  @Nullable
+  private ViewController<?> xgramOwner () {
+    NavigationController list = com.fahadali.xgram.layout.XgramTwoPaneGestures.listNavigation(context);
+    if (list != null) {
+      ViewController<?> c = list.getCurrentStackItem();
+      if (c != null) {
+        return c;
+      }
+    }
+    return context.navigation().getCurrentStackItem();
+  }
+
+  private boolean xgramSwipeEnabled = true;
+
+  /**
+   * XGram: whether a swipe from the screen edge opens the side menu. The navigation rail turns it off on wide windows,
+   * where it stands in for the menu; the menu button still opens it, and an open menu can still be swiped closed.
+   */
+  public void xgramSetSwipeEnabled (boolean enabled) {
+    this.xgramSwipeEnabled = enabled;
+  }
+
+  public boolean xgramSwipeEnabled () {
+    return xgramSwipeEnabled;
   }
 
   public boolean prepare () {
@@ -1394,7 +1584,12 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   }
 
   private float getScreenWidth () {
-    return context.navigation().getValue().getMeasuredWidth();
+    View navigationView = context.navigation().getValue();
+    if (xgramTwoPane() != null && navigationView.getParent() instanceof View) {
+      // XGram: the navigation is only the chat pane there; the menu slides in from the screen edge (right to left)
+      return ((View) navigationView.getParent()).getMeasuredWidth();
+    }
+    return navigationView.getMeasuredWidth();
   }
 
   public void translate (int lastScrollX) {
