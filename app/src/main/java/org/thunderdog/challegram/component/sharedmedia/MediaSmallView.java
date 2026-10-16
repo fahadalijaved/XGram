@@ -376,8 +376,10 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
 
     boolean isStreamingUI = item.isVideo() && Config.VIDEO_CLOUD_PLAYBACK_AVAILABLE;
 
-    int textLeft = receiver.getLeft() + Screen.dp(7f);
-    int textTop = receiver.getTop() + Screen.dp(5f);
+    // XGram: in the Expressive grid the duration chip starts 8dp in from the tile's top start corner, clear of the
+    // group's 16dp outer corner (XgramW2ProfileGrid paints outside it), on every tile so the chips line up
+    int textLeft = receiver.getLeft() + Screen.dp(xgramM3 ? 11f : 7f);
+    int textTop = receiver.getTop() + Screen.dp(xgramM3 ? 10f : 5f);
 
     if (text != null) {
       float dlFactor = 1f - downloadedAnimator.getFloatValue();
@@ -420,7 +422,8 @@ public class MediaSmallView extends SparseDrawableView implements Destroyable, F
       final int centerY = receiver.centerY() - (int) ((float) receiver.getHeight() * (1f - SCALE)) / 2;
       final int radius = Screen.dp(9f + 2f * selectionFactor);
 
-      final int toColor = ColorUtils.compositeColor(Theme.fillingColor(), Theme.chatSelectionColor());
+      // XGram: the ring cuts the check out of the selected tile's secondaryContainer
+      final int toColor = xgramM3 ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : ColorUtils.compositeColor(Theme.fillingColor(), Theme.chatSelectionColor());
       c.drawCircle(centerX, centerY, radius, Paints.getOuterCheckPaint(ColorUtils.alphaColor(selectableFactor, ColorUtils.fromToArgb(0xffffffff, toColor, selectionFactor))));
 
       if (selectionFactor != 0f) {

@@ -104,6 +104,20 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
   }
 
+  /**
+   * The row color the incognito badge's disc and the remove cross's ring cut out of: Telegram X's filling, or with
+   * Expressive design the color the row's background actually draws (a segmented list tile is surfaceBright).
+   */
+  private static int cutOutColor (View view) {
+    if (xgramM3()) {
+      com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.findMorph(view.getBackground());
+      if (morph != null) {
+        return morph.getDrawColor();
+      }
+    }
+    return Theme.fillingColor();
+  }
+
   public DoubleTextWrapper (Tdlib tdlib, TdApi.Chat chat) {
     this(tdlib, chat, /* needSubtitle */ true, false);
   }
@@ -587,7 +601,8 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
   private void buildSubtitle () {
     int availWidth = currentWidth - horizontalPadding;
     if (this.adminSign != null) {
-      availWidth -= this.adminSign.getWidth() + Screen.dp(4f);
+      // XGram: the tag is trailing text centred on both lines, so the subtitle keeps the title's 16dp from it
+      availWidth -= this.adminSign.getWidth() + Screen.dp(xgramM3() ? XGRAM_PADDING : 4f);
     }
     if (drawAnonymousIcon || isPremiumLocked) {
       availWidth -= Screen.dp(30);
@@ -631,7 +646,7 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
       float x = receiver.centerX() + (float) ((double) (receiver.getWidth() / 2) * Math.sin(radians));
       float y = receiver.centerY() + (float) ((double) (receiver.getHeight() / 2) * Math.cos(radians));
       Drawable incognitoIcon = view.getSparseDrawable(R.drawable.baseline_incognito_circle_18, ColorId.iconLight);
-      c.drawCircle(x, y, incognitoIcon.getMinimumWidth() / 2f * anonymousFactor, Paints.fillingPaint(Theme.fillingColor()));
+      c.drawCircle(x, y, incognitoIcon.getMinimumWidth() / 2f * anonymousFactor, Paints.fillingPaint(cutOutColor(view)));
       if (anonymousFactor != 1f) {
         c.save();
         c.scale(anonymousFactor, anonymousFactor, x, y);
@@ -666,7 +681,7 @@ public class DoubleTextWrapper implements MessageSourceProvider, UserProvider, T
         int radius = Screen.dp(11f);
         float sweepFactor = 1f;
         rectF.set(cx - radius, cy - radius, cx + radius, cy + radius);
-        c.drawArc(rectF, Lang.rtl() ? 225f + 170f * (1f - sweepFactor) : 135f, 170f * sweepFactor, false, Paints.getOuterCheckPaint(Theme.fillingColor()));
+        c.drawArc(rectF, Lang.rtl() ? 225f + 170f * (1f - sweepFactor) : 135f, 170f * sweepFactor, false, Paints.getOuterCheckPaint(cutOutColor(view)));
       }
     }
     if (drawAnonymousIcon) {

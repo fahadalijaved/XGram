@@ -35,16 +35,19 @@ import java.util.List;
 
 /**
  * Material 3 Expressive media grid (the shared Media, GIFs and Video messages tabs). The grid is inset 16dp like the
- * segmented list tiles, so no tile meets the screen edge; tiles are squares with 2dp gaps and 4dp corners; each
- * month's group takes the segmented list's 20dp outer corners on its convex corners only (a partial last row keeps
- * its step). The outer corners are painted over in the color behind the grid (the docked sheet on the profile, the
- * page background elsewhere): no clipping, no layers, nothing allocated while drawing.
+ * segmented list tiles, so no tile meets the screen edge; tiles are squares with 2dp gaps and 4dp corners. One rule
+ * for every date group, whatever its size: the group is one container with 16dp (CORNER_L) outer corners on its
+ * convex corners only (a partial last row keeps its step, its last tile carries the group's bottom corners), 4dp
+ * inner corners, and a group of a single tile has the four outer corners. The 16dp stays under the 2dp-gapped 108dp
+ * tiles' scale (a 20dp corner on a lone tile reads as a separate card) and never above the docked sheet's corners.
+ * The outer corners are painted over in the color behind the grid (the docked sheet on the profile, the page
+ * background elsewhere): no clipping, no layers, nothing allocated while drawing.
  * Only used while {@link XgramExpressive#isEnabled()}; Telegram X keeps GridSpacingItemDecoration.
  */
 public final class XgramW2ProfileGrid extends RecyclerView.ItemDecoration {
-  /** Grid side inset, gap, tile corner and group corner (dp): LIST_INSET, LIST_GAP, CORNER_XS, LIST_OUTER_CORNER. */
+  /** Grid side inset, gap, tile corner and group corner (dp): LIST_INSET, LIST_GAP, CORNER_XS, CORNER_L. */
   public static final float INSET = XgramExpressive.LIST_INSET, GAP = XgramExpressive.LIST_GAP,
-    TILE_CORNER = XgramExpressive.CORNER_XS, GROUP_CORNER = XgramExpressive.LIST_OUTER_CORNER;
+    TILE_CORNER = XgramExpressive.CORNER_XS, GROUP_CORNER = XgramExpressive.CORNER_L;
 
   private static final int TOP_START = 1, TOP_END = 1 << 1, BOTTOM_END = 1 << 2, BOTTOM_START = 1 << 3;
 

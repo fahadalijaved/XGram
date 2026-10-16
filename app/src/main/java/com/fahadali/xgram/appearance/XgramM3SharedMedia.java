@@ -243,35 +243,90 @@ public final class XgramM3SharedMedia {
   // Tab switch
 
   /**
-   * M3 shared axis X for a tab tap: the pages stay in place, the outgoing one slides 30dp away and fades out while the
-   * incoming one slides in from 30dp and fades in (fade through at the midpoint). Only while {@link #setActive}; a
-   * finger swipe keeps the plain slide. View properties only, no layers.
+   * M3 shared axis X for a tab tap: the two pages stay in place, the outgoing one slides 30dp away and fades out while
+   * the incoming one slides in from 30dp and fades in (fade through at the midpoint). It knows the two pages, so on a
+   * jump of several tabs the pages the pager scrolls past stay hidden (they never fade in on the way). Only between
+   * {@link #start} and {@link #stop}; a finger swipe keeps the plain slide. View properties only, no layers, nothing
+   * allocated per frame.
    */
   public static final class SharedAxisTransformer implements androidx.viewpager.widget.ViewPager.PageTransformer {
-    private boolean active;
+    /** The page view of the pager's adapter position {@code index}, or null while it is not instantiated. */
+    public interface PageResolver {
+      @Nullable View pageAt (int index);
+    }
 
-    public void setActive (boolean active) {
-      this.active = active;
+    private boolean active;
+    private int fromIndex, toIndex;
+    private @Nullable View fromPage, toPage;
+    private @Nullable PageResolver resolver;
+
+    /** A tab tap from adapter position {@code from} to {@code to}; call after ViewPager.setCurrentItem. */
+    public void start (int from, int to, @NonNull PageResolver resolver) {
+      this.fromIndex = from;
+      this.toIndex = to;
+      this.resolver = resolver;
+      this.fromPage = resolver.pageAt(from);
+      this.toPage = resolver.pageAt(to);
+      this.active = from != to;
+    }
+
+    /** Ends the motion: every page of {@code pager} is back at rest (in place, opaque). */
+    public void stop (@Nullable ViewGroup pager) {
+      final boolean wasActive = active;
+      active = false;
+      fromPage = toPage = null;
+      resolver = null;
+      if (wasActive && pager != null) {
+        for (int i = 0; i < pager.getChildCount(); i++) {
+          reset(pager.getChildAt(i));
+        }
+      }
     }
 
     public boolean isActive () {
       return active;
     }
 
+    private static void reset (View page) {
+      if (page.getAlpha() != 1f) {
+        page.setAlpha(1f);
+      }
+      if (page.getTranslationX() != 0f) {
+        page.setTranslationX(0f);
+      }
+    }
+
     @Override
     public void transformPage (@NonNull View page, float position) {
-      if (!active || position <= -1f || position >= 1f) {
-        if (page.getAlpha() != 1f) {
-          page.setAlpha(1f);
-        }
-        if (page.getTranslationX() != 0f) {
-          page.setTranslationX(0f);
-        }
+      if (!active) {
+        reset(page);
         return;
       }
+      if (resolver != null) {
+        if (fromPage == null) {
+          fromPage = resolver.pageAt(fromIndex);
+        }
+        if (toPage == null) {
+          toPage = resolver.pageAt(toIndex);
+        }
+      }
+      // position is the page's offset from the scroll position in pages: it goes from 0 to the jump's distance for
+      // the outgoing page, and from the distance to 0 for the incoming one; its sign is the side the page is on (RTL
+      // included), so the pages move with the scroll's direction
+      final float distance = Math.max(1, Math.abs(toIndex - fromIndex));
       final float width = page.getWidth();
-      page.setTranslationX(position * (Screen.dp(30f) - width));
-      page.setAlpha(XgramMotion.clamp01(1f - Math.abs(position) * 2f));
+      final float shift = Screen.dp(30f);
+      if (page == fromPage) {
+        final float p = XgramMotion.clamp01(Math.abs(position) / distance);
+        page.setTranslationX(-position * width + Math.signum(position) * shift * p);
+        page.setAlpha(XgramMotion.clamp01(1f - p * 2f));
+      } else if (page == toPage) {
+        final float p = XgramMotion.clamp01(1f - Math.abs(position) / distance);
+        page.setTranslationX(-position * width + Math.signum(position) * shift * (1f - p));
+        page.setAlpha(XgramMotion.clamp01(p * 2f - 1f));
+      } else if (page.getAlpha() != 0f) {
+        page.setAlpha(0f); // a page passed on the way
+      }
     }
   }
 

@@ -1340,6 +1340,36 @@ public final class XgramExpressive {
     }
   }
 
+  /**
+   * The top offset the segmented list decoration gives the item at {@code position}: the 2dp gap above a grouped
+   * row that follows another row, the floating button's clearance under a collapsing header, the 8dp a SHADOW_TOP
+   * would give a group opened by the list start; 0 for anything else. Shared with the profile's scroll sync
+   * (XgramM3Profile.groupGapPx), which measures the base list item by item.
+   */
+  static int listTopOffsetPx (List<ListItem> items, int position) {
+    if (position < 0 || position >= items.size()) {
+      return 0;
+    }
+    int type = items.get(position).getViewType();
+    if (type == ListItem.TYPE_SMALL_MEDIA || !isRowType(type) || !isInGroup(items, position)) {
+      return 0;
+    }
+    if (position == 0) {
+      // A group opened by the list start: the space a SHADOW_TOP would give.
+      return Screen.dp(8f);
+    }
+    int prevType = items.get(position - 1).getViewType();
+    if (isRowType(prevType)) {
+      return Screen.dp(LIST_GAP);
+    }
+    if (prevType == ListItem.TYPE_EMPTY_OFFSET) {
+      // Under a collapsing avatar header (Settings, profiles) the floating button sits half below the header's
+      // edge: the first group starts clear of it instead of under it.
+      return Screen.dp(HEADER_FAB_CLEARANCE);
+    }
+    return 0;
+  }
+
   private static final class ListDecoration extends RecyclerView.ItemDecoration {
     private final List<ListItem> items;
     private final Paint tilePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1370,25 +1400,17 @@ public final class XgramExpressive {
         return;
       }
       int type = items.get(position).getViewType();
+      if (type == ListItem.TYPE_SMALL_MEDIA) {
+        // The shared media grid (Saved Messages' Media tab) is XgramW2ProfileGrid's: no tile insets or gaps here.
+        return;
+      }
       boolean groupRow = isRowType(type) && isInGroup(items, position);
       if (groupRow || isFrameType(type)) {
         int inset = Screen.dp(LIST_INSET);
         outRect.left = inset;
         outRect.right = inset;
       }
-      if (groupRow && position > 0) {
-        int prevType = items.get(position - 1).getViewType();
-        if (isRowType(prevType)) {
-          outRect.top = Screen.dp(LIST_GAP);
-        } else if (prevType == ListItem.TYPE_EMPTY_OFFSET) {
-          // Under a collapsing avatar header (Settings, profiles) the floating button sits half below the header's
-          // edge: the first group starts clear of it instead of under it.
-          outRect.top = Screen.dp(HEADER_FAB_CLEARANCE);
-        }
-      } else if (groupRow) {
-        // A group opened by the list start: the space a SHADOW_TOP would give.
-        outRect.top = Screen.dp(8f);
-      }
+      outRect.top = listTopOffsetPx(items, position);
     }
 
     @Override
@@ -1405,6 +1427,9 @@ public final class XgramExpressive {
         }
         ListItem item = items.get(position);
         int type = item.getViewType();
+        if (type == ListItem.TYPE_SMALL_MEDIA) {
+          continue; // the media grid draws its own tiles and group corners (XgramW2ProfileGrid)
+        }
         if (isHeaderType(type) || type == ListItem.TYPE_DESCRIPTION || type == ListItem.TYPE_DESCRIPTION_CENTERED) {
           if (item.getTextColorId(ColorId.NONE) == ColorId.NONE) {
             syncTextColor(child, color(isHeaderType(type) ? PRIMARY : ON_SURFACE_VARIANT));

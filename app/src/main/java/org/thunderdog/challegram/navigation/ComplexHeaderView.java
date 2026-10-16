@@ -1077,7 +1077,10 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       if (xgramCentered) {
         // XGram: avatar, title (22 to 24) and subtitle (12 to 14) move to the center as the header expands.
         final int viewW = getMeasuredWidth();
-        float titleBlock = trimmedTitle != null ? (trimmedTitle.getWidth() + getTextOffsetRight() + additionalTextEndPadding) * textScaleFactor : 0f;
+        // the whole block is centred: the lock before the title (its line margin), the title, the emoji status after a
+        // 6dp gap (its width is in additionalTextEndPadding, with a scam / fake mark's), the verify and mute icons
+        float titleBlock = trimmedTitle != null ? (trimmedTitle.getWidth() + getTextOffsetLeft() + getTextOffsetRight() + additionalTextEndPadding +
+          (emojiStatusHelper.needDrawEmojiStatus() ? Screen.dp(6f) : 0)) * textScaleFactor : 0f;
         baseTextLeft = MathUtils.fromTo(xgramCollapsedTextLeft, (viewW - titleBlock) / 2f, xgramS);
         baseTitleTop = MathUtils.fromTo(baseTitleTop, currentHeaderOffset + Screen.dp(168f), xgramS);
         xgramSubtitleScale = MathUtils.fromTo(1f, XGRAM_SUBTITLE_SCALE, xgramS);

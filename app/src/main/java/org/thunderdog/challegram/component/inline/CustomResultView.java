@@ -82,7 +82,7 @@ public class CustomResultView extends SparseDrawableView implements Destroyable,
     }
     this.result = result;
     if (this.result != null) {
-      this.result.layout(getMeasuredWidth(), receiver);
+      this.result.layout(layoutWidth(), receiver);
       this.result.requestFiles(receiver);
       if (isAttached) {
         this.result.attachToView(this);
@@ -159,12 +159,37 @@ public class CustomResultView extends SparseDrawableView implements Destroyable,
     return (flags & FLAG_CAUGHT) != 0 && result != null ? result.onTouchEvent(this, e) : super.onTouchEvent(e);
   }
 
+  /** The list's width, which onMeasure lays results out at, last seen there. */
+  private int lastParentWidth;
+
+  /**
+   * The width a result is laid out at: the list's (the parent's) width, as in onMeasure, never the row's own. A row of
+   * a segmented list is inset by the list decoration, so its own width is narrower than the list's, and the results
+   * that subtract that inset themselves (InlineResultCommon, XgramM3LinkResult) would lose it twice. A recycled row
+   * is bound while detached from the list, so with Expressive design the width onMeasure last saw is used then (the
+   * row is not measured again when its height stays); a row never measured yet returns 0 and is laid out by its first
+   * onMeasure. Telegram X's own rows are as wide as the list, so nothing changes there.
+   */
+  private int layoutWidth () {
+    final android.view.ViewParent parent = getParent();
+    if (parent instanceof View && ((View) parent).getMeasuredWidth() > 0) {
+      return ((View) parent).getMeasuredWidth();
+    }
+    if (lastParentWidth > 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return lastParentWidth;
+    }
+    return getMeasuredWidth();
+  }
+
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     if (result == null) {
       super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     } else {
       int width = ((View) getParent()).getMeasuredWidth();
+      if (width > 0) {
+        lastParentWidth = width;
+      }
       result.layout(width, receiver);
       setMeasuredDimension(getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec),
         MeasureSpec.makeMeasureSpec(result.getHeight(), MeasureSpec.EXACTLY));
