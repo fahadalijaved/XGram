@@ -300,6 +300,114 @@ public final class XgramM3Sessions {
     }
   }
 
+  // Websites (TYPE_SESSION_WITH_AVATAR)
+
+  public static boolean isAvatarRow (@Nullable View view) {
+    return view instanceof SessionAvatarRow;
+  }
+
+  /** The TYPE_SESSION_WITH_AVATAR row (Settings > Devices > Websites), with Expressive design. */
+  public static RelativeLayout newAvatarRow (Context context, View.OnClickListener onClickListener, @Nullable ViewController<?> themeProvider) {
+    return new SessionAvatarRow(context, onClickListener, themeProvider);
+  }
+
+  /**
+   * A connected website as a segmented list tile: the bot's 40dp avatar, the domain in titleMedium, the bot, browser and
+   * platform in bodyMedium onSurfaceVariant (two lines at most), the IP address and location in bodySmall, the last
+   * active time as trailing labelMedium. Child order as Telegram X's (time, title, text, location, progress, avatar):
+   * SettingsAdapter and SettingHolder read them by index.
+   */
+  public static final class SessionAvatarRow extends RelativeSessionLayout {
+    SessionAvatarRow (Context context, View.OnClickListener onClickListener, @Nullable ViewController<?> themeProvider) {
+      super(context);
+      final boolean rtl = Lang.rtl();
+      setOnClickListener(onClickListener);
+      setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
+      setMinimumHeight(Screen.dp(72f));
+      Views.setClickable(this);
+
+      XgramExpressive.MorphDrawable tile = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_NONE, XgramExpressive.LIST_PRESSED_CORNER);
+      tile.setColorRole(XgramExpressive.SURFACE_BRIGHT);
+      tile.setHost(this);
+      setBackground(XgramAppMotion.ThemedRipple.ofRole(XgramExpressive.ON_SURFACE, tile, tile.newMask()));
+
+      RelativeLayout.LayoutParams params;
+
+      // 0: last active time, trailing, on the title's baseline
+      RoleTextView time = new RoleTextView(context, XgramExpressive.TS_LABEL_M, XgramExpressive.ON_SURFACE_VARIANT);
+      time.setId(R.id.session_time);
+      time.setPadding(rtl ? 0 : Screen.dp(12f), 0, rtl ? Screen.dp(12f) : 0, 0);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        time.setFontFeatureSettings("tnum");
+      }
+      params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      params.addRule(rtl ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+      params.addRule(RelativeLayout.ALIGN_BASELINE, R.id.session_title);
+      time.setLayoutParams(params);
+      addView(time);
+
+      // 1: domain, titleMedium
+      RoleTextView title = new RoleTextView(context, XgramExpressive.TS_TITLE_M, XgramExpressive.ON_SURFACE);
+      title.setId(R.id.session_title);
+      params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      if (rtl) {
+        params.addRule(RelativeLayout.RIGHT_OF, R.id.session_time);
+        params.addRule(RelativeLayout.LEFT_OF, R.id.session_icon);
+        params.rightMargin = Screen.dp(16f);
+      } else {
+        params.addRule(RelativeLayout.LEFT_OF, R.id.session_time);
+        params.addRule(RelativeLayout.RIGHT_OF, R.id.session_icon);
+        params.leftMargin = Screen.dp(16f);
+      }
+      title.setLayoutParams(params);
+      addView(title);
+
+      // 2: bot, browser and platform, bodyMedium, two lines at most
+      RoleTextView text = new RoleTextView(context, XgramExpressive.TS_BODY_M, XgramExpressive.ON_SURFACE_VARIANT);
+      text.setId(R.id.session_device);
+      text.setSingleLine(false);
+      text.setMaxLines(2);
+      text.setLayoutParams(SessionRow.belowTitleColumn(R.id.session_title, rtl));
+      addView(text);
+
+      // 3: IP address and location, bodySmall
+      RoleTextView location = new RoleTextView(context, XgramExpressive.TS_BODY_S, XgramExpressive.ON_SURFACE_VARIANT);
+      location.setId(R.id.session_location);
+      location.setLayoutParams(SessionRow.belowTitleColumn(R.id.session_device, rtl));
+      addView(location);
+
+      // 4: progress while the website is being disconnected (it fades the time out)
+      ProgressComponentView progress = new ProgressComponentView(context);
+      progress.initMedium(0f);
+      progress.setInverseView(time);
+      params = new RelativeLayout.LayoutParams(Screen.dp(14f), Screen.dp(14f));
+      params.addRule(rtl ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+      params.topMargin = Screen.dp(5f);
+      progress.setLayoutParams(params);
+      addView(progress);
+
+      // 5: the bot's 40dp avatar, top-aligned as in M3 three-line items
+      org.thunderdog.challegram.widget.AvatarView avatar = new org.thunderdog.challegram.widget.AvatarView(context);
+      avatar.setId(R.id.session_icon);
+      avatar.setUseCustomWindowManagement();
+      avatar.setLettersSizeDp(16f);
+      params = new RelativeLayout.LayoutParams(Screen.dp(40f), Screen.dp(40f));
+      params.addRule(rtl ? RelativeLayout.ALIGN_PARENT_RIGHT : RelativeLayout.ALIGN_PARENT_LEFT);
+      avatar.setLayoutParams(params);
+      addView(avatar);
+
+      if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(this);
+        themeProvider.addThemeInvalidateListener(time);
+        themeProvider.addThemeInvalidateListener(title);
+        themeProvider.addThemeInvalidateListener(text);
+        themeProvider.addThemeInvalidateListener(location);
+        themeProvider.addThemeInvalidateListener(avatar);
+      }
+    }
+  }
+
   /** A single line of text in a type scale style and a color role. */
   static final class RoleTextView extends NoScrollTextView {
     private int role;

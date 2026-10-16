@@ -76,7 +76,9 @@ public class SettingsWebsitesController extends RecyclerViewController<SettingsP
     }
 
     ArrayList<ListItem> items = new ArrayList<>(6 + websites.size() * 2);
-    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_terminateAllSessions, 0, R.string.TerminateAllWebSessions).setTextColorId(ColorId.textNegative));
+    // XGram M3E: the error row gets a leading icon (drawn in an errorContainer circle, see setValuedSetting)
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_terminateAllSessions, xgramM3 ? R.drawable.baseline_cancel_24 : 0, R.string.TerminateAllWebSessions).setTextColorId(ColorId.textNegative));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.ClearOtherWebSessionsHelp));
 
@@ -101,11 +103,21 @@ public class SettingsWebsitesController extends RecyclerViewController<SettingsP
 
   private SettingsAdapter adapter;
 
+  /** XGram M3E: errorContainer circle of "Disconnect all websites". */
+  private final com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier xgramErrorIcon = new com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier(R.drawable.baseline_cancel_24, com.fahadali.xgram.appearance.XgramM3Sessions.ICON_TOP_SETTING);
+
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
     this.adapter = new SettingsAdapter(this) {
       @Override
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
+        // XGram M3E: "Disconnect all websites" in sentence case, its icon in an errorContainer circle (rows are recycled: only this one)
+        if (item.getId() == R.id.btn_terminateAllSessions && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          view.setName(com.fahadali.xgram.appearance.XgramR5Lists.label(item));
+          view.addDrawModifier(xgramErrorIcon, false);
+        } else {
+          view.removeDrawModifier(xgramErrorIcon);
+        }
         if (item.getId() == R.id.btn_terminateAllSessions) {
           if (isUpdate) {
             view.setEnabledAnimated(!disconnectingAllWebsites);
@@ -165,7 +177,7 @@ public class SettingsWebsitesController extends RecyclerViewController<SettingsP
 
   @Override
   public CharSequence getName () {
-    return Lang.getString(R.string.WebSessionsTitle);
+    return com.fahadali.xgram.appearance.XgramR5Lists.label(R.string.WebSessionsTitle); // XGram M3E: sentence case (Telegram X otherwise)
   }
 
   // Click

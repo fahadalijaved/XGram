@@ -360,6 +360,11 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
   }
 
   protected void setHeaderText (ListItem item, TextView view, boolean isUpdate) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: sentence case for the headers whose Telegram X English is title case (translations as they are)
+      view.setText(com.fahadali.xgram.appearance.XgramR5Lists.label(item));
+      return;
+    }
     Views.setMediumText(view, item.getString());
   }
 

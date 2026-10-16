@@ -1473,6 +1473,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
           // XGram M3E: Devices tile (same child order: time, title, app, location, progress, icon, secret, calls)
           return new SettingHolder(com.fahadali.xgram.appearance.XgramM3Sessions.newRow(context, onClickListener, themeProvider));
         }
+        if (viewType == ListItem.TYPE_SESSION_WITH_AVATAR && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: connected website tile (same child order: time, title, text, location, progress, avatar)
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramM3Sessions.newAvatarRow(context, onClickListener, themeProvider));
+        }
         boolean isAvatar = viewType == ListItem.TYPE_SESSION_WITH_AVATAR;
 
         RelativeLayout layout = new RelativeSessionLayout(context);
