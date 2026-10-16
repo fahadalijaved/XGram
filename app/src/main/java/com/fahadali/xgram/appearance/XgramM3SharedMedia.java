@@ -56,9 +56,9 @@ public final class XgramM3SharedMedia {
 
   public static final float ROW_PADDING = 16f, LEADING_SIZE = 40f, LEADING_CORNER = 12f, TEXT_START = 72f;
 
-  /** Headline: titleMedium. */
+  /** Headline: bodyLarge (M3 list item headline), as on the other shared media tabs. */
   public static TextStyleProvider titleProvider () {
-    return XgramM3Profile.flexProvider(XgramExpressive.TS_TITLE_M, false, XgramExpressive.textSizeSp(XgramExpressive.TS_TITLE_M));
+    return XgramM3Profile.listHeadlineProvider(); // M3 list headline: bodyLarge
   }
 
   /** Supporting text and links: bodyMedium. */

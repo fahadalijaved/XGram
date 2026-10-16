@@ -55,7 +55,7 @@ fun MainPage() {
     }
 
     group {
-      link(R.id.btn_xgramWhatsNew, s(R.string.XgramWhatsNew), icon = R.drawable.baseline_whatshot_24) {
+      link(R.id.btn_xgramWhatsNew, s(R.string.XgramWhatsNew), icon = R.drawable.baseline_whatshot_24, iconStyle = IconStyle.CIRCLE) {
         mainPageAction(host, R.id.btn_xgramWhatsNew)
       }
     }

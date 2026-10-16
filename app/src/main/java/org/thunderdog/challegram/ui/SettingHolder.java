@@ -179,7 +179,7 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return Screen.dp(95f);
       }
       case ListItem.TYPE_FAKE_PAGER_TOPVIEW: {
-        return Screen.dp(48f);
+        return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 56f : 48f); // XGram M3E: the 40dp pill tabs of the chat list folders
       }
       case ListItem.TYPE_LIST_INFO_VIEW: {
         return Screen.dp(42f);
@@ -199,7 +199,9 @@ public class SettingHolder extends RecyclerView.ViewHolder {
       case ListItem.TYPE_DRAWER_ITEM:
       case ListItem.TYPE_DRAWER_ITEM_WITH_RADIO:
       case ListItem.TYPE_DRAWER_ITEM_WITH_RADIO_SEPARATED:
-      case ListItem.TYPE_DRAWER_ITEM_WITH_AVATAR:
+      case ListItem.TYPE_DRAWER_ITEM_WITH_AVATAR: {
+        return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 56f : 52f); // XGram: the M3 drawer's 56dp rows (DrawerController)
+      }
       case ListItem.TYPE_LIVE_LOCATION_TARGET: {
         return Screen.dp(52f);
       }

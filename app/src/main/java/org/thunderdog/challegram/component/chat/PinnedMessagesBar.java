@@ -304,17 +304,11 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
   }
 
   /**
-   * XGram M3E: the segment takes the colour MessagePreviewView gives the author's name (the sender's accent when the
-   * preview has no forced title, otherwise the author role, which is primary), so the line and the name always match,
-   * in the pinned bar and in the composer's reply preview.
+   * XGram M3E: the segment takes the colour MessagePreviewView gives the author's name, which is primary for every
+   * sender under Expressive, so the line and the name always match, in the pinned bar and in the composer's reply
+   * preview.
    */
   private int xgramSegmentColor (@Nullable Entry entry, int dataPosition) {
-    if (entry != null && entry.isMessage() && entry.accentColor != null && messagesAdapter != null && dataPosition >= 0 && dataPosition < messagesAdapter.getItems().size()) {
-      ListItem item = messagesAdapter.getItems().get(dataPosition);
-      if (StringUtils.isEmpty(item.getStringValue())) {
-        return entry.accentColor.getNameColor();
-      }
-    }
     return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
   }
 
@@ -435,7 +429,12 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     r -= getPaddingRight();
     showAllButton.layout(l, b - Screen.dp(36f), r, b);
     recyclerView.layout(l, t, r, getRecyclerHeight());
-    collapseButton.layout(r - collapseButton.getMeasuredWidth(), b - collapseButton.getMeasuredHeight(), r, b);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      final int xgramRight = getMeasuredWidth() - getPaddingRight(), xgramBottom = getMeasuredHeight(); // XGram: local coordinates (the M3E card is 8dp in)
+      collapseButton.layout(xgramRight - collapseButton.getMeasuredWidth(), xgramBottom - collapseButton.getMeasuredHeight(), xgramRight, xgramBottom);
+    } else {
+      collapseButton.layout(r - collapseButton.getMeasuredWidth(), b - collapseButton.getMeasuredHeight(), r, b);
+    }
   }
 
   private void updateContentInset (MessagePreviewView view, int position) {

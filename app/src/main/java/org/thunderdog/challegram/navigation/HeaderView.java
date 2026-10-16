@@ -2236,7 +2236,11 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       backButton.setButtonFactor(item.getBackButton());
       backButton.setVisibility(View.VISIBLE);
       if (item.getBackButtonResource() != 0) {
-        backButton.setBackgroundResource(item.getBackButtonResource());
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          backButton.setButtonBackground(item.getBackButtonResource()); // XGram: HeaderButton gives the M3E 40dp state layer under Expressive
+        } else {
+          backButton.setBackgroundResource(item.getBackButtonResource());
+        }
       }
       backButton.setColor(Theme.getColor(item.getHeaderIconColorId()));
     } else {

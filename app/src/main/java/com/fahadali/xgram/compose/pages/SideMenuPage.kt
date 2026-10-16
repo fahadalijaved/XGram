@@ -95,4 +95,5 @@ private fun setShown(host: XgramComposeHost, settings: XgramSettings, key: Strin
 
 private fun updateDrawer(host: XgramComposeHost) {
   host.activity.getDrawer()?.xgramUpdateMenuItems()
+  host.activity.xgramTwoPane()?.update() // XGram M3E: the navigation rail's destinations follow at once
 }

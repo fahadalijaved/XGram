@@ -1493,9 +1493,12 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       @BackPressMode int mode = backPressMode;
       SystemBackEventListener target;
       switch (mode) {
-        case BackPressMode.NAVIGATE_BACK_IN_STACK:
-          target = navigation;
+        case BackPressMode.NAVIGATE_BACK_IN_STACK: {
+          // XGram: two panes: a back swipe from the chat list's screen edge goes back in that pane first.
+          NavigationController listTarget = com.fahadali.xgram.layout.XgramTwoPaneGestures.backTargetForEdge(BaseActivity.this, backEvent.getSwipeEdge());
+          target = listTarget != null ? listTarget : navigation;
           break;
+        }
         case BackPressMode.CLOSE_NAVIGATION_DRAWER:
           target = drawer;
           break;
@@ -1601,6 +1604,13 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     }
     if (isAnimating(false)) {
       return BackPressMode.CUSTOM_ACTION_PERFORMED;
+    }
+    if (com.fahadali.xgram.layout.XgramTwoPaneGestures.closesDrawerFirst(this)) {
+      // XGram: two panes: the side menu over the chat list closes before anything in the chat pane.
+      if (commit) {
+        drawer.close(0f, null);
+      }
+      return BackPressMode.CLOSE_NAVIGATION_DRAWER;
     }
     if (navigation.passBackPressToActivity(fromTop)) {
       return BackPressMode.SYSTEM_ACTION_REQUIRED;

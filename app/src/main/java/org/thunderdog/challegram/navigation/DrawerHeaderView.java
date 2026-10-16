@@ -252,7 +252,7 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
   }
 
   private static int contentLeft () {
-    return Screen.dp(16f);
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 28f : 16f); // XGram: the M3 drawer's 28dp keyline
   }
 
   private static int avatarTop () {
@@ -347,7 +347,7 @@ public class DrawerHeaderView extends View implements Destroyable, GlobalAccount
     private Text trimmedName, trimmedPhone;
 
     public void trim (int width) {
-      int availWidth = width - contentLeft() * 3 - Screen.dp(24);
+      int availWidth = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? width - contentLeft() - Screen.dp(54f + 8f) : width - contentLeft() * 3 - Screen.dp(24); // XGram: the chevron box plus a gap
       if (account.getUser() != null && account.getUser().isPremium) {
         availWidth -= Screen.dp(48);
       }

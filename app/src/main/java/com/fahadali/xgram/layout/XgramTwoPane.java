@@ -327,6 +327,11 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
     if (railShown != show) {
       railShown = show;
+      // The rail stands in for the side menu's edge swipe; its menu button still opens the menu.
+      org.thunderdog.challegram.navigation.DrawerController drawer = context.getDrawer();
+      if (drawer != null) {
+        drawer.xgramSetSwipeEnabled(!show);
+      }
       container.requestLayout();
       // The ☰ and the compose button of the chat lists come or go
       MainController root = mainRoot();
@@ -1271,6 +1276,12 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       rail.destroy();
       container.removeView(rail.view());
       rail = null;
+    }
+    if (railShown) {
+      org.thunderdog.challegram.navigation.DrawerController drawer = context.getDrawer();
+      if (drawer != null) {
+        drawer.xgramSetSwipeEnabled(true);
+      }
     }
     railShown = false;
     removeLeft();

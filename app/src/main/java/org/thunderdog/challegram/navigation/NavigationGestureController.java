@@ -179,6 +179,11 @@ public class NavigationGestureController implements GestureDetector.OnGestureLis
     if (startY <= 0f) //HeaderView.getSize()
       return false;
 
+    com.fahadali.xgram.layout.XgramTwoPane xgramPanes = ((BaseActivity) navigation.getContext()).xgramTwoPane();
+    if (xgramPanes != null && xgramPanes.isOnRail(startX)) {
+      return false; // XGram M3E: the navigation rail's own
+    }
+
     final boolean drawerVisible = drawer != null && drawer.isVisible();
     if (!xgramPickPane(startX, drawerVisible)) {
       return false;

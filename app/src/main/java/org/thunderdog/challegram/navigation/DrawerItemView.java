@@ -203,8 +203,8 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
     if (receiver == null)
       return;
     int left = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 22f : 12f);
-    int top = Screen.dp(6f);
     int size = Screen.dp(AVATAR_SIZE);
+    int top = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && getMeasuredHeight() > size ? (getMeasuredHeight() - size) / 2 : Screen.dp(6f); // XGram: centred in the 56dp row
     if (Lang.rtl()) {
       int viewWidth = getMeasuredWidth();
       receiver.setBounds(viewWidth - left - size, top, viewWidth - left, top + size);
@@ -331,7 +331,7 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
     layoutReceiver();
 
     final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
-    if (isDragging) {
+    if (isDragging && !xgramM3) {
       c.drawColor(ColorUtils.alphaColor(.85f, Theme.fillingColor()));
     }
     if (xgramM3 && checkFactor > 0f && receiver != null) {
@@ -352,7 +352,7 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
       int textTop = xgramM3 ? (getMeasuredHeight() - trimmedText.getLineHeight()) / 2 : Screen.dp(17f);
       trimmedText.draw(c, textLeft, textLeft + trimmedText.getWidth(), 0, textTop);
     }
-    emojiStatusHelper.draw(c, textLeft + (trimmedText != null ? trimmedText.getWidth() + Screen.dp(6) : 0), Screen.dp(17f));
+    emojiStatusHelper.draw(c, textLeft + (trimmedText != null ? trimmedText.getWidth() + Screen.dp(6) : 0), xgramM3 && trimmedText != null ? (getMeasuredHeight() - trimmedText.getLineHeight()) / 2 : Screen.dp(17f));
     if (receiver != null) {
       layoutReceiver();
       if (receiver.needPlaceholder()) {
@@ -371,7 +371,7 @@ public class DrawerItemView extends BaseView implements FactorAnimator.Target, A
         int r = Screen.dp(11f);
         rectF.set(x - r, y - r, x + r, y + r);
 
-        c.drawArc(rectF, rtl ? 225f + 170f * (1f - checkFactor) : 135f, 170f * checkFactor, false, Paints.getOuterCheckPaint(Theme.fillingColor()));
+        c.drawArc(rectF, rtl ? 225f + 170f * (1f - checkFactor) : 135f, 170f * checkFactor, false, Paints.getOuterCheckPaint(xgramM3 ? ColorUtils.compositeColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW), com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), checkFactor)) : Theme.fillingColor()));
       }
 
     }

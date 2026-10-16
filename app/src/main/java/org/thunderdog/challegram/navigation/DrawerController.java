@@ -819,7 +819,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_savedMessages, R.drawable.baseline_bookmark_24, R.string.SavedMessages));
     }
     if (!xgram.drawerItemHidden("bookmarks")) {
-      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramBookmarks, R.drawable.baseline_star_24, R.string.XgramBookmarks)); // XGram
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramBookmarks, (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.baseline_star_border_24 : R.drawable.baseline_star_24), R.string.XgramBookmarks)); // XGram
     }
     if (!xgram.drawerItemHidden("saved_by_chat")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramSavedByChat, R.drawable.baseline_forum_24, R.string.XgramSavedByChat)); // XGram
@@ -1306,6 +1306,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   }
 
   public void open () {
+    com.fahadali.xgram.layout.XgramTwoPane xgramPanes = context().xgramTwoPane();
+    if (xgramPanes != null && xgramPanes.expandRail()) {
+      return; // XGram M3E: while the navigation rail shows, the side menu is its modal expanded rail
+    }
     // XGram: with two panes the menu button of the chat list pane opens the drawer whatever is open on the right.
     boolean twoPane = xgramTwoPane() != null;
     ViewController<?> c = twoPane ? xgramOwner() : UI.getCurrentStackItem(context());

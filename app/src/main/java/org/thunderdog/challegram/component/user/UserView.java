@@ -114,6 +114,13 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
 
   private void layoutReceiver () {
     int centerY = height / 2;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: M3 list item avatar 40dp centred in the 50dp slot: 16dp from the tile edge, text stays at 72dp
+      final int radius = Screen.dp(20f);
+      final int centerX = Lang.rtl() ? getMeasuredWidth() - offsetLeft - avatarRadius : offsetLeft + avatarRadius;
+      avatarReceiver.setBounds(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+      return;
+    }
     if (Lang.rtl()) {
       int viewWidth = getMeasuredWidth();
       avatarReceiver.setBounds(viewWidth - offsetLeft - avatarRadius - avatarRadius, centerY - avatarRadius, viewWidth - offsetLeft, centerY + avatarRadius);

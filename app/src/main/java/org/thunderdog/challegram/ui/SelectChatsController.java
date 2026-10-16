@@ -1129,7 +1129,7 @@ class Chip extends Drawable implements FlowListAnimator.Measurable, Drawable.Cal
     ShapeDrawable mask = new ShapeDrawable(new OvalShape());
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       mask.setTint(Color.WHITE);
-      crossIconRipple = new RippleDrawable(ColorStateList.valueOf(Theme.RIPPLE_COLOR), /* content */ null, mask);
+      crossIconRipple = new RippleDrawable(ColorStateList.valueOf(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT)) : Theme.RIPPLE_COLOR), /* content */ null, mask); // XGram M3E: onSurfaceVariant state layer
     } else {
       mask.getPaint().setColor(Theme.RIPPLE_COLOR);
       crossIconRipple = Drawables.getColorSelector(null, mask);

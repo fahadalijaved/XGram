@@ -578,7 +578,7 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
     protected void onDraw (Canvas canvas) {
       final float selected = isSelected.getFloatValue();
       if (selected > 0) {
-        canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(selected, Theme.RIPPLE_COLOR)));
+        canvas.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(selected, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : Theme.RIPPLE_COLOR))); // XGram M3E: selected menu item container
       }
       super.onDraw(canvas);
       if (isActive.isAnimating()) {

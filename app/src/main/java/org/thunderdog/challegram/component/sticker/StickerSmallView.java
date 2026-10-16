@@ -226,7 +226,7 @@ public class StickerSmallView extends View implements FactorAnimator.Target, Sti
     int restoreToCountClip = -1;
     if (isChosen) {
       float radius = Math.min(getMeasuredWidth(), getMeasuredHeight()) / 2f;
-      c.drawCircle(getMeasuredWidth() / 2f, getMeasuredHeight() / 2f, radius, Paints.fillingPaint(Theme.getColor(ColorId.fillingPositive)));
+      c.drawCircle(getMeasuredWidth() / 2f, getMeasuredHeight() / 2f, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : Theme.getColor(ColorId.fillingPositive))); // XGram M3E: selected = secondaryContainer
 
       tmpClipPath.reset();
       tmpClipPath.addCircle(getMeasuredWidth() / 2f, getMeasuredHeight() / 2f, radius - Screen.dp(1), Path.Direction.CW);

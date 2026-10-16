@@ -721,7 +721,7 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
     }
 
     pIconTop = (flags & FLAG_CENTER_ICON) != 0 && icon != null ?  (totalHeight / 2f - icon.getMinimumHeight() / 2f) : Screen.dp(type == TYPE_INFO || type == TYPE_INFO_COMPACT || type == TYPE_INFO_MULTILINE ? 20f : 16f);
-    pIconLeft = Screen.dp(18f);
+    pIconLeft = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 24f : 18f); // XGram M3E: the 40dp leading circle 16dp inside the tile
   }
 
   private boolean subscribedToEmojiUpdates;

@@ -239,7 +239,7 @@ public class EmojiToneListView extends FrameLayout {
         int rectX = x + Screen.dp(ITEM_SIZE) * toneIndex;
         RectF rectF = Paints.getRectF();
         rectF.set(rectX, y, rectX + Screen.dp(ITEM_SIZE), y + Screen.dp(ITEM_SIZE));
-        c.drawRoundRect(rectF, Screen.dp(4f), Screen.dp(4f), Paints.fillingPaint(Theme.HALF_RIPPLE_COLOR));
+        c.drawRoundRect(rectF, Screen.dp(4f), Screen.dp(4f), Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : Theme.HALF_RIPPLE_COLOR));
       }
 
       y += Screen.dp(ITEM_SIZE + ITEM_PADDING * 3);

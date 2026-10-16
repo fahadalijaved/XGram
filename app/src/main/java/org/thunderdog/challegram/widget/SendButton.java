@@ -179,8 +179,8 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
   private void xgramDrawContainer (Canvas c, int cx, int cy, float visibility, float disabledFactor) {
     final float scale = Config.DEFAULT_ICON_SWITCH_SCALE + (1f - Config.DEFAULT_ICON_SWITCH_SCALE) * visibility;
     final float size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight()) * scale;
-    // M3E filled icon button: the circle springs to a 12dp rounded square while pressed
-    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_M, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
+    // M3E small filled icon button: the circle springs to an 8dp rounded square while pressed (smallPressedShape)
+    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
     int color = XgramExpressive.color(XgramExpressive.PRIMARY);
     if (disabledFactor > 0f) {
       color = ColorUtils.fromToArgb(color, XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTAINER), disabledFactor);
@@ -191,7 +191,7 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
 
   // XGram: M3E icon morph from the record button. While the composer's send factor runs (0 to 1, overshooting on
   // the SPATIAL_FAST spring) and the record button is shown, this button stays opaque over it and draws the morph
-  // itself: the record button's primaryContainer circle turns primary without resizing, the mic (or camera) turns
+  // itself: the record button's primary circle keeps its colour and size, the mic (or camera) turns
   // and shrinks away while the send icon turns and grows in. The record button is hidden meanwhile, so the two
   // never show at once. 1 = no morph (normal drawing).
   private float xgramMorph = 1f;
@@ -221,7 +221,7 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
   }
 
   private Paint xgramRecordIconPaint () {
-    int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
+    int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY);
     if (xgramRecordIconPaint == null || xgramRecordIconPaint.getColor() != color)
       xgramRecordIconPaint = Paints.createPorterDuffPaint(xgramRecordIconPaint, color);
     return xgramRecordIconPaint;
@@ -243,14 +243,14 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
 
     // Container: one circle, recoloured
     final float size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight());
-    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_M, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
+    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
     int to = XgramExpressive.color(XgramExpressive.PRIMARY);
     final float disabledFactor = editFactor * (1f - activeFactor);
     if (disabledFactor > 0f) {
       to = ColorUtils.fromToArgb(to, XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTAINER), disabledFactor);
     }
     xgramRect.set(x - size / 2f, cy - size / 2f, x + size / 2f, cy + size / 2f);
-    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), to, t)));
+    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.PRIMARY), to, t)));
 
     // Outgoing: the mic or camera turns a quarter and shrinks as it fades
     if (t < 1f) {

@@ -146,7 +146,7 @@ public class ReactionsSelectorRecyclerView extends RecyclerView {
       rectF = new RectF();
       counter = new Counter.Builder()
         .noBackground()
-        .textColor(ColorId.fillingPositiveContent, ColorId.text, ColorId.text)
+        .textColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.fillingActiveContent : ColorId.fillingPositiveContent, ColorId.text, ColorId.text)
         .textSize(13f)
         .allBold(false)
         .callback(this)
@@ -188,7 +188,7 @@ public class ReactionsSelectorRecyclerView extends RecyclerView {
     @Override
     protected void dispatchDraw (Canvas c) {
       if (chosen) {
-        c.drawRoundRect(rectF, Screen.dp(19), Screen.dp(19), Paints.fillingPaint(Theme.getColor(ColorId.fillingPositive)));
+        c.drawRoundRect(rectF, Screen.dp(19), Screen.dp(19), Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) : Theme.getColor(ColorId.fillingPositive))); // XGram M3E: selected = secondaryContainer
       }
       if (useCounter) {
         counter.draw(c, Screen.dp(36), getMeasuredHeight() / 2f, Gravity.LEFT, 1f);

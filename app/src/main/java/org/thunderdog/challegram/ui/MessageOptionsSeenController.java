@@ -88,7 +88,8 @@ public class MessageOptionsSeenController extends BottomSheetViewController.Bott
       } else {
         items.add(new ListItem(ListItem.TYPE_SEPARATOR));
       }
-      items.add(new ListItem(ListItem.TYPE_USER_SMALL, R.id.user).setLongId(viewer.userId).setIntValue(viewer.viewDate));
+      // XGram M3E: 72dp two-line rows, as in the reacted list
+      items.add(new ListItem(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ListItem.TYPE_USER : ListItem.TYPE_USER_SMALL, R.id.user).setLongId(viewer.userId).setIntValue(viewer.viewDate));
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     //items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.description, 0, R.string.MessageSeenPrivacy));

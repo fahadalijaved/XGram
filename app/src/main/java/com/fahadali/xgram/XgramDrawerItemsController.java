@@ -175,6 +175,9 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
     if (context.getDrawer() != null) {
       context.getDrawer().xgramUpdateMenuItems();
     }
+    if (context.xgramTwoPane() != null) {
+      context.xgramTwoPane().update(); // XGram M3E: the navigation rail's destinations follow at once
+    }
   }
 
   @Override

@@ -186,11 +186,11 @@ public final class TextColorSets {
       MESSAGE_SEARCH_HIGHLIGHT = new Regular() {
         @Override
         public int backgroundColor (boolean isPressed) {
-          return Theme.getColor(ColorId.textLinkPressHighlight);
+          return Theme.getColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.iv_textMarkedBackground : ColorId.textLinkPressHighlight); // XGram M3E: search matches as <mark>
         }
         @Override
         public int backgroundColorId (boolean isPressed) {
-          return ColorId.textLinkPressHighlight;
+          return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.iv_textMarkedBackground : ColorId.textLinkPressHighlight;
         }
       },
       LINK = new Regular() {
@@ -245,7 +245,7 @@ public final class TextColorSets {
 
         @Override
         public int backgroundColor (boolean isPressed) {
-          return isPressed ? ColorUtils.alphaColor(.2f, Theme.getColor(ColorId.messageAuthor)) : ColorId.NONE;
+          return isPressed ? ColorUtils.alphaColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED : .2f, Theme.getColor(ColorId.messageAuthor)) : ColorId.NONE;
         }
 
         @Override
@@ -337,11 +337,11 @@ public final class TextColorSets {
         }
         @Override
         public int backgroundColor (boolean isPressed) {
-          return Theme.getColor(ColorId.bubbleOut_textLinkPressHighlight);
+          return Theme.getColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.iv_textMarkedBackground : ColorId.bubbleOut_textLinkPressHighlight); // XGram M3E: search matches as <mark>
         }
         @Override
         public int backgroundColorId (boolean isPressed) {
-          return ColorId.bubbleOut_textLinkPressHighlight;
+          return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.iv_textMarkedBackground : ColorId.bubbleOut_textLinkPressHighlight;
         }
       };
   }
@@ -410,11 +410,11 @@ public final class TextColorSets {
         }
         @Override
         public int backgroundColor (boolean isPressed) {
-          return Theme.getColor(ColorId.bubbleIn_textLinkPressHighlight);
+          return Theme.getColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.iv_textMarkedBackground : ColorId.bubbleIn_textLinkPressHighlight); // XGram M3E: search matches as <mark>
         }
         @Override
         public int backgroundColorId (boolean isPressed) {
-          return ColorId.bubbleIn_textLinkPressHighlight;
+          return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.iv_textMarkedBackground : ColorId.bubbleIn_textLinkPressHighlight;
         }
       };
   }

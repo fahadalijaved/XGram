@@ -193,7 +193,7 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
       availWidth -= Screen.dp(SECURE_OFFSET);
     }
     if (availWidth > 0 && !StringUtils.isEmpty(title)) {
-      trimmedTitle = new Text.Builder(title, availWidth, Paints.robotoStyleProvider(13), this).singleLine().build();
+      trimmedTitle = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? new Text.Builder(title, availWidth, Paints.robotoStyleProvider(12f), this).singleLine().allBold().build() : new Text.Builder(title, availWidth, Paints.robotoStyleProvider(13), this).singleLine().build(); // XGram M3E: labelMedium
     } else {
       trimmedTitle = null;
     }
@@ -306,9 +306,9 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
   @Override
   protected void onDraw (Canvas c) {
     final float checkFactor = checkBoxHelper != null ? checkBoxHelper.getCheckFactor() : 0f;
-    final int radius = Screen.dp(25f);
+    final int radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 28f : 25f); // XGram M3E: 56dp avatar
     final int centerX = getMeasuredWidth() / 2;
-    final int centerY = getMeasuredHeight() / 2 - Screen.dp(11f);
+    final int centerY = getMeasuredHeight() / 2 - Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 10f : 11f);
     avatarReceiver.forceAllowOnline(checkBoxHelper == null || !checkBoxHelper.isChecked(), 1f - checkFactor);
 
     avatarReceiver.setBounds(centerX - radius, centerY - radius, centerX + radius, centerY + radius);
@@ -346,7 +346,7 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
       final int sourceColor = paint.getColor();
       boolean isSecret = chat != null && chat.isSecret();
       int startX;
-      int startY = getMeasuredHeight() / 2 + Screen.dp(22f);
+      int startY = getMeasuredHeight() / 2 + Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 24f : 22f);
       if (isSecret) {
         Drawable d = Icons.getSecureSmallDrawable();
         startX = getMeasuredWidth() / 2 - (trimmedTitle.getWidth() + d.getMinimumWidth()) / 2;

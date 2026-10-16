@@ -63,7 +63,7 @@ final class XgramM3TopicTabs extends RecyclerView.ItemDecoration implements Recy
   private static final float FADE_DP = 24f;
 
   /** Unread badge: error container (the muted one: surfaceContainerHighest). One place to change. */
-  private static final int BADGE = XgramExpressive.ERROR_CONTAINER, ON_BADGE = XgramExpressive.ON_ERROR_CONTAINER;
+  private static final int BADGE = XgramExpressive.ERROR, ON_BADGE = XgramExpressive.ON_ERROR; // M3 Badge: error / onError (BadgeTokens)
   private static final int BADGE_MUTED = XgramExpressive.SURFACE_CONTAINER_HIGHEST, ON_BADGE_MUTED = XgramExpressive.ON_SURFACE_VARIANT;
 
   private final RecyclerView rv;

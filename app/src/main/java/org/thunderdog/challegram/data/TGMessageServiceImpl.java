@@ -245,7 +245,7 @@ abstract class TGMessageServiceImpl extends TGMessage {
     if (availWidth > 0) {
       Text.Builder b = new Text.Builder(
         formattedText, availWidth,
-        getServiceTextStyleProvider(useBubbles()),
+        useBubbles() && com.fahadali.xgram.appearance.XgramW2Cards.on() ? com.fahadali.xgram.appearance.XgramW2Cards.serviceLabelProvider() : getServiceTextStyleProvider(useBubbles()),
         defaultTextColorSet(),
         (text, specificMedia) -> {
           if (this.displayText == text) {
@@ -344,7 +344,12 @@ abstract class TGMessageServiceImpl extends TGMessage {
       );
 
       int backgroundColor = getBubbleDateBackgroundColor();
-      c.drawRoundRect(rectF, backgroundRadius, backgroundRadius, Paints.fillingPaint(backgroundColor));
+      if (com.fahadali.xgram.appearance.XgramW2Cards.on()) {
+        // XGram M3E: the date chip's pill (12dp sides, at least 26dp tall, full corners)
+        com.fahadali.xgram.appearance.XgramW2Cards.drawServicePill(c, left, top, right, bottom, backgroundColor);
+      } else {
+        c.drawRoundRect(rectF, backgroundRadius, backgroundRadius, Paints.fillingPaint(backgroundColor));
+      }
     }
 
     // Text

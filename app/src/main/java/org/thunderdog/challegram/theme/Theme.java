@@ -562,6 +562,9 @@ public class Theme {
   }
 
   public static Drawable fillingSelector (@ColorId int backgroundColorId) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.fillingSelector(backgroundColorId, 0f); // XGram M3E: M3 state layer
+    }
     if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
       return fillingRippleSelector(backgroundColorId);
     } else {
@@ -570,6 +573,9 @@ public class Theme {
   }
 
   public static Drawable fillingSelector (@ColorId int backgroundColorId, float radius) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.fillingSelector(backgroundColorId, radius); // XGram M3E: M3 state layer
+    }
     if (Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP) {
       return fillingRippleSelector(backgroundColorId, radius);
     } else {
@@ -761,18 +767,30 @@ public class Theme {
   }
 
   public static Drawable transparentSelector () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.transparentSelector(0f); // XGram M3E: M3 state layer
+    }
     return transparentSelector(RIPPLE_COLOR);
   }
 
   public static Drawable transparentWhiteSelector () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.transparentSelector(0f); // XGram M3E: M3 state layer
+    }
     return transparentSelector(0x30ffffff);
   }
 
   public static Drawable transparentBlackSelector () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.transparentSelector(0f); // XGram M3E: M3 state layer
+    }
     return transparentSelector(0x40a0a0a0);
   }
 
   public static Drawable transparentRoundSelector (float radius) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.transparentSelector(radius); // XGram M3E: M3 state layer
+    }
     return transparentSelector(RIPPLE_COLOR, radius);
   }
 
@@ -821,6 +839,9 @@ public class Theme {
   // Custom selector
 
   public static Drawable customSelector (Drawable drawable, Drawable legacyPressedDrawable) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.customSelector(drawable); // XGram M3E: M3 state layer
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       return customRippleSelector(drawable);
     } else {
@@ -844,6 +865,9 @@ public class Theme {
   // Circle selector
 
   public static Drawable circleSelector (final float size, final @ColorId int colorId) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.circleSelector(size, colorId); // XGram M3E: M3 state layer
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       return circleRippleSelector(size, colorId);
     } else {
@@ -867,6 +891,9 @@ public class Theme {
   // Circle selector
 
   public static Drawable rectSelector (final float size, final float padding, final @ColorId int color) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.rectSelector(size, padding, color); // XGram M3E: M3 state layer
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       return rectRippleSelector(size, padding, color);
     } else {

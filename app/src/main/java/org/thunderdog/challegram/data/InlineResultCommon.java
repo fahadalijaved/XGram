@@ -322,7 +322,7 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
       com.fahadali.xgram.appearance.XgramM3SharedMedia.drawIconTile(c, rect, size / 2f, com.fahadali.xgram.appearance.XgramM3SharedMedia.tonalIndex(customColorId), customIcon);
     } else if (track) {
       if (preview == null) {
-        c.drawCircle(cx, cy, size / 2f, Paints.fillingPaint(Theme.getColor(ColorId.file)));
+        c.drawCircle(cx, cy, size / 2f, Paints.fillingPaint((com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3MediaButton.containerColor(com.fahadali.xgram.appearance.XgramM3MediaButton.TONAL) : Theme.getColor(ColorId.file)))); // XGram M3E: the tonal file button
       } else {
         if (preview.needPlaceholder(receiver)) {
           c.drawRoundRect(rect, corner, corner, Paints.fillingPaint(Theme.getColor(ColorId.playerCoverPlaceholder)));
@@ -749,7 +749,7 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
     if (fileProgress != null) {
       if (fileProgress.isTrack()) {
         if (!trackIsQueued && getMediaPreview() == null) {
-          c.drawCircle(rectF.centerX(), rectF.centerY(), radius, Paints.fillingPaint(Theme.getColor(ColorId.file)));
+          c.drawCircle(rectF.centerX(), rectF.centerY(), radius, Paints.fillingPaint((com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3MediaButton.containerColor(com.fahadali.xgram.appearance.XgramM3MediaButton.TONAL) : Theme.getColor(ColorId.file)))); // XGram M3E: the tonal file button
         } else {
           if (getMediaPreview() == null || getMediaPreview().needPlaceholder(receiver)) {
             c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(Theme.getColor(ColorId.playerCoverPlaceholder)));

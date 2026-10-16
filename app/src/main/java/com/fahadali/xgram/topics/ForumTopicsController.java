@@ -252,7 +252,9 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
 
       mentionButton = new org.thunderdog.challegram.widget.CircleButton(context);
       mentionButton.init(R.drawable.baseline_alternate_email_24, 48f, 4f, ColorId.circleButtonChat, ColorId.circleButtonChatIcon);
-      mentionButton.setLayoutParams(new FrameLayout.LayoutParams(Screen.dp(48f) + padding * 2, Screen.dp(48f) + padding * 2, Gravity.RIGHT | Gravity.BOTTOM));
+      // XGram M3E: the chat's 56dp FAB (CircleButton.XGRAM_CHAT_FAB_DP) with its own badge, as in the chat
+      int xgramFabSize = mentionButton.xgramIsChatFab() ? Screen.dp(org.thunderdog.challegram.widget.CircleButton.XGRAM_CHAT_FAB_DP + 8f) : Screen.dp(48f) + padding * 2;
+      mentionButton.setLayoutParams(new FrameLayout.LayoutParams(xgramFabSize, xgramFabSize, Gravity.RIGHT | Gravity.BOTTOM));
       mentionButton.setOnClickListener(v -> openNextMention());
       addThemeInvalidateListener(mentionButton);
       mentionWrap.addView(mentionButton);
@@ -261,6 +263,9 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       mentionCountView.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP));
       addThemeInvalidateListener(mentionCountView);
       mentionWrap.addView(mentionCountView);
+      if (mentionButton.xgramIsChatFab()) {
+        mentionCountView.setVisibility(View.GONE); // XGram M3E: the FAB draws the badge
+      }
 
       ((ViewGroup) view).addView(mentionWrap);
       tdlib.listeners().subscribeToChatUpdates(getArgumentsStrict().chat.id, mentionListener);
@@ -355,6 +360,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     TdApi.Chat current = tdlib.chat(chat.id);
     int count = current != null ? current.unreadMentionCount : 0;
     mentionCountView.setCounter(count, false, animated);
+    mentionButton.xgramSetBadge(count, false, animated);
     mentionWrap.setVisibility(count > 0 ? View.VISIBLE : View.GONE);
   }
 

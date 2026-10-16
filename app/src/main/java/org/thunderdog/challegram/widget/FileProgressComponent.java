@@ -1092,9 +1092,9 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       return 0xffffffff;
     }
     if (isTrack) {
-      // Playlist tracks: the owner draws the circle (ColorId.file, primary) or the cover overlay under the play glyph
+      // Playlist tracks: the owner draws the circle (the tonal primaryContainer under Expressive) or the cover overlay under the play glyph
       final boolean themeCircle = backgroundColorIsId && (backgroundColor == ColorId.file || backgroundColor == ColorId.bubbleOut_file);
-      return themeCircle ? XgramExpressive.color(XgramExpressive.ON_PRIMARY) : 0xffffffff;
+      return themeCircle ? XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER) : 0xffffffff;
     }
     if (currentState == TdlibFilesManager.STATE_FAILED) {
       return XgramExpressive.color(XgramExpressive.ON_ERROR_CONTAINER);

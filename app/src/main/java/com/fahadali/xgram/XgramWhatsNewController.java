@@ -64,7 +64,7 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
     new Entry(R.drawable.baseline_forum_24, R.string.XgramNewTopics, R.string.XgramNewTopicsInfo, OPEN_NONE),
     new Entry(R.drawable.baseline_history_24, R.string.XgramNewHistory, R.string.XgramNewHistoryInfo, OPEN_HISTORY),
     new Entry(R.drawable.baseline_apps_24, R.string.XgramNewIcons, R.string.XgramNewIconsInfo, OPEN_ICONS),
-    new Entry(R.drawable.baseline_star_24, R.string.XgramNewBookmarks, R.string.XgramNewBookmarksInfo, OPEN_BOOKMARKS),
+    new Entry((com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.baseline_star_border_24 : R.drawable.baseline_star_24), R.string.XgramNewBookmarks, R.string.XgramNewBookmarksInfo, OPEN_BOOKMARKS),
     new Entry(R.drawable.baseline_bookmark_24, R.string.XgramNewSavedByChat, R.string.XgramNewSavedByChatInfo, OPEN_SAVED_BY_CHAT),
     new Entry(R.drawable.baseline_flash_on_24, R.string.XgramNewMessageTools, R.string.XgramNewMessageToolsInfo, OPEN_NONE),
     new Entry(R.drawable.baseline_block_24, R.string.XgramNewFilters, R.string.XgramNewFiltersInfo, OPEN_FILTERS),
