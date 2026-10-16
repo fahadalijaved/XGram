@@ -1461,6 +1461,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
       }
       case ListItem.TYPE_SESSION:
       case ListItem.TYPE_SESSION_WITH_AVATAR: {
+        if (viewType == ListItem.TYPE_SESSION && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: Devices tile (same child order: time, title, app, location, progress, icon, secret, calls)
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramM3Sessions.newRow(context, onClickListener, themeProvider));
+        }
         boolean isAvatar = viewType == ListItem.TYPE_SESSION_WITH_AVATAR;
 
         RelativeLayout layout = new RelativeSessionLayout(context);

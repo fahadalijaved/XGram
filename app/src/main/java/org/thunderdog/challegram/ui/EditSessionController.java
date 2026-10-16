@@ -149,13 +149,25 @@ public class EditSessionController extends EditBaseController<EditSessionControl
     return R.id.controller_editSession;
   }
 
+  /** XGram M3E: sentence case labels. */
+  private static boolean xgramM3 () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  /** XGram M3E: the terminate / log out row's icon in an errorContainer circle. */
+  private com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier xgramErrorIcon;
+
   @Override
   protected void onCreateView (Context context, FrameLayoutFix contentView, RecyclerView recyclerView) {
+    final boolean xgramM3 = xgramM3();
+    final boolean logoutIsSetting = session.isPasswordPending || session.isCurrent;
+    xgramErrorIcon = new com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier(R.drawable.baseline_dangerous_24,
+      logoutIsSetting ? com.fahadali.xgram.appearance.XgramM3Sessions.ICON_TOP_SETTING : com.fahadali.xgram.appearance.XgramM3Sessions.ICON_TOP_COMPACT);
     if (!session.isPasswordPending && !session.isCurrent) {
       headerCell = new DoubleHeaderView(context());
       headerCell.setThemedTextColor(this);
       headerCell.initWithMargin(Screen.dp(49f), true);
-      headerCell.setTitle(R.string.SessionDetails);
+      headerCell.setTitle(xgramM3 ? R.string.XgramM3eR4preSbSessionDetails : R.string.SessionDetails);
       headerCell.setSubtitle(Lang.getRelativeDate(
         session.lastActiveDate, TimeUnit.SECONDS,
         tdlib.currentTimeMillis(), TimeUnit.MILLISECONDS,
@@ -174,6 +186,11 @@ public class EditSessionController extends EditBaseController<EditSessionControl
         } else {
           view.setIconColorId(ColorId.icon);
         }
+        if (item.getId() == R.id.btn_sessionLogout && xgramM3()) {
+          view.addDrawModifier(xgramErrorIcon, false);
+        } else {
+          view.removeDrawModifier(xgramErrorIcon);
+        }
 
         final int itemId = item.getId();
         if (itemId == R.id.btn_sessionDevice) {
@@ -185,11 +202,15 @@ public class EditSessionController extends EditBaseController<EditSessionControl
         } else if (itemId == R.id.btn_sessionCountry) {
           view.setData(R.string.SessionLocation);
         } else if (itemId == R.id.btn_sessionIp) {
-          view.setData(R.string.SessionIP);
+          view.setData(xgramM3() ? R.string.XgramM3eR4preSbIpAddress : R.string.SessionIP);
         } else if (itemId == R.id.btn_sessionFirstLogin) {
-          view.setData(session.isPasswordPending ? R.string.SessionAttempt : R.string.SessionFirstLogin);
+          if (xgramM3()) {
+            view.setData(session.isPasswordPending ? R.string.XgramM3eR4preSbLoginAttempt : R.string.XgramM3eR4preSbFirstLogin);
+          } else {
+            view.setData(session.isPasswordPending ? R.string.SessionAttempt : R.string.SessionFirstLogin);
+          }
         } else if (itemId == R.id.btn_sessionLastLogin) {
-          view.setData(R.string.SessionLastLogin);
+          view.setData(xgramM3() ? R.string.XgramM3eR4preSbLastActivity : R.string.SessionLastLogin);
         } else if (itemId == R.id.btn_sessionLogout) {
           view.setData((session.isCurrent || session.isPasswordPending) ? null : Lang.getReverseRelativeDateBold(
             session.lastActiveDate + TimeUnit.DAYS.toSeconds(getArgumentsStrict().inactiveSessionTtlDays), TimeUnit.SECONDS,
@@ -224,9 +245,9 @@ public class EditSessionController extends EditBaseController<EditSessionControl
     if (!session.isPasswordPending) {
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.SessionAccepts));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptSecretChats, R.drawable.baseline_lock_24, R.string.SessionSecretChats));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptSecretChats, R.drawable.baseline_lock_24, xgramM3 ? R.string.XgramM3eR4preSbSecretChats : R.string.SessionSecretChats));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptCalls, R.drawable.baseline_call_24, R.string.SessionCalls));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_sessionAcceptCalls, R.drawable.baseline_call_24, xgramM3 ? R.string.XgramM3eR4preSbIncomingCalls : R.string.SessionCalls));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     }
 
@@ -275,6 +296,9 @@ public class EditSessionController extends EditBaseController<EditSessionControl
 
   @Override
   public CharSequence getName () {
+    if (xgramM3()) {
+      return Lang.getString(session.isPasswordPending ? R.string.XgramM3eR4preSbAttemptDetails : R.string.XgramM3eR4preSbSessionDetails);
+    }
     return Lang.getString(session.isPasswordPending ? R.string.SessionAttemptDetails : R.string.SessionDetails);
   }
 }

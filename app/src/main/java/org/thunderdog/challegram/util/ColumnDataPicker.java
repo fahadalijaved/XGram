@@ -24,11 +24,13 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.FillingDrawable;
+import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.support.ViewSupport;
@@ -109,6 +111,16 @@ public final class ColumnDataPicker implements Destroyable {
     boolean onCommitRequested (ColumnDataPicker picker, View commitButtonView);
   }
 
+  // XGram M3E: an optional third action at the start of the bottom actions (e.g. "Remove birthday")
+  private @Nullable CharSequence neutralText;
+  private @Nullable CommitListener neutralListener;
+
+  /** Shown with Expressive design only, as a text button at the start of the actions; returns true to dismiss. */
+  public void setNeutralAction (@Nullable CharSequence text, @Nullable CommitListener listener) {
+    this.neutralText = text;
+    this.neutralListener = listener;
+  }
+
   private PopupLayout popupLayout;
 
   public PopupLayout popupLayout () {
@@ -138,10 +150,13 @@ public final class ColumnDataPicker implements Destroyable {
       int contentHeight = 0;
       final int pickerHeight = InfiniteRecyclerView.getItemHeight() * 5;
 
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramM3Wheel.on();
+
       LinearLayout columnWrap = new LinearLayout(c.context());
       columnWrap.setOrientation(LinearLayout.HORIZONTAL);
       columnWrap.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, pickerHeight));
-      ViewUtils.setBackground(columnWrap, new LinesHighlightDrawable(forcedTheme));
+      // XGram M3E: the selected row's secondaryContainer band instead of two hairlines
+      ViewUtils.setBackground(columnWrap, xgramM3 ? new com.fahadali.xgram.appearance.XgramM3Wheel.BandDrawable(forcedTheme) : new LinesHighlightDrawable(forcedTheme));
       if (forcedTheme == null) {
         c.addThemeInvalidateListener(columnWrap);
       }
@@ -152,8 +167,14 @@ public final class ColumnDataPicker implements Destroyable {
         columnWrap.addView(emptyView);
       }
 
-      EmojiTextView commitButton = newCommitButton(c, forcedTheme);
-      Views.setMediumText(commitButton, Lang.uppercase(commitButtonText.toString()));
+      final TextView commitButton;
+      if (xgramM3) {
+        commitButton = com.fahadali.xgram.appearance.XgramM3Wheel.newConfirmButton(c.context(), forcedTheme);
+        commitButton.setText(commitButtonText);
+      } else {
+        commitButton = newCommitButton(c, forcedTheme);
+        Views.setMediumText(commitButton, Lang.uppercase(commitButtonText.toString()));
+      }
 
       for (Column column : columns) {
         InfiniteRecyclerView<SimpleStringItem> picker = new InfiniteRecyclerView<SimpleStringItem>(c.context(), false);
@@ -179,8 +200,24 @@ public final class ColumnDataPicker implements Destroyable {
         columnWrap.addView(emptyView);
       }
 
-      optionsWrap.addView(commitButton);
-      contentHeight += Screen.dp(56f);
+      if (xgramM3) {
+        // XGram M3E: [Remove birthday] ... [Cancel] [Save] instead of the full-width uppercase bar
+        com.fahadali.xgram.appearance.XgramM3Wheel.Actions actions = com.fahadali.xgram.appearance.XgramM3Wheel.newActions(c.context(), forcedTheme, neutralListener != null ? neutralText : null, Lang.getString(R.string.Cancel), commitButton);
+        actions.cancel.setOnClickListener(v -> dismissPopup(true));
+        if (actions.neutral != null) {
+          final CommitListener neutral = neutralListener;
+          actions.neutral.setOnClickListener(v -> {
+            if (neutral != null && neutral.onCommitRequested(this, v)) {
+              dismissPopup(true);
+            }
+          });
+        }
+        optionsWrap.addView(actions.view);
+        contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT);
+      } else {
+        optionsWrap.addView(commitButton);
+        contentHeight += Screen.dp(56f);
+      }
 
       if (commitListener != null) {
         commitButton.setOnClickListener(v -> {
