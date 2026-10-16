@@ -1145,12 +1145,15 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   }
 
   public void open () {
-    ViewController<?> c = UI.getCurrentStackItem(context());
     // XGram: with two panes the menu button of the chat list pane opens the drawer whatever is open on the right.
-    boolean twoPane = context().xgramTwoPane() != null && context().xgramTwoPane().isActive();
+    boolean twoPane = xgramTwoPane() != null;
+    ViewController<?> c = twoPane ? xgramOwner() : UI.getCurrentStackItem(context());
     if (c != null && (c.useDrawer() || twoPane) && !c.isIntercepted()) {
-      prepare();
-      open(0f);
+      boolean prepared = prepare();
+      // XGram: never "open" a menu that is not shown (the next tap anywhere would only close it).
+      if (prepared || !twoPane) {
+        open(0f);
+      }
     }
   }
 
@@ -1314,8 +1317,45 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   // private int currentScreenWidth;
 
   public boolean isNeeded () {
-    ViewController<?> c = context.navigation().getCurrentStackItem();
+    ViewController<?> c = xgramOwner();
     return c != null && c.useDrawer();
+  }
+
+  // XGram: two panes (XgramTwoPane). The side menu belongs to the chat list pane: it opens over it from the screen
+  // edge whatever is open in the chat pane, by its menu button or by a swipe that starts in it
+  // (NavigationGestureController). With one pane everything is as in Telegram X.
+
+  @Nullable
+  private com.fahadali.xgram.layout.XgramTwoPane xgramTwoPane () {
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+    return twoPane != null && twoPane.isActive() ? twoPane : null;
+  }
+
+  /** The screen the side menu opens for: the chat list pane's top screen with two panes, else the top screen. */
+  @Nullable
+  private ViewController<?> xgramOwner () {
+    NavigationController list = com.fahadali.xgram.layout.XgramTwoPaneGestures.listNavigation(context);
+    if (list != null) {
+      ViewController<?> c = list.getCurrentStackItem();
+      if (c != null) {
+        return c;
+      }
+    }
+    return context.navigation().getCurrentStackItem();
+  }
+
+  private boolean xgramSwipeEnabled = true;
+
+  /**
+   * XGram: whether a swipe from the screen edge opens the side menu. The navigation rail turns it off on wide windows,
+   * where it stands in for the menu; the menu button still opens it, and an open menu can still be swiped closed.
+   */
+  public void xgramSetSwipeEnabled (boolean enabled) {
+    this.xgramSwipeEnabled = enabled;
+  }
+
+  public boolean xgramSwipeEnabled () {
+    return xgramSwipeEnabled;
   }
 
   public boolean prepare () {
@@ -1356,7 +1396,12 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   }
 
   private float getScreenWidth () {
-    return context.navigation().getValue().getMeasuredWidth();
+    View navigationView = context.navigation().getValue();
+    if (xgramTwoPane() != null && navigationView.getParent() instanceof View) {
+      // XGram: the navigation is only the chat pane there; the menu slides in from the screen edge (right to left)
+      return ((View) navigationView.getParent()).getMeasuredWidth();
+    }
+    return navigationView.getMeasuredWidth();
   }
 
   public void translate (int lastScrollX) {
