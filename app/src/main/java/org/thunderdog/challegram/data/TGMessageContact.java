@@ -114,7 +114,7 @@ public class TGMessageContact extends TGMessage implements TdlibCache.UserDataCh
   }
 
   // XGram M3E wave 2: the contact as an inner card (12dp corners): a 40dp avatar, the name in titleMedium and the
-  // number in bodyMedium, then the actions as a connected button group (size S, tonal): Message and Add for a
+  // number in bodyMedium, then the actions as a connected button group (size S, tonal): Add and Message for a
   // Telegram user who is not a contact yet, Message alone once they are, Call for a number without an account.
   // The card body keeps Telegram X's tap (profile or dialer).
 
@@ -265,7 +265,7 @@ public class TGMessageContact extends TGMessage implements TdlibCache.UserDataCh
       android.graphics.RectF rect = xgramButtonRects[i];
       final float press = xgramPress[i] != null ? xgramPress[i].getValue() : 0f;
       com.fahadali.xgram.appearance.XgramW2Cards.drawConnectedButton(c, rect, i, count, press, container, content, xgramPath, xgramCornersDp, xgramRadii);
-      final String label = i == 0 ? xgramPrimaryLabel : xgramAddLabel;
+      final String label = xgramIsAddButton(i) ? xgramAddLabel : xgramPrimaryLabel;
       if (label != null) {
         android.text.TextPaint labelPaint = com.fahadali.xgram.appearance.XgramW2Cards.labelPaint(content);
         c.drawText(label, rect.centerX(), com.fahadali.xgram.appearance.XgramW2Cards.baseline(labelPaint, rect.top, rect.height()), labelPaint);
@@ -273,12 +273,19 @@ public class TGMessageContact extends TGMessage implements TdlibCache.UserDataCh
     }
   }
 
+  /** With two buttons the group reads Add, then Message; a lone button is Message (or Call). */
+  private boolean xgramIsAddButton (int button) {
+    return button == 0 && xgramButtonCount() == 2;
+  }
+
   private void xgramPerformAction (int button) {
     if (xgramActions == XGRAM_ACTIONS_MESSAGE) {
-      if (button == 0) {
+      if (xgramIsAddButton(button)) {
+        if (xgramContact != null) {
+          tdlib.ui().addContact(controller(), xgramContact);
+        }
+      } else {
         tdlib.ui().openPrivateChat(controller(), userId, new TdlibUi.ChatOpenParameters().keepStack().removeDuplicates().urlOpenParameters(openParameters()));
-      } else if (xgramContact != null) {
-        tdlib.ui().addContact(controller(), xgramContact);
       }
     } else if (xgramActions == XGRAM_ACTIONS_CALL) {
       UI.openNumber(phone);
