@@ -616,7 +616,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     });
     // XGram: in the narrow chat list pane the last rows scroll clear of the compose button
     Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this));
-    chatsView.setItemAnimator(null);
+    chatsView.setItemAnimator(xgramIdleAnimator()); // XGram: reorders, pins and archive changes spring with Expressive design
     if (isInForceTouchMode()) {
       chatsView.setVerticalScrollBarEnabled(false);
     }
@@ -696,7 +696,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           adapter.savePinnedChats();
         }
         dragFrom = dragTo = -1;
-        chatsView.setItemAnimator(null);
+        chatsView.setItemAnimator(xgramIdleAnimator());
         setAnimatorFlag(ANIMATOR_FLAG_DRAGGING, false);
         if (viewHolder.getItemViewType() == ChatsAdapter.VIEW_TYPE_CHAT) {
           ((ChatView) viewHolder.itemView).setIsDragging(false);
@@ -1093,22 +1093,36 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       this.animatorFlags = flags;
       if (hadAnimator != hasAnimator) {
         if (hasAnimator) {
-          if (chatsAnimator == null) {
-            chatsAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l) {
-              @Override
-              protected void setAlpha (View view, float value) {
-                if ((animatorFlags & ANIMATOR_FLAG_LOCATION) == 0) {
-                  super.setAlpha(view, value);
-                }
-              }
-            };
-          }
-          chatsView.setItemAnimator(chatsAnimator);
+          chatsView.setItemAnimator(xgramChatsAnimator());
         } else {
-          chatsView.setItemAnimator(null);
+          chatsView.setItemAnimator(xgramIdleAnimator());
         }
       }
     }
+  }
+
+  private CustomItemAnimator xgramChatsAnimator () {
+    if (chatsAnimator == null) {
+      chatsAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l) {
+        @Override
+        protected void setAlpha (View view, float value) {
+          if ((animatorFlags & ANIMATOR_FLAG_LOCATION) == 0) {
+            super.setAlpha(view, value);
+          }
+        }
+      };
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: a row that only changed (new message, read, typing) redraws in place, no crossfade
+        chatsAnimator.setSupportsChangeAnimations(false);
+      }
+    }
+    return chatsAnimator;
+  }
+
+  /** XGram: the chat list keeps its spring animator with Expressive design; Telegram X runs without one. */
+  @Nullable
+  private CustomItemAnimator xgramIdleAnimator () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramChatsAnimator() : null;
   }
 
   @Override

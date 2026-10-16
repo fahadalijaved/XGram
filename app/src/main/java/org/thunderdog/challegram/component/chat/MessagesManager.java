@@ -1949,6 +1949,13 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   // Updates
 
+  /** XGram: one live message (not history, not sponsored) animates in with Expressive design. */
+  private void xgramArmMessageAnimation (TGMessage message) {
+    if (!message.isOld() && !message.isSponsoredMessage() && !loader.isLoading()) {
+      controller.getMessagesView().xgramArmOnce();
+    }
+  }
+
   private void updateNewMessage (TGMessage message) {
     switch (loader.getSpecialMode()) {
       case MessagesLoader.SPECIAL_MODE_RESTRICTED:
@@ -1985,6 +1992,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       boolean scrollToBottom = (message.isSending() || (atBottom && (!message.isOld() || message.isChatMember()))) && !message.isSponsoredMessage();
       // message.mergeWith(bottomMessage, true);
       if (scrollToBottom) {
+        xgramArmMessageAnimation(message);
         boolean hasScrolled = adapter.addMessage(message, false, scrollToBottom);
         if (!hasScrolled)
           scrollToBottom(false);
@@ -1999,6 +2007,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         }
 
         boolean bottomFullyVisible = manager.findFirstCompletelyVisibleItemPosition() == 0;
+        xgramArmMessageAnimation(message);
         if (!adapter.addMessage(message, false, scrollToBottom)) {
           if (message.isSponsoredMessage() && bottomFullyVisible) {
             if (controller.canWriteMessages()) {
@@ -2382,6 +2391,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
             }
           }
           case TGMessage.REMOVE_COMPLETELY: {
+            if (!loader.isLoading()) {
+              controller.getMessagesView().xgramArmOnce(); // XGram: the message fades out and the gap closes on a spring
+            }
             TGMessage removed = adapter.removeItem(index);
             if (controller.unselectMessage(messageId, removed)) {
               selectedCount--;

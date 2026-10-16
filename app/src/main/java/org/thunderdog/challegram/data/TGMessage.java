@@ -6758,7 +6758,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         selectionAnimators = new LongSparseArray<>();
       }
       if (targetAnimator == null) {
-        targetAnimator = new FactorAnimator(ANIMATOR_SELECT, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200l);
+        // XGram: check circle and content shift on SPATIAL_DEFAULT with Expressive design (clamped: the factor also feeds paint alpha)
+        targetAnimator = new FactorAnimator(ANIMATOR_SELECT, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 200l));
         targetAnimator.setLongValue(messageId);
         selectionAnimators.put(messageId, targetAnimator);
         onAnimatorAttachedToMessage(messageId, targetAnimator);

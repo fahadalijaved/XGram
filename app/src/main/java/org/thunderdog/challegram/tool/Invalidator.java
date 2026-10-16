@@ -18,8 +18,11 @@ import android.animation.ValueAnimator;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.view.Choreographer;
 
 import androidx.annotation.NonNull;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.navigation.NavigationController;
@@ -101,8 +104,7 @@ public class Invalidator implements Handler.Callback, ReferenceList.FullnessList
     }
   }
 
-  @Override
-  public boolean handleMessage (Message msg) {
+  private long invalidateTargets () {
     long minFrameDelay = -1;
     for (Target target : targets) {
       long frameDelay = target.onInvalidateTarget(this);
@@ -112,6 +114,49 @@ public class Invalidator implements Handler.Callback, ReferenceList.FullnessList
         }
       }
     }
+    return minFrameDelay;
+  }
+
+  // XGram: with Expressive design the loop runs on vsync (120 Hz) instead of a handler capped at 15 ms
+  private final Choreographer.FrameCallback xgramFrame = this::xgramDoFrame;
+  private long xgramLastFrameNanos, xgramRequestedDelay;
+  private boolean xgramVsync;
+
+  private final Runnable xgramSyncRunnable = this::xgramSync;
+
+  private void xgramSync () {
+    if (Looper.myLooper() != Looper.getMainLooper()) {
+      handler.post(xgramSyncRunnable);
+      return;
+    }
+    Choreographer choreographer = Choreographer.getInstance();
+    choreographer.removeFrameCallback(xgramFrame);
+    xgramVsync = isLooping;
+    if (isLooping) {
+      xgramRequestedDelay = 0;
+      choreographer.postFrameCallback(xgramFrame);
+    }
+  }
+
+  private void xgramDoFrame (long frameTimeNanos) {
+    if (!isLooping || !xgramVsync) {
+      return;
+    }
+    long elapsedMs = (frameTimeNanos - xgramLastFrameNanos) / 1_000_000L;
+    if (xgramRequestedDelay > ValueAnimator.getFrameDelay() && elapsedMs + 4 < xgramRequestedDelay) {
+      Choreographer.getInstance().postFrameCallback(xgramFrame);
+      return;
+    }
+    xgramLastFrameNanos = frameTimeNanos;
+    xgramRequestedDelay = invalidateTargets();
+    if (isLooping && xgramVsync) {
+      Choreographer.getInstance().postFrameCallback(xgramFrame);
+    }
+  }
+
+  @Override
+  public boolean handleMessage (Message msg) {
+    long minFrameDelay = invalidateTargets();
     if (isLooping) {
       handler.sendMessageDelayed(Message.obtain(handler, 0), Math.max(getFrameDelay(), minFrameDelay));
     }
@@ -132,6 +177,10 @@ public class Invalidator implements Handler.Callback, ReferenceList.FullnessList
     boolean isLooping = this.isFull && context.getActivityState() == UI.State.RESUMED;
     if (this.isLooping != isLooping) {
       this.isLooping = isLooping;
+      if (XgramExpressive.isEnabled()) {
+        xgramSync();
+        return;
+      }
       if (isLooping) {
         handler.sendMessageDelayed(Message.obtain(handler, 0), getFrameDelay());
       } else {

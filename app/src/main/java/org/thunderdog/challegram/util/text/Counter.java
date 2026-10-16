@@ -177,10 +177,12 @@ public class Counter implements FactorAnimator.Target, CounterAnimator.Callback<
     }
   }
 
-  private final CounterAnimator<CounterTextPart> counter = new CounterAnimator<>(this);
-  private final BounceAnimator isVisible = new BounceAnimator(this);
-  private final BoolAnimator isMuted = new BoolAnimator(1, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 120l);
-  private final BoolAnimator isFailed = new BoolAnimator(2, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 120l);
+  // XGram: with Expressive design digits slide on SPATIAL_FAST, the badge pops in on SPATIAL_FAST and fades out on
+  // EFFECTS_FAST (scale from the raw value, alpha and widths clamped), muted / failed colors move on EFFECTS_DEFAULT
+  private final CounterAnimator<CounterTextPart> counter = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? new com.fahadali.xgram.appearance.XgramCounterAnimator<>(this) : new CounterAnimator<>(this);
+  private final com.fahadali.xgram.appearance.XgramAppMotion.Bounce isVisible = new com.fahadali.xgram.appearance.XgramAppMotion.Bounce(this);
+  private final BoolAnimator isMuted = new BoolAnimator(1, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 120l));
+  private final BoolAnimator isFailed = new BoolAnimator(2, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 120l));
   private boolean isVisibleTarget = false;
 
   public interface Callback {

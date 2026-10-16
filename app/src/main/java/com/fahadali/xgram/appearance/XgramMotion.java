@@ -779,7 +779,7 @@ public final class XgramMotion {
       final int kind;
       final ArrayList<SpringAnimation> springs = new ArrayList<>(3);
       int remaining;
-      boolean done;
+      boolean done, layered;
 
       Run (RecyclerView.ViewHolder holder, int kind) {
         this.holder = holder;
@@ -976,6 +976,9 @@ public final class XgramMotion {
     /** axis: 0 = x, 1 = y (velocity tracking), -1 = none. */
     private void addSpring (Run run, FloatPropertyCompat<View> property, float finalValue, int token, float minVisibleChange, float startVelocity, int axis) {
       final View view = run.holder.itemView;
+      if (property == alphaProperty) {
+        layer(run);
+      }
       SpringAnimation a = new SpringAnimation(view, property, finalValue);
       a.getSpring().setStiffness(XgramExpressive.stiffness(token)).setDampingRatio(XgramExpressive.damping(token));
       a.setMinimumVisibleChange(minVisibleChange);
@@ -996,6 +999,30 @@ public final class XgramMotion {
       run.springs.add(a);
       run.remaining++;
       a.start();
+    }
+
+    /**
+     * A fading row gets a hardware layer while the fade runs, so its alpha is a texture blend instead of an
+     * offscreen pass of the whole row every frame. Not for rows over twice the list's area.
+     */
+    private static void layer (Run run) {
+      View view = run.holder.itemView;
+      if (run.layered || view.getLayerType() != View.LAYER_TYPE_NONE || !view.isHardwareAccelerated()) {
+        return;
+      }
+      int w = view.getWidth(), h = view.getHeight();
+      if (w <= 0 || h <= 0) {
+        return;
+      }
+      android.view.ViewParent parent = view.getParent();
+      if (parent instanceof View) {
+        View list = (View) parent;
+        if ((long) w * h > 2L * list.getWidth() * list.getHeight()) {
+          return;
+        }
+      }
+      view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+      run.layered = true;
     }
 
     private void onSpringEnd (Run run) {
@@ -1033,6 +1060,10 @@ public final class XgramMotion {
       }
       runs.remove(run);
       View view = run.holder.itemView;
+      if (run.layered) {
+        run.layered = false;
+        view.setLayerType(View.LAYER_TYPE_NONE, null);
+      }
       switch (run.kind) {
         case REMOVE:
           alphaSink.setItemAlpha(view, 1f);

@@ -65,7 +65,7 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
   private final ComplexReceiver complexReceiver;
   private final BoolAnimator isFullScreen;
   private final BoolAnimator isForum;
-  private final BounceAnimator isOnline;
+  private final com.fahadali.xgram.appearance.XgramAppMotion.Bounce isOnline; // XGram: the online dot pops on SPATIAL_FAST with Expressive design
   private final BoolAnimator allowOnline;
   private boolean isDetached;
 
@@ -115,8 +115,8 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
     FactorAnimator.Target target = (id, factor, fraction, callee) -> invalidate();
     this.isFullScreen = new BoolAnimator(0, target, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
     this.isForum = new BoolAnimator(0, target, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
-    this.isOnline = new BounceAnimator(target);
-    this.allowOnline = new BoolAnimator(0, target, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, true);
+    this.isOnline = new com.fahadali.xgram.appearance.XgramAppMotion.Bounce(target);
+    this.allowOnline = new BoolAnimator(0, target, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 180l), true);
   }
 
   public void setDisplayFullSizeOnlyInFullScreen (boolean displayFullSizeOnlyInFullScreen) {

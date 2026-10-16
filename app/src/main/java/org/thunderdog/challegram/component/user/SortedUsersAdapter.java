@@ -627,7 +627,10 @@ public class SortedUsersAdapter extends RecyclerView.Adapter<SortedUsersAdapter.
         onlineAnimator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
       }
       onlineAnimator.cancel();
-      if (isOnline && onlineFactor == 0f) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: the dot pops in on SPATIAL_FAST and fades out on EFFECTS_FAST
+        com.fahadali.xgram.appearance.XgramAppMotion.use(onlineAnimator, isOnline ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, !isOnline);
+      } else if (isOnline && onlineFactor == 0f) {
         onlineAnimator.setInterpolator(AnimatorUtils.OVERSHOOT_INTERPOLATOR);
         onlineAnimator.setDuration(210l);
       } else {
