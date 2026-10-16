@@ -604,6 +604,7 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
       this.fileProgress.setBackgroundColorId(TdlibAccentColor.getFileColorId(document, false));
     } else {
       this.fileProgress.setBackgroundColor(0x44000000);
+      this.fileProgress.setXgramThumbnail(true); // XGram M3E: the media button on the thumbnail (Expressive design only)
     }
     this.fileProgress.setFile(document.document);
     this.fileProgress.setMimeType(document.mimeType);
@@ -635,6 +636,7 @@ public class InlineResultCommon extends InlineResult<TdApi.InlineQueryResult> im
       this.fileProgress.setBackgroundColorId(TdlibAccentColor.getFileColorId(data.document, false));
     } else {
       this.fileProgress.setBackgroundColor(0x44000000);
+      this.fileProgress.setXgramThumbnail(true); // XGram M3E: the media button on the thumbnail (Expressive design only)
     }
     this.fileProgress.setFile(data.document.document);
     this.fileProgress.setMimeType(data.document.mimeType);

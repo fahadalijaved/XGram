@@ -9775,6 +9775,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
         emojiLayout = emojiKeyboardFrameLayout.contentView.emojiLayout;
         emojiLayout.initWithMediasEnabled(this, true, this, this, false);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          emojiLayout.xgramSetDockedUnder(com.fahadali.xgram.appearance.XgramExpressive.SURFACE); // XGram M3E: one surface with the composer bar (XgramInputFieldBackground)
+        }
         emojiLayout.setAllowPremiumFeatures(isSelfChat());
         emojiLayout.setAllowMedia(!hasAttachedFiles());
         emojiLayout.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
