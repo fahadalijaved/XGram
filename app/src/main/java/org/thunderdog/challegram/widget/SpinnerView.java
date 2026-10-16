@@ -40,7 +40,37 @@ public class SpinnerView extends ImageView implements Runnable {
     setScaleType(ScaleType.CENTER_INSIDE);
   }
 
+  // XGram M3E: the expressive loading indicator in primary instead of the rotating spinner image (ProgressComponent's)
+
+  private long xgramStartTime;
+
+  @Override
+  protected void onDraw (android.graphics.Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      final int width = getWidth() - getPaddingLeft() - getPaddingRight();
+      final int height = getHeight() - getPaddingTop() - getPaddingBottom();
+      final float size = Math.min(width, height) * com.fahadali.xgram.appearance.XgramLoadingIndicator.ACTIVE_INDICATOR_SCALE;
+      if (xgramStartTime == 0L) {
+        xgramStartTime = android.os.SystemClock.uptimeMillis();
+      }
+      com.fahadali.xgram.appearance.XgramLoadingIndicator.draw(c, getPaddingLeft() + width / 2f, getPaddingTop() + height / 2f, size,
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY),
+        android.os.SystemClock.uptimeMillis() - xgramStartTime);
+      if (started) {
+        postInvalidateOnAnimation();
+      }
+      return;
+    }
+    super.onDraw(c);
+  }
+
   public void start () {
+    if (!started && getVisibility() != View.GONE && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      started = true;
+      xgramStartTime = 0L;
+      invalidate();
+      return;
+    }
     if (!started && getVisibility() != View.GONE) {
       started = true;
 
@@ -76,6 +106,10 @@ public class SpinnerView extends ImageView implements Runnable {
   }
 
   public void stop () {
+    if (started && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      started = false; // the indicator stops asking for frames
+      return;
+    }
     if (started) {
       started = false;
       if (Anim.ANIMATORS && Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {

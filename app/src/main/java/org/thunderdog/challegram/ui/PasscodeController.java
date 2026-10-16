@@ -39,6 +39,10 @@ import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 import androidx.biometric.BiometricPrompt;
 
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramMotion;
+import com.fahadali.xgram.appearance.XgramR5Security;
+
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.R;
@@ -192,8 +196,315 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     return ColorId.passcode;
   }
 
+  // XGram M3E (round 5): unlocking (the app lock, a locked chat, the check before the passcode settings) is the
+  // Material 3 Expressive lock screen (XgramR5Security.LockView), the way XgramM3CallScreen replaced the call screen:
+  // hero, headlineSmall title, an inline supporting / error line, PIN dots over a round keypad, the filled password
+  // field, the M3E pattern or the fingerprint button. The logic below (codes, attempts, lockout, biometrics) is
+  // Telegram X's; PasscodeView stays as the state holder and is not shown. Setting a passcode keeps Telegram X's page.
+
+  private @Nullable XgramR5Security.LockView xgramLock;
+  private @Nullable org.thunderdog.challegram.widget.MaterialEditTextGroup xgramPasswordGroup;
+  private boolean xgramPasswordRevealed;
+
+  private final XgramR5Security.LockView.Callback xgramLockCallback = new XgramR5Security.LockView.Callback() {
+    @Override
+    public void onLockKey (int digit) {
+      onPinAppend(digit);
+    }
+
+    @Override
+    public void onLockBackspace () {
+      onPinRemove();
+    }
+
+    @Override
+    public boolean onLockBackspaceLong () {
+      return onPinRemoveAll();
+    }
+
+    @Override
+    public void onLockBiometrics () {
+      checkBiometricsNeeded();
+    }
+
+    @Override
+    public void onLockPattern (PasscodeBuilder pattern) {
+      handlePattern(pattern);
+    }
+  };
+
+  private boolean xgramUseLock () {
+    return XgramExpressive.isEnabled();
+  }
+
+  /** The fingerprint as a second way in (Telegram X's SwirlView at the bottom). */
+  private boolean xgramExtraBiometrics () {
+    return Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !inSetupMode() && mode != Passcode.MODE_BIOMETRICS && needUnlockWithBiometrics();
+  }
+
+  // Setting a passcode (round 5, P2): a plain "Set passcode" app bar, the modes as a connected button group under it
+  // (Telegram X's toggle title is not used), the step ("Choose your PIN", "Confirm your PIN") as the headlineSmall
+  // title with a fade-through, mismatches and short codes inline, and the same keypad, dots and pattern.
+
+  private @Nullable XgramR5Security.SegmentedRow xgramModes;
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton xgramPasswordButton;
+
+  private boolean xgramSetup () {
+    return xgramLock != null && controllerMode == MODE_SETUP;
+  }
+
+  /** An inline setup error (mismatch, too short) on the main thread. */
+  private void xgramSetupError (@StringRes int res) {
+    UI.post(() -> {
+      if (xgramLock != null && !isDestroyed()) {
+        if (pincode != null) {
+          pincode.clear();
+        }
+        xgramLock.showError(Lang.getString(res), true);
+      }
+    });
+  }
+
+  private View xgramCreateLock (Context context) {
+    contentView = new FrameLayoutFix(context) {
+      @Override
+      public boolean onInterceptTouchEvent (MotionEvent ev) {
+        return (ev.getAction() == MotionEvent.ACTION_DOWN && !inSetupMode() && Settings.instance().isPasscodeBlocked(mode, makeBruteForceSuffix())) || super.onInterceptTouchEvent(ev);
+      }
+    };
+    if (inSetupMode()) {
+      return xgramCreateSetup(context);
+    }
+    if (inGlobalUnlockMode()) {
+      // The app lock is its own page: surface (black with Pure black), read when drawn
+      XgramExpressive.MorphDrawable page = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_NONE, Float.NaN);
+      page.setColorRole(XgramExpressive.SURFACE);
+      contentView.setBackground(page);
+    } else {
+      ViewSupport.setThemedBackground(contentView, ColorId.passcode, this); // the app bar's surface, as the page under it
+    }
+    contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+    getCustomHeaderCell();
+
+    passcodeView = new PasscodeView(context);
+    passcodeView.setCallback(this);
+
+    xgramLock = new XgramR5Security.LockView(context, xgramLockCallback, inGlobalUnlockMode());
+    xgramLock.setTitle(Lang.getString(R.string.XgramR5SecurityEnterPasscode));
+    contentView.addView(xgramLock, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+    setMode(getPasscodeMode());
+    if (xgramExtraBiometrics()) {
+      setNeedBiometrics(true);
+    }
+    xgramUpdateSupporting();
+
+    this.context.addSimpleStateListener(this);
+    Settings.instance().addPasscodeTickLister(this);
+    return contentView;
+  }
+
+  private View xgramCreateSetup (Context context) {
+    ViewSupport.setThemedBackground(contentView, ColorId.passcode, this);
+    contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+    passcodeView = new PasscodeView(context);
+    passcodeView.setCallback(this);
+
+    xgramLock = new XgramR5Security.LockView(context, xgramLockCallback, false);
+    FrameLayoutFix.LayoutParams lockParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+    if (!inBiometricsSetup) {
+      final int initial = forcedMode != 0 ? forcedMode : isPasscodeEnabled() ? getPasscodeMode() : Passcode.MODE_PINCODE;
+      xgramModes = new XgramR5Security.SegmentedRow(context, getToggleSections(), initial - 1, index -> {
+        setMode(index + 1);
+        if (xgramModes != null) {
+          xgramModes.setSelectedSegment(mode - 1, true); // stays put when the mode cannot be used (no fingerprint)
+        }
+      });
+      contentView.addView(xgramModes, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f), Gravity.TOP));
+      lockParams.topMargin = Screen.dp(56f);
+    }
+    contentView.addView(xgramLock, lockParams);
+
+    setMode(forcedMode != 0 ? forcedMode : isPasscodeEnabled() ? getPasscodeMode() : Passcode.MODE_PINCODE);
+    if (xgramModes != null && mode > 0) {
+      xgramModes.setSelectedSegment(mode - 1, false);
+    }
+    xgramUpdateSupporting();
+    this.context.addSimpleStateListener(this);
+    return contentView;
+  }
+
+  /** The resting supporting line: the instruction, or the lockout countdown in error. */
+  private void xgramUpdateSupporting () {
+    if (xgramLock == null || passcodeView == null) {
+      return;
+    }
+    if (controllerMode == MODE_SETUP) {
+      // The step is the title; the supporting line is kept for mismatches and short codes
+      passcodeView.updateTextAndInvalidate();
+      final String step = passcodeView.getText();
+      xgramLock.setTitleAnimated(step != null ? step : "");
+      xgramLock.setSupporting("", false);
+      if (xgramPasswordButton != null) {
+        xgramPasswordButton.setText(Lang.getString(passcodeView.getState() == Passcode.STATE_CONFIRM ? R.string.Done : R.string.Continue));
+      }
+      return;
+    }
+    passcodeView.updateTextAndInvalidate();
+    final boolean blocked = Settings.instance().getPasscodeBlockSeconds(makeBruteForceSuffix()) > 0;
+    final String text = passcodeView.getText();
+    xgramLock.setSupporting(text != null ? text : "", blocked);
+  }
+
+  private String xgramInvalidText (int mode) {
+    switch (mode) {
+      case Passcode.MODE_PASSWORD:
+        return XgramR5Security.sentence(R.string.PasscodeInvalidPassword, R.string.XgramR5SecurityInvalidPassword);
+      case Passcode.MODE_PATTERN:
+        return XgramR5Security.sentence(R.string.PasscodeInvalidPattern, R.string.XgramR5SecurityInvalidPattern);
+      case Passcode.MODE_GESTURE:
+        return XgramR5Security.sentence(R.string.PasscodeInvalidGesture, R.string.XgramR5SecurityInvalidGesture);
+      default:
+        return Lang.getString(getInvalidString(mode));
+    }
+  }
+
+  /** A wrong code (main thread): the error inline, the dots shaken and cleared; a lockout that starts shows its countdown. */
+  private void xgramShowError (int mode) {
+    if (xgramLock == null || isDestroyed()) {
+      return;
+    }
+    if (pincode != null) {
+      pincode.clear();
+    }
+    xgramUpdateSupporting();
+    if (xgramPasswordGroup != null && mode == Passcode.MODE_PASSWORD) {
+      xgramPasswordGroup.setInErrorState(true);
+    }
+    final boolean blocked = Settings.instance().getPasscodeBlockSeconds(makeBruteForceSuffix()) > 0;
+    xgramLock.showError(blocked ? passcodeView.getText() : xgramInvalidText(mode), true);
+  }
+
+  private void xgramPinAppend (int digit) {
+    if (xgramLock == null || xgramLock.getFilled() >= Passcode.PINCODE_SIZE || Settings.instance().isPasscodeBlocked(Passcode.MODE_PINCODE, makeBruteForceSuffix())) {
+      return; // full (being checked) or locked out
+    }
+    if (pincode == null) {
+      pincode = new PasscodeBuilder();
+    }
+    if (pincode.getSize() >= Passcode.PINCODE_SIZE) {
+      return;
+    }
+    pincode.append(digit);
+    xgramLock.setFilled(pincode.getSize(), true);
+    if (pincode.getSize() == Passcode.PINCODE_SIZE) {
+      PasscodeBuilder code = new PasscodeBuilder(pincode);
+      pincode.clear();
+      handlePincode(code);
+    }
+  }
+
+  private void xgramApplyPasswordTransformation () {
+    if (passwordView == null) {
+      return;
+    }
+    final int selection = passwordView.getSelectionEnd();
+    passwordView.setTransformationMethod(xgramPasswordRevealed ? null : isPasscodeVisible() ? PasswordTransformationMethod.getInstance() : InvisibleTransformationMethod.instance());
+    if (selection >= 0 && selection <= passwordView.length()) {
+      passwordView.setSelection(selection);
+    }
+  }
+
+  private void xgramShowPassword () {
+    if (xgramLock == null) {
+      return;
+    }
+    if (xgramPasswordGroup == null) {
+      final boolean rtl = Lang.rtl();
+      org.thunderdog.challegram.widget.MaterialEditTextGroup group = new org.thunderdog.challegram.widget.MaterialEditTextGroup(context(), tdlib);
+      group.setHint(R.string.login_Password);
+      group.applyRtl(rtl);
+      passwordView = group.getEditText();
+      passwordView.setUseIncognitoKeyboard(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+      passwordView.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+      passwordView.setImeOptions(EditorInfo.IME_ACTION_DONE);
+      passwordView.setOnEditorActionListener(this);
+      passwordView.setPadding(passwordView.getPaddingLeft() + (rtl ? Screen.dp(40f) : 0), passwordView.getPaddingTop(), passwordView.getPaddingRight() + (rtl ? 0 : Screen.dp(40f)), passwordView.getPaddingBottom());
+      xgramApplyPasswordTransformation();
+      group.setTextListener((v, text) -> {
+        v.setInErrorState(false);
+        if (xgramLock != null) {
+          xgramLock.onUserInput();
+        }
+      });
+
+      // The trailing visibility toggle (a standard icon button on the field)
+      android.widget.ImageView toggle = new android.widget.ImageView(context()) {
+        private int tint;
+
+        @Override
+        protected void onDraw (android.graphics.Canvas c) {
+          final int color = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+          if (tint != color) {
+            tint = color;
+            setColorFilter(color);
+          }
+          super.onDraw(c);
+        }
+      };
+      toggle.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+      toggle.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), 40f));
+      final Runnable syncToggle = () -> {
+        toggle.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(xgramPasswordRevealed ? R.drawable.baseline_eye_off_24 : R.drawable.baseline_visibility_24));
+        toggle.setContentDescription(Lang.getString(xgramPasswordRevealed ? R.string.XgramR5SecurityHidePassword : R.string.XgramR5SecurityShowPassword));
+      };
+      syncToggle.run();
+      toggle.setOnClickListener(v -> {
+        xgramPasswordRevealed = !xgramPasswordRevealed;
+        syncToggle.run();
+        xgramApplyPasswordTransformation();
+        v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      });
+      FrameLayoutFix.LayoutParams toggleParams = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.TOP | (rtl ? Gravity.LEFT : Gravity.RIGHT));
+      toggleParams.topMargin = Screen.dp(16f);
+      toggleParams.leftMargin = toggleParams.rightMargin = Screen.dp(4f);
+      group.addView(toggle, toggleParams);
+
+      com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton unlock = new com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton(context(), XgramExpressive.PRIMARY, XgramExpressive.ON_PRIMARY);
+      unlock.setText(Lang.getString(inSetupMode() ? R.string.Continue : R.string.XgramR5SecurityUnlock));
+      unlock.setOnClickListener(v -> processPasscode());
+
+      xgramPasswordGroup = group;
+      xgramPasswordButton = unlock;
+    }
+    if (xgramPasswordButton != null) {
+      xgramLock.setPasswordViews(xgramPasswordGroup, xgramPasswordButton, xgramExtraBiometrics());
+    }
+    if (inGlobalUnlockMode()) {
+      UI.showKeyboardDelayed(passwordView);
+    } else if (!isNavigationAnimating()) {
+      Keyboard.show(passwordView);
+    }
+  }
+
+  @Override
+  public void onThemeColorsChanged (boolean areTemp, org.thunderdog.challegram.theme.ColorState state) {
+    super.onThemeColorsChanged(areTemp, state);
+    if (xgramLock != null) {
+      xgramLock.refreshColors();
+    }
+    if (xgramModes != null) {
+      xgramModes.refreshColors();
+    }
+  }
+
   @Override
   protected View onCreateView (Context context) {
+    if (xgramUseLock()) {
+      return xgramCreateLock(context);
+    }
     contentView = new FrameLayoutFix(context) {
       @Override
       public boolean onInterceptTouchEvent (MotionEvent ev) {
@@ -252,7 +563,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
       }
     }
 
-    setName(Passcode.getModeName(mode));
+    if (xgramSetup() && !inBiometricsSetup) {
+      setName(Lang.getString(R.string.XgramR5SecuritySetPasscode)); // XGram M3E: a plain app bar; the modes are under it
+    } else {
+      setName(Passcode.getModeName(mode));
+    }
     updateHeaderText();
 
     if (this.mode != 0) {
@@ -302,6 +617,13 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
         }
         break;
       }
+      case Passcode.MODE_PATTERN: {
+        if (xgramLock != null) {
+          // XGram M3E: the lock's own pattern (PasscodeView draws Telegram X's)
+          xgramLock.setContent(XgramR5Security.LockView.CONTENT_PATTERN, 0, isPasscodeVisible(), xgramExtraBiometrics());
+        }
+        break;
+      }
     }
 
     if (controllerMode == MODE_SETUP) {
@@ -313,6 +635,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
   private EditText passwordView;
 
   private void showPasswordWrap () {
+    if (xgramLock != null) {
+      xgramShowPassword();
+      return;
+    }
     if (passwordView == null) {
       passwordView = (EditText) Views.inflate(context(), R.layout.input_password, contentView);
       passwordView.setTypeface(Fonts.getRobotoRegular());
@@ -358,6 +684,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
   private PinInputLayout pinLayout;
 
   private void showPincodeWrap () {
+    if (xgramLock != null) {
+      xgramLock.setContent(XgramR5Security.LockView.CONTENT_PIN, Passcode.PINCODE_SIZE, isPasscodeVisible(), xgramExtraBiometrics());
+      return;
+    }
     if (pinLayout == null) {
       pinLayout = new PinInputLayout(context());
       pinLayout.initWithFeedback(isPasscodeVisible());
@@ -388,6 +718,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     if (pincode != null) {
       pincode.clear();
     }
+    if (xgramLock != null) {
+      xgramLock.setFilled(0, false);
+      return;
+    }
     passcodeView.getPincodeOutput().clear();
     contentView.removeView(pinLayout);
   }
@@ -396,6 +730,13 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
   @Override
   public void onPinRemove () {
+    if (xgramLock != null) {
+      if (pincode != null && pincode.getSize() > 0 && xgramLock.getFilled() < Passcode.PINCODE_SIZE) {
+        pincode.removeLast();
+        xgramLock.setFilled(pincode.getSize(), true);
+      }
+      return;
+    }
     if (passcodeView.getPincodeOutput().isAnimating()) return;
     if (pincode != null) {
       pincode.removeLast();
@@ -405,6 +746,14 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
   @Override
   public boolean onPinRemoveAll () {
+    if (xgramLock != null) {
+      if (pincode != null && pincode.getSize() > 0 && xgramLock.getFilled() < Passcode.PINCODE_SIZE) {
+        pincode.clear();
+        xgramLock.setFilled(0, true);
+        return true;
+      }
+      return false;
+    }
     if (passcodeView.getPincodeOutput().isAnimating()) return false;
     if (passcodeView.getPincodeOutput().removeAll()) {
       if (pincode != null) {
@@ -417,6 +766,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
   @Override
   public void onPinAppend (int digit) {
+    if (xgramLock != null) {
+      xgramPinAppend(digit);
+      return;
+    }
     if (passcodeView.getPincodeOutput().isAnimating() || (pincode != null && pincode.getSize() >= Passcode.PINCODE_SIZE)) return;
     if (pincode == null) {
       pincode = new PasscodeBuilder();
@@ -446,6 +799,18 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
       gestureView.addOnGesturePerformedListener(this);
       gestureView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
+    if (xgramLock != null) {
+      // XGram M3E: the stroke in primary, over the lock column
+      final int primary = XgramExpressive.color(XgramExpressive.PRIMARY);
+      gestureView.setGestureColor(primary);
+      gestureView.setUncertainGestureColor(primary);
+      gestureView.setGestureStrokeWidth(Screen.dp(4f));
+      // The modes stay usable: the overlay starts under them
+      FrameLayoutFix.LayoutParams gestureParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+      gestureParams.topMargin = xgramModes != null ? Screen.dp(56f) : 0;
+      gestureView.setLayoutParams(gestureParams);
+      xgramLock.setContent(XgramR5Security.LockView.CONTENT_GESTURE, 0, isPasscodeVisible(), xgramExtraBiometrics());
+    }
 
     contentView.addView(gestureView);
   }
@@ -467,7 +832,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     if (passcodeView.getState() == Passcode.STATE_CONFIRM) {
       Background.instance().post(() -> {
         if (!getGesturePassword().compare(gesture, true, null)) {
-          UI.showToast(getMismatchString(Passcode.MODE_GESTURE), Toast.LENGTH_SHORT);
+          if (xgramLock != null) {
+            xgramSetupError(getMismatchString(Passcode.MODE_GESTURE)); // XGram M3E: inline
+          } else {
+            UI.showToast(getMismatchString(Passcode.MODE_GESTURE), Toast.LENGTH_SHORT);
+          }
           return;
         }
 
@@ -515,6 +884,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
   @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
   private void showBiometricsIcon () {
+    if (xgramLock != null) {
+      xgramLock.setContent(XgramR5Security.LockView.CONTENT_BIOMETRICS, 0, true, false);
+      setNeedBiometrics(true);
+      return;
+    }
     if (biometricsView == null) {
       biometricsView = new SwirlView(context);
       biometricsView.setOnClickListener(v -> checkBiometricsNeeded());
@@ -558,6 +932,13 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
         if (controllerMode == MODE_UNLOCK && unlockByBiometrics(biometricsId, strong)) {
           biometricsScanCompleted = true;
           UI.unlock(PasscodeController.this);
+        } else if (xgramLock != null) {
+          final int failRes = BiometricAuthentication.ONLY_FINGERPRINT ? R.string.fingerprint_fail : R.string.biometrics_fail;
+          runOnUiThreadOptional(() -> {
+            if (xgramLock != null) {
+              xgramLock.showError(Lang.getString(failRes), false); // XGram M3E: inline
+            }
+          });
         } else {
           UI.showToast(BiometricAuthentication.ONLY_FINGERPRINT ? R.string.fingerprint_fail : R.string.biometrics_fail, Toast.LENGTH_SHORT);
         }
@@ -576,7 +957,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
             postNavigateBack();
           });
         } else {
-          UI.showToast(getMismatchString(Passcode.MODE_BIOMETRICS), Toast.LENGTH_SHORT);
+          if (xgramLock != null) {
+            xgramSetupError(getMismatchString(Passcode.MODE_BIOMETRICS)); // XGram M3E: inline
+          } else {
+            UI.showToast(getMismatchString(Passcode.MODE_BIOMETRICS), Toast.LENGTH_SHORT);
+          }
           checkBiometricsNeeded();
         }
       } else {
@@ -634,6 +1019,30 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
   @Override
   public void updateConfirmMode () {
+    if (xgramLock != null) {
+      // XGram M3E: the confirm step may hide what is typed (an invisible passcode): rebuild the content for it
+      switch (mode) {
+        case Passcode.MODE_PINCODE:
+          if (pincode != null) {
+            pincode.clear();
+          }
+          xgramLock.setContent(XgramR5Security.LockView.CONTENT_PIN, Passcode.PINCODE_SIZE, isPasscodeVisible(), xgramExtraBiometrics());
+          break;
+        case Passcode.MODE_PATTERN:
+          xgramLock.setContent(XgramR5Security.LockView.CONTENT_PATTERN, 0, isPasscodeVisible(), xgramExtraBiometrics());
+          break;
+        case Passcode.MODE_PASSWORD:
+          xgramApplyPasswordTransformation();
+          break;
+        case Passcode.MODE_GESTURE:
+          if (gestureView != null) {
+            gestureView.setGestureVisible(isPasscodeVisible());
+          }
+          break;
+      }
+      xgramUpdateSupporting();
+      return;
+    }
     switch (mode) {
       case Passcode.MODE_PINCODE: {
         pinLayout.setHasFeedback(isPasscodeVisible());
@@ -670,6 +1079,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
         Keyboard.hide(passwordView);
         navigateBack();
         return true;
+      } else if (xgramLock != null) {
+        if (xgramPasswordGroup != null) {
+          xgramPasswordGroup.setInErrorState(true);
+        }
+        xgramSetupError(getMismatchString(Passcode.MODE_PASSWORD)); // XGram M3E: the field's error, inline
       } else {
         UI.showToast(getMismatchString(Passcode.MODE_PASSWORD), Toast.LENGTH_SHORT);
       }
@@ -677,6 +1091,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     }
 
     if (password.length() < Passcode.MIN_PASSWORD_SIZE) {
+      if (xgramLock != null) {
+        xgramSetupError(R.string.passcode_password_tooshort);
+        return false;
+      }
       UI.showToast(R.string.passcode_password_tooshort, Toast.LENGTH_SHORT);
       return false;
     }
@@ -744,7 +1162,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
           UI.unlock(PasscodeController.this);
         } else {
           Settings.instance().tracePasscodeError(Passcode.MODE_PATTERN, patternStr, makeBruteForceSuffix());
-          UI.showToast(getInvalidString(Passcode.MODE_PATTERN), Toast.LENGTH_SHORT);
+          if (xgramLock != null) {
+            UI.post(() -> xgramShowError(Passcode.MODE_PATTERN)); // XGram M3E: inline, not a toast
+          } else {
+            UI.showToast(getInvalidString(Passcode.MODE_PATTERN), Toast.LENGTH_SHORT);
+          }
         }
       });
       return;
@@ -761,6 +1183,8 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
             UI.showToast("Error setting up pattern", Toast.LENGTH_SHORT);
           }
         });
+      } else if (xgramLock != null) {
+        xgramSetupError(getMismatchString(Passcode.MODE_PATTERN)); // XGram M3E: inline
       } else {
         UI.showToast(getMismatchString(Passcode.MODE_PATTERN), Toast.LENGTH_SHORT);
       }
@@ -768,6 +1192,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     }
 
     if (pattern.getSize() < Passcode.MIN_PATTERN_SIZE) {
+      if (xgramLock != null) {
+        xgramSetupError(R.string.passcode_pattern_tooshort);
+        return;
+      }
       UI.showToast(R.string.passcode_pattern_tooshort, Toast.LENGTH_SHORT);
       return;
     }
@@ -781,6 +1209,9 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
   public void handlePincode (final PasscodeBuilder pincode) {
     if (!inSetupMode()) {
       if (Settings.instance().isPasscodeBlocked(Passcode.MODE_PINCODE, makeBruteForceSuffix())) {
+        if (xgramLock != null) {
+          xgramLock.setFilled(0, true); // XGram M3E: the dots never stay full while locked out
+        }
         return;
       }
       Background.instance().post(() -> {
@@ -793,6 +1224,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
           UI.unlock(PasscodeController.this);
         } else {
           Settings.instance().tracePasscodeError(Passcode.MODE_PINCODE, pincodeStr, makeBruteForceSuffix());
+          if (xgramLock != null) {
+            UI.post(() -> xgramShowError(Passcode.MODE_PINCODE)); // XGram M3E: inline error, the dots shake and clear
+            return;
+          }
           UI.showToast(getInvalidString(Passcode.MODE_PINCODE), Toast.LENGTH_SHORT);
           UI.post(() -> passcodeView.getPincodeOutput().removeAll());
         }
@@ -811,6 +1246,8 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
             UI.showToast("Error setting up pincode", Toast.LENGTH_SHORT);
           }
         });
+      } else if (xgramLock != null) {
+        xgramSetupError(getMismatchString(Passcode.MODE_PINCODE)); // XGram M3E: inline, the dots shake and clear
       } else {
         UI.showToast(getMismatchString(Passcode.MODE_PINCODE), Toast.LENGTH_SHORT);
         passcodeView.getPincodeOutput().removeAll();
@@ -819,6 +1256,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     }
 
     if (pincode.getSize() != Passcode.PINCODE_SIZE) {
+      if (xgramLock != null) {
+        xgramSetupError(R.string.passcode_pattern_tooshort);
+        return;
+      }
       UI.showToast(R.string.passcode_pattern_tooshort, Toast.LENGTH_SHORT);
       return;
     }
@@ -826,6 +1267,9 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     this.confirmPasscode = new PasscodeBuilder(pincode);
 
     passcodeView.setState(Passcode.STATE_CONFIRM);
+    if (xgramLock != null) {
+      return; // XGram M3E: updateConfirmMode gave the confirm step empty dots
+    }
     passcodeView.getPincodeOutput().removeAll();
   }
 
@@ -848,7 +1292,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
           UI.unlock(PasscodeController.this);
         } else {
           Settings.instance().tracePasscodeError(Passcode.MODE_GESTURE, null, makeBruteForceSuffix());
-          UI.showToast(getInvalidString(Passcode.MODE_GESTURE), Toast.LENGTH_SHORT);
+          if (xgramLock != null) {
+            UI.post(() -> xgramShowError(Passcode.MODE_GESTURE));
+          } else {
+            UI.showToast(getInvalidString(Passcode.MODE_GESTURE), Toast.LENGTH_SHORT);
+          }
         }
       });
     }
@@ -882,7 +1330,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
             UI.unlock(PasscodeController.this);
           } else {
             Settings.instance().tracePasscodeError(Passcode.MODE_PASSWORD, password, makeBruteForceSuffix());
-            UI.showToast(getInvalidString(Passcode.MODE_PASSWORD), Toast.LENGTH_SHORT);
+            if (xgramLock != null) {
+              UI.post(() -> xgramShowError(Passcode.MODE_PASSWORD)); // XGram M3E: the field's error, inline
+            } else {
+              UI.showToast(getInvalidString(Passcode.MODE_PASSWORD), Toast.LENGTH_SHORT);
+            }
           }
         });
 
@@ -896,6 +1348,13 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     hideTooltipsAndPopUps();
     if (specificChat != null) {
       tdlib.ui().openChat(this, specificChat, (chatOpenParameters != null ? chatOpenParameters : new TdlibUi.ChatOpenParameters()).passcodeUnlocked());
+    } else if (xgramLock != null && !XgramMotion.reduce() && contentView != null && contentView.isAttachedToWindow()) {
+      // XGram M3E: the column scales to .92 and fades on SPATIAL_DEFAULT; the page fades out (BaseActivity) as it goes
+      if (xgramLock.isExiting()) {
+        return;
+      }
+      xgramLock.playExit();
+      contentView.postDelayed(() -> context().hidePasscode(), 140L);
     } else {
       context().hidePasscode();
     }
@@ -940,7 +1399,7 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
   @Override
   protected boolean swipeNavigationEnabled () {
-    return !passcodeView.isIntercepted() && mode != Passcode.MODE_GESTURE;
+    return !passcodeView.isIntercepted() && mode != Passcode.MODE_GESTURE && (xgramLock == null || !xgramLock.isTracking());
   }
 
   @Override
@@ -952,6 +1411,10 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
   public void onConfigurationChanged (Configuration newConfig) {
     super.onConfigurationChanged(newConfig);
     passcodeView.setOrientation(newConfig.orientation);
+    if (xgramLock != null) {
+      xgramLock.requestLayout(); // XGram M3E: the column centres itself (and its keys fit) in the new size
+      return;
+    }
     switch (mode) {
       case Passcode.MODE_PINCODE: {
         updatePincodeOrientation();
@@ -973,6 +1436,9 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
   @Override
   public void onFocus () {
     super.onFocus();
+    if (xgramLock != null && xgramLock.getFilled() >= Passcode.PINCODE_SIZE) {
+      xgramLock.setFilled(0, false); // back from the passcode settings: an empty PIN again
+    }
     if (mode == Passcode.MODE_PASSWORD) {
       UI.showKeyboardDelayed(passwordView);
     }
@@ -991,6 +1457,23 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
   @Override
   public void onAuthenticationError (CharSequence error, boolean isFatal) {
+    if (xgramLock != null) {
+      // XGram M3E: the error in the supporting line, no tooltip or toast; the fingerprint button retries
+      final CharSequence text = error;
+      runOnUiThreadOptional(() -> {
+        if (xgramLock != null && text != null && text.length() > 0) {
+          xgramLock.showError(text, false);
+        }
+      });
+      runOnUiThreadOptional(() -> {
+        if (isFatal && (controllerMode == MODE_SETUP || controllerMode == MODE_UNLOCK_SETUP)) {
+          navigateBack();
+        } else {
+          isBiometricAuthenticationActive = false;
+        }
+      }, null, 2000L);
+      return;
+    }
     if (tooltipInfo != null) {
       tooltipInfo.hideNow();
       tooltipInfo = null;
@@ -1074,6 +1557,9 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
         this.headerCell = headerCell;
       }
     } else if (controllerMode == MODE_SETUP && !inBiometricsSetup) {
+      if (XgramExpressive.isEnabled()) {
+        return null; // XGram M3E: "Set passcode" in the small app bar, the modes in a connected button group under it
+      }
       if (headerCell == null) {
         headerCell = this.context.navigation().getHeaderView().genToggleTitle(context(), this);
       }
@@ -1321,6 +1807,7 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
       if (passcodeView != null) {
         passcodeView.updateTextAndInvalidate();
       }
+      xgramUpdateSupporting(); // XGram M3E: the lockout countdown, inline
     }
   }
 }

@@ -247,8 +247,36 @@ public class PasswordController extends ViewController<PasswordController.Args> 
 
   private CustomConfirmDelegate confirmDelegate;
 
+  /** XGram M3E: the page titles in sentence case while the language is Telegram X's English (its own are title case). */
+  private @Nullable String xgramSentenceName () {
+    switch (mode) {
+      case MODE_EDIT: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.ChangePassword, R.string.XgramR5SecurityChangePassword);
+      case MODE_NEW: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.YourPassword, R.string.XgramR5SecurityYourPassword);
+      case MODE_EMAIL_LOGIN: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.YourEmail, R.string.XgramR5SecurityYourEmail);
+      case MODE_CONFIRM:
+      case MODE_UNLOCK_EDIT: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.EnterPassword, R.string.XgramR5SecurityEnterPassword);
+      case MODE_TRANSFER_OWNERSHIP_CONFIRM: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.TransferOwnershipPasswordAlert, R.string.XgramR5SecurityTransferOwnership);
+      case MODE_LOGIN: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.TwoStepVerification, R.string.XgramR5SecurityTwoStepVerification);
+      case MODE_EMAIL_RECOVERY:
+      case MODE_LOGIN_EMAIL_RECOVERY: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.PasswordRecovery, R.string.XgramR5SecurityPasswordRecovery);
+      case MODE_CODE:
+      case MODE_CODE_CHANGE:
+      case MODE_CODE_EMAIL: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.ConfirmationCode, R.string.XgramR5SecurityConfirmationCode);
+      case MODE_CODE_PHONE_CONFIRM: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.CancelAccountReset, R.string.XgramR5SecurityCancelAccountReset);
+      case MODE_2FA_RECOVERY_EMAIL_CHANGE: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.ChangeRecoveryEmail, R.string.XgramR5SecurityChangeRecoveryEmail);
+      case MODE_LOGIN_EMAIL_CHANGE: return com.fahadali.xgram.appearance.XgramR5Security.sentence(R.string.LoginEmail, R.string.XgramR5SecurityLoginEmail);
+    }
+    return null;
+  }
+
   @Override
   public CharSequence getName () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      String name = xgramSentenceName();
+      if (name != null) {
+        return name;
+      }
+    }
     switch (mode) {
       case MODE_EDIT: {
         return Lang.getString(R.string.ChangePassword);
@@ -434,6 +462,91 @@ public class PasswordController extends ViewController<PasswordController.Args> 
         break;
       }
     }
+  }
+
+  // XGram M3E (round 5): the code and password pages as one column of at most 480dp under the app bar, with no
+  // offset worked out from a phone's height: the page title in headlineMedium (the app bar's small title fades in
+  // once it scrolls away), the hint as bodyMedium supporting text, the filled field (a visibility toggle on password
+  // fields) and the links as M3 text buttons, the wait for a reset in bodyMedium. Errors stay in the supporting text.
+
+  private @Nullable View xgramLinks;
+  private @Nullable TextView xgramHeadline;
+
+  private void xgramLayout (Context context, FrameLayoutFix contentView) {
+    contentView.removeView(editText);
+    contentView.removeView(hintView);
+    if (xgramLinks != null) {
+      contentView.removeView(xgramLinks);
+    }
+
+    android.widget.ScrollView scroll = new android.widget.ScrollView(context);
+    scroll.setVerticalScrollBarEnabled(false);
+    scroll.setClipToPadding(false);
+    FrameLayoutFix wrap = new FrameLayoutFix(context);
+    scroll.addView(wrap, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    android.widget.LinearLayout column = new android.widget.LinearLayout(context) {
+      @Override
+      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+        final int max = Screen.dp(480f);
+        if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED && MeasureSpec.getSize(widthMeasureSpec) > max) {
+          widthMeasureSpec = MeasureSpec.makeMeasureSpec(max, MeasureSpec.EXACTLY);
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+      }
+    };
+    column.setOrientation(android.widget.LinearLayout.VERTICAL);
+    column.setPadding(Screen.dp(16f), Screen.dp(24f), Screen.dp(16f), Screen.dp(104f)); // the FAB stays clear of the links
+    wrap.addView(column, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP));
+    final boolean rtl = Lang.rtl();
+    final int startGravity = rtl ? Gravity.RIGHT : Gravity.LEFT;
+
+    xgramHeadline = new NoScrollTextView(context);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(xgramHeadline, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_M, false);
+    xgramHeadline.setText(getName());
+    xgramHeadline.setGravity(startGravity);
+    xgramHeadline.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
+    addThemeTextColorListener(xgramHeadline, ColorId.text);
+    column.addView(xgramHeadline, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(hintView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+    hintView.setGravity(startGravity);
+    android.widget.LinearLayout.LayoutParams hintParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    hintParams.topMargin = Screen.dp(8f);
+    column.addView(hintView, hintParams);
+
+    android.widget.LinearLayout.LayoutParams fieldParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    fieldParams.topMargin = Screen.dp(16f);
+    column.addView(editText, fieldParams);
+    editText.applyRtl(rtl);
+    if ((editText.getEditText().getInputType() & android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD) {
+      com.fahadali.xgram.appearance.XgramR5Security.attachVisibilityToggle(editText);
+    }
+
+    if (xgramLinks != null) {
+      for (TextView link : new TextView[] {forgotView, cancelResetView}) {
+        com.fahadali.xgram.appearance.XgramM3Controls.styleButton(link);
+        link.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
+        link.setGravity(Gravity.CENTER_VERTICAL | startGravity);
+        link.setFontFeatureSettings("tnum"); // the resend countdown keeps its width
+      }
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(resetWaitView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+      resetWaitView.setFontFeatureSettings("tnum");
+      resetWaitView.setPadding(Screen.dp(12f), Screen.dp(8f), Screen.dp(12f), Screen.dp(8f));
+      android.widget.LinearLayout.LayoutParams linksParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      linksParams.topMargin = Screen.dp(16f);
+      linksParams.gravity = startGravity;
+      linksParams.leftMargin = linksParams.rightMargin = -Screen.dp(12f); // the text buttons' labels line up with the column
+      column.addView(xgramLinks, linksParams);
+    }
+    contentView.addView(scroll, 0, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+    // The small title in the app bar is the headline's: it fades in as the headline scrolls away
+    HeaderView.xgramSetTitleAlpha(this, 0f);
+    scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+      if (xgramHeadline != null) {
+        HeaderView.xgramSetTitleAlpha(this, (scrollY - xgramHeadline.getBottom() + Screen.dp(16f)) / (float) Screen.dp(24f));
+      }
+    });
   }
 
   @Override
@@ -664,9 +777,11 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       forgotWrap.addView(progressView);
 
       contentView.addView(forgotWrap);
+      xgramLinks = forgotWrap;
     } else {
       forgotView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM));
       contentView.addView(forgotView);
+      xgramLinks = forgotView;
     }
 
     params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -691,6 +806,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       hintView.setAlpha(0f);
     }
     contentView.addView(hintView);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramLayout(context, contentView);
+    }
 
     setLockFocusView(editText.getEditText());
 

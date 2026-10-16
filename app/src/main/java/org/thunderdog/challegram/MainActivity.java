@@ -534,10 +534,77 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
 
   // Stack initialization
 
+  // XGram M3E (round 5): while the account's state is not known yet (Telegram X shows nothing), the contained
+  // loading indicator in the middle of the surface; it fades out once the first page is set.
+
+  private @androidx.annotation.Nullable View xgramStartupLoading;
+
+  private void xgramSetStartupLoading (boolean visible) {
+    if (visible) {
+      if (xgramStartupLoading != null || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || rootView == null) {
+        return;
+      }
+      com.fahadali.xgram.appearance.XgramListStateView view = new com.fahadali.xgram.appearance.XgramListStateView(this);
+      view.setLoading(true, com.fahadali.xgram.appearance.XgramM3MediaChrome.LOADING_ACTIVE_DP);
+      com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable surface = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, Float.NaN);
+      surface.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE);
+      view.setBackground(surface);
+      view.setClickable(true);
+      view.setContentDescription(Lang.getString(R.string.LoadingInformation));
+      rootView.addView(view, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      xgramStartupLoading = view;
+    } else if (xgramStartupLoading != null) {
+      final View view = xgramStartupLoading;
+      xgramStartupLoading = null;
+      view.setClickable(false);
+      view.animate().alpha(0f)
+        .setDuration(com.fahadali.xgram.appearance.XgramAppMotion.springDuration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT))
+        .setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.springClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT))
+        .withEndAction(() -> {
+          if (view.getParent() instanceof ViewGroup) {
+            ((ViewGroup) view.getParent()).removeView(view);
+          }
+        });
+    }
+  }
+
+  /**
+   * XGram M3E: the system splash of the next launch (Android 13+): the surface with the app icon on primaryContainer,
+   * black with Pure black in the dark theme. Expressive design off goes back to the system's default splash.
+   */
+  private void xgramUpdateSplashTheme () {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) {
+      return;
+    }
+    try {
+      final int theme;
+      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        theme = android.content.res.Resources.ID_NULL;
+      } else if (com.fahadali.xgram.appearance.XgramAmoled.isActive()) {
+        theme = R.style.XgramR5SecuritySplashBlack;
+      } else {
+        theme = org.thunderdog.challegram.theme.ThemeManager.instance().isCurrentThemeDark() ? R.style.XgramR5SecuritySplashDark : R.style.XgramR5SecuritySplashLight;
+      }
+      getSplashScreen().setSplashScreenTheme(theme);
+    } catch (Throwable t) {
+      Log.e("XGram: cannot set the splash theme", t);
+    }
+  }
+
+  @Override
+  protected void onStop () {
+    super.onStop();
+    xgramUpdateSplashTheme(); // the day / night and Pure black of this session decide the next splash
+  }
+
   private void initController (Tdlib tdlib, @Tdlib.Status int status) {
+    if (status != Tdlib.Status.UNKNOWN) {
+      xgramSetStartupLoading(false);
+    }
     switch (status) {
       case Tdlib.Status.UNKNOWN:
         // setBlankViewVisible(true, false);
+        xgramSetStartupLoading(true);
         break;
       case Tdlib.Status.UNAUTHORIZED:
         int nextAccountId = tdlib.context().findNextAccountId(tdlib.id());

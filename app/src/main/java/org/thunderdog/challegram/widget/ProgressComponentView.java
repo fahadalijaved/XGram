@@ -183,6 +183,7 @@ public class ProgressComponentView extends View implements FactorAnimator.Target
     if (animator == null) {
       this.animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, currentFactor);
     }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(animator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram M3E: fades on a spring
     animator.animateTo(toFactor);
   }
 

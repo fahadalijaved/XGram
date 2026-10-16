@@ -116,7 +116,10 @@ public class DoneButton extends CircleButton implements RootFrameLayout.InsetsCh
         if (visibilityAnimator == null) {
           visibilityAnimator = new FactorAnimator(ANIMATOR_VISIBILITY, target, AnimatorUtils.OVERSHOOT_INTERPOLATOR, 210l, visibilityFactor);
         }
-        if (toFactor == 1f && visibilityFactor == 0f) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: in on SPATIAL_FAST (the scale overshoots a little, the alpha is clamped), out on EFFECTS_FAST
+          com.fahadali.xgram.appearance.XgramAppMotion.use(visibilityAnimator, isVisible ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, !isVisible);
+        } else if (toFactor == 1f && visibilityFactor == 0f) {
           visibilityAnimator.setInterpolator(AnimatorUtils.OVERSHOOT_INTERPOLATOR);
           visibilityAnimator.setDuration(210l);
         } else {
@@ -136,7 +139,8 @@ public class DoneButton extends CircleButton implements RootFrameLayout.InsetsCh
   protected void setVisibilityFactor (float factor) {
     if (this.visibilityFactor != factor) {
       this.visibilityFactor = factor;
-      float scale = .6f + .4f * factor;
+      // XGram M3E: Reduce motion fades the button only
+      float scale = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : .6f + .4f * factor;
       setScaleX(scale);
       setScaleY(scale);
       updateAlpha();
