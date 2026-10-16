@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!--
+    XGram: Material 3 Expressive system scrollbars, applied over the activity theme with Expressive design.
+    Sizes and timing follow Compose NonInteractiveScrollbarDefaults: a 4dp thumb (drawn inside the 10dp box),
+    fading out over 250ms after 400ms.
+  -->
+  <style name="XgramScrollbars">
+    <item name="android:scrollbarThumbVertical">@drawable/xgram_scroll_thumb</item>
+    <item name="android:scrollbarThumbHorizontal">@drawable/xgram_scroll_thumb</item>
+    <item name="android:scrollbarTrackVertical">@null</item>
+    <item name="android:scrollbarTrackHorizontal">@null</item>
+    <item name="android:scrollbarSize">10dp</item>
+    <item name="android:scrollbarFadeDuration">250</item>
+    <item name="android:scrollbarDefaultDelayBeforeFade">400</item>
+    <item name="android:scrollbarStyle">insideOverlay</item>
+  </style>
+</resources>

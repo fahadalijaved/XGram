@@ -113,6 +113,11 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
   public void setManager (MessagesManager manager) {
     this.manager = manager;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (xgramScroll = com.fahadali.xgram.appearance.XgramScrollIndicator.find(this)) != null) {
+      // XGram: history is paginated, so a fixed-length thumb that shows and hides with the date pill,
+      // clear of the 28dp corners of the messages container
+      xgramScroll.setFixedThumbLength(Screen.dp(40f)).setManualVisibility(true).setTopInset(Screen.dp(20f));
+    }
   }
 
   public void setController (MessagesController controller) {
@@ -192,9 +197,46 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
   private boolean startAnimatorOnAnimationEnd;
 
+  // XGram: with Expressive design the date pill fades on springs (in fast, out slow) and the scroll thumb follows it
+  private @Nullable com.fahadali.xgram.appearance.XgramScrollIndicator xgramScroll;
+  private @Nullable com.fahadali.xgram.appearance.XgramScrollIndicator.Anim xgramDateSpring;
+  private final Runnable xgramDateHide = () -> {
+    if (!this.isScrolling && xgramDateSpring != null) {
+      xgramDateSpring.animateTo(0f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_SLOW);
+      if (xgramScroll != null) {
+        xgramScroll.setShown(false);
+      }
+    }
+  };
+
+  private void xgramSetIsScrolling (boolean isScrolling) {
+    if (xgramDateSpring == null) {
+      xgramDateSpring = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(scrollFactor, .002f, () -> {
+        float factor = MathUtils.clamp(xgramDateSpring.getValue());
+        if (this.scrollFactor != factor) {
+          this.scrollFactor = factor;
+          invalidateDate();
+        }
+      });
+    }
+    removeCallbacks(xgramDateHide);
+    if (isScrolling) {
+      xgramDateSpring.animateTo(1f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST);
+      if (xgramScroll != null) {
+        xgramScroll.setShown(true);
+      }
+    } else {
+      postDelayed(xgramDateHide, 1500);
+    }
+  }
+
   public void setIsScrolling (boolean isScrolling) {
     if (this.isScrolling != isScrolling) {
       this.isScrolling = isScrolling;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramSetIsScrolling(isScrolling);
+        return;
+      }
       if (scrollAnimator == null) {
         scrollAnimator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.scrollFactor);
       }

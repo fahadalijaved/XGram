@@ -54,6 +54,9 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
       public void onScrolled (RecyclerView recyclerView, int dx, int dy) {
         scrollY += dy;
         layoutSectionStuff();
+        if (xgram && dy != 0) {
+          xgramShow();
+        }
       }
     });
     letterPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
@@ -67,6 +70,80 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
 
     textLeft = Screen.dp(25f);
     textOffset = Screen.dp(7f);
+
+    if (xgram) {
+      Runnable invalidate = this::invalidate;
+      xgramAlpha = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(0f, .002f, invalidate);
+      xgramPress = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(0f, .002f, invalidate);
+      xgramLabelAlpha = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(0f, .002f, invalidate);
+      xgramLabelScale = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(1f, .002f, invalidate);
+    }
+  }
+
+  // XGram: with Expressive design the fast scroller looks and moves like XgramScrollIndicator: a thumb that fades in
+  // while scrolling and out 1.2s after, widens and turns primary when grabbed, with the letter in a label pill.
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private com.fahadali.xgram.appearance.XgramScrollIndicator.Anim xgramAlpha, xgramPress, xgramLabelAlpha, xgramLabelScale;
+  private final com.fahadali.xgram.appearance.XgramScrollIndicator.Exclusion xgramExclusion = new com.fahadali.xgram.appearance.XgramScrollIndicator.Exclusion();
+  private final RectF xgramThumb = new RectF();
+  private String xgramLabel;
+  private final Runnable xgramHide = () -> {
+    if (!this.caughtScrollbar && this.xgramAlpha != null) {
+      this.xgramAlpha.animateTo(0f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_SLOW);
+    }
+  };
+
+  private void xgramShow () {
+    removeCallbacks(xgramHide);
+    xgramAlpha.animateTo(1f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST);
+    if (getScrollState() == SCROLL_STATE_IDLE && !caughtScrollbar) {
+      postDelayed(xgramHide, 1200L);
+    }
+  }
+
+  @Override
+  public void onScrollStateChanged (int state) {
+    super.onScrollStateChanged(state);
+    if (xgram && state == SCROLL_STATE_IDLE && !caughtScrollbar && xgramAlpha.getTarget() > 0f) {
+      removeCallbacks(xgramHide);
+      postDelayed(xgramHide, 1200L);
+      invalidate(); // settles the back gesture exclusion on the resting thumb
+    }
+  }
+
+  private void xgramCheckLabel () {
+    String key = visibleSections > 0 ? largeKeys[0] : null;
+    if (key != null && !key.equals(xgramLabel)) {
+      if (xgramLabel != null && caughtScrollbar) {
+        com.fahadali.xgram.appearance.XgramScrollIndicator.labelTick(this);
+      }
+      xgramLabel = key;
+    }
+  }
+
+  private void xgramDrawScrollbar (Canvas c) {
+    float alpha = xgramAlpha.getValue();
+    if (!scrollbarEnabled || scrollbarSpace <= 0 || alpha <= 0f) {
+      xgramExclusion.clear(this);
+      return;
+    }
+    boolean rtl = Lang.rtl();
+    int width = getMeasuredWidth();
+    float press = xgramPress.getValue();
+    com.fahadali.xgram.appearance.XgramScrollIndicator.layoutThumb(xgramThumb, scrollbarRect.top, scrollbarRect.bottom, press, rtl, width);
+    com.fahadali.xgram.appearance.XgramScrollIndicator.drawThumb(c, xgramThumb, Math.max(0f, Math.min(1f, press)), Math.min(1f, alpha));
+    float labelAlpha = xgramLabelAlpha.getValue();
+    String key = visibleSections > 0 ? largeKeys[0] : null;
+    if (labelAlpha > 0f && key != null && key.length() > 0) {
+      float cy = com.fahadali.xgram.appearance.XgramScrollIndicator.labelCenterY(xgramThumb, 0, getScrollBarViewportHeight());
+      float scale = com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : xgramLabelScale.getValue();
+      com.fahadali.xgram.appearance.XgramScrollIndicator.drawLabel(c, com.fahadali.xgram.appearance.XgramScrollIndicator.labelAnchorX(xgramThumb, rtl), cy, key, Math.min(1f, labelAlpha) * Math.min(1f, alpha), scale, com.fahadali.xgram.appearance.XgramScrollIndicator.labelWidth(key), rtl);
+    }
+    if (xgramAlpha.getTarget() <= 0f) {
+      xgramExclusion.clear(this);
+    } else if (!caughtScrollbar) {
+      xgramExclusion.update(this, xgramThumb, rtl, width, getScrollState() != SCROLL_STATE_IDLE);
+    }
   }
 
   private boolean showSections = true;
@@ -195,7 +272,7 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
   private final int scrollbarRadius = Screen.dp(2f);
   private final int scrollbarWidth = scrollbarRadius + scrollbarRadius;
   private final int scrollbarPadding = Screen.dp(9f);
-  private final int scrollbarMinHeight = Screen.dp(32f);
+  private final int scrollbarMinHeight = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 48f : 32f);
 
   private int getScrollBarViewportHeight () {
     return getMeasuredHeight() - getPaddingBottom();
@@ -295,6 +372,9 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
   }
 
   private boolean checkScrollbar (float x, float y) {
+    if (xgram) {
+      return visibleSections > 0 && scrollbarEnabled && xgramAlpha.getValue() >= .5f && com.fahadali.xgram.appearance.XgramScrollIndicator.hitTest(x, y, scrollbarRect.top, scrollbarRect.bottom, Lang.rtl(), getMeasuredWidth());
+    }
     return visibleSections > 0 && scrollbarEnabled && x >= scrollbarRect.left - scrollbarPadding && x <= scrollbarRect.right + scrollbarPadding && y >= scrollbarRect.top - scrollbarPadding && y <= scrollbarRect.bottom + scrollbarPadding;
   }
 
@@ -316,6 +396,24 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
   private static final long DURATION = 150l;
 
   private void openScrollbar () {
+    if (xgram) {
+      removeCallbacks(xgramHide);
+      xgramAlpha.animateTo(1f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST);
+      xgramPress.animateTo(1f, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST);
+      if (xgramLabelAlpha.getValue() <= 0f) {
+        xgramLabelScale.setValue(.6f);
+      }
+      xgramLabelAlpha.animateTo(1f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST);
+      xgramLabelScale.animateTo(1f, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST);
+      xgramLabel = visibleSections > 0 ? largeKeys[0] : null;
+      android.view.ViewParent parent = getParent();
+      if (parent != null) {
+        parent.requestDisallowInterceptTouchEvent(true);
+      }
+      performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      stopScroll();
+      return;
+    }
     ValueAnimator obj;
     final float startFactor = getFactor();
     final float diffFactor = 1f - startFactor;
@@ -328,6 +426,20 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
   }
 
   private void closeScrollbar (boolean animated) {
+    if (xgram) {
+      if (animated) {
+        xgramPress.animateTo(0f, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST);
+        xgramLabelAlpha.animateTo(0f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST);
+        xgramLabelScale.animateTo(.8f, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST);
+      } else {
+        xgramPress.setValue(0f);
+        xgramLabelAlpha.setValue(0f);
+        invalidate();
+      }
+      removeCallbacks(xgramHide);
+      postDelayed(xgramHide, 1200L);
+      return;
+    }
     if (animated) {
       ValueAnimator obj;
       obj = AnimatorUtils.simpleValueAnimator();
@@ -349,6 +461,9 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
     int by = (int) (dy * scale);
     if (by != 0) {
       scrollBy(0, by);
+      if (xgram) {
+        xgramCheckLabel();
+      }
     }
   }
 
@@ -411,6 +526,10 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
     }
 
     // Scrollbar drawing
+    if (xgram) {
+      xgramDrawScrollbar(c);
+      return;
+    }
     if (scrollbarEnabled && scrollbarSpace > 0) {
       int inactiveColor = Theme.getColor(ColorId.sectionedScrollBar);
       int activeColor = ColorUtils.compositeColor(Theme.headerColor(), Theme.getColor(ColorId.sectionedScrollBarActive));

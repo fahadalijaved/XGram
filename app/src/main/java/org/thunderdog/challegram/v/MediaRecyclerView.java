@@ -70,6 +70,10 @@ public class MediaRecyclerView extends RecyclerView {
 
   private void init () {
     setVerticalScrollBarEnabled(false);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: the flag (on once the header has scrolled away) now shows the Material 3 indicator
+      com.fahadali.xgram.appearance.XgramScrollIndicator.install(this, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL);
+    }
     addOnScrollListener(new OnScrollListener() {
       @Override
       public void onScrolled (RecyclerView recyclerView, int dx, int dy) {

@@ -243,6 +243,12 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
     onCreateView(context, recyclerView, adapter);
     buildCells();
     recyclerView.setAdapter(adapter);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: draggable thumb once everything is loaded, with the month under the finger
+      com.fahadali.xgram.appearance.XgramScrollIndicator.install(recyclerView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_DRAGGABLE)
+        .setDragCondition(() -> !isLoading && !canLoadMore())
+        .setLabelProvider(needDateSectionSplitting() ? this::xgramSectionLabel : null);
+    }
     loadInitialChunk();
     return recyclerView;
   }
@@ -1451,6 +1457,21 @@ public abstract class SharedBaseController <T extends MessageSourceProvider> ext
 
   protected boolean needDateSectionSplitting () {
     return true;
+  }
+
+  /** XGram: the month header at or above {@code position}, for the scroll thumb label. */
+  private @Nullable CharSequence xgramSectionLabel (int position) {
+    List<ListItem> items = adapter != null ? adapter.getItems() : null;
+    if (items == null) {
+      return null;
+    }
+    for (int i = Math.min(position, items.size() - 1); i >= 0; i--) {
+      int viewType = items.get(i).getViewType();
+      if (viewType == ListItem.TYPE_HEADER || viewType == ListItem.TYPE_HEADER_PADDED) {
+        return items.get(i).getString();
+      }
+    }
+    return null;
   }
 
   protected boolean supportsLoadingMore (boolean isMore) {

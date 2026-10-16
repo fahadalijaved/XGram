@@ -340,6 +340,12 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
     if (stickersController.recyclerView == null) {
       stickersController.getValue();
       setEnableStickersAnimations(true);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: a Material 3 scroll indicator below the section tabs
+        com.fahadali.xgram.appearance.XgramScrollIndicator.install(stickersController.recyclerView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
+          .setIgnoreScrollbarFlag(true)
+          .setTopInset(EmojiLayout.getHeaderSize());
+      }
       stickersController.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
         @Override
         public void onScrollStateChanged (@NonNull RecyclerView recyclerView, int newState) {
@@ -429,6 +435,12 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
           }
         }
       });
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: a Material 3 scroll indicator below the section tabs
+        com.fahadali.xgram.appearance.XgramScrollIndicator.install(gifsView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
+          .setIgnoreScrollbarFlag(true)
+          .setTopInset(EmojiLayout.getHeaderSize());
+      }
       gifsView.addItemDecoration(new RecyclerView.ItemDecoration() {
         @Override
         public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
