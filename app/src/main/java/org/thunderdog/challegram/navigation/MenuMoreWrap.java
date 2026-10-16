@@ -137,7 +137,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       if (forcedTheme != null) {
         container.setColor(forcedTheme.getColor(ColorId.overlayFilling));
       } else {
-        container.setColorRole(XgramExpressive.SURFACE_CONTAINER_LOW);
+        container.setFloatingColorRole(XgramExpressive.SURFACE_CONTAINER_LOW);
       }
       final int inset = Screen.dp(PADDING);
       ViewUtils.setBackground(this, new InsetDrawable(container, inset, 0, inset, 0));

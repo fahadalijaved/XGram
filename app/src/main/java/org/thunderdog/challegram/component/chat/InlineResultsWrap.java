@@ -938,7 +938,7 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
       xgramMenuShadowColor = shadowColor;
       xgramMenuPaint.setShadowLayer(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_2), 0, Screen.dp(1f), shadowColor);
     }
-    xgramMenuPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER));
+    xgramMenuPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.floatingRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER)));
     c.drawRoundRect(xgramMenuRect, radius, radius, xgramMenuPaint);
   }
 

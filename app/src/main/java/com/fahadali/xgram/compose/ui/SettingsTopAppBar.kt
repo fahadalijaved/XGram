@@ -148,7 +148,8 @@ internal fun SettingsTopAppBar(
   // Dragging the bar itself collapses or expands it, then it settles as TopAppBar's own drag does.
   val dragState = rememberDraggableState { delta -> state.heightOffset += delta }
   val rest = cs.surfaceContainer
-  val scrolled = cs.surfaceContainerHigh
+  // Pure black: the bar stays black when content scrolls under it
+  val scrolled = if (com.fahadali.xgram.appearance.XgramAmoled.isActive()) cs.surfaceContainer else cs.surfaceContainerHigh
 
   Layout(
     content = {

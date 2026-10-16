@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.SplitButtonDefaults
 import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Text
@@ -259,7 +260,12 @@ private fun UpdateSplitButton(
           }
         }
       )
-      DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+      DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = { expanded = false },
+        // Pure black: the menu takes the card step, as surfaceContainer is the black page under it
+        containerColor = if (com.fahadali.xgram.appearance.XgramAmoled.isActive()) MaterialTheme.colorScheme.surfaceContainerHigh else MenuDefaults.containerColor
+      ) {
         DropdownMenuItem(
           text = { Text(str(R.string.XgramWhatsNew)) },
           leadingIcon = { Icon(tgxIcon(R.drawable.baseline_whatshot_24), contentDescription = null) },

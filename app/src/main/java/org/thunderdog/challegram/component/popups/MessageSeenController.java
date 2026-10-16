@@ -129,7 +129,9 @@ public class MessageSeenController extends MediaBottomBaseController<Void> imple
       }
     };
 
-    ViewSupport.setThemedBackground(recyclerView, ColorId.background);
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      ViewSupport.setThemedBackground(recyclerView, ColorId.background);
+    } // XGram: else the list keeps the sheet color (getRecyclerBackgroundColorId), the same as its 28dp top and handle
 
     ArrayList<ListItem> items = new ArrayList<>();
 
@@ -178,6 +180,14 @@ public class MessageSeenController extends MediaBottomBaseController<Void> imple
   @Override
   protected ViewGroup createCustomBottomBar () {
     return new FrameLayout(context);
+  }
+
+  // XGram: Material 3 Expressive, the modal sheet color (surfaceContainerLow, ColorId.drawer's role, as
+  // XgramM3Sheets.sheetColor) for the sheet top, its handle band and the list: the list used to be in the background
+  // color under a band in the filling color, two tones in one sheet.
+  @Override
+  protected int getRecyclerBackgroundColorId () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : super.getRecyclerBackgroundColorId();
   }
 
   @Override

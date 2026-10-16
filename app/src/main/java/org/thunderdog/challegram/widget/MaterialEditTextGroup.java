@@ -250,7 +250,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
     xgramRect.set(editText.getLeft() + editText.getTranslationX(), 0, editText.getRight() + editText.getTranslationX(), bottom);
     xgramPath.rewind();
     xgramPath.addRoundRect(xgramRect, xgramRadii, Path.Direction.CW);
-    xgramPaint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST));
+    xgramPaint.setColor(XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.role(XgramExpressive.SURFACE_CONTAINER_HIGHEST, XgramExpressive.SURFACE_CONTAINER_HIGH)));
     c.drawPath(xgramPath, xgramPaint);
   }
 

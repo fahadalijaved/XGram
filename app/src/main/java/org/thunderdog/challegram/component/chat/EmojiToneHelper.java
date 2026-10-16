@@ -488,7 +488,7 @@ public class EmojiToneHelper implements FactorAnimator.Target {
 
   private static void xgramStyleApplySurface (BubbleLayout applyButton) {
     com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable surface = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramW2ToneListView.MENU_CORNER, com.fahadali.xgram.appearance.XgramW2ToneListView.MENU_CORNER);
-    surface.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER);
+    surface.setFloatingColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER);
     applyButton.setBackground(new android.graphics.drawable.InsetDrawable(surface, applyButton.getPaddingLeft(), applyButton.getPaddingTop(), applyButton.getPaddingRight(), applyButton.getPaddingBottom()));
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
       applyButton.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);

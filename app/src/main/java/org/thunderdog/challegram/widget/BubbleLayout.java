@@ -130,7 +130,7 @@ public class BubbleLayout extends AnimatedLinearLayout implements FactorAnimator
     if (enabled) {
       xgramBubbleBackground = getBackground();
       com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable container = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
-      container.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
+      container.setFloatingColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
       ViewUtils.setBackground(this, container);
       setMinimumWidth(Screen.dp(112f));
     } else {

@@ -144,7 +144,7 @@ public final class XgramW2ToneListView extends EmojiToneListView {
   protected void dispatchDraw (Canvas c) {
     if (menuBounds(menuRect)) {
       // Container
-      fillPaint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER));
+      fillPaint.setColor(XgramExpressive.color(XgramAmoled.floatingRole(XgramExpressive.SURFACE_CONTAINER)));
       final float radius = menuRadius(menuRect);
       c.drawRoundRect(menuRect, radius, radius, fillPaint);
 

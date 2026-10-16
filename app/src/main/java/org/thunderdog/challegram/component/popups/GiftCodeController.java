@@ -198,7 +198,9 @@ public class GiftCodeController extends MediaBottomBaseController<Void> implemen
     adapter.setItems(items.toArray(new ListItem[0]), false);
     initMetrics();
 
-    ViewSupport.setThemedBackground(recyclerView, ColorId.background);
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      ViewSupport.setThemedBackground(recyclerView, ColorId.background);
+    } // XGram: else the list keeps the sheet color (getRecyclerBackgroundColorId), the same as its 28dp top and handle
     recyclerView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
       @Override
       public void onLayoutChange (View v, int left, int top, int right, int bottom, int oldLeft, int oldTop, int oldRight, int oldBottom) {
@@ -222,6 +224,14 @@ public class GiftCodeController extends MediaBottomBaseController<Void> implemen
     }
 
     return super.getInitialContentHeight();
+  }
+
+  // XGram: Material 3 Expressive, the modal sheet color (surfaceContainerLow, ColorId.drawer's role, as
+  // XgramM3Sheets.sheetColor) for the sheet top, its handle band and the list: the list used to be in the background
+  // color under a band in the filling color, two tones in one sheet.
+  @Override
+  protected int getRecyclerBackgroundColorId () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.drawer : super.getRecyclerBackgroundColorId();
   }
 
   @Override

@@ -135,7 +135,7 @@ public class TooltipOverlayView extends ViewGroup {
 
     @Override
     public int tooltipColor () {
-      return XgramExpressive.color(info.xgramRich ? XgramExpressive.SURFACE_CONTAINER : XgramExpressive.INVERSE_SURFACE);
+      return XgramExpressive.color(info.xgramRich ? com.fahadali.xgram.appearance.XgramAmoled.floatingRole(XgramExpressive.SURFACE_CONTAINER) : XgramExpressive.INVERSE_SURFACE);
     }
 
     @Override
