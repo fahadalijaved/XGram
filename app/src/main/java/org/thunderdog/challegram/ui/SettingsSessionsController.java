@@ -591,6 +591,59 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
     return true;
   }
 
+  // XGram M3E: "Terminate old sessions if inactive for" as an M3 sheet of radio rows; the current value is checked (a
+  // value none of the presets is checks Custom, which shows it). Custom stays the input dialog.
+
+  private void xgramShowSessionTtl () {
+    final int[] ids = {R.id.btn_terminateIn1w, R.id.btn_terminateIn1m, R.id.btn_terminateIn3m, R.id.btn_terminateIn6m, R.id.btn_terminateInCustom};
+    final int[] days = {7, 31, 31 * 3, 31 * 6, 0};
+    int checkedId = R.id.btn_terminateInCustom;
+    for (int i = 0; i < days.length; i++) {
+      if (days[i] != 0 && days[i] == inactiveSessionTtlDays) {
+        checkedId = ids[i];
+        break;
+      }
+    }
+    final String customLabel = checkedId == R.id.btn_terminateInCustom && inactiveSessionTtlDays > 0 ?
+      Lang.getString(R.string.XgramR5ListsCustomDays, Lang.getDuration((int) TimeUnit.DAYS.toSeconds(inactiveSessionTtlDays))) :
+      Lang.getString(R.string.SessionTerminatesCustom);
+    final CharSequence[] labels = {
+      Lang.plural(R.string.SessionTerminatesInWeeks, 1),
+      Lang.plural(R.string.SessionTerminatesInMonths, 1),
+      Lang.plural(R.string.SessionTerminatesInMonths, 3),
+      Lang.plural(R.string.SessionTerminatesInMonths, 6),
+      customLabel
+    };
+    ListItem[] items = new ListItem[ids.length];
+    for (int i = 0; i < ids.length; i++) {
+      items[i] = new ListItem(ListItem.TYPE_RADIO_OPTION, ids[i], 0, labels[i], R.id.btn_sessionTtl, ids[i] == checkedId);
+    }
+    showSettings(new org.thunderdog.challegram.navigation.SettingsWrapBuilder(R.id.btn_sessionTtl)
+      .addHeaderItem(Lang.getString(R.string.SessionTerminateTtl))
+      .setRawItems(items)
+      .setIntDelegate((id, result) -> {
+        final int selectedId = result.get(R.id.btn_sessionTtl);
+        if (selectedId == R.id.btn_terminateInCustom) {
+          openInputAlert(Lang.getString(R.string.SessionTerminatesCustomAlertTitle), Lang.getString(R.string.SessionTerminatesCustomAlertHint), R.string.Done, R.string.Cancel, String.valueOf(inactiveSessionTtlDays), (inputView, value) -> {
+            int data = StringUtils.parseInt(value, -1);
+            if (data < 1 || data > 366)
+              return false;
+            tdlib.setInactiveSessionTtl(data, err -> { });
+            return true;
+          }, true).getEditText().setInputType(InputType.TYPE_CLASS_NUMBER);
+          return;
+        }
+        for (int i = 0; i < ids.length; i++) {
+          if (ids[i] == selectedId && days[i] != 0) {
+            if (days[i] != inactiveSessionTtlDays) {
+              tdlib.setInactiveSessionTtl(days[i], err -> { });
+            }
+            break;
+          }
+        }
+      }));
+  }
+
   // XGram M3E: the "Secret chats" and "Calls" filter chips of a session tile toggle the setting in place
 
   private void xgramToggleSession (TdApi.Session session, boolean secretChats) {
@@ -655,6 +708,8 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
       });
     } else if (viewId == R.id.btn_qrLogin) {
       openInAppCamera(new CameraOpenOptions().anchor(v).noTrace(true).allowSystem(false).optionalMicrophone(true).mode(CameraController.MODE_QR).qrCodeListener(this));
+    } else if (viewId == R.id.btn_sessionTtl && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramShowSessionTtl(); // XGram M3E: a sheet of radio rows with the current value checked
     } else if (viewId == R.id.btn_sessionTtl) {
       IntList ids = new IntList(4);
       StringList strings = new StringList(4);

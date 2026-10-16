@@ -40,6 +40,11 @@ enum class TgxRowKind {
   /** Telegram X's full-width text button: an action row in the primary color. */
   BUTTON,
   SLIDER, BUILD_NO, LOADING, EMPTY,
+  /**
+   * An empty state with an icon (TYPE_ICONIZED_EMPTY, TYPE_WEBSITES_EMPTY, TYPE_SESSIONS_EMPTY, M3E TYPE_EMPTY): the
+   * icon on a soft burst in primaryContainer, the headline in titleLarge, the text in bodyMedium.
+   */
+  EMPTY_ICON,
   /** The real Telegram X view in the row's place (AndroidView): users, chats, edit fields, previews, custom rows. */
   FALLBACK
 }

@@ -360,6 +360,11 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
   }
 
   protected void setHeaderText (ListItem item, TextView view, boolean isUpdate) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: sentence case for the headers whose Telegram X English is title case (translations as they are)
+      view.setText(com.fahadali.xgram.appearance.XgramR5Lists.label(item));
+      return;
+    }
     Views.setMediumText(view, item.getString());
   }
 
@@ -384,6 +389,18 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
   }
 
   protected void setButtonText (ListItem item, ScalableTextView view, boolean isUpdate) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: labels as written (sentence case where Telegram X's English is title case), never in capitals
+      CharSequence label = com.fahadali.xgram.appearance.XgramR5Lists.label(item);
+      if (isUpdate) {
+        view.replaceText(label);
+      } else if (view instanceof com.fahadali.xgram.appearance.XgramR5Lists.PillButton) {
+        view.setText(label);
+      } else {
+        Views.setMediumText(view, label);
+      }
+      return;
+    }
     CharSequence text = item.getString() != null ? Lang.uppercase(item.getString().toString()) : null;
     if (isUpdate) {
       view.replaceText(text);
@@ -1557,6 +1574,16 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
       }
       case ListItem.TYPE_WEBSITES_EMPTY:
       case ListItem.TYPE_ICONIZED_EMPTY: {
+        com.fahadali.xgram.appearance.XgramListStateView xgramState = com.fahadali.xgram.appearance.XgramR5Lists.emptyBlockState(holder.itemView);
+        if (xgramState != null) {
+          // XGram M3E: the item's icon (a globe for websites) on a soft burst, the text split into headline and supporting text
+          final int icon = viewType == ListItem.TYPE_WEBSITES_EMPTY ? R.drawable.baseline_language_24 : com.fahadali.xgram.appearance.XgramR5Lists.emptyIcon(item.getStringResource(), item.getIconResource());
+          com.fahadali.xgram.appearance.XgramR5Lists.bindEmpty(xgramState, icon, item.getString());
+          if (holder.itemView.getMeasuredHeight() != 0) {
+            holder.itemView.requestLayout();
+          }
+          break;
+        }
         ViewGroup group = (ViewGroup) ((ViewGroup) holder.itemView).getChildAt(0);
         if (viewType == ListItem.TYPE_ICONIZED_EMPTY) {
           ((ImageView) group.getChildAt(0)).setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(item.getIconResource()));
@@ -1715,6 +1742,11 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
         break;
       }
       case ListItem.TYPE_EMPTY: {
+        if (holder.itemView instanceof com.fahadali.xgram.appearance.XgramListStateView) {
+          // XGram M3E: icon chosen by the empty text's string, the text as headline or supporting text
+          com.fahadali.xgram.appearance.XgramR5Lists.bindEmpty((com.fahadali.xgram.appearance.XgramListStateView) holder.itemView, item);
+          break;
+        }
         ((TextView) holder.itemView).setText(item.getString());
         ((TextView) holder.itemView).setTextColor(Theme.getColor(item.getTextColorId(ColorId.background_textLight)));
         break;
@@ -1724,6 +1756,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
         break;
       }
       case ListItem.TYPE_BUTTON: {
+        com.fahadali.xgram.appearance.XgramR5Lists.bindButtonRow(holder.itemView, item); // XGram M3E: the pill takes the click
         setButtonText(item, (ScalableTextView) ((ViewGroup) holder.itemView).getChildAt(0), false);
         break;
       }

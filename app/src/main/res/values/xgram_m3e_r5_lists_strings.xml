@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram Material 3 Expressive, round 5: Devices and the shared list layer (sentence case, used while the language is the bundled English) -->
+<resources>
+  <string name="XgramR5ListsChangeNumber">Change number</string>
+  <string name="XgramR5ListsInviteContacts">Invite contacts</string>
+  <string name="XgramR5ListsArchivedChats">Archived chats</string>
+  <string name="XgramR5ListsEditFolder">Edit folder</string>
+  <string name="XgramR5ListsDisconnectAll">Disconnect all websites</string>
+  <string name="XgramR5ListsConnectedWebsites">Connected websites</string>
+  <string name="XgramR5ListsLoggedIn">Logged in with Telegram</string>
+  <string name="XgramR5ListsNoOtherSessions">No other active sessions</string>
+  <string name="XgramR5ListsUnconfirmed">Unconfirmed</string>
+  <string name="XgramR5ListsCustomDays">Custom: %1$s</string>
+</resources>

@@ -904,6 +904,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return new SettingHolder(settingView);
       }
       case ListItem.TYPE_EMPTY: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: an icon on a soft burst, titleLarge and bodyMedium, centred in the page (SettingsAdapter binds it)
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramR5Lists.newEmptyPage(context, onClickListener, themeProvider));
+        }
         TextView textView = new NoScrollTextView(context);
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
         textView.setTypeface(Fonts.getRobotoRegular());
@@ -1439,6 +1443,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return new SettingHolder(createDescription(context, viewType, ColorId.background_textLight, onClickListener, themeProvider));
       }
       case ListItem.TYPE_BUILD_NO: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: labelMedium onSurfaceVariant, centred, 24dp below
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramR5Lists.newBuildNo(context, onClickListener, onLongClickListener, themeProvider));
+        }
         TextView textView = new NoScrollTextView(context);
         textView.setGravity(Gravity.CENTER);
         textView.setPadding(0, 0, 0, Screen.dp(4f));
@@ -1464,6 +1472,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         if (viewType == ListItem.TYPE_SESSION && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
           // XGram M3E: Devices tile (same child order: time, title, app, location, progress, icon, secret, calls)
           return new SettingHolder(com.fahadali.xgram.appearance.XgramM3Sessions.newRow(context, onClickListener, themeProvider));
+        }
+        if (viewType == ListItem.TYPE_SESSION_WITH_AVATAR && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: connected website tile (same child order: time, title, text, location, progress, avatar)
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramM3Sessions.newAvatarRow(context, onClickListener, themeProvider));
         }
         boolean isAvatar = viewType == ListItem.TYPE_SESSION_WITH_AVATAR;
 
@@ -1682,6 +1694,12 @@ public class SettingHolder extends RecyclerView.ViewHolder {
             int totalHeight = parent != null ? ((RecyclerView) parent).getMeasuredHeight() : 0;
             int availHeight = totalHeight - paddingTop;
 
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && availHeight > Screen.dp(240f)) {
+              // XGram M3E: never shorter than the empty state itself
+              super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+              availHeight = Math.max(availHeight, getMeasuredHeight());
+            }
+
             if (availHeight > Screen.dp(240f)) {
               super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(availHeight, MeasureSpec.EXACTLY));
             } else {
@@ -1690,6 +1708,21 @@ public class SettingHolder extends RecyclerView.ViewHolder {
           }
         };
         frameLayout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: the devices icon on a soft burst, titleLarge and bodyMedium, centred in the space left
+          com.fahadali.xgram.appearance.XgramListStateView stateView = new com.fahadali.xgram.appearance.XgramListStateView(context);
+          stateView.setWrapContent(true);
+          stateView.setPadding(0, Screen.dp(24f), 0, Screen.dp(24f));
+          stateView.setEmpty(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_devices_other_24),
+            com.fahadali.xgram.appearance.XgramR5Lists.label(R.string.NoOtherSessions), Lang.getString(R.string.NoOtherSessionsInfo));
+          stateView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
+          if (themeProvider != null) {
+            themeProvider.addThemeInvalidateListener(stateView);
+          }
+          frameLayout.addView(stateView);
+          return new SettingHolder(frameLayout);
+        }
 
         RelativeLayout relativeLayout = new RelativeLayout(context);
         relativeLayout.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
@@ -1753,6 +1786,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
       case ListItem.TYPE_WEBSITES_EMPTY:
       case ListItem.TYPE_CHATS_PLACEHOLDER: {
         final boolean needRegisteredUsers = viewType == ListItem.TYPE_CHATS_PLACEHOLDER;
+        if (!needRegisteredUsers && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: the empty state (icon on a soft burst, titleLarge, bodyMedium) centred with the button group under it
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramR5Lists.newEmptyBlock(context, themeProvider));
+        }
 
         RelativeLayout contentView = new RelativeLayout(context);
         contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
@@ -1831,7 +1868,8 @@ public class SettingHolder extends RecyclerView.ViewHolder {
             if (myViewId == R.id.changePhoneText) {
               headerHeight = Screen.dp(310f);
             } else if (myViewId == R.id.inviteFriendsText) {
-              headerHeight = Screen.dp(120f);
+              // XGram M3E: the burst band and the texts of JoinedUsersView's empty state
+              headerHeight = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 250f : 120f);
             } else {
               headerHeight = Screen.dp(240f);
             }
@@ -1850,6 +1888,10 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return new SettingHolder(wrapView);
       }
       case ListItem.TYPE_BUTTON: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: a centred 40dp filled pill (primary for a page's main action, tonal otherwise), no tile behind it
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramR5Lists.newButtonRow(context, onClickListener, themeProvider));
+        }
         TextView textView = new ScalableTextView(context);
 
         textView.setSingleLine(true);

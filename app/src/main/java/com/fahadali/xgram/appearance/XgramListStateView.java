@@ -36,7 +36,7 @@ import org.thunderdog.challegram.tool.Screen;
  * icon on a soft burst in primaryContainer, a titleLarge headline and a bodyMedium supporting line).
  */
 public final class XgramListStateView extends View {
-  private static final int STATE_LOADING = 0, STATE_EMPTY = 1;
+  private static final int STATE_LOADING = 0, STATE_EMPTY = 1, STATE_NONE = 2;
 
   private int state = STATE_LOADING;
   private boolean contained = true;
@@ -70,19 +70,92 @@ public final class XgramListStateView extends View {
     invalidate();
   }
 
-  public void setEmpty (@DrawableRes int iconRes, CharSequence title, @Nullable CharSequence text) {
+  /** Draws nothing (a list whose own loading indicator is elsewhere, while it loads); the next empty state enters. */
+  public void setNone () {
+    if (state != STATE_NONE) {
+      this.state = STATE_NONE;
+      this.fadeLoading = false;
+      this.emptyStart = -1;
+      invalidate();
+    }
+  }
+
+  /**
+   * As a list row (SettingsAdapter's empty states): with {@code wrap} on, a height that is not exact is the empty
+   * state's own height (burst, headline, supporting text and the padding) instead of all the space offered.
+   */
+  public void setWrapContent (boolean wrap) {
+    if (this.wrapContent != wrap) {
+      this.wrapContent = wrap;
+      requestLayout();
+    }
+  }
+
+  private boolean wrapContent;
+
+  public boolean isEmptyState () {
+    return state == STATE_EMPTY;
+  }
+
+  @Nullable
+  public CharSequence getEmptyTitle () {
+    return state == STATE_EMPTY ? title : null;
+  }
+
+  @Nullable
+  public CharSequence getEmptyText () {
+    return state == STATE_EMPTY ? text : null;
+  }
+
+  /** The empty state's height for {@code width}, padding included. */
+  public int measureEmptyHeight (int width) {
+    checkLayouts(width);
+    int total = Screen.dp(112f);
+    if (titleLayout != null) {
+      total += Screen.dp(16f) + titleLayout.getHeight();
+    }
+    if (textLayout != null) {
+      total += (titleLayout != null ? Screen.dp(8f) : Screen.dp(16f)) + textLayout.getHeight();
+    }
+    return total + getPaddingTop() + getPaddingBottom();
+  }
+
+  @Override
+  protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+    if (!wrapContent || MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) {
+      super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+      return;
+    }
+    final int width = getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec);
+    int height = state == STATE_EMPTY ? measureEmptyHeight(width) : Screen.dp(48f) + Screen.dp(32f) + getPaddingTop() + getPaddingBottom();
+    if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.AT_MOST) {
+      height = Math.min(height, MeasureSpec.getSize(heightMeasureSpec));
+    }
+    setMeasuredDimension(width, height);
+  }
+
+  /** {@code title} may be null: the icon and the supporting text only (a hint that is one long sentence). */
+  public void setEmpty (@DrawableRes int iconRes, @Nullable CharSequence title, @Nullable CharSequence text) {
     if (state != STATE_EMPTY) {
       // Entrance: the burst scales in, then the headline and the supporting text fade and rise (50 ms apart);
       // a loading indicator that was on screen crossfades out
       fadeLoading = state == STATE_LOADING && startTime >= 0;
       emptyStart = -1;
     }
+    final boolean sizeChanged = wrapContent && (!eq(this.title, title) || !eq(this.text, text));
     this.state = STATE_EMPTY;
     this.icon = iconRes != 0 ? Drawables.get(iconRes) : null;
     this.title = title;
     this.text = text;
     this.layoutWidth = -1;
+    if (sizeChanged) {
+      requestLayout();
+    }
     invalidate();
+  }
+
+  private static boolean eq (@Nullable CharSequence a, @Nullable CharSequence b) {
+    return a == null ? b == null : b != null && a.toString().equals(b.toString());
   }
 
   @Override
@@ -100,7 +173,7 @@ public final class XgramListStateView extends View {
     }
     if (state == STATE_LOADING) {
       drawLoading(c, width / 2f, getPaddingTop() + height / 2f, 1f);
-    } else {
+    } else if (state == STATE_EMPTY) {
       drawEmpty(c, width, height);
     }
   }
@@ -134,7 +207,7 @@ public final class XgramListStateView extends View {
   }
 
   private void checkLayouts (int width) {
-    if (layoutWidth == width && titleLayout != null) {
+    if (layoutWidth == width && (titleLayout != null || textLayout != null || (title == null && text == null))) {
       return;
     }
     layoutWidth = width;
@@ -164,7 +237,7 @@ public final class XgramListStateView extends View {
 
   private void drawEmpty (Canvas c, int width, int height) {
     checkLayouts(width);
-    if (titleLayout == null) {
+    if (titleLayout == null && textLayout == null) {
       return;
     }
     long now = AnimationUtils.currentAnimationTimeMillis();
@@ -192,7 +265,8 @@ public final class XgramListStateView extends View {
       fadeLoading = false;
     }
     final int shapeSize = Screen.dp(112f), gap = Screen.dp(16f), textGap = Screen.dp(8f);
-    final int total = shapeSize + gap + titleLayout.getHeight() + (textLayout != null ? textGap + textLayout.getHeight() : 0);
+    final int titleHeight = titleLayout != null ? titleLayout.getHeight() : 0;
+    final int total = shapeSize + (titleLayout != null ? gap + titleHeight : 0) + (textLayout != null ? (titleLayout != null ? textGap : gap) + textLayout.getHeight() : 0);
     final float top = getPaddingTop() + Math.max(0, (height - total) / 2f);
     final float cx = width / 2f, cy = top + shapeSize / 2f;
 
@@ -226,11 +300,17 @@ public final class XgramListStateView extends View {
     }
 
     c.save();
-    c.translate((width - titleLayout.getWidth()) / 2f, top + shapeSize + gap + titleRise);
-    titlePaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), titleAlpha));
-    titleLayout.draw(c);
+    if (titleLayout != null) {
+      c.translate((width - titleLayout.getWidth()) / 2f, top + shapeSize + gap + titleRise);
+      titlePaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), titleAlpha));
+      titleLayout.draw(c);
+      if (textLayout != null) {
+        c.translate(0, titleLayout.getHeight() + textGap - titleRise + textRise);
+      }
+    } else if (textLayout != null) {
+      c.translate((width - textLayout.getWidth()) / 2f, top + shapeSize + gap + textRise);
+    }
     if (textLayout != null) {
-      c.translate(0, titleLayout.getHeight() + textGap - titleRise + textRise);
       textPaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), textAlpha));
       textLayout.draw(c);
     }

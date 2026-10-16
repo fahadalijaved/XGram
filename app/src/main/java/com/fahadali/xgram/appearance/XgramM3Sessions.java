@@ -75,11 +75,13 @@ public final class XgramM3Sessions {
       return;
     }
     SessionRow row = (SessionRow) parent;
-    row.setCurrent(current);
+    row.setState(current, !current && session.isPasswordPending);
     row.icon.setImageResource(XgramIconPack.map(iconOf(session)));
     final boolean chips = !session.isPasswordPending;
     row.secret.setVisibility(chips ? View.VISIBLE : View.GONE);
     row.calls.setVisibility(chips ? View.VISIBLE : View.GONE);
+    // An incomplete login attempt: an "Unconfirmed" assist chip in the chips' place
+    row.unconfirmed.setVisibility(chips ? View.GONE : View.VISIBLE);
     row.secret.setChecked(session.canAcceptSecretChats, current);
     row.calls.setChecked(session.canAcceptCalls, current);
     row.secret.setEnabled(!inProgress);
@@ -131,7 +133,8 @@ public final class XgramM3Sessions {
     final ProgressComponentView progress;
     final IconView icon;
     final ChipView secret, calls;
-    private boolean current, bound;
+    final AssistChipView unconfirmed;
+    private boolean current, pending, bound;
 
     SessionRow (Context context, View.OnClickListener onClickListener, @Nullable ViewController<?> themeProvider) {
       super(context);
@@ -230,7 +233,18 @@ public final class XgramM3Sessions {
       calls.setLayoutParams(params);
       addView(calls);
 
+      // 8: "Unconfirmed" (incomplete login attempts), after the children SettingsAdapter reads by index
+      unconfirmed = new AssistChipView(context, R.string.XgramR5ListsUnconfirmed, R.drawable.baseline_warning_18);
+      params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(CHIP_HEIGHT));
+      params.addRule(RelativeLayout.BELOW, R.id.session_location);
+      params.addRule(rtl ? RelativeLayout.ALIGN_RIGHT : RelativeLayout.ALIGN_LEFT, R.id.session_title);
+      params.topMargin = Screen.dp(8f);
+      unconfirmed.setLayoutParams(params);
+      unconfirmed.setVisibility(View.GONE);
+      addView(unconfirmed);
+
       if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(unconfirmed);
         // Roles are re-read in onDraw: a theme change only has to redraw every part
         themeProvider.addThemeInvalidateListener(this);
         themeProvider.addThemeInvalidateListener(time);
@@ -252,11 +266,29 @@ public final class XgramM3Sessions {
 
     /** This device: a secondaryContainer tile with on-container text and a primary icon. */
     void setCurrent (boolean current) {
-      if (bound && this.current == current) {
+      setState(current, false);
+    }
+
+    /**
+     * This device: a secondaryContainer tile with on-container text and a primary icon. An incomplete login attempt
+     * ({@code pending}): an errorContainer tile, the device name in error, an error icon circle.
+     */
+    void setState (boolean current, boolean pending) {
+      if (bound && this.current == current && this.pending == pending) {
         return;
       }
       this.bound = true;
       this.current = current;
+      this.pending = pending;
+      if (pending) {
+        tile.setColorRole(XgramExpressive.ERROR_CONTAINER);
+        title.setRole(XgramExpressive.ERROR);
+        app.setRole(XgramExpressive.ON_ERROR_CONTAINER);
+        location.setRole(XgramExpressive.ON_ERROR_CONTAINER);
+        time.setRole(XgramExpressive.ON_ERROR_CONTAINER);
+        icon.setRoles(XgramExpressive.ERROR, XgramExpressive.ON_ERROR);
+        return;
+      }
       tile.setColorRole(current ? XgramExpressive.SECONDARY_CONTAINER : XgramExpressive.SURFACE_BRIGHT);
       final int content = current ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE;
       final int variant = current ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE_VARIANT;
@@ -265,6 +297,114 @@ public final class XgramM3Sessions {
       location.setRole(variant);
       time.setRole(variant);
       icon.setRoles(current ? XgramExpressive.PRIMARY : XgramExpressive.PRIMARY_CONTAINER, current ? XgramExpressive.ON_PRIMARY : XgramExpressive.ON_PRIMARY_CONTAINER);
+    }
+  }
+
+  // Websites (TYPE_SESSION_WITH_AVATAR)
+
+  public static boolean isAvatarRow (@Nullable View view) {
+    return view instanceof SessionAvatarRow;
+  }
+
+  /** The TYPE_SESSION_WITH_AVATAR row (Settings > Devices > Websites), with Expressive design. */
+  public static RelativeLayout newAvatarRow (Context context, View.OnClickListener onClickListener, @Nullable ViewController<?> themeProvider) {
+    return new SessionAvatarRow(context, onClickListener, themeProvider);
+  }
+
+  /**
+   * A connected website as a segmented list tile: the bot's 40dp avatar, the domain in titleMedium, the bot, browser and
+   * platform in bodyMedium onSurfaceVariant (two lines at most), the IP address and location in bodySmall, the last
+   * active time as trailing labelMedium. Child order as Telegram X's (time, title, text, location, progress, avatar):
+   * SettingsAdapter and SettingHolder read them by index.
+   */
+  public static final class SessionAvatarRow extends RelativeSessionLayout {
+    SessionAvatarRow (Context context, View.OnClickListener onClickListener, @Nullable ViewController<?> themeProvider) {
+      super(context);
+      final boolean rtl = Lang.rtl();
+      setOnClickListener(onClickListener);
+      setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
+      setMinimumHeight(Screen.dp(72f));
+      Views.setClickable(this);
+
+      XgramExpressive.MorphDrawable tile = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_NONE, XgramExpressive.LIST_PRESSED_CORNER);
+      tile.setColorRole(XgramExpressive.SURFACE_BRIGHT);
+      tile.setHost(this);
+      setBackground(XgramAppMotion.ThemedRipple.ofRole(XgramExpressive.ON_SURFACE, tile, tile.newMask()));
+
+      RelativeLayout.LayoutParams params;
+
+      // 0: last active time, trailing, on the title's baseline
+      RoleTextView time = new RoleTextView(context, XgramExpressive.TS_LABEL_M, XgramExpressive.ON_SURFACE_VARIANT);
+      time.setId(R.id.session_time);
+      time.setPadding(rtl ? 0 : Screen.dp(12f), 0, rtl ? Screen.dp(12f) : 0, 0);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        time.setFontFeatureSettings("tnum");
+      }
+      params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      params.addRule(rtl ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+      params.addRule(RelativeLayout.ALIGN_BASELINE, R.id.session_title);
+      time.setLayoutParams(params);
+      addView(time);
+
+      // 1: domain, titleMedium
+      RoleTextView title = new RoleTextView(context, XgramExpressive.TS_TITLE_M, XgramExpressive.ON_SURFACE);
+      title.setId(R.id.session_title);
+      params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      if (rtl) {
+        params.addRule(RelativeLayout.RIGHT_OF, R.id.session_time);
+        params.addRule(RelativeLayout.LEFT_OF, R.id.session_icon);
+        params.rightMargin = Screen.dp(16f);
+      } else {
+        params.addRule(RelativeLayout.LEFT_OF, R.id.session_time);
+        params.addRule(RelativeLayout.RIGHT_OF, R.id.session_icon);
+        params.leftMargin = Screen.dp(16f);
+      }
+      title.setLayoutParams(params);
+      addView(title);
+
+      // 2: bot, browser and platform, bodyMedium, two lines at most
+      RoleTextView text = new RoleTextView(context, XgramExpressive.TS_BODY_M, XgramExpressive.ON_SURFACE_VARIANT);
+      text.setId(R.id.session_device);
+      text.setSingleLine(false);
+      text.setMaxLines(2);
+      text.setLayoutParams(SessionRow.belowTitleColumn(R.id.session_title, rtl));
+      addView(text);
+
+      // 3: IP address and location, bodySmall
+      RoleTextView location = new RoleTextView(context, XgramExpressive.TS_BODY_S, XgramExpressive.ON_SURFACE_VARIANT);
+      location.setId(R.id.session_location);
+      location.setLayoutParams(SessionRow.belowTitleColumn(R.id.session_device, rtl));
+      addView(location);
+
+      // 4: progress while the website is being disconnected (it fades the time out)
+      ProgressComponentView progress = new ProgressComponentView(context);
+      progress.initMedium(0f);
+      progress.setInverseView(time);
+      params = new RelativeLayout.LayoutParams(Screen.dp(14f), Screen.dp(14f));
+      params.addRule(rtl ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+      params.topMargin = Screen.dp(5f);
+      progress.setLayoutParams(params);
+      addView(progress);
+
+      // 5: the bot's 40dp avatar, top-aligned as in M3 three-line items
+      org.thunderdog.challegram.widget.AvatarView avatar = new org.thunderdog.challegram.widget.AvatarView(context);
+      avatar.setId(R.id.session_icon);
+      avatar.setUseCustomWindowManagement();
+      avatar.setLettersSizeDp(16f);
+      params = new RelativeLayout.LayoutParams(Screen.dp(40f), Screen.dp(40f));
+      params.addRule(rtl ? RelativeLayout.ALIGN_PARENT_RIGHT : RelativeLayout.ALIGN_PARENT_LEFT);
+      avatar.setLayoutParams(params);
+      addView(avatar);
+
+      if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(this);
+        themeProvider.addThemeInvalidateListener(time);
+        themeProvider.addThemeInvalidateListener(title);
+        themeProvider.addThemeInvalidateListener(text);
+        themeProvider.addThemeInvalidateListener(location);
+        themeProvider.addThemeInvalidateListener(avatar);
+      }
     }
   }
 
@@ -438,6 +578,55 @@ public final class XgramM3Sessions {
       super.onInitializeAccessibilityNodeInfo(info);
       info.setCheckable(true);
       info.setChecked(checked);
+    }
+  }
+
+  /**
+   * An M3 assist chip that only tells a state (AssistChipTokens: 32dp, 8dp corners, labelLarge, an 18dp leading icon,
+   * a 1dp outline), on the errorContainer tile of an incomplete login attempt: outline and icon in error, the label in
+   * onErrorContainer. Not clickable: the row's tap opens the attempt.
+   */
+  static final class AssistChipView extends NoScrollTextView {
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF rect = new RectF();
+    private final @Nullable Drawable icon;
+
+    AssistChipView (Context context, @StringRes int textRes, @DrawableRes int iconRes) {
+      super(context);
+      XgramExpressive.applyText(this, XgramExpressive.TS_LABEL_L, false);
+      setAllCaps(false);
+      setSingleLine(true);
+      setGravity(Gravity.CENTER_VERTICAL);
+      setText(Lang.getString(textRes));
+      setClickable(false);
+      setFocusable(false);
+      icon = Drawables.get(getResources(), XgramIconPack.map(iconRes));
+      final int start = Screen.dp(CHIP_ICON_START + CHIP_ICON + CHIP_ICON_GAP), end = Screen.dp(CHIP_SPACE);
+      final boolean rtl = Lang.rtl();
+      setPadding(rtl ? end : start, 0, rtl ? start : end, 0);
+      paint.setStyle(Paint.Style.STROKE);
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      final int outline = XgramExpressive.color(XgramExpressive.ERROR);
+      final int content = XgramExpressive.color(XgramExpressive.ON_ERROR_CONTAINER);
+      final float stroke = Screen.dpf(1f);
+      final float radius = Screen.dpf(XgramExpressive.CORNER_S);
+      paint.setColor(outline);
+      paint.setStrokeWidth(stroke);
+      rect.set(stroke / 2f, stroke / 2f, getWidth() - stroke / 2f, getHeight() - stroke / 2f);
+      c.drawRoundRect(rect, radius - stroke / 2f, radius - stroke / 2f, paint);
+      if (icon != null) {
+        final int size = Screen.dp(CHIP_ICON);
+        final float x = Lang.rtl() ? getWidth() - Screen.dp(CHIP_ICON_START) - size : Screen.dp(CHIP_ICON_START);
+        final float y = (getHeight() - size) / 2f;
+        Drawables.draw(c, icon, x, y, Paints.getPorterDuffPaint(outline));
+      }
+      if (getCurrentTextColor() != content) {
+        setTextColor(content);
+      }
+      super.onDraw(c);
     }
   }
 

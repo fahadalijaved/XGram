@@ -169,6 +169,9 @@ public class ShadowView extends View {
 
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return; // XGram M3E: surfaces are told apart by tone, no shadow gradients or lines (the view keeps its size)
+    }
     float separatorFactor = Theme.getSeparatorReplacement();
     if (separatorFactor == 0f) {
       drawSimpleShadow(c, (isTransparent ? Theme.getShadowDepth() : 1f));

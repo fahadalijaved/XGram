@@ -489,7 +489,10 @@ public class SettingsPrivacyController extends RecyclerViewController<SettingsPr
       SettingsWebsitesController websites = new SettingsWebsitesController(context, tdlib);
       websites.setArguments(this);
 
-      SimpleViewPagerController c = new SimpleViewPagerController(context, tdlib, new ViewController<?>[] {sessions, websites}, new String[] {Lang.uppercase(Lang.getString(R.string.Devices)), Lang.uppercase(Lang.getString(R.string.Websites))}, false);
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled(); // XGram M3E: tab labels in sentence case
+      SimpleViewPagerController c = new SimpleViewPagerController(context, tdlib, new ViewController<?>[] {sessions, websites}, xgramM3 ?
+        new String[] {Lang.getString(R.string.Devices), Lang.getString(R.string.Websites)} :
+        new String[] {Lang.uppercase(Lang.getString(R.string.Devices)), Lang.uppercase(Lang.getString(R.string.Websites))}, false);
       navigateTo(c);
     } else if (id == R.id.btn_passcode) {
       lastClickedButton = id;
