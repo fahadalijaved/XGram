@@ -1012,6 +1012,8 @@ public final class XgramInlineVideo {
 
     // Material 3 Expressive controls (drawControlsM3). Made on the first frame, once per player.
     private static final float M3_SCRIM_DP = 48f, M3_TRACK_INSET_DP = 12f;
+    /** The track's touch band, its gap to the bubble time chip, and the shortest track kept beside the chip. */
+    private static final float M3_TRACK_BAND_DP = 32f, M3_TRACK_CHIP_GAP_DP = 8f, M3_TRACK_MIN_DP = 48f;
     private static TextPaint m3Text;
     private static float m3TextBaseline;
     /** Paused disk: 0 a circle, 1 a 16dp rounded square at .85 (playing). */
@@ -1027,6 +1029,9 @@ public final class XgramInlineVideo {
     private long m3TimePosition = -1, m3TimeDuration = -1;
     private String m3Time = "";
     private float m3TimeWidth;
+    /** The seek track (layoutM3Track), shared by drawing and touch, and the bubble time chip it makes way for. */
+    private float m3TrackLeft, m3TrackRight, m3TrackY;
+    private final RectF m3TimeChip = new RectF();
 
     PlayerLayer (Context context, Session session) {
       super(context);
@@ -1321,6 +1326,35 @@ public final class XgramInlineVideo {
       }
     }
 
+    /**
+     * The seek track: the cell's width less 12dp at each end, 12dp over the bottom. When the bubble time chip lies
+     * over the cell's bottom (a video without a caption), the track ends 8dp before the chip on the chip's center
+     * line, the way a player puts the slider and a trailing label on one row; with less than 48dp left for it, it
+     * rises above the chip instead. Either way the chip never sits on the track.
+     */
+    private void layoutM3Track () {
+      float trackLeft = cell.left + Screen.dp(M3_TRACK_INSET_DP), trackRight = cell.right - Screen.dp(M3_TRACK_INSET_DP);
+      float trackY = cell.bottom - Screen.dp(12f);
+      final RectF chip = m3TimeChip;
+      if (session.wrapper.xgramTimeChipRect(chip) &&
+        chip.bottom > cell.bottom - Screen.dp(M3_TRACK_BAND_DP) && chip.top < cell.bottom &&
+        chip.right > cell.left && chip.left < cell.right) {
+        final boolean chipAtEnd = chip.centerX() >= cell.exactCenterX();
+        final float start = chipAtEnd ? trackLeft : Math.max(trackLeft, chip.right + Screen.dp(M3_TRACK_CHIP_GAP_DP));
+        final float end = chipAtEnd ? Math.min(trackRight, chip.left - Screen.dp(M3_TRACK_CHIP_GAP_DP)) : trackRight;
+        if (end - start >= Screen.dp(M3_TRACK_MIN_DP)) {
+          trackLeft = start;
+          trackRight = end;
+          trackY = chip.centerY();
+        } else {
+          trackY = chip.top - Screen.dp(12f);
+        }
+      }
+      m3TrackLeft = trackLeft;
+      m3TrackRight = trackRight;
+      m3TrackY = trackY;
+    }
+
     private void drawControlsM3 (Canvas c) {
       final Session s = session;
       final int left = cell.left, top = cell.top, right = cell.right, bottom = cell.bottom;
@@ -1330,9 +1364,10 @@ public final class XgramInlineVideo {
       final boolean playing = s.isPlaying();
       updateM3State(!playing && !dragging, playing && !dragging);
       boolean animating = false;
+      layoutM3Track();
 
-      // Bottom: a gradient for the seek track to stand out on
-      final int scrimHeight = Math.min(Screen.dp(M3_SCRIM_DP), cell.height());
+      // Bottom: a gradient for the seek track to stand out on (taller when the track rises above the time chip)
+      final int scrimHeight = Math.min(Math.max(Screen.dp(M3_SCRIM_DP), (int) (bottom - m3TrackY) + Screen.dp(24f)), cell.height());
       if (scrimHeight > 0) {
         if (m3ScrimHeight != scrimHeight) {
           m3ScrimHeight = scrimHeight;
@@ -1415,10 +1450,10 @@ public final class XgramInlineVideo {
         animating = true;
       }
 
-      // Bottom: the seek track
-      final float trackLeft = left + Screen.dp(M3_TRACK_INSET_DP), trackRight = right - Screen.dp(M3_TRACK_INSET_DP);
+      // Bottom: the seek track, clear of the bubble time chip
+      final float trackLeft = m3TrackLeft, trackRight = m3TrackRight;
       if (trackRight > trackLeft) {
-        final float trackY = bottom - Screen.dp(12f);
+        final float trackY = m3TrackY;
         final float amplitude = Screen.dp(3f) * Math.max(0f, Math.min(1f, m3Wave.getValue()));
         final boolean handle = dragging || s.engaged;
         XgramWavyLinear.draw(c, trackLeft, trackRight, trackY, progress, 0xffffffff, 0x4dffffff,
@@ -1450,6 +1485,15 @@ public final class XgramInlineVideo {
       if (!playRect.isEmpty() && playRect.contains(x, y)) {
         return TARGET_PLAY;
       }
+      if (XgramExpressive.isEnabled()) {
+        // The track's own 32dp band, so a tap on the bubble time chip beside it doesn't seek
+        layoutM3Track();
+        final float band = Screen.dp(M3_TRACK_BAND_DP) / 2f;
+        if (m3TrackRight > m3TrackLeft && Math.abs(y - m3TrackY) <= band && x >= m3TrackLeft - slop * 2f && x <= m3TrackRight + slop * 2f) {
+          return TARGET_TRACK;
+        }
+        return TARGET_NONE;
+      }
       if (y >= cell.bottom - Screen.dp(28f) && cell.width() > Screen.dp(20f)) {
         return TARGET_TRACK;
       }
@@ -1458,7 +1502,7 @@ public final class XgramInlineVideo {
 
     private float trackFraction (float x) {
       if (XgramExpressive.isEnabled()) {
-        float trackLeft = cell.left + Screen.dp(M3_TRACK_INSET_DP), trackRight = cell.right - Screen.dp(M3_TRACK_INSET_DP);
+        final float trackLeft = m3TrackLeft, trackRight = m3TrackRight;
         return trackRight > trackLeft ? Math.max(0f, Math.min(1f, (x - trackLeft) / (trackRight - trackLeft))) : 0f;
       }
       float trackLeft = cell.left + Screen.dp(10f), trackRight = cell.right - Screen.dp(10f);

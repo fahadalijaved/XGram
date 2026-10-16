@@ -910,6 +910,11 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
   }
 
   private int getRadius () {
+    if (useBubbles() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: album tiles take the grouped bubble corner the Expressive bubble path uses (4dp, CORNER_XS), the
+      // same one the viewer zoom starts from (getMediaThumbLocation)
+      return Screen.dp(com.fahadali.xgram.appearance.XgramM3Chat.bubbleMergeRadius());
+    }
     return Screen.dp(useBubbles() ? Theme.getBubbleMergeRadius() : Theme.getImageRadius());
   }
 
@@ -1388,6 +1393,42 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
 
   public boolean xgramSpoilerVisible () {
     return spoilerOverlayVisible.getValue();
+  }
+
+  /**
+   * XGram M3E: the bubble time chip ("5:51 am", pin, views, ticks) that the message draws over its media, in the
+   * message view's coordinates, so the inline player's seek track can end before it instead of running under it.
+   * Mirrors TGMessage.drawBubbleTimePart: a 21dp chip from 6dp before the time part to 6dp after it, 4dp above the
+   * 16dp time line that sits 8dp over the content bottom. False when no chip is drawn over the media (a caption or
+   * a footer puts the time inside the bubble).
+   */
+  public boolean xgramTimeChipRect (@NonNull RectF out) {
+    final TGMessage source = this.source;
+    if (!(source instanceof TGMessageMedia) || !source.useBubbles() || source.getBubbleTimePartWidth() == 0) {
+      return false;
+    }
+    final boolean overContent = !source.useBubble() || source.useCircleBubble() || (source.drawBubbleTimeOverContent() && !source.useForward());
+    if (!overContent) {
+      return false;
+    }
+    final int innerWidth = source.computeBubbleTimePartWidth(false);
+    if (innerWidth <= 0) {
+      return false;
+    }
+    final int startX;
+    if (Config.MOVE_BUBBLE_TIME_RTL_TO_LEFT && source.moveBubbleTimePartToLeft()) {
+      startX = source.getActualLeftContentEdge() + Screen.dp(10f);
+    } else {
+      startX = source.getActualRightContentEdge() - (innerWidth + Screen.dp(11f));
+    }
+    int startY = source.getBottomContentEdge() - TGMessage.getBubbleTimePartHeight() - source.getBubbleTimePartOffsetY();
+    if (source.commentButton.isVisible() && source.commentButton.isInline()) {
+      startY -= source.commentButton.getAnimatedHeight(0, source.commentButton.getVisibility());
+    }
+    startY -= Screen.dp(4f);
+    final int padding = Screen.dp(6f);
+    out.set(startX - padding, startY, startX + innerWidth + padding, startY + Screen.dp(21f));
+    return true;
   }
 
   // XGram M3E: a video with no thumbnail is a tonal cell instead of a black one, with a video glyph when no button

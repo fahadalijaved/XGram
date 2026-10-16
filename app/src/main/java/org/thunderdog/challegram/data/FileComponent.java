@@ -165,6 +165,7 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
 
     this.progress = new FileProgressComponent(context.context(), context.tdlib(), TdlibFilesManager.DOWNLOAD_FLAG_FILE, hasPreview && TGMimeType.isImageMimeType(doc.mimeType), message != null ? message.chatId : context.getChatId(), message != null ? message.id : context.getId());
     this.progress.setBackgroundColorProvider(context);
+    this.progress.setXgramOutgoing(context.isOutgoingBubble()); // XGram M3E: primary in outgoing bubbles, tonal elsewhere
     this.progress.setSimpleListener(this);
     this.progress.setDocumentMetadata(doc, !hasPreview);
     if (hasPreview) {
@@ -220,6 +221,7 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
 
     this.progress = new FileProgressComponent(context.context(), context.tdlib(), TdlibFilesManager.DOWNLOAD_FLAG_MUSIC, preview != null, message != null ? message.chatId : context.getChatId(), message != null ? message.id : context.getId());
     this.progress.setBackgroundColorProvider(context);
+    this.progress.setXgramOutgoing(context.isOutgoingBubble()); // XGram M3E: primary in outgoing bubbles, tonal elsewhere
     this.progress.setSimpleListener(this);
     if (hasPreview) {
       progress.setBackgroundColor(Config.COVER_OVERLAY);
@@ -252,6 +254,7 @@ public class FileComponent extends BaseComponent implements FileProgressComponen
 
     this.progress = new FileProgressComponent(context.context(), context.tdlib(), TdlibFilesManager.DOWNLOAD_FLAG_VOICE, false,message != null ? message.chatId : context.getChatId(), message != null ? message.id : context.getId());
     this.progress.setBackgroundColorProvider(context);
+    this.progress.setXgramOutgoing(context.isOutgoingBubble()); // XGram M3E: primary in outgoing bubbles, tonal elsewhere
     this.progress.setSimpleListener(this);
     this.progress.setBackgroundColorId(context.isOutgoingBubble() ? ColorId.bubbleOut_file : ColorId.file);
     this.progress.setPlayPauseFile(playPauseFile != null ? playPauseFile : TD.newFakeMessage(voice), playListBuilder, this);

@@ -243,10 +243,11 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
   private MessageReactionEntry getMessageReactionEntry (TGReaction reactionObj) {
     final MessageReactionEntry entry;
     if (!reactionsMapEntry.containsKey(reactionObj.key)) {
+      final boolean xgramChip = com.fahadali.xgram.appearance.XgramExpressive.isEnabled(); // XGram M3E: labelLarge counts (14sp, medium)
       Counter.Builder counterBuilder = new Counter.Builder()
-        .allBold(false)
+        .allBold(xgramChip)
         .callback(parent)
-        .textSize(TGMessage.reactionsTextStyleProvider().getTextSizeInDp())
+        .textSize(xgramChip ? com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L) : TGMessage.reactionsTextStyleProvider().getTextSizeInDp())
         .noBackground()
         .textColor(ColorId.badgeText, ColorId.badgeText, ColorId.badgeText);
       entry = new MessageReactionEntry(tdlib, delegate, parent, reactionObj, counterBuilder);
@@ -342,7 +343,7 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
       maxWidth = 1;
     }
     int bubbleHeight = getReactionBubbleHeight();
-    int padding = Screen.dp(6);
+    int padding = getButtonsPadding();
     int x = 0;
     int y = 0;
 
@@ -372,8 +373,17 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
     reactionsAnimator.setLayoutParams(maxWidth, timeWidth, parent.getForceTimeExpandHeightByReactions());
   }
 
+  // XGram M3E: reaction chips are M3 filter chips. 32dp tall (FilterChipTokens.ContainerHeight), full corners, 8dp
+  // apart (chip group spacing), an 18dp emoji 6dp in from the start and 8dp before the label (the 32dp emoji box at
+  // -1dp, as the flying reaction expects), 24dp avatars, a labelLarge count and 16dp after it (label end padding).
+
+  private static final float XGRAM_CHIP_HEIGHT_DP = 32f, XGRAM_CHIP_SPACING_DP = 8f;
+  private static final float XGRAM_LABEL_START_DP = 32f, XGRAM_LABEL_END_DP = 16f;
+  private static final float XGRAM_END_AFTER_AVATARS_DP = 6f, XGRAM_END_AFTER_EMOJI_DP = -2f;
+  private static final int XGRAM_AVATAR_RADIUS_DP = 12, XGRAM_AVATAR_OUTLINE_DP = 2, XGRAM_AVATAR_SPACING_DP = -4;
+
   public static int getButtonsPadding () {
-    return Screen.dp(6);
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? XGRAM_CHIP_SPACING_DP : 6f);
   }
 
   public int getBubblesCount () {
@@ -381,22 +391,37 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
   }
 
   public static int getReactionBubbleHeight () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Screen.dp(XGRAM_CHIP_HEIGHT_DP);
+    }
     return Screen.dp((TGMessage.reactionsTextStyleProvider().getTextSizeInDp() + 1) * 1.25f + 11);
   }
 
   public static int getReactionImageSize () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Screen.dp(XGRAM_CHIP_HEIGHT_DP);
+    }
     return Screen.dp((TGMessage.reactionsTextStyleProvider().getTextSizeInDp() + 1) * 1.25f + 17);
   }
 
   public static int getReactionAvatarRadiusDp () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return XGRAM_AVATAR_RADIUS_DP;
+    }
     return (int) ((TGMessage.reactionsTextStyleProvider().getTextSizeInDp() + 1) * 0.625f + 2.5f);
   }
 
   public static int getReactionAvatarOutlineDp () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return XGRAM_AVATAR_OUTLINE_DP;
+    }
     return (int) ((TGMessage.reactionsTextStyleProvider().getTextSizeInDp() + 1) / 6f);
   }
 
   public static int getReactionAvatarSpacingDp () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return XGRAM_AVATAR_SPACING_DP;
+    }
     return (int) -((TGMessage.reactionsTextStyleProvider().getTextSizeInDp() + 1) / 3f);
   }
 
@@ -998,17 +1023,18 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
         c.scale(visibility, visibility, 0, 0);
       }
 
+      final boolean xgramChip = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
       int avatarsWidth = (int) avatars.getAnimatedWidth();
       int avatarsOffset = (Screen.dp(2f * avatars.getAvatarsVisibility()));
       int width = getBubbleWidth();
       int height = getBubbleHeight();
       int imageSize = getReactionImageSize();
       int imgY = (height - imageSize) / 2;
-      int avatarsX = height + Screen.dp(1);
+      int avatarsX = xgramChip ? Screen.dp(XGRAM_LABEL_START_DP) : height + Screen.dp(1); // XGram M3E: 8dp after the emoji
       int textX = avatarsX + avatarsOffset + avatarsWidth;
       int radius = height / 2;
       int backgroundColor = backgroundColor(false);
-      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      if (xgramChip) {
         float pop = xgramPopScale();
         if (pop != 1f) {
           c.scale(pop, pop, width / 2f, height / 2f);
@@ -1028,7 +1054,13 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
         }
       }
 
-      int selectionColor = message.useBubbles() ? message.getBubbleButtonRippleColor() : ColorUtils.alphaColor(0.25f, Theme.getColor(ColorId.bubbleIn_time));
+      int selectionColor;
+      if (xgramChip) {
+        // XGram M3E: the pressed state layer, the chip's content color at 10%
+        selectionColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(xgramChipColor(true), com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED);
+      } else {
+        selectionColor = message.useBubbles() ? message.getBubbleButtonRippleColor() : ColorUtils.alphaColor(0.25f, Theme.getColor(ColorId.bubbleIn_time));
+      }
       if (fadeFactor != 0f) {
         selectionColor = ColorUtils.color((int) ((float) Color.alpha(selectionColor) * (1f - fadeFactor)), selectionColor);
       }
@@ -1089,6 +1121,14 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
     public int getBubbleWidth () {
       float avatarsWidth = avatars.getAnimatedWidth();
       float avatarsOffset = Screen.dp(2f * avatars.getAvatarsVisibility() * counter.getVisibility());
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: emoji, avatars, count, then 16dp (6dp after avatars alone, 6dp each side of an emoji alone)
+        final float counterVisibility = counter.getVisibility();
+        final float avatarsVisibility = avatars.getAvatarsVisibility();
+        final float end = Screen.dp(XGRAM_LABEL_END_DP) * counterVisibility + (1f - counterVisibility) *
+          (Screen.dp(XGRAM_END_AFTER_AVATARS_DP) * avatarsVisibility + Screen.dp(XGRAM_END_AFTER_EMOJI_DP) * (1f - avatarsVisibility));
+        return (int) (Screen.dp(XGRAM_LABEL_START_DP) + avatarsWidth + avatarsOffset + counter.getWidth() * counterVisibility + end);
+      }
       int addW = Screen.dp((TGMessage.reactionsTextStyleProvider().getTextSizeInDp() + 1f) / 3f);
       int subW = Screen.dp(6f - counter.getVisibility() * 6f);
       return (int) (counter.getWidth() + getReactionImageSize() + addW - subW + avatarsWidth + avatarsOffset);
@@ -1096,6 +1136,11 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
 
     public int getBubbleTargetWidth () {
       float avatarsWidth = avatars.getTargetWidth(Screen.dp(counter.getVisibilityTarget() ? 2: 0));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        final boolean counterVisible = counter.getVisibilityTarget();
+        final float end = Screen.dp(counterVisible ? XGRAM_LABEL_END_DP : avatarsWidth > 0f ? XGRAM_END_AFTER_AVATARS_DP : XGRAM_END_AFTER_EMOJI_DP);
+        return (int) (Screen.dp(XGRAM_LABEL_START_DP) + avatarsWidth + (counterVisible ? counter.getTargetWidth() : 0f) + end);
+      }
       int addW = Screen.dp((TGMessage.reactionsTextStyleProvider().getTextSizeInDp() + 1f) / 3f);
       int subW = Screen.dp(counter.getVisibilityTarget() ? 0: 6);
       return (int) (counter.getTargetWidth() + getReactionImageSize() + addW - subW + avatarsWidth);
@@ -1107,26 +1152,30 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
 
     // ColorSet
 
-    /** XGram: Expressive chip roles, chosen mixed towards not chosen by the counter's mute factor. */
+    /**
+     * XGram M3E: filter chip roles, chosen mixed towards not chosen by the counter's mute factor. Selected is
+     * secondaryContainer / onSecondaryContainer (FilterChipTokens.FlatSelectedContainerColor), unselected a neutral
+     * surface container with onSurfaceVariant, the same on in and out bubbles and under media. The containers are
+     * picked by what the chip sits on, so the chip always shows: on the chat background (under media and stickers,
+     * and without bubbles) unselected is surfaceContainerHigh; inside a bubble (incoming is surfaceContainerHigh
+     * itself, outgoing primaryContainer) it is surfaceContainerLowest. In an outgoing bubble selected is
+     * inversePrimary / onPrimaryContainer instead: secondaryContainer has the bubble's own tone (90 light, 30 dark)
+     * and can't be told from it, while inversePrimary is the primary tone one step away (80 light, 40 dark).
+     */
     private int xgramChipColor (boolean content) {
-      final int chosen, other;
-      if (!message.useBubbles()) {
-        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
-        other = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST);
-      } else if (message.useStickerBubbleReactions() || message.useMediaBubbleReactions()) {
-        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
-        other = content ? message.getBubbleDateTextColor() : message.getBubbleDateBackgroundColor();
+      final int chosenRole, otherRole;
+      final boolean onChatBackground = !message.useBubbles() || message.useStickerBubbleReactions() || message.useMediaBubbleReactions();
+      if (onChatBackground) {
+        chosenRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER;
+        otherRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH;
       } else if (message.isOutgoingBubble()) {
-        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
-        int onContainer = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
-        other = content ? onContainer : com.fahadali.xgram.appearance.XgramExpressive.withAlpha(onContainer, .12f);
+        chosenRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.INVERSE_PRIMARY;
+        otherRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOWEST;
       } else {
-        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
-        other = content ?
-          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT) :
-          com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), .08f);
+        chosenRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER;
+        otherRole = content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOWEST;
       }
-      return ColorUtils.fromToArgb(chosen, other, counter.getMuteFactor());
+      return ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(chosenRole), com.fahadali.xgram.appearance.XgramExpressive.color(otherRole), counter.getMuteFactor());
     }
 
     @Override

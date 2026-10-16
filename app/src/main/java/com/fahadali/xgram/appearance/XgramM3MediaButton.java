@@ -30,6 +30,12 @@ import org.thunderdog.challegram.tool.Screen;
  * GIF, round video, document, voice and music message (and in the viewer, wallpapers and inline results), plus the
  * on-media chips around it. Styles and role pairs only; FileProgressComponent keeps the state. Main thread only,
  * except {@link #measureChipText}.
+ *
+ * <p>One design for every state (download, queued, loading, paused, open, failed, play and pause, uploading): a
+ * circle in one tonal role pair that never changes shape at rest. Loading draws the M3E circular wavy progress
+ * indicator inside it (4dp indicator and track, 4dp track gap, 15dp wavelength, 1.6dp amplitude) with a 4dp gap to
+ * the circle's edge; queued draws the contained loading indicator; a press springs the corners to 12dp (the M3E
+ * medium icon button pressed shape) under a 10% content state layer. Failed uses errorContainer.
  */
 public final class XgramM3MediaButton {
   private XgramM3MediaButton () { }
@@ -38,14 +44,17 @@ public final class XgramM3MediaButton {
 
   /** Expressive design off: every Telegram X branch runs unchanged. */
   public static final int NONE = 0;
-  /** Theme file circles (ColorId.file, bubbleOut_file): primary / onPrimary. */
-  public static final int ROLE = 1;
-  /** APKs (ColorId.fileGreen): tertiary / onTertiary. */
-  public static final int ACCENT_GREEN = 2;
-  /** Archives (ColorId.fileYellow): secondary / onSecondary. */
-  public static final int ACCENT_YELLOW = 3;
-  /** PDFs (ColorId.fileRed): error / onError. */
-  public static final int ACCENT_RED = 4;
+  /**
+   * File, voice and music buttons on the chat surface or in an incoming bubble (surfaceContainerHigh): a tonal
+   * primaryContainer / onPrimaryContainer circle, the container pair of the M3E contained loading indicator, so the
+   * button, its queued indicator and its ring share one pair. Every file type (APKs, archives and PDFs too).
+   */
+  public static final int TONAL = 1;
+  /**
+   * The same buttons in an outgoing bubble, which is primaryContainer itself: the M3 filled icon button roles
+   * primary / onPrimary, the only role pair that contrasts with primaryContainer in both light and dark schemes.
+   */
+  public static final int FILLED = 2;
   /** Any overlay color (photos, videos, GIFs, viewer, wallpapers, inline results): a tonal primaryContainer disk. */
   public static final int MEDIA = 5;
   /** Self-destructing media: keeps the dark overlay and white content. */
@@ -53,53 +62,58 @@ public final class XgramM3MediaButton {
 
   // Geometry (dp)
 
-  /** 48dp button on photos, videos and GIFs (the loading indicator container). */
+  /** 48dp button on photos, videos and GIFs (the wavy progress indicator container, WaveSize). */
   public static final float MEDIA_RADIUS = 24f;
   /** 56dp play button (M icon button). */
   public static final float PLAY_RADIUS = 28f;
-  /** The 4dp ring sits 2dp inside the button. */
-  public static final float RING_INSET = 6f;
+  /** CircularWavyProgressIndicator tokens: 4dp indicator and track, 1.6dp wave amplitude, 4dp track gap. */
+  public static final float RING_STROKE = 4f, RING_AMPLITUDE = 1.6f, RING_GAP = 4f;
+  /**
+   * From the button's edge to the center line of its ring: a 4dp gap, the wave amplitude and half the stroke, so
+   * the wave never touches the edge and the ring reads as a ring inside the circle, not as a wavy edge.
+   */
+  public static final float RING_INSET = RING_GAP + RING_AMPLITUDE + RING_STROKE / 2f;
   /** 16dp large badge for voice, music and streaming downloads, with a 2dp ring in the bubble color. */
   public static final float BADGE_RADIUS = 8f, BADGE_RING = 2f, BADGE_GLYPH = 12f, BADGE_PROGRESS_RADIUS = 4.5f;
 
   /** primaryContainer at 92% over a picture. */
   public static final float MEDIA_CONTAINER_ALPHA = .92f;
+  /** The ring's track: its indicator color at 24%, so it shows on every container. */
+  public static final float RING_TRACK_ALPHA = .24f;
   /** Black 50%: the on-media scrim of chips. */
   public static final int CHIP_SCRIM = 0x80000000;
   /** Telegram X's self-destructing media overlay. */
   public static final int SCRIM_COLOR = 0x66000000;
 
-  /** The style of a button whose background is {@code color} (a color id when {@code isColorId}). */
-  public static int resolve (boolean isColorId, int color, boolean scrim) {
+  /**
+   * The style of a button whose background is {@code color} (a color id when {@code isColorId}); {@code outgoing}
+   * when it sits in an outgoing bubble.
+   */
+  public static int resolve (boolean isColorId, int color, boolean scrim, boolean outgoing) {
     if (!isColorId) {
       return scrim ? SCRIM : MEDIA;
     }
-    if (color == ColorId.file || color == ColorId.bubbleOut_file) {
-      return ROLE;
+    if (color == ColorId.bubbleOut_file) {
+      return FILLED;
     }
-    if (color == ColorId.fileGreen) {
-      return ACCENT_GREEN;
-    }
-    if (color == ColorId.fileYellow) {
-      return ACCENT_YELLOW;
-    }
-    if (color == ColorId.fileRed) {
-      return ACCENT_RED;
+    if (color == ColorId.file || color == ColorId.fileGreen || color == ColorId.fileYellow || color == ColorId.fileRed) {
+      return outgoing ? FILLED : TONAL;
     }
     return NONE;
+  }
+
+  /** {@link #resolve(boolean, int, boolean, boolean)} outside a bubble. */
+  public static int resolve (boolean isColorId, int color, boolean scrim) {
+    return resolve(isColorId, color, scrim, false);
   }
 
   @ColorInt
   public static int containerColor (int style) {
     switch (style) {
-      case ROLE:
+      case TONAL:
+        return XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER);
+      case FILLED:
         return XgramExpressive.color(XgramExpressive.PRIMARY);
-      case ACCENT_GREEN:
-        return XgramExpressive.color(XgramExpressive.TERTIARY);
-      case ACCENT_YELLOW:
-        return XgramExpressive.color(XgramExpressive.SECONDARY);
-      case ACCENT_RED:
-        return XgramExpressive.color(XgramExpressive.ERROR);
       case MEDIA:
         return XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), MEDIA_CONTAINER_ALPHA);
       default:
@@ -110,19 +124,28 @@ public final class XgramM3MediaButton {
   @ColorInt
   public static int contentColor (int style) {
     switch (style) {
-      case ROLE:
-        return XgramExpressive.color(XgramExpressive.ON_PRIMARY);
-      case ACCENT_GREEN:
-        return XgramExpressive.color(XgramExpressive.ON_TERTIARY);
-      case ACCENT_YELLOW:
-        return XgramExpressive.color(XgramExpressive.ON_SECONDARY);
-      case ACCENT_RED:
-        return XgramExpressive.color(XgramExpressive.ON_ERROR);
+      case TONAL:
       case MEDIA:
         return XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
+      case FILLED:
+        return XgramExpressive.color(XgramExpressive.ON_PRIMARY);
       default:
         return 0xffffffff;
     }
+  }
+
+  /**
+   * The small download badge of voice and music buttons: primary / onPrimary, set off from the button by a ring in
+   * the bubble color. Primary contrasts with the tonal button, the filled one (through the ring) and both bubbles.
+   */
+  @ColorInt
+  public static int badgeContainerColor () {
+    return XgramExpressive.color(XgramExpressive.PRIMARY);
+  }
+
+  @ColorInt
+  public static int badgeContentColor () {
+    return XgramExpressive.color(XgramExpressive.ON_PRIMARY);
   }
 
   // Shapes
