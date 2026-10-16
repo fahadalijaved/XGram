@@ -116,13 +116,34 @@ public class ToggleHeaderView2 extends View {
     return paint;
   }
 
+  // XGram M3E round 5: the subtitle ("Translated from …") in bodySmall, as the supporting line of an M3 app bar title
+  private static TextPaint xgramSubtitlePaint;
+
+  private static TextPaint subtitlePaint (@ColorInt int color) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Paints.getRegularTextPaint(14f, color);
+    }
+    TextPaint paint = xgramSubtitlePaint;
+    final int ts = com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S;
+    final float size = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(ts));
+    if (paint == null || paint.getTextSize() != size) {
+      paint = new TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+      paint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(ts, false));
+      paint.setTextSize(size);
+      paint.setLetterSpacing(com.fahadali.xgram.appearance.XgramExpressive.trackingSp(ts) / com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(ts));
+      xgramSubtitlePaint = paint;
+    }
+    paint.setColor(color);
+    return paint;
+  }
+
   private void trimTexts () {
     int avail = getMeasuredWidth() - Screen.dp(textPaddingDp) - Screen.dp(12f);
     for (ListAnimator.Entry<TrimmedText> entry : titleR) {
       entry.item.measure(avail, titlePaint(colorSet.titleColor()));
     }
     for (ListAnimator.Entry<TrimmedText> entry : subtitleR) {
-      entry.item.measure(avail, Paints.getRegularTextPaint(14f, colorSet.subtitleColor()));
+      entry.item.measure(avail, subtitlePaint(colorSet.subtitleColor()));
     }
   }
 
@@ -160,7 +181,7 @@ public class ToggleHeaderView2 extends View {
       final int offset2 = (int) ((!entry.isAffectingList() ?
         ((entry.getVisibility() - 1f) * Screen.dp(14)) :
         ((1f - entry.getVisibility()) * Screen.dp(14))));
-      entry.item.draw(c, getPaddingLeft(), getPaddingTop() + textTop + Screen.dp(19) + offset2, entry.getVisibility(), Paints.getRegularTextPaint(14f, colorSet.subtitleColor()));
+      entry.item.draw(c, getPaddingLeft(), getPaddingTop() + textTop + Screen.dp(19) + offset2, entry.getVisibility(), subtitlePaint(colorSet.subtitleColor()));
     }
 
     Drawables.draw(c, arrowDrawable, getTitleWidth() + Screen.dp(2), getPaddingTop() + triangleTop, PorterDuffPaint.get(colorSet.iconColorId()));
