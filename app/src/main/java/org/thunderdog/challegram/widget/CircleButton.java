@@ -272,7 +272,6 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     xgramZ = needShadow ? Screen.dp(XgramExpressive.ELEVATION_3) : 0;
     setElevation(xgramZ);
     xgramSyncTagZ();
-    xgramUnclipShadow(); // already in its wrap (onAttachedToWindow covers the usual order)
     return true;
   }
 
@@ -370,18 +369,80 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     }
   }
 
+  /** Room past a chat FAB's container for its level 3 shadow: at 6dp the spot shadow's soft edge ends about 16dp below it. */
+  private static final float XGRAM_SHADOW_ROOM = 16f;
+
   /**
-   * XGram M3E: a chat FAB sits in the corner of a small wrap (MessagesController's scroll, mention and reaction wraps,
-   * the forum topics' mention wrap, the search arrows' CircleCounterBadgeView) with only 4dp (or no) room past the
-   * container, and a clipping wrap cut its elevation shadow off at the wrap's right and bottom edges: a hard-edged
-   * translucent rectangle around the button. Nothing else in those wraps draws outside them, so they stop clipping
-   * and the level 3 shadow falls around the rounded square (its outline is the container's, the view's padding
-   * paints nothing).
+   * XGram M3E: room for this chat FAB's elevation shadow inside its own wrap (MessagesController's scroll, mention and
+   * reaction wraps, the search arrows' CircleCounterBadgeView, the forum topics' mention wrap).
+   * <p>
+   * A view's shadow is drawn in its parent's canvas, under the parent's clip, and each wrap is clipped to its own
+   * bounds by the layout holding it (that layout clips its children). The FAB sat in its wrap's right bottom corner
+   * with 4dp (the search arrows: none) past the container, so its shadow ended in hard edges there: a translucent
+   * rectangle around the button, cut off on its right and bottom. A wrap that stops clipping its own children does
+   * not help (that only stops clipping the button's own drawing, not the shadow drawn around it).
+   * <p>
+   * So the wrap's right and bottom margins move inside it: the wrap grows by the same amount and keeps its left and
+   * top, the button and its right or bottom anchored siblings take the amount as extra margins, and nothing moves on
+   * screen, until the container has 16dp of room inside the wrap. Call it once the button sits in its wrap and both
+   * have their final layout params; calling it again changes nothing. Nothing unless this is a chat FAB with a
+   * shadow (Expressive design on).
    */
-  private void xgramUnclipShadow () {
-    if (xgramChatFab && xgramZ > 0 && getParent() instanceof android.view.ViewGroup) {
-      ((android.view.ViewGroup) getParent()).setClipChildren(false);
+  public void xgramMakeShadowRoom () {
+    if (!xgramChatFab || xgramZ <= 0 || !(getParent() instanceof android.view.ViewGroup)) {
+      return;
     }
+    final android.view.ViewGroup wrap = (android.view.ViewGroup) getParent();
+    if (!(wrap.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) || !(getLayoutParams() instanceof android.widget.FrameLayout.LayoutParams)) {
+      return;
+    }
+    final android.view.ViewGroup.MarginLayoutParams wrapParams = (android.view.ViewGroup.MarginLayoutParams) wrap.getLayoutParams();
+    final android.widget.FrameLayout.LayoutParams params = (android.widget.FrameLayout.LayoutParams) getLayoutParams();
+    if (!xgramAnchoredRight(params) || !xgramAnchoredBottom(params)) {
+      return;
+    }
+    // The container is centred in the view: a 64dp view already leaves 4dp around it
+    final int inset = Math.max(0, (Math.min(params.width, params.height) - Screen.dp(XGRAM_CHAT_FAB_DP)) / 2);
+    final int room = Screen.dp(XGRAM_SHADOW_ROOM);
+    final int dx = Math.max(0, Math.min(room - inset - params.rightMargin, wrapParams.rightMargin));
+    final int dy = Math.max(0, Math.min(room - inset - params.bottomMargin, wrapParams.bottomMargin));
+    if (dx == 0 && dy == 0) {
+      return;
+    }
+    for (int i = 0; i < wrap.getChildCount(); i++) {
+      final View child = wrap.getChildAt(i);
+      if (child.getLayoutParams() instanceof android.widget.FrameLayout.LayoutParams) {
+        final android.widget.FrameLayout.LayoutParams childParams = (android.widget.FrameLayout.LayoutParams) child.getLayoutParams();
+        final boolean right = xgramAnchoredRight(childParams), bottom = xgramAnchoredBottom(childParams);
+        if (right) {
+          childParams.rightMargin += dx;
+        }
+        if (bottom) {
+          childParams.bottomMargin += dy;
+        }
+        if (right || bottom) {
+          child.setLayoutParams(childParams);
+        }
+      }
+    }
+    wrapParams.rightMargin -= dx;
+    wrapParams.bottomMargin -= dy;
+    if (wrapParams.width > 0) {
+      wrapParams.width += dx;
+    }
+    if (wrapParams.height > 0) {
+      wrapParams.height += dy;
+    }
+    wrap.setLayoutParams(wrapParams);
+  }
+
+  /** Laid out from its parent's right edge (an unspecified gravity, -1, is top left: its masks give neither). */
+  private static boolean xgramAnchoredRight (android.widget.FrameLayout.LayoutParams params) {
+    return (params.gravity & Gravity.HORIZONTAL_GRAVITY_MASK) == Gravity.RIGHT;
+  }
+
+  private static boolean xgramAnchoredBottom (android.widget.FrameLayout.LayoutParams params) {
+    return (params.gravity & Gravity.VERTICAL_GRAVITY_MASK) == Gravity.BOTTOM;
   }
 
   /** A counter badge kept in the tag must stay above the button (it used to follow the press animator's Z). */
@@ -1056,7 +1117,6 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   protected void onAttachedToWindow () {
     super.onAttachedToWindow();
     xgramSyncTagZ();
-    xgramUnclipShadow();
     if (gifReceiver != null) {
       gifReceiver.attach();
     }

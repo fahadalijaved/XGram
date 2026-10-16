@@ -80,6 +80,11 @@ public class CircleCounterBadgeView extends FrameLayout implements FactorAnimato
     circleButton.setInProgress(inProgress);
   }
 
+  /** XGram M3E: room for the FAB's shadow inside this view (see CircleButton.xgramMakeShadowRoom), after its final layout params. */
+  public void xgramMakeShadowRoom () {
+    circleButton.xgramMakeShadowRoom();
+  }
+
   public void setEnabled (boolean enabled, boolean animated) {
     animatorEnabled.setValue(enabled, animated);
   }

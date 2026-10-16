@@ -265,6 +265,7 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       mentionWrap.addView(mentionCountView);
       if (mentionButton.xgramIsChatFab()) {
         mentionCountView.setVisibility(View.GONE); // XGram M3E: the FAB draws the badge
+        mentionButton.xgramMakeShadowRoom(); // the wrap's 12dp margins move inside it, so its bounds no longer cut the shadow
       }
 
       ((ViewGroup) view).addView(mentionWrap);
