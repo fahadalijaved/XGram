@@ -34,7 +34,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import com.fahadali.xgram.appearance.XgramIconPack
+import com.fahadali.xgram.appearance.XgramComposeSettingsIcons
 import org.thunderdog.challegram.component.base.SettingView
 import org.thunderdog.challegram.theme.ColorId
 import org.thunderdog.challegram.theme.Theme
@@ -411,7 +411,8 @@ internal object TgxIcons {
   private val cache = SparseIntArray()
 
   fun supported(context: Context, icon: Int): Boolean {
-    val res = XgramIconPack.map(icon)
+    // The drawable tgxIcon draws (the pack's, or the Line family's with the Classic pack).
+    val res = XgramComposeSettingsIcons.map(icon)
     val cached = cache.get(res)
     if (cached != 0) {
       return cached == 1

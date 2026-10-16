@@ -18,11 +18,11 @@ import android.view.View
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -80,6 +80,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -93,6 +95,7 @@ import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.thunderdog.challegram.R
@@ -456,19 +459,31 @@ private fun ReorderItem(
   onToggle: (String, Boolean) -> Unit
 ) {
   val host = LocalXgramHost.current
-  val motion = MaterialTheme.motionScheme
   val rowKey = row.key
   val isDragged = state.dragged == rowKey
-  val scale = animateFloatAsState(if (isDragged) 1.02f else 1f, motion.fastSpatialSpec(), label = "xgramReorderScale")
-  val lift = animateDpAsState(if (isDragged) 8.dp else 0.dp, motion.fastEffectsSpec(), label = "xgramReorderLift")
   val slide = state.offset(rowKey)
   val slot = remember(rowKey) { state.slot(rowKey) }
-  val liftShape = MaterialTheme.shapes.large
   // A held row is a card of its own; the others keep the group's corners for their place in it.
   val shapes = if (isDragged) {
     ListItemDefaults.segmentedShapes(index = 0, count = 1)
   } else {
     ListItemDefaults.segmentedShapes(index = index, count = count)
+  }
+
+  // The held row is the M3E dragged list item: the row reports the drag as a DragInteraction, and SegmentedListItem
+  // draws its dragged state (tertiaryContainer and onTertiaryContainer, CornerLarge, 8dp elevation) and animates in and
+  // out of it itself.
+  val interactions = remember { MutableInteractionSource() }
+  if (isDragged) {
+    LaunchedEffect(interactions) {
+      val start = DragInteraction.Start()
+      interactions.emit(start)
+      try {
+        awaitCancellation()
+      } finally {
+        interactions.tryEmit(DragInteraction.Stop(start))
+      }
+    }
   }
 
   // A search result for this row: once the page has scrolled to the group, make sure the row itself is on screen.
@@ -503,11 +518,6 @@ private fun ReorderItem(
     }
     .graphicsLayer {
       translationY = if (state.isMoving(rowKey)) state.dragOffset else slide.floatValue
-      scaleX = scale.value
-      scaleY = scale.value
-      shadowElevation = lift.value.toPx()
-      shape = liftShape
-      clip = false
     }
     .semantics {
       val actions = ArrayList<CustomAccessibilityAction>(2)
@@ -557,15 +567,21 @@ private fun ReorderItem(
       trailingContent = { SettingsSwitch(checked, row.enabled) },
       supportingContent = supporting,
       colors = colors,
+      interactionSource = interactions,
       content = { Text(row.title) }
     )
   } else {
+    // A row that can only move: the interactive item too, so its press and dragged states match the rows around it. A
+    // tap does nothing; screen readers read its text as one label, with the move actions.
+    val description = if (subtitle != null) row.title + ", " + subtitle else row.title
     SegmentedListItem(
+      onClick = { },
       shapes = shapes,
-      modifier = modifier,
+      modifier = modifier.clearAndSetSemantics { contentDescription = description },
       leadingContent = leading,
       supportingContent = supporting,
       colors = colors,
+      interactionSource = interactions,
       content = { Text(row.title) }
     )
   }
