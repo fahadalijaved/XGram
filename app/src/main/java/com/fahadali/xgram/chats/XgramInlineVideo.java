@@ -14,12 +14,14 @@ package com.fahadali.xgram.chats;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Handler;
@@ -41,14 +43,22 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.VideoSize;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.fahadali.xgram.XgramSettings;
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramLoadingIndicator;
+import com.fahadali.xgram.appearance.XgramWavyLinear;
+import com.fahadali.xgram.layout.XgramTwoPane;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.component.chat.MessageViewGroup;
+import org.thunderdog.challegram.component.chat.MessagesAdapter;
+import org.thunderdog.challegram.component.chat.MessagesManager;
 import org.thunderdog.challegram.config.Config;
 import org.thunderdog.challegram.core.WatchDog;
 import org.thunderdog.challegram.data.MediaWrapper;
@@ -56,6 +66,9 @@ import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGMessage;
 import org.thunderdog.challegram.data.TGMessageMedia;
 import org.thunderdog.challegram.mediaview.MediaViewController;
+import org.thunderdog.challegram.navigation.NavigationController;
+import org.thunderdog.challegram.navigation.NavigationStack;
+import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.player.TGPlayerController;
 import org.thunderdog.challegram.support.ViewSupport;
 import org.thunderdog.challegram.telegram.CallManager;
@@ -63,6 +76,7 @@ import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibDataSource;
 import org.thunderdog.challegram.telegram.TdlibFilesManager;
 import org.thunderdog.challegram.telegram.TdlibManager;
+import org.thunderdog.challegram.tool.DrawAlgorithms;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Screen;
@@ -77,6 +91,7 @@ import java.util.List;
 import java.util.Map;
 
 import tgx.td.ChatId;
+import tgx.td.MessageId;
 import tgx.td.Td;
 
 /**
@@ -124,6 +139,91 @@ public final class XgramInlineVideo {
     return XgramSettings.instance().inlineVideoStart() == XgramSettings.INLINE_VIDEO_START_AUTO;
   }
 
+  /** {@link #onSettingChanged()} once the switch has handled its own tap. */
+  public static void postSettingChanged () {
+    handler.post(XgramInlineVideo::onSettingChanged);
+  }
+
+  /**
+   * Play videos in chat was switched: the video playing stops and the open chats whose media would now be made
+   * differently load again where they are. Whether a video message gets the player's view group is fixed when the
+   * message is made (TGMessage's constructor asks {@link TGMessageMedia#needViewGroup()}), so the messages are made
+   * again rather than told. Both panes' screens are covered.
+   */
+  public static void onSettingChanged () {
+    if (!UI.inUiThread()) {
+      handler.post(XgramInlineVideo::onSettingChanged);
+      return;
+    }
+    stop();
+    BaseActivity context = UI.getUiContext();
+    if (context == null) {
+      return;
+    }
+    NavigationController navigation = context.navigation();
+    if (navigation != null) {
+      rebuildChats(navigation.getStack());
+    }
+    XgramTwoPane twoPane = context.xgramTwoPane();
+    ViewController<?> leftMain = twoPane != null ? twoPane.leftMain() : null;
+    NavigationController leftNavigation = leftMain != null ? leftMain.navigationController() : null;
+    if (leftNavigation != null && leftNavigation != navigation) {
+      rebuildChats(leftNavigation.getStack());
+    }
+  }
+
+  private static void rebuildChats (@Nullable NavigationStack stack) {
+    if (stack == null) {
+      return;
+    }
+    for (int i = 0; i < stack.size(); i++) {
+      ViewController<?> c = stack.get(i);
+      if (c instanceof MessagesController) {
+        rebuildChat((MessagesController) c);
+      }
+    }
+  }
+
+  private static void rebuildChat (MessagesController c) {
+    if (c.isDestroyed() || c.getChat() == null || c.isInForceTouchMode()) {
+      return; // a prewarmed chat has no chat yet: its messages are made after this
+    }
+    MessagesManager manager = c.getManager();
+    if (manager == null || manager.isEventLog() || !needsRebuild(manager.getAdapter())) {
+      return; // the recent actions log keeps its own loading: it picks the switch up when opened again
+    }
+    // Back at the first message on screen, at the offset the chat saved for it (MessagesManager.saveScrollPosition).
+    TGMessage anchor = null;
+    RecyclerView list = c.getMessagesView();
+    RecyclerView.LayoutManager layoutManager = list != null ? list.getLayoutManager() : null;
+    if (layoutManager instanceof LinearLayoutManager && !manager.isAtVeryBottom()) {
+      int position = ((LinearLayoutManager) layoutManager).findFirstVisibleItemPosition();
+      if (position != RecyclerView.NO_POSITION) {
+        anchor = manager.getAdapter().getMessage(position);
+      }
+    }
+    if (anchor != null && anchor.getChatId() == c.getChatId() && anchor.getId() > 0 && !anchor.isSponsoredMessage() && !anchor.isSending()) {
+      long messageId = anchor.getBiggestId();
+      manager.resetByMessage(new MessageId(anchor.getChatId(), messageId, anchor.getOtherMessageIds(messageId)), MessagesManager.HIGHLIGHT_MODE_POSITION_RESTORE);
+    } else {
+      c.reloadData(); // at the bottom, or nothing to keep
+    }
+  }
+
+  /** Some message on hand would get a different view now. */
+  private static boolean needsRebuild (@Nullable MessagesAdapter adapter) {
+    if (adapter == null) {
+      return false;
+    }
+    for (int i = 0; i < adapter.getMessageCount(); i++) {
+      TGMessage message = adapter.getMessage(i);
+      if (message instanceof TGMessageMedia && !message.isDestroyed() && message.needViewGroup() != needViewGroup(message.getMessage())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Asked once per media message, when it is made: the player needs the message's own view group. Videos, and photos
    * of albums (an album can mix photos and videos and is shown by its first message).
@@ -146,6 +246,9 @@ public final class XgramInlineVideo {
   /** A tap on a video cell. True when it was handled here instead of opening the media viewer. */
   public static boolean onClick (MediaWrapper wrapper, View view) {
     if (!isEnabled() || !wrapper.isVideo()) {
+      if (wrapper.isVideo()) {
+        logRejected(wrapper, "off");
+      }
       return false;
     }
     Session s = current;
@@ -154,10 +257,21 @@ public final class XgramInlineVideo {
       return true;
     }
     ViewParent parent = view.getParent();
-    if (!(parent instanceof MessageViewGroup) || !canPlay(wrapper, (MessageViewGroup) parent)) {
+    if (!(parent instanceof MessageViewGroup)) {
+      logRejected(wrapper, "not-view-group"); // a message made while the switch was off: it opens in the media viewer
+      return false;
+    }
+    String reason = rejectReason(wrapper, (MessageViewGroup) parent);
+    if (reason != null) {
+      logRejected(wrapper, reason);
       return false;
     }
     return start(wrapper, (MessageViewGroup) parent, true);
+  }
+
+  /** Taps only (never autoplay or drawing): why a video opened in the media viewer, for logcat -s XGram. */
+  private static void logRejected (MediaWrapper wrapper, String reason) {
+    android.util.Log.i("XGram", "In-chat video: " + reason + " msg=" + wrapper.getSourceMessageId());
   }
 
   /** While a video cell is drawn. Keeps the player over it; true when the cell is playing here. */
@@ -299,27 +413,57 @@ public final class XgramInlineVideo {
   }
 
   private static boolean canPlay (MediaWrapper wrapper, MessageViewGroup group) {
+    return rejectReason(wrapper, group) == null;
+  }
+
+  /** Why the video can't play in the message (it opens in the media viewer then), or null when it can. */
+  @Nullable
+  private static String rejectReason (MediaWrapper wrapper, MessageViewGroup group) {
     TGMessage source = wrapper.xgramSource();
     TdApi.Video video = wrapper.getVideo();
-    if (!(source instanceof TGMessageMedia) || video == null || video.video == null || group.getMessage() != source || !source.needViewGroup()) {
-      return false;
+    if (!(source instanceof TGMessageMedia) || video == null || video.video == null) {
+      return "no-video";
     }
-    if (source.getChatId() == 0 || source.isSecretChat() || source.isHot() || source.isSponsoredMessage() || source.isDestroyed() || wrapper.xgramSpoilerVisible()) {
-      return false;
+    if (group.getMessage() != source || !source.needViewGroup()) {
+      return "not-view-group";
+    }
+    if (source.getChatId() == 0 || source.isDestroyed()) {
+      return "no-chat";
+    }
+    if (source.isSecretChat()) {
+      return "secret";
+    }
+    if (source.isHot()) {
+      return "hot";
+    }
+    if (source.isSponsoredMessage()) {
+      return "sponsored";
+    }
+    if (wrapper.xgramSpoilerVisible()) {
+      return "spoiler";
     }
     MessagesController c = source.messagesController();
-    if (c == null || c.isDestroyed() || c.isInForceTouchMode() || !c.isFocused() || c.getSelectableFactor() > 0f) {
-      return false;
+    if (c == null || c.isDestroyed()) {
+      return "no-chat";
+    }
+    if (c.isInForceTouchMode()) {
+      return "force-touch";
+    }
+    if (!c.isFocused()) {
+      return "not-focused";
+    }
+    if (c.getSelectableFactor() > 0f) {
+      return "selecting";
     }
     TdApi.File file = video.video;
     if (failed.get(file.id)) {
-      return false;
+      return "failed-before";
     }
     boolean loaded = TD.isFileLoaded(file);
     if (file.remote.isUploadingActive || (!file.remote.isUploadingCompleted && !loaded)) {
-      return false; // still being sent
+      return "uploading"; // still being sent
     }
-    return loaded || Config.VIDEO_CLOUD_PLAYBACK_AVAILABLE;
+    return loaded || Config.VIDEO_CLOUD_PLAYBACK_AVAILABLE ? null : "no-cloud";
   }
 
   /** Telegram X's own rules for media that starts by itself: downloaded already, or allowed on this network. */
@@ -866,6 +1010,24 @@ public final class XgramInlineVideo {
     boolean dragging;
     private float dragFraction;
 
+    // Material 3 Expressive controls (drawControlsM3). Made on the first frame, once per player.
+    private static final float M3_SCRIM_DP = 48f, M3_TRACK_INSET_DP = 12f;
+    private static TextPaint m3Text;
+    private static float m3TextBaseline;
+    /** Paused disk: 0 a circle, 1 a 16dp rounded square at .85 (playing). */
+    private XgramExpressive.Spring m3Centre;
+    /** Paused disk opacity. */
+    private XgramExpressive.Spring m3Fade;
+    /** Seek track wave: 1 while playing and not dragging. */
+    private XgramExpressive.Spring m3Wave;
+    private Path m3PlayPausePath;
+    private float m3PlayPauseDrawFactor = -1f;
+    private Paint m3Tint, m3Scrim;
+    private int m3TintColor, m3ScrimHeight;
+    private long m3TimePosition = -1, m3TimeDuration = -1;
+    private String m3Time = "";
+    private float m3TimeWidth;
+
     PlayerLayer (Context context, Session session) {
       super(context);
       this.session = session;
@@ -987,6 +1149,10 @@ public final class XgramInlineVideo {
     }
 
     private void drawControls (Canvas c) {
+      if (XgramExpressive.isEnabled()) {
+        drawControlsM3(c);
+        return;
+      }
       final Session s = session;
       final int left = cell.left, top = cell.top, right = cell.right, bottom = cell.bottom;
       final long duration = s.duration();
@@ -1070,6 +1236,204 @@ public final class XgramInlineVideo {
       }
     }
 
+    // Material 3 Expressive controls: a full-corner chip on a 50 % black scrim (play or pause, the time in
+    // labelMedium, sound), a 32dp expand button, a primaryContainer disk while paused that morphs into a rounded
+    // square and fades as playback resumes, the contained loading indicator while buffering, and the M3 linear seek
+    // track (wavy while playing, a handle bar once touched) over a bottom gradient. Nothing is allocated per frame:
+    // the time string is made again only when its second changes and the gradient when the cell's height does.
+
+    private static TextPaint m3TextPaint () {
+      if (m3Text == null) {
+        TextPaint p = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(0xffffffff);
+        p.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_M, false));
+        p.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_M)));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+          p.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_M) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_M));
+          p.setFontFeatureSettings("tnum"); // the time doesn't change width while it counts
+        }
+        Paint.FontMetrics metrics = p.getFontMetrics();
+        m3TextBaseline = -(metrics.ascent + metrics.descent) / 2f;
+        m3Text = p;
+      }
+      return m3Text;
+    }
+
+    private void onM3Spring (XgramExpressive.Spring spring, float value) {
+      invalidate();
+    }
+
+    /** Springs made at the current state on the first frame (nothing animates in), retargeted after that. */
+    private void updateM3State (boolean showCentre, boolean waving) {
+      final float centre = showCentre ? 0f : 1f, fade = showCentre ? 1f : 0f, wave = waving ? 1f : 0f;
+      if (m3Centre == null) {
+        m3Centre = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, centre, this::onM3Spring);
+        m3Fade = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, fade, this::onM3Spring);
+        m3Wave = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, wave, this::onM3Spring);
+        m3PlayPausePath = new Path();
+        m3Tint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        m3Scrim = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        m3TextPaint();
+        return;
+      }
+      if (m3Centre.getTarget() != centre) {
+        m3Centre.animateTo(centre);
+      }
+      if (m3Fade.getTarget() != fade) {
+        m3Fade.animateTo(fade);
+      }
+      if (m3Wave.getTarget() != wave) {
+        m3Wave.animateTo(wave);
+      }
+    }
+
+    private void updateM3Time (long position, long duration) {
+      final long positionSeconds = position / 1000;
+      final long durationSeconds = duration > 0 ? duration / 1000 : -1;
+      if (positionSeconds != m3TimePosition || durationSeconds != m3TimeDuration) {
+        m3TimePosition = positionSeconds;
+        m3TimeDuration = durationSeconds;
+        m3Time = durationSeconds >= 0 ? Strings.buildDuration(positionSeconds) + " / " + Strings.buildDuration(durationSeconds) : Strings.buildDuration(positionSeconds);
+        m3TimeWidth = m3TextPaint().measureText(m3Time);
+      }
+    }
+
+    /** {@link #drawIcon} in {@code color} (its alpha too). The drawable is shared: its alpha is put back after. */
+    private void drawTintedIcon (Canvas c, @Nullable Drawable d, float cx, float cy, float size, int color) {
+      if (d == null || d.getMinimumWidth() <= 0) {
+        return;
+      }
+      final int opaque = color | 0xff000000;
+      if (m3TintColor != opaque || m3Tint.getColorFilter() == null) {
+        m3TintColor = opaque;
+        m3Tint.setColorFilter(new PorterDuffColorFilter(opaque, PorterDuff.Mode.SRC_IN));
+      }
+      final int alpha = color >>> 24;
+      m3Tint.setAlpha(alpha);
+      float scale = size / d.getMinimumWidth();
+      int saveCount = c.save();
+      c.translate(cx, cy);
+      c.scale(scale, scale);
+      Drawables.draw(c, d, -d.getMinimumWidth() / 2f, -d.getMinimumHeight() / 2f, m3Tint);
+      c.restoreToCount(saveCount);
+      if (alpha != 0xff) {
+        d.setAlpha(0xff);
+      }
+    }
+
+    private void drawControlsM3 (Canvas c) {
+      final Session s = session;
+      final int left = cell.left, top = cell.top, right = cell.right, bottom = cell.bottom;
+      final long duration = s.duration();
+      final long position = dragging && duration > 0 ? (long) (duration * dragFraction) : s.position();
+      final float progress = duration > 0 ? Math.max(0f, Math.min(1f, (float) position / (float) duration)) : 0f;
+      final boolean playing = s.isPlaying();
+      updateM3State(!playing && !dragging, playing && !dragging);
+      boolean animating = false;
+
+      // Bottom: a gradient for the seek track to stand out on
+      final int scrimHeight = Math.min(Screen.dp(M3_SCRIM_DP), cell.height());
+      if (scrimHeight > 0) {
+        if (m3ScrimHeight != scrimHeight) {
+          m3ScrimHeight = scrimHeight;
+          m3Scrim.setShader(new LinearGradient(0f, 0f, 0f, scrimHeight, 0x00000000, 0x66000000, Shader.TileMode.CLAMP));
+        }
+        int saveCount = c.save();
+        c.translate(0f, bottom - scrimHeight);
+        c.drawRect(left, 0f, right, scrimHeight, m3Scrim);
+        c.restoreToCount(saveCount);
+      }
+
+      final int pad = Screen.dp(8f);
+      final int chipHeight = Screen.dp(32f);
+      final int iconSize = Screen.dp(20f);
+      final int inner = Screen.dp(8f), spacing = Screen.dp(6f);
+      final float expandRadius = Screen.dp(16f);
+
+      // Top start: play or pause, the time, sound on or off
+      updateM3Time(position, duration);
+      final float playPart = inner + iconSize + spacing;
+      final float soundPart = spacing + iconSize + inner;
+      final float room = cell.width() - pad * 3 - expandRadius * 2;
+      final boolean showPlay = playPart + soundPart <= room;
+      final boolean showTime = showPlay && playPart + m3TimeWidth + soundPart <= room;
+      final float chipWidth = showPlay ? playPart + (showTime ? m3TimeWidth : 0f) + soundPart : chipHeight;
+      pillRect.set(left + pad, top + pad, left + pad + chipWidth, top + pad + chipHeight);
+      fill.setColor(0x80000000);
+      c.drawRoundRect(pillRect, chipHeight / 2f, chipHeight / 2f, fill);
+      final Drawable soundIcon = s.isSilent() ? soundOffIcon : soundOnIcon;
+      if (showPlay) {
+        playRect.set(pillRect.left, pillRect.top, pillRect.right - soundPart, pillRect.bottom);
+        drawIcon(c, playing ? pauseIcon : playIcon, pillRect.left + inner + iconSize / 2f, pillRect.centerY(), iconSize);
+        soundRect.set(pillRect.right - soundPart, pillRect.top, pillRect.right, pillRect.bottom);
+        drawIcon(c, soundIcon, soundRect.left + spacing + iconSize / 2f, pillRect.centerY(), iconSize);
+      } else {
+        playRect.setEmpty();
+        soundRect.set(pillRect);
+        drawIcon(c, soundIcon, pillRect.centerX(), pillRect.centerY(), iconSize);
+      }
+      if (showTime) {
+        c.drawText(m3Time, pillRect.left + playPart, pillRect.centerY() + m3TextBaseline, m3TextPaint());
+      }
+
+      // Top end: the full screen viewer
+      final float expandX = right - pad - expandRadius, expandY = pillRect.centerY();
+      if (expandX - expandRadius >= pillRect.right + Screen.dp(4f)) {
+        expandRect.set(expandX - expandRadius, expandY - expandRadius, expandX + expandRadius, expandY + expandRadius);
+        c.drawCircle(expandX, expandY, expandRadius, fill);
+        drawIcon(c, expandIcon, expandX, expandY, iconSize);
+      } else {
+        expandRect.setEmpty();
+      }
+
+      // Middle: paused or over (the disk morphs away as it plays), or loading
+      final float cx = cell.exactCenterX(), cy = cell.exactCenterY();
+      final float fade = Math.max(0f, Math.min(1f, m3Fade.getValue()));
+      if (fade > 0f) {
+        final float morph = Math.max(-.2f, Math.min(1.2f, m3Centre.getValue()));
+        final float half = Screen.dp(28f);
+        final float corner = Math.min(half, half + (Screen.dp(XgramExpressive.CORNER_L) - half) * morph);
+        final float scale = 1f - .15f * Math.max(0f, morph);
+        int saveCount = c.save();
+        c.scale(scale, scale, cx, cy);
+        rect.set(cx - half, cy - half, cx + half, cy + half);
+        fill.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), .92f * fade));
+        c.drawRoundRect(rect, corner, corner, fill);
+        final int content = XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER), fade);
+        if (s.ended) {
+          drawTintedIcon(c, replayIcon, cx, cy, Screen.dp(24f), content);
+        } else {
+          final float glyph = Math.max(0f, Math.min(1f, morph)); // play, turning into pause as it goes
+          DrawAlgorithms.drawPlayPause(c, (int) cx, (int) cy, Screen.dp(13f), m3PlayPausePath, m3PlayPauseDrawFactor, m3PlayPauseDrawFactor = glyph, 1f, content);
+        }
+        c.restoreToCount(saveCount);
+      }
+      if (playing && s.buffering) {
+        fill.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER), .92f));
+        c.drawCircle(cx, cy, Screen.dp(24f), fill);
+        XgramLoadingIndicator.draw(c, cx, cy, Screen.dp(38f), XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER), SystemClock.uptimeMillis());
+        animating = true;
+      }
+
+      // Bottom: the seek track
+      final float trackLeft = left + Screen.dp(M3_TRACK_INSET_DP), trackRight = right - Screen.dp(M3_TRACK_INSET_DP);
+      if (trackRight > trackLeft) {
+        final float trackY = bottom - Screen.dp(12f);
+        final float amplitude = Screen.dp(3f) * Math.max(0f, Math.min(1f, m3Wave.getValue()));
+        final boolean handle = dragging || s.engaged;
+        XgramWavyLinear.draw(c, trackLeft, trackRight, trackY, progress, 0xffffffff, 0x4dffffff,
+          Screen.dp(4f), amplitude, Screen.dp(40f), Screen.dp(4f), true,
+          handle ? Screen.dp(4f) : 0f, handle ? Screen.dp(16f) : 0f);
+        if (playing && XgramWavyLinear.isWaveMoving(progress, amplitude)) {
+          animating = true;
+        }
+      }
+
+      if (animating) {
+        postInvalidateOnAnimation(); // every frame while the wave or the indicator moves: the 50ms tick judders them
+      }
+    }
+
     // Touch: only the controls; a tap anywhere else goes to the message (sound on or off, long press menu)
 
     private int findTarget (float x, float y) {
@@ -1093,6 +1457,10 @@ public final class XgramInlineVideo {
     }
 
     private float trackFraction (float x) {
+      if (XgramExpressive.isEnabled()) {
+        float trackLeft = cell.left + Screen.dp(M3_TRACK_INSET_DP), trackRight = cell.right - Screen.dp(M3_TRACK_INSET_DP);
+        return trackRight > trackLeft ? Math.max(0f, Math.min(1f, (x - trackLeft) / (trackRight - trackLeft))) : 0f;
+      }
       float trackLeft = cell.left + Screen.dp(10f), trackRight = cell.right - Screen.dp(10f);
       return trackRight > trackLeft ? Math.max(0f, Math.min(1f, (x - trackLeft) / (trackRight - trackLeft))) : 0f;
     }

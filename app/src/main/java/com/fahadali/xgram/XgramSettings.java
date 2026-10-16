@@ -1054,13 +1054,21 @@ public final class XgramSettings {
   public static final int INLINE_VIDEO_START_AUTO = 0;
   public static final int INLINE_VIDEO_START_TAP = 1;
 
+  /** Set once Play videos in chat became on by default: it was off by default in the first builds that had it. */
+  private static final String KEY_INLINE_VIDEO_V2 = "xgram_inline_video_v2";
+
   private volatile boolean inlineVideo;
   private volatile int inlineVideoStart = -1; // -1: not read yet (read on first use, it's asked while drawing)
 
   private void loadInlineVideo () {
     if (inlineVideoStart == -1) {
       LevelDB pmc = pmc();
-      inlineVideo = pmc.getBoolean(KEY_INLINE_VIDEO, false);
+      if (!pmc.getBoolean(KEY_INLINE_VIDEO_V2, false)) {
+        // One time: the switch is turned on, also where an earlier build saved it off. A choice made after this wins.
+        put(KEY_INLINE_VIDEO, true);
+        put(KEY_INLINE_VIDEO_V2, true);
+      }
+      inlineVideo = pmc.getBoolean(KEY_INLINE_VIDEO, true);
       inlineVideoStart = pmc.getInt(KEY_INLINE_VIDEO_START, INLINE_VIDEO_START_AUTO) == INLINE_VIDEO_START_TAP ? INLINE_VIDEO_START_TAP : INLINE_VIDEO_START_AUTO;
     }
   }
