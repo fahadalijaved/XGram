@@ -201,7 +201,35 @@ public class StickerSuggestionAdapter extends RecyclerView.Adapter<StickerSugges
 
   @Override
   public boolean canFindChildViewUnder (StickerSmallView view, int recyclerX, int recyclerY) {
-    return true;
+    return !xgramOffsets; // XGram: getStickerViewUnder finds it while the list is offset in its layout
+  }
+
+  // XGram M3E: the floating strip sits inside its layout (8dp from the pane edge, 4dp from the layout's top), so the
+  // preview opens from the sticker's real place: x is shifted by the list's left (getStickerViewLeft, and back in
+  // getStickerViewUnder), y by its top (getStickersListTop). Off with Expressive design off.
+
+  private boolean xgramOffsets;
+  private int xgramOffsetX, xgramOffsetY;
+
+  /** XGram: the list's position in the suggestions layout (px). */
+  public void setXgramOffsets (int x, int y) {
+    this.xgramOffsets = true;
+    this.xgramOffsetX = x;
+    this.xgramOffsetY = y;
+  }
+
+  @Override
+  public int getStickerViewLeft (StickerSmallView v) {
+    return xgramOffsets ? v.getLeft() + xgramOffsetX : -1;
+  }
+
+  @Override
+  public StickerSmallView getStickerViewUnder (StickerSmallView v, int x, int y) {
+    if (!xgramOffsets || !(v.getParent() instanceof RecyclerView)) {
+      return null;
+    }
+    final View child = ((RecyclerView) v.getParent()).findChildViewUnder(x - xgramOffsetX, y);
+    return child instanceof StickerSmallView ? (StickerSmallView) child : null;
   }
 
   @Override
@@ -216,7 +244,7 @@ public class StickerSuggestionAdapter extends RecyclerView.Adapter<StickerSugges
 
   @Override
   public int getStickersListTop () {
-    return callback.getStickerSuggestionsTop(isEmoji);
+    return callback.getStickerSuggestionsTop(isEmoji) + (xgramOffsets ? xgramOffsetY : 0);
   }
 
   // Holder
@@ -231,6 +259,34 @@ public class StickerSuggestionAdapter extends RecyclerView.Adapter<StickerSugges
     }
 
     public static StickerSuggestionHolder create (Context context, Tdlib tdlib, int viewType, StickerSmallView.StickerMovementCallback callback, @Nullable ViewController<?> themeProvider, boolean isEmoji) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the strip is the floating container itself (StickersSuggestionsLayout), so the cells have no
+        // bubble pieces: 64dp sticker cells (40dp emoji) 4dp apart, 4dp from the container's ends
+        switch (viewType) {
+          case TYPE_START:
+          case TYPE_END: {
+            View view = new View(context);
+            view.setLayoutParams(new RecyclerView.LayoutParams(Screen.dp(2f), ViewGroup.LayoutParams.MATCH_PARENT));
+            return new StickerSuggestionHolder(view);
+          }
+          case TYPE_STICKER: {
+            StickerSmallView stickerView = new StickerSmallView(context);
+            stickerView.init(tdlib);
+            stickerView.setStickerMovementCallback(callback);
+            if (themeProvider != null) {
+              themeProvider.addThemeInvalidateListener(stickerView);
+            }
+            stickerView.setIsSuggestion(isEmoji);
+            RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            params.leftMargin = params.rightMargin = Screen.dp(2f);
+            stickerView.setLayoutParams(params);
+            if (isEmoji) {
+              stickerView.setPadding(Screen.dp(6f));
+            }
+            return new StickerSuggestionHolder(stickerView);
+          }
+        }
+      }
       switch (viewType) {
         case TYPE_START: {
           Drawable drawable = Theme.filteredDrawable(R.drawable.stickers_back_left, ColorId.overlayFilling, themeProvider);

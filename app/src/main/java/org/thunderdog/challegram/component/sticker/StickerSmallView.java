@@ -187,7 +187,9 @@ public class StickerSmallView extends View implements FactorAnimator.Target, Sti
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     if (isSuggestion) {
-      super.onMeasure(MeasureSpec.makeMeasureSpec(Screen.dp(isEmojiSuggestion ? 36 : 72), MeasureSpec.EXACTLY), heightMeasureSpec);
+      // XGram M3E: 64dp sticker cells (40dp for emoji) in the floating suggestion strip
+      final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      super.onMeasure(MeasureSpec.makeMeasureSpec(Screen.dp(isEmojiSuggestion ? (xgram ? 40 : 36) : (xgram ? 64 : 72)), MeasureSpec.EXACTLY), heightMeasureSpec);
     } else if (isTrending) {
       super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(Screen.smallestSide() / 5, MeasureSpec.EXACTLY));
     } else {
