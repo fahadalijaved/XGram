@@ -316,8 +316,16 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
         return true;
       }
     };
+    // XGram M3E wave 2: the Emoji / Stickers / GIFs switch is a connected button group at the panel's bottom start
+    final boolean xgramGroup = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && this.allowMedia && !useDarkMode;
     if (useDarkMode) {
       headerView.setBackgroundColor(Theme.getColor(ColorId.filling, ThemeId.NIGHT_BLACK));
+    } else if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: the tabs sit on the panel's own surfaceContainerLow, not on a lighter strip
+      headerView.setBackground(new com.fahadali.xgram.appearance.XgramM3Composer.RoleDrawable(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW));
+      if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(headerView);
+      }
     } else {
       ViewSupport.setThemedBackground(headerView, ColorId.filling, themeProvider);
     }
@@ -338,7 +346,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       expandableSections.add(new EmojiSection(this,  EmojiSection.SECTION_EMOJI_SYMBOLS, R.drawable.deproko_baseline_lamp_24, R.drawable.deproko_baseline_lamp_filled_24));
       expandableSections.add(new EmojiSection(this,  EmojiSection.SECTION_EMOJI_FLAGS, R.drawable.deproko_baseline_flag_outline_24, R.drawable.deproko_baseline_flag_filled_24).setMakeFirstTransparent());
 
-      emojiHeaderView = new EmojiHeaderView(getContext(), this, themeProvider, emojiSections, expandableSections, allowMedia);
+      emojiHeaderView = new EmojiHeaderView(getContext(), this, themeProvider, emojiSections, expandableSections, allowMedia, xgramGroup);
       emojiHeaderView.setSectionsOnClickListener(this);
       emojiHeaderView.setSectionsOnLongClickListener(this::onEmojiHeaderLongClick);
       checkAllowPremiumFeatures();
@@ -381,7 +389,11 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     }
 
     final int padding = Screen.dp(4);
-    params = FrameLayoutFix.newParams(Screen.dp(23f) * 2 + padding * 2, Screen.dp(23f) * 2 + padding * 2, Gravity.RIGHT | Gravity.BOTTOM);
+    // XGram: with Expressive design the backspace / search button is an M3E FAB (56dp, 16dp corners, elevation
+    // level 3) in the surface colors (surfaceContainerHigh, primary icon), 16dp from the edges
+    final float circleSize = xgramCircleSize();
+    final int circleBox = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !useDarkMode ? Screen.dp(circleSize) + padding * 2 : Screen.dp(23f) * 2 + padding * 2;
+    params = FrameLayoutFix.newParams(circleBox, circleBox, Gravity.RIGHT | Gravity.BOTTOM);
     params.rightMargin = Screen.dp(16f) - padding;
     params.bottomMargin = Screen.dp(16f) - padding + extraBottomInsetWithoutKeyboard;
 
@@ -391,20 +403,38 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     }
     circleButton.setId(R.id.btn_circle);
     if (position == 0) {
-      circleButton.init(R.drawable.baseline_backspace_24, -Screen.dp(BACKSPACE_OFFSET), 46f, 4f, ColorId.circleButtonOverlay, ColorId.circleButtonOverlayIcon);
+      circleButton.init(R.drawable.baseline_backspace_24, -Screen.dp(BACKSPACE_OFFSET), circleSize, 4f, ColorId.circleButtonOverlay, ColorId.circleButtonOverlayIcon);
       setCircleVisible(hasLeftButton(), false, 0, 0);
     } else {
-      circleButton.init(R.drawable.baseline_search_24, 46f, 4f, ColorId.circleButtonOverlay, ColorId.circleButtonOverlayIcon);
+      circleButton.init(R.drawable.baseline_search_24, circleSize, 4f, ColorId.circleButtonOverlay, ColorId.circleButtonOverlayIcon);
       setCircleVisible(hasRightButton(), false, 0, 0);
     }
     circleButton.setOnClickListener(this);
     circleButton.setLayoutParams(params);
     updateCircleStyles();
 
+    if (xgramGroup) {
+      xgramTypeGroup = new com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup(getContext());
+      xgramTypeGroup.setCallback(this::xgramOnTypeSelected);
+      FrameLayoutFix.LayoutParams groupParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM);
+      groupParams.leftMargin = Screen.dp(16f);
+      groupParams.bottomMargin = xgramTypeGroupBottomMargin();
+      xgramTypeGroup.setLayoutParams(groupParams);
+      if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(xgramTypeGroup);
+      }
+      xgramSyncTypeGroup(false);
+    } else {
+      xgramTypeGroup = null;
+    }
+
     addView(pager);
     addView(headerView);
     addView(shadowView);
     addView(circleButton);
+    if (xgramTypeGroup != null) {
+      addView(xgramTypeGroup);
+    }
 
     checkBackground();
     // NewEmoji.instance().loadAllEmoji();
@@ -427,6 +457,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       if (circleButton != null) {
         Views.setBottomMargin(circleButton, Screen.dp(16f) - Screen.dp(4f) + extraBottomInsetWithoutKeyboard);
       }
+      if (xgramTypeGroup != null) {
+        Views.setBottomMargin(xgramTypeGroup, xgramTypeGroupBottomMargin()); // XGram
+      }
     }
   }
 
@@ -441,10 +474,76 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       this.emojiHeaderView.setAllowMedia(allowMedia);
       this.adapter.allowMedia = allowMedia;
       this.adapter.notifyDataSetChanged();
+      if (xgramTypeGroup != null) {
+        xgramTypeGroup.setVisibility(allowMedia && !isOptimizedForDisplayMessageOptionsWindow ? VISIBLE : GONE); // XGram
+        xgramSyncTypeGroup(false);
+      }
     }
   }
 
   private boolean xgramThemeListener;
+
+  // XGram M3E wave 2: Emoji / Stickers / GIFs as a connected button group (com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup)
+  // floating at the bottom start, centred on the FAB at the bottom end; it hides with the header like the FAB.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup xgramTypeGroup;
+
+  private float xgramCircleSize () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !useDarkMode ? 56f : 46f;
+  }
+
+  private int xgramTypeGroupBottomMargin () {
+    return Screen.dp(16f) + (Screen.dp(xgramCircleSize()) - Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.HEIGHT_DP)) / 2 + extraBottomInsetWithoutKeyboard;
+  }
+
+  private void xgramSyncTypeGroup (boolean animated) {
+    if (xgramTypeGroup == null || pager == null || adapter == null) {
+      return;
+    }
+    final int type;
+    if (pager.getCurrentItem() == 0) {
+      type = com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_EMOJI;
+    } else {
+      type = getCurrentMediaEmojiSection() == EmojiMediaType.GIF ? com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS : com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_STICKERS;
+    }
+    xgramTypeGroup.setSelectedType(type, animated);
+  }
+
+  private void xgramOnTypeSelected (int type) {
+    if (scrollState != ViewPager.SCROLL_STATE_IDLE || pager == null || adapter == null) {
+      return;
+    }
+    final int prevSection = getCurrentEmojiSection();
+    if (type == com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_EMOJI) {
+      if (pager.getCurrentItem() != 0) {
+        pager.setCurrentItem(0, true);
+        if (listener != null) {
+          listener.onSectionSwitched(this, EmojiMediaType.EMOJI, prevSection);
+        }
+      }
+    } else {
+      final boolean switchPage = pager.getCurrentItem() != 1;
+      if (switchPage) {
+        pager.setCurrentItem(1, true);
+      }
+      ViewController<?> c = adapter.getCachedItem(1);
+      if (c instanceof EmojiMediaListController) {
+        EmojiMediaListController media = (EmojiMediaListController) c;
+        if (type == com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS) {
+          // As the GIF section button: no saved GIFs opens the GIF search
+          if (media.getMediaSection() != EmojiMediaType.GIF && !media.showGIFs() && listener != null) {
+            listener.onSearchRequested(this, false);
+          }
+        } else if (media.getMediaSection() != EmojiMediaType.STICKER) {
+          media.showStickers();
+        }
+      }
+      if (switchPage && listener != null) {
+        listener.onSectionSwitched(this, getCurrentMediaEmojiSection(), prevSection);
+      }
+    }
+    xgramSyncTypeGroup(true);
+  }
 
   private void checkBackground () {
     if (!useDarkMode && !isOptimizedForDisplayMessageOptionsWindow && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -527,6 +626,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     if (shadowView != null) shadowView.setVisibility(visibility);
     if (pager != null) pager.setVisibility(visibility);
     if (circleButton != null) circleButton.setVisibility(visibility);
+    if (xgramTypeGroup != null) xgramTypeGroup.setVisibility(allowMedia ? visibility : GONE); // XGram
   }
 
   public int getCurrentItem () {
@@ -814,6 +914,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       }
       if (mediaSectionsView != null) {
         mediaSectionsView.setAlpha(alpha);
+      }
+      if (xgramTypeGroup != null) {
+        xgramTypeGroup.setHideFactor(factor); // XGram: hides with the header
       }
     }
   }
@@ -1128,6 +1231,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       setCircleVisible((hasLeft && position == 0) || (hasRight && position == 1), true, position == 0 ? R.drawable.baseline_backspace_24 : R.drawable.baseline_search_24, position == 0 ? -Screen.dp(BACKSPACE_OFFSET) : 0);
     }
     resetScrollState(false);
+    xgramSyncTypeGroup(true); // XGram
   }
 
   private boolean affectHeight;
@@ -1232,6 +1336,10 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   public void setMediaSection (boolean isGif) {
     if (emojiHeaderView != null) {
       emojiHeaderView.setMediaSection(isGif);
+    }
+    if (xgramTypeGroup != null && pager != null && pager.getCurrentItem() == 1) {
+      // XGram: the media page switched between stickers and GIFs
+      xgramTypeGroup.setSelectedType(isGif ? com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS : com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_STICKERS, true);
     }
   }
 

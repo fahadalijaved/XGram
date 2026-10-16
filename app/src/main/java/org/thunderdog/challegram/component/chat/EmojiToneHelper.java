@@ -289,6 +289,8 @@ public class EmojiToneHelper implements FactorAnimator.Target {
           visibilityAnimator.setDuration(100l);
         }
       }
+      // XGram: M3E menus enter on the spatial fast spring (the scale may overshoot a little) and leave on effects fast
+      com.fahadali.xgram.appearance.XgramAppMotion.use(visibilityAnimator, isVisible ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, !isVisible);
       boolean byLayout = prepareWrap(anchorView);
       visibilityAnimator.setValue(isVisible, true, byLayout ? emojiTonePicker : null);
     }
@@ -408,6 +410,12 @@ public class EmojiToneHelper implements FactorAnimator.Target {
     /*if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       sendView.setOutlineProvider(applyButton.getOutlineProvider());
     }*/
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: an M3E text button: labelLarge in sentence case, primary, a full-corner primary state layer at 10%
+      Views.setMediumText(sendView, Lang.getString(R.string.ApplyToAll));
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(sendView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      com.fahadali.xgram.appearance.XgramM3Chat.setTextButtonBackground(sendView, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+    }
     sendView.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
     sendView.setGravity(Gravity.CENTER);
     sendView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));

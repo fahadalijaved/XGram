@@ -188,8 +188,28 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
 
   @Override
   protected boolean needBubbleCornerFix () {
+    if (xgramCardMode()) {
+      return false; // XGram: the map is an inner card with its own corners
+    }
     return true;
   }
+
+  /**
+   * XGram M3E wave 2: a venue or a live location (a map with text under it) in a bubble is an inner card: the map sits
+   * in the bubble's 8dp content padding with 12dp corners (the bubble's 20dp minus the padding, as in the link preview
+   * card), the title in titleMedium and the address or update time in bodyMedium under it. A plain location keeps the
+   * map edge to edge, clipped to the bubble like a photo. Decided without side effects, so the layout and the drawing
+   * agree; a live location that expires rebuilds the message (checkAlive).
+   */
+  private boolean xgramCardMode () {
+    if (!com.fahadali.xgram.appearance.XgramW2Cards.on() || !useBubbles() || useFullWidth()) {
+      return false;
+    }
+    return venue != null || (livePeriod > 0 && aliveExpiresAt > 0 && aliveExpiresAt > SystemClock.uptimeMillis());
+  }
+
+  /** XGram: the text block under the map in card mode: 10dp gap, a titleMedium line (24dp), a bodyMedium line (20dp), 2dp. */
+  private static final float XGRAM_TEXT_GAP = 10f, XGRAM_TEXT_BLOCK = 56f;
 
   @Override
   public boolean isEdited () {
@@ -298,7 +318,7 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
       if (!StringUtils.equalsOrBothEmpty(newSubtitle, this.subtitle)) {
         this.subtitle = newSubtitle;
         if (maxSubtitleWidth > 0) {
-          trimmedSubtitle = TextUtils.ellipsize(subtitle, Paints.getSubtitlePaint(), maxSubtitleWidth, TextUtils.TruncateAt.END).toString();
+          trimmedSubtitle = xgramCardMode() ? com.fahadali.xgram.appearance.XgramW2Cards.ellipsizeBody(subtitle, maxSubtitleWidth) : TextUtils.ellipsize(subtitle, Paints.getSubtitlePaint(), maxSubtitleWidth, TextUtils.TruncateAt.END).toString();
         }
         return true;
       }
@@ -390,7 +410,7 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
       this.subtitle = newSubtitle;
       this.originalSubtitle = originalSubtitle;
       if (maxSubtitleWidth > 0) {
-        trimmedSubtitle = TextUtils.ellipsize(subtitle, Paints.getSubtitlePaint(), maxSubtitleWidth, TextUtils.TruncateAt.END).toString();
+        trimmedSubtitle = xgramCardMode() ? com.fahadali.xgram.appearance.XgramW2Cards.ellipsizeBody(subtitle, maxSubtitleWidth) : TextUtils.ellipsize(subtitle, Paints.getSubtitlePaint(), maxSubtitleWidth, TextUtils.TruncateAt.END).toString();
       }
     }
     if (!isScheduled && isUpdating) {
@@ -513,7 +533,10 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
       int circleRadius = Screen.dp(20f);
       int horizontalPadding = (useFullWidth() ? xContentLeft : 0);
       int maxTextWidth = maxWidth - horizontalPadding * 2;
-      if (useBubbles) {
+      final boolean xgramCard = xgramCardMode();
+      if (xgramCard) {
+        maxTextWidth = Math.min(maxTextWidth, previewWidth); // XGram: the text spans the map card
+      } else if (useBubbles) {
         maxTextWidth -= (xBubblePadding - xBubblePaddingSmall) * 2;
       } else if (NEED_VENUE_CIRCLE) {
         maxTextWidth -= textPaddingLeft + circleRadius * 2;
@@ -527,11 +550,20 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
       }
 
       needFakeTitle = Text.needFakeBold(title);
+      if (xgramCard) {
+        // XGram: titleMedium over bodyMedium
+        trimmedTitle = com.fahadali.xgram.appearance.XgramW2Cards.ellipsizeTitle(title, needFakeTitle, maxTextWidth);
+        if (venue != null) {
+          maxTextWidth -= computeBubbleTimePartWidth(true);
+        }
+        trimmedSubtitle = com.fahadali.xgram.appearance.XgramW2Cards.ellipsizeBody(subtitle, maxSubtitleWidth = maxTextWidth);
+      } else {
       trimmedTitle = TextUtils.ellipsize(title, Paints.getTitlePaint(needFakeTitle), maxTextWidth, TextUtils.TruncateAt.END).toString();
       if (useBubbles && venue != null) {
         maxTextWidth -= computeBubbleTimePartWidth(true);
       }
       trimmedSubtitle = TextUtils.ellipsize(subtitle, Paints.getSubtitlePaint(), maxSubtitleWidth = maxTextWidth, TextUtils.TruncateAt.END).toString();
+      }
 
       if (useFullWidth()) {
         previewHeight -= circleRadius * 2 - Screen.dp(9f);
@@ -615,11 +647,17 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
 
   @Override
   protected int getBubbleContentPadding () {
+    if (xgramCardMode()) {
+      return xBubblePadding; // XGram: the map card sits in the bubble's content padding
+    }
     return xBubblePaddingSmall;
   }
 
   @Override
   public int getImageContentRadius (boolean isPreview) {
+    if (isPreview && xgramCardMode()) {
+      return Screen.dp(com.fahadali.xgram.appearance.XgramW2Cards.CARD_CORNER); // XGram: the map's 12dp corners
+    }
     return !isPreview && venue == null && livePeriod > 0 ? Screen.dp(26f) : 0;
   }
 
@@ -724,13 +762,18 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
   @Override
   protected void drawContent (MessageView view, Canvas c, final int startX, int startY, int maxWidth, Receiver mapReceiver, Receiver iconReceiver) {
     boolean useBubbles = useBubbles();
-    final boolean clipped = useBubbles && !useForward();
+    final boolean xgramCard = xgramCardMode();
+    final boolean clipped = useBubbles && !useForward() && !xgramCard; // XGram: the map card is rounded by its receiver
     final int saveCount = clipped ? ViewSupport.clipPath(c, getBubbleClipPath()) : Integer.MIN_VALUE;
     boolean useFullWidth = useFullWidth();
 
     mapReceiver.setBounds(getContentX(), getContentY(), getContentX() + previewWidth, getContentY() + previewHeight);
     if (mapReceiver.needPlaceholder()) {
+      if (xgramCard) {
+        mapReceiver.drawPlaceholderRounded(c, Screen.dp(com.fahadali.xgram.appearance.XgramW2Cards.CARD_CORNER));
+      } else {
       c.drawRect(startX, startY, startX + previewWidth, startY + previewHeight, Paints.getPlaceholderPaint());
+      }
     }
     mapReceiver.draw(c);
 
@@ -833,7 +876,21 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
       int venueContentY = startY + previewHeight;
       int paddingTop = Screen.dp(4f);
       int textX = venueContentX;
-      if (useBubbles) {
+      if (xgramCard) {
+        // XGram: titleMedium and bodyMedium lines under the map card, aligned with its start edge
+        final float lineTop = venueContentY + Screen.dp(XGRAM_TEXT_GAP);
+        final float titleLine = Screen.dp(com.fahadali.xgram.appearance.XgramW2Cards.TITLE_LINE);
+        if (trimmedTitle != null) {
+          android.text.TextPaint titlePaint = com.fahadali.xgram.appearance.XgramW2Cards.titlePaint(getTextColor(), needFakeTitle);
+          c.drawText(trimmedTitle, textX, com.fahadali.xgram.appearance.XgramW2Cards.baseline(titlePaint, lineTop, titleLine), titlePaint);
+        }
+        if (trimmedSubtitle != null) {
+          android.text.TextPaint bodyPaint = com.fahadali.xgram.appearance.XgramW2Cards.bodyPaint(getDecentColor());
+          c.drawText(trimmedSubtitle, textX, com.fahadali.xgram.appearance.XgramW2Cards.baseline(bodyPaint, lineTop + titleLine, Screen.dp(com.fahadali.xgram.appearance.XgramW2Cards.BODY_LINE)), bodyPaint);
+        }
+        // The timer ring (22dp below paddingTop) is centred on the two lines
+        paddingTop = Screen.dp(XGRAM_TEXT_GAP);
+      } else if (useBubbles) {
         textX += xBubblePadding - xBubblePaddingSmall;
       }/* else if (NEED_VENUE_CIRCLE && venue != null) {
         int circleRadius = Screen.dp(20f);
@@ -843,16 +900,16 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
         c.drawBitmap(icon, venueContentX + circleRadius - icon.getWidth() / 2, centerY - icon.getHeight() / 2, Paints.getBitmapPaint());
         textX += circleRadius * 2 + Screen.dp(11f);
       }*/
-      if (trimmedTitle != null) {
+      if (trimmedTitle != null && !xgramCard) {
         c.drawText(trimmedTitle, textX, venueContentY + paddingTop + Screen.dp(17f), Paints.getTitlePaint(needFakeTitle));
       }
       boolean align = isOutgoingBubble();
-      if (trimmedSubtitle != null) {
+      if (trimmedSubtitle != null && !xgramCard) {
         c.drawText(trimmedSubtitle, textX, venueContentY + paddingTop + Screen.dp(35f), Paints.getRegularTextPaint(13f, getDecentColor()));
       }
 
       if (timer != null) {
-        timerCenterX = useFullWidth ? view.getMeasuredWidth() - xContentLeft : startX + previewWidth - (useBubbles ? Screen.dp(22) : Screen.dp(16f));
+        timerCenterX = useFullWidth ? view.getMeasuredWidth() - xContentLeft : startX + previewWidth - (xgramCard ? Screen.dp(TIMER_RADIUS) : useBubbles ? Screen.dp(22) : Screen.dp(16f));
         timerCenterY = venueContentY + paddingTop + Screen.dp(22f);
         int timerRadius = Screen.dp(TIMER_RADIUS);
         int color = Theme.getColor(getProgressColorId());
@@ -900,6 +957,9 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
 
   @Override
   protected int getContentHeight () {
+    if ((venue != null || isAliveNow) && xgramCardMode()) {
+      return previewHeight + Screen.dp(XGRAM_TEXT_BLOCK); // XGram
+    }
     return venue != null || isAliveNow ? previewHeight + Screen.dp(useBubbles() ? 9f : 4f) + Screen.dp(20f) * 2 : previewHeight;
   }
 

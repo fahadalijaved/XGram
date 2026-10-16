@@ -2852,6 +2852,42 @@ public final class TGMessageService extends TGMessageServiceImpl {
   @Override
   @NonNull
   protected TextColorSet defaultTextColorSet () {
+    if (useBubbles() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E wave 2: the service chip is the date separator's chip, so its label has the date's color
+      // (onSurfaceVariant). Over a wallpaper (on the chip) names keep that color, a chip label is one color; without
+      // one (no chip) they are links in primary. Pressed: the content color's 10% state layer.
+      return new TextColorSet() {
+        @Override
+        public int defaultTextColor () {
+          return getBubbleDateTextColor();
+        }
+
+        @Override
+        public int clickableTextColor (boolean isPressed) {
+          return ColorUtils.fromToArgb(
+            getBubbleDateTextColor(),
+            com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY),
+            messagesController().wallpaper().getBackgroundTransparency()
+          );
+        }
+
+        @Override
+        public int backgroundColor (boolean isPressed) {
+          return isPressed ? com.fahadali.xgram.appearance.XgramExpressive.withAlpha(clickableTextColor(true), com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED) : 0;
+        }
+
+        @Override
+        public int backgroundColorId (boolean isPressed) {
+          // Only a key for the pressed highlight (the color comes from backgroundColor)
+          return isPressed ? ColorId.bubble_dateText : 0;
+        }
+
+        @Override
+        public int iconColor () {
+          return getBubbleDateTextColor();
+        }
+      };
+    }
     if (useBubbles()) {
       return new TextColorSet() {
         @Override

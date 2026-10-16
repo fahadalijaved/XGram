@@ -67,7 +67,16 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
   private boolean isPremium;
 
   public EmojiHeaderView (@NonNull Context context, EmojiLayoutRecyclerController.Callback emojiLayout, ViewController<?> themeProvider, ArrayList<EmojiSection> emojiSections, @Nullable ArrayList<EmojiSection> expandableSections, boolean allowMedia) {
+    this(context, emojiLayout, themeProvider, emojiSections, expandableSections, allowMedia, false);
+  }
+
+  /**
+   * XGram: {@code xgramMediaSwitchElsewhere} (Expressive design) leaves the Stickers / GIFs switch out of the header,
+   * because the panel shows the Emoji / Stickers / GIFs connected button group instead.
+   */
+  public EmojiHeaderView (@NonNull Context context, EmojiLayoutRecyclerController.Callback emojiLayout, ViewController<?> themeProvider, ArrayList<EmojiSection> emojiSections, @Nullable ArrayList<EmojiSection> expandableSections, boolean allowMedia, boolean xgramMediaSwitchElsewhere) {
     super(context);
+    this.xgramMediaSwitchElsewhere = xgramMediaSwitchElsewhere;
     this.emojiLayout = emojiLayout;
     this.allowMedia = allowMedia;
     setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48)));
@@ -111,11 +120,21 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
     addView(goToMediaPageSection, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT));
 
     emojiHeaderViewNonPremium = new EmojiHeaderViewNonPremium(context);
-    emojiHeaderViewNonPremium.init(emojiLayout, themeProvider, allowMedia);
+    emojiHeaderViewNonPremium.init(emojiLayout, themeProvider, allowMedia && !xgramMediaSwitchElsewhere);
     addView(emojiHeaderViewNonPremium, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-    updatePaints(Theme.fillingColor());
+    updatePaints(xgramFadeColor());
     setSelectedObjectByPosition(1, false);
+  }
+
+  private final boolean xgramMediaSwitchElsewhere;
+
+  /** XGram: the end fade matches the header's surface (the panel's surfaceContainerLow with Expressive design). */
+  private int xgramFadeColor () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (emojiLayout == null || !emojiLayout.isUseDarkMode())) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
+    }
+    return Theme.fillingColor();
   }
 
   private boolean allowMedia;
@@ -129,6 +148,12 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
   }
 
   private void checkAllowMedia () {
+    if (xgramMediaSwitchElsewhere) {
+      // XGram: the panel's connected button group switches to stickers and GIFs
+      goToMediaPageSection.setVisibility(GONE);
+      recyclerView.setPadding(Screen.dp(DEFAULT_PADDING), 0, Screen.dp(DEFAULT_PADDING), 0);
+      return;
+    }
     goToMediaPageSection.setVisibility(allowMedia && mediaMustBeVisibility ? VISIBLE : GONE);
     recyclerView.setPadding(Screen.dp(DEFAULT_PADDING), 0, Screen.dp(DEFAULT_PADDING + (allowMedia ? 44 : 0)), 0);
   }
@@ -265,7 +290,7 @@ public class EmojiHeaderView extends FrameLayout implements FactorAnimator.Targe
   @Override
   protected boolean drawChild (Canvas canvas, View child, long drawingTime) {
     if (child == goToMediaPageSection) {
-      updatePaints(Theme.fillingColor());
+      updatePaints(xgramFadeColor());
       canvas.save();
       canvas.translate(getMeasuredWidth() - Screen.dp(96), 0);
       canvas.drawRect(0, 0, Screen.dp(96), getMeasuredHeight(), shadowPaint);

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E wave 2 (emoji panel, attach menu, media viewer, message cards) -->
+  <!-- The Emoji segment of the Emoji / Stickers / GIFs button group in the emoji panel (Stickers and GIFs reuse R.string.Stickers and R.string.GIFs) -->
+  <string name="XgramW2EmojiTypeEmoji">Emoji</string>
+  <!-- The button that adds the shared contact, next to Message, on a contact message -->
+  <string name="XgramW2ContactAdd">Add</string>
+</resources>

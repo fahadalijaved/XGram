@@ -1998,7 +1998,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       if (mode == MODE_GALLERY) {
         alpha = editWrap != null ? editWrap.getAlpha() : 0f;
       } else {
-        float captionWrapAlpha = Views.isValid(captionWrapView) ? captionWrapView.getAlpha() : 0f;
+        // XGram: the caption card floats, so it needs no band under it
+        float captionWrapAlpha = Views.isValid(captionWrapView) && !xgramCaptionCard() ? captionWrapView.getAlpha() : 0f;
         float sliderAlpha = Views.isValid(videoSliderView) ? videoSliderView.getAlpha() * videoSliderView.getInnerAlpha() : 0f;
         float thumbsAlpha = Views.isValid(thumbsRecyclerView) ? thumbsRecyclerView.getAlpha() : 0f;
         alpha = Math.max(captionWrapAlpha, Math.max(thumbsAlpha, sliderAlpha));
@@ -3392,7 +3393,36 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       this.needVideoMargin = needMargin;
       float y = (needMargin ? 0 : (float) -Screen.dp(56f) * videoFactor * (inCaption ? 0f : 1f)) + (thumbsFactor * Screen.dp(THUMBS_PADDING));
       captionWrapView.setTranslationY(y);
-      Views.setBottomMargin(captionWrapView, (needVideoMargin ? Screen.dp(56f) : 0));
+      Views.setBottomMargin(captionWrapView, (needVideoMargin ? Screen.dp(56f) : 0) + (xgramCaptionCard() ? Screen.dp(XGRAM_CAPTION_GAP) : 0));
+    }
+  }
+
+  // XGram M3E wave 2: in the messages viewer the caption is a card on the on-media scrim (black at 50%, 12dp corners,
+  // 16dp from the screen edges, 8dp above the controls), not a full-width band; the bars that touch the screen edges
+  // (the navigation bar area, the album thumbnails) use the scrims' 60% end so they read as one with the controls.
+
+  private static final float XGRAM_CAPTION_GAP = 8f;
+  private static final int XGRAM_ON_MEDIA_SCRIM = 0x99000000;
+
+  private boolean xgramCaptionCard () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (mode == MODE_MESSAGES || mode == MODE_SIMPLE);
+  }
+
+  private static void xgramStyleCaptionCard (View v) {
+    android.graphics.drawable.GradientDrawable card = new android.graphics.drawable.GradientDrawable();
+    card.setColor(com.fahadali.xgram.appearance.XgramM3Content.ON_MEDIA_SCRIM);
+    card.setCornerRadius(Screen.dp(com.fahadali.xgram.appearance.XgramW2Cards.CARD_CORNER));
+    v.setBackground(card);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      v.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+      v.setClipToOutline(true);
+    }
+    ViewGroup.LayoutParams params = v.getLayoutParams();
+    if (params instanceof ViewGroup.MarginLayoutParams) {
+      ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
+      margins.leftMargin = margins.rightMargin = Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.EDGE_DP);
+      margins.bottomMargin = Screen.dp(XGRAM_CAPTION_GAP);
+      v.setLayoutParams(params);
     }
   }
 
@@ -4124,6 +4154,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     thumbsRecyclerView.addItemDecoration(new ThumbItemDecoration(thumbsAdapter));
     thumbsRecyclerView.setItemAnimator(null);
     thumbsRecyclerView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
+    if (xgramCaptionCard()) {
+      thumbsRecyclerView.setBackgroundColor(XGRAM_ON_MEDIA_SCRIM); // XGram: the scrims' 60% end, as the navigation bar area
+    }
     thumbsRecyclerView.setLayoutManager(thumbsLayoutManager);
     thumbsRecyclerView.setAdapter(thumbsAdapter);
 
@@ -5296,6 +5329,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         pipOpenButton.setId(R.id.btn_inlineOpen);
         pipOpenButton.setIcon(R.drawable.deproko_baseline_outinline_24, false, false);
         pipOpenButton.setLayoutParams(fp);
+        com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(pipOpenButton); // XGram
         pipControlsWrap.addView(pipOpenButton);
 
         fp = FrameLayoutFix.newParams(Screen.dp(45f), Screen.dp(45f), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
@@ -5313,6 +5347,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         pipCloseButton.setId(R.id.btn_inlineClose);
         pipCloseButton.setIcon(R.drawable.baseline_close_24, false, false);
         pipCloseButton.setLayoutParams(fp);
+        com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(pipCloseButton); // XGram
         pipControlsWrap.addView(pipCloseButton);
 
         pipOverlayView = new PipOverlayView(context);
@@ -5340,6 +5375,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           }
         };
         captionView.setPadding(Screen.dp(14f), Screen.dp(14f), Screen.dp(14f), Screen.dp(14f));
+        if (xgramCaptionCard()) {
+          // XGram: M3 card content padding
+          captionView.setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
+        }
         captionView.setTextColorId(ColorId.white, true);
         captionView.setTextSize(Screen.dp(16f));
         captionView.setTextStyleProvider(TGMessage.getTextStyleProvider());
@@ -5361,6 +5400,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         scrollView.setAlpha(0f);
         scrollView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
         scrollView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+        if (xgramCaptionCard()) {
+          xgramStyleCaptionCard(scrollView);
+        }
         this.captionWrapView = scrollView;
 
         bottomWrap.addView(this.captionWrapView);
@@ -5396,7 +5438,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
 
     bottomSpace = new FillingSpace(context);
+    if (xgramCaptionCard()) {
+      // XGram: the navigation bar area continues the controls' bottom scrim (its 60% end) instead of a lighter band
+      bottomSpace.setBackgroundColor(XGRAM_ON_MEDIA_SCRIM);
+    } else {
     bottomSpace.setThemedBackground(ColorId.transparentEditor, this);
+    }
     bottomSpace.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, Gravity.BOTTOM));
     bottomSpace.setAlpha(0f);
     bottomSpace.setLayoutHeight(bottomInnerMargin, false);
@@ -6204,6 +6251,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           rotateButton.setOnClickListener(this);
           rotateButton.setIcon(R.drawable.baseline_rotate_90_degrees_ccw_24, false, false);
           rotateButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT));
+          com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(rotateButton); // XGram
           cropControlsWrap.addView(rotateButton);
 
           proportionButton = new EditButton(context());
@@ -6211,6 +6259,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           proportionButton.setOnClickListener(this);
           proportionButton.setIcon(R.drawable.baseline_image_aspect_ratio_24, false, false);
           proportionButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT));
+          com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(proportionButton); // XGram
           if (!inProfilePhotoEditMode) {
             cropControlsWrap.addView(proportionButton);
           }
@@ -6220,6 +6269,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           mirrorButton.setOnClickListener(this);
           mirrorButton.setIcon(R.drawable.dot_baseline_flip_horizontal_24, false, false);
           mirrorButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT, inProfilePhotoEditMode ? 0 : Screen.dp(56), 0, 0, 0));
+          com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(mirrorButton); // XGram
           cropControlsWrap.addView(mirrorButton);
 
           params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -6285,6 +6335,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           Views.setClickable(undoButton);
           undoButton.setBackgroundResource(R.drawable.bg_btn_header_light);
           undoButton.setLayoutParams(params);
+          com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(undoButton); // XGram
           paintControlsWrap.addView(undoButton);
 
           params = FrameLayoutFix.newParams(Screen.dp(56f), Screen.dp(48f), Gravity.RIGHT | Gravity.BOTTOM);
@@ -6294,6 +6345,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           paintTypeButton.setOnClickListener(this);
           paintTypeButton.setIcon(getIconForPaintType(PaintMode.PATH), false, false);
           paintTypeButton.setLayoutParams(params);
+          com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(paintTypeButton); // XGram
           paintControlsWrap.addView(paintTypeButton);
 
           params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(12f) + padding * 2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
@@ -9002,6 +9054,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     backButton.setIcon(R.drawable.baseline_arrow_back_24, false, false);
     backButton.setOnClickListener(this);
     backButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT));
+    com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(backButton); // XGram: on-media standard icon button
     editWrap.addView(backButton);
 
     sendButton = new EditButton(context);
@@ -9105,6 +9158,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     // cropOrStickerButton.setSecondIcon(R.drawable.deproko_baseline_insert_sticker_24);
     cropOrStickerButton.setIcon(R.drawable.baseline_crop_rotate_24, false, false);
     cropOrStickerButton.setLayoutParams(new LinearLayout.LayoutParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT));
+    com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(cropOrStickerButton); // XGram
     editButtons.addView(cropOrStickerButton);
 
     LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT);
@@ -9116,6 +9170,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     paintOrMuteButton.setId(R.id.btn_paint);
     paintOrMuteButton.setIcon(R.drawable.baseline_brush_24, false, false);
     paintOrMuteButton.setLayoutParams(params);
+    com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(paintOrMuteButton); // XGram
     editButtons.addView(paintOrMuteButton);
 
     adjustOrTextButton = new EditButton(context);
@@ -9124,6 +9179,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     adjustOrTextButton.setSecondIcon(R.drawable.deproko_baseline_text_add_24);
     adjustOrTextButton.setIcon(R.drawable.baseline_tune_24, false, false);
     adjustOrTextButton.setLayoutParams(new LinearLayout.LayoutParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT));
+    com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(adjustOrTextButton); // XGram
     editButtons.addView(adjustOrTextButton);
 
     if (chat != null && chat.type.getConstructor() == TdApi.ChatTypePrivate.CONSTRUCTOR && !tdlib.isBotChat(chat) && !hasFlag(Args.FLAG_DISALLOW_SET_DESTRUCTION_TIMER)) {
@@ -9133,6 +9189,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       stopwatchButton.setId(R.id.menu_btn_stopwatch);
       stopwatchButton.setOnClickListener(this);
       stopwatchButton.setLayoutParams(new LinearLayout.LayoutParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT));
+      com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(stopwatchButton); // XGram
       editButtons.addView(stopwatchButton);
     }
 
@@ -9247,6 +9304,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     captionView.setHintTextColor(0xbaffffff);
     captionView.setTextColor(0xffffffff);
     captionView.setTypeface(Fonts.getRobotoRegular());
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: bodyLarge face, the hint in the dark scheme's onSurfaceVariant (media stays dark), primary cursor and handles
+      captionView.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false));
+      captionView.setHintTextColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      com.fahadali.xgram.appearance.XgramM3Composer.tintInput(captionView, com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+    }
     captionView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     captionView.setInputType(captionView.getInputType() | EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES | EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE);
     captionView.setSelectionChangeListener(this);
@@ -9262,6 +9325,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     captionDoneButton.setAlpha(0f);
     captionDoneButton.setEnabled(false);
     captionDoneButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(55f), Screen.dp(52f), Gravity.RIGHT | Gravity.BOTTOM));
+    com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(captionDoneButton); // XGram
 
     captionEmojiButton = new ImageView(context());
     captionEmojiButton.setId(R.id.btn_caption_emoji);
@@ -9272,6 +9336,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     captionEmojiButton.setAlpha(0f);
     captionEmojiButton.setEnabled(false);
     captionEmojiButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(55f), Screen.dp(52f), Gravity.LEFT | Gravity.BOTTOM));
+    com.fahadali.xgram.appearance.XgramM3MediaChrome.iconButton(captionEmojiButton); // XGram
 
     LinearLayout captionWrapView = new LinearLayout(context) {
       @Override
