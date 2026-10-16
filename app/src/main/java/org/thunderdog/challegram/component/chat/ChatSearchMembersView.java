@@ -105,9 +105,21 @@ public class ChatSearchMembersView extends FrameLayout implements TdlibCache.Bas
         }
       }
     });
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramM3) {
+      // XGram M3E: one surface panel: the list sits on the panel color (the rows' own surface), as does the actions row
+      usersRecyclerView.setBackgroundColor(Theme.getColor(ColorId.filling));
+      controller.addThemeBackgroundColorListener(usersRecyclerView, ColorId.filling);
+      Views.setBottomMargin(usersRecyclerView, Screen.dp(XGRAM_ACTIONS_HEIGHT));
+    } else
     controller.addThemeBackgroundColorListener(usersRecyclerView, ColorId.background);
     Views.setScrollBarPosition(usersRecyclerView);
     addView(usersRecyclerView);
+
+    if (xgramM3) {
+      xgramBuildActions(context);
+      return;
+    }
 
     FrameLayoutFix footerView = new FrameLayoutFix(context) {
       @Override
@@ -141,6 +153,50 @@ public class ChatSearchMembersView extends FrameLayout implements TdlibCache.Bas
         button.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(55f), (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.BOTTOM));
       }
       Views.updateMediumTypeface(button, text);
+      Views.setClickable(button);
+      footerView.addView(button);
+    }
+  }
+
+  /** XGram M3E: the actions row, 40dp buttons with 12dp above and below. */
+  private static final float XGRAM_ACTIONS_HEIGHT = 64f;
+
+  /**
+   * XGram M3E: the footer as an M3 actions row on the panel color (no full-width bar or hairline): sentence-case text
+   * buttons in labelLarge and primary with a full-corner state layer that morphs to 8dp on press, "Clear" (the
+   * neutral one) at the start and "Cancel" at the end, 16dp from the sides.
+   */
+  private void xgramBuildActions (Context context) {
+    FrameLayoutFix footerView = new FrameLayoutFix(context) {
+      @Override
+      public boolean onTouchEvent (MotionEvent event) {
+        super.onTouchEvent(event);
+        return true;
+      }
+    };
+    ViewSupport.setThemedBackground(footerView, ColorId.filling, controller);
+    footerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(XGRAM_ACTIONS_HEIGHT), Gravity.BOTTOM));
+    addView(footerView);
+
+    for (int i = 0; i < 2; i++) {
+      TextView button = new NoScrollTextView(context);
+      final int colorId = ColorId.textNeutral; // primary
+      button.setTextColor(Theme.getColor(colorId));
+      controller.addThemeTextColorListener(button, colorId);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(button, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      button.setOnClickListener(this::onClickControlButtons);
+      com.fahadali.xgram.appearance.XgramM3Chat.setThemedTextButtonBackground(button, colorId);
+      button.setGravity(Gravity.CENTER);
+      button.setSingleLine(true);
+      button.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
+      final boolean clear = i == 0;
+      button.setId(clear ? R.id.btn_clear : R.id.btn_cancel);
+      button.setText(Lang.getString(clear ? R.string.Clear : R.string.Cancel));
+      final boolean atStart = clear;
+      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f),
+        ((atStart != Lang.rtl()) ? Gravity.LEFT : Gravity.RIGHT) | Gravity.CENTER_VERTICAL);
+      params.leftMargin = params.rightMargin = Screen.dp(16f); // the actions row's 16dp side insets
+      button.setLayoutParams(params);
       Views.setClickable(button);
       footerView.addView(button);
     }
