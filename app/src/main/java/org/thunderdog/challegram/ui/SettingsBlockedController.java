@@ -217,7 +217,7 @@ public class SettingsBlockedController extends RecyclerViewController<TdApi.Bloc
         if (isUpdate) {
           userView.updateSubtext();
         } else {
-          userView.setUser(senders.get(position));
+          userView.setUser(senders.get(position - xgramOffset)); // XGram M3E: the rows above the senders
         }
       }
     };
@@ -276,16 +276,34 @@ public class SettingsBlockedController extends RecyclerViewController<TdApi.Bloc
     tdlib.listeners().unsubscribeFromGlobalUpdates(this);
   }
 
+  /** XGram M3E: the position of the first sender (the "Block user" group comes first); 0 in Telegram X's list. */
+  private int xgramOffset;
+
   private void buildCells () {
     ArrayList<ListItem> items = new ArrayList<>();
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    xgramOffset = 0;
 
     if (senders != null) {
+      if (xgramM3) {
+        // XGram M3E: "Block user" (a tonal icon) above the list, the blocked senders as one group of segmented tiles
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_blockSender, R.drawable.baseline_block_24, R.string.BlockUser));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      }
       if (senders.isEmpty()) {
         items.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.BlockListEmpty));
       } else {
-        items.ensureCapacity(senders.size());
+        items.ensureCapacity(senders.size() + 5);
+        if (xgramM3) {
+          items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+          xgramOffset = items.size();
+        }
         for (TGUser chat : senders) {
           items.add(new ListItem(ListItem.TYPE_USER, R.id.user, 0, 0).setLongId(chat.getChatId()));
+        }
+        if (xgramM3) {
+          items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
         }
       }
     }
@@ -301,10 +319,11 @@ public class SettingsBlockedController extends RecyclerViewController<TdApi.Bloc
     senders.addAll(newSenders);
     List<ListItem> out = adapter.getItems();
     ArrayUtils.ensureCapacity(out, out.size() + newSenders.size());
+    int insertAt = xgramOffset + startIndex; // XGram M3E: before the group's closing spacer (Telegram X: the end)
     for (TGUser user : newSenders) {
-      out.add(new ListItem(ListItem.TYPE_USER, R.id.user, 0, 0).setLongId(user.getUserId()));
+      out.add(insertAt++, new ListItem(ListItem.TYPE_USER, R.id.user, 0, 0).setLongId(user.getUserId()));
     }
-    adapter.notifyItemRangeInserted(startIndex, newSenders.size());
+    adapter.notifyItemRangeInserted(xgramOffset + startIndex, newSenders.size());
   }
 
   @Override
@@ -335,8 +354,8 @@ public class SettingsBlockedController extends RecyclerViewController<TdApi.Bloc
     } else {
       int i = findFirstVisiblePosition();
       int top = getViewTop(i);
-      adapter.getItems().add(0, new ListItem(ListItem.TYPE_USER, R.id.user, 0, 0).setLongId(parsedSender.getChatId()));
-      adapter.notifyItemInserted(0);
+      adapter.getItems().add(xgramOffset, new ListItem(ListItem.TYPE_USER, R.id.user, 0, 0).setLongId(parsedSender.getChatId()));
+      adapter.notifyItemInserted(xgramOffset);
       if (i != -1) {
         ((LinearLayoutManager) getRecyclerView().getLayoutManager()).scrollToPositionWithOffset(i, top);
       }
@@ -410,7 +429,9 @@ public class SettingsBlockedController extends RecyclerViewController<TdApi.Bloc
 
   @Override
   public void onClick (View v) {
-    if (v.getId() == R.id.user) {
+    if (v.getId() == R.id.btn_blockSender) {
+      blockContact(); // XGram M3E: the "Block user" row
+    } else if (v.getId() == R.id.user) {
       TGUser user = ((UserView) v).getUser();
       if (user != null) {
         tdlib.ui().openChat(this, user.getSenderId(), new TdlibUi.ChatOpenParameters().keepStack()
