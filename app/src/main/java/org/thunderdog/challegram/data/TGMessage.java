@@ -1067,7 +1067,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   protected boolean needCommentButtonSeparator () {
-    return !drawBubbleTimeOverContent() || useForward();
+    return !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (!drawBubbleTimeOverContent() || useForward());
   }
 
   public final void openMessageThread () {

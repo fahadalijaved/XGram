@@ -90,7 +90,7 @@ public final class XgramIconPack {
       case PACK_PHOSPHOR: return XgramIconPackTable.PHOSPHOR;
       case PACK_MINGCUTE: return XgramIconPackTable.MINGCUTE;
       case PACK_PIXEL: return XgramIconPackTable.PIXEL;
-      default: return null;
+      default: return XgramIconPackTable.classic();
     }
   }
 
