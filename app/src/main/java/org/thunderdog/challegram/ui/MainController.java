@@ -1613,7 +1613,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   @Override
   protected int getBackButton () {
-    return xgramIsHiddenRoot() ? BackHeaderButton.TYPE_NONE : BackHeaderButton.TYPE_MENU;
+    return xgramIsHiddenRoot() || xgramRailShown() ? BackHeaderButton.TYPE_NONE : BackHeaderButton.TYPE_MENU;
   }
 
   // XGram: in the two-pane layout this chat list sits under the placeholder on the right, header included.
@@ -1622,21 +1622,40 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     return twoPane != null && twoPane.isHiddenRoot(this);
   }
 
-  /** XGram: as the chat list pane of the two-pane layout, the list keeps clear of the screen edge and the divider. */
+  /**
+   * XGram M3E: the navigation rail at the start of a wide window (XgramNavRail) is the side menu: no ☰, no drawer
+   * swipe, and the compose button is the rail's FAB.
+   */
+  private boolean xgramRailShown () {
+    return com.fahadali.xgram.layout.XgramTwoPane.isRailShown(context);
+  }
+
+  /** XGram: the navigation rail came or went (XgramTwoPane re-applies the header for the ☰). */
+  public void xgramOnNavRailChanged () {
+    if (composeWrap != null && xgramRailShown()) {
+      composeWrap.close();
+    }
+    xgramUpdateComposeVisibility();
+  }
+
+  /** XGram: as the chat list pane of the two-pane layout, the list keeps clear of the screen edge (or the rail) and the chat. */
   public void xgramUpdatePaneInset () {
     if (pagerWrap instanceof com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout) {
       boolean pane = com.fahadali.xgram.layout.XgramTwoPane.isPaneChatList(this);
-      ((com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout) pagerWrap).setSideInset(pane ? Screen.dp(16f) : 0);
+      ((com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout) pagerWrap).setSideInset(pane ? Screen.dp(com.fahadali.xgram.layout.XgramTwoPane.PANE_INSET_DP) : 0);
     }
   }
 
   @Override
   protected boolean useDrawer () {
-    return true;
+    return !xgramRailShown(); // XGram M3E: the rail's menu button opens the expanded rail instead
   }
 
   @Override
   public boolean canSlideBackFrom (NavigationController navigationController, float x, float y) {
+    if (xgramRailShown() && navigationController != null && navigationController.getStackSize() <= 1) {
+      return false; // XGram M3E: nothing to slide in from the chat list while the rail shows (no drawer)
+    }
     if (!super.canSlideBackFrom(navigationController, x, y)) {
       return false;
     }
@@ -2197,7 +2216,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private void xgramUpdateComposeVisibility () {
     if (composeWrap != null) {
-      composeWrap.setVisibility(com.fahadali.xgram.XgramSettings.instance().hideFab() ? View.GONE : View.VISIBLE);
+      // XGram M3E: with the navigation rail the compose button is the rail's FAB
+      boolean hidden = com.fahadali.xgram.XgramSettings.instance().hideFab() || xgramRailShown();
+      composeWrap.setVisibility(hidden ? View.GONE : View.VISIBLE);
     }
   }
 

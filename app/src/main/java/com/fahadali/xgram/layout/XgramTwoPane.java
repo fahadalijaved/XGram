@@ -12,6 +12,7 @@
 package com.fahadali.xgram.layout;
 
 import android.content.res.Configuration;
+import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -24,6 +25,7 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 
 import com.fahadali.xgram.XgramSettings;
+import com.fahadali.xgram.appearance.XgramExpressive;
 
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.Log;
@@ -46,11 +48,16 @@ import org.thunderdog.challegram.ui.MainController;
  * Telegram X's own navigation stays untouched and becomes the right pane. A second chat list in its own
  * {@link NavigationController} is shown on the left, and while the right pane is at its root (Telegram X's chat list)
  * a "select a chat" placeholder covers it. Folding or unfolding only shows or hides the left pane.
+ *
+ * With Material 3 Expressive the window also gets the navigation rail ({@link XgramNavRail}) at its start when it is
+ * at least 600dp wide or shows two panes: rail, chat list pane, the 24dp pane spacer with its drag handle, chat. The
+ * rail takes over the side menu, its swipe and the chat list's compose button.
  */
 public final class XgramTwoPane implements NavigationStack.ChangeListener {
   /**
    * Smallest window (dp) that gets two panes. The height rule keeps one pane on a phone in landscape and on a Fold's
    * cover screen in landscape (both are 800 to 900dp wide but under 480dp high), where the list squashed the chat.
+   * Also the smallest window (any height) that gets the navigation rail (Material 3 medium width class).
    */
   private static final int MIN_WIDTH_DP = 600, MIN_HEIGHT_DP = 480;
   /** Wide enough for two panes whatever the height (desktop windows). */
@@ -62,6 +69,16 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   private static final int HYSTERESIS_DP = 20;
   /** Book posture: the hinge only becomes the divider when it leaves both panes at least this wide (dp). */
   private static final int HINGE_MIN_LIST_DP = 260, HINGE_MIN_CHAT_DP = 300;
+  /**
+   * Material 3 Expressive: the chat list pane keeps its content this far from both of its sides (the screen edge or
+   * the rail, and the chat), on the app bar's layer (MainController#xgramUpdatePaneInset).
+   */
+  public static final float PANE_INSET_DP = 16f;
+  /**
+   * Material 3 pane spacer (DragHandleTokens.ContainerWidth, the adaptive scaffold's partition spacer): 24dp between
+   * the list's content and the chat. The list's own inset gives 16dp of it.
+   */
+  private static final float SPACER_DP = 24f;
 
   private final BaseActivity context;
   private final NavigationController navigation;
@@ -80,6 +97,10 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   @Nullable private View hiddenRootView, hiddenHeaderCell;
   private boolean isActive;
   private int leftWidth;
+
+  /** Material 3 Expressive navigation rail, while it shows. */
+  @Nullable private XgramNavRail rail;
+  private boolean railShown;
 
   public XgramTwoPane (BaseActivity context, NavigationController navigation, ViewGroup container) {
     this.context = context;
@@ -131,21 +152,28 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
 
   /** @param isActive two panes are shown now: they stay a little below the line (see {@link #HYSTERESIS_DP}) */
   private static boolean isWideEnough (BaseActivity context, boolean isActive) {
-    int width, height;
-    XgramWindow window = context.xgramWindow();
-    if (window != null && window.widthDp() > 0 && window.heightDp() > 0) {
-      width = window.widthDp();
-      height = window.heightDp();
-    } else {
-      Configuration configuration = context.getResources().getConfiguration();
-      width = configuration.screenWidthDp;
-      height = configuration.screenHeightDp;
-    }
+    int width = windowWidthDp(context), height = windowHeightDp(context);
     int slack = isActive ? HYSTERESIS_DP : 0;
     if (width >= ANY_HEIGHT_WIDTH_DP - slack) {
       return true;
     }
     return width >= MIN_WIDTH_DP - slack && height >= MIN_HEIGHT_DP - slack;
+  }
+
+  private static int windowWidthDp (BaseActivity context) {
+    XgramWindow window = context.xgramWindow();
+    if (window != null && window.widthDp() > 0 && window.heightDp() > 0) {
+      return window.widthDp();
+    }
+    return context.getResources().getConfiguration().screenWidthDp;
+  }
+
+  private static int windowHeightDp (BaseActivity context) {
+    XgramWindow window = context.xgramWindow();
+    if (window != null && window.widthDp() > 0 && window.heightDp() > 0) {
+      return window.heightDp();
+    }
+    return context.getResources().getConfiguration().screenHeightDp;
   }
 
   @Nullable
@@ -164,16 +192,16 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   }
 
   @Nullable private MainController headerRoot;
-  private boolean headerRootHidden;
+  private boolean headerRootHidden, headerRootRail;
 
   /**
-   * Re-applies the root's header when it starts or stops being hidden while it is on screen. When a chat is on top,
-   * the header picks it up by itself on the way back.
+   * Re-applies the root's header when it starts or stops being hidden, or the rail comes or goes, while it is on
+   * screen. When a chat is on top, the header picks it up by itself on the way back.
    */
   private void syncRootHeader () {
     MainController root = mainRoot();
     boolean hidden = isHiddenRoot(root);
-    if (root == headerRoot && hidden == headerRootHidden) {
+    if (root == headerRoot && hidden == headerRootHidden && railShown == headerRootRail) {
       return;
     }
     if (root != null && navigation.getCurrentStackItem() == root) {
@@ -187,6 +215,40 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
     headerRoot = root;
     headerRootHidden = hidden;
+    headerRootRail = railShown;
+  }
+
+  /** The chat list pane whose header {@link #leftHeaderRail} was applied to (kept while it is folded away). */
+  @Nullable private MainController leftHeaderMain;
+  private boolean leftHeaderRail;
+
+  /**
+   * The chat list pane's ☰ goes while the rail shows (MainController#getBackButton): re-applies its header when the
+   * rail came or went since it was set (a new pane's header is set up with the rail as it is).
+   */
+  private void syncLeftHeader () {
+    MainController main = isActive ? leftMain : null;
+    if (main == null) {
+      return;
+    }
+    if (main != leftHeaderMain) {
+      leftHeaderMain = main;
+      leftHeaderRail = railShown;
+      return;
+    }
+    if (railShown == leftHeaderRail) {
+      return;
+    }
+    if (leftNavigation != null && leftNavigation.getCurrentStackItem() == main) {
+      if (leftNavigation.isAnimating()) {
+        return; // the next stack change tries again
+      }
+      org.thunderdog.challegram.navigation.HeaderView header = leftNavigation.getHeaderView();
+      if (header != null) {
+        header.setTitle(main);
+      }
+    }
+    leftHeaderRail = railShown;
   }
 
   /** Re-evaluates the layout: setting, window width and whether the app is past login. */
@@ -194,6 +256,16 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     MainController root = mainRoot();
     boolean isAllowed = root != null && XgramSettings.instance().twoPaneLayout() && !navigation.isDestroyed();
     boolean needActive = isAllowed && isWideEnough(context, isActive);
+    // The rail first: the chat list pane built below already knows it has no ☰ and no compose button
+    try {
+      setRailShown(needRail(root, needActive));
+    } catch (Throwable t) {
+      Log.e("XGram: navigation rail failed", t);
+      android.util.Log.e("XGram", "navigation rail failed", t);
+      try {
+        setRailShown(false);
+      } catch (Throwable ignored) { }
+    }
     try {
       if (needActive) {
         if (!isActive || leftMain == null || leftMain.tdlib() != root.tdlib()) {
@@ -221,6 +293,123 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     updatePlaceholder();
     updateHighlight();
     syncRootHeader();
+    syncLeftHeader();
+    syncRail();
+  }
+
+  // Navigation rail (Material 3 Expressive)
+
+  /** Expressive design, past login, a window at least 600dp wide (or two panes), tall enough for the rail's items. */
+  private boolean needRail (@Nullable MainController root, boolean twoPanes) {
+    if (root == null || navigation.isDestroyed() || !XgramExpressive.isEnabled()) {
+      return false;
+    }
+    if (!twoPanes && windowWidthDp(context) < MIN_WIDTH_DP - (railShown ? HYSTERESIS_DP : 0)) {
+      return false;
+    }
+    return XgramNavRail.fits(XgramNavRail.destinations(root.tdlib(), false).length, windowHeightDp(context));
+  }
+
+  private void setRailShown (boolean show) {
+    if (show) {
+      if (rail == null) {
+        rail = new XgramNavRail(context, this);
+      }
+      View view = rail.view();
+      if (view.getParent() == null) {
+        // After the focus view, under the panes, the placeholder, the handle and the drawer
+        container.addView(view, Math.min(1, container.getChildCount()), new FrameLayout.LayoutParams(rail.width(), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
+      }
+    } else if (rail != null) {
+      rail.destroy();
+      container.removeView(rail.view());
+      rail = null;
+    }
+    if (railShown != show) {
+      railShown = show;
+      container.requestLayout();
+      // The ☰ and the compose button of the chat lists come or go
+      MainController root = mainRoot();
+      if (root != null) {
+        root.xgramOnNavRailChanged();
+      }
+      if (leftMain != null && leftMain != root) {
+        leftMain.xgramOnNavRailChanged();
+      }
+    }
+  }
+
+  /** The rail's destinations (with the archive while there is room) and the one on screen. */
+  private void syncRail () {
+    XgramNavRail rail = this.rail;
+    MainController root = mainRoot();
+    if (!railShown || rail == null || root == null) {
+      return;
+    }
+    Tdlib tdlib = root.tdlib();
+    int[] destinations = XgramNavRail.destinations(tdlib, true);
+    if (!XgramNavRail.fits(destinations.length, windowHeightDp(context))) {
+      destinations = XgramNavRail.destinations(tdlib, false);
+    }
+    rail.sync(destinations);
+  }
+
+  /** The navigation rail is on screen: the side menu, its swipe and the chat list's compose button are on it. */
+  public boolean isRailShown () {
+    return railShown;
+  }
+
+  public static boolean isRailShown (@Nullable BaseActivity context) {
+    XgramTwoPane twoPane = context != null ? context.xgramTwoPane() : null;
+    return twoPane != null && twoPane.railShown;
+  }
+
+  /**
+   * Opens the modal expanded rail: the side menu while the rail shows (for DrawerController#open, keyboard shortcuts).
+   * False when there is no rail, so the caller opens the drawer as usual.
+   */
+  public boolean expandRail () {
+    if (!railShown || rail == null) {
+      return false;
+    }
+    rail.expand();
+    return true;
+  }
+
+  /** Whether {@code x} (in the activity's content layout) is over the navigation rail: no pane gesture starts there. */
+  public boolean isOnRail (float x) {
+    return railShown && rail != null && x >= railStart && x < railEnd;
+  }
+
+  /** Whether {@code x} (in the activity's content layout) is over the chat list pane. */
+  public boolean isInListPane (float x) {
+    return isActive && leftNavigation != null && x >= listStart && x < listEnd;
+  }
+
+  /** Whether {@code x} (in the activity's content layout) is over the chat pane (the only pane in one-pane layouts). */
+  public boolean isInChatPane (float x) {
+    if (!isActive && !railShown) {
+      return true;
+    }
+    return x >= chatStart && x < chatEnd;
+  }
+
+  /** The current account's chat list at the root of the right pane (Telegram X's own). */
+  @Nullable
+  MainController railRoot () {
+    return mainRoot();
+  }
+
+  /** The chat list pane's navigation while two panes are shown. */
+  @Nullable
+  NavigationController railLeftNavigation () {
+    return isActive ? leftNavigation : null;
+  }
+
+  /** The chat list on screen: the chat list pane's with two panes, else the root. */
+  @Nullable
+  MainController railChatList () {
+    return isActive && leftMain != null ? leftMain : mainRoot();
   }
 
   // The chat open on the right is highlighted in the left chat list, as on tablets.
@@ -292,9 +481,19 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     return twoPane != null && twoPane.leftMain != null && twoPane.leftMain == c;
   }
 
-  /** Space under the last chat of a chat list page in the narrow pane, so the compose button doesn't cover it. */
+  /**
+   * Space under the last chat of a chat list page in the narrow pane, so the compose button doesn't cover it. None
+   * while the navigation rail shows: the compose button is the rail's FAB then.
+   */
   public static int fabSpace (@Nullable ViewController<?> c) {
-    return c != null && isPaneChatList(c.getParentOrSelf()) ? Screen.dp(56f + 16f + 8f) : 0;
+    if (c == null) {
+      return 0;
+    }
+    XgramTwoPane twoPane = c.context().xgramTwoPane();
+    if (twoPane != null && twoPane.railShown) {
+      return 0;
+    }
+    return isPaneChatList(c.getParentOrSelf()) ? Screen.dp(56f + 16f + 8f) : 0;
   }
 
   private void activate (Tdlib tdlib) {
@@ -309,13 +508,18 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
 
     if (!reuse) {
       leftNavigation = new NavigationController(context);
-      leftNavigation.getStack().addChangeListener(stack -> context.notifyBackPressAvailabilityChanged());
+      leftNavigation.getStack().addChangeListener(stack -> {
+        context.notifyBackPressAvailabilityChanged();
+        context.runOnUiThread(this::syncRail); // the archive opened or closed in the chat list pane
+      });
       leftMain = new MainController(context, tdlib);
     }
     View leftView = leftNavigation.getValue();
     leftView.setLayoutParams(new FrameLayout.LayoutParams(leftWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT | Gravity.TOP));
-    // Behind the main navigation and the drawer, after the focus view.
-    container.addView(leftView, Math.min(1, container.getChildCount()));
+    // Behind the main navigation and the drawer, after the focus view (and the rail).
+    View railView = rail != null ? rail.view() : null;
+    int railIndex = railView != null ? container.indexOfChild(railView) : -1;
+    container.addView(leftView, railIndex != -1 ? railIndex + 1 : Math.min(1, container.getChildCount()));
     if (!reuse) {
       leftNavigation.initController(leftMain);
     }
@@ -345,21 +549,30 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     container.requestLayout();
   }
 
-  // Where the panes go, in the container: set by computeSplit in onMeasure and used by onLayout.
+  // Where the rail and the panes go, in the container: set by computeSplit in onMeasure and used by onLayout.
   private int splitWidth = -1;
+  private int railStart, railEnd;
   private int listStart, listEnd, chatStart, chatEnd;
   /** Book posture with a physical hinge: the space it hides, kept empty. Equal values: no gutter. */
   private int gutterStart, gutterEnd;
+  /** Material 3 Expressive: the pane spacer between the list pane and the chat. Equal values: none (a line). */
+  private int spacerStart, spacerEnd;
+
+  /** The spacer's own width: the 24dp spacer less the 16dp the list pane keeps clear on that side. */
+  private static int spacerWidth () {
+    return XgramExpressive.isEnabled() ? Screen.dp(SPACER_DP - PANE_INSET_DP) : 0;
+  }
 
   /**
-   * Splits {@code width} between the chat list and the chat.
+   * Splits {@code width} between the rail, the chat list and the chat.
    * <ul>
    *   <li>The navigation views carry the left and right system bar and cutout insets as margins
    *   (RootFrameLayout#applyNavigationInsets): the list gets the inset on its side, the chat the one on its side,
-   *   so neither runs under a side navigation bar or a cutout.</li>
-   *   <li>Right-to-left languages put the list on the right. The root is always laid out left to right, so this
-   *   is mirrored here by hand.</li>
+   *   so neither runs under a side navigation bar or a cutout. The rail spans the inset on its side.</li>
+   *   <li>Right-to-left languages put the rail and the list on the right. The root is always laid out left to right,
+   *   so this is mirrored here by hand.</li>
    *   <li>Book posture (half open, vertical fold): the panes meet at the hinge instead of at the usual width.</li>
+   *   <li>One pane (no two panes, but the rail): the chat pane takes everything after the rail.</li>
    * </ul>
    */
   private void computeSplit (ViewGroup parent, int width) {
@@ -372,6 +585,33 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     int start = Math.min(insetLeft, width), end = Math.max(start, width - insetRight);
     boolean rtl = Lang.rtl();
     splitWidth = width;
+    spacerStart = spacerEnd = 0;
+
+    if (railShown && rail != null) {
+      int railWidth = Screen.dp(XgramNavRail.WIDTH);
+      if (rtl) {
+        rail.setStartInset(insetRight);
+        railEnd = width;
+        railStart = Math.max(start, end - railWidth);
+        end = railStart;
+      } else {
+        rail.setStartInset(insetLeft);
+        railStart = 0;
+        railEnd = Math.min(end, start + railWidth);
+        start = railEnd;
+      }
+    } else {
+      railStart = railEnd = 0;
+    }
+
+    if (!isActive || leftNavigation == null) {
+      // One pane, after the rail
+      listStart = listEnd = rtl ? end : start;
+      chatStart = start;
+      chatEnd = end;
+      gutterStart = gutterEnd = listEnd;
+      return;
+    }
 
     android.graphics.Rect hinge = hingeSplit(parent);
     if (hinge != null && hinge.left >= start && hinge.right <= end) {
@@ -395,11 +635,17 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       }
     }
 
-    int total = end - start;
+    int spacer = spacerWidth();
+    int total = Math.max(0, end - start - spacer);
     XgramSettings settings = XgramSettings.instance();
     int list;
     if (settings.paneSplitEvenly()) {
       list = evenListWidth(parent, start, end, rtl);
+      if (spacer > 0) {
+        // The visible 24dp gap (16dp of the list's inset and the spacer) is centered where the panes meet
+        list += Screen.dp((PANE_INSET_DP - (SPACER_DP - PANE_INSET_DP)) / 2f);
+      }
+      list = Math.max(0, Math.min(total, list));
     } else if (dragListWidth >= 0 || (settings.paneResizable() && settings.paneListWidthDp() > 0)) {
       // Set with the handle: anything that leaves both panes usable.
       int min = Math.min(Screen.dp(HINGE_MIN_LIST_DP), total / 2);
@@ -409,17 +655,25 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       list = Math.min(leftWidth, total / 2);
     }
     if (rtl) {
-      chatStart = start;
-      chatEnd = end - list;
-      listStart = chatEnd;
       listEnd = end;
+      listStart = end - list;
+      chatStart = start;
+      chatEnd = Math.max(start, listStart - spacer);
       gutterStart = gutterEnd = chatEnd;
+      if (spacer > 0) {
+        spacerStart = chatEnd;
+        spacerEnd = listStart;
+      }
     } else {
       listStart = start;
       listEnd = start + list;
-      chatStart = listEnd;
+      chatStart = Math.min(end, listEnd + spacer);
       chatEnd = end;
       gutterStart = gutterEnd = listEnd;
+      if (spacer > 0) {
+        spacerStart = listEnd;
+        spacerEnd = chatStart;
+      }
     }
   }
 
@@ -457,20 +711,34 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   }
 
   private int dividerWidth () {
-    return gutterEnd > gutterStart ? gutterEnd - gutterStart : Math.max(1, Screen.dp(.5f));
+    if (gutterEnd > gutterStart) {
+      return gutterEnd - gutterStart;
+    }
+    if (spacerEnd > spacerStart) {
+      return spacerEnd - spacerStart;
+    }
+    return Math.max(1, Screen.dp(.5f));
   }
 
   /** Called by the activity's content layout after its own measure pass. */
   public void onMeasure (ViewGroup parent) {
-    if (!isActive || leftNavigation == null) {
+    boolean panes = isActive && leftNavigation != null;
+    XgramNavRail rail = railShown ? this.rail : null;
+    if (!panes && rail == null) {
       return;
     }
     int width = parent.getMeasuredWidth(), height = parent.getMeasuredHeight();
     computeSplit(parent, width);
     int heightSpec = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY);
     int chatSpec = View.MeasureSpec.makeMeasureSpec(Math.max(0, chatEnd - chatStart), View.MeasureSpec.EXACTLY);
-    leftNavigation.getValue().measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, listEnd - listStart), View.MeasureSpec.EXACTLY), heightSpec);
     navigation.getValue().measure(chatSpec, heightSpec);
+    if (rail != null) {
+      rail.view().measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, railEnd - railStart), View.MeasureSpec.EXACTLY), heightSpec);
+    }
+    if (!panes) {
+      return;
+    }
+    leftNavigation.getValue().measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, listEnd - listStart), View.MeasureSpec.EXACTLY), heightSpec);
     if (placeholder != null) {
       placeholder.measure(chatSpec, heightSpec);
     }
@@ -490,15 +758,23 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
 
   /** Called by the activity's content layout after its own layout pass. */
   public void onLayout (ViewGroup parent) {
-    if (!isActive || leftNavigation == null) {
+    boolean panes = isActive && leftNavigation != null;
+    XgramNavRail rail = railShown ? this.rail : null;
+    if (!panes && rail == null) {
       return;
     }
     int width = parent.getMeasuredWidth(), height = parent.getMeasuredHeight();
     if (splitWidth != width) {
       computeSplit(parent, width);
     }
-    leftNavigation.getValue().layout(listStart, 0, listEnd, height);
     navigation.getValue().layout(chatStart, 0, chatEnd, height);
+    if (rail != null) {
+      rail.view().layout(railStart, 0, railEnd, height);
+    }
+    if (!panes) {
+      return;
+    }
+    leftNavigation.getValue().layout(listStart, 0, listEnd, height);
     if (placeholder != null) {
       placeholder.layout(chatStart, 0, chatEnd, height);
     }
@@ -509,6 +785,8 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       int dividerWidth = divider.getMeasuredWidth();
       if (gutterEnd > gutterStart) {
         divider.layout(gutterStart, 0, gutterEnd, height); // covers the hinge
+      } else if (spacerEnd > spacerStart) {
+        divider.layout(spacerStart, 0, spacerEnd, height); // the pane spacer
       } else if (listStart < chatStart) {
         divider.layout(listEnd - dividerWidth, 0, listEnd, height); // list on the left
       } else {
@@ -516,8 +794,8 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       }
     }
     if (handle != null) {
-      // Centred on the line, in the middle of the space under the headers.
-      int line = listStart < chatStart ? listEnd : listStart;
+      // Centred in the gap between the panes, in the middle of the space under the headers.
+      int line = handleCenterX();
       int w = handle.getMeasuredWidth(), h = handle.getMeasuredHeight();
       int headerHeight = org.thunderdog.challegram.navigation.HeaderView.getSize(true);
       int top = headerHeight + Math.max(0, (height - headerHeight - h) / 2);
@@ -530,8 +808,22 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
   }
 
+  /**
+   * Where the drag handle sits: the middle of the visible gap between the list's content and the chat (the 24dp
+   * spacer with Expressive design), else on the line.
+   */
+  private int handleCenterX () {
+    boolean listFirst = listStart < chatStart;
+    if (spacerEnd > spacerStart) {
+      int inset = Screen.dp(PANE_INSET_DP);
+      return listFirst ? (listEnd - inset + chatStart) / 2 : (chatEnd + listStart + inset) / 2;
+    }
+    return listFirst ? listEnd : listStart;
+  }
+
   // Resizing: the handle on the line between the panes drags it; the width is kept (in dp) for the next time.
 
+  /** DragHandleTokens.ContainerWidth (24dp) across, 72dp along. */
   private static final float HANDLE_TOUCH_WIDTH_DP = 24f, HANDLE_TOUCH_HEIGHT_DP = 72f;
 
   @Nullable private HandleView handle;
@@ -572,7 +864,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   }
 
   /**
-   * The Material 3 pane drag handle: a 4dp pill on the line between the panes (wider while held), in a 24 x 72dp touch
+   * The Material 3 pane drag handle: a 4dp pill in the gap between the panes (wider while held), in a 24 x 72dp touch
    * area. It takes the gesture from the panes and the back swipe as soon as it is touched.
    */
   private final class HandleView extends View {
@@ -600,16 +892,17 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       }
     }
 
-    // XGram: Material 3 Expressive adaptive pane drag handle: 4 x 48dp in outline, springing (spatial fast) to
-    // 12 x 52dp in onSurface while held. Nothing with Expressive design off.
-    @Nullable private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramHeld;
+    // XGram: Material 3 Expressive adaptive pane drag handle (DragHandleTokens): 4 x 48dp, full corner, in outline,
+    // springing (spatial fast) to 12 x 52dp with medium (12dp) corners in onSurface while pressed or dragged.
+    // Nothing with Expressive design off.
+    @Nullable private XgramExpressive.Spring xgramHeld;
 
     private void xgramSetHeld (boolean held) {
-      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      if (!XgramExpressive.isEnabled()) {
         return;
       }
       if (xgramHeld == null) {
-        xgramHeld = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+        xgramHeld = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
       }
       xgramHeld.animateTo(held ? 1f : 0f);
     }
@@ -620,15 +913,16 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       float cx = getWidth() / 2f, cy = getHeight() / 2f;
       pill.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
       paint.setColor(me.vkryl.core.ColorUtils.fromToArgb(
-        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE),
-        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE),
+        XgramExpressive.color(XgramExpressive.OUTLINE),
+        XgramExpressive.color(XgramExpressive.ON_SURFACE),
         Math.max(0f, Math.min(1f, f))));
-      c.drawRoundRect(pill, w / 2f, w / 2f, paint);
+      float radius = Math.min(w / 2f, Screen.dpf(XgramExpressive.CORNER_M));
+      c.drawRoundRect(pill, radius, radius, paint);
     }
 
     @Override
     protected void onDraw (android.graphics.Canvas c) {
-      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      if (XgramExpressive.isEnabled()) {
         xgramDraw(c);
         return;
       }
@@ -784,6 +1078,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   // Placeholder
 
   private View createPlaceholder () {
+    if (XgramExpressive.isEnabled()) {
+      return createM3Placeholder();
+    }
     FrameLayout layout = new FrameLayout(context);
     layout.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     layout.setBackgroundColor(Theme.getColor(ColorId.background));
@@ -814,6 +1111,53 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     View header = new View(context);
     header.setBackgroundColor(Theme.headerColor());
     layout.addView(header, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, org.thunderdog.challegram.navigation.HeaderView.getSize(true), Gravity.TOP));
+    return layout;
+  }
+
+  /**
+   * Material 3 Expressive empty detail pane, built like a chat: the app bar band on surfaceContainer, then a surface
+   * container with 28dp (extra large) top corners, and in it the outlined forum icon and a bodyLarge line in
+   * onSurfaceVariant.
+   */
+  private View createM3Placeholder () {
+    FrameLayout layout = new FrameLayout(context);
+    layout.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    layout.setBackgroundColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER));
+    layout.setClickable(true); // the hidden chat list behind must not get touches
+
+    FrameLayout surface = new FrameLayout(context);
+    GradientDrawable background = new GradientDrawable();
+    background.setColor(XgramExpressive.color(XgramExpressive.SURFACE));
+    float radius = Screen.dpf(XgramExpressive.CORNER_XL);
+    background.setCornerRadii(new float[] {radius, radius, radius, radius, 0f, 0f, 0f, 0f});
+    surface.setBackground(background);
+    FrameLayout.LayoutParams surfaceParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+    surfaceParams.topMargin = org.thunderdog.challegram.navigation.HeaderView.getSize(true);
+    layout.addView(surface, surfaceParams);
+
+    LinearLayout content = new LinearLayout(context);
+    content.setOrientation(LinearLayout.VERTICAL);
+    content.setGravity(Gravity.CENTER_HORIZONTAL);
+    int padding = Screen.dp(24f);
+    content.setPadding(padding, padding, padding, padding);
+
+    int onSurfaceVariant = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+    ImageView icon = new ImageView(context);
+    boolean classic = com.fahadali.xgram.appearance.XgramIconPack.current() == com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X;
+    icon.setImageResource(classic ? R.drawable.xgl_forum_96 : com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_forum_96));
+    icon.setColorFilter(onSurfaceVariant);
+    content.addView(icon, new LinearLayout.LayoutParams(Screen.dp(96f), Screen.dp(96f)));
+
+    TextView text = new TextView(context);
+    text.setText(Lang.getString(R.string.XgramSelectChat));
+    XgramExpressive.applyText(text, XgramExpressive.TS_BODY_L, false);
+    text.setTextColor(onSurfaceVariant);
+    text.setGravity(Gravity.CENTER);
+    LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    textParams.topMargin = Screen.dp(16f);
+    content.addView(text, textParams);
+
+    surface.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
     return layout;
   }
 
@@ -852,6 +1196,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       underlay = createPlaceholder();
       container.addView(underlay, container.indexOfChild(navigation.getValue()));
       layout();
+    }
+    if (rail != null) {
+      rail.onThemeChanged();
     }
   }
 
@@ -920,6 +1267,12 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     if (window != null) {
       window.removeListener(windowListener);
     }
+    if (rail != null) {
+      rail.destroy();
+      container.removeView(rail.view());
+      rail = null;
+    }
+    railShown = false;
     removeLeft();
     isActive = false;
   }
@@ -934,8 +1287,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   }
 
   /**
-   * Line between the panes. Across the status bar and headers it is a slightly darker header colour (a light
-   * separator there looked like a white line between the two headers); below them, the usual separator.
+   * Between the panes. Material 3 Expressive: the pane spacer (or the hinge), on the app bar's layer, no line.
+   * Otherwise a line: across the status bar and headers a slightly darker header colour (a light separator there
+   * looked like a white line between the two headers); below them, the usual separator.
    */
   private static final class DividerView extends View {
     private final android.graphics.Paint paint = new android.graphics.Paint();
@@ -946,6 +1300,11 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
 
     @Override
     protected void onDraw (android.graphics.Canvas c) {
+      if (XgramExpressive.isEnabled()) {
+        paint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER));
+        c.drawRect(0, 0, getWidth(), getHeight(), paint);
+        return;
+      }
       int headerHeight = Math.min(getHeight(), org.thunderdog.challegram.navigation.HeaderView.getSize(true));
       paint.setColor(me.vkryl.core.ColorUtils.fromToArgb(Theme.getColor(ColorId.headerBackground), 0xFF000000, .14f));
       c.drawRect(0, 0, getWidth(), headerHeight, paint);
