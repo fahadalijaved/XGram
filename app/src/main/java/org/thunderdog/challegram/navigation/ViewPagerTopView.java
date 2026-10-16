@@ -91,6 +91,11 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
   public static final @Dimension(unit = Dimension.DP) float DEFAULT_ITEM_SPACING = 6f;
   public static final @Dimension(unit = Dimension.DP) float COMPACT_ITEM_SPACING = 4f;
 
+  /** XGram: Material 3 Expressive gives compact tabs (chat folders) 16dp each side, so the selection pill fits inside its tab. */
+  public static @Dimension(unit = Dimension.DP) float xgramCompactItemPadding () {
+    return XgramExpressive.isEnabled() ? 16f : COMPACT_ITEM_PADDING;
+  }
+
   private static final int ITEM_ANIMATOR = 1;
   private static final boolean APPLY_HORIZONTAL_MARGIN = false; // BuildConfig.DEBUG
 
@@ -733,14 +738,20 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
     return Math.min(item.getContentWidth(labelFactor), item.getWidth(labelFactor));
   }
 
+  /** Half of one tab's pill: its content plus 16dp each side, or nothing for an empty tab (the message menu's options page). */
+  private float xgramPillHalf (int index) {
+    final float contentWidth = xgramContentWidth(index);
+    return contentWidth > 0f ? contentWidth / 2f + Screen.dp(16f) : 0f;
+  }
+
   private void xgramUpdatePill (float selectionFactor, int selectionLeft, int selectionWidth) {
     final int count = items.size();
     final int index = MathUtils.clamp((int) selectionFactor, 0, count - 1);
     final int nextIndex = MathUtils.clamp(index + 1, 0, count - 1);
     final float remainFactor = MathUtils.clamp(selectionFactor - (float) ((int) selectionFactor));
-    final float fromWidth = xgramContentWidth(index);
-    final float contentWidth = fromWidth + (xgramContentWidth(nextIndex) - fromWidth) * remainFactor;
-    final float half = contentWidth / 2f + Screen.dp(16f);
+    final float fromHalf = xgramPillHalf(index);
+    // each tab sizes its own pill, blended while the pager moves; it never leaves the selected tab, so the strip's edge can't cut it flat
+    final float half = Math.min(fromHalf + (xgramPillHalf(nextIndex) - fromHalf) * remainFactor, selectionWidth / 2f);
     final float center = selectionLeft + selectionWidth / 2f;
     final float start = center - half, end = center + half;
     if (xgramPillStart == null || xgramPillEnd == null) {

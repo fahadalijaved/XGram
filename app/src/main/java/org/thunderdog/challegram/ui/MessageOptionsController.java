@@ -31,6 +31,7 @@ import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
+import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.text.TextEntity;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.CustomTextView;
@@ -106,7 +107,7 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
           }
           int inset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
           int top = index == 0 ? Screen.dp(8f) : adapter.xgramSameGroup(index - 1, index) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
-          int bottom = index == adapter.options.items.length - 1 ? Screen.dp(8f) : 0;
+          int bottom = index == adapter.options.items.length - 1 ? Screen.dp(8f) + xgramNavigationBarSpace(parent) : 0;
           outRect.set(inset, top, inset, bottom);
         }
       });
@@ -396,12 +397,21 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
     adapter.updateSubtitle(options);
   }
 
+  /** XGram: room under the last group for the navigation bar when the app draws edge to edge (the keyboard is left out), less any bottom padding the list already has. */
+  private int xgramNavigationBarSpace (@Nullable RecyclerView recyclerView) {
+    if (!Settings.instance().useEdgeToEdge()) {
+      return 0;
+    }
+    int inset = context().getRootView().getSystemInsetsWithoutIme().bottom;
+    return Math.max(0, inset - (recyclerView != null ? recyclerView.getPaddingBottom() : 0));
+  }
+
   @Override
   public int getItemsHeight (RecyclerView recyclerView) {
     int totalHeight = (options.items.length + 2) * Screen.dp(54);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && options.items.length > 0) {
       // XGram: 56dp tiles, 2dp gaps inside a group, 8dp between groups and around the list
-      totalHeight += options.items.length * Screen.dp(2f) + Screen.dp(16f);
+      totalHeight += options.items.length * Screen.dp(2f) + Screen.dp(16f) + xgramNavigationBarSpace(recyclerView);
       for (int i = 1; i < options.items.length; i++) {
         totalHeight += adapter.xgramSameGroup(i - 1, i) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
       }

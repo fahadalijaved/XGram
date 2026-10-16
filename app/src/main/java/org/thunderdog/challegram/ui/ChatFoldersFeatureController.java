@@ -329,7 +329,7 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
       topView.setUseDarkBackground(false);
       topView.setDrawSelectionAtTop(false);
       topView.setShowLabelOnActiveOnly(false);
-      topView.setItemPadding(Screen.dp(ViewPagerTopView.COMPACT_ITEM_PADDING));
+      topView.setItemPadding(Screen.dp(ViewPagerTopView.xgramCompactItemPadding())); // XGram: matches the chat list tabs
       topView.setItemSpacing(Screen.dp(ViewPagerTopView.COMPACT_ITEM_SPACING));
       topView.setSelectionColorId(ColorId.headerTabActive);
       topView.setTextFromToColorId(ColorId.headerTabInactiveText, ColorId.headerTabActiveText);
@@ -369,7 +369,7 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
           TdApi.ChatFolderInfo chatFolder = chatFolders[chatFolderIndex++];
           section = buildSectionItem(chatFolder);
         }
-        section.setMinWidth(Screen.dp(56f - ViewPagerTopView.COMPACT_ITEM_PADDING * 2));
+        section.setMinWidth(Screen.dp(56f - ViewPagerTopView.xgramCompactItemPadding() * 2));
         sections.add(section);
       }
       return sections;

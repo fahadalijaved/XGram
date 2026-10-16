@@ -2869,7 +2869,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     headerCell.getTopView().setUseDarkBackground(displayTabsAtBottom);
     headerCell.getTopView().setDrawSelectionAtTop(displayTabsAtBottom);
     headerCell.getTopView().setSlideOffDirection(displayTabsAtBottom ? ViewPagerTopView.SLIDE_OFF_DIRECTION_TOP : ViewPagerTopView.SLIDE_OFF_DIRECTION_BOTTOM);
-    headerCell.getTopView().setItemPadding(Screen.dp(hasFolders ? ViewPagerTopView.COMPACT_ITEM_PADDING : ViewPagerTopView.DEFAULT_ITEM_PADDING));
+    headerCell.getTopView().setItemPadding(Screen.dp(hasFolders ? ViewPagerTopView.xgramCompactItemPadding() : ViewPagerTopView.DEFAULT_ITEM_PADDING)); // XGram: 16dp in Expressive
     headerCell.getTopView().setItemSpacing(Screen.dp(hasFolders ? ViewPagerTopView.COMPACT_ITEM_SPACING : ViewPagerTopView.DEFAULT_ITEM_SPACING));
     headerCellView.setFadingEdgeLength(displayTabsAtBottom ? 0f : 16f);
 
@@ -3099,7 +3099,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       sectionName = null;
     }
     ViewPagerTopView.Item item = new ViewPagerTopView.Item(sectionName, iconResource, unreadCounter);
-    item.setMinWidth(Screen.dp(56f - ViewPagerTopView.COMPACT_ITEM_PADDING * 2));
+    item.setMinWidth(Screen.dp(56f - ViewPagerTopView.xgramCompactItemPadding() * 2)); // XGram: a tab stays at least 56dp with either padding
     return item;
   }
 
