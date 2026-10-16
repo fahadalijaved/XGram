@@ -12778,6 +12778,25 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     c.setTimeInMillis(Math.max(minDate, Math.min(maxDate, currentTime)));
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the Compose material3 date picker (Beginning, Cancel, Go) instead of the platform dialog
+      final long xgramMinDate = Math.min(minDate, maxDate);
+      boolean shown = com.fahadali.xgram.compose.XgramR5ChatPickers.showDatePicker(context(), c.getTimeInMillis(), xgramMinDate, maxDate, (year1, month, dayOfMonth1) -> {
+        Calendar c1 = Calendar.getInstance();
+        c1.set(Calendar.YEAR, year1);
+        c1.set(Calendar.MONTH, month);
+        c1.set(Calendar.DAY_OF_MONTH, dayOfMonth1);
+        c1.set(Calendar.HOUR_OF_DAY, 0);
+        c1.set(Calendar.MINUTE, 0);
+        c1.set(Calendar.SECOND, 0);
+        c1.set(Calendar.MILLISECOND, 0);
+        jumpToDate((int) (c1.getTimeInMillis() / 1000l));
+      }, () -> jumpToDate(0));
+      if (shown) {
+        return;
+      }
+    }
+
     int year = c.get(Calendar.YEAR);
     int monthOfYear = c.get(Calendar.MONTH);
     int dayOfMonth = c.get(Calendar.DAY_OF_MONTH);

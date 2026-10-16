@@ -1154,6 +1154,19 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
       final boolean isOn = id == R.id.btn_autoNightModeScheduled_timeOn;
       final int time = isOn ? Settings.instance().getNightModeScheduleOn() : Settings.instance().getNightModeScheduleOff();
 
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.compose.XgramR5ChatPickers.showTimePicker(context(),
+        Lang.getString(isOn ? R.string.XgramR5ChatNightFrom : R.string.XgramR5ChatNightTo),
+        BitwiseUtils.splitIntToHour(time), BitwiseUtils.splitIntToMinute(time), !UI.needAmPm(), (hourOfDay, minute) -> {
+          // XGram M3E: the Compose material3 time picker (dial, or the time input fields)
+          final int newTime = BitwiseUtils.mergeTimeToInt(hourOfDay, minute, 0);
+          if (time != newTime) {
+            Settings.instance().setNightModeSchedule(newTime, isOn);
+            adapter.updateValuedSettingById(id);
+          }
+        })) {
+        return;
+      }
+
       TimePickerDialog timePickerDialog = new TimePickerDialog(context(), Theme.dialogTheme(), (view, hourOfDay, minute) -> {
         final int newTime = BitwiseUtils.mergeTimeToInt(hourOfDay, minute, 0);
         if (time != newTime) {

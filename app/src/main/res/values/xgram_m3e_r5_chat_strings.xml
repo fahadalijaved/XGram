@@ -3,4 +3,12 @@
   <!-- XGram M3E round 5, chat canvas. Sentence-case strings are used only while Telegram&#160;X's string is the bundled English one, so translations are kept. -->
   <!-- The wallpaper picker with Pure black on in a dark theme -->
   <string name="XgramR5ChatPureBlackNote">Pure black shows colour backgrounds as black</string>
+  <!-- Jump to date (Compose date picker): the confirm button -->
+  <string name="XgramR5ChatGo">Go</string>
+  <!-- Night mode schedule (Compose time picker) -->
+  <string name="XgramR5ChatSelectTime">Select time</string>
+  <string name="XgramR5ChatNightFrom">Night theme from</string>
+  <string name="XgramR5ChatNightTo">Night theme until</string>
+  <string name="XgramR5ChatTimeTypeIn">Type in the time</string>
+  <string name="XgramR5ChatTimeDial">Pick on the clock</string>
 </resources>
