@@ -19,6 +19,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.fahadali.xgram.appearance.XgramIconPack;
@@ -40,10 +41,16 @@ import me.vkryl.android.widget.FrameLayoutFix;
  */
 public final class XgramAutoTranslateBar extends FrameLayoutFix {
   public static int height () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Screen.dp(48f); // XGram: room for the 40dp icon button and its 48dp touch target
+    }
     return Screen.dp(36f);
   }
 
   private final TextView label;
+  /** XGram: what fades and rises in on a spring when the bar appears (Expressive design only). */
+  @Nullable private View[] xgramContent;
+  @Nullable private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramEnter;
 
   public XgramAutoTranslateBar (Context context, @Nullable ViewController<?> themeProvider, View.OnClickListener onClick, View.OnClickListener onClose) {
     super(context);
@@ -82,10 +89,19 @@ public final class XgramAutoTranslateBar extends FrameLayoutFix {
     addView(close);
 
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // Material 3 Expressive: a card of the group under the app bar (the card is set by the bar stack), the label in
-      // labelLarge and the cross as a standard icon button.
+      // Material 3 Expressive: a card of the group under the app bar (the bar stack gives it the surfaceContainerHigh
+      // card), a 24dp onSurfaceVariant icon 16dp from the start, the label in labelLarge onSurface 16dp after it, and
+      // the cross as a 40dp standard icon button whose corners spring on press. The content fades and rises in on a
+      // spring when the bar appears.
+      int iconSize = Screen.dp(24f);
+      icon.setPadding(0, 0, 0, 0);
+      icon.setLayoutParams(FrameLayoutFix.newParams(iconSize, iconSize, side | Gravity.CENTER_VERTICAL, rtl ? 0 : Screen.dp(16f), 0, rtl ? Screen.dp(16f) : 0, 0));
       com.fahadali.xgram.appearance.XgramExpressive.applyText(label, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
-      close.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.iconButtonRipple(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressiveC.ICON_BUTTON_BOX));
+      label.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, side | Gravity.TOP, rtl ? Screen.dp(48f) : Screen.dp(56f), 0, rtl ? Screen.dp(56f) : Screen.dp(48f), 0));
+      close.setImageResource(XgramIconPack.map(R.drawable.baseline_close_24));
+      close.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(40f), Screen.dp(40f), otherSide | Gravity.CENTER_VERTICAL, rtl ? Screen.dp(4f) : 0, 0, rtl ? 0 : Screen.dp(4f), 0));
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(close);
+      xgramContent = new View[] {icon, label, close};
     }
 
     if (themeProvider != null) {
@@ -105,5 +121,61 @@ public final class XgramAutoTranslateBar extends FrameLayoutFix {
   /** Where a tooltip about auto-translate points to. */
   public View anchor () {
     return label;
+  }
+
+  // XGram: Material 3 Expressive enter. The bar stack slides the card in; its content fades in and rises 8dp on a
+  // spring (spatial default) with it. Only alpha and translation change per frame. Reduce motion: no motion.
+
+  private boolean xgramShown;
+
+  @Override
+  protected void onVisibilityChanged (@NonNull View changedView, int visibility) {
+    super.onVisibilityChanged(changedView, visibility);
+    if (changedView == this && xgramContent != null) {
+      boolean shown = visibility == View.VISIBLE;
+      if (shown != xgramShown) {
+        xgramShown = shown; // not again when the chat comes back on screen with the bar already shown
+        if (shown && isAttachedToWindow()) {
+          xgramPlayEnter();
+        } else {
+          xgramSettle();
+        }
+      }
+    }
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow();
+    xgramSettle();
+  }
+
+  private void xgramPlayEnter () {
+    if (xgramEnter == null) {
+      xgramEnter = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 1f, (s, value) -> xgramApplyEnter(value));
+    }
+    xgramEnter.setValue(0f);
+    xgramApplyEnter(0f);
+    xgramEnter.animateTo(1f);
+  }
+
+  private void xgramSettle () {
+    if (xgramEnter != null) {
+      xgramEnter.setValue(1f);
+      xgramApplyEnter(1f);
+    }
+  }
+
+  private void xgramApplyEnter (float value) {
+    View[] content = xgramContent;
+    if (content == null) {
+      return;
+    }
+    float alpha = Math.max(0f, Math.min(1f, value));
+    float dy = (1f - value) * Screen.dp(8f);
+    for (View v : content) {
+      v.setAlpha(alpha);
+      v.setTranslationY(dy);
+    }
   }
 }

@@ -212,8 +212,9 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     this.manager = manager;
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (xgramScroll = com.fahadali.xgram.appearance.XgramScrollIndicator.find(this)) != null) {
       // XGram: history is paginated, so a fixed-length thumb that shows and hides with the date pill,
-      // clear of the 28dp corners of the messages container
-      xgramScroll.setFixedThumbLength(Screen.dp(40f)).setManualVisibility(true).setTopInset(Screen.dp(20f));
+      // clear of the 28dp corners of the messages container. Never grabbed: the chat's end edge belongs to the
+      // system edge gestures (back swipe, Samsung's Edge panel), and to swipe-to-reply.
+      xgramScroll.setFixedThumbLength(Screen.dp(40f)).setManualVisibility(true).setTopInset(Screen.dp(20f)).setCanDrag(false);
     }
   }
 

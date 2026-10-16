@@ -594,13 +594,44 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       if (tracking) {
         tracking = dragging = false;
         setPressed(false);
+        xgramSetHeld(false);
         onDragEnd(false);
         invalidate();
       }
     }
 
+    // XGram: Material 3 Expressive adaptive pane drag handle: 4 x 48dp in outline, springing (spatial fast) to
+    // 12 x 52dp in onSurface while held. Nothing with Expressive design off.
+    @Nullable private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramHeld;
+
+    private void xgramSetHeld (boolean held) {
+      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return;
+      }
+      if (xgramHeld == null) {
+        xgramHeld = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+      }
+      xgramHeld.animateTo(held ? 1f : 0f);
+    }
+
+    private void xgramDraw (android.graphics.Canvas c) {
+      float f = xgramHeld != null ? xgramHeld.getValue() : 0f; // may overshoot a little
+      float w = Math.max(Screen.dpf(2f), Screen.dpf(4f + 8f * f)), h = Screen.dpf(48f + 4f * f);
+      float cx = getWidth() / 2f, cy = getHeight() / 2f;
+      pill.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f);
+      paint.setColor(me.vkryl.core.ColorUtils.fromToArgb(
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE),
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE),
+        Math.max(0f, Math.min(1f, f))));
+      c.drawRoundRect(pill, w / 2f, w / 2f, paint);
+    }
+
     @Override
     protected void onDraw (android.graphics.Canvas c) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramDraw(c);
+        return;
+      }
       boolean held = tracking;
       float w = Screen.dpf(held ? 8f : 4f), h = Screen.dpf(held ? 52f : 48f);
       float cx = getWidth() / 2f, cy = getHeight() / 2f;
@@ -625,6 +656,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
           tracking = true;
           dragging = false;
           setPressed(true);
+          xgramSetHeld(true);
           invalidate();
           return true;
         }
@@ -648,6 +680,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
           }
           tracking = false;
           setPressed(false);
+          xgramSetHeld(false);
           if (dragging) {
             dragging = false;
             onDragEnd(true);

@@ -43,6 +43,7 @@ import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.util.text.Counter;
 
 import me.vkryl.core.ColorUtils;
@@ -66,6 +67,9 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
   private static final int TOPICS_OFFSET = 2;
 
   public static int getBarHeight () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Screen.dp(XgramM3TopicTabs.BAR_HEIGHT_DP); // XGram: Material 3 tabs, 48dp touch targets
+    }
     return Screen.dp(44f);
   }
 
@@ -83,6 +87,9 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
   private long chatId;
   private int selectedTab = XgramForums.TAB_ALL;
   private boolean canCreate;
+  /** XGram: the Material 3 Expressive pill, fades and scroll spring; null with Expressive design off. */
+  @Nullable private XgramM3TopicTabs xgramLook;
+  private int xgramSelectedCache = -1;
 
   public ForumTabsView (Context context, Tdlib tdlib, ViewController<?> parent, boolean vertical) {
     super(context);
@@ -98,6 +105,8 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
     setClipToPadding(false);
     if (vertical) {
       setPadding(0, Screen.dp(4f), 0, Screen.dp(8f));
+    } else if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      setPadding(Screen.dp(4f), 0, Screen.dp(4f), 0); // XGram: the 48dp icon buttons put their icons 16dp from the edges
     } else {
       setPadding(Screen.dp(4f), 0, Screen.dp(6f), 0);
     }
@@ -109,6 +118,23 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
         checkLoadMore();
       }
     });
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive, as the chat list's folder tabs (see XgramM3TopicTabs)
+      xgramLook = new XgramM3TopicTabs(this, manager, vertical, this::xgramSelectedPosition);
+    }
+  }
+
+  /** XGram: {@link #positionOf} of the selected tab, checked in O(1) on every frame, searched only when topics moved. */
+  private int xgramSelectedPosition () {
+    if (selectedTab == XgramForums.TAB_ALL) {
+      return 1;
+    }
+    int position = xgramSelectedCache;
+    int index = position - TOPICS_OFFSET;
+    if (list != null && index >= 0 && index < list.size() && list.get(index).info.forumTopicId == selectedTab) {
+      return position;
+    }
+    return xgramSelectedCache = positionOf(selectedTab);
   }
 
   public void setCallback (@Nullable Callback callback) {
@@ -125,6 +151,9 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       this.chatId = chat.id;
       this.canCreate = canCreate;
       this.selectedTab = selectedTab;
+      if (xgramLook != null) {
+        xgramLook.reset();
+      }
       list = ForumTopicList.obtain(tdlib, chat.id);
       list.addListener(this);
       if (!list.isLoaded()) {
@@ -150,6 +179,9 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
     }
     int oldPosition = positionOf(this.selectedTab);
     this.selectedTab = tab;
+    if (xgramLook != null) {
+      xgramLook.moveSelection(oldPosition, positionOf(tab)); // XGram: the pill springs over from the old tab
+    }
     if (oldPosition != -1) {
       adapter.notifyItemChanged(oldPosition);
     }
@@ -173,6 +205,9 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
     int position = positionOf(selectedTab);
     if (position == -1) {
       return;
+    }
+    if (smooth && xgramLook != null && xgramLook.scrollToCenter(position)) {
+      return; // XGram: the picked tab springs to the middle
     }
     int first = manager.findFirstCompletelyVisibleItemPosition();
     int last = manager.findLastCompletelyVisibleItemPosition();
@@ -214,6 +249,9 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       list = null;
     }
     chatId = 0;
+    if (xgramLook != null) {
+      xgramLook.reset();
+    }
     for (int i = 0; i < getChildCount(); i++) {
       View view = getChildAt(i);
       if (view instanceof TabView) {
@@ -306,7 +344,18 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       view.setLayoutParams(vertical ?
         new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) :
         new RecyclerView.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, getBarHeight()));
-      RippleSupport.setTransparentSelector(view);
+      if (xgramLook != null) {
+        // XGram: Material 3 Expressive: the placement switch and "+" are standard icon buttons (corners spring on
+        // press), a tab presses in its pill
+        if (viewType == TYPE_TOGGLE || viewType == TYPE_ADD) {
+          com.fahadali.xgram.appearance.XgramAppMotion.iconButton(view);
+          view.setContentDescription(Lang.getString(viewType == TYPE_ADD ? R.string.XgramNewTopic : vertical ? R.string.XgramM3TopicTabsOnTop : R.string.XgramM3TopicTabsOnSide));
+        } else {
+          view.setBackground(XgramM3TopicTabs.tabBackground(vertical));
+        }
+      } else {
+        RippleSupport.setTransparentSelector(view);
+      }
       parent.addThemeInvalidateListener(view);
       view.setOnClickListener(v -> {
         TabView tab = (TabView) v;
@@ -389,7 +438,15 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       this.counter = new Counter.Builder().textSize(11f).callback((Counter.Callback) this).build();
     }
 
-    private static TextPaint xgramTitlePaint, xgramSideTitlePaint;
+    // XGram: Material 3 Expressive tab (see XgramM3TopicTabs): the label color springs (effects fast) between
+    // onSurfaceVariant and onSecondaryContainer (rail: onSurface) as the pill moves, the unread count is an M3 badge.
+    private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    @Nullable private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramSelection;
+    private long xgramBoundKey = Long.MIN_VALUE;
+    private int xgramBadgeCount = -1;
+    private boolean xgramBadgeMuted;
+    private String xgramBadgeText = "";
+    private float xgramBadgeTextWidth;
 
     /** XGram: Expressive tab label: ON_SECONDARY_CONTAINER on the selected pill, ON_SURFACE_VARIANT otherwise. */
     private static int xgramLabelColor (boolean selected) {
@@ -398,26 +455,18 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
 
     private static TextPaint titlePaint (boolean selected) {
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-        if (xgramTitlePaint == null) {
-          xgramTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
-          xgramTitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false));
-        }
-        xgramTitlePaint.setTextSize(Screen.dp(14f));
-        xgramTitlePaint.setColor(xgramLabelColor(selected));
-        return xgramTitlePaint;
+        TextPaint paint = XgramM3TopicTabs.labelPaint(); // labelLarge, as the folder tabs
+        paint.setColor(xgramLabelColor(selected));
+        return paint;
       }
       return Paints.getBoldPaint14(false, Theme.getColor(selected ? ColorId.textNeutral : ColorId.textLight));
     }
 
     private static TextPaint sideTitlePaint (boolean selected) {
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-        if (xgramSideTitlePaint == null) {
-          xgramSideTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
-          xgramSideTitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false));
-        }
-        xgramSideTitlePaint.setTextSize(Screen.dp(12f));
-        xgramSideTitlePaint.setColor(xgramLabelColor(selected));
-        return xgramSideTitlePaint;
+        TextPaint paint = XgramM3TopicTabs.railLabelPaint(); // labelMedium, as a navigation rail
+        paint.setColor(xgramLabelColor(selected));
+        return paint;
       }
       if (sideTitlePaint == null) {
         sideTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
@@ -457,8 +506,39 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
         setEmoji(0);
         counter.setCount(0, false, false);
       }
+      if (xgram) {
+        xgramBind(type, topic, chatId, selected);
+      }
       requestLayout();
       invalidate();
+    }
+
+    /** XGram: the selection spring (animated when the same tab is rebound) and the badge text. */
+    private void xgramBind (int type, @Nullable TdApi.ForumTopic topic, long chatId, boolean selected) {
+      long key = topic != null ? topic.info.forumTopicId : -1L - type;
+      float target = selected ? 1f : 0f;
+      if (xgramSelection == null) {
+        xgramSelection = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, target, (s, value) -> invalidate());
+      } else if (key == xgramBoundKey) {
+        xgramSelection.animateTo(target);
+      } else {
+        xgramSelection.setValue(target);
+      }
+      xgramBoundKey = key;
+      int count = topic != null ? Math.max(0, topic.unreadCount) : 0;
+      if (count != xgramBadgeCount) {
+        xgramBadgeCount = count;
+        xgramBadgeText = count > 0 ? Strings.buildCounter(count) : "";
+        xgramBadgeTextWidth = XgramM3TopicTabs.badgeTextWidth(xgramBadgeText);
+      }
+      xgramBadgeMuted = count > 0 && XgramForums.isTopicMuted(tdlib, chatId, topic);
+      if (type == TYPE_ALL || type == TYPE_TOPIC) {
+        setContentDescription(title);
+      }
+    }
+
+    private float xgramSelectionFactor () {
+      return xgramSelection != null ? Math.max(0f, Math.min(1f, xgramSelection.getValue())) : selected ? 1f : 0f;
     }
 
     private void layoutTitle () {
@@ -551,6 +631,10 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
 
     @Override
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      if (xgram) {
+        xgramMeasure(widthMeasureSpec, heightMeasureSpec);
+        return;
+      }
       if (vertical) {
         int height;
         switch (type) {
@@ -591,10 +675,140 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
 
     @Override
     protected void onDraw (Canvas c) {
+      if (xgram) {
+        if (vertical) {
+          xgramDrawVertical(c);
+        } else {
+          xgramDrawHorizontal(c);
+        }
+        return;
+      }
       if (vertical) {
         drawVertical(c);
       } else {
         drawHorizontal(c);
+      }
+    }
+
+    // XGram: Material 3 Expressive tabs. The pill is drawn by XgramM3TopicTabs under the tabs.
+
+    /**
+     * Top: a tab is 16dp, [20dp icon, 8dp], label, [8dp, badge], 16dp wide in the 48dp bar, the pill around all of it;
+     * the switch and "+" are 48dp wide icon buttons. Side: 48dp and 56dp icon buttons, and rail items of a 32dp
+     * indicator, 4dp, one or two 16dp label lines and 8dp.
+     */
+    private void xgramMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      if (vertical) {
+        int height;
+        switch (type) {
+          case TYPE_TOGGLE:
+            height = Screen.dp(XgramM3TopicTabs.RAIL_TOGGLE_HEIGHT_DP);
+            break;
+          case TYPE_ADD:
+            height = Screen.dp(XgramM3TopicTabs.RAIL_ADD_HEIGHT_DP);
+            break;
+          default:
+            height = XgramM3TopicTabs.railItemHeight(line2.isEmpty() ? 1 : 2);
+            break;
+        }
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), height);
+        return;
+      }
+      int width;
+      if (type == TYPE_ADD || type == TYPE_TOGGLE) {
+        width = Screen.dp(XgramM3TopicTabs.ICON_BUTTON_WIDTH_DP);
+      } else {
+        width = Screen.dp(XgramM3TopicTabs.TAB_PADDING_DP) * 2 + (int) Math.ceil(titleWidth);
+        if (topic != null) {
+          width += Screen.dp(XgramM3TopicTabs.TAB_ICON_DP) + Screen.dp(XgramM3TopicTabs.TAB_GAP_DP);
+        }
+        if (!xgramBadgeText.isEmpty()) {
+          width += Screen.dp(XgramM3TopicTabs.TAB_GAP_DP) + (int) Math.ceil(XgramM3TopicTabs.badgeWidth(xgramBadgeTextWidth));
+        }
+      }
+      setMeasuredDimension(width, MeasureSpec.getSize(heightMeasureSpec));
+    }
+
+    /** One of the two colors, never a blend: Paints' color filters are cached for every color they get. */
+    private void xgramDrawIcon (Canvas c, @DrawableRes int res, float cx, float cy, int color) {
+      Drawable icon = Drawables.get(getResources(), res);
+      Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(color));
+    }
+
+    private void xgramDrawHorizontal (Canvas c) {
+      int width = getMeasuredWidth(), height = getMeasuredHeight();
+      float centerY = height / 2f;
+      int inactive = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      if (type == TYPE_TOGGLE || type == TYPE_ADD) {
+        xgramDrawIcon(c, type == TYPE_TOGGLE ? R.drawable.xgram_tabs_side_24 : R.drawable.baseline_add_24, width / 2f, centerY, inactive);
+        return;
+      }
+      float f = xgramSelectionFactor();
+      boolean rtl = Lang.rtl();
+      int gap = Screen.dp(XgramM3TopicTabs.TAB_GAP_DP);
+      int padding = Screen.dp(XgramM3TopicTabs.TAB_PADDING_DP);
+      int x = rtl ? width - padding : padding;
+      if (topic != null) {
+        int size = Screen.dp(XgramM3TopicTabs.TAB_ICON_DP);
+        int left = rtl ? x - size : x;
+        int top = (int) (centerY - size / 2f);
+        Drawable icon = emoji != null ? emoji : bubble;
+        if (icon != null) {
+          icon.setBounds(left, top, left + size, top + size);
+          icon.draw(c);
+        }
+        x = rtl ? x - size - gap : x + size + gap;
+      }
+      if (!displayTitle.isEmpty()) {
+        TextPaint paint = XgramM3TopicTabs.labelPaint();
+        paint.setColor(ColorUtils.fromToArgb(inactive, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), f));
+        c.drawText(displayTitle, rtl ? x - titleWidth : x, XgramM3TopicTabs.baseline(paint, centerY), paint);
+        x = rtl ? (int) (x - titleWidth - gap) : (int) (x + titleWidth + gap);
+      }
+      if (!xgramBadgeText.isEmpty()) {
+        float badgeWidth = XgramM3TopicTabs.badgeWidth(xgramBadgeTextWidth);
+        XgramM3TopicTabs.drawBadge(c, rtl ? x - badgeWidth : x, centerY, xgramBadgeText, xgramBadgeTextWidth, xgramBadgeMuted);
+      }
+    }
+
+    private void xgramDrawVertical (Canvas c) {
+      int width = getMeasuredWidth(), height = getMeasuredHeight();
+      float centerX = width / 2f;
+      int inactive = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      if (type == TYPE_TOGGLE || type == TYPE_ADD) {
+        xgramDrawIcon(c, type == TYPE_TOGGLE ? R.drawable.xgram_tabs_top_24 : R.drawable.baseline_add_24, centerX, height / 2f, inactive);
+        return;
+      }
+      float f = xgramSelectionFactor();
+      float iconCenterY = XgramM3TopicTabs.railIconCenterY();
+      int iconSize = Screen.dp(XgramM3TopicTabs.RAIL_ICON_DP);
+      if (type == TYPE_ALL) {
+        xgramDrawIcon(c, R.drawable.baseline_forum_24, centerX, iconCenterY, f >= .5f ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER) : inactive);
+      } else {
+        Drawable icon = emoji != null ? emoji : bubble;
+        if (icon != null) {
+          int left = (int) (centerX - iconSize / 2f), top = (int) (iconCenterY - iconSize / 2f);
+          icon.setBounds(left, top, left + iconSize, top + iconSize);
+          icon.draw(c);
+        }
+      }
+      TextPaint paint = XgramM3TopicTabs.railLabelPaint();
+      paint.setColor(ColorUtils.fromToArgb(inactive, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), f));
+      float lineHeight = XgramM3TopicTabs.railLineHeight();
+      float lineCenter = XgramM3TopicTabs.railLabelTop() + lineHeight / 2f;
+      if (!line1.isEmpty()) {
+        c.drawText(line1, centerX - paint.measureText(line1) / 2f, XgramM3TopicTabs.baseline(paint, lineCenter), paint);
+      }
+      if (!line2.isEmpty()) {
+        c.drawText(line2, centerX - paint.measureText(line2) / 2f, XgramM3TopicTabs.baseline(paint, lineCenter + lineHeight), paint);
+      }
+      if (!xgramBadgeText.isEmpty()) {
+        // On the icon's top end corner, as on a navigation rail
+        float badgeWidth = XgramM3TopicTabs.badgeWidth(xgramBadgeTextWidth);
+        boolean rtl = Lang.rtl();
+        float left = rtl ? centerX - iconSize / 2f + Screen.dp(6f) - badgeWidth : centerX + iconSize / 2f - Screen.dp(6f);
+        left = Math.max(Screen.dp(2f), Math.min(left, width - Screen.dp(2f) - badgeWidth));
+        XgramM3TopicTabs.drawBadge(c, left, iconCenterY - iconSize / 2f + Screen.dp(2f), xgramBadgeText, xgramBadgeTextWidth, xgramBadgeMuted);
       }
     }
 
