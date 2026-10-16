@@ -180,7 +180,9 @@ public final class ReactionsListAnimator implements Iterable<ReactionsListAnimat
     }
 
     public float getTimeHeightExpand () {
-      return timeHeightExpand.get();
+      // XGram: a 0..1 factor (its targets are 0 and 1); clamped so the spring's dip and overshoot never take the
+      // bubble's time row below its collapsed or past its expanded height
+      return MathUtils.clamp(timeHeightExpand.get());
     }
   }
 
