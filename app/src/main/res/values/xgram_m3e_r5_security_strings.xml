@@ -8,6 +8,8 @@
   <string name="XgramR5SecurityBiometrics">Unlock with biometrics</string>
   <string name="XgramR5SecurityShowPassword">Show password</string>
   <string name="XgramR5SecurityHidePassword">Hide password</string>
+  <string name="XgramR5SecuritySetPasscode">Set passcode</string>
+  <string name="XgramR5SecurityUseIconPack">Use %1$s?</string>
   <!-- Sentence case of Telegram X's title case strings, used while the language is Telegram X's English -->
   <string name="XgramR5SecurityInvalidPassword">Invalid password</string>
   <string name="XgramR5SecurityInvalidPattern">Invalid pattern</string>

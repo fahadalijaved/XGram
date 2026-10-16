@@ -111,26 +111,36 @@ public final class XgramR5Security {
 
   /** Columns of at least {@code minCellDp} (gaps and the 16dp gutters included) in {@code widthPx}, never below {@code minSpans}. */
   public static int spanCount (int widthPx, float minCellDp, int minSpans) {
+    return spanCount(widthPx, minCellDp, minSpans, Integer.MAX_VALUE);
+  }
+
+  /** {@link #spanCount(int, float, int)} with at most {@code maxSpans} columns. */
+  public static int spanCount (int widthPx, float minCellDp, int minSpans, int maxSpans) {
     if (widthPx <= 0) {
       widthPx = Screen.currentWidth();
     }
     final float usable = widthPx - Screen.dp(GRID_EDGE) * 2 + Screen.dp(GRID_GAP);
     final int count = (int) (usable / (Screen.dp(minCellDp) + Screen.dp(GRID_GAP)));
-    return Math.max(minSpans, count);
+    return Math.max(minSpans, Math.min(maxSpans, count));
   }
 
   /**
    * Keeps the grid's column count adaptive (see {@link #spanCount}) as the list's width changes (cover and inner screen,
-   * the two panes), and gives its cells the 16dp gutters and 8dp gaps ({@link GridSpacing}).
+   * the two panes), and gives its cells the 16dp gutters and 8dp gaps ({@link GridSpacing}). The first item should
+   * span every column (the large title's space sits above it).
    */
   public static void attachAdaptiveGrid (RecyclerView recyclerView, GridLayoutManager manager, float minCellDp, int minSpans) {
+    attachAdaptiveGrid(recyclerView, manager, minCellDp, minSpans, Integer.MAX_VALUE);
+  }
+
+  public static void attachAdaptiveGrid (RecyclerView recyclerView, GridLayoutManager manager, float minCellDp, int minSpans, int maxSpans) {
     recyclerView.addItemDecoration(new GridSpacing());
     recyclerView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
       final int width = right - left;
       if (width <= 0 || width == oldRight - oldLeft) {
         return;
       }
-      final int spans = spanCount(width, minCellDp, minSpans);
+      final int spans = spanCount(width, minCellDp, minSpans, maxSpans);
       if (spans != manager.getSpanCount()) {
         v.post(() -> {
           if (manager.getSpanCount() != spans) {
@@ -373,6 +383,110 @@ public final class XgramR5Security {
     return button;
   }
 
+  // Connected button group (modes under an app bar)
+
+  /**
+   * An M3E connected button group of text segments (40dp, labelLarge, 2dp apart, 20dp outer and 8dp inner corners):
+   * the selected one is secondaryContainer with a leading check and morphs into a pill on SPATIAL_FAST, the others are
+   * surfaceContainerHighest. It scrolls sideways when the segments are wider than the screen (the cover screen) and is
+   * centred otherwise; RTL puts the first segment on the right.
+   */
+  public static final class SegmentedRow extends android.widget.HorizontalScrollView {
+    public interface Listener {
+      void onSegmentSelected (int index);
+    }
+
+    private final android.widget.LinearLayout row;
+    private final TextView[] segments;
+    private final XgramExpressive.MorphDrawable[] morphs;
+    private int selected = -1;
+
+    public SegmentedRow (Context context, String[] labels, int selected, Listener listener) {
+      super(context);
+      setHorizontalScrollBarEnabled(false);
+      setOverScrollMode(OVER_SCROLL_NEVER);
+      setFillViewport(true);
+      setClipToPadding(false);
+      setPadding(Screen.dp(GUTTER), Screen.dp(8f), Screen.dp(GUTTER), Screen.dp(8f));
+      row = new android.widget.LinearLayout(context);
+      row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+      row.setGravity(android.view.Gravity.CENTER);
+      addView(row, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f)));
+      final int count = labels.length;
+      segments = new TextView[count];
+      morphs = new XgramExpressive.MorphDrawable[count];
+      final boolean rtl = Lang.rtl();
+      for (int p = 0; p < count; p++) {
+        final int index = rtl ? count - 1 - p : p;
+        TextView segment = new TextView(context);
+        XgramExpressive.applyText(segment, XgramExpressive.TS_LABEL_L, false);
+        segment.setText(labels[index]);
+        segment.setSingleLine(true);
+        segment.setGravity(android.view.Gravity.CENTER);
+        segment.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
+        segment.setMinWidth(Screen.dp(48f));
+        segment.setCompoundDrawablePadding(Screen.dp(8f));
+        XgramExpressive.MorphDrawable morph = XgramM3Connected.attachButton(segment, XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+        XgramM3Connected.shape(morph, true, true, p, count);
+        segment.setOnClickListener(v -> {
+          if (index != this.selected) {
+            v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+            listener.onSegmentSelected(index);
+          }
+        });
+        android.widget.LinearLayout.LayoutParams params = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f));
+        if (p > 0) {
+          params.leftMargin = Screen.dp(XgramM3Connected.GAP);
+        }
+        row.addView(segment, params);
+        segments[index] = segment;
+        morphs[index] = morph;
+      }
+      setSelectedSegment(selected, false);
+    }
+
+    public int getSelectedSegment () {
+      return selected;
+    }
+
+    public void setSelectedSegment (int index, boolean animated) {
+      if (this.selected == index) {
+        return;
+      }
+      this.selected = index;
+      final boolean rtl = Lang.rtl();
+      for (int i = 0; i < segments.length; i++) {
+        final boolean on = i == index;
+        morphs[i].setColorRole(on ? XgramExpressive.SECONDARY_CONTAINER : XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+        morphs[i].setCornerTarget(on ? XgramExpressive.CORNER_FULL : Float.NaN, animated && isAttachedToWindow());
+        segments[i].setSelected(on);
+        android.graphics.drawable.Drawable check = null;
+        if (on) {
+          check = org.thunderdog.challegram.tool.Drawables.get(getResources(), XgramIconPack.map(org.thunderdog.challegram.R.drawable.baseline_check_24));
+          if (check != null) {
+            final int size = Screen.dp(18f);
+            check.setBounds(0, 0, size, size);
+          }
+        }
+        segments[i].setCompoundDrawables(rtl ? null : check, null, rtl ? check : null, null);
+      }
+      refreshColors();
+    }
+
+    /** Label and check colours (the containers read theirs when drawn). */
+    public void refreshColors () {
+      for (int i = 0; i < segments.length; i++) {
+        final int color = XgramExpressive.color(i == selected ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE);
+        segments[i].setTextColor(color);
+        for (android.graphics.drawable.Drawable d : segments[i].getCompoundDrawables()) {
+          if (d != null) {
+            d.setTint(color);
+          }
+        }
+      }
+    }
+  }
+
   // Lock screen
 
   /**
@@ -477,7 +591,26 @@ public final class XgramR5Security {
     // Texts
 
     public void setTitle (CharSequence text) {
+      title.animate().cancel();
+      title.setAlpha(1f);
       title.setText(text);
+    }
+
+    /** A new step ("Confirm your PIN"): the title fades through (out and in on EFFECTS_FAST); set at once with Reduce motion. */
+    public void setTitleAnimated (CharSequence text) {
+      if (android.text.TextUtils.equals(title.getText(), text)) {
+        return;
+      }
+      if (XgramMotion.reduce() || !isAttachedToWindow() || title.getWidth() == 0) {
+        setTitle(text);
+        return;
+      }
+      final long duration = Math.max(60L, XgramAppMotion.springDuration(XgramExpressive.EFFECTS_FAST) / 2);
+      title.animate().cancel();
+      title.animate().alpha(0f).setDuration(duration).setInterpolator(XgramAppMotion.springClamped(XgramExpressive.EFFECTS_FAST)).withEndAction(() -> {
+        title.setText(text);
+        title.animate().alpha(1f).setDuration(duration).setInterpolator(XgramAppMotion.springClamped(XgramExpressive.EFFECTS_FAST));
+      });
     }
 
     /** The resting supporting line: the instruction, or the lockout countdown ({@code error}). */
@@ -664,6 +797,12 @@ public final class XgramR5Security {
       dots = null;
       keypad = null;
       pattern = null;
+      // Shown again after another mode (setting a passcode): out of the box they were in
+      for (View v : new View[] {field, unlockButton}) {
+        if (v.getParent() instanceof ViewGroup) {
+          ((ViewGroup) v.getParent()).removeView(v);
+        }
+      }
       android.widget.LinearLayout box = new android.widget.LinearLayout(getContext());
       box.setOrientation(android.widget.LinearLayout.VERTICAL);
       box.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
