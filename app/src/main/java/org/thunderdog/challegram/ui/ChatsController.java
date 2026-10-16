@@ -2537,7 +2537,23 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
   // other stuff
 
+  private @Nullable com.fahadali.xgram.appearance.XgramListStateView xgramSpinnerView;
+
   public void showProgressView () {
+    if (!progressVisible && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the first load shows the contained loading indicator (the 38dp indicator on a 48dp primaryContainer
+      // circle) instead of Telegram X's arc; it only draws frames while it is on screen
+      if (xgramSpinnerView == null) {
+        xgramSpinnerView = new com.fahadali.xgram.appearance.XgramListStateView(context());
+        xgramSpinnerView.setLoading(true, 38f);
+        xgramSpinnerView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER));
+      }
+      if (xgramSpinnerView.getParent() == null) {
+        contentView.addView(xgramSpinnerView);
+      }
+      progressVisible = true;
+      return;
+    }
     if (!progressVisible) {
       if (spinnerView == null) {
         spinnerView = new ProgressComponentView(context());
@@ -2552,6 +2568,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   }
 
   public void hideProgressView () {
+    if (xgramSpinnerView != null && progressVisible) { // XGram M3E
+      progressVisible = false;
+      contentView.removeView(xgramSpinnerView);
+      xgramSpinnerView = null;
+    }
     if (spinnerView != null && progressVisible) {
       progressVisible = false;
       contentView.removeView(spinnerView);
