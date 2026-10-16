@@ -1004,6 +1004,21 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
   // Counter
 
   public static CounterHeaderView genCounterHeader (Context context, @ColorId int colorId) {
+    if (XgramExpressive.isEnabled()) {
+      // XGram M3E: the select mode title of a small top app bar: the count in titleLarge (onSurface, rolling on the
+      // spatial fast spring), 56dp from the start like the other app bar titles, centred in the bar
+      FrameLayoutFix.LayoutParams m3Params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, getSize(false), Gravity.TOP | (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT));
+      if (Lang.rtl()) {
+        m3Params.rightMargin = DoubleHeaderView.xgramStartMargin();
+      } else {
+        m3Params.leftMargin = DoubleHeaderView.xgramStartMargin();
+      }
+      CounterHeaderView m3View = new CounterHeaderView(context);
+      m3View.xgramSetM3Title();
+      m3View.initDefault(colorId);
+      m3View.setLayoutParams(m3Params);
+      return m3View;
+    }
     FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(53f), Gravity.TOP | (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT));
     if (Lang.rtl()) {
       params.rightMargin = Screen.dp(68f);
@@ -3107,6 +3122,9 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
   public static void updateLayoutMargins (View view, int leftMargin, int rightMargin) {
     if (view instanceof CounterHeaderView) {
+      if (((CounterHeaderView) view).xgramIsM3Title() && leftMargin == Screen.dp(68f)) {
+        leftMargin = DoubleHeaderView.xgramStartMargin(); // XGram M3E: the app bar title's 56dp start
+      }
       FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) view.getLayoutParams();
       int gravity = Gravity.TOP | (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT);
       boolean changed = params.gravity != gravity;

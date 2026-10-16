@@ -1627,8 +1627,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     contentView.addView(reactionsButtonWrap);
     contentView.addView(mentionButtonWrap);
     contentView.addView(scrollToBottomButtonWrap);
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && previewMode == PREVIEW_MODE_NONE && !isInForceTouchMode()) {
-      // XGram: Material 3 Expressive floating toolbar for selected messages (reply, copy, share, delete)
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (previewMode == PREVIEW_MODE_NONE || previewMode == PREVIEW_MODE_SEARCH) && !isInForceTouchMode()) {
+      // XGram: Material 3 Expressive floating toolbar for selected messages (reply, copy, share, delete), also in
+      // found messages (no composer: it then sits 16dp above the bottom inset)
       xgramSelectionToolbar = new com.fahadali.xgram.appearance.XgramM3Chat.FloatingToolbar(context);
       View.OnClickListener toolbarClick = v -> onMenuItemPressed(v.getId(), v);
       xgramSelectionToolbar.addButton(R.id.menu_btn_reply, R.drawable.baseline_reply_24, Lang.getString(R.string.Reply), toolbarClick);
@@ -1638,6 +1639,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       RelativeLayout.LayoutParams toolbarParams = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(64f));
       toolbarParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
       toolbarParams.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
+      // Without a composer (found messages, a channel without the right to post) the composer row is gone: the
+      // toolbar then aligns to the bottom, and checkScrollButtonOffsets lifts it over the bottom inset and bar
+      toolbarParams.alignWithParent = true;
       toolbarParams.bottomMargin = Screen.dp(16f);
       xgramSelectionToolbar.setLayoutParams(toolbarParams);
       // Its width follows the visible buttons and its centre the pane: it moves clear of the FAB again (a translation)
