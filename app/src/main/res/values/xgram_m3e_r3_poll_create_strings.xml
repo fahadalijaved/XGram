@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the New poll page with Expressive design (CreatePollController, XgramM3PollCreate) -->
+  <string name="XgramM3PollAddOption">Add an option</string>
+  <string name="XgramM3PollRemoveOption">Remove option</string>
+  <string name="XgramM3PollReorderOption">Drag to reorder</string>
+</resources>

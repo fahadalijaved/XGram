@@ -52,6 +52,7 @@ import org.thunderdog.challegram.widget.FillingDecoration;
 import org.thunderdog.challegram.widget.MaterialEditTextGroup;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -122,9 +123,39 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
   private ListItem addItem, itemsListHint;
   private ListItem questionItem, descriptionItem, descriptionHintItem, explanationItem, explanationHintItem;
 
+  // XGram: with Expressive design the inputs are M3E tiles on one page surface, options reorder by a handle
+  // (com.fahadali.xgram.appearance.XgramM3PollCreate); false keeps Telegram X's page
+  private boolean xgram;
+
+  private final com.fahadali.xgram.appearance.XgramM3PollCreate.Host xgramHost = new com.fahadali.xgram.appearance.XgramM3PollCreate.Host() {
+    @Override
+    public int optionCount () {
+      return options.size();
+    }
+
+    @Override
+    public boolean moveOption (int fromPosition, int toPosition) {
+      return xgramMoveOption(fromPosition, toPosition);
+    }
+
+    @Override
+    public void removeOption (View row) {
+      xgramRemoveOption(row);
+    }
+  };
+
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
+    xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     adapter = new SettingsAdapter(this) {
+      @Override
+      protected View createModifiedView (ViewGroup parent, int viewType, View view) {
+        if (xgram) {
+          com.fahadali.xgram.appearance.XgramM3PollCreate.styleRow(CreatePollController.this, view, viewType, xgramHost);
+        }
+        return null;
+      }
+
       @Override
       protected void modifyEditText (ListItem item, ViewGroup parent, MaterialEditTextGroup editText) {
         final int itemId = item.getId();
@@ -181,6 +212,9 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
           });
           editText.getEditText().setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_ACTION_NEXT);
         }
+        if (xgram) {
+          com.fahadali.xgram.appearance.XgramM3PollCreate.bindRow(parent, itemId, options.size(), isQuiz);
+        }
       }
 
       @Override
@@ -193,6 +227,9 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
       @Override
       public void onFocusChanged (MaterialEditTextGroup v, boolean isFocused) {
         super.onFocusChanged(v, isFocused);
+        if (xgram) {
+          com.fahadali.xgram.appearance.XgramM3PollCreate.onFocusChanged(v, isFocused);
+        }
         if (isFocused && ((ViewGroup) v.getParent()).getId() == R.id.optionAdd) {
           addOption();
         }
@@ -254,8 +291,15 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
       @Override
       public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
         int i = parent.getChildAdapterPosition(view);
-        outRect.top = view.getId() == R.id.text_subtitle || view.getId() == R.id.text_explanation ? Screen.dp(10f) : 0;
+        // XGram: an Expressive description tile keeps its room inside the tile
+        outRect.top = !xgram && (view.getId() == R.id.text_subtitle || view.getId() == R.id.text_explanation) ? Screen.dp(10f) : 0;
         outRect.bottom = i != -1 && i == adapter.getItemCount() - 1 ? Screen.dp(56f) : 0;
+      }
+
+      @Override
+      protected int getFillingColor (RecyclerView parent, int position, View view) {
+        // XGram: Expressive design, the inputs are tiles on the page's one surface (no full-width bands behind them)
+        return xgram ? 0 : super.getFillingColor(parent, position, view);
       }
     };
     decoration.addId(R.id.text_subtitle);
@@ -362,6 +406,9 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
     recyclerView.setAdapter(adapter);
     recyclerView.setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
     recyclerView.addItemDecoration(decoration);
+    if (xgram) {
+      com.fahadali.xgram.appearance.XgramM3PollCreate.attachReorder(recyclerView, xgramHost); // XGram: options move by their handle
+    }
   }
 
   private HapticMenuHelper currentMenu;
@@ -420,6 +467,9 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
     View view = getRecyclerView().getLayoutManager().findViewByPosition(adapterPosition);
     if (view != null && view.getTag() == item) {
       ((MaterialEditTextGroup) ((ViewGroup) view).getChildAt(0)).setCheckboxSelected(isActive, true);
+      if (xgram) {
+        com.fahadali.xgram.appearance.XgramM3PollCreate.syncCheckbox(view, isQuiz); // XGram: a check box made just now
+      }
     } else {
       adapter.notifyItemChanged(adapterPosition);
     }
@@ -611,6 +661,9 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
         if (view != null && view.getTag() == otherItem) {
           MaterialEditTextGroup editTextGroup = (MaterialEditTextGroup) ((ViewGroup) view).getChildAt(0);
           editTextGroup.setCheckboxVisible(isQuiz, !isMultiAnswers(), true);
+          if (xgram) {
+            com.fahadali.xgram.appearance.XgramM3PollCreate.syncCheckbox(view, isQuiz); // XGram: past the handle, taps only while shown
+          }
         } else {
           adapter.notifyItemChanged(position);
         }
@@ -655,13 +708,18 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
   }
 
   private void removeOption (ListItem option) {
+    removeOption(option, true);
+  }
+
+  /** @param moveFocus false: a remove button of a row without focus, focus and keyboard stay as they are (XGram) */
+  private void removeOption (ListItem option, boolean moveFocus) {
     final int i = options.indexOf(option);
     if (i == -1)
       return;
     setCorrectOptionEnabled(option, false);
     options.remove(i);
-    boolean hideKeyboard = true;
-    if (!options.isEmpty()) {
+    boolean hideKeyboard = moveFocus;
+    if (moveFocus && !options.isEmpty()) {
       int nextIndex = adapter.indexOfView(options.get(i > 0 ? i - 1 : 0));
       View view = getRecyclerView().getLayoutManager().findViewByPosition(nextIndex);
       if (view instanceof ViewGroup) {
@@ -702,6 +760,56 @@ public class CreatePollController extends RecyclerViewController<CreatePollContr
     if (itemsListHint.setStringIfChanged(maxPollOptionCount <= options.size() ? Lang.getString(R.string.PollOptionsMax) : Lang.plural(R.string.PollOptionsLimit, maxPollOptionCount - options.size()))) {
       adapter.updateValuedSetting(itemsListHint);
     }
+    if (xgram) {
+      // XGram: the option count changed, the last option can't be removed or moved
+      com.fahadali.xgram.appearance.XgramM3PollCreate.updateButtons(getRecyclerView(), options.size());
+    }
+  }
+
+  // XGram: Expressive design, an option's handle and remove button
+
+  /** Moves an option by whole options (each option row is followed by a separator row), the send order with it. */
+  private boolean xgramMoveOption (int fromPosition, int toPosition) {
+    List<ListItem> items = adapter.getItems();
+    if (fromPosition == toPosition || fromPosition < 0 || toPosition < 0 || fromPosition >= items.size() || toPosition >= items.size() ||
+      (toPosition - fromPosition) % 2 != 0 || items.get(fromPosition).getId() != R.id.option) {
+      return false;
+    }
+    final int step = toPosition > fromPosition ? 2 : -2;
+    for (int i = fromPosition; i != toPosition; i += step) {
+      if (items.get(i + step).getId() != R.id.option || items.get(i + step / 2).getViewType() != ListItem.TYPE_SEPARATOR_FULL) {
+        return false;
+      }
+    }
+    for (int i = fromPosition; i != toPosition; i += step) {
+      final int next = i + step;
+      ListItem moving = items.get(i), other = items.get(next);
+      items.set(next, moving);
+      items.set(i, other);
+      int movingIndex = options.indexOf(moving), otherIndex = options.indexOf(other);
+      if (movingIndex != -1 && otherIndex != -1) {
+        Collections.swap(options, movingIndex, otherIndex);
+      }
+      // The dragged row goes to the other option's place, then the separator and the other option swap back in order
+      adapter.notifyItemMoved(i, next);
+      if (step > 0) {
+        adapter.notifyItemMoved(next - 1, i);
+      } else {
+        adapter.notifyItemMoved(i, i - 1);
+      }
+    }
+    return true;
+  }
+
+  private void xgramRemoveOption (View row) {
+    Object tag = row.getTag();
+    if (!(tag instanceof ListItem) || options.size() <= 1 || !options.contains(tag)) {
+      return;
+    }
+    View field = row instanceof ViewGroup ? ((ViewGroup) row).getChildAt(0) : null;
+    boolean hadFocus = field instanceof MaterialEditTextGroup && ((MaterialEditTextGroup) field).getEditText().hasFocus();
+    removeOption((ListItem) tag, hadFocus);
+    checkSend(); // unlike backspace on an empty option, the button can remove one with text
   }
 
   private final List<ListItem> options = new ArrayList<>();
