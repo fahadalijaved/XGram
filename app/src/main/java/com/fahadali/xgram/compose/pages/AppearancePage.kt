@@ -20,6 +20,7 @@ import com.fahadali.xgram.XgramComposeBridge
 import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.XgramUi
+import com.fahadali.xgram.appearance.XgramAmoled
 import com.fahadali.xgram.appearance.XgramExpressive
 import com.fahadali.xgram.appearance.XgramIconPack
 import com.fahadali.xgram.appearance.XgramIconPacksController
@@ -81,6 +82,16 @@ fun AppearancePage() {
           // Telegram X's night mode: its Themes page has Auto night mode (the side menu has the switch).
           value(R.id.btn_xgramAutoNightMode, s(R.string.XgramAutoNightMode), s(XgramSettingDeps.autoNightModeName())) {
             host.open(SettingsThemeController(host.activity, host.tdlib))
+          }
+        }
+        if (XgramAmoled.isAvailable()) {
+          // Black Material You surfaces in night mode; the whole app (this page too) repaints at once.
+          switch(
+            R.id.btn_xgramPureBlack, s(R.string.XgramPureBlack), s(R.string.XgramPureBlackSub),
+            checked = XgramAmoled.isSaved()
+          ) {
+            XgramAmoled.setEnabled(it)
+            host.themeChanged()
           }
         }
       }

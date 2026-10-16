@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E: Pure black night mode for Expressive design (XgramAmoled) -->
+  <item type="id" name="btn_xgramPureBlack" />
+  <string name="XgramPureBlack">Pure black</string>
+  <string name="XgramPureBlackSub">Black backgrounds in night mode, for OLED screens</string>
+</resources>
