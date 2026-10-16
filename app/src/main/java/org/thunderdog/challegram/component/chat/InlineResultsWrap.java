@@ -206,6 +206,15 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
       public void draw (Canvas c) {
         int top = detectRecyclerTopEdge();
         int width = getMeasuredWidth();
+        if (xgramMenu()) {
+          // XGram: the Material 3 Expressive menu surface; the rows are clipped to it
+          xgramDrawMenu(c, top, width, getMeasuredHeight());
+          final int saveCount = Views.save(c);
+          c.clipPath(xgramMenuPath);
+          super.draw(c);
+          Views.restore(c, saveCount);
+          return;
+        }
         c.drawRect(0, top, width, getMeasuredHeight(), Paints.fillingPaint(adapter.useDarkMode() ? Theme.getColor(ColorId.filling, ThemeId.NIGHT_BLACK) : Theme.fillingColor()));
 
         super.draw(c);
@@ -214,6 +223,14 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
     recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
       @Override
       public void getItemOffsets (Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
+        if (xgramMenu()) {
+          // XGram: the rows sit inside the menu surface, 8dp in from the screen edges and 8dp above the input bar
+          int i = parent.getChildAdapterPosition(view);
+          outRect.top = 0;
+          outRect.left = outRect.right = i > 0 ? Screen.dp(XGRAM_MENU_MARGIN) : 0;
+          outRect.bottom = i > 0 && i == adapter.getItemCount() - 1 ? Screen.dp(XGRAM_MENU_MARGIN) : 0;
+          return;
+        }
         if (layoutMode != LAYOUT_MODE_FLOW) {
           outRect.bottom = outRect.left = outRect.right = outRect.top = 0;
           return;
@@ -517,7 +534,7 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
   private void updateRecyclerY () {
     float range = MathUtils.clamp(visibleFactor);
     recyclerView.setTranslationY((float) translateY * (1f - visibleFactor));
-    shadowView.setAlpha(range);
+    shadowView.setAlpha(xgramMenu() ? 0f : range); // XGram: the menu surface casts its own shadow
     int desiredVisibility = range == 0f ? View.INVISIBLE : View.VISIBLE;
     if (recyclerView.getVisibility() != desiredVisibility) {
       recyclerView.setVisibility(desiredVisibility);
@@ -544,6 +561,8 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
 
     if (visibleAnimator == null) {
       visibleAnimator = new FactorAnimator(ANIMATOR_VISIBLE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 190l, visibleFactor);
+      // XGram: the suggestions rise and leave on the clamped spatial default spring with Expressive design
+      com.fahadali.xgram.appearance.XgramAppMotion.use(visibleAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
     }
     visibleAnimator.animateTo(factor);
   }
@@ -565,6 +584,7 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
         return;
       }
       hideAnimator = new BoolAnimator(ANIMATOR_HIDE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(hideAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram
     }
     calculateTranslateY();
     hideAnimator.setValue(isHidden, animated && showFactor > 0f);
@@ -866,7 +886,57 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
     // height of the offset
     final int totalHeight = rootView != null ? rootView.getMeasuredHeight() - bottomInset - lastBottomMargin : 0;
     int itemsHeight = measureItemsHeight();
+    if (xgramMenu()) {
+      // XGram: the menu surface ends 8dp above the input bar (the last row's bottom offset), so the rows start 8dp higher
+      return Math.max(topOffset, totalHeight - Screen.dp(XGRAM_MENU_MARGIN) - Math.min(totalHeight / 2, itemsHeight));
+    }
     return Math.max(topOffset, totalHeight - Math.min(totalHeight / 2, itemsHeight));
+  }
+
+  // XGram: Material 3 Expressive. The mention, command, hashtag and emoji suggestions (the list layout) are an M3
+  // menu surface: surfaceContainer, 16dp corners (shape.corner.large), elevation level 2 (a 3dp shadow), 8dp in from
+  // the screen edges and 8dp above the input bar, the rows clipped to it; it rises from the input bar as before.
+  // Inline bot media grids keep Telegram X's full-width sheet. Nothing changes with Expressive design off.
+
+  private static final float XGRAM_MENU_MARGIN = 8f;
+  private final android.graphics.Path xgramMenuPath = new android.graphics.Path();
+  private final android.graphics.RectF xgramMenuRect = new android.graphics.RectF();
+  private final android.graphics.Paint xgramMenuPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+  private int xgramMenuShadowColor;
+  private boolean xgramMenuStyle = true;
+
+  /** False keeps Telegram X's full-width sheet with Expressive design too (the files about to be sent use it). */
+  public void xgramSetMenuStyle (boolean menuStyle) {
+    if (this.xgramMenuStyle != menuStyle) {
+      this.xgramMenuStyle = menuStyle;
+      recyclerView.invalidateItemDecorations();
+      recyclerView.invalidate();
+    }
+  }
+
+  private boolean xgramMenu () {
+    return xgramMenuStyle && layoutMode == LAYOUT_MODE_LINEAR && !adapter.useDarkMode() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  private void xgramDrawMenu (Canvas c, int top, int width, int height) {
+    final float margin = Screen.dpf(XGRAM_MENU_MARGIN);
+    final float radius = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+    final float bottom = height - margin;
+    xgramMenuPath.rewind();
+    if (bottom - top <= 0f || width - margin * 2f <= 0f) {
+      xgramMenuPath.addRect(0, 0, 0, 0, android.graphics.Path.Direction.CW);
+      return;
+    }
+    xgramMenuRect.set(margin, top, width - margin, bottom);
+    xgramMenuPath.addRoundRect(xgramMenuRect, radius, radius, android.graphics.Path.Direction.CW);
+    // Elevation level 2: the same 3dp shadow as the rich tooltip, faded with the menu
+    final int shadowColor = ColorUtils.alphaColor(.25f * MathUtils.clamp(visibleFactor), 0xff000000);
+    if (shadowColor != xgramMenuShadowColor) {
+      xgramMenuShadowColor = shadowColor;
+      xgramMenuPaint.setShadowLayer(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_2), 0, Screen.dp(1f), shadowColor);
+    }
+    xgramMenuPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER));
+    c.drawRoundRect(xgramMenuRect, radius, radius, xgramMenuPaint);
   }
 
   private int topOffset, bottomInset;

@@ -125,17 +125,16 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
     return paint;
   }
 
-  // XGram: Material 3 Expressive filled tonal icon button in the input bar: a 40dp
-  // primaryContainer circle (the size of the Send button) with an onPrimaryContainer
-  // Material Symbols mic or videocam, morphing to small (8dp) corners while pressed
-  // (spatial fast spring).
+  // XGram: Material 3 Expressive filled icon button in the input bar, the same as Send: a 40dp primary circle (the
+  // small icon button) with an onPrimary Material Symbols mic or videocam, morphing to small (8dp, shape.corner.small)
+  // corners while pressed (spatial fast spring), with the onPrimary state layer at 10% while held.
   private XgramExpressive.Spring xgramPress;
   private Paint xgramIconPaint;
   private final RectF xgramRect = new RectF();
   private Drawable xgramMicIcon, xgramVideoIcon;
 
   private Paint xgramIconPaint () {
-    int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
+    int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY);
     if (xgramIconPaint == null || xgramIconPaint.getColor() != color)
       xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
     return xgramIconPaint;
@@ -152,9 +151,14 @@ public class VoiceVideoButtonView extends View implements FactorAnimator.Target,
 
   private void xgramDrawContainer (Canvas c, int cx, int cy) {
     final float size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight());
-    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, xgramPress != null ? xgramPress.getValue() : 0f);
+    final float press = xgramPress != null ? xgramPress.getValue() : 0f;
+    final float radius = XgramExpressiveC.morphCorner(XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S, size, size, press);
     xgramRect.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f);
-    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.PRIMARY_CONTAINER)));
+    c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.PRIMARY)));
+    final float stateLayer = Math.max(0f, Math.min(1f, press));
+    if (stateLayer > 0f) {
+      c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_PRIMARY), XgramExpressive.STATE_PRESSED * stateLayer)));
+    }
   }
 
   @Override

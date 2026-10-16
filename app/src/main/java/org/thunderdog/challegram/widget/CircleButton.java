@@ -194,6 +194,9 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     if (!XgramExpressive.isEnabled()) {
       return false;
     }
+    if (size == 48f && backgroundColorId == ColorId.circleButtonChat) {
+      return xgramInitChatFab(needShadow); // the chat's floating buttons (scroll to bottom, mentions, reactions, search)
+    }
     final boolean fab;
     if (size < 56f) {
       fab = false;
@@ -231,6 +234,139 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     setElevation(xgramZ);
     xgramSyncTagZ();
     return true;
+  }
+
+  // XGram M3E: the chat's floating buttons (Telegram X's 48dp circles) are M3 secondary FABs: a 56dp container with
+  // 16dp corners (shape.corner.large), secondaryContainer with a 24dp onSecondaryContainer icon, elevation level 3
+  // (6dp), the onSecondaryContainer state layer at 10% (ripple only: M3 FABs keep their shape when pressed). The
+  // container is centred in the view, so a view laid out larger (64dp) leaves room for the badge on its corner.
+
+  public static final float XGRAM_CHAT_FAB_DP = 56f;
+
+  private boolean xgramChatFab;
+
+  /** True for a chat floating button drawn as an M3 FAB (Expressive design). */
+  public boolean xgramIsChatFab () {
+    return xgramChatFab;
+  }
+
+  private boolean xgramInitChatFab (boolean needShadow) {
+    this.xgramChatFab = true;
+    this.xgramFab = false; // not the main FAB: no toggle, extended or size morphs
+    this.xgramSizeDp = XGRAM_CHAT_FAB_DP;
+    final float corner = XgramExpressive.CORNER_L;
+    xgramMorph = new XgramExpressive.MorphDrawable(0, corner, Float.NaN);
+    xgramMask = new XgramExpressive.MorphDrawable(0xff000000, corner, Float.NaN);
+    xgramMorph.setSize(XGRAM_CHAT_FAB_DP, XGRAM_CHAT_FAB_DP, Gravity.CENTER);
+    xgramMask.setSize(XGRAM_CHAT_FAB_DP, XGRAM_CHAT_FAB_DP, Gravity.CENTER);
+    xgramContainerRole = XgramExpressive.SECONDARY_CONTAINER;
+    xgramIconRole = XgramExpressive.ON_SECONDARY_CONTAINER;
+    xgramMorph.setColorRole(xgramContainerRole);
+    xgramMorph.setHost(this);
+    xgramMask.setHost(this);
+    xgramRippleColor = XgramExpressive.withAlpha(xgramIconColor(), XgramExpressive.STATE_PRESSED);
+    xgramRipple = new RippleDrawable(ColorStateList.valueOf(xgramRippleColor), xgramMorph, new InsetDrawable(xgramMask, 0));
+    setBackground(xgramRipple);
+    setStateListAnimator(null);
+    setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+    xgramZ = needShadow ? Screen.dp(XgramExpressive.ELEVATION_3) : 0;
+    setElevation(xgramZ);
+    xgramSyncTagZ();
+    return true;
+  }
+
+  // M3 large badge on a chat FAB (Compose BadgeTokens): 16dp high, at least 16dp wide, full corners, 4dp horizontal
+  // padding, labelSmall (11sp, 500, .5sp tracking), error / onError (a muted count: surfaceContainerHighest /
+  // onSurfaceVariant), up to 4 characters ("999+"). It sits on the container's top end corner, 4dp outside it, and
+  // scales in from that corner on the spatial fast spring. Drawn over the button, no allocation per frame.
+
+  private static final float XGRAM_BADGE_HEIGHT = 16f, XGRAM_BADGE_PADDING = 4f, XGRAM_BADGE_OUTSET = 4f;
+  private static final Paint XGRAM_BADGE_FILL = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private static @Nullable android.text.TextPaint xgramBadgePaint;
+
+  private int xgramBadgeCount;
+  private boolean xgramBadgeMuted;
+  private @Nullable String xgramBadgeText;
+  private float xgramBadgeTextWidth;
+  private @Nullable XgramExpressive.Spring xgramBadgeShow;
+  private final android.graphics.RectF xgramBadgeRect = new android.graphics.RectF();
+
+  private static android.text.TextPaint xgramBadgePaint () {
+    if (xgramBadgePaint == null) {
+      xgramBadgePaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+      xgramBadgePaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_S, false));
+      xgramBadgePaint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_S) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_S));
+    }
+    xgramBadgePaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_S)));
+    return xgramBadgePaint;
+  }
+
+  /** The count on a chat FAB (0 hides it). Nothing unless this is a chat FAB. */
+  public void xgramSetBadge (int count, boolean muted, boolean animated) {
+    if (!xgramChatFab) {
+      return;
+    }
+    boolean changed = false;
+    if (this.xgramBadgeMuted != muted) {
+      this.xgramBadgeMuted = muted;
+      changed = true;
+    }
+    if (this.xgramBadgeCount != count) {
+      this.xgramBadgeCount = count;
+      if (count > 0) {
+        // While it leaves, the old count stays on it
+        this.xgramBadgeText = count > 999 ? "999+" : String.valueOf(count);
+        this.xgramBadgeTextWidth = xgramBadgePaint().measureText(xgramBadgeText);
+      }
+      changed = true;
+    }
+    final float target = count > 0 ? 1f : 0f;
+    if (xgramBadgeShow == null) {
+      xgramBadgeShow = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, target, (s, value) -> invalidate());
+      xgramBadgeShow.setThreshold(.005f);
+    } else if (animated && isAttachedToWindow()) {
+      xgramBadgeShow.animateTo(target);
+    } else if (xgramBadgeShow.getValue() != target || xgramBadgeShow.isRunning()) {
+      xgramBadgeShow.setValue(target);
+      changed = true;
+    }
+    if (changed) {
+      invalidate();
+    }
+  }
+
+  private void xgramDrawBadge (Canvas c) {
+    final float f = xgramBadgeShow != null ? xgramBadgeShow.getValue() : 0f;
+    if (f <= 0f || xgramBadgeText == null) {
+      return;
+    }
+    final float width = getWidth(), height = getHeight();
+    final float box = Math.min(Screen.dpf(XGRAM_CHAT_FAB_DP), Math.min(width, height));
+    final float boxLeft = (width - box) / 2f, boxTop = (height - box) / 2f;
+    final float badgeHeight = Screen.dpf(XGRAM_BADGE_HEIGHT);
+    final float badgeWidth = Math.max(badgeHeight, xgramBadgeTextWidth + Screen.dpf(XGRAM_BADGE_PADDING) * 2f);
+    final float outset = Screen.dpf(XGRAM_BADGE_OUTSET);
+    final boolean rtl = Lang.rtl();
+    final float top = Math.max(0f, boxTop - outset);
+    final float left = rtl ? Math.max(0f, boxLeft - outset) : Math.min(width, boxLeft + box + outset) - badgeWidth;
+    xgramBadgeRect.set(left, top, left + badgeWidth, top + badgeHeight);
+    final float scale = Math.max(0f, f), alpha = MathUtils.clamp(f);
+    final boolean scaled = scale != 1f;
+    final int saveCount = scaled ? Views.save(c) : -1;
+    if (scaled) {
+      final float pivotX = rtl ? xgramBadgeRect.left + badgeHeight / 2f : xgramBadgeRect.right - badgeHeight / 2f;
+      c.scale(scale, scale, pivotX, xgramBadgeRect.centerY());
+    }
+    final int fill = XgramExpressive.color(xgramBadgeMuted ? XgramExpressive.SURFACE_CONTAINER_HIGHEST : XgramExpressive.ERROR);
+    XGRAM_BADGE_FILL.setColor(XgramExpressive.withAlpha(fill, alpha));
+    c.drawRoundRect(xgramBadgeRect, badgeHeight / 2f, badgeHeight / 2f, XGRAM_BADGE_FILL);
+    final android.text.TextPaint paint = xgramBadgePaint();
+    final int text = XgramExpressive.color(xgramBadgeMuted ? XgramExpressive.ON_SURFACE_VARIANT : XgramExpressive.ON_ERROR);
+    paint.setColor(XgramExpressive.withAlpha(text, alpha));
+    c.drawText(xgramBadgeText, xgramBadgeRect.centerX() - xgramBadgeTextWidth / 2f, xgramBadgeRect.centerY() - (paint.ascent() + paint.descent()) / 2f, paint);
+    if (scaled) {
+      Views.restore(c, saveCount);
+    }
   }
 
   /** A counter badge kept in the tag must stay above the button (it used to follow the press animator's Z). */
@@ -730,8 +866,10 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     }
 
     if (sticker != null && imageReceiver != null && gifReceiver != null) {
-      imageReceiver.setBounds(cx - width / 3, cy - height / 3, cx + width / 3, cy + height / 3);
-      gifReceiver.setBounds(cx - width / 3, cy - height / 3, cx + width / 3, cy + height / 3);
+      // XGram: on a chat FAB the reaction takes a 32dp box in the 56dp container (Telegram X: two thirds of the view)
+      final int halfW = xgramChatFab ? Screen.dp(16f) : width / 3, halfH = xgramChatFab ? Screen.dp(16f) : height / 3;
+      imageReceiver.setBounds(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
+      gifReceiver.setBounds(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
 
       final float MIN_SCALE = .82f;
       final boolean isAnimation = sticker.isAnimated();
@@ -842,6 +980,10 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
       if (crossFactor > 0f) {
         DrawAlgorithms.drawCross(c, cx, cy - Screen.dp(6f), crossFactor, iconColor, RippleSupport.getCurrentViewColor(this), Screen.dp(27f));
       }
+    }
+
+    if (xgramChatFab) {
+      xgramDrawBadge(c); // XGram: over the icon (or the reaction) and the state layer
     }
   }
 
