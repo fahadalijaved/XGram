@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the New poll page with Expressive design (XgramM3PollCreate): an option row's handle and remove button -->
+  <item type="id" name="xgram_m3e_poll_drag" />
+  <item type="id" name="xgram_m3e_poll_remove" />
+</resources>
