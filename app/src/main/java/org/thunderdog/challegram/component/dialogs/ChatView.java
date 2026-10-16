@@ -565,8 +565,53 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
   public void setIsDragging (boolean isDragging) {
     if (this.isDragging != isDragging) {
       this.isDragging = isDragging;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        // XGram M3E: the dragged row is a raised tile (see xgramDrawDragTile): its shadow takes the tile's shape
+        if (isDragging) {
+          setOutlineProvider(xgramDragOutline());
+          setTranslationZ(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3));
+        } else {
+          setTranslationZ(0f);
+          setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+        }
+      }
       invalidate();
     }
+  }
+
+  /**
+   * XGram M3E: the press and selection tile's horizontal inset (XgramM3Profile.drawSelectionTile), so the dragged
+   * tile lines up with it.
+   */
+  private static final float XGRAM_TILE_INSET_X = 8f, XGRAM_TILE_INSET_Y = 2f;
+  private static @Nullable android.view.ViewOutlineProvider xgramDragOutline;
+
+  private static android.view.ViewOutlineProvider xgramDragOutline () {
+    if (xgramDragOutline == null) {
+      xgramDragOutline = new android.view.ViewOutlineProvider() {
+        @Override
+        public void getOutline (android.view.View view, android.graphics.Outline outline) {
+          int insetX = Screen.dp(XGRAM_TILE_INSET_X), insetY = Screen.dp(XGRAM_TILE_INSET_Y);
+          outline.setRoundRect(insetX, insetY, view.getWidth() - insetX, view.getHeight() - insetY, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L));
+        }
+      };
+    }
+    return xgramDragOutline;
+  }
+
+  /** XGram M3E: the dragged row, a tile in surfaceContainerHigh with the 16% dragged state layer. */
+  private static int xgramDragTileColor () {
+    return ColorUtils.compositeColor(
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH),
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), com.fahadali.xgram.appearance.XgramExpressive.STATE_DRAGGED)
+    );
+  }
+
+  private void xgramDrawDragTile (Canvas c, int viewWidth, int color) {
+    RectF rect = Paints.getRectF();
+    rect.set(Screen.dp(XGRAM_TILE_INSET_X), Screen.dp(XGRAM_TILE_INSET_Y), viewWidth - Screen.dp(XGRAM_TILE_INSET_X), getMeasuredHeight() - Screen.dp(XGRAM_TILE_INSET_Y));
+    float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+    c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(color));
   }
 
   public boolean isDragging () {
@@ -646,8 +691,25 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     int viewWidth = getMeasuredWidth();
 
     final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    // XGram M3E: what lies under the photo, for the cut-outs of its online dot, schedule clock and check: the row's
+    // surface, the selection / open-chat tile over it, or the dragged tile
+    int xgramCutOut = 0;
+    if (xgramM3) {
+      if (isDragging) {
+        xgramCutOut = xgramDragTileColor();
+      } else {
+        float tile = Math.max(com.fahadali.xgram.layout.XgramTwoPane.isHighlighted(tdlib, chat.getChatId()) ? 1f : 0f, Math.max(0f, Math.min(1f, isSelected.getFloatValue())));
+        xgramCutOut = tile > 0f ?
+          ColorUtils.compositeColor(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), tile)) :
+          Theme.fillingColor();
+      }
+    }
     if (isDragging) {
-      c.drawColor(ColorUtils.alphaColor(.8f, Theme.fillingColor()));
+      if (xgramM3) {
+        xgramDrawDragTile(c, viewWidth, xgramCutOut); // XGram M3E: a raised tile, as the press and selection tiles
+      } else {
+        c.drawColor(ColorUtils.alphaColor(.8f, Theme.fillingColor()));
+      }
     } else if (com.fahadali.xgram.layout.XgramTwoPane.isHighlighted(tdlib, chat.getChatId())) {
       if (xgramM3) {
         com.fahadali.xgram.appearance.XgramM3Profile.drawSelectionTile(c, viewWidth, getMeasuredHeight(), 1f); // XGram: a rounded tile
@@ -840,10 +902,12 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     if (avatarReceiver.needPlaceholder()) {
       avatarReceiver.drawPlaceholder(c);
     }
+    avatarReceiver.setContentCutOutColor(xgramCutOut);
     avatarReceiver.draw(c);
 
-    DrawAlgorithms.drawIcon(c, avatarReceiver, 315f, chat.getScheduleAnimator().getFloatValue(), Theme.fillingColor(), getSparseDrawable(R.drawable.baseline_watch_later_10, ColorId.badgeMuted), PorterDuffPaint.get(ColorId.badgeMuted, chat.getScheduleAnimator().getFloatValue()));
-    DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, isSelected.getFloatValue());
+    final int cutOutColor = xgramCutOut != 0 ? xgramCutOut : Theme.fillingColor();
+    DrawAlgorithms.drawIcon(c, avatarReceiver, 315f, chat.getScheduleAnimator().getFloatValue(), cutOutColor, getSparseDrawable(R.drawable.baseline_watch_later_10, ColorId.badgeMuted), PorterDuffPaint.get(ColorId.badgeMuted, chat.getScheduleAnimator().getFloatValue()));
+    DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, isSelected.getFloatValue(), cutOutColor);
   }
 
   /**

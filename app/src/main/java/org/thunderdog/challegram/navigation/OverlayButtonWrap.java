@@ -566,15 +566,41 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     if (xgram && mainButton != null) {
-      // Medium FAB (80dp, 24dp from the edges) once the content is at least 600dp wide (unfolded Fold, tablets)
-      final float size = MeasureSpec.getSize(widthMeasureSpec) >= Screen.dp(600f) ? 80f : 56f;
+      // Medium FAB (80dp, 24dp from the edges) once the content is at least 600 x 480dp (unfolded Fold, tablets; not a
+      // phone or the cover screen in landscape, wide but low)
+      final int width = MeasureSpec.getSize(widthMeasureSpec), height = MeasureSpec.getSize(heightMeasureSpec);
+      final float size = width >= Screen.dp(600f) && height >= Screen.dp(480f) ? 80f : 56f;
       if (size != xgramFabSize) {
         xgramFabSize = size;
         xgramFabMargin = size == 80f ? 24f : 16f;
         xgramApplyFabSize();
       }
+      // The menu column goes beside the FAB when it would not fit above it (a low window: landscape)
+      final boolean beside = height > 0 && xgramColumnHeight() > height - getPaddingBottom();
+      if (beside != xgramMenuBeside) {
+        xgramMenuBeside = beside;
+        xgramLayoutItems();
+      }
     }
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+  }
+
+  /** The menu items sit beside the FAB (towards the start, from its bottom up) instead of above it. */
+  private boolean xgramMenuBeside;
+
+  /** The FAB, the 8dp gap and the menu column above it, from the wrap's bottom padding up. */
+  private int xgramColumnHeight () {
+    final int count = xgramItems.size();
+    if (count == 0) {
+      return 0;
+    }
+    return Screen.dp(xgramFabMargin) + Screen.dp(xgramFabSize) + Screen.dp(XgramFabMenuItemView.FAB_GAP) +
+      count * Screen.dp(XgramFabMenuItemView.HEIGHT) + (count - 1) * Screen.dp(XgramFabMenuItemView.SPACING);
+  }
+
+  /** The FAB's distance from the wrap's end and bottom (above the bottom padding), in px. */
+  public int xgramFabMarginPx () {
+    return Screen.dp(xgramFabMargin);
   }
 
   private int xgramGravity () {
@@ -613,18 +639,23 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
     xgramLayoutItems();
   }
 
-  /** Items sit above the FAB's layout box: 8dp from it, 4dp apart, end-aligned with the FAB. */
+  /**
+   * Items sit above the FAB's layout box: 8dp from it, 4dp apart, end-aligned with the FAB. When that column does not
+   * fit (see onMeasure), they stand beside the FAB instead: 8dp before its start, from its bottom edge up.
+   */
   private void xgramLayoutItems () {
     final int margin = Screen.dp(xgramFabMargin);
     final int itemHeight = Screen.dp(XgramFabMenuItemView.HEIGHT);
     final int spacing = Screen.dp(XgramFabMenuItemView.SPACING);
-    final int base = margin + Screen.dp(xgramFabSize) + Screen.dp(XgramFabMenuItemView.FAB_GAP);
+    final int base = xgramMenuBeside ? margin : margin + Screen.dp(xgramFabSize) + Screen.dp(XgramFabMenuItemView.FAB_GAP);
+    final int side = xgramMenuBeside ? margin + Screen.dp(xgramFabSize) + Screen.dp(XgramFabMenuItemView.FAB_GAP) : margin;
     for (int i = 0; i < xgramItems.size(); i++) {
       FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) xgramItems.get(i).getLayoutParams();
       if (params == null) {
         continue;
       }
-      params.leftMargin = params.rightMargin = margin;
+      // Set in place (also from onMeasure, right before the children are measured with them)
+      params.leftMargin = params.rightMargin = side;
       params.bottomMargin = base + (itemHeight + spacing) * i;
     }
   }

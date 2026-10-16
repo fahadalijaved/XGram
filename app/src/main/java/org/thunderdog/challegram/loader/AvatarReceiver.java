@@ -148,6 +148,14 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
     }
   }
 
+  /** XGram: the online dot's cut-out color, exact (a tile drawn under the photo); 0 uses the color id. */
+  private int xgramCutOutColor;
+
+  /** XGram: set by the host right before {@link #draw}, so it never invalidates. */
+  public void setContentCutOutColor (int color) {
+    this.xgramCutOutColor = color;
+  }
+
   public void clearAvatarRadiusPropertyIds () {
     //noinspection WrongConstant
     setAvatarRadiusPropertyIds(0, 0);
@@ -1206,7 +1214,7 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
     }
 
     int contentCutOutColor = ColorUtils.alphaColor(alpha,
-      Theme.getColor(contentCutOutColorId != 0 ? contentCutOutColorId : ColorId.filling)
+      xgramCutOutColor != 0 ? xgramCutOutColor : Theme.getColor(contentCutOutColorId != 0 ? contentCutOutColorId : ColorId.filling)
     );
     int onlineColor = ColorUtils.alphaColor(alpha, Theme.getColor(ColorId.online));
     DrawAlgorithms.drawOnline(c,

@@ -89,10 +89,37 @@ public class ToggleHeaderView2 extends View {
     this.colorSet = colorSet;
   }
 
+  // XGram M3E: the title in the app bar's titleLarge (22sp, emphasized), as every other Expressive app bar title
+  // (HeaderView), a 28sp line centered in the 56dp bar; Telegram X's Roboto Medium 18 otherwise.
+  private static TextPaint xgramTitlePaint;
+  private static float xgramTitleCenter;
+
+  private static TextPaint titlePaint (@ColorInt int color) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Paints.getMediumTextPaint(18f, color, false);
+    }
+    TextPaint paint = xgramTitlePaint;
+    int ts = com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L;
+    float size = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(ts));
+    if (paint == null || paint.getTextSize() != size) {
+      paint = new TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+      paint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(ts, true));
+      paint.setTextSize(size);
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        paint.setLetterSpacing(com.fahadali.xgram.appearance.XgramExpressive.trackingSp(ts) / com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(ts));
+      }
+      android.graphics.Paint.FontMetrics metrics = paint.getFontMetrics();
+      xgramTitleCenter = -(metrics.ascent + metrics.descent) / 2f;
+      xgramTitlePaint = paint;
+    }
+    paint.setColor(color);
+    return paint;
+  }
+
   private void trimTexts () {
     int avail = getMeasuredWidth() - Screen.dp(textPaddingDp) - Screen.dp(12f);
     for (ListAnimator.Entry<TrimmedText> entry : titleR) {
-      entry.item.measure(avail, Paints.getMediumTextPaint(18f, colorSet.titleColor(), false));
+      entry.item.measure(avail, titlePaint(colorSet.titleColor()));
     }
     for (ListAnimator.Entry<TrimmedText> entry : subtitleR) {
       entry.item.measure(avail, Paints.getRegularTextPaint(14f, colorSet.subtitleColor()));
@@ -118,11 +145,16 @@ public class ToggleHeaderView2 extends View {
   protected void onDraw (@NonNull Canvas c) {
     final int textTop = Screen.dp(textTopDp) + Screen.dp(17);
     final int triangleTop = Screen.dp(triangleTopDp) + Screen.dp(3);
+    final TextPaint titlePaint = titlePaint(colorSet.titleColor());
+    final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    // M3E: the line's center where Telegram X's 18dp title had it (textTop 17 + 11 = the 56dp bar's middle)
+    final int titleBaseline = xgramM3 ? Math.round(Screen.dp(textTopDp) + Screen.dp(11f) + xgramTitleCenter) : textTop;
+    final int titleShift = xgramM3 ? Math.round(titlePaint.getTextSize()) : Screen.dp(18);
     for (ListAnimator.Entry<TrimmedText> entry : titleR) {
       final int offset2 = (int) ((!entry.isAffectingList() ?
-        ((entry.getVisibility() - 1f) * Screen.dp(18)) :
-        ((1f - entry.getVisibility()) * Screen.dp(18))));
-      entry.item.draw(c, getPaddingLeft(), getPaddingTop() + textTop + offset2, entry.getVisibility(), Paints.getMediumTextPaint(18f, colorSet.titleColor(), false));
+        ((entry.getVisibility() - 1f) * titleShift) :
+        ((1f - entry.getVisibility()) * titleShift)));
+      entry.item.draw(c, getPaddingLeft(), getPaddingTop() + titleBaseline + offset2, entry.getVisibility(), titlePaint);
     }
     for (ListAnimator.Entry<TrimmedText> entry : subtitleR) {
       final int offset2 = (int) ((!entry.isAffectingList() ?

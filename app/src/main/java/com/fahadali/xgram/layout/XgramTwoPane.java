@@ -122,26 +122,86 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
   };
 
-  // The placeholder, its header strip and the divider take their colours when created: rebuild them when the
-  // theme changes (e.g. Material You night), or they stay in the old theme.
+  // The placeholder, its header strip and the divider take their colours when created: recolor them on every frame of
+  // an animated day/night switch (as the list pane and the rail crossfade), rebuild them once the theme has changed
+  // (e.g. Material You night, an icon pack), or they stay in the old theme.
   private final org.thunderdog.challegram.theme.ThemeChangeListener themeListener = new org.thunderdog.challegram.theme.ThemeChangeListener() {
     @Override
     public boolean needsTempUpdates () {
-      return false;
+      return true;
     }
 
     @Override
     public void onThemeColorsChanged (boolean areTemp, @Nullable org.thunderdog.challegram.theme.ColorState state) {
-      if (!areTemp) {
+      if (areTemp) {
+        XgramTwoPane.this.recolorPlaceholders();
+      } else {
         XgramTwoPane.this.onThemeChanged();
       }
     }
 
     @Override
     public void onThemeChanged (org.thunderdog.challegram.theme.ThemeDelegate fromTheme, org.thunderdog.challegram.theme.ThemeDelegate toTheme) {
+      // At the start of a switch: built in the colors on screen (the temporary theme's), then recolored as it runs
       XgramTwoPane.this.onThemeChanged();
     }
   };
+
+  /** The colored parts of a placeholder (or its underlay), kept as its tag so a theme switch recolors it in place. */
+  private static final class PlaceholderParts {
+    final boolean m3;
+    final View layout;
+    @Nullable final GradientDrawable surface;
+    final ImageView icon;
+    final TextView text;
+    @Nullable final View header;
+
+    PlaceholderParts (boolean m3, View layout, @Nullable GradientDrawable surface, ImageView icon, TextView text, @Nullable View header) {
+      this.m3 = m3;
+      this.layout = layout;
+      this.surface = surface;
+      this.icon = icon;
+      this.text = text;
+      this.header = header;
+    }
+
+    void recolor () {
+      if (m3) {
+        layout.setBackgroundColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER));
+        if (surface != null) {
+          surface.setColor(XgramExpressive.color(XgramExpressive.SURFACE));
+        }
+        int onSurfaceVariant = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+        icon.setColorFilter(org.thunderdog.challegram.tool.Paints.getColorFilter(onSurfaceVariant));
+        text.setTextColor(onSurfaceVariant);
+      } else {
+        layout.setBackgroundColor(Theme.getColor(ColorId.background));
+        icon.setColorFilter(org.thunderdog.challegram.tool.Paints.getColorFilter(Theme.getColor(ColorId.iconLight)));
+        text.setTextColor(Theme.getColor(ColorId.textLight));
+        if (header != null) {
+          header.setBackgroundColor(Theme.headerColor());
+        }
+      }
+    }
+  }
+
+  private static void recolorPlaceholder (@Nullable View view) {
+    if (view != null && view.getTag() instanceof PlaceholderParts) {
+      ((PlaceholderParts) view.getTag()).recolor();
+    }
+  }
+
+  /** A frame of a day/night switch, or its end: the placeholder, its underlay, the spacer and the handle follow it. */
+  private void recolorPlaceholders () {
+    recolorPlaceholder(placeholder);
+    recolorPlaceholder(underlay);
+    if (divider != null) {
+      divider.invalidate();
+    }
+    if (handle != null) {
+      handle.invalidate();
+    }
+  }
 
   public boolean isActive () {
     return isActive;
@@ -210,7 +270,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
         return; // the next stack change tries again
       }
       org.thunderdog.challegram.navigation.HeaderView header = navigation.getHeaderView();
-      if (header != null) {
+      // Not while it searches or selects: that would put its title and menu over the search field or the counter.
+      // Leaving those modes builds the header again, with the rail as it is then.
+      if (header != null && !root.inTransformMode()) {
         header.setTitle(root);
       }
     }
@@ -245,7 +307,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
         return; // the next stack change tries again
       }
       org.thunderdog.challegram.navigation.HeaderView header = leftNavigation.getHeaderView();
-      if (header != null) {
+      if (header != null && !main.inTransformMode()) { // see syncRootHeader
         header.setTitle(main);
       }
     }
@@ -350,6 +412,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       // The rail stands in for the side menu's edge swipe; its menu button still opens the menu.
       org.thunderdog.challegram.navigation.DrawerController drawer = context.getDrawer();
       if (drawer != null) {
+        if (show && (drawer.isVisible() || drawer.getShowFactor() > 0f)) {
+          drawer.close(0f, null); // a side menu left open (unfolded with it open): the rail's own takes over
+        }
         drawer.xgramSetSwipeEnabled(!show);
       }
       container.requestLayout();
@@ -372,6 +437,27 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       return;
     }
     rail.sync(XgramNavRail.destinations(railChatList()));
+  }
+
+  /**
+   * The rail's destinations changed without a stack change (folders came or went: Calls is a page of the chat list,
+   * or a screen the side menu settings may hide).
+   */
+  public void onRailDestinationsChanged () {
+    syncRail();
+  }
+
+  /**
+   * The call list is on screen: the chat list's Calls page with nothing over it (in its pane, or the only one), or a
+   * call list opened as a screen. The rail's missed calls badge counts only calls that came in while it is not.
+   */
+  boolean isCallListOnScreen () {
+    MainController list = railChatList();
+    NavigationController listNavigation = isActive && leftNavigation != null ? leftNavigation : navigation;
+    if (list != null && list.xgramOnCallsPage() && listNavigation.getCurrentStackItem() == list) {
+      return true;
+    }
+    return navigation.getCurrentStackItem() instanceof org.thunderdog.challegram.ui.CallListController;
   }
 
   /** The chat list {@code c} shows another page (Chats or Calls, a folder): the rail's pill follows the one on screen. */
@@ -1072,6 +1158,8 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       leftNavigation = null;
     }
     leftMain = null;
+    leftHeaderMain = null; // nor the destroyed chat list's pages and views kept through it
+    leftHeaderRail = false;
   }
 
   /** Takes the panes off screen. The chat list itself stays alive, so unfolding brings it back where it was. */
@@ -1135,6 +1223,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     View header = new View(context);
     header.setBackgroundColor(Theme.headerColor());
     layout.addView(header, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, org.thunderdog.challegram.navigation.HeaderView.getSize(true), Gravity.TOP));
+    layout.setTag(new PlaceholderParts(false, layout, null, icon, text, header));
     return layout;
   }
 
@@ -1182,6 +1271,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     content.addView(text, textParams);
 
     surface.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+    layout.setTag(new PlaceholderParts(true, layout, background, icon, text, null));
     return layout;
   }
 
