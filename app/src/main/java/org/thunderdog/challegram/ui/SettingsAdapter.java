@@ -1438,6 +1438,14 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
         if (holder.itemView instanceof ShadowView) { // XGram: a plain spacer with Expressive design
           setShadowVisibility(item, (ShadowView) holder.itemView);
         }
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram: Expressive spacers are transparent gaps between the segmented groups: a page-specific
+          // color (such as ColorId.background in a sheet) would show as a lighter square band
+          if (holder.itemView.getBackground() != null) {
+            holder.itemView.setBackground(null);
+          }
+          break;
+        }
         int colorId = item.getTextColorId(ColorId.NONE);
         if (colorId != 0) {
           holder.itemView.setBackgroundColor(Theme.getColor(colorId));

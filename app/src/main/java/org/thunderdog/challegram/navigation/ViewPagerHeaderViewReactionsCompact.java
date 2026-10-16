@@ -211,8 +211,28 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
 
   private float getReactionPickerHiddenZoneLeft () {
     final int x = (int) (reactionsSelectorRecyclerView != null ? reactionsSelectorRecyclerView.getTranslationX() : 0);
+    if (xgramButtonsShift() > 0) {
+      // XGram: Material 3 Expressive: the expand button and the counters sit inside the 16dp-inset pill's end,
+      // so the zone they cover grows by whole emoji columns (no reaction is cut in half under the fill)
+      return getMeasuredWidth() - xgramReactionsPickerRightHiddenWidth() + x;
+    }
     final float width = MessageOptionsPagerController.getReactionsPickerRightHiddenWidth(state);
     return getMeasuredWidth() - width + x;
+  }
+
+  /** XGram: how far the expand button and the counters move start-wards from Telegram X's place (8dp from the edge), so they end where the reaction pill ends. */
+  private int xgramButtonsShift () {
+    return state.needShowReactionsPopupPicker && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(XGRAM_PILL_SIDE - 8f) : 0;
+  }
+
+  /** XGram: {@link MessageOptionsPagerController#getReactionsPickerRightHiddenWidth} for buttons that are {@link #xgramButtonsShift()} wider. */
+  private float xgramReactionsPickerRightHiddenWidth () {
+    final int buttonsWidth = state.getRightViewsWidth() + xgramButtonsShift();
+    final int emojiPickerWidthWithoutPadding = Screen.currentWidth() - Screen.dp(org.thunderdog.challegram.ui.ReactionsPickerController.RECYCLER_VIEW_LEFT_RIGHT_PADDING * 2);
+    final int emojiPickerSpanCount = org.thunderdog.challegram.widget.emoji.EmojiLayoutRecyclerController.calculateSpanCount(emojiPickerWidthWithoutPadding, 9, Screen.dp(38));
+    final float emojiPickerItemSize = (float) emojiPickerWidthWithoutPadding / emojiPickerSpanCount;
+    return (float) Math.ceil(((float) buttonsWidth - Screen.dp(12)) / emojiPickerItemSize)
+      * emojiPickerItemSize + Screen.dp(org.thunderdog.challegram.ui.ReactionsPickerController.RECYCLER_VIEW_LEFT_RIGHT_PADDING) + Screen.dp(1);
   }
 
   // XGram: Material 3 Expressive: the sheet's rounded top-end corner, so the fill behind the expand button keeps it
@@ -223,7 +243,7 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
   private final float[] xgramPillRadii = new float[8];
 
   /** The reaction pill row, in dp from the top of the row: the popup picker's first row draws it under the same bounds. */
-  public static final float XGRAM_PILL_TOP = 4f, XGRAM_PILL_BOTTOM = 50f, XGRAM_PILL_SIDE = 8f;
+  public static final float XGRAM_PILL_TOP = 4f, XGRAM_PILL_BOTTOM = 50f, XGRAM_PILL_SIDE = com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET;
 
   public void xgramSetTopEndRadius (float radius) {
     if (this.xgramTopEndRadius != radius) {
@@ -286,7 +306,17 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
       int width = getMeasuredWidth();
       if (position == 0) {
         float offset = (width - state.headerAlwaysVisibleCountersWidth - Screen.dp(56)) * (1f - positionOffset);
-        if (needShowReactions && needShowViews) {
+        final int xgramShift = xgramButtonsShift();
+        if (xgramShift > 0) {
+          // XGram: Material 3 Expressive: the counters and the expand button end inside the 16dp-inset pill
+          final int itemShift = (int) ((Screen.dp(-8) - xgramShift) * (1f - positionOffset));
+          if (needShowReactions && needShowViews) {
+            getTopView().setItemTranslationX(1, itemShift);
+            getTopView().setItemTranslationX(2, itemShift);
+          } else if (needShowReactions || needShowViews) {
+            getTopView().setItemTranslationX(1, itemShift);
+          }
+        } else if (needShowReactions && needShowViews) {
           getTopView().setItemTranslationX(1, (int) (Screen.dp(-8) * (1f - positionOffset)));
           getTopView().setItemTranslationX(2, (int) (Screen.dp(-8) * (1f - positionOffset)));
         } else if (needShowReactions || needShowViews) {
@@ -296,7 +326,11 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
         reactionsSelectorRecyclerView.setTranslationX(-width * positionOffset);
         backButton.setTranslationX(offset);
         if (moreButton != null) {
-          moreButton.setTranslationX(offset);
+          if (xgramShift > 0) {
+            moreButton.setTranslationX(offset - xgramShift * (1f - positionOffset)); // XGram
+          } else {
+            moreButton.setTranslationX(offset);
+          }
         }
         setBackButtonAlpha(positionOffset);
         isScrollEnabled = false;

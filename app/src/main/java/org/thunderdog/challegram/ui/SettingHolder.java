@@ -1104,6 +1104,16 @@ public class SettingHolder extends RecyclerView.ViewHolder {
             paddingTop = 0;
             needHint = false;
             break;
+          case ListItem.TYPE_EDITTEXT_CHANNEL_DESCRIPTION:
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              // XGram: Material 3 Expressive: the description field gets the same breathing room above it as the name field
+              paddingTop = Screen.dp(12f);
+              needHint = true;
+              break;
+            }
+            paddingTop = 0;
+            needHint = true;
+            break;
           default:
             paddingTop = 0;
             needHint = true;
@@ -1135,7 +1145,9 @@ public class SettingHolder extends RecyclerView.ViewHolder {
           }
           case ListItem.TYPE_EDITTEXT_CHANNEL_DESCRIPTION: {
             editText.addLengthCounter(false);
-            editText.getEditText().setLineDisabled(true);
+            if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram: an Expressive field keeps its active indicator line, like the name field
+              editText.getEditText().setLineDisabled(true);
+            }
             editText.setEmptyHint(R.string.DescriptionEmptyHint);
             break;
           }

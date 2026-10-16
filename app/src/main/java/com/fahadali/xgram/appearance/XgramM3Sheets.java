@@ -1,0 +1,173 @@
+/*
+ * This file is a part of XGram, a fork of Telegram X
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.fahadali.xgram.appearance;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.drawable.InsetDrawable;
+import android.text.TextUtils;
+import android.view.Gravity;
+import android.view.View;
+
+import androidx.annotation.ColorInt;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.loader.AvatarReceiver;
+import org.thunderdog.challegram.navigation.HeaderView;
+import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.widget.NoScrollTextView;
+
+import me.vkryl.core.ColorUtils;
+import me.vkryl.core.MathUtils;
+
+/**
+ * Material 3 Expressive for Telegram X's own bottom sheets (share, sticker set, the {@code BottomSheetViewController}
+ * sheets and the settings sheets): the 28dp sheet top with its drag handle, the filled S button of the sheet actions
+ * and the selected-chat check on avatars. Values follow the material3 1.5 tokens (BottomSheet: 28dp corners, 32x4dp
+ * handle; Button S: 40dp, full corners, 8dp while pressed, labelLarge). Main thread only, and only used while
+ * {@link XgramExpressive#isEnabled()} is true.
+ */
+public final class XgramM3Sheets {
+  private XgramM3Sheets () { }
+
+  // Sheet top
+
+  /**
+   * 1 while the sheet top is 28dp or more below the top of the window, 0 once it reaches it, so the 28dp corners
+   * square off as the sheet docks under the status bar (the rule of MessageOptionsPagerController).
+   */
+  public static float cornerFactor (float sheetTop) {
+    return MathUtils.clamp((sheetTop - HeaderView.getTopOffset()) / Screen.dpf(XgramExpressive.CORNER_XL));
+  }
+
+  /**
+   * Replaces a Telegram X header's filling with the sheet top in {@code color}. {@code extraBottom} is the part of the
+   * header view below its bar (HeaderFilling's shadow height): the sheet top stays out of it, as the filling did.
+   * Update the returned drawable with {@link XgramM3Chat.SheetTopDrawable#set} when the sheet moves.
+   */
+  public static XgramM3Chat.SheetTopDrawable attachHeaderSheetTop (@NonNull View headerView, int extraBottom, @ColorInt int color) {
+    XgramM3Chat.SheetTopDrawable sheetTop = new XgramM3Chat.SheetTopDrawable();
+    sheetTop.set(color, 1f);
+    headerView.setBackground(extraBottom > 0 ? new InsetDrawable(sheetTop, 0, 0, 0, extraBottom) : sheetTop);
+    return sheetTop;
+  }
+
+  // Buttons
+
+  /**
+   * A filled button container on {@code v}: {@code containerRole} with full corners that morph to 8dp while pressed and
+   * a state layer in the matching on-role. The container follows theme changes; the caller colors the content.
+   */
+  public static XgramExpressive.MorphDrawable attachFilledButton (@NonNull View v, int containerRole) {
+    XgramExpressive.MorphDrawable container = XgramExpressive.attachPressMorph(v, XgramExpressive.color(containerRole), XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S);
+    container.setColorRole(containerRole);
+    return container;
+  }
+
+  /**
+   * The filled S button of sheet actions ("Save"): labelLarge, 16dp side padding (the caller gives it 40dp of height).
+   * While disabled it is onSurface at .12 with its label in onSurface at .38, never the primary label on the pill.
+   */
+  public static final class FilledButton extends NoScrollTextView {
+    private int containerRole, contentRole;
+    private @Nullable XgramExpressive.MorphDrawable container;
+
+    public FilledButton (Context context, int containerRole, int contentRole) {
+      super(context);
+      XgramExpressive.applyText(this, XgramExpressive.TS_LABEL_L, false);
+      setGravity(Gravity.CENTER);
+      setSingleLine(true);
+      setEllipsize(TextUtils.TruncateAt.END);
+      setMinWidth(Screen.dp(48f));
+      setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
+      setRoles(containerRole, contentRole);
+    }
+
+    /** Container and label roles, e.g. {@code ERROR} and {@code ON_ERROR} for a destructive action. */
+    public void setRoles (int containerRole, int contentRole) {
+      if (container != null && this.containerRole == containerRole && this.contentRole == contentRole) {
+        return;
+      }
+      this.containerRole = containerRole;
+      this.contentRole = contentRole;
+      if (container == null) {
+        container = attachFilledButton(this, containerRole);
+      }
+      syncColors();
+    }
+
+    @Override
+    public void setEnabled (boolean enabled) {
+      final boolean changed = enabled != isEnabled();
+      super.setEnabled(enabled);
+      if (changed) {
+        syncColors();
+      }
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      // Theme changes: the roles are re-read here, and the setters only act (and invalidate once) when a color changed
+      syncColors();
+      super.onDraw(c);
+    }
+
+    private void syncColors () {
+      if (container == null) {
+        return;
+      }
+      final int text;
+      if (isEnabled()) {
+        container.setColorRole(containerRole);
+        text = XgramExpressive.color(contentRole);
+      } else {
+        final int onSurface = XgramExpressive.color(XgramExpressive.ON_SURFACE);
+        container.setColor(XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTAINER));
+        text = XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTENT);
+      }
+      if (getCurrentTextColor() != text) {
+        setTextColor(text);
+      }
+    }
+  }
+
+  // Selection
+
+  /**
+   * The check of a selected chat on its avatar: a 22dp M3 checkbox in circle mode (primary with an onPrimary mark) at
+   * the avatar's bottom-end, cut out of the avatar by a 2dp ring in {@code ringColor} (the sheet color). {@code factor}
+   * is the view's existing check animation: it scales the check from .6 to 1 and draws the mark in.
+   */
+  public static void drawAvatarCheck (@NonNull Canvas c, @NonNull AvatarReceiver receiver, float factor, @ColorInt int ringColor) {
+    if (factor <= 0f) {
+      return;
+    }
+    factor = MathUtils.clamp(factor);
+    final double radians = Math.toRadians(Lang.rtl() ? 315f : 45f);
+    final float displayRadius = receiver.getDisplayRadius();
+    final float centerX = receiver.getRight() - displayRadius;
+    final float centerY = receiver.getBottom() - displayRadius;
+    final float cx = centerX + (float) ((double) displayRadius * Math.sin(radians));
+    final float cy = centerY + (float) ((double) displayRadius * Math.cos(radians));
+    final float size = Screen.dpf(22f);
+    final float scale = .6f + .4f * factor;
+    final float alpha = MathUtils.clamp(factor * 2f);
+    final int saveCount = c.save();
+    c.scale(scale, scale, cx, cy);
+    c.drawCircle(cx, cy, size / 2f + Screen.dpf(2f), Paints.fillingPaint(ColorUtils.alphaColor(alpha, ringColor)));
+    XgramM3Controls.drawCheckbox(c, cx - size / 2f, cy - size / 2f, size, .5f + .5f * factor, 0f, 0f, 1f, alpha);
+    c.restoreToCount(saveCount);
+  }
+}

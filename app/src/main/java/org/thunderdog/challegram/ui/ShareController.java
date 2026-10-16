@@ -983,7 +983,12 @@ public class ShareController extends TelegramViewController<ShareController.Args
     if (headerView != null) {
       headerView.resetColors(this, null);
     }
+    if (xgramSheetTop != null && headerView != null) {
+      xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(headerView.getTranslationY())); // XGram
+    }
   }
+
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.SheetTopDrawable xgramSheetTop; // XGram: Expressive header background
 
   @Override
   public boolean accept (TdApi.Chat chat) {
@@ -1414,6 +1419,10 @@ public class ShareController extends TelegramViewController<ShareController.Args
     headerView.getFilling().setShadowAlpha(0f);
     headerView.getBackButton().setIsReverse(true);
     getSearchHeaderView(headerView);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive modal sheet top: 28dp corners that square off at the window top, a drag handle
+      xgramSheetTop = com.fahadali.xgram.appearance.XgramM3Sheets.attachHeaderSheetTop(headerView, headerView.getFilling().getExtraHeight(), Theme.fillingColor());
+    }
 
     // Fix blinking black line between header & content
     FrameLayout.LayoutParams fp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(6f));
@@ -1796,6 +1805,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
     if (headerView != null) {
       headerView.setTranslationY(top);
       fixView.setTranslationY(top);
+      if (xgramSheetTop != null) {
+        xgramSheetTop.set(Theme.fillingColor(), com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(top)); // XGram
+      }
       final int topOffset = HeaderView.getTopOffset();
       top -= topOffset;
       checkInputEnabled(top);
