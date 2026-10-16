@@ -128,10 +128,54 @@ public class TrendingPackHeaderView extends RelativeLayout {
     subtitleView.setEllipsize(TextUtils.TruncateAt.END);
     subtitleView.setLayoutParams(params);
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: titleMedium name, bodyMedium count in onSurfaceVariant, and a sentence-case "New" badge (labelSmall,
+      // full corners, primaryContainer); the colours are read at bind time (setStickerSetInfo)
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(titleView, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(subtitleView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(newView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S, false);
+      newView.setText(Lang.getString(R.string.New));
+      newView.setGravity(android.view.Gravity.CENTER);
+      newView.setIncludeFontPadding(false);
+      newView.setPadding(Screen.dp(6f), 0, Screen.dp(6f), 0);
+      newView.getLayoutParams().height = Screen.dp(16f);
+      xgramBadge = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, Float.NaN);
+      xgramBadge.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER);
+      newView.setBackground(xgramBadge);
+      xgramSyncColors();
+    }
+
     addView(newView);
     addView(button);
     addView(titleView);
     addView(subtitleView);
+  }
+
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramBadge;
+
+  /** XGram M3E: the roles of the texts (theme changes come through invalidate). */
+  private void xgramSyncColors () {
+    if (xgramBadge == null) {
+      return;
+    }
+    final int badge = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
+    if (newView.getCurrentTextColor() != badge) {
+      newView.setTextColor(badge);
+    }
+    final int title = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+    if (titleView.getCurrentTextColor() != title) {
+      titleView.setTextColor(title);
+    }
+    final int subtitle = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    if (subtitleView.getCurrentTextColor() != subtitle) {
+      subtitleView.setTextColor(subtitle);
+    }
+  }
+
+  @Override
+  public void invalidate () {
+    xgramSyncColors();
+    super.invalidate();
   }
 
   public void setButtonOnClickListener (View.OnClickListener listener) {
@@ -139,6 +183,13 @@ public class TrendingPackHeaderView extends RelativeLayout {
   }
 
   public void setThemeProvider (@Nullable ViewController<?> themeProvider) {
+    if (themeProvider != null && xgramBadge != null) {
+      // XGram M3E: the roles are read again in invalidate (xgramSyncColors)
+      themeProvider.addThemeInvalidateListener(this);
+      themeProvider.addThemeInvalidateListener(newView);
+      themeProvider.addThemeInvalidateListener(button);
+      return;
+    }
     if (themeProvider != null) {
       themeProvider.addThemeTextColorListener(newView, ColorId.promoContent);
       themeProvider.addThemeInvalidateListener(newView);
@@ -158,7 +209,12 @@ public class TrendingPackHeaderView extends RelativeLayout {
     button.setIsDone(stickerSet != null && stickerSet.isInstalled(), false);
     button.setTag(stickerSet);
 
-    Views.setMediumText(titleView, Highlight.toSpannable(stickerSet != null ? stickerSet.getTitle() : "", highlight));
+    if (xgramBadge != null) {
+      titleView.setText(Highlight.toSpannable(stickerSet != null ? stickerSet.getTitle() : "", highlight)); // XGram M3E: no fake bold
+      xgramSyncColors();
+    } else {
+      Views.setMediumText(titleView, Highlight.toSpannable(stickerSet != null ? stickerSet.getTitle() : "", highlight));
+    }
     subtitleView.setText(stickerSet != null ? Lang.plural(stickerSet.isEmoji() ? R.string.xEmoji : R.string.xStickers, stickerSet.getFullSize()) : "");
 
     if (Views.setAlignParent(newView, Lang.rtl())) {

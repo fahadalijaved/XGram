@@ -152,8 +152,9 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
 
     button = new RelativeLayout(context);
     if (xgram) {
-      // XGram: Material 3 Expressive: a 40dp filled pill inset 16dp in the sheet-colored 56dp bar (the container is set by xgramApplyButtonColors)
-      FrameLayoutFix.LayoutParams buttonParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(40f), Gravity.CENTER_VERTICAL);
+      // XGram: Material 3 Expressive: the sheet's main action, a 48dp filled pill inset 16dp in the sheet-colored 56dp
+      // bar, at most 400dp wide and centred (onMeasure); the container is set by xgramApplyButtonColors
+      FrameLayoutFix.LayoutParams buttonParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f), Gravity.CENTER);
       buttonParams.leftMargin = buttonParams.rightMargin = Screen.dp(16f);
       button.setLayoutParams(buttonParams);
     } else {
@@ -638,6 +639,14 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     if (xgram) {
       widthMeasureSpec = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidthSpec(widthMeasureSpec); // XGram: at most 640dp wide
+      // XGram M3E: the main action is at most 400dp wide, centred in the bar (wide sheets on the unfolded Fold)
+      if (button.getLayoutParams() instanceof FrameLayoutFix.LayoutParams && MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+        final FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) button.getLayoutParams();
+        final int want = MeasureSpec.getSize(widthMeasureSpec) - Screen.dp(32f) > Screen.dp(400f) ? Screen.dp(400f) : ViewGroup.LayoutParams.MATCH_PARENT;
+        if (params.width != want) {
+          params.width = want;
+        }
+      }
     }
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     updateHeader();
@@ -681,6 +690,10 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
       // XGram: Material 3 Expressive modal sheet top: 28dp corners that square off at the window top, a drag handle
       xgramSheetTop = com.fahadali.xgram.appearance.XgramM3Sheets.attachHeaderSheetTop(headerView, headerView.getFilling().getExtraHeight(), xgramSheetColor());
       xgramUpdateSheetTop(headerView.getTranslationY());
+      // XGram M3E round 5: the close button is a standard icon button (a 40dp state layer, not Telegram X's rectangle)
+      if (headerView.getBackButton() != null) {
+        com.fahadali.xgram.appearance.XgramM3Sheets.applyNavigationButton(headerView.getBackButton(), Theme.getColor(ColorId.headerLightIcon));
+      }
     }
     addView(stickersController.getValue());
     if (!xgram) { // XGram: no shadow above an Expressive sheet top

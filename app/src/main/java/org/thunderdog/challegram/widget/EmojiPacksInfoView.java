@@ -48,6 +48,11 @@ public class EmojiPacksInfoView extends CustomTextView {
     this.parent = parent;
 
     setTextColorId(ColorId.textLight);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: bodySmall in onSurfaceVariant (textLight), the pack name a primary link in the emphasized weight
+      setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S,
+        com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S)));
+    }
     setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(40f)));
     setPadding(Screen.dp(16f), Screen.dp(14f), Screen.dp(16f), Screen.dp(6f));
   }
