@@ -1935,6 +1935,45 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       setBottomInset(insetsWithoutIme.bottom);
     }
 
+    // XGram M3E: the sheet is at most 640dp wide, centered (unfolded Fold, tablets), as the option sheets
+
+    @Override
+    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        widthMeasureSpec = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidthSpec(widthMeasureSpec);
+      }
+      super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
+
+    @Override
+    public void setLayoutParams (ViewGroup.LayoutParams params) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        com.fahadali.xgram.appearance.XgramM3Sheets.centerSheet(params);
+      }
+      super.setLayoutParams(params);
+    }
+
+    // XGram M3E: the list starts under the status bar (see showSettings): once the sheet reaches it, the status bar
+    // strip above grows in the sheet color over the last status bar height of travel, as the other sheets' LickView,
+    // and the sheet is full screen (square corners, no handle: XgramSettingsSheetDecoration)
+
+    @Override
+    protected void dispatchDraw (Canvas canvas) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && recyclerView != null) {
+        final int topOffset = HeaderView.getTopOffset();
+        if (topOffset > 0) {
+          final float sheetTop = XgramSettingsSheetDecoration.sheetTop(recyclerView);
+          final float factor = MathUtils.clamp(1f - (sheetTop - topOffset) / (float) topOffset);
+          if (factor > 0f) {
+            // directly above the sheet top, topOffset * factor tall: all of the status bar once docked
+            canvas.drawRect(0, sheetTop - topOffset * factor, getMeasuredWidth(), sheetTop,
+              Paints.fillingPaint(com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor()));
+          }
+        }
+      }
+      super.dispatchDraw(canvas);
+    }
+
     private int bottomInset;
 
     private void setBottomInset (int extraBottomInsetWithoutIme) {
@@ -2161,7 +2200,8 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         }
       };
       if (xgramSheet) {
-        footerView.setBackgroundColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW));
+        // the sheet color (ColorId.drawer is surfaceContainerLow with Expressive design), following theme changes
+        ViewSupport.setThemedBackground(footerView, ColorId.drawer, this);
       } else
       ViewSupport.setThemedBackground(footerView, ColorId.filling, this);
       footerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f) + extraBottomInsetWithoutIme, Gravity.BOTTOM));
@@ -2203,6 +2243,17 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
     FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
     params.bottomMargin = footerView != null ? Screen.dp(56f) + extraBottomInsetWithoutIme : 0;
+    if (xgramSheet) {
+      // XGram M3E: a list taller than the window starts under the status bar, not under its icons; the status bar strip
+      // above it is drawn by SettingsWrapLayout, which follows the list while it scrolls
+      params.topMargin = HeaderView.getTopOffset();
+      recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+        @Override
+        public void onScrolled (@NonNull RecyclerView rv, int dx, int dy) {
+          settingsLayout.invalidate();
+        }
+      });
+    }
 
     Views.applyBottomInset(recyclerView, footerView == null ? extraBottomInsetWithoutIme : 0);
     recyclerView.setAdapter(settings.adapter);
@@ -2614,13 +2665,32 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     }
     int totalHeight = shadowView.getLayoutParams().height + optionsWrap.getTextHeight() + extraBottomInsetWithoutIme;
     int index = 0;
-    for (OptionItem item : options.items) {
+    // XGram M3E: the rows go in a scrolling container (a sheet taller than the window scrolls them, OptionsLayout.onMeasure)
+    // and, without a forced theme, are the message menu's segmented tiles: 56dp surfaceBright tiles 16dp in from the
+    // sides, 2dp apart within a group, 8dp between groups (a separator, or another kind of action) and around them
+    final LinearLayout xgramRows = xgramExpressive ? optionsWrap.xgramAddRowsContainer() : optionsWrap;
+    final boolean xgramTiles = xgramExpressive && forcedTheme == null;
+    int xgramLastRow = -1;
+    for (int i = 0; i < options.items.length; i++) {
+      if (options.items[i] != OptionItem.SEPARATOR) {
+        xgramLastRow = i;
+      }
+    }
+    OptionItem xgramPrevious = null; // the row before, in the same run (null at the start and after a separator)
+    boolean xgramFirstRow = true;
+    for (int itemIndex = 0; itemIndex < options.items.length; itemIndex++) {
+      final OptionItem item = options.items[itemIndex];
+      if (item == OptionItem.SEPARATOR && xgramTiles) {
+        xgramPrevious = null; // a new group: an 8dp gap before the next tile
+        index++;
+        continue;
+      }
       if (item == OptionItem.SEPARATOR) {
         ShadowView shadowViewBottom = new ShadowView(context);
         shadowViewBottom.setSimpleBottomTransparentShadow(false);
         ViewSupport.setThemedBackground(shadowViewBottom, ColorId.background, this);
         addThemeInvalidateListener(shadowViewBottom);
-        optionsWrap.addView(shadowViewBottom, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(6f)));
+        xgramRows.addView(shadowViewBottom, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(6f)));
 
         ShadowView shadowViewTop = new ShadowView(context);
         shadowViewTop.setSimpleTopShadow(true, this);
@@ -2630,26 +2700,51 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
           shadowViewTop.setVisibility(View.INVISIBLE);
         }
         addThemeInvalidateListener(shadowViewTop);
-        optionsWrap.addView(shadowViewTop, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(6f)));
+        xgramRows.addView(shadowViewTop, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(6f)));
         index++;
         totalHeight += shadowViewBottom.getLayoutParams().height + shadowViewTop.getLayoutParams().height;
         continue;
       }
       TextView text = OptionsLayout.genOptionView(context, item.id, item.name, item.textColor, item.icon, item.iconColor, onClickListener, getThemeListeners(), forcedTheme);
-      RippleSupport.setTransparentSelector(text);
-      if (forcedTheme != null)
-        Theme.forceTheme(text, forcedTheme);
-      text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(54f)));
+      if (xgramTiles) {
+        final OptionItem next = itemIndex + 1 < options.items.length ? options.items[itemIndex + 1] : null;
+        final boolean joinsPrevious = xgramPrevious != null && OptionsLayout.xgramSameGroup(xgramPrevious, item);
+        final boolean joinsNext = next != null && next != OptionItem.SEPARATOR && OptionsLayout.xgramSameGroup(item, next);
+        final com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(text,
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT),
+          com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.LIST_PRESSED_CORNER);
+        morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+        morph.setSegment(joinsPrevious ?
+          (joinsNext ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_MIDDLE : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_LAST) :
+          (joinsNext ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f));
+        params.leftMargin = params.rightMargin = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+        params.topMargin = !xgramFirstRow && joinsPrevious ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
+        params.bottomMargin = itemIndex == xgramLastRow ? Screen.dp(8f) : 0;
+        text.setLayoutParams(params);
+        totalHeight += params.height + params.topMargin + params.bottomMargin;
+        xgramPrevious = item;
+        xgramFirstRow = false;
+      } else {
+        RippleSupport.setTransparentSelector(text);
+        if (forcedTheme != null)
+          Theme.forceTheme(text, forcedTheme);
+        text.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(54f)));
+        totalHeight += text.getLayoutParams().height;
+      }
       if (delegate != null) {
         text.setTag(delegate.getTagForItem(index));
       }
-      optionsWrap.addView(text);
+      xgramRows.addView(text);
       index++;
-      totalHeight += text.getLayoutParams().height;
     }
 
     // Window
 
+    if (xgramExpressive) {
+      // XGram: the sheet never covers the status bar (OptionsLayout.onMeasure), so it never slides in from further down
+      totalHeight = Math.min(totalHeight, Math.max(0, Screen.currentHeight() - HeaderView.getTopOffset()));
+    }
     popupLayout.showSimplePopupView(optionsWrap, totalHeight);
     onCreatePopupLayout(popupLayout);
     
@@ -2671,10 +2766,25 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     private final android.graphics.RectF rect = new android.graphics.RectF();
     private final float[] radii = new float[8];
 
+    /** The sheet's visible top in the list's parent: the first item's top, the list's own top once it scrolled away. */
+    static float sheetTop (@NonNull RecyclerView parent) {
+      final float listTop = parent.getTop() + parent.getTranslationY();
+      for (int i = 0; i < parent.getChildCount(); i++) {
+        View view = parent.getChildAt(i);
+        if (view != null && parent.getChildAdapterPosition(view) == 0) {
+          return Math.max(listTop, listTop + view.getTop() + view.getTranslationY());
+        }
+      }
+      return listTop;
+    }
+
     @Override
     public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
-      final float corner = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
-      float top = -corner; // first item scrolled away: the sheet fills the list, its corners above the top
+      // the 28dp corners square off and the handle fades out as the sheet reaches the status bar (it is full screen
+      // there, the status bar strip above it: SettingsWrapLayout), as the other sheets (XgramM3Sheets.cornerFactor)
+      final float cornerFactor = com.fahadali.xgram.appearance.XgramM3Sheets.cornerFactor(sheetTop(parent));
+      final float corner = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL) * cornerFactor;
+      float top = -Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL); // first item scrolled away: the sheet fills the list, its corners above the top
       boolean hasTop = false;
       for (int i = 0; i < parent.getChildCount(); i++) {
         View view = parent.getChildAt(i);
@@ -2690,13 +2800,13 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       path.rewind();
       path.addRoundRect(rect, radii, android.graphics.Path.Direction.CW);
       c.drawPath(path, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW)));
-      if (hasTop) {
+      if (hasTop && cornerFactor > 0f) {
         final float handleWidth = Screen.dp(32f), handleHeight = Screen.dp(4f);
         final float handleTop = top + (OptionsLayout.xgramHandleBandHeight() - handleHeight) / 2f;
         final float cx = parent.getWidth() / 2f;
         android.graphics.RectF handle = Paints.getRectF();
         handle.set(cx - handleWidth / 2f, handleTop, cx + handleWidth / 2f, handleTop + handleHeight);
-        final int handleColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), .4f);
+        final int handleColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), .4f * cornerFactor);
         c.drawRoundRect(handle, handleHeight / 2f, handleHeight / 2f, Paints.fillingPaint(handleColor));
       }
     }
