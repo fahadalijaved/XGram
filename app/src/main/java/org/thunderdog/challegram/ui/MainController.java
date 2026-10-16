@@ -273,6 +273,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         R.string.NewChat
       }, false);
     composeWrap.setCallback(this);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: an extended FAB (icon and "New chat") at the top of the chat list that shrinks once the list scrolls
+      composeWrap.xgramSetExtendedLabel(Lang.getString(R.string.XgramFabNewChat));
+      com.fahadali.xgram.appearance.XgramMotion.addLiftListener(xgramFabLift);
+    }
     contentView.addView(composeWrap);
     xgramUpdateComposeVisibility();
 
@@ -1135,9 +1140,16 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
   }
 
+  private final com.fahadali.xgram.appearance.XgramMotion.LiftListener xgramFabLift = (c, lift, collapse) -> {
+    if (composeWrap != null && c == getCurrentPagerItem()) {
+      composeWrap.xgramSetExtended(lift < .5f);
+    }
+  };
+
   @Override
   public void destroy () {
     super.destroy();
+    com.fahadali.xgram.appearance.XgramMotion.removeLiftListener(xgramFabLift); // XGram: extended FAB
     com.fahadali.xgram.XgramSettings.instance().removeListener(xgramSettingsListener); // XGram
     tdlib.listeners().removeOptionListener(this);
     context().appUpdater().removeListener(this);

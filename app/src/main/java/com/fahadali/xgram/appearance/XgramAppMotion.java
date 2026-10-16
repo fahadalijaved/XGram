@@ -25,7 +25,8 @@ import me.vkryl.android.animator.FactorAnimator;
 
 /**
  * App-wide Material 3 Expressive motion outside settings: cached spring interpolators for BoolAnimator /
- * FactorAnimator sites, a drop-in BounceAnimator on springs, spring item animators for lists and entrance motion.
+ * FactorAnimator sites, a drop-in BounceAnimator on springs, spring item animators for lists, the icon button press
+ * morph and dialog window motion.
  * Everything returns Telegram X's own values with Expressive design off.
  */
 public final class XgramAppMotion {
@@ -214,40 +215,5 @@ public final class XgramAppMotion {
     if (window != null) {
       window.setWindowAnimations(XgramMotion.reduce() ? org.thunderdog.challegram.R.style.XgramDialogFade : org.thunderdog.challegram.R.style.XgramDialogAnim);
     }
-  }
-
-  // Entrances
-
-  /**
-   * Pops {@code view} in after {@code delayMs}: scale from {@code fromScale} on SPATIAL_DEFAULT, or a rise of
-   * {@code risePx} on SPATIAL_FAST, with the alpha on the same curve (RenderNode clamps it). RenderNode properties
-   * only. Reduce motion: alpha only.
-   */
-  public static void popIn (@Nullable View view, float fromScale, float risePx, long delayMs) {
-    if (view == null || !XgramExpressive.isEnabled()) {
-      return;
-    }
-    view.animate().cancel();
-    boolean reduce = XgramMotion.reduce();
-    view.setAlpha(0f);
-    if (!reduce && fromScale != 1f) {
-      view.setScaleX(fromScale);
-      view.setScaleY(fromScale);
-    }
-    if (!reduce && risePx != 0f) {
-      view.setTranslationY(risePx);
-    }
-    final int spatial = risePx != 0f && fromScale == 1f ? XgramExpressive.SPATIAL_FAST : XgramExpressive.SPATIAL_DEFAULT;
-    view.animate()
-      .alpha(1f)
-      .scaleX(1f)
-      .scaleY(1f)
-      .translationY(0f)
-      .setStartDelay(delayMs)
-      .setDuration(springDuration(spatial))
-      .setInterpolator(spring(spatial))
-      .setUpdateListener(null)
-      .withLayer()
-      .start();
   }
 }

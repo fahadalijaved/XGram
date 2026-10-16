@@ -90,7 +90,7 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
   /** Call right before the adapter inserts or removes one live message. */
   public void xgramArmOnce () {
-    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !isAttachedToWindow() || getWidth() == 0) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || getWindowToken() == null || getWidth() == 0) {
       return;
     }
     if (xgramArmed == null) {

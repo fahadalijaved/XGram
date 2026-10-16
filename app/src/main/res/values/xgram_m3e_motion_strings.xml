@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: label of the extended compose FAB on the chat list (Expressive design) -->
+  <string name="XgramFabNewChat">New chat</string>
+</resources>
