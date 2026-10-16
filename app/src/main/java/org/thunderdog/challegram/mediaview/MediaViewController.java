@@ -6458,14 +6458,22 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           TextView textView = Views.newTextView(context(), 14f, Theme.getColor(ColorId.white), Gravity.LEFT, Views.TEXT_FLAG_SINGLE_LINE);
           textView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP, Screen.dp(15f), Screen.dp(10f), Screen.dp(15f), 0));
           textView.setText(Lang.getString(R.string.QualityWorse));
+          com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, .7f); // XGram: end label
           qualityControlWrap.addView(textView);
           textView = Views.newTextView(context(), 14f, Theme.getColor(ColorId.white), Gravity.RIGHT, Views.TEXT_FLAG_SINGLE_LINE);
           textView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.RIGHT | Gravity.TOP, Screen.dp(15f), Screen.dp(10f), Screen.dp(15f), 0));
           textView.setText(Lang.getString(R.string.QualityBetter));
+          com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, .7f); // XGram: end label
           qualityControlWrap.addView(textView);
 
           qualityInfo = Views.newTextView(context(), 15f, Theme.getColor(ColorId.white), Gravity.CENTER, Views.TEXT_FLAG_SINGLE_LINE);
           qualityInfo.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.BOTTOM, 0, 0, 0, Screen.dp(8f)));
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram: the M3E discrete slider (stops at each quality) in the dark scheme's primary, the value in labelLarge
+            com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(qualityInfo, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, 1f);
+            com.fahadali.xgram.appearance.XgramR5Media.tabular(qualityInfo);
+            qualitySlider.setXgramColors(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), com.fahadali.xgram.appearance.XgramM3MediaChrome.white(com.fahadali.xgram.appearance.XgramM3MediaChrome.TRACK_INACTIVE_ALPHA));
+          }
           qualityControlWrap.addView(qualityInfo);
         }
         bottomWrap.addView(qualityControlWrap);

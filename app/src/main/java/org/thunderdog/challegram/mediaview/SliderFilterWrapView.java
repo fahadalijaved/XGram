@@ -50,12 +50,29 @@ public class SliderFilterWrapView extends FrameLayoutFix implements SliderView.L
     addView(sliderView);
 
     setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(42f)));
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: the M3E adjust row: labelLarge name, a value chip while dragging, the slider in the dark scheme's primary
+      // on a white 24% track with a stop at 0 for the filters anchored in the centre
+      this.nameView.xgramStyleOnMedia();
+      this.sliderView.setXgramCenterStop(true);
+      xgramApplyColor(ColorId.white);
+    }
+  }
+
+  /** XGram: the default (white) colour becomes the dark scheme's primary; a tint colour keeps its own. */
+  private void xgramApplyColor (@ColorId int colorId) {
+    final int active = colorId == 0 || colorId == ColorId.white ? com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY) : org.thunderdog.challegram.theme.Theme.getColor(colorId);
+    sliderView.setXgramColors(active, com.fahadali.xgram.appearance.XgramM3MediaChrome.white(com.fahadali.xgram.appearance.XgramM3MediaChrome.TRACK_INACTIVE_ALPHA));
   }
 
   public void setData (String name, int value, float floatValue, int anchorMode, @ColorId int colorId, boolean isEnabled) {
     nameView.setName(name);
     nameView.setValue(value == 0 ? "0" : value > 0 ? "+" + value : String.valueOf(value));
     sliderView.setColorId(colorId, false);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramApplyColor(colorId);
+    }
     sliderView.setValue(floatValue);
     sliderView.setAnchorMode(anchorMode);
     sliderView.setSlideEnabled(isEnabled, false);
@@ -67,6 +84,9 @@ public class SliderFilterWrapView extends FrameLayoutFix implements SliderView.L
 
   public void setColorId (@ColorId int colorId) {
     sliderView.setColorId(colorId, true);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramApplyColor(colorId);
+    }
   }
 
   public interface Callback {
