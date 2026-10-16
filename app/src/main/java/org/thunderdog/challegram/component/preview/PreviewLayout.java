@@ -57,17 +57,67 @@ public abstract class PreviewLayout extends FrameLayoutFix implements View.OnCli
 
   private final ThemeListenerList themeListeners = new ThemeListenerList();
 
+  /** XGram M3E r5: the embed preview is an M3 sheet (see xgramAddActions and onDraw). Fixed for the layout's life. */
+  protected final boolean xgramSheet = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+
   public PreviewLayout (Context context, final ViewController<?> parent) {
     super(context);
     this.parent = parent;
 
+    if (xgramSheet) {
+      xgramAddActions();
+      setWillNotDraw(false);
+    } else {
     addFooterItem(R.id.btn_share, R.string.Share, R.drawable.baseline_forward_24);
     addFooterItem(R.id.btn_openLink, R.string.OpenInExternalApp,  R.drawable.baseline_open_in_browser_24);
+    }
 
-    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
+    setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, xgramSheet ? Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL : Gravity.BOTTOM));
     themeListeners.addThemeInvalidateListener(this);
 
     UI.getContext(context).addGlobalThemeListeners(themeListeners);
+  }
+
+  // XGram M3E r5: an M3 sheet at most 640dp wide and centered: the 28dp sheet top in surfaceContainerLow with its drag
+  // handle (the first 48dp), the preview under it, and the actions row (two filled tonal buttons) at the bottom; the
+  // sheet color goes on under the navigation bar.
+
+  /** The height of the handle band above the preview (dp). */
+  public static final float XGRAM_BAND_DP = 48f;
+
+  private void xgramAddActions () {
+    TextView share = com.fahadali.xgram.appearance.XgramR5Sheets.tonalButton(getContext(), Lang.getString(R.string.Share), null);
+    share.setId(R.id.btn_share);
+    share.setOnClickListener(this);
+    TextView open = com.fahadali.xgram.appearance.XgramR5Sheets.tonalButton(getContext(), Lang.getString(R.string.XgramR5SheetsOpenInBrowser), null);
+    open.setId(R.id.btn_openLink);
+    open.setOnClickListener(this);
+    android.widget.LinearLayout row = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(getContext(), null, share, open);
+    final int height = Screen.dp(com.fahadali.xgram.appearance.XgramR5Sheets.ACTIONS_HEIGHT);
+    row.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM));
+    footerHeight = height;
+    addView(row);
+  }
+
+  /** XGram M3E r5: true while the preview plays full screen (the status bar inset then counts again). */
+  protected boolean xgramIsFullscreen () {
+    return false;
+  }
+
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+  private final android.graphics.Paint xgramPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+  private void xgramDrawSheet (@NonNull Canvas c) {
+    final float corner = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
+    final int width = getMeasuredWidth(), height = getMeasuredHeight();
+    xgramRect.set(0, 0, width, height + corner); // the bottom corners stay below the view
+    xgramPaint.setColor(com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor());
+    c.drawRoundRect(xgramRect, corner, corner, xgramPaint);
+    final float handleWidth = Screen.dp(32f), handleHeight = Screen.dp(4f);
+    final float handleTop = (Screen.dp(XGRAM_BAND_DP) - handleHeight) / 2f;
+    xgramRect.set(width / 2f - handleWidth / 2f, handleTop, width / 2f + handleWidth / 2f, handleTop + handleHeight);
+    xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), .4f));
+    c.drawRoundRect(xgramRect, handleHeight / 2f, handleHeight / 2f, xgramPaint);
   }
 
   @Override
@@ -161,7 +211,7 @@ public abstract class PreviewLayout extends FrameLayoutFix implements View.OnCli
       this.topInset = top;
       this.bottomInset = bottomInset;
       Views.setPaddingBottom(this, bottomInset);
-      setWillNotDraw(bottomInset == 0);
+      setWillNotDraw(!xgramSheet && bottomInset == 0);
       UI.post(this::requestLayout);
     }
   }
@@ -169,6 +219,12 @@ public abstract class PreviewLayout extends FrameLayoutFix implements View.OnCli
   @Override
   protected void onDraw (@NonNull Canvas c) {
     super.onDraw(c);
+    if (xgramSheet) {
+      if (!xgramIsFullscreen()) {
+        xgramDrawSheet(c); // the sheet color under the navigation bar too: no separate filling strip
+      }
+      return;
+    }
     if (getPaddingBottom() != 0) {
       c.drawRect(0, getMeasuredHeight() - getPaddingBottom(), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(Theme.fillingColor()));
     }
@@ -176,6 +232,12 @@ public abstract class PreviewLayout extends FrameLayoutFix implements View.OnCli
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+    if (xgramSheet) {
+      widthMeasureSpec = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidthSpec(widthMeasureSpec);
+      final int top = xgramIsFullscreen() ? topInset : 0;
+      super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(computeHeight(MeasureSpec.getSize(widthMeasureSpec)) + bottomInset + top, MeasureSpec.EXACTLY));
+      return;
+    }
     super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(computeHeight(MeasureSpec.getSize(widthMeasureSpec)) + bottomInset + topInset, MeasureSpec.EXACTLY));
   }
 

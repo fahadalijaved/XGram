@@ -763,6 +763,13 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       com.fahadali.xgram.appearance.XgramAppMotion.dialogWindow(dialog); // XGram: M3 exit for dialogs shown elsewhere
       return dialog;
     }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E r5: a dialog in a forced theme (the media viewer's timer, a theme preview) is the same M3 dialog, in
+      // that theme's light or dark scheme
+      com.fahadali.xgram.appearance.XgramM3Controls.styleAlert(context, dialog, theme);
+      com.fahadali.xgram.appearance.XgramAppMotion.dialogWindow(dialog);
+      return dialog;
+    }
 
     int textColor = theme.getColor(ColorId.text);
 
@@ -2011,6 +2018,17 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   public void setProgressFactor (float progress) {
     if (progressFactor != progress) {
       progressFactor = progress;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E r5: the progress dialog scales on a spring (it may overshoot 1) and fades; the scrim is black at
+        // 32%; Reduce motion fades only
+        final float alpha = com.fahadali.xgram.appearance.XgramMotion.clamp01(progress);
+        final float scale = com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : MIN_PROGRESS_SCALE + (1f - MIN_PROGRESS_SCALE) * progress;
+        progressWrap.setScaleX(scale);
+        progressWrap.setScaleY(scale);
+        progressWrap.setAlpha(alpha);
+        overlayView.setAlpha(com.fahadali.xgram.appearance.XgramM3Controls.DIALOG_DIM * alpha);
+        return;
+      }
       final float scale = MIN_PROGRESS_SCALE + (1f - MIN_PROGRESS_SCALE) * progress;
       progressWrap.setScaleX(scale);
       progressWrap.setScaleY(scale);
@@ -2036,6 +2054,8 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     }
     progressWrap.setMessage(message);
     progressListener = listener;
+    // XGram M3E r5: a cancellable progress shows its "Cancel" text button (nothing with Expressive design off)
+    progressWrap.xgramSetCancel(listener != null ? () -> hideProgress(true) : null);
 
     if (isProgressAnimating) return;
     isProgressAnimating = true;
@@ -2057,8 +2077,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     // FIXME with implements
     progressAnimator = AnimatorUtils.simpleValueAnimator();
     progressAnimator.addUpdateListener(animation -> setProgressFactor(AnimatorUtils.getFraction(animation)));
-    progressAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-    progressAnimator.setDuration(PROGRESS_DURATION);
+    // XGram M3E r5: SPATIAL_DEFAULT spring in (Telegram X's 220 ms decelerate with Expressive design off)
+    progressAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR));
+    progressAnimator.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, PROGRESS_DURATION));
     progressAnimator.addListener(new AnimatorListenerAdapter() {
       @Override
       public void onAnimationEnd (Animator animation) {
@@ -2107,8 +2128,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     ValueAnimator obj;
     obj = AnimatorUtils.simpleValueAnimator();
     obj.addUpdateListener(animation -> setProgressFactor(1f - AnimatorUtils.getFraction(animation)));
-    obj.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-    obj.setDuration(PROGRESS_DURATION);
+    // XGram M3E r5: out on the clamped EFFECTS_FAST spring (no overshoot below 0)
+    obj.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
+    obj.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, PROGRESS_DURATION));
     obj.addListener(new AnimatorListenerAdapter() {
       @Override
       public void onAnimationEnd (Animator animation) {
@@ -2204,6 +2226,23 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
 
   public boolean isWindowPopupShowing () {
     return windows != null && !windows.isEmpty();
+  }
+
+  /**
+   * XGram M3E r5: the topmost popup window that is on screen and not on its way out (a sheet, the media viewer), for
+   * the snackbar to float over; null when there is none.
+   */
+  public @Nullable PopupLayout xgramTopShownPopup () {
+    if (windows == null) {
+      return null;
+    }
+    for (int i = windows.size() - 1; i >= 0; i--) {
+      PopupLayout window = windows.get(i);
+      if (window != null && !window.isWindowHidden() && !window.isDestroyed() && window.isBoundWindowShowing()) {
+        return window;
+      }
+    }
+    return null;
   }
 
   public View getContentView () {
@@ -2545,6 +2584,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (requestCode == Intents.ACTIVITY_RESULT_GOOGLE_PLAY_UPDATE) {
       appUpdater.onGooglePlayFlowActivityResult(resultCode, data);
       return;
+    }
+    if (requestCode == Intents.ACTIVITY_RESULT_XGRAM_PARTIAL_TAB) {
+      return; // XGram M3E r5: the partial in-app browser closed; nothing to hand on
     }
     final int handlerIndex = activityResultHandlers.indexOfKey(requestCode);
     if (handlerIndex >= 0) {

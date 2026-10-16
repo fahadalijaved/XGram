@@ -2411,14 +2411,25 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   public final void showUnsavedChangesPromptBeforeLeaving (@Nullable CharSequence info, @NonNull String discardText, @Nullable Runnable onConfirm) {
-    showOptions(info, new int[]{R.id.btn_done, R.id.btn_cancel}, new String[]{discardText, Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+    final OptionDelegate delegate = (itemView, id) -> {
       if (id == R.id.btn_done) {
         if (onConfirm != null)
           onConfirm.run();
         navigateBack();
       }
       return true;
-    });
+    };
+    final int[] ids = {R.id.btn_done, R.id.btn_cancel};
+    final String[] titles = {discardText, Lang.getString(R.string.Cancel)};
+    final int[] colors = {OptionColor.RED, OptionColor.NORMAL};
+    final int[] icons = {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24};
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E r5: the confirm sheet gets a question as its headline when the caller gave no text
+      Options options = getOptions(info, ids, titles, colors, icons, Text.LINE_COUNT_UNLIMITED);
+      showOptions(new Options(options.info, StringUtils.isEmpty(info) ? Lang.getString(R.string.XgramR5SheetsUnsavedTitle) : null, null, options.items, options.maxLineCount), delegate);
+      return;
+    }
+    showOptions(info, ids, titles, colors, icons, delegate);
   }
 
   public final PopupLayout showOptions (CharSequence info, int[] ids, String[] titles, int[] colors, int[] icons, final OptionDelegate delegate) {
@@ -2665,14 +2676,34 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     }
     int totalHeight = shadowView.getLayoutParams().height + optionsWrap.getTextHeight() + extraBottomInsetWithoutIme;
     int index = 0;
+
+    // XGram M3E r5: an action with a Cancel tile is the M3E confirm sheet (title, info, then [Cancel] [action] at the end)
+    final int xgramConfirmIndex = xgramExpressive ? com.fahadali.xgram.appearance.XgramR5Sheets.confirmActionIndex(options.items) : -1;
+    if (xgramConfirmIndex != -1) {
+      if (!StringUtils.isEmpty(options.title)) {
+        optionsWrap.xgramSetHeaderStyle(com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S);
+      }
+      totalHeight += xgramAddConfirmActions(optionsWrap, options.items, xgramConfirmIndex, delegate, onClickListener, popupLayout, forcedTheme);
+      if (xgramExpressive) {
+        totalHeight = Math.min(totalHeight, Math.max(0, Screen.currentHeight() - HeaderView.getTopOffset()));
+      }
+      popupLayout.showSimplePopupView(optionsWrap, totalHeight);
+      onCreatePopupLayout(popupLayout);
+      return popupLayout;
+    }
+    // XGram M3E r5: no Cancel tile (the sheet closes by its scrim, a drag or back), unless the sheet disables those
+    final boolean xgramDropCancel = xgramExpressive && !(delegate != null && delegate.disableCancelOnTouchdown()) &&
+      com.fahadali.xgram.appearance.XgramR5Sheets.countRows(options.items, false) > com.fahadali.xgram.appearance.XgramR5Sheets.countRows(options.items, true);
+
     // XGram M3E: the rows go in a scrolling container (a sheet taller than the window scrolls them, OptionsLayout.onMeasure)
-    // and, without a forced theme, are the message menu's segmented tiles: 56dp surfaceBright tiles 16dp in from the
-    // sides, 2dp apart within a group, 8dp between groups (a separator, or another kind of action) and around them
+    // and are the message menu's segmented tiles: 56dp surfaceBright tiles 16dp in from the sides, 2dp apart within a
+    // group, 8dp between groups (a separator, or another kind of action) and around them. A forced theme (camera,
+    // media viewer) draws the same tiles in that theme's scheme.
     final LinearLayout xgramRows = xgramExpressive ? optionsWrap.xgramAddRowsContainer() : optionsWrap;
-    final boolean xgramTiles = xgramExpressive && forcedTheme == null;
+    final boolean xgramTiles = xgramExpressive;
     int xgramLastRow = -1;
     for (int i = 0; i < options.items.length; i++) {
-      if (options.items[i] != OptionItem.SEPARATOR) {
+      if (options.items[i] != OptionItem.SEPARATOR && !(xgramDropCancel && com.fahadali.xgram.appearance.XgramR5Sheets.isPlainCancel(options.items[i]))) {
         xgramLastRow = i;
       }
     }
@@ -2680,6 +2711,10 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     boolean xgramFirstRow = true;
     for (int itemIndex = 0; itemIndex < options.items.length; itemIndex++) {
       final OptionItem item = options.items[itemIndex];
+      if (xgramDropCancel && com.fahadali.xgram.appearance.XgramR5Sheets.isPlainCancel(item)) {
+        index++; // the tags of the rows after it keep their indexes
+        continue;
+      }
       if (item == OptionItem.SEPARATOR && xgramTiles) {
         xgramPrevious = null; // a new group: an 8dp gap before the next tile
         index++;
@@ -2707,13 +2742,21 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       }
       TextView text = OptionsLayout.genOptionView(context, item.id, item.name, item.textColor, item.icon, item.iconColor, onClickListener, getThemeListeners(), forcedTheme);
       if (xgramTiles) {
-        final OptionItem next = itemIndex + 1 < options.items.length ? options.items[itemIndex + 1] : null;
+        OptionItem next = null; // the next row shown (a dropped Cancel tile is skipped)
+        for (int nextIndex = itemIndex + 1; nextIndex < options.items.length; nextIndex++) {
+          if (!(xgramDropCancel && com.fahadali.xgram.appearance.XgramR5Sheets.isPlainCancel(options.items[nextIndex]))) {
+            next = options.items[nextIndex];
+            break;
+          }
+        }
         final boolean joinsPrevious = xgramPrevious != null && OptionsLayout.xgramSameGroup(xgramPrevious, item);
         final boolean joinsNext = next != null && next != OptionItem.SEPARATOR && OptionsLayout.xgramSameGroup(item, next);
         final com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(text,
-          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT),
+          com.fahadali.xgram.appearance.XgramR5Sheets.role(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT, forcedTheme),
           com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.LIST_PRESSED_CORNER);
-        morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+        if (forcedTheme == null) {
+          morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+        }
         morph.setSegment(joinsPrevious ?
           (joinsNext ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_MIDDLE : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_LAST) :
           (joinsNext ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE));
@@ -2812,6 +2855,41 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     }
   }
 
+  /**
+   * XGram M3E r5: the actions row of a confirm sheet (an action and a Cancel tile): [Cancel] [action] at the end, the
+   * action a filled button (error for a red one, primary otherwise), both going through the sheet's own click listener
+   * with the ids (and tags) their tiles had, so the delegates see the same presses. Cancel always closes the sheet.
+   * Returns the height added.
+   */
+  private int xgramAddConfirmActions (OptionsLayout optionsWrap, OptionItem[] items, int actionIndex, @Nullable OptionDelegate delegate, View.OnClickListener onClickListener, PopupLayout popupLayout, @Nullable ThemeDelegate forcedTheme) {
+    final OptionItem action = items[actionIndex];
+    final int cancelIndex = com.fahadali.xgram.appearance.XgramR5Sheets.cancelIndex(items);
+    final TextView confirm = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(context, action.name, action.textColor == OptionColor.RED, forcedTheme);
+    confirm.setId(action.id);
+    confirm.setOnClickListener(onClickListener);
+    if (delegate != null) {
+      confirm.setTag(delegate.getTagForItem(actionIndex));
+    }
+    com.fahadali.xgram.appearance.XgramM3Wheel.Actions actions = com.fahadali.xgram.appearance.XgramM3Wheel.newActions(context, forcedTheme, null, Lang.getString(R.string.Cancel), confirm);
+    actions.cancel.setId(R.id.btn_cancel);
+    if (delegate != null && cancelIndex != -1) {
+      actions.cancel.setTag(delegate.getTagForItem(cancelIndex));
+    }
+    actions.cancel.setOnClickListener(v -> {
+      onClickListener.onClick(v);
+      if (!popupLayout.isWindowHidden()) {
+        popupLayout.hideWindow(true);
+      }
+    });
+    // 8dp under the info, as the M3 dialog's 24dp between its text and its actions (the row has 12dp above its buttons)
+    LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) actions.view.getLayoutParams();
+    params.topMargin = Screen.dp(8f);
+    params.bottomMargin = Screen.dp(8f);
+    actions.view.setLayoutParams(params);
+    optionsWrap.addView(actions.view);
+    return params.height + params.topMargin + params.bottomMargin;
+  }
+
   /** Sheet footer actions at the end, like M3 dialog actions: "Cancel" as a text button, "Save" as a filled S button. */
   private void xgramAddSheetActions (FrameLayout footerView, SettingsWrapBuilder b, SettingsWrap settings, View.OnClickListener onClickListener) {
     LinearLayout actions = new LinearLayout(context);
@@ -2869,6 +2947,15 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   public final PopupLayout showPopup (CharSequence title, boolean isTitle, int maxLineCount, @NonNull PopUpBuilder popUpBuilder, @Nullable ThemeDelegate forcedTheme) {
+    return showPopup(title, isTitle, maxLineCount, popUpBuilder, forcedTheme, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L);
+  }
+
+  /**
+   * XGram M3E r5: {@link #showPopup(CharSequence, boolean, int, PopUpBuilder, ThemeDelegate)} with the title in the
+   * type scale style {@code xgramTitleTs} while Expressive design is on (headlineSmall for the wheel and hero sheets,
+   * titleLarge otherwise).
+   */
+  public final PopupLayout showPopup (CharSequence title, boolean isTitle, int maxLineCount, @NonNull PopUpBuilder popUpBuilder, @Nullable ThemeDelegate forcedTheme, int xgramTitleTs) {
     final PopupLayout popupLayout = new PopupLayout(context);
     popupLayout.setTag(this);
     popupLayout.init(true);
@@ -2877,6 +2964,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     int totalHeight = 0;
 
     OptionsLayout optionsWrap = new OptionsLayout(context(), this, forcedTheme);
+    optionsWrap.xgramSetTitleStyle(xgramTitleTs);
     optionsWrap.setInfo(this, tdlib(), title, isTitle, maxLineCount);
     optionsWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
     totalHeight += optionsWrap.getTextHeight();
@@ -3316,7 +3404,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       listener.onCurrentIndexChanged(null, -1);
       optionsWrap.addView(xgramActions != null ? xgramActions.view : sendView);
       return contentHeight;
-    }, forcedTheme);
+    }, forcedTheme, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S); // XGram M3E r5: the wheel sheet's headlineSmall title
   }
 
   // Other

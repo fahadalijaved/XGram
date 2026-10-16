@@ -267,10 +267,18 @@ public class UIHandler extends Handler {
   public void handleMessage (Message msg) {
     switch (msg.what) {
       case SHOW_TOAST: {
+        // XGram M3E r5: the M3 snackbar (over the topmost popup when one is showing); the system toast only while the
+        // app is not resumed
+        if (com.fahadali.xgram.appearance.XgramSnackbar.show((CharSequence) msg.obj, msg.arg1)) {
+          break;
+        }
         Toast.makeText(UI.getContext(), (CharSequence) msg.obj, msg.arg1).show();
         break;
       }
       case OPEN_CUSTOM_TOAST: {
+        if (com.fahadali.xgram.appearance.XgramSnackbar.show((CharSequence) msg.obj, msg.arg1)) {
+          break; // XGram M3E r5: the snackbar in place of the centered custom toast
+        }
         Context context = UI.getContext();
         if (context != null) {
           Toast toast = new Toast(context);

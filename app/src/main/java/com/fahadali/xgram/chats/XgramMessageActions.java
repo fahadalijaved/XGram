@@ -313,6 +313,15 @@ public final class XgramMessageActions {
   }
 
   private static void showTranscription (ViewController<?> context, String text) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E r5: the transcription as a list item (tap copies) with a tonal "Copy", no Cancel row
+      java.util.List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row> rows = new ArrayList<>(1);
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(text, null).maxLines(0).copy(text));
+      com.fahadali.xgram.appearance.XgramR5SheetsInfo.show(context, Lang.getString(R.string.XgramTranscribe), rows,
+        new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.Copy), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_TONAL,
+          () -> com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(text)));
+      return;
+    }
     context.showOptions(text,
       new int[] {R.id.btn_copyText, R.id.btn_cancel},
       new String[] {Lang.getString(R.string.Copy), Lang.getString(R.string.Cancel)},
@@ -363,6 +372,10 @@ public final class XgramMessageActions {
         UI.showToast(R.string.XgramEditHistoryEmpty, Toast.LENGTH_SHORT);
         return;
       }
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        showEditHistoryM3(context, msg, message, edits);
+        return;
+      }
       StringBuilder b = new StringBuilder();
       for (int i = edits.size() - 1; i >= 0; i--) {
         XgramHistory.Edit edit = edits.get(i);
@@ -383,6 +396,46 @@ public final class XgramMessageActions {
           return true;
         });
     });
+  }
+
+  /**
+   * XGram M3E r5: the edit history sheet, titled "Edit history": every version as a segmented tile, newest first, its
+   * time in labelMedium over its text in bodyLarge, the current one marked "Current"; tapping a version copies it.
+   * A tonal "Copy" copies the whole history.
+   */
+  private static void showEditHistoryM3 (ViewController<?> context, TGMessage msg, TdApi.Message message, List<XgramHistory.Edit> edits) {
+    java.util.List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row> rows = new ArrayList<>(edits.size() + 1);
+    StringBuilder all = new StringBuilder();
+    TdApi.FormattedText current = tgx.td.Td.textOrCaption(message.content);
+    final int lastEdit = edits.get(edits.size() - 1).editDate;
+    if (current != null && !me.vkryl.core.StringUtils.isEmpty(current.text)) {
+      int currentDate = msg.getEditDate() != 0 ? msg.getEditDate() : lastEdit;
+      String time = Lang.timeOrDateShort(currentDate, TimeUnit.SECONDS);
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(current.text, time)
+        .supportingFirst()
+        .badge(Lang.getString(R.string.XgramR5SheetsCurrent))
+        .maxLines(0)
+        .copy(current.text));
+      all.append(time).append(":\n").append(current.text);
+    }
+    // a version was written at the edit before it (the message's own date for the first one)
+    for (int i = edits.size() - 1; i >= 0; i--) {
+      XgramHistory.Edit edit = edits.get(i);
+      int writtenAt = i > 0 ? edits.get(i - 1).editDate : message.date;
+      String time = Lang.timeOrDateShort(writtenAt != 0 ? writtenAt : edit.editDate, TimeUnit.SECONDS);
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(edit.oldText != null ? edit.oldText : "", time)
+        .supportingFirst()
+        .maxLines(0)
+        .copy(edit.oldText));
+      if (all.length() > 0) {
+        all.append("\n\n");
+      }
+      all.append(time).append(":\n").append(edit.oldText);
+    }
+    final String allText = all.toString();
+    com.fahadali.xgram.appearance.XgramR5SheetsInfo.show(context, Lang.getString(R.string.XgramR5SheetsEditHistory), rows,
+      new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.Copy), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_TONAL,
+        () -> com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(allText)));
   }
 
   // Chat actions

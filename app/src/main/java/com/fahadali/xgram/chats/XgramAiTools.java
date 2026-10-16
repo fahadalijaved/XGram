@@ -286,9 +286,59 @@ public final class XgramAiTools {
     if (c.isDestroyed()) {
       return;
     }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      pickLanguageM3(c, after);
+      return;
+    }
     TranslationControllerV2.LanguageSelectorPopup popup = new TranslationControllerV2.LanguageSelectorPopup(c.context(), c, after::runWithData, null, null);
     popup.languageRecyclerWrap.setTranslationY(HeaderView.getSize(true));
     popup.show();
+  }
+
+  /**
+   * XGram M3E r5: the language as a radio sheet (the settings choice sheet), the recent languages first; a tap picks
+   * one and closes it, and it becomes the most recent (as the translation screen's own list keeps them).
+   */
+  private static void pickLanguageM3 (ViewController<?> c, RunnableData<String> after) {
+    ArrayList<String> recents = Settings.instance().getTranslateLanguageRecents();
+    List<org.thunderdog.challegram.ui.ListItem> items = new ArrayList<>();
+    java.util.HashSet<String> added = new java.util.HashSet<>();
+    int id = 1;
+    for (String lang : recents) {
+      if (lang != null && added.add(lang)) {
+        items.add(new org.thunderdog.challegram.ui.ListItem(org.thunderdog.challegram.ui.ListItem.TYPE_RADIO_OPTION, id++, 0, Lang.getLanguageName(lang, lang), R.id.btn_xgramAiTranslate, false).setStringValue(lang));
+      }
+    }
+    for (String lang : Lang.getSupportedLanguagesForTranslate()) {
+      if (lang != null && added.add(lang)) {
+        items.add(new org.thunderdog.challegram.ui.ListItem(org.thunderdog.challegram.ui.ListItem.TYPE_RADIO_OPTION, id++, 0, Lang.getLanguageName(lang, lang), R.id.btn_xgramAiTranslate, false).setStringValue(lang));
+      }
+    }
+    if (items.isEmpty()) {
+      return;
+    }
+    org.thunderdog.challegram.navigation.SettingsWrapBuilder b = new org.thunderdog.challegram.navigation.SettingsWrapBuilder(R.id.btn_xgramAiTranslate)
+      .setRawItems(items)
+      .setDisableFooter(true)
+      .addHeaderItem(Lang.getString(R.string.XgramAiTranslate))
+      .setOnSettingItemClick((view, settingsId, item, doneButton, adapter, window) -> {
+        String code = item.getStringValue();
+        if (StringUtils.isEmpty(code)) {
+          return;
+        }
+        ArrayList<String> current = Settings.instance().getTranslateLanguageRecents();
+        current.remove(code);
+        current.add(0, code);
+        while (current.size() > 4) {
+          current.remove(current.size() - 1);
+        }
+        Settings.instance().setTranslateLanguageRecents(current);
+        if (window != null) {
+          window.hideWindow(true);
+        }
+        after.runWithData(code);
+      });
+    c.showSettings(b);
   }
 
   private static boolean isPremiumFlood (TdApi.Error error) {
@@ -302,6 +352,12 @@ public final class XgramAiTools {
     }
     if (c.tdlib().hasPremium()) {
       UI.showToast(R.string.XgramAiLimitPremium, Toast.LENGTH_LONG);
+      return;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E r5: the limit notice as an M3 dialog (headlineSmall title, bodyMedium text, an OK text button)
+      c.openAlert(R.string.XgramAiLimitTitle, Lang.getMarkdownString(c, isSummary ? R.string.XgramAiSummaryLimitText : R.string.XgramAiLimitText),
+        Lang.getOK(), (dialog, which) -> dialog.dismiss(), ViewController.ALERT_NO_CANCEL | ViewController.ALERT_HAS_LINKS);
       return;
     }
     c.showOptions(new ViewController.Options(
@@ -342,6 +398,10 @@ public final class XgramAiTools {
    */
   private static void showSheet (ViewController<?> c, CharSequence title, @Nullable TdApi.FormattedText body, @Nullable ViewController.OptionItem[] scrollingItems, ViewController.OptionItem[] items, OptionDelegate delegate) {
     if (c.isDestroyed()) {
+      return;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      showSheetM3(c, title, body, scrollingItems, items, delegate);
       return;
     }
     Tdlib tdlib = c.tdlib();
@@ -392,6 +452,117 @@ public final class XgramAiTools {
       for (ViewController.OptionItem item : items) {
         optionsLayout.addView(optionView(c, item, onClick));
         totalHeight += Screen.dp(54f);
+      }
+      return totalHeight;
+    }, null);
+  }
+
+  /**
+   * XGram M3E r5: the AI sheet. Under the titleLarge title the result (or summary) sits in a 16dp inset
+   * surfaceContainerHigh card with 16dp corners and padding (bodyLarge), or the choices (styles) are segmented
+   * surfaceBright tiles; the part scrolls, capped to half the screen. Then the actions row: text "Translate", tonal
+   * "Copy" and the filled "Apply" at the end. No Cancel row: the sheet closes by its scrim, a drag or back.
+   */
+  private static void showSheetM3 (ViewController<?> c, CharSequence title, @Nullable TdApi.FormattedText body, @Nullable ViewController.OptionItem[] scrollingItems, ViewController.OptionItem[] items, OptionDelegate delegate) {
+    final Tdlib tdlib = c.tdlib();
+    final int maxScrollHeight = Math.round(Screen.currentHeight() * .5f);
+    c.showPopup(title, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsLayout) -> {
+      final Context context = optionsLayout.getContext();
+      final int width = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(c.context().getControllerWidth(optionsLayout));
+      View.OnClickListener onClick = v -> {
+        if (delegate.onOptionItemPressed(v, v.getId())) {
+          popupLayout.hideWindow(true);
+        }
+      };
+      LinearLayout content = new LinearLayout(context);
+      content.setOrientation(LinearLayout.VERTICAL);
+      int contentHeight = 0;
+      if (body != null && !StringUtils.isEmpty(body.text)) {
+        CustomTextView textView = new CustomTextView(context, tdlib);
+        textView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L,
+          com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L)));
+        textView.setPadding(Screen.dp(16f), Screen.dp(16f), Screen.dp(16f), Screen.dp(16f));
+        textView.setTextColorId(ColorId.text);
+        textView.setText(body.text, TextEntity.valueOf(tdlib, body, null), false);
+        com.fahadali.xgram.appearance.XgramR5Sheets.applyCard(textView, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardParams.leftMargin = cardParams.rightMargin = Screen.dp(16f);
+        cardParams.topMargin = Screen.dp(4f);
+        cardParams.bottomMargin = Screen.dp(8f);
+        textView.setLayoutParams(cardParams);
+        content.addView(textView);
+        contentHeight += textView.getCurrentHeight(width - Screen.dp(32f)) + cardParams.topMargin + cardParams.bottomMargin;
+      }
+      if (scrollingItems != null && scrollingItems.length > 0) {
+        for (int i = 0; i < scrollingItems.length; i++) {
+          final int segment = scrollingItems.length == 1 ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE :
+            i == 0 ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST :
+            i == scrollingItems.length - 1 ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_LAST : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_MIDDLE;
+          android.widget.TextView view = OptionsLayout.genOptionView(c.context(), scrollingItems[i].id, scrollingItems[i].name, scrollingItems[i].textColor, scrollingItems[i].icon, scrollingItems[i].iconColor, onClick, c.getThemeListeners(), null);
+          com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(view,
+            com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT),
+            com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.LIST_PRESSED_CORNER);
+          morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+          morph.setSegment(segment);
+          LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f));
+          params.leftMargin = params.rightMargin = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+          params.topMargin = i == 0 ? Screen.dp(4f) : Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP);
+          params.bottomMargin = i == scrollingItems.length - 1 ? Screen.dp(8f) : 0;
+          content.addView(view, params);
+          contentHeight += params.height + params.topMargin + params.bottomMargin;
+        }
+      }
+      int totalHeight = 0;
+      if (content.getChildCount() > 0) {
+        ScrollView scrollView = new ScrollView(context) {
+          @Override
+          protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+            int maxHeight = maxScrollHeight;
+            if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+              maxHeight = Math.min(maxHeight, MeasureSpec.getSize(heightMeasureSpec));
+            }
+            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST));
+          }
+        };
+        scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        scrollView.setVerticalScrollBarEnabled(false);
+        scrollView.addView(content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        optionsLayout.addView(scrollView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        totalHeight += Math.min(contentHeight, maxScrollHeight); // only used for the slide-in animation
+      }
+      // the actions row: Translate (text), Copy (tonal), Apply (filled) at the end, in that order; Cancel goes
+      android.widget.TextView translate = null, copy = null, apply = null;
+      List<View> others = new ArrayList<>();
+      for (ViewController.OptionItem item : items) {
+        if (com.fahadali.xgram.appearance.XgramR5Sheets.isPlainCancel(item)) {
+          continue;
+        }
+        android.widget.TextView button;
+        if (item.id == R.id.btn_xgramAiApply) {
+          button = apply = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(context, item.name, false, null);
+        } else if (item.id == R.id.btn_copyText) {
+          button = copy = com.fahadali.xgram.appearance.XgramR5Sheets.tonalButton(context, item.name, null);
+        } else if (item.id == R.id.btn_xgramAiTranslate) {
+          button = translate = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(context, item.name, com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+        } else {
+          button = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(context, item.name, com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+          others.add(button);
+        }
+        button.setId(item.id);
+        button.setOnClickListener(onClick);
+      }
+      if (translate != null || copy != null || apply != null || !others.isEmpty()) {
+        List<View> end = new ArrayList<>(others);
+        end.add(translate);
+        end.add(copy);
+        end.add(apply);
+        LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(context, null, end.toArray(new View[0]));
+        optionsLayout.addView(actions);
+        totalHeight += ((LinearLayout.LayoutParams) actions.getLayoutParams()).height;
+      } else {
+        View spacer = new View(context);
+        optionsLayout.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(8f)));
+        totalHeight += Screen.dp(8f);
       }
       return totalHeight;
     }, null);

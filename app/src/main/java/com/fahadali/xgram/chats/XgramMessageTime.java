@@ -57,6 +57,10 @@ public final class XgramMessageTime {
       return;
     }
     final TdApi.Message message = msg.getMessage();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      showM3(c, msg, message);
+      return;
+    }
     StringBuilder b = new StringBuilder();
 
     if (message.schedulingState instanceof TdApi.MessageSchedulingStateSendAtDate) {
@@ -115,6 +119,51 @@ public final class XgramMessageTime {
       }
       return true;
     });
+  }
+
+  /**
+   * XGram M3E r5: the exact times and the message ID as M3 list items (the value as the headline, its label as the
+   * supporting line, a trailing copy icon button; tapping copies), a tonal "Copy" for all of it and "Details" at the
+   * start. No Cancel row.
+   */
+  private static void showM3 (ViewController<?> c, TGMessage msg, TdApi.Message message) {
+    java.util.List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row> rows = new java.util.ArrayList<>(4);
+    StringBuilder b = new StringBuilder();
+    if (message.schedulingState instanceof TdApi.MessageSchedulingStateSendAtDate) {
+      m3Row(rows, b, R.string.XgramDetailsScheduledFor, formatExact(((TdApi.MessageSchedulingStateSendAtDate) message.schedulingState).sendDate));
+    } else if (message.date != 0) {
+      m3Row(rows, b, R.string.XgramDetailsSent, formatExact(message.date));
+    }
+    int editDate = msg.getEditDate();
+    if (editDate != 0 && editDate != message.date) {
+      m3Row(rows, b, R.string.XgramDetailsEdited, formatExact(editDate));
+    }
+    int originalDate = msg.getForwardOrImportDate();
+    if (originalDate != 0) {
+      m3Row(rows, b, R.string.XgramDetailsOriginallySent, formatExact(originalDate));
+    }
+    final String ids = serverIds(msg);
+    if (ids != null) {
+      m3Row(rows, b, R.string.XgramDetailsMessageId, ids);
+    }
+    if (rows.isEmpty()) {
+      return;
+    }
+    final String text = b.toString();
+    com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action details = message.id != 0 ?
+      new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.XgramMessageDetails), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_TEXT, () -> {
+        XgramMessageDetailsController controller = new XgramMessageDetailsController(msg.context(), msg.tdlib());
+        controller.setArguments(new XgramMessageDetailsController.Args(message));
+        msg.navigateTo(controller);
+      }).atStart() : null;
+    com.fahadali.xgram.appearance.XgramR5SheetsInfo.show(c, null, rows, details,
+      new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.Copy), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_TONAL,
+        () -> com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(text)));
+  }
+
+  private static void m3Row (java.util.List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row> rows, StringBuilder b, @StringRes int label, String value) {
+    rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(value, Lang.getString(label)).tabular().copy(value));
+    row(b, label, value);
   }
 
   private static void row (StringBuilder b, @StringRes int label, String value) {

@@ -158,10 +158,11 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
       radii[4] = radii[5] = radii[6] = radii[7] = 0f;
       path.reset();
       path.addRoundRect(rect, radii, Path.Direction.CW);
-      final int surfaceColor = forcedTheme != null ? forcedTheme.getColor(ColorId.filling) : XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_LOW);
+      // XGram M3E r5: a forced theme (camera, media viewer) draws the same sheet in that theme's scheme
+      final int surfaceColor = com.fahadali.xgram.appearance.XgramR5Sheets.role(XgramExpressive.SURFACE_CONTAINER_LOW, forcedTheme);
       c.drawPath(path, Paints.fillingPaint(surfaceColor));
 
-      final int handleColor = XgramExpressive.withAlpha(forcedTheme != null ? forcedTheme.getColor(ColorId.textLight) : XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), .4f);
+      final int handleColor = XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramR5Sheets.role(XgramExpressive.ON_SURFACE_VARIANT, forcedTheme), .4f);
       final float handleWidth = Screen.dp(32f), handleHeight = Screen.dp(4f);
       final float handleTop = top + (xgramHandleBandHeight() - handleHeight) / 2f;
       final float cx = getMeasuredWidth() / 2f;
@@ -264,7 +265,10 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
       XgramExpressive.applyText(text, XgramExpressive.TS_BODY_L, false);
     }
     final int textColorId = getOptionColorId(textColor);
-    if (forcedTheme != null) {
+    if (forcedTheme != null && xgramExpressive) {
+      // XGram M3E r5: the M3 role of the color in the forced theme's scheme
+      text.setTextColor(com.fahadali.xgram.appearance.XgramR5Sheets.themeColor(forcedTheme, textColorId));
+    } else if (forcedTheme != null) {
       text.setTextColor(forcedTheme.getColor(textColorId));
     } else if (xgramExpressive && textColor == ViewController.OptionColor.NORMAL) {
       text.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
@@ -304,6 +308,8 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
           if (themeProvider != null) {
             themeProvider.addThemeFilterListener(drawable, ColorId.icon); // XGram: onSurfaceVariant follows theme changes (ColorId.icon maps to it)
           }
+        } else if (forcedTheme != null && xgramExpressive) {
+          drawable.setColorFilter(Paints.getColorFilter(com.fahadali.xgram.appearance.XgramR5Sheets.themeColor(forcedTheme, drawableColorId)));
         } else {
           drawable.setColorFilter(Paints.getColorFilter(forcedTheme != null ? forcedTheme.getColor(drawableColorId) : Theme.getColor(drawableColorId)));
           if (themeProvider != null) {
@@ -339,6 +345,30 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
     } else {
       headerView.setVisibility(View.GONE);
     }
+  }
+
+  // XGram M3E r5: header styles of the sheets (titleLarge by default; headlineSmall for hero, confirm and wheel sheets)
+
+  /** The sheet title set with {@link #setHeader} in the type scale style {@code ts} (e.g. headlineSmall). */
+  public void xgramSetHeaderStyle (int ts) {
+    if (!XgramExpressive.isEnabled()) {
+      return;
+    }
+    headerView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(ts, false, XgramExpressive.textSizeSp(ts)));
+    headerView.setMaxLineCount(2);
+    if (headerView.getVisibility() == View.VISIBLE) {
+      headerView.setText(headerView.getText(), null, false);
+    }
+  }
+
+  private int xgramTitleTs = XgramExpressive.TS_TITLE_L;
+
+  /**
+   * The style of a title shown through {@link #setInfo} with {@code isTitle} (showPopup, the wheel pickers): titleLarge
+   * by default, headlineSmall for a wheel or hero sheet. Call before setInfo.
+   */
+  public void xgramSetTitleStyle (int ts) {
+    this.xgramTitleTs = ts;
   }
 
   // XGram M3E: the option rows of showOptions
@@ -451,8 +481,11 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
       textView.setVisibility(View.VISIBLE);
       textView.setMaxLineCount(maxLineCount);
       if (isTitle) {
-        textView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(XgramExpressive.TS_TITLE_L, XgramExpressive.textSizeSp(XgramExpressive.TS_TITLE_L)));
+        textView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(xgramTitleTs, XgramExpressive.textSizeSp(xgramTitleTs)));
         textView.setTextColorId(ColorId.text);
+        if (xgramTitleTs == XgramExpressive.TS_HEADLINE_S) {
+          textView.setPadding(Screen.dp(16f), 0, Screen.dp(16f), Screen.dp(12f)); // the headline sits right under the handle band
+        }
       } else {
         textView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(XgramExpressive.TS_BODY_M, XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_M)));
         textView.setTextColorId(ColorId.textLight);

@@ -73,6 +73,10 @@ public final class XgramIdInfo {
 
   /** Opens the sheet for the ID row of a profile. */
   public static void show (ViewController<?> context, long peerId, @Nullable TdApi.User user, @Nullable TdApi.Chat chat, @Nullable TdApi.Supergroup supergroup) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      showM3(context, peerId, user, chat, supergroup);
+      return;
+    }
     StringBuilder info = new StringBuilder(Long.toString(peerId));
     String chatIdText = chat != null && chat.id != peerId ? Long.toString(chat.id) : null;
     String link = null;
@@ -112,5 +116,28 @@ public final class XgramIdInfo {
       }
       return true;
     });
+  }
+
+  /**
+   * XGram M3E r5: the IDs as M3 list items (the value as the headline, its label as the supporting line, a trailing
+   * copy icon button; tapping copies), then the registration estimate or the joined / created date. No Cancel row.
+   */
+  private static void showM3 (ViewController<?> context, long peerId, @Nullable TdApi.User user, @Nullable TdApi.Chat chat, @Nullable TdApi.Supergroup supergroup) {
+    java.util.List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row> rows = new java.util.ArrayList<>(4);
+    final String peerIdText = Long.toString(peerId);
+    rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(peerIdText, Lang.getString(R.string.XgramR5SheetsIdLabel)).tabular().copy(peerIdText));
+    if (chat != null && chat.id != peerId) {
+      final String chatIdText = Long.toString(chat.id);
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(chatIdText, Lang.getString(R.string.XgramR5SheetsChatIdLabel)).tabular().copy(chatIdText));
+    }
+    if (user != null) {
+      final String link = "tg://user?id=" + user.id;
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(link, Lang.getString(R.string.XgramR5SheetsLinkLabel)).copy(link));
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(Lang.getString(R.string.XgramRegisteredAbout, monthYear(estimateRegistration(user.id))), null));
+    } else if (supergroup != null && supergroup.date != 0) {
+      boolean isMember = supergroup.status != null && supergroup.status.getConstructor() != TdApi.ChatMemberStatusLeft.CONSTRUCTOR && supergroup.status.getConstructor() != TdApi.ChatMemberStatusBanned.CONSTRUCTOR;
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(Lang.getString(isMember ? R.string.XgramJoinedOn : R.string.XgramCreatedOn, Lang.getDate(supergroup.date, TimeUnit.SECONDS)), null));
+    }
+    com.fahadali.xgram.appearance.XgramR5SheetsInfo.show(context, null, rows);
   }
 }

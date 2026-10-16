@@ -403,6 +403,10 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
           final long bytesToDownload = totalBytesToDownload() - bytesDownloaded();
           final String displayVersion = displayVersion();
           final String commit = commit();
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            xgramShowUpdatePrompt(c, bytesToDownload, displayVersion, xgramUpdate);
+            return true;
+          }
           ViewController.Options.Builder b = new ViewController.Options.Builder()
             .info(Lang.getMarkdownString(c,
               !StringUtils.isEmpty(displayVersion) ? R.string.AppUpdateAvailableVersionPrompt : R.string.AppUpdateAvailablePrompt,
@@ -449,6 +453,39 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
       }
     }
     return false;
+  }
+
+  /**
+   * XGram M3E r5: the update prompt as an M3 dialog: "Update available", then "XGram <version> · <size>" and the first
+   * lines of the changelog, with "Download" (positive), "What's new" (the full changelog) and "Later". No Cancel tile.
+   */
+  private void xgramShowUpdatePrompt (ViewController<?> c, long bytesToDownload, @Nullable String displayVersion, @Nullable XgramUpdates.Found found) {
+    final String version = !StringUtils.isEmpty(displayVersion) ? displayVersion : found != null ? found.versionName : null;
+    final String size = bytesToDownload > 0 ? Strings.buildSize(bytesToDownload) : null;
+    StringBuilder message = new StringBuilder();
+    if (!StringUtils.isEmpty(version)) {
+      message.append(size != null ? Lang.getString(R.string.XgramR5SheetsUpdateVersion, version, size) : Lang.getString(R.string.XgramUpdateWhatsNewTitle, version));
+    } else if (size != null) {
+      message.append(size);
+    }
+    final String head = XgramUpdates.changelogHead(found, 4);
+    if (!StringUtils.isEmpty(head)) {
+      if (message.length() > 0) {
+        message.append("\n\n");
+      }
+      message.append(head);
+    }
+    android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(c.context(), org.thunderdog.challegram.theme.Theme.dialogTheme());
+    b.setTitle(Lang.getString(R.string.XgramR5SheetsUpdateAvailable));
+    if (message.length() > 0) {
+      b.setMessage(message.toString());
+    }
+    b.setPositiveButton(Lang.getString(R.string.XgramUpdateDownload), (dialog, which) -> downloadUpdate());
+    if (found != null) {
+      b.setNeutralButton(Lang.getString(R.string.XgramUpdateWhatsNew), (dialog, which) -> XgramUpdates.showWhatsNew(c, found, this::downloadUpdate));
+    }
+    b.setNegativeButton(Lang.getString(R.string.XgramR5SheetsLater), (dialog, which) -> dialog.dismiss());
+    c.showAlert(b);
   }
 
   @Override
