@@ -573,7 +573,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (messageThread == null)
       return;
     if (areScheduled) {
-      headerCell.setForcedSubtitle(Lang.lowercase(Lang.getString(R.string.ScheduledMessages)));
+      headerCell.setForcedSubtitle(com.fahadali.xgram.appearance.XgramR5Chat.on() ? com.fahadali.xgram.appearance.XgramR5Chat.scheduledMessages() : Lang.lowercase(Lang.getString(R.string.ScheduledMessages))); // XGram M3E: sentence case
     } else {
       headerCell.setForcedSubtitle(messageThread.chatHeaderSubtitle());
     }
@@ -583,6 +583,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (messageThread != null) {
       updateMessageThreadSubtitle();
     } else if (areScheduled) {
+      if (com.fahadali.xgram.appearance.XgramR5Chat.on()) {
+        headerCell.setForcedSubtitle(isSelfChat() ? Lang.getString(R.string.Reminders) : com.fahadali.xgram.appearance.XgramR5Chat.scheduledMessages()); // XGram M3E: sentence case
+      } else
       headerCell.setForcedSubtitle(Lang.lowercase(Lang.getString(isSelfChat() ? R.string.Reminders : R.string.ScheduledMessages)));
     } else {
       headerCell.setForcedSubtitle(null);
@@ -657,7 +660,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     headerCell.setPhotoOpenCallback(this);
     switch (previewMode) {
       case PREVIEW_MODE_EVENT_LOG: {
-        headerCell.setForcedSubtitle(Lang.lowercase(Lang.getString(R.string.EventLogAllEvents)));
+        headerCell.setForcedSubtitle(com.fahadali.xgram.appearance.XgramR5Chat.on() ? Lang.getString(R.string.EventLogAllEvents) : Lang.lowercase(Lang.getString(R.string.EventLogAllEvents))); // XGram M3E: sentence case
         break;
       }
       case PREVIEW_MODE_SEARCH: {
@@ -1616,8 +1619,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     contentView.addView(bottomShadowView);
 
     contentView.addView(topBar);
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && previewMode == PREVIEW_MODE_NONE && !isInForceTouchMode()) {
-      // XGram: Material 3 Expressive: the messages sit in a container with 28dp top corners under the app bar
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (previewMode == PREVIEW_MODE_NONE || previewMode == PREVIEW_MODE_EVENT_LOG || previewMode == PREVIEW_MODE_SEARCH) && !isInForceTouchMode()) {
+      // XGram: Material 3 Expressive: the messages sit in a container with 28dp top corners under the app bar (also
+      // in recent actions and found messages)
       xgramCornersView = new com.fahadali.xgram.appearance.XgramM3Chat.CornersView(context, this::xgramAppBarColor);
       xgramCornersView.setLayoutParams(new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.appearance.XgramM3Chat.cornersHeight()));
       addThemeInvalidateListener(xgramCornersView);
@@ -1692,13 +1696,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
       ProfileController.fillMediaControllers(mediaControllers, context(), tdlib());
       List<ViewPagerTopView.Item> items = new ArrayList<ViewPagerTopView.Item>(mediaControllers.size() + 1);
       items.add(new ViewPagerTopView.Item(
-        Lang.uppercase(Lang.getString(R.string.TabMessages)),
+        com.fahadali.xgram.appearance.XgramR5Chat.on() ? Lang.getString(R.string.TabMessages) : Lang.uppercase(Lang.getString(R.string.TabMessages)), // XGram M3E: sentence case
         R.drawable.baseline_chat_bubble_24,
         null
       ));
       for (SharedBaseController<?> c : mediaControllers) {
         items.add(new ViewPagerTopView.Item(
-          Lang.uppercase(c.getName().toString()),
+          com.fahadali.xgram.appearance.XgramR5Chat.on() ? com.fahadali.xgram.appearance.XgramR5Chat.tabCase(c.getName()) : Lang.uppercase(c.getName().toString()), // XGram M3E: sentence case
           c.getIcon(),
           null
         ));
@@ -3908,7 +3912,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public void checkEventLogSubtitle (boolean inSearch) {
     int res = inSearch ? R.string.EventLogSelectedEvents : R.string.EventLogAllEvents;
-    String str = Lang.lowercase(Lang.getString(res));
+    String str = com.fahadali.xgram.appearance.XgramR5Chat.on() ? Lang.getString(res) : Lang.lowercase(Lang.getString(res)); // XGram M3E: sentence case
     headerCell.setForcedSubtitle(str);
     headerCell.setSubtitle(str);
   }
@@ -5951,6 +5955,23 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return chat != null && tdlib.isSelfChat(chat.id);
   }
 
+  /** XGram M3E: the empty chat card offers "Say hi" in a chat the user can write to (not a preview, not scheduled). */
+  public boolean xgramCanSayHi () {
+    return chat != null && !inPreviewMode && !isInForceTouchMode() && !areScheduled && !isSelfChat() && canWriteMessages();
+  }
+
+  /** XGram M3E: "Say hi" puts a waving hand in the empty composer and opens the keyboard; nothing is sent. */
+  public void xgramSayHi () {
+    if (inputView == null || !xgramCanSayHi()) {
+      return;
+    }
+    if (StringUtils.isEmpty(inputView.getInput())) {
+      inputView.setInput("👋", true, true);
+    }
+    inputView.requestFocus();
+    Keyboard.show(inputView);
+  }
+
   @Deprecated
   private boolean hasWritePermission () {
     // FIXME: this check is outdated and no longer correct
@@ -6606,6 +6627,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
         imageView.setColorFilter(Theme.getColor(ColorId.textNeutral));
         addThemeFilterListener(imageView, ColorId.textNeutral);
         imageView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(49f), Screen.dp(49f), Gravity.RIGHT | Gravity.CENTER_VERTICAL));
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: a standard icon button: onSurfaceVariant icon, 40dp state layer in a 48dp target, 8dp from the end
+          imageView.setColorFilter(Theme.getColor(ColorId.icon));
+          addThemeFilterListener(imageView, ColorId.icon);
+          FrameLayout.LayoutParams helpParams = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.CENTER_VERTICAL);
+          if (Lang.rtl()) {
+            helpParams.leftMargin = Screen.dp(8f);
+          } else {
+            helpParams.rightMargin = Screen.dp(8f);
+          }
+          imageView.setLayoutParams(helpParams);
+          com.fahadali.xgram.appearance.XgramAppMotion.iconButton(imageView);
+          imageView.setContentDescription(Lang.getString(R.string.Help));
+        }
         imageView.setId(R.id.btn_help);
         actionButtonWrap.addView(imageView);
       }

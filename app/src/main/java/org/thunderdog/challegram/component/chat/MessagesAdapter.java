@@ -93,7 +93,11 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesHolder> {
   public void onBindViewHolder (MessagesHolder holder, int position) {
     switch (holder.getItemViewType()) {
       case ListItem.TYPE_CHAT_EMPTY: {
-        manager.setEmptyText((TextView) holder.itemView, items != null);
+        if (holder.itemView instanceof com.fahadali.xgram.appearance.XgramR5Chat.EmptyChatView) {
+          manager.xgramBindEmptyChat((com.fahadali.xgram.appearance.XgramR5Chat.EmptyChatView) holder.itemView, items != null); // XGram M3E
+        } else {
+          manager.setEmptyText((TextView) holder.itemView, items != null);
+        }
         break;
       }
       case ListItem.TYPE_SECRET_CHAT_INFO:
@@ -160,6 +164,9 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesHolder> {
   @Override
   public int getItemViewType (int position) {
     if (items == null || items.isEmpty() || position >= items.size() || position < 0) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return ListItem.TYPE_CHAT_EMPTY; // XGram M3E: the empty chat card, with the secret chat text in a secret chat
+      }
       return items != null && manager.isSecretChat() ? (manager.useBubbles() ? ListItem.TYPE_SECRET_CHAT_INFO_BUBBLE : ListItem.TYPE_SECRET_CHAT_INFO) : ListItem.TYPE_CHAT_EMPTY;
     } else {
       int viewType;

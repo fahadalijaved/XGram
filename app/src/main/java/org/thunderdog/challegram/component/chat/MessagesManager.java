@@ -2814,6 +2814,63 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   // Empty text
 
+  /**
+   * XGram M3E: the empty chat card (MessagesHolder with Expressive design), with an icon by context: the chat bubble,
+   * the lock in a secret chat, history in the recent actions, schedule in scheduled messages and reminders. While
+   * loading, the contained loading indicator.
+   */
+  public void xgramBindEmptyChat (com.fahadali.xgram.appearance.XgramR5Chat.EmptyChatView view, boolean isLoaded) {
+    if (!isLoaded) {
+      view.bindLoading();
+      return;
+    }
+    if (loader.getSpecialMode() == MessagesLoader.SPECIAL_MODE_RESTRICTED) {
+      String restrictionText = Lang.getRestrictionText(tdlib.chatRestriction(loader.getChatId()));
+      if (!StringUtils.isEmpty(restrictionText)) {
+        view.bind(R.drawable.baseline_block_24, null, restrictionText, false, null);
+        return;
+      }
+    }
+    if (isEventLog()) {
+      final String source;
+      if (StringUtils.isEmpty(eventLogQuery) && eventLogUserIds == null && eventLogFilters == null) {
+        source = Lang.getString(isChannel() ? R.string.EventLogEmptyChannel : R.string.EventLogEmpty);
+      } else if (StringUtils.isEmpty(eventLogQuery)) {
+        source = Lang.getString(R.string.EventLogEmptySearch);
+      } else {
+        view.bind(R.drawable.baseline_history_24, null, Lang.getStringBold(R.string.EventLogEmptyTextSearch, eventLogQuery), false, null);
+        return;
+      }
+      String[] parts = new String[2];
+      com.fahadali.xgram.appearance.XgramR5Chat.splitBoldTitle(source, parts);
+      // Telegram X breaks these lines by hand for its narrow text: the card wraps them itself
+      view.bind(R.drawable.baseline_history_24, parts[0], parts[1] != null ? parts[1].replace('\n', ' ') : null, false, null);
+      return;
+    }
+    if (controller.areScheduledOnly()) {
+      final boolean reminders = controller.isSelfChat();
+      view.bind(R.drawable.baseline_schedule_24,
+        com.fahadali.xgram.appearance.XgramR5Chat.englishOr(reminders ? R.string.XgramR5ChatEmptyRemindersTitle : R.string.XgramR5ChatEmptyScheduledTitle, R.string.NoMessages),
+        com.fahadali.xgram.appearance.XgramR5Chat.englishOr(reminders ? R.string.XgramR5ChatEmptyRemindersText : R.string.XgramR5ChatEmptyScheduledText, 0),
+        false, null);
+      return;
+    }
+    if (controller.isSecretChat()) {
+      view.bind(R.drawable.baseline_lock_24, Lang.getString(R.string.SecretChats),
+        Lang.getString(R.string.format_EncryptedDescription, Lang.getString(R.string.EncryptedDescription1), Lang.getString(R.string.EncryptedDescription2), Lang.getString(R.string.EncryptedDescription3), Lang.getString(R.string.EncryptedDescription4)),
+        true, controller.xgramCanSayHi() ? controller::xgramSayHi : null);
+      return;
+    }
+    if (controller.inPreviewSearchMode()) {
+      view.bind(R.drawable.baseline_search_24, com.fahadali.xgram.appearance.XgramR5Chat.englishOr(R.string.XgramR5ChatEmptySearchTitle, R.string.NoMessages), null, false, null);
+      return;
+    }
+    view.bind(R.drawable.baseline_chat_bubble_24,
+      com.fahadali.xgram.appearance.XgramR5Chat.englishOr(R.string.XgramR5ChatEmptyTitle, R.string.NoMessages),
+      com.fahadali.xgram.appearance.XgramR5Chat.englishOr(R.string.XgramR5ChatEmptyText, 0),
+      false, controller.xgramCanSayHi() ? controller::xgramSayHi : null);
+  }
+
   public void setEmptyText (TextView view, boolean isLoaded) {
     if (loader.getSpecialMode() == MessagesLoader.SPECIAL_MODE_RESTRICTED) {
       String restrictionText = Lang.getRestrictionText(tdlib.chatRestriction(loader.getChatId()));
