@@ -542,9 +542,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
 
     // The small title in the app bar is the headline's: it fades in as the headline scrolls away
     HeaderView.xgramSetTitleAlpha(this, 0f);
-    scroll.getViewTreeObserver().addOnScrollChangedListener(() -> {
+    scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
       if (xgramHeadline != null) {
-        HeaderView.xgramSetTitleAlpha(this, (scroll.getScrollY() - xgramHeadline.getBottom() + Screen.dp(16f)) / (float) Screen.dp(24f));
+        HeaderView.xgramSetTitleAlpha(this, (scrollY - xgramHeadline.getBottom() + Screen.dp(16f)) / (float) Screen.dp(24f));
       }
     });
   }

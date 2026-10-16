@@ -7,6 +7,12 @@
 
   <style name="WhiteRecyclerTheme" parent="@style/AppTheme" />
 
+  <!-- XGram M3E: the splash of the next launch with Expressive design (MainActivity.xgramUpdateSplashTheme, Android 13+);
+       the splash colours are in values-v31 -->
+  <style name="XgramR5SecuritySplashLight" parent="@style/AppTheme" />
+  <style name="XgramR5SecuritySplashDark" parent="@style/AppTheme.Dark" />
+  <style name="XgramR5SecuritySplashBlack" parent="@style/AppTheme.Dark" />
+
   <style name="TransparentTheme" parent="@style/AppTheme">
     <item name="android:windowIsTranslucent">true</item>
     <item name="android:windowBackground">@android:color/transparent</item>
