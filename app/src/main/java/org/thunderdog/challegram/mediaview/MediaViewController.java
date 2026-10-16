@@ -3409,6 +3409,15 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (mode == MODE_MESSAGES || mode == MODE_SIMPLE);
   }
 
+  /**
+   * XGram M3E round 5: scrims instead of Telegram X's flat transparentEditor bands in every viewer mode (profile photos
+   * included): the album strip and the navigation bar area take the scrims' 60% end, and nothing over media casts a shadow
+   * (the elevations stay for the drawing order, their outlines go).
+   */
+  private boolean xgramScrims () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && mode != MODE_GALLERY;
+  }
+
   // XGram M3E wave 2: the send screen (gallery mode): the edit actions in a floating toolbar next to the send FAB, the
   // caption in a filled field, a bottom scrim instead of the bands (com.fahadali.xgram.appearance.XgramW2MediaViewer)
 
@@ -4248,6 +4257,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     thumbsRecyclerView.setBackgroundColor(Theme.getColor(ColorId.transparentEditor));
     if (xgramCaptionCard()) {
       thumbsRecyclerView.setBackgroundColor(XGRAM_ON_MEDIA_SCRIM); // XGram: the scrims' 60% end, as the navigation bar area
+    } else if (xgramScrims()) {
+      // XGram: profile photos have no controls above the strip: the strip is the bottom scrim (clear, 50%, 60%), not a band
+      ViewUtils.setBackground(thumbsRecyclerView, new com.fahadali.xgram.appearance.XgramW2MediaViewer.BottomScrimDrawable());
     }
     thumbsRecyclerView.setLayoutManager(thumbsLayoutManager);
     thumbsRecyclerView.setAdapter(thumbsAdapter);
@@ -4257,7 +4269,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     Views.setBottomMargin(thumbsRecyclerView, controlsMargin);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
       thumbsRecyclerView.setElevation(Screen.dp(3f));
-      if (xgramCaptionCard()) {
+      if (xgramScrims()) {
         thumbsRecyclerView.setOutlineProvider(null); // XGram: no shadow through the 60% strip (see bottomSpace)
       }
     }
@@ -4288,7 +4300,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   private int calculateThumbWidth () {
-    return Screen.dp((mode == MediaViewController.MODE_PROFILE || mode == MediaViewController.MODE_CHAT_PROFILE) ? THUMBS_WIDTH_BIG : THUMBS_WIDTH_SMALL) + Screen.dp(THUMBS_SPACING_BETWEEN);
+    return Screen.dp((mode == MediaViewController.MODE_PROFILE || mode == MediaViewController.MODE_CHAT_PROFILE) ? THUMBS_WIDTH_BIG : THUMBS_WIDTH_SMALL) + xgramThumbSpacing();
+  }
+
+  /** XGram: the gap between album thumbnails: 2dp between the rounded M3E tiles, Telegram X's 1dp otherwise. */
+  private static int xgramThumbSpacing () {
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 2f : THUMBS_SPACING_BETWEEN);
   }
 
   // Called when recyclerView width has been changed
@@ -4687,7 +4704,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     private int thumbStartWidth, thumbEndWidth, thumbHeight;
 
     private boolean layoutImage () {
-      int totalPaddingHorizontal = Screen.dp(THUMBS_SPACING_BETWEEN);
+      int totalPaddingHorizontal = xgramThumbSpacing();
       int paddingVertical = Screen.dp(THUMBS_PADDING);
       int width = getMeasuredWidth();
       int height = getMeasuredHeight();
@@ -4732,6 +4749,33 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       }
       int startX = centerX - thumbWidth / 2;
       preview.setBounds(startX, startY, startX + thumbWidth, startY + thumbHeight);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: M3E carousel tiles: 4dp corners, the current (expanded) one 8dp, following its expansion
+        final float radius = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS + (com.fahadali.xgram.appearance.XgramExpressive.CORNER_S - com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS) * MathUtils.clamp(expandFactor));
+        final boolean clip = preview == avatarReceiver;
+        int saveCount = -1;
+        if (clip) {
+          // the avatar receiver manages its own (here square) corners: clip it to the tile instead
+          xgramRect.set(startX, startY, startX + thumbWidth, startY + thumbHeight);
+          xgramPath.rewind();
+          xgramPath.addRoundRect(xgramRect, radius, radius, Path.Direction.CW);
+          saveCount = c.save();
+          c.clipPath(xgramPath);
+        } else {
+          preview.setRadius(radius);
+        }
+        if (preview.needPlaceholder()) {
+          preview.drawPlaceholderRounded(c, radius, 0x10ffffff);
+        }
+        preview.draw(c);
+        if (clip) {
+          c.restoreToCount(saveCount);
+        }
+        if (alpha != 1f) {
+          preview.restorePaintAlpha();
+        }
+        return;
+      }
       if (preview.needPlaceholder()) {
         preview.drawPlaceholderRounded(c, 0, 0x10ffffff);
       }
@@ -4741,6 +4785,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         preview.restorePaintAlpha();
       }
     }
+
+    private final RectF xgramRect = new RectF();
+    private final Path xgramPath = new Path();
   }
 
   private static class ThumbViewHolder extends RecyclerView.ViewHolder {
@@ -5343,6 +5390,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       headerView = new HeaderView(context);
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && (mode == MODE_MESSAGES || mode == MODE_SIMPLE) && !Config.DISABLE_VIEWER_ELEVATION) {
         headerView.setElevation(Screen.dp(3f));
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          headerView.setOutlineProvider(null); // XGram: no 3dp shadow over media (the elevation keeps it above the media view)
+        }
       }
       attachHeaderViewWithoutNavigation(headerView);
       headerView.initWithSingleController(this, useEdgeToEdge() || ((SET_FULLSCREEN_ON_OPEN || canRunFullscreen()) && !Config.CUTOUT_ENABLED));
@@ -5461,6 +5511,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         checkBottomWrapY();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
           bottomWrap.setElevation(Screen.dp(3f));
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            bottomWrap.setOutlineProvider(null); // XGram: no 3dp shadow over media (the elevation keeps the drawing order)
+          }
         }
         if (xgramCaptionCard()) {
           xgramInitBottomScrim(); // XGram: the controls' scrim behind the caption card (see xgramUpdateBottomScrim)
@@ -5537,7 +5590,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     }
 
     bottomSpace = new FillingSpace(context);
-    if (xgramCaptionCard() || xgramGalleryToolbar()) {
+    if (xgramCaptionCard() || xgramGalleryToolbar() || xgramScrims()) {
       // XGram: the navigation bar area continues the controls' bottom scrim (its 60% end) instead of a lighter band
       bottomSpace.setBackgroundColor(XGRAM_ON_MEDIA_SCRIM);
     } else {
@@ -5549,7 +5602,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     bottomSpace.setVisibility(bottomInnerMargin > 0 ? View.VISIBLE : View.GONE);
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
       bottomSpace.setElevation(Screen.dp(3f));
-      if (xgramCaptionCard() || xgramGalleryToolbar()) {
+      if (xgramCaptionCard() || xgramGalleryToolbar() || xgramScrims()) {
         // XGram: the strip continues the scrims' 60% end: a translucent caster would show its own shadow through it
         // (a darker seam at its top, a strip darker than the scrim above). The elevation stays for the drawing order.
         bottomSpace.setOutlineProvider(null);
