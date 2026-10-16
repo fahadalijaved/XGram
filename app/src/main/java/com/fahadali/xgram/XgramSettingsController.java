@@ -285,6 +285,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setEnabled(!locked);
         } else if (id == R.id.btn_xgramAutoNightMode) {
           view.setData(XgramSettingDeps.autoNightModeName());
+        } else if (id == R.id.btn_xgramPureBlack) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramAmoled.isSaved(), isUpdate);
+          view.setEnabled(com.fahadali.xgram.appearance.XgramAmoled.isAvailable());
         } else if (id == R.id.btn_xgramExpressive) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramExpressive.isEnabled(), isUpdate);
         } else if (id == R.id.btn_xgramEmojiSet) {
@@ -646,6 +649,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       boolean themesLocked = XgramSettingDeps.themesLocked();
       if (themesLocked) {
         theme.add(link(R.id.btn_xgramAutoNightMode, R.string.XgramAutoNightMode));
+      }
+      if (com.fahadali.xgram.appearance.XgramAmoled.isAvailable()) {
+        // Black Material You surfaces in night mode (only with Expressive design, whose colors they are)
+        theme.add(toggle(R.id.btn_xgramPureBlack, R.string.XgramPureBlack, R.string.XgramPureBlackSub));
       }
       addRows(items, theme.toArray(new ListItem[0]));
       items.add(description(themesLocked ? R.string.XgramThemeExpressiveInfo : R.string.XgramMaterialYouInfo));
@@ -1723,6 +1730,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramAutoNightMode) {
       // Telegram X's night mode settings (Auto night mode) are on its Themes page.
       navigateTo(new org.thunderdog.challegram.ui.SettingsThemeController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramPureBlack) {
+      if (!com.fahadali.xgram.appearance.XgramAmoled.isAvailable()) {
+        return; // only with Expressive design
+      }
+      // Applies at once: the role colors are dropped and the app repaints (this list too).
+      com.fahadali.xgram.appearance.XgramAmoled.setEnabled(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramSectionAppearance) {
       navigateTo(section(context, tdlib, SECTION_APPEARANCE));

@@ -1222,6 +1222,26 @@ public final class XgramSettings {
     put(KEY_COMPOSE_TGX_PAGES, value);
   }
 
+  // Pure black (Appearance, under Expressive design; see com.fahadali.xgram.appearance.XgramAmoled): black Material You
+  // surfaces in night mode. Off by default. Cached there too: read while colors are resolved.
+
+  public static final String KEY_PURE_BLACK = "xgram_pure_black";
+
+  private volatile Boolean pureBlack;
+
+  public boolean pureBlack () {
+    Boolean value = pureBlack;
+    if (value == null) {
+      pureBlack = value = pmc().getBoolean(KEY_PURE_BLACK, false);
+    }
+    return value;
+  }
+
+  public void setPureBlack (boolean value) {
+    pureBlack = value;
+    put(KEY_PURE_BLACK, value);
+  }
+
   // Two panes (Appearance > Layout, see com.fahadali.xgram.layout.XgramTwoPane): how wide the chat list pane is.
   // Read while measuring the panes, so cached.
 
