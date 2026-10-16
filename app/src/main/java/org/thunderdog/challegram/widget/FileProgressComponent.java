@@ -28,6 +28,7 @@ import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.Interpolator;
 
+import androidx.annotation.ColorInt;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -663,7 +664,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
         progress.setBounds(x - originRadius, y - originRadius, x + originRadius, y + originRadius);
       } else if (isVideoStreaming()) {
         updateVsRect();
-        progress.setRadius(getRadius() - Screen.dp(4f));
+        progress.setRadius(getRadius() - Screen.dp(xgramChipCap() ? 2f : 4f));
         progress.setBounds(vsDownloadRect.left, vsDownloadRect.top, vsDownloadRect.right, vsDownloadRect.bottom);
       } else {
         if (xgramStyle() != XgramM3MediaButton.NONE) {
@@ -697,6 +698,10 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
 
   public int getRadius () {
     if (isVideoStreaming()) {
+      if (xgramChipCap()) {
+        // XGram M3E: the download disk is the left cap of the 20dp duration chip
+        return Math.min(Screen.dp(XGRAM_CHIP_CAP_RADIUS), Math.min(right - left, bottom - top) / 2);
+      }
       return Math.min(Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_LARGE ? DEFAULT_STREAMING_RADIUS : DEFAULT_SMALL_STREAMING_RADIUS), Math.min(right - left, bottom - top) / 2);
     }
 
@@ -1254,7 +1259,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     final float scale = 1f - hideFactor;
     final float badgeAlpha = alpha * scale;
     final float badgeRadius = Screen.dp(XgramM3MediaButton.BADGE_RADIUS) * scale;
-    final int ringColor = backgroundColorProvider != null ? backgroundColorProvider.getContentReplaceColor() : Theme.fillingColor();
+    final int ringColor = xgramBehindColor();
     c.drawCircle(x, y, badgeRadius + Screen.dp(XgramM3MediaButton.BADGE_RING) * scale, Paints.fillingPaint(ColorUtils.alphaColor(badgeAlpha, ringColor)));
     c.drawCircle(x, y, badgeRadius, Paints.fillingPaint(ColorUtils.alphaColor(badgeAlpha, XgramM3MediaButton.badgeContainerColor())));
 
@@ -1475,6 +1480,48 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
     this.backgroundColorProvider = msg;
   }
 
+  // XGram M3E: the colors of the cut-outs (the badge's ring, the cloud's filling, the track's disc) where the component
+  // does not sit on the message's content color or on the window surface
+
+  private boolean xgramHasReplaceColor;
+  private @ColorInt int xgramReplaceColor;
+  private int xgramSurfaceRole = -1;
+
+  /**
+   * The color that replaces the message's content color behind the component (a link preview card's tint over the
+   * bubble), or none ({@code override} false).
+   */
+  public void setReplaceColorOverride (boolean override, @ColorInt int color) {
+    this.xgramHasReplaceColor = override;
+    this.xgramReplaceColor = color;
+  }
+
+  /**
+   * The Expressive surface role the component is drawn on outside messages (a shared media list tile is SURFACE_BRIGHT),
+   * or -1 for the window surface ({@link Theme#fillingColor()}).
+   */
+  public void setXgramSurfaceRole (int role) {
+    this.xgramSurfaceRole = role;
+  }
+
+  /** The surface outside a message: the tile's role while Expressive design is on, otherwise the window surface. */
+  private @ColorInt int xgramFillingColor () {
+    return xgramSurfaceRole != -1 && XgramExpressive.isEnabled() ? XgramExpressive.color(xgramSurfaceRole) : Theme.fillingColor();
+  }
+
+  /** A track's disc and glyphs, cut out of the cloud: the surface it is drawn on outside messages. */
+  private @ColorInt int xgramTrackCutOutColor () {
+    return backgroundColorProvider == null ? xgramFillingColor() : Theme.fillingColor();
+  }
+
+  /** The color behind the component: the override, the message's content color, or the surface it is drawn on. */
+  private @ColorInt int xgramBehindColor () {
+    if (xgramHasReplaceColor) {
+      return xgramReplaceColor;
+    }
+    return backgroundColorProvider != null ? backgroundColorProvider.getContentReplaceColor() : xgramFillingColor();
+  }
+
   private float calculateCloudHideFactor () {
     if (currentState == TdlibFilesManager.STATE_DOWNLOADED_OR_UPLOADED) {
       return 1f * (1f - cloudReverseHideFactor);
@@ -1592,10 +1639,10 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       cloudColor = ColorUtils.fromToArgb(inactiveColor, activeColor, colorFactor);
     }
     int fillingColor;
-    if (backgroundColorProvider != null) {
-      fillingColor = backgroundColorProvider.getContentReplaceColor();
+    if (xgramHasReplaceColor || backgroundColorProvider != null) {
+      fillingColor = xgramBehindColor();
     } else {
-      fillingColor = ColorUtils.alphaColor(alpha, Theme.fillingColor());
+      fillingColor = ColorUtils.alphaColor(alpha, xgramFillingColor());
     }
 
     if (!isTrack || progressFactor <= 1f) {
@@ -1604,7 +1651,8 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
       DrawAlgorithms.drawCloud(c, x, y, radius, circleFactor, ColorUtils.alphaColor(alpha, cloudColor), fillingPadding, fillingColor, isVideoStreaming());
 
       if (isTrack) {
-        int color = Theme.fillingColor();
+        // XGram M3E: the disc is the surface the row is drawn on (a shared media tile), so it reads as a cut-out
+        int color = xgramTrackCutOutColor();
         c.drawCircle(x, y, (radius + Screen.dp(1f)) * progressFactor, Paints.fillingPaint(color));
         // c.drawCircle(x, y, (radius - Screen.dp(1f)), Paints.strokeBigPaint(U.alphaColor(progressFactor, color)));
       }
@@ -1650,7 +1698,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
 
         int cx = x; int cy = y;
 
-        int progressColor = isTrack ? ColorUtils.alphaColor(alpha, Theme.fillingColor()) : ((int) (255f * alpha) << 24) | 0xffffff;
+        int progressColor = isTrack ? ColorUtils.alphaColor(alpha, xgramTrackCutOutColor()) : ((int) (255f * alpha) << 24) | 0xffffff;
 
         if (totalDistance > 0) {
           c.save();
@@ -1677,7 +1725,7 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
 
         int length, cy;
         if (isTrack) {
-          color = ColorUtils.alphaColor(alpha, Theme.fillingColor());
+          color = ColorUtils.alphaColor(alpha, xgramTrackCutOutColor());
           if (triangleBig == null) {
             int width = Screen.dp(9f);
             int height = Screen.dp(4f);
@@ -1914,9 +1962,20 @@ public class FileProgressComponent implements TdlibFilesManager.FileListener, Fa
 
   // Video streaming UI stuff
 
+  /**
+   * XGram M3E: in the single-line streaming chip (20dp tall, 8dp from the cell's top and left, MediaWrapper) the opaque
+   * download disk is the chip's left cap instead of a 24dp disk the chip clips.
+   */
+  private boolean xgramChipCap () {
+    return videoStreamingUiMode == STREAMING_UI_MODE_SMALL && xgramStyle() != XgramM3MediaButton.NONE;
+  }
+
+  private static final float XGRAM_CHIP_CAP_RADIUS = 10f;
+
   private void updateVsRect () {
+    final boolean xgramCap = xgramChipCap();
     int startX = left + Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_EXTRA_SMALL ? 4f : videoStreamingUiMode == STREAMING_UI_MODE_SMALL ? 8f : 14f) - vsPadding;
-    int startY = top + Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_EXTRA_SMALL ? 3f : videoStreamingUiMode == STREAMING_UI_MODE_SMALL ? 6f : 12f) + (isVideoStreamingOffsetNeeded ? Screen.dp(16f) : 0) - vsPadding;
+    int startY = top + Screen.dp(videoStreamingUiMode == STREAMING_UI_MODE_EXTRA_SMALL ? 3f : videoStreamingUiMode == STREAMING_UI_MODE_SMALL ? (xgramCap ? 8f : 6f) : 12f) + (isVideoStreamingOffsetNeeded ? Screen.dp(16f) : 0) - vsPadding;
     vsDownloadRect.set(
       startX, startY, startX + (getRadius() * 2), startY + (getRadius() * 2)
     );

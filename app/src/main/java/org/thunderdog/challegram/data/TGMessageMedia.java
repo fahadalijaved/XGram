@@ -17,6 +17,7 @@ package org.thunderdog.challegram.data;
 import android.graphics.Canvas;
 import android.graphics.RectF;
 import android.os.SystemClock;
+import android.text.TextPaint;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewParent;
@@ -488,15 +489,26 @@ public class TGMessageMedia extends TGMessage {
     }
 
     // A caption wider than the media widens it, up to the widest a text bubble gets (getCaptionMediaWidth)
-    final int captionMediaWidth = needFullWidth ? 0 : getCaptionMediaWidth(Math.max(maxWidth, origMaxWidth));
+    int captionMediaWidth = needFullWidth ? 0 : getCaptionMediaWidth(Math.max(maxWidth, origMaxWidth));
     if (captionMediaWidth > maxWidth) {
-      maxWidth = captionMediaWidth; // the media's own limit is narrower (landscape, the smallest screen side)
+      // The media's own limit is narrower (landscape, the smallest screen side). A single item keeps the height it
+      // has at that limit and center crops to the caption's width, instead of growing with it in both directions
+      // past the height limit; an album is not widened past the limit.
+      final MediaWrapper item = mosaicWrapper.isSingular() ? mosaicWrapper.getSingularItem() : null;
+      if (item != null && item.getContentWidth() > 0 && item.getContentHeight() > 0) {
+        final float fit = Math.min((float) maxWidth / (float) item.getContentWidth(), (float) maxHeight / (float) item.getContentHeight());
+        maxHeight = Math.max(1, Math.min(maxHeight, (int) ((float) item.getContentHeight() * fit)));
+        maxWidth = captionMediaWidth;
+      } else {
+        captionMediaWidth = maxWidth;
+      }
     }
 
     minWidth = Math.min(minWidth, maxWidth);
     minHeight = Math.min(minHeight, maxHeight);
     minWidth = Math.max(minWidth, captionMediaWidth);
 
+    mosaicWrapper.setStretchWidth(captionMediaWidth); // an album narrower than its caption is stretched to it
     mosaicWrapper.build(maxWidth, maxHeight, minWidth, minHeight, needFullWidth ? MosaicWrapper.MODE_FIT_WIDTH : MosaicWrapper.MODE_FIT_AS_IS, false);
 
     if (isHot()) {
@@ -526,20 +538,26 @@ public class TGMessageMedia extends TGMessage {
       return 0;
     }
     final int textSize = wrapper.getTextStyleProvider().getTextSizeInPixels();
-    if (captionMeasuredWrapper != wrapper || captionMeasuredMaxWidth != maxCaptionWidth || captionMeasuredTextSize != textSize) {
-      // Measured once per caption, width and text size: buildContent also runs on every frame of the inline
-      // comment button's animation, and the caption's final layout (at the media's width) stays cached in the wrapper
+    final int emojiScale = com.fahadali.xgram.XgramSettings.instance().emojiScale(); // part of the wrapper's layout key (big emoji)
+    if (captionMeasuredWrapper != wrapper || captionMeasuredMaxWidth != maxCaptionWidth || captionMeasuredTextSize != textSize || captionMeasuredEmojiScale != emojiScale) {
+      // Measured once per caption, width, text size and emoji scale: buildContent also runs on every frame of the
+      // inline comment button's animation, and the caption's final layout (at the media's width) stays cached in the
+      // wrapper
       wrapper.prepare(maxCaptionWidth);
       captionMeasuredWrapper = wrapper;
       captionMeasuredMaxWidth = maxCaptionWidth;
       captionMeasuredTextSize = textSize;
+      captionMeasuredEmojiScale = emojiScale;
       captionMeasuredWidth = wrapper.getWidth();
     }
-    return captionMeasuredWidth > 0 ? Math.min(maxMediaWidth, captionMeasuredWidth + xBubblePadding * 2) : 0;
+    // + 1: Text reports a line's width rounded down (an int sum of float word widths), so laid out again at exactly
+    // that width its last word no longer fits and wraps alone; one more pixel fits every line that fitted here and
+    // nothing that wrapped (the line breaks match this measuring pass)
+    return captionMeasuredWidth > 0 ? Math.min(maxMediaWidth, captionMeasuredWidth + 1 + xBubblePadding * 2) : 0;
   }
 
   private @Nullable TextWrapper captionMeasuredWrapper;
-  private int captionMeasuredMaxWidth, captionMeasuredTextSize, captionMeasuredWidth;
+  private int captionMeasuredMaxWidth, captionMeasuredTextSize, captionMeasuredEmojiScale, captionMeasuredWidth;
 
   @Override
   protected void onAnimatorAttachedToMessage (long messageId, FactorAnimator animator) {
@@ -593,7 +611,7 @@ public class TGMessageMedia extends TGMessage {
     String ttl = getHotTimerText();
     if (timerText == null || !timerText.equals(ttl)) {
       timerText = ttl;
-      timerWidth = (int) U.measureText(ttl, mHotPaint());
+      timerWidth = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3MediaButton.measureChipText(ttl) : (int) U.measureText(ttl, mHotPaint());
       return true;
     }
     return false;
@@ -654,10 +672,22 @@ public class TGMessageMedia extends TGMessage {
       }
 
       RectF rectF = Paints.getRectF();
-      rectF.set(pTimerLeft - Screen.dp(4f), pTimerTop + Screen.dp(4f), pTimerRight, pTimerTop + Screen.dp(4f) + Screen.dp(20f));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the on-media chip of the duration chip (MediaWrapper): 20dp, full corners on the 50% scrim, 8dp
+        // from the cell's start and bottom, 8dp padding, labelMedium (timerWidth is measured in it, updateTimerText)
+        final float chipLeft = mediaWrapper.getCellLeft() + Screen.dp(8f);
+        final float chipBottom = startY + mediaWrapper.getCellHeight() - Screen.dp(8f);
+        final float chipTop = chipBottom - Screen.dp(20f);
+        final float chipRight = chipLeft + timerWidth + Screen.dp(8f) * 2;
+        com.fahadali.xgram.appearance.XgramM3Content.drawMediaChip(c, chipLeft, chipTop, chipRight, chipBottom);
+        final TextPaint chipPaint = com.fahadali.xgram.appearance.XgramM3Content.onMediaLabelPaint();
+        c.drawText(timerText, chipLeft + Screen.dp(8f), (chipTop + chipBottom) / 2f - (chipPaint.ascent() + chipPaint.descent()) / 2f, chipPaint);
+      } else {
+        rectF.set(pTimerLeft - Screen.dp(4f), pTimerTop + Screen.dp(4f), pTimerRight, pTimerTop + Screen.dp(4f) + Screen.dp(20f));
 
-      c.drawRoundRect(rectF, Screen.dp(4f), Screen.dp(4f), Paints.fillingPaint(0x4c000000));
-      c.drawText(timerText, pTimerLeft, pTimerTop + Screen.dp(18f), Paints.colorPaint(mHotPaint(), 0xffffffff));
+        c.drawRoundRect(rectF, Screen.dp(4f), Screen.dp(4f), Paints.fillingPaint(0x4c000000));
+        c.drawText(timerText, pTimerLeft, pTimerTop + Screen.dp(18f), Paints.colorPaint(mHotPaint(), 0xffffffff));
+      }
 
       if (isHotTimerStarted() && !isOutgoing()) {
         int centerX = mediaWrapper.getCenterX();

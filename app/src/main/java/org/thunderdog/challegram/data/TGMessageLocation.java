@@ -211,6 +211,20 @@ public class TGMessageLocation extends TGMessage implements LiveLocationManager.
   /** XGram: the text block under the map in card mode: 10dp gap, a titleMedium line (24dp), a bodyMedium line (20dp), 2dp. */
   private static final float XGRAM_TEXT_GAP = 10f, XGRAM_TEXT_BLOCK = 56f;
 
+  /**
+   * XGram M3E: in card mode the time shares the address row (the address is ellipsized before it), so its baseline
+   * is the address's (previewHeight + 49.5dp) instead of 6dp under it. Reactions in the bubble move the time to their
+   * row at the bubble's bottom, so it goes back to the default offset as they appear.
+   */
+  @Override
+  protected int getBubbleTimePartOffsetY () {
+    if (xgramCardMode() && venue != null && trimmedSubtitle != null) {
+      final float reactions = useReactionBubbles() ? MathUtils.clamp(messageReactions.getVisibility()) : 0f;
+      return (int) MathUtils.fromTo(Screen.dp(14f), super.getBubbleTimePartOffsetY(), reactions);
+    }
+    return super.getBubbleTimePartOffsetY();
+  }
+
   @Override
   public boolean isEdited () {
     return false;

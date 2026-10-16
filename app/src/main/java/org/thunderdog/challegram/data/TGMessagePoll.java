@@ -953,7 +953,10 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
     com.fahadali.xgram.appearance.XgramM3Controls.drawRadio(c, cx, cy, ringColor, dotColor, dot);
   }
 
-  /** Results as M3 flat linear progress: 4dp, gap, track and stop dot; the percentage in labelLarge. */
+  /**
+   * Results as M3 flat linear progress: 4dp, gap, track and stop dot; the percentage in labelMedium (labelLarge's
+   * "100%" started before the bubble's start edge: it ends 8dp before the bar, 26dp from the content start).
+   */
   private void xgramDrawResult (Canvas c, OptionEntry option, int fromX, int toX, int lineY, int textY, float ratio, float visibility, boolean isChosen, boolean isQuizResult, boolean isCorrectOption, float selectionFactor, int textColor) {
     int active;
     if (isOutgoingBubble()) {
@@ -972,7 +975,7 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
       com.fahadali.xgram.appearance.XgramExpressive.withAlpha(active, visibility),
       com.fahadali.xgram.appearance.XgramExpressive.withAlpha(active, .24f * visibility));
     if (option.percentageStr != null) {
-      c.drawText(option.percentageStr, fromX - Screen.dp(8f), textY, com.fahadali.xgram.appearance.XgramM3Content.labelLargeEndPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(textColor, visibility)));
+      c.drawText(option.percentageStr, fromX - Screen.dp(8f), textY, com.fahadali.xgram.appearance.XgramM3Content.labelMediumEndPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(textColor, visibility)));
     }
   }
 

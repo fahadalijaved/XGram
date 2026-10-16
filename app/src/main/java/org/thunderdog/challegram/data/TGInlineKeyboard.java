@@ -186,7 +186,8 @@ public class TGInlineKeyboard {
   }
 
   private static int getButtonPadding () {
-    return Screen.dp(4f);
+    // XGram M3E: a label keeps clear of the rounded ends of a pill (and of a top-end corner icon)
+    return Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12f : 4f);
   }
 
   private static int getStrokePadding () {
@@ -611,6 +612,10 @@ public class TGInlineKeyboard {
       if (xgramM3) {
         xgramLayoutPath(rounder, row, column);
       }
+      final int cornerInset = xgramCornerInset();
+      if (progress != null && xgramProgressInset != cornerInset) {
+        setProgressBounds(); // the cell's place in the block, and so its top-end corner, is known now
+      }
 
       final boolean useBubbleMode = useWhiteMode();
       // float darkFactor = Theme.getDarkFactor();
@@ -724,7 +729,7 @@ public class TGInlineKeyboard {
             }
             Drawable icon = getSparseDrawable(iconRes, ColorId.NONE);
             int padding = Screen.dp(paddingDp);
-            Drawables.draw(c, icon, dirtyRect.right - icon.getMinimumWidth() - padding, dirtyRect.top + padding, useBubbleMode ?
+            Drawables.draw(c, icon, dirtyRect.right - icon.getMinimumWidth() - padding - cornerInset, dirtyRect.top + padding + cornerInset, useBubbleMode ?
               (progressFactor == 0f ? Paints.getInlineBubbleIconPaint(textColor) : Paints.getPorterDuffPaint(ColorUtils.alphaColor(1f - progressFactor, textColor))) :
               textColorFactor == 0f && progressFactor == 0f ? Paints.getInlineIconPorterDuffPaint(isOutBubble) : Paints.getPorterDuffPaint(ColorUtils.alphaColor(1f - progressFactor, ColorUtils.fromToArgb(iconColor, Theme.inlineTextActiveColor(), textColorFactor))));
             drawProgress(c, useBubbleMode, textColorFactor);
@@ -732,19 +737,19 @@ public class TGInlineKeyboard {
           }
           case TdApi.InlineKeyboardButtonTypeUrl.CONSTRUCTOR: {
             Drawable icon = getSparseDrawable(R.drawable.deproko_baseline_link_arrow_20, ColorId.NONE);
-            Drawables.draw(c, icon, dirtyRect.right - icon.getMinimumWidth(), dirtyRect.top, useBubbleMode ? Paints.getInlineBubbleIconPaint(textColor) : textColorFactor == 0f ? Paints.getInlineIconPorterDuffPaint(isOutBubble) : Paints.getPorterDuffPaint(ColorUtils.fromToArgb(iconColor, Theme.inlineTextActiveColor(), textColorFactor)));
+            Drawables.draw(c, icon, dirtyRect.right - icon.getMinimumWidth() - cornerInset, dirtyRect.top + cornerInset, useBubbleMode ? Paints.getInlineBubbleIconPaint(textColor) : textColorFactor == 0f ? Paints.getInlineIconPorterDuffPaint(isOutBubble) : Paints.getPorterDuffPaint(ColorUtils.fromToArgb(iconColor, Theme.inlineTextActiveColor(), textColorFactor)));
             break;
           }
           case TdApi.InlineKeyboardButtonTypeLoginUrl.CONSTRUCTOR: {
             Drawable icon = getSparseDrawable(R.drawable.deproko_baseline_link_arrow_20, ColorId.NONE);
-            Drawables.draw(c, icon, dirtyRect.right - icon.getMinimumWidth(), dirtyRect.top, useBubbleMode ? Paints.getInlineBubbleIconPaint(ColorUtils.alphaColor(1f - progressFactor, textColor)) : textColorFactor == 0f && progressFactor == 1f ? Paints.getInlineIconPorterDuffPaint(isOutBubble) : Paints.getPorterDuffPaint(ColorUtils.alphaColor(1f - progressFactor, ColorUtils.fromToArgb(iconColor, Theme.inlineTextActiveColor(), textColorFactor))));
+            Drawables.draw(c, icon, dirtyRect.right - icon.getMinimumWidth() - cornerInset, dirtyRect.top + cornerInset, useBubbleMode ? Paints.getInlineBubbleIconPaint(ColorUtils.alphaColor(1f - progressFactor, textColor)) : textColorFactor == 0f && progressFactor == 1f ? Paints.getInlineIconPorterDuffPaint(isOutBubble) : Paints.getPorterDuffPaint(ColorUtils.alphaColor(1f - progressFactor, ColorUtils.fromToArgb(iconColor, Theme.inlineTextActiveColor(), textColorFactor))));
             drawProgress(c, useBubbleMode, textColorFactor);
             break;
           }
           case TdApi.InlineKeyboardButtonTypeBuy.CONSTRUCTOR: {
             if (!StringUtils.isEmpty(currencyChar)) {
               int color = ColorUtils.alphaColor(1f - progressFactor, useBubbleMode ? textColor : ColorUtils.fromToArgb(iconColor, Theme.inlineTextActiveColor(), textColorFactor));
-              c.drawText(currencyChar, dirtyRect.right - Screen.dp(6f) - currencyCharWidth, dirtyRect.top + getStrokePadding() + Screen.dp(12f), Paints.getBoldTextPaint(CURRENCY_TEXT_SIZE_DP, color));
+              c.drawText(currencyChar, dirtyRect.right - Screen.dp(6f) - currencyCharWidth - cornerInset, dirtyRect.top + getStrokePadding() + Screen.dp(12f) + cornerInset, Paints.getBoldTextPaint(CURRENCY_TEXT_SIZE_DP, color));
             }
             drawProgress(c, useBubbleMode, textColorFactor);
             break;
@@ -1024,10 +1029,26 @@ public class TGInlineKeyboard {
     private @Nullable ProgressComponent progress;
     private FactorAnimator progressAnimator;
 
+    private int xgramProgressInset;
+
     private void setProgressBounds () {
       if (progress != null) {
-        progress.setBounds(dirtyRect.right - Screen.dp(16f), dirtyRect.top, dirtyRect.right, dirtyRect.top + Screen.dp(16f));
+        final int inset = xgramProgressInset = xgramCornerInset();
+        progress.setBounds(dirtyRect.right - Screen.dp(16f) - inset, dirtyRect.top + inset, dirtyRect.right - inset, dirtyRect.top + Screen.dp(16f) + inset);
       }
+    }
+
+    /**
+     * XGram M3E: how far the top-end decorations (the link arrow, the switch-inline, user and lock icons, the
+     * currency sign, the progress) move in from the corner on both axes. They sit where Telegram X's 6dp corner
+     * leaves room; an outer (20dp) or pill top-right corner would cut them, 4dp further in they stay inside it.
+     */
+    private int xgramCornerInset () {
+      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || xgramCornersDp == null) {
+        return 0;
+      }
+      final float corner = xgramCornersDp[1]; // top right: the decorations are drawn at the right edge in every direction
+      return corner == com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL || corner > com.fahadali.xgram.appearance.XgramM3Connected.INNER ? Screen.dp(4f) : 0;
     }
 
     private void animateProgressFactor (float toFactor) {

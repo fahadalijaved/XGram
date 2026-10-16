@@ -223,7 +223,8 @@ abstract class TGMessageServiceImpl extends TGMessage {
 
   @Override
   protected void buildContent (int maxWidth) {
-    int availWidth = Math.max(0, this.width - Screen.dp(12f) * 2);
+    // XGram M3E: the pill adds 12dp on both sides of the text, so a wrapped text keeps a 16dp margin to the edges
+    int availWidth = Math.max(0, this.width - (useBubbles() && com.fahadali.xgram.appearance.XgramW2Cards.on() ? Screen.dp((com.fahadali.xgram.appearance.XgramW2Cards.SERVICE_PADDING_H + 16f) * 2) : Screen.dp(12f) * 2));
 
     FormattedText formattedText =
       textCreator != null ?

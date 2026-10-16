@@ -862,6 +862,18 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
 
   private int roundings = ROUND_ALL_CORNERS;
 
+  // XGram M3E: media drawn on a tinted card (a link preview) fix their corners, and the download badge its ring, in
+  // the card's color over the bubble instead of the bubble's
+  private boolean xgramHasReplaceColor;
+  private int xgramReplaceColor;
+
+  /** The color behind the cell that the corner fixes and the badge ring take, or none ({@code override} false). */
+  public void setContentReplaceColorOverride (boolean override, int color) {
+    this.xgramHasReplaceColor = override;
+    this.xgramReplaceColor = color;
+    fileProgress.setReplaceColorOverride(override, color);
+  }
+
   public void setNeedRound (boolean needTopLeft, boolean needTopRight, boolean needBottomRight, boolean needBottomLeft) {
     int roundings = 0;
     if (needTopLeft) {
@@ -1081,7 +1093,7 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
 
       if (source != null && roundings != 0) {
         int radius = getRadius();
-        TGMessage.drawCornerFixes(c, source, 1f, cellLeft, cellTop, cellRight, cellBottom,
+        TGMessage.drawCornerFixes(c, xgramHasReplaceColor ? xgramReplaceColor : source.getContentReplaceColor(), 1f, cellLeft, cellTop, cellRight, cellBottom,
           (roundings & ROUND_TOP_LEFT) != 0 ? radius : 0,
           (roundings & ROUND_TOP_RIGHT) != 0 ? radius : 0,
           (roundings & ROUND_BOTTOM_RIGHT) != 0 ? radius : 0,
@@ -1112,8 +1124,11 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       final boolean xgramChip = com.fahadali.xgram.appearance.XgramExpressive.isEnabled(); // XGram M3E: full corner chip on the 50% scrim
       int pDurationCorners = isDoubleLine ? MathUtils.fromTo(Screen.dp(4f), Screen.dp(12f), dlFactor) : Screen.dp(4f);
       int pDurationTop = cellTop + Screen.dp(8f) + (needTopOffset ? Screen.dp(16f) : 0);
-      int pDurationLeft = cellLeft + Screen.dp(12f);
-      int pDurationRight = (int) (pDurationLeft + ((durationTrimmed != null && fileProgress.isUploading()) ? durationWidth : MathUtils.fromTo(durationWidthShort, durationWidth, dlFactor)) + ((doubleFpRadius) * (isStreamingUI ? dlFactor : 1f)) + ((isStreamingUI) ? MathUtils.fromTo(Screen.dp(4f), Screen.dp(isSmallStreamingUI ? 26f : 16f), dlFactor) : Screen.dp(4f)));
+      // XGram M3E: the full-corner chip keeps 8dp between its ends and the text (the streaming chip keeps its offsets:
+      // its text follows the download disk)
+      final boolean xgramPaddedChip = xgramChip && !isStreamingUI;
+      int pDurationLeft = cellLeft + Screen.dp(xgramPaddedChip ? 16f : 12f);
+      int pDurationRight = (int) (pDurationLeft + ((durationTrimmed != null && fileProgress.isUploading()) ? durationWidth : MathUtils.fromTo(durationWidthShort, durationWidth, dlFactor)) + ((doubleFpRadius) * (isStreamingUI ? dlFactor : 1f)) + ((isStreamingUI) ? MathUtils.fromTo(Screen.dp(4f), Screen.dp(isSmallStreamingUI ? 26f : 16f), dlFactor) : Screen.dp(xgramPaddedChip ? 8f : 4f)));
       int pDurationBottom = pDurationTop + (isDoubleLine ? MathUtils.fromTo(durationHeight(), (doubleFpRadius) + Screen.dp(8f), dlFactor) : durationHeight());
 
       float cellCenterX = cellLeft + cellWidth / 2f;
@@ -1123,7 +1138,7 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       int radiusCloud = Screen.dp(14f);
 
       actionButtonRect.set(cellCenterX - radius, cellCenterY - radius + (isSmallStreamingUI ? 0 : Screen.dp(6f)), cellCenterX + radius, cellCenterY + radius);
-      durationRect.set(pDurationLeft - Screen.dp(4f), pDurationTop, pDurationRight, pDurationBottom);
+      durationRect.set(pDurationLeft - Screen.dp(xgramPaddedChip ? 8f : 4f), pDurationTop, pDurationRight, pDurationBottom);
 
       //c.drawRect(durationRect, Paints.getPorterDuffPaint(Color.GREEN));
       //c.drawRect(actionButtonRect, Paints.getPorterDuffPaint(Color.RED));
@@ -1242,8 +1257,41 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     }
 
     final int radius1, radius2;
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram M3E: the viewer zoom starts and ends with the corners the bubble uses (TGMessage bubble path)
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && source != null && source.useBubbles()) {
+      // XGram M3E: the viewer zoom starts and ends with the corners the cell is drawn with. Where the cell meets the
+      // bubble's corner that is the bubble's corner fix (TGMessage.drawCornerFixes: its 2dp stroke leaves the radius
+      // minus 1dp; 0 at a tail corner), where the cell rounds itself (roundings) its own corner fix, and square
+      // elsewhere (album seams, above a caption)
+      final int cellRadius = Math.max(getRadius() / 2, getRadius() - Screen.dp(1f));
+      int topLeft = (roundings & ROUND_TOP_LEFT) != 0 ? cellRadius : 0;
+      int topRight = (roundings & ROUND_TOP_RIGHT) != 0 ? cellRadius : 0;
+      int bottomRight = (roundings & ROUND_BOTTOM_RIGHT) != 0 ? cellRadius : 0;
+      int bottomLeft = (roundings & ROUND_BOTTOM_LEFT) != 0 ? cellRadius : 0;
+      if (source.useBubble() && source.needBubbleCornerFix()) {
+        final RectF bubbleRect = source.bubblePathRect;
+        final float padding = source.getBubbleContentPadding();
+        final float tolerance = Screen.dp(1f);
+        final boolean atLeft = Math.abs(lastLeft - (bubbleRect.left + padding)) <= tolerance;
+        final boolean atTop = Math.abs(lastTop - (bubbleRect.top + padding)) <= tolerance;
+        final boolean atRight = Math.abs(cellRight - (bubbleRect.right - padding)) <= tolerance;
+        final boolean atBottom = Math.abs(cellBottom - (bubbleRect.bottom - padding)) <= tolerance;
+        final int fix = Screen.dp(1f);
+        if (atLeft && atTop) {
+          topLeft = Math.max(topLeft, (int) source.getBubbleTopLeftRadius() - fix);
+        }
+        if (atRight && atTop) {
+          topRight = Math.max(topRight, (int) source.getBubbleTopRightRadius() - fix);
+        }
+        if (atRight && atBottom) {
+          bottomRight = Math.max(bottomRight, (int) source.getBubbleBottomRightRadius() - fix);
+        }
+        if (atLeft && atBottom) {
+          bottomLeft = Math.max(bottomLeft, (int) source.getBubbleBottomLeftRadius() - fix);
+        }
+      }
+      thumbLocation.setRoundings(Math.max(0, topLeft), Math.max(0, topRight), Math.max(0, bottomRight), Math.max(0, bottomLeft));
+      return finishMediaThumbLocation(view, viewTop, viewBottom, top);
+    } else if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       radius1 = Screen.dp(com.fahadali.xgram.appearance.XgramM3Chat.bubbleMergeRadius());
       radius2 = useBubbles() ? (int) ((float) Screen.dp(com.fahadali.xgram.appearance.XgramM3Chat.bubbleRadius()) / 1.5f) : 0;
     } else {
@@ -1256,7 +1304,10 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       (roundings & ROUND_BOTTOM_RIGHT) != 0 ? radius1 : radius2,
       (roundings & ROUND_BOTTOM_LEFT) != 0 ? radius1 : radius2
     );
+    return finishMediaThumbLocation(view, viewTop, viewBottom, top);
+  }
 
+  private MediaViewThumbLocation finishMediaThumbLocation (View view, int viewTop, int viewBottom, int top) {
     int actualTop = lastTop + viewTop;
     int actualBottom = (view.getMeasuredHeight() - cellBottom) + viewBottom;
 
@@ -1398,9 +1449,9 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
   /**
    * XGram M3E: the bubble time chip ("5:51 am", pin, views, ticks) that the message draws over its media, in the
    * message view's coordinates, so the inline player's seek track can end before it instead of running under it.
-   * Mirrors TGMessage.drawBubbleTimePart: a 21dp chip from 6dp before the time part to 6dp after it, 4dp above the
-   * 16dp time line that sits 8dp over the content bottom. False when no chip is drawn over the media (a caption or
-   * a footer puts the time inside the bubble).
+   * Mirrors TGMessage.drawBubbleTimePart: with Expressive design the 20dp on-media chip from 8dp before the time part
+   * to 8dp after it (otherwise a 21dp chip with 6dp), around the 16dp time line that sits 8dp over the content
+   * bottom. False when no chip is drawn over the media (a caption or a footer puts the time inside the bubble).
    */
   public boolean xgramTimeChipRect (@NonNull RectF out) {
     final TGMessage source = this.source;
@@ -1415,19 +1466,29 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
     if (innerWidth <= 0) {
       return false;
     }
+    // TGMessage.drawBubbleTimePart draws it as the on-media chip (20dp, 8dp padding) when xgramMediaTimeChip()
+    final boolean mediaChip = source.xgramMediaTimeChip();
+    final int chipShift = mediaChip ? Screen.dp(TGMessage.XGRAM_TIME_CHIP_SHIFT) : 0;
     final int startX;
     if (Config.MOVE_BUBBLE_TIME_RTL_TO_LEFT && source.moveBubbleTimePartToLeft()) {
-      startX = source.getActualLeftContentEdge() + Screen.dp(10f);
+      startX = source.getActualLeftContentEdge() + Screen.dp(10f) + chipShift;
     } else {
-      startX = source.getActualRightContentEdge() - (innerWidth + Screen.dp(11f));
+      startX = source.getActualRightContentEdge() - (innerWidth + Screen.dp(11f) + chipShift);
     }
     int startY = source.getBottomContentEdge() - TGMessage.getBubbleTimePartHeight() - source.getBubbleTimePartOffsetY();
     if (source.commentButton.isVisible() && source.commentButton.isInline()) {
       startY -= source.commentButton.getAnimatedHeight(0, source.commentButton.getVisibility());
     }
     startY -= Screen.dp(4f);
-    final int padding = Screen.dp(6f);
-    out.set(startX - padding, startY, startX + innerWidth + padding, startY + Screen.dp(21f));
+    if (mediaChip) {
+      final int padding = Screen.dp(TGMessage.XGRAM_TIME_CHIP_PADDING);
+      final float centerY = startY + Screen.dp(10.5f);
+      final float halfHeight = Screen.dp(TGMessage.XGRAM_TIME_CHIP_HEIGHT) / 2f;
+      out.set(startX - padding, centerY - halfHeight, startX + innerWidth + padding, centerY + halfHeight);
+    } else {
+      final int padding = Screen.dp(6f);
+      out.set(startX - padding, startY, startX + innerWidth + padding, startY + Screen.dp(21f));
+    }
     return true;
   }
 
@@ -1465,7 +1526,8 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
   private String durationTrimmed, durationAlternative;
 
   private void trimDuration () {
-    int width = cellWidth - Screen.dp(4f) * 3;
+    // XGram M3E: the chip's text padding is 8dp instead of 4dp on both sides (draw)
+    int width = cellWidth - Screen.dp(4f) * 3 - (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(8f) : 0);
     this.durationTrimmed = null;
     this.durationWidth = 0;
     if (width > 0) {

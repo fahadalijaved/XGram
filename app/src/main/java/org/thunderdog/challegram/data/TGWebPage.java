@@ -63,6 +63,7 @@ import java.util.Locale;
 
 import me.vkryl.android.util.ClickHelper;
 import me.vkryl.android.util.ViewProvider;
+import me.vkryl.core.ColorUtils;
 import me.vkryl.core.StringUtils;
 import me.vkryl.core.lambda.Destroyable;
 import tgx.td.Td;
@@ -166,7 +167,7 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
   public void buildLayout (int width) {
     this.availWidth = width;
 
-    int maxWidth = width - paddingLeft;
+    int maxWidth = width - paddingLeft - xgramEndInset();
     height = 0;
 
     if (isAdvertisement) {
@@ -684,7 +685,7 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
     int minHeight = 0;
     if (!linkPreview.showLargeMedia && setSmallMedia()) {
       textMaxWidth = maxWidth - imageMarginLeft - imageSize;
-      imageX = availWidth - imageSize;
+      imageX = availWidth - imageSize - xgramEndInset();
       imageY = imageOffset;
       imageWidth = imageHeight = imageSize;
       minHeight = imageY + imageHeight + lineAdd;
@@ -1038,7 +1039,7 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
       rippleButtonY = height + Screen.dp(6f);
       height = rippleButtonY + TGInlineKeyboard.getButtonHeight();
       rippleButton = new TGInlineKeyboard(parent, false);
-      rippleButton.setCustom(icon, text, availWidth - paddingLeft, type != TYPE_TELEGRAM_AD, this);
+      rippleButton.setCustom(icon, text, availWidth - paddingLeft - xgramEndInset(), type != TYPE_TELEGRAM_AD, this);
     }
   }
 
@@ -1207,12 +1208,17 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
       xgramCard = new com.fahadali.xgram.appearance.XgramM3Content.TonalCard();
     }
     final int lineColor = parent.getVerticalLineColor();
-    final int fillColor = parent.isOutgoingBubble() ?
-      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), .08f) :
-      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(lineColor, .10f);
+    final int fillColor = xgramCardFillColor(lineColor);
     final int outset = Screen.dp(2f);
     xgramCard.draw(c, startX, startY - outset, startX + previewWidth, startY + height + outset,
       Screen.dp(com.fahadali.xgram.appearance.XgramM3Content.CARD_CORNER_DP), fillColor, lineColor, lineWidth, rtl);
+  }
+
+  /** XGram: the card's tint: onPrimaryContainer at 8% in outgoing bubbles, the line color at 10% elsewhere. */
+  private int xgramCardFillColor (int lineColor) {
+    return parent.isOutgoingBubble() ?
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), .08f) :
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(lineColor, .10f);
   }
 
   /** XGram: the duration chip as a full-corner chip on the on-media scrim, labelMedium white. */
@@ -1271,11 +1277,21 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
     if (type != TYPE_TELEGRAM_AD) {
       drawHeader(c, startX, startY, previewWidth, rtl, textMediaReceiver);
     }
+    // XGram M3E: what lies on the card fixes its corners and cuts its rings in the card's tint over the bubble
+    final boolean onCard = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && type != TYPE_TELEGRAM_AD;
+    final int contentReplaceColor = parent != null ? parent.getContentReplaceColor() : 0;
+    final int cardReplaceColor = onCard && parent != null ? ColorUtils.compositeColor(contentReplaceColor, xgramCardFillColor(parent.getVerticalLineColor())) : contentReplaceColor;
+    final int endInset = xgramEndInset();
     if (component != null) {
-      component.draw(view, c, rtl ? startX : startX + paddingLeft, startY + componentY, preview, receiver, parent != null ? parent.getContentBackgroundColor() : 0, parent != null ? parent.getContentReplaceColor() : 0, alpha, 0f);
+      final FileProgressComponent componentProgress = component.getFileProgress();
+      if (componentProgress != null) {
+        componentProgress.setReplaceColorOverride(onCard, cardReplaceColor);
+      }
+      component.draw(view, c, rtl ? startX + endInset : startX + paddingLeft, startY + componentY, preview, receiver, parent != null ? parent.getContentBackgroundColor() : 0, cardReplaceColor, alpha, 0f);
     } else if (mediaWrapper != null) {
       final int imageX = rtl ? (startX + previewWidth - this.imageX - this.imageWidth) : startX + this.imageX;
       final int imageY = startY + this.imageY;
+      mediaWrapper.setContentReplaceColorOverride(onCard, cardReplaceColor);
       mediaWrapper.draw(view, c, imageX, imageY, preview, receiver, 1f);
       String text = null;
       float textWidth = 0;
@@ -1312,7 +1328,7 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
       if (type == TYPE_TELEGRAM_AD) {
         rippleButton.draw(view, c, startX, startY + rippleButtonY);
       } else {
-        rippleButton.draw(view, c, rtl ? startX : startX + paddingLeft, startY + rippleButtonY);
+        rippleButton.draw(view, c, rtl ? startX + endInset : startX + paddingLeft, startY + rippleButtonY);
       }
     }
   }
@@ -1326,7 +1342,19 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
   }
 
   public int getWidth () {
-    return rippleButton != null ? availWidth : Math.max(simpleImageWidth != 0 ? simpleImageWidth + paddingLeft : 0, Math.max(component != null ? paddingLeft + component.getWidth() : 0, Math.max(siteName != null ? paddingLeft + siteName.getWidth() : 0, Math.max(mediaWrapper != null ? imageX + imageWidth : 0, Math.max(title != null ? paddingLeft + title.getWidth() : 0, description != null ? paddingLeft + description.getWidth() : 0)))));
+    if (rippleButton != null) {
+      return availWidth;
+    }
+    final int contentWidth = Math.max(simpleImageWidth != 0 ? simpleImageWidth + paddingLeft : 0, Math.max(component != null ? paddingLeft + component.getWidth() : 0, Math.max(siteName != null ? paddingLeft + siteName.getWidth() : 0, Math.max(mediaWrapper != null ? imageX + imageWidth : 0, Math.max(title != null ? paddingLeft + title.getWidth() : 0, description != null ? paddingLeft + description.getWidth() : 0)))));
+    return contentWidth > 0 ? contentWidth + xgramEndInset() : 0;
+  }
+
+  /**
+   * XGram M3E: the space between the content and the card's end edge, as at its start (the 3dp line and 7dp), so text
+   * does not wrap at the card's edge and the thumbnail, the media and the button do not touch it. 0 without a card.
+   */
+  private int xgramEndInset () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isAdvertisement ? paddingLeft : 0;
   }
 
   public int getMaxWidth () {

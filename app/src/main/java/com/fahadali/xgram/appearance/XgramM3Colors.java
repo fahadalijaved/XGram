@@ -125,6 +125,10 @@ public final class XgramM3Colors {
       ColorId.messageSwipeBackground, ColorId.sectionedScrollBar, ColorId.iv_textCodeBackgroundPressed,
       ColorId.chatKeyboardButton);
     roleAlpha(SURFACE_CONTAINER_HIGH, .92f, ColorId.bubble_date, ColorId.bubble_overlay);
+    // The time chip under stickers, emoji and round videos (and their duration chip): the date chip's pill with
+    // onSurfaceVariant text instead of white on 25% black over the solid surface
+    roleAlpha(SURFACE_CONTAINER_HIGH, .92f, ColorId.bubble_mediaTime, ColorId.bubble_mediaTime_noWallpaper);
+    role(ON_SURFACE_VARIANT, ColorId.bubble_mediaTimeText, ColorId.bubble_mediaTimeText_noWallpaper);
     transparent(ColorId.bubble_date_noWallpaper, ColorId.bubble_overlay_noWallpaper, ColorId.statusBar,
       ColorId.tooltip_outline, ColorId.bubbleIn_outline, ColorId.bubbleOut_outline);
     // Pressed rows that swap their fill (state list drawables): onSurface .10 over the surface, opaque.

@@ -289,6 +289,15 @@ public class MosaicWrapper implements FactorAnimator.Target, ComplexReceiver.Key
   private int layoutWidth, layoutHeight, minLayoutWidth, minLayoutHeight;
   private int fitMode;
   private float sumAspectRatio;
+  private int stretchWidth, builtStretchWidth;
+
+  /**
+   * The width an album laid out narrower is stretched sideways to (its caption's width, TGMessageMedia), or 0 for
+   * none. Only {@link #MODE_FIT_AS_IS} albums stretch; the next {@code build} applies it.
+   */
+  public void setStretchWidth (int stretchWidth) {
+    this.stretchWidth = Math.max(0, stretchWidth);
+  }
 
   private MosaicItemInfo[] mosaicItems;
   private int mosaicWidth, mosaicHeight;
@@ -310,7 +319,7 @@ public class MosaicWrapper implements FactorAnimator.Target, ComplexReceiver.Key
       return MOSAIC_NOT_CHANGED;
     }
 
-    if (built && this.layoutWidth == layoutWidth && this.layoutHeight == layoutHeight && this.minLayoutWidth == minLayoutWidth && this.minLayoutHeight == minLayoutHeight && this.fitMode == fitMode) {
+    if (built && this.layoutWidth == layoutWidth && this.layoutHeight == layoutHeight && this.minLayoutWidth == minLayoutWidth && this.minLayoutHeight == minLayoutHeight && this.fitMode == fitMode && this.builtStretchWidth == this.stretchWidth) {
       return MOSAIC_NOT_CHANGED;
     }
 
@@ -319,6 +328,7 @@ public class MosaicWrapper implements FactorAnimator.Target, ComplexReceiver.Key
     this.minLayoutWidth = minLayoutWidth;
     this.minLayoutHeight = minLayoutHeight;
     this.fitMode = fitMode;
+    this.builtStretchWidth = this.stretchWidth;
     this.built = false;
 
     final int itemCount = this.items.size();
@@ -738,8 +748,10 @@ public class MosaicWrapper implements FactorAnimator.Target, ComplexReceiver.Key
       }
     }
 
-    if (fitMode == MODE_FIT_AS_IS) {
-      stretchToMinWidth(itemInfos, minLayoutWidth, spacing);
+    if (fitMode == MODE_FIT_AS_IS && stretchWidth > 0) {
+      // Only for the caption (setStretchWidth): the minimum layout width also carries the 160dp floor and the inline
+      // comment button's animated width, which never stretched an album
+      stretchToMinWidth(itemInfos, Math.min(stretchWidth, layoutWidth), spacing);
     }
 
     int mosaicWidth = 0;
