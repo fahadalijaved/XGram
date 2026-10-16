@@ -195,6 +195,8 @@ public final class XgramUpdates {
     public final boolean isStable;
     /** The bot's "what's new" reply, or the caption when there is none. */
     public String changelog;
+    /** XGram M3E r5: {@link #changelog} with its formatting (the reply's entities), when it came from the reply. */
+    public @Nullable TdApi.FormattedText changelogText;
 
     Found (Tdlib tdlib, Tdlib.UpdateFileInfo file, TdApi.Message message, String versionName, int versionCode, String sha256, boolean isStable) {
       this.tdlib = tdlib;
@@ -428,6 +430,7 @@ public final class XgramUpdates {
         boolean isReply = message.replyTo instanceof TdApi.MessageReplyToMessage &&
           ((TdApi.MessageReplyToMessage) message.replyTo).messageId == found.message.id;
         if (isReply || isNotesFor(firstLine(text), heading)) {
+          found.changelogText = stripHeading(((TdApi.MessageText) message.content).text);
           return stripHeading(text);
         }
       }
@@ -568,6 +571,46 @@ public final class XgramUpdates {
     return text.trim();
   }
 
+  /** {@link #stripHeading(String)} keeping the formatting: the same characters are cut from the formatted text. */
+  private static TdApi.FormattedText stripHeading (TdApi.FormattedText formatted) {
+    final String text = formatted.text != null ? formatted.text : "";
+    String first = firstLine(text);
+    int start = first.contains("what's new") && first.length() < text.length() ? first.length() : 0;
+    int end = text.length();
+    while (start < end && Character.isWhitespace(text.charAt(start))) {
+      start++;
+    }
+    while (end > start && Character.isWhitespace(text.charAt(end - 1))) {
+      end--;
+    }
+    return start == 0 && end == text.length() ? formatted : tgx.td.Td.substring(formatted, start, end);
+  }
+
+  /** XGram M3E r5: the first {@code maxLines} non-empty lines of the changelog (an ellipsis when there are more), or null. */
+  public static @Nullable String changelogHead (@Nullable Found found, int maxLines) {
+    if (found == null || StringUtils.isEmpty(found.changelog)) {
+      return null;
+    }
+    StringBuilder b = new StringBuilder();
+    int count = 0;
+    for (String line : found.changelog.split("\n")) {
+      String trimmed = line.trim();
+      if (trimmed.isEmpty()) {
+        continue;
+      }
+      if (count == maxLines) {
+        b.append("\n…");
+        break;
+      }
+      if (b.length() > 0) {
+        b.append('\n');
+      }
+      b.append(trimmed);
+      count++;
+    }
+    return b.length() > 0 ? b.toString() : null;
+  }
+
   // Prompt actions
 
   /** The changelog, with Download (while the update isn't downloaded yet) and Open post. */
@@ -575,11 +618,70 @@ public final class XgramUpdates {
     if (found == null || c.isDestroyed()) {
       return;
     }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      showWhatsNewM3(c, found, download);
+      return;
+    }
     AlertDialog.Builder b = new AlertDialog.Builder(c.context(), Theme.dialogTheme());
     b.setTitle(Lang.getString(R.string.XgramUpdateWhatsNewTitle, found.versionName));
     b.setMessage(StringUtils.isEmpty(found.changelog) ? Lang.getString(R.string.XgramUpdateNoChangelog) : found.changelog);
     // Two short buttons in one row: a third (Open post, already in the update prompt) made the theme stack them in a
     // scrolling area, one of them drawn without text.
+    if (download != null && c.context().appUpdater().state() == AppUpdater.State.AVAILABLE) {
+      b.setPositiveButton(Lang.getString(R.string.XgramUpdateDownload), (dialog, which) -> download.run());
+    } else {
+      b.setPositiveButton(Lang.getString(R.string.XgramUpdateOpenPost), (dialog, which) -> openPost(c, found));
+    }
+    b.setNegativeButton(Lang.getString(R.string.XgramUpdateClose), (dialog, which) -> dialog.dismiss());
+    c.showAlert(b);
+  }
+
+  /**
+   * XGram M3E r5: the changelog as an M3 dialog: "What's new", the version as a supporting line (bodyMedium,
+   * onSurfaceVariant), then the notes with their formatting and links (bodyMedium, onSurfaceVariant) in a scroll capped
+   * at 60% of the screen; "Download" while it isn't downloaded yet (else "Open post") and "Close".
+   */
+  private static void showWhatsNewM3 (ViewController<?> c, Found found, @Nullable Runnable download) {
+    final android.content.Context context = c.context();
+    final int maxHeight = Math.round(org.thunderdog.challegram.tool.Screen.currentHeight() * .6f);
+    android.widget.LinearLayout column = new android.widget.LinearLayout(context);
+    column.setOrientation(android.widget.LinearLayout.VERTICAL);
+    column.setPadding(org.thunderdog.challegram.tool.Screen.dp(24f), 0, org.thunderdog.challegram.tool.Screen.dp(24f), 0);
+
+    android.widget.TextView versionView = new org.thunderdog.challegram.widget.NoScrollTextView(context);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(versionView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+    versionView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+    versionView.setTextAlignment(android.view.View.TEXT_ALIGNMENT_VIEW_START);
+    versionView.setText(Lang.getString(R.string.XgramUpdateWhatsNewTitle, found.versionName));
+    column.addView(versionView, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    org.thunderdog.challegram.widget.CustomTextView notes = new org.thunderdog.challegram.widget.CustomTextView(context, found.tdlib);
+    notes.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M,
+      com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)));
+    notes.setTextColorId(org.thunderdog.challegram.theme.ColorId.textLight);
+    notes.setPadding(0, org.thunderdog.challegram.tool.Screen.dp(16f), 0, org.thunderdog.challegram.tool.Screen.dp(8f));
+    if (found.changelogText != null && !StringUtils.isEmpty(found.changelogText.text)) {
+      notes.setText(found.changelogText.text, org.thunderdog.challegram.util.text.TextEntity.valueOf(found.tdlib, found.changelogText, null), false);
+    } else {
+      notes.setText(StringUtils.isEmpty(found.changelog) ? Lang.getString(R.string.XgramUpdateNoChangelog) : found.changelog, null, false);
+    }
+    android.widget.ScrollView scroll = new android.widget.ScrollView(context) {
+      @Override
+      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+        int max = maxHeight;
+        if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+          max = Math.min(max, MeasureSpec.getSize(heightMeasureSpec));
+        }
+        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(max, MeasureSpec.AT_MOST));
+      }
+    };
+    scroll.setOverScrollMode(android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+    scroll.addView(notes, new android.widget.FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+    column.addView(scroll, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    AlertDialog.Builder b = new AlertDialog.Builder(context, Theme.dialogTheme());
+    b.setTitle(Lang.getString(R.string.XgramUpdateWhatsNew));
+    b.setView(column);
     if (download != null && c.context().appUpdater().state() == AppUpdater.State.AVAILABLE) {
       b.setPositiveButton(Lang.getString(R.string.XgramUpdateDownload), (dialog, which) -> download.run());
     } else {
