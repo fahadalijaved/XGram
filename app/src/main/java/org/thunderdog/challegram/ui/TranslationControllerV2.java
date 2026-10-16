@@ -611,13 +611,18 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
     @Override
     protected void onAfterCreateView () {
-      setLickViewColor(Theme.getColor(ColorId.headerLightBackground));
+      setLickViewColor(xgramLickColor());
     }
 
     @Override
     public void onThemeColorsChanged (boolean areTemp, ColorState state) {
       super.onThemeColorsChanged(areTemp, state);
-      setLickViewColor(Theme.getColor(ColorId.headerLightBackground));
+      setLickViewColor(xgramLickColor());
+    }
+
+    /** XGram M3E: the strip above the docked sheet is the sheet colour (surfaceContainerLow), as its header. */
+    private int xgramLickColor () {
+      return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor() : Theme.getColor(ColorId.headerLightBackground);
     }
 
     @Override
@@ -891,7 +896,9 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
       languageView.titleView.setText(Lang.getLanguageName(language, language));
       /*languageView.titleView.setTranslationY(isOriginal ? -Screen.dp(9.5f) : 0);*/
       languageView.subtitleView.setVisibility(/*isOriginal ? View.VISIBLE : */ View.GONE);
-      languageView.setPadding(Screen.dp(16), 0, Screen.dp((isSelected || isOriginal || isRecent) ? 40 : 16), 0);
+      // XGram M3E: menu items keep 12dp from the menu's edges (the trailing icon's 40dp stays)
+      final int start = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12 : 16);
+      languageView.setPadding(start, 0, Screen.dp((isSelected || isOriginal || isRecent) ? 40 : (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12 : 16)), 0);
       languageView.updateDrawable();
       languageView.invalidate();
     }
@@ -910,7 +917,9 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
       super(context);
 
       Views.setClickable(this);
-      RippleSupport.setSimpleWhiteBackground(this, themeProvider);
+      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram M3E: no white fill on the menu surface (state layer below)
+        RippleSupport.setSimpleWhiteBackground(this, themeProvider);
+      }
 
       titleView = new TextView(context);
       titleView.setTextColor(Theme.getColor(ColorId.text));
@@ -930,6 +939,31 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
         themeProvider.addThemeTextColorListener(titleView, ColorId.text);
         themeProvider.addThemeTextColorListener(subtitleView, ColorId.textLight);
       }
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: an M3 menu item: bodyLarge / bodySmall, a 12dp-corner onSurfaceVariant state layer, and the
+        // selected language on a secondaryContainer pill with a primary check (dispatchDraw)
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(titleView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+        com.fahadali.xgram.appearance.XgramExpressive.applyText(subtitleView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, false);
+        com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable state = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(this, 0,
+          com.fahadali.xgram.appearance.XgramExpressive.CORNER_M, com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
+        state.setSize(ITEM_WIDTH - 8f, ITEM_HEIGHT, Gravity.CENTER);
+        setWillNotDraw(false);
+      }
+    }
+
+    // XGram M3E menu item geometry (dp)
+    private static final float ITEM_WIDTH = 178f, ITEM_HEIGHT = 48f;
+    private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+
+    @Override
+    protected void onDraw (Canvas canvas) {
+      super.onDraw(canvas);
+      if (isSelected && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // the selected item's pill, inside the state layer's box (4dp from the menu's sides)
+        xgramRect.set(Screen.dp(4f), 0, getMeasuredWidth() - Screen.dp(4f), getMeasuredHeight());
+        final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
+        canvas.drawRoundRect(xgramRect, radius, radius, org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER)));
+      }
     }
 
     public void updateDrawable () {
@@ -946,14 +980,16 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
     @Override
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-      super.onMeasure(MeasureSpec.makeMeasureSpec(Screen.dp(178), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Screen.dp(50), MeasureSpec.EXACTLY));
+      super.onMeasure(MeasureSpec.makeMeasureSpec(Screen.dp(178), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ITEM_HEIGHT : 50), MeasureSpec.EXACTLY));
     }
 
     @Override
     protected void dispatchDraw (Canvas canvas) {
       super.dispatchDraw(canvas);
       if (drawable != null) {
-        Drawables.draw(canvas, drawable, getMeasuredWidth() - Screen.dp(40), Screen.dp(13), PorterDuffPaint.get(isSelected ? ColorId.iconActive : ColorId.icon));
+        // XGram M3E: the icon centred in the 48dp item
+        final int top = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? (getMeasuredHeight() - drawable.getMinimumHeight()) / 2 : Screen.dp(13);
+        Drawables.draw(canvas, drawable, getMeasuredWidth() - Screen.dp(40), top, PorterDuffPaint.get(isSelected ? ColorId.iconActive : ColorId.icon));
       }
     }
   }

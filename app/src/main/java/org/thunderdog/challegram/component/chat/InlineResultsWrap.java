@@ -105,6 +105,7 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
       recyclerView.setLayoutManager(layoutMode == LAYOUT_MODE_GRID ? gridManager : flowManager);
       recyclerView.invalidateItemDecorations();
     }
+    xgramSyncPadding();
   }
 
   public ThemeListenerList getThemeProvider () {
@@ -223,6 +224,12 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
     recyclerView.addItemDecoration(new RecyclerView.ItemDecoration() {
       @Override
       public void getItemOffsets (Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
+        if (xgramMenu() && layoutMode != LAYOUT_MODE_LINEAR) {
+          // XGram M3E: the media tiles fill the menu surface (the list's 8dp side and bottom padding, see
+          // xgramSyncPadding) with 2dp gaps between them, so the outer tiles meet its 16dp corners
+          xgramTileOffsets(outRect, view, parent);
+          return;
+        }
         if (xgramMenu()) {
           // XGram: the rows sit inside the menu surface, 8dp in from the screen edges and 8dp above the input bar
           int i = parent.getChildAdapterPosition(view);
@@ -297,6 +304,7 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
 
   public void setUseDarkMode (boolean useDarkMode) {
     adapter.setUseDarkMode(useDarkMode);
+    xgramSyncPadding();
   }
 
   public void addLick (ViewGroup parent) {
@@ -800,6 +808,10 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
           headerItemCount++;
         }
 
+        if (xgramMenu()) {
+          // XGram M3E: the rows are laid out in the menu surface's width, with a 2dp gap under each
+          return headerHeight + (flowManager.getRowsCount(xgramInnerWidth()) - headerItemCount) * (Screen.dp(118f) + Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.TILE_GAP));
+        }
         return headerHeight + (flowManager.getRowsCount(Screen.currentWidth()) - headerItemCount) * Screen.dp(118f);
       }
       case LAYOUT_MODE_GRID: {
@@ -813,6 +825,10 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
           headerItemCount++;
         }
 
+        if (xgramMenu()) {
+          // XGram M3E: square cells across the menu surface's width
+          return headerHeight + (int) Math.ceil((double) (currentItems.size() - headerItemCount) / (double) spanCount) * (xgramInnerWidth() / Math.max(1, spanCount));
+        }
         return headerHeight + (int) Math.ceil((double) (currentItems.size() - headerItemCount) / (double) spanCount) * (Screen.currentWidth() / spanCount);
       }
       case LAYOUT_MODE_LINEAR: {
@@ -899,7 +915,8 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
   // XGram: Material 3 Expressive. The mention, command, hashtag and emoji suggestions (the list layout) are an M3
   // menu surface: surfaceContainer, 16dp corners (shape.corner.large), elevation level 2 (a 3dp shadow), 8dp in from
   // the screen edges and 8dp above the input bar, the rows clipped to it; it rises from the input bar as before.
-  // Inline bot media grids keep Telegram X's full-width sheet. Nothing changes with Expressive design off.
+  // Round 5: the inline bot media grids are that surface too, their tiles 2dp apart (XgramR5Composer); the dark
+  // variant over the media viewer keeps Telegram X's NIGHT_BLACK sheet. Nothing changes with Expressive design off.
 
   private static final float XGRAM_MENU_MARGIN = 8f;
   private final android.graphics.Path xgramMenuPath = new android.graphics.Path();
@@ -912,13 +929,62 @@ public class InlineResultsWrap extends FrameLayoutFix implements View.OnClickLis
   public void xgramSetMenuStyle (boolean menuStyle) {
     if (this.xgramMenuStyle != menuStyle) {
       this.xgramMenuStyle = menuStyle;
+      xgramSyncPadding();
       recyclerView.invalidateItemDecorations();
       recyclerView.invalidate();
     }
   }
 
   private boolean xgramMenu () {
-    return xgramMenuStyle && layoutMode == LAYOUT_MODE_LINEAR && !adapter.useDarkMode() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    // Round 5: the inline bot media grids (GIF search, photo, video and sticker bots) are the same floating surface
+    return xgramMenuStyle && !adapter.useDarkMode() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  /** XGram M3E: the media grids get the menu surface's 8dp side and bottom room as list padding (even cells). */
+  private void xgramSyncPadding () {
+    if (recyclerView == null) {
+      return;
+    }
+    final int room = xgramMenu() && layoutMode != LAYOUT_MODE_LINEAR ? Screen.dp(XGRAM_MENU_MARGIN) : 0;
+    if (recyclerView.getPaddingLeft() != room || recyclerView.getPaddingRight() != room || recyclerView.getPaddingBottom() != room || recyclerView.getPaddingTop() != 0) {
+      recyclerView.setPadding(room, 0, room, room);
+    }
+  }
+
+  /** XGram M3E: the width of the menu surface, which the media tiles fill. */
+  private int xgramInnerWidth () {
+    final int width = recyclerView != null && recyclerView.getMeasuredWidth() > 0 ? recyclerView.getMeasuredWidth() : getMeasuredWidth() > 0 ? getMeasuredWidth() : Screen.currentWidth();
+    return Math.max(1, width - Screen.dp(XGRAM_MENU_MARGIN) * 2);
+  }
+
+  /** XGram M3E: 2dp gaps between the media tiles; the header and the button row above them get none. */
+  private void xgramTileOffsets (Rect outRect, View view, RecyclerView parent) {
+    outRect.set(0, 0, 0, 0);
+    final int i = parent.getChildAdapterPosition(view);
+    if (i <= 0 || currentItems == null || i - 1 >= currentItems.size()) {
+      return;
+    }
+    final int type = currentItems.get(i - 1).getType();
+    final int gap = Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.TILE_GAP);
+    final boolean rtl = parent.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+    if (layoutMode == LAYOUT_MODE_GRID && InlineResult.isGridType(type)) {
+      final ViewGroup.LayoutParams params = view.getLayoutParams();
+      final int column = params instanceof GridLayoutManager.LayoutParams ? Math.max(0, ((GridLayoutManager.LayoutParams) params).getSpanIndex()) : 0;
+      final int count = Math.max(1, spanCount);
+      final int start = column * gap / count;
+      final int end = gap - (column + 1) * gap / count;
+      outRect.left = rtl ? end : start;
+      outRect.right = rtl ? start : end;
+      outRect.bottom = gap;
+    } else if (layoutMode == LAYOUT_MODE_FLOW && InlineResult.isFlowType(type)) {
+      final int end = flowManager.isLastInRow(i) ? 0 : gap;
+      if (rtl) {
+        outRect.left = end;
+      } else {
+        outRect.right = end;
+      }
+      outRect.bottom = gap;
+    }
   }
 
   private void xgramDrawMenu (Canvas c, int top, int width, int height) {

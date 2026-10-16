@@ -18,6 +18,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.support.RippleSupport;
@@ -45,20 +46,45 @@ public class RecordControllerButton extends FrameLayoutFix {
     Views.setClickable(this);
   }
 
+  /** XGram M3E: the 48dp filled tonal container (secondaryContainer, primary while active); null with Expressive design off. */
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramTonal;
+
   public void init (ViewController<?> themeProvider) {
     this.themeProvider = themeProvider;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: a 48dp filled tonal button of the round video's vertical floating toolbar
+      xgramTonal = com.fahadali.xgram.appearance.XgramR5Composer.applyTonal(this);
+      return;
+    }
     RippleSupport.setCircleBackground(RecordControllerButton.this, BUTTON_SIZE, PADDING, ColorId.filling, true, themeProvider);
+  }
+
+  /** XGram: true when the button is the Expressive tonal button. */
+  protected final boolean isXgramTonal () {
+    return xgramTonal != null;
   }
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-    final int sizeMeasureSpec = MeasureSpec.makeMeasureSpec(Screen.dp(BUTTON_SIZE + PADDING * 2), MeasureSpec.EXACTLY);
+    final int sizeMeasureSpec = MeasureSpec.makeMeasureSpec(xgramTonal != null ? Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.TOOLBAR_BUTTON) : Screen.dp(BUTTON_SIZE + PADDING * 2), MeasureSpec.EXACTLY);
     super.onMeasure(sizeMeasureSpec, sizeMeasureSpec);
   }
 
+  @Override
+  public void draw (@NonNull Canvas canvas) {
+    if (xgramTonal != null) {
+      // XGram M3E: the container follows the active state and the theme (set only when its colour changed)
+      com.fahadali.xgram.appearance.XgramR5Composer.syncTonal(xgramTonal, isActiveAnimator.getFloatValue());
+    }
+    super.draw(canvas);
+  }
 
   @Override
   protected void dispatchDraw (@NonNull Canvas canvas) {
+    if (xgramTonal != null) {
+      super.dispatchDraw(canvas);
+      return;
+    }
     final float active = isActiveAnimator.getFloatValue();
     if (active > 0f) {
       final int color = ColorUtils.fromToArgb(Theme.getColor(ColorId.filling), Theme.getColor(ColorId.fillingPositive), active);
@@ -87,10 +113,15 @@ public class RecordControllerButton extends FrameLayoutFix {
   private final BoolAnimator isActiveAnimator = new BoolAnimator(0, isActiveTarget, AnimatorUtils.DECELERATE_INTERPOLATOR, 220L);
 
   public void setActive (boolean active, boolean animated) {
+    com.fahadali.xgram.appearance.XgramAppMotion.use(isActiveAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram
     isActiveAnimator.setValue(active, animated);
   }
 
   public void toggleActive (boolean animated) {
+    com.fahadali.xgram.appearance.XgramAppMotion.use(isActiveAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram
+    if (xgramTonal != null && animated) {
+      performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // XGram M3E: a tick on toggles
+    }
     isActiveAnimator.setValue(!isActiveAnimator.getValue(), animated);
   }
 

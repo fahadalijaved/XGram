@@ -66,6 +66,11 @@ public class RoundProgressView3 extends View {
     final int viewHeight = getMeasuredHeight();
     final float progress = visualProgress;
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c, viewWidth, viewHeight, progress);
+      return;
+    }
+
     final int defaultColor = 0xFFFFFFFF;
     final int fillingColor = ColorUtils.fromToArgb(defaultColor, Theme.getColor(ColorId.fillingPositive), editFactor);
 
@@ -102,6 +107,73 @@ public class RoundProgressView3 extends View {
 
     this.lastDrawProgress = progress;
   }
+
+  /**
+   * XGram M3E: the ring is the round video's wavy progress (XgramM3Content.drawRoundVideoRing's look): primary on a
+   * white track at 24 %, 4dp, wavy while recording and turning to error over the last seconds before the limit.
+   * In the preview (editFactor) it flattens: the trimmed part in primary, the rest on the track, and the two trim
+   * handles as primary dots (the touch targets are Telegram X's).
+   */
+  private void xgramDraw (@NonNull Canvas c, int viewWidth, int viewHeight, float progress) {
+    final int padding = Screen.dp(PADDING);
+    final RectF rectF = Paints.getRectF();
+    rectF.set(padding, padding, viewWidth - padding, viewHeight - padding);
+    final float cx = rectF.centerX(), cy = rectF.centerY();
+    final float radius = rectF.width() / 2f;
+    final float stroke = Screen.dpf(com.fahadali.xgram.appearance.XgramM3Content.WAVY_STROKE_DP);
+    final float edit = MathUtils.clamp(editFactor);
+    final int track = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(0xffffffff, .24f);
+    final int ring = com.fahadali.xgram.appearance.XgramR5Composer.recordRingColor(edit > 0f ? 0f : progress);
+    final float wave = 1f - edit;
+
+    if (edit < 1f) {
+      // Recording: the whole recorded part, wavy
+      final int alpha = Math.round(255f * (1f - edit));
+      final float amplitude = Screen.dpf(com.fahadali.xgram.appearance.XgramM3Content.WAVY_AMPLITUDE_DP) * wave;
+      com.fahadali.xgram.appearance.XgramWavyProgress.drawCircular(c, cx, cy, radius, stroke, progress,
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(ring, alpha / 255f), com.fahadali.xgram.appearance.XgramExpressive.withAlpha(track, alpha / 255f), amplitude);
+    }
+
+    final float angle = 360f * progress;
+    if (edit > 0f) {
+      if (xgramStrokePaint == null) {
+        xgramStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        xgramStrokePaint.setStyle(Paint.Style.STROKE);
+        xgramStrokePaint.setStrokeCap(Paint.Cap.ROUND);
+      }
+      xgramStrokePaint.setStrokeWidth(stroke);
+      xgramStrokePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(track, edit));
+      c.drawArc(rectF, -90, angle * trimStartFactor, false, xgramStrokePaint);
+      c.drawArc(rectF, -90 + angle * trimEndFactor, angle * (1f - trimEndFactor), false, xgramStrokePaint);
+      xgramStrokePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), edit));
+      c.drawArc(rectF, -90 + angle * trimStartFactor, angle * (trimEndFactor - trimStartFactor), false, xgramStrokePaint);
+    }
+
+    final int handleColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+    {
+      final double angleRad = Math.toRadians(-90 + angle * trimStartFactor);
+      float x = lastDrawStartPointerX = (float) Math.cos(angleRad) * rectF.width() / 2f + rectF.centerX();
+      float y = lastDrawStartPointerY = (float) Math.sin(angleRad) * rectF.width() / 2f + rectF.centerY();
+      if (edit > 0f) {
+        c.drawCircle(x, y, Screen.dp(POINTER_RADIUS) * edit, Paints.fillingPaint(handleColor));
+      }
+    }
+    {
+      final double angleRad = Math.toRadians(-90 + angle * trimEndFactor);
+      float x = lastDrawEndPointerX = (float) Math.cos(angleRad) * rectF.width() / 2f + rectF.centerX();
+      float y = lastDrawEndPointerY = (float) Math.sin(angleRad) * rectF.width() / 2f + rectF.centerY();
+      if (edit > 0f) {
+        c.drawCircle(x, y, Screen.dp(POINTER_RADIUS) * edit, Paints.fillingPaint(handleColor));
+      }
+    }
+    this.lastDrawProgress = progress;
+
+    if (edit < 1f && getAlpha() > 0f && com.fahadali.xgram.appearance.XgramM3Content.needsWaveFrame(progress, wave)) {
+      postInvalidateOnAnimation(); // the wave travels while recording (never with Reduce motion)
+    }
+  }
+
+  private Paint xgramStrokePaint;
 
 
 

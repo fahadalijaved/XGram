@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  XGram M3E round 5, composer overlays and stickers: sentence-case labels used with Expressive design while the
+  language is Telegram&#160;X's own English (see XgramR5Composer.sentence), and new tooltips.
+-->
+<resources>
+  <string name="XgramR5ComposerViewPack">View pack</string>
+  <string name="XgramR5ComposerPasteEmoji">Paste emoji</string>
+  <string name="XgramR5ComposerShareEmoji">Share emoji</string>
+  <string name="XgramR5ComposerAddToFavorites">Add to favorites</string>
+  <string name="XgramR5ComposerRemoveFromFavorites">Remove from favorites</string>
+  <string name="XgramR5ComposerRemoveRecent">Remove from recents</string>
+  <string name="XgramR5ComposerSwitchCamera">Switch camera</string>
+  <string name="XgramR5ComposerViewOnce">View once</string>
+  <string name="XgramR5ComposerDeleteRecording">Delete recording</string>
+</resources>

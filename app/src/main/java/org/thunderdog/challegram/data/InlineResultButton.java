@@ -56,6 +56,11 @@ public class InlineResultButton extends InlineResult<TdApi.InlineQueryResultsBut
 
   @Override
   protected int getContentHeight () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the row of the 40dp tonal button (InlineResultsAdapter); the dark variant over the media viewer
+      // keeps Telegram X's 37dp row, which only changes the offset estimate there (the list scrolls a little)
+      return Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.BUTTON_ROW_HEIGHT);
+    }
     return Screen.dp(36f) + Screen.dp(1f);
   }
 }

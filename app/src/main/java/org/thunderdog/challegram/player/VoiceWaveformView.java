@@ -113,6 +113,37 @@ public class VoiceWaveformView extends View implements FactorAnimator.Target {
     int height = getMeasuredHeight();
     int centerY = (int) ((float) height * .5f);
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the waveform in primary on a secondaryContainer track (a 32dp pill), the duration in labelLarge
+      // onSurfaceVariant with tabular figures at the track's end
+      final float trackHeight = Math.min(height, Screen.dp(32f));
+      xgramTrack.set(0, centerY - trackHeight / 2f, width, centerY + trackHeight / 2f);
+      xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER));
+      c.drawRoundRect(xgramTrack, trackHeight / 2f, trackHeight / 2f, xgramPaint);
+      if (seekStr != null) {
+        final android.text.TextPaint label = com.fahadali.xgram.appearance.XgramM3Content.labelLargeEndPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+        final String features = label.getFontFeatureSettings();
+        label.setFontFeatureSettings("'tnum'");
+        final boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+        final float baseline = centerY - (label.ascent() + label.descent()) / 2f;
+        if (rtl) {
+          label.setTextAlign(Paint.Align.LEFT);
+          c.drawText(seekStr, Screen.dp(12f), baseline, label);
+          label.setTextAlign(Paint.Align.RIGHT);
+        } else {
+          c.drawText(seekStr, width - Screen.dp(12f), baseline, label);
+        }
+        label.setFontFeatureSettings(features);
+      }
+      final int saveCount = c.save();
+      if (org.thunderdog.challegram.core.Lang.rtl()) {
+        c.scale(-1f, 1f, width / 2f, centerY);
+      }
+      waveform.draw(c, 1f, waveLeft + Screen.dp(4f), centerY);
+      c.restoreToCount(saveCount);
+      return;
+    }
+
     if (seekStr != null) {
       textPaint.setColor(Theme.textAccentColor());
       c.drawText(seekStr, width - textRight, centerY + textOffset, textPaint);
@@ -120,6 +151,9 @@ public class VoiceWaveformView extends View implements FactorAnimator.Target {
 
     waveform.draw(c, 1f, waveLeft, centerY);
   }
+
+  private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final android.graphics.RectF xgramTrack = new android.graphics.RectF();
 
   private static final AnticipateOvershootInterpolator overshoot = new AnticipateOvershootInterpolator(3.0f);
 

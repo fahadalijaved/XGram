@@ -150,6 +150,19 @@ public class SettingsStickersController extends ViewPagerController<SettingsCont
 
   @Override
   protected String[] getPagerSections () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: sentence-case tabs (the strings are single words in Telegram X's English)
+      return type == TYPE_STICKER ? new String[] {
+        Lang.getString(R.string.Trending),
+        Lang.getString(R.string.Installed),
+        Lang.getString(R.string.Archived),
+        Lang.getString(R.string.Masks)
+      } : new String[] {
+        Lang.getString(R.string.Trending),
+        Lang.getString(R.string.Installed),
+        Lang.getString(R.string.Archived)
+      };
+    }
     return type == TYPE_STICKER ? new String[] {
       Lang.uppercase(Lang.getString(R.string.Trending)),
       Lang.uppercase(Lang.getString(R.string.Installed)),

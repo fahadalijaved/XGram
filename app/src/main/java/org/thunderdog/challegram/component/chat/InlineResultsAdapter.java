@@ -198,6 +198,13 @@ public class InlineResultsAdapter extends RecyclerView.Adapter<InlineResultsAdap
       }
       case ViewHolder.TYPE_BUTTON: {
         InlineResultButton button = (InlineResultButton) items.get(position - 1);
+        if (!(holder.itemView instanceof TextView) && holder.itemView instanceof ViewGroup && ((ViewGroup) holder.itemView).getChildCount() > 0) {
+          // XGram M3E: the tonal button inside its row, the bot's own text in its own case
+          final View buttonView = ((ViewGroup) holder.itemView).getChildAt(0);
+          ((TextView) buttonView).setText(button.getText());
+          buttonView.setTag(button);
+          break;
+        }
         ((TextView) holder.itemView).setText(Lang.uppercase(button.getText()));
         holder.itemView.setTag(button);
         break;
@@ -272,6 +279,10 @@ public class InlineResultsAdapter extends RecyclerView.Adapter<InlineResultsAdap
           gifView.setCustomControllerProvider(customControllerProvider);
           gifView.setId(R.id.result);
           gifView.setOnClickListener(onClickListener);
+          if (!useDarkMode && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E: a tile of the menu surface, 8dp corners morphing to 12dp on press, a surfaceContainerHighest placeholder
+            com.fahadali.xgram.appearance.XgramR5Composer.applyTile(gifView);
+          }
           return new ViewHolder(gifView);
         }
         case TYPE_STICKER: {
@@ -298,9 +309,28 @@ public class InlineResultsAdapter extends RecyclerView.Adapter<InlineResultsAdap
           photoView.setCustomControllerProvider(customControllerProvider);
           photoView.setId(R.id.result);
           photoView.setOnClickListener(onClickListener);
+          if (!useDarkMode && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            com.fahadali.xgram.appearance.XgramR5Composer.applyTile(photoView); // XGram M3E: see TYPE_GIF
+          }
           return new ViewHolder(photoView);
         }
         case TYPE_BUTTON: {
+          if (!useDarkMode && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E: the switch-PM row ("Go to bot") is a centred 40dp filled tonal button at the top, no separator
+            me.vkryl.android.widget.FrameLayoutFix row = new me.vkryl.android.widget.FrameLayoutFix(context);
+            row.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.BUTTON_ROW_HEIGHT)));
+            com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton buttonView = new com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton(context,
+              com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+            buttonView.setId(R.id.btn_switchPmButton);
+            buttonView.setOnClickListener(onClickListener);
+            buttonView.setMaxWidth(Screen.dp(400f));
+            final int side = Screen.dp(16f);
+            me.vkryl.android.widget.FrameLayoutFix.LayoutParams params = me.vkryl.android.widget.FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f), Gravity.CENTER);
+            params.leftMargin = params.rightMargin = side;
+            buttonView.setLayoutParams(params);
+            row.addView(buttonView);
+            return new ViewHolder(row);
+          }
           TextView textView = new NoScrollTextView(context) {
             @Override
             protected void onDraw (Canvas c) {

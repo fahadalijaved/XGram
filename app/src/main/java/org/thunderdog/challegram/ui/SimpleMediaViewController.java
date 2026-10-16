@@ -132,6 +132,16 @@ public class SimpleMediaViewController extends ViewController<SimpleMediaViewCon
     }
     mediaItem.download(true);
     cellView.setMedia(mediaItem);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the media is clipped to the ForceTouch card's 28dp corners (XgramM3Preview.CARD_CORNER)
+      cellView.setOutlineProvider(new android.view.ViewOutlineProvider() {
+        @Override
+        public void getOutline (View view, android.graphics.Outline outline) {
+          outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), Math.min(com.fahadali.xgram.appearance.XgramM3Preview.cardRadius(), Math.min(view.getWidth(), view.getHeight()) / 2f));
+        }
+      });
+      cellView.setClipToOutline(true);
+    }
     executeScheduledAnimation();
     return cellView;
   }
@@ -141,7 +151,9 @@ public class SimpleMediaViewController extends ViewController<SimpleMediaViewCon
     cellView.setBoundForceTouchContext(context);
     context.setAllowFullscreen(true);
     context.setStateListener(cellView);
-    context.setBackgroundColor(0x70000000);
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      context.setBackgroundColor(0x70000000);
+    } // XGram M3E: no colour, so ForceTouchView draws its modal scrim (32% black, XgramM3Preview.ScrimDrawable)
   }
 
   @Override

@@ -21,6 +21,7 @@ import android.graphics.drawable.Drawable;
 import androidx.annotation.NonNull;
 
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Drawables;
@@ -31,10 +32,15 @@ import me.vkryl.core.ColorUtils;
 
 public class RecordDisposableSwitchButton extends RecordControllerButton {
   private final Drawable drawable;
+  private android.graphics.Paint xgramIconPaint;
+  private int xgramIconColor;
 
   public RecordDisposableSwitchButton(Context context) {
     super(context);
-    drawable = Drawables.get(context.getResources(), R.drawable.baseline_hot_once_24);
+    drawable = Drawables.get(context.getResources(), com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_hot_once_24) : R.drawable.baseline_hot_once_24);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      setContentDescription(Lang.getString(R.string.XgramR5ComposerViewOnce));
+    }
   }
 
   @Override
@@ -44,6 +50,17 @@ public class RecordDisposableSwitchButton extends RecordControllerButton {
     final float cx = getMeasuredWidth() / 2f;
     final float cy = getMeasuredHeight() / 2f;
     final float active = getActiveFactor();
+
+    if (isXgramTonal()) {
+      // XGram M3E: the icon in the tonal button's content colour, onPrimary while view once is on
+      final int color = com.fahadali.xgram.appearance.XgramR5Composer.tonalContentColor(active);
+      if (xgramIconPaint == null || xgramIconColor != color) {
+        xgramIconColor = color;
+        xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
+      }
+      Drawables.drawCentered(canvas, drawable, cx, cy, xgramIconPaint);
+      return;
+    }
 
     if (active == 0f) {
       Drawables.drawCentered(canvas, drawable, cx, cy, PorterDuffPaint.get(ColorId.icon));

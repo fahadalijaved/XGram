@@ -1373,11 +1373,13 @@ public class EmojiStatusListController extends ViewController<EmojiLayout> imple
 
   @Override
   public void buildMenuStickerPreview (ArrayList<StickerPreviewView.MenuItem> menuItems, @NonNull TGStickerObj sticker) {
+    // XGram M3E: sentence-case labels on the floating toolbar
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     menuItems.add(new StickerPreviewView.MenuItem(StickerPreviewView.MenuItem.MENU_ITEM_TEXT,
-      Lang.uppercase(Lang.getString(R.string.SetEmojiAsStatus)), R.id.btn_setEmojiStatus, ColorId.textNeutral));
+      xgram ? Lang.getString(R.string.SetEmojiAsStatus) : Lang.uppercase(Lang.getString(R.string.SetEmojiAsStatus)), R.id.btn_setEmojiStatus, ColorId.textNeutral));
 
     menuItems.add(new StickerPreviewView.MenuItem(StickerPreviewView.MenuItem.MENU_ITEM_TEXT,
-      Lang.uppercase(Lang.getString(R.string.SetEmojiAsStatusTimed)), R.id.btn_setEmojiStatusTimed, ColorId.textNeutral));
+      xgram ? Lang.getString(R.string.SetEmojiAsStatusTimed) : Lang.uppercase(Lang.getString(R.string.SetEmojiAsStatusTimed)), R.id.btn_setEmojiStatusTimed, ColorId.textNeutral));
   }
 
   @Override
