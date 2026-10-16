@@ -206,6 +206,92 @@ public final class XgramM3Wheel {
     }
   }
 
+  // Round 5: sheet colour, headlineSmall title, supporting text and the optional column chip
+
+  /**
+   * The colour of the sheet a picker sits in (the fade mask over its rows): surfaceContainerLow, or the forced theme's
+   * filling, as OptionsLayout draws the sheet with a forced theme.
+   */
+  @ColorInt
+  public static int sheetColor (@Nullable ThemeDelegate forcedTheme) {
+    return forcedTheme != null ? forcedTheme.getColor(org.thunderdog.challegram.theme.ColorId.filling) : XgramM3Sheets.sheetColor();
+  }
+
+  /** A picker sheet's title (rule e: a hero sheet title in headlineSmall, onSurface), 16dp from the sides, 16dp above the wheel. */
+  public static TextView newTitle (Context context, CharSequence title, @Nullable ThemeDelegate forcedTheme) {
+    TextView view = new NoScrollTextView(context);
+    XgramExpressive.applyText(view, XgramExpressive.TS_HEADLINE_S, false);
+    view.setTextColor(color(XgramExpressive.ON_SURFACE, forcedTheme));
+    view.setMaxLines(2);
+    view.setEllipsize(TextUtils.TruncateAt.END);
+    view.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+    view.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    view.setPadding(Screen.dp(16f), 0, Screen.dp(16f), Screen.dp(8f));
+    view.setText(title);
+    view.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    return view;
+  }
+
+  /** Supporting text under a picker sheet's title: bodyMedium in onSurfaceVariant. */
+  public static TextView newSupportingText (Context context, CharSequence text, @Nullable ThemeDelegate forcedTheme) {
+    TextView view = new NoScrollTextView(context);
+    XgramExpressive.applyText(view, XgramExpressive.TS_BODY_M, false);
+    view.setTextColor(color(XgramExpressive.ON_SURFACE_VARIANT, forcedTheme));
+    view.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    view.setPadding(Screen.dp(16f), 0, Screen.dp(16f), Screen.dp(16f));
+    view.setText(text);
+    view.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    return view;
+  }
+
+  /** The height {@code view} takes in a sheet {@code availableWidth} px wide (capped like every sheet at 640dp). */
+  public static int measureHeight (View view, int availableWidth) {
+    final int width = XgramM3Sheets.sheetWidth(availableWidth);
+    view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+    return view.getMeasuredHeight();
+  }
+
+  /** Height of the row that holds {@link #newColumnChip} (dp): a 32dp chip with a 48dp touch target. */
+  public static final float CHIP_ROW_HEIGHT = 48f;
+
+  /**
+   * An M3 filter chip (32dp, CORNER_S, outlineVariant border; selected: secondaryContainer with a leading check) in a
+   * {@link #CHIP_ROW_HEIGHT} row, 16dp from the start; taps anywhere in the row's height over the chip toggle it.
+   * {@code listener} gets the new state; the chip is already updated.
+   */
+  public static LinearLayout newColumnChip (Context context, @androidx.annotation.StringRes int textRes, boolean checked, @NonNull ChipListener listener) {
+    final LinearLayout row = new LinearLayout(context);
+    row.setOrientation(LinearLayout.HORIZONTAL);
+    row.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+    row.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
+    row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(CHIP_ROW_HEIGHT)));
+    final XgramM3Sessions.ChipView chip = new XgramM3Sessions.ChipView(context, textRes);
+    chip.setChecked(checked, false);
+    chip.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(32f)));
+    chip.setOnClickListener(v -> {
+      final boolean now = !chip.isSelected();
+      chip.setSelected(now);
+      chip.setChecked(now, false);
+      v.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      listener.onChipChanged(now);
+    });
+    chip.setSelected(checked);
+    row.addView(chip);
+    // 48dp touch target: the row's full height over the chip
+    row.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      Rect hit = new Rect();
+      chip.getHitRect(hit);
+      hit.top = 0;
+      hit.bottom = row.getHeight();
+      row.setTouchDelegate(new android.view.TouchDelegate(hit, chip));
+    });
+    return row;
+  }
+
+  public interface ChipListener {
+    void onChipChanged (boolean checked);
+  }
+
   /** The filled confirm button ("Save", "Send today at 10:00"): primary with an onPrimary label. */
   public static ActionButton newConfirmButton (Context context, @Nullable ThemeDelegate forcedTheme) {
     return new ActionButton(context, true, XgramExpressive.PRIMARY, XgramExpressive.ON_PRIMARY, forcedTheme);

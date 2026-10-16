@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 5: calls, audio and pickers (XgramR5Calls). Sentence-case labels are only used while the
+       language is Telegram&#160;X's English; a translation keeps its own string. -->
+  <string name="XgramR5CallsOutgoingCall">Outgoing call</string>
+  <string name="XgramR5CallsIncomingCall">Incoming call</string>
+  <string name="XgramR5CallsMissedCall">Missed call</string>
+  <string name="XgramR5CallsCanceledCall">Canceled call</string>
+  <string name="XgramR5CallsDeclinedCall">Declined call</string>
+  <string name="XgramR5CallsCallBack">Call back</string>
+  <string name="XgramR5CallsMute">Mute</string>
+  <string name="XgramR5CallsUnmute">Unmute</string>
+  <string name="XgramR5CallsPlay">Play</string>
+  <string name="XgramR5CallsPause">Pause</string>
+  <string name="XgramR5CallsClosePlayer">Close player</string>
+  <string name="XgramR5CallsSpeed">Playback speed</string>
+  <string name="XgramR5CallsShowYear">Show year</string>
+  <string name="XgramR5CallsMiniAppsUnsupported">Mini apps aren\'t supported yet</string>
+  <string name="XgramR5CallsLinkUnsupported">This link isn\'t supported yet</string>
+  <string name="XgramR5CallsOpenInBrowser">Open in browser</string>
+  <string name="XgramR5CallsRateTitle">Rate this call</string>
+  <string name="XgramR5CallsRatePrompt">How was the sound quality?</string>
+  <string name="XgramR5CallsRateComment">Comment (optional)</string>
+  <string name="XgramR5CallsStar">%1$d of 5 stars</string>
+  <string name="XgramR5CallsDevices">Devices</string>
+  <string name="XgramR5CallsWebsites">Websites</string>
+</resources>

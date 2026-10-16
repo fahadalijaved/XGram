@@ -111,13 +111,17 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
       return;
     }
     if (xgramSnap == null) {
-      // Standard spatial spring: no visible overshoot, so a snap that ends at the list's edge is not pushed back off it
-      xgramSnap = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, 0f, (s, value) -> {
+      // Expressive spatial spring with its small overshoot. Only the pixels the list really scrolled count as applied, so
+      // the overshoot past the list's edge (which it can't scroll) is never pulled back off the edge.
+      xgramSnap = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> {
         int target = Math.round(value);
         int delta = target - xgramSnapApplied;
         if (delta != 0) {
-          xgramSnapApplied = target;
+          xgramSnapScrolled = 0;
+          xgramSnapStep = true;
           scrollBy(0, delta);
+          xgramSnapStep = false;
+          xgramSnapApplied += xgramSnapScrolled;
         }
       }).setThreshold(.5f).setEndListener(this::onSnapSettled);
     }
@@ -133,6 +137,106 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
     if (xgramSnap != null) {
       xgramSnap.cancel();
     }
+  }
+
+  private boolean xgramSnapStep;
+  private int xgramSnapScrolled;
+  private int xgramTickRow = -1;
+
+  @Override
+  public void onScrolled (int dx, int dy) {
+    super.onScrolled(dx, dy);
+    if (!xgramM3) {
+      return;
+    }
+    if (xgramSnapStep) {
+      xgramSnapScrolled += dy;
+    }
+    if (dy != 0) {
+      xgramCheckTick();
+    }
+  }
+
+  /** XGram M3E: a clock tick each time another row reaches the band (dragging, flinging or snapping). */
+  private void xgramCheckTick () {
+    if (items == null || items.isEmpty()) {
+      return;
+    }
+    View child = findChildViewUnder(getWidth() / 2f, getHeight() / 2f);
+    if (child == null) {
+      return;
+    }
+    int position = getChildAdapterPosition(child);
+    if (position == NO_POSITION) {
+      return;
+    }
+    int row = position % items.size(); // a repeating list jumps by whole copies, which is not a new row
+    if (xgramTickRow == -1) {
+      xgramTickRow = currentIndex; // the row in the band before the first scroll
+    }
+    if (row != xgramTickRow) {
+      boolean ticked = xgramTickRow != -1;
+      xgramTickRow = row;
+      if (ticked) {
+        performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+      }
+    }
+  }
+
+  // XGram M3E: the rows fade into the sheet at the top and the bottom (a gradient in the sheet color over them)
+
+  private int xgramFadeState = -1; // -1: not looked up, 0: not in a sheet, 1: in a sheet
+  private @Nullable Paint xgramFadePaint;
+  private @Nullable android.graphics.LinearGradient xgramFadeTop, xgramFadeBottom;
+  private int xgramFadeColor, xgramFadeHeight;
+  private final android.graphics.Matrix xgramFadeMatrix = new android.graphics.Matrix();
+
+  @Override
+  protected void onAttachedToWindow () {
+    super.onAttachedToWindow();
+    xgramFadeState = -1;
+  }
+
+  private boolean xgramInSheet () {
+    if (xgramFadeState == -1) {
+      int state = 0;
+      for (android.view.ViewParent parent = getParent(); parent != null; parent = parent.getParent()) {
+        if (parent instanceof org.thunderdog.challegram.navigation.OptionsLayout) {
+          state = 1;
+          break;
+        }
+      }
+      xgramFadeState = state;
+    }
+    return xgramFadeState == 1;
+  }
+
+  private void xgramDrawFade (Canvas c) {
+    final int height = getMeasuredHeight();
+    final int fade = Math.min(getItemHeight(), height / 3);
+    if (fade <= 0 || getMeasuredWidth() <= 0) {
+      return;
+    }
+    final int color = com.fahadali.xgram.appearance.XgramM3Wheel.sheetColor(forcedTheme) | 0xff000000;
+    if (xgramFadePaint == null) {
+      xgramFadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    }
+    if (xgramFadeTop == null || color != xgramFadeColor || fade != xgramFadeHeight) {
+      xgramFadeColor = color;
+      xgramFadeHeight = fade;
+      final int clear = color & 0x00ffffff;
+      xgramFadeTop = new android.graphics.LinearGradient(0, 0, 0, fade, color, clear, android.graphics.Shader.TileMode.CLAMP);
+      xgramFadeBottom = new android.graphics.LinearGradient(0, 0, 0, fade, clear, color, android.graphics.Shader.TileMode.CLAMP);
+    }
+    xgramFadeMatrix.reset();
+    xgramFadeTop.setLocalMatrix(xgramFadeMatrix);
+    xgramFadePaint.setShader(xgramFadeTop);
+    c.drawRect(0, 0, getMeasuredWidth(), fade, xgramFadePaint);
+    xgramFadeMatrix.setTranslate(0, height - fade);
+    xgramFadeBottom.setLocalMatrix(xgramFadeMatrix);
+    xgramFadePaint.setShader(xgramFadeBottom);
+    c.drawRect(0, height - fade, getMeasuredWidth(), height, xgramFadePaint);
+    xgramFadePaint.setShader(null);
   }
 
   /** What the IDLE scroll state did after smoothScrollBy: settles the current index (and the last pixels). */
@@ -335,6 +439,9 @@ public class InfiniteRecyclerView<T> extends RecyclerView implements View.OnClic
         com.fahadali.xgram.appearance.XgramM3Wheel.drawBand(c, 0, getMeasuredWidth(), getMeasuredHeight() / 2f, forcedTheme);
       }
       super.draw(c);
+      if (xgramInSheet()) {
+        xgramDrawFade(c);
+      }
       return;
     }
     super.draw(c);
