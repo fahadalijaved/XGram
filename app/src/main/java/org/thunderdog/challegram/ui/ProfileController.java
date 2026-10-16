@@ -1757,6 +1757,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     topView.setShowLabelOnActiveOnly(!isEditing() && !Settings.instance().needReduceMotion() && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       com.fahadali.xgram.appearance.XgramM3Profile.roundTopCorners(topCellView, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL); // XGram: tabs and media read as one container
+      // XGram: the tab strip is inset so the pills line up with the 16dp-inset cards above and clear the 28dp corner
+      // (a pill starts 3dp inside its tab); scrolled tabs still run to the container edge, the media stays full width
+      int tabsInset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET) - (Screen.dp(ViewPagerTopView.DEFAULT_ITEM_PADDING) - Screen.dp(16f));
+      topCellView.getRecyclerView().setPadding(tabsInset, 0, tabsInset, 0);
+      topCellView.getRecyclerView().setClipToPadding(false);
     }
     topView.setItems(getPagerTitles());
     topCellView.getRecyclerView().setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
