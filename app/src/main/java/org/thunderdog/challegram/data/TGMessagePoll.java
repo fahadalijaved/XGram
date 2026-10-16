@@ -636,6 +636,7 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
     int textColor = getTextColor();
     int decentColor = getDecentColor();
     int textOffset = Screen.dp(12f);
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled(); // XGram: Material 3 Expressive poll
 
     // First, draw question
     if (questionText != null) {
@@ -726,14 +727,21 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
       int optionHeight = getOptionHeight(option.text);
       int rightX = startX + maxWidth + (useBubbles() ? getBubblePaddingRight() : 0);
 
-      if (visibility < 1f) {
+      if (visibility < 1f && !xgram) {
         // separator
         int lineY = startY + optionHeight - Screen.separatorSize();
         c.drawLine(startX + Screen.dp(34f), lineY, rightX, lineY, Paints.getProgressPaint(ColorUtils.alphaColor(1f - visibility, getSeparatorColor()),  Screen.separatorSize()));
       }
 
       if (highlightOptionId == optionId) {
-        c.drawRect(startX - (useBubbles() ? getBubbleContentPadding() : 0), startY, rightX, startY + optionHeight, Paints.fillingPaint(Theme.getColor(getPressColorId())));
+        if (xgram) {
+          // XGram: the pressed option is a 12dp round-rect state layer inset 4dp, not a full-width rect
+          int inset = Screen.dp(4f);
+          com.fahadali.xgram.appearance.XgramM3Content.drawRoundRect(c, startX - (useBubbles() ? getBubbleContentPadding() : 0) + inset, startY + inset / 2, rightX - inset, startY + optionHeight - inset / 2,
+            Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M), Theme.getColor(getPressColorId()));
+        } else {
+          c.drawRect(startX - (useBubbles() ? getBubbleContentPadding() : 0), startY, rightX, startY + optionHeight, Paints.fillingPaint(Theme.getColor(getPressColorId())));
+        }
       }
 
       int optionTextY = startY + Math.max(Screen.dp(8f), Screen.dp(46f) / 2 - (option.text != null ? option.text.getLineHeight() / 2 : 0));
@@ -747,15 +755,19 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
       int progressCx = startX + Screen.dp(12f);
       int progressCy = startY + Screen.dp(22f);
       if (stateVisibility > 0f) {
-        int circleColor = ColorUtils.alphaColor(stateVisibility * (isMultiChoicePoll() ? 1f - option.getSelectionFactor() : 1f - progress), decentColor);
-        if (isMultiChoicePoll()) {
-          RectF rectF = Paints.getRectF();
-          progressRadius -= Screen.dp(1f);
-          rectF.set(progressCx - progressRadius, progressCy - progressRadius, progressCx + progressRadius, progressCy + progressRadius);
-          int squareRadius = Screen.dp(3f);
-          c.drawRoundRect(rectF, squareRadius, squareRadius, Paints.getProgressPaint(circleColor, Screen.dp(1f)));
+        if (xgram) {
+          xgramDrawOptionControl(c, option, progressCx, progressCy, stateVisibility, progress);
         } else {
-          c.drawCircle(progressCx, progressCy, progressRadius, Paints.getProgressPaint(circleColor, Screen.dp(1f)));
+          int circleColor = ColorUtils.alphaColor(stateVisibility * (isMultiChoicePoll() ? 1f - option.getSelectionFactor() : 1f - progress), decentColor);
+          if (isMultiChoicePoll()) {
+            RectF rectF = Paints.getRectF();
+            progressRadius -= Screen.dp(1f);
+            rectF.set(progressCx - progressRadius, progressCy - progressRadius, progressCx + progressRadius, progressCy + progressRadius);
+            int squareRadius = Screen.dp(3f);
+            c.drawRoundRect(rectF, squareRadius, squareRadius, Paints.getProgressPaint(circleColor, Screen.dp(1f)));
+          } else {
+            c.drawCircle(progressCx, progressCy, progressRadius, Paints.getProgressPaint(circleColor, Screen.dp(1f)));
+          }
         }
         if (progress > 0f && option.progress != null && !isMultiChoicePoll()) {
           ProgressComponent progressComponent = getResultProgressView(optionId);
@@ -789,12 +801,18 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
       int fromX = startX + Screen.dp(34f);
       int toX = startX + maxWidth;
       if (visibility > 0f) {
-        c.drawLine(fromX, lineY, fromX + (float) (toX - fromX) * getResultRatio(optionId), lineY, Paints.getProgressPaint(ColorUtils.alphaColor(visibility, lineColor),
-                Screen.dp(3f)));
-        c.drawText(option.percentageStr, fromX - option.percentageStrWidth - Screen.dp(8f), optionTextY + textOffset, Paints.getMediumTextPaint(13f, ColorUtils.alphaColor(visibility, textColor), false));
+        if (xgram) {
+          xgramDrawResult(c, option, fromX, toX, lineY, optionTextY + textOffset, getResultRatio(optionId), visibility, isChosen,
+            correctOptionIds != null, isCorrectOption, selectionFactor, textColor);
+        } else {
+          c.drawLine(fromX, lineY, fromX + (float) (toX - fromX) * getResultRatio(optionId), lineY, Paints.getProgressPaint(ColorUtils.alphaColor(visibility, lineColor),
+                  Screen.dp(3f)));
+          c.drawText(option.percentageStr, fromX - option.percentageStrWidth - Screen.dp(8f), optionTextY + textOffset, Paints.getMediumTextPaint(13f, ColorUtils.alphaColor(visibility, textColor), false));
+        }
       }
 
-      if (selectionFactor > 0f) {
+      // XGram: before the results show, the M3 checkbox or radio button shows the selection itself
+      if (selectionFactor > 0f && (!xgram || visibility > 0f)) {
         float moveFactor = option.getMoveFactor(visibility);
         float squareFactor = state.poll.allowsMultipleAnswers ? 1f : 0f;
         int checkBoxMode = isQuiz && hasAnswer && correctOptionIds != null ? (!isCorrectOption ? SimplestCheckBox.MODE_NEGATIVE : !isChosen ? SimplestCheckBox.MODE_MISSING : SimplestCheckBox.MODE_NORMAL) : SimplestCheckBox.MODE_NORMAL;
@@ -826,7 +844,7 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
       startY += optionHeight;
     }
 
-    if (highlightOptionId == HIGHLIGHT_BUTTON) {
+    if (highlightOptionId == HIGHLIGHT_BUTTON && !xgram) {
       if (useBubble() && !useForward()) {
         final int restoreToCount = Views.save(c);
         c.clipRect(getActualLeftContentEdge(), startY, getActualRightContentEdge(), getBottomContentEdge());
@@ -845,6 +863,10 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
         maxVisibility = Math.max(entry.getVisibility(), maxVisibility);
         int x = startX + maxWidth / 2 - entry.item.text.getWidth() / 2;
         int y = startY + Screen.dp(useBubbles() ? 6f : 4f);
+        if (xgram && highlightOptionId == HIGHLIGHT_BUTTON) {
+          // XGram: M3 text button: a full-pill state layer while pressed
+          xgramDrawButtonPill(c, entry.item, x, y, startX, maxWidth, entry.getVisibility());
+        }
         /*float textVisibility = entry.getVisibility();
         if (textVisibility != 1f) {
           float scale = .9f + .1f * textVisibility;
@@ -910,6 +932,61 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
     if (changeFactor == 1f)
       return futureState.timerVisibility;
     return fromTo(state.timerVisibility, futureState.timerVisibility, changeFactor);
+  }
+
+  // XGram: Material 3 Expressive poll and quiz controls
+
+  /** M3 checkbox (multiple choice) or radio button (single choice) in place of the 1dp outlines. */
+  private void xgramDrawOptionControl (Canvas c, OptionEntry option, int cx, int cy, float stateVisibility, float voteProgress) {
+    if (isMultiChoicePoll()) {
+      final int size = Screen.dp(18f);
+      com.fahadali.xgram.appearance.XgramM3Controls.drawCheckbox(c, cx - size / 2f, cy - size / 2f, size, option.getSelectionFactor(), 0f, 0f, 1f, stateVisibility);
+      return;
+    }
+    final float dot = MathUtils.clamp(Math.max(option.getSelectionFactor(), voteProgress));
+    final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+    final int ring = isOutgoingBubble() ?
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), .7f) :
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    final int ringColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(ColorUtils.fromToArgb(ring, primary, dot), stateVisibility * (1f - voteProgress));
+    final int dotColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(primary, stateVisibility);
+    com.fahadali.xgram.appearance.XgramM3Controls.drawRadio(c, cx, cy, ringColor, dotColor, dot);
+  }
+
+  /** Results as M3 flat linear progress: 4dp, gap, track and stop dot; the percentage in labelLarge. */
+  private void xgramDrawResult (Canvas c, OptionEntry option, int fromX, int toX, int lineY, int textY, float ratio, float visibility, boolean isChosen, boolean isQuizResult, boolean isCorrectOption, float selectionFactor, int textColor) {
+    int active;
+    if (isOutgoingBubble()) {
+      final int onContainer = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
+      active = isChosen ? onContainer : com.fahadali.xgram.appearance.XgramExpressive.withAlpha(onContainer, .5f);
+    } else {
+      active = com.fahadali.xgram.appearance.XgramExpressive.color(isChosen ? com.fahadali.xgram.appearance.XgramExpressive.PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY);
+    }
+    if (isQuizResult) {
+      final int quizColor = isCorrectOption ?
+        Theme.getColor(org.thunderdog.challegram.theme.ColorId.messageCorrectFilling) :
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR);
+      active = ColorUtils.fromToArgb(active, quizColor, selectionFactor * visibility);
+    }
+    com.fahadali.xgram.appearance.XgramM3Content.drawLinearProgress(c, fromX, toX, lineY, ratio,
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(active, visibility),
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(active, .24f * visibility));
+    if (option.percentageStr != null) {
+      c.drawText(option.percentageStr, fromX - Screen.dp(8f), textY, com.fahadali.xgram.appearance.XgramM3Content.labelLargeEndPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(textColor, visibility)));
+    }
+  }
+
+  /** The pressed state of the Vote and View results text buttons: a full pill at primary .10 around the label. */
+  private void xgramDrawButtonPill (Canvas c, Button button, int x, int y, int startX, int maxWidth, float visibility) {
+    final float padding = Screen.dp(12f);
+    final float extra = commonProgress != null && button.id == R.id.btn_vote ? Screen.dp(13f) : 0f;
+    final float cy = y + button.text.getHeight() / 2f;
+    final float minLeft = startX - (useBubbles() ? getBubbleContentPadding() : 0);
+    final float maxRight = startX + maxWidth + (useBubbles() ? getBubblePaddingRight() : 0);
+    final float left = Math.max(minLeft, x - padding);
+    final float right = Math.min(maxRight, x + button.text.getWidth() + extra + padding);
+    final int color = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), com.fahadali.xgram.appearance.XgramExpressive.STATE_PRESSED * visibility);
+    com.fahadali.xgram.appearance.XgramM3Content.drawPill(c, left, cy - Screen.dp(16f), right, cy + Screen.dp(16f), color);
   }
 
   private float getResultRatio (int optionId) {
@@ -1331,7 +1408,11 @@ public class TGMessagePoll extends TGMessage implements ClickHelper.Delegate, Co
     } else {
       id = 0; str = null;
     }
-    if (str != null) {
+    if (str != null && !isInactive && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive text button label (labelLarge)
+      Text text = new Text.Builder(str, getContentMaxWidth(), com.fahadali.xgram.appearance.XgramM3Content.labelLargeProvider(), getLinkColorSet()).singleLine().allBold(true).build();
+      this.button.replace(new Button(id, text, isInactive), animated);
+    } else if (str != null) {
       Text text = new Text.Builder(str, getContentMaxWidth(), isInactive ? Paints.robotoStyleProvider(12f) : getNameStyleProvider(), isInactive ? getDecentColorSet() : getLinkColorSet()).singleLine().allBold(!isInactive).build();
       this.button.replace(new Button(id, text, isInactive), animated);
     } else {

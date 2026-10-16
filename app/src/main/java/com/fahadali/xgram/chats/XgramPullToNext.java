@@ -331,16 +331,21 @@ public final class XgramPullToNext implements FactorAnimator.Target {
 
     // Circle with an arrow, filled when releasing would open the target.
     Paint fill = Paints.fillingPaint(alphaColor(alpha, bg));
-    c.drawCircle(cx, cy, radius, fill);
-    if (target != null) {
-      RectF rect = Paints.getRectF();
-      int inset = Screen.dp(2f);
-      rect.set(cx - radius + inset, cy - radius + inset, cx + radius - inset, cy + radius - inset);
-      c.drawArc(rect, -90f, 360f * progress, false, Paints.getProgressPaint(alphaColor(alpha, textColor), Screen.dp(2f)));
-    }
-    Drawable arrow = Drawables.get(view.getResources(), noTarget ? R.drawable.baseline_check_24 : R.drawable.baseline_arrow_upward_24);
-    if (arrow != null) {
-      Drawables.drawCentered(c, arrow, cx, cy, Paints.getPorterDuffPaint(alphaColor(alpha, textColor)));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      radius = Screen.dp(20f);
+      xgramDrawIndicator(c, cx, cy, radius, progress, alpha, bg, textColor);
+    } else {
+      c.drawCircle(cx, cy, radius, fill);
+      if (target != null) {
+        RectF rect = Paints.getRectF();
+        int inset = Screen.dp(2f);
+        rect.set(cx - radius + inset, cy - radius + inset, cx + radius - inset, cy + radius - inset);
+        c.drawArc(rect, -90f, 360f * progress, false, Paints.getProgressPaint(alphaColor(alpha, textColor), Screen.dp(2f)));
+      }
+      Drawable arrow = Drawables.get(view.getResources(), noTarget ? R.drawable.baseline_check_24 : R.drawable.baseline_arrow_upward_24);
+      if (arrow != null) {
+        Drawables.drawCentered(c, arrow, cx, cy, Paints.getPorterDuffPaint(alphaColor(alpha, textColor)));
+      }
     }
 
     // Text pill under the circle (two lines when there is room).
@@ -374,6 +379,55 @@ public final class XgramPullToNext implements FactorAnimator.Target {
     c.drawText(titleText, 0, titleText.length(), cx - titleWidth / 2f, textTop + Screen.dp(16.5f), titlePaint);
     if (hintText != null) {
       c.drawText(hintText, 0, hintText.length(), cx - hintWidth / 2f, textTop + Screen.dp(33f), hintPaint);
+    }
+  }
+
+  // XGram: Material 3 Expressive indicator (the PullToRefresh LoadingIndicator pattern)
+
+  @Nullable private Drawable xgramArrow, xgramCheck;
+  @Nullable private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramArmed;
+
+  /**
+   * A 40dp disk with a wavy determinate ring for the pull progress (4dp, 1.6dp amplitude, primary on primary .24).
+   * Past the threshold the disk fills primaryContainer and the glyph turns onPrimaryContainer. Draws with the
+   * helper's own paints, so the shared filling paint keeps the pill color.
+   */
+  private void xgramDrawIndicator (Canvas c, float cx, float cy, int radius, float progress, float alpha, int bg, int textColor) {
+    final boolean isArmed = armed && target != null;
+    if (xgramArmed == null) {
+      xgramArmed = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, isArmed ? 1f : 0f, (s, value) -> view.invalidate());
+    } else if (xgramArmed.getTarget() != (isArmed ? 1f : 0f)) {
+      xgramArmed.animateTo(isArmed ? 1f : 0f);
+    }
+    final float armedFactor = Math.max(0f, Math.min(1f, xgramArmed.getValue()));
+    final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+    final int disk = me.vkryl.core.ColorUtils.fromToArgb(bg, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER), armedFactor);
+    final int glyph = me.vkryl.core.ColorUtils.fromToArgb(textColor, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), armedFactor);
+    com.fahadali.xgram.appearance.XgramM3Content.drawPill(c, cx - radius, cy - radius, cx + radius, cy + radius, alphaColor(alpha, disk));
+    if (target != null) {
+      final float stroke = Screen.dpf(com.fahadali.xgram.appearance.XgramM3Content.WAVY_STROKE_DP);
+      final float amplitude = Screen.dpf(com.fahadali.xgram.appearance.XgramM3Content.WAVY_AMPLITUDE_DP);
+      final float ringRadius = radius - stroke / 2f - amplitude - Screen.dpf(.5f);
+      com.fahadali.xgram.appearance.XgramWavyProgress.drawCircular(c, cx, cy, ringRadius, stroke, progress,
+        alphaColor(alpha, primary), alphaColor(alpha * .24f, primary), amplitude);
+      if (pulling && com.fahadali.xgram.appearance.XgramM3Content.needsWaveFrame(progress, 1f)) {
+        view.postInvalidateOnAnimation(); // the wave travels while the finger holds the pull
+      }
+    }
+    final Drawable icon;
+    if (noTarget) {
+      if (xgramCheck == null) {
+        xgramCheck = Drawables.get(view.getResources(), R.drawable.baseline_check_24);
+      }
+      icon = xgramCheck;
+    } else {
+      if (xgramArrow == null) {
+        xgramArrow = Drawables.get(view.getResources(), R.drawable.baseline_arrow_upward_24);
+      }
+      icon = xgramArrow;
+    }
+    if (icon != null) {
+      Drawables.drawCentered(c, icon, cx, cy, Paints.getPorterDuffPaint(alphaColor(alpha, glyph)));
     }
   }
 

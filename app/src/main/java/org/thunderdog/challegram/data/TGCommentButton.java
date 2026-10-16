@@ -377,10 +377,97 @@ public final class TGCommentButton implements FactorAnimator.Target, TextColorSe
   }
 
   public void draw (@NonNull MessageView view, @NonNull Canvas c, @NonNull DrawableProvider drawableProvider, int left, int top, int right, int bottom) {
-    if (isBubble()) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (isBubble() || isInline())) {
+      xgramDrawPill(view, c, drawableProvider, left, top, right, bottom);
+    } else if (isBubble()) {
       drawBubble(view, c, drawableProvider, left, top, right, bottom);
     } else if (isInline()) {
       drawInline(view, c, drawableProvider, left, top, right, bottom);
+    }
+  }
+
+  // XGram: Material 3 Expressive comment button: a full-corner tonal pill (labelLarge), with a state layer while pressed
+
+  private @ColorInt int xgramContainerColor () {
+    if (isInline() && context.isOutgoingBubble()) {
+      return com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), .12f);
+    }
+    return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+  }
+
+  private @ColorInt int xgramContentColor () {
+    if (isInline() && context.isOutgoingBubble()) {
+      return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
+    }
+    return com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+  }
+
+  private void xgramDrawPill (@NonNull MessageView view, @NonNull Canvas c, @NonNull DrawableProvider drawableProvider, int left, int top, int right, int bottom) {
+    final boolean inline = isInline();
+    final boolean useBubbles = context.useBubbles();
+    if (rect.left != left || rect.top != top || rect.right != right || rect.bottom != bottom) {
+      rect.set(left, top, right, bottom); // touch area, as before
+    }
+    final float alpha = visibilityAnimator.getFloatValue();
+    final float selectionFactor = selectionAnimator != null ? selectionAnimator.getFloatValue() : 0f;
+    final float fadeFactor = fadeAnimator != null ? fadeAnimator.getFloatValue() : 0f;
+    final int contentColor = xgramContentColor();
+
+    final float pillLeft = inline ? left + Screen.dp(8f) : left;
+    final float pillRight = inline ? right - Screen.dp(8f) : right;
+    final float pillTop = inline ? top + Screen.dp(6f) : top;
+    final float pillBottom = inline ? bottom - Screen.dp(6f) : bottom;
+    final float cy = (pillTop + pillBottom) / 2f;
+    final int saveCount;
+    if (alpha != 1f) {
+      // Showing or hiding: the height animates, keep the content inside it
+      saveCount = c.save();
+      c.clipRect(left, top, right, bottom);
+    } else {
+      saveCount = -1;
+    }
+    com.fahadali.xgram.appearance.XgramM3Content.drawPill(c, pillLeft, pillTop, pillRight, pillBottom, com.fahadali.xgram.appearance.XgramExpressive.withAlpha(xgramContainerColor(), alpha));
+    if (selectionFactor > 0f) {
+      final int stateLayer = com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(contentColor);
+      com.fahadali.xgram.appearance.XgramM3Content.drawPill(c, pillLeft, pillTop, pillRight, pillBottom, com.fahadali.xgram.appearance.XgramExpressive.withAlpha(stateLayer, alpha * selectionFactor * (1f - fadeFactor)));
+    }
+
+    final Paint iconPaint = Paints.getPorterDuffPaint(contentColor);
+    iconPaint.setAlpha((int) (255f * alpha));
+    if (inline) {
+      Drawable icon = drawableProvider.getSparseDrawable(R.drawable.baseline_forum_18, ColorId.inlineIcon);
+      float iconX = useBubbles ? left + Screen.dp(16f) : (TGMessage.getContentLeft() - icon.getMinimumWidth()) / 2f;
+      Drawables.draw(c, icon, iconX, cy - icon.getMinimumHeight() / 2f, iconPaint);
+    } else {
+      Drawable icon = drawableProvider.getSparseDrawable(R.drawable.baseline_forum_16, getBubbleIconColorId());
+      Drawables.drawCentered(c, icon, left + Screen.dp(18f), cy, iconPaint);
+    }
+    iconPaint.setAlpha(255);
+
+    final float textX = inline ? (useBubbles ? left + Screen.dp(46f) : TGMessage.getContentLeft()) : left + Screen.dp(34f);
+    drawText(c, textX, cy, alpha);
+
+    final float arrowVisibility = arrowVisibilityAnimator.getFloatValue();
+    if (arrowVisibility > 0f) {
+      int arrowColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(contentColor, alpha * arrowVisibility * .7f);
+      int arrowX = right - (inline ? (useBubbles ? Screen.dp(22f) : Screen.dp(18f)) : Screen.dp(12f));
+      int arrowY = Math.round(cy);
+      float arrowScale = 0.75f;
+      c.save();
+      c.scale(arrowScale, arrowScale, arrowX, arrowY);
+      DrawAlgorithms.drawDirection(c, arrowX, arrowY, arrowColor, Gravity.RIGHT);
+      c.restore();
+    }
+
+    int avatarsX = right - (inline ? (useBubbles ? Screen.dp(16f) : Screen.dp(38f)) : Screen.dp(6f));
+    int avatarsY = Math.round(cy);
+    avatars.draw(c, view.getAvatarsReceiver(), avatarsX, avatarsY, Gravity.RIGHT, alpha);
+
+    float badgeX = avatarsX - avatars.getAnimatedWidth() - Screen.dp(8f) - Screen.dp(BADGE_RADIUS);
+    drawBadge(c, badgeX, cy, alpha);
+
+    if (saveCount != -1) {
+      c.restoreToCount(saveCount);
     }
   }
 
@@ -555,6 +642,9 @@ public final class TGCommentButton implements FactorAnimator.Target, TextColorSe
   }
 
   @Override public int defaultTextColor () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && (isInline() || isBubble())) {
+      return xgramContentColor(); // XGram: on the tonal pill
+    }
     if (isInline()) {
       TdlibAccentColor accentColor = context.getContentAccentColor();
       if (accentColor != null) {
@@ -606,6 +696,10 @@ public final class TGCommentButton implements FactorAnimator.Target, TextColorSe
   }
 
   @Override public Text onCreateTextDrawable (String text) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: labelLarge on the tonal pill
+      return new Text.Builder(text, Integer.MAX_VALUE, com.fahadali.xgram.appearance.XgramM3Content.labelLargeProvider(), this).noSpacing().allBold().build();
+    }
     return new Text.Builder(text, Integer.MAX_VALUE, Paints.robotoStyleProvider(getTextSize()), this).noSpacing().allBold().build();
   }
 

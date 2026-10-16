@@ -141,8 +141,60 @@ class RoundProgressView extends View implements FactorAnimator.Target {
 
   private float lastDrawProgress;
 
+  // XGram: Material 3 Expressive: a circular wavy ring in primary, its wave springing in while playing
+  private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramWave;
+  private boolean xgramWavePlaying;
+
+  private boolean xgramIsVisibleNow () {
+    if (!isShown() || getAlpha() <= 0f) {
+      return false;
+    }
+    android.view.ViewParent parent = getParent();
+    return !(parent instanceof View) || ((View) parent).getAlpha() > 0f;
+  }
+
+  private void xgramDraw (Canvas c) {
+    final float progress = controller != null ? controller.getVisualProgress() : this.visualProgress;
+    final int viewWidth = getMeasuredWidth();
+    final int viewHeight = getMeasuredHeight();
+    final boolean playing = controller != null && controller.getVisualIsPlaying() >= .5f;
+    if (xgramWave == null) {
+      xgramWave = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, playing ? 1f : 0f, (s, value) -> invalidate());
+      xgramWavePlaying = playing;
+    } else if (xgramWavePlaying != playing) {
+      xgramWavePlaying = playing;
+      xgramWave.animateTo(playing ? 1f : 0f);
+    }
+    final float wave = xgramWave.getValue();
+    if (progress != 0f) {
+      final float size = Math.min(viewWidth, viewHeight);
+      com.fahadali.xgram.appearance.XgramM3Content.drawRoundVideoRing(c, viewWidth / 2f, viewHeight / 2f,
+        com.fahadali.xgram.appearance.XgramM3Content.roundVideoRingRadius(size), progress, wave, 1f);
+    }
+    if (this.progress != null) {
+      c.drawCircle(viewWidth / 2, viewHeight / 2, Screen.dp(12f), Paints.fillingPaint(ColorUtils.alphaColor(this.progress.getAlpha(), 0x44000000)));
+      this.progress.draw(c);
+    }
+    this.lastDrawProgress = progress;
+    if (playing && com.fahadali.xgram.appearance.XgramM3Content.needsWaveFrame(progress, wave) && xgramIsVisibleNow()) {
+      postInvalidateOnAnimation();
+    }
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow();
+    if (xgramWave != null) {
+      xgramWave.setValue(xgramWave.getTarget()); // XGram: stops the spring where it was heading
+    }
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c);
+      return;
+    }
     final float progress = controller != null ? controller.getVisualProgress() : this.visualProgress;
     final int viewWidth = getMeasuredWidth();
     final int viewHeight = getMeasuredHeight();
