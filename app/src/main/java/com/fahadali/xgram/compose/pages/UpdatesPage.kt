@@ -263,8 +263,9 @@ private fun UpdateSplitButton(
       DropdownMenu(
         expanded = expanded,
         onDismissRequest = { expanded = false },
-        // Pure black: the menu takes the card step, as surfaceContainer is the black page under it
-        containerColor = if (com.fahadali.xgram.appearance.XgramAmoled.isActive()) MaterialTheme.colorScheme.surfaceContainerHigh else MenuDefaults.containerColor
+        // Pure black: the menu takes the chip step, as surfaceContainer is the black page under it and the card step
+        // is the tiles it can float over (XgramAmoled.floatingRole)
+        containerColor = if (com.fahadali.xgram.appearance.XgramAmoled.isActive()) MaterialTheme.colorScheme.surfaceContainerHighest else MenuDefaults.containerColor
       ) {
         DropdownMenuItem(
           text = { Text(str(R.string.XgramWhatsNew)) },

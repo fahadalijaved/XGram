@@ -852,7 +852,8 @@ public final class XgramExpressive {
 
     /**
      * As {@link #setColorRole(int)} for a floating container (a menu or popup): with Pure black on in the dark theme it
-     * draws in the card step instead, as the page under it is black ({@link XgramAmoled#floatingRole}). Read at draw
+     * draws in the chip step instead, as the page under it is black and the cards it floats over are the card step
+     * ({@link XgramAmoled#floatingRole}). Read at draw
      * time, so the switch applies to a container already built.
      */
     public void setFloatingColorRole (int role) {

@@ -64,7 +64,9 @@ public final class XgramW2MediaViewer {
   public static Drawable newToolbarBackground () {
     GradientDrawable pill = new GradientDrawable();
     pill.setShape(GradientDrawable.RECTANGLE);
-    pill.setColor(XgramM3MediaChrome.onMedia(XgramExpressive.SURFACE_CONTAINER));
+    // With pure black saved, onMedia's dark scheme makes surfaceContainer the black page level, which vanishes on the
+    // black scrim over letterboxed media: the pill takes the chip step, distinct from the scrim and the caption field
+    pill.setColor(XgramM3MediaChrome.onMedia(XgramAmoled.isEnabled() ? XgramExpressive.SURFACE_CONTAINER_HIGHEST : XgramExpressive.SURFACE_CONTAINER));
     // GradientDrawable clamps the radius to half the shorter side: full corners
     pill.setCornerRadius(Screen.dp(100f));
     final int inset = Screen.dp(TOOLBAR_INSET_DP);

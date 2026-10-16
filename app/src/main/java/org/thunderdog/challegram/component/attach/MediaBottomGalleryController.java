@@ -667,6 +667,12 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
           clipBottom += bottom - (bottomBarBottom - bottomBarHeight);
         }
 
+        // XGram: the sheet can sit inside its popup with a left margin (its pane beside the rail or the chat list, or
+        // a cutout), while the media viewer's popup spans the window from x 0, as the sheet's popup does
+        final int dx = mediaLayout.getLeft();
+        left += dx;
+        right += dx;
+
         location.set(left, top, right, bottom);
         location.setClip(0, clipTop, 0, clipBottom);
 

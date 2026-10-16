@@ -77,6 +77,8 @@ public final class XgramM3PollCreate {
   private static final float COUNTER_SPACE = 32f;
   /** The quiz answer check box: Telegram X's 56dp box moved past the handle (it slides the text 40dp further). */
   private static final float QUIZ_CHECK_START = 40f;
+  /** How far MaterialEditTextGroup slides the text while the check box shows (towards the end). */
+  private static final float QUIZ_CHECK_SLIDE = 40f;
   /** MaterialEditTextGroup floats its label at this scale: the label's size that floats to labelMedium. */
   private static final float LABEL_FLOATED_SCALE = 1f - .23076923f;
 
@@ -155,6 +157,9 @@ public final class XgramM3PollCreate {
     setTile(frame);
     frame.setMinimumHeight(Screen.dp(ROW_HEIGHT));
     group.setWillNotDraw(true);
+    // The quiz box goes next to the handle: the row's right in RTL, with the slide mirrored. Set before modifyEditText
+    // first adds the box (on bind)
+    group.setCheckboxAtRight(rtl);
 
     ViewGroup.LayoutParams params = group.getLayoutParams();
     if (params instanceof FrameLayout.LayoutParams) {
@@ -306,11 +311,24 @@ public final class XgramM3PollCreate {
       return;
     }
     if (itemId == R.id.option) {
+      final boolean rtl = Lang.rtl();
       ViewGroup.LayoutParams params = box.getLayoutParams();
-      int margin = Screen.dp(Lang.rtl() ? TEXT_END : QUIZ_CHECK_START);
-      if (params instanceof FrameLayout.LayoutParams && ((FrameLayout.LayoutParams) params).leftMargin != margin) {
-        ((FrameLayout.LayoutParams) params).leftMargin = margin;
-        box.setLayoutParams(params);
+      if (params instanceof FrameLayout.LayoutParams) {
+        // Past the handle, on the handle's side: the row's right in RTL (styleOption puts the box at the right there)
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) params;
+        int left = rtl ? 0 : Screen.dp(QUIZ_CHECK_START), right = rtl ? Screen.dp(QUIZ_CHECK_START) : 0;
+        if (lp.leftMargin != left || lp.rightMargin != right) {
+          lp.leftMargin = left;
+          lp.rightMargin = right;
+          box.setLayoutParams(lp);
+        }
+      }
+      if (row.getChildCount() > 0 && row.getChildAt(0) instanceof MaterialEditTextGroup) {
+        // While the box shows, the text slides 40dp towards the end: the end padding keeps that room, so wrapped text
+        // stops before the remaining-characters counter instead of running under it and past the clipped group
+        MaterialEditText input = ((MaterialEditTextGroup) row.getChildAt(0)).getEditText();
+        int end = Screen.dp(COUNTER_SPACE) + (isQuiz ? Screen.dp(QUIZ_CHECK_SLIDE) : 0);
+        input.setPadding(rtl ? end : 0, input.getPaddingTop(), rtl ? 0 : end, input.getPaddingBottom());
       }
       if (box.isClickable() != isQuiz) {
         box.setClickable(isQuiz);
@@ -439,11 +457,22 @@ public final class XgramM3PollCreate {
     }
   }
 
-  /** The dragged option: lifted (elevation 3) with every corner at the pressed 16dp, settling back on drop. */
+  /**
+   * The dragged option: lifted (elevation 3) with every corner at the pressed 16dp and the 16% dragged state layer
+   * (the shadow alone does not show on the dark tiles it slides over), settling back on drop.
+   */
   private static void setDragged (View row, boolean dragged) {
     XgramExpressive.MorphDrawable tile = XgramExpressive.findMorph(row.getBackground());
     if (tile != null) {
       tile.setCornerTarget(dragged ? XgramExpressive.LIST_PRESSED_CORNER : Float.NaN, true);
+      if (dragged) {
+        tile.setColor(me.vkryl.core.ColorUtils.compositeColor(
+          XgramExpressive.color(XgramExpressive.SURFACE_BRIGHT),
+          XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.STATE_DRAGGED)
+        ));
+      } else {
+        tile.setColorRole(XgramExpressive.SURFACE_BRIGHT);
+      }
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       row.setTranslationZ(dragged ? Screen.dp(XgramExpressive.ELEVATION_3) : 0f);

@@ -250,7 +250,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
     xgramRect.set(editText.getLeft() + editText.getTranslationX(), 0, editText.getRight() + editText.getTranslationX(), bottom);
     xgramPath.rewind();
     xgramPath.addRoundRect(xgramRect, xgramRadii, Path.Direction.CW);
-    xgramPaint.setColor(XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.role(XgramExpressive.SURFACE_CONTAINER_HIGHEST, XgramExpressive.SURFACE_CONTAINER_HIGH)));
+    xgramPaint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST));
     c.drawPath(xgramPath, xgramPaint);
   }
 
@@ -406,6 +406,11 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   private static final int ANIMATOR_RADIO_VISIBILITY = 6;
   private CheckBoxView checkboxView;
   private BoolAnimator checkboxVisible;
+  private boolean checkboxAtRight;
+
+  public void setCheckboxAtRight (boolean atRight) {
+    this.checkboxAtRight = atRight;
+  }
 
   public void setCheckboxVisible (boolean visible, boolean circular, boolean animated) {
     if (checkboxView != null || visible) {
@@ -428,7 +433,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
       .builder(checkboxView)
       .controller(controller)
       .offset(outRect ->
-        outRect.offset(-Screen.dp(40f) * (1f - checkboxVisible.getFloatValue()), 0)
+        outRect.offset((checkboxAtRight ? 1f : -1f) * Screen.dp(40f) * (1f - checkboxVisible.getFloatValue()), 0)
       )
       .show(tdlib, stringRes)
       .hideDelayed();
@@ -456,7 +461,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
       int size = Screen.dp(18f);
       int padding = Screen.dp(19f);
       checkboxView = CheckBoxView.simpleCheckBox(getContext(), true);
-      checkboxView.setLayoutParams(FrameLayoutFix.newParams(size + padding * 2, size + padding * 2, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+      checkboxView.setLayoutParams(FrameLayoutFix.newParams(size + padding * 2, size + padding * 2, (checkboxAtRight ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL));
       checkboxView.setPadding(padding, padding, padding, padding);
       checkboxView.setOnClickListener(v -> {
         if (radioClickListener != null) {
@@ -473,8 +478,9 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
 
   private void setRadioVisibility (float factor) {
     checkboxView.setAlpha(factor);
-    checkboxView.setTranslationX(-Screen.dp(40f) * (1f - factor));
-    editText.setTranslationX(Screen.dp(40f) * factor);
+    final float dir = checkboxAtRight ? -1f : 1f;
+    checkboxView.setTranslationX(-dir * Screen.dp(40f) * (1f - factor));
+    editText.setTranslationX(dir * Screen.dp(40f) * factor);
     if (radioTooltip != null) {
       radioTooltip.reposition();
     }

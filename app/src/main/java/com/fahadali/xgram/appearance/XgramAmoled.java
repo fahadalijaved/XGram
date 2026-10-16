@@ -21,8 +21,8 @@ import org.thunderdog.challegram.theme.ThemeManager;
  * Pure black (AMOLED) night mode for Expressive design. While it is on and the app is dark, the surface roles fold into
  * three levels: every page-level surface (pages, app bars, panes, the rail, sheets, the composer bar, the chat
  * background without a wallpaper, the status and navigation bars) is black, cards on it (list tiles, incoming bubbles,
- * text fields, dialogs, pinned and join request bars) one near-black step, and chips and pills inside those cards the
- * next step, so nothing is grey on grey. Content colors (onSurface, outlines) and the accent containers stay the
+ * dialogs, pinned and join request bars) one near-black step, and chips, pills and text fields inside those cards, and
+ * menus floating over them, the next step, so nothing is grey on grey. Content colors (onSurface, outlines) and the accent containers stay the
  * dynamic scheme's, and the light scheme is never changed. Everything drawn with the surface roles follows: Telegram X's
  * colors (XgramM3Colors through XgramExpressive.colorFor) and the Compose pages (XgramM3Theme).
  */
@@ -61,8 +61,8 @@ public final class XgramAmoled {
 
   /**
    * {@code pureBlackRole} while pure black draws ({@link #isActive()}), else {@code role}: for a call site whose M3
-   * role lands on the wrong level once the page roles are black, such as a filled text field drawn straight on the page
-   * (surfaceContainerHighest, a chip step with pure black, where a field is a card: surfaceContainerHigh).
+   * role lands on the wrong level once the page roles are black. Only for a call site that is always drawn on the
+   * same level: a view that can sit on a card (a tile, a dialog) as well as on the page must keep its role.
    */
   public static int role (int role, int pureBlackRole) {
     return isActive() ? pureBlackRole : role;
@@ -70,11 +70,13 @@ public final class XgramAmoled {
 
   /**
    * The role of a floating container (a menu, popup or rich tooltip) that M3 draws in {@code role}: surfaceContainer
-   * and surfaceContainerLow are black with pure black, like the page under the container, where no shadow shows, so it
-   * takes the card step (surfaceContainerHigh) instead.
+   * and surfaceContainerLow are black with pure black, like the page under the container, where no shadow shows, and
+   * the card step is what these containers float over (incoming bubbles, the pinned bar, list tiles), so it takes the
+   * chip step (surfaceContainerHighest, #1E1E1E) instead, distinct from both. Nothing drawn inside these containers
+   * uses that role: their selected pills are secondaryContainer.
    */
   public static int floatingRole (int role) {
-    return isActive() ? XgramExpressive.SURFACE_CONTAINER_HIGH : role;
+    return isActive() ? XgramExpressive.SURFACE_CONTAINER_HIGHEST : role;
   }
 
   /**
@@ -108,9 +110,10 @@ public final class XgramAmoled {
    * <li>Page, black: surface and dim (pages, the chat), surfaceContainerLow (sheets, the drawer, the emoji and keyboard
    * panels) and surfaceContainer (the settings page under its tiles, app bars, the rail, the two-pane gap, the attach
    * bar, the navigation and status bars).</li>
-   * <li>Card, #121212: surfaceBright (list tiles) and surfaceContainerHigh (incoming bubbles, text fields, the pinned
-   * and join request bars, chips on the chat background, dialogs, menus).</li>
-   * <li>Chip, #1E1E1E: surfaceContainerHighest (placeholders, muted badges, switch tracks, bot keyboard buttons) and
+   * <li>Card, #121212: surfaceBright (list tiles) and surfaceContainerHigh (incoming bubbles, the pinned and join
+   * request bars, chips on the chat background, dialogs).</li>
+   * <li>Chip, #1E1E1E: surfaceContainerHighest (filled text fields, placeholders, muted badges, switch tracks, bot
+   * keyboard buttons, and floating menus and popups through {@link #floatingRole}) and
    * surfaceContainerLowest. Nothing is darker than black, so lowest, which M3 uses for a recessed chip inside a raised
    * container (reactions in a bubble), is the chip step above the card instead of a black hole in it.</li>
    * </ul>

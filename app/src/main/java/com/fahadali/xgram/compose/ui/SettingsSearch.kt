@@ -115,11 +115,16 @@ fun SettingsSearchOverlay(state: SettingsSearchState, onMainHit: (Int) -> Unit) 
     }
   }
 
-  // The full-screen search view: the same container colour as the pill, and no line under the field.
+  // The full-screen search view: the same container colour as the pill, and no line under the field. With pure black
+  // the pill's surfaceContainerHigh is the card step the result rows are drawn in, so the view takes the page colour,
+  // as SettingsPage does, and the rows read as cards on it.
   ExpandedFullScreenSearchBar(
     state = searchState,
     inputField = { SearchInputField(textState, searchState, scope, expandedLook = true) },
-    colors = SearchBarDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh, dividerColor = Color.Transparent)
+    colors = SearchBarDefaults.colors(
+      containerColor = if (com.fahadali.xgram.appearance.XgramAmoled.isActive()) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+      dividerColor = Color.Transparent
+    )
   ) {
     val query = textState.text.toString()
     val hits = remember(query, index) { filterHits(index, query) }
