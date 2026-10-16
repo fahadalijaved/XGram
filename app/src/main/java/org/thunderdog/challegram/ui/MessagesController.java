@@ -921,7 +921,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         return toastAlertView;
       }
     };
-    toastAlertView.setTextSize(15f);
+    toastAlertView.setTextSize(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 14f : 15f); // XGram: bodyMedium on its Material 3 Expressive card
     addThemeTextAccentColorListener(toastAlertView);
     ViewSupport.setThemedBackground(toastAlertView, ColorId.filling, this);
     toastAlertView.setTextColorId(ColorId.text);
@@ -1158,6 +1158,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     goToPrevFoundMessageButtonBadge.setTranslationX(CircleCounterBadgeView.BUTTON_WRAPPER_WIDTH);
     goToPrevFoundMessageButtonBadge.setEnabled(false, false);
     searchNavigationButtonVisibleAnimator.setValue(false, false);
+    xgramSetupChatFabs(); // XGram
 
     searchByUserViewWrapper = new ChatSearchMembersView(context, this);
     searchByUserViewWrapper.setVisibility(View.GONE);
@@ -6406,11 +6407,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
     int baseY = needSearchControlsTranslate() ? (int) ((float) barHeight * MathUtils.clamp(searchControlsFactor)) : 0;
     float fromY = bottomButtonFactor == 1f ? baseY : baseY + (int) ((float) barHeight * (1f - bottomButtonFactor));
     float alpha = (1f - 1f * collapseFactor * (1f - bottomButtonFactor)) * (1f - searchControlsFactor);
-    int moveBy = Screen.dp(74f) - Screen.dp(16f);
-    float toY = -getButtonsOffset() - Screen.dp(16f) - moveBy - moveBy * mentionButtonFactor + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme); //  -getReplyOffset() - (Screen.dp(74f) - Screen.dp(48f)) / 2f;
+    // XGram: with Expressive design the bar collapses into a 56dp FAB one slot above the scroll FAB: its centre 44dp
+    // from the end (16dp margin + 28dp) and 44dp + 68dp above the input bar, 20dp + 68dp above the bar's own centre
+    final boolean xgramFabs = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    int moveBy = xgramFabPitch();
+    float toY = -getButtonsOffset() - Screen.dp(xgramFabs ? 20f : 16f) - moveBy - moveBy * mentionButtonFactor + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme); //  -getReplyOffset() - (Screen.dp(74f) - Screen.dp(48f)) / 2f;
     bottomBar.setCollapseFactor(collapseFactor);
     bottomBar.setAlpha(alpha);
-    int dx = (int) ((bottomBar.getMeasuredWidth() / 2f - Screen.dp(16f) - Screen.dp(48f) / 2f) * detachFactor);
+    int dx = (int) ((bottomBar.getMeasuredWidth() / 2f - Screen.dp(16f) - Screen.dp(xgramFabs ? CircleButton.XGRAM_CHAT_FAB_DP : 48f) / 2f) * detachFactor);
     bottomBar.setTranslationY(bottomButtonFactor == 1f && detachFactor == 0f ? fromY : fromY + (toY - fromY) * detachFactor);
     bottomBar.setTranslationX(dx);
     int desiredVisibility = (bottomButtonFactor > 0f && searchControlsFactor != 1f) ? View.VISIBLE : View.GONE;
@@ -6703,7 +6707,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private final BoolAnimator scrollToBottomReverse = new BoolAnimator(0, new FactorAnimator.Target() {
     @Override
     public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
-      scrollToBottomButton.setRotation(180f * factor);
+      if (scrollToBottomButton.xgramIsChatFab()) {
+        scrollToBottomButton.setIconRotation(180f * factor, false); // XGram: the arrow turns, the FAB and its badge stay
+      } else {
+        scrollToBottomButton.setRotation(180f * factor);
+      }
     }
   }, AnimatorUtils.DECELERATE_INTERPOLATOR, 120l);
 
@@ -6731,6 +6739,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     boolean animated = isUpdate && scrollToBottomVisible.getFloatValue() > 0f && isFocused();
     boolean isMuted = messageThread == null && !tdlib.chatNotificationsEnabled(getChatId());
     unreadCountView.setCounter(unreadCount, isMuted, animated);
+    scrollToBottomButton.xgramSetBadge(unreadCount, isMuted, animated); // XGram: the M3 badge of the FAB
   }
 
   private static final int ANIMATOR_MENTION_BUTTON = 7;
@@ -6767,6 +6776,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       boolean visible = mentionCount > 0;
       boolean animate = isFocused();
       mentionCountView.setCounter(mentionCount, false, animate && mentionButtonFactor > 0f);
+      mentionButton.xgramSetBadge(mentionCount, false, animate && mentionButtonFactor > 0f); // XGram
       setMentionButtonVisible(visible, animate);
     }
   }
@@ -6779,6 +6789,48 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramPopScale(mentionButtonWrap, factor);
       updateBottomBarStyle();
     }
+  }
+
+  /**
+   * XGram M3E: the floating chat buttons are M3 FABs (CircleButton draws the 56dp, 16dp-corner secondaryContainer
+   * container). Each is laid out at 64dp so its M3 badge fits on the container's corner; the wrap keeps its 12dp
+   * margins, which puts the container 16dp from the screen edge and 16dp above the input bar (the M3 FAB margins).
+   * The counts move from Telegram X's counter views into those badges, and the wraps pop in and out from the FAB's
+   * own centre. The search arrows get 16dp margins for their 56dp FABs. Nothing with Expressive design off.
+   */
+  private void xgramSetupChatFabs () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    final int size = Screen.dp(CircleButton.XGRAM_CHAT_FAB_DP + 8f);
+    final CircleButton[] buttons = {mentionButton, scrollToBottomButton, reactionsButton};
+    final View[] wraps = {mentionButtonWrap, scrollToBottomButtonWrap, reactionsButtonWrap};
+    final View[] counters = {mentionCountView, unreadCountView, reactionsCountView};
+    for (int i = 0; i < buttons.length; i++) {
+      if (buttons[i] == null || !buttons[i].xgramIsChatFab()) {
+        continue;
+      }
+      buttons[i].setLayoutParams(FrameLayoutFix.newParams(size, size, Gravity.RIGHT | Gravity.BOTTOM));
+      if (counters[i] != null) {
+        counters[i].setVisibility(View.GONE);
+      }
+      if (wraps[i] != null) {
+        wraps[i].setPivotX(Screen.dp(118f) - size / 2f);
+        wraps[i].setPivotY(Screen.dp(74f) - size / 2f);
+      }
+    }
+    for (View badge : new View[] {goToNextFoundMessageButtonBadge, goToPrevFoundMessageButtonBadge}) {
+      if (badge != null && badge.getLayoutParams() instanceof RelativeLayout.LayoutParams) {
+        RelativeLayout.LayoutParams badgeParams = (RelativeLayout.LayoutParams) badge.getLayoutParams();
+        badgeParams.rightMargin = badgeParams.bottomMargin = Screen.dp(16f);
+        badge.setLayoutParams(badgeParams);
+      }
+    }
+  }
+
+  /** XGram: the step between stacked floating buttons: Telegram X's 58dp, 68dp for the 56dp M3 FABs (12dp apart). */
+  private static int xgramFabPitch () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(68f) : Screen.dp(74f) - Screen.dp(16f);
   }
 
   /** XGram: a floating chat button grows from .6 with the spring's overshoot (Expressive design, not with Reduce motion). */
@@ -6840,6 +6892,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       boolean visible = reactionCount > 0;
       boolean animate = isFocused();
       reactionsCountView.setCounter(reactionCount, true, animate && reactionButtonFactor > 0f);
+      reactionsButton.xgramSetBadge(reactionCount, true, animate && reactionButtonFactor > 0f); // XGram
       setReactionButtonVisible(visible, animate);
     }
     if (reactionCount > 0) {
@@ -7043,6 +7096,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private void xgramStopAutoTranslate () {
     if (chat != null) {
       com.fahadali.xgram.chats.XgramAutoTranslate.setEnabled(tdlib, chat.id, false);
+      // XGram: this chat stops translating and its bar leaves right away, not only once the posted change notice
+      // comes back (the notice then finds nothing left to change).
+      xgramCheckAutoTranslate();
     }
   }
 
@@ -7467,7 +7523,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private float getMentionButtonY () {
-    int moveY = Screen.dp(74f) - Screen.dp(16f);
+    int moveY = xgramFabPitch(); // XGram: Telegram X's Screen.dp(74f) - Screen.dp(16f) with Expressive design off
     float y = -getButtonsOffset() - moveY * scrollToBottomVisible.getFloatValue();
     if (isInForceTouchMode()) {
       y += -Screen.dp(16f) + Screen.dp(4f);
@@ -7476,8 +7532,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private float getReactionButtonY () {
-    int scrollToBottomOffset = Screen.dp(74f) - Screen.dp(16f);
-    int mentionButtonOffset = Screen.dp(74f) - Screen.dp(16f);
+    int scrollToBottomOffset = xgramFabPitch(); // XGram: Screen.dp(74f) - Screen.dp(16f) with Expressive design off
+    int mentionButtonOffset = xgramFabPitch();
 
     float y = -getButtonsOffset();
     y -= scrollToBottomOffset * scrollToBottomVisible.getFloatValue();
@@ -7509,7 +7565,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       goToPrevFoundMessageButtonBadge.setTranslationY(offsetY);
     }
     if (goToNextFoundMessageButtonBadge != null) {
-      goToNextFoundMessageButtonBadge.setTranslationY(offsetY - Screen.dp(74 - 16));
+      goToNextFoundMessageButtonBadge.setTranslationY(offsetY - (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramFabPitch() : Screen.dp(74 - 16)));
     }
     if (xgramSelectionToolbar != null) {
       boolean overBottomBar = bottomBar != null && bottomBar.getVisibility() == View.VISIBLE && bottomWrap.getVisibility() != View.VISIBLE;
@@ -14166,6 +14222,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
           }
         }
       };
+      attachedFiles.xgramSetMenuStyle(false); // XGram: the files to send keep their full-width sheet (it sizes the reply bar's offset)
       attachedFilesAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 150L);
       attachedFiles.getRecyclerView().setItemAnimator(null);
       attachedFiles.setListener(new InlineResultsWrap.PickListener() {});

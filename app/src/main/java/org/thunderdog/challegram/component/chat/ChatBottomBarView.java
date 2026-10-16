@@ -50,12 +50,26 @@ import me.vkryl.core.MathUtils;
 public class ChatBottomBarView extends BaseView {
   private Drawable drawable;
 
-  // XGram: Material 3 Expressive. The bar keeps the surface color and the action (Join, Mute, Unmute) is a filled
-  // tonal pill: secondaryContainer, 40dp tall, 16dp side margins, full corners that morph to 12dp while pressed. It
-  // still collapses into the round scroll button; the shadow only shows while it floats.
+  // XGram: Material 3 Expressive. The bar keeps the surface color and the action (Join, Mute, Unmute) is a full-width
+  // filled tonal button: secondaryContainer, 40dp tall (the small button), 16dp side margins, labelLarge in
+  // onSecondaryContainer, full corners that morph to 8dp (shape.corner.small, the small button's pressed shape) while
+  // pressed, the onSecondaryContainer state layer at 10%. When the scroll button shows it collapses into one of the
+  // chat's M3 FABs: 56dp, 16dp corners, the same secondaryContainer, the icon in onSecondaryContainer, elevation level
+  // 3 (6dp) whose shadow only shows while it floats.
   private final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
   private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress;
   private boolean xgramPressed;
+  private static Paint xgramIconPaint;
+
+  /** The collapsed icon in onSecondaryContainer at {@code alpha}; one paint, rebuilt only when the color changes. */
+  private static Paint xgramIconPaint (float alpha) {
+    int color = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+    if (xgramIconPaint == null || (xgramIconPaint.getColor() | 0xff000000) != (color | 0xff000000)) {
+      xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
+    }
+    xgramIconPaint.setAlpha((int) (255f * MathUtils.clamp(alpha)));
+    return xgramIconPaint;
+  }
 
   private void xgramInit () {
     Drawable content = new SimpleDrawable() {
@@ -65,7 +79,7 @@ public class ChatBottomBarView extends BaseView {
         if (barAlpha > 0f) {
           c.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(barAlpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE))));
         }
-        int color = ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), Theme.getColor(ColorId.circleButtonChat), collapseFactor);
+        int color = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
         RectF rectF = buildRectF();
         float radius = xgramRadius(rectF);
         c.drawRoundRect(rectF, radius, radius, Paints.fillingPaint(color));
@@ -90,14 +104,18 @@ public class ChatBottomBarView extends BaseView {
         outline.setAlpha(collapseFactor);
       }
     });
-    Views.setSimpleStateListAnimator(this);
+    // Level 3 like the other chat FABs (no Telegram X press lift); the outline alpha keeps it flat while it is a bar
+    setStateListAnimator(null);
+    setElevation(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3));
   }
 
   private float xgramRadius (RectF rectF) {
     float full = Math.min(rectF.width(), rectF.height()) / 2f;
-    float pressed = Math.min(full, Screen.dp(12f));
+    // The button's full corners go to the FAB's 16dp as it collapses
+    float resting = full + (Math.min(full, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L)) - full) * collapseFactor;
+    float pressed = Math.min(resting, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_S));
     float press = xgramPress != null ? xgramPress.getValue() * (1f - collapseFactor) : 0f;
-    return full + (pressed - full) * press;
+    return Math.max(0f, resting + (pressed - resting) * press);
   }
 
   @Override
@@ -173,7 +191,7 @@ public class ChatBottomBarView extends BaseView {
   private RectF buildRectF () {
     int fromWidth = getMeasuredWidth();
     int fromHeight = getMeasuredHeight();
-    int toSize = Screen.dp(48f);
+    int toSize = Screen.dp(xgramM3 ? org.thunderdog.challegram.widget.CircleButton.XGRAM_CHAT_FAB_DP : 48f); // XGram: the 56dp M3 FAB
 
     RectF rectF = Paints.getRectF();
 
@@ -282,7 +300,7 @@ public class ChatBottomBarView extends BaseView {
         c.drawText(xgramText, cx - xgramTextWidth / 2f, cy - (paint.ascent() + paint.descent()) / 2f, paint);
       }
       if (collapseFactor > 0f && drawable != null) {
-        Paint paint = PorterDuffPaint.get(ColorId.circleButtonChatIcon, factor * collapseFactor);
+        Paint paint = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramIconPaint(factor * collapseFactor) : PorterDuffPaint.get(ColorId.circleButtonChatIcon, factor * collapseFactor);
         Drawables.drawCentered(c, drawable, cx, cy, paint);
       }
       if (needScale) {

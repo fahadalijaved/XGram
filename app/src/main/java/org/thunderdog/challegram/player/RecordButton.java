@@ -180,10 +180,11 @@ public class RecordButton extends View implements FactorAnimator.Target, ClickHe
     }
   }
 
-  // XGram: Material 3 Expressive recording button. The disk keeps the input bar's tonal role (the mic on top of it is
-  // VoiceVideoButtonView's onPrimaryContainer glyph); the volume halo is a primary soft burst at 30% that turns once
-  // every 12 seconds (not with Reduce motion). The burst path is built once in unit size: frames only move the canvas.
-  private static final int XGRAM_DISK_ROLE = com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER;
+  // XGram: Material 3 Expressive recording button. The disk keeps the input bar's record button role, primary (the
+  // filled icon button; the mic on top of it is VoiceVideoButtonView's onPrimary glyph); the volume halo is a primary
+  // soft burst at 30% that turns once every 12 seconds (not with Reduce motion). The burst path is built once in unit
+  // size: frames only move the canvas.
+  private static final int XGRAM_DISK_ROLE = com.fahadali.xgram.appearance.XgramExpressive.PRIMARY;
   private static final long XGRAM_HALO_TURN_MS = 12000L;
   private @Nullable android.graphics.Path xgramHalo;
   private float xgramHaloCenterX, xgramHaloCenterY, xgramHaloUnit;

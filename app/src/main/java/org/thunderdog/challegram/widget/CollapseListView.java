@@ -77,6 +77,9 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
       this.view = view;
       this.shadowView = shadowView;
       this.isVisible = new BoolAnimator(0, target, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+      // XGram: Material 3 Expressive bars slide in and out on the spatial default spring, clamped (the factor feeds
+      // the bar stack's height and the messages inset, so it never goes past 1). Nothing with Expressive design off.
+      com.fahadali.xgram.appearance.XgramAppMotion.use(this.isVisible, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
       this.height = item.getVisualHeight();
     }
   }
@@ -86,6 +89,8 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
 
   public CollapseListView (@NonNull Context context) {
     super(context);
+    // XGram: the bars collapse with the header (search, selection) on the same clamped spatial default spring
+    com.fahadali.xgram.appearance.XgramAppMotion.use(globalVisibility, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
   }
 
   @Override

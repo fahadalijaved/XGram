@@ -127,8 +127,54 @@ public class MessagePreviewView extends BaseView implements AttachDelegate, Dest
   public MessagePreviewView (Context context, Tdlib tdlib) {
     super(context, tdlib);
     setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, SettingHolder.measureHeightForType(ListItem.TYPE_MESSAGE_PREVIEW)));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      setBackground(new XgramStateLayer()); // XGram: the M3 pressed state layer, not Telegram X's grey selector
+    } else
     RippleSupport.setTransparentSelector(this);
     TGLegacyManager.instance().addEmojiListener(this);
+  }
+
+  // XGram: Material 3 Expressive look of the preview (the pinned message bar, the reply / edit / link preview above
+  // the input, message previews in lists): the author in labelLarge primary (one color for every sender, so it matches
+  // the bar's primary line), the text in bodyMedium onSurfaceVariant, media thumbnails with 8dp corners
+  // (shape.corner.small), and the onSurface state layer at 10% (bounded, so the card it sits on clips it to its shape).
+
+  private static final float XGRAM_MEDIA_CORNER = com.fahadali.xgram.appearance.XgramExpressive.CORNER_S;
+
+  private static boolean xgramM3 () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  private static int xgramMediaCorner () {
+    return Screen.dp(xgramM3() ? XGRAM_MEDIA_CORNER : 3f);
+  }
+
+  /** onSurface at the pressed state-layer opacity; the color is checked on every press, so theme switches need no listener. */
+  private static final class XgramStateLayer extends android.graphics.drawable.RippleDrawable {
+    private int color;
+
+    XgramStateLayer () {
+      this(xgramStateColor());
+    }
+
+    private XgramStateLayer (int color) {
+      super(android.content.res.ColorStateList.valueOf(color), null, new android.graphics.drawable.ColorDrawable(0xff000000));
+      this.color = color;
+    }
+
+    private static int xgramStateColor () {
+      return com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
+    }
+
+    @Override
+    protected boolean onStateChange (int[] stateSet) {
+      int now = xgramStateColor();
+      if (now != color) {
+        color = now;
+        setColor(android.content.res.ColorStateList.valueOf(now));
+      }
+      return super.onStateChange(stateSet);
+    }
   }
 
   private final ViewProvider viewProvider = new SingleViewProvider(this);
@@ -473,13 +519,13 @@ public class MessagePreviewView extends BaseView implements AttachDelegate, Dest
     boolean showSmallMedia = false;
 
     if (data != null && data.forcedLocalPickedFile != null) {
-      preview = data.forcedLocalPickedFile.buildMediaPreview(tdlib, Screen.dp(IMAGE_HEIGHT), Screen.dp(3f));
+      preview = data.forcedLocalPickedFile.buildMediaPreview(tdlib, Screen.dp(IMAGE_HEIGHT), xgramMediaCorner());
     } else if (data != null) {
-      preview = MediaPreview.valueOf(tdlib, data.message, contentPreview, Screen.dp(IMAGE_HEIGHT), Screen.dp(3f));
+      preview = MediaPreview.valueOf(tdlib, data.message, contentPreview, Screen.dp(IMAGE_HEIGHT), xgramMediaCorner());
       if (preview == null && useAvatarFallback) {
         TdApi.Chat chat = tdlib.chat(data.message.chatId);
         if (chat != null && chat.photo != null) {
-          preview = MediaPreview.valueOf(tdlib, chat.photo, Screen.dp(IMAGE_HEIGHT), Screen.dp(3f));
+          preview = MediaPreview.valueOf(tdlib, chat.photo, Screen.dp(IMAGE_HEIGHT), xgramMediaCorner());
         }
       }
       showSmallMedia = data.isLinkPreviewShowSmallMedia();
@@ -527,7 +573,8 @@ public class MessagePreviewView extends BaseView implements AttachDelegate, Dest
       throw new IllegalStateException();
     }
     String title = getTitle();
-    TdlibAccentColor accentColor = data.accentColor();
+    // XGram: with Expressive design every author is primary (messageAuthor), so no sender accent here
+    TdlibAccentColor accentColor = xgramM3() ? null : data.accentColor();
 
     Drawable drawable;
     if (!Td.isEmpty(data.quote)) {
@@ -550,7 +597,7 @@ public class MessagePreviewView extends BaseView implements AttachDelegate, Dest
         title,
         null,
         availWidth,
-        Paints.robotoStyleProvider(TEXT_SIZE),
+        xgramM3() ? com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false, TEXT_SIZE) : Paints.robotoStyleProvider(TEXT_SIZE), // XGram: labelLarge
         accentColor != null ?
           accentColor::getNameColor :
           TextColorSets.Regular.MESSAGE_AUTHOR,
@@ -583,7 +630,10 @@ public class MessagePreviewView extends BaseView implements AttachDelegate, Dest
     ComplexReceiver receiver;
     if (!Td.isEmpty(text)) {
       newText = new Text.Builder(tdlib,
-        text, null, availWidth, Paints.robotoStyleProvider(TEXT_SIZE), TextColorSets.Regular.NORMAL, (text1, specificMedia) -> {
+        text, null, availWidth,
+        xgramM3() ? com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, TEXT_SIZE) : Paints.robotoStyleProvider(TEXT_SIZE), // XGram: bodyMedium
+        xgramM3() ? TextColorSets.Regular.LIGHT : TextColorSets.Regular.NORMAL, // XGram: onSurfaceVariant (textLight)
+        (text1, specificMedia) -> {
           for (ListAnimator.Entry<TextEntry> entry : contentText) {
             if (entry.item.content == text1) {
               if (!text1.invalidateMediaContent(entry.item.receiver, specificMedia)) {

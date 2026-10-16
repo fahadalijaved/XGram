@@ -14,6 +14,7 @@ package com.fahadali.xgram.chats;
 import android.content.Context;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -51,13 +52,23 @@ public final class XgramAutoTranslateBar extends FrameLayoutFix {
   /** XGram: what fades and rises in on a spring when the bar appears (Expressive design only). */
   @Nullable private View[] xgramContent;
   @Nullable private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramEnter;
+  /** XGram: the cross and what it runs, so a tap on its zone is never taken by the bar (Expressive design only). */
+  @Nullable private View xgramClose;
+  @Nullable private View.OnClickListener xgramOnClose;
 
   public XgramAutoTranslateBar (Context context, @Nullable ViewController<?> themeProvider, View.OnClickListener onClick, View.OnClickListener onClose) {
     super(context);
     setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height()));
     RippleSupport.setSimpleWhiteBackground(this, themeProvider);
     Views.setClickable(this);
-    setOnClickListener(onClick);
+    setOnClickListener(v -> {
+      // XGram: a tap that reached the bar inside the cross's zone (e.g. while the content still rises in) is the cross
+      if (xgramClose != null && xgramOnClose != null && xgramInCloseZone(xgramDownX)) {
+        xgramOnClose.onClick(xgramClose);
+      } else {
+        onClick.onClick(v);
+      }
+    });
 
     boolean rtl = Lang.rtl();
     int side = rtl ? Gravity.RIGHT : Gravity.LEFT, otherSide = rtl ? Gravity.LEFT : Gravity.RIGHT;
@@ -89,19 +100,24 @@ public final class XgramAutoTranslateBar extends FrameLayoutFix {
     addView(close);
 
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // Material 3 Expressive: a card of the group under the app bar (the bar stack gives it the surfaceContainerHigh
-      // card), a 24dp onSurfaceVariant icon 16dp from the start, the label in labelLarge onSurface 16dp after it, and
-      // the cross as a 40dp standard icon button whose corners spring on press. The content fades and rises in on a
-      // spring when the bar appears.
+      // Material 3 Expressive list item on a card of the group under the app bar (the bar stack gives it the
+      // surfaceContainerHigh card): a 24dp onSurfaceVariant leading icon 16dp from the start, the label in labelLarge
+      // onSurface 16dp after it (56dp), and the cross as the trailing standard icon button: a 24dp icon 16dp from the
+      // end inside a 40dp state layer whose corners spring to 8dp on press. Its touch target is the whole trailing
+      // 56dp x 48dp of the card (at least the M3 48dp minimum), so a tap anywhere on the cross closes the bar instead
+      // of falling through to the bar (which opens the options) or past the card's edge. The content fades and
+      // rises in on a spring when the bar appears.
       int iconSize = Screen.dp(24f);
       icon.setPadding(0, 0, 0, 0);
       icon.setLayoutParams(FrameLayoutFix.newParams(iconSize, iconSize, side | Gravity.CENTER_VERTICAL, rtl ? 0 : Screen.dp(16f), 0, rtl ? Screen.dp(16f) : 0, 0));
       com.fahadali.xgram.appearance.XgramExpressive.applyText(label, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
-      label.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, side | Gravity.TOP, rtl ? Screen.dp(48f) : Screen.dp(56f), 0, rtl ? Screen.dp(56f) : Screen.dp(48f), 0));
+      label.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, side | Gravity.TOP, Screen.dp(56f), 0, Screen.dp(56f), 0));
       close.setImageResource(XgramIconPack.map(R.drawable.baseline_close_24));
-      close.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(40f), Screen.dp(40f), otherSide | Gravity.CENTER_VERTICAL, rtl ? Screen.dp(4f) : 0, 0, rtl ? 0 : Screen.dp(4f), 0));
-      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(close);
+      close.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, otherSide | Gravity.TOP));
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(close); // the 40dp state layer, centred in the 56dp target
       xgramContent = new View[] {icon, label, close};
+      xgramClose = close;
+      xgramOnClose = onClose;
     }
 
     if (themeProvider != null) {
@@ -121,6 +137,26 @@ public final class XgramAutoTranslateBar extends FrameLayoutFix {
   /** Where a tooltip about auto-translate points to. */
   public View anchor () {
     return label;
+  }
+
+  // XGram: the trailing 56dp of the bar belongs to the cross
+
+  private float xgramDownX = -1f;
+
+  private boolean xgramInCloseZone (float x) {
+    if (x < 0f || getWidth() == 0) {
+      return false;
+    }
+    int zone = Screen.dp(56f);
+    return Lang.rtl() ? x < zone : x > getWidth() - zone;
+  }
+
+  @Override
+  public boolean dispatchTouchEvent (MotionEvent e) {
+    if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+      xgramDownX = e.getX();
+    }
+    return super.dispatchTouchEvent(e);
   }
 
   // XGram: Material 3 Expressive enter. The bar stack slides the card in; its content fades in and rises 8dp on a
