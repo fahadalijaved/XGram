@@ -559,6 +559,14 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       parent.getMaximumHeaderHeight() >= Size.getHeaderBigPortraitSize(true);
   }
 
+  /** XGram M3E: 0..1, how much a connection line (see ChatHeaderView) replaces the subtitle and the typing status. */
+  protected float xgramConnectionFactor () {
+    return 0f;
+  }
+
+  /** XGram M3E: draws the connection line in the subtitle's place; {@code subtitleTop} is the subtitle's top. */
+  protected void xgramDrawConnection (@NonNull Canvas c, float left, float subtitleTop, float avatarExpandFactor, int maxWidth) { }
+
   /** 0 for the collapsed app bar, 1 for the fully expanded header. */
   private float xgramS () {
     return Math.max(0f, Math.min(1f, scaleFactor));
@@ -930,6 +938,7 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
     float statusVisibility = state != null ? state.visibility() : 0f;
     float textAlpha = 1f - statusVisibility;
     int dy = (int) (Screen.dp(12f) * statusVisibility);
+    final float xgramConnKeep = 1f - xgramConnectionFactor(); // XGram M3E: the connection line replaces subtitle and typing
     int viewWidth = getMeasuredWidth();
     float avatarExpandFactor = getAvatarExpandFactor();
 
@@ -1102,12 +1111,16 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
       } else if (trimmedSubtitle != null) {
         if (trimmedSubtitleExpanded != null && avatarExpandFactor > 0f) {
           if (avatarExpandFactor < 1f) {
-            trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * (1f - avatarExpandFactor));
+            trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * (1f - avatarExpandFactor) * xgramConnKeep);
           }
-          trimmedSubtitleExpanded.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * avatarExpandFactor);
+          trimmedSubtitleExpanded.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * avatarExpandFactor * xgramConnKeep);
         } else {
-          trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha);
+          trimmedSubtitle.draw(c, (int) baseTextLeft, (int) baseSubtitleTop + dy, null, textAlpha * xgramConnKeep);
         }
+      }
+
+      if (xgramConnKeep < 1f && !xgramCentered && avatarExpandFactor < 1f) {
+        xgramDrawConnection(c, baseTextLeft, baseSubtitleTop, avatarExpandFactor, getCurrentScaledTextMaxWidth()); // XGram
       }
 
       if (showArrow) {
@@ -1138,8 +1151,8 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
             knownColorId = ColorId.chatListAction;
           }
           float statusLeft = xgramCentered ? MathUtils.fromTo(xgramCollapsedTextLeft, (getMeasuredWidth() - text.getWidth()) / 2f, xgramS) : baseTextLeft;
-          DrawAlgorithms.drawStatus(c, state, statusLeft, top + text.getLineHeight() / 2f, ColorUtils.alphaColor(statusVisibility, statusTextColor), this, statusVisibility == 1f ? knownColorId : 0);
-          text.draw(c, (int) statusLeft, (int) top, null, statusVisibility);
+          DrawAlgorithms.drawStatus(c, state, statusLeft, top + text.getLineHeight() / 2f, ColorUtils.alphaColor(statusVisibility * xgramConnKeep, statusTextColor), this, statusVisibility == 1f && xgramConnKeep == 1f ? knownColorId : 0);
+          text.draw(c, (int) statusLeft, (int) top, null, statusVisibility * xgramConnKeep);
         }
       }
     } finally {

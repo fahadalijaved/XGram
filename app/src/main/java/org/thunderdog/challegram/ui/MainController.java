@@ -196,6 +196,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       checkComposeWrapPaddings();
     }
     Views.setPaddingBottom(updateSnackBar, extraBottomInsetWithoutIme);
+    if (xgramConnSnackBar != null) {
+      Views.setPaddingBottom(xgramConnSnackBar, xgramConnSnackInset()); // XGram
+    }
     updateBottomBarMargins();
     checkMargins();
   }
@@ -275,6 +278,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     composeWrap.setCallback(this);
     contentView.addView(composeWrap);
     xgramUpdateComposeVisibility();
+    xgramConnSetup(); // XGram M3E: connection pill and snackbar
 
     makeStartupChecks();
 
@@ -809,12 +813,32 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   protected void onEnterSearchMode () {
     super.onEnterSearchMode();
     composeWrap.forceHide();
+    xgramSearching = true; // XGram
+    xgramConnUpdateSuppressed();
   }
 
   @Override
   protected void onLeaveSearchMode () {
     super.onLeaveSearchMode();
     composeWrap.showIfWasHidden();
+    xgramSearching = false; // XGram
+    xgramConnUpdateSuppressed();
+  }
+
+  // XGram M3E: no connection pill while chats are selected (the selection app bar is up)
+
+  @Override
+  protected void onEnterSelectMode () {
+    super.onEnterSelectMode();
+    xgramSelecting = true;
+    xgramConnUpdateSuppressed();
+  }
+
+  @Override
+  public void onLeaveSelectMode () {
+    super.onLeaveSelectMode();
+    xgramSelecting = false;
+    xgramConnUpdateSuppressed();
   }
 
   /*@Override
@@ -1080,6 +1104,155 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
   }
 
+  // XGram M3E: the connection in the app instead of over the status bar: a pill at the top of the chat list and, when
+  // offline for 3 s or stuck connecting, one snackbar per episode (gone on connect, or for good once swiped away).
+
+  private @Nullable com.fahadali.xgram.appearance.XgramConnectionPill xgramConnPill;
+  private @Nullable SnackBar xgramConnSnackBar;
+  private int xgramConnSnackState;
+  private boolean xgramConnSnackDismissed, xgramSearching, xgramSelecting;
+  private final Runnable xgramConnSnackCheck = this::xgramConnCheckSnackBar;
+  private final com.fahadali.xgram.appearance.XgramConnection.Listener xgramConnListener = (state, text, animated) -> {
+    if (xgramConnPill != null) {
+      xgramConnPill.setDisplay(state, text, animated);
+    }
+    xgramConnCheckSnackBar();
+  };
+
+  private void xgramConnSetup () {
+    if (!(pagerWrap instanceof com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout)) {
+      return;
+    }
+    xgramConnPill = com.fahadali.xgram.appearance.XgramConnectionPill.attach(pagerWrap);
+    com.fahadali.xgram.appearance.XgramConnection conn = com.fahadali.xgram.appearance.XgramConnection.instance();
+    conn.addListener(xgramConnListener);
+    xgramConnPill.setDisplay(conn.getState(), conn.getText(), false);
+    if (composeWrap != null) {
+      composeWrap.xgramOnToggle = this::xgramConnUpdateSuppressed;
+    }
+    xgramConnCheckSnackBar();
+  }
+
+  private void xgramConnDestroy () {
+    if (xgramConnPill != null) {
+      com.fahadali.xgram.appearance.XgramConnection.instance().removeListener(xgramConnListener);
+      UI.cancel(xgramConnSnackCheck);
+    }
+  }
+
+  private void xgramConnUpdateSuppressed () {
+    if (xgramConnPill != null) {
+      xgramConnPill.setSuppressed(xgramSearching || xgramSelecting || (composeWrap != null && composeWrap.xgramIsOpen()), true);
+    }
+  }
+
+  private int xgramConnSnackInset () {
+    return extraBottomInsetWithoutIme + (displayTabsAtBottom() ? getHeaderHeight() : 0);
+  }
+
+  private void xgramConnCheckSnackBar () {
+    if (xgramConnPill == null) {
+      return;
+    }
+    UI.cancel(xgramConnSnackCheck);
+    final com.fahadali.xgram.appearance.XgramConnection conn = com.fahadali.xgram.appearance.XgramConnection.instance();
+    final int state = conn.getState();
+    if (!com.fahadali.xgram.appearance.XgramConnection.isProblem(state)) {
+      xgramConnSnackDismissed = false;
+      xgramConnHideSnackBar();
+      return;
+    }
+    int want = 0;
+    if (state == com.fahadali.xgram.appearance.XgramConnection.STUCK) {
+      want = state;
+    } else if (state == com.fahadali.xgram.appearance.XgramConnection.OFFLINE) {
+      long wait = conn.getStateSince() + 3000L - android.os.SystemClock.uptimeMillis();
+      if (wait > 0) {
+        UI.post(xgramConnSnackCheck, wait);
+      } else {
+        want = state;
+      }
+    }
+    if (want == 0 || xgramConnSnackDismissed || !isFocused() || updateSnackBar != null || isDestroyed()) {
+      return; // PROGRESS keeps a snackbar that is already up: at most one per episode
+    }
+    if (xgramConnSnackBar == null) {
+      SnackBar bar = new SnackBar(context);
+      bar.setCallback(new SnackBar.Callback() {
+        @Override
+        public void onSnackBarTransition (SnackBar v, float factor) {
+          if (composeWrap != null) {
+            composeWrap.setTranslationY(-(v.getMeasuredHeight() + Screen.dp(4f)) * factor);
+          }
+        }
+
+        @Override
+        public void onDestroySnackBar (SnackBar v) {
+          if (composeWrap != null && updateSnackBar == null) {
+            composeWrap.setTranslationY(0f);
+          }
+          if (xgramConnSnackBar == v) {
+            xgramConnRemoveSnackBar();
+          }
+        }
+      });
+      bar.addThemeListeners(this);
+      Views.setPaddingBottom(bar, xgramConnSnackInset());
+      mainWrap.addView(bar);
+      com.fahadali.xgram.appearance.XgramConnectionPill.attachSwipeDismiss(bar, () -> {
+        xgramConnSnackDismissed = true;
+        if (xgramConnSnackBar != null) {
+          xgramConnSnackBar.dismissSnackBar(false);
+          xgramConnRemoveSnackBar();
+        }
+      });
+      xgramConnSnackBar = bar;
+      xgramConnSnackState = 0;
+    }
+    if (xgramConnSnackState != want) {
+      xgramConnSnackState = want;
+      if (want == com.fahadali.xgram.appearance.XgramConnection.OFFLINE) {
+        xgramConnSnackBar.setText(Lang.getString(R.string.XgramNetworkOffline));
+        xgramConnSnackBar.setAction(Lang.getString(R.string.XgramNetworkSettings), () -> {
+          xgramConnSnackDismissed = true;
+          com.fahadali.xgram.appearance.XgramConnectionPill.openInternetPanel(context);
+        }, true);
+      } else {
+        xgramConnSnackBar.setText(Lang.getString(R.string.XgramNetworkCantConnect));
+        xgramConnSnackBar.setAction(Lang.getString(R.string.Proxy), () -> {
+          xgramConnSnackDismissed = true;
+          navigateTo(new SettingsProxyController(context, tdlib));
+        }, true);
+      }
+    }
+    xgramConnSnackBar.showSnackBar(true);
+  }
+
+  private void xgramConnHideSnackBar () {
+    xgramConnSnackState = 0;
+    if (xgramConnSnackBar != null) {
+      if (isFocused() && xgramConnSnackBar.getVisibilityFactor() > 0f) {
+        xgramConnSnackBar.dismissSnackBar(true);
+      } else {
+        xgramConnSnackBar.dismissSnackBar(false);
+        xgramConnRemoveSnackBar();
+      }
+    }
+  }
+
+  private void xgramConnRemoveSnackBar () {
+    SnackBar bar = xgramConnSnackBar;
+    if (bar != null) {
+      xgramConnSnackBar = null;
+      xgramConnSnackState = 0;
+      mainWrap.removeView(bar);
+      bar.removeThemeListeners(this);
+      if (composeWrap != null && updateSnackBar == null) {
+        composeWrap.setTranslationY(0f);
+      }
+    }
+  }
+
   private SnackBar updateSnackBar;
 
   private void onAppUpdateAvailable (boolean isApk, boolean immediate) {
@@ -1139,6 +1312,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   public void destroy () {
     super.destroy();
     com.fahadali.xgram.XgramSettings.instance().removeListener(xgramSettingsListener); // XGram
+    xgramConnDestroy(); // XGram
     tdlib.listeners().removeOptionListener(this);
     context().appUpdater().removeListener(this);
     tdlib.context().global().removeCountersListener(this);
@@ -1316,6 +1490,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   public void onFocus () {
     super.onFocus();
     xgramUpdateGhostButton(); // XGram
+    xgramConnCheckSnackBar(); // XGram M3E: a connection snackbar held back while another page was on top
     com.fahadali.xgram.XgramWhatsNewController.showIfNeeded(this); // XGram: once after an update with new features
     // FIXME check tdlib.isUnauthorized()
     tdlib.context().changePreferredAccountId(tdlib.id(), TdlibManager.SWITCH_REASON_NAVIGATION);

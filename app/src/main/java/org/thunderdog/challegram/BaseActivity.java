@@ -548,7 +548,8 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       setDarkness(darkness);
     }*/
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: with Expressive design the connection shows in the app (XgramConnection), not over the status bar
       statusBar = new NetworkStatusBarView(this);
       statusBar.addThemeListeners(themeList);
       rootView.addView(statusBar);

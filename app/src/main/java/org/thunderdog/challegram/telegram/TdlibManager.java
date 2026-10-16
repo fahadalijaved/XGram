@@ -741,6 +741,17 @@ public class TdlibManager implements Iterable<TdlibAccount>, UI.StateListener {
     }
   }
 
+  /** XGram: sends the network type again, so TDLib drops its reconnect back-off and tries right away. */
+  public void xgramRetryConnection () {
+    if (networkType != null) {
+      for (TdlibAccount account : accounts) {
+        if (account.hasTdlib(false)) {
+          account.tdlib.setNetworkType(networkType);
+        }
+      }
+    }
+  }
+
   void onConnectionStateChanged (Tdlib tdlib, @ConnectionState int newState) {
     if (newState != ConnectionState.UNKNOWN) {
       handler.sendMessage(Message.obtain(handler, ACTION_DISPATCH_NETWORK_STATE, tdlib.id(), newState, tdlib));
