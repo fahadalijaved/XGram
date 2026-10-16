@@ -1197,14 +1197,53 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
       (description != null && description.onTouchEvent(view, e, callback));
   }
 
+  // XGram: Material 3 Expressive link preview card and duration chip
+  private com.fahadali.xgram.appearance.XgramM3Content.TonalCard xgramCard;
+  private com.fahadali.xgram.appearance.XgramM3Content.CachedWidth xgramChipWidth;
+
+  /** XGram: the preview sits in a tonal card with 12dp corners; the line is clipped to its edge, as in the reply blocks. */
+  private void xgramDrawCard (Canvas c, int startX, int startY, int previewWidth, boolean rtl) {
+    if (xgramCard == null) {
+      xgramCard = new com.fahadali.xgram.appearance.XgramM3Content.TonalCard();
+    }
+    final int lineColor = parent.getVerticalLineColor();
+    final int fillColor = parent.isOutgoingBubble() ?
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), .08f) :
+      com.fahadali.xgram.appearance.XgramExpressive.withAlpha(lineColor, .10f);
+    final int outset = Screen.dp(2f);
+    xgramCard.draw(c, startX, startY - outset, startX + previewWidth, startY + height + outset,
+      Screen.dp(com.fahadali.xgram.appearance.XgramM3Content.CARD_CORNER_DP), fillColor, lineColor, lineWidth, rtl);
+  }
+
+  /** XGram: the duration chip as a full-corner chip on the on-media scrim, labelMedium white. */
+  private void xgramDrawChip (Canvas c, String text, int right, int bottom) {
+    final android.text.TextPaint paint = com.fahadali.xgram.appearance.XgramM3Content.onMediaLabelPaint();
+    if (xgramChipWidth == null) {
+      xgramChipWidth = new com.fahadali.xgram.appearance.XgramM3Content.CachedWidth();
+    }
+    final float textWidth = xgramChipWidth.of(text, paint);
+    final float padding = Screen.dp(8f);
+    final float chipRight = right - durationMargin;
+    final float chipBottom = bottom - durationMargin;
+    final float chipTop = chipBottom - durationHeight;
+    final float chipLeft = chipRight - textWidth - padding * 2f;
+    com.fahadali.xgram.appearance.XgramM3Content.drawMediaChip(c, chipLeft, chipTop, chipRight, chipBottom);
+    final float baseline = (chipTop + chipBottom) / 2f - (paint.ascent() + paint.descent()) / 2f;
+    c.drawText(text, chipLeft + padding, baseline, paint);
+  }
+
   private void drawHeader (Canvas c, int startX, int startY, int previewWidth, boolean rtl, ComplexReceiver textMediaReceiver) {
     RectF rectF = Paints.getRectF();
-    if (rtl) {
-      rectF.set(startX + previewWidth - lineWidth, startY, startX + previewWidth, startY + height);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDrawCard(c, startX, startY, previewWidth, rtl);
     } else {
-      rectF.set(startX, startY, startX + lineWidth, startY + height);
+      if (rtl) {
+        rectF.set(startX + previewWidth - lineWidth, startY, startX + previewWidth, startY + height);
+      } else {
+        rectF.set(startX, startY, startX + lineWidth, startY + height);
+      }
+      c.drawRoundRect(rectF, lineWidth / 2, lineWidth / 2, Paints.fillingPaint(parent.getVerticalLineColor()));
     }
-    c.drawRoundRect(rectF, lineWidth / 2, lineWidth / 2, Paints.fillingPaint(parent.getVerticalLineColor()));
     int textY = 0;
     // int y = startY + titleOffset;
     if (siteName != null) {
@@ -1250,14 +1289,18 @@ public class TGWebPage implements FileProgressComponent.SimpleListener, MediaWra
       if (!StringUtils.isEmpty(text)) {
         int dx = imageX + imageWidth;
         int dy = imageY + imageHeight;
-        RectF rectF = Paints.getRectF();
-        if (text.charAt(0) == '1') {
-          rectF.set(dx - durationMargin - durationPadding * 2 - textWidth + durationDecrease, dy - durationMargin - durationHeight, dx - durationMargin, dy - durationMargin);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          xgramDrawChip(c, text, dx, dy);
         } else {
-          rectF.set(dx - durationMargin - durationPadding * 2 - textWidth, dy - durationMargin - durationHeight, dx - durationMargin, dy - durationMargin);
+          RectF rectF = Paints.getRectF();
+          if (text.charAt(0) == '1') {
+            rectF.set(dx - durationMargin - durationPadding * 2 - textWidth + durationDecrease, dy - durationMargin - durationHeight, dx - durationMargin, dy - durationMargin);
+          } else {
+            rectF.set(dx - durationMargin - durationPadding * 2 - textWidth, dy - durationMargin - durationHeight, dx - durationMargin, dy - durationMargin);
+          }
+          c.drawRoundRect(rectF, Screen.dp(4f), Screen.dp(4f), Paints.fillingPaint(DURATION_COLOR));
+          c.drawText(text, dx - durationMargin - durationPadding - textWidth, dy - durationMargin - durationHeight + durationOffset, Paints.whiteMediumPaint(13f, false, false));
         }
-        c.drawRoundRect(rectF, Screen.dp(4f), Screen.dp(4f), Paints.fillingPaint(DURATION_COLOR));
-        c.drawText(text, dx - durationMargin - durationPadding - textWidth, dy - durationMargin - durationHeight + durationOffset, Paints.whiteMediumPaint(13f, false, false));
       }
     } else if (simpleImageFile != null || simpleGifFile != null) {
       final int imageX = rtl ? startX + previewWidth - this.imageX - this.imageWidth : startX + this.imageX;

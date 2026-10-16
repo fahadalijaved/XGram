@@ -592,8 +592,17 @@ public class TGMessageVideo extends TGMessage implements FileProgressComponent.S
       } else {
         restoreToCount = -1;
       }
-      c.drawCircle(centerX, centerY, radius, Paints.fillingPaint(ColorUtils.alphaColor(alpha, 0x40000000)));
+      final boolean xgramDisk = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      if (xgramDisk) {
+        // XGram: Material 3 Expressive: the mute disk is a tonal disk with an on-container glyph
+        c.drawCircle(centerX, centerY, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER), .92f * alpha)));
+      } else {
+        c.drawCircle(centerX, centerY, radius, Paints.fillingPaint(ColorUtils.alphaColor(alpha, 0x40000000)));
+      }
       Paint paint = Paints.whitePorterDuffPaint();
+      if (xgramDisk) {
+        paint = Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
+      }
       paint.setAlpha((int) (255f * alpha));
       Drawable drawable = view.getSparseDrawable(R.drawable.deproko_baseline_sound_muted_24, 0);
       Drawables.draw(c, drawable, centerX - drawable.getMinimumWidth() / 2f, centerY - drawable.getMinimumHeight() / 2f, paint);

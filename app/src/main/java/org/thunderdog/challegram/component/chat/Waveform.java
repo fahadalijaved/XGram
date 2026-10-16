@@ -56,6 +56,7 @@ public class Waveform {
       spacing = Screen.dp(1f);
       radius = Screen.dp(1f);
     }
+    xgramApplyGeometry();
     if (rect == null) {
       rect = new RectF();
     }
@@ -72,6 +73,29 @@ public class Waveform {
 
     this.data = data;
     calculateMaxSample();
+  }
+
+  /** XGram: 1 while the bars use the Material 3 Expressive geometry, 0 while they use Telegram X's, -1 before the first wave. */
+  private static int xgramGeometry = -1;
+
+  /**
+   * XGram: Material 3 Expressive voice bars: 3dp wide with 2dp gaps and full round caps (played and inactive colors
+   * are already the primary and outlineVariant roles). Bar geometry is static and only read at layout and draw.
+   */
+  private static void xgramApplyGeometry () {
+    final int state = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 1 : 0;
+    if (xgramGeometry == state) {
+      return;
+    }
+    final boolean wasExpressive = xgramGeometry == 1;
+    xgramGeometry = state;
+    if (state == 1) {
+      spacing = Screen.dp(2f);
+      radius = (width + 1) / 2;
+    } else if (wasExpressive) {
+      spacing = Screen.dp(1f);
+      radius = Screen.dp(1f);
+    }
   }
 
   public int getWidth () {

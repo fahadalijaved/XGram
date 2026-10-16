@@ -306,6 +306,7 @@ public class RoundVideoController extends BasePlaybackController implements
   private CircleFrameLayout mainPlayerView;
   private View mainTextureView;
   private RoundProgressView2 mainProgressView;
+  private @Nullable XgramRoundRing xgramRing; // XGram: Material 3 Expressive ring, only with Expressive design
   private ImageReceiverView mainPreviewView;
 
   private ExoPlayer exoPlayer;
@@ -363,6 +364,14 @@ public class RoundVideoController extends BasePlaybackController implements
       mainProgressView.setIsPaused(!isPlaying);
       mainProgressView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
       mainPlayerView.addView(mainProgressView);
+
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: Material 3 Expressive ring. It repeats the seek gesture of RoundProgressView2, which stays hidden.
+        mainProgressView.setVisibility(View.GONE);
+        xgramRing = new XgramRoundRing(context, this);
+        xgramRing.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mainPlayerView.addView(xgramRing);
+      }
 
       rootView.addView(mainPlayerView);
     }
@@ -563,6 +572,7 @@ public class RoundVideoController extends BasePlaybackController implements
     context.removeFromNavigation(rootView);
     rootView = null;
     mainPlayerView = null; mainTextureView = null; mainProgressView = null;
+    xgramRing = null; // XGram
 
     // context.removeFromRoot(pipParentView);
     pipParentView.removeView(pipPlayerView);
@@ -1035,6 +1045,9 @@ public class RoundVideoController extends BasePlaybackController implements
       if (texturePrepared) {
         pipProgressView.invalidate();
         mainProgressView.invalidate();
+        if (xgramRing != null) {
+          xgramRing.invalidate(); // XGram
+        }
       }
     }
   }
@@ -1093,6 +1106,12 @@ public class RoundVideoController extends BasePlaybackController implements
       case ANIMATOR_IS_PLAYING:
         if (mainProgressView != null) {
           mainProgressView.invalidate();
+        }
+        if (xgramRing != null) {
+          xgramRing.invalidate(); // XGram
+        }
+        if (pipProgressView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          pipProgressView.invalidate(); // XGram: the PiP wave follows play and pause
         }
         break;
       case ANIMATOR_SMOOTH_SCROLLER:
@@ -1530,12 +1549,141 @@ public class RoundVideoController extends BasePlaybackController implements
     @Override
     protected void onDraw (Canvas c) {
       DrawAlgorithms.drawScaledBitmap(this, c, bitmap);
+      if (progress != 0f && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: the M3 ring, flat (this snapshot does not animate)
+        final float size = Math.min(getMeasuredWidth(), getMeasuredHeight());
+        com.fahadali.xgram.appearance.XgramM3Content.drawRoundVideoRing(c, getMeasuredWidth() / 2f, getMeasuredHeight() / 2f,
+          com.fahadali.xgram.appearance.XgramM3Content.roundVideoRingRadius(size), progress, 0f, 1f);
+        return;
+      }
       if (progress != 0f) {
         RectF rectF = Paints.getRectF();
         int padding = Screen.dp(1.5f);
 
         rectF.set(padding, padding, getMeasuredWidth() - padding, getMeasuredHeight() - padding);
         c.drawArc(rectF, -90, (360f - removeDegrees) * progress, false, Paints.videoStrokePaint());
+      }
+    }
+  }
+
+  /**
+   * XGram: Material 3 Expressive ring for the round video playing in the chat, used in place of RoundProgressView2
+   * (whose seek gesture it repeats): a circular wavy indicator in primary on a white track, its wave springing in
+   * while playing and out when paused. Paused, the ring moves inwards and shows the seek knob.
+   */
+  private static final class XgramRoundRing extends View {
+    private final RoundVideoController controller;
+    private final org.thunderdog.challegram.util.RateLimiter updateSeekRunnable = new org.thunderdog.challegram.util.RateLimiter(this::updateSeek, 150L, null);
+    private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring wave;
+    private boolean wavePlaying;
+    private boolean captured;
+    private float seekProgress;
+    private float lastDrawPointerX, lastDrawPointerY;
+    private @Nullable ViewParent seekCaught;
+
+    XgramRoundRing (Context context, RoundVideoController controller) {
+      super(context);
+      this.controller = controller;
+    }
+
+    private void updateSeek () {
+      controller.seekTo(MathUtils.clamp(seekProgress), false);
+    }
+
+    private boolean isVisibleNow () {
+      if (!isShown() || getAlpha() <= 0f) {
+        return false;
+      }
+      ViewParent parent = getParent();
+      return !(parent instanceof View) || ((View) parent).getAlpha() > 0f;
+    }
+
+    @Override
+    protected void onDraw (@NonNull Canvas c) {
+      final boolean playing = controller.isPlaying;
+      if (wave == null) {
+        wave = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, playing ? 1f : 0f, (s, value) -> invalidate());
+        wavePlaying = playing;
+      } else if (wavePlaying != playing) {
+        wavePlaying = playing;
+        wave.animateTo(playing ? 1f : 0f);
+      }
+      final float progress = captured ? seekProgress : controller.getVisualProgress();
+      if (progress == 0f && !captured) {
+        return;
+      }
+      final float paused = 1f - controller.getVisualIsPlaying();
+      final float size = Math.min(getMeasuredWidth(), getMeasuredHeight());
+      final float cx = getMeasuredWidth() / 2f, cy = getMeasuredHeight() / 2f;
+      final float radius = MathUtils.fromTo(com.fahadali.xgram.appearance.XgramM3Content.roundVideoRingRadius(size), size / 2f - Screen.dp(18f), paused);
+      final float waveValue = wave.getValue();
+      com.fahadali.xgram.appearance.XgramM3Content.drawRoundVideoRing(c, cx, cy, radius, progress, waveValue, 1f);
+      if (paused > 0f) {
+        final double angle = Math.toRadians(360f * MathUtils.clamp(progress) - 90f);
+        final float x = lastDrawPointerX = (float) (Math.cos(angle) * radius) + cx;
+        final float y = lastDrawPointerY = (float) (Math.sin(angle) * radius) + cy;
+        c.drawCircle(x, y, Screen.dp(6f) * paused, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY)));
+      }
+      if (playing && com.fahadali.xgram.appearance.XgramM3Content.needsWaveFrame(progress, waveValue) && isVisibleNow()) {
+        postInvalidateOnAnimation();
+      }
+    }
+
+    @Override
+    public boolean onTouchEvent (MotionEvent event) {
+      final float x = event.getX();
+      final float y = event.getY();
+      if (controller.isPlaying) {
+        captured = false;
+        return false;
+      }
+      switch (event.getAction()) {
+        case MotionEvent.ACTION_DOWN:
+          if (MathUtils.distance(x, y, lastDrawPointerX, lastDrawPointerY) < Screen.dp(24f)) {
+            captured = true;
+            seekProgress = controller.getVisualProgress();
+            final View root = controller.getRootView();
+            seekCaught = root != null ? root.getParent() : null;
+            if (seekCaught != null) {
+              seekCaught.requestDisallowInterceptTouchEvent(true);
+            }
+            return true;
+          }
+          break;
+        case MotionEvent.ACTION_MOVE:
+          if (captured) {
+            final double rad = Math.atan2(y - getMeasuredHeight() / 2f, x - getMeasuredWidth() / 2f);
+            final float angle = ((float) Math.toDegrees(rad) + 360f + 90f) % 360f;
+            seekProgress = MathUtils.clamp(angle / 360f);
+            invalidate();
+            updateSeekRunnable.run();
+            return true;
+          }
+          break;
+        case MotionEvent.ACTION_UP:
+        case MotionEvent.ACTION_CANCEL:
+          if (captured) {
+            updateSeekRunnable.cancelIfScheduled();
+            controller.seekTo(MathUtils.clamp(seekProgress), true);
+            if (seekCaught != null) {
+              seekCaught.requestDisallowInterceptTouchEvent(false);
+              seekCaught = null;
+            }
+            captured = false;
+            invalidate();
+            return true;
+          }
+          break;
+      }
+      return false;
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      super.onDetachedFromWindow();
+      updateSeekRunnable.cancelIfScheduled();
+      if (wave != null) {
+        wave.setValue(wave.getTarget()); // stops the spring where it was heading
       }
     }
   }
