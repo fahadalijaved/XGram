@@ -98,20 +98,36 @@ public final class XgramM3Connected {
 
   /** Shapes the button view's morph as cell (col) of a row; call at bind or layout time, never per frame. */
   public static void shape (@Nullable View view, boolean firstRow, boolean lastRow, int col, int colCount) {
+    shape(view, firstRow, lastRow, col, colCount, true);
+  }
+
+  /**
+   * As {@link #shape(View, boolean, boolean, int, int)}; with {@code allowPill} false a lone cell keeps the block's
+   * outer corners (20dp, pressed 4dp) instead of becoming a pill: a large cell (a bot keyboard that fills the keyboard
+   * area) would otherwise get corners of half its height.
+   */
+  public static void shape (@Nullable View view, boolean firstRow, boolean lastRow, int col, int colCount, boolean allowPill) {
     if (view == null) {
       return;
     }
-    shape(XgramExpressive.findMorph(view.getBackground()), firstRow, lastRow, col, colCount);
+    shape(XgramExpressive.findMorph(view.getBackground()), firstRow, lastRow, col, colCount, allowPill);
   }
 
   public static void shape (@Nullable XgramExpressive.MorphDrawable morph, boolean firstRow, boolean lastRow, int col, int colCount) {
+    shape(morph, firstRow, lastRow, col, colCount, true);
+  }
+
+  public static void shape (@Nullable XgramExpressive.MorphDrawable morph, boolean firstRow, boolean lastRow, int col, int colCount, boolean allowPill) {
     if (morph == null) {
       return;
     }
-    final boolean single = firstRow && lastRow && colCount <= 1;
+    final boolean lone = firstRow && lastRow && colCount <= 1;
+    final boolean single = allowPill && lone;
     float tl, tr, br, bl;
     if (single) {
       tl = tr = br = bl = XgramExpressive.CORNER_FULL;
+    } else if (lone) {
+      tl = tr = br = bl = OUTER; // the whole block: its four outer corners
     } else {
       final boolean first = col == 0, last = col == colCount - 1;
       tl = firstRow && first ? OUTER : INNER;

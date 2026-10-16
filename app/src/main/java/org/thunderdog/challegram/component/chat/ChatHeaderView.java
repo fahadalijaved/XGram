@@ -49,9 +49,9 @@ public class ChatHeaderView extends ComplexHeaderView {
     });
     setUseDefaultClickListener(true);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram: Material 3 Expressive: an onSurface state layer on the surface app bar instead of the white header ripple
-      int rippleColor = com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
-      setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(rippleColor), null, new android.graphics.drawable.ColorDrawable(0xffffffff)));
+      // XGram: Material 3 Expressive: an onSurface state layer on the surface app bar instead of the white header ripple,
+      // its colour following theme switches
+      setBackground(com.fahadali.xgram.appearance.XgramAppMotion.ThemedRipple.ofRole(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE, null, new android.graphics.drawable.ColorDrawable(0xffffffff)));
     } else
     setBackgroundResource(ThemeDeprecated.headerSelector());
     setInnerMargins(Screen.dp(56f), Screen.dp(49f));

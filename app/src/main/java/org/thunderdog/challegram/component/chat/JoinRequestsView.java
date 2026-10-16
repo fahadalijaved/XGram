@@ -19,6 +19,7 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
+import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.annotation.Nullable;
@@ -36,6 +37,7 @@ import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.util.text.Text;
+import org.thunderdog.challegram.util.text.TextColorSet;
 import org.thunderdog.challegram.util.text.TextColorSets;
 import org.thunderdog.challegram.widget.BaseView;
 
@@ -63,14 +65,35 @@ public class JoinRequestsView extends BaseView implements Destroyable, ComplexRe
   private final ComplexReceiver megaReceiver = new ComplexReceiver(this);
   private final RectF dismissRect = new RectF();
 
-  private final Bitmap closeIcon;
+  private final @Nullable Bitmap closeIcon;
   private final ReplaceAnimator<Text> title = new ReplaceAnimator<>(ignored -> invalidate(), AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+
+  // XGram: Material 3 Expressive, as the neighbouring translate and action cards: the title in labelLarge (14sp, 500)
+  // onSurface, and the close button a standard icon button (24dp icon, 40dp state layer 28dp from the end, a 56dp
+  // touch target) whose press no longer ripples the whole card. Nothing with Expressive design off.
+  private static final float XGRAM_CLOSE_WIDTH = 56f;
+  private static final TextColorSet XGRAM_TITLE_COLORS = () -> com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+  private final @Nullable com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton xgramClose;
 
   public JoinRequestsView (Context context, Tdlib tdlib) {
     super(context, tdlib);
     setWillNotDraw(false);
-    closeIcon = Drawables.toBitmap(Drawables.get(R.drawable.baseline_close_18));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      closeIcon = null;
+      xgramClose = new com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton(this, R.drawable.baseline_close_24);
+    } else {
+      closeIcon = Drawables.toBitmap(Drawables.get(R.drawable.baseline_close_18));
+      xgramClose = null;
+    }
     megaReceiver.attach();
+  }
+
+  @Override
+  public boolean onTouchEvent (MotionEvent e) {
+    if (xgramClose != null && xgramClose.onTouchEvent(e, onDismissRunnable)) {
+      return true; // XGram: the close button's own press
+    }
+    return super.onTouchEvent(e);
   }
 
   @Override
@@ -93,10 +116,16 @@ public class JoinRequestsView extends BaseView implements Destroyable, ComplexRe
       canvas.restore();
     }
 
-    drawBitmap(canvas, closeIcon, getMeasuredWidth() - Screen.dp(20f), getMeasuredHeight() / 2);
+    if (xgramClose != null) {
+      xgramClose.draw(canvas, 1f);
+    } else if (closeIcon != null) {
+      drawBitmap(canvas, closeIcon, getMeasuredWidth() - Screen.dp(20f), getMeasuredHeight() / 2);
+    }
 
     for (ListAnimator.Entry<Text> entry : title) {
-      entry.item.draw(canvas, textStartX,  getMeasuredWidth(), 0, (getMeasuredHeight() / 2) - Screen.dp(9), null, entry.getVisibility());
+      // XGram: the labelLarge line centred on the card
+      int textY = xgramClose != null ? getMeasuredHeight() / 2 - entry.item.getLineCenterY() : (getMeasuredHeight() / 2) - Screen.dp(9);
+      entry.item.draw(canvas, textStartX,  getMeasuredWidth(), 0, textY, null, entry.getVisibility());
     }
   }
 
@@ -114,6 +143,9 @@ public class JoinRequestsView extends BaseView implements Destroyable, ComplexRe
     long[] ids = info.userIds;
 
     this.info = info;
+    if (xgramClose != null) {
+      title.replace(new Text.Builder(Lang.plural(R.string.xJoinRequests, info.totalCount), Screen.dp(300f), com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false, 14f), XGRAM_TITLE_COLORS).singleLine().build(), animated);
+    } else
     title.replace(new Text.Builder(Lang.plural(R.string.xJoinRequests, info.totalCount), Screen.dp(300f), Paints.robotoStyleProvider(16), TextColorSets.Regular.NEUTRAL).allBold().singleLine().build(), animated);
     updateTitleMaxWidth();
     setRequestInfo(ids, animated);
@@ -155,13 +187,17 @@ public class JoinRequestsView extends BaseView implements Destroyable, ComplexRe
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
     super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     updateTitleMaxWidth();
+    if (xgramClose != null) {
+      dismissRect.setEmpty(); // XGram: the close button handles its own touches
+      xgramClose.setBounds(getMeasuredWidth() - Screen.dp(XGRAM_CLOSE_WIDTH), 0, getMeasuredWidth(), getMeasuredHeight());
+    } else
     dismissRect.set(getMeasuredWidth() - Screen.dp(48f), 0, getMeasuredWidth(), getMeasuredHeight());
   }
 
   private void updateTitleMaxWidth () {
     if (!title.isEmpty() && getMeasuredWidth() > 0) {
       for (ListAnimator.Entry<Text> entry : title) {
-        entry.item.changeMaxWidth(getMeasuredWidth() - Screen.dp(AVATAR_RADIUS * 4f) - Screen.dp(48f));
+        entry.item.changeMaxWidth(getMeasuredWidth() - Screen.dp(AVATAR_RADIUS * 4f) - Screen.dp(xgramClose != null ? XGRAM_CLOSE_WIDTH : 48f));
       }
     }
   }

@@ -348,19 +348,59 @@ public class CollapseListView extends FrameLayoutFix implements Destroyable {
       } else {
         segment = com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_MIDDLE;
       }
+      boolean changed = false;
       if (entry.xgramCard.getSegment() != segment) {
         entry.xgramCard.setSegment(segment);
+        changed = true;
+      }
+      // The corners follow the neighbours as they slide in and out instead of switching between outer and inner in
+      // one frame: an edge is as inner as there is card next to it (the visibility of the cards on that side, up to a
+      // plain item, against this card's own), so the pinned card's bottom corners close as the action bar comes out
+      // from under it, and nothing changes while the whole group collapses together (search, selection).
+      final float own = xgramVisibility(entry);
+      float above = 0f, below = 0f;
+      for (int j = i - 1; j >= 0 && above < own; j--) {
+        Entry other = entries.get(j);
+        float visibility = xgramVisibility(other);
+        if (visibility <= 0f || other.height <= 0) {
+          continue;
+        }
+        if (other.xgramCard == null) {
+          break;
+        }
+        above += visibility;
+      }
+      for (int j = i + 1; j < count && below < own; j++) {
+        Entry other = entries.get(j);
+        float visibility = xgramVisibility(other);
+        if (visibility <= 0f || other.height <= 0) {
+          continue;
+        }
+        if (other.xgramCard == null) {
+          break;
+        }
+        below += visibility;
+      }
+      if (entry.xgramCard.setCornerFactors(Math.min(1f, above / own), Math.min(1f, below / own))) {
+        changed = true;
+      }
+      if (changed) {
         entry.view.invalidateOutline();
       }
     }
   }
 
-  private boolean xgramIsShown (Entry entry) {
+  /** XGram: how far {@code entry} is shown (its own visibility, and the bars' while it collapses with them). */
+  private float xgramVisibility (Entry entry) {
     float visibility = entry.isVisible.getFloatValue();
     if (entry.item.allowCollapse()) {
       visibility *= globalVisibility.getFactor();
     }
-    return visibility > 0f && entry.height > 0;
+    return Math.max(0f, Math.min(1f, visibility));
+  }
+
+  private boolean xgramIsShown (Entry entry) {
+    return xgramVisibility(entry) > 0f && entry.height > 0;
   }
 
   private int lastHeight;

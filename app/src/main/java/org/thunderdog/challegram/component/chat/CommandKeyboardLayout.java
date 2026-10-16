@@ -79,10 +79,12 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
     oneTime = keyboard.oneTime;
     fillLayout(keyboard.rows);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      xgramShapeButtons();
+      xgramShapeButtons(keyboard.resizeKeyboard);
     }
     resizeKeyboard(keyboard.resizeKeyboard);
-    layoutChildren(Screen.currentWidth(), false, 0);
+    // XGram: the cells take this keyboard's own width (the chat pane's in two-pane mode), not the screen's: a keyboard
+    // replaced by one of the same height was laid out for the whole inner screen and ran off the pane
+    layoutChildren(getWidth() > 0 ? getWidth() : Screen.currentWidth(), false, 0);
     requestLayout();
     if (getParent() != null) {
       ((ScrollView) getParent()).scrollTo(0, 0);
@@ -133,8 +135,13 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
     blockLayout = false;
   }
 
-  /** XGram M3E: outer block corners 20dp, inner 8dp, a lone button is a pill. Runs when a keyboard is bound, not per frame. */
-  private void xgramShapeButtons () {
+  /**
+   * XGram M3E: outer block corners 20dp, inner 8dp, a lone button is a pill, but only in a keyboard sized to its
+   * buttons ({@code resizeKeyboard}): a lone cell filling a full-height keyboard (~330 x 230dp) became a stadium with
+   * ~115dp ends whose press sprang across the whole keyboard, so there it keeps the block's 20dp corners. Runs when a
+   * keyboard is bound, not per frame.
+   */
+  private void xgramShapeButtons (boolean allowPill) {
     int firstRow = -1, lastRow = -1;
     for (int row = 0; row < rowsCount; row++) {
       if (columnCount[row] > 0) {
@@ -148,7 +155,7 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
     for (int row = 0; row < rowsCount; row++) {
       final int cols = columnCount[row];
       for (int col = 0; col < cols; col++) {
-        com.fahadali.xgram.appearance.XgramM3Connected.shape(getChildAt(index), row == firstRow, row == lastRow, col, cols);
+        com.fahadali.xgram.appearance.XgramM3Connected.shape(getChildAt(index), row == firstRow, row == lastRow, col, cols, allowPill);
         index++;
       }
     }
@@ -272,20 +279,15 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
       wasChanged = 0;
     }
 
-    if (changed) {
-      layoutChildren(width, true, t);
-    } else {
-      for (int i = 0; i < getChildCount(); i++) {
-        View v = getChildAt(i);
-        if (v.getVisibility() == View.GONE) continue;
-        MarginLayoutParams mp = (MarginLayoutParams) v.getLayoutParams();
-        v.measure(MeasureSpec.makeMeasureSpec(mp.width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(mp.height, MeasureSpec.EXACTLY));
-        v.layout(mp.leftMargin, t + mp.topMargin, mp.leftMargin + mp.width, t + mp.topMargin + mp.height);
-      }
-    }
+    // XGram: always from the current width. Telegram X reused the cells' stored sizes when the bounds had not changed,
+    // and those could be from another width (setKeyboard sized them for the whole screen): a few dozen buttons at most
+    layoutChildren(width, true, t);
   }
 
   private void layoutChildren (int currentWidth, boolean layout, int top) {
+    if (columnCount == null || rowsCount == 0 || currentWidth <= 0) {
+      return; // XGram: no keyboard yet
+    }
     int count = getChildCount();
 
     float frameWidth = currentWidth - spacingBig * 2 - spacing * (columnCount[0] - 1);
