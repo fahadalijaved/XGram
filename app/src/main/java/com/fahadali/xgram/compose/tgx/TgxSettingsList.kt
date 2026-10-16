@@ -106,7 +106,13 @@ internal fun TgxSettingsScreen(r: TgxSettingsRenderer) {
   XgramM3Theme(dark = r.isDark.value, themeVersion = r.themeVersion.intValue) {
     val lang = r.langVersion.intValue
     val direction = if (lang >= 0 && Lang.rtl()) LayoutDirection.Rtl else LayoutDirection.Ltr
-    CompositionLocalProvider(LocalXgramHost provides r.composeHost, LocalLayoutDirection provides direction) {
+    // The page's content color (onSurface on surfaceContainer, as SettingsPage's Scaffold gives): ripples of controls
+    // on the page itself (header buttons, the build number) are the M3 content color, not the default black.
+    CompositionLocalProvider(
+      LocalXgramHost provides r.composeHost,
+      LocalLayoutDirection provides direction,
+      LocalContentColor provides MaterialTheme.colorScheme.onSurface
+    ) {
       val structure = r.structureVersion.intValue
       val blocks = remember(structure, lang) { r.buildBlocks() }
       val density = LocalDensity.current
@@ -191,9 +197,11 @@ internal fun TgxRowBlock(r: TgxSettingsRenderer, row: TgxRow, shapes: ListItemSh
       TgxRowKind.DESCRIPTION -> TgxDescription(row, s)
       TgxRowKind.EMPTY -> SettingsEmpty(0, s.title?.toString().orEmpty())
       TgxRowKind.LOADING -> SettingsLoading()
+      // The ripple stays in a card-shaped area (CornerLarge), not a full-bleed rectangle.
       TgxRowKind.BUILD_NO -> Text(
         s.title?.toString().orEmpty(),
-        modifier = placed.fillMaxWidth().clickable(enabled = s.enabled) { r.click(row) }.padding(vertical = 12.dp),
+        modifier = placed.fillMaxWidth().clip(MaterialTheme.shapes.large).clickable(enabled = s.enabled) { r.click(row) }
+          .padding(vertical = 12.dp),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center

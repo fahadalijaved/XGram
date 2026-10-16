@@ -38,11 +38,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -69,8 +67,9 @@ import kotlinx.coroutines.flow.first
 import org.thunderdog.challegram.R
 
 /**
- * A settings page in the Android 16 Settings look: a large flexible top app bar that collapses on scroll
- * (exitUntilCollapsed), and below it headers, descriptions and segmented card groups built by [content].
+ * A settings page in the Android 16 Settings look: an M3E large flexible top app bar ([SettingsTopAppBar], medium
+ * flexible with [large] false) that collapses on scroll (exitUntilCollapsed), its title gliding into the collapsed
+ * bar, and below it headers, descriptions and segmented card groups built by [content].
  *
  * [content] runs during composition after the page has read the host's version, so it reads settings singletons
  * directly: every setter path calls host.changed(), which builds the page again (a few dozen rows, cheap). Rows that
@@ -119,40 +118,24 @@ fun SettingsPage(
     }
   }
 
+  // The status bar height, read by the app bar while it is measured.
+  val topInset = remember(host) { { host.topInset } }
+
   Scaffold(
+    // The list's scroll reaches the bar first (exitUntilCollapsed): it collapses before the rows move under it.
     modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
     containerColor = cs.surfaceContainer,
     contentWindowInsets = WindowInsets(0, 0, 0, 0),
     topBar = {
-      val colors = TopAppBarDefaults.topAppBarColors(containerColor = cs.surfaceContainer, scrolledContainerColor = cs.surfaceContainer)
-      val insets = WindowInsets(top = host.topInset)
-      val titleSlot: @Composable () -> Unit = { Text(title) }
-      val navigationSlot: @Composable () -> Unit = { BackButton(host) }
-      if (large) {
-        if (subtitle != null) {
-          LargeFlexibleTopAppBar(
-            title = titleSlot, subtitle = { Text(subtitle) }, navigationIcon = navigationSlot, actions = actions,
-            windowInsets = insets, colors = colors, scrollBehavior = scrollBehavior
-          )
-        } else {
-          LargeFlexibleTopAppBar(
-            title = titleSlot, navigationIcon = navigationSlot, actions = actions,
-            windowInsets = insets, colors = colors, scrollBehavior = scrollBehavior
-          )
-        }
-      } else {
-        if (subtitle != null) {
-          MediumFlexibleTopAppBar(
-            title = titleSlot, subtitle = { Text(subtitle) }, navigationIcon = navigationSlot, actions = actions,
-            windowInsets = insets, colors = colors, scrollBehavior = scrollBehavior
-          )
-        } else {
-          MediumFlexibleTopAppBar(
-            title = titleSlot, navigationIcon = navigationSlot, actions = actions,
-            windowInsets = insets, colors = colors, scrollBehavior = scrollBehavior
-          )
-        }
-      }
+      SettingsTopAppBar(
+        title = title,
+        subtitle = subtitle,
+        large = large,
+        scrollBehavior = scrollBehavior,
+        topInset = topInset,
+        navigationIcon = { BackButton(host) },
+        actions = actions
+      )
     }
   ) { padding ->
     // Read only when the list is measured: the bar collapsing remeasures the list instead of recomposing it.

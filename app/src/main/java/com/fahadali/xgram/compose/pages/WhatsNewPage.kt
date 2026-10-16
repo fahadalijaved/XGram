@@ -14,26 +14,14 @@
 package com.fahadali.xgram.compose.pages
 
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemShapes
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.XgramWhatsNewController
 import com.fahadali.xgram.appearance.XgramThemesController
 import com.fahadali.xgram.appicons.XgramAppIconsController
@@ -42,10 +30,11 @@ import com.fahadali.xgram.chats.XgramSavedTopicsController
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
 import com.fahadali.xgram.compose.XgramPage
+import com.fahadali.xgram.compose.ui.RowIcon
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
+import com.fahadali.xgram.compose.ui.settingsRowColors
 import com.fahadali.xgram.compose.ui.str
-import com.fahadali.xgram.compose.ui.tgxIcon
 import com.fahadali.xgram.history.XgramHistoryController
 import org.thunderdog.challegram.R
 
@@ -62,9 +51,9 @@ fun WhatsNewPage() {
         val key = entry.title.toString()
         val action = entry.action
         if (action == XgramWhatsNewController.OPEN_NONE) {
-          // Nothing to open: a plain row in the group's shape, not a button.
+          // Nothing to open: the group's list item without a click target.
           custom(key, R.id.btn_xgramWhatsNewItem) { shapes ->
-            WhatsNewInfoRow(entry.icon, title, subtitle, shapes)
+            WhatsNewInfoRow(entry.icon, title, subtitle, shapes, key)
           }
         } else {
           link(R.id.btn_xgramWhatsNewItem, title, subtitle, icon = entry.icon, key = key) {
@@ -95,26 +84,22 @@ private fun openEntry(host: XgramComposeHost, action: Int) {
   }
 }
 
-/** A row that only informs: the look of the group's list items (icon, title, subtitle) without a click target. */
+/**
+ * A row that only informs: the same SegmentedListItem as the rows that open something (icon, title, subtitle, the
+ * card's color and the search highlight), without a click target, so the group is one list item style.
+ */
 @Composable
-private fun WhatsNewInfoRow(@DrawableRes icon: Int, title: String, subtitle: String, shapes: ListItemShapes) {
-  val cs = MaterialTheme.colorScheme
-  Surface(
-    modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { },
-    shape = shapes.shape,
-    color = cs.surfaceBright,
-    contentColor = cs.onSurface
-  ) {
-    Row(
-      modifier = Modifier.heightIn(min = 72.dp).padding(horizontal = 16.dp, vertical = 12.dp),
-      verticalAlignment = Alignment.CenterVertically
-    ) {
-      Icon(tgxIcon(icon), contentDescription = null, modifier = Modifier.size(24.dp), tint = cs.onSurfaceVariant)
-      Spacer(Modifier.width(16.dp))
-      Column(Modifier.weight(1f)) {
-        Text(title, style = MaterialTheme.typography.bodyLarge)
-        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-      }
-    }
-  }
+private fun WhatsNewInfoRow(@DrawableRes icon: Int, title: String, subtitle: String, shapes: ListItemShapes, key: String) {
+  SegmentedListItem(
+    shapes = shapes,
+    modifier = Modifier.semantics(mergeDescendants = true) { },
+    leadingContent = if (icon != 0) {
+      { RowIcon(icon) }
+    } else {
+      null
+    },
+    supportingContent = { Text(subtitle) },
+    colors = settingsRowColors(R.id.btn_xgramWhatsNewItem, key),
+    content = { Text(title) }
+  )
 }

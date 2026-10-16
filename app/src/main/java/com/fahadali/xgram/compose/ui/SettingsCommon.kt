@@ -46,7 +46,7 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.fahadali.xgram.appearance.XgramIconPack
+import com.fahadali.xgram.appearance.XgramComposeSettingsIcons
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
 import org.thunderdog.challegram.R
@@ -66,9 +66,12 @@ fun str(@StringRes id: Int, vararg args: Any): String {
   return s(id, *args)
 }
 
-/** A Telegram X drawable through the user's icon pack. */
+/**
+ * A Telegram X drawable through the user's icon pack. With the Classic pack every icon of a page is from the XGram Line
+ * family (outlined at rest), so rows never mix filled Telegram X icons with outlined ones.
+ */
 @Composable
-fun tgxIcon(@DrawableRes id: Int): Painter = painterResource(XgramIconPack.map(id))
+fun tgxIcon(@DrawableRes id: Int): Painter = painterResource(XgramComposeSettingsIcons.map(id))
 
 /**
  * Keeps Telegram X's swipe-back from starting on this element (sliders, drag handles, horizontal scrollers). The
