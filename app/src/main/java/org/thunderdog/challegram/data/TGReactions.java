@@ -927,6 +927,32 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
 
       counter.setCount(value, !chosen, text, animated);
       avatars.setSenders(senders, animated);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramOnChosenChanged(chosen, animated);
+      }
+    }
+
+    // XGram: Expressive selection pop (.9 to 1 on the spatial fast spring) when the chosen state flips
+
+    private boolean xgramChosenKnown, xgramChosen;
+    private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPop;
+
+    private void xgramOnChosenChanged (boolean chosen, boolean animated) {
+      boolean flipped = xgramChosenKnown && xgramChosen != chosen;
+      xgramChosenKnown = true;
+      xgramChosen = chosen;
+      if (!flipped || !animated || !org.thunderdog.challegram.tool.UI.inUiThread()) {
+        return;
+      }
+      if (xgramPop == null) {
+        xgramPop = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 1f, (s, value) -> invalidate());
+      }
+      xgramPop.setValue(.9f);
+      xgramPop.animateTo(1f);
+    }
+
+    private float xgramPopScale () {
+      return xgramPop != null ? xgramPop.getValue() : 1f;
     }
 
     public void requestAvatars (ComplexReceiver complexReceiver, boolean isUpdate) {
@@ -982,6 +1008,12 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
       int textX = avatarsX + avatarsOffset + avatarsWidth;
       int radius = height / 2;
       int backgroundColor = backgroundColor(false);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        float pop = xgramPopScale();
+        if (pop != 1f) {
+          c.scale(pop, pop, width / 2f, height / 2f);
+        }
+      }
 
       rect.set(0, 0, width, height);
       path.reset();
@@ -1075,8 +1107,33 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
 
     // ColorSet
 
+    /** XGram: Expressive chip roles, chosen mixed towards not chosen by the counter's mute factor. */
+    private int xgramChipColor (boolean content) {
+      final int chosen, other;
+      if (!message.useBubbles()) {
+        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+        other = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+      } else if (message.useStickerBubbleReactions() || message.useMediaBubbleReactions()) {
+        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+        other = content ? message.getBubbleDateTextColor() : message.getBubbleDateBackgroundColor();
+      } else if (message.isOutgoingBubble()) {
+        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+        int onContainer = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
+        other = content ? onContainer : com.fahadali.xgram.appearance.XgramExpressive.withAlpha(onContainer, .12f);
+      } else {
+        chosen = com.fahadali.xgram.appearance.XgramExpressive.color(content ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+        other = content ?
+          com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT) :
+          com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), .08f);
+      }
+      return ColorUtils.fromToArgb(chosen, other, counter.getMuteFactor());
+    }
+
     @Override
     public int defaultTextColor () {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return xgramChipColor(true);
+      }
       if (!message.useBubbles()) {
         return counter.getColor(counter.getMuteFactor(), ColorId.fillingPositiveContent, ColorId.fillingActiveContent);
       } else if (message.useStickerBubbleReactions() || message.useMediaBubbleReactions()) {
@@ -1094,6 +1151,9 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
 
     @Override
     public int backgroundColor (boolean isPressed) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return xgramChipColor(false);
+      }
       if (!message.useBubbles()) {
         return counter.getColor(counter.getMuteFactor(), ColorId.fillingPositive, ColorId.fillingActive);
       } else if (message.useStickerBubbleReactions() || message.useMediaBubbleReactions()) {

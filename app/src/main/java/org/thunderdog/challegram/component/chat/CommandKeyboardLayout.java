@@ -55,6 +55,9 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
     super(context);
     spacingBig = Screen.dp(15f);
     spacing = Screen.dp(10f);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      spacing = Screen.dp(com.fahadali.xgram.appearance.XgramM3Connected.GAP); // XGram M3E: a connected block, 2dp gaps both ways
+    }
     minSize = Screen.dp(42f);
     size = Keyboard.getSize();
     setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, size));
@@ -75,6 +78,9 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
   public void setKeyboard (TdApi.ReplyMarkupShowKeyboard keyboard) {
     oneTime = keyboard.oneTime;
     fillLayout(keyboard.rows);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramShapeButtons();
+    }
     resizeKeyboard(keyboard.resizeKeyboard);
     layoutChildren(Screen.currentWidth(), false, 0);
     requestLayout();
@@ -127,6 +133,27 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
     blockLayout = false;
   }
 
+  /** XGram M3E: outer block corners 20dp, inner 8dp, a lone button is a pill. Runs when a keyboard is bound, not per frame. */
+  private void xgramShapeButtons () {
+    int firstRow = -1, lastRow = -1;
+    for (int row = 0; row < rowsCount; row++) {
+      if (columnCount[row] > 0) {
+        if (firstRow == -1) {
+          firstRow = row;
+        }
+        lastRow = row;
+      }
+    }
+    int index = 0;
+    for (int row = 0; row < rowsCount; row++) {
+      final int cols = columnCount[row];
+      for (int col = 0; col < cols; col++) {
+        com.fahadali.xgram.appearance.XgramM3Connected.shape(getChildAt(index), row == firstRow, row == lastRow, col, cols);
+        index++;
+      }
+    }
+  }
+
   private void resizeKeyboard (boolean customSize) {
     int size = minSize * rowsCount + spacing * (rowsCount - 1) + spacingBig * 2;
     setSize(size, customSize ? size : Keyboard.getSize());
@@ -137,7 +164,12 @@ public class CommandKeyboardLayout extends ViewGroup implements ViewTreeObserver
   private TextView genButton () {
     TextView text = new EmojiTextView(getContext());
     text.setScrollDisabled(true);
-    ViewUtils.setBackground(text, Theme.rectSelector(4f, 0f, ColorId.chatKeyboardButton));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: a tonal cell of the connected block; its corners are set by xgramShapeButtons
+      com.fahadali.xgram.appearance.XgramM3Connected.attachButton(text, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+    } else {
+      ViewUtils.setBackground(text, Theme.rectSelector(4f, 0f, ColorId.chatKeyboardButton));
+    }
     if (themeProvider != null) {
       themeProvider.addThemeInvalidateListener(text);
     }

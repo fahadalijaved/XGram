@@ -179,6 +179,9 @@ public class TGInlineKeyboard {
   }
 
   public static int getButtonSpacing () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Screen.dp(com.fahadali.xgram.appearance.XgramM3Connected.GAP); // XGram M3E: a connected block, 2dp gaps
+    }
     return Screen.dp(4f);
   }
 
@@ -266,6 +269,9 @@ public class TGInlineKeyboard {
     final int strokePadding = getStrokePadding();
 
     if (isCustom) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        buttons.get(0).xgramSetGroup(1, 1);
+      }
       buttons.get(0).draw(view, c, startX, startY, maxWidth, buttonHeight, disableCustomPadding ? 0 : strokePadding, rounder, 0, 0);
       return;
     }
@@ -283,6 +289,9 @@ public class TGInlineKeyboard {
       int buttonColumn = 0;
       for (TdApi.InlineKeyboardButton ignored : row) {
         final Button button = buttons.get(buttonIndex);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          button.xgramSetGroup(keyboard.rows.length, row.length);
+        }
         button.draw(view, c, cx, cy, buttonWidth, buttonHeight, strokePadding, rounder, buttonRow, buttonColumn);
         cx += buttonWidth + buttonSpacing;
         buttonIndex++;
@@ -516,6 +525,56 @@ public class TGInlineKeyboard {
 
     private int row = -1, column = -1;
 
+    // XGram M3E: each button is a cell of a connected block (com.fahadali.xgram.appearance.XgramM3Connected) whose
+    // corners spring to the pressed corner while it is held. Everything is allocated once; the path is rebuilt only
+    // when the bounds, the place in the block or the press value change.
+
+    private int xgramRowCount = 1, xgramColCount = 1;
+    private @Nullable float[] xgramCornersDp, xgramRadii;
+    private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress;
+    private float xgramPathLeft, xgramPathTop, xgramPathRight, xgramPathBottom, xgramPathPress;
+    private int xgramPathRow, xgramPathColumn, xgramPathRowCount, xgramPathColCount;
+
+    void xgramSetGroup (int rowCount, int colCount) {
+      this.xgramRowCount = rowCount;
+      this.xgramColCount = colCount;
+    }
+
+    private void xgramSetPressed (boolean pressed) {
+      if (xgramPress == null) {
+        if (!pressed) {
+          return;
+        }
+        xgramPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+      }
+      xgramPress.animateTo(pressed ? 1f : 0f);
+    }
+
+    private void xgramLayoutPath (RectF rounder, int row, int column) {
+      final float press = xgramPress != null ? xgramPress.getValue() : 0f;
+      if (xgramRadii == null || xgramCornersDp == null) {
+        xgramRadii = new float[8];
+        xgramCornersDp = new float[4];
+      } else if (xgramPathPress == press && xgramPathLeft == rounder.left && xgramPathTop == rounder.top && xgramPathRight == rounder.right && xgramPathBottom == rounder.bottom &&
+        xgramPathRow == row && xgramPathColumn == column && xgramPathRowCount == xgramRowCount && xgramPathColCount == xgramColCount) {
+        return;
+      }
+      xgramPathPress = press;
+      xgramPathLeft = rounder.left;
+      xgramPathTop = rounder.top;
+      xgramPathRight = rounder.right;
+      xgramPathBottom = rounder.bottom;
+      xgramPathRow = row;
+      xgramPathColumn = column;
+      xgramPathRowCount = xgramRowCount;
+      xgramPathColCount = xgramColCount;
+      final boolean single = isCustom || com.fahadali.xgram.appearance.XgramM3Connected.isSingle(xgramRowCount, xgramColCount);
+      com.fahadali.xgram.appearance.XgramM3Connected.radii(single, row == 0, row == xgramRowCount - 1, column, xgramColCount, xgramCornersDp);
+      com.fahadali.xgram.appearance.XgramM3Connected.radiiPx(xgramCornersDp, rounder.width(), rounder.height(), com.fahadali.xgram.appearance.XgramM3Connected.pressedCorner(single), press, xgramRadii);
+      path.rewind();
+      path.addRoundRect(rounder, xgramRadii, Path.Direction.CCW);
+    }
+
     private boolean useWhiteMode () {
       return context.context.useBubbles() && !isCustom;
     }
@@ -548,13 +607,26 @@ public class TGInlineKeyboard {
           setProgressBounds();
         }
       }
+      final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      if (xgramM3) {
+        xgramLayoutPath(rounder, row, column);
+      }
 
       final boolean useBubbleMode = useWhiteMode();
       // float darkFactor = Theme.getDarkFactor();
       int inlineOutlineColor = customColorId != ColorId.NONE ? Theme.getColor(customColorId) : Theme.inlineOutlineColor(isOutBubble);
       int fillingColor = 0;
 
-      if (useBubbleMode) {
+      if (xgramM3) {
+        // XGram M3E: the connected cell shape; tonal (bubble_button) in bubbles, outlined otherwise
+        if (useBubbleMode) {
+          c.drawPath(path, Paints.fillingPaint(fillingColor = context.context.getBubbleButtonBackgroundColor()));
+        } else {
+          Paint paint = Paints.getInlineButtonOuterPaint();
+          paint.setColor(inlineOutlineColor);
+          c.drawPath(path, paint);
+        }
+      } else if (useBubbleMode) {
         c.drawRoundRect(rounder, radius, radius, Paints.fillingPaint(fillingColor = context.context.getBubbleButtonBackgroundColor()));
       } else {
         Paint paint = Paints.getInlineButtonOuterPaint();
@@ -565,12 +637,18 @@ public class TGInlineKeyboard {
       //noinspection ConstantConditions
       float selectionColorFactor = ALLOW_INVERSE ? (ALLOW_ALWAYS_ACTIVE && isAlwaysActive() ? selectionFactor : activeFactor) : (ALLOW_ALWAYS_ACTIVE ? selectionFactor : 0f); // : Utils.color((int) (255f * (1f - fadeFactor)), selectionChanger.getColor(inverseFactor));
       int selectionColor = useBubbleMode ? context.context.getBubbleButtonRippleColor() : ColorUtils.fromToArgb(ColorUtils.color(0x1a, inlineOutlineColor), inlineOutlineColor, selectionColorFactor);
+      if (xgramM3) {
+        // XGram M3E: the touch-anchored ripple is the content colour's pressed state layer, the label keeps its colour
+        selectionColor = com.fahadali.xgram.appearance.XgramExpressiveC.stateLayerColor(useBubbleMode ? context.context.getBubbleButtonTextColor() : customColorId != ColorId.NONE ? Theme.getColor(customColorId) : Theme.inlineTextColor(isOutBubble));
+      }
       if (fadeFactor != 0f) {
         selectionColor = ColorUtils.color((int) ((float) Color.alpha(selectionColor) * (1f - fadeFactor)), selectionColor);
       }
 
       if (selectionFactor != 0f) {
-        if (selectionFactor == 1f || path == null) {
+        if (xgramM3 && selectionFactor == 1f) {
+          c.drawPath(path, Paints.fillingPaint(selectionColor));
+        } else if (selectionFactor == 1f || path == null) {
           c.drawRoundRect(rounder, radius, radius, Paints.fillingPaint(selectionColor));
         } else {
           int anchorX = Math.max(Math.min(this.anchorX, buttonWidth), 0);
@@ -586,6 +664,8 @@ public class TGInlineKeyboard {
           final int saveCount;
           if ((saveCount = ViewSupport.clipPath(c, path)) != Integer.MIN_VALUE) {
             c.drawCircle(selectionX, selectionY, selectionRadius, Paints.fillingPaint(selectionColor));
+          } else if (xgramM3) {
+            c.drawPath(path, Paints.fillingPaint(selectionColor));
           } else {
             c.drawRoundRect(rounder, radius, radius, Paints.fillingPaint(selectionColor));
           }
@@ -594,7 +674,7 @@ public class TGInlineKeyboard {
       }
 
       //noinspection ConstantConditions
-      final float textColorFactor = ALLOW_INVERSE ? (selectionFactor * activeFactor * (1f - fadeFactor)) : ALLOW_ALWAYS_ACTIVE ? selectionFactor * (1f - fadeFactor) : 0f;
+      final float textColorFactor = xgramM3 ? 0f : ALLOW_INVERSE ? (selectionFactor * activeFactor * (1f - fadeFactor)) : ALLOW_ALWAYS_ACTIVE ? selectionFactor * (1f - fadeFactor) : 0f;
       final int textColor = useBubbleMode ? context.context.getBubbleButtonTextColor() : ColorUtils.fromToArgb(customColorId != ColorId.NONE ? Theme.getColor(customColorId) :Theme.inlineTextColor(isOutBubble), Theme.inlineTextActiveColor(), textColorFactor);
 
       int textX = cx + getButtonPadding();
@@ -756,6 +836,9 @@ public class TGInlineKeyboard {
         case MotionEvent.ACTION_DOWN: {
           flags |= FLAG_CAUGHT;
           anchorX = x; anchorY = y;
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            xgramSetPressed(true);
+          }
           if (!isActive() && !isBlocked()) {
             animateSelectionFactor(1f);
           }
@@ -766,6 +849,9 @@ public class TGInlineKeyboard {
           return true;
         }
         case MotionEvent.ACTION_CANCEL: {
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            xgramSetPressed(false);
+          }
           if (isCaught()) {
             flags &= ~FLAG_CAUGHT;
             if (!isActive() && !isBlocked()) {
@@ -775,6 +861,9 @@ public class TGInlineKeyboard {
           return true;
         }
         case MotionEvent.ACTION_UP: {
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            xgramSetPressed(false);
+          }
           anchorX = x; anchorY = y;
           if (isCaught()) {
             flags &= ~FLAG_CAUGHT;
@@ -825,6 +914,9 @@ public class TGInlineKeyboard {
     public boolean performLongPress (View view) {
       if ((flags & FLAG_CAUGHT) != 0) {
         flags &= ~FLAG_CAUGHT;
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          xgramSetPressed(false); // XGram M3E: the long-press menu takes over, so the shape goes back to rest
+        }
         if (!isActive()) {
           cancelSelection();
           if (parent.isSponsoredMessage()) {
