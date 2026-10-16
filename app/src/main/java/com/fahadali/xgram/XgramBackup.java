@@ -38,7 +38,7 @@ public final class XgramBackup {
     XgramSettings.KEY_INLINE_VIDEO,
     // Foldables (Appearance > Layout)
     XgramSettings.KEY_FOLD_HINGE_SPLIT, XgramSettings.KEY_FOLD_TABLETOP,
-    XgramSettings.KEY_PANE_SPLIT_EVENLY, XgramSettings.KEY_PANE_RESIZABLE,
+    XgramSettings.KEY_PANE_SPLIT_EVENLY, XgramSettings.KEY_PANE_RESIZABLE, XgramSettings.KEY_NAV_RAIL,
     XgramSettings.KEY_DRAG_DROP, XgramSettings.KEY_OPEN_BESIDE,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",

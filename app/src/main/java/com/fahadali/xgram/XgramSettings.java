@@ -1227,6 +1227,38 @@ public final class XgramSettings {
     put(KEY_PANE_RESIZABLE, value);
   }
 
+  // Navigation rail (Appearance > Layout, see com.fahadali.xgram.layout.XgramNavRail): Expressive design's rail on
+  // wide windows. Read while the layout is checked, so cached.
+
+  public static final String KEY_NAV_RAIL = "xgram_nav_rail";
+  /** Prefix, followed by the account id: the date of the newest missed call seen (the rail's Calls badge). Local. */
+  private static final String KEY_MISSED_CALLS_SEEN = "xgram_missed_seen_";
+
+  private volatile Boolean navRail;
+
+  /** On wide windows the chat list's Chats and Calls tabs and the side menu are a navigation rail at the start. */
+  public boolean navRail () {
+    Boolean value = navRail;
+    if (value == null) {
+      navRail = value = pmc().getBoolean(KEY_NAV_RAIL, true);
+    }
+    return value;
+  }
+
+  public void setNavRail (boolean value) {
+    navRail = value;
+    put(KEY_NAV_RAIL, value);
+  }
+
+  /** Unix time of the newest missed call already seen on account {@code accountId}, or 0 before the first look. */
+  public int railCallsSeen (int accountId) {
+    return pmc().getInt(KEY_MISSED_CALLS_SEEN + accountId, 0);
+  }
+
+  public void setRailCallsSeen (int accountId, int date) {
+    pmc().putInt(KEY_MISSED_CALLS_SEEN + accountId, date);
+  }
+
   // Settings search: the results opened last (search hit keys, newest first), shown before anything is typed.
   // Not a setting: left out of backups.
 

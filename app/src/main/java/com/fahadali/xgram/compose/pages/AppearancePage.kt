@@ -36,6 +36,7 @@ import com.fahadali.xgram.compose.ui.PageScope
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
+import com.fahadali.xgram.layout.XgramNavRail
 import com.fahadali.xgram.layout.XgramWindow
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.ui.MessagesController
@@ -135,6 +136,19 @@ fun AppearancePage() {
       switch(R.id.btn_xgramTwoPane, s(R.string.XgramTwoPane), s(R.string.XgramTwoPaneSub), checked = settings.twoPaneLayout()) {
         settings.setTwoPaneLayout(it)
         host.activity.xgramTwoPane()?.update()
+      }
+      // Expressive design's navigation rail on wide windows (only there); off: the chat list's own header (tabs, ☰)
+      // is back at once
+      if (XgramExpressive.isEnabled()) {
+        val railReason = XgramNavRail.settingReason()
+        switch(
+          R.id.btn_xgramNavRail, s(R.string.XgramNavRailOption),
+          s(if (railReason != 0) railReason else R.string.XgramNavRailOptionSub),
+          checked = settings.navRail(), enabled = railReason == 0
+        ) {
+          settings.setNavRail(it)
+          host.activity.xgramTwoPane()?.update()
+        }
       }
     }
     description(R.string.XgramTwoPaneInfo)

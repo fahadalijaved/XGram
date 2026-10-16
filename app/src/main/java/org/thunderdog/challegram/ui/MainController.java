@@ -405,6 +405,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (useGlobalFilter()) {
       return Lang.getString(getGlobalFilterName(globalFilter));
     }
+    if (xgramRailTitle()) {
+      // XGram M3E: the app bar title instead of the Chats / Calls tabs (now on the navigation rail): the page shown
+      return xgramOnCallsPage() ? Lang.getString(R.string.Calls) : getMenuSectionName(MAIN_PAGER_ITEM_ID, POSITION_CHATS, /* hasFolders */ false, ChatFolderStyle.LABEL_ONLY, /* upperCase */ false);
+    }
     return Lang.getString(R.string.Chats);
   }
 
@@ -436,9 +440,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           });
           addThemeInvalidateListener(toggleHeaderView);
         }
+        xgramFitToggleHeader();
         return toggleHeaderView;
       }
       return null;
+    }
+    if (xgramRailTitle()) {
+      return null; // XGram M3E: Chats and Calls are on the navigation rail, the app bar shows the page's title (getName)
     }
     if (headerCell != null) {
       View headerCellView = headerCell.getView();
@@ -1001,6 +1009,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   @Override
   public void onPageSelected (int position, int actualPosition) {
     com.fahadali.xgram.appearance.XgramMotion.notifyActive(getCurrentPagerItem());
+    xgramRailPageChanged(); // XGram M3E: the app bar title and the rail's pill follow the page
     if (!inSearchMode()) {
       composeWrap.show();
     }
@@ -1096,11 +1105,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (xgramGhostButton != null && xgramGhostButton.getVisibility() == View.VISIBLE) {
         menuWidth += Screen.dp(49f); // XGram: the ghost mode button, or the last folder tab slides under it
       }
+      // XGram M3E: no ☰ while the navigation rail shows: the first folder tab lines up with the list (4 + 12dp)
+      int navWidth = Screen.dp(xgramRailShown() ? 4f : 44f);
       if (Lang.rtl()) {
         paddingLeft = menuWidth;
-        paddingRight = Screen.dp(44f);
+        paddingRight = navWidth;
       } else {
-        paddingLeft = Screen.dp(44f);
+        paddingLeft = navWidth;
         paddingRight = menuWidth;
       }
     }
@@ -1623,25 +1634,95 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   /**
-   * XGram M3E: the navigation rail at the start of a wide window (XgramNavRail) is the side menu: no ☰, no drawer
-   * swipe, and the compose button is the rail's FAB.
+   * XGram M3E: the navigation rail at the start of a wide window (XgramNavRail) is the side menu and has the Chats and
+   * Calls tabs: no ☰, no drawer swipe, and a plain app bar title when the pages are Chats and Calls (no folders).
+   * The compose button stays the chat list's own.
    */
   private boolean xgramRailShown () {
     return com.fahadali.xgram.layout.XgramTwoPane.isRailShown(context);
   }
 
-  /** XGram: the navigation rail came or went (XgramTwoPane re-applies the header for the ☰). */
-  public void xgramOnNavRailChanged () {
-    if (composeWrap != null && xgramRailShown()) {
-      composeWrap.close();
-    }
-    xgramUpdateComposeVisibility();
+  /** XGram M3E: the app bar shows the page's title, not the Chats / Calls tabs (never on the hidden right pane root). */
+  private boolean xgramRailTitle () {
+    return xgramRailShown() && !hasFolders() && !xgramIsHiddenRoot();
   }
 
-  /** XGram: as the chat list pane of the two-pane layout, the list keeps clear of the screen edge (or the rail) and the chat. */
+  /** XGram: the navigation rail came or went (XgramTwoPane re-applies the header for the ☰ and the tabs). */
+  public void xgramOnNavRailChanged () {
+    xgramUpdatePaneInset();
+    checkHeaderMargins();
+    xgramFitToggleHeader();
+  }
+
+  /** XGram M3E: the header again (folder tabs came or went), for the navigation rail's title or tabs. */
+  private void xgramReapplyHeader () {
+    if (xgramRailShown() && headerView != null && isFocused() && !inTransformMode()) {
+      headerView.setTitle(this);
+    }
+  }
+
+  /** XGram M3E: the folder title at the top (folders at the bottom) starts 16dp in while there is no ☰. */
+  private void xgramFitToggleHeader () {
+    if (toggleHeaderView == null || !(toggleHeaderView.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) {
+      return;
+    }
+    ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) toggleHeaderView.getLayoutParams();
+    boolean rail = xgramRailShown();
+    int left = Lang.rtl() ? Screen.dp(56f) : Screen.dp(rail ? 16f : 56f);
+    int right = Lang.rtl() ? Screen.dp(rail ? 16f : 68f) : Screen.dp(68f);
+    if (params.leftMargin != left || params.rightMargin != right) {
+      params.leftMargin = left;
+      params.rightMargin = right;
+      toggleHeaderView.setLayoutParams(params);
+    }
+  }
+
+  /** XGram M3E: the page changed: the app bar title (Chats or Calls) and the navigation rail's pill follow it. */
+  private void xgramRailPageChanged () {
+    if (!xgramRailShown()) {
+      return;
+    }
+    if (xgramRailTitle() && headerView != null) {
+      headerView.xgramMorphTitle(getId(), getName(), com.fahadali.xgram.appearance.XgramTitleMorph.LEADING_NONE, true);
+    }
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+    if (twoPane != null) {
+      twoPane.onRailPageChanged(this);
+    }
+  }
+
+  /** XGram M3E: Calls is one of this chat list's pages (no folders: Chats and Calls), for the navigation rail. */
+  public boolean xgramHasCallsPage () {
+    return !hasFolders();
+  }
+
+  /** XGram M3E: the Calls page is on screen. */
+  public boolean xgramOnCallsPage () {
+    return !hasFolders() && getViewPager() != null && getCurrentPagerItemPosition() == POSITION_CALLS;
+  }
+
+  /**
+   * XGram M3E: the navigation rail's Chats or Calls, as a tap on their tab: another page switches to it, the page
+   * shown scrolls to the top ({@code scrollIfShown}). With folders, Chats keeps the folder shown.
+   */
+  public void xgramShowRailPage (boolean calls, boolean scrollIfShown) {
+    if (getViewPager() == null) {
+      return;
+    }
+    int current = getCurrentPagerItemPosition();
+    int position = hasFolders() ? current : calls ? POSITION_CALLS : POSITION_CHATS;
+    if (position != current || scrollIfShown) {
+      onPagerItemClick(position);
+    }
+  }
+
+  /**
+   * XGram: as the chat list pane of the two-pane layout (or the only one beside the navigation rail), the list keeps
+   * clear of the screen edge or the rail, and the chat.
+   */
   public void xgramUpdatePaneInset () {
     if (pagerWrap instanceof com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout) {
-      boolean pane = com.fahadali.xgram.layout.XgramTwoPane.isPaneChatList(this);
+      boolean pane = com.fahadali.xgram.layout.XgramTwoPane.isPaneChatList(this) || (xgramRailShown() && !xgramIsHiddenRoot());
       ((com.fahadali.xgram.appearance.XgramM3Bars.CornerFrameLayout) pagerWrap).setSideInset(pane ? Screen.dp(com.fahadali.xgram.layout.XgramTwoPane.PANE_INSET_DP) : 0);
     }
   }
@@ -2216,9 +2297,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private void xgramUpdateComposeVisibility () {
     if (composeWrap != null) {
-      // XGram M3E: with the navigation rail the compose button is the rail's FAB
-      boolean hidden = com.fahadali.xgram.XgramSettings.instance().hideFab() || xgramRailShown();
-      composeWrap.setVisibility(hidden ? View.GONE : View.VISIBLE);
+      composeWrap.setVisibility(com.fahadali.xgram.XgramSettings.instance().hideFab() ? View.GONE : View.VISIBLE);
     }
   }
 
@@ -3315,6 +3394,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       checkMenu();
       checkMargins();
       showFoldersSetupSuggestion();
+      xgramReapplyHeader(); // XGram M3E: with the navigation rail, folder tabs or the page's title
     }
   }
 
