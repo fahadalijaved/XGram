@@ -716,6 +716,8 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
     headerView.getBackButton().setIsReverse(true);
     if (xgramM3()) {
       headerView.getFilling().setShadowAlpha(0f); // XGram: M3 app bars have no shadow, the sheet continues under it
+      // XGram: the close button as an M3E standard icon button (40dp onSurface state layer), not Telegram X's rectangle
+      com.fahadali.xgram.appearance.XgramM3Sheets.applyNavigationButton(headerView.getBackButton(), Theme.getColor(ColorId.text));
     }
     addThemeInvalidateListener(headerView);
 

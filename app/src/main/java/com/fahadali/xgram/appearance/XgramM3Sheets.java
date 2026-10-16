@@ -16,6 +16,7 @@ import android.graphics.Canvas;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -32,6 +33,7 @@ import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.loader.AvatarReceiver;
 import org.thunderdog.challegram.navigation.DoubleHeaderView;
+import org.thunderdog.challegram.navigation.HeaderButton;
 import org.thunderdog.challegram.navigation.HeaderView;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
@@ -181,6 +183,20 @@ public final class XgramM3Sheets {
     container.setColorRole(XgramExpressive.SECONDARY_CONTAINER);
     container.setSize(ICON_BUTTON_SIZE, ICON_BUTTON_SIZE, Gravity.CENTER);
     return container;
+  }
+
+  /**
+   * The navigation (close / back) button of a sheet header as an M3E standard icon button: no container, a 40dp state
+   * layer in {@code contentColor} at .10 with full corners, 8dp while pressed. HeaderView.initWithSingleController gives
+   * it Telegram X's rectangular bg_btn_header highlight instead; call this after it.
+   */
+  public static void applyNavigationButton (@NonNull HeaderButton button, @ColorInt int contentColor) {
+    if (!(button.getBackground() instanceof RippleDrawable)) {
+      button.setButtonBackground(R.drawable.bg_btn_header); // HeaderButton's own M3E state layer, unless it has one
+    }
+    if (!(button.getBackground() instanceof RippleDrawable)) {
+      button.setBackground(XgramExpressiveC.iconButtonRipple(contentColor, ICON_BUTTON_SIZE));
+    }
   }
 
   /**

@@ -176,7 +176,11 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     backButton = new BackHeaderButton(context);
     backButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(56f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
     backButton.setButtonFactor(this.needReactionSelector ? BackHeaderButton.TYPE_BACK : BackHeaderButton.TYPE_CLOSE);
-    RippleSupport.setTransparentSelector(backButton);
+    if (xgramM3) {
+      backButton.setButtonBackground(R.drawable.bg_btn_header); // XGram: HeaderButton's M3E standard icon button state layer (40dp)
+    } else {
+      RippleSupport.setTransparentSelector(backButton);
+    }
     Views.setClickable(backButton);
     addView(backButton);
 

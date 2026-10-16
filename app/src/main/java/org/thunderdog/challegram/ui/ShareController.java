@@ -1428,6 +1428,8 @@ public class ShareController extends TelegramViewController<ShareController.Args
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive modal sheet top: 28dp corners that square off at the window top, a drag handle
       xgramSheetTop = com.fahadali.xgram.appearance.XgramM3Sheets.attachHeaderSheetTop(headerView, headerView.getFilling().getExtraHeight(), Theme.fillingColor());
+      // the close button as an M3E standard icon button (40dp state layer), not Telegram X's rectangle highlight
+      com.fahadali.xgram.appearance.XgramM3Sheets.applyNavigationButton(headerView.getBackButton(), Theme.getColor(getHeaderIconColorId()));
     }
 
     // Fix blinking black line between header & content
