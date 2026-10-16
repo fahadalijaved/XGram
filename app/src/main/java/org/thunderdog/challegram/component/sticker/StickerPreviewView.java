@@ -113,7 +113,12 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
     this.stickerView = new StickerView(context);
     this.stickerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     addView(stickerView);
-    ViewSupport.setThemedBackground(this, ColorId.previewBackground);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the modal scrim (32% black) behind the sticker, read on every draw
+      setBackground(new com.fahadali.xgram.appearance.XgramM3Preview.ScrimDrawable());
+    } else {
+      ViewSupport.setThemedBackground(this, ColorId.previewBackground);
+    }
     themeListenerList.addThemeInvalidateListener(this);
     setAlpha(0f);
     stickerView.setLayerType(LAYER_TYPE_HARDWARE, Views.getLayerPaint());
@@ -168,6 +173,8 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
   @Override
   public void launchShowAnimation (PopupLayout popup) {
     this.pendingPopup = popup;
+    // XGram M3E: the sticker scales in on the spatial default spring (a fade only with Reduce motion, see onFactorChanged)
+    com.fahadali.xgram.appearance.XgramAppMotion.use(animator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, false);
     animator.animateTo(1f);
   }
 
@@ -178,6 +185,7 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
     animator.cancel();
     //animator.setInterpolator(Anim.DECELERATE_INTERPOLATOR);
     animator.setDuration(HIDE_DURATION);
+    com.fahadali.xgram.appearance.XgramAppMotion.use(animator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
     if (animator.getFactor() == 0f) {
       popup.onCustomHideAnimationComplete();
     } else {
@@ -193,7 +201,8 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
       case REVEAL_ANIMATOR: {
         final float alpha = Math.max(0f, Math.min(1f, factor));
         setAlpha(alpha);
-        setAppearFactor(factor);
+        // XGram M3E: with Reduce motion the sticker only fades, it does not fly in from its cell
+        setAppearFactor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : factor);
         break;
       }
       case REPLACE_ANIMATOR: {
@@ -407,7 +416,8 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
     if (menu == null) {
       return Integer.MAX_VALUE;
     }
-    final int availableWidth = getMeasuredWidth() - menu.getPaddingLeft() - menu.getPaddingRight();
+    // XGram M3E: the floating toolbar keeps 16dp from the screen edges
+    final int availableWidth = getMeasuredWidth() - menu.getPaddingLeft() - menu.getPaddingRight() - (menu instanceof com.fahadali.xgram.appearance.XgramR5Composer.Toolbar ? Screen.dp(32f) : 0);
     if (availableWidth > 0) {
       int imageButtonsWidth = 0;
       int textButtonsCount = 0;
@@ -444,6 +454,10 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
 
   public void openMenu (final TGStickerObj sticker) {
     setMenuVisible(false, false);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramOpenMenu(sticker);
+      return;
+    }
     menu = new LinearLayout(getContext()) {
       @Override
       protected void onDraw (Canvas c) {
@@ -557,6 +571,117 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
     setMenuVisible(true, true);
   }
 
+  /**
+   * XGram M3E: the sticker's actions as the floating toolbar (XgramR5Composer.Toolbar), 16dp under the sticker: the
+   * callers' actions as sentence-case labelLarge text buttons, or else 48dp icon buttons with plain tooltips (send,
+   * favourite as a toggle, view pack, remove from recents in error). The touch handling (dispatchMenuTouchEvent) and
+   * the actions are Telegram X's.
+   */
+  private void xgramOpenMenu (final TGStickerObj sticker) {
+    final com.fahadali.xgram.appearance.XgramR5Composer.Toolbar toolbar = new com.fahadali.xgram.appearance.XgramR5Composer.Toolbar(getContext(), this);
+    menu = toolbar;
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.TOOLBAR_HEIGHT), Gravity.CENTER_HORIZONTAL);
+    params.topMargin = getStickerCenterY() + stickerHeight / 2 + Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.TOOLBAR_GAP);
+    params.leftMargin = params.rightMargin = Screen.dp(16f);
+    toolbar.setLayoutParams(params);
+
+    final StickerPreviewView.MenuStickerPreviewCallback menuStickerPreviewCallback = previewCallback != null ?
+      previewCallback.getMenuStickerPreviewCallback() : null;
+
+    if (menuStickerPreviewCallback != null && sticker != null) {
+      ArrayList<MenuItem> menuItems = new ArrayList<>(5);
+      menuStickerPreviewCallback.buildMenuStickerPreview(menuItems, sticker);
+      View.OnClickListener onClickListener = view -> menuStickerPreviewCallback.onMenuStickerPreviewClick(view, findRoot(), sticker, controllerView);
+      View.OnLongClickListener onLongClickListener = view -> menuStickerPreviewCallback.onMenuStickerPreviewLongClick(view, findRoot(), sticker, controllerView);
+      for (MenuItem item : menuItems) {
+        if (item.type != MenuItem.MENU_ITEM_TEXT) {
+          throw new IllegalArgumentException();
+        }
+        final int role = item.colorId == ColorId.textNegative ? com.fahadali.xgram.appearance.XgramExpressive.ERROR : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY;
+        toolbar.addTextButton(item.viewId, com.fahadali.xgram.appearance.XgramR5Composer.menuLabel(item.title, item.viewId), role, onClickListener, onLongClickListener);
+      }
+    } else if (sticker != null && tdlib != null) {
+      View.OnClickListener onClickListener = v -> {
+        final int viewId = v.getId();
+        if (viewId == R.id.btn_favorite) {
+          final int stickerId = sticker.getId();
+          if (tdlib.isStickerFavorite(stickerId)) {
+            tdlib.send(new TdApi.RemoveFavoriteSticker(new TdApi.InputFileId(stickerId)), tdlib.typedOkHandler());
+          } else {
+            tdlib.send(new TdApi.AddFavoriteSticker(new TdApi.InputFileId(stickerId)), tdlib.typedOkHandler());
+          }
+          closePreviewIfNeeded();
+        } else if (viewId == R.id.btn_send) {
+          if (controllerView != null && controllerView.onSendSticker(v, sticker, Td.newSendOptions())) {
+            closePreviewIfNeeded();
+          }
+        } else if (viewId == R.id.btn_view) {
+          if (controllerView != null) {
+            ViewController<?> context = findRoot();
+            if (context != null) {
+              tdlib.ui().showStickerSet(context, sticker.getStickerSetId(), null);
+              closePreviewIfNeeded();
+            }
+          }
+        } else if (viewId == R.id.btn_removeRecent) {
+          final int stickerId = sticker.getId();
+          if (sticker.isCustomEmoji()) {
+            Emoji.instance().removeRecentCustomEmoji(sticker.getCustomEmojiId());
+          } else {
+            tdlib.send(new TdApi.RemoveRecentSticker(false, new TdApi.InputFileId(stickerId)), tdlib.typedOkHandler());
+          }
+          closePreviewIfNeeded();
+        } else {
+          closePreviewIfNeeded();
+        }
+      };
+      final boolean isEmoji = sticker.isCustomEmoji();
+      final ImageView sendView = toolbar.addIconButton(R.id.btn_send, R.drawable.deproko_baseline_send_24, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT, false,
+        isEmoji ? com.fahadali.xgram.appearance.XgramR5Composer.sentence(R.string.PasteCustomEmoji) : Lang.getString(R.string.SendSticker), onClickListener);
+      if (controllerView != null && controllerView.getStickerOutputChatId() != 0) {
+        sendView.setOnLongClickListener(v -> {
+          ViewController<?> c = findRoot();
+          return c != null && tdlib.ui().showScheduleOptions(c, controllerView.getStickerOutputChatId(), true, (sendOptions, disableMarkdown) -> {
+            if (controllerView.onSendSticker(v, sticker, sendOptions)) {
+              closePreviewIfNeeded();
+            }
+          }, null, null);
+        });
+      }
+      if (!isEmoji) {
+        final boolean isFavorite = tdlib.isStickerFavorite(sticker.getId());
+        toolbar.addIconButton(R.id.btn_favorite, isFavorite ? R.drawable.baseline_star_24 : R.drawable.baseline_star_border_24, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT, isFavorite,
+          com.fahadali.xgram.appearance.XgramR5Composer.sentence(isFavorite ? R.string.RemoveFromFavorites : R.string.AddToFavorites), onClickListener);
+      }
+      if (sticker.needViewPackButton()) {
+        toolbar.addIconButton(R.id.btn_view, R.drawable.deproko_baseline_stickers_24, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT, false,
+          com.fahadali.xgram.appearance.XgramR5Composer.sentence(R.string.ViewPackPreview), onClickListener);
+      }
+      if (sticker.isRecent()) {
+        toolbar.addIconButton(R.id.btn_removeRecent, R.drawable.baseline_auto_delete_24, com.fahadali.xgram.appearance.XgramExpressive.ERROR, false,
+          Lang.getString(R.string.XgramR5ComposerRemoveRecent), onClickListener);
+      }
+    }
+
+    if (toolbar.getChildCount() == 0) {
+      menu = null;
+      return;
+    }
+    toolbar.setAlpha(0f);
+    addView(toolbar);
+    applyMaximumMenuItemsWidth();
+    setMenuVisible(true, true);
+  }
+
+  @Override
+  protected void dispatchDraw (Canvas c) {
+    super.dispatchDraw(c);
+    if (menu instanceof com.fahadali.xgram.appearance.XgramR5Composer.Toolbar) {
+      // XGram M3E: the plain tooltip of the action under the finger, above the floating toolbar
+      ((com.fahadali.xgram.appearance.XgramR5Composer.Toolbar) menu).drawTooltips(c, getMeasuredWidth());
+    }
+  }
+
   @Deprecated
   private void makeMenuForSticker (final TGStickerObj sticker, final View.OnClickListener onClickListener) {
     boolean isFavorite = tdlib.isStickerFavorite(sticker.getId());
@@ -667,7 +792,10 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
     if (this.menuFactor != factor) {
       this.menuFactor = factor;
       menu.setAlpha(MathUtils.clamp(factor));
-      float sourceScale = (.6f + .4f * menuFactor);
+      // XGram M3E: the floating toolbar scales from .8 as it fades in (a fade only with Reduce motion)
+      float sourceScale = menu instanceof com.fahadali.xgram.appearance.XgramR5Composer.Toolbar ?
+        (com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : .8f + .2f * menuFactor) :
+        (.6f + .4f * menuFactor);
       menu.setScaleX(sourceScale);
       menu.setScaleY(sourceScale);
     }
@@ -688,6 +816,7 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
           menuAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
           menuAnimator.setDuration(140l);
         }
+        com.fahadali.xgram.appearance.XgramAppMotion.use(menuAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
         menuAnimator.animateTo(toFactor);
       } else {
         if (menuAnimator != null) {
@@ -722,6 +851,7 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
     setSticker(sticker, true);
     this.fromCx = cx;
     this.fromCy = cy;
+    com.fahadali.xgram.appearance.XgramAppMotion.use(replaceAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, false); // XGram
     replaceAnimator.animateTo(0f);
   }
 
@@ -735,6 +865,7 @@ public class StickerPreviewView extends FrameLayoutFix implements FactorAnimator
     setSticker(reaction.activateAnimationSicker(), reaction.effectAnimationSicker(), true);
     this.fromCx = cx;
     this.fromCy = cy;
+    com.fahadali.xgram.appearance.XgramAppMotion.use(replaceAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, false); // XGram
     replaceAnimator.animateTo(0f);
   }
 

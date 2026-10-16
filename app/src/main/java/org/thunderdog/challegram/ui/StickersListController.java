@@ -856,12 +856,14 @@ public class StickersListController extends ViewController<StickersListControlle
 
     final @StringRes int sendText = isEmoji ? (canWriteMessages ? R.string.PasteCustomEmoji : R.string.ShareCustomEmoji) : R.string.SendSticker;
 
+    // XGram M3E: sentence-case labels on the floating toolbar
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     menuItems.add(new StickerPreviewView.MenuItem(StickerPreviewView.MenuItem.MENU_ITEM_TEXT,
-      Lang.uppercase(Lang.getString(sendText)), R.id.btn_send, ColorId.textNeutral));
+      xgram ? com.fahadali.xgram.appearance.XgramR5Composer.sentence(sendText) : Lang.uppercase(Lang.getString(sendText)), R.id.btn_send, ColorId.textNeutral));
 
     if (needViewPackButton) {
       menuItems.add(new StickerPreviewView.MenuItem(StickerPreviewView.MenuItem.MENU_ITEM_TEXT,
-        Lang.uppercase(Lang.getString(R.string.ViewPackPreview)), R.id.btn_view, ColorId.textNeutral));
+        xgram ? com.fahadali.xgram.appearance.XgramR5Composer.sentence(R.string.ViewPackPreview) : Lang.uppercase(Lang.getString(R.string.ViewPackPreview)), R.id.btn_view, ColorId.textNeutral));
     }
   }
 

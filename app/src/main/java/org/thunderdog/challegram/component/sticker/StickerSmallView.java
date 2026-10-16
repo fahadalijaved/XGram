@@ -233,6 +233,9 @@ public class StickerSmallView extends View implements FactorAnimator.Target, Sti
       tmpClipPath.close();
       restoreToCountClip = Views.save(c);
       c.clipPath(tmpClipPath);
+    } else if (factor > 0f && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the pressed cell is a 12dp surfaceContainerHighest tile behind the sticker
+      com.fahadali.xgram.appearance.XgramR5Composer.drawStickerPressTile(c, getMeasuredWidth(), getMeasuredHeight(), factor);
     }
 
     float originalScale = sticker != null ? sticker.getDisplayScale() : 1f;
@@ -494,6 +497,8 @@ public class StickerSmallView extends View implements FactorAnimator.Target, Sti
   public void setStickerPressed (boolean isPressed) {
     if (this.isPressed != isPressed) {
       this.isPressed = isPressed;
+      // XGram M3E: the press shrinks the sticker on the spatial fast spring (a press tile grows in behind it, onDraw)
+      com.fahadali.xgram.appearance.XgramAppMotion.use(animator, isPressed ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, !isPressed);
       animator.animateTo(isPressed ? 1f : 0f);
     }
   }
