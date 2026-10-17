@@ -57,7 +57,7 @@ fun MessageMenuPage() {
           // Summarize and Edit history are only added while their setting is on.
           val reason = XgramSettingDeps.messageMenuOptionReason(key)
           ReorderRow(
-            key = key, title = s(option.name), icon = option.icon, checked = !XgramMessageMenu.isHidden(key),
+            key = key, title = s(option.name), icon = option.icon(), checked = !XgramMessageMenu.isHidden(key),
             enabled = reason == 0, subtitle = if (reason != 0) s(reason) else null
           )
         }

@@ -50,13 +50,14 @@ fun WhatsNewPage() {
         val subtitle = s(entry.subtitle)
         val key = entry.title.toString()
         val action = entry.action
+        val icon = entry.icon()
         if (action == XgramWhatsNewController.OPEN_NONE) {
           // Nothing to open: the group's list item without a click target.
           custom(key, R.id.btn_xgramWhatsNewItem) { shapes ->
-            WhatsNewInfoRow(entry.icon, title, subtitle, shapes, key)
+            WhatsNewInfoRow(icon, title, subtitle, shapes, key)
           }
         } else {
-          link(R.id.btn_xgramWhatsNewItem, title, subtitle, icon = entry.icon, key = key) {
+          link(R.id.btn_xgramWhatsNewItem, title, subtitle, icon = icon, key = key) {
             openEntry(host, action)
           }
         }

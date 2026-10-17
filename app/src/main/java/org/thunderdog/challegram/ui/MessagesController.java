@@ -7987,6 +7987,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (isEditingMessage() || inSelectMode() || inSearchMode() || hasAttachedFiles() || !canWriteMessages()) {
       return false;
     }
+    if (manager == null || manager.xgramCanLoadBottom()) {
+      // Only the loaded window is searched: while older history is shown (a search result, a reply jump,
+      // go-to-date) the newest loaded message is not the chat's last one, so Up keeps its normal meaning.
+      return false;
+    }
     MessagesAdapter adapter = manager.getAdapter();
     TGMessage last = adapter.getMessage(adapter.indexOfMessage(m -> !m.isSponsoredMessage() && m.canEditText()));
     if (last == null) {

@@ -665,12 +665,23 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   private int listStart, listEnd, chatStart, chatEnd;
   /** Book posture with a physical hinge: the space it hides, kept empty. Equal values: no gutter. */
   private int gutterStart, gutterEnd;
-  /** Material 3 Expressive: the pane spacer between the list pane and the chat. Equal values: none (a line). */
+  /**
+   * The space between the list pane and the chat: Material 3 Expressive's pane spacer, or with Expressive design off
+   * the gutter the drag handle sits in. Equal values: none (a line).
+   */
   private int spacerStart, spacerEnd;
 
-  /** The spacer's own width: the 24dp spacer less the 16dp the list pane keeps clear on that side. */
+  /**
+   * The spacer's own width. Expressive design: the 24dp spacer less the 16dp the list pane keeps clear on that side.
+   * Otherwise the panes meet at a line, unless they can be resized: then the handle gets a gutter of its own width, so
+   * it never covers (and never takes the touches of) either pane's content.
+   */
   private static int spacerWidth () {
-    return XgramExpressive.isEnabled() ? Screen.dp(SPACER_DP - PANE_INSET_DP) : 0;
+    if (XgramExpressive.isEnabled()) {
+      return Screen.dp(SPACER_DP - PANE_INSET_DP);
+    }
+    XgramSettings settings = XgramSettings.instance();
+    return settings.paneResizable() && !settings.paneSplitEvenly() ? Screen.dp(HANDLE_TOUCH_WIDTH_DP) : 0;
   }
 
   /**
@@ -920,12 +931,13 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
 
   /**
    * Where the drag handle sits: the middle of the visible gap between the list's content and the chat (the 24dp
-   * spacer with Expressive design), else on the line.
+   * spacer with Expressive design, where the list pane's own inset is part of the gap; the handle's gutter without
+   * it), else on the line.
    */
   private int handleCenterX () {
     boolean listFirst = listStart < chatStart;
     if (spacerEnd > spacerStart) {
-      int inset = Screen.dp(PANE_INSET_DP);
+      int inset = XgramExpressive.isEnabled() ? Screen.dp(PANE_INSET_DP) : 0;
       return listFirst ? (listEnd - inset + chatStart) / 2 : (chatEnd + listStart + inset) / 2;
     }
     return listFirst ? listEnd : listStart;
@@ -1409,7 +1421,8 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   /**
    * Between the panes. Material 3 Expressive: the pane spacer (or the hinge), on the app bar's layer, no line.
    * Otherwise a line: across the status bar and headers a slightly darker header colour (a light separator there
-   * looked like a white line between the two headers); below them, the usual separator.
+   * looked like a white line between the two headers); below them, the usual separator. As wide as the drag handle's
+   * gutter: the same header strip across it, the window background below with the separator down the middle.
    */
   private static final class DividerView extends View {
     private final android.graphics.Paint paint = new android.graphics.Paint();
@@ -1428,6 +1441,16 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       int headerHeight = Math.min(getHeight(), org.thunderdog.challegram.navigation.HeaderView.getSize(true));
       paint.setColor(me.vkryl.core.ColorUtils.fromToArgb(Theme.getColor(ColorId.headerBackground), 0xFF000000, .14f));
       c.drawRect(0, 0, getWidth(), headerHeight, paint);
+      int line = Math.max(1, Screen.dp(.5f));
+      if (getWidth() > Math.max(line, Screen.dp(1f))) {
+        // A gutter (the drag handle's, or the hinge): the window background, the usual line down its middle
+        paint.setColor(Theme.getColor(ColorId.background));
+        c.drawRect(0, headerHeight, getWidth(), getHeight(), paint);
+        int lineStart = (getWidth() - line) / 2;
+        paint.setColor(Theme.getColor(ColorId.separator));
+        c.drawRect(lineStart, headerHeight, lineStart + line, getHeight(), paint);
+        return;
+      }
       paint.setColor(Theme.getColor(ColorId.separator));
       c.drawRect(0, headerHeight, getWidth(), getHeight(), paint);
     }

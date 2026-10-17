@@ -38,15 +38,30 @@ public final class XgramMessageMenu {
     public final String key;
     public final int[] ids;
     @StringRes public final int name;
-    @DrawableRes public final int icon;
+    @DrawableRes private final int icon, expressiveIcon;
     public final boolean isXgram;
 
     Option (String key, int name, int icon, boolean isXgram, @IdRes int... ids) {
+      this(key, name, icon, 0, isXgram, ids);
+    }
+
+    /** {@code expressiveIcon}: another icon with Expressive design on (0: the same one). */
+    Option (String key, int name, int icon, int expressiveIcon, boolean isXgram, @IdRes int... ids) {
       this.key = key;
       this.name = name;
       this.icon = icon;
+      this.expressiveIcon = expressiveIcon;
       this.isXgram = isXgram;
       this.ids = ids;
+    }
+
+    /**
+     * Chosen when it is shown, not when the class loads: turning Expressive design on or off only recreates the
+     * activity, and this array outlives it.
+     */
+    @DrawableRes
+    public int icon () {
+      return expressiveIcon != 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? expressiveIcon : icon;
     }
   }
 
@@ -64,7 +79,7 @@ public final class XgramMessageMenu {
     new Option("details", R.string.XgramMessageDetails, R.drawable.baseline_info_24, true, R.id.btn_xgramMessageDetails),
     new Option("save_to_saved", R.string.XgramSaveToSaved, R.drawable.baseline_bookmark_24, true, R.id.btn_xgramSaveToSaved),
     new Option("view_in_topic", R.string.XgramViewInTopic, R.drawable.baseline_forum_24, true, R.id.btn_xgramViewInTopic),
-    new Option("bookmark", R.string.XgramBookmark, (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.baseline_star_border_24 : R.drawable.baseline_star_24), true, R.id.btn_xgramBookmark),
+    new Option("bookmark", R.string.XgramBookmark, R.drawable.baseline_star_24, R.drawable.baseline_star_border_24, true, R.id.btn_xgramBookmark),
     new Option("repeat", R.string.XgramRepeat, R.drawable.baseline_repeat_24, true, R.id.btn_xgramRepeat),
     new Option("transcribe", R.string.XgramTranscribe, R.drawable.baseline_format_text_24, true, R.id.btn_xgramTranscribe),
     new Option("summarize", R.string.XgramSummarize, R.drawable.baseline_format_list_bulleted_type_24, true, R.id.btn_xgramSummarize),

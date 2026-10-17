@@ -204,6 +204,11 @@ public final class XgramBackup {
             count++;
           }
         }
+        if (booleans.has(XgramSettings.KEY_INLINE_VIDEO)) {
+          // The restored Play videos in chat choice counts as one made after the one-time switch-on
+          // (XgramSettings.loadInlineVideo), which would otherwise turn it back on at the next start.
+          pmc().putBoolean(XgramSettings.KEY_INLINE_VIDEO_V2, true);
+        }
       }
       JSONObject strings = root.optJSONObject("strings");
       if (strings != null) {

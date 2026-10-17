@@ -1123,8 +1123,9 @@ public final class XgramSettings {
   public static final int INLINE_VIDEO_START_AUTO = 0;
   public static final int INLINE_VIDEO_START_TAP = 1;
 
-  /** Set once Play videos in chat became on by default: it was off by default in the first builds that had it. */
-  private static final String KEY_INLINE_VIDEO_V2 = "xgram_inline_video_v2";
+  /** Set once Play videos in chat became on by default: it was off by default in the first builds that had it.
+   *  A restored backup sets it too ({@link XgramBackup#importJson}), so the restored choice is kept. */
+  public static final String KEY_INLINE_VIDEO_V2 = "xgram_inline_video_v2";
 
   private volatile boolean inlineVideo;
   private volatile int inlineVideoStart = -1; // -1: not read yet (read on first use, it's asked while drawing)

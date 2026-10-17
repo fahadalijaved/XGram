@@ -42,14 +42,30 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
   private static final String KEY_SEEN = "xgram_whatsnew_seen";
 
   public static final class Entry { // XGram: public, for the Compose What's new page
-    public final int icon, title, subtitle;
+    public final int title, subtitle;
     public final int action;
+    @DrawableRes private final int icon, expressiveIcon;
 
     Entry (@DrawableRes int icon, @StringRes int title, @StringRes int subtitle, int action) {
+      this(icon, title, subtitle, action, 0);
+    }
+
+    /** {@code expressiveIcon}: another icon with Expressive design on (0: the same one). */
+    Entry (@DrawableRes int icon, @StringRes int title, @StringRes int subtitle, int action, @DrawableRes int expressiveIcon) {
       this.icon = icon;
       this.title = title;
       this.subtitle = subtitle;
       this.action = action;
+      this.expressiveIcon = expressiveIcon;
+    }
+
+    /**
+     * Chosen when it is shown, not when the class loads: turning Expressive design on or off only recreates the
+     * activity, and this array outlives it.
+     */
+    @DrawableRes
+    public int icon () {
+      return expressiveIcon != 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? expressiveIcon : icon;
     }
   }
 
@@ -64,7 +80,7 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
     new Entry(R.drawable.baseline_forum_24, R.string.XgramNewTopics, R.string.XgramNewTopicsInfo, OPEN_NONE),
     new Entry(R.drawable.baseline_history_24, R.string.XgramNewHistory, R.string.XgramNewHistoryInfo, OPEN_HISTORY),
     new Entry(R.drawable.baseline_apps_24, R.string.XgramNewIcons, R.string.XgramNewIconsInfo, OPEN_ICONS),
-    new Entry((com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.baseline_star_border_24 : R.drawable.baseline_star_24), R.string.XgramNewBookmarks, R.string.XgramNewBookmarksInfo, OPEN_BOOKMARKS),
+    new Entry(R.drawable.baseline_star_24, R.string.XgramNewBookmarks, R.string.XgramNewBookmarksInfo, OPEN_BOOKMARKS, R.drawable.baseline_star_border_24),
     new Entry(R.drawable.baseline_bookmark_24, R.string.XgramNewSavedByChat, R.string.XgramNewSavedByChatInfo, OPEN_SAVED_BY_CHAT),
     new Entry(R.drawable.baseline_flash_on_24, R.string.XgramNewMessageTools, R.string.XgramNewMessageToolsInfo, OPEN_NONE),
     new Entry(R.drawable.baseline_block_24, R.string.XgramNewFilters, R.string.XgramNewFiltersInfo, OPEN_FILTERS),
@@ -128,7 +144,7 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
         items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       }
       first = false;
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_xgramWhatsNewItem, entry.icon, entry.title).setData(entry));
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_xgramWhatsNewItem, entry.icon(), entry.title).setData(entry));
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramWhatsNewOutro));

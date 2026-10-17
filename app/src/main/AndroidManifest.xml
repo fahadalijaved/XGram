@@ -212,6 +212,12 @@
         android:name="androidx.work.WorkManagerInitializer"
         android:value="androidx.startup"
         tools:node="remove" />
+      <!-- XGram: Compose brings emoji2 in, but nothing uses EmojiCompat (Telegram X draws its own emoji, and Compose
+           text works without it): no downloadable emoji font loaded through Play services at every start. -->
+      <meta-data
+        android:name="androidx.emoji2.text.EmojiCompatInitializer"
+        android:value="androidx.startup"
+        tools:node="remove" />
     </provider>
 
     <service
