@@ -738,7 +738,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
         if (view != null && view.getId() == item.getId()) {
           if (view instanceof SettingView) {
             ((SettingView) view).setIcon(item.getIconResource());
-            ((SettingView) view).setName(item.getString());
+            ((SettingView) view).setName(com.fahadali.xgram.appearance.XgramR6B6Lists.name(item)); // XGram M3E: sentence case (Telegram X's string otherwise)
             setValuedSetting(item, (SettingView) view, true);
           } else {
             boolean ok = false;
@@ -1692,7 +1692,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
       case ListItem.TYPE_CHECKBOX_OPTION_DOUBLE_LINE:
       case ListItem.TYPE_CHECKBOX_OPTION_WITH_AVATAR: {
         ((SettingView) holder.itemView).setIcon(item.getIconResource());
-        ((SettingView) holder.itemView).setName(item.getString());
+        ((SettingView) holder.itemView).setName(com.fahadali.xgram.appearance.XgramR6B6Lists.name(item)); // XGram M3E: sentence case
         ((SettingView) holder.itemView).setIgnoreEnabled(false);
         ((SettingView) holder.itemView).setTextColorId(item.getTextColorId(ColorId.text));
         holder.itemView.setEnabled(true);
@@ -1792,7 +1792,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
       case ListItem.TYPE_INFO_SETTING: {
         SettingView settingView = (SettingView) holder.itemView;
         settingView.setIcon(item.getIconResource());
-        settingView.setName(item.getString());
+        settingView.setName(com.fahadali.xgram.appearance.XgramR6B6Lists.name(item)); // XGram M3E: sentence case
         settingView.setTextColorId(item.getTextColorId(ColorId.NONE));
         holder.itemView.setEnabled(true);
         switch (viewType) {
@@ -1925,7 +1925,7 @@ public class SettingsAdapter extends RecyclerView.Adapter<SettingHolder> impleme
       case ListItem.TYPE_RADIO_SETTING:
       case ListItem.TYPE_RADIO_SETTING_WITH_NEGATIVE_STATE: {
         SettingView settingView = (SettingView) holder.itemView;
-        settingView.setName(item.getString());
+        settingView.setName(com.fahadali.xgram.appearance.XgramR6B6Lists.name(item)); // XGram M3E: sentence case
         settingView.setIcon(item.getIconResource());
         settingView.getToggler().checkRtl(true);
         holder.itemView.setEnabled(true);

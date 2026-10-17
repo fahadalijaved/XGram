@@ -293,6 +293,9 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return toneHeight + paletteHeight * 2 + inputHeight * 2 + barHeight + marginBottom;
       }
       case ListItem.TYPE_GIFT_HEADER: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          return Screen.dp(XGRAM_GIFT_HERO_HEIGHT); // XGram M3E: the hero (cookie, headline, two lines of text)
+        }
         return GiftHeaderView.getDefaultHeight();
       }
       default: {
@@ -1174,6 +1177,13 @@ public class SettingHolder extends RecyclerView.ViewHolder {
 
         switch (viewType) {
           case ListItem.TYPE_EDITTEXT_WITH_PHOTO: {
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              // XGram M3E: the name field fills its tile; the photo is the page's hero above it (ProfileController)
+              FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+              params.topMargin = Screen.dp(8f);
+              editText.setLayoutParams(params);
+              break;
+            }
             FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (Lang.rtl()) {
               params.rightMargin = Screen.dp(82f);
@@ -1251,6 +1261,9 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         return new SettingHolder(stupidView);
       }
       case ListItem.TYPE_GIFT_HEADER: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          return new SettingHolder(xgramNewGiftHero(context, themeProvider));
+        }
         GiftHeaderView view = new GiftHeaderView(context);
         ViewSupport.setThemedBackground(view, ColorId.filling, themeProvider);
         view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, GiftHeaderView.getDefaultHeight()));
@@ -2832,6 +2845,45 @@ public class SettingHolder extends RecyclerView.ViewHolder {
   }
 
   public static final boolean COLOR_PICKER_PALETTE_BOTTOM = true;
+
+  // XGram M3E: the gift link sheet's hero (TYPE_GIFT_HEADER): the gift glyph on a 96dp tertiaryContainer cookie, the
+  // headline in headlineSmall and the text in bodyMedium onSurfaceVariant, centred on the sheet color. The page sets
+  // the texts on android.R.id.title and android.R.id.summary (GiftCodeController).
+  private static final float XGRAM_GIFT_HERO_HEIGHT = 236f;
+
+  private static View xgramNewGiftHero (Context context, @Nullable ViewController<?> themeProvider) {
+    LinearLayout hero = new LinearLayout(context);
+    hero.setOrientation(LinearLayout.VERTICAL);
+    hero.setGravity(Gravity.CENTER_HORIZONTAL);
+    hero.setPadding(Screen.dp(24f), Screen.dp(24f), Screen.dp(24f), Screen.dp(16f));
+    hero.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(XGRAM_GIFT_HERO_HEIGHT)));
+    com.fahadali.xgram.appearance.XgramR5Sheets.ShapeIconView icon = new com.fahadali.xgram.appearance.XgramR5Sheets.ShapeIconView(context, 96f, 40f)
+      .setIcon(R.drawable.baseline_gift_outline_24)
+      .setRoles(com.fahadali.xgram.appearance.XgramExpressive.TERTIARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_TERTIARY_CONTAINER);
+    hero.addView(icon, new LinearLayout.LayoutParams(Screen.dp(96f), Screen.dp(96f)));
+    com.fahadali.xgram.appearance.XgramR5Lists.RoleText title = new com.fahadali.xgram.appearance.XgramR5Lists.RoleText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+    title.setId(android.R.id.title);
+    title.setGravity(Gravity.CENTER_HORIZONTAL);
+    title.setSingleLine(true);
+    title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    titleParams.topMargin = Screen.dp(16f);
+    hero.addView(title, titleParams);
+    com.fahadali.xgram.appearance.XgramR5Lists.RoleText text = new com.fahadali.xgram.appearance.XgramR5Lists.RoleText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    text.setId(android.R.id.summary);
+    text.setGravity(Gravity.CENTER_HORIZONTAL);
+    text.setMaxLines(2);
+    text.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    textParams.topMargin = Screen.dp(4f);
+    hero.addView(text, textParams);
+    if (themeProvider != null) {
+      themeProvider.addThemeInvalidateListener(icon);
+      themeProvider.addThemeInvalidateListener(title);
+      themeProvider.addThemeInvalidateListener(text);
+    }
+    return hero;
+  }
 
   public static TextView createDescription (Context context, int viewType, @ColorId int textColorId, View.OnClickListener onClickListener, @Nullable ViewController<?> themeProvider) {
     TextView textView = new NoScrollTextView(context);

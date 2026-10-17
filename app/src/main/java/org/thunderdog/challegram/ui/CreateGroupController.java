@@ -76,6 +76,99 @@ public class CreateGroupController extends ViewController<Void> implements EditH
   private MembersAdapter adapter;
   private RecyclerView recyclerView;
 
+  // XGram M3E: a standard app bar ("New group"); the 96dp avatar picker and the filled "Group name" field (a length
+  // counter, IME Done) lead the content, above the members. The EditHeaderView stays as the photo's holder for the
+  // avatar picker manager, off screen.
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private @androidx.annotation.Nullable View xgramForm;
+  private @androidx.annotation.Nullable org.thunderdog.challegram.widget.MaterialEditTextGroup xgramNameField;
+  private @androidx.annotation.Nullable org.thunderdog.challegram.widget.AvatarView xgramAvatar;
+  private CharSequence xgramTitle = "";
+
+  private int xgramOffset () {
+    return xgram ? 1 : 0;
+  }
+
+  @Override
+  public CharSequence getName () {
+    if (xgram) {
+      return com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.NewGroup);
+    }
+    return super.getName();
+  }
+
+  private View xgramNewForm (Context context) {
+    android.widget.LinearLayout form = new android.widget.LinearLayout(context) {
+      @Override
+      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+        // the field: the width less 16dp on each side, at most 480dp, centred (the inner Fold screen, landscape)
+        View field = getChildCount() > 1 ? getChildAt(1) : null;
+        if (field != null && MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+          int want = Math.max(0, Math.min(MeasureSpec.getSize(widthMeasureSpec) - Screen.dp(32f), Screen.dp(com.fahadali.xgram.appearance.XgramR5People.FORM_MAX_WIDTH)));
+          ViewGroup.LayoutParams params = field.getLayoutParams();
+          if (params != null && params.width != want) {
+            params.width = want;
+          }
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+      }
+    };
+    form.setId(R.id.xgram_r6b6_groupForm);
+    form.setOrientation(android.widget.LinearLayout.VERTICAL);
+    form.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+    RecyclerView.LayoutParams formParams = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    form.setLayoutParams(formParams);
+
+    org.thunderdog.challegram.widget.AvatarView avatarView = new org.thunderdog.challegram.widget.AvatarView(context);
+    avatarView.setId(R.id.avatar);
+    avatarView.xgramSetPicker(true);
+    avatarView.xgramSetImageFile(headerCell.getImageFile());
+    avatarView.setContentDescription(Lang.getString(R.string.SetGroupPhoto));
+    avatarView.setOnClickListener(v -> {
+      if (!isCreating) {
+        if (xgramNameField != null) {
+          Keyboard.hide(xgramNameField.getEditText());
+        }
+        avatarPickerManager.showMenuForNonCreatedChat(headerCell, false);
+      }
+    });
+    addThemeInvalidateListener(avatarView);
+    android.widget.LinearLayout.LayoutParams avatarParams = new android.widget.LinearLayout.LayoutParams(Screen.dp(com.fahadali.xgram.appearance.XgramR6B6Lists.AVATAR_HERO), Screen.dp(com.fahadali.xgram.appearance.XgramR6B6Lists.AVATAR_HERO));
+    avatarParams.topMargin = Screen.dp(16f);
+    avatarParams.bottomMargin = Screen.dp(16f);
+    form.addView(avatarView, avatarParams);
+
+    org.thunderdog.challegram.widget.MaterialEditTextGroup field = new org.thunderdog.challegram.widget.MaterialEditTextGroup(context, tdlib, true);
+    field.applyRtl(Lang.rtl());
+    field.addThemeListeners(this);
+    field.setHint(Lang.getString(R.string.GroupName));
+    field.addLengthCounter(false);
+    field.setMaxLength(tgx.td.TdConstants.MAX_CHAT_TITLE_LENGTH);
+    field.getEditText().setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+    field.getEditText().setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+    field.getEditText().setFilters(new android.text.InputFilter[] {
+      new me.vkryl.android.text.CodePointCountFilter(tgx.td.TdConstants.MAX_CHAT_TITLE_LENGTH),
+      new org.thunderdog.challegram.util.CharacterStyleFilter()
+    });
+    field.setText(xgramTitle);
+    field.setTextListener((v, text) -> {
+      xgramTitle = text != null ? text : "";
+      onReadyStateChanged(xgramTitle.toString().trim().length() > 0);
+    });
+    if (isCreating) {
+      field.setInputEnabled(false);
+    }
+    android.widget.LinearLayout.LayoutParams fieldParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    fieldParams.bottomMargin = Screen.dp(8f);
+    form.addView(field, fieldParams);
+
+    xgramForm = form;
+    xgramNameField = field;
+    xgramAvatar = avatarView;
+    setLockFocusView(field.getEditText());
+    return form;
+  }
+
   @Override
   protected View onCreateView (Context context) {
     headerCell = new EditHeaderView(context, this);
@@ -85,7 +178,16 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     });
     headerCell.setImeOptions(EditorInfo.IME_ACTION_DONE);
     headerCell.setReadyCallback(this);
-    setLockFocusView(headerCell.getInputView());
+    if (xgram) {
+      // the picker in the content shows each photo the manager gives the header
+      headerCell.xgramSetOnPhotoChanged(() -> runOnUiThreadOptional(() -> {
+        if (xgramAvatar != null) {
+          xgramAvatar.xgramSetImageFile(headerCell.getImageFile());
+        }
+      }));
+    } else {
+      setLockFocusView(headerCell.getInputView());
+    }
 
     FrameLayoutFix contentView;
 
@@ -97,7 +199,7 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     FrameLayoutFix.LayoutParams params;
 
     params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-    params.topMargin = Size.getHeaderSizeDifference(false);
+    params.topMargin = xgram ? 0 : Size.getHeaderSizeDifference(false); // XGram M3E: a standard app bar
 
     recyclerView = new RecyclerView(context);
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
@@ -212,7 +314,7 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     int i = indexOfUser(user.id);
     if (i != 0) {
       members.get(i).setUser(user, 0);
-      updateUserAtIndex(i + 1, false);
+      updateUserAtIndex(i + 1 + xgramOffset(), false);
     }
   }
 
@@ -220,7 +322,7 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     int i = indexOfUser(userId);
     if (i != 0) {
       members.get(i).setStatus(status);
-      updateUserAtIndex(i + 1, true);
+      updateUserAtIndex(i + 1 + xgramOffset(), true);
     }
   }
 
@@ -269,6 +371,16 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     @Override
     public MemberViewHolder onCreateViewHolder (ViewGroup parent, int viewType) {
       switch (viewType) {
+        case MemberViewHolder.TYPE_FORM: {
+          // XGram M3E: the avatar picker and the name field (one view, its state kept by the controller)
+          View form = controller.xgramForm;
+          if (form == null || form.getParent() != null) {
+            form = controller.xgramNewForm(context);
+          }
+          MemberViewHolder holder = new MemberViewHolder(form);
+          holder.setIsRecyclable(false);
+          return holder;
+        }
         case MemberViewHolder.TYPE_USER: {
           UserView view = new UserView(context, controller.tdlib);
           view.setOffsetLeft(Screen.dp(22f));
@@ -307,7 +419,7 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     public void onBindViewHolder (MemberViewHolder holder, int position) {
       switch (holder.getItemViewType()) {
         case MemberViewHolder.TYPE_USER: {
-          ((UserView) holder.itemView).setUser(controller.members.get(position - 1));
+          ((UserView) holder.itemView).setUser(controller.members.get(position - 1 - controller.xgramOffset()));
           break;
         }
         case MemberViewHolder.TYPE_INFO: {
@@ -327,13 +439,18 @@ public class CreateGroupController extends ViewController<Void> implements EditH
 
     @Override
     public int getItemViewType (int position) {
+      final int offset = controller.xgramOffset(); // XGram M3E: the form leads the list
+      if (offset > 0 && position == 0) {
+        return MemberViewHolder.TYPE_FORM;
+      }
+      position -= offset;
       return position == 0 ? MemberViewHolder.TYPE_HEADER : position == controller.members.size() + 1 ? MemberViewHolder.TYPE_INFO : MemberViewHolder.TYPE_USER;
     }
 
     @Override
     public int getItemCount () {
       int size = controller.members == null ? 0 : controller.members.size();
-      return size == 0 ? 0 : size + 2;
+      return (size == 0 ? 0 : size + 2) + controller.xgramOffset();
     }
   }
 
@@ -341,6 +458,7 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     public static final int TYPE_USER = 0;
     public static final int TYPE_INFO = 1;
     public static final int TYPE_HEADER = 2;
+    public static final int TYPE_FORM = 3; // XGram M3E
 
     public MemberViewHolder (View itemView) {
       super(itemView);
@@ -376,14 +494,15 @@ public class CreateGroupController extends ViewController<Void> implements EditH
         if (index != -1) {
           tdlib.cache().unsubscribeFromUserUpdates(userId, this);
           members.remove(index);
+          final int offset = xgramOffset(); // XGram M3E: the form leads the list
           if (members.isEmpty()) {
-            adapter.notifyItemRangeRemoved(0, 3);
-            Keyboard.hide(headerCell.getInputView());
+            adapter.notifyItemRangeRemoved(offset, 3);
+            Keyboard.hide(xgramNameField != null ? xgramNameField.getEditText() : headerCell.getInputView());
             navigateBack();
           } else {
-            adapter.notifyItemRemoved(index + 1);
-            adapter.notifyItemChanged(members.size() + 1);
-            adapter.notifyItemChanged(0); // XGram M3E: the member count in the subheader
+            adapter.notifyItemRemoved(index + 1 + offset);
+            adapter.notifyItemChanged(members.size() + 1 + offset);
+            adapter.notifyItemChanged(offset); // XGram M3E: the "N members" subheader (after the form in Expressive)
           }
         }
       }
@@ -434,10 +553,13 @@ public class CreateGroupController extends ViewController<Void> implements EditH
     }
 
     headerCell.setInputEnabled(false);
+    if (xgramNameField != null) {
+      xgramNameField.setInputEnabled(false); // XGram M3E
+    }
     isCreating = true;
     currentImageFile = headerCell.getImageFile();
 
-    String title = headerCell.getInput();
+    String title = xgram ? xgramTitle.toString() : headerCell.getInput(); // XGram M3E: typed in the content's field
 
     this.currentMemberIds = new long[members.size()];
     int i = 0;
@@ -471,6 +593,9 @@ public class CreateGroupController extends ViewController<Void> implements EditH
   public void unlock () {
     isCreating = false;
     headerCell.setInputEnabled(true);
+    if (xgramNameField != null) {
+      xgramNameField.setInputEnabled(true); // XGram M3E
+    }
   }
 
   private void handleError (TdApi.Error error) {
@@ -531,7 +656,7 @@ public class CreateGroupController extends ViewController<Void> implements EditH
 
   @Override
   public View getCustomHeaderCell () {
-    return headerCell;
+    return xgram ? null : headerCell; // XGram M3E: a standard app bar, no input in it
   }
 
   @Override
@@ -541,7 +666,7 @@ public class CreateGroupController extends ViewController<Void> implements EditH
 
   @Override
   protected int getHeaderHeight () {
-    return Size.getHeaderBigPortraitSize(false);
+    return xgram ? Size.getHeaderPortraitSize() : Size.getHeaderBigPortraitSize(false);
   }
 
   @Override

@@ -86,6 +86,9 @@ public class GiftCodeController extends MediaBottomBaseController<Void> implemen
     final ArrayList<ListItem> items = new ArrayList<>();
 
     items.add(new ListItem(ListItem.TYPE_GIFT_HEADER));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP)); // XGram M3E: the hero sits on the sheet, the rows below are one group
+    }
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_copyLink, R.drawable.baseline_link_24, R.string.GiftLink)
       .setStringValue(tdlib.tMeGiftCodeUrl(code)));
 
@@ -140,7 +143,18 @@ public class GiftCodeController extends MediaBottomBaseController<Void> implemen
       @Override
       public void updateView (SettingHolder holder, int position, int viewType) {
         super.updateView(holder, position, viewType);
-        if (viewType == ListItem.TYPE_GIFT_HEADER) {
+        if (viewType == ListItem.TYPE_GIFT_HEADER && !(holder.itemView instanceof GiftHeaderView)) {
+          // XGram M3E: the hero's headline and text
+          final boolean isActivated = giftCodeInfo.useDate > 0;
+          View title = holder.itemView.findViewById(android.R.id.title);
+          View text = holder.itemView.findViewById(android.R.id.summary);
+          if (title instanceof android.widget.TextView) {
+            ((android.widget.TextView) title).setText(com.fahadali.xgram.appearance.XgramR6B6Lists.title(isActivated ? R.string.GiftLinkActivated : R.string.GiftLink));
+          }
+          if (text instanceof android.widget.TextView) {
+            ((android.widget.TextView) text).setText(Lang.getMarkdownString(GiftCodeController.this, isActivated ? R.string.GiftLinkActivatedDesc : R.string.GiftLinkDesc));
+          }
+        } else if (viewType == ListItem.TYPE_GIFT_HEADER) {
           final boolean isActivated = giftCodeInfo.useDate > 0;
           GiftHeaderView view = (GiftHeaderView) (holder.itemView);
           view.setTexts(
@@ -186,6 +200,9 @@ public class GiftCodeController extends MediaBottomBaseController<Void> implemen
       @Override
       protected void setButtonText (ListItem item, ScalableTextView view, boolean isUpdate) {
         super.setButtonText(item, view, isUpdate);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          return; // XGram M3E: the list's filled primary pill ("Use gift link"), not a badge-colored bar
+        }
         removeThemeListenerByTarget(view);
 
         view.setTextColor(Theme.getColor(ColorId.badgeText));

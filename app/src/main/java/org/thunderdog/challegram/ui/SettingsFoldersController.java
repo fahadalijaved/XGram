@@ -125,8 +125,13 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
 
   @Override
   public CharSequence getName () {
-    return Lang.getString(R.string.ChatFolders);
+    return com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.ChatFolders); // XGram M3E: sentence case (Telegram X's string otherwise)
   }
+
+  // XGram M3E: a folder row ends with its icon buttons (invite links, the tab's eye) and, when it can move, a drag
+  // handle that starts the drag on touch.
+  private final com.fahadali.xgram.appearance.XgramR6B6Lists.DragHandleModifier xgramHandle = new com.fahadali.xgram.appearance.XgramR6B6Lists.DragHandleModifier(com.fahadali.xgram.appearance.XgramR6B6Lists.DRAG_HANDLE_CENTER);
+  private static final float XGRAM_HANDLE_ZONE = 52f, XGRAM_ICON_BUTTON = 48f;
 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
@@ -184,10 +189,36 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
             eyeView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(48f), ViewGroup.LayoutParams.MATCH_PARENT, Lang.reverseGravity(Gravity.CENTER_VERTICAL)));
             eyeView.setColorFilter(Theme.getColor(ColorId.icon));
             getThemeListeners().addThemeFilterListener(eyeView, ColorId.icon);
-            org.thunderdog.challegram.support.RippleSupport.setTransparentSelector(eyeView);
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              com.fahadali.xgram.appearance.XgramAppMotion.iconButton(eyeView); // XGram M3E: a 40dp standard icon button
+            } else {
+              org.thunderdog.challegram.support.RippleSupport.setTransparentSelector(eyeView);
+            }
             eyeView.setOnClickListener(SettingsFoldersController.this);
             eyeView.setVisibility(View.GONE);
             settingView.addView(eyeView);
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              // XGram M3E: the invite links mark is a standard icon button too (it opens the folder, where its links are),
+              // and a touch on the trailing drag handle starts the drag
+              android.widget.ImageView linksView = new android.widget.ImageView(parent.getContext());
+              linksView.setId(R.id.xgram_r6b6_folderLinks);
+              linksView.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+              linksView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_link_24));
+              linksView.setContentDescription(com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.InviteLinks));
+              linksView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(XGRAM_ICON_BUTTON), ViewGroup.LayoutParams.MATCH_PARENT, Lang.reverseGravity(Gravity.CENTER_VERTICAL)));
+              linksView.setColorFilter(Theme.getColor(ColorId.icon));
+              getThemeListeners().addThemeFilterListener(linksView, ColorId.icon);
+              com.fahadali.xgram.appearance.XgramAppMotion.iconButton(linksView);
+              linksView.setOnClickListener(SettingsFoldersController.this);
+              linksView.setVisibility(View.GONE);
+              settingView.addView(linksView);
+              settingView.setOnTouchListener((v, e) -> {
+                if (e.getActionMasked() == MotionEvent.ACTION_DOWN && v.getTag() instanceof ListItem && canMoveChatFolder((ListItem) v.getTag()) && xgramHandle.isOnHandle(v, e.getX())) {
+                  SettingsFoldersController.this.startDrag(SettingsFoldersController.this.getRecyclerView().getChildViewHolder(v));
+                }
+                return false;
+              });
+            }
             return new SettingHolder(settingView);
           }
           case TYPE_RECOMMENDED_CHAT_FOLDER:
@@ -196,6 +227,26 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
             settingView.setSwapDataAndName();
             settingView.setOnClickListener(SettingsFoldersController.this);
             addThemeInvalidateListener(settingView);
+
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              // XGram M3E: a small filled tonal "Add" with a leading add icon (40dp in its 48dp touch target)
+              FrameLayout.LayoutParams xgramParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(48f), Lang.reverseGravity(Gravity.CENTER_VERTICAL));
+              xgramParams.leftMargin = xgramParams.rightMargin = Screen.dp(16f);
+              com.fahadali.xgram.appearance.XgramR6B6Lists.TonalIconButton xgramButton = new com.fahadali.xgram.appearance.XgramR6B6Lists.TonalIconButton(parent.getContext(), R.drawable.baseline_add_24) {
+                @Override
+                protected void onSizeChanged (int width, int height, int oldWidth, int oldHeight) {
+                  super.onSizeChanged(width, height, oldWidth, oldHeight);
+                  settingView.forcePadding(0, Math.max(0, width + xgramParams.leftMargin + xgramParams.rightMargin - Screen.dp(17f)));
+                }
+              };
+              xgramButton.setId(R.id.btn_double);
+              xgramButton.setText(Lang.getString(R.string.Add));
+              xgramButton.setOnClickListener(SettingsFoldersController.this);
+              xgramButton.setLayoutParams(xgramParams);
+              settingView.addView(xgramButton);
+              addThemeInvalidateListener(xgramButton);
+              return new SettingHolder(settingView);
+            }
 
             FrameLayout.LayoutParams params = FrameLayoutFix.newParams(Screen.dp(29f), Screen.dp(28f), Lang.reverseGravity(Gravity.CENTER_VERTICAL));
             params.leftMargin = params.rightMargin = Screen.dp(17f);
@@ -278,6 +329,9 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
             }
           }
           settingView.forcePadding(0, hasEye ? Screen.dp(36f) : 0);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            xgramBindFolderRow(settingView, item, hasEye);
+          }
         } else if (customViewType == TYPE_RECOMMENDED_CHAT_FOLDER) {
           SettingView settingView = (SettingView) holder.itemView;
           settingView.setIcon(item.getIconResource());
@@ -302,7 +356,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
           boolean canCreateChatFolder = tdlib.canCreateChatFolder();
           view.setIgnoreEnabled(true);
           view.setVisuallyEnabled(canCreateChatFolder, isUpdate);
-          view.setIconColorId(ColorId.textNeutral);
+          view.setIconColorId(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.NONE : ColorId.textNeutral); // XGram M3E: the add icon in its primaryContainer circle
           disabledAlpha = iconAlpha = canCreateChatFolder ? 1f : .45f;
           PremiumLockModifier modifier = (canCreateChatFolder || tdlib.hasPremium()) ? null : premiumLockModifier;
           view.setDrawModifier(modifier);
@@ -399,6 +453,50 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
     // No need to show any prompts anymore.
     Settings.instance().revokeFeatureNotifications(FeatureAvailability.Feature.CHAT_FOLDERS);
     xgramCheckHideFolders(); // XGram: it can change in XGram settings too
+  }
+
+  /**
+   * XGram M3E: a folder row's trailing part, from the end: the drag handle (when the folder can move), the eye (a
+   * standard icon button), the invite links button (when the folder has links). The leading icon sits in the tonal
+   * circle; the name is in sentence case (All chats). The main folder without Premium keeps the lock badge instead of
+   * the handle.
+   */
+  private void xgramBindFolderRow (SettingView settingView, ListItem item, boolean hasEye) {
+    settingView.setName(com.fahadali.xgram.appearance.XgramR6B6Lists.name(item));
+    settingView.setIconColorId(ColorId.NONE);
+    final boolean hasHandle = canMoveChatFolder(item);
+    final boolean hasLinks = !isMainChatFolder(item) && !isArchiveChatFolder(item) && item.getData() instanceof TdApi.ChatFolderInfo && ((TdApi.ChatFolderInfo) item.getData()).hasMyInviteLinks;
+    DrawModifier lock = isMainChatFolder(item) && !hasHandle ? item.getDrawModifier() : null;
+    settingView.setDrawModifier(lock);
+    if (hasHandle) {
+      settingView.addDrawModifier(xgramHandle, false);
+    }
+    final int handleZone = hasHandle ? Screen.dp(XGRAM_HANDLE_ZONE) : 0;
+    int trailing = handleZone;
+    android.widget.ImageView eyeView = settingView.findViewById(R.id.btn_xgramFolderVisible);
+    if (eyeView != null && hasEye) {
+      FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) eyeView.getLayoutParams();
+      if (params.leftMargin != trailing || params.rightMargin != trailing) {
+        params.leftMargin = params.rightMargin = trailing;
+        eyeView.setLayoutParams(params);
+      }
+      trailing += Screen.dp(XGRAM_ICON_BUTTON);
+    }
+    android.widget.ImageView linksView = settingView.findViewById(R.id.xgram_r6b6_folderLinks);
+    if (linksView != null) {
+      linksView.setVisibility(hasLinks ? View.VISIBLE : View.GONE);
+      linksView.setTag(hasLinks ? item : null);
+      if (hasLinks) {
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) linksView.getLayoutParams();
+        if (params.leftMargin != trailing || params.rightMargin != trailing) {
+          params.leftMargin = params.rightMargin = trailing;
+          linksView.setLayoutParams(params);
+        }
+        trailing += Screen.dp(XGRAM_ICON_BUTTON);
+      }
+    }
+    // SettingView keeps 17dp at the end; the name stops 8dp before the first trailing button
+    settingView.forcePadding(0, Math.max(0, trailing - Screen.dp(9f)));
   }
 
   // XGram: Hide folder tabs as the switch and the folder rows show it
@@ -545,6 +643,12 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
     } else if (v.getId() == R.id.btn_xgramHideFolders) {
       com.fahadali.xgram.XgramSettings.instance().setHideFolders(tdlib.accountId(), adapter.toggleView(v));
       xgramCheckHideFolders();
+    } else if (v.getId() == R.id.xgram_r6b6_folderLinks) {
+      // XGram M3E: the invite links button opens the folder, where its links are
+      Object tag = v.getTag();
+      if (tag instanceof ListItem && ((ListItem) tag).getData() instanceof TdApi.ChatFolderInfo) {
+        editChatFolder((TdApi.ChatFolderInfo) ((ListItem) tag).getData());
+      }
     } else if (v.getId() == R.id.btn_xgramFolderVisible) {
       // XGram: hides or shows the folder's tab on this device only, the folder isn't changed
       Object tag = v.getTag();
@@ -815,7 +919,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
     item.setString(R.string.CategoryArchive);
     item.setLongId(ARCHIVE_CHAT_FOLDER_ID);
     item.setIconRes(R.drawable.baseline_archive_24);
-    item.setStringValue(Lang.getString(R.string.LocalFolder));
+    item.setStringValue(com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.LocalFolder)); // XGram M3E: sentence case
     return item;
   }
 
@@ -1046,6 +1150,9 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
   private static class ItemDecoration extends RecyclerView.ItemDecoration {
     @Override
     public void onDrawOver (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return; // XGram M3E: the folders are segmented tiles, 2dp apart, with no hairlines
+      }
       boolean isRtl = Lang.rtl();
       int separatorColor = Theme.separatorColor();
       int separatorHeight = Math.max(1, Screen.dp(.5f));

@@ -285,6 +285,20 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
     }
   }
 
+  // XGram M3E: room before the supporting text of an info row, for a status dot drawn by a DrawModifier
+  // (XgramR6B6Lists.StatusModifier). 0, Telegram X's layout, unless a page sets it.
+  private int xgramSubtitleStart;
+
+  public void xgramSetSubtitleStart (int px) {
+    if (this.xgramSubtitleStart != px) {
+      this.xgramSubtitleStart = px;
+      if (lastMeasuredWidth > 0) {
+        buildLayout();
+      }
+      invalidate();
+    }
+  }
+
   public void addThemeListeners (@Nullable ViewController<?> themeProvider) {
     if (themeProvider != null) {
       if (togglerView != null) {
@@ -445,6 +459,10 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
   }
 
   public void setName (@StringRes int resId) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      setName(com.fahadali.xgram.appearance.XgramR5Lists.label(resId)); // XGram M3E: sentence case where Telegram X's English is title case
+      return;
+    }
     setName(Lang.getString(resId));
   }
 
@@ -707,7 +725,7 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
         lastTextAvailWidth = 0;
       }
       if (displayItemName != null) {
-        setDisplayItemName(displayItemName, availWidth, xgramSubtitlePaint(Paints.getRegularTextPaint(13f)), 13f);
+        setDisplayItemName(displayItemName, availWidth - xgramSubtitleStart, xgramSubtitlePaint(Paints.getRegularTextPaint(13f)), 13f);
       }
     } else {
       if (displayItemData != null) {
@@ -1002,7 +1020,7 @@ public class SettingView extends FrameLayoutFix implements FactorAnimator.Target
         if ((flags & FLAG_DATA_SUBTITLE) != 0) {
           subtitleColor = ColorUtils.alphaColor(Theme.getSubtitleAlpha(), subtitleColor);
         }
-        drawText(c, displayItemName, displayItemNameLayout, pLeft, pTop, (int) (pTop - Screen.dp(12f)), xgramSubtitlePaint(Paints.getRegularTextPaint(13f, subtitleColor)), rtl, width, displayItemNameWidth, displayItemNameText, subtitleColorSet, emojiStatusHelper);
+        drawText(c, displayItemName, displayItemNameLayout, pLeft + xgramSubtitleStart, pTop, (int) (pTop - Screen.dp(12f)), xgramSubtitlePaint(Paints.getRegularTextPaint(13f, subtitleColor)), rtl, width, displayItemNameWidth, displayItemNameText, subtitleColorSet, emojiStatusHelper);
       }
       if (displayItemData != null) {
         drawText(c, displayItemData, displayItemDataLayout, pDataLeft, pDataTop,  (int) (pDataTop - Screen.dp(15f)), xgramTitlePaint(Paints.getTextPaint16(dataColor)), rtl, width, displayItemDataWidth, null, null, emojiStatusHelper);

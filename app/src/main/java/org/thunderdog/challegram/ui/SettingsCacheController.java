@@ -68,7 +68,7 @@ public class SettingsCacheController extends RecyclerViewController<SettingsData
 
   @Override
   public CharSequence getName () {
-    return Lang.getString(R.string.StorageUsage);
+    return com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.StorageUsage); // XGram M3E: sentence case (Telegram X's string otherwise)
   }
 
   private SettingsAdapter adapter;
@@ -211,7 +211,8 @@ public class SettingsCacheController extends RecyclerViewController<SettingsData
         TGStorageStats.Entry entry = (TGStorageStats.Entry) item.getData();
         if (entry != null) {
           textView.setText(entry.getTitle(), isCleaningUp && ArrayUtils.contains(busyChatIds, item.getLongId()) ? Lang.getString(R.string.CleaningUp) : Strings.buildSize(entry.getSize()));
-          textView.setTitleColorId(entry.isSecret() ? ColorId.textSecure : entry.isSelfChat() ? ColorId.textNeutral : ColorId.text);
+          // XGram M3E: the title in onSurface (no green secret chat or blue Saved Messages title on a tile)
+          textView.setTitleColorId(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.text : entry.isSecret() ? ColorId.textSecure : entry.isSelfChat() ? ColorId.textNeutral : ColorId.text);
           textView.setChatAvatar(tdlib, entry.getId());
         }
       }

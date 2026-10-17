@@ -350,6 +350,17 @@ public class EditHeaderView extends FrameLayoutFix implements RtlCheckListener, 
   public void setPhoto (ImageGalleryFile file) {
     this.file = file;
     receiver.requestFile(file);
+    if (xgramPhotoListener != null) {
+      xgramPhotoListener.run();
+    }
+  }
+
+  // XGram M3E: a page that shows this view's photo somewhere else (CreateGroupController's avatar picker in the
+  // content, where the header holds no input) hears of every new photo. Null, Telegram X's case, does nothing.
+  private @androidx.annotation.Nullable Runnable xgramPhotoListener;
+
+  public void xgramSetOnPhotoChanged (@androidx.annotation.Nullable Runnable listener) {
+    this.xgramPhotoListener = listener;
   }
 
   public void setIcon (@DrawableRes int iconRes, @PorterDuffColorId int colorId) {

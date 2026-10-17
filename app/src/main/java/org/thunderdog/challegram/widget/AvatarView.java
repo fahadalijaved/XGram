@@ -165,8 +165,122 @@ public class AvatarView extends View implements Destroyable, TdlibCache.UserData
     if (needRounds()) {
       receiver.setRadius(Math.min(receiver.getWidth(), receiver.getHeight()) / 2);
     }
+    if (xgramPicker) {
+      receiver.setRadius(0); // XGram M3E: the picker clips the photo to its own (morphing) shape
+    }
     if (needFull()) {
       preview.copyBounds(receiver);
+    }
+  }
+
+  // XGram M3E: an M3 avatar picker (the photo of a group or channel being edited or created): a primaryContainer
+  // circle holding the camera (icon pack) in onPrimaryContainer, or the photo in the same shape; pressed, its corners
+  // spring from full to 16dp (SPATIAL_FAST, a snap with Reduce motion); a primary badge at its bottom end (an add mark,
+  // or the edit glyph over a photo) ringed in the page color. Expressive design only.
+
+  private boolean xgramPicker;
+  private int xgramRingColorId = ColorId.background;
+  private boolean xgramHasFile;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress;
+  private final android.graphics.Path xgramShape = new android.graphics.Path();
+  private final android.graphics.RectF xgramRect = new android.graphics.RectF();
+  private @Nullable Drawable xgramCamera, xgramEdit;
+
+  /** Draws this view as the M3 avatar picker; nothing with Expressive design off. */
+  public void xgramSetPicker (boolean picker) {
+    picker = picker && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (this.xgramPicker != picker) {
+      this.xgramPicker = picker;
+      if (picker && xgramCamera == null) {
+        xgramCamera = Drawables.get(getResources(), R.drawable.baseline_camera_alt_24);
+        xgramEdit = Drawables.get(getResources(), R.drawable.baseline_edit_24);
+      }
+      requestLayout();
+      invalidate();
+    }
+  }
+
+  /** The color behind the picker (the badge's ring), a theme color id; the page background by default. */
+  public void xgramSetRingColorId (int colorId) {
+    if (this.xgramRingColorId != colorId) {
+      this.xgramRingColorId = colorId;
+      invalidate();
+    }
+  }
+
+  /** A photo that is not uploaded yet (a chat being created), or null for none. */
+  public void xgramSetImageFile (@Nullable ImageFile file) {
+    this.xgramHasFile = file != null;
+    if (file != null) {
+      file.setScaleType(ImageFile.CENTER_CROP);
+      receiver.requestFile(file);
+    } else if (account == null && getUserId() == 0 && getChatId() == 0) {
+      receiver.clear();
+    }
+    invalidate();
+  }
+
+  @Override
+  public void setPressed (boolean pressed) {
+    super.setPressed(pressed);
+    if (xgramPicker) {
+      if (xgramPress == null) {
+        xgramPress = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+        xgramPress.setThreshold(.005f);
+      }
+      xgramPress.animateTo(pressed ? 1f : 0f);
+    }
+  }
+
+  private void xgramDrawPicker (Canvas c) {
+    xgramRect.set(receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom());
+    final float size = Math.min(xgramRect.width(), xgramRect.height());
+    if (size <= 0f) {
+      return;
+    }
+    final float press = xgramPress != null ? xgramPress.getValue() : 0f;
+    final float radius = com.fahadali.xgram.appearance.XgramExpressiveC.morphCorner(com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L, size, size, press);
+    xgramShape.rewind();
+    xgramShape.addRoundRect(xgramRect, radius, radius, android.graphics.Path.Direction.CW);
+    final boolean photo = xgramHasFile || (hasPhoto && (account != null || getUserId() != 0 || getChatId() != 0));
+    final float cx = xgramRect.centerX(), cy = xgramRect.centerY();
+    if (photo) {
+      final int saveCount = c.save();
+      c.clipPath(xgramShape);
+      if (receiver.needPlaceholder()) {
+        c.drawRect(xgramRect, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST)));
+      }
+      receiver.draw(c);
+      c.restoreToCount(saveCount);
+    } else {
+      c.drawPath(xgramShape, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER)));
+      if (xgramCamera != null && xgramCamera.getMinimumWidth() > 0) {
+        final float scale = (size * .375f) / xgramCamera.getMinimumWidth(); // 36dp in a 96dp picker
+        final int saveCount = c.save();
+        c.scale(scale, scale, cx, cy);
+        Drawables.drawCentered(c, xgramCamera, cx, cy, Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER)));
+        c.restoreToCount(saveCount);
+      }
+    }
+    // The badge at the bottom end
+    final float badge = Math.max(Screen.dp(20f), size * .29f), ring = Screen.dp(3f);
+    final boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+    final float bx = rtl ? xgramRect.left + badge / 2f : xgramRect.right - badge / 2f;
+    final float by = xgramRect.bottom - badge / 2f;
+    c.drawCircle(bx, by, badge / 2f + ring, Paints.fillingPaint(Theme.getColor(xgramRingColorId)));
+    c.drawCircle(bx, by, badge / 2f, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY)));
+    final int onPrimary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY);
+    if (photo && xgramEdit != null && xgramEdit.getMinimumWidth() > 0) {
+      final float scale = (badge * .6f) / xgramEdit.getMinimumWidth();
+      final int saveCount = c.save();
+      c.scale(scale, scale, bx, by);
+      Drawables.drawCentered(c, xgramEdit, bx, by, Paints.getPorterDuffPaint(onPrimary));
+      c.restoreToCount(saveCount);
+    } else {
+      final float arm = badge * .25f, stroke = Math.max(1f, Screen.dp(1f));
+      final android.graphics.Paint plus = Paints.fillingPaint(onPrimary);
+      c.drawRect(bx - arm, by - stroke, bx + arm, by + stroke, plus);
+      c.drawRect(bx - stroke, by - arm, bx + stroke, by + arm, plus);
     }
   }
 
@@ -381,6 +495,10 @@ public class AvatarView extends View implements Destroyable, TdlibCache.UserData
 
   @Override
   protected void onDraw (Canvas c) {
+    if (xgramPicker) {
+      xgramDrawPicker(c); // XGram M3E
+      return;
+    }
     if (account != null || getUserId() != 0 || getChatId() != 0) {
       if (hasPhoto) {
         if (receiver.needPlaceholder() && (preview == null || preview.needPlaceholder())) {

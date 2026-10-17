@@ -73,7 +73,7 @@ public class SettingsPrivacyController extends RecyclerViewController<SettingsPr
 
   @Override
   public CharSequence getName () {
-    return Lang.getString(isOnlyPrivacy() ? R.string.Privacy : R.string.PrivacySettings);
+    return com.fahadali.xgram.appearance.XgramR6B6Lists.title(isOnlyPrivacy() ? R.string.Privacy : R.string.PrivacySettings); // XGram M3E: sentence case
   }
 
   @Override

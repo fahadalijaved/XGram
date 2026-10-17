@@ -243,11 +243,11 @@ public class SelectChatsController extends RecyclerViewController<SelectChatsCon
     Arguments arguments = getArgumentsStrict();
     switch (arguments.mode) {
       case MODE_FOLDER_INCLUDE_CHATS:
-        return Lang.getString(R.string.IncludeChats);
+        return com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.IncludeChats); // XGram M3E: sentence case
       case MODE_FOLDER_EXCLUDE_CHATS:
-        return Lang.getString(R.string.ExcludeChats);
+        return com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.ExcludeChats);
       case MODE_SELECT_CHATS:
-        return Lang.getString(R.string.SelectChats);
+        return com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.SelectChats);
       default:
         throw new IllegalArgumentException("mode=" + arguments.mode);
     }
@@ -953,6 +953,9 @@ public class SelectChatsController extends RecyclerViewController<SelectChatsCon
   private static class ItemDecoration extends RecyclerView.ItemDecoration {
     @Override
     public void onDrawOver (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return; // XGram M3E: the chats are segmented tiles, 2dp apart, with no hairlines
+      }
       boolean isRtl = Lang.rtl();
       int separatorColor = Theme.separatorColor();
       int separatorHeight = Math.max(1, Screen.dp(.5f));

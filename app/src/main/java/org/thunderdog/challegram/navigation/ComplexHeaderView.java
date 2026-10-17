@@ -1638,7 +1638,7 @@ public class ComplexHeaderView extends BaseView implements RtlCheckListener, Sti
   public void buildMenuStickerPreview (ArrayList<StickerPreviewView.MenuItem> menuItems, @NonNull TGStickerObj sticker) {
     menuItems.add(new StickerPreviewView.MenuItem(
       StickerPreviewView.MenuItem.MENU_ITEM_TEXT,
-      Lang.uppercase(Lang.getString(R.string.ViewPackPreview)),
+      com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.ViewPackPreview) : Lang.uppercase(Lang.getString(R.string.ViewPackPreview)), // XGram M3E: sentence case
       R.id.btn_view,
       ColorId.textNeutral
     ));

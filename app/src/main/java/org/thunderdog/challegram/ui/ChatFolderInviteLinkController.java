@@ -113,13 +113,18 @@ public class ChatFolderInviteLinkController extends BottomSheetViewController<Ch
 
   @Override
   protected void onAfterCreateView () {
-    setLickViewColor(Theme.getColor(ColorId.headerLightBackground));
+    setLickViewColor(xgramLickColor());
   }
 
   @Override
   public void onThemeColorsChanged (boolean areTemp, ColorState state) {
     super.onThemeColorsChanged(areTemp, state);
-    setLickViewColor(Theme.getColor(ColorId.headerLightBackground));
+    setLickViewColor(xgramLickColor());
+  }
+
+  /** XGram M3E: the strip under the status bar is the sheet's color (surfaceContainerLow). */
+  private static int xgramLickColor () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor() : Theme.getColor(ColorId.headerLightBackground);
   }
 
   @Override
