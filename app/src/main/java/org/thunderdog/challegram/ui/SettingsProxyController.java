@@ -38,6 +38,7 @@ import org.thunderdog.challegram.telegram.GlobalProxyPingListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibContext;
 import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.unsorted.Settings;
@@ -333,6 +334,80 @@ public class SettingsProxyController extends RecyclerViewController<Void> implem
     }
   }
 
+  /**
+   * XGram M3E: a proxy row: the server in bodyLarge, then an 8dp status dot (tertiary connected, primary available, error
+   * failed, onSurfaceVariant while checking) and the state in bodyMedium, sentence case; the ping trails the row in
+   * labelMedium with tabular figures (primary for the best one); the current proxy's tile is secondaryContainer. The
+   * state follows getState (which keeps pinging what it has not pinged yet).
+   */
+  private void xgramBindProxyRow (SettingView view, @NonNull Settings.Proxy info) {
+    final int proxyId = info.id;
+    final int connectionState = tdlib.connectionState();
+    CharSequence status;
+    int role = com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT;
+    String ping = null;
+    boolean best = false;
+    if (proxyId == effectiveProxyId) {
+      switch (connectionState) {
+        case ConnectionState.CONNECTED: {
+          if (proxyLocked) {
+            status = Lang.getString(R.string.network_Connecting);
+          } else if (info.pingMs == Settings.PROXY_TIME_UNSET || info.pingMs == Settings.PROXY_TIME_LOADING) {
+            status = Lang.getString(R.string.ProxyChecking);
+          } else {
+            status = Lang.getString(R.string.Connected);
+            role = com.fahadali.xgram.appearance.XgramExpressive.TERTIARY;
+            if (info.pingMs >= 0) {
+              ping = Lang.getString(R.string.XgramR6B6PingMs, Strings.buildCounter(info.pingMs));
+              best = info.winState == WIN_STATE_WINNER;
+            }
+          }
+          break;
+        }
+        case ConnectionState.UPDATING:
+          status = Lang.getString(R.string.network_Updating);
+          break;
+        case ConnectionState.WAITING_FOR_NETWORK:
+          status = Lang.getString(R.string.network_WaitingForNetwork);
+          break;
+        default:
+          status = Lang.getString(R.string.network_Connecting);
+          break;
+      }
+    } else if (connectionState == ConnectionState.WAITING_FOR_NETWORK) {
+      status = Lang.getString(R.string.ProxyChecking);
+    } else if (info.pingMs >= 0) {
+      status = Lang.getString(R.string.XgramR6B6ProxyAvailable);
+      role = com.fahadali.xgram.appearance.XgramExpressive.PRIMARY;
+      ping = Lang.getString(R.string.XgramR6B6PingMs, Strings.buildCounter(info.pingMs));
+      best = info.winState == WIN_STATE_WINNER;
+    } else if (info.pingMs == Settings.PROXY_TIME_EMPTY) {
+      role = com.fahadali.xgram.appearance.XgramExpressive.ERROR;
+      if (Settings.instance().checkProxySetting(Settings.PROXY_FLAG_SHOW_ERRORS)) {
+        status = Lang.getString(R.string.ProxyErrorDetailed, info.pingError == null ? "unknown" : info.pingError.code + ": " + info.pingError.message);
+      } else {
+        status = Lang.getString(info.id == Settings.PROXY_ID_NONE ? R.string.ProxyErrorDirect : R.string.ProxyError);
+      }
+    } else {
+      status = Lang.getString(R.string.ProxyChecking);
+    }
+    view.setDataColorId(0);
+    view.setData(status);
+    view.xgramSetSubtitleStart(Screen.dp(com.fahadali.xgram.appearance.XgramR6B6Lists.STATUS_DOT_SPACE));
+    Object tag = view.getTag(R.id.xgram_r6b6_status);
+    com.fahadali.xgram.appearance.XgramR6B6Lists.StatusModifier modifier;
+    if (tag instanceof com.fahadali.xgram.appearance.XgramR6B6Lists.StatusModifier) {
+      modifier = (com.fahadali.xgram.appearance.XgramR6B6Lists.StatusModifier) tag;
+    } else {
+      modifier = new com.fahadali.xgram.appearance.XgramR6B6Lists.StatusModifier();
+      view.setTag(R.id.xgram_r6b6_status, modifier);
+    }
+    modifier.set(role, ping, best);
+    view.setDrawModifier(modifier);
+    com.fahadali.xgram.appearance.XgramR6B6Lists.setRowSelected(view, proxyId == effectiveProxyId);
+    view.invalidate();
+  }
+
   private void pingProxy (@NonNull Settings.Proxy info, boolean allowNotify) {
     int nextPingId = info.pingCount + 1;
     tdlib.pingProxy(info, pingMs -> runOnUiThreadOptional(() -> {
@@ -437,7 +512,11 @@ public class SettingsProxyController extends RecyclerViewController<Void> implem
     }
 
     List<ListItem> items = new ArrayList<>();
-    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_addProxy, 0, R.string.ProxyAdd)); // TODO design: icon
+    ListItem addProxyItem = new ListItem(ListItem.TYPE_SETTING, R.id.btn_addProxy, com.fahadali.xgram.appearance.XgramR6B6Lists.icon(R.drawable.baseline_add_24), R.string.ProxyAdd); // TODO design: icon
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      addProxyItem.setTextColorId(ColorId.textNeutral); // XGram M3E: an add row: primary text, the add icon in its primaryContainer circle
+    }
+    items.add(addProxyItem);
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.ProxyInfo));
 
@@ -490,6 +569,9 @@ public class SettingsProxyController extends RecyclerViewController<Void> implem
             radioView.setActive(proxy.id == effectiveProxyId && displayInfo.connected, isUpdate);
           }
           radioView.setChecked(proxy.id == effectiveProxyId, isUpdate);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            xgramBindProxyRow(view, proxy);
+          }
         } else if (itemId == R.id.btn_useProxyForCalls) {
           view.getToggler().setRadioEnabled(Settings.instance().checkProxySetting(Settings.PROXY_FLAG_USE_FOR_CALLS), isUpdate);
         } else if (itemId == R.id.btn_xgramTgxProxyRules) { // XGram: how many rules are on

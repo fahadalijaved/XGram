@@ -1864,6 +1864,16 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     baseAdapter = new SettingsAdapter(this) {
       @Override
       protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == XGRAM_R6B6_HERO_TYPE) {
+          // XGram M3E: the photo of the group, channel or bot being edited, as the page's 96dp avatar picker
+          AvatarView avatarView = new AvatarView(context());
+          avatarView.setId(R.id.avatar);
+          avatarView.xgramSetPicker(true);
+          avatarView.setOnClickListener(ProfileController.this);
+          avatarView.setContentDescription(Lang.getString(R.string.XgramR6B6ChangePhoto));
+          ProfileController.this.addThemeInvalidateListener(avatarView);
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramR6B6Lists.newAvatarHero(context(), avatarView, XGRAM_R6B6_HERO_BOTTOM));
+        }
         if (customViewType == XGRAM_ACTIONS_TYPE) {
           // XGram: Material 3 Expressive connected button group (2dp gaps, full outer and 8dp inner corners, tonal)
           com.fahadali.xgram.appearance.XgramW2ProfileActions view = new com.fahadali.xgram.appearance.XgramW2ProfileActions(context());
@@ -1877,7 +1887,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
       @Override
       protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
-        if (customViewType == XGRAM_ACTIONS_TYPE && view instanceof com.fahadali.xgram.appearance.XgramW2ProfileActions) {
+        if (customViewType == XGRAM_R6B6_HERO_TYPE) {
+          View avatarView = view.findViewById(R.id.avatar);
+          if (avatarView instanceof AvatarView) {
+            ((AvatarView) avatarView).setChat(tdlib, chat); // XGram M3E
+          }
+        } else if (customViewType == XGRAM_ACTIONS_TYPE && view instanceof com.fahadali.xgram.appearance.XgramW2ProfileActions) {
           xgramActionsView = (com.fahadali.xgram.appearance.XgramW2ProfileActions) view;
           xgramActionsView.setActions(xgramBuildActions());
         } else {
@@ -1914,7 +1929,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
       @Override
       protected void modifyEditText (ListItem item, ViewGroup parent, MaterialEditTextGroup editText) {
-        if (item.getId() == R.id.title) {
+        if (item.getId() == R.id.title && parent.getChildAt(1) instanceof AvatarView) { // XGram M3E: the photo is the hero row's
           AvatarView view = (AvatarView) parent.getChildAt(1);
           view.setChat(tdlib, chat);
         }
@@ -1935,6 +1950,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         if (item.getViewType() == ListItem.TYPE_INFO_MULTILINE) {
           view.setAllowMultiLineName(item.getId() == R.id.btn_username);
+        }
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          view.setDrawModifier(item.getDrawModifier()); // XGram M3E: the error icon of the delete row (none on the others)
         }
         final int itemId = item.getId();
         if (itemId == R.id.btn_useExplicitDice) {
@@ -2524,6 +2542,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   // XGram: Material 3 Expressive actions row (a connected button group, Medium size) under the header.
 
   private static final int XGRAM_ACTIONS_TYPE = 88;
+  /** XGram M3E: the hero row of the edit pages (the 96dp avatar picker), and the space under it (dp). */
+  private static final int XGRAM_R6B6_HERO_TYPE = 89;
+  private static final float XGRAM_R6B6_HERO_BOTTOM = 16f;
   private boolean xgramHasActions;
   private @Nullable com.fahadali.xgram.appearance.XgramW2ProfileActions xgramActionsView;
 
@@ -4406,6 +4427,11 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         default:
           throw new IllegalStateException();
       }
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the 96dp avatar picker on the page, then the name and description fields as one group
+        items.add(new ListItem(ListItem.TYPE_CUSTOM - XGRAM_R6B6_HERO_TYPE, R.id.xgram_r6b6_avatarHero));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      }
       chatTitleItem = new ListItem(ListItem.TYPE_EDITTEXT_WITH_PHOTO, R.id.title, 0, titleRes)
         .setStringValue(chat.title)
         .setInputFilters(new InputFilter[]{
@@ -4642,6 +4668,23 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       items.add(ttlDescItem = new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_chatTtlDescription, 0, getTtlDescription(ttlValue, isChannel), false));
     }
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: a leading icon on every row, and deleting the chat as a destructive tile at the end
+      for (ListItem item : items) {
+        xgramEditIcon(item);
+      }
+      if (toggleShowAuthorsItem != null) {
+        xgramEditIcon(toggleShowAuthorsItem);
+      }
+      if (mode != Mode.EDIT_BOT_USER && canDestroyChat()) {
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_destroyChat, R.drawable.baseline_delete_forever_24, isChannel() ? R.string.XgramR6B6DeleteChannel : R.string.XgramR6B6DeleteGroup)
+          .setTextColorId(ColorId.textNegative)
+          .setDrawModifier(new com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier(R.drawable.baseline_delete_forever_24, com.fahadali.xgram.appearance.XgramM3Sessions.ICON_TOP_SETTING)));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      }
+    }
+
     if (mode != Mode.EDIT_BOT_USER) {
       addMediaItems(items);
     }
@@ -4650,6 +4693,54 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     if (tdlib.canInviteUsers(chat)) {
       requestInviteLinks(TD.isCreator(myStatus));
     }
+  }
+
+  /** XGram M3E: the leading icon of an edit page row (Telegram X's rows have none); nothing with Expressive design off. */
+  private ListItem xgramEditIcon (ListItem item) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || item.getIconResource() != 0) {
+      return item;
+    }
+    final int id = item.getId();
+    int icon = 0;
+    if (id == R.id.btn_channelType) {
+      icon = R.drawable.baseline_link_24;
+    } else if (id == R.id.btn_linkedChat) {
+      icon = mode == Mode.EDIT_CHANNEL ? R.drawable.baseline_forum_24 : R.drawable.baseline_bullhorn_24;
+    } else if (id == R.id.btn_manageInviteLinks) {
+      icon = R.drawable.baseline_add_link_24;
+    } else if (id == R.id.btn_manageJoinRequests) {
+      icon = R.drawable.baseline_person_add_24;
+    } else if (id == R.id.btn_toggleJoinByRequest) {
+      icon = R.drawable.baseline_group_add_24;
+    } else if (id == R.id.btn_toggleSignatures) {
+      icon = R.drawable.baseline_create_24;
+    } else if (id == R.id.btn_toggleShowAuthors) {
+      icon = R.drawable.baseline_account_circle_24;
+    } else if (id == R.id.btn_toggleProtection) {
+      icon = R.drawable.baseline_security_24;
+    } else if (id == R.id.btn_prehistoryMode) {
+      icon = R.drawable.baseline_history_24;
+    } else if (id == R.id.btn_chatPermissions) {
+      icon = R.drawable.baseline_vpn_key_24;
+    } else if (id == R.id.btn_enabledReactions) {
+      icon = R.drawable.baseline_emoticon_24;
+    } else if (id == R.id.btn_viewStatistics) {
+      icon = R.drawable.baseline_bar_chart_24;
+    } else if (id == R.id.btn_recentActions) {
+      icon = R.drawable.baseline_assignment_24;
+    } else if (id == R.id.btn_toggleAggressiveAntiSpam) {
+      icon = R.drawable.baseline_policy_24;
+    } else if (id == R.id.btn_xgramTopicsMode) {
+      icon = R.drawable.baseline_forum_24;
+    } else if (id == R.id.btn_convertToBroadcastGroup) {
+      icon = R.drawable.baseline_bullhorn_24;
+    } else if (id == R.id.btn_toggleHideMembers) {
+      icon = R.drawable.baseline_group_24;
+    }
+    if (icon != 0) {
+      item.setIconRes(icon);
+    }
+    return item;
   }
 
   private void requestInviteLinks (boolean owner) {
@@ -4704,7 +4795,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         if ((pendingJoinRequests == null || pendingJoinRequests.totalCount == 0) && idxRequests != -1) {
           baseAdapter.removeRange(idxRequests - 1, 2);
         } else if (pendingJoinRequests != null && pendingJoinRequests.totalCount > 0 && idxRequests == -1 && idxLinks != -1) {
-          baseAdapter.addItems(idxLinks + 1, new ListItem(ListItem.TYPE_SEPARATOR_FULL), new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_manageJoinRequests, 0, R.string.InviteLinkRequests));
+          baseAdapter.addItems(idxLinks + 1, new ListItem(ListItem.TYPE_SEPARATOR_FULL), xgramEditIcon(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_manageJoinRequests, 0, R.string.InviteLinkRequests)));
         } else {
           baseAdapter.updateValuedSettingById(R.id.btn_manageJoinRequests);
         }
@@ -4754,7 +4845,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   private ListItem newLinkedChatItem () {
-    return new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_linkedChat, 0, mode == Mode.EDIT_CHANNEL ? R.string.LinkedGroup : R.string.LinkedChannel);
+    return xgramEditIcon(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_linkedChat, 0, mode == Mode.EDIT_CHANNEL ? R.string.LinkedGroup : R.string.LinkedChannel)); // XGram M3E: its leading icon
   }
 
   @Override
@@ -5246,6 +5337,8 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     final int viewId = v.getId();
     if (viewId == R.id.avatar) {
       changeProfilePhoto();
+    } else if (viewId == R.id.btn_destroyChat) {
+      destroyChat(); // XGram M3E: the delete row of the edit page
     } else if (viewId == R.id.btn_done) {
       applyChatChanges();
     } else if (viewId == R.id.menu_btn_copy) {
@@ -5982,6 +6075,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     final int itemId = item.getId();
     if (item.getViewType() == ListItem.TYPE_CUSTOM - XGRAM_ACTIONS_TYPE) {
       return com.fahadali.xgram.appearance.XgramW2ProfileActions.getViewHeight();
+    }
+    if (item.getViewType() == ListItem.TYPE_CUSTOM - XGRAM_R6B6_HERO_TYPE) {
+      return com.fahadali.xgram.appearance.XgramR6B6Lists.avatarHeroHeight(XGRAM_R6B6_HERO_BOTTOM); // XGram M3E
     }
     switch (item.getViewType()) {
       case ListItem.TYPE_INFO_MULTILINE: {

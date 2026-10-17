@@ -183,6 +183,10 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
   @Override
   public CharSequence getName () {
     Arguments arguments = getArgumentsStrict();
+    if (xgram) {
+      // XGram M3E: a plain app bar with the large title; the name is typed in the first tile
+      return com.fahadali.xgram.appearance.XgramR6B6Lists.title(chatFolderId != NO_CHAT_FOLDER_ID ? R.string.EditFolder : R.string.NewFolder);
+    }
     return chatFolderId != NO_CHAT_FOLDER_ID ? TD.toCharSequence(arguments.chatFolderName) : Lang.getString(R.string.NewFolder);
   }
 
@@ -194,6 +198,9 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
   @Override
   @SuppressWarnings("deprecation")
   protected int getHeaderHeight () {
+    if (xgram) {
+      return Size.getHeaderPortraitSize(); // XGram M3E: no expanding header
+    }
     ComplexRecyclerView recyclerView = getRecyclerView();
     return (int) (Size.getHeaderPortraitSize() + Size.getHeaderSizeDifference(true) * recyclerView.getScrollFactor());
   }
@@ -201,8 +208,17 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
   @Override
   @SuppressWarnings("deprecation")
   protected int getMaximumHeaderHeight () {
+    if (xgram) {
+      return Size.getHeaderPortraitSize();
+    }
     return Size.getHeaderBigPortraitSize(false);
   }
+
+  // XGram M3E: no EditHeaderView. The first tile is the filled "Folder name" field (with its length counter) behind a
+  // 40dp tonal icon button that shows the folder's icon and opens the icon sheet.
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private @Nullable ImageView xgramFolderIconView;
+  private @Nullable MaterialEditTextGroup xgramNameField;
 
   @Override
   protected int getRecyclerBackgroundColorId () {
@@ -220,6 +236,10 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
   @Override
   @SuppressWarnings("deprecation")
   protected void onCreateView (Context context, FrameLayoutFix contentView, RecyclerView recyclerView) {
+    if (xgram) {
+      xgramCreateView(recyclerView);
+      return;
+    }
     headerCell = new EditHeaderView(context, this);
     headerCell.setInput(TD.toCharSequence(editedChatFolder.name));
     headerCell.setInputOptions(R.string.FolderNameHint, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
@@ -293,6 +313,71 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
     }
   }
 
+  /** XGram M3E: the page without the expanding header (see {@link #onCreateView}). */
+  private void xgramCreateView (RecyclerView recyclerView) {
+    ArrayList<ListItem> items = new ArrayList<>();
+
+    // The name field and, for a saved folder, its visibility: one group
+    items.add(new ListItem(ListItem.TYPE_CUSTOM_SINGLE, R.id.xgram_r6b6_folderName).setStringValue(TD.toCharSequence(editedChatFolder.name)));
+    if (chatFolderId != NO_CHAT_FOLDER_ID) {
+      items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_visible, 0, R.string.FolderVisible));
+    }
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+
+    items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.FolderIncludedChats));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_folderIncludeChats, R.drawable.baseline_add_24, R.string.FolderActionIncludeChats).setTextColorId(ColorId.textNeutral));
+    fillIncludedChats(editedChatFolder, items);
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM, includedChatsNextItemId));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Lang.getMarkdownString(this, R.string.FolderIncludedChatsInfo)));
+
+    if (!isShareable()) {
+      items.add(new ListItem(ListItem.TYPE_HEADER_PADDED, 0, 0, R.string.FolderExcludedChats));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_folderExcludeChats, R.drawable.baseline_add_24, R.string.FolderActionExcludeChats).setTextColorId(ColorId.textNeutral));
+      fillExcludedChats(editedChatFolder, items);
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM, excludedChatsNextItemId));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Lang.getMarkdownString(this, R.string.FolderExcludedChatsInfo)));
+    }
+
+    if (chatFolderId != NO_CHAT_FOLDER_ID) {
+      items.add(new ListItem(ListItem.TYPE_HEADER_PADDED, 0, 0, R.string.InviteLinks));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP, 0));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_createInviteLink, R.drawable.baseline_add_link_24, R.string.CreateANewLink)
+        .setTextColorId(ColorId.textNeutral)
+        .setDrawModifier(new PremiumLockModifier()));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM, inviteLinksNextItemId));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.ChatFolderInviteLinksInfo));
+      // A destructive row: the delete icon in an errorContainer circle, the label in error
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_removeFolder, R.drawable.baseline_delete_24, R.string.RemoveFolder)
+        .setTextColorId(ColorId.textNegative)
+        .setDrawModifier(new com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier(R.drawable.baseline_delete_24, com.fahadali.xgram.appearance.XgramM3Sessions.ICON_TOP_SETTING)));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    }
+
+    adapter = new Adapter(this);
+    adapter.setItems(items, false);
+    adapter.setTextChangeListener((id, item, v) -> {
+      if (id == R.id.xgram_r6b6_folderName) {
+        TdApi.FormattedText formattedText = TD.toFormattedText(v.getText(), false);
+        onTitleChanged(new TdApi.ChatFolderName(formattedText, editedChatFolder.name.animateCustomEmoji));
+      }
+    });
+    recyclerView.setAdapter(adapter);
+    RemoveHelper.attach(recyclerView, new RemoveHelperCallback());
+    com.fahadali.xgram.appearance.XgramR6B6Lists.attachLargeTitle(this, recyclerView); // the large "New folder" / "Edit folder"
+
+    if (chatFolderId != NO_CHAT_FOLDER_ID) {
+      if (originChatFolder == null) {
+        loadChatFolder();
+      }
+      updateInviteLinks();
+      tdlib.listeners().subscribeToChatFoldersUpdates(this);
+      tdlib.listeners().addChatFolderListener(chatFolderId, this);
+    }
+  }
+
   @Override
   protected RecyclerView onCreateRecyclerView () {
     CustomItemAnimator itemAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
@@ -321,7 +406,7 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
 
       @Override
       public void onScrollStateChanged (@NonNull RecyclerView recyclerView, int newState) {
-        if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+        if (newState == RecyclerView.SCROLL_STATE_IDLE && !xgram) { // XGram M3E: no expanding header to snap
           LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
           View view = layoutManager != null ? layoutManager.findViewByPosition(0) : null;
           if (view == null) return;
@@ -605,7 +690,12 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
     }
     if (moreCount > 0) {
       outList.add(new ListItem(ListItem.TYPE_SEPARATOR).setIntValue(R.id.btn_showAdvanced));
-      outList.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_showAdvanced, R.drawable.baseline_direction_arrow_down_24, Lang.pluralBold(R.string.ChatsXShowMore, moreCount)).setBoolValue(true /* included chats */));
+      if (xgram) {
+        // XGram M3E: a centred filled tonal button
+        outList.add(new ListItem(ListItem.TYPE_BUTTON, R.id.btn_showAdvanced, 0, Lang.plural(R.string.ChatsXShowMore, moreCount)).setBoolValue(true /* included chats */));
+      } else {
+        outList.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_showAdvanced, R.drawable.baseline_direction_arrow_down_24, Lang.pluralBold(R.string.ChatsXShowMore, moreCount)).setBoolValue(true /* included chats */));
+      }
     }
   }
 
@@ -629,7 +719,12 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
     }
     if (moreCount > 0) {
       outList.add(new ListItem(ListItem.TYPE_SEPARATOR).setIntValue(R.id.btn_showAdvanced));
-      outList.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_showAdvanced, R.drawable.baseline_direction_arrow_down_24, Lang.pluralBold(R.string.ChatsXShowMore, moreCount)).setBoolValue(false /* excluded chats */));
+      if (xgram) {
+        // XGram M3E: a centred filled tonal button
+        outList.add(new ListItem(ListItem.TYPE_BUTTON, R.id.btn_showAdvanced, 0, Lang.plural(R.string.ChatsXShowMore, moreCount)).setBoolValue(false /* excluded chats */));
+      } else {
+        outList.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_showAdvanced, R.drawable.baseline_direction_arrow_down_24, Lang.pluralBold(R.string.ChatsXShowMore, moreCount)).setBoolValue(false /* excluded chats */));
+      }
     }
   }
 
@@ -775,6 +870,9 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
       editedChatFolder.name = chatTypeName;
       if (headerCell != null) {
         headerCell.setInput(TD.toCharSequence(chatTypeName));
+      }
+      if (xgramNameField != null) {
+        xgramNameField.setText(TD.toCharSequence(chatTypeName)); // XGram M3E: the name field
       }
     }
   }
@@ -922,11 +1020,70 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
       int iconResource = tdlib.chatFolderIconDrawable(editedChatFolder, R.drawable.baseline_folder_24);
       headerCell.setIcon(iconResource, ColorId.white);
     }
+    if (xgramFolderIconView != null) {
+      // XGram M3E: the icon button of the name field
+      xgramFolderIconView.setImageDrawable(Drawables.get(xgramFolderIconView.getResources(), tdlib.chatFolderIconDrawable(editedChatFolder, R.drawable.baseline_folder_24)));
+    }
   }
 
   private void updateDoneButton () {
     boolean isDoneVisible = isInProgress() || canSaveChanges();
     setDoneVisible(isDoneVisible);
+  }
+
+  /**
+   * XGram M3E: the name tile: a 40dp filled tonal icon button with the folder's icon (it opens the icon sheet), then the
+   * filled "Folder name" field with its length counter in the supporting text row.
+   */
+  private SettingHolder xgramInitNameField (ViewGroup parent, SettingsAdapter adapter) {
+    final Context context = parent.getContext();
+    final boolean rtl = Lang.rtl();
+    FrameLayoutFix frameLayout = new FrameLayoutFix(context);
+    frameLayout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    frameLayout.setPadding(0, Screen.dp(8f), 0, Screen.dp(8f));
+    ViewSupport.setThemedBackground(frameLayout, ColorId.filling, this);
+
+    MaterialEditTextGroup editText = new MaterialEditTextGroup(context, tdlib, true);
+    editText.setId(android.R.id.input);
+    editText.applyRtl(rtl);
+    editText.addThemeListeners(this);
+    editText.setTextListener(adapter);
+    editText.setFocusListener(adapter);
+    editText.setHint(Lang.getString(R.string.XgramR6B6FolderName));
+    editText.addLengthCounter(false);
+    editText.setMaxLength(MAX_CHAT_FOLDER_TITLE_LENGTH);
+    editText.getEditText().setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+    editText.getEditText().setImeOptions(EditorInfo.IME_ACTION_DONE | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+    editText.getEditText().setFilters(new InputFilter[] {
+      new CodePointCountFilter(MAX_CHAT_FOLDER_TITLE_LENGTH),
+      new CharacterStyleFilter()
+    });
+    FrameLayout.LayoutParams editTextParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL);
+    editTextParams.leftMargin = Screen.dp(rtl ? 16f : 72f);
+    editTextParams.rightMargin = Screen.dp(rtl ? 72f : 16f);
+    frameLayout.addView(editText, editTextParams);
+
+    ImageView imageView = new ImageView(context);
+    imageView.setId(android.R.id.icon);
+    imageView.setScaleType(ImageView.ScaleType.CENTER);
+    imageView.setContentDescription(Lang.getString(R.string.XgramR6B6FolderIcon));
+    com.fahadali.xgram.appearance.XgramM3Sheets.attachTonalIconButton(imageView);
+    imageView.setColorFilter(Theme.getColor(ColorId.fillingActiveContent));
+    addThemeFilterListener(imageView, ColorId.fillingActiveContent);
+    Views.setClickable(imageView);
+    imageView.setOnClickListener(v -> showIconSelector());
+    FrameLayout.LayoutParams imageViewParams = new FrameLayout.LayoutParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER_VERTICAL | (rtl ? Gravity.RIGHT : Gravity.LEFT));
+    imageViewParams.leftMargin = imageViewParams.rightMargin = Screen.dp(12f);
+    frameLayout.addView(imageView, imageViewParams);
+
+    xgramFolderIconView = imageView;
+    xgramNameField = editText;
+    updateFolderIcon();
+    setLockFocusView(editText.getEditText(), false);
+
+    SettingHolder holder = new SettingHolder(frameLayout);
+    holder.setIsRecyclable(false);
+    return holder;
   }
 
   private class Adapter extends SettingsAdapter {
@@ -936,6 +1093,9 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
 
     @Override
     protected SettingHolder initCustom (ViewGroup parent) {
+      if (xgram) {
+        return xgramInitNameField(parent, this);
+      }
       FrameLayoutFix frameLayout = new FrameLayoutFix(parent.getContext());
       frameLayout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(57f)));
       ViewSupport.setThemedBackground(frameLayout, ColorId.filling, EditChatFolderController.this);
@@ -979,6 +1139,16 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
 
     @Override
     protected void setCustom (ListItem item, SettingHolder holder, int position) {
+      if (xgram) {
+        // XGram M3E: the text is kept while the field is rebound, so the cursor stays where it is
+        MaterialEditTextGroup editText = holder.itemView.findViewById(android.R.id.input);
+        editText.applyRtl(Lang.rtl());
+        if (!StringUtils.equalsOrBothEmpty(editText.getText(), item.getCharSequenceValue())) {
+          editText.setText(item.getCharSequenceValue());
+        }
+        updateFolderIcon();
+        return;
+      }
       MaterialEditTextGroup editText = holder.itemView.findViewById(android.R.id.input);
       editText.applyRtl(Lang.rtl());
       editText.setEmptyHint(R.string.FolderNameHint);
@@ -1026,6 +1196,9 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
         view.setIconColorId(ColorId.iconNegative);
       } else {
         view.setIconColorId(ColorId.NONE /* theme_color_icon */);
+      }
+      if (xgram) {
+        view.setIconColorId(ColorId.NONE); // XGram M3E: every leading icon in its primaryContainer circle (the delete row's is drawn in errorContainer)
       }
       view.setIconAlpha(iconAlpha);
       view.setDisabledAlpha(disabledAlpha);
@@ -1358,7 +1531,7 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
         if (isDoneVisible()) {
           minScrollableHeight = Screen.dp(76f);
         }
-        outRect.bottom = Math.max(minScrollableHeight, emptyHeight + Size.getHeaderSizeDifference(false));
+        outRect.bottom = Math.max(minScrollableHeight, emptyHeight + (xgram ? 0 : Size.getHeaderSizeDifference(false))); // XGram M3E: no header to collapse
         if (DECORATION_LOGGING_ENABLED) {
           Log.v("setBottom %d", outRect.bottom);
         }

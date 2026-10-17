@@ -64,7 +64,7 @@ public class SettingsStickersController extends ViewPagerController<SettingsCont
 
   @Override
   public CharSequence getName () {
-    return Lang.getString(type == TYPE_STICKER ? R.string.Stickers : R.string.EmojiPacks);
+    return com.fahadali.xgram.appearance.XgramR6B6Lists.title(type == TYPE_STICKER ? R.string.Stickers : R.string.EmojiPacks); // XGram M3E: sentence case
   }
 
   @Override

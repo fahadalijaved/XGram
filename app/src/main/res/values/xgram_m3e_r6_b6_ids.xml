@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram Material 3 Expressive, round 6 batch 6: view and list item ids -->
+<resources>
+  <item name="xgram_r6b6_folderName" type="id" />
+  <item name="xgram_r6b6_folderLinks" type="id" />
+  <item name="xgram_r6b6_avatarHero" type="id" />
+  <item name="xgram_r6b6_groupForm" type="id" />
+  <item name="xgram_r6b6_sheetClose" type="id" />
+  <item name="xgram_r6b6_status" type="id" />
+</resources>

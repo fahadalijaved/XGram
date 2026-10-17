@@ -93,13 +93,18 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
 
   @Override
   protected void onAfterCreateView () {
-    setLickViewColor(Theme.getColor(ColorId.background));
+    setLickViewColor(xgramLickColor());
   }
 
   @Override
   public void onThemeColorsChanged (boolean areTemp, ColorState state) {
     super.onThemeColorsChanged(areTemp, state);
-    setLickViewColor(Theme.getColor(ColorId.background));
+    setLickViewColor(xgramLickColor());
+  }
+
+  /** XGram M3E: the strip under the status bar is the sheet's color (surfaceContainerLow). */
+  private static int xgramLickColor () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor() : Theme.getColor(ColorId.background);
   }
 
   @Override
@@ -163,6 +168,10 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
     @Override
     protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
       super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
+      if (xgram) {
+        Views.setBottomMargin(getRecyclerView(), extraBottomInsetWithoutIme); // XGram M3E: the hero button is in the page
+        return;
+      }
       int buttonHeight = Screen.dp(56f) + extraBottomInsetWithoutIme;
       Views.setLayoutHeight(bottomButton, buttonHeight);
       Views.setPaddingBottom(bottomButton, extraBottomInsetWithoutIme);
@@ -175,6 +184,10 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
     protected View onCreateView (Context context) {
       View view = super.onCreateView(context);
 
+      if (xgram) {
+        Views.setBottomMargin(getRecyclerView(), extraBottomInsetWithoutIme); // XGram M3E: no bottom bar, the hero button is in the page
+        return view;
+      }
       int buttonHeight = Screen.dp(56f) + extraBottomInsetWithoutIme;
       FrameLayoutFix wrap = (FrameLayoutFix) view;
       bottomButton = buildActionButton();
@@ -184,8 +197,72 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
       return view;
     }
 
+    // XGram M3E: a hero sheet: a 40dp close icon button at the top end, the folder icon on a 96dp cookie, the headline in
+    // headlineSmall, the text in bodyMedium onSurfaceVariant, and a single "Set up folders" hero button
+    private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+
+    private View xgramBuildHero (Context context) {
+      LinearLayout hero = new LinearLayout(context);
+      hero.setOrientation(LinearLayout.VERTICAL);
+      hero.setGravity(Gravity.CENTER_HORIZONTAL);
+      hero.setLayoutParams(new RecyclerView.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+      hero.setPadding(0, 0, 0, Screen.dp(12f));
+
+      FrameLayoutFix top = new FrameLayoutFix(context);
+      android.widget.ImageView close = new android.widget.ImageView(context);
+      close.setId(R.id.xgram_r6b6_sheetClose);
+      close.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+      close.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_close_24));
+      close.setColorFilter(Theme.getColor(ColorId.icon));
+      addThemeFilterListener(close, ColorId.icon);
+      close.setContentDescription(Lang.getString(R.string.XgramR6B6Close));
+      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(close);
+      close.setOnClickListener(v -> parent.hidePopupWindow(true));
+      top.addView(close, FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.TOP, Screen.dp(8f), Screen.dp(8f), Screen.dp(8f), 0));
+      hero.addView(top, new LinearLayout.LayoutParams(LayoutHelper.MATCH_PARENT, Screen.dp(56f)));
+
+      com.fahadali.xgram.appearance.XgramR5Sheets.ShapeIconView icon = new com.fahadali.xgram.appearance.XgramR5Sheets.ShapeIconView(context, 96f, 40f).setIcon(R.drawable.baseline_folder_24);
+      addThemeInvalidateListener(icon);
+      hero.addView(icon, new LinearLayout.LayoutParams(Screen.dp(96f), Screen.dp(96f)));
+
+      final int side = Screen.dp(24f);
+      com.fahadali.xgram.appearance.XgramR5Lists.RoleText title = new com.fahadali.xgram.appearance.XgramR5Lists.RoleText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+      title.setGravity(Gravity.CENTER_HORIZONTAL);
+      title.setText(Lang.getString(R.string.ChatFoldersSetupSuggestionTitle));
+      title.setPadding(side, Screen.dp(16f), side, Screen.dp(8f));
+      addThemeInvalidateListener(title);
+      hero.addView(title, new LinearLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+      com.fahadali.xgram.appearance.XgramR5Lists.RoleText text = new com.fahadali.xgram.appearance.XgramR5Lists.RoleText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      text.setGravity(Gravity.CENTER_HORIZONTAL);
+      text.setText(Lang.getMarkdownString(this, R.string.ChatFoldersSetupSuggestionText));
+      text.setPadding(side, 0, side, Screen.dp(8f));
+      text.setLineSpacing(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.lineHeightSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M) - com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)), 1f);
+      addThemeInvalidateListener(text);
+      hero.addView(text, new LinearLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+      android.widget.FrameLayout button = com.fahadali.xgram.appearance.XgramR5People.newHeroButton(context, Lang.getString(R.string.XgramR6B6SetUpFolders), com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY, v -> {
+        parent.hidePopupWindow(true);
+        // revokeFeatureNotifications is called inside SettingsFoldersController.onFocus
+        UI.getContext(context).navigation().navigateTo(new SettingsFoldersController(context, tdlib));
+      });
+      View pill = com.fahadali.xgram.appearance.XgramR5People.actionOf(button);
+      if (pill != null) {
+        addThemeInvalidateListener(pill);
+      }
+      hero.addView(button, new LinearLayout.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+      return hero;
+    }
+
     @Override
     protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
+      if (xgram) {
+        recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        com.fahadali.xgram.appearance.XgramMotion.stretch(recyclerView, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTTOM);
+        recyclerView.setItemAnimator(null);
+        recyclerView.setAdapter(adapter = new SingleViewAdapter<>(xgramBuildHero(context)));
+        return;
+      }
       TdApi.ChatFolderInfo[] chatFolders = tdlib.chatFolders();
 
       FrameLayoutFix singleView = new FrameLayoutFix(context) {{
@@ -415,7 +492,9 @@ public class ChatFoldersFeatureController extends SinglePageBottomSheetViewContr
     @Override
     public void onThemeColorsChanged (boolean areTemp, ColorState state) {
       super.onThemeColorsChanged(areTemp, state);
-      updatePreviewBackground();
+      if (!xgram) { // XGram M3E: no preview, the hero reads its roles when it draws
+        updatePreviewBackground();
+      }
     }
 
     private static final int BORDER = 0, FILLING = 1, FADE = 2;

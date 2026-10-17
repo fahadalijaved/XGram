@@ -174,10 +174,14 @@ public class SmallChatView extends BaseView implements AttachDelegate, TooltipOv
     }
 
     layoutReceiver();
-    if (avatarReceiver.needPlaceholder()) {
-      avatarReceiver.drawPlaceholder(c);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && org.thunderdog.challegram.data.TD.isChatType(getId())) {
+      xgramDrawChatType(c); // XGram M3E: a chat type (Contacts, Muted...) is a tonal circle with its glyph, not a colored avatar
+    } else {
+      if (avatarReceiver.needPlaceholder()) {
+        avatarReceiver.drawPlaceholder(c);
+      }
+      avatarReceiver.draw(c);
     }
-    avatarReceiver.draw(c);
 
     chat.draw(this, avatarReceiver, c, emojiStatusHelper.emojiStatusReceiver);
 
@@ -203,6 +207,28 @@ public class SmallChatView extends BaseView implements AttachDelegate, TooltipOv
     if (removeHelper != null) {
       removeHelper.restore(c);
       removeHelper.draw(c);
+    }
+  }
+
+  // XGram M3E: chat type rows of a folder (include: Contacts, Non-contacts, Groups, Channels, Bots in primaryContainer;
+  // exclude: Muted, Read, Archived in secondaryContainer), 40dp tonal circles holding the icon-pack glyph
+
+  private @Nullable android.graphics.drawable.Drawable xgramTypeIcon;
+  private int xgramTypeIconId;
+
+  private void xgramDrawChatType (@NonNull Canvas c) {
+    final int chatType = getId();
+    if (xgramTypeIcon == null || xgramTypeIconId != chatType) {
+      xgramTypeIcon = org.thunderdog.challegram.tool.Drawables.get(getResources(), org.thunderdog.challegram.data.TD.chatTypeIcon24(chatType));
+      xgramTypeIconId = chatType;
+    }
+    final boolean exclude = me.vkryl.core.ArrayUtils.contains(org.thunderdog.challegram.data.TD.CHAT_TYPES_TO_EXCLUDE, chatType);
+    final int container = exclude ? com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER;
+    final int content = exclude ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER;
+    final float cx = avatarReceiver.centerX(), cy = avatarReceiver.centerY();
+    c.drawCircle(cx, cy, Screen.dp(DoubleTextWrapper.XGRAM_AVATAR_SIZE) / 2f, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(container)));
+    if (xgramTypeIcon != null) {
+      org.thunderdog.challegram.tool.Drawables.drawCentered(c, xgramTypeIcon, cx, cy, Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(content)));
     }
   }
 

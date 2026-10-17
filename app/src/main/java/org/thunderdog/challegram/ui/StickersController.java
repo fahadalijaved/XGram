@@ -107,6 +107,18 @@ public class StickersController extends RecyclerViewController<StickersControlle
   }
 
   private AdapterForAdapter adapterForAdapter;
+  private @Nullable ItemTouchHelper xgramTouchHelper; // XGram M3E
+
+  /** XGram M3E: a touch on an installed set's drag handle starts its drag. */
+  private void xgramStartDrag (View itemView) {
+    RecyclerView recyclerView = getRecyclerView();
+    if (xgramTouchHelper != null && recyclerView != null && itemView.getParent() == recyclerView) {
+      RecyclerView.ViewHolder holder = recyclerView.getChildViewHolder(itemView);
+      if (holder != null) {
+        xgramTouchHelper.startDrag(holder);
+      }
+    }
+  }
 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
@@ -114,7 +126,48 @@ public class StickersController extends RecyclerViewController<StickersControlle
     adapterForAdapter.setStickerSets(stickerSetsToSets);
     adapterForAdapter.search(searchRequest);
 
-    if (mode == MODE_STICKERS || mode == MODE_MASKS) {
+    if ((mode == MODE_STICKERS || mode == MODE_MASKS) && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the shared drag (RemoveHelper: the lifted tile, a tick on each new slot), started by a long press or
+      // the trailing drag handle of an installed set
+      if (mode == MODE_STICKERS) {
+        recyclerView.setItemAnimator(null);
+      }
+      xgramTouchHelper = org.thunderdog.challegram.component.user.RemoveHelper.attach(recyclerView, new org.thunderdog.challegram.component.user.RemoveHelper.ExtendedCallback() {
+        @Override
+        public boolean isLongPressDragEnabled () {
+          return true;
+        }
+
+        @Override
+        public int makeDragFlags (RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder) {
+          return viewHolder.getItemViewType() == ListItem.TYPE_STICKER_SET && !adapterForAdapter.inSearchMode() ? ItemTouchHelper.UP | ItemTouchHelper.DOWN : 0;
+        }
+
+        @Override
+        public boolean onMove (RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, RecyclerView.ViewHolder target) {
+          int fromIndex = adapterForAdapter.getIndexFromPosition(viewHolder.getBindingAdapterPosition());
+          int toIndex = adapterForAdapter.getIndexFromPosition(target.getBindingAdapterPosition());
+          if (stickerSetsToSets != null && fromIndex != -1 && toIndex != -1) {
+            adapterForAdapter.moveStickerSet(fromIndex, toIndex);
+            return true;
+          }
+          return false;
+        }
+
+        @Override
+        public void onCompleteMovement (int fromPosition, int toPosition) {
+          adapterForAdapter.saveStickersOrder();
+        }
+
+        @Override
+        public boolean canRemove (RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, int position) {
+          return false;
+        }
+
+        @Override
+        public void onRemove (RecyclerView.ViewHolder viewHolder) { }
+      });
+    } else if (mode == MODE_STICKERS || mode == MODE_MASKS) {
       if (mode == MODE_STICKERS) {
         recyclerView.setItemAnimator(null);
       }
@@ -238,7 +291,11 @@ public class StickersController extends RecyclerViewController<StickersControlle
   public void onParentFocus () {
     if (!parentFocusApplied) {
       parentFocusApplied = true;
-      getRecyclerView().setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180L));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        getRecyclerView().setItemAnimator(com.fahadali.xgram.appearance.XgramAppMotion.listAnimator()); // XGram M3E: the shared list motion
+      } else {
+        getRecyclerView().setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180L));
+      }
     }
   }
 
@@ -607,6 +664,11 @@ public class StickersController extends RecyclerViewController<StickersControlle
         return;
       }
       group.setStickerSet(stickerSet, item.getHighlightValue());
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: an installed set that can be reordered ends with a drag handle
+        final boolean reorderable = !isArchived && (mode == MODE_STICKERS || mode == MODE_MASKS) && !inSearchMode() && xgramTouchHelper != null;
+        group.xgramSetDragHandle(reorderable ? () -> xgramStartDrag(group) : null);
+      }
       if (isArchived) {
         NonMaterialButton button = group.getButton();
         if (button != null) {

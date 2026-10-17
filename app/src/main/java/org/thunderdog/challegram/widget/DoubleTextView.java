@@ -54,7 +54,17 @@ import org.thunderdog.challegram.util.text.TextColorSets;
 
 import me.vkryl.core.lambda.Destroyable;
 
-public class DoubleTextView extends RelativeLayout implements RtlCheckListener, Destroyable {
+public class DoubleTextView extends RelativeLayout implements RtlCheckListener, Destroyable, org.thunderdog.challegram.component.user.RemoveHelper.RemoveDelegate {
+  // XGram M3E: an M3 two-line list item: a 40dp leading avatar or set preview 16dp from the start (previews clipped to
+  // 12dp corners), the title in bodyLarge and the supporting text in bodyMedium (onSurface / onSurfaceVariant through
+  // the theme's text colors), the action a small tonal button (Add, outlined Added once added), no hairlines, and an
+  // optional trailing drag handle.
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private static final float XGRAM_TITLE_TOP = 14f, XGRAM_SUBTITLE_TOP = 37f, XGRAM_HANDLE_SPACE = 36f;
+  private @Nullable Runnable xgramOnHandleDown;
+  private final Path xgramClip = new Path();
+  private final android.graphics.RectF xgramClipRect = new android.graphics.RectF();
+
   private final TextView titleView, subtitleView;
   private final ComplexReceiver receiver;
   private final EmojiStatusHelper emojiStatusHelper;
@@ -72,9 +82,49 @@ public class DoubleTextView extends RelativeLayout implements RtlCheckListener, 
       subtitleView.setGravity(Lang.gravity());
     int leftMargin = Screen.dp(72f) - (ignoreStartOffset ? currentStartOffset / 2 : 0);
     int rightMargin = Screen.dp(16f) + emojiStatusHelper.getWidth(Screen.dp(6));
+    if (xgram) {
+      leftMargin = Screen.dp(72f); // 16dp + the 40dp leading element + 16dp
+      if (xgramOnHandleDown != null) {
+        rightMargin += Screen.dp(XGRAM_HANDLE_SPACE);
+      }
+      updateLayoutParams(titleView, leftMargin, rightMargin, Screen.dp(XGRAM_TITLE_TOP));
+      updateLayoutParams(subtitleView, leftMargin, rightMargin, Screen.dp(XGRAM_SUBTITLE_TOP));
+      return;
+    }
     updateLayoutParams(titleView, leftMargin, rightMargin, Screen.dp(15f));
     updateLayoutParams(subtitleView, leftMargin, rightMargin, Screen.dp(38f));
   }
+
+  /**
+   * XGram M3E: a trailing drag handle (a reorderable sticker or emoji set); {@code onHandleDown} runs when a touch
+   * starts on it (start the drag there). Null removes it. Expressive design only.
+   */
+  public void xgramSetDragHandle (@Nullable Runnable onHandleDown) {
+    if (!xgram) {
+      return;
+    }
+    boolean changed = (this.xgramOnHandleDown == null) != (onHandleDown == null);
+    this.xgramOnHandleDown = onHandleDown;
+    if (changed) {
+      checkRtl();
+    }
+  }
+
+  @Override
+  public boolean dispatchTouchEvent (android.view.MotionEvent e) {
+    if (xgram && xgramOnHandleDown != null && e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN && com.fahadali.xgram.appearance.XgramR6B6Lists.isOnDragHandle(this, e.getX(), com.fahadali.xgram.appearance.XgramR6B6Lists.DRAG_HANDLE_CENTER)) {
+      xgramOnHandleDown.run();
+    }
+    return super.dispatchTouchEvent(e);
+  }
+
+  // Remove delegate (RemoveHelper.attach reads it on every row it moves; sticker sets are not swiped away)
+
+  @Override
+  public void setRemoveDx (float dx) { }
+
+  @Override
+  public void onRemoveSwipe () { }
 
   private static void updateLayoutParams (View view, int leftMargin, int rightMargin, int topMargin) {
     if (Views.setMargins(view, Lang.rtl() ? rightMargin : leftMargin, topMargin, Lang.rtl() ? leftMargin : rightMargin, 0)) {
@@ -152,6 +202,14 @@ public class DoubleTextView extends RelativeLayout implements RtlCheckListener, 
 
     this.receiver = new ComplexReceiver(this);
 
+    if (xgram) {
+      // XGram M3E: bodyLarge title, bodyMedium supporting text (the theme's text colors are onSurface / onSurfaceVariant)
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(titleView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(subtitleView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+      ((RelativeLayout.LayoutParams) titleView.getLayoutParams()).topMargin = Screen.dp(XGRAM_TITLE_TOP);
+      ((RelativeLayout.LayoutParams) subtitleView.getLayoutParams()).topMargin = Screen.dp(XGRAM_SUBTITLE_TOP);
+    }
+
     addView(titleView);
     addView(subtitleView);
     setWillNotDraw(false);
@@ -170,6 +228,13 @@ public class DoubleTextView extends RelativeLayout implements RtlCheckListener, 
     int imageSize = viewHeight - Screen.dp(12f) * 2;
     int offset = currentStartOffset = viewHeight / 2 - imageSize / 2;
     int startOffset = ignoreStartOffset ? offset / 2 : offset;
+    if (xgram) {
+      // XGram M3E: the 40dp leading element, 16dp from the start, centered on the row
+      viewHeight = getMeasuredHeight() > 0 ? getMeasuredHeight() : viewHeight;
+      imageSize = Screen.dp(com.fahadali.xgram.appearance.XgramR5People.AVATAR);
+      offset = viewHeight / 2 - imageSize / 2;
+      startOffset = Screen.dp(com.fahadali.xgram.appearance.XgramR5People.PADDING);
+    }
     if (Lang.rtl()) {
       int x = getMeasuredWidth() - startOffset - imageSize;
       receiver.setBounds(x, offset, x + imageSize, offset + imageSize);
@@ -199,10 +264,10 @@ public class DoubleTextView extends RelativeLayout implements RtlCheckListener, 
   private void checkButton () {
     if (button == null) {
       RelativeLayout.LayoutParams params;
-      params = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(28f));
+      params = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(xgram ? 40f : 28f)); // XGram M3E: a small (40dp) button, 16dp from the end
       params.addRule(Lang.rtl() ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
       params.addRule(RelativeLayout.CENTER_VERTICAL);
-      params.rightMargin = params.leftMargin = Screen.dp(19f);
+      params.rightMargin = params.leftMargin = Screen.dp(xgram ? 16f : 19f);
 
       button = new NonMaterialButton(getContext());
       button.setId(R.id.btn_double);
@@ -216,6 +281,9 @@ public class DoubleTextView extends RelativeLayout implements RtlCheckListener, 
     checkButton();
     button.setText(string);
     button.setOnClickListener(onClickListener);
+    if (xgram && string == R.string.Add) {
+      button.xgramSetAddStyle(R.string.XgramR5PeopleAdded); // XGram M3E: a filled tonal "Add", an outlined "Added" once added
+    }
   }
 
   public void setIcon (@DrawableRes int icon, View.OnClickListener onClickListener) {
@@ -256,7 +324,7 @@ public class DoubleTextView extends RelativeLayout implements RtlCheckListener, 
     receiver.getImageReceiver(0).requestFile(stickerSet.getPreviewImage());
     receiver.getGifReceiver(0).requestFile(stickerSet.getPreviewAnimation());
     receiver.getAvatarReceiver(0).clear();
-    stickerSetContour = stickerSet.getPreviewContour(Screen.dp(72f) - Screen.dp(12f) * 2);
+    stickerSetContour = stickerSet.getPreviewContour(xgram ? Screen.dp(com.fahadali.xgram.appearance.XgramR5People.AVATAR) : Screen.dp(72f) - Screen.dp(12f) * 2);
     stickerSetInfo = stickerSet;
   }
 
@@ -303,6 +371,19 @@ public class DoubleTextView extends RelativeLayout implements RtlCheckListener, 
   protected void onDraw (Canvas c) {
     final boolean needThemedColorFilter = stickerSetInfo != null && stickerSetInfo.needThemedColorFilter();
 
+    // XGram M3E: a set's preview sits in a 40dp box with 12dp corners
+    final int xgramSave;
+    if (xgram && !useAvatarReceiver && stickerSetInfo != null) {
+      Receiver bounds = receiver.getImageReceiver(0);
+      xgramClipRect.set(bounds.getLeft(), bounds.getTop(), bounds.getRight(), bounds.getBottom());
+      xgramClip.rewind();
+      xgramClip.addRoundRect(xgramClipRect, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M), Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M), Path.Direction.CW);
+      xgramSave = Views.save(c);
+      c.clipPath(xgramClip);
+    } else {
+      xgramSave = -1;
+    }
+
     if (useAvatarReceiver) {
       AvatarReceiver avatarReceiver = receiver.getAvatarReceiver(0);
       if (avatarReceiver.needPlaceholder()) {
@@ -335,6 +416,17 @@ public class DoubleTextView extends RelativeLayout implements RtlCheckListener, 
         }
       }
       imageReceiver.draw(c);
+    }
+    if (xgramSave != -1) {
+      Views.restore(c, xgramSave);
+    }
+    if (xgram) {
+      if (xgramOnHandleDown != null) {
+        com.fahadali.xgram.appearance.XgramR6B6Lists.drawDragHandle(this, c, com.fahadali.xgram.appearance.XgramR6B6Lists.DRAG_HANDLE_CENTER, 1f);
+      }
+      int x = (int) (titleView.getX() + Math.min((textWidth) + Screen.dp(6), titleView.getMeasuredWidth() + Screen.dp(6)));
+      emojiStatusHelper.draw(c, x, (int) titleView.getY());
+      return; // XGram M3E: no hairline between the tiles
     }
     if (stickerSetInfo != null && stickerSetInfo.needSeparatorOnTop()) {
       int height = Math.max(1, Screen.dp(.5f));

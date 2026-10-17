@@ -1174,6 +1174,13 @@ public class SettingHolder extends RecyclerView.ViewHolder {
 
         switch (viewType) {
           case ListItem.TYPE_EDITTEXT_WITH_PHOTO: {
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              // XGram M3E: the name field fills its tile; the photo is the page's hero above it (ProfileController)
+              FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+              params.topMargin = Screen.dp(8f);
+              editText.setLayoutParams(params);
+              break;
+            }
             FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (Lang.rtl()) {
               params.rightMargin = Screen.dp(82f);

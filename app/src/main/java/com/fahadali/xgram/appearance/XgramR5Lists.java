@@ -96,7 +96,7 @@ public final class XgramR5Lists {
     } else if (res == R.string.NoOtherSessions) {
       return R.string.XgramR5ListsNoOtherSessions;
     }
-    return 0;
+    return XgramR6B6Lists.sentenceFor(res); // round 6: the title case rows, headers and page titles of settings pages
   }
 
   /** The label of a list item in Expressive design: as written (never in capitals), sentence case where Telegram X's English is title case. */

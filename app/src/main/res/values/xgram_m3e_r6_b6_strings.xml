@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram Material 3 Expressive, round 6 batch 6: settings lists, chat folders, group and channel pages -->
+<resources>
+  <string name="XgramR6B6PingMs">%1$s ms</string>
+  <string name="XgramR6B6ProxyAvailable">Available</string>
+  <string name="XgramR6B6FolderIcon">Folder icon</string>
+  <string name="XgramR6B6FolderName">Folder name</string>
+  <string name="XgramR6B6AddFolder">Add folder</string>
+  <string name="XgramR6B6JoinChats">Join chats</string>
+  <string name="XgramR6B6DontJoin">Don\'t join</string>
+  <string name="XgramR6B6FolderLinkAddInfo">Add this folder and pick the chats to join</string>
+  <string name="XgramR6B6FolderLinkJoinInfo">Pick the chats to join</string>
+  <string name="XgramR6B6FolderLinkNewChatsInfo">New chats were added to this folder</string>
+  <string name="XgramR6B6FolderLinkDeleteInfo">Pick the chats to leave as well</string>
+  <string name="XgramR6B6SetUpFolders">Set up folders</string>
+  <string name="XgramR6B6DragToReorder">Drag to reorder</string>
+  <string name="XgramR6B6DeleteGroup">Delete group</string>
+  <string name="XgramR6B6DeleteChannel">Delete channel</string>
+  <string name="XgramR6B6Close">Close</string>
+  <string name="XgramR6B6ChangePhoto">Change photo</string>
+</resources>

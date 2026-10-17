@@ -103,12 +103,134 @@ public class ChatFolderInviteLinkControllerPage extends BottomSheetViewControlle
     if (headerView == null) {
       headerView = new HeaderView(context);
       headerView.initWithSingleController(this, false);
-      headerView.getFilling().setColor(Theme.fillingColor());
-      headerView.getFilling().setShadowAlpha(1f);
+      if (xgram) {
+        // XGram M3E: the header is part of the sheet: its color, no shadow
+        headerView.getFilling().setColor(com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor());
+        headerView.getFilling().setShadowAlpha(0f);
+      } else {
+        headerView.getFilling().setColor(Theme.fillingColor());
+        headerView.getFilling().setShadowAlpha(1f);
+      }
       headerView.setWillNotDraw(false);
       addThemeInvalidateListener(headerView);
     }
     return headerView;
+  }
+
+  // XGram M3E: the sheet's header is the folder's name in headlineSmall over a bodyMedium line saying what the sheet
+  // does; the full-width capitals bar is the actions row: [Cancel] [a filled Add folder / Join chats, or an error
+  // filled Remove folder], 16dp from the sides, on the sheet color, above today's insets.
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private @Nullable android.widget.LinearLayout xgramTitleCell;
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton xgramConfirm;
+
+  @Override
+  public View getCustomHeaderCell () {
+    if (!xgram) {
+      return super.getCustomHeaderCell();
+    }
+    if (xgramTitleCell == null) {
+      xgramTitleCell = xgramNewTitleCell();
+    }
+    return xgramTitleCell;
+  }
+
+  private android.widget.LinearLayout xgramNewTitleCell () {
+    final boolean rtl = Lang.rtl();
+    android.widget.LinearLayout cell = new android.widget.LinearLayout(context);
+    cell.setOrientation(android.widget.LinearLayout.VERTICAL);
+    cell.setGravity(Gravity.CENTER_VERTICAL | (rtl ? Gravity.RIGHT : Gravity.LEFT));
+    com.fahadali.xgram.appearance.XgramR5Lists.RoleText title = new com.fahadali.xgram.appearance.XgramR5Lists.RoleText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+    title.setSingleLine(true);
+    title.setEllipsize(TextUtils.TruncateAt.END);
+    title.setIncludeFontPadding(false);
+    title.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
+    title.setText(getName());
+    com.fahadali.xgram.appearance.XgramR5Lists.RoleText supporting = new com.fahadali.xgram.appearance.XgramR5Lists.RoleText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    supporting.setSingleLine(true);
+    supporting.setEllipsize(TextUtils.TruncateAt.END);
+    supporting.setIncludeFontPadding(false);
+    supporting.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
+    supporting.setText(Lang.getString(xgramSupportingRes()));
+    cell.addView(title, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    android.widget.LinearLayout.LayoutParams params = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    params.topMargin = Screen.dp(2f);
+    cell.addView(supporting, params);
+    // between the close button and the more button (Telegram X's title margins)
+    final int start = Screen.dp(68f), end = getMenuId() != 0 ? Screen.dp(56f) : Screen.dp(16f);
+    FrameLayoutFix.LayoutParams cellParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, HeaderView.getSize(false), Gravity.TOP);
+    cellParams.leftMargin = rtl ? end : start;
+    cellParams.rightMargin = rtl ? start : end;
+    cell.setLayoutParams(cellParams);
+    addThemeInvalidateListener(title);
+    addThemeInvalidateListener(supporting);
+    return cell;
+  }
+
+  private int xgramSupportingRes () {
+    switch (mode) {
+      case ChatFolderInviteLinkController.MODE_NEW_CHATS:
+        return R.string.XgramR6B6FolderLinkNewChatsInfo;
+      case ChatFolderInviteLinkController.MODE_DELETE_FOLDER:
+        return R.string.XgramR6B6FolderLinkDeleteInfo;
+      case ChatFolderInviteLinkController.MODE_INVITE_LINK:
+      default:
+        return chatFolderId != NO_CHAT_FOLDER_ID ? R.string.XgramR6B6FolderLinkJoinInfo : R.string.XgramR6B6FolderLinkAddInfo;
+    }
+  }
+
+  private FrameLayoutFix xgramCreateActions () {
+    final boolean destructive = mode == ChatFolderInviteLinkController.MODE_DELETE_FOLDER;
+    android.widget.TextView cancel = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(context, Lang.getString(R.string.Cancel), com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+    cancel.setId(R.id.btn_cancel);
+    cancel.setOnClickListener(this);
+    android.widget.TextView confirm = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(context, null, destructive, null);
+    confirm.setId(R.id.btn_done);
+    confirm.setOnClickListener(this);
+    if (confirm instanceof com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton) {
+      xgramConfirm = (com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton) confirm;
+    }
+    android.widget.LinearLayout row = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(context, null, cancel, confirm);
+    FrameLayoutFix frame = new FrameLayoutFix(context) {
+      @Override
+      protected void onDraw (android.graphics.Canvas c) {
+        c.drawColor(com.fahadali.xgram.appearance.XgramM3Sheets.sheetColor());
+      }
+    };
+    frame.setWillNotDraw(false);
+    frame.addView(row, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(com.fahadali.xgram.appearance.XgramR5Sheets.ACTIONS_HEIGHT), Gravity.TOP));
+    addThemeInvalidateListener(frame);
+    addThemeInvalidateListener(cancel);
+    addThemeInvalidateListener(confirm);
+    return frame;
+  }
+
+  private void xgramUpdateActions () {
+    if (xgramConfirm == null) {
+      return;
+    }
+    final int selectedChatCount = selectedChatIds.size();
+    CharSequence text;
+    boolean enabled = !isFinishing();
+    switch (mode) {
+      case ChatFolderInviteLinkController.MODE_DELETE_FOLDER:
+        text = com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.RemoveFolder);
+        break;
+      case ChatFolderInviteLinkController.MODE_NEW_CHATS:
+        text = Lang.getString(selectedChatCount > 0 ? R.string.XgramR6B6JoinChats : R.string.XgramR6B6DontJoin);
+        break;
+      case ChatFolderInviteLinkController.MODE_INVITE_LINK:
+      default:
+        if (selectableChatIds.length == 0) {
+          text = Lang.getString(R.string.OK);
+        } else {
+          text = Lang.getString(chatFolderId != NO_CHAT_FOLDER_ID ? R.string.XgramR6B6JoinChats : R.string.XgramR6B6AddFolder);
+          enabled = enabled && selectedChatCount > 0;
+        }
+        break;
+    }
+    xgramConfirm.setText(text);
+    xgramConfirm.setEnabled(enabled);
   }
 
   @Override
@@ -141,12 +263,14 @@ public class ChatFolderInviteLinkControllerPage extends BottomSheetViewControlle
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
 
-    int buttonHeight = Screen.dp(BUTTON_HEIGHT_DP) + extraBottomInsetWithoutIme;
+    int buttonHeight = (xgram ? com.fahadali.xgram.appearance.XgramR6B6Lists.actionsHeight() : Screen.dp(BUTTON_HEIGHT_DP)) + extraBottomInsetWithoutIme; // XGram M3E: the actions row
 
     Views.setLayoutHeight(actionButton, buttonHeight);
     Views.setPaddingBottom(actionButton, extraBottomInsetWithoutIme);
     Views.setBottomMargin(getRecyclerView(), buttonHeight);
-    Views.setBottomMargin(bottomShadowView, buttonHeight);
+    if (bottomShadowView != null) {
+      Views.setBottomMargin(bottomShadowView, buttonHeight);
+    }
 
   }
 
@@ -158,18 +282,22 @@ public class ChatFolderInviteLinkControllerPage extends BottomSheetViewControlle
 
     FrameLayoutFix wrap = (FrameLayoutFix) view;
 
-    int buttonHeight = Screen.dp(BUTTON_HEIGHT_DP) + extraBottomInsetWithoutIme;
-    wrap.addView(actionButton = createActionButton(), FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, buttonHeight, Gravity.BOTTOM));
+    int buttonHeight = (xgram ? com.fahadali.xgram.appearance.XgramR6B6Lists.actionsHeight() : Screen.dp(BUTTON_HEIGHT_DP)) + extraBottomInsetWithoutIme; // XGram M3E: the actions row
+    wrap.addView(actionButton = xgram ? xgramCreateActions() : createActionButton(), FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, buttonHeight, Gravity.BOTTOM));
     Views.setPaddingBottom(actionButton, extraBottomInsetWithoutIme);
     updateActionButton();
 
-    bottomShadowView = SeparatorView.simpleSeparator(context, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 1f, Gravity.BOTTOM), false);
-    addThemeInvalidateListener(bottomShadowView);
-    bottomShadowView.setAlignBottom();
-    wrap.addView(bottomShadowView);
+    if (!xgram) { // XGram M3E: no hairline over the actions
+      bottomShadowView = SeparatorView.simpleSeparator(context, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 1f, Gravity.BOTTOM), false);
+      addThemeInvalidateListener(bottomShadowView);
+      bottomShadowView.setAlignBottom();
+      wrap.addView(bottomShadowView);
+    }
 
     Views.setBottomMargin(getRecyclerView(), buttonHeight);
-    Views.setBottomMargin(bottomShadowView, buttonHeight);
+    if (bottomShadowView != null) {
+      Views.setBottomMargin(bottomShadowView, buttonHeight);
+    }
     return view;
   }
 
@@ -207,6 +335,10 @@ public class ChatFolderInviteLinkControllerPage extends BottomSheetViewControlle
   }
 
   private void updateActionButton () {
+    if (xgram) {
+      xgramUpdateActions();
+      return;
+    }
     boolean enabled = !isFinishing();
     actionButton.setEnabled(enabled);
     int textColorId;
@@ -426,6 +558,8 @@ public class ChatFolderInviteLinkControllerPage extends BottomSheetViewControlle
     if (isFinishing()) return;
     if (v.getId() == R.id.chat) {
       onChatItemClicked((ListItem) v.getTag());
+    } else if (v.getId() == R.id.btn_cancel) {
+      parent.hidePopupWindow(true); // XGram M3E: the actions row's Cancel
     } else if (v.getId() == R.id.btn_done) {
       switch (mode) {
         case ChatFolderInviteLinkController.MODE_INVITE_LINK:
