@@ -186,7 +186,7 @@ public class PageBlockWrapView extends FrameLayoutFix implements ViewPager.OnPag
         addView(pager);
 
         ViewPagerPositionView position;
-        position = new ViewPagerPositionView(getContext());
+        position = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? new com.fahadali.xgram.appearance.XgramR6B7Places.PageIndicator(getContext()) : new ViewPagerPositionView(getContext()); // XGram: the M3E page indicator
         position.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(36f), Gravity.BOTTOM));
         position.reset(adapter.getCount(), 0f);
         addView(position);

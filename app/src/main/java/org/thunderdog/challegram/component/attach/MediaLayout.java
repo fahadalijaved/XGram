@@ -158,6 +158,7 @@ public class MediaLayout extends FrameLayoutFix implements
           controller.setBottomInset(extraBottomInset, extraBottomInsetWithoutIme);
         }
       }
+      xgramLayoutPill(); // XGram: the caption row stays above the bar and the keyboard
     }
   }
 
@@ -938,6 +939,7 @@ public class MediaLayout extends FrameLayoutFix implements
     addView(toView, 1);
     xgramLayoutNow(toView);
     xgramApplySwitch(0f);
+    xgramUpdatePill(); // the caption field leaves with the gallery tab
   }
 
   /** Measures and lays out a page just added, so its first frame is complete. */
@@ -1062,6 +1064,7 @@ public class MediaLayout extends FrameLayoutFix implements
     currentController = controllers[index];
     controllers[index].onCompleteShow(false);
     onCurrentColorChanged();
+    xgramUpdatePill(); // XGram: the caption field belongs to the gallery tab
     if (mode == MODE_DEFAULT && target != null) {
       target.setBroadcastAction(controllers[index].getBroadcastingAction());
     }
@@ -1138,6 +1141,7 @@ public class MediaLayout extends FrameLayoutFix implements
         shadowView.setTranslationY(y);
       }
     }
+    xgramLayoutPill(); // XGram: the caption row follows the bar
   }
 
   private ValueAnimator bottomBarAnimator;
@@ -1731,7 +1735,11 @@ public class MediaLayout extends FrameLayoutFix implements
    * caption button shows only on the gallery tab; elsewhere the old margin stays.
    */
   private void xgramUpdateCounterMargins () {
-    final int rightMargin = xgramCaptionView != null && xgramAllowCaption() ? xgramCaptionMargin() + Screen.dp(48f) : Screen.dp(56f);
+    int rightMargin = xgramCaptionView != null && xgramAllowCaption() ? xgramCaptionMargin() + Screen.dp(48f) : Screen.dp(56f);
+    if (xgramPill != null && xgramAllowCaption()) {
+      // XGram M3E: with the caption field the send button sits in its row; the album and spoiler toggles take its slot
+      rightMargin = Screen.dp(55f) + (allowSpoiler ? Screen.dp(48f) : 0) + Screen.dp(8f);
+    }
     if (counterView != null) {
       Views.setRightMargin(counterView, rightMargin);
     }
@@ -1750,6 +1758,187 @@ public class MediaLayout extends FrameLayoutFix implements
     xgramCaptionView.setColorFilter(Theme.getColor(colorId));
     themeListeners.removeThemeListenerByTarget(xgramCaptionView);
     themeListeners.addThemeFilterListener(xgramCaptionView, colorId);
+  }
+
+  // XGram M3E: the inline caption field. While photos are selected on the gallery tab, a pill (bodyLarge on
+  // surfaceContainerHighest, full corners, an emoji button inside) rises above the 64dp bar on the spatial default
+  // spring with the filled send button at its end; the bar's own send button steps aside and the album and spoiler
+  // toggles take its slot. It edits the first selected item's caption (Telegram shows it under the album), follows the
+  // first item when the selection changes, and lifts above the keyboard.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill xgramPill;
+  private @Nullable SendButton xgramPillSend;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPillSpring;
+  private float xgramPillFactor;
+  private @Nullable ImageGalleryFile xgramPillTarget;
+
+  /** XGram M3E: the height the caption field takes above the bar now (0 while it is hidden), for the lists' bottom padding. */
+  public int xgramCaptionPillHeight () {
+    if (xgramPill == null || xgramPillFactor <= 0f) {
+      return 0;
+    }
+    final int height = xgramPill.getHeight() > 0 ? xgramPill.getHeight() : Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.ROW_MIN_HEIGHT);
+    return Math.round(height * me.vkryl.core.MathUtils.clamp(xgramPillFactor));
+  }
+
+  private void xgramCreatePill () {
+    if (xgramPill != null || bottomBar == null || mode != MODE_DEFAULT) {
+      return;
+    }
+    xgramPill = new com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill(getContext());
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+    params.bottomMargin = getBottomBarHeight();
+    xgramPill.setLayoutParams(params);
+    xgramPill.setAlpha(0f);
+    xgramPill.setVisibility(View.INVISIBLE);
+
+    xgramPillSend = new SendButton(getContext(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_send_24)) {
+      @Override
+      public boolean onTouchEvent (MotionEvent e) {
+        return isEnabled() && Views.isValid(this) && super.onTouchEvent(e);
+      }
+    };
+    xgramPillSend.setId(R.id.btn_send);
+    xgramPillSend.setXgramFilled(true);
+    xgramPillSend.getSlowModeCounterController(tdlib()).setCurrentChat(getTargetChatId());
+    xgramPillSend.setContentDescription(Lang.getString(R.string.XgramR6B7Send));
+    Views.setClickable(xgramPillSend);
+    xgramPillSend.setOnClickListener(this);
+    xgramAttachSendMenu(xgramPillSend);
+    xgramPill.setSendButton(xgramPillSend);
+
+    xgramPill.setCallback(text -> {
+      ImageGalleryFile file = xgramCaptionTarget();
+      if (file != null) {
+        file.setCaption(new TdApi.FormattedText(text.trim(), new TdApi.TextEntity[0]));
+      }
+    });
+    addView(xgramPill, indexOfChild(bottomBar)); // under the bar: it rises from behind it
+    xgramPillSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> {
+      xgramPillFactor = value;
+      xgramLayoutPill();
+    });
+    xgramPillSpring.setThreshold(.002f);
+    xgramPillSpring.setEndListener(() -> {
+      // The list's bottom padding counts the field (xgramCaptionPillHeight): measured again once it settles
+      if (currentController != null) {
+        currentController.updateExtraSpacingDecoration();
+      }
+      xgramLayoutPill();
+    });
+  }
+
+  /** The haptic send menu of the bar's send button, for the caption row's one (same items and actions). */
+  private void xgramAttachSendMenu (SendButton button) {
+    new HapticMenuHelper(list -> {
+      final TdApi.Chat chat = getTargetChat();
+      List<HapticMenuHelper.MenuItem> items = tdlib().ui().fillDefaultHapticMenu(getTargetChatId(), false, getCurrentController().canRemoveMarkdown(), true);
+      if (items == null)
+        items = new ArrayList<>();
+      getCurrentController().addCustomItems(button, items);
+      if (chat != null && chat.messageSenderId != null) {
+        items.add(0, MediaLayout.createHapticSenderItem(tdlib(), chat));
+      }
+      return !items.isEmpty() ? items : null;
+    }, (menuItem, parentView, item) -> {
+      final int menuItemId = menuItem.getId();
+      if (menuItemId == R.id.btn_openSendersMenu) {
+        openSetSenderPopup();
+      } else if (menuItemId == R.id.btn_sendNoMarkdown) {
+        pickDateOrProceed((sendOptions, disableMarkdown) ->
+          getCurrentController().onMultiSendPress(button, sendOptions, true)
+        );
+      } else if (menuItemId == R.id.btn_sendNoSound) {
+        pickDateOrProceed((sendOptions, disableMarkdown) ->
+          getCurrentController().onMultiSendPress(button, sendOptions, false)
+        );
+      } else if (menuItemId == R.id.btn_sendOnceOnline) {
+        getCurrentController().onMultiSendPress(button, Td.newSendOptions(new TdApi.MessageSchedulingStateSendWhenOnline()), false);
+      } else if (menuItemId == R.id.btn_sendScheduled) {
+        if (target != null) {
+          tdlib().ui().pickSchedulingState(target,
+            schedule ->
+              getCurrentController().onMultiSendPress(button, Td.newSendOptions(schedule), false),
+            getTargetChatId(), false, false, null, null
+          );
+        }
+      }
+      return true;
+    }, themeListeners, null).attachToView(button);
+  }
+
+  private boolean xgramPillWanted () {
+    if (xgramSwitching && !(xgramSwitchTo instanceof MediaBottomGalleryController)) {
+      return false; // leaving the gallery: the field goes as the switch starts
+    }
+    return xgramPill != null && target != null && !inSingleMediaMode() && isCounterVisible && xgramAllowCaption();
+  }
+
+  /** Shows or hides the caption field (on its spring) and binds it to the first selected item. */
+  private void xgramUpdatePill () {
+    if (xgramPill == null || xgramPillSpring == null) {
+      return;
+    }
+    final boolean wanted = xgramPillWanted();
+    if (wanted) {
+      ImageGalleryFile file = xgramCaptionTarget();
+      if (file != xgramPillTarget) {
+        // The first item changed: a caption typed for the old one moves along, unless the new one has its own
+        final ImageGalleryFile old = xgramPillTarget;
+        final String typed = xgramPill.getCaption();
+        xgramPillTarget = file;
+        if (file != null && old != null && !typed.isEmpty() && !file.hasCaption()) {
+          file.setCaption(new TdApi.FormattedText(typed, new TdApi.TextEntity[0]));
+          old.setCaption(new TdApi.FormattedText("", new TdApi.TextEntity[0]));
+        }
+        TdApi.FormattedText caption = file != null ? file.getCaption(false, false) : null;
+        xgramPill.setCaption(caption != null ? caption.text : null);
+      }
+      xgramPill.setVisibility(View.VISIBLE);
+    } else if (xgramPill.getInput().hasFocus()) {
+      xgramPill.getInput().clearFocus();
+      org.thunderdog.challegram.tool.Keyboard.hide(xgramPill.getInput());
+    }
+    if (!wanted && xgramPillFactor <= 0f && !xgramPillSpring.isRunning()) {
+      xgramPillTarget = null;
+    }
+    xgramPillSpring.animateTo(wanted ? 1f : 0f);
+    xgramUpdateCounterMargins();
+  }
+
+  /** Places the caption row above the bar (following it) and above the keyboard, and the bar's send and toggles. */
+  private void xgramLayoutPill () {
+    if (xgramPill == null) {
+      return;
+    }
+    final float f = xgramPillFactor;
+    final float p = me.vkryl.core.MathUtils.clamp(f);
+    final int barHeight = getBottomBarHeight();
+    if (xgramPill.getLayoutParams() instanceof MarginLayoutParams && ((MarginLayoutParams) xgramPill.getLayoutParams()).bottomMargin != barHeight) {
+      Views.setBottomMargin(xgramPill, barHeight);
+    }
+    final float barY = bottomBar != null ? bottomBar.getTranslationY() : 0f;
+    final int imeShift = Math.max(0, extraBottomInset - barHeight);
+    final int rowHeight = xgramPill.getHeight() > 0 ? xgramPill.getHeight() : Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.ROW_MIN_HEIGHT);
+    xgramPill.setTranslationY(barY - imeShift * p + rowHeight * .6f * (1f - f));
+    xgramPill.setAlpha(me.vkryl.core.MathUtils.clamp(f * 1.5f));
+    if (f <= 0f && xgramPillSpring != null && !xgramPillSpring.isRunning() && !xgramPillWanted()) {
+      xgramPill.setVisibility(View.INVISIBLE);
+    }
+    if (sendButton != null) {
+      sendButton.setAlpha(xgramSendBaseAlpha * (1f - p));
+      sendButton.setEnabled(counterView != null && counterView.isEnabled() && p < .5f);
+    }
+    if (xgramPillSend != null) {
+      xgramPillSend.setEnabled(p >= .5f);
+    }
+    final float shift = Screen.dp(55f) * p;
+    if (groupMediaView != null) {
+      groupMediaView.setTranslationX(shift);
+    }
+    if (hotMediaView != null) {
+      hotMediaView.setTranslationX(shift);
+    }
   }
 
   private void xgramEditCaption () {
@@ -1977,6 +2166,11 @@ public class MediaLayout extends FrameLayoutFix implements
       hotMediaView.setAlpha(0f);
 
       setCounterEnabled(false);
+
+      if (xgramM3) {
+        xgramCaptionView.setVisibility(View.GONE); // XGram M3E: the inline caption field replaces the button and its dialog
+        xgramCreatePill();
+      }
     }
     // No need to reset, right?
     // setNeedSpoiler(false);
@@ -2174,7 +2368,11 @@ public class MediaLayout extends FrameLayoutFix implements
       checkCounterHint();
     }
     setCounterEnabled(factor != 0f);
+    xgramSendBaseAlpha = factor;
+    xgramLayoutPill(); // XGram: the bar's send button steps aside for the caption row's
   }
+
+  private float xgramSendBaseAlpha;
 
   public float getCounterFactor () {
     return counterFactor;
@@ -2230,6 +2428,7 @@ public class MediaLayout extends FrameLayoutFix implements
       setCounterFactorInternal(1f);
     }
     counterAnimator.animateTo(toFactor);
+    xgramUpdatePill(); // XGram: the caption field comes and goes with the selection
   }
 
   public void setCounter (int count) {
@@ -2254,6 +2453,7 @@ public class MediaLayout extends FrameLayoutFix implements
       checkSuffix(true);
       checkCounterHintText();
     }
+    xgramUpdatePill(); // XGram: follows the first selected item
   }
 
   public void clearCounter () {

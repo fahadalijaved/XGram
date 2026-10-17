@@ -65,7 +65,34 @@ public class SetSenderControllerPage extends BottomSheetViewController.BottomShe
     headerView.getBackButton().setIsReverse(true);
     headerView.setWillNotDraw(false);
     addThemeInvalidateListener(headerView);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the header on the sheet colour (surfaceContainerLow) with the M3 navigation icon button
+      headerView.getFilling().setColor(Theme.getColor(ColorId.drawer));
+      com.fahadali.xgram.appearance.XgramM3Sheets.applyNavigationButton(headerView.getBackButton(), Theme.getColor(ColorId.text));
+    }
     return headerView;
+  }
+
+  /**
+   * XGram M3E: the senders are segmented tiles (the shared list decoration); the current one's tile is
+   * secondaryContainer, under the check its row draws.
+   */
+  private static final class XgramCurrentSenderTile extends RecyclerView.ItemDecoration {
+    @Override
+    public void onDraw (@NonNull android.graphics.Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      for (int i = 0; i < parent.getChildCount(); i++) {
+        View child = parent.getChildAt(i);
+        Object tag = child.getTag();
+        if (!(tag instanceof ListItem) || !(((ListItem) tag).getData() instanceof DoubleTextWrapper)) {
+          continue;
+        }
+        com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.findMorph(child.getBackground());
+        if (morph != null) {
+          morph.setColorRole(((DoubleTextWrapper) ((ListItem) tag).getData()).isChecked() ?
+            com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+        }
+      }
+    }
   }
 
   @Override
@@ -95,6 +122,9 @@ public class SetSenderControllerPage extends BottomSheetViewController.BottomShe
     adapter = new SettingsAdapter(this, this::onItemClickListener, this);
     adapter.setNoEmptyProgress();
     recyclerView.setAdapter(adapter);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      recyclerView.addItemDecoration(new XgramCurrentSenderTile());
+    }
     buildCells();
   }
 
@@ -183,6 +213,7 @@ public class SetSenderControllerPage extends BottomSheetViewController.BottomShe
         ListItem separatorItem = new ListItem(ListItem.TYPE_SEPARATOR);
         ListItem contentItem = new ListItem(ListItem.TYPE_CHAT_SMALL).setData(item);
         if (!isFirst) {
+          if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) // XGram M3E: tiles are apart by their 2dp gaps
           items.add(separatorItem);
         } else {
           isFirst = false;

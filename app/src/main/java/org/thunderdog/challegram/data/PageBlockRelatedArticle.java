@@ -53,14 +53,27 @@ public class PageBlockRelatedArticle extends PageBlock {
     this.openParameters = openParameters;
 
     if (!StringUtils.isEmpty(article.title)) {
-      title = new TextWrapper(article.title, PageBlockRichText.getParagraphProvider(), TextColorSets.InstantView.NORMAL)
+      title = new TextWrapper(article.title, xgram ? com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M)) : PageBlockRichText.getParagraphProvider(), TextColorSets.InstantView.NORMAL)
         .setMaxLines(3)
         .addTextFlags(Text.FLAG_ALL_BOLD | Text.FLAG_ARTICLE);
     }
     if (!StringUtils.isEmpty(article.description)) {
-      description = new TextWrapper(article.description, PageBlockRichText.getCaptionProvider(), TextColorSets.InstantView.NORMAL)
+      description = new TextWrapper(article.description, xgram ? com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)) : PageBlockRichText.getCaptionProvider(), xgram ? TextColorSets.InstantView.CAPTION : TextColorSets.InstantView.NORMAL)
         .setMaxLines(3)
         .addTextFlags(Text.FLAG_ARTICLE);
+    }
+    if (xgram) {
+      // XGram M3E: the article's place in the list, for its tile's corners
+      final TdApi.PageBlockRelatedArticle[] all = articles.articles;
+      int index = -1;
+      for (int i = 0; i < all.length; i++) {
+        if (all[i] == article) {
+          index = i;
+          break;
+        }
+      }
+      xgramFirst = index <= 0;
+      xgramLast = index == -1 || index == all.length - 1;
     }
     String info;
     if (article.publishDate != 0 && !StringUtils.isEmptyOrBlank(article.author)) {
@@ -104,7 +117,26 @@ public class PageBlockRelatedArticle extends PageBlock {
 
   @Override
   public int getImageContentRadius () {
-    return Screen.dp(3f);
+    return Screen.dp(xgram ? com.fahadali.xgram.appearance.XgramExpressive.CORNER_M : 3f); // XGram M3E: 12dp thumbnail corners
+  }
+
+  // XGram M3E: each related article is a segmented tile (surfaceContainer, 20dp outer and 4dp inner corners, 16dp in,
+  // 2dp apart) with 16dp padding: the title in titleMedium, the description in bodyMedium onSurfaceVariant, the info
+  // in bodySmall, and a 56dp thumbnail with 12dp corners at the end.
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private boolean xgramFirst = true, xgramLast = true;
+  private static final float XGRAM_INSET = 16f, XGRAM_PADDING = 16f, XGRAM_THUMB = 56f;
+  private final android.graphics.Path xgramTile = new android.graphics.Path();
+  private final android.graphics.RectF xgramTileRect = new android.graphics.RectF();
+  private final float[] xgramRadii = new float[8];
+
+  private int xgramGap () {
+    return xgramFirst ? Screen.dp(4f) : Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP);
+  }
+
+  private int xgramTextX () {
+    return Screen.dp(XGRAM_INSET + XGRAM_PADDING);
   }
 
   @Override
@@ -123,6 +155,22 @@ public class PageBlockRelatedArticle extends PageBlock {
     int maxWidth = width - Screen.dp(PageBlockRichText.TEXT_HORIZONTAL_OFFSET) * 2;
     if (article.photo != null) {
       maxWidth -= Screen.dp(50f) + Screen.dp(12f);
+    }
+    if (xgram) {
+      maxWidth = width - xgramTextX() * 2 - (article.photo != null ? Screen.dp(XGRAM_THUMB + 16f) : 0);
+      if (title != null) {
+        title.get(maxWidth);
+        availLineCount -= title.getLineCount();
+      }
+      if (description != null) {
+        description.setMaxLines(availLineCount);
+        if (availLineCount > 0)
+          description.get(maxWidth);
+      }
+      if (info != null) {
+        info.get(maxWidth);
+      }
+      return Math.max(article.photo != null ? xgramGap() + Screen.dp(XGRAM_PADDING) * 2 + Screen.dp(XGRAM_THUMB) : 0, getContentHeight() + getContentTop());
     }
     if (title != null) {
       title.get(maxWidth);
@@ -146,6 +194,9 @@ public class PageBlockRelatedArticle extends PageBlock {
 
   @Override
   protected int getContentTop () {
+    if (xgram) {
+      return xgramGap() + Screen.dp(XGRAM_PADDING);
+    }
     return Screen.dp(SPACING_START);
   }
 
@@ -181,14 +232,28 @@ public class PageBlockRelatedArticle extends PageBlock {
     if (totalHeight > 0) {
       totalHeight -= Screen.dp(SPACING);
     }
-    totalHeight += Screen.dp(SPACING_START);
+    totalHeight += Screen.dp(xgram ? XGRAM_PADDING : SPACING_START);
     return totalHeight;
+  }
+
+  private void xgramDrawTile (Canvas c, int viewWidth, int viewHeight) {
+    final float outer = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.LIST_OUTER_CORNER), inner = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.LIST_INNER_CORNER);
+    xgramTileRect.set(Screen.dpf(XGRAM_INSET), xgramGap(), viewWidth - Screen.dpf(XGRAM_INSET), viewHeight);
+    final float top = xgramFirst ? outer : inner, bottom = xgramLast ? outer : inner;
+    xgramRadii[0] = xgramRadii[1] = xgramRadii[2] = xgramRadii[3] = top;
+    xgramRadii[4] = xgramRadii[5] = xgramRadii[6] = xgramRadii[7] = bottom;
+    xgramTile.rewind();
+    xgramTile.addRoundRect(xgramTileRect, xgramRadii, android.graphics.Path.Direction.CW);
+    c.drawPath(xgramTile, org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER)));
   }
 
   @Override
   protected <T extends View & DrawableProvider> void drawInternal (T view, Canvas c, Receiver preview, Receiver receiver, ComplexReceiver iconReceiver) {
-    int textX = Screen.dp(PageBlockRichText.TEXT_HORIZONTAL_OFFSET);
-    int textY = Screen.dp(SPACING_START);
+    if (xgram) {
+      xgramDrawTile(c, view.getMeasuredWidth(), view.getMeasuredHeight());
+    }
+    int textX = xgram ? xgramTextX() : Screen.dp(PageBlockRichText.TEXT_HORIZONTAL_OFFSET);
+    int textY = xgram ? getContentTop() : Screen.dp(SPACING_START);
     if (title != null) {
       title.draw(c, textX, textY);
       textY += title.getHeight() + Screen.dp(SPACING);
@@ -207,6 +272,12 @@ public class PageBlockRelatedArticle extends PageBlock {
       int top = getContentTop();
       int right = viewWidth - Screen.dp(PageBlockRichText.TEXT_HORIZONTAL_OFFSET);
       int bottom = getContentTop() + Screen.dp(50f);
+      if (xgram) {
+        // XGram M3E: the 56dp thumbnail 16dp inside the tile's end
+        right = viewWidth - xgramTextX();
+        left = right - Screen.dp(XGRAM_THUMB);
+        bottom = top + Screen.dp(XGRAM_THUMB);
+      }
       if (receiver.needPlaceholder()) {
         preview.setBounds(left, top, right, bottom);
         if (preview.needPlaceholder()) {

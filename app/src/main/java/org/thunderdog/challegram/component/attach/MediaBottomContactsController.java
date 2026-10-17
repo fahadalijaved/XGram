@@ -94,6 +94,12 @@ public class MediaBottomContactsController extends MediaBottomBaseController<Voi
     buildContentView(true);
     setLayoutManager(new LinearLayoutManager(context(), RecyclerView.VERTICAL, false));
     setAdapter(adapter = new SimpleUsersAdapter(this, this, SimpleUsersAdapter.OPTION_CLICKABLE | SimpleUsersAdapter.OPTION_SELECTABLE, this));
+    RecyclerView.ItemDecoration xgramTiles = SimpleUsersAdapter.xgramNewTileDecoration();
+    if (xgramTiles != null) {
+      // XGram M3E: the contacts as segmented tiles on the sheet, items entering on the list springs
+      addItemDecoration(xgramTiles);
+      recyclerView.setItemAnimator(com.fahadali.xgram.appearance.XgramAppMotion.listAnimator());
+    } else
     recyclerView.setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, HIDE_PROGRESS_DURATION));
     tdlib.searchContacts(null, ContactsController.DISPLAY_LIMIT, this);
     return contentView;

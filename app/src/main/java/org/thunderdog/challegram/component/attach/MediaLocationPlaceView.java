@@ -114,6 +114,9 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
 
   @Override
   public void onActiveStateChanged (TimerView v, boolean isActive) {
+    if (xgram) {
+      return; // XGram: the remaining time is a ring around the leading visual, the text keeps its 16dp end
+    }
     int rightMargin = Screen.dp(IMAGE_RADIUS) + (timerView.isTimerVisible() ? Screen.dp(26f) : 0);
     Views.setRightMargin(titleView, rightMargin);
     Views.setRightMargin(addressView, rightMargin);
@@ -194,6 +197,205 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
 
     Views.setClickable(this);
     RippleSupport.setSimpleWhiteBackground(this, themeProvider);
+
+    if (xgram) {
+      xgramInit(big);
+    }
+  }
+
+  // XGram M3E: a two-line list tile (the list decoration makes its background a segmented surfaceBright tile). The
+  // leading visual is a 40dp container with 12dp corners: primaryContainer with the venue icon or the pin for a place,
+  // tertiaryContainer with the broadcast waves for live location (errorContainer while it offers to stop sharing),
+  // or the person's round avatar; a live share's remaining time is a wavy ring around it. Headline titleMedium in
+  // onSurface (error to stop sharing), supporting text bodyMedium in onSurfaceVariant. A picked place turns its tile
+  // secondaryContainer with the check badge on the leading visual, on a spring.
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private boolean xgramBig, xgramTint;
+  private int xgramLivePeriod;
+  private long xgramExpiresAt;
+  private boolean xgramChecked;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramCheck;
+  private @Nullable Drawable xgramPlaceIcon, xgramLiveIcon;
+
+  private void xgramInit (boolean big) {
+    this.xgramBig = big;
+    xgramPlaceIcon = Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_location_on_24));
+    xgramLiveIcon = Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_location_on_24));
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(titleView, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(addressView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+    if (themeProvider != null) {
+      themeProvider.removeThemeListenerByTarget(titleView);
+      themeProvider.addThemeTextColorListener(titleView, ColorId.text);
+    }
+    titleView.setTextColor(Theme.getColor(ColorId.text)); // onSurface: the place names are not links
+    timerView.setVisibility(GONE);
+    checkView.setVisibility(GONE);
+    final boolean rtl = Lang.rtl();
+    xgramTextParams(titleView, rtl, Screen.dp(10f), 0);
+    xgramTextParams(addressView, rtl, 0, Screen.dp(11f));
+    titleView.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
+    addressView.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
+  }
+
+  private static void xgramTextParams (TextView view, boolean rtl, int bottomMargin, int topMargin) {
+    FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) view.getLayoutParams();
+    params.leftMargin = Screen.dp(rtl ? 16f : com.fahadali.xgram.appearance.XgramR6B7Places.TEXT_START);
+    params.rightMargin = Screen.dp(rtl ? com.fahadali.xgram.appearance.XgramR6B7Places.TEXT_START : 16f);
+    params.bottomMargin = bottomMargin;
+    params.topMargin = topMargin;
+    view.setLayoutParams(params);
+  }
+
+  @Override
+  protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+    super.onSizeChanged(w, h, oldw, oldh);
+    if (xgram && w > 0 && h > 0) {
+      // The 40dp leading visual, 16dp from the start, centred vertically
+      final int size = Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.LEADING);
+      final int left = Lang.rtl() ? w - Screen.dp(16f) - size : Screen.dp(16f);
+      final int top = (h - size) / 2;
+      receiver.setBounds(left, top, left + size, top + size);
+      if (progressComponent != null) {
+        progressComponent.setBounds(left, top, left + size, top + size);
+      }
+    }
+  }
+
+  private float xgramCheckFactor () {
+    return xgramCheck != null ? xgramCheck.getValue() : (xgramChecked ? 1f : 0f);
+  }
+
+  /** A picked place: its tile in secondaryContainer and the check badge, springing while on screen. */
+  private void xgramSetChecked (boolean checked, boolean animated) {
+    this.xgramChecked = checked;
+    final float target = checked ? 1f : 0f;
+    if (xgramCheck == null) {
+      if (!checked) {
+        return; // never checked: nothing to undo
+      }
+      xgramCheck = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> {
+        xgramApplyTileColor();
+        invalidate();
+      });
+      xgramCheck.setThreshold(.005f);
+    }
+    if (animated && isAttachedToWindow() && getWidth() > 0) {
+      xgramCheck.animateTo(target);
+    } else if (xgramCheck.getValue() != target || xgramCheck.isRunning()) {
+      xgramCheck.setValue(target);
+      xgramApplyTileColor();
+      invalidate();
+    }
+  }
+
+  private void xgramApplyTileColor () {
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.findMorph(getBackground());
+    if (morph == null) {
+      return;
+    }
+    final float f = me.vkryl.core.MathUtils.clamp(xgramCheckFactor());
+    if (f <= 0f) {
+      morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+    } else if (f >= 1f) {
+      morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    } else {
+      morph.setColor(ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), f));
+    }
+  }
+
+  private void xgramDraw (Canvas c) {
+    if (xgramCheck == null || !xgramCheck.isRunning()) {
+      xgramApplyTileColor(); // the list gives the tile its background after binding: settle its colour here
+    }
+    final float cx = receiver.centerX(), cy = receiver.centerY();
+    final float alpha = (flags & FLAG_FADED) != 0 ? .6f : 1f;
+    final float leading = com.fahadali.xgram.appearance.XgramR6B7Places.LEADING;
+    if ((flags & FLAG_LIVE_LOCATION) != 0) {
+      final boolean red = (flags & FLAG_RED) != 0;
+      final int containerRole = red ? com.fahadali.xgram.appearance.XgramExpressive.ERROR_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.TERTIARY_CONTAINER;
+      final int contentRole = red ? com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.ON_TERTIARY_CONTAINER;
+      final int content = com.fahadali.xgram.appearance.XgramExpressive.color(contentRole);
+      final float progressFactor = progressAnimator != null ? progressAnimator.getFloatValue() : 0f;
+      com.fahadali.xgram.appearance.XgramR6B7Places.drawContainer(c, cx, cy, leading, com.fahadali.xgram.appearance.XgramR6B7Places.LEADING_CORNER,
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(containerRole), alpha));
+      if (progressFactor < 1f) {
+        com.fahadali.xgram.appearance.XgramR6B7Places.drawIcon(c, xgramLiveIcon, cx, cy, content, (1f - progressFactor) * alpha);
+        if ((flags & FLAG_NEED_WAVES) != 0 && !com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+          long delay = DrawAlgorithms.drawWaves(c, cx, cy - Screen.dp(2f), ColorUtils.alphaColor((1f - progressFactor) * alpha, content), false, nextScheduleTime);
+          if (delay != -1) {
+            nextScheduleTime = SystemClock.uptimeMillis() + delay;
+            postInvalidateDelayed(delay, receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom());
+          }
+        }
+      }
+      if (progressComponent != null) {
+        progressComponent.forceColor(content);
+        progressComponent.draw(c);
+      }
+      xgramDrawRing(c, cx, cy, alpha);
+      return;
+    }
+
+    if (avatarPlaceholder != null) {
+      avatarPlaceholder.draw(c, cx, cy);
+      xgramDrawRing(c, cx, cy, alpha);
+      return;
+    }
+
+    final boolean avatar = !xgramTint && receiver.getCurrentFile() != null;
+    if (letters != null && receiver.getCurrentFile() == null) {
+      // A person without a photo: their accent circle with the initials, as their avatar elsewhere
+      c.drawCircle(cx, cy, Screen.dp(IMAGE_RADIUS), Paints.fillingPaint(ColorUtils.alphaColor(alpha, accentColor != null ? accentColor.getPrimaryColor() : Theme.getColor(ColorId.fileAttach))));
+      Paints.drawLetters(c, letters, cx - lettersWidth / 2, cy + Screen.dp(6f), 17f, alpha);
+    } else if (!avatar) {
+      com.fahadali.xgram.appearance.XgramR6B7Places.drawContainer(c, cx, cy, leading, com.fahadali.xgram.appearance.XgramR6B7Places.LEADING_CORNER,
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER), alpha));
+      final int content = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
+      if (receiver.needPlaceholder()) {
+        com.fahadali.xgram.appearance.XgramR6B7Places.drawIcon(c, xgramPlaceIcon, cx, cy, content, alpha - receiver.getDisplayAlpha());
+      }
+      receiver.setPorterDuffColorFilter(content, 1f, false); // the venue glyph in onPrimaryContainer
+      if (alpha != 1f) {
+        receiver.setPaintAlpha(alpha);
+      }
+      receiver.draw(c);
+      if (alpha != 1f) {
+        receiver.restorePaintAlpha();
+      }
+    } else {
+      receiver.setPorterDuffColorFilter(ColorId.NONE, 1f, true); // a photo: no tint
+      if (receiver.needPlaceholder()) {
+        c.drawCircle(cx, cy, Screen.dp(IMAGE_RADIUS), Paints.fillingPaint(ColorUtils.alphaColor(alpha, Theme.placeholderColor())));
+      }
+      if (alpha != 1f) {
+        receiver.setPaintAlpha(alpha);
+      }
+      receiver.draw(c);
+      if (alpha != 1f) {
+        receiver.restorePaintAlpha();
+      }
+    }
+    xgramDrawRing(c, cx, cy, alpha);
+    final float check = xgramCheckFactor();
+    if (check > 0f) {
+      final float half = Screen.dpf(leading) / 2f;
+      final float bx = Lang.rtl() ? cx - half + Screen.dp(2f) : cx + half - Screen.dp(2f);
+      com.fahadali.xgram.appearance.XgramR5Security.drawCheckBadge(c, bx, cy + half - Screen.dp(2f), check, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER));
+    }
+  }
+
+  private void xgramDrawRing (Canvas c, float cx, float cy, float alpha) {
+    if (xgramExpiresAt == 0 || xgramLivePeriod <= 0) {
+      return;
+    }
+    long delay = com.fahadali.xgram.appearance.XgramR6B7Places.drawLiveRing(c, cx, cy, com.fahadali.xgram.appearance.XgramR6B7Places.LEADING,
+      (flags & FLAG_LIVE_LOCATION) != 0 ? com.fahadali.xgram.appearance.XgramExpressive.TERTIARY : com.fahadali.xgram.appearance.XgramExpressive.PRIMARY,
+      xgramLivePeriod, xgramExpiresAt, alpha);
+    if (delay != -1) {
+      final int pad = Screen.dp(8f);
+      postInvalidateDelayed(delay, receiver.getLeft() - pad, receiver.getTop() - pad, receiver.getRight() + pad, receiver.getBottom() + pad);
+    }
   }
 
   // Adapter
@@ -223,6 +425,11 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
     clearLiveLocation();
     setIsFaded(isFaded);
     timerView.setLivePeriod(livePeriod, expiresAt);
+    if (xgram) {
+      xgramLivePeriod = livePeriod;
+      xgramExpiresAt = expiresAt;
+      xgramSetChecked(false, false);
+    }
     titleView.setText(title);
     addressView.setText(subtitle);
     boolean needInvalidate = false;
@@ -241,11 +448,13 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
   }
 
   public void setLocationImage (ImageFile image) {
+    xgramTint = true; // XGram: a venue glyph, tinted in its container
     receiver.setRadius(0);
     receiver.requestFile(image);
   }
 
   public void setRoundedLocationImage (ImageFile image) {
+    xgramTint = false; // XGram: a photo
     receiver.setRadius(Screen.dp(IMAGE_RADIUS));
     receiver.requestFile(image);
   }
@@ -266,10 +475,16 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
       addressView.setText(location.getAddress());
     }
     checkView.forceSetChecked(isChecked);
+    if (xgram) {
+      xgramTint = true;
+      xgramLivePeriod = 0;
+      xgramExpiresAt = 0;
+      xgramSetChecked(isChecked, false);
+    }
   }
 
   public void setDefaultLiveLocation (boolean needWaves) {
-    setLiveLocation(Lang.getString(R.string.ShareLiveLocation), Lang.getString(R.string.SendLiveLocationInfo), false, needWaves, false, 0, 0);
+    setLiveLocation(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.ShareLiveLocation, R.string.XgramR6B7ShareLiveLocation), Lang.getString(R.string.SendLiveLocationInfo), false, needWaves, false, 0, 0); // XGram: sentence case
   }
 
   private Runnable subtitleUpdater;
@@ -313,6 +528,12 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
     addressView.setText(subtitle);
     receiver.requestFile(null);
     checkView.forceSetChecked(false);
+    if (xgram) {
+      xgramLivePeriod = livePeriod;
+      xgramExpiresAt = expiresAt;
+      xgramSetChecked(false, false);
+      invalidate(); // the container switches between tertiary and error
+    }
     receiver.invalidate();
   }
 
@@ -325,6 +546,7 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
     if (nowInProgress != inProgress) {
       if (progressAnimator == null) {
         progressAnimator = new BoolAnimator(ANIMATOR_PROGRESS, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(progressAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
       }
       if (progressComponent == null) {
         progressComponent = ProgressComponent.simpleInstance(this, 5f, receiver.getLeft(), receiver.getTop(), receiver.getWidth(), receiver.getHeight());
@@ -354,6 +576,9 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
     } else {
       checkView.forceSetChecked(isChecked);
     }
+    if (xgram) {
+      xgramSetChecked(isChecked, animated);
+    }
   }
 
   // Drawing
@@ -362,6 +587,10 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
 
   @Override
   protected void onDraw (Canvas c) {
+    if (xgram) {
+      xgramDraw(c);
+      return;
+    }
     int cx = receiver.centerX();
     int cy = receiver.centerY();
 

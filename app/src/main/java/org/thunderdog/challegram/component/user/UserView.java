@@ -574,6 +574,54 @@ public class UserView extends BaseView implements Destroyable, RemoveHelper.Remo
       checkBoxHelper = new SimplestCheckBoxHelper(this);
     }
     checkBoxHelper.setIsChecked(isChecked, animated);
+    if (xgramSelectableTile) {
+      xgramSetTileSelected(isChecked, animated);
+    }
+  }
+
+  // XGram M3E: a selectable tile (the attach sheet's contacts): a selected contact's tile turns secondaryContainer on
+  // the effects spring, under the avatar's check badge (drawn ringed in the tile's colour, see xgramDraw).
+
+  private boolean xgramSelectableTile;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramTileSpring;
+
+  public void xgramSetSelectableTile (boolean selectable) {
+    this.xgramSelectableTile = selectable && xgram();
+  }
+
+  private void xgramSetTileSelected (boolean selected, boolean animated) {
+    final float target = selected ? 1f : 0f;
+    if (xgramTileSpring == null) {
+      if (!selected) {
+        return;
+      }
+      xgramTileSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> xgramApplyTileColor(value));
+      xgramTileSpring.setThreshold(.005f);
+    }
+    if (animated && isAttachedToWindow() && getWidth() > 0) {
+      xgramTileSpring.animateTo(target);
+    } else {
+      xgramTileSpring.setValue(target);
+      xgramApplyTileColor(target);
+    }
+  }
+
+  private void xgramApplyTileColor (float value) {
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.findMorph(getBackground());
+    if (morph == null) {
+      return;
+    }
+    final float f = me.vkryl.core.MathUtils.clamp(value);
+    if (f <= 0f) {
+      morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+    } else if (f >= 1f) {
+      morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    } else {
+      morph.setColor(me.vkryl.core.ColorUtils.fromToArgb(
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT),
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), f));
+    }
+    invalidate();
   }
 
   @Override

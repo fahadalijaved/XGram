@@ -118,7 +118,7 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
       }
       if (bitmap != null) {
         opts.icon(BitmapDescriptorFactory.fromBitmap(bitmap));
-        opts.anchor(0.5f, 0.907f);
+        opts.anchor(0.5f, xgram ? com.fahadali.xgram.appearance.XgramR6B7Places.markerAnchorY() : 0.907f); // XGram: the teardrop's tip
       }
       return opts;
     }
@@ -194,6 +194,9 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
     }
 
     private @Nullable Bitmap newBitmap (MarkerData data, TdlibAccentColor accentColor, Letters letters, TdApi.File avatar) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return xgramNewBitmap(data, letters, avatar);
+      }
       Bitmap result = null;
       boolean success = false;
       try {
@@ -221,6 +224,48 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
         result = null;
       }
       return result;
+    }
+
+    // XGram M3E: a 44dp avatar in a 3dp primary ring on a teardrop pin (initials in labelLarge on primaryContainer
+    // until the photo loads), anchored at the pin's tip.
+
+    private boolean xgram;
+
+    private @Nullable Bitmap xgramNewBitmap (MarkerData data, Letters letters, TdApi.File avatar) {
+      Bitmap result = null;
+      try {
+        result = Bitmap.createBitmap(Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.MARKER_WIDTH), Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.MARKER_HEIGHT), Bitmap.Config.ARGB_8888);
+        result.eraseColor(0);
+        Canvas c = new Canvas(result);
+        com.fahadali.xgram.appearance.XgramR6B7Places.drawMarkerPin(c, 1f);
+        data.canvas = c;
+        data.bitmap = result;
+        data.xgram = true;
+        ImageFile imageFile = null;
+        if (avatar != null) {
+          imageFile = new ImageFile(tdlib, avatar);
+          imageFile.setSwOnly(true);
+          imageFile.setSize(ChatView.getDefaultAvatarCacheSize());
+          synchronized (ImageCache.getReferenceCounters()) {
+            Bitmap avatarBitmap = ImageCache.instance().getBitmap(imageFile);
+            if (U.isValidBitmap(avatarBitmap)) {
+              com.fahadali.xgram.appearance.XgramR6B7Places.drawMarkerAvatar(c, avatarBitmap);
+              return result;
+            }
+          }
+        }
+        com.fahadali.xgram.appearance.XgramR6B7Places.drawMarkerLetters(c, letters != null ? letters.text : null);
+        data.requestFile(imageFile);
+        return result;
+      } catch (Throwable t) {
+        Log.w(t);
+        if (result != null) {
+          try {
+            result.recycle();
+          } catch (Throwable ignored) { }
+        }
+        return null;
+      }
     }
 
     public void setPosition (LocationPoint<MarkerData> point) {
@@ -271,6 +316,9 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
     @Override
     public void imageLoaded (final ImageFile file, boolean successful, Bitmap bitmap) {
       if (successful && isRequested(file) && canvas != null && U.isValidBitmap(bitmap)) {
+        if (xgram) {
+          com.fahadali.xgram.appearance.XgramR6B7Places.drawMarkerAvatar(canvas, bitmap); // XGram: in the pin's ring
+        } else
         drawAvatar(canvas, bitmap);
         UI.post(() -> {
           if (isRequested(file)) {
@@ -336,6 +384,12 @@ final class MapGoogleController extends MapController<MapView, MapGoogleControll
 
   private MapStyleOptions darkMapTheme;
   private MapStyleOptions getDarkMapTheme () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the night map in the dark scheme's surface roles (black with Pure black), built when applied
+      try {
+        return new MapStyleOptions(com.fahadali.xgram.appearance.XgramR6B7Places.nightMapStyle());
+      } catch (Throwable ignored) { }
+    }
     if (darkMapTheme == null) {
       darkMapTheme = MapStyleOptions.loadRawResourceStyle(context, R.raw.maps_night);
     }

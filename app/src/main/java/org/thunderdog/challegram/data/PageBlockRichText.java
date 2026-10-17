@@ -141,6 +141,11 @@ public class PageBlockRichText extends PageBlock {
     super(context, kicker, quoteLevel);
     this.paddingTop = 16f;
     this.paddingBottom = 3f;
+    if (xgram()) {
+      // XGram M3E: the kicker in labelMedium, primary
+      setText(new TdApi.RichTextBold(kicker.kicker), xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, true, false), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_PRIMARY, Text.FLAG_ARTICLE, openParameters);
+      return;
+    }
     setText(new TdApi.RichTextBold(kicker.kicker), getCaptionProvider(), TextColorSets.InstantView.CAPTION, Text.FLAG_ARTICLE, openParameters);
     // setPadding(10f);
   }
@@ -221,6 +226,13 @@ public class PageBlockRichText extends PageBlock {
 
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockRelatedArticles articles, int quoteLevel, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     super(context, articles, quoteLevel);
+    if (xgram()) {
+      // XGram M3E: a section header (titleSmall, primary) over the related article tiles
+      setText(new TdApi.RichTextBold(articles.header), xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_S, true, false), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_PRIMARY, openParameters);
+      this.paddingTop = 16f;
+      this.paddingBottom = 8f;
+      return;
+    }
     setText(new TdApi.RichTextBold(articles.header), getParagraphProvider(), TextColorSets.InstantView.CAPTION, openParameters);
   }
 
@@ -239,6 +251,15 @@ public class PageBlockRichText extends PageBlock {
     this.paddingTop = 15f;
     this.paddingBottom = 12f;
     setText(details.header, getParagraphProvider(), TextColorSets.InstantView.NORMAL, Text.FLAG_ARTICLE, openParameters);
+    if (xgram()) {
+      // XGram M3E: an expandable tile (surfaceContainer, 20dp corners, 16dp in) whose chevron turns on a spring; no
+      // full-width separator under it
+      com.fahadali.xgram.appearance.XgramAppMotion.use(detailsOpened, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, false);
+      this.xgramCard = XGRAM_CARD_SINGLE;
+      this.textHorizontalOffset = XGRAM_CARD_INSET + 16f;
+      this.paddingTop += XGRAM_CARD_MARGIN;
+      this.paddingBottom += XGRAM_CARD_MARGIN;
+    }
   }
 
   public boolean toggleDetailsOpened () {
@@ -263,7 +284,7 @@ public class PageBlockRichText extends PageBlock {
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlockChatLink chatLink, int quoteLevel, boolean isOverlay, int viewCount, @Nullable TdlibUi.UrlOpenParameters openParameters) {
     super(context, chatLink, quoteLevel);
     this.paddingTop = this.paddingBottom = 16f;
-    setText(new TdApi.RichTextBold(new TdApi.RichTextPlain(chatLink.title)), getParagraphProvider(), isOverlay ? TextColorSets.InstantView.CHAT_LINK_OVERLAY : TextColorSets.InstantView.NORMAL, openParameters);
+    setText(new TdApi.RichTextBold(new TdApi.RichTextPlain(chatLink.title)), xgram() ? xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, true, false) : getParagraphProvider(), isOverlay ? TextColorSets.InstantView.CHAT_LINK_OVERLAY : TextColorSets.InstantView.NORMAL, openParameters); // XGram: the channel's name in titleMedium
     this.forceBackground = isOverlay;
     this.backgroundColorId = isOverlay ? ColorId.iv_chatLinkOverlayBackground : ColorId.iv_chatLinkBackground;
     this.clickHelper = new ClickHelper(new ClickHelper.Delegate() {
@@ -310,7 +331,7 @@ public class PageBlockRichText extends PageBlock {
       text = title;
     }*/
     context.runOnUiThreadOptional(() -> {
-      int avatarSize = (getComputedHeight() - Screen.dp(8f) * 2);
+      int avatarSize = xgram() ? Screen.dp(40f) : (getComputedHeight() - Screen.dp(8f) * 2); // XGram M3E: 40dp
       avatarFile = context.tdlib().chatAvatar(chat.id);
       avatarPlaceholder = context.tdlib().chatPlaceholder(chat, false, Screen.px(avatarSize / 2f), null);
       currentViews.invalidateContent(this);
@@ -365,6 +386,42 @@ public class PageBlockRichText extends PageBlock {
       }
     }
     this.textHorizontalOffset = TEXT_HORIZONTAL_OFFSET_PULL_QUOTE;
+    if (xgram()) {
+      // XGram M3E: the pull quote (and its credit) in a surfaceContainer card with 20dp corners, 16dp in
+      final boolean hasCredit = !Td.isEmpty(pullQuote.credit);
+      this.xgramCard = isCredit ? XGRAM_CARD_BOTTOM : hasCredit ? XGRAM_CARD_TOP : XGRAM_CARD_SINGLE;
+      this.textHorizontalOffset = XGRAM_CARD_INSET + 16f;
+      if (xgramCard != XGRAM_CARD_BOTTOM) {
+        this.paddingTop += XGRAM_CARD_MARGIN + 12f;
+      }
+      if (xgramCard != XGRAM_CARD_TOP) {
+        this.paddingBottom += XGRAM_CARD_MARGIN + 12f;
+      }
+    }
+  }
+
+  // XGram M3E: cards and tiles drawn behind a block (the pull quote's card, a details header's tile)
+
+  private static final int XGRAM_CARD_NONE = 0, XGRAM_CARD_SINGLE = 1, XGRAM_CARD_TOP = 2, XGRAM_CARD_BOTTOM = 3;
+  private static final float XGRAM_CARD_INSET = 16f, XGRAM_CARD_MARGIN = 4f;
+  private int xgramCard = XGRAM_CARD_NONE;
+  private final float[] xgramRadii = new float[8];
+  private final android.graphics.Path xgramPath = new android.graphics.Path();
+  private final RectF xgramRect = new RectF();
+
+  /** The card part of this block in {@code role}: rounded {@code cornerDp} on the open sides, 16dp in from the sides. */
+  private void xgramDrawCard (Canvas c, int viewWidth, int viewHeight, int role, float cornerDp) {
+    final float margin = Screen.dpf(XGRAM_CARD_MARGIN);
+    final float top = xgramCard == XGRAM_CARD_BOTTOM ? 0f : margin;
+    final float bottom = xgramCard == XGRAM_CARD_TOP ? viewHeight : viewHeight - margin;
+    xgramRect.set(Screen.dpf(XGRAM_CARD_INSET), top, viewWidth - Screen.dpf(XGRAM_CARD_INSET), bottom);
+    final float r = Math.min(Screen.dpf(cornerDp), Math.min(xgramRect.width(), xgramRect.height()) / 2f);
+    final float rTop = xgramCard == XGRAM_CARD_BOTTOM ? 0f : r, rBottom = xgramCard == XGRAM_CARD_TOP ? 0f : r;
+    xgramRadii[0] = xgramRadii[1] = xgramRadii[2] = xgramRadii[3] = rTop;
+    xgramRadii[4] = xgramRadii[5] = xgramRadii[6] = xgramRadii[7] = rBottom;
+    xgramPath.rewind();
+    xgramPath.addRoundRect(xgramRect, xgramRadii, android.graphics.Path.Direction.CW);
+    c.drawPath(xgramPath, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(role)));
   }
 
   public PageBlockRichText (ViewController<?> context, TdApi.PageBlock mediaBlock, int quoteLevel, TdApi.PageBlockCaption caption, boolean isCredit, boolean isCover, @Nullable TdlibUi.UrlOpenParameters openParameters) {
@@ -564,6 +621,11 @@ public class PageBlockRichText extends PageBlock {
       if (forceBackground && backgroundColorId != ColorId.NONE) {
         c.drawRect(0, 0, viewWidth, getComputedHeight(), Paints.fillingPaint(Theme.getColor(backgroundColorId)));
       }
+      if (xgramCard != XGRAM_CARD_NONE) {
+        // XGram M3E: the details tile (20dp, as list tiles) or the pull quote card (20dp)
+        xgramDrawCard(c, viewWidth, view.getMeasuredHeight(), com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER,
+          detailsOpened != null ? com.fahadali.xgram.appearance.XgramExpressive.LIST_OUTER_CORNER : com.fahadali.xgram.appearance.XgramExpressive.CORNER_L_INC);
+      }
 
       if (needAvatar) {
         int avatarSize = Screen.dp(40f);
@@ -588,7 +650,7 @@ public class PageBlockRichText extends PageBlock {
       for (int extraLevel = 0; extraLevel < quoteLevel; extraLevel++) {
         final int lineColor = Theme.getColor(ColorId.iv_blockQuoteLine);
         RectF rectF = Paints.getRectF();
-        int lineWidth = Screen.dp(3f);
+        int lineWidth = Screen.dp(xgram() ? 4f : 3f); // XGram M3E: a 4dp full-corner primary bar
         int linePadding = Screen.dp(8f) / 2;
         rectF.top = textTop - linePadding;
         rectF.bottom = textTop + linePadding + text.getHeight();
@@ -627,6 +689,7 @@ public class PageBlockRichText extends PageBlock {
         int iconLeft = textLeft - Screen.dp(18f);
         int iconTop = textTop + text.getLineCenterY();
         DrawAlgorithms.drawCollapse(c, iconLeft, iconTop, Theme.getColor(ColorId.iv_icon), detailsOpened.getFloatValue(), 0f);
+        if (!xgram()) // XGram M3E: the tile is the boundary, no separator
         c.drawRect(0, view.getMeasuredHeight() - Screen.separatorSize(), viewWidth, view.getMeasuredHeight(), Paints.fillingPaint(Theme.getColor(ColorId.iv_separator)));
       }
 
@@ -635,7 +698,7 @@ public class PageBlockRichText extends PageBlock {
         textTop -= subtitleFactor * subtitle.getHeight() / 2f;
         int restoreCount = Views.save(c);
         int avatarPadding = Screen.dp(8f);
-        int avatarSize = getComputedHeight() - avatarPadding * 2;
+        int avatarSize = xgram() ? Screen.dp(40f) : getComputedHeight() - avatarPadding * 2; // XGram M3E: the 40dp list avatar
         int cx = (int) (textLeft + avatarSize / 2f - (forceBackground ? avatarPadding / 2 : 0) - (avatarSize + avatarPadding) * (1f - subtitleFactor));
         int cy = getComputedHeight() / 2;
         c.drawCircle(cx, cy, avatarSize / 2f, Paints.fillingPaint(ColorUtils.alphaColor(subtitleFactor, Theme.placeholderColor())));
@@ -665,7 +728,24 @@ public class PageBlockRichText extends PageBlock {
 
   private static TextStyleProvider titleProvider, subtitleProvider, authorProvider, footerProvider, paragraphProvider, headerProvider, subheaderProvider, paragraphMonoProvider, listTextProvider, blockQuoteProvider, pullQuoteProvider, captionProvider, creditProvider;
 
+  // XGram M3E: Instant View in Google Sans Flex on the type scale. Title headlineMedium, subtitle titleMedium, header
+  // titleLarge, subheader titleMedium, paragraphs and lists bodyLarge, captions and credits bodySmall, author and
+  // footer labelMedium, kicker labelMedium in primary, pull quotes titleLarge. Bold-only blocks (title, headers,
+  // kicker) keep their style's weight; texts with entities get the emphasized weight for bold.
+
+  private static boolean xgram () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  private static TextStyleProvider xgramProvider (int ts, boolean boldOnly, boolean emphasized) {
+    final float size = com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(ts);
+    return boldOnly ? com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(ts, emphasized, size) : com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(ts, size);
+  }
+
   public static TextStyleProvider getTitleProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_M, true, true);
+    }
     if (titleProvider == null) {
       titleProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       titleProvider.setTextSize(TEXT_SIZE_TITLE);
@@ -674,6 +754,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getSubtitleProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false, false);
+    }
     if (subtitleProvider == null) {
       subtitleProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       subtitleProvider.setTextSize(TEXT_SIZE_SUBTITLE);
@@ -682,6 +765,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getAuthorProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false, false);
+    }
     if (authorProvider == null) {
       authorProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       authorProvider.setTextSize(TEXT_SIZE_AUTHOR);
@@ -690,6 +776,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getFooterProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false, false);
+    }
     if (footerProvider == null) {
       footerProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       footerProvider.setTextSize(TEXT_SIZE_FOOTER);
@@ -698,6 +787,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getBlockQuoteProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false, false);
+    }
     if (blockQuoteProvider == null) {
       blockQuoteProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       blockQuoteProvider.setTextSize(TEXT_SIZE_BLOCK_QUOTE);
@@ -706,6 +798,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getPullQuoteProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L, false, false);
+    }
     if (pullQuoteProvider == null) {
       pullQuoteProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       pullQuoteProvider.setTextSize(TEXT_SIZE_PULL_QUOTE);
@@ -714,6 +809,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getHeaderProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_L, true, false);
+    }
     if (headerProvider == null) {
       headerProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       headerProvider.setTextSize(TEXT_SIZE_HEADER);
@@ -722,6 +820,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getSubheaderProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, true, false);
+    }
     if (subheaderProvider == null) {
       subheaderProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       subheaderProvider.setTextSize(TEXT_SIZE_SUBHEADER);
@@ -730,6 +831,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getParagraphProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false, false);
+    }
     if (paragraphProvider == null) {
       paragraphProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       paragraphProvider.setTextSize(TEXT_SIZE_PARAGRAPH);
@@ -746,6 +850,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getListTextProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false, false);
+    }
     if (listTextProvider == null) {
       listTextProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       listTextProvider.setTextSize(TEXT_SIZE_LIST_TEXT);
@@ -754,6 +861,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getCaptionProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, false, false);
+    }
     if (captionProvider == null) {
       captionProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       captionProvider.setTextSize(TEXT_SIZE_CAPTION);
@@ -762,6 +872,9 @@ public class PageBlockRichText extends PageBlock {
   }
 
   public static TextStyleProvider getCreditProvider () {
+    if (xgram()) {
+      return xgramProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, false, false);
+    }
     if (creditProvider == null) {
       creditProvider = new TextStyleProvider(Fonts.newRobotoStorage());
       creditProvider.setTextSize(TEXT_SIZE_CREDIT);

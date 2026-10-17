@@ -204,15 +204,51 @@ public class PageBlockTable extends PageBlock implements Destroyable {
     return this.tableHeight;
   }
 
+  // XGram M3E: the table is a surfaceContainerLow card with 16dp corners; header cells in surfaceContainerHigh, striped
+  // rows in surfaceContainer, borders in outlineVariant, all inside the card's shape. It still scrolls sideways.
+
+  private final android.graphics.Path xgramCard = new android.graphics.Path();
+  private final android.graphics.RectF xgramCardRect = new android.graphics.RectF();
+
+  private void xgramDrawCells (Canvas c, TdApi.PageBlockTable table) {
+    final float left = Screen.dp(MARGIN_HORIZONTAL), top = getContentTop();
+    xgramCardRect.set(left, top, left + customTableWidth, top + tableHeight);
+    final float r = Math.min(Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L), Math.min(xgramCardRect.width(), xgramCardRect.height()) / 2f);
+    xgramCard.rewind();
+    xgramCard.addRoundRect(xgramCardRect, r, r, android.graphics.Path.Direction.CW);
+    c.drawPath(xgramCard, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW)));
+    final int saveCount = c.save();
+    c.clipPath(xgramCard);
+    for (Cell cell : cellsList) {
+      if (cell.cell.isHeader) {
+        c.drawRect(cell.bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+      } else if (table.isStriped && cell.cellPositionStartY() % 2 == 0) {
+        c.drawRect(cell.bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER)));
+      }
+      if (table.isBordered) {
+        c.drawRect(cell.bounds, Paints.strokeSeparatorPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT)));
+      }
+    }
+    c.restoreToCount(saveCount);
+  }
+
   @Override
   protected <T extends View & DrawableProvider> void drawInternal (T view, Canvas c, Receiver preview, Receiver receiver, @Nullable ComplexReceiver iconReceiver) {
     final TdApi.PageBlockTable table = (TdApi.PageBlockTable) this.block;
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgram) {
+      xgramDrawCells(c, table);
+    }
     for (Cell cell : cellsList) {
+      if (xgram) {
+        // XGram: the backgrounds and borders are drawn in the card above
+      } else {
       if (cell.cell.isHeader || (table.isStriped && cell.cellPositionStartY() % 2 == 0)) {
         c.drawRect(cell.bounds, Paints.fillingPaint(Theme.backgroundColor()));
       }
       if (table.isBordered) {
         c.drawRect(cell.bounds, Paints.strokeSeparatorPaint(Theme.separatorColor()));
+      }
       }
       if (cell.text != null) {
         int restoreCount = Views.save(c);

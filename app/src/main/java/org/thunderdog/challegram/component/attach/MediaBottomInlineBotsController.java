@@ -45,14 +45,29 @@ public class MediaBottomInlineBotsController extends MediaBottomBaseController<V
     buildContentView(true);
     setLayoutManager(new LinearLayoutManager(context(), RecyclerView.VERTICAL, false));
     setAdapter(adapter = new SimpleUsersAdapter(this, this, SimpleUsersAdapter.OPTION_CLICKABLE, this));
+    RecyclerView.ItemDecoration xgramTiles = SimpleUsersAdapter.xgramNewTileDecoration();
+    if (xgramTiles != null) {
+      addItemDecoration(xgramTiles); // XGram M3E: the bots as segmented tiles on the sheet
+      recyclerView.setItemAnimator(com.fahadali.xgram.appearance.XgramAppMotion.listAnimator());
+    }
     tdlib.client().send(new TdApi.GetTopChats(new TdApi.TopChatCategoryInlineBots(), 50), this);
     return contentView;
   }
 
   private SimpleUsersAdapter adapter;
 
+  @Override
+  protected int xgramErrorIcon () {
+    return com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_bots_56); // XGram: no bots: a bot
+  }
+
   protected void displayBots (final List<TGUser> users) {
     if (users.isEmpty()) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the empty state (XgramListStateView) says what is missing, not "Nothing found"
+        showError(org.thunderdog.challegram.core.Lang.getString(R.string.XgramR6B7NoInlineBots), null, null, true);
+        return;
+      }
       showError(R.string.NothingFound, 0, null, true);
     } else {
       hideProgress(() -> {

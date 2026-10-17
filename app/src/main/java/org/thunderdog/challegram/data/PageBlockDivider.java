@@ -63,6 +63,13 @@ public class PageBlockDivider extends PageBlock {
   @Override
   public void drawInternal (View view, Canvas c, Receiver preview, Receiver receiver, ComplexReceiver iconReceiver) {
     int top = Screen.dp(9f);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: a 1dp outlineVariant divider, inset 16dp from the content edges
+      final int inset = Screen.dp(16f);
+      c.drawRect(getMinimumContentPadding(true) + inset, top, view.getMeasuredWidth() - getMinimumContentPadding(false) - inset, top + Screen.dp(1f),
+        Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT)));
+      return;
+    }
     int viewWidth = (view.getMeasuredWidth() - getTotalContentPadding()) / 2;
     int x = viewWidth - viewWidth / 2 + getMinimumContentPadding(true);
     c.drawRect(x, top, x + viewWidth, top + Screen.dp(1f), Paints.fillingPaint(Theme.getColor(ColorId.iv_separator)));

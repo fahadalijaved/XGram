@@ -147,7 +147,8 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
   protected View onCreateView (Context context) {
     final int mapHeight = MediaLocationMapView.getMapHeight(mediaLayout.inSpecificMode());
     final int barHeight = SettingHolder.measureHeightForType(ListItem.TYPE_ATTACH_LOCATION);
-    final int marginOffset = Screen.dp(4f);
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final int marginOffset = Screen.dp(xgram ? 8f : 4f); // XGram M3E: 8dp between the map card and the send tile
     final int totalHeaderSize = this.totalHeaderSize = mapHeight + barHeight + marginOffset;
 
     // Map wrap
@@ -178,7 +179,7 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
     // Recycler
 
     buildContentView(false);
-    recyclerView.setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, MOVE_MAP_DURATION));
+    recyclerView.setItemAnimator(xgram ? com.fahadali.xgram.appearance.XgramAppMotion.listAnimator() : new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, MOVE_MAP_DURATION));
     LinearLayoutManager manager = new LinearLayoutManager(context, RecyclerView.VERTICAL, false);
 
     settingsAdapter = new SettingsAdapter(this) {
@@ -204,8 +205,19 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
     ArrayList<ListItem> items = new ArrayList<>();
     items.add(paddingItem = new ListItem(ListItem.TYPE_PADDING).setHeight(totalHeaderSize));
     if (!mediaLayout.inSpecificMode() && !ChatId.isSecret(mediaLayout.getTargetChatId()) && !mediaLayout.areScheduledOnly()) {
-      items.add(liveItem = new ListItem(ListItem.TYPE_ATTACH_LOCATION, R.id.btn_shareLiveLocation));
+      liveItem = new ListItem(ListItem.TYPE_ATTACH_LOCATION, R.id.btn_shareLiveLocation);
+      if (xgram) {
+        // XGram M3E: the live location tile is a group of its own, 8dp under the send tile
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        items.add(liveItem);
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      } else
+      items.add(liveItem);
     }
+    if (xgram) {
+      // XGram M3E: a primary subheader (the list decoration colours it); the places follow as one group
+      items.add(new ListItem(ListItem.TYPE_HEADER, R.id.btn_places, 0, R.string.PullToSeePlaces));
+    } else
     items.add(new ListItem(ListItem.TYPE_HEADER, R.id.btn_places, 0, R.string.PullToSeePlaces).setTextColorId(ColorId.textLight));
     settingsAdapter.setItems(items, false);
 
@@ -297,9 +309,81 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
     mapWrap.addView(shadowView);
     settingsAdapter.addBoundShadow(recyclerView, shadowView, Screen.dp(10f));
 
+    if (xgram) {
+      xgramStyleSendTile(view, textWrap, mapHeight, barHeight, marginOffset);
+      shadowView.setVisibility(View.GONE); // XGram M3E: no shadows; the tiles sit on the sheet
+    }
+
     contentView.addView(mapWrap);
 
     return contentView;
+  }
+
+  // XGram M3E: the send row is a list tile (surfaceBright, 20dp corners pressing to 16dp, 16dp in from the sheet's
+  // sides) under the map card: the 40dp leading container (MediaLocationPointView) morphs from the location pin to
+  // send, the headline in titleMedium primary, the coordinates or address in bodyMedium onSurfaceVariant.
+
+  private void xgramStyleSendTile (View tile, FrameLayoutFix textWrap, int mapHeight, int barHeight, int marginOffset) {
+    final boolean rtl = Lang.rtl();
+    final int inset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, barHeight, Gravity.TOP);
+    params.topMargin = mapHeight + marginOffset;
+    params.leftMargin = params.rightMargin = inset;
+    tile.setLayoutParams(params);
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable morph = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(tile, 0,
+      com.fahadali.xgram.appearance.XgramExpressive.LIST_OUTER_CORNER, com.fahadali.xgram.appearance.XgramExpressive.LIST_PRESSED_CORNER);
+    morph.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+
+    // The leading container: 16dp into the tile
+    final int leadingBox = Screen.dp(16f + com.fahadali.xgram.appearance.XgramR6B7Places.LEADING + 16f);
+    params = FrameLayoutFix.newParams(leadingBox, barHeight, (rtl ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
+    params.topMargin = mapHeight + marginOffset;
+    if (rtl) {
+      params.rightMargin = inset;
+    } else {
+      params.leftMargin = inset;
+    }
+    locationView.setLayoutParams(params);
+    locationView.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
+
+    params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, barHeight, Gravity.TOP);
+    params.topMargin = mapHeight + marginOffset;
+    params.leftMargin = rtl ? inset + Screen.dp(16f) : inset + leadingBox;
+    params.rightMargin = rtl ? inset + leadingBox : inset + Screen.dp(16f);
+    textWrap.setLayoutParams(params);
+    textWrap.setPadding(0, 0, 0, 0);
+    Views.setRightMargin(textView, 0);
+    Views.setRightMargin(dataView, 0);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(textView, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(dataView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+    textView.setGravity((rtl ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
+    dataView.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
+    removeThemeListenerByTarget(textView);
+    textView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+    addThemeTextColorListener(textView, ColorId.textNeutral); // primary while Expressive design maps it
+    // The headline lifts and the supporting text rises in on the spatial spring
+    com.fahadali.xgram.appearance.XgramAppMotion.use(dataAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
+  }
+
+  /** XGram M3E: Telegram X's title case place headers, in sentence case while the English strings are in use. */
+  private @androidx.annotation.StringRes int xgramHeaderRes (@androidx.annotation.StringRes int res) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return res;
+    }
+    if (res == R.string.NearbyPlaces) {
+      return xgramIfEnglish(res, R.string.XgramR6B7NearbyPlaces);
+    } else if (res == R.string.FoundPlaces) {
+      return xgramIfEnglish(res, R.string.XgramR6B7FoundPlaces);
+    } else if (res == R.string.LoadingPlaces) {
+      return xgramIfEnglish(res, R.string.XgramR6B7FindingPlaces);
+    } else if (res == R.string.SendCurrentLocation) {
+      return xgramIfEnglish(res, R.string.XgramR6B7SendMyLocation);
+    }
+    return res;
+  }
+
+  private static int xgramIfEnglish (@androidx.annotation.StringRes int tgxRes, @androidx.annotation.StringRes int xgramRes) {
+    return com.fahadali.xgram.appearance.XgramR5Lists.sentence(tgxRes, xgramRes).equals(Lang.getString(xgramRes)) ? xgramRes : tgxRes;
   }
 
   @Override
@@ -440,12 +524,12 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
     locationView.setIsCustom(custom);
     if (custom) {
       if (selectedPlace == null) {
-        textView.setText(Lang.getString(R.string.SendCurrentLocation));
+        textView.setText(Lang.getString(xgramHeaderRes(R.string.SendCurrentLocation)));
         locationView.setIsPlace(false);
         setLocationData(MathUtils.roundDouble(location.getLatitude()) + ", " + MathUtils.roundDouble(location.getLongitude()));
       }
     } else {
-      textView.setText(Lang.getString(R.string.SendCurrentLocation));
+      textView.setText(Lang.getString(xgramHeaderRes(R.string.SendCurrentLocation)));
       locationView.setIsPlace(false);
       setLocationData(location.getAccuracy() > 0 ? Lang.plural(R.string.AccurateToMeters, (int) location.getAccuracy()) : null);
     }
@@ -503,7 +587,7 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
   }
 
   private void setPlacesHeader (int headerRes) {
-    setPlacesHeader(headerRes != 0 ? Lang.getString(headerRes) : "");
+    setPlacesHeader(headerRes != 0 ? Lang.getString(xgramHeaderRes(headerRes)) : "");
   }
 
   private void setPlacesHeader (CharSequence str) {
@@ -577,6 +661,11 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
 
   @Override
   protected int getInitialContentHeight () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the 8dp gap under the map card and the live tile's group spacers (8dp above and below it)
+      final boolean live = !(mediaLayout.inSpecificMode() || ChatId.isSecret(mediaLayout.getTargetChatId()) || mediaLayout.areScheduledOnly());
+      return getMapWrapHeight() + Screen.dp(8f) + (live ? SettingHolder.measureHeightForType(ListItem.TYPE_ATTACH_LOCATION) + Screen.dp(16f) : 0) + SettingHolder.measureHeightForType(ListItem.TYPE_HEADER) + Screen.dp(10f);
+    }
     return getMapWrapHeight() + (mediaLayout.inSpecificMode() || ChatId.isSecret(mediaLayout.getTargetChatId()) || mediaLayout.areScheduledOnly() ? 0 : SettingHolder.measureHeightForType(ListItem.TYPE_ATTACH_LOCATION)) + SettingHolder.measureHeightForType(ListItem.TYPE_HEADER) + Screen.dp(10f);
   }
 
@@ -618,6 +707,10 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
   private boolean showingPlacesFound;
 
   public void setPlaces (List<MediaLocationData> places, boolean areFound) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramSetPlaces(places, areFound);
+      return;
+    }
     List<MediaLocationData> showingPlaces = this.showingPlaces;
     boolean oldPlacesFound = this.showingPlacesFound;
     int oldItemCount = showingPlaces != null && !showingPlaces.isEmpty() ? showingPlaces.size() : 0;
@@ -661,6 +754,78 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
         settingsAdapter.notifyItemRangeInserted(headerItemCount + oldItemCount, newItemCount - oldItemCount);
       } else if (oldItemCount > newItemCount) {
         settingsAdapter.notifyItemRangeRemoved(headerItemCount + newItemCount, oldItemCount - newItemCount);
+      }
+    }
+    ((LinearLayoutManager) getLayoutManager()).scrollToPositionWithOffset(0, 0);
+  }
+
+  /**
+   * XGram M3E: as {@link #setPlaces}, with the Expressive list: the live location tile in its own group
+   * (SHADOW_TOP, the tile, SHADOW_BOTTOM) while it shows, the places header, then the places as one group of
+   * segmented tiles (SHADOW_TOP, the places, SHADOW_BOTTOM). Indexes are found, not counted, so the sections can come
+   * and go independently.
+   */
+  private void xgramSetPlaces (List<MediaLocationData> places, boolean areFound) {
+    final List<MediaLocationData> oldPlaces = this.showingPlaces;
+    final int oldItemCount = oldPlaces != null && !oldPlaces.isEmpty() ? oldPlaces.size() : 0;
+    final int newItemCount = places != null && !places.isEmpty() ? places.size() : 0;
+    this.showingPlaces = places;
+    this.showingPlacesFound = areFound;
+    final List<ListItem> items = settingsAdapter.getItems();
+
+    // Live location: hidden while search results show
+    if (liveItem != null) {
+      final int liveIndex = settingsAdapter.indexOfViewById(R.id.btn_shareLiveLocation);
+      if (areFound && liveIndex > 0) {
+        settingsAdapter.removeRange(liveIndex - 1, 3);
+      } else if (!areFound && liveIndex == -1) {
+        items.add(1, new ListItem(ListItem.TYPE_SHADOW_TOP));
+        items.add(2, liveItem);
+        items.add(3, new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+        settingsAdapter.notifyItemRangeInserted(1, 3);
+      }
+    }
+    if (oldItemCount == 0 && newItemCount == 0) {
+      return;
+    }
+
+    final int headerIndex = settingsAdapter.indexOfViewById(R.id.btn_places);
+    if (headerIndex == -1) {
+      return;
+    }
+    final int start = headerIndex + 1;
+    final int oldCount = items.size() - start; // SHADOW_TOP, the places, SHADOW_BOTTOM (or nothing)
+    if (newItemCount == 0) {
+      if (oldCount > 0) {
+        settingsAdapter.removeRange(start, oldCount);
+      }
+      if (areFound) {
+        setPlacesHeader(R.string.NoPlacesFound);
+      }
+      selectPlace(null, true);
+      return;
+    }
+    setPlacesHeader(areFound ? R.string.FoundPlaces : R.string.NearbyPlaces);
+    for (int i = items.size() - 1; i >= start; i--) {
+      items.remove(i);
+    }
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    for (MediaLocationData location : places) {
+      items.add(new ListItem(ListItem.TYPE_ATTACH_LOCATION, R.id.place).setData(location));
+    }
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    final int newCount = newItemCount + 2;
+    if (areFound) {
+      selectPlace(places.get(0), false);
+    }
+    if (oldCount == 0) {
+      settingsAdapter.notifyItemRangeInserted(start, newCount);
+    } else {
+      settingsAdapter.notifyItemRangeChanged(start, Math.min(oldCount, newCount));
+      if (oldCount < newCount) {
+        settingsAdapter.notifyItemRangeInserted(start + oldCount, newCount - oldCount);
+      } else if (oldCount > newCount) {
+        settingsAdapter.notifyItemRangeRemoved(start + newCount, oldCount - newCount);
       }
     }
     ((LinearLayoutManager) getLayoutManager()).scrollToPositionWithOffset(0, 0);

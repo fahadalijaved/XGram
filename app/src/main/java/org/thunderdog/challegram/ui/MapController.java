@@ -274,9 +274,12 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
     int bottomMargin = SettingHolder.measureHeightForType(ListItem.TYPE_ATTACH_LOCATION_BIG);
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    // XGram M3E: the sheet's peek (its handle band, the place tile and the gap under it) instead of the bare tile
+    final int xgramPeek = xgram ? SettingHolder.measureHeightForType(ListItem.TYPE_SHADOW_TOP) + bottomMargin + com.fahadali.xgram.appearance.XgramR6B7Places.sheetPeekExtra() : bottomMargin;
 
     mapType = Settings.instance().getMapType();
-    mapView = createMapView(context, bottomMargin);
+    mapView = createMapView(context, xgramPeek);
     if (mapView == null) {
       throw new IllegalStateException();
     }
@@ -333,6 +336,10 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     addThemeInvalidateListener(backCircle);
     contentView.addView(backCircle);
 
+    if (xgram) {
+      xgramStyleButtons(xgramPeek);
+    }
+
     recyclerView = (CustomRecyclerView) Views.inflate(context(), R.layout.recycler_custom, contentView);
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
       @Override
@@ -343,6 +350,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     ViewSupport.setHigherElevation(recyclerView);
     recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
     recyclerView.setVerticalScrollBarEnabled(false);
+    if (!xgram) // XGram M3E: the sheet decoration replaces it once the adapter is set (see below)
     recyclerView.addItemDecoration(new SettingsAdapter.BackgroundDecoration(ColorId.background) {
       @Override
       public void getItemOffsets (Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
@@ -362,7 +370,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
       }
     });
     addThemeInvalidateListener(recyclerView);
-    recyclerView.setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
+    recyclerView.setItemAnimator(xgram ? com.fahadali.xgram.appearance.XgramAppMotion.listAnimator() : new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
     recyclerView.setMeasureListener((v, oldWidth, oldHeight, newWidth, newHeight) -> {
       if (oldHeight > 0 && oldHeight != newHeight) {
         v.invalidateItemDecorations();
@@ -374,6 +382,10 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
       int i = m.findFirstVisibleItemPosition();
       if (i == 0) {
         View top = m.findViewByPosition(0);
+        if (xgram) {
+          // XGram M3E: the sheet starts at its handle band, above the first item; above it the map takes the touch
+          return top == null || y >= top.getTop() - Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.SHEET_BAND_EXTRA);
+        }
         return top == null || !(top.getTop() + top.getMeasuredHeight() >= y);
       }
       return true;
@@ -393,7 +405,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
             TGMessageLocation.TimeResult result = TGMessageLocation.buildLiveLocationSubtitle(tdlib, Math.max(msg.date, msg.editDate));
             TdApi.MessageLiveLocation location = ((TdApi.MessageLiveLocation) msg.content);
             long expiresIn = Math.max(0, (long) (msg.date + location.location.livePeriod) * 1000l - System.currentTimeMillis());
-            view.setLiveLocation(Lang.getString(R.string.StopSharingLiveLocation), result.text, true, true, location.expiresIn == 0, location.location.livePeriod, expiresIn > 0 ? SystemClock.uptimeMillis() + expiresIn : 0);
+            view.setLiveLocation(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.StopSharingLiveLocation, R.string.XgramR6B7StopSharingLiveLocation), result.text, true, true, location.expiresIn == 0, location.location.livePeriod, expiresIn > 0 ? SystemClock.uptimeMillis() + expiresIn : 0); // XGram: sentence case
             view.setInProgress(inShareProgress, isUpdate);
             if (result.nextLiveLocationUpdateTime != -1) {
               view.scheduleSubtitleUpdater(new Runnable() {
@@ -505,6 +517,12 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     adapter.setItems(items, false);
 
     recyclerView.setAdapter(adapter);
+    if (xgram) {
+      // XGram M3E: a standard bottom sheet over the map (MapSheetDecoration), instead of the shared list decoration,
+      // whose groups need a closing SHADOW_BOTTOM the live location list cannot have (its cells stay last)
+      com.fahadali.xgram.appearance.XgramExpressive.detachListDecoration(recyclerView);
+      recyclerView.addItemDecoration(new com.fahadali.xgram.appearance.XgramR6B7Places.MapSheetDecoration(adapter.getItems()), 0);
+    }
     contentView.addView(recyclerView);
 
     if (args.mode == MODE_LIVE_LOCATION && args.message != null) {
@@ -592,6 +610,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     if (nowHidden != isHidden) {
       if (directionHideAnimator == null) {
         directionHideAnimator = new BoolAnimator(ANIMATOR_DIRECTION_HIDE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(directionHideAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram
       }
       directionHideAnimator.setValue(isHidden, hasFocused);
     }
@@ -655,6 +674,60 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
       b.append(Lang.getString(R.string.Calculating));
     }
     return new TGMessageLocation.TimeResult(b.toString(), nextUpdateTimeMs);
+  }
+
+  // XGram M3E: the map's controls. Directions is an extended FAB (primaryContainer, the label written out, no
+  // uppercase caption under the icon); my location a 40dp small FAB on surfaceContainerHigh with 12dp corners, stacked
+  // 16dp above it; back and map type 40dp filled tonal icon buttons (secondaryContainer) in 48dp targets, centred on
+  // the header's back arrow line. All keep Telegram X's ids, listeners and animations.
+
+  private void xgramStyleButtons (int peek) {
+    directionButton.setBottomText(null);
+    directionButton.setIcon(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_directions_24));
+    directionButton.xgramSetPlainExtendedLabel(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.DirectionGo, R.string.XgramR6B7Directions));
+    directionButton.setContentDescription(Lang.getString(R.string.XgramR6B7Directions));
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(directionButton.xgramLayoutWidth(), Screen.dp(56f), Gravity.RIGHT | Gravity.BOTTOM);
+    params.rightMargin = Screen.dp(16f);
+    params.bottomMargin = Screen.dp(16f) + peek;
+    directionButton.setLayoutParams(params);
+
+    myLocationButton.init(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_gps_fixed_24), 40f, 0f, ColorId.filling, ColorId.icon);
+    myLocationButton.xgramSetContainer(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT, com.fahadali.xgram.appearance.XgramExpressive.CORNER_M, false);
+    myLocationButton.setElevation(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3));
+    myLocationButton.setContentDescription(Lang.getString(R.string.XgramR6B7MyLocation));
+    params = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.RIGHT | Gravity.BOTTOM);
+    params.rightMargin = Screen.dp(16f - 4f); // the 40dp container's end on the FAB's end, 16dp in
+    params.bottomMargin = Screen.dp(16f) + peek + Screen.dp(56f + 16f) - Screen.dp(4f);
+    myLocationButton.setLayoutParams(params);
+
+    final int headerCenter = HeaderView.getTopOffset() + HeaderView.getSize(false) / 2;
+    tileButton.init(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_layers_24), 40f, 0f, ColorId.filling, ColorId.icon);
+    tileButton.xgramSetContainer(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, false);
+    tileButton.setContentDescription(Lang.getString(R.string.XgramR6B7MapType));
+    params = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.RIGHT | Gravity.TOP);
+    params.rightMargin = Screen.dp(4f);
+    params.topMargin = headerCenter - Screen.dp(24f);
+    tileButton.setLayoutParams(params);
+
+    backCircle.init(0, 40f, 0f, ColorId.filling, ColorId.icon);
+    backCircle.xgramSetContainer(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, false);
+    params = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.LEFT | Gravity.TOP);
+    params.leftMargin = Screen.dp(4f);
+    params.topMargin = headerCenter - Screen.dp(24f);
+    backCircle.setLayoutParams(params);
+
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+      directionButton.setTooltipText(directionButton.getContentDescription());
+      myLocationButton.setTooltipText(myLocationButton.getContentDescription());
+      tileButton.setTooltipText(tileButton.getContentDescription());
+    }
+  }
+
+  private ListItem xgramLiveLocationsHeader () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return new ListItem(ListItem.TYPE_HEADER, 0, 0, com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.LiveLocations, R.string.XgramR6B7LiveLocations));
+    }
+    return new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.LiveLocations);
   }
 
   @Override
@@ -818,6 +891,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     if (hasMyLocation != (myAnimator != null && myAnimator.getValue())) {
       if (myAnimator == null) {
         myAnimator = new BoolAnimator(ANIMATOR_MY, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(myAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
       }
       myAnimator.setValue(hasMyLocation, true);
     }
@@ -827,6 +901,13 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
   public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
     switch (id) {
       case ANIMATOR_MY: {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: the small FAB's icon goes from onSurfaceVariant to primary while it follows you
+          myLocationButton.setCustomIconColor(ColorUtils.fromToArgb(
+            com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT),
+            com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), factor));
+          break;
+        }
         if (factor == 0f) {
           myLocationButton.setIconColorId(ColorId.icon);
         } else if (factor == 1f) {
@@ -856,7 +937,8 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
         return false;
       }
       this.inCompass = inCompass;
-      myLocationButton.replaceIcon(inCompass ? R.drawable.baseline_explore_24 : R.drawable.baseline_gps_fixed_24);
+      final int icon = inCompass ? R.drawable.baseline_explore_24 : R.drawable.baseline_gps_fixed_24;
+      myLocationButton.replaceIcon(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramIconPack.map(icon) : icon);
       if (!inCompass || (myLocation != null && myLocation.heading != 0)) {
         updateCameraAutomatically();
       }
@@ -1122,6 +1204,9 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     int decorationTop = viewHeight
       - SettingHolder.measureHeightForType(ListItem.TYPE_SHADOW_TOP)
       - SettingHolder.measureHeightForType(ListItem.TYPE_ATTACH_LOCATION_BIG);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      decorationTop -= com.fahadali.xgram.appearance.XgramR6B7Places.sheetPeekExtra(); // XGram: the sheet's taller peek
+    }
 
     int scrollTop = adapter.measureScrollTop(firstVisiblePosition);
     View view = manager.findViewByPosition(firstVisiblePosition);
@@ -1188,6 +1273,10 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
   @Override
   public void onThemeChanged (ThemeDelegate oldTheme, ThemeDelegate newTheme) {
     super.onThemeChanged(oldTheme, newTheme);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && myLocationButton != null) {
+      // XGram M3E: the small FAB's icon colour is a blend of two roles: work it out again in the new scheme
+      onFactorChanged(ANIMATOR_MY, myAnimator != null ? myAnimator.getFloatValue() : 0f, 0f, null);
+    }
     if (mapType == Settings.MAP_TYPE_UNSET) {
       boolean needDark;
       if (oldTheme.isDark() != (needDark = newTheme.isDark())) {
@@ -1520,7 +1609,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
       headerItemCount = 4;
       ArrayUtils.ensureCapacity(items, cellCount + points.size() + headerItemCount);
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-      items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.LiveLocations));
+      items.add(xgramLiveLocationsHeader());
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       if (tdlib.canSendBasicMessage(getArgumentsStrict().chatId)) {
         items.add(newShareLiveLocationCell());
@@ -1641,7 +1730,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
       }
       ArrayUtils.ensureCapacity(items, items.size() + headerItemCount);
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-      items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.LiveLocations));
+      items.add(xgramLiveLocationsHeader());
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       if (hasWritePermission) {
         items.add(newShareLiveLocationCell());

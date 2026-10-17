@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E round 6, batch 7: location, attach sheet, Instant View, stickers and emoji -->
+<resources>
+  <string name="XgramR6B7Directions">Directions</string>
+  <string name="XgramR6B7MyLocation">My location</string>
+  <string name="XgramR6B7MapType">Map type</string>
+  <string name="XgramR6B7ShareLiveLocation">Share live location</string>
+  <string name="XgramR6B7StopSharingLiveLocation">Stop sharing live location</string>
+  <string name="XgramR6B7LiveLocations">Live locations</string>
+  <string name="XgramR6B7NearbyPlaces">Places nearby</string>
+  <string name="XgramR6B7FoundPlaces">Found places</string>
+  <string name="XgramR6B7SendMyLocation">Send my location</string>
+  <string name="XgramR6B7FindingPlaces">Finding places…</string>
+  <string name="XgramR6B7Emoji">Emoji</string>
+  <string name="XgramR6B7Send">Send</string>
+  <string name="XgramR6B7NoInlineBots">No inline bots yet</string>
+  <string name="XgramR6B7NoInlineBotsText">Bots you use inline show up here</string>
+  <string name="XgramR6B7ThisChat">This chat</string>
+  <string name="XgramR6B7AllChats">All chats</string>
+  <string name="XgramR6B7Join">Join</string>
+  <string name="XgramR6B7NoResults">Nothing found</string>
+  <string name="XgramR6B7NoResultsText">Try a different name</string>
+</resources>
