@@ -1439,18 +1439,24 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
         return;
       }
       int headerHeight = Math.min(getHeight(), org.thunderdog.challegram.navigation.HeaderView.getSize(true));
-      paint.setColor(me.vkryl.core.ColorUtils.fromToArgb(Theme.getColor(ColorId.headerBackground), 0xFF000000, .14f));
-      c.drawRect(0, 0, getWidth(), headerHeight, paint);
+      int headerShade = me.vkryl.core.ColorUtils.fromToArgb(Theme.getColor(ColorId.headerBackground), 0xFF000000, .14f);
       int line = Math.max(1, Screen.dp(.5f));
       if (getWidth() > Math.max(line, Screen.dp(1f))) {
-        // A gutter (the drag handle's, or the hinge): the window background, the usual line down its middle
+        // A gutter (the drag handle's, or the hinge): the header colour and the window background, so the two headers
+        // read as one bar, with the usual thin line down the middle (no dark band across the gutter)
+        int lineStart = (getWidth() - line) / 2;
+        paint.setColor(Theme.getColor(ColorId.headerBackground));
+        c.drawRect(0, 0, getWidth(), headerHeight, paint);
+        paint.setColor(headerShade);
+        c.drawRect(lineStart, 0, lineStart + line, headerHeight, paint);
         paint.setColor(Theme.getColor(ColorId.background));
         c.drawRect(0, headerHeight, getWidth(), getHeight(), paint);
-        int lineStart = (getWidth() - line) / 2;
         paint.setColor(Theme.getColor(ColorId.separator));
         c.drawRect(lineStart, headerHeight, lineStart + line, getHeight(), paint);
         return;
       }
+      paint.setColor(headerShade);
+      c.drawRect(0, 0, getWidth(), headerHeight, paint);
       paint.setColor(Theme.getColor(ColorId.separator));
       c.drawRect(0, headerHeight, getWidth(), getHeight(), paint);
     }
