@@ -100,6 +100,42 @@ public abstract class SettingsCloudController<T extends Settings.CloudSetting> e
 
   protected void drawSettingPreview (Canvas c, T setting, ImageReceiver receiver) { }
 
+  // XGram M3E (round 6): what the Compose rows of this page read (TgxPagesBatch3): the preview the page draws over a
+  // set's image, and the set being downloaded or installed, with its progress.
+
+  /** {@link #drawSettingPreview} for a set of this page, into {@code receiver}'s bounds. */
+  public final void xgramDrawPreview (Canvas c, Settings.CloudSetting setting, ImageReceiver receiver) {
+    if (settings != null && settings.contains(setting)) {
+      drawSettingPreview(c, (T) setting, receiver);
+    }
+  }
+
+  /** The set in use. */
+  public final boolean xgramIsCurrent (Settings.CloudSetting setting) {
+    return setting != null && setting.equals(getCurrentSetting());
+  }
+
+  /** -1 when {@code setting} is not being installed; else its download's progress (0..1), or NaN while it installs. */
+  public final float xgramPendingProgress (Settings.CloudSetting setting) {
+    if (installingSetting == null || !installingSetting.equals(setting)) {
+      return -1f;
+    }
+    if (isInstalling) {
+      return Float.NaN;
+    }
+    TdApi.File file = setting.getFile();
+    if (file == null || file.local == null) {
+      return Float.NaN;
+    }
+    long size = file.size != 0 ? file.size : file.expectedSize;
+    return size > 0 ? Math.max(0f, Math.min(1f, file.local.downloadedSize / (float) size)) : Float.NaN;
+  }
+
+  /** The label of a set being installed ("Downloading", "Installing"), without its percentage: the ring shows that. */
+  public final String xgramPendingLabel () {
+    return Lang.getString(installingStringRes);
+  }
+
   private SettingsAdapter adapter;
   private List<T> settings;
 

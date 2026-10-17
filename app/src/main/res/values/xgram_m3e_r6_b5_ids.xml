@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 6, batch 5: the large title of classic pages (XgramM3Bars) -->
+  <item type="id" name="xgram_r6b5_title_style" />
+  <item type="id" name="xgram_r6b5_title_subtitle" />
+</resources>

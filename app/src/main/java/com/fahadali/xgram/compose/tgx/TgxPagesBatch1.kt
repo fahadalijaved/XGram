@@ -32,8 +32,8 @@ import org.thunderdog.challegram.ui.WaitForPremiumController
  * (TgxPageHints.DEFAULT, or an object overriding kind/trailing/largeTitle). Only this batch edits this file.
  *
  * Rows the generic mapping keeps as real views on these pages: the public photo preview (PrivacyKey), chat rows
- * (PrivacyException, EditRights, community chats), edit fields (2FA, EditRights, Request) and the iconized empty
- * states (2FA, Phone, WaitForPremium), which keep their large icon and bold text.
+ * (PrivacyException, EditRights) and edit fields (2FA, EditRights, Request). A community's chats are native chat rows
+ * (TgxChatRowsHints).
  */
 internal object TgxPagesBatch1 {
   val pages: Map<Class<*>, TgxPageHints> = mapOf(
@@ -46,7 +46,8 @@ internal object TgxPagesBatch1 {
     SettingsArchiveChatListController::class.java to TgxPageHints.DEFAULT,
     EditSessionController::class.java to TgxPageHints.DEFAULT,
     RequestController::class.java to TgxPageHints.DEFAULT,
-    XgramCommunitySettingsController::class.java to TgxPageHints.DEFAULT,
+    // Its hero (a 96dp avatar with a camera badge) stays the real view on the page; its chats are native rows.
+    XgramCommunitySettingsController::class.java to TgxChatRowsHints.INSTANCE,
   )
 }
 

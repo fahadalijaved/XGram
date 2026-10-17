@@ -40,6 +40,7 @@ import com.fahadali.xgram.appearance.XgramR5Lists
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.component.base.SettingView
 import org.thunderdog.challegram.core.Lang
+import org.thunderdog.challegram.data.DoubleTextWrapper
 import org.thunderdog.challegram.theme.ColorId
 import org.thunderdog.challegram.theme.Theme
 import org.thunderdog.challegram.ui.ListItem
@@ -129,7 +130,15 @@ internal data class TgxRowSnap(
   val longClickable: Boolean = false,
   val centered: Boolean = false,
   val sliderLabels: List<String> = emptyList(),
-  val sliderIndex: Int = 0
+  val sliderIndex: Int = 0,
+  /** Tabular figures in the supporting line ([TgxRowText.tabular]). */
+  val tabular: Boolean = false,
+  /** Lines of the supporting line before its ellipsis ([TgxRowText.subtitleLines]). */
+  val subtitleLines: Int = Int.MAX_VALUE,
+  /** The supporting line is loading: a shimmer bar ([TgxRowText.loading]). */
+  val textLoading: Boolean = false,
+  /** A download in progress: 0..1, NaN unknown, -1 none ([TgxRowText.progress]). */
+  val progress: Float = -1f
 ) {
   companion object {
     val HIDDEN = TgxRowSnap(TgxRowKind.HIDDEN)
@@ -165,7 +174,9 @@ internal object TgxRead {
     ListItem.TYPE_EMPTY, ListItem.TYPE_ICONIZED_EMPTY, ListItem.TYPE_SESSIONS_EMPTY, ListItem.TYPE_WEBSITES_EMPTY,
     ListItem.TYPE_SMART_EMPTY, ListItem.TYPE_PROGRESS, ListItem.TYPE_SMART_PROGRESS, ListItem.TYPE_BUILD_NO,
     // A page's call to action (Set password, Change number, Redeem): a centred filled button, as in the classic list
-    ListItem.TYPE_BUTTON -> true
+    ListItem.TYPE_BUTTON,
+    // A page's own block on the page itself (a community's hero)
+    ListItem.TYPE_CUSTOM_SINGLE -> true
     else -> false
   }
 
@@ -241,6 +252,24 @@ internal object TgxRead {
   private fun buttonLabel(shown: CharSequence?, written: CharSequence?): CharSequence? =
     if (shown != null && written != null && shown.toString().equals(written.toString(), ignoreCase = true)) written else shown
 
+  /**
+   * A header's or a row's text in sentence case (XgramR5Lists.label, which keeps a translation as it is): only when the
+   * view shows the item's own string (pages may set another name on the view), and kept as shown (with its styles)
+   * when the label is the same text.
+   */
+  private fun labelOf(item: ListItem, shown: CharSequence?): CharSequence? {
+    if (shown == null || item.stringResource == 0) {
+      return shown
+    }
+    val own = item.string ?: return shown
+    val text = shown.toString()
+    if (!text.equals(own.toString(), ignoreCase = true)) {
+      return shown
+    }
+    val label = XgramR5Lists.label(item) ?: return shown
+    return if (label.toString() == text) shown else label
+  }
+
   private fun isInfoType(type: Int): Boolean = type == SettingView.TYPE_INFO || type == SettingView.TYPE_INFO_COMPACT ||
     type == SettingView.TYPE_INFO_SUPERCOMPACT || type == SettingView.TYPE_INFO_MULTILINE
 
@@ -315,8 +344,9 @@ internal object TgxRead {
    */
   fun read(kind: TgxRowKind, view: View, item: ListItem, type: Int, partial: Boolean): TgxRowSnap = when (kind) {
     TgxRowKind.SWITCH, TgxRowKind.SPLIT_SWITCH, TgxRowKind.RADIO, TgxRowKind.CHECKBOX, TgxRowKind.VALUE ->
-      if (view is SettingView) readSetting(kind, view, partial) else TgxRowSnap.HIDDEN
-    TgxRowKind.HEADER -> TgxRowSnap(kind, title = (view as? TextView)?.text)
+      if (view is SettingView) readSetting(kind, view, item, partial) else TgxRowSnap.HIDDEN
+    TgxRowKind.CHAT -> readChat(view, item)
+    TgxRowKind.HEADER -> TgxRowSnap(kind, title = labelOf(item, (view as? TextView)?.text))
     TgxRowKind.HEADER_ACTION -> readHeader(view, item, type)
     TgxRowKind.DESCRIPTION -> TgxRowSnap(kind, title = (view as? TextView)?.text, centered = type == ListItem.TYPE_DESCRIPTION_CENTERED)
     TgxRowKind.BUILD_NO, TgxRowKind.EMPTY -> TgxRowSnap(
@@ -337,6 +367,16 @@ internal object TgxRead {
     }
     TgxRowKind.LOADING, TgxRowKind.FALLBACK, TgxRowKind.HIDDEN -> TgxRowSnap(kind)
   }
+
+  /** The text a page's [TgxPageHints.text] gives the row, over what was read from the view. */
+  fun withText(snap: TgxRowSnap, text: TgxRowText): TgxRowSnap = snap.copy(
+    title = text.title,
+    subtitle = if (text.subtitle.isNullOrEmpty()) null else text.subtitle,
+    tabular = text.tabular,
+    subtitleLines = text.subtitleLines,
+    textLoading = text.loading,
+    progress = text.progress
+  )
 
   /** An empty state's icon, headline and text, as the classic list's M3E empty states show them (XgramR5Lists). */
   private fun readEmpty(item: ListItem, type: Int): TgxRowSnap {
@@ -377,8 +417,28 @@ internal object TgxRead {
     }
   }
 
-  private fun readSetting(kind: TgxRowKind, view: SettingView, partialHint: Boolean): TgxRowSnap {
-    val name = view.name
+  /**
+   * A CHAT row: a setting row the page maps here reads as a value row; a chat row (SmallChatView) reads its wrapper's
+   * title and the item's string value as the supporting text.
+   */
+  private fun readChat(view: View, item: ListItem): TgxRowSnap {
+    if (view is SettingView) {
+      return readSetting(TgxRowKind.CHAT, view, item, false)
+    }
+    val wrapper = item.data as? DoubleTextWrapper
+    val subtitle = item.charSequenceValue
+    return TgxRowSnap(
+      TgxRowKind.CHAT,
+      title = wrapper?.title,
+      subtitle = if (subtitle.isNullOrEmpty()) null else subtitle,
+      enabled = view.isEnabled,
+      longClickable = view.isLongClickable
+    )
+  }
+
+  private fun readSetting(kind: TgxRowKind, view: SettingView, item: ListItem, partialHint: Boolean): TgxRowSnap {
+    // The row's label in sentence case where Telegram X's English is title case
+    val name = labelOf(item, view.name)
     val data = view.data
     val title: CharSequence?
     val subtitle: CharSequence?

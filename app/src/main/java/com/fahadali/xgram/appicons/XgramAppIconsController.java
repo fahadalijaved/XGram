@@ -102,12 +102,17 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
       } else {
         adapter.notifyDataSetChanged();
       }
-      UI.showToast(R.string.XgramAppIconChanged, android.widget.Toast.LENGTH_LONG);
-      if (com.fahadali.xgram.XgramSettings.instance().iconTheme()) {
+      if (!xgram || !com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.XgramAppIconChanged), android.widget.Toast.LENGTH_LONG)) {
+        UI.showToast(R.string.XgramAppIconChanged, android.widget.Toast.LENGTH_LONG);
+      }
+      // While Expressive design locks the themes the icon's theme would change nothing (XgramSettingDeps.themesLocked)
+      if (com.fahadali.xgram.XgramSettings.instance().iconTheme() && !com.fahadali.xgram.XgramSettingDeps.themesLocked()) {
         com.fahadali.xgram.appearance.XgramThemePack.applyForIcon(this, icon);
       }
     } catch (Throwable t) {
-      UI.showToast(R.string.XgramAppIconFailed, android.widget.Toast.LENGTH_SHORT);
+      if (!xgram || !com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.XgramAppIconFailed), android.widget.Toast.LENGTH_SHORT)) {
+        UI.showToast(R.string.XgramAppIconFailed, android.widget.Toast.LENGTH_SHORT);
+      }
     }
   }
 
@@ -168,10 +173,14 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
 
     org.thunderdog.challegram.component.base.TogglerView toggler = new org.thunderdog.challegram.component.base.TogglerView(context);
     toggler.init(com.fahadali.xgram.XgramSettings.instance().iconTheme());
-    frame.addView(toggler, new FrameLayout.LayoutParams(Screen.dp(66f), Screen.dp(48f), Gravity.CENTER_VERTICAL));
+    // The M3 switch (52x32) 16dp from the tile's end, as SegmentedListItem's trailing switch
+    frame.addView(toggler, new FrameLayout.LayoutParams(Screen.dp(XGRAM_SWITCH_WIDTH + XGRAM_TILE_PADDING), Screen.dp(48f), Gravity.CENTER_VERTICAL));
     frame.setTag(toggler);
 
     frame.setOnClickListener(v -> {
+      if (com.fahadali.xgram.XgramSettingDeps.themesLocked()) {
+        return; // drawn disabled: the themes are the wallpaper's while Expressive design is on
+      }
       com.fahadali.xgram.XgramSettings settings = com.fahadali.xgram.XgramSettings.instance();
       boolean enabled = !settings.iconTheme();
       settings.setIconTheme(enabled);
@@ -184,27 +193,46 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
     return frame;
   }
 
+  /** SegmentedListItem: 16dp inside the tile, 16dp between the text and the 52dp switch. */
+  private static final float XGRAM_TILE_PADDING = 16f, XGRAM_SWITCH_WIDTH = 52f;
+
+  /**
+   * "Theme too" as a Compose switch row (SegmentedListItem): bodyLarge title, bodyMedium supporting text, the switch at
+   * the end, 12dp vertical padding, at least 72dp for its two lines. While Expressive design locks the themes it is the
+   * disabled row: content at .38, the switch disabled, no ripple, and it says why (Material You colors with Expressive
+   * design).
+   */
   private void xgramBindThemeSwitch (View view, boolean animated) {
     ViewGroup frame = (ViewGroup) view;
     final boolean rtl = Lang.rtl();
+    final boolean locked = com.fahadali.xgram.XgramSettingDeps.themesLocked();
     ViewGroup texts = (ViewGroup) frame.getChildAt(0);
     FrameLayout.LayoutParams textParams = (FrameLayout.LayoutParams) texts.getLayoutParams();
-    textParams.leftMargin = Screen.dp(rtl ? 78f : 16f);
-    textParams.rightMargin = Screen.dp(rtl ? 16f : 78f);
+    final int textEnd = Screen.dp(XGRAM_TILE_PADDING + XGRAM_SWITCH_WIDTH + XGRAM_TILE_PADDING);
+    textParams.leftMargin = rtl ? textEnd : Screen.dp(XGRAM_TILE_PADDING);
+    textParams.rightMargin = rtl ? Screen.dp(XGRAM_TILE_PADDING) : textEnd;
     textParams.topMargin = textParams.bottomMargin = Screen.dp(12f);
     texts.setLayoutParams(textParams);
     View togglerView = frame.getChildAt(1);
     FrameLayout.LayoutParams togglerParams = (FrameLayout.LayoutParams) togglerView.getLayoutParams();
     togglerParams.gravity = Gravity.CENTER_VERTICAL | (rtl ? Gravity.LEFT : Gravity.RIGHT);
-    togglerParams.leftMargin = togglerParams.rightMargin = Screen.dp(6f);
+    togglerParams.leftMargin = togglerParams.rightMargin = 0;
     togglerView.setLayoutParams(togglerParams);
     TextView title = (TextView) texts.getChildAt(0);
     TextView subtitle = (TextView) texts.getChildAt(1);
-    title.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
-    subtitle.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+    final int onSurface = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+    final int variant = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    final int disabled = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(onSurface, com.fahadali.xgram.appearance.XgramExpressive.DISABLED_CONTENT);
+    title.setTextColor(locked ? disabled : onSurface);
+    subtitle.setTextColor(locked ? disabled : variant);
+    subtitle.setText(Lang.getString(locked ? R.string.XgramThemesExpressive : R.string.XgramIconThemeToggleInfo));
     title.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
     subtitle.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
-    ((org.thunderdog.challegram.component.base.TogglerView) frame.getTag()).setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().iconTheme(), animated);
+    frame.setEnabled(!locked);
+    frame.setClickable(!locked);
+    org.thunderdog.challegram.component.base.TogglerView toggler = (org.thunderdog.challegram.component.base.TogglerView) frame.getTag();
+    toggler.setDisabled(locked, false);
+    toggler.setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().iconTheme(), animated);
   }
 
   /** XGram M3E: an icon as a selectable card: the 64dp icon, its name in labelLarge, the check badge at its top end. */
@@ -229,7 +257,6 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
           outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), view.getWidth() * CORNER);
         }
       });
-      iconView.setClipToOutline(true);
       iconView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
       addView(iconView, new LayoutParams(Screen.dp(64f), Screen.dp(64f)));
 
@@ -246,6 +273,10 @@ public final class XgramAppIconsController extends RecyclerViewController<Void> 
 
     void bind (XgramAppIcons.Icon icon, boolean isSelected, boolean animated) {
       iconView.setImageResource(icon.iconRes);
+      // An adaptive icon draws itself in the device's icon shape (AdaptiveIconDrawable.getIconMask), as the launcher
+      // shows it; only a legacy bitmap icon is clipped, to a rounded square
+      final boolean adaptive = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && iconView.getDrawable() instanceof android.graphics.drawable.AdaptiveIconDrawable;
+      iconView.setClipToOutline(!adaptive);
       String name = Lang.getString(icon.nameRes);
       nameView.setText(name);
       setContentDescription(name);

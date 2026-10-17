@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 6, batch 5: XGram's own pages (themes, icons, bookmarks, history) -->
+  <string name="XgramR6B5WallpaperColors">Wallpaper colors</string>
+  <string name="XgramR6B5WallpaperColorsInfo">In use with Expressive design</string>
+  <string name="XgramR6B5ThemesOff">These themes apply when Expressive design is off.</string>
+  <string name="XgramR6B5Packs">Packs</string>
+  <string name="XgramR6B5IconPackRestart">XGram restarts now to use these icons. Icons a pack has no drawing for keep the classic look.</string>
+  <string name="XgramR6B5BookmarkRemoved">Bookmark removed</string>
+  <string name="XgramR6B5HistoryDeleted">Deleted</string>
+  <string name="XgramR6B5HistoryEdited">Edited %1$d×</string>
+  <string name="XgramR6B5HistoryCurrent">Current</string>
+  <string name="XgramR6B5HistoryNoText">No text</string>
+  <string name="XgramR6B5HistoryClearTitle">Clear this chat\'s history?</string>
+  <string name="XgramR6B5Clear">Clear</string>
+  <string name="XgramR6B5HistoryCleared">History cleared</string>
+  <string name="XgramR6B5SignupHint">This is how people see you in chats.</string>
+  <string name="XgramR6B5Downloading">Downloading</string>
+</resources>

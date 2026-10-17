@@ -13,6 +13,12 @@ package com.fahadali.xgram.compose.tgx
 
 import android.view.View
 import androidx.compose.runtime.Composable
+import com.fahadali.xgram.appearance.XgramM3Bars
+import com.fahadali.xgram.appearance.XgramR6B5Pages
+import org.thunderdog.challegram.R
+import org.thunderdog.challegram.component.base.SettingView
+import org.thunderdog.challegram.core.Lang
+import org.thunderdog.challegram.data.DoubleTextWrapper
 import org.thunderdog.challegram.navigation.ViewController
 import org.thunderdog.challegram.ui.ListItem
 import org.thunderdog.challegram.ui.SettingsDataController
@@ -45,9 +51,36 @@ enum class TgxRowKind {
    * icon on a soft burst in primaryContainer, the headline in titleLarge, the text in bodyMedium.
    */
   EMPTY_ICON,
+  /**
+   * A chat, or a message of one, drawn natively (TYPE_CHAT_SMALL with a DoubleTextWrapper, or a row a page maps here):
+   * the page's leading content (a 40dp avatar), the headline in bodyLarge, the supporting text in bodyMedium and the
+   * page's trailing content (a date in labelMedium). The headline is the wrapper's title, the supporting text the
+   * item's string value (ListItem.setStringValue), unless the page's [TgxPageHints.text] says otherwise.
+   */
+  CHAT,
   /** The real Telegram X view in the row's place (AndroidView): users, chats, edit fields, previews, custom rows. */
   FALLBACK
 }
+
+/**
+ * How a page wants a row's text drawn ([TgxPageHints.text]): its headline, its supporting line (null: none) and their
+ * look. Equal values recompose nothing.
+ */
+data class TgxRowText(
+  val title: CharSequence?,
+  val subtitle: CharSequence?,
+  /** Tabular figures in the supporting line (IDs, times, sizes). */
+  val tabular: Boolean = false,
+  /** Lines of the supporting text before it is cut with an ellipsis. */
+  val subtitleLines: Int = Int.MAX_VALUE,
+  /** The supporting line is still loading: a shimmer bar takes its place. */
+  val loading: Boolean = false,
+  /**
+   * A download or an install of the row in progress: a 24dp wavy ring at the row's end in place of its trailing content
+   * (0..1, NaN while its progress is unknown); -1: none.
+   */
+  val progress: Float = -1f
+)
 
 /**
  * What a page may change about its Compose rows. Every method has a default: [TgxPageHints.DEFAULT] opts a page in as
@@ -63,11 +96,38 @@ interface TgxPageHints {
   /** The page title as the first list item, fading Telegram X's small title in as it scrolls away. */
   fun largeTitle(c: ViewController<*>): Boolean = c.xgramAllowsLargeTitle()
 
+  /**
+   * The large title's style: XgramM3Bars.TITLE_LARGE (displaySmall, every page by default, as the Compose pages and the
+   * classic list) or XgramM3Bars.TITLE_MEDIUM (headlineMedium) for a page that needs the smaller one.
+   */
+  fun titleStyle(c: ViewController<*>): Int = XgramM3Bars.TITLE_LARGE
+
+  /** A bodyMedium line under the large title (Log out: "Alternative options"); null: none. */
+  fun largeSubtitle(c: ViewController<*>): CharSequence? = null
+
+  /** A form (a name, a sign-up step): the page's column at most 480dp wide, centred, as XGram's forms. */
+  fun formWidth(c: ViewController<*>): Boolean = false
+
   /** How to draw [item] (bound to [view]); null: the generic mapping. FALLBACK keeps the real view. */
   fun kind(item: ListItem, view: View): TgxRowKind? = null
 
   /** Extra trailing content of a VALUE row (an avatar stack, a preview); null: none. */
   fun trailing(item: ListItem, view: View): (@Composable () -> Unit)? = null
+
+  /**
+   * [trailing] with the page at hand, for content that reads the page's state (a download's progress, a message's
+   * date). VALUE, RADIO and CHAT rows ask this one; by default it is [trailing].
+   */
+  fun trailing(c: ViewController<*>, item: ListItem, view: View): (@Composable () -> Unit)? = trailing(item, view)
+
+  /**
+   * The leading content of a VALUE, RADIO or CHAT row in place of the row's own icon (a chat's 40dp avatar, see
+   * TgxChatAvatar); null: the row's icon as a tonal circle, or nothing. A RADIO row keeps its radio button.
+   */
+  fun leading(c: ViewController<*>, item: ListItem, view: View): (@Composable () -> Unit)? = null
+
+  /** The row's text as the page wants it drawn (VALUE, RADIO and CHAT rows); null: as read from the view. */
+  fun text(c: ViewController<*>, item: ListItem, view: View): TgxRowText? = null
 
   /**
    * Whether a switch row is only partly on (a group with some of its options on): drawn as the switch's third state.
@@ -78,6 +138,34 @@ interface TgxPageHints {
   companion object {
     @JvmField
     val DEFAULT: TgxPageHints = object : TgxPageHints {}
+  }
+}
+
+/**
+ * XGram's lists of chats (Saved by chat, a community's chats): TYPE_CHAT_SMALL rows drawn natively, with the chat's 40dp
+ * avatar, its title, the item's string value as the supporting text and the item's int value (a unix time, 0: none)
+ * as a trailing labelMedium date.
+ */
+internal open class TgxChatRowsHints : TgxPageHints {
+  override fun kind(item: ListItem, view: View): TgxRowKind? =
+    if (item.viewType == ListItem.TYPE_CHAT_SMALL && item.data is DoubleTextWrapper) TgxRowKind.CHAT else null
+
+  override fun leading(c: ViewController<*>, item: ListItem, view: View): (@Composable () -> Unit)? {
+    val wrapper = item.data as? DoubleTextWrapper ?: return null
+    return { TgxChatAvatar { avatar -> avatar.setWrapper(wrapper) } }
+  }
+
+  override fun trailing(c: ViewController<*>, item: ListItem, view: View): (@Composable () -> Unit)? {
+    if (item.viewType != ListItem.TYPE_CHAT_SMALL || item.intValue <= 0) {
+      return null
+    }
+    val date = XgramR6B5Pages.shortDate(item.intValue.toLong())
+    return { TgxTrailingLabel(date) }
+  }
+
+  companion object {
+    @JvmField
+    val INSTANCE: TgxPageHints = TgxChatRowsHints()
   }
 }
 
@@ -95,8 +183,26 @@ object TgxComposePages {
     SettingsNotificationController::class.java to TgxPageHints.DEFAULT,
     SettingsThemeController::class.java to TgxPageHints.DEFAULT,
     SettingsLanguageTranslateController::class.java to TgxPageHints.DEFAULT,
-    SettingsLogOutController::class.java to TgxPageHints.DEFAULT,
+    SettingsLogOutController::class.java to LogOutHints,
   )
+
+  /**
+   * Log out and Delete account: Telegram X's two-line header becomes the large title with "Alternative options" under
+   * it in bodyMedium (the page drops its custom header with Expressive design). Log out and Delete account are error
+   * rows (textNegative: an errorContainer icon circle and an error label).
+   */
+  private object LogOutHints : TgxPageHints {
+    override fun largeSubtitle(c: ViewController<*>): CharSequence? = Lang.getString(R.string.SignOutAlt)
+
+    /** The classic error circle is a draw modifier on these rows: they stay native rows here all the same. */
+    override fun kind(item: ListItem, view: View): TgxRowKind? {
+      val id = item.id
+      if ((id == R.id.btn_logout || id == R.id.btn_deleteAccount) && view is SettingView && view.toggler == null && view.childCount == 0) {
+        return TgxRowKind.VALUE
+      }
+      return null
+    }
+  }
 
   private val pages: Map<Class<*>, TgxPageHints> by lazy {
     HashMap<Class<*>, TgxPageHints>().apply {

@@ -152,7 +152,8 @@ public final class XgramMessageDetailsController extends RecyclerViewController<
     FileInfo file = fileInfo(msg.content);
     if (file != null) {
       if (!StringUtils.isEmpty(file.name)) {
-        add(items, R.drawable.deproko_baseline_text_add_24, R.string.XgramDetailsFileName, file.name);
+        // XGram M3E: a Material glyph, not Telegram X's own
+        add(items, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.baseline_insert_drive_file_24 : R.drawable.deproko_baseline_text_add_24, R.string.XgramDetailsFileName, file.name);
       }
       if (file.size > 0) {
         add(items, R.drawable.baseline_sd_storage_24, R.string.XgramDetailsFileSize, Formatter.formatFileSize(UI.getContext(), file.size));
@@ -306,6 +307,11 @@ public final class XgramMessageDetailsController extends RecyclerViewController<
       return;
     }
     String value = (String) data;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: a tap copies, the snackbar confirms (the row's copy icon button does the same)
+      com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(value);
+      return;
+    }
     showOptions(value, new int[] {R.id.btn_copyText, R.id.btn_cancel}, new String[] {Lang.getString(R.string.Copy), Lang.getString(R.string.Cancel)},
       new int[] {OptionColor.NORMAL, OptionColor.NORMAL}, new int[] {R.drawable.baseline_content_copy_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
         if (id == R.id.btn_copyText) {

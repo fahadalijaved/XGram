@@ -220,6 +220,10 @@ public final class XgramHistoryController extends RecyclerViewController<XgramHi
       XgramHistoryController c = new XgramHistoryController(context, tdlib);
       c.setArguments(new Args(((XgramHistory.ChatEntry) data).chatId));
       navigateTo(c);
+    } else if (id == R.id.btn_xgramHistoryMessage && data instanceof XgramHistory.Entry && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramShowEntry((XgramHistory.Entry) data);
+    } else if (id == R.id.btn_xgramHistoryClear && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramConfirmClear();
     } else if (id == R.id.btn_xgramHistoryMessage && data instanceof XgramHistory.Entry) {
       XgramHistory.Entry entry = (XgramHistory.Entry) data;
       String fullText = fullTextOf(entry);
@@ -259,5 +263,74 @@ public final class XgramHistoryController extends RecyclerViewController<XgramHi
           return true;
         });
     }
+  }
+
+  // XGram M3E (round 6): a message opens an M3 sheet with its text and every earlier version, each copyable (tonal
+  // Copy, filled Open media); Clear asks in an M3 dialog with a destructive confirm, then confirms in a snackbar. The
+  // Compose rows read the sender, the preview and the state here (TgxPagesBatch2).
+
+  /** The headline of a message's row: its sender, or what happened to it when the sender is unknown. */
+  public String xgramHeadlineOf (XgramHistory.Entry entry) {
+    String sender = senderName(entry.senderId);
+    if (!StringUtils.isEmpty(sender)) {
+      return sender;
+    }
+    return entry.deletedDate != 0 ? Lang.getString(R.string.XgramR6B5HistoryDeleted) : Lang.getString(R.string.XgramR6B5HistoryEdited, entry.edits.size());
+  }
+
+  /** A message's text on one line, after its kind (Photo: text). */
+  public static String xgramPreviewOf (XgramHistory.Entry entry) {
+    return previewOf(entry);
+  }
+
+  private void xgramShowEntry (XgramHistory.Entry entry) {
+    final String label = kindLabel(entry.kind);
+    final String current = label != null ? (StringUtils.isEmpty(entry.text) ? label : label + ": " + entry.text) : entry.text;
+    List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row> rows = new ArrayList<>();
+    // The message as it is now (or was when it was deleted): its time, a "Deleted" or "Current" badge
+    final int when = entry.deletedDate != 0 ? entry.deletedDate : entry.date;
+    com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row currentRow = new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(
+      StringUtils.isEmpty(current) ? Lang.getString(R.string.XgramR6B5HistoryNoText) : current, when != 0 ? Lang.timeOrDateShort(when, TimeUnit.SECONDS) : null
+    ).supportingFirst().maxLines(0).copy(StringUtils.isEmpty(entry.text) ? null : entry.text);
+    if (entry.deletedDate != 0) {
+      currentRow.badge(Lang.getString(R.string.XgramR6B5HistoryDeleted), com.fahadali.xgram.appearance.XgramExpressive.ERROR_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR_CONTAINER);
+    } else {
+      currentRow.badge(Lang.getString(R.string.XgramR6B5HistoryCurrent));
+    }
+    rows.add(currentRow);
+    // Earlier versions, newest first
+    for (int i = entry.edits.size() - 1; i >= 0; i--) {
+      XgramHistory.Edit edit = entry.edits.get(i);
+      String old = StringUtils.isEmpty(edit.oldText) ? Lang.getString(R.string.XgramR6B5HistoryNoText) : edit.oldText;
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(old, Lang.timeOrDateShort(edit.editDate, TimeUnit.SECONDS))
+        .supportingFirst().maxLines(0).copy(StringUtils.isEmpty(edit.oldText) ? null : edit.oldText));
+    }
+    List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action> actions = new ArrayList<>();
+    if (!StringUtils.isEmpty(entry.text)) {
+      actions.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.Copy), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_TONAL,
+        () -> com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(entry.text)).keepOpen());
+    }
+    if (entry.hasSavedMedia()) {
+      actions.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.XgramHistoryOpenMedia), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_FILLED,
+        () -> UI.openFile(this, StringUtils.isEmpty(entry.fileName) ? null : entry.fileName, new java.io.File(entry.mediaPath), entry.mimeType, 0)));
+    }
+    com.fahadali.xgram.appearance.XgramR5SheetsInfo.show(this, xgramHeadlineOf(entry), rows,
+      actions.toArray(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action[0]));
+  }
+
+  private void xgramConfirmClear () {
+    final long chatId = chatId();
+    android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(context(), org.thunderdog.challegram.theme.Theme.dialogTheme());
+    b.setTitle(Lang.getString(R.string.XgramR6B5HistoryClearTitle));
+    b.setMessage(Lang.getString(R.string.XgramHistoryClearConfirm));
+    b.setPositiveButton(Lang.getString(R.string.XgramR6B5Clear), (dialog, which) ->
+      XgramHistory.instance().clear(tdlib.id(), chatId, () -> {
+        com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.XgramR6B5HistoryCleared), android.widget.Toast.LENGTH_SHORT);
+        if (!isDestroyed()) {
+          navigateBack();
+        }
+      }));
+    b.setNegativeButton(Lang.getString(R.string.Cancel), (dialog, which) -> dialog.dismiss());
+    com.fahadali.xgram.appearance.XgramR5Sheets.markPositiveDestructive(showAlert(b));
   }
 }

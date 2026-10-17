@@ -14,8 +14,12 @@ package com.fahadali.xgram.chats;
 import android.content.Context;
 import android.content.Intent;
 import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
+
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramR6B5Pages;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
@@ -39,6 +43,7 @@ import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.RecyclerViewController;
+import org.thunderdog.challegram.ui.SettingHolder;
 import org.thunderdog.challegram.ui.SettingsAdapter;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 
@@ -63,6 +68,7 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
   /** Chats asked from TDLib (GetChat), once each. */
   private final Set<Long> requestedChats = new HashSet<>();
   private int chatCount;
+  @Nullable private ListItem xgramHeroItem;
 
   private final Runnable rebuild = () -> {
     if (!isDestroyed()) {
@@ -110,7 +116,7 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
 
   @Override
   public View getCustomHeaderCell () {
-    return headerCell;
+    return headerCell; // null with Expressive design: the large title, and the community's hero as the first item
   }
 
   // Your status in the community decides what can be changed (TDLib checks the same rights).
@@ -151,15 +157,30 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
-    headerCell = new ComplexHeaderView(context, tdlib, this);
-    headerCell.setNoExpand(true);
-    headerCell.setPhotoOpenDisabled(true);
-    headerCell.initWithController(this, true);
-    headerCell.setInnerMargins(Screen.dp(56f), Screen.dp(49f));
+    if (!XgramExpressive.isEnabled()) {
+      headerCell = new ComplexHeaderView(context, tdlib, this);
+      headerCell.setNoExpand(true);
+      headerCell.setPhotoOpenDisabled(true);
+      headerCell.initWithController(this, true);
+      headerCell.setInnerMargins(Screen.dp(56f), Screen.dp(49f));
+    }
     updateHeader();
     avatarPickerManager = new AvatarPickerManager(this);
 
     adapter = new SettingsAdapter(this) {
+      // XGram M3E: the community's hero (TYPE_CUSTOM_SINGLE), the first item under the large title
+      @Override
+      protected SettingHolder initCustom (ViewGroup parent) {
+        return new SettingHolder(new XgramR6B5Pages.CommunityHero(parent.getContext(), v -> changePhoto()));
+      }
+
+      @Override
+      protected void setCustom (ListItem item, SettingHolder holder, int position) {
+        if (holder.itemView instanceof XgramR6B5Pages.CommunityHero) {
+          xgramBindHero((XgramR6B5Pages.CommunityHero) holder.itemView);
+        }
+      }
+
       @Override
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         int id = item.getId();
@@ -224,8 +245,23 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
     TdApi.Community community = tdlib.cache().community(communityId());
     String name = community != null && !community.name.isEmpty() ? community.name : Lang.getString(R.string.XgramCommunity);
     headerCell.setText(name, Lang.plural(R.string.xChats, chatCount));
+    requestAvatar(headerCell.getAvatarReceiver(), community, name);
+  }
+
+  // XGram M3E (round 6): the hero (96dp avatar with a tonal camera badge, headlineSmall name, bodyMedium chat count)
+
+  private void xgramBindHero (XgramR6B5Pages.CommunityHero hero) {
+    TdApi.Community community = tdlib.cache().community(communityId());
+    String name = community != null && !community.name.isEmpty() ? community.name : Lang.getString(R.string.XgramCommunity);
+    hero.bind(name, Lang.plural(R.string.xChats, chatCount), canChangeInfo());
+    requestAvatar(hero.getAvatar().getReceiver(), community, name);
+    hero.getAvatar().invalidate();
+  }
+
+  /** The community's photo, or a placeholder in the accent of its first chat (or of its name), as a rounded square. */
+  private void requestAvatar (AvatarReceiver receiver, @Nullable TdApi.Community community, String name) {
     if (community != null && community.photo != null) {
-      headerCell.getAvatarReceiver().requestSpecific(tdlib, community.photo, AvatarReceiver.Options.FORCE_FORUM);
+      receiver.requestSpecific(tdlib, community.photo, AvatarReceiver.Options.FORCE_FORUM);
     } else {
       TdlibAccentColor accentColor = null;
       for (long chatId : XgramCommunityData.chatIds(tdlib, communityId(), communityFull())) {
@@ -235,7 +271,7 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
       if (accentColor == null) {
         accentColor = tdlib.accentColorForString(name);
       }
-      headerCell.getAvatarReceiver().requestPlaceholder(tdlib, new AvatarPlaceholder.Metadata(accentColor, TD.getLetters(name)), AvatarReceiver.Options.FORCE_FORUM);
+      receiver.requestPlaceholder(tdlib, new AvatarPlaceholder.Metadata(accentColor, TD.getLetters(name)), AvatarReceiver.Options.FORCE_FORUM);
     }
   }
 
@@ -264,16 +300,25 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
   private void buildItems () {
     TdApi.Community community = tdlib.cache().community(communityId());
     List<ListItem> items = new ArrayList<>();
+    final boolean xgram = XgramExpressive.isEnabled();
     if (community == null) {
-      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityLoading));
+      // XGram M3E: the loading indicator
+      items.add(xgram ? new ListItem(ListItem.TYPE_PROGRESS) : new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityLoading));
       adapter.setItems(items, false);
       return;
+    }
+    if (xgram) {
+      // The hero: photo (its badge changes it), name, chat count. One item for the page's life, so a rebuild rebinds it
+      if (xgramHeroItem == null) {
+        xgramHeroItem = new ListItem(ListItem.TYPE_CUSTOM_SINGLE);
+      }
+      items.add(xgramHeroItem);
     }
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
 
     // Photo and name
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    if (canChangeInfo()) {
+    if (canChangeInfo() && !xgram) {
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramCommunityPhoto, R.drawable.baseline_image_24, R.string.XgramCommunityChangePhoto));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     }
@@ -320,11 +365,16 @@ public final class XgramCommunitySettingsController extends RecyclerViewControll
         continue;
       }
       DoubleTextWrapper wrapper = new DoubleTextWrapper(tdlib, chat, true, false);
-      wrapper.setForcedSubtitle(XgramCommunityController.subtitleFor(tdlib, chat));
+      CharSequence subtitle = XgramCommunityController.subtitleFor(tdlib, chat);
+      wrapper.setForcedSubtitle(subtitle);
       if (!chatRows.isEmpty()) {
         chatRows.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       }
-      chatRows.add(new ListItem(ListItem.TYPE_CHAT_SMALL, R.id.btn_xgramCommunityChat).setData(wrapper).setLongId(chatId));
+      ListItem chatItem = new ListItem(ListItem.TYPE_CHAT_SMALL, R.id.btn_xgramCommunityChat).setData(wrapper).setLongId(chatId);
+      if (xgram) {
+        chatItem.setStringValue(subtitle); // the Compose row's supporting text (TgxChatRowsHints)
+      }
+      chatRows.add(chatItem);
     }
     if (!chatRows.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.Chats));

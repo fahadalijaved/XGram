@@ -77,9 +77,19 @@ public final class XgramR5SheetsInfo {
       return this;
     }
 
+    int badgeContainerRole = XgramExpressive.PRIMARY_CONTAINER, badgeContentRole = XgramExpressive.ON_PRIMARY_CONTAINER;
+
     /** A labelSmall badge with full corners in primaryContainer after the supporting line ("Current"). */
     public Row badge (@Nullable CharSequence badge) {
       this.badge = badge;
+      return this;
+    }
+
+    /** {@link #badge(CharSequence)} in other roles: "Deleted" in errorContainer, "Edited 2×" in secondaryContainer. */
+    public Row badge (@Nullable CharSequence badge, int containerRole, int contentRole) {
+      this.badge = badge;
+      this.badgeContainerRole = containerRole;
+      this.badgeContentRole = contentRole;
       return this;
     }
 
@@ -338,15 +348,15 @@ public final class XgramR5SheetsInfo {
         line.addView(supporting, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0f));
       }
       if (!TextUtils.isEmpty(row.badge)) {
-        // The sticker sets' "New" badge spec (TrendingPackHeaderView): 16dp, 6dp sides, primaryContainer; the label's
-        // colour is read when drawn, like the container's
-        TextView badge = new XgramR5Lists.RoleText(context, XgramExpressive.TS_LABEL_S, XgramExpressive.ON_PRIMARY_CONTAINER);
+        // The sticker sets' "New" badge spec (TrendingPackHeaderView): 16dp, 6dp sides, primaryContainer by default; the
+        // label's colour is read when drawn, like the container's
+        TextView badge = new XgramR5Lists.RoleText(context, XgramExpressive.TS_LABEL_S, row.badgeContentRole);
         badge.setGravity(Gravity.CENTER);
         badge.setSingleLine(true);
         badge.setIncludeFontPadding(false);
         badge.setPadding(Screen.dp(6f), 0, Screen.dp(6f), 0);
         badge.setText(row.badge);
-        XgramR5Sheets.applyCard(badge, XgramExpressive.PRIMARY_CONTAINER, XgramExpressive.CORNER_FULL);
+        XgramR5Sheets.applyCard(badge, row.badgeContainerRole, XgramExpressive.CORNER_FULL);
         LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(16f));
         if (!TextUtils.isEmpty(row.supporting)) {
           badgeParams.setMarginStart(Screen.dp(8f));
