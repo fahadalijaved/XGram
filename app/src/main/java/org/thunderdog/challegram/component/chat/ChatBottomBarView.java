@@ -77,7 +77,8 @@ public class ChatBottomBarView extends BaseView {
       public void draw (@NonNull Canvas c) {
         float barAlpha = 1f - collapseFactor;
         if (barAlpha > 0f) {
-          c.drawRect(0, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(barAlpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE))));
+          // From the top padding: the room above the bar for the collapsed FAB (MessagesController.xgramBottomBarRoom)
+          c.drawRect(0, getPaddingTop(), getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(ColorUtils.alphaColor(barAlpha, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE))));
         }
         int color = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
         RectF rectF = buildRectF();

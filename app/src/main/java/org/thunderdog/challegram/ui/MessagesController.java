@@ -607,8 +607,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     iterateMediaTabs(c ->
       c.setBottomInset(extraBottomInset, extraBottomInsetWithoutIme)
     );
-    Views.setLayoutHeight(bottomBar, Screen.dp(48f) + extraBottomInsetWithoutIme);
-    Views.setPaddingBottom(bottomBar, extraBottomInsetWithoutIme);
+    Views.setLayoutHeight(bottomBar, Screen.dp(48f) + extraBottomInsetWithoutIme + xgramBottomBarRoom() * 2);
+    Views.setPaddingBottom(bottomBar, extraBottomInsetWithoutIme + xgramBottomBarRoom());
     checkScrollButtonOffsets();
     updateMessagesViewInset();
     onMessagesFrameChanged();
@@ -1614,8 +1614,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     // Bottom bar
 
-    params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f) + extraBottomInsetWithoutIme);
+    params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(48f) + extraBottomInsetWithoutIme + xgramBottomBarRoom() * 2);
     params.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+    params.bottomMargin = -xgramBottomBarRoom();
 
     bottomBar = new ChatBottomBarView(context, tdlib) {
       @Override
@@ -1624,7 +1625,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         updateBottomBarStyle();
       }
     };
-    Views.setPaddingBottom(bottomBar, extraBottomInsetWithoutIme);
+    bottomBar.setPadding(0, xgramBottomBarRoom(), 0, extraBottomInsetWithoutIme + xgramBottomBarRoom());
     bottomBar.setOnClickListener(this);
     bottomBar.setLayoutParams(params);
     addThemeInvalidateListener(bottomBar);
@@ -6943,6 +6944,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
     } else {
       wrap.setAlpha(alpha);
     }
+  }
+
+  /**
+   * XGram M3E: the 56dp FAB the bottom bar collapses into is taller than the 48dp bar, and the bar's view is clipped to
+   * its bounds, so the button lost its top and bottom (the bell above the scroll button in channels). The view gets
+   * this much room above and below the bar as padding, and a negative bottom margin keeps the bar where it was. 0 with
+   * Expressive design off.
+   */
+  private static int xgramBottomBarRoom () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(8f) : 0;
   }
 
   /** XGram: the step between stacked floating buttons: Telegram X's 58dp, 68dp for the 56dp M3 FABs (12dp apart). */
