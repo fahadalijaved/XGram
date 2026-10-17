@@ -104,6 +104,16 @@ public class InstantViewController extends ViewController<InstantViewController.
   @Override
   public void fillMenuItems (int id, HeaderView header, LinearLayout menu) {
     if (id == R.id.menu_iv) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the small app bar's standard share icon button (48dp), with its tooltip
+        View share = header.genButton(R.id.menu_btn_forward, com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_share_24), getHeaderIconColorId(), this, Screen.dp(48f), ThemeDeprecated.headerSelector(), header);
+        share.setContentDescription(Lang.getString(R.string.Share));
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+          share.setTooltipText(share.getContentDescription());
+        }
+        menu.addView(share, Lang.rtl() ? 0 : -1);
+        return;
+      }
       menu.addView(header.genButton(R.id.menu_btn_forward, R.drawable.baseline_share_arrow_24, getHeaderIconColorId(), this, Screen.dp(52f), ThemeDeprecated.headerSelector(), header), Lang.rtl() ? 0 : -1);
     }
   }
@@ -236,7 +246,7 @@ public class InstantViewController extends ViewController<InstantViewController.
     if (openParameters.tooltip != null) {
       TdApi.RichText referenceText = Td.findReference(getArgumentsStrict().instantView, referenceAnchorName);
       if (referenceText != null) {
-        TextWrapper textWrapper = TextWrapper.parseRichText(this, this, referenceText, Paints.robotoStyleProvider(13f), openParameters.tooltip.colorProvider(), openParameters, null);
+        TextWrapper textWrapper = TextWrapper.parseRichText(this, this, referenceText, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)) : Paints.robotoStyleProvider(13f), openParameters.tooltip.colorProvider(), openParameters, null); // XGram: bodyMedium
         openParameters.tooltip.anchor(view, ((PageBlockView) view).getBlock().getViewProvider()).controller(this).show(textWrapper);
         return true;
       }
@@ -356,7 +366,8 @@ public class InstantViewController extends ViewController<InstantViewController.
 
     FrameLayout contentView = new FrameLayout(context);
     contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-    ViewSupport.setThemedBackground(contentView, ColorId.background, this);
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    ViewSupport.setThemedBackground(contentView, xgram ? ColorId.filling : ColorId.background, this); // XGram M3E: the whole page on surface
 
     recyclerView = (RecyclerView) Views.inflate(context(), R.layout.recycler, contentView);
     recyclerView.setHasFixedSize(true);
@@ -426,6 +437,13 @@ public class InstantViewController extends ViewController<InstantViewController.
     buildCells(pageBlocks, false);
 
     recyclerView.setAdapter(adapter);
+    if (xgram) {
+      // XGram M3E: the article is not a settings list: no segmented tiles or large title of the shared decorations;
+      // the small app bar lifts (surfaceContainer) once the article scrolls under it
+      com.fahadali.xgram.appearance.XgramExpressive.detachListDecoration(recyclerView);
+      com.fahadali.xgram.appearance.XgramM3Bars.detachLargeTitle(recyclerView);
+      com.fahadali.xgram.appearance.XgramMotion.attachScrollLink(this, recyclerView, 0);
+    }
 
     TGLegacyManager.instance().addEmojiListener(this);
     ThemeManager.instance().addThemeListener(this);

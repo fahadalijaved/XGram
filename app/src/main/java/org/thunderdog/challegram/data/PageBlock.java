@@ -282,7 +282,7 @@ public abstract class PageBlock {
     if (isPost) {
       final int lineColor = Theme.getColor(ColorId.iv_blockQuoteLine);
       RectF rectF = Paints.getRectF();
-      int lineWidth = Screen.dp(3f);
+      int lineWidth = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 4f : 3f); // XGram M3E: a 4dp full-corner primary bar
       int linePadding = Screen.dp(8f) / 2;
       int contentLeft = Screen.dp(PageBlockRichText.TEXT_HORIZONTAL_OFFSET);
       int contentTop = getContentTop();

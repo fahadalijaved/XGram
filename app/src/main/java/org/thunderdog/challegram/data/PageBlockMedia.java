@@ -432,8 +432,50 @@ public class PageBlockMedia extends PageBlock implements MediaWrapper.OnClickLis
     }
   }
 
+  // XGram M3E: media inside the article (not the full-width cover) is clipped to 16dp corners (shape.corner.large)
+
+  private final android.graphics.Path xgramClip = new android.graphics.Path();
+  private final android.graphics.RectF xgramClipRect = new android.graphics.RectF();
+
+  private boolean xgramClips () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isCover;
+  }
+
+  private int xgramClipTo (Canvas c, float left, float top, float right, float bottom) {
+    final int saveCount = c.save();
+    xgramClipRect.set(left, top, right, bottom);
+    final float r = Math.min(Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L), Math.min(xgramClipRect.width(), xgramClipRect.height()) / 2f);
+    xgramClip.rewind();
+    xgramClip.addRoundRect(xgramClipRect, r, r, android.graphics.Path.Direction.CW);
+    c.clipPath(xgramClip);
+    return saveCount;
+  }
+
   @Override
   protected <T extends View & DrawableProvider> void drawInternal (T view, Canvas c, Receiver preview, Receiver receiver, ComplexReceiver iconReceiver) {
+    if (xgramClips()) {
+      int saveCount = -1;
+      if (embedded != null || map != null) {
+        saveCount = xgramClipTo(c, getMinimumContentPadding(true), getContentTop(), view.getMeasuredWidth() - getMinimumContentPadding(false), getComputedHeight() - (!ignoreBottomPadding ? getContentTop() : 0));
+      } else if (collageContext != null && view instanceof PageBlockView) {
+        final int maxWidth = view.getMeasuredWidth() - getMinimumContentPadding(true) - getMinimumContentPadding(false);
+        final int collageWidth = collageContext.getWidth();
+        final int x = !isIndependent() ? getMinimumContentPadding(true) : collageWidth < maxWidth ? (maxWidth - collageWidth) / 2 : 0;
+        saveCount = xgramClipTo(c, x, getContentTop(), x + collageWidth, getContentTop() + collageContext.getCachedHeight());
+      } else if (wrapper != null) {
+        final int x = ((view.getMeasuredWidth() - getMinimumContentPadding(true) - getMinimumContentPadding(false)) / 2 - wrapper.getCellWidth() / 2) + getMinimumContentPadding(true);
+        saveCount = xgramClipTo(c, x, getContentTop(), x + wrapper.getCellWidth(), getContentTop() + wrapper.getCellHeight());
+      }
+      xgramDrawInternal(view, c, preview, receiver, iconReceiver);
+      if (saveCount != -1) {
+        c.restoreToCount(saveCount);
+      }
+      return;
+    }
+    xgramDrawInternal(view, c, preview, receiver, iconReceiver);
+  }
+
+  private <T extends View & DrawableProvider> void xgramDrawInternal (T view, Canvas c, Receiver preview, Receiver receiver, ComplexReceiver iconReceiver) {
     if (embedded != null || map != null) {
       preview.setBounds(getMinimumContentPadding(true), getContentTop(), view.getMeasuredWidth() - getMinimumContentPadding(false), getComputedHeight() - (!isCover && !ignoreBottomPadding ? getContentTop() : 0));
       receiver.setBounds(preview.getLeft(), preview.getTop(), preview.getRight(), preview.getBottom());

@@ -402,6 +402,74 @@ public final class XgramR6B7Places {
     }
   }
 
+  // Instant View slideshows: the M3E page indicator over the photos
+
+  /**
+   * A 16x6dp primary pill for the current page and 6dp dots at 38% for the others, 6dp apart, on a soft dark pill so it
+   * reads over any photo; the pill stretches between dots as the pager scrolls. Over media, so the dark scheme's roles.
+   */
+  public static final class PageIndicator extends org.thunderdog.challegram.widget.ViewPagerPositionView {
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF item = new RectF();
+    private int count;
+    private float position;
+
+    public PageIndicator (Context context) {
+      super(context);
+    }
+
+    @Override
+    public void reset (int count, float factor) {
+      super.reset(count, factor);
+      if (this.count != count || this.position != factor) {
+        this.count = count;
+        this.position = factor;
+        invalidate();
+      }
+    }
+
+    @Override
+    public void setPositionFactor (float factor) {
+      super.setPositionFactor(factor);
+      if (this.position != factor) {
+        this.position = factor;
+        invalidate();
+      }
+    }
+
+    private float selectedOf (int i) {
+      return MathUtils.clamp(1f - Math.abs(position - i));
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      if (count <= 1) {
+        return;
+      }
+      final float dot = Screen.dpf(6f), active = Screen.dpf(16f), gap = Screen.dpf(6f);
+      float total = gap * (count - 1);
+      for (int i = 0; i < count; i++) {
+        total += dot + (active - dot) * selectedOf(i);
+      }
+      final float cy = getHeight() / 2f;
+      float x = (getWidth() - total) / 2f;
+      final float pad = Screen.dpf(6f);
+      item.set(x - pad, cy - dot / 2f - pad, x + total + pad, cy + dot / 2f + pad);
+      paint.setColor(0x3d000000);
+      c.drawRoundRect(item, item.height() / 2f, item.height() / 2f, paint);
+      final int primary = XgramExpressive.colorFor(XgramExpressive.PRIMARY, true);
+      final int rest = XgramExpressive.withAlpha(XgramExpressive.colorFor(XgramExpressive.ON_SURFACE, true), .38f);
+      for (int i = 0; i < count; i++) {
+        final float s = selectedOf(i);
+        final float w = dot + (active - dot) * s;
+        item.set(x, cy - dot / 2f, x + w, cy + dot / 2f);
+        paint.setColor(ColorUtils.fromToArgb(rest, primary, s));
+        c.drawRoundRect(item, dot / 2f, dot / 2f, paint);
+        x += w + gap;
+      }
+    }
+  }
+
   // Attach sheet: the caption field that rises above the navigation bar while photos are selected
 
   /**
