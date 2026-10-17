@@ -813,7 +813,6 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (tabL && tabR && !forward) {
       setTarget(computeSelected(left), true); // back to the chat list: the pill morphs with the fade
     }
-    ViewController<?> entering = forward ? right : left;
     boolean enteringTab = forward ? tabR : tabL;
     if (enteringTab && (scrollHidden || (forceMask & FORCE_TRANSFORM) != 0)) {
       scrollHidden = false;
@@ -822,8 +821,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       boolean follows = tabL != tabR; // it comes back with its screen: already in place
       updateHidden(!follows);
     }
-    if (entering != null && enteringTab && tabL && tabR) {
+    if (tabL && tabR) {
       away = false;
+    }
+    if (kind == KIND_CARD && holeKnown) {
+      applyCardHole(); // the card is above the toolbar from its first frame
     }
     applyTransitionFrame();
   }
@@ -883,15 +885,31 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (destroyed || preview) {
       return;
     }
-    if (rectInRoot == null || !transitionActive) {
+    if (rectInRoot == null) {
+      holeKnown = false;
       host.setCardHole(null, 0f);
       return;
     }
-    holeRect.set(rectInRoot);
+    // Kept: the card's first frame comes before the transition's begin (it is applied there)
+    holeInRoot.set(rectInRoot);
+    cardHoleRadius = radius;
+    cardHoleAlpha = alpha;
+    holeKnown = true;
+    if (transitionActive) {
+      applyCardHole();
+    }
+  }
+
+  private final RectF holeInRoot = new RectF();
+  private float cardHoleRadius, cardHoleAlpha;
+  private boolean holeKnown;
+
+  private void applyCardHole () {
+    holeRect.set(holeInRoot);
     holeRect.offset(holeOffsetX, holeOffsetY);
     holePath.rewind();
-    holePath.addRoundRect(holeRect, radius, radius, Path.Direction.CW);
-    host.setCardHole(holePath, alpha);
+    holePath.addRoundRect(holeRect, cardHoleRadius, cardHoleRadius, Path.Direction.CW);
+    host.setCardHole(holePath, cardHoleAlpha);
   }
 
   // Following the screens
@@ -900,6 +918,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     transitionActive = false;
     tLeft = tRight = null;
     tabL = tabR = false;
+    holeKnown = false;
     host.setCardHole(null, 0f);
   }
 
@@ -1454,7 +1473,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (buttonMode) {
       int buttonLeft = Math.round(rtl ? groupLeft : groupLeft + w + Screen.dpf(BUTTON_GAP));
       int buttonTop = top + (Screen.dp(HEIGHT) - Screen.dp(BUTTON)) / 2;
-      profile.layout(buttonLeft, buttonTop, buttonLeft + Screen.dp(BUTTON), buttonTop + Screen.dp(BUTTON));
+      int slop = Screen.dp(BUTTON_HIT_SLOP); // the view is 4dp larger on each side: the touch area around the button
+      profile.layout(buttonLeft - slop, buttonTop - slop, buttonLeft + Screen.dp(BUTTON) + slop, buttonTop + Screen.dp(BUTTON) + slop);
     }
     pill.markDirty();
     host.invalidate();
@@ -1824,7 +1844,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       this.view = new TabView(context, this);
       if (dest == DEST_PROFILE) {
         avatar = new AvatarReceiver(pill);
-        if (pill.isAttachedToWindow()) {
+        if (androidx.core.view.ViewCompat.isAttachedToWindow(pill)) {
           avatar.attach();
         }
         requestAvatar(tdlib);
@@ -2004,7 +2024,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       setMeasuredDimension(width, height);
       ensureFit(width);
       pill.measure(MeasureSpec.makeMeasureSpec(Math.max(0, Math.round(widthSpring.getValue())), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Screen.dp(HEIGHT), MeasureSpec.EXACTLY));
-      profile.measure(MeasureSpec.makeMeasureSpec(Screen.dp(BUTTON), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Screen.dp(BUTTON), MeasureSpec.EXACTLY));
+      int buttonSize = Screen.dp(BUTTON) + 2 * Screen.dp(BUTTON_HIT_SLOP);
+      profile.measure(MeasureSpec.makeMeasureSpec(buttonSize, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(buttonSize, MeasureSpec.EXACTLY));
     }
 
     @Override
@@ -2606,7 +2627,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         setOutlineProvider(new ViewOutlineProvider() {
           @Override
           public void getOutline (View view, Outline outline) {
-            outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), corner());
+            int slop = Screen.dp(BUTTON_HIT_SLOP);
+            outline.setRoundRect(slop, slop, view.getWidth() - slop, view.getHeight() - slop, corner());
           }
         });
       }
@@ -2718,9 +2740,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       int selected = color(vibrant ? XgramExpressive.TERTIARY : XgramExpressive.SECONDARY_CONTAINER);
       paint.setColor(ColorUtils.fromToArgb(rest, selected, MathUtils.clamp(select.getValue())));
       float radius = corner();
-      rect.set(0, 0, width, height);
+      float slop = Screen.dpf(BUTTON_HIT_SLOP);
+      rect.set(slop, slop, width - slop, height - slop);
       c.drawRoundRect(rect, radius, radius, paint);
-      setStateShape(0, 0, width, height, radius);
+      setStateShape(rect.left, rect.top, rect.right, rect.bottom, radius);
       drawState(c);
       float scale = 1f + (AVATAR_PRESSED_SCALE - 1f) * MathUtils.clamp(press.getValue());
       int size = Math.round(Screen.dpf(AVATAR) * scale);
