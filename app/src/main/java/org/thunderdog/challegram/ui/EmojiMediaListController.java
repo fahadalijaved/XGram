@@ -428,6 +428,8 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
       if (i == 0) {
         View view = manager.findViewByPosition(0);
         return view != null ? -manager.getDecoratedTop(view) : 0;
+      } else if (i == RecyclerView.NO_POSITION && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return 0; // XGram: not laid out yet (shown at once for the switch, before a layout): it opens at its top
       } else {
         return EmojiLayout.getHeaderSize();
       }
