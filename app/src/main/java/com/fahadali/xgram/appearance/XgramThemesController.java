@@ -376,16 +376,17 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
       preview.set(item.theme, false);
       name.setText(item.theme.name);
       setContentDescription(item.theme.name);
-      card.setChecked(selected, animated);
+      // Locked (Expressive design is on): dimmed once, the content at .38 on its card (the supporting line above says
+      // when they apply), and never shown as chosen: the wallpaper colors card is the one in use
+      final boolean checked = selected && !locked;
+      card.setChecked(checked, animated);
       card.setDisabled(locked);
-      setSelected(selected);
+      setSelected(checked);
       setEnabled(!locked);
       setClickable(!locked);
-      // Locked (Expressive design is on): dimmed once, the content at .38 on its card (the supporting line above says
-      // when they apply), and no check badge: the wallpaper colors are the ones in use
       setAlpha(1f);
       preview.setAlpha(locked ? XgramExpressive.DISABLED_CONTENT : 1f);
-      final int nameColor = XgramExpressive.color(selected ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE);
+      final int nameColor = XgramExpressive.color(checked ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE);
       name.setTextColor(locked ? XgramExpressive.withAlpha(nameColor, XgramExpressive.DISABLED_CONTENT) : nameColor);
       invalidate();
     }
