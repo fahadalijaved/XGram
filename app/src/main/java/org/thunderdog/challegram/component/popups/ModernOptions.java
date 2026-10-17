@@ -110,13 +110,102 @@ public class ModernOptions {
    * primaryContainer holds the icon in onPrimaryContainer, then the headlineSmall title and the bodyMedium text
    * (onSurfaceVariant), centered, and the actions row: "Privacy policy" as a text button at the start, then "Cancel"
    * and the filled "Continue" at the end. The scrim does not close it (as Telegram X's), so Cancel stays.
+   * Round 6: public, built on {@link XgramHero}.
    */
-  private static void xgramShowHeroConfirm (ViewController<?> context, @DrawableRes int icon, CharSequence title, CharSequence text, Runnable onCancel, Runnable onAgree) {
+  public static PopupLayout xgramShowHeroConfirm (ViewController<?> context, @DrawableRes int icon, CharSequence title, CharSequence text, Runnable onCancel, Runnable onAgree) {
+    return new XgramHero(icon, title, text)
+      .neutral(com.fahadali.xgram.appearance.XgramR5Sheets.sentenceCase(R.string.PrivacyPolicy, R.string.XgramR5SheetsPrivacyPolicy), () -> {
+        onCancel.run();
+        context.tdlib().ui().openUrl(context, Lang.getStringSecure(R.string.url_privacyPolicy), new TdlibUi.UrlOpenParameters().forceInstantView());
+      })
+      .cancel(Lang.getString(R.string.Cancel), onCancel)
+      .confirm(Lang.getString(R.string.Continue), onAgree)
+      .show(context);
+  }
+
+  /**
+   * XGram M3E r6: a hero confirm sheet with any actions (permission prompts, offline and call notices): [cancelText]
+   * (a text button) and [confirmText] (the filled button) at the end, an optional neutral text button at the start.
+   * Each button closes the sheet before its action runs.
+   */
+  public static PopupLayout xgramShowHeroConfirm (ViewController<?> context, @DrawableRes int icon, CharSequence title, CharSequence text, @Nullable CharSequence cancelText, @Nullable Runnable onCancel, CharSequence confirmText, @Nullable Runnable onConfirm) {
+    XgramHero hero = new XgramHero(icon, title, text).confirm(confirmText, onConfirm);
+    if (cancelText != null) {
+      hero.cancel(cancelText, onCancel);
+    }
+    return hero.show(context);
+  }
+
+  /**
+   * XGram M3E r6: what a hero confirm sheet shows: the icon on a 96dp cookie (primaryContainer, errorContainer for a
+   * destructive one), the headlineSmall title, the bodyMedium text, and up to three actions: [neutral] ... [cancel]
+   * [confirm, filled]. {@link #onDismiss} runs when the sheet closes without a button (back).
+   */
+  public static final class XgramHero {
+    private final @DrawableRes int icon;
+    private final CharSequence title, text;
+    private @Nullable CharSequence neutralText, cancelText, confirmText;
+    private @Nullable Runnable onNeutral, onCancel, onConfirm, onDismiss;
+    private boolean destructive, keepOpenOnConfirm;
+
+    public XgramHero (@DrawableRes int icon, CharSequence title, CharSequence text) {
+      this.icon = icon;
+      this.title = title;
+      this.text = text;
+    }
+
+    public XgramHero neutral (CharSequence text, @Nullable Runnable action) {
+      this.neutralText = text;
+      this.onNeutral = action;
+      return this;
+    }
+
+    public XgramHero cancel (CharSequence text, @Nullable Runnable action) {
+      this.cancelText = text;
+      this.onCancel = action;
+      return this;
+    }
+
+    public XgramHero confirm (CharSequence text, @Nullable Runnable action) {
+      this.confirmText = text;
+      this.onConfirm = action;
+      return this;
+    }
+
+    /** The confirm button and the hero in the error roles. */
+    public XgramHero destructive () {
+      this.destructive = true;
+      return this;
+    }
+
+    /** The confirm button runs its action without closing the sheet (it closes later, e.g. once a permission is on). */
+    public XgramHero keepOpenOnConfirm () {
+      this.keepOpenOnConfirm = true;
+      return this;
+    }
+
+    public XgramHero onDismiss (@Nullable Runnable onDismiss) {
+      this.onDismiss = onDismiss;
+      return this;
+    }
+
+    public PopupLayout show (ViewController<?> context) {
+      return xgramShowHero(context, this);
+    }
+  }
+
+  private static PopupLayout xgramShowHero (ViewController<?> context, XgramHero spec) {
+    final boolean[] handled = {false};
+    final @DrawableRes int icon = spec.icon;
+    final CharSequence title = spec.title, text = spec.text;
     PopupLayout popup = context.showPopup(null, false, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsLayout) -> {
       final Context ctx = optionsLayout.getContext();
       final int width = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(context.context().getControllerWidth(optionsLayout));
 
       com.fahadali.xgram.appearance.XgramR5Sheets.ShapeIconView hero = new com.fahadali.xgram.appearance.XgramR5Sheets.ShapeIconView(ctx, 96f, 48f).setIcon(icon);
+      if (spec.destructive) {
+        hero.setRoles(com.fahadali.xgram.appearance.XgramExpressive.ERROR_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR_CONTAINER);
+      }
       hero.setContentDescription(title);
       hero.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -140,25 +229,40 @@ public class ModernOptions {
       textParams.topMargin = Screen.dp(8f);
       textView.setLayoutParams(textParams);
 
-      TextView privacy = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(ctx,
-        com.fahadali.xgram.appearance.XgramR5Sheets.sentenceCase(R.string.PrivacyPolicy, R.string.XgramR5SheetsPrivacyPolicy),
-        com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
-      privacy.setOnClickListener(v -> {
-        popupLayout.hideWindow(true);
-        onCancel.run();
-        context.tdlib().ui().openUrl(context, Lang.getStringSecure(R.string.url_privacyPolicy), new TdlibUi.UrlOpenParameters().forceInstantView());
-      });
-      TextView cancel = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(ctx, Lang.getString(R.string.Cancel), com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
-      cancel.setOnClickListener(v -> {
-        popupLayout.hideWindow(true);
-        onCancel.run();
-      });
-      TextView agree = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(ctx, Lang.getString(R.string.Continue), false, null);
-      agree.setOnClickListener(v -> {
-        popupLayout.hideWindow(true);
-        onAgree.run();
-      });
-      LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(ctx, privacy, cancel, agree);
+      TextView neutral = null, cancel = null, agree = null;
+      if (spec.neutralText != null) {
+        neutral = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(ctx, spec.neutralText, com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+        neutral.setOnClickListener(v -> {
+          handled[0] = true;
+          popupLayout.hideWindow(true);
+          if (spec.onNeutral != null) {
+            spec.onNeutral.run();
+          }
+        });
+      }
+      if (spec.cancelText != null) {
+        cancel = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(ctx, spec.cancelText, com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+        cancel.setOnClickListener(v -> {
+          handled[0] = true;
+          popupLayout.hideWindow(true);
+          if (spec.onCancel != null) {
+            spec.onCancel.run();
+          }
+        });
+      }
+      if (spec.confirmText != null) {
+        agree = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(ctx, spec.confirmText, spec.destructive, null);
+        agree.setOnClickListener(v -> {
+          if (!spec.keepOpenOnConfirm) {
+            handled[0] = true;
+            popupLayout.hideWindow(true);
+          }
+          if (spec.onConfirm != null) {
+            spec.onConfirm.run();
+          }
+        });
+      }
+      LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(ctx, neutral, cancel, agree);
       LinearLayout.LayoutParams actionsParams = (LinearLayout.LayoutParams) actions.getLayoutParams();
       actionsParams.topMargin = Screen.dp(16f);
       actionsParams.bottomMargin = Screen.dp(8f);
@@ -183,7 +287,17 @@ public class ModernOptions {
     }, null, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S);
     if (popup != null) {
       popup.setDisableCancelOnTouchDown(true);
+      if (spec.onDismiss != null) {
+        final Runnable onDismiss = spec.onDismiss;
+        popup.setDismissListener(p -> {
+          if (!handled[0]) {
+            handled[0] = true;
+            onDismiss.run();
+          }
+        });
+      }
     }
+    return popup;
   }
 
   private static void addBigColoredHeader (PopupLayout layout, @DrawableRes int icon) {

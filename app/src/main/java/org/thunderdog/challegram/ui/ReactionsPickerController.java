@@ -837,6 +837,19 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
     emojiTypesRecyclerView.setVisibility(View.GONE);
     emojiTypesRecyclerView.init(this, this::searchEmojiSection);
     emojiTypesRecyclerView.setMinimalLeftPadding(((int) U.measureText(Lang.getString(R.string.Search), Paints.getRegularTextPaint(16))) + Screen.dp(68 - 56));
+    if (xgramM3()) {
+      // XGram M3E r6: no shadow over the grid (the bar is the sheet's own color), and the categories start after the
+      // "Search" hint as the M3 search bar draws it (bodyLarge)
+      bottomHeaderView.getFilling().setShadowAlpha(0f);
+      android.text.TextPaint hintPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+      hintPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false));
+      hintPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L)));
+      hintPaint.setLetterSpacing(com.fahadali.xgram.appearance.XgramExpressive.trackingSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L) / com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L));
+      emojiTypesRecyclerView.setMinimalLeftPadding(((int) U.measureText(Lang.getString(R.string.Search), hintPaint)) + Screen.dp(68 - 56));
+      // the categories fade and the top app bar slides on springs, not Telegram X's 220ms decelerate
+      com.fahadali.xgram.appearance.XgramAppMotion.use(bottomHeaderSearchModeVisibility, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(topHeaderVisibility, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
+    }
 
     bottomHeaderViewGroup = new FrameLayout(context);
     bottomHeaderViewGroup.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, HeaderView.getSize(false) + extraBottomInsetWithoutIme, Gravity.BOTTOM));
@@ -999,7 +1012,7 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
 
     @Override
     protected int getHeaderColorId () {
-      return ColorId.filling;
+      return xgramM3() ? ColorId.drawer : ColorId.filling; // XGram M3E r6: the bottom bar on the sheet color (surfaceContainerLow)
     }
 
     @Override

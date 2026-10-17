@@ -722,6 +722,7 @@ public class TdlibContactManager implements CleanupStartupDelegate {
 
   public void makeSilentPermissionCheck (BaseActivity context) {
     boolean hasPermission = context.permissions().canReadContacts();
+    xgramCheckPendingRetry(context, hasPermission); // XGram M3E r6: the hero sheet's "Open settings" wait
     if (pendingRetryDialog != null && pendingRetryDialog.getContext() == context && hasPermission) {
       DialogInterface dialog = pendingRetryDialog;
       Runnable callback = pendingRetryCallback;
@@ -782,6 +783,10 @@ public class TdlibContactManager implements CleanupStartupDelegate {
       }
     } else {
       message = Lang.getMarkdownString(delegate, R.string.SyncHint3, appName);
+    }
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramShowSyncPrompt(context, flags, callback, isRetry, allowNever, message)) {
+      return; // XGram M3E r6: the prompt as a hero sheet
     }
 
     AlertDialog.Builder b = new AlertDialog.Builder(context, Theme.dialogTheme());
@@ -846,6 +851,119 @@ public class TdlibContactManager implements CleanupStartupDelegate {
       if (isRetry) {
         pendingRetryDialog = dialog;
         pendingRetryCallback = callback;
+      }
+    }
+  }
+
+  // XGram M3E r6: the contacts prompt as a hero sheet
+
+  private @Nullable org.thunderdog.challegram.widget.PopupLayout xgramPrompt, xgramPendingRetry;
+  private @Nullable BaseActivity xgramPendingRetryContext;
+  private @Nullable Runnable xgramPendingRetryCallback;
+  private @Nullable boolean[] xgramPendingResolved;
+
+  /**
+   * The contacts prompt as an M3E hero sheet: the contacts icon on a 96dp cookie, "Sync contacts with Telegram?" (or
+   * "Allow contacts access" once the permission was refused for good), Telegram X's explanation, and [Never] [Sync]
+   * ([Never] [Open settings] when the permission has to be turned on in Settings: that sheet stays until it is, see
+   * {@link #makeSilentPermissionCheck}). Every button does what Telegram X's dialog does; closing it with back is "not
+   * now". False when there is no page to show it from.
+   */
+  private boolean xgramShowSyncPrompt (final BaseActivity context, final int flags, final @Nullable Runnable callback, final boolean isRetry, final boolean allowNever, CharSequence message) {
+    if (xgramPrompt != null && !xgramPrompt.isWindowHidden()) {
+      return true; // already on screen
+    }
+    final org.thunderdog.challegram.navigation.NavigationController navigation = context.navigation();
+    final org.thunderdog.challegram.navigation.ViewController<?> c = navigation != null ? navigation.getCurrentStackItem() : null;
+    if (c == null || c.isDestroyed() || context.isFinishing()) {
+      return false;
+    }
+    final boolean settings = isRetry && !context.permissions().canReadContacts();
+    final boolean[] resolved = {false};
+    final Runnable clearPending = () -> {
+      if (xgramPendingResolved == resolved) {
+        xgramPendingRetry = null;
+        xgramPendingRetryContext = null;
+        xgramPendingRetryCallback = null;
+        xgramPendingResolved = null;
+      }
+    };
+    org.thunderdog.challegram.component.popups.ModernOptions.XgramHero hero = new org.thunderdog.challegram.component.popups.ModernOptions.XgramHero(
+      R.drawable.baseline_contact_phone_24,
+      Lang.getString(settings ? R.string.XgramR6B1AllowContacts : R.string.SyncHintTitle2),
+      message
+    ).cancel(Lang.getString(R.string.Never), () -> {
+      resolved[0] = true;
+      clearPending.run();
+      if (callback != null) {
+        callback.run();
+      }
+      setHideOption(HIDE_OPTION_NEVER);
+      setStatus(STATUS_INACTIVE);
+    }).confirm(Lang.getString(settings ? R.string.XgramR6B1OpenSettings : R.string.SyncBtn), () -> {
+      if (isRetry) {
+        Intents.openPermissionSettings();
+        return;
+      }
+      resolved[0] = true;
+      setHideOption(HIDE_OPTION_DEFAULT);
+      if (!context.permissions().requestReadContacts(granted -> {
+        if (granted) {
+          if (getStatus() == STATUS_INACTIVE) {
+            setStatus(STATUS_IN_FIRST_PROGRESS);
+          }
+          startSyncIfNeeded(context, allowNever, callback);
+        } else if (context.permissions().shouldShowReadContactsRationale()) {
+          showAlert(context, flags | FLAG_NOT_FIRST_TIME, callback);
+        } else {
+          // User has checked "Never ask again" or something like that
+          showAlert(context, flags | FLAG_NOT_FIRST_TIME | FLAG_PERMISSION_DISABLED, callback);
+        }
+      })) {
+        setStatus(STATUS_IN_FIRST_PROGRESS);
+        startSyncIfNeeded(context, allowNever, callback);
+      }
+    }).onDismiss(() -> {
+      if (!resolved[0]) {
+        resolved[0] = true;
+        clearPending.run();
+        if (callback != null) {
+          callback.run();
+        }
+      }
+    });
+    if (isRetry) {
+      hero.keepOpenOnConfirm();
+    }
+    final org.thunderdog.challegram.widget.PopupLayout popup = hero.show(c);
+    if (popup == null) {
+      return false;
+    }
+    xgramPrompt = popup;
+    if (isRetry) {
+      xgramPendingRetry = popup;
+      xgramPendingRetryContext = context;
+      xgramPendingRetryCallback = callback;
+      xgramPendingResolved = resolved;
+    }
+    return true;
+  }
+
+  /** The permission was turned on in Settings while the "Open settings" sheet waited: it closes and the flow goes on. */
+  private void xgramCheckPendingRetry (BaseActivity context, boolean hasPermission) {
+    if (hasPermission && xgramPendingRetry != null && xgramPendingRetryContext == context && xgramPendingResolved != null) {
+      final org.thunderdog.challegram.widget.PopupLayout popup = xgramPendingRetry;
+      final Runnable callback = xgramPendingRetryCallback;
+      xgramPendingResolved[0] = true;
+      xgramPendingRetry = null;
+      xgramPendingRetryContext = null;
+      xgramPendingRetryCallback = null;
+      xgramPendingResolved = null;
+      if (callback != null) {
+        callback.run();
+      }
+      if (!popup.isWindowHidden()) {
+        popup.hideWindow(true);
       }
     }
   }

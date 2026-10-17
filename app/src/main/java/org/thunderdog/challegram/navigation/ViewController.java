@@ -1680,6 +1680,13 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
     LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL);
     ll.addView(inputView, params);
+    // XGram M3E r6: the M3 dialog's content insets (24dp sides, 16dp under the title, the actions right below) and a
+    // bodySmall error line under the field, shown when the value is refused
+    final TextView xgramErrorView = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramNewInputError(forcedTheme) : null;
+    if (xgramErrorView != null) {
+      ll.setPadding(Screen.dp(24f), Screen.dp(16f), Screen.dp(24f), 0);
+      ll.addView(xgramErrorView);
+    }
     if (layoutOverride != null) {
       layoutOverride.runWithData(ll);
     }
@@ -1751,7 +1758,94 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
           }
         });
     }
+    if (xgramErrorView != null) {
+      xgramBindInputAlert(dialog, inputView, xgramErrorView, value, defaultValue, needReset, callback, hideKeyboard);
+    }
     return inputView;
+  }
+
+  /** XGram M3E r6: the error line of an input dialog: bodySmall in error, 4dp under the field, hidden until needed. */
+  private TextView xgramNewInputError (@Nullable ThemeDelegate forcedTheme) {
+    TextView errorView = new NoScrollTextView(context);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(errorView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, false);
+    errorView.setTextColor(com.fahadali.xgram.appearance.XgramR5Sheets.role(com.fahadali.xgram.appearance.XgramExpressive.ERROR, forcedTheme));
+    errorView.setText(Lang.getString(R.string.XgramR6B1InputInvalid));
+    errorView.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    errorView.setVisibility(View.GONE);
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    params.topMargin = Screen.dp(4f);
+    errorView.setLayoutParams(params);
+    return errorView;
+  }
+
+  /**
+   * XGram M3E r6: an input dialog's M3 behaviour: a refused value puts the field in its error state with the error line
+   * under it (both cleared on the next edit), the keyboard's Done confirms, and Done stays disabled while the field is
+   * empty when it opened empty (confirming nothing would change nothing). The buttons do what Telegram X's do.
+   */
+  private void xgramBindInputAlert (AlertDialog dialog, MaterialEditTextGroup inputView, TextView errorView, @Nullable CharSequence value, @Nullable String defaultValue, boolean needReset, InputAlertCallback callback, boolean hideKeyboard) {
+    final Button positive = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+    final boolean emptyIsNoOp = StringUtils.isEmpty(value);
+    final Runnable refuse = () -> {
+      inputView.setInErrorState(true);
+      errorView.setVisibility(View.VISIBLE);
+    };
+    if (positive != null) {
+      positive.setOnClickListener(v -> {
+        String result = inputView.getText().toString();
+        if (callback.onAcceptInput(inputView, result)) {
+          if (hideKeyboard) {
+            Keyboard.hide(inputView.getEditText());
+          }
+          dialog.dismiss();
+        } else {
+          refuse.run();
+        }
+      });
+      if (emptyIsNoOp) {
+        positive.setEnabled(!StringUtils.isEmpty(inputView.getText()));
+      }
+    }
+    if (needReset) {
+      final Button neutral = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
+      if (neutral != null) {
+        neutral.setOnClickListener(v -> {
+          if (callback.onAcceptInput(inputView, defaultValue)) {
+            if (hideKeyboard) {
+              Keyboard.hide(inputView.getEditText());
+            }
+            dialog.dismiss();
+          } else {
+            refuse.run();
+          }
+        });
+      }
+    }
+    inputView.getEditText().addTextChangedListener(new TextWatcher() {
+      @Override
+      public void beforeTextChanged (CharSequence s, int start, int count, int after) { }
+
+      @Override
+      public void onTextChanged (CharSequence s, int start, int before, int count) {
+        if (errorView.getVisibility() != View.GONE) {
+          errorView.setVisibility(View.GONE);
+        }
+        if (emptyIsNoOp && positive != null) {
+          positive.setEnabled(!StringUtils.isEmpty(s));
+        }
+      }
+
+      @Override
+      public void afterTextChanged (Editable s) { }
+    });
+    final int imeOptions = inputView.getEditText().getImeOptions();
+    inputView.getEditText().setImeOptions((imeOptions & ~android.view.inputmethod.EditorInfo.IME_MASK_ACTION) | android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+    inputView.setDoneListener(v -> {
+      if (positive != null && positive.isEnabled()) {
+        positive.performClick();
+      }
+      return true;
+    });
   }
 
   protected final AlertDialog modifyAlert (AlertDialog dialog, int flags) {
@@ -1781,6 +1875,9 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   public void openMissingPermissionAlert (@StringRes int message) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramR6B1Prompts.showMissingPermission(this, message)) {
+      return; // XGram M3E r6: "Allow microphone access" hero sheet with [Not now] [Open settings]
+    }
     AlertDialog.Builder b = new AlertDialog.Builder(context, Theme.dialogTheme());
     b.setTitle(Lang.getString(R.string.AppName));
     b.setMessage(Lang.getString(message));
@@ -1842,6 +1939,9 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   public void openMissingGoogleMapsAlert () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramR6B1Prompts.showMissingGoogleMaps(this)) {
+      return; // XGram M3E r6: hero sheet with [Not now] [Install]
+    }
     AlertDialog.Builder b = new AlertDialog.Builder(context, Theme.dialogTheme());
     b.setTitle(Lang.getString(R.string.AppName));
     b.setMessage(Lang.getString(R.string.NoGoogleMaps));
@@ -2013,7 +2113,9 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     if (b.headerItems != null && !b.headerItems.isEmpty()) {
       items.addAll(b.headerItems);
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram M3E r6: tiles keep their own 2dp gap, no divider under the header (live location)
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      }
     }
     if (b.sizeValues != null) {
       items.add(new ListItem(ListItem.TYPE_SLIDER, b.sizeOptionId, 0, b.sizeStringRes, false).setSliderInfo(b.sizeValues, b.sizeValue));
@@ -3179,6 +3281,9 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   public final PopupLayout showDateTimePicker (Tdlib tdlib, CharSequence title, @StringRes int todayRes, @StringRes int tomorrowRes, @StringRes int futureRes, final RunnableLong callback, final @Nullable ThemeDelegate forcedTheme) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramShowDateTimeDialog(tdlib, title, todayRes, tomorrowRes, futureRes, callback, forcedTheme)) {
+      return null; // XGram M3E r6: the M3 date picker, then the M3 time picker (no wheel); the callers keep no popup
+    }
     return showPopup(title, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
       int contentHeight = 0;
       int pickerHeight = InfiniteRecyclerView.getItemHeight() * 5;
@@ -3405,6 +3510,34 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       optionsWrap.addView(xgramActions != null ? xgramActions.view : sendView);
       return contentHeight;
     }, forcedTheme, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S); // XGram M3E r5: the wheel sheet's headlineSmall title
+  }
+
+  /**
+   * XGram M3E r6: {@link #showDateTimePicker(Tdlib, CharSequence, int, int, int, RunnableLong, ThemeDelegate)} as the
+   * material3 date picker (today to a year ahead) and then the time picker in the same dialog
+   * (XgramR5ChatPickers.showDateTimePicker), the clock in 24-hour form when the device uses it, the confirm button
+   * saying the same as Telegram X's bar ("Send today at 10:00"), and the dark scheme over the media viewer. False when
+   * the dialog could not be shown (the wheel sheet is shown then).
+   */
+  private boolean xgramShowDateTimeDialog (Tdlib tdlib, CharSequence title, @StringRes int todayRes, @StringRes int tomorrowRes, @StringRes int futureRes, final RunnableLong callback, final @Nullable ThemeDelegate forcedTheme) {
+    return com.fahadali.xgram.compose.XgramR5ChatPickers.showDateTimePicker(
+      context,
+      title != null ? title.toString() : null,
+      tdlib.currentTimeMillis(),
+      365,
+      android.text.format.DateFormat.is24HourFormat(context),
+      forcedTheme != null && forcedTheme.isDark(),
+      millis -> {
+        if (DateUtils.isToday(millis, TimeUnit.MILLISECONDS)) {
+          return Lang.getString(todayRes, Lang.time(millis, TimeUnit.MILLISECONDS));
+        } else if (DateUtils.isTomorrow(millis, TimeUnit.MILLISECONDS)) {
+          return Lang.getString(tomorrowRes, Lang.time(millis, TimeUnit.MILLISECONDS));
+        } else {
+          return Lang.getString(futureRes, Lang.getDate(millis, TimeUnit.MILLISECONDS), Lang.time(millis, TimeUnit.MILLISECONDS));
+        }
+      },
+      callback::runWithLong
+    );
   }
 
   // Other

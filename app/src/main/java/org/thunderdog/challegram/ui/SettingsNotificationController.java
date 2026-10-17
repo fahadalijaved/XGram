@@ -2018,39 +2018,24 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
   }
 
   /**
-   * XGram M3E: the repeat interval in an M3 sheet, as the self-destruct timer's (TdlibUi.xgramShowTTLSheet): a
-   * headlineSmall title, the band wheel with the current value, and Cancel / OK.
+   * XGram M3E r6: the repeat interval as the M3 single-choice list in the M3 sheet (XgramR6B1Pickers.showChoiceSheet),
+   * as the self-destruct timer's: a headlineSmall title, one radio tile per interval with the current one checked, and
+   * Cancel / Done.
    */
   private void xgramShowRepeatSheet (ArrayList<SimpleStringItem> items, int foundIndex) {
-    showPopup(null, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
-      int contentHeight = 0;
-      android.widget.TextView titleView = com.fahadali.xgram.appearance.XgramM3Wheel.newTitle(context(), com.fahadali.xgram.appearance.XgramR5Calls.sentence(R.string.RepeatNotifications, R.string.XgramR5CallsRepeatNotifications), null);
-      optionsWrap.addView(titleView);
-      contentHeight += com.fahadali.xgram.appearance.XgramM3Wheel.measureHeight(titleView, context().getControllerWidth(titleView));
-
-      final InfiniteRecyclerView<SimpleStringItem> wheel = new InfiniteRecyclerView<>(context(), false);
-      wheel.addThemeListeners(this);
-      wheel.initWithItems(items, foundIndex);
-      wheel.setLayoutParams(new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, InfiniteRecyclerView.getItemHeight() * 5));
-      addThemeInvalidateListener(wheel);
-      optionsWrap.addView(wheel);
-      contentHeight += InfiniteRecyclerView.getItemHeight() * 5;
-
-      final android.widget.TextView ok = com.fahadali.xgram.appearance.XgramM3Wheel.newConfirmButton(context(), null);
-      ok.setText(Lang.getOK());
-      final com.fahadali.xgram.appearance.XgramM3Wheel.Actions actions = com.fahadali.xgram.appearance.XgramM3Wheel.newActions(context(), null, null, Lang.getString(R.string.Cancel), ok);
-      actions.cancel.setOnClickListener(v -> popupLayout.hideWindow(true));
-      ok.setOnClickListener(v -> {
-        SimpleStringItem currentItem = wheel.getCurrentItem();
-        popupLayout.hideWindow(true);
+    final CharSequence[] labels = new CharSequence[items.size()];
+    for (int i = 0; i < labels.length; i++) {
+      labels[i] = items.get(i).toString();
+    }
+    com.fahadali.xgram.appearance.XgramR6B1Pickers.showChoiceSheet(this,
+      com.fahadali.xgram.appearance.XgramR5Calls.sentence(R.string.RepeatNotifications, R.string.XgramR5CallsRepeatNotifications),
+      null, labels, foundIndex, false, null,
+      index -> {
+        SimpleStringItem currentItem = index >= 0 && index < items.size() ? items.get(index) : null;
         if (currentItem != null && tdlib.notifications().setRepeatNotificationMinuted((int) currentItem.getArg1())) {
           adapter.updateValuedSettingById(R.id.btn_repeatNotifications);
         }
       });
-      optionsWrap.addView(actions.view);
-      contentHeight += org.thunderdog.challegram.tool.Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT);
-      return contentHeight;
-    }, null);
   }
 
   private static boolean isRingtone (int id) {

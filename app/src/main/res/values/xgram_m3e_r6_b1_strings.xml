@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 6, batch 1: the birthday dialog, the date and time pickers, the single-choice sheets, the
+       permission prompts, calls and the translation sheet. Sentence case; a Telegram&#160;X string is used where it
+       already says the same. -->
+
+  <!-- Birthday dialog -->
+  <string name="XgramR6B1BirthdayMonth">Month</string>
+  <string name="XgramR6B1BirthdayDay">Day</string>
+  <string name="XgramR6B1BirthdayYear">Year</string>
+  <string name="XgramR6B1Optional">Optional</string>
+  <string name="XgramR6B1BirthdayDayRange">Enter a day from 1 to %1$d</string>
+  <string name="XgramR6B1BirthdayYearRange">Enter a year from %1$d to %2$d</string>
+  <string name="XgramR6B1BirthdayNotLeap">%1$d isn\'t a leap year</string>
+  <string name="XgramR6B1BirthdayFuture">This date is in the future</string>
+  <string name="XgramR6B1Back">Back</string>
+
+  <!-- Input dialogs -->
+  <string name="XgramR6B1InputInvalid">This value isn\'t valid</string>
+
+  <!-- Date and time pickers -->
+  <string name="XgramR6B1Next">Next</string>
+  <string name="XgramR6B1PastTime">Pick a time in the future</string>
+  <string name="XgramR6B1SelectTime">Select time</string>
+
+  <!-- Permission prompts -->
+  <string name="XgramR6B1AllowMicrophone">Allow microphone access</string>
+  <string name="XgramR6B1AllowCamera">Allow camera access</string>
+  <string name="XgramR6B1AllowStorage">Allow access to your files</string>
+  <string name="XgramR6B1AllowLocation">Allow location access</string>
+  <string name="XgramR6B1AllowLocationAlways">Allow location access all the time</string>
+  <string name="XgramR6B1AllowContacts">Allow contacts access</string>
+  <string name="XgramR6B1SyncContacts">Sync contacts</string>
+  <string name="XgramR6B1OpenSettings">Open settings</string>
+  <string name="XgramR6B1GetMaps">Get Google Maps</string>
+  <string name="XgramR6B1NoMicrophone">No microphone found</string>
+
+  <!-- Calls and voice chats -->
+  <string name="XgramR6B1Offline">You\'re offline</string>
+  <string name="XgramR6B1AirplaneMode">Airplane mode is on</string>
+  <string name="XgramR6B1CallFailed">Couldn\'t start the call</string>
+  <string name="XgramR6B1TryAgain">Try again</string>
+  <string name="XgramR6B1VoiceChatsUnsupported">Voice chats aren\'t supported yet</string>
+  <string name="XgramR6B1OpenInBrowser">Open in browser</string>
+
+  <!-- Translation sheet -->
+  <string name="XgramR6B1Original">Original</string>
+  <string name="XgramR6B1Translated">Translated</string>
+  <string name="XgramR6B1ChooseLanguage">Choose language</string>
+  <string name="XgramR6B1TranslationService">Translation service</string>
+</resources>

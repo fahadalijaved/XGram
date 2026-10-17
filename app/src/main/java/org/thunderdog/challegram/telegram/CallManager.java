@@ -275,6 +275,9 @@ debugCall id:long debug:string = Ok;
 
   private void showAlert (@AlertType int alertType) {
     final Context context = UI.getContext();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramShowAlert(context, alertType)) {
+      return; // XGram M3E r6: hero sheets ("Allow microphone access" with [Not now] [Open settings])
+    }
     AlertDialog.Builder b;
     b = new AlertDialog.Builder(context, Theme.dialogTheme());
     switch (alertType) {
@@ -302,6 +305,19 @@ debugCall id:long debug:string = Ok;
       context.startActivity(intent);
     });
     com.fahadali.xgram.appearance.XgramR5Calls.showAlert(context, b); // XGram: BaseActivity.showAlert with Expressive design
+  }
+
+  /** XGram M3E r6: the microphone alerts as hero sheets from the page on screen; false for the others (or no page). */
+  private static boolean xgramShowAlert (Context context, @AlertType int alertType) {
+    final ViewController<?> host = com.fahadali.xgram.appearance.XgramR6B1Pickers.host(context);
+    switch (alertType) {
+      case AlertType.MICROPHONE_PERMISSION_MISSING:
+        return com.fahadali.xgram.appearance.XgramR6B1Prompts.showCallMicrophone(host);
+      case AlertType.MICROPHONE_HARDWARE_MISSING:
+        return com.fahadali.xgram.appearance.XgramR6B1Prompts.showNoMicrophone(host);
+      default:
+        return false;
+    }
   }
 
   public void acceptIncomingCall (Tdlib tdlib, int callId) {
@@ -397,6 +413,10 @@ debugCall id:long debug:string = Ok;
     final TdApi.Call pendingCall = getCurrentCall();
     final Tdlib pendingCallTdlib = pendingCall != null ? currentCallTdlib : null;
     if (pendingCall != null || (userFull != null && !userFull.canBeCalled)|| (CHECK_CONNECTION && !context.tdlib().isConnected())) {
+      if (pendingCall == null && !(userFull != null && !userFull.canBeCalled) && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() &&
+        com.fahadali.xgram.appearance.XgramR6B1Prompts.showCallOffline(context, U.isAirplaneModeOn())) {
+        return; // XGram M3E r6: offline / airplane mode as a hero sheet
+      }
       AlertDialog.Builder b = new AlertDialog.Builder(context.context(), Theme.dialogTheme());
       b.setPositiveButton(Lang.getOK(), (dialog, which) -> dialog.dismiss());
       if (pendingCall != null) {
@@ -419,7 +439,10 @@ debugCall id:long debug:string = Ok;
           UI.post(() -> {
             if (!signal[0]) {
               signal[0] = true;
-              UI.showToast(R.string.VoipFailed, Toast.LENGTH_SHORT);
+              // XGram M3E r6: "Couldn't start the call" snackbar with "Try again" instead of the toast
+              if (!com.fahadali.xgram.appearance.XgramR6B1Prompts.showCallFailed(() -> makeCall(context, userId, userFullFinal, false))) {
+                UI.showToast(R.string.VoipFailed, Toast.LENGTH_SHORT);
+              }
             }
           }, 1500);
         });
@@ -490,6 +513,10 @@ debugCall id:long debug:string = Ok;
   private boolean checkConnection (final Context context, final Tdlib tdlib) {
     AlertDialog.Builder b = null;
     if (CHECK_CONNECTION && !tdlib.isConnected()) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() &&
+        com.fahadali.xgram.appearance.XgramR6B1Prompts.showCallOffline(com.fahadali.xgram.appearance.XgramR6B1Pickers.host(context), U.isAirplaneModeOn())) {
+        return false; // XGram M3E r6: offline / airplane mode as a hero sheet
+      }
       if (U.isAirplaneModeOn()) {
         b = new AlertDialog.Builder(context, Theme.dialogTheme());
         b.setTitle(Lang.getString(R.string.VoipOfflineAirplaneTitle));
