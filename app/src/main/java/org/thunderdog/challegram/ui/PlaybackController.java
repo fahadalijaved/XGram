@@ -178,6 +178,14 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
           infoView.showProgress();
         }
       }
+
+      @Override
+      public void onBindViewHolder (SettingHolder holder, int position) {
+        super.onBindViewHolder(holder, position);
+        if (xgram() && holder.getItemViewType() == ListItem.TYPE_CUSTOM_INLINE) {
+          xgramBindTrackTile(holder.itemView); // XGram: after the shared list row binding, which it replaces
+        }
+      }
     };
     this.adapter.setItems(tracks, false);
     this.tracks = adapter.getItems();
@@ -237,7 +245,8 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
 
     FrameLayoutFix frameLayout = new FrameLayoutFix(context);
     frameLayout.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-    ViewSupport.setThemedBackground(frameLayout, ColorId.filling, this);
+    // XGram: with Expressive design the page is surfaceContainer (ColorId.background), so the playlist's surfaceBright tiles read
+    ViewSupport.setThemedBackground(frameLayout, xgram() ? ColorId.background : ColorId.filling, this);
 
     recyclerView = new PlayListRecyclerView(context);
     Views.applyBottomInset(recyclerView, extraBottomInset);
@@ -245,9 +254,12 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     recyclerView.setVerticalScrollBarEnabled(false);
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     recyclerView.addItemDecoration(new OffsetDecoration(this));
+    if (xgram()) {
+      recyclerView.addItemDecoration(new XgramTrackTiles(this)); // XGram: the playlist as segmented tiles
+    }
     recyclerView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     recyclerView.setAdapter(adapter);
-    recyclerView.setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
+    recyclerView.setItemAnimator(xgram() ? com.fahadali.xgram.appearance.XgramAppMotion.listAnimator() : new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
     recyclerView.setAlpha(isTrackListLess() ? 0f : 1f);
     frameLayout.addView(recyclerView);
 
@@ -350,6 +362,9 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     shadowView.setSimpleBottomTransparentShadow(true);
     shadowView.setAlpha(0f);
     shadowView.setLayoutParams(FrameLayoutFix.newParams(shadowView.getLayoutParams()));
+    if (xgram()) {
+      shadowView.setVisibility(View.GONE); // XGram: no shadows; the controls lift by colour instead
+    }
     frameLayout.addView(shadowView);
     addThemeInvalidateListener(shadowView);
 
@@ -364,6 +379,9 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     playPauseButton.setOnClickListener(this);
     playPauseButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(64f), Screen.dp(64f)));
     addThemeInvalidateListener(playPauseButton);
+    if (xgram()) {
+      xgramInitControls();
+    }
 
     frameLayout.addView(shuffleButton);
     frameLayout.addView(repeatButton);
@@ -378,9 +396,54 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
 
     final boolean isPlaying = isPlaying();
     playPauseButton.setIsPlaying(isPlaying, false);
+    xgramSetPlaying(isPlaying, false);
     currentItem.setIsTrackPlaying(isPlaying);
 
     return frameLayout;
+  }
+
+  // XGram M3E: the controls are drawn by the cover view as one button group (XgramR6B4Media.PlayerControls); the
+  // buttons stay on top of it at its resting slots, transparent, so touches, clicks and accessibility go through them.
+
+  private void xgramInitControls () {
+    coverView.xgramControls = new com.fahadali.xgram.appearance.XgramR6B4Media.PlayerControls(coverView,
+      isShuffleActive(), isRepeatActive(), TGPlayerController.getPlayRepeatFlag(playFlags) == TGPlayerController.PLAY_FLAG_REPEAT_ONE, false);
+    final View[] buttons = {shuffleButton, prevButton, playPauseButton, nextButton, repeatButton};
+    final float[][] sizes = {{48f, 48f}, {56f, 56f}, {96f, 72f}, {56f, 56f}, {48f, 48f}};
+    final int[] labels = {R.string.XgramR6B4Shuffle, R.string.XgramR6B4Previous, R.string.XgramR6B4Play, R.string.XgramR6B4Next, R.string.XgramR6B4Repeat};
+    for (int i = 0; i < buttons.length; i++) {
+      final View button = buttons[i];
+      final int index = i;
+      button.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(sizes[i][0]), Screen.dp(sizes[i][1])));
+      button.setBackground(null);
+      if (button instanceof ImageView) {
+        ((ImageView) button).setImageAlpha(0);
+      }
+      button.setContentDescription(Lang.getString(labels[i]));
+      button.setOnTouchListener((v, e) -> {
+        switch (e.getActionMasked()) {
+          case MotionEvent.ACTION_DOWN:
+            if (coverView.xgramControls != null) {
+              coverView.xgramControls.setPressed(index);
+            }
+            break;
+          case MotionEvent.ACTION_UP:
+          case MotionEvent.ACTION_CANCEL:
+            if (coverView.xgramControls != null) {
+              coverView.xgramControls.setPressed(-1);
+            }
+            break;
+        }
+        return false;
+      });
+    }
+  }
+
+  private void xgramSetPlaying (boolean isPlaying, boolean animated) {
+    if (coverView != null && coverView.xgramControls != null) {
+      coverView.xgramControls.setPlaying(isPlaying, animated);
+      playPauseButton.setContentDescription(Lang.getString(isPlaying ? R.string.XgramR6B4Pause : R.string.XgramR6B4Play));
+    }
   }
 
   @Override
@@ -724,6 +787,7 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     if ((state == TGPlayerController.STATE_PAUSED || state == TGPlayerController.STATE_PLAYING) && currentItem != null && TGPlayerController.compareTracks(currentItem.getMessage(), chatId, messageId, fileId)) {
       boolean isPlaying = state == TGPlayerController.STATE_PLAYING;
       playPauseButton.setIsPlaying(isPlaying, true);
+      xgramSetPlaying(isPlaying, true);
       if (currentItem != null) {
         currentItem.setIsTrackPlaying(isPlaying);
       }
@@ -869,6 +933,11 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     }
     if (prevRepeatMode == TGPlayerController.PLAY_FLAG_REPEAT_ONE == (newRepeatMode != TGPlayerController.PLAY_FLAG_REPEAT_ONE)) {
       repeatButton.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(newRepeatMode == TGPlayerController.PLAY_FLAG_REPEAT_ONE ? R.drawable.round_repeat_one_24 : R.drawable.round_repeat_24));
+    }
+    if (coverView != null && coverView.xgramControls != null) {
+      // XGram: the button group's toggles
+      coverView.xgramControls.setShuffle(nowShuffling, true);
+      coverView.xgramControls.setRepeat(newRepeatMode != 0, newRepeatMode == TGPlayerController.PLAY_FLAG_REPEAT_ONE, true);
     }
 
     boolean wasReverse = (playFlags & TGPlayerController.PLAYLIST_FLAG_REVERSE) != 0;
@@ -1254,6 +1323,9 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
       if (!mayExpandOverlay()) {
         shadowView.setAlpha(shadowFactor);
       }
+      if (xgram() && coverView != null) {
+        coverView.invalidate(); // XGram: the controls lift to surfaceContainerHigh while the list scrolls under them
+      }
     }
   }
 
@@ -1284,10 +1356,38 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
   }
 
   private static int getMinimumOverlayHeight () {
+    if (xgram()) {
+      return Screen.dp(XGRAM_MIN_OVERLAY); // XGram: the small app bar, the seek bar and the button group
+    }
     return Screen.dp(112f) + HeaderView.getSize(false);
   }
 
+  // XGram M3E: the player's layout. Expanded: under the app bar row (56dp + 8dp) the cover is a 28dp-corner card 24dp
+  // from the sides (at most 432dp), then 240dp for the title block, the seek bar, the times and the button group, all
+  // anchored to the overlay's bottom. Collapsed: a 56dp small app bar (back, a 48dp 12dp-corner thumbnail, the title
+  // and artist, more) over the same controls.
+
+  private static final float XGRAM_MIN_OVERLAY = 56f + 168f, XGRAM_COVER_TOP = 64f, XGRAM_BELOW_COVER = 240f, XGRAM_LIST_PEEK = 72f;
+  private static final float XGRAM_EDGE = 24f, XGRAM_CONTENT_MAX = 480f;
+
+  private static boolean xgram () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  /** The expanded cover card's size for a list of {@code totalWidth} x {@code totalHeight}. */
+  private static int xgramCoverSize (int totalWidth, int totalHeight) {
+    int byWidth = Math.min(totalWidth, Screen.dp(XGRAM_CONTENT_MAX)) - Screen.dp(XGRAM_EDGE) * 2;
+    int byHeight = totalHeight - HeaderView.getTopOffset() - Screen.dp(XGRAM_COVER_TOP + XGRAM_BELOW_COVER + XGRAM_LIST_PEEK);
+    return Math.min(byWidth, byHeight);
+  }
+
   private int getAvailableOverlayHeight (int totalWidth, int totalHeight) {
+    if (xgram()) {
+      if (mayExpandOverlay(totalWidth, totalHeight)) {
+        return HeaderView.getTopOffset() + Screen.dp(XGRAM_COVER_TOP + XGRAM_BELOW_COVER) + xgramCoverSize(totalWidth, totalHeight);
+      }
+      return getMinimumOverlayHeight() + HeaderView.getTopOffset();
+    }
     int height = getMinimumOverlayHeight();
     float ratio = totalHeight != 0 ? (float) totalWidth / (float) totalHeight : 0f;
     if (ratio <= .7f) {
@@ -1302,6 +1402,11 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
   }
 
   private boolean mayExpandOverlay (int totalWidth, int totalHeight) {
+    if (xgram()) {
+      // XGram: portrait only, and only when a cover of at least 160dp fits with the controls and a row of the list
+      float ratio = totalHeight != 0 ? (float) totalWidth / (float) totalHeight : 0f;
+      return ratio <= .7f && totalHeight > 0 && xgramCoverSize(totalWidth, totalHeight) >= Screen.dp(160f);
+    }
     int height = getMinimumOverlayHeight();
     float ratio = totalHeight != 0 ? (float) totalWidth / (float) totalHeight : 0f;
     if (ratio <= .7f) {
@@ -1328,6 +1433,81 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
       return minHeight + (int) ((float) (availableHeight - minHeight) * expandFactor);
     }
     return availableHeight;
+  }
+
+  // XGram M3E: the playlist as segmented tiles: 16dp from the sides, 2dp apart, 20dp outer and 4dp inner corners that
+  // morph to 16dp while pressed, surfaceBright, the current track in secondaryContainer. The list keeps Telegram X's
+  // items (no shadow items are added, the indices stay); this decoration gives the rows their insets and shapes, and
+  // each row's tile sits inside an InsetDrawable so the shared list decoration leaves it alone.
+
+  private static void xgramBindTrackTile (View row) {
+    if (row.getTag(R.id.xgram_r6b4_track_tile) instanceof com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable) {
+      return;
+    }
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable tile = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0,
+      com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.LIST_PRESSED_CORNER);
+    tile.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+    tile.setHost(row);
+    row.setBackground(com.fahadali.xgram.appearance.XgramAppMotion.ThemedRipple.ofRole(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE,
+      new android.graphics.drawable.InsetDrawable(tile, 0), new android.graphics.drawable.InsetDrawable(tile.newMask(), 0)));
+    row.setTag(R.id.xgram_r6b4_track_tile, tile);
+  }
+
+  private static class XgramTrackTiles extends RecyclerView.ItemDecoration {
+    private final PlaybackController controller;
+
+    XgramTrackTiles (PlaybackController controller) {
+      this.controller = controller;
+    }
+
+    private boolean isTrackAt (int position) {
+      final List<ListItem> items = controller.tracks;
+      return items != null && position >= 0 && position < items.size() && items.get(position).getViewType() == ListItem.TYPE_CUSTOM_INLINE;
+    }
+
+    private int positionOf (RecyclerView parent, View view) {
+      final RecyclerView.ViewHolder holder = parent.getChildViewHolder(view);
+      if (holder == null || holder.getItemViewType() != ListItem.TYPE_CUSTOM_INLINE) {
+        return RecyclerView.NO_POSITION;
+      }
+      return holder.getBindingAdapterPosition();
+    }
+
+    @Override
+    public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      outRect.set(0, 0, 0, 0);
+      final int position = positionOf(parent, view);
+      if (position == RecyclerView.NO_POSITION) {
+        return;
+      }
+      outRect.left = outRect.right = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+      outRect.top = isTrackAt(position - 1) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
+    }
+
+    @Override
+    public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      final int childCount = parent.getChildCount();
+      for (int i = 0; i < childCount; i++) {
+        final View child = parent.getChildAt(i);
+        final int position = child != null ? positionOf(parent, child) : RecyclerView.NO_POSITION;
+        if (position == RecyclerView.NO_POSITION) {
+          continue;
+        }
+        final Object tag = child.getTag(R.id.xgram_r6b4_track_tile);
+        if (!(tag instanceof com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable)) {
+          continue;
+        }
+        final com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable tile = (com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable) tag;
+        final boolean first = !isTrackAt(position - 1), last = !isTrackAt(position + 1);
+        final int segment = first && last ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_SINGLE :
+          first ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST :
+          last ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_LAST : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_MIDDLE;
+        tile.setSegment(segment);
+        final Object item = child.getTag();
+        final boolean current = item instanceof ListItem && controller.currentItem != null && ((ListItem) item).getData() == controller.currentItem;
+        tile.setColorRole(current ? com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+      }
+    }
   }
 
   // Custom views
@@ -1384,42 +1564,11 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     @Override
     public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) { }
 
-    // XGram: Material 3 Expressive large toggle button: a primaryContainer container (the view's shorter side, at most
-    // 96dp) that is round while paused and springs to a rounded square while playing (28dp corners from 80dp up,
-    // 16dp below), with an onPrimaryContainer glyph. Same spring as the media viewer's play button.
-    private static final float XGRAM_MAX_SIZE_DP = 96f, XGRAM_XL_FROM_DP = 80f;
-    private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramShape;
-    private final RectF xgramRect = new RectF();
-
-    private float xgramShapeFactor () {
-      float target = animator.getValue() ? 1f : 0f;
-      if (xgramShape == null) {
-        xgramShape = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, target, (s, value) -> invalidate());
-      } else if (xgramShape.getTarget() != target) {
-        xgramShape.animateTo(target);
-      }
-      return xgramShape.getValue();
-    }
-
-    private void xgramDraw (Canvas c) {
-      final float cx = getMeasuredWidth() / 2f, cy = getMeasuredHeight() / 2f;
-      final float size = Math.min(Screen.dp(XGRAM_MAX_SIZE_DP), Math.min(getMeasuredWidth(), getMeasuredHeight()));
-      if (size <= 0f) {
-        return;
-      }
-      final float half = size / 2f;
-      final float playingCorner = Screen.dp(size >= Screen.dp(XGRAM_XL_FROM_DP) ? com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL : com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
-      final float shape = Math.max(0f, Math.min(1.2f, xgramShapeFactor()));
-      final float radius = Math.max(0f, Math.min(half, half + (playingCorner - half) * shape));
-      xgramRect.set(cx - half, cy - half, cx + half, cy + half);
-      c.drawRoundRect(xgramRect, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER)));
-      DrawAlgorithms.drawPlayPause(c, (int) cx, (int) cy, Math.round(size * .22f), path, drawFactor, drawFactor = factor, 1f, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
-    }
-
     @Override
     protected void onDraw (Canvas c) {
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-        xgramDraw(c);
+        // XGram M3E: the play button is drawn by the cover view's button group (XgramR6B4Media.PlayerControls);
+        // this view is its transparent touch target
         return;
       }
       int cx = getMeasuredWidth() / 2;
@@ -1481,6 +1630,15 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
         @Override
         public void draw (@NonNull Canvas c) {
           int height = controller.getCurrentOverlayHeight();
+          if (xgram()) {
+            // XGram M3E: the player sits on the page's surfaceContainer and lifts to surfaceContainerHigh (no shadow)
+            // while the list is under it: collapsed into the app bar, or scrolled under the controls
+            final float lift = MathUtils.clamp(controller.mayExpandOverlay() ? getActualCollapseFactor() : controller.shadowFactor);
+            c.drawRect(0, 0, getBounds().right, height, Paints.fillingPaint(ColorUtils.fromToArgb(
+              com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER),
+              com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH), lift)));
+            return;
+          }
           c.drawRect(0, 0, getBounds().right, height, Paints.fillingPaint(Theme.fillingColor()));
           if (controller.shadowView.getTranslationY() != height) {
             controller.shadowView.setTranslationY(height);
@@ -1598,6 +1756,7 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
         this.isSeeking = isSeeking;
         if (seekAnimator == null) {
           seekAnimator = new BoolAnimator(ANIMATOR_SEEK, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, !isSeeking);
+          com.fahadali.xgram.appearance.XgramAppMotion.use(seekAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, true); // XGram
         }
         getParent().requestDisallowInterceptTouchEvent(isSeeking);
         if (!isSeeking && apply) {
@@ -1612,8 +1771,54 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
       }
     }
 
+    /** XGram M3E: the whole track seeks (a tap or a drag anywhere on it), not only its thumb. */
+    private boolean xgramTouch (MotionEvent e) {
+      final int viewWidth = getMeasuredWidth();
+      final int overlayHeight = controller.getCurrentOverlayHeight();
+      final float left = xgramContentLeft(viewWidth), right = xgramContentRight(viewWidth);
+      final float width = Math.max(1f, right - left);
+      final float seekY = xgramSeekY(overlayHeight);
+      final float x = e.getX(), y = e.getY();
+      switch (e.getAction()) {
+        case MotionEvent.ACTION_DOWN: {
+          boolean isSeeking = y < overlayHeight && durationMillis > 0 && item != null &&
+            Math.abs(y - seekY) <= Screen.dp(24f) && x >= left - Screen.dp(16f) && x <= right + Screen.dp(16f) &&
+            controller.tdlib().context().player().canSeekTrack(item.getMessage());
+          if (isSeeking) {
+            setDesiredSeekPosition(MathUtils.clamp((x - left) / width));
+          }
+          setSeeking(isSeeking, false);
+          return isSeeking || (y < overlayHeight && (isCollapsed || controller.recyclerView.findChildViewUnder(x, y) != null));
+        }
+        case MotionEvent.ACTION_MOVE: {
+          if (isSeeking) {
+            setDesiredSeekPosition(controller.tdlib().context().player().normalizeSeekPosition(durationMillis, MathUtils.clamp((x - left) / width)));
+          }
+          return isSeeking;
+        }
+        case MotionEvent.ACTION_UP: {
+          if (isSeeking) {
+            setSeeking(false, true);
+            return true;
+          }
+          return false;
+        }
+        case MotionEvent.ACTION_CANCEL: {
+          if (isSeeking) {
+            setSeeking(false, false);
+            return true;
+          }
+          return false;
+        }
+      }
+      return false;
+    }
+
     @Override
     public boolean onTouchEvent (MotionEvent e) {
+      if (xgram()) {
+        return xgramTouch(e);
+      }
       final int viewWidth = getMeasuredWidth();
 
       // Values copy-paste from drawing
@@ -1701,13 +1906,58 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     }
 
     private void trimTitle () {
+      if (xgram()) {
+        // XGram M3E: headlineSmall in onSurface, scaled down to titleMedium in the collapsed app bar
+        this.trimmedTitle = StringUtils.isEmpty(title) ? null : new Text.Builder(title, xgramTextWidth(XGRAM_TITLE_COLLAPSED_SCALE), com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S)), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE).singleLine().build();
+        return;
+      }
       int availWidth = getAvailWidth();
       this.trimmedTitle = StringUtils.isEmpty(title) ? null : new Text.Builder(title, availWidth, Paints.getTitleStyleProvider(), TextColorSets.Regular.NORMAL).allBold().singleLine().build();
     }
 
     private void trimSubtitle () {
+      if (xgram()) {
+        // XGram M3E: bodyLarge in onSurfaceVariant, scaled down to bodyMedium in the collapsed app bar
+        this.trimmedSubtitle = StringUtils.isEmpty(subtitle) ? null : new Text.Builder(subtitle, xgramTextWidth(XGRAM_ARTIST_COLLAPSED_SCALE), com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L)), com.fahadali.xgram.appearance.XgramM3Profile.TEXT_ON_SURFACE_VARIANT).singleLine().build();
+        return;
+      }
       int availWidth = getAvailWidth();
       this.trimmedSubtitle = StringUtils.isEmpty(subtitle) ? null : new Text.Builder(subtitle, availWidth, Paints.getSubtitleStyleProvider(), TextColorSets.Regular.LIGHT).singleLine().build();
+    }
+
+    // XGram M3E player layout (see PlaybackController.XGRAM_*): all positions derive from the view width and the
+    // overlay height, so drawing and touch agree.
+
+    private static final float XGRAM_TITLE_COLLAPSED_SCALE = 16f / 24f, XGRAM_ARTIST_COLLAPSED_SCALE = 14f / 16f;
+    /** The bar's thumbnail: 48dp at 60dp from the start; the text 12dp after it. */
+    private static final float XGRAM_THUMB = 48f, XGRAM_THUMB_START = 60f, XGRAM_BAR_TEXT_START = 120f, XGRAM_BAR_TEXT_END = 64f;
+    private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramR6B4Media.PlayerControls xgramControls;
+    private final RectF xgramRect = new RectF();
+    private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint xgramIconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private int xgramIconColor;
+    private final android.text.TextPaint xgramTimePaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+    private @androidx.annotation.Nullable String xgramMeasuredDuration;
+    private float xgramDurationWidth;
+
+    /** The width a line of text may take: the expanded width, or the collapsed bar's at {@code collapsedScale}. */
+    private int xgramTextWidth (float collapsedScale) {
+      final int viewWidth = getMeasuredWidth();
+      final int content = Math.min(viewWidth, Screen.dp(XGRAM_CONTENT_MAX)) - Screen.dp(XGRAM_EDGE) * 2;
+      final int bar = viewWidth - Screen.dp(XGRAM_BAR_TEXT_START + XGRAM_BAR_TEXT_END);
+      return Math.max(Screen.dp(48f), Math.min(content, (int) (bar / collapsedScale)));
+    }
+
+    private float xgramContentLeft (int viewWidth) {
+      return (viewWidth - Math.min(viewWidth, Screen.dp(XGRAM_CONTENT_MAX))) / 2f + Screen.dp(XGRAM_EDGE);
+    }
+
+    private float xgramContentRight (int viewWidth) {
+      return viewWidth - xgramContentLeft(viewWidth);
+    }
+
+    private static float xgramSeekY (int overlayHeight) {
+      return overlayHeight - Screen.dp(138f);
     }
 
     private int lastWidth;
@@ -1736,6 +1986,7 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
         if (animated) {
           if (collapseAnimator == null) {
             collapseAnimator = new FactorAnimator(ANIMATOR_COLLAPSE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 220l, this.collapseFactor);
+            com.fahadali.xgram.appearance.XgramAppMotion.use(collapseAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, false); // XGram: the cover card morphs into the thumbnail
           }
           collapseAnimator.animateTo(toFactor);
         } else {
@@ -2045,9 +2296,174 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
       return trimmedSubtitle != null ? trimmedSubtitle.getWidth() : 0;
     }
 
+    private static float xgramLerp (float from, float to, float factor) {
+      return from + (to - from) * factor;
+    }
+
+    private void xgramDraw (Canvas c) {
+      final int viewWidth = getMeasuredWidth();
+      final int overlayHeight = controller.getCurrentOverlayHeight();
+      final int topOffset = HeaderView.getTopOffset();
+      final boolean rtl = Lang.rtl();
+      final float coverFactor = 1f - getActualCollapseFactor(); // 1: the card, 0: the bar's thumbnail (springs past both)
+      final float contentLeft = xgramContentLeft(viewWidth), contentRight = xgramContentRight(viewWidth);
+
+      // Cover: a 28dp-corner card under the app bar row, shrinking as the list scrolls, morphing into the 48dp thumbnail
+      final float barCenterY = topOffset + HeaderView.getSize(false) / 2f;
+      final float thumb = Screen.dp(XGRAM_THUMB);
+      final float thumbLeft = rtl ? viewWidth - Screen.dp(XGRAM_THUMB_START) - thumb : Screen.dp(XGRAM_THUMB_START);
+      final float cardSize = Math.max(0f, Math.min(contentRight - contentLeft, overlayHeight - topOffset - Screen.dp(XGRAM_COVER_TOP + XGRAM_BELOW_COVER)));
+      final float cardLeft = (viewWidth - cardSize) / 2f, cardTop = topOffset + Screen.dp(XGRAM_COVER_TOP);
+      final float size = xgramLerp(thumb, cardSize, coverFactor);
+      final int x = Math.round(xgramLerp(thumbLeft, cardLeft, coverFactor));
+      final int y = Math.round(xgramLerp(barCenterY - thumb / 2f, cardTop, coverFactor));
+      final int width = Math.max(0, Math.round(size)), height = width;
+      final int radius = Math.round(Math.max(0f, xgramLerp(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M), Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL), MathUtils.clamp(coverFactor))));
+      if (width > 0) {
+        final boolean ignoreSource = coverFactor < .5f;
+        if (source.needPlaceholder() || ignoreSource) {
+          receiver.setRadius(radius);
+          receiver.setBounds(x, y, x + width, y + height);
+          if (receiver.needPlaceholder()) {
+            if (mediaPreview == null || mediaPreview.needPlaceholder(preview)) {
+              xgramRect.set(x, y, x + width, y + height);
+              xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER));
+              c.drawRoundRect(xgramRect, radius, radius, xgramPaint);
+              if (icon != null && icon.getMinimumWidth() > 0) {
+                final int iconColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+                if (xgramIconColor != iconColor || xgramIconPaint.getColorFilter() == null) {
+                  xgramIconColor = iconColor;
+                  xgramIconPaint.setColorFilter(Paints.getColorFilter(iconColor));
+                }
+                final float iconScale = Math.max(.25f, width * .4f / icon.getMinimumWidth());
+                final float cx = x + width / 2f, cy = y + height / 2f;
+                c.save();
+                c.scale(iconScale, iconScale, cx, cy);
+                Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, xgramIconPaint);
+                c.restore();
+              }
+            }
+            if (mediaPreview != null) {
+              mediaPreview.draw(this, c, preview, x, y, width, height, radius, 1f);
+            }
+          }
+          receiver.draw(c);
+        }
+        source.setRadius(radius);
+        source.setBounds(x, y, x + width, y + height);
+        source.draw(c);
+      }
+
+      // Title and artist: start-aligned under the card, scaled into the bar next to the thumbnail
+      final float titleScale = xgramLerp(XGRAM_TITLE_COLLAPSED_SCALE, 1f, coverFactor);
+      final float artistScale = xgramLerp(XGRAM_ARTIST_COLLAPSED_SCALE, 1f, coverFactor);
+      final int titleHeight = trimmedTitle != null ? trimmedTitle.getHeight() : 0;
+      final int artistHeight = trimmedSubtitle != null ? trimmedSubtitle.getHeight() : 0;
+      final float lineGap = Screen.dp(2f);
+      final float expandedArtistTop = overlayHeight - Screen.dp(158f) - artistHeight;
+      final float expandedTitleTop = expandedArtistTop - lineGap - titleHeight;
+      final float collapsedBlock = titleHeight * XGRAM_TITLE_COLLAPSED_SCALE + lineGap + artistHeight * XGRAM_ARTIST_COLLAPSED_SCALE;
+      final float collapsedTitleTop = barCenterY - collapsedBlock / 2f;
+      final float collapsedArtistTop = collapsedTitleTop + titleHeight * XGRAM_TITLE_COLLAPSED_SCALE + lineGap;
+      final float barTextStart = Screen.dp(XGRAM_BAR_TEXT_START);
+      if (trimmedTitle != null) {
+        final float w = trimmedTitle.getWidth() * titleScale;
+        final float tx = rtl ? xgramLerp(viewWidth - barTextStart, contentRight, coverFactor) - w : xgramLerp(barTextStart, contentLeft, coverFactor);
+        final float ty = xgramLerp(collapsedTitleTop, expandedTitleTop, coverFactor);
+        c.save();
+        c.translate(tx, ty);
+        c.scale(titleScale, titleScale);
+        trimmedTitle.draw(c, 0, 0);
+        c.restore();
+      }
+      if (trimmedSubtitle != null) {
+        final float w = trimmedSubtitle.getWidth() * artistScale;
+        final float tx = rtl ? xgramLerp(viewWidth - barTextStart, contentRight, coverFactor) - w : xgramLerp(barTextStart, contentLeft, coverFactor);
+        final float ty = xgramLerp(collapsedArtistTop, expandedArtistTop, coverFactor);
+        c.save();
+        c.translate(tx, ty);
+        c.scale(artistScale, artistScale);
+        trimmedSubtitle.draw(c, 0, 0);
+        c.restore();
+      }
+
+      // Seek bar: wavy while playing, flat when paused or with Reduce motion, a 4dp handle, the buffered range
+      final float seekY = xgramSeekY(overlayHeight);
+      final float progress = MathUtils.clamp(seekDesireFactor > 0f ? getSeekFactor() : seekDisplayProgress);
+      final float playing = xgramControls != null ? xgramControls.playingFactor() : 0f;
+      final boolean reduce = com.fahadali.xgram.appearance.XgramMotion.reduce();
+      final float amplitude = reduce ? 0f : Screen.dpf(3f) * playing * (1f - seekDesireFactor);
+      final float thickness = Screen.dpf(4f), gap = Screen.dpf(4f), handleWidth = Screen.dpf(4f);
+      final float handleHeight = Screen.dpf(24f) + Screen.dpf(8f) * MathUtils.clamp(seekDesireFactor);
+      final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      com.fahadali.xgram.appearance.XgramWavyLinear.draw(c, contentLeft, contentRight, seekY, progress, primary,
+        com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER),
+        thickness, amplitude, Screen.dpf(40f), gap, true, handleWidth, handleHeight);
+      if (fileOffset > 0f || fileProgress < 1f) {
+        // what is downloaded of the track, past the handle
+        final float trackWidth = contentRight - contentLeft;
+        final float handleX = Math.max(contentLeft + handleWidth / 2f, Math.min(contentRight - handleWidth / 2f, contentLeft + trackWidth * progress));
+        final float from = Math.max(handleX + handleWidth / 2f + gap + thickness / 2f, contentLeft + trackWidth * MathUtils.clamp(fileOffset) + thickness / 2f);
+        final float to = Math.min(contentRight - thickness / 2f, contentLeft + trackWidth * MathUtils.clamp(fileProgress) - thickness / 2f);
+        if (to > from) {
+          c.drawLine(from, seekY, to, seekY, Paints.getProgressPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(primary, com.fahadali.xgram.appearance.XgramM3MediaChrome.TRACK_BUFFERED_ALPHA), thickness));
+        }
+      }
+      if (amplitude > 0f && com.fahadali.xgram.appearance.XgramWavyLinear.isWaveMoving(progress, amplitude) && getWindowToken() != null) {
+        postInvalidateOnAnimation();
+      }
+
+      // Times: labelMedium with tabular figures in onSurfaceVariant
+      if (xgramTimePaint.getTypeface() == null || xgramTimePaint.getTextSize() <= 0f) {
+        xgramTimePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false));
+        xgramTimePaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M)));
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+          xgramTimePaint.setFontFeatureSettings("tnum");
+        }
+      }
+      xgramTimePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      final float timesBaseline = seekY + Screen.dp(30f);
+      if (positionStr != null) {
+        c.drawText(positionStr, contentLeft, timesBaseline, xgramTimePaint);
+      }
+      if (durationStr != null) {
+        if (xgramMeasuredDuration != durationStr) {
+          xgramMeasuredDuration = durationStr;
+          xgramDurationWidth = xgramTimePaint.measureText(durationStr);
+        }
+        c.drawText(durationStr, contentRight - xgramDurationWidth, timesBaseline, xgramTimePaint);
+      }
+
+      // Buttons: the group in the 72dp row 20dp above the bottom; the transparent buttons sit at its resting slots
+      if (xgramControls != null) {
+        final float controlsY = overlayHeight - Screen.dp(20f) - Screen.dp(com.fahadali.xgram.appearance.XgramR6B4Media.PlayerControls.HEIGHT_DP) / 2f;
+        xgramControls.layout(viewWidth / 2f, controlsY, Math.min(viewWidth, Screen.dp(XGRAM_CONTENT_MAX)) - Screen.dp(16f) * 2);
+        xgramControls.draw(c);
+        for (int i = 0; i < com.fahadali.xgram.appearance.XgramR6B4Media.PlayerControls.COUNT; i++) {
+          final View view;
+          switch (i) {
+            case com.fahadali.xgram.appearance.XgramR6B4Media.PlayerControls.SHUFFLE: view = controller.shuffleButton; break;
+            case com.fahadali.xgram.appearance.XgramR6B4Media.PlayerControls.PREVIOUS: view = controller.prevButton; break;
+            case com.fahadali.xgram.appearance.XgramR6B4Media.PlayerControls.PLAY: view = controller.playPauseButton; break;
+            case com.fahadali.xgram.appearance.XgramR6B4Media.PlayerControls.NEXT: view = controller.nextButton; break;
+            default: view = controller.repeatButton; break;
+          }
+          if (view != null) {
+            final RectF slot = xgramControls.slot(i);
+            view.setTranslationX(Math.round(slot.centerX() - view.getMeasuredWidth() / 2f));
+            view.setTranslationY(Math.round(slot.centerY() - view.getMeasuredHeight() / 2f));
+          }
+        }
+      }
+    }
+
     @Override
     protected void onDraw (Canvas c) {
       if (item == null) {
+        return;
+      }
+      if (xgram()) {
+        xgramDraw(c);
         return;
       }
 
@@ -2334,16 +2750,21 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
     return BackHeaderButton.TYPE_BACK;
   }
 
+  /** XGram: the app bar icons sit on the surface (the cover card is under them), never on the artwork. */
+  private float xgramIconFactor () {
+    return xgram() ? 1f : coverView.getActualCollapseFactor();
+  }
+
   public void updateButtonColors () {
     if (headerView != null && coverView != null) {
-      headerView.updateButtonColorFactor(this, getMenuId(), coverView.getActualCollapseFactor());
+      headerView.updateButtonColorFactor(this, getMenuId(), xgramIconFactor());
       headerView.updateBackButtonColor(this, getHeaderIconColor());
     }
   }
 
   @Override
   protected int getHeaderIconColor () {
-    return ColorUtils.fromToArgb(0xffffffff, Theme.getColor(ColorId.headerLightIcon), coverView.getActualCollapseFactor());
+    return ColorUtils.fromToArgb(0xffffffff, Theme.getColor(ColorId.headerLightIcon), xgramIconFactor());
   }
 
   @Override
@@ -2355,7 +2776,7 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
   public void onPrepareToShow () {
     super.onPrepareToShow();
     if (headerView != null && coverView != null) {
-      headerView.updateButtonColorFactor(this, getMenuId(), coverView.getActualCollapseFactor());
+      headerView.updateButtonColorFactor(this, getMenuId(), xgramIconFactor());
     }
   }
 
@@ -2363,7 +2784,7 @@ public class PlaybackController extends ViewController<Void> implements Menu, Mo
   public void fillMenuItems (int id, HeaderView header, LinearLayout menu) {
     if (id == R.id.menu_player) {
       header.addMoreButton(menu, this, ColorId.NONE)
-        .setThemeColorId(ColorId.white, ColorId.headerLightIcon, coverView.getActualCollapseFactor());
+        .setThemeColorId(ColorId.white, ColorId.headerLightIcon, xgramIconFactor());
     }
   }
 

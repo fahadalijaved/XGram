@@ -118,6 +118,8 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
       if (caughtAnimator == null) {
         caughtAnimator = new BoolAnimator(ANIMATOR_CAUGHT, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
       }
+      // XGram: the swatch pops up over the handle on the fast spatial spring and settles back without overshoot
+      com.fahadali.xgram.appearance.XgramAppMotion.use(caughtAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, !isCaught);
       caughtAnimator.setValue(isCaught, true);
     }
   }
@@ -149,6 +151,9 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
       }
       preview.setBaseY(baseY * factor);
       preview.setScaleFactor(factor);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        invalidate(); // XGram: the handle narrows while it is held
+      }
     }
   }
 
@@ -229,6 +234,9 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
     tempHsv[2] = startHsv[2] + (desiredV - startHsv[2]) * desireFactor;
     isCustomTone = true;
     preview.setColor(tempHsv[0], tempHsv[1], tempHsv[2]);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && tone != null) {
+      tone.xgramSetThumb(preview.getBrushColor(), tempHsv[1], tempHsv[2]); // XGram: the tone card's ring thumb
+    }
   }
 
   private void setDesiredPositions (float desiredS, float desiredV) {
@@ -257,6 +265,7 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
       this.pickingTone = picking;
       if (pickingAnimator == null) {
         pickingAnimator = new BoolAnimator(ANIMATOR_PICK, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(pickingAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram: a colour blend
       }
       if (picking) {
         pickingAnimator.setValue(true, true);
@@ -299,10 +308,15 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
         preview.getHsv(tempHsv);
         desiredS = tempHsv[1];
         desiredV = tempHsv[2];
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          tone.xgramSetThumb(preview.getBrushColor(), tempHsv[1], tempHsv[2]); // XGram: the ring thumb starts at the current tone
+        }
       }
       if (longTapAnimator == null) {
         longTapAnimator = new BoolAnimator(ANIMATOR_TONE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
       }
+      // XGram: the tone card rises on the default spatial spring and leaves without overshoot
+      com.fahadali.xgram.appearance.XgramAppMotion.use(longTapAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, !inLongTap);
       longTapAnimator.setValue(inLongTap, true);
       if (this.toneEventListener != null) {
         this.toneEventListener.onLongTapStateChanged(this, inLongTap);
@@ -315,6 +329,22 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
   private void setToneFactor (float factor) {
     if (this.toneFactor != factor) {
       this.toneFactor = factor;
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: the floating tone card fades in and grows from 92% at its bottom edge; no shadow view
+        final float alpha = MathUtils.clamp(factor);
+        tone.setAlpha(alpha);
+        final float scale = .92f + .08f * Math.max(0f, factor);
+        tone.setPivotX(tone.getWidth() / 2f);
+        tone.setPivotY(tone.getHeight());
+        tone.setScaleX(scale);
+        tone.setScaleY(scale);
+        if (toneShadow != null) {
+          toneShadow.setAlpha(alpha);
+        }
+        preview.setInToneFactor(factor);
+        direction.setFactor(alpha);
+        return;
+      }
       tone.setAlpha(factor);
       toneShadow.setAlpha(factor);
       preview.setInToneFactor(factor);
@@ -337,16 +367,23 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
   private void setColorFactor (float factor) {
     isCustomTone = false;
     preview.setHue(factor); // U.hslToRgb(factor, .82f, .54f)
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      invalidate(); // XGram: the handle and the track's gap follow the hue
+    }
   }
 
   private void setTapFactor (float factor) {
     preview.setColor(ColorUtils.hslToRgb(factor, tapColor[1], tapColor[2]), factor);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      invalidate(); // XGram: the handle and the track's gap follow the hue
+    }
   }
 
   private void performTap (float x) {
     float toFactor = MathUtils.clamp((x - getPaddingLeft()) / (float) (getMeasuredWidth() - getPaddingLeft() - getPaddingRight()));
     if (tapAnimator == null) {
       tapAnimator = new FactorAnimator(ANIMATOR_TAP, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 120l, preview.getHue());
+      com.fahadali.xgram.appearance.XgramAppMotion.use(tapAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram: the handle glides to the tap
     } else {
       tapAnimator.forceFactor(preview.getHue());
     }
@@ -431,6 +468,11 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
 
           float toneAreaHeight = tone.getMeasuredHeight();
           float value = MathUtils.clamp(y < 0 ? -y / toneAreaHeight : 0f);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram: the tone square is inset in its card: map the finger to the square itself
+            saturation = tone.xgramSaturationAt(x + getLeft());
+            value = tone.xgramValueAt(y + getTop());
+          }
 
           setDesiredPositions(saturation, value);
 
@@ -462,8 +504,59 @@ public class ColorPickerView extends View implements FactorAnimator.Target {
     return true;
   }
 
+  // XGram M3E: the hue track is an Expressive slider track (full corners, its height from the padding) split by a 4dp
+  // gap on both sides of a 4 x 44dp white handle at the hue, which narrows to 2dp while held.
+
+  private final android.graphics.Path xgramPath = new android.graphics.Path();
+  private final float[] xgramRadii = new float[8];
+  private final RectF xgramRect = new RectF();
+  private final Paint xgramHandlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+  private void xgramSegment (Canvas c, float left, float right, float height, float leftRadius, float rightRadius) {
+    if (right - left <= 0f) {
+      return;
+    }
+    xgramRect.set(left, 0, right, height);
+    xgramRadii[0] = xgramRadii[1] = xgramRadii[6] = xgramRadii[7] = leftRadius;
+    xgramRadii[2] = xgramRadii[3] = xgramRadii[4] = xgramRadii[5] = rightRadius;
+    xgramPath.rewind();
+    xgramPath.addRoundRect(xgramRect, xgramRadii, android.graphics.Path.Direction.CW);
+    c.drawPath(xgramPath, colorPaint);
+  }
+
+  private void xgramDraw (Canvas c) {
+    final int startX = getPaddingLeft(), startY = getPaddingTop();
+    final int width = getMeasuredWidth() - startX - getPaddingRight();
+    final int height = getMeasuredHeight() - startY - getPaddingBottom();
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    final float hue = preview != null ? MathUtils.clamp(preview.getHue()) : 0f;
+    final float held = MathUtils.clamp(caughtFactor);
+    final float handleWidth = Screen.dpf(4f) - Screen.dpf(2f) * held;
+    final float handleHeight = Math.min(Screen.dpf(44f), getMeasuredHeight());
+    final float gap = Screen.dpf(4f);
+    final float full = height / 2f, inner = Screen.dpf(2f);
+    final float handleX = width * hue; // in the track's coordinates
+
+    c.save();
+    c.translate(startX, startY);
+    xgramSegment(c, 0f, handleX - handleWidth / 2f - gap, height, full, inner);
+    xgramSegment(c, handleX + handleWidth / 2f + gap, width, height, inner, full);
+    c.restore();
+
+    final float cx = startX + handleX, cy = startY + height / 2f;
+    xgramRect.set(cx - handleWidth / 2f, cy - handleHeight / 2f, cx + handleWidth / 2f, cy + handleHeight / 2f);
+    xgramHandlePaint.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.white(1f));
+    c.drawRoundRect(xgramRect, handleWidth / 2f, handleWidth / 2f, xgramHandlePaint);
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c);
+      return;
+    }
     int viewWidth = getMeasuredWidth();
     int viewHeight = getMeasuredHeight();
 

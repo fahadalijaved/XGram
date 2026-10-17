@@ -17,6 +17,7 @@ package org.thunderdog.challegram.mediaview.paint.widget;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.view.View;
 
 import androidx.annotation.Nullable;
@@ -40,8 +41,23 @@ public class ColorPreviewView extends View implements FactorAnimator.Target {
   private ColorToneView tone;
   private ColorDirectionView direction;
 
+  // XGram M3E: the brush preview is a swatch that pops up over the hue handle while it is held (and floats over the
+  // tone card's ring thumb while a tone is picked): the brush colour at the brush size inside a 2dp white ring 3dp out
+  // (XgramR5Media.Swatch's selected look) with a 1dp outline for light media. At rest it draws nothing, the handle
+  // being the thumb. The view keeps its scale at 1, so tooltips anchored to it stay on the handle.
+  private final boolean xgramSwatch;
+  private final Paint xgramFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint xgramStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+  /** How far the swatch floats over the tone card's ring thumb, centre to centre. */
+  private static final float XGRAM_TONE_LIFT = 52f;
+
   public ColorPreviewView (Context context) {
     super(context);
+    xgramSwatch = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (xgramSwatch) {
+      xgramStroke.setStyle(Paint.Style.STROKE);
+      return;
+    }
     setBackgroundResource(R.drawable.knob_shadow);
   }
 
@@ -68,6 +84,11 @@ public class ColorPreviewView extends View implements FactorAnimator.Target {
   private float scaleFactor = 1f;
 
   public void setScaleFactor (float factor) {
+    if (this.scaleFactor != factor && xgramSwatch) {
+      this.scaleFactor = factor;
+      invalidate(); // XGram: the swatch scales inside the view
+      return;
+    }
     if (this.scaleFactor != factor) {
       this.scaleFactor = factor;
       float scale;
@@ -176,7 +197,13 @@ public class ColorPreviewView extends View implements FactorAnimator.Target {
 
   private void updateTranslationX () {
     float baseX = (float) targetWidth * hue;
-    if (toneFactor != 0f) {
+    if (toneFactor != 0f && xgramSwatch && tone != null) {
+      // XGram: over the ring thumb on the inset tone square, kept inside the card
+      int half = getMeasuredWidth() / 2;
+      float x = Math.max(tone.getLeft() + half, Math.min(tone.getRight() - half, tone.xgramXFor(hsv[1])));
+      float toneX = x - getLeft() - half;
+      baseX = baseX + (toneX - baseX) * toneFactor;
+    } else if (toneFactor != 0f) {
       int half = getMeasuredWidth() / 2;
       float x = hsv[1];
       float toneX = Math.max(half + Screen.dp(8f), Math.min(toneWidth - half - Screen.dp(8f), toneWidth * x)) - getLeft() - half;
@@ -201,7 +228,12 @@ public class ColorPreviewView extends View implements FactorAnimator.Target {
 
   private void updateTranslationY () {
     float baseY = this.baseY;
-    if (toneFactor != 0f) {
+    if (toneFactor != 0f && xgramSwatch && tone != null) {
+      // XGram: lifted over the ring thumb
+      int half = getMeasuredHeight() / 2;
+      float toneY = tone.xgramYFor(hsv[2]) - getTop() - half - Screen.dp(XGRAM_TONE_LIFT);
+      baseY = baseY + (toneY - baseY) * toneFactor;
+    } else if (toneFactor != 0f) {
       int half = getMeasuredHeight() / 2;
       float y = hsv[2];
       float toneY = -toneHeight * y + toneHeight - (getTop() - tone.getTop()) - half - Screen.dp(MARGIN_DISTANCE);
@@ -366,8 +398,38 @@ public class ColorPreviewView extends View implements FactorAnimator.Target {
 
   private float[] hsv = new float[3];
 
+  private void xgramDraw (Canvas c) {
+    final float s = Math.max(0f, Math.min(1.2f, scaleFactor));
+    if (s <= .01f) {
+      return;
+    }
+    final float cx = getMeasuredWidth() / 2f, cy = getMeasuredHeight() / 2f;
+    final float gap = Screen.dpf(com.fahadali.xgram.appearance.XgramR5Media.Swatch.RING_GAP_DP), ring = Screen.dpf(com.fahadali.xgram.appearance.XgramR5Media.Swatch.RING_WIDTH_DP), outline = Screen.dpf(1f);
+    final float radius = Math.max(Screen.dpf(2f), Math.min(getRadius(), Math.min(cx, cy) - gap - ring - outline));
+    final int saveCount = c.save();
+    c.scale(s, s, cx, cy);
+    xgramFill.setColor(color);
+    c.drawCircle(cx, cy, radius, xgramFill);
+    if (strokeColor != 0 && strokeColor != color) {
+      xgramStroke.setStrokeWidth(Screen.dpf(1f));
+      xgramStroke.setColor(strokeColor);
+      c.drawCircle(cx, cy, radius - Screen.dpf(.5f), xgramStroke);
+    }
+    xgramStroke.setStrokeWidth(ring);
+    xgramStroke.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.white(1f));
+    c.drawCircle(cx, cy, radius + gap + ring / 2f, xgramStroke);
+    xgramStroke.setStrokeWidth(outline);
+    xgramStroke.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT));
+    c.drawCircle(cx, cy, radius + gap + ring + outline / 2f, xgramStroke);
+    c.restoreToCount(saveCount);
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (xgramSwatch) {
+      xgramDraw(c);
+      return;
+    }
     int radius = getRadius();
 
     int viewWidth = getMeasuredWidth();

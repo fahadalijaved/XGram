@@ -120,6 +120,21 @@ class DisposableMediaViewControllerAudio extends DisposableMediaViewController {
       revealStartPosition = revealEndPosition;
     }
 
+    if (xgram()) {
+      // XGram M3E: the message rises from its bubble to the middle on the spatial spring, scaling from 90% as it fades
+      // in, on a 75% scrim
+      final float alpha = MathUtils.clamp(factor);
+      final float scale = .9f + .1f * factor;
+      messageView.setAlpha(alpha);
+      messageView.setTranslationY(Math.round(MathUtils.fromTo(revealStartPosition, revealEndPosition, factor)));
+      messageView.setScaleX(scale);
+      messageView.setScaleY(scale);
+      context.setPhotoRevealFactor(alpha);
+      contentView.setBackgroundColor(ColorUtils.alphaColor(alpha * com.fahadali.xgram.appearance.XgramR6B4Media.ONCE_SCRIM_ALPHA, Color.BLACK));
+      contentView.invalidate();
+      return;
+    }
+
     messageView.setAlpha(factor);
     messageView.setTranslationY(Math.round(MathUtils.fromTo(revealStartPosition, revealEndPosition, factor)));
 
@@ -158,14 +173,57 @@ class DisposableMediaViewControllerAudio extends DisposableMediaViewController {
   /* Content */
 
   public class ContentView extends FrameLayoutFix {
+    // XGram M3E: the voice message sits on a 28dp card, under the fire glyph and the "Plays once" chip
+    private final @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramR6B4Media.OnceRow xgramOnce;
+    private final android.graphics.Paint xgramCardPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.RectF xgramCard = new android.graphics.RectF();
+
     public ContentView (@NonNull Context context) {
       super(context);
+      xgramOnce = xgram() ? new com.fahadali.xgram.appearance.XgramR6B4Media.OnceRow(org.thunderdog.challegram.R.drawable.baseline_hot_once_24) : null;
     }
 
     @Override
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
       super.onMeasure(widthMeasureSpec, heightMeasureSpec);
       onChangeRevealFactor(getRevealFactor());
+    }
+
+    /** The card around the message, in this view's coordinates, following the message's translation and scale. */
+    private void xgramLayoutCard () {
+      final float pad = Screen.dpf(12f);
+      float left, top, right, bottom;
+      if (copy != null && copy.useBubbles()) {
+        left = copy.getActualLeftContentEdge() - pad;
+        right = copy.getActualRightContentEdge() + pad;
+        top = copy.getTopContentEdge() - pad;
+        bottom = copy.getBottomContentEdge() + pad;
+      } else {
+        left = Screen.dpf(16f);
+        right = messageView.getMeasuredWidth() - Screen.dpf(16f);
+        top = 0f;
+        bottom = messageView.getMeasuredHeight();
+      }
+      final float px = messageView.getPivotX(), py = messageView.getPivotY();
+      final float sx = messageView.getScaleX(), sy = messageView.getScaleY();
+      final float dx = messageView.getLeft() + messageView.getTranslationX(), dy = messageView.getTop() + messageView.getTranslationY();
+      xgramCard.set(
+        dx + px + (left - px) * sx,
+        dy + py + (top - py) * sy,
+        dx + px + (right - px) * sx,
+        dy + py + (bottom - py) * sy
+      );
+    }
+
+    @Override
+    protected void dispatchDraw (@NonNull android.graphics.Canvas canvas) {
+      if (xgramOnce != null && messageView != null && messageView.getMeasuredHeight() > 0) {
+        final float alpha = MathUtils.clamp(getRevealFactor());
+        xgramLayoutCard();
+        com.fahadali.xgram.appearance.XgramR6B4Media.drawOnceCard(canvas, xgramCard, alpha, xgramCardPaint);
+        xgramOnce.draw(canvas, getMeasuredWidth() / 2f, xgramCard.top - Screen.dp(16f) - com.fahadali.xgram.appearance.XgramR6B4Media.OnceRow.heightPx() / 2f, alpha * alpha);
+      }
+      super.dispatchDraw(canvas);
     }
   }
 

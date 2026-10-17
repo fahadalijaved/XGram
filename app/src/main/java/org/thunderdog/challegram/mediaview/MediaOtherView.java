@@ -36,6 +36,18 @@ public class MediaOtherView extends FrameLayoutFix implements Destroyable {
     this.receiver = new ImageReceiver(this, 0);
     setWillNotDraw(false);
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: a 64dp thumbnail with 12dp corners; the remove badge's 48dp target covers its top-end corner
+      receiver.setRadius(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M));
+      final int target = Screen.dp(com.fahadali.xgram.appearance.XgramR6B4Media.REMOVE_TARGET_DP);
+      DeleteView view = new DeleteView(context);
+      view.setId(R.id.btn_removePhoto);
+      view.setLayoutParams(FrameLayoutFix.newParams(target, target, Gravity.TOP | (org.thunderdog.challegram.core.Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT)));
+      view.setContentDescription(org.thunderdog.challegram.core.Lang.getString(R.string.XgramR6B4RemoveFromSelection));
+      addView(view);
+      return;
+    }
+
     int padding = Screen.dp(4f);
     int paddingBig = Screen.dp(16f);
     FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(Screen.dp(24f) + padding + paddingBig, Screen.dp(24f) + padding + paddingBig, Gravity.RIGHT | Gravity.TOP);
@@ -66,7 +78,8 @@ public class MediaOtherView extends FrameLayoutFix implements Destroyable {
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-    super.onMeasure(MeasureSpec.makeMeasureSpec(Screen.dp(100f), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(Screen.dp(100f), MeasureSpec.EXACTLY));
+    final int size = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramR6B4Media.STRIP_THUMB_DP : 100f); // XGram: 64dp thumbnails
+    super.onMeasure(MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY));
     receiver.setBounds(0, 0, getMeasuredWidth(), getMeasuredHeight());
   }
 
@@ -83,6 +96,17 @@ public class MediaOtherView extends FrameLayoutFix implements Destroyable {
 
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the placeholder takes the thumbnail's 12dp corners, in the dark scheme's surfaceContainerHigh
+      if (receiver.needPlaceholder()) {
+        final float radius = Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
+        android.graphics.RectF rect = Paints.getRectF();
+        rect.set(receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom());
+        c.drawRoundRect(rect, radius, radius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+      }
+      receiver.draw(c);
+      return;
+    }
     if (receiver.needPlaceholder()) {
       c.drawRect(receiver.getLeft(), receiver.getTop(), receiver.getRight(), receiver.getBottom(), Paints.fillingPaint(0x22ffffff));
     }
@@ -90,12 +114,29 @@ public class MediaOtherView extends FrameLayoutFix implements Destroyable {
   }
 
   private static class DeleteView extends View {
+    // XGram M3E: a 24dp error container badge with a close glyph at the thumbnail's top-end corner (4dp in), springing
+    // in on SPATIAL_FAST when the strip shows it
+    private final @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramR6B4Media.RemoveBadge xgramBadge;
+
     public DeleteView (Context context) {
       super(context);
+      xgramBadge = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? new com.fahadali.xgram.appearance.XgramR6B4Media.RemoveBadge(this) : null;
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      if (xgramBadge != null) {
+        xgramBadge.springIn();
+      }
     }
 
     @Override
     protected void onDraw (Canvas c) {
+      if (xgramBadge != null) {
+        xgramBadge.draw(c, org.thunderdog.challegram.core.Lang.rtl());
+        return;
+      }
       int cx = getPaddingLeft() + (getMeasuredWidth() - getPaddingLeft() - getPaddingRight()) / 2;
       int cy = getPaddingTop() + (getMeasuredHeight() - getPaddingLeft() - getPaddingRight()) / 2;
 

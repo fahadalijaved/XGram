@@ -160,6 +160,20 @@ class DisposableMediaViewControllerVideo extends DisposableMediaViewController {
     progressBounds.set(revealPosition);
     progressBounds.inset(-Screen.dp(10), -Screen.dp(10));
 
+    if (xgram()) {
+      // XGram M3E: the round video moves and scales from its bubble on the spatial spring, fading in on a 75% scrim
+      final float alpha = MathUtils.clamp(factor);
+      mainPlayerView.setAlpha(alpha);
+      mainPlayerView.setTranslationX(revealPosition.left);
+      mainPlayerView.setTranslationY(revealPosition.top);
+      mainPlayerView.setScaleX(revealPosition.width() / revealEndPosition.width());
+      mainPlayerView.setScaleY(revealPosition.height() / revealEndPosition.height());
+      context.setPhotoRevealFactor(alpha);
+      contentView.setBackgroundColor(ColorUtils.alphaColor(alpha * com.fahadali.xgram.appearance.XgramR6B4Media.ONCE_SCRIM_ALPHA, Color.BLACK));
+      contentView.invalidate();
+      return;
+    }
+
     mainPlayerView.setAlpha(factor);
     mainPlayerView.setTranslationX(revealPosition.left);
     mainPlayerView.setTranslationY(revealPosition.top);
@@ -205,10 +219,41 @@ class DisposableMediaViewControllerVideo extends DisposableMediaViewController {
     private final Paint strokePaint;
     private final Drawable drawable;
 
+    // XGram M3E: a 4dp wavy ring of the time played in primary (dark scheme) over a white 24% track, and the fire glyph
+    // in a tertiary circle next to a "Plays once" chip above the video
+    private final @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramR6B4Media.OnceRow xgramOnce;
+
     public ContentView (@NonNull Context context) {
       super(context);
       strokePaint = new Paint(Paints.videoStrokePaint());
       drawable = Drawables.get(context.getResources(), R.drawable.baseline_hot_once_24);
+      xgramOnce = xgram() ? new com.fahadali.xgram.appearance.XgramR6B4Media.OnceRow(R.drawable.baseline_hot_once_24) : null;
+    }
+
+    private void xgramDispatchDraw (@NonNull Canvas canvas) {
+      final float alpha = MathUtils.clamp(getRevealFactor());
+      final float decorationsAlpha = alpha * alpha;
+
+      if (xgramOnce != null) {
+        xgramOnce.draw(canvas, revealPosition.centerX(), progressBounds.top - Screen.dp(16f) - com.fahadali.xgram.appearance.XgramR6B4Media.OnceRow.heightPx() / 2f, decorationsAlpha);
+      }
+
+      previewReceiver.setAlpha(alpha);
+      if (previewReceiver.needPlaceholder()) {
+        previewReceiver.drawPlaceholderRounded(canvas, revealPositionBounds.width() / 2f);
+      }
+      previewReceiver.draw(canvas);
+
+      final float stroke = Screen.dp(STROKE_WIDTH);
+      final float progress = getVisualProgress();
+      final boolean wave = !com.fahadali.xgram.appearance.XgramMotion.reduce();
+      com.fahadali.xgram.appearance.XgramWavyProgress.drawCircular(canvas, progressBounds.centerX(), progressBounds.centerY(), progressBounds.width() / 2f, stroke, progress,
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), decorationsAlpha),
+        com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramM3MediaChrome.white(com.fahadali.xgram.appearance.XgramM3MediaChrome.TRACK_INACTIVE_ALPHA), decorationsAlpha),
+        wave ? Math.min(Screen.dpf(1.5f), stroke * .4f) : 0f);
+      if (wave && alpha >= 1f && progress > 0f && progress < 1f) {
+        postInvalidateOnAnimation(); // the wave travels while it plays
+      }
     }
 
     @Override
@@ -231,6 +276,11 @@ class DisposableMediaViewControllerVideo extends DisposableMediaViewController {
 
     @Override
     protected void dispatchDraw (@NonNull Canvas canvas) {
+      if (xgramOnce != null) {
+        xgramDispatchDraw(canvas);
+        super.dispatchDraw(canvas);
+        return;
+      }
       final float alpha = getRevealFactor();
       final float decorationsAlpha = alpha * alpha;
 

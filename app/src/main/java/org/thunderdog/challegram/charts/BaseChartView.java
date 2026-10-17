@@ -247,6 +247,18 @@ public abstract class BaseChartView<T extends ChartData, L extends LineViewData>
         signaturePaint2.setTextAlign(Paint.Align.RIGHT);
         bottomSignaturePaint.setTextSize(SIGNATURE_TEXT_SIZE);
         bottomSignaturePaint.setTextAlign(Paint.Align.CENTER);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E: axis labels in labelSmall (Google Sans Flex) with tabular figures
+            final android.graphics.Typeface labelSmall = com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S, false);
+            signaturePaint.setTypeface(labelSmall);
+            signaturePaint2.setTypeface(labelSmall);
+            bottomSignaturePaint.setTypeface(labelSmall);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                signaturePaint.setFontFeatureSettings("tnum");
+                signaturePaint2.setFontFeatureSettings("tnum");
+                bottomSignaturePaint.setFontFeatureSettings("tnum");
+            }
+        }
 
         selectionBackgroundPaint.setStrokeWidth(Screen.dpf(6f));
         selectionBackgroundPaint.setStrokeCap(Paint.Cap.ROUND);
@@ -294,6 +306,22 @@ public abstract class BaseChartView<T extends ChartData, L extends LineViewData>
         unactiveBottomChartPaint.setColor(me.vkryl.core.ColorUtils.alphaColor(.5f, ColorUtils.blendARGB(Theme.getColor(ColorId.fillingPositive), Theme.fillingColor(), .6f))); // TODO key_statisticChartInactivePickerChart
         selectionBackgroundPaint.setColor(Theme.fillingColor()); // Theme.key_windowBackgroundWhite
         ripplePaint.setColor(me.vkryl.core.ColorUtils.alphaColor(.2f, Theme.getColor(ColorId.fillingPositive))); // Theme.key_statisticChartRipple
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E: roles: labels onSurfaceVariant, the grid outlineVariant, the range picker primary over the
+            // card's surfaceContainerLow (the chart sits on that card, see ChartLayout)
+            final int onSurfaceVariant = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+            final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+            final int card = com.fahadali.xgram.appearance.XgramExpressive.color(org.thunderdog.challegram.widget.ChartLayout.xgramCardRole());
+            signaturePaint.setColor(onSurfaceVariant);
+            signaturePaint2.setColor(onSurfaceVariant);
+            bottomSignaturePaint.setColor(onSurfaceVariant);
+            linePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT));
+            selectedLinePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE));
+            pickerSelectorPaint.setColor(primary);
+            unactiveBottomChartPaint.setColor(me.vkryl.core.ColorUtils.alphaColor(.5f, ColorUtils.blendARGB(primary, card, .6f)));
+            selectionBackgroundPaint.setColor(card);
+            ripplePaint.setColor(me.vkryl.core.ColorUtils.alphaColor(.2f, primary));
+        }
         legendSignatureView.recolor();
 
         hintLinePaintAlpha = linePaint.getAlpha();
@@ -1155,6 +1183,14 @@ public abstract class BaseChartView<T extends ChartData, L extends LineViewData>
             if (chartData != null && chartData.lines != null) {
                 for (int i = 0; i < chartData.lines.size(); i++) {
                     lines.add(createLineViewData(chartData.lines.get(i)));
+                }
+                if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+                    // XGram M3E: series colours from the roles, in order (LineViewData.updateColors)
+                    for (int i = 0; i < lines.size(); i++) {
+                        L l = lines.get(i);
+                        l.xgramIndex = i;
+                        l.updateColors();
+                    }
                 }
             }
             clearSelection();

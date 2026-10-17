@@ -102,6 +102,24 @@ public class XgramButtonGroupView extends View {
   private @Nullable Callback callback;
   private int pressedIndex = -1;
 
+  // XGram M3E round 6: the connected style (a segmented choice over media, e.g. the photo editor's blur type): 40dp
+  // label-only buttons 2dp apart, full outer corners and 8dp inner ones that tighten to 4dp while pressed; the selected
+  // button rounds fully and fills with the dark scheme's secondaryContainer, the others sit on its surfaceContainerHigh
+  // at 60%. Colours, corners and widths spring as in the profile style.
+  private static final float CONNECTED_HEIGHT_DP = 40f, CONNECTED_GAP_DP = 2f, CONNECTED_INNER_DP = 8f, CONNECTED_PRESSED_DP = 4f;
+  private boolean connectedOnMedia;
+  private final android.graphics.Path connectedPath = new android.graphics.Path();
+  private final float[] connectedRadii = new float[8];
+
+  /** Switches to the connected style over media (call once, before the actions are set). */
+  public void setConnectedOnMedia () {
+    if (!connectedOnMedia) {
+      connectedOnMedia = true;
+      requestLayout();
+      invalidate();
+    }
+  }
+
   public XgramButtonGroupView (Context context) {
     super(context);
     textPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_L, false));
@@ -146,7 +164,7 @@ public class XgramButtonGroupView extends View {
       b.bind(action);
       if (selectionChanged) {
         b.selected.animateTo(action.selected ? 1f : 0f);
-        b.corner.animateTo(action.selected || i == pressedIndex ? 1f : 0f);
+        b.corner.animateTo(action.selected || (i == pressedIndex && !connectedOnMedia) ? 1f : 0f);
       }
     }
     invalidate();
@@ -158,7 +176,7 @@ public class XgramButtonGroupView extends View {
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-    super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(getViewHeight(), MeasureSpec.EXACTLY));
+    super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(connectedOnMedia ? Screen.dp(CONNECTED_HEIGHT_DP) : getViewHeight(), MeasureSpec.EXACTLY));
   }
 
   private void layoutButtons () {
@@ -166,14 +184,14 @@ public class XgramButtonGroupView extends View {
     if (count == 0) {
       return;
     }
-    float side = Screen.dp(SIDE_DP), gap = Screen.dp(GAP_DP);
+    float side = connectedOnMedia ? 0f : Screen.dp(SIDE_DP), gap = Screen.dp(connectedOnMedia ? CONNECTED_GAP_DP : GAP_DP);
     float avail = getMeasuredWidth() - side * 2f - gap * (count - 1);
     float base = avail / count;
     float totalWeight = 0f;
     for (Button b : buttons) {
       totalWeight += Math.max(.1f, b.weight.getValue());
     }
-    float top = Screen.dp(TOP_DP), bottom = top + Screen.dp(BUTTON_DP);
+    float top = connectedOnMedia ? 0f : Screen.dp(TOP_DP), bottom = top + (connectedOnMedia ? getMeasuredHeight() : Screen.dp(BUTTON_DP));
     boolean rtl = Lang.rtl();
     float x = rtl ? getMeasuredWidth() - side : side;
     for (Button b : buttons) {
@@ -209,7 +227,7 @@ public class XgramButtonGroupView extends View {
         }
       }
       b.weight.animateTo(target);
-      b.corner.animateTo(i == index || b.action.selected ? 1f : 0f);
+      b.corner.animateTo((i == index && !connectedOnMedia) || b.action.selected ? 1f : 0f);
       b.pressLayer.animateTo(i == index ? 1f : 0f);
     }
   }
@@ -260,12 +278,65 @@ public class XgramButtonGroupView extends View {
     return super.onTouchEvent(e);
   }
 
+  private void drawConnected (@NonNull Canvas c) {
+    final int containerColor = XgramExpressive.withAlpha(XgramM3MediaChrome.onMedia(XgramExpressive.SURFACE_CONTAINER_HIGH), .6f);
+    final int contentColor = XgramM3MediaChrome.onMedia(XgramExpressive.ON_SURFACE);
+    final int selectedColor = XgramM3MediaChrome.onMedia(XgramExpressive.SECONDARY_CONTAINER);
+    final int selectedContentColor = XgramM3MediaChrome.onMedia(XgramExpressive.ON_SECONDARY_CONTAINER);
+    final float inner = Screen.dp(CONNECTED_INNER_DP), pressedInner = Screen.dp(CONNECTED_PRESSED_DP);
+    final float labelPadding = Screen.dp(12f);
+    final int count = buttons.size();
+    final boolean rtl = Lang.rtl();
+    for (int i = 0; i < count; i++) {
+      Button b = buttons.get(i);
+      RectF r = b.rect;
+      final float full = r.height() / 2f;
+      final float sel = Math.max(0f, Math.min(1f, b.selected.getValue()));
+      final float round = Math.max(0f, Math.min(1.2f, b.corner.getValue()));
+      final float press = Math.max(0f, Math.min(1f, b.pressLayer.getValue()));
+      float innerRadius = inner + (pressedInner - inner) * press;
+      innerRadius = Math.max(0f, Math.min(full, innerRadius + (full - innerRadius) * round));
+      // the visual first button is at the start: in RTL it is the right one
+      final boolean leftOuter = rtl ? i == count - 1 : i == 0;
+      final boolean rightOuter = rtl ? i == 0 : i == count - 1;
+      final float left = leftOuter ? full : innerRadius, right = rightOuter ? full : innerRadius;
+      connectedRadii[0] = connectedRadii[1] = left; // top left
+      connectedRadii[2] = connectedRadii[3] = right; // top right
+      connectedRadii[4] = connectedRadii[5] = right; // bottom right
+      connectedRadii[6] = connectedRadii[7] = left; // bottom left
+      connectedPath.rewind();
+      connectedPath.addRoundRect(r, connectedRadii, android.graphics.Path.Direction.CW);
+      final int content = me.vkryl.core.ColorUtils.fromToArgb(contentColor, selectedContentColor, sel);
+      fillPaint.setColor(me.vkryl.core.ColorUtils.fromToArgb(containerColor, selectedColor, sel));
+      c.drawPath(connectedPath, fillPaint);
+      if (press > 0f) {
+        fillPaint.setColor(XgramExpressive.withAlpha(content, XgramExpressive.STATE_PRESSED * press));
+        c.drawPath(connectedPath, fillPaint);
+      }
+      int maxWidth = Math.max(0, Math.round(r.width() - labelPadding * 2f));
+      if (b.ellipsizedWidth != maxWidth) {
+        b.ellipsizedWidth = maxWidth;
+        b.ellipsized = TextUtils.ellipsize(b.action.label, textPaint, maxWidth, TextUtils.TruncateAt.END);
+      }
+      if (b.ellipsized != null && b.ellipsized.length() > 0) {
+        textPaint.setColor(content);
+        String text = b.ellipsized.toString();
+        float textWidth = textPaint.measureText(text);
+        c.drawText(text, r.centerX() - textWidth / 2f, r.centerY() - (textPaint.ascent() + textPaint.descent()) / 2f, textPaint);
+      }
+    }
+  }
+
   @Override
   protected void onDraw (@NonNull Canvas c) {
     if (buttons.isEmpty()) {
       return;
     }
     layoutButtons();
+    if (connectedOnMedia) {
+      drawConnected(c);
+      return;
+    }
     final int containerColor = XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER);
     final int contentColor = XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
     final int selectedColor = XgramExpressive.color(XgramExpressive.PRIMARY);

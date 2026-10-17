@@ -105,6 +105,14 @@ public class VideoControlView extends FrameLayoutFix implements FactorAnimator.T
     this.totalView.setLayoutParams(params);
     addView(totalView);
 
+    if (xgramLayout) {
+      // XGram M3E: times in white labelMedium with tabular figures, so they do not jitter while they count
+      com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(nowView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, 1f);
+      com.fahadali.xgram.appearance.XgramR5Media.tabular(nowView);
+      com.fahadali.xgram.appearance.XgramR5Media.onMediaLabel(totalView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, 1f);
+      com.fahadali.xgram.appearance.XgramR5Media.tabular(totalView);
+    }
+
     playPauseButton = new PlayPauseButton(context);
     if (xgramLayout) {
       playPauseButton.setTranslationX(-xgramPlayHiddenX());

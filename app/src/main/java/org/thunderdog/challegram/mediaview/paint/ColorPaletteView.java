@@ -156,8 +156,68 @@ public class ColorPaletteView extends View implements ClickHelper.Delegate {
     }
   }
 
+  // XGram M3E: the theme editor's hue and opacity tracks as Expressive slider tracks: 12dp tall with full corners,
+  // split by a 4dp gap around a 4dp onSurface handle (the alpha track keeps its checkerboard and an outlineVariant
+  // hairline).
+
+  private final android.graphics.Path xgramPath = new android.graphics.Path();
+  private final float[] xgramRadii = new float[8];
+  private final RectF xgramRect = new RectF();
+  private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+  private void xgramSegment (Canvas c, float left, float right, float top, float bottom, float leftRadius, float rightRadius) {
+    if (right - left <= 0f) {
+      return;
+    }
+    xgramRect.set(left, top, right, bottom);
+    xgramRadii[0] = xgramRadii[1] = xgramRadii[6] = xgramRadii[7] = leftRadius;
+    xgramRadii[2] = xgramRadii[3] = xgramRadii[4] = xgramRadii[5] = rightRadius;
+    xgramPath.rewind();
+    xgramPath.addRoundRect(xgramRect, xgramRadii, android.graphics.Path.Direction.CW);
+    if (transparentGradientPaint != null) {
+      c.drawPath(xgramPath, transparentGradientPaint);
+    }
+    c.drawPath(xgramPath, colorPaint);
+    if (transparentGradientPaint != null) {
+      xgramPaint.setStyle(Paint.Style.STROKE);
+      xgramPaint.setStrokeWidth(Screen.dpf(1f));
+      xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT));
+      c.drawPath(xgramPath, xgramPaint);
+    }
+  }
+
+  private void xgramDraw (Canvas c) {
+    final int paddingLeft = getPaddingLeft(), paddingTop = getPaddingTop();
+    final int width = getMeasuredWidth() - paddingLeft - getPaddingRight();
+    final int height = getMeasuredHeight() - paddingTop - getPaddingBottom();
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    final float track = Math.min(height, Screen.dpf(12f));
+    final float top = (height - track) / 2f, bottom = top + track;
+    final float full = track / 2f, inner = Screen.dpf(2f), gap = Screen.dpf(4f), handleWidth = Screen.dpf(4f);
+    c.save();
+    c.translate(paddingLeft, paddingTop);
+    if (value == -1f) {
+      xgramSegment(c, 0, width, top, bottom, full, full);
+    } else {
+      final float handleX = Math.max(handleWidth / 2f, Math.min(width - handleWidth / 2f, width * MathUtils.clamp(value)));
+      xgramSegment(c, 0, handleX - handleWidth / 2f - gap, top, bottom, full, inner);
+      xgramSegment(c, handleX + handleWidth / 2f + gap, width, top, bottom, inner, full);
+      xgramPaint.setStyle(Paint.Style.FILL);
+      xgramPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
+      xgramRect.set(handleX - handleWidth / 2f, 0, handleX + handleWidth / 2f, height);
+      c.drawRoundRect(xgramRect, handleWidth / 2f, handleWidth / 2f, xgramPaint);
+    }
+    c.restore();
+  }
+
   @Override
   protected void onDraw (Canvas c) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDraw(c);
+      return;
+    }
     int paddingLeft = getPaddingLeft();
     int paddingTop = getPaddingTop();
     int width = getMeasuredWidth() - paddingLeft - getPaddingRight();

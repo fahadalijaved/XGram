@@ -838,6 +838,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       updateBottomSpaceAlpha();
       if (this.inCaptionAnimator == null) {
         this.inCaptionAnimator = new FactorAnimator(ANIMATOR_ID_CAPTION, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, this.inCaptionFactor);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(inCaptionAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram
       }
       inCaptionAnimator.animateTo(inCaption ? 1f : 0f);
 
@@ -894,10 +895,16 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void setAnimatorType (int type, boolean isOpen) {
     mediaView.setDisableAnimations(isOpen);
     this.revealAnimationType = type;
+    // XGram M3E: the viewer opens and closes on springs, clamped (the reveal also clips and fades): the default
+    // spatial spring for the shared-element reveal and the picture-in-picture close, the default effects spring for fades
+    final boolean xgramSprings = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     switch (revealAnimationType) {
       case ANIMATION_TYPE_FADE: {
         revealAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
         revealAnimator.setDuration(mode != MODE_SECRET && !animationAlreadyDone ? 180l : 0l);
+        if (xgramSprings && mode != MODE_SECRET && !animationAlreadyDone) {
+          com.fahadali.xgram.appearance.XgramAppMotion.use(revealAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true);
+        }
         break;
       }
       case ANIMATION_TYPE_CAMERA:
@@ -907,11 +914,17 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       case ANIMATION_TYPE_SECRET_CLOSE: {
         revealAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
         revealAnimator.setDuration(220l);
+        if (xgramSprings) {
+          com.fahadali.xgram.appearance.XgramAppMotion.use(revealAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true);
+        }
         break;
       }
       case ANIMATION_TYPE_PIP_CLOSE: {
         revealAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
         revealAnimator.setDuration(190l);
+        if (xgramSprings) {
+          com.fahadali.xgram.appearance.XgramAppMotion.use(revealAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
+        }
         break;
       }
       case ANIMATION_TYPE_REVEAL: {
@@ -923,6 +936,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         } else {
           revealAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
           revealAnimator.setDuration(REVEAL_ANIMATION_DURATION);
+        }
+        if (xgramSprings) {
+          com.fahadali.xgram.appearance.XgramAppMotion.use(revealAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
         }
         break;
       }
@@ -1444,6 +1460,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void animateCaptionFactor (float toFactor) {
     if (captionAnimator == null) {
       captionAnimator = new FactorAnimator(ANIMATOR_CAPTION, this, AnimatorUtils.DECELERATE_INTERPOLATOR, BOTTOM_ANIMATION_DURATION, captionFactor);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(captionAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
     }
     captionAnimator.animateTo(toFactor);
   }
@@ -1509,6 +1526,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       } else {
         hideAnimator.setDuration(hidePaint ? 290 : 380);
       }
+      // XGram: the draw button shrinks out on the fast spatial spring and pops back on it (clamped: it drives alpha and width)
+      com.fahadali.xgram.appearance.XgramAppMotion.use(hideAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, true);
       hideAnimator.setValue(hidePaint, animated);
     }
   }
@@ -2628,6 +2647,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
       if (pipAnimator == null) {
         pipAnimator = new FactorAnimator(ANIMATOR_PIP, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 198, pipFactor);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(pipAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram: into and out of the floating window
       }
 
       pipAnimator.animateTo(in ? 1f : 0f);
@@ -2857,6 +2877,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
       if (pipUpAnimator == null) {
         pipUpAnimator = new FactorAnimator(ANIMATOR_PIP_UP, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(pipUpAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, true); // XGram
       }
       pipUpAnimator.animateTo(isUp ? 1f : 0f);
     }
@@ -2881,6 +2902,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       this.pipHidden = isHidden;
       if (pipHideAnimator == null) {
         pipHideAnimator = new FactorAnimator(ANIMATOR_PIP_HIDE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(pipHideAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, true); // XGram
       }
       if (isHidden) {
         pipOverlayView.setIsLeft(isLeft);
@@ -3073,6 +3095,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void animatePipControlsFactor (float toFactor) {
     if (pipControlsAnimator == null) {
       pipControlsAnimator = new FactorAnimator(ANIMATOR_PIP_CONTROLS, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, pipControlsFactor);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(pipControlsAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram
     }
     pipControlsAnimator.animateTo(toFactor);
   }
@@ -3112,6 +3135,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     private Paint timerPaint;
 
+    // XGram M3E: the countdown is a chip at the top start, 16dp under the status bar (XgramR6B4Media.TimerChip)
+    private @Nullable com.fahadali.xgram.appearance.XgramR6B4Media.TimerChip xgramChip;
+    private int xgramTopOffset;
+
     public SecretTimerView (Context context) {
       super(context);
 
@@ -3119,6 +3146,31 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       timerPaint.setTypeface(Fonts.getRobotoMedium());
       timerPaint.setTextSize(Screen.dp(19f));
       timerPaint.setColor(0xffffffff);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramChip = new com.fahadali.xgram.appearance.XgramR6B4Media.TimerChip(this);
+      }
+    }
+
+    public void setXgramTopOffset (int topOffset) {
+      if (this.xgramTopOffset != topOffset) {
+        this.xgramTopOffset = topOffset;
+        if (xgramChip != null) {
+          ViewGroup.LayoutParams params = getLayoutParams();
+          if (params != null) {
+            params.height = com.fahadali.xgram.appearance.XgramR6B4Media.TimerChip.bottom(topOffset);
+            setLayoutParams(params);
+          }
+          invalidate();
+        }
+      }
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      if (xgramChip != null) {
+        xgramChip.show();
+      }
     }
 
     public void setSecretPhoto (TGMessageMedia photo) {
@@ -3143,6 +3195,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       if (this.text == null || !this.text.equals(text)) {
         this.text = text;
         this.textWidth = (int) U.measureText(text, timerPaint);
+        if (xgramChip != null) {
+          xgramChip.setText(text);
+        }
       }
     }
 
@@ -3155,6 +3210,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     @Override
     protected void onDraw (Canvas c) {
       if (secretPhoto == null) {
+        return;
+      }
+      if (xgramChip != null) {
+        xgramChip.draw(c, xgramTopOffset, secretPhoto.getHotExpiresFactor());
         return;
       }
       int offset = Screen.dp(18f);
@@ -3338,6 +3397,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void animateCounterFactor (float factor) {
     if (this.counterAnimator == null) {
       counterAnimator = new FactorAnimator(ANIMATOR_COUNTER, this, new OvershootInterpolator(3.8f), 260l, counterFactor);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(counterAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, false); // XGram: the counter pops on the fast spatial spring
     }
     counterAnimator.animateTo(factor);
   }
@@ -3677,6 +3737,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void animateVideoFactor (float toFactor) {
     if (videoAnimator == null) {
       videoAnimator = new FactorAnimator(ANIMATOR_VIDEO, this, AnimatorUtils.DECELERATE_INTERPOLATOR, BOTTOM_ANIMATION_DURATION, videoFactor);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(videoAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram: the video controls rise
     }
     videoAnimator.animateTo(toFactor);
   }
@@ -3848,6 +3909,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     if (slideAnimator == null) {
       slideAnimator = new FactorAnimator(ANIMATOR_SLIDE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 280l);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(slideAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram: the dragged media settles
     } else {
       slideAnimator.forceFactor(0f);
     }
@@ -3951,6 +4013,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     if (prevNeedThumbs != needThumbs) {
       if (thumbsAnimator == null) {
         thumbsAnimator = new BoolAnimator(ANIMATOR_THUMBS, this, AnimatorUtils.DECELERATE_INTERPOLATOR, BOTTOM_ANIMATION_DURATION);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(thumbsAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram: the album strip rises
       }
       if (needThumbs) {
         initThumbsRecyclerView();
@@ -4173,6 +4236,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     if (prevIsScrolling != isScrolling) {
       if (thumbsScrollAnimator == null) {
         thumbsScrollAnimator = new BoolAnimator(ANIMATOR_THUMBS_SCROLL, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 140l);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(thumbsScrollAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, true); // XGram
       }
       applyingThumbScrollFix = false;
       if (!isScrolling) {
@@ -4433,6 +4497,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         autoScrollDistanceLast = 0;
         if (autoThumbScroller == null) {
           autoThumbScroller = new FactorAnimator(ANIMATOR_THUMBS_AUTO_SCROLLER, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+          com.fahadali.xgram.appearance.XgramAppMotion.use(autoThumbScroller, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, true); // XGram
         }
         autoThumbScroller.animateTo(1f);
       }
@@ -5394,6 +5459,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     contentView.setWillNotDraw(false);
     contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
+    // XGram M3E: the viewer's built-in animators on springs (clamped: their factors also drive alpha and layout)
+    com.fahadali.xgram.appearance.XgramAppMotion.use(headerVisible, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true);
+    com.fahadali.xgram.appearance.XgramAppMotion.use(cropAnimator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, true);
+    com.fahadali.xgram.appearance.XgramAppMotion.use(imageFlipAnimatorHorizontally, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
+    com.fahadali.xgram.appearance.XgramAppMotion.use(imageFlipAnimatorVertically, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
+
     mediaView = new MediaView(context);
     mediaView.setFactorChangeListener(this);
     mediaView.prepare(mode != MODE_SECRET);
@@ -5651,6 +5722,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           secretView = new SecretTimerView(context);
           secretView.setSecretPhoto(stack.getCurrent().getSecretPhoto());
           secretView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Size.getHeaderPortraitSize(), Gravity.TOP));
+          secretView.setXgramTopOffset(topOffset); // XGram
           contentView.addView(secretView);
         }
         break;
@@ -5744,7 +5816,20 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void setTopOffset (int topOffset) {
     if (this.topOffset != topOffset) {
       this.topOffset = topOffset;
+      if (othersView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram: the selected media strip keeps its 8dp under the status bar, and its height follows the inset
+        Views.setPaddingTop(othersView, topOffset + Screen.dp(com.fahadali.xgram.appearance.XgramR6B4Media.STRIP_TOP_DP));
+        ViewGroup.LayoutParams stripParams = othersView.getLayoutParams();
+        if (stripParams != null) {
+          stripParams.height = com.fahadali.xgram.appearance.XgramR6B4Media.stripHeight() + topOffset;
+          othersView.setLayoutParams(stripParams);
+        }
+      } else {
       Views.setPaddingTop(othersView, topOffset);
+      }
+      if (secretView != null) {
+        secretView.setXgramTopOffset(topOffset); // XGram: the countdown chip sits 16dp under the status bar
+      }
       if (receiverView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         FrameLayout.LayoutParams fp = (FrameLayout.LayoutParams) receiverView.getLayoutParams();
         xgramPlaceReceiverChip(fp); // XGram: the receiver chip
@@ -5929,6 +6014,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     if (otherAnimator == null) {
       otherAnimator = new FactorAnimator(ANIMATOR_OTHER, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, otherFactor);
     }
+    com.fahadali.xgram.appearance.XgramAppMotion.use(otherAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram: the strip fades on the effects spring
     otherAnimator.animateTo(toFactor);
   }
 
@@ -5941,6 +6027,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       final float alpha = Math.max(0f, Math.min(1f, factor));
       overlayView.setAlpha(alpha);
       othersView.setAlpha(alpha);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+        othersView.setTranslationY(-Screen.dp(16f) * (1f - alpha)); // XGram: the strip drops in from the top as it fades in
+      }
       setCheckAlpha(1f - alpha);
       setCounterAlpha((1f - alpha) * Math.max(0f, Math.min(1f, counterFactor)));
     }
@@ -5964,6 +6053,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   private void setSelectedImages (@Nullable ArrayList<ImageFile> images) {
+    if (othersView == null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramBuildSelectedStrip(images);
+      return;
+    }
     if (othersView == null) {
       otherAdapter = new MediaOtherAdapter(context(), this);
       otherAdapter.setImages(images);
@@ -5994,6 +6087,42 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     } else {
       otherAdapter.setImages(images);
     }
+  }
+
+  // XGram M3E round 6: the strip of selected media on the send screen sits on the top scrim (black at 60% fading to
+  // clear) instead of a flat band: 64dp thumbnails with 12dp corners, 4dp apart, 16dp from the screen edges, each with
+  // a 24dp remove badge at its top-end corner; items enter and leave on the spring item animator, and the strip fades
+  // and drops in on springs (XgramR6B4Media).
+
+  private void xgramBuildSelectedStrip (@Nullable ArrayList<ImageFile> images) {
+    otherAdapter = new MediaOtherAdapter(context(), this);
+    otherAdapter.setImages(images);
+
+    othersView = new MediaOtherRecyclerView(context());
+    othersView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, com.fahadali.xgram.appearance.XgramR6B4Media.stripHeight() + topOffset, Gravity.TOP));
+    final int side = Screen.dp(com.fahadali.xgram.appearance.XgramR6B4Media.STRIP_SIDE_DP);
+    othersView.setPadding(side, topOffset + Screen.dp(com.fahadali.xgram.appearance.XgramR6B4Media.STRIP_TOP_DP), side, Screen.dp(com.fahadali.xgram.appearance.XgramR6B4Media.STRIP_FADE_DP));
+    othersView.setLayoutManager(new LinearLayoutManager(context(), LinearLayoutManager.HORIZONTAL, true));
+    othersView.setHasFixedSize(true);
+    othersView.setItemAnimator(com.fahadali.xgram.appearance.XgramAppMotion.listAnimator());
+    othersView.setClipToPadding(false);
+    ViewUtils.setBackground(othersView, new com.fahadali.xgram.appearance.XgramM3MediaChrome.TopScrimDrawable());
+    othersView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    othersView.addItemDecoration(new RecyclerView.ItemDecoration() {
+      @Override
+      public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+        // a reversed horizontal list: item 0 at the end, each next one 4dp before the previous (the layout manager
+        // un-reverses it in an RTL layout, so the gap follows the list's own direction)
+        int position = parent.getChildAdapterPosition(view);
+        boolean last = position == RecyclerView.NO_POSITION || position == otherAdapter.getItemCount() - 1;
+        int gap = last ? 0 : Screen.dp(com.fahadali.xgram.appearance.XgramR6B4Media.STRIP_GAP_DP);
+        boolean rtlLayout = androidx.core.view.ViewCompat.getLayoutDirection(parent) == androidx.core.view.ViewCompat.LAYOUT_DIRECTION_RTL;
+        outRect.set(rtlLayout ? 0 : gap, 0, rtlLayout ? gap : 0, 0);
+      }
+    });
+    othersView.setAlpha(0f);
+    othersView.setAdapter(otherAdapter);
+    contentView.addView(othersView);
   }
 
   private void setShowOtherMedias (boolean showOtherMedias) {
@@ -6616,17 +6745,30 @@ public class MediaViewController extends ViewController<MediaViewController.Args
             }
           });
           colorPickerView.setPadding(padding, padding, padding, padding);
+          final boolean xgramPicker = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+          if (xgramPicker) {
+            // XGram M3E: a 16dp Expressive slider track (the row keeps its 48dp)
+            final int trackPadding = (Screen.dp(12f) + padding * 2 - Screen.dp(16f)) / 2;
+            colorPickerView.setPadding(padding, trackPadding, padding, trackPadding);
+          }
           colorPickerView.setLayoutParams(params);
           paintControlsWrap.addView(colorPickerView);
 
           params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(220f), Gravity.BOTTOM);
           params.bottomMargin = Screen.dp(12f) + padding * 2;
+          if (xgramPicker) {
+            // XGram M3E: a floating card 16dp from the screen edges and 8dp over the picker row
+            params.leftMargin = params.rightMargin = Screen.dp(16f);
+            params.bottomMargin += Screen.dp(8f);
+          }
 
           colorToneView = new ColorToneView(context());
           colorToneView.setAlpha(0f);
           colorToneView.setLayoutParams(params);
+          colorToneView.xgramSetMediaStyle();
           paintControlsWrap.addView(colorToneView);
 
+          if (!xgramPicker) {
           colorToneShadow = new ShadowView(context());
           colorToneShadow.setSimpleTopShadow(true);
           colorToneShadow.setAlpha(0f);
@@ -6634,6 +6776,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           params.bottomMargin = Screen.dp(220f) + Screen.dp(12f) + padding * 2;
           colorToneShadow.setLayoutParams(params);
           paintControlsWrap.addView(colorToneShadow);
+          }
 
           int addY = Screen.dp(78f);
           params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(220f) + padding + addY, Gravity.BOTTOM);
@@ -6647,6 +6790,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           params = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.LEFT | Gravity.BOTTOM);
           params.leftMargin = margin - Screen.dp(48f) / 2;
           params.bottomMargin = (Screen.dp(12f) + padding * 2) / 2 - Screen.dp(48f) / 2;
+          if (xgramPicker) {
+            // XGram M3E: room for the swatch's ring around the largest brush
+            params.width = params.height = Screen.dp(56f);
+            params.leftMargin = margin - Screen.dp(56f) / 2;
+            params.bottomMargin = (Screen.dp(12f) + padding * 2) / 2 - Screen.dp(56f) / 2;
+          }
           colorPreviewView = new ColorPreviewView(context());
           colorPreviewView.setColorChangeListener((v, color) -> {
             showDefaultBrushHint();
@@ -6864,6 +7013,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void cropRotateByDegrees (int degrees) {
     if (imageRotateAnimator == null) {
       imageRotateAnimator = new FactorAnimator(ANIMATOR_IMAGE_ROTATE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(imageRotateAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram: the photo turns on a spring
     } else if (!imageRotateAnimator.isAnimating()) {
       imageRotateAnimator.forceFactor(0f);
       imageRotateFactor = 0f;
@@ -7145,6 +7295,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
     if (rotateAnimator == null) {
       rotateAnimator = new FactorAnimator(ANIMATOR_ROTATION, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(rotateAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram
     } else if (rotateAnimator.isAnimating()) {
       // Wait until previous video rotation will be applied
       return;
@@ -7948,9 +8099,20 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   private int currentActiveButton;
 
+  /**
+   * XGram M3E: the edit sections fade through on spring curves (the default spatial spring, clamped: the factors
+   * also drive alpha and the media's offsets) in place of Telegram X's decelerate halves.
+   */
+  private static float xgramSectionCurve (float t) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramAppMotion.springClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT).getInterpolation(t);
+    }
+    return AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(t);
+  }
+
   private void setSectionChangeFactor (float factor, float fraction) {
-    float sectionFromFactor = factor >= .5f ? 0f : 1f - AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(factor / .5f);
-    float sectionToFactor = factor < .5f ? 0f : AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation((factor - .5f) / .5f);
+    float sectionFromFactor = factor >= .5f ? 0f : 1f - xgramSectionCurve(factor / .5f);
+    float sectionToFactor = factor < .5f ? 0f : xgramSectionCurve((factor - .5f) / .5f);
 
     if (factor >= .5f && currentActiveButton != prevActiveButtonId) {
       if (prevActiveButtonId != 0) {
@@ -7971,9 +8133,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     } else {
       float rangeFactor = factor <= .25f ? 0f : (factor - .25f) / .75f;
       if (fromSection == SECTION_PAINT) {
-        setPaintSectionFactor(1f - AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(rangeFactor));
+        setPaintSectionFactor(1f - xgramSectionCurve(rangeFactor));
       } else if (currentSection == SECTION_PAINT) {
-        setPaintSectionFactor(AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(rangeFactor));
+        setPaintSectionFactor(xgramSectionCurve(rangeFactor));
       }
     }
 
@@ -8574,6 +8736,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   public void closeByDelete () {
     FactorAnimator animator = new FactorAnimator(ANIMATOR_PRIVACY, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+    com.fahadali.xgram.appearance.XgramAppMotion.use(animator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
     animator.animateTo(1f);
     forceAnimationType = ANIMATION_TYPE_SECRET_CLOSE;
     popupView.hideWindow(true);
@@ -9242,6 +9405,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void setForceEditModeVisibility (boolean visible) {
     if (animatorEditModeVisibility == null) {
       animatorEditModeVisibility = new BoolAnimator(ANIMATOR_EDIT_MODE_VISIBILITY, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, !visible);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(animatorEditModeVisibility, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
     }
     animatorEditModeVisibility.setValue(visible, true);
   }

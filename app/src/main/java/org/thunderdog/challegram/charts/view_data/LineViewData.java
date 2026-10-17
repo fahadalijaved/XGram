@@ -59,7 +59,29 @@ public class LineViewData {
         linesPathBottom = new float[line.y.length << 2];
     }
 
+    /** XGram: the series' place in its chart (set by BaseChartView.setData with Expressive design), or -1. */
+    public int xgramIndex = -1;
+
+    /** XGram M3E: series colours from the roles: primary, tertiary, secondary, error, then their containers. */
+    private static final int[] XGRAM_SERIES = {
+        com.fahadali.xgram.appearance.XgramExpressive.PRIMARY,
+        com.fahadali.xgram.appearance.XgramExpressive.TERTIARY,
+        com.fahadali.xgram.appearance.XgramExpressive.SECONDARY,
+        com.fahadali.xgram.appearance.XgramExpressive.ERROR,
+        com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER,
+        com.fahadali.xgram.appearance.XgramExpressive.TERTIARY_CONTAINER,
+        com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER,
+        com.fahadali.xgram.appearance.XgramExpressive.ERROR_CONTAINER
+    };
+
     public void updateColors() {
+        if (xgramIndex >= 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            lineColor = com.fahadali.xgram.appearance.XgramExpressive.color(XGRAM_SERIES[xgramIndex % XGRAM_SERIES.length]);
+            paint.setColor(lineColor);
+            bottomLinePaint.setColor(lineColor);
+            selectionPaint.setColor(lineColor);
+            return;
+        }
         /*TODO if (line.colorKey != null && Theme.hasThemeKey(line.colorKey)) {
             lineColor = Theme.getColor(line.colorKey);
         } else {*/

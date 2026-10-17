@@ -79,11 +79,49 @@ public class ChartHeaderView extends FrameLayout implements Chart.DateListener, 
       datesTmp.setPivotX(datesTmp.getMeasuredWidth() * 0.7f);
       dates.setPivotX(dates.getMeasuredWidth() * 0.7f);
     });
+    if (xgram()) {
+      // XGram M3E: the chart's title in titleMedium, its date range in labelMedium with tabular figures, "Zoom out" a
+      // primary text button in labelLarge with a pill state layer
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(title, com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(dates, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(datesTmp, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false);
+      com.fahadali.xgram.appearance.XgramR5Media.tabular(dates);
+      com.fahadali.xgram.appearance.XgramR5Media.tabular(datesTmp);
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(back, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+      back.setMinHeight(Screen.dp(40f));
+      back.setPadding(Screen.dp(12f), 0, Screen.dp(16f), 0);
+      back.setCompoundDrawablePadding(Screen.dp(8f));
+      back.setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.transparentSelector(20f));
+    }
     recolor();
+  }
+
+  private static boolean xgram () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  /** XGram: a header animation on the fast spatial spring (clamped: it fades and scales from 30%). */
+  private static android.view.ViewPropertyAnimator xgramMotion (android.view.ViewPropertyAnimator animator) {
+    if (xgram()) {
+      animator.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.springClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST));
+      animator.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.springDuration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST));
+    }
+    return animator;
   }
 
 
   public void recolor () {
+    if (xgram()) {
+      final int onSurface = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+      final int onSurfaceVariant = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      title.setTextColor(onSurface);
+      dates.setTextColor(onSurfaceVariant);
+      datesTmp.setTextColor(onSurfaceVariant);
+      back.setTextColor(primary);
+      zoomIcon.setColorFilter(primary, PorterDuff.Mode.SRC_IN);
+      return;
+    }
     title.setTextColor(Theme.textAccent2Color()); // key_dialogTextBlack
     dates.setTextColor(Theme.textAccent2Color()); // key_dialogTextBlack
     datesTmp.setTextColor(Theme.textAccent2Color()); // key_dialogTextBlack
@@ -122,10 +160,10 @@ public class ChartHeaderView extends FrameLayout implements Chart.DateListener, 
       back.setScaleY(0.3f);
       back.setPivotX(0);
       back.setPivotY(Screen.dp(40));
-      back.animate().alpha(1f)
+      xgramMotion(back.animate().alpha(1f)
         .scaleY(1f)
         .scaleX(1f)
-        .setDuration(200)
+        .setDuration(200))
         .start();
 
       title.setAlpha(1f);
@@ -135,11 +173,11 @@ public class ChartHeaderView extends FrameLayout implements Chart.DateListener, 
       title.setScaleY(1f);
       title.setPivotX(0);
       title.setPivotY(0);
-      title.animate()
+      xgramMotion(title.animate()
         .alpha(0f)
         .scaleY(0.3f)
         .scaleX(0.3f)
-        .setDuration(200)
+        .setDuration(200))
         .start();
     } else {
       back.setAlpha(1f);
@@ -157,10 +195,10 @@ public class ChartHeaderView extends FrameLayout implements Chart.DateListener, 
       title.setScaleY(0.3f);
       title.setPivotX(0);
       title.setPivotY(0);
-      title.animate().alpha(1f)
+      xgramMotion(title.animate().alpha(1f)
         .scaleY(1f)
         .scaleX(1f)
-        .setDuration(200)
+        .setDuration(200))
         .start();
 
       back.setAlpha(1f);
@@ -169,11 +207,11 @@ public class ChartHeaderView extends FrameLayout implements Chart.DateListener, 
       back.setScaleX(1f);
       back.setScaleY(1f);
       back.setPivotY(Screen.dp(40));
-      back.animate()
+      xgramMotion(back.animate()
         .alpha(0f)
         .scaleY(0.3f)
         .scaleX(0.3f)
-        .setDuration(200)
+        .setDuration(200))
         .start();
     } else {
       title.setAlpha(1f);
@@ -202,6 +240,9 @@ public class ChartHeaderView extends FrameLayout implements Chart.DateListener, 
   private Chart chart;
 
   public void setChart (MiniChart chart) {
+    if (xgram()) {
+      title.setText(Lang.getString(chart.titleRes)); // XGram: keeps titleMedium
+    } else
     Views.setMediumText(title, Lang.getString(chart.titleRes));
     if (chart.dateRange != null) {
       showDate(true);
@@ -218,6 +259,9 @@ public class ChartHeaderView extends FrameLayout implements Chart.DateListener, 
       this.chart = chart;
       if (chart != null) {
         chart.attach(this);
+        if (xgram()) {
+          title.setText(Lang.getString(chart.getTitle())); // XGram: keeps titleMedium
+        } else
         Views.setMediumText(title, Lang.getString(chart.getTitle()));
         if (chart.hasTimePeriod()) {
           showDate(true);

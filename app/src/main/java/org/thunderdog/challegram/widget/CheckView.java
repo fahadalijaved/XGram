@@ -306,6 +306,11 @@ public class CheckView extends View {
       }
       checkAnimator.setDuration(isChecked ? CHECK_TRANSITION_IN_DURATION : CHECK_TRANSITION_OUT_DURATION);
       checkAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+      if (mode == MODE_GALLERY && XgramExpressive.isEnabled()) {
+        // XGram M3E: the fill grows and the check draws on the fast spatial spring (clamped: the factor drives the erase)
+        checkAnimator.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.springDuration(XgramExpressive.SPATIAL_FAST));
+        checkAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.springClamped(XgramExpressive.SPATIAL_FAST));
+      }
       if (isChecked) {
         checkAnimator.addListener(new AnimatorListenerAdapter() {
           @Override
@@ -377,9 +382,9 @@ public class CheckView extends View {
 
               checkCanvas.drawCircle(cx, cy, galleryTotalRadius, Paints.fillingPaint(0xffffffff));
               if (XgramExpressive.isEnabled()) {
-                // XGram M3E: primary circle with an onPrimary check
-                checkCanvas.drawCircle(cx, cy, galleryInnerRadius, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.PRIMARY)));
-                checkColor = XgramExpressive.color(XgramExpressive.ON_PRIMARY);
+                // XGram M3E: primary circle with an onPrimary check, from the dark scheme (it sits on media)
+                checkCanvas.drawCircle(cx, cy, galleryInnerRadius, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(XgramExpressive.PRIMARY)));
+                checkColor = com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(XgramExpressive.ON_PRIMARY);
               } else {
                 checkCanvas.drawCircle(cx, cy, galleryInnerRadius, Paints.fillingPaint(Theme.getColor(ColorId.checkActive)));
                 checkColor = Theme.getColor(ColorId.checkContent);

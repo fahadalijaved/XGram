@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 6, batch 4: media viewer and editor, view-once media, music player, web pages (com.fahadali.xgram.appearance.XgramR6B4Media) -->
+  <string name="XgramR6B4RemoveFromSelection">Remove from selection</string>
+  <string name="XgramR6B4PlaysOnce">Plays once</string>
+  <string name="XgramR6B4WebErrorTitle">Can\'t open this page</string>
+  <string name="XgramR6B4WebErrorText">Check your connection and try again.</string>
+  <string name="XgramR6B4Retry">Retry</string>
+  <string name="XgramR6B4Shuffle">Shuffle</string>
+  <string name="XgramR6B4Previous">Previous</string>
+  <string name="XgramR6B4Play">Play</string>
+  <string name="XgramR6B4Pause">Pause</string>
+  <string name="XgramR6B4Next">Next</string>
+  <string name="XgramR6B4Repeat">Repeat</string>
+</resources>
