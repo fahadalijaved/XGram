@@ -1310,7 +1310,12 @@ public final class XgramInlineVideo {
       }
     }
 
-    /** {@link #drawIcon} in {@code color} (its alpha too). The drawable is shared: its alpha is put back after. */
+    /**
+     * {@link #drawIcon} in {@code color} (its alpha too). The alpha stays on the drawable until its next draw (every draw
+     * sets it again from its paint): a VectorDrawable's alpha is read when the frame is rendered, not when it is drawn
+     * (see XgramIconCrossfade), so putting it back to opaque right after this draw drew the icon opaque all through the
+     * disk's fade, and it popped out at the end.
+     */
     private void drawTintedIcon (Canvas c, @Nullable Drawable d, float cx, float cy, float size, int color) {
       if (d == null || d.getMinimumWidth() <= 0) {
         return;
@@ -1328,9 +1333,6 @@ public final class XgramInlineVideo {
       c.scale(scale, scale);
       Drawables.draw(c, d, -d.getMinimumWidth() / 2f, -d.getMinimumHeight() / 2f, m3Tint);
       c.restoreToCount(saveCount);
-      if (alpha != 0xff) {
-        d.setAlpha(0xff);
-      }
     }
 
     /**

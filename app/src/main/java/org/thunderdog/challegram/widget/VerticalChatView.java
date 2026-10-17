@@ -388,7 +388,9 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
 
       if (drawAnonymousSender) {
         identityAvatarReceiver.drawPlaceholderRounded(c, identityAvatarReceiver.getDisplayRadius(), Theme.getColor(ColorId.iconLight));
-        Drawables.draw(c, Drawables.get(R.drawable.infanf_baseline_incognito_14), identityAvatarReceiver.centerX() - Screen.dp(7), identityAvatarReceiver.centerY() - Screen.dp(7), PorterDuffPaint.get(ColorId.badgeMutedText));
+        // XGram: the view's cached drawable, not a new one inflated on every frame (the share sheet redraws the cells all
+        // through a selection's animation)
+        Drawables.draw(c, getSparseDrawable(R.drawable.infanf_baseline_incognito_14, ColorId.NONE), identityAvatarReceiver.centerX() - Screen.dp(7), identityAvatarReceiver.centerY() - Screen.dp(7), PorterDuffPaint.get(ColorId.badgeMutedText));
       } else {
         identityAvatarReceiver.draw(c);
       }

@@ -302,6 +302,8 @@ public class MessageSenderButton extends FrameLayout implements ReplaceAnimator.
     private int mode = MODE_PERSON_BUTTON;
     private float sendModeFactor = 0f;
     private float quickSelectFactor = 0f;
+    // XGram: the icons are loaded once, not inflated on every frame of the send mode and quick select animations
+    private Drawable anonymousIcon, personalIcon, incognitoIcon;
 
     public ButtonView (@NonNull Context context) {
       super(context);
@@ -354,12 +356,17 @@ public class MessageSenderButton extends FrameLayout implements ReplaceAnimator.
         if (sendModeFactor != 1f) {
           int color = ColorUtils.alphaColor(1f - sendModeFactor, ColorUtils.fromToArgb(Theme.iconColor(), Theme.radioFillingColor(), quickSelectFactor));
 
-          Drawable drawable = Drawables.get(getResources(), mode == MODE_ANONYMOUS_BUTTON ? R.drawable.dot_baseline_acc_anon_24 : R.drawable.dot_baseline_acc_personal_24);
+          final Drawable drawable;
+          if (mode == MODE_ANONYMOUS_BUTTON) {
+            drawable = anonymousIcon != null ? anonymousIcon : (anonymousIcon = Drawables.get(getResources(), R.drawable.dot_baseline_acc_anon_24));
+          } else {
+            drawable = personalIcon != null ? personalIcon : (personalIcon = Drawables.get(getResources(), R.drawable.dot_baseline_acc_personal_24));
+          }
           Drawables.draw(c, drawable, cx - r, cy - r, Paints.getPorterDuffPaint(color));
         }
         if (sendModeFactor != 0 && mode == MODE_ANONYMOUS_BUTTON) {
           c.drawCircle(cx, cy, r, Paints.fillingPaint(ColorUtils.alphaColor(sendModeFactor, Theme.iconLightColor())));
-          Drawable drawable = Drawables.get(getResources(), R.drawable.infanf_baseline_incognito_20);
+          final Drawable drawable = incognitoIcon != null ? incognitoIcon : (incognitoIcon = Drawables.get(getResources(), R.drawable.infanf_baseline_incognito_20));
           Drawables.draw(c, drawable, cx - r2, cy - r2, Paints.getPorterDuffPaint(ColorUtils.alphaColor(sendModeFactor, Theme.getColor(ColorId.badgeMutedText))));
         }
       }

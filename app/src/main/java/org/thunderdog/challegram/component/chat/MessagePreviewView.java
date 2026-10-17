@@ -578,14 +578,9 @@ public class MessagePreviewView extends BaseView implements AttachDelegate, Dest
 
     Drawable drawable;
     if (!Td.isEmpty(data.quote)) {
-      @ColorId int colorId = ColorId.messageAuthor;
-      if (accentColor != null) {
-        long complexColor = accentColor.getNameComplexColor();
-        if (Theme.isColorId(complexColor)) {
-          colorId = Theme.extractColorValue(complexColor);
-        }
-      }
-      drawable = getSparseDrawable(R.drawable.baseline_format_quote_close_16, colorId);
+      // XGram: the entry's own drawing, not the view's shared sparse drawable (see buildContentText); its color is the
+      // entry's name color, applied when drawn
+      drawable = Drawables.get(getResources(), R.drawable.baseline_format_quote_close_16);
       availWidth -= drawable.getMinimumWidth() + Screen.dp(CORNER_PADDING);
     } else {
       drawable = null;
@@ -659,7 +654,11 @@ public class MessagePreviewView extends BaseView implements AttachDelegate, Dest
       newText = null;
       receiver = null;
     }
-    this.contentText.replace(newText != null || iconRes != 0 ? new TextEntry(newText, getSparseDrawable(iconRes, ColorId.icon), receiver, null) : null, animated);
+    // XGram: each entry draws its own icon (Drawables.get, not this view's shared sparse drawable). The outgoing and the
+    // incoming entry are drawn in the same frames at their two visibilities, and one VectorDrawable drawn twice in a
+    // frame takes the last alpha for both draws (see XgramIconCrossfade): with the same icon on both sides (a reply to
+    // another photo) it vanished as the change started.
+    this.contentText.replace(newText != null || iconRes != 0 ? new TextEntry(newText, iconRes != 0 ? Drawables.get(getResources(), iconRes) : null, receiver, null) : null, animated);
   }
 
   @Override
