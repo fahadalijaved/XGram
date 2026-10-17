@@ -1541,7 +1541,6 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
     if (msg == null || msg.isNotSent() || !msg.canSwipe() || msg.isSponsoredMessage() || UI.getContext(getContext()).getRecordAudioVideoController().isOpen()) {
       return false;
     }
-    MessagesController m = msg.messagesController();
     MessagesRecyclerView recyclerView = findParentRecyclerView();
     if (recyclerView == null) {
       return false;
@@ -1552,10 +1551,13 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
     }
 
     if (touchX > MessagesController.getSlideBackBound()) {
+      // XGram: the swipe starts in the list this view is in (not through whatever list the message's controller has
+      // now), and only for the touch that asked for it: the text's language and the reactions come back later.
+      final int gestureId = recyclerView.xgramGestureId();
       msg.checkTranslatableText(() -> {
         msg.loadAvailableReactions(() -> {
           if ((msg.getRightQuickReactions().size() > 0 && diffX < 0) || (msg.getLeftQuickReactions().size() > 0 && diffX > 0)) {
-            m.startSwipe(findTargetView());
+            recyclerView.xgramStartSwipe(findTargetView(), gestureId);
           }
         });
       });

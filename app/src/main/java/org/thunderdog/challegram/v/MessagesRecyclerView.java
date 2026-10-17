@@ -224,8 +224,8 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
   }
 
   public void startSwipe (View view) {
-    if (view == null) {
-      return;
+    if (view == null || !xgramInGesture) {
+      return; // XGram: no finger on the list any more (see xgramStartSwipe)
     }
     RecyclerView.ViewHolder holder;
     try {
@@ -240,6 +240,27 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
   public MessagesManager getManager () {
     return manager;
+  }
+
+  // XGram: the touch on the list, from its ACTION_DOWN to its ACTION_UP or ACTION_CANCEL (dispatchTouchEvent).
+  private int xgramGestureId;
+  private boolean xgramInGesture;
+
+  /** XGram: the touch now on the list. It changes with every new touch. */
+  public int xgramGestureId () {
+    return xgramGestureId;
+  }
+
+  /**
+   * XGram: {@link #startSwipe}, only while the touch {@code gestureId} is still on the list. MessageView asks TDLib
+   * (the reactions) and ML Kit (the text's language) before a swipe starts, and their answers can come after the
+   * finger has lifted: a swipe started then was selected with no touch to end it, so the list's next touch went to
+   * that message (the touch helper took its ACTION_DOWN) instead of where the finger was.
+   */
+  public void xgramStartSwipe (View view, int gestureId) {
+    if (xgramInGesture && gestureId == xgramGestureId) {
+      startSwipe(view);
+    }
   }
 
   private boolean ignore;
@@ -257,6 +278,15 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     }
   }
 
+  /**
+   * Whether a child asked the list not to intercept the current touch (MessageView then starts no swipe). XGram: kept
+   * for the current touch only, cleared on every ACTION_DOWN and when the touch ends (dispatchTouchEvent), as
+   * ViewGroup clears its own flag. It used to change only when someone called requestDisallowInterceptTouchEvent, so
+   * one "true" whose "false" never came stopped every swipe in this list for good: the in-chat video controls, a long
+   * pressed message the list let go of before the finger lifted, a "false" that a parent view group (MessageViewGroup)
+   * swallowed because it had already cleared its own flag. Telegram X reuses this list for every chat it opens, so
+   * swipe to reply stayed off in all chats until the activity or the app was restarted.
+   */
   private boolean disallowIntercept;
 
   @Override
@@ -346,6 +376,12 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
       xgramDateSpring.setValue(factor);
       scrollFactor = factor;
     }
+    // XGram: a screen opened over the chat, or the activity is recreated (a theme, Expressive design): the touch on
+    // the list is over, and a swipe still in progress puts its message back instead of waiting for a finger or a
+    // frame that never come.
+    xgramInGesture = false;
+    disallowIntercept = false;
+    touchHelper.xgramDropGesture();
   }
 
   public void setIsScrolling (boolean isScrolling) {
@@ -442,6 +478,22 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
 
   @Override
   public boolean dispatchTouchEvent (MotionEvent e) {
+    // XGram: one touch at a time (xgramStartSwipe), and nothing a child asked during an earlier touch stays
+    final int action = e.getActionMasked();
+    if (action == MotionEvent.ACTION_DOWN) {
+      xgramGestureId++;
+      xgramInGesture = true;
+      disallowIntercept = false;
+    }
+    final boolean handled = xgramDispatchTouchEvent(e);
+    if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+      xgramInGesture = false;
+      disallowIntercept = false;
+    }
+    return handled;
+  }
+
+  private boolean xgramDispatchTouchEvent (MotionEvent e) {
     if (xgramPull != null && xgramPull.onTouchEvent(this, e)) {
       if (xgramPull.needsCancel()) {
         MotionEvent cancel = MotionEvent.obtain(e);

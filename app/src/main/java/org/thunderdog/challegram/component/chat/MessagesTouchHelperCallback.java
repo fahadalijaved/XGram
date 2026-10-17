@@ -16,6 +16,7 @@ package org.thunderdog.challegram.component.chat;
 
 import android.graphics.Canvas;
 
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -149,6 +150,46 @@ public class MessagesTouchHelperCallback extends CustomTouchHelper.Callback {
       if (holder.itemView instanceof MessageViewGroup) {
         ((MessageViewGroup) holder.itemView).setSwipeTranslation(msg.getTranslation());
       }
+    }
+  }
+
+  // XGram: swipe state that outlives its swipe
+
+  @Nullable
+  private static TGMessage xgramMessage (RecyclerView.ViewHolder holder) {
+    if (holder == null || !MessagesHolder.isMessageType(holder.getItemViewType())) {
+      return null;
+    }
+    MessageView view = MessagesHolder.findMessageView(holder.itemView);
+    return view != null ? view.getMessage() : null;
+  }
+
+  @Override
+  public void onSelectedChanged (RecyclerView.ViewHolder holder, int actionState) {
+    super.onSelectedChanged(holder, actionState);
+    if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
+      // XGram: a new swipe on a message at rest starts from a clean swipe state. The helper was only reset by a frame
+      // drawn at 0, which a swipe that ended off screen or was cut off never had: the next swipe on that message
+      // started from the old offsets, without the locks that keep a plain swipe on its own action.
+      TGMessage msg = xgramMessage(holder);
+      if (msg != null && msg.canSwipe() && msg.getTranslation() == 0f) {
+        msg.getSwipeHelper().reset();
+      }
+    }
+  }
+
+  @Override
+  public void xgramOnGestureDropped (RecyclerView recyclerView, RecyclerView.ViewHolder holder) {
+    // XGram: the list left the window in the middle of a swipe (a screen opened over the chat, the activity recreated
+    // for a theme or Expressive design): the message goes back in place, as the end of the swipe would have put it.
+    TGMessage msg = xgramMessage(holder);
+    if (msg == null || !msg.canSwipe()) {
+      return; // Telegram X's own settle animation is running, it ends the swipe itself
+    }
+    msg.translate(0f, 0f, false);
+    msg.getSwipeHelper().reset();
+    if (holder.itemView instanceof MessageViewGroup) {
+      ((MessageViewGroup) holder.itemView).setSwipeTranslation(0f);
     }
   }
 }
