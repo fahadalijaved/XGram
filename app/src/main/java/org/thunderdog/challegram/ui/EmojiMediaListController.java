@@ -162,8 +162,9 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
   private RecyclerView gifsView;
 
   private int xgramTopClearance;
+  private @Nullable com.fahadali.xgram.appearance.XgramScrollIndicator xgramStickersIndicator, xgramGifsIndicator;
 
-  /** XGram M3E: extra room at the top of the sticker and GIF grids for the emoji panel's floating toolbar, in px. */
+  /** XGram M3E: extra room at the top of the sticker and GIF grids for the emoji panel's switch row, in px. */
   public void xgramSetTopClearance (int clearance) {
     final boolean changed = this.xgramTopClearance != clearance;
     this.xgramTopClearance = clearance;
@@ -175,6 +176,21 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
     }
     if (changed && gifsView != null) {
       gifsView.invalidateItemDecorations();
+    }
+    if (changed) {
+      // The scroll indicators start below the tabs and the switch's row
+      if (xgramStickersIndicator != null) {
+        xgramStickersIndicator.setTopInset(EmojiLayout.getHeaderSize() + clearance);
+        if (stickersController.recyclerView != null) {
+          stickersController.recyclerView.invalidate();
+        }
+      }
+      if (xgramGifsIndicator != null) {
+        xgramGifsIndicator.setTopInset(EmojiLayout.getHeaderSize() + clearance);
+        if (gifsView != null) {
+          gifsView.invalidate();
+        }
+      }
     }
   }
 
@@ -250,9 +266,13 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
             }
           }
           getArguments().setCurrentStickerSectionByPosition(EmojiLayout.STICKERS_INSTALLED_CONTROLLER_ID,
-            nextSection == SECTION_STICKERS ? (stickerSetSection != -1 ? stickerSetSection : stickersController.getStickerSetSection()) :
+            nextSection == SECTION_STICKERS ? (stickerSetSection != -1 ? stickerSetSection : xgramStickerSection()) :
               nextSection == SECTION_TRENDING ? 2 : 1
             , nextSection == SECTION_STICKERS,true);
+          if (getArguments().xgramHasTypeGroup()) {
+            // XGram: the switch's pill starts with the content (content-driven changes; a tap moved it already)
+            getArguments().xgramOnMediaSectionMoving(nextSection == SECTION_GIFS ? EmojiMediaType.GIF : EmojiMediaType.STICKER, xgramScrollYOf(nextSection), true);
+          }
         }
       }
 
@@ -272,12 +292,23 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
 
         if (getArguments() != null) {
           EmojiLayout.Listener listener = getArguments().getListener();
-          if (listener != null) {
+          if (listener != null && getArguments().xgramShouldReportSectionSwitch()) { // XGram: a tap reported it already
             int prevSectionX = prevSection == SECTION_GIFS ? EmojiMediaType.GIF : EmojiMediaType.STICKER;
             int newSection = currentSection == SECTION_GIFS ? EmojiMediaType.GIF : EmojiMediaType.STICKER;
             listener.onSectionSwitched(getArguments(), newSection, prevSectionX);
           }
           getArguments().resetScrollState(false);
+          getArguments().xgramOnMediaSectionSettled(); // XGram
+        }
+      }
+
+      @Override
+      protected void xgramOnSectionChangeReverted (int section) {
+        // XGram: a slide that turned back (the switch) is over: as the end of a slide, without a report
+        if (getArguments() != null) {
+          getArguments().setPreferredSection(section == SECTION_GIFS ? EmojiMediaType.GIF : EmojiMediaType.STICKER);
+          getArguments().resetScrollState(false);
+          getArguments().xgramOnMediaSectionSettled();
         }
       }
     };
@@ -361,9 +392,9 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
       setEnableStickersAnimations(true);
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram: a Material 3 scroll indicator below the section tabs
-        com.fahadali.xgram.appearance.XgramScrollIndicator.install(stickersController.recyclerView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
+        xgramStickersIndicator = com.fahadali.xgram.appearance.XgramScrollIndicator.install(stickersController.recyclerView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
           .setIgnoreScrollbarFlag(true)
-          .setTopInset(EmojiLayout.getHeaderSize());
+          .setTopInset(EmojiLayout.getHeaderSize() + xgramTopClearance);
       }
       stickersController.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
         @Override
@@ -379,7 +410,7 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
           if (!stickersController.isNeedIgnoreScroll()) {
             if (contentView.isSectionStable() && contentView.getCurrentSection() == SECTION_STICKERS && getArguments() != null && getArguments().isWatchingMovements() && getArguments().getCurrentItem() == 1) {
               getArguments().moveHeader(stickersController.getStickersScrollY(showRecentTitle));
-              getArguments().setCurrentStickerSectionByPosition(EmojiLayout.STICKERS_INSTALLED_CONTROLLER_ID, stickersController.getStickerSetSection(), true, true);
+              getArguments().setCurrentStickerSectionByPosition(EmojiLayout.STICKERS_INSTALLED_CONTROLLER_ID, xgramStickerSection(), true, true);
               getArguments().onSectionInteractedScroll(EmojiMediaType.STICKER, dy != 0);
             }
           }
@@ -397,6 +428,8 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
       if (i == 0) {
         View view = manager.findViewByPosition(0);
         return view != null ? -manager.getDecoratedTop(view) : 0;
+      } else if (i == RecyclerView.NO_POSITION && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        return 0; // XGram: not laid out yet (shown at once for the switch, before a layout): it opens at its top
       } else {
         return EmojiLayout.getHeaderSize();
       }
@@ -457,15 +490,15 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
       });
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram: a Material 3 scroll indicator below the section tabs
-        com.fahadali.xgram.appearance.XgramScrollIndicator.install(gifsView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
+        xgramGifsIndicator = com.fahadali.xgram.appearance.XgramScrollIndicator.install(gifsView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
           .setIgnoreScrollbarFlag(true)
-          .setTopInset(EmojiLayout.getHeaderSize());
+          .setTopInset(EmojiLayout.getHeaderSize() + xgramTopClearance);
       }
       gifsView.addItemDecoration(new RecyclerView.ItemDecoration() {
         @Override
         public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
           int position = parent.getChildAdapterPosition(view);
-          outRect.top = manager.isFirstRow(position) ? Screen.dp(4f) + EmojiLayout.getHeaderSize() + xgramTopClearance : 0; // XGram: clear of the floating toolbar
+          outRect.top = manager.isFirstRow(position) ? Screen.dp(4f) + EmojiLayout.getHeaderSize() + xgramTopClearance + (xgramTopClearance > 0 ? Screen.dp(2f) : 0) : 0; // XGram: clear of the switch's row, level with the sticker grid
           outRect.right = manager.isLastInRow(position) ? 0 : Screen.dp(3f);
           outRect.bottom = Screen.dp(3f);
         }
@@ -717,6 +750,80 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
       return EmojiMediaType.GIF;
     } else {
       return EmojiMediaType.STICKER;
+    }
+  }
+
+  // XGram M3E: the emoji panel's Emoji / Stickers / GIFs switch (EmojiLayout) decides where a tap goes and moves its
+  // pill once, at the tap; the page follows it here: a cut while the page is not idle on screen (no slide inside a
+  // page that is sliding in itself), else a slide on the pill's curve that can turn back.
+
+  /** XGram: the page has its view and a section (not while it is being built). */
+  public boolean xgramIsReady () {
+    return contentView != null && contentView.xgramHasSection();
+  }
+
+  /** XGram: -1 while the saved GIFs load, 0 for none, 1 for some. */
+  public int xgramGifAvailability () {
+    return gifs == null ? -1 : (gifs.isEmpty() || gifsAdapter == null || gifsAdapter.getItemCount() == 0 ? 0 : 1);
+  }
+
+  /** XGram: the content rests: no section slide running. */
+  public boolean xgramIsSectionSettled () {
+    return xgramIsReady() && !contentView.xgramIsSliding() && contentView.isSectionStable();
+  }
+
+  public boolean xgramIsTrending () {
+    return xgramIsReady() && !contentView.xgramIsSliding() && contentView.getCurrentSection() == SECTION_TRENDING;
+  }
+
+  private int xgramScrollYOf (int section) {
+    return section == SECTION_GIFS ? getGIFsScrollY() : section == SECTION_TRENDING ? trendingSetsController.getStickersScrollY(showRecentTitle) : stickersController.getStickersScrollY(showRecentTitle);
+  }
+
+  /** The sticker set at the top of the grid, below the switch's row while that shows. */
+  private int xgramStickerSection () {
+    return stickersController.getStickerSetSection(getArguments() != null ? getArguments().xgramVisibleClearance() : 0);
+  }
+
+  /**
+   * XGram: shows stickers or GIFs for a tap on the switch: at once ({@code instant}: the page is not idle on screen,
+   * or animations are off) or as a slide that follows the segment order (Stickers in from the start side, GIFs from
+   * the end side), turning a running slide back if need be. Nothing when the content is there or on its way
+   * (Trending counts as Stickers).
+   */
+  public void xgramShowSection (@EmojiMediaType int type, boolean instant) {
+    if (!xgramIsReady()) {
+      return;
+    }
+    final boolean toGifs = type == EmojiMediaType.GIF;
+    final int section = toGifs ? SECTION_GIFS : SECTION_STICKERS;
+    final int dest = contentView.xgramDestination();
+    if (toGifs == (dest == SECTION_GIFS)) {
+      return;
+    }
+    if (toGifs) {
+      initGIFs();
+    } else {
+      initStickers();
+    }
+    if (!instant && contentView.xgramSlideToward(section, !toGifs)) {
+      return;
+    }
+    final boolean leftTrending = contentView.getCurrentSection() == SECTION_TRENDING || dest == SECTION_TRENDING;
+    if (!contentView.xgramSetSectionNow(section)) {
+      return;
+    }
+    if (leftTrending) {
+      trendingSetsController.applyScheduledFeaturedSets();
+    }
+    final EmojiLayout parent = getArguments();
+    if (parent != null) {
+      if (parent.getCurrentItem() == 1) {
+        parent.setCircleVisible(toGifs, toGifs); // as onSectionChangeStart: the GIF search button
+      }
+      parent.setCurrentStickerSectionByPosition(EmojiLayout.STICKERS_INSTALLED_CONTROLLER_ID, toGifs ? 1 : xgramStickerSection(), !toGifs, false);
+      parent.setPreferredSection(type); // Settings and Telegram X's hidden header icon, never the pill
+      parent.xgramOnMediaSectionMoving(type, xgramScrollYOf(section), false);
     }
   }
 
@@ -1517,8 +1624,15 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
     this.loadingGIFs = false;
     this.gifs = gifs;
     gifsAdapter.setGIFs(gifs);
-    if (gifs.isEmpty() && contentView.getCurrentSection() == SECTION_GIFS) {
-      showStickers();
+    if (gifs.isEmpty()) {
+      final EmojiLayout parent = getArguments();
+      if (parent != null && parent.xgramHasTypeGroup() && contentView.xgramDestination() == SECTION_GIFS) {
+        // XGram: no GIFs after all: a GIFs tap still waiting opens the GIF search, and the page goes to Stickers
+        parent.xgramOnGifsUnavailable();
+        xgramShowSection(EmojiMediaType.STICKER, !parent.xgramMediaPageIdleOnScreen());
+      } else if (contentView.getCurrentSection() == SECTION_GIFS) {
+        showStickers();
+      }
     }
     tdlib.listeners().subscribeForAnimationsUpdates(this);
   }

@@ -544,7 +544,7 @@ public class EmojiLayoutRecyclerController extends ViewController<EmojiLayoutRec
   }
 
   public void scrollToStickerSet (int stickerSetIndex, boolean showRecentTitle, boolean animated) {
-    scrollToStickerSet(stickerSetIndex, EmojiLayout.getHeaderSize() + EmojiLayout.getHeaderPadding(), showRecentTitle, animated);
+    scrollToStickerSet(stickerSetIndex, EmojiLayout.getHeaderSize() + EmojiLayout.getHeaderPadding() + (callbacks instanceof EmojiLayout ? ((EmojiLayout) callbacks).xgramGridTopClearance() : 0), showRecentTitle, animated); // XGram: the title lands under the switch's row
   }
 
   public void scrollToStickerSet (int stickerSetIndex, int scrollOffset, boolean showRecentTitle, boolean animated) {
