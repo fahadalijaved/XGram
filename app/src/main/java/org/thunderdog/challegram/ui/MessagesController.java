@@ -8314,6 +8314,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
       UI.post(this::xgramUpdateInputButtons);
     } else if (key.equals(com.fahadali.xgram.XgramSettings.KEY_HISTORY_RED_DELETED)) {
       UI.post(this::xgramRedrawMessages); // XGram: deleted messages in red, redrawn at once (the chat can be open next to settings)
+    } else if (key.equals(com.fahadali.xgram.XgramSettings.KEY_CHANNEL_REACTIONS)) {
+      UI.post(this::xgramRefreshChannelReactions); // XGram: Reactions in channels, applied to the open chat at once
     }
   };
 
@@ -8321,6 +8323,21 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (!isDestroyed() && manager.getAdapter() != null) {
       manager.getAdapter().invalidateAllMessages();
     }
+  }
+
+  /** XGram: Reactions in channels was switched: the posts on hand show or drop their reactions (only channel posts change). */
+  private void xgramRefreshChannelReactions () {
+    MessagesAdapter adapter = !isDestroyed() ? manager.getAdapter() : null;
+    if (adapter == null) {
+      return;
+    }
+    for (int i = 0; i < adapter.getMessageCount(); i++) {
+      TGMessage message = adapter.getMessage(i);
+      if (message != null) {
+        message.xgramRefreshReactions();
+      }
+    }
+    adapter.invalidateAllMessages();
   }
 
   private void xgramUpdateInputButtons () {

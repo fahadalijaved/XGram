@@ -29,6 +29,7 @@ import com.fahadali.xgram.appearance.XgramM3Sheets;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.data.TGMessage;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.theme.ColorId;
@@ -65,9 +66,15 @@ public final class XgramReactionBar {
     }
   }
 
-  /** The mode of one message sheet: the setting, or Top for a sheet without the options page (a tap on reactions). */
-  public static int mode (boolean hasOptions) {
-    return hasOptions ? XgramSettings.instance().reactionBar() : XgramSettings.REACTION_BAR_TOP;
+  /**
+   * The mode of one message sheet: the setting, or Top for a sheet without the options page (a tap on reactions). A
+   * channel post gets Off while Reactions in channels is off: the sheet is the one Off gives, whatever the setting.
+   */
+  public static int mode (@NonNull TGMessage message, boolean hasOptions) {
+    if (!hasOptions) {
+      return XgramSettings.REACTION_BAR_TOP;
+    }
+    return message.xgramHidesReactions() ? XgramSettings.REACTION_BAR_OFF : XgramSettings.instance().reactionBar();
   }
 
   /**

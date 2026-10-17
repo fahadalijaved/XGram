@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram round 7: Reactions in channels (Messages, XgramSettings.channelReactions) -->
+  <string name="XgramR7ChReactHeader">Reactions</string>
+  <string name="XgramR7ChReactTitle">Reactions in channels</string>
+  <string name="XgramR7ChReactSub">Show reactions under channel posts</string>
+  <string name="XgramR7ChReactInfo">When off, channel posts show no reactions, and you can\'t react to them with a swipe or from the message menu. Groups and private chats keep theirs.</string>
+</resources>

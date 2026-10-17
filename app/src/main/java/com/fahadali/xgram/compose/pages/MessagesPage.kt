@@ -53,6 +53,18 @@ fun MessagesPage() {
       }
     }
 
+    header(R.string.XgramR7ChReactHeader)
+    group {
+      switch(
+        R.id.btn_xgramR7ChannelReactions, s(R.string.XgramR7ChReactTitle), s(R.string.XgramR7ChReactSub),
+        checked = settings.channelReactions()
+      ) {
+        // Open chats follow at once: MessagesController listens for the key.
+        settings.setChannelReactions(it)
+      }
+    }
+    description(R.string.XgramR7ChReactInfo)
+
     header(R.string.XgramHeaderGestures)
     group {
       swipe(host, settings, R.id.btn_xgramSwipeLeft, R.string.XgramSwipeLeft, toRight = false)

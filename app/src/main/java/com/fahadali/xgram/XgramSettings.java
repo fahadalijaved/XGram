@@ -851,6 +851,28 @@ public final class XgramSettings {
     putInt(KEY_REACTION_BAR, value);
   }
 
+  // Reactions in channels (Messages > Reactions): off hides the reactions of broadcast channel posts
+  // (TGMessage.xgramHidesReactions), their quick reactions on a swipe and the message menu's reaction bar.
+
+  public static final String KEY_CHANNEL_REACTIONS = "xgram_channel_reactions";
+
+  private volatile int channelReactions = -1; // -1: not read yet. Cached: read whenever a message's reactions are set.
+
+  /** Reactions under posts of broadcast channels, and reacting to them. On by default, as in Telegram X. */
+  public boolean channelReactions () {
+    int value = channelReactions;
+    if (value < 0) {
+      channelReactions = value = pmc().getBoolean(KEY_CHANNEL_REACTIONS, true) ? 1 : 0;
+    }
+    return value == 1;
+  }
+
+  /** Open chats follow at once: MessagesController listens for {@link #KEY_CHANNEL_REACTIONS}. */
+  public void setChannelReactions (boolean value) {
+    channelReactions = value ? 1 : 0;
+    put(KEY_CHANNEL_REACTIONS, value);
+  }
+
   // Notification icon (Appearance > Theme, next to App icon). Separate from the app icon.
 
   public static final String KEY_NOTIFICATION_ICON = "xgram_notification_icon";
