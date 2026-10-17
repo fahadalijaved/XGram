@@ -25,24 +25,33 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.CheckedTextView;
 import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.DrawableRes;
 import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.theme.ThemeDelegate;
 import org.thunderdog.challegram.theme.ThemeManager;
+import org.thunderdog.challegram.tool.Drawables;
+import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
+
+import java.util.WeakHashMap;
 
 import me.vkryl.core.ColorUtils;
 import me.vkryl.core.MathUtils;
@@ -84,15 +93,20 @@ public final class XgramM3Controls {
    * mark into the indeterminate bar, {@code circle} rounds the box into a circle.
    */
   public static void drawCheckbox (Canvas c, float left, float top, float size, float checked, float partial, float disabled, float circle, float alpha) {
+    drawCheckbox(c, left, top, size, checked, partial, disabled, circle, alpha, null);
+  }
+
+  /** {@link #drawCheckbox(Canvas, float, float, float, float, float, float, float, float)} in the scheme of {@code forcedTheme} (a menu over media), or of the current theme when it is null. */
+  public static void drawCheckbox (Canvas c, float left, float top, float size, float checked, float partial, float disabled, float circle, float alpha, @Nullable ThemeDelegate forcedTheme) {
     if (size <= 0f || alpha <= 0f) {
       return;
     }
     ensurePaints();
     final float fill = MathUtils.clamp(checked / .5f);
     final float mark = MathUtils.clamp((checked - .5f) / .5f);
-    int boxColor = ColorUtils.fromToArgb(role(XgramExpressive.ON_SURFACE_VARIANT), role(XgramExpressive.PRIMARY), fill);
+    int boxColor = ColorUtils.fromToArgb(role(XgramExpressive.ON_SURFACE_VARIANT, forcedTheme), role(XgramExpressive.PRIMARY, forcedTheme), fill);
     if (disabled > 0f) {
-      boxColor = ColorUtils.fromToArgb(boxColor, XgramExpressive.withAlpha(role(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTENT), disabled);
+      boxColor = ColorUtils.fromToArgb(boxColor, XgramExpressive.withAlpha(role(XgramExpressive.ON_SURFACE, forcedTheme), XgramExpressive.DISABLED_CONTENT), disabled);
     }
     final float stroke = Screen.dpf(2f);
     final float half = size / 2f;
@@ -112,7 +126,7 @@ public final class XgramM3Controls {
     c.drawPath(boxPath, fillPaint);
 
     if (mark > 0f) {
-      final int markColor = ColorUtils.fromToArgb(role(XgramExpressive.ON_PRIMARY), role(XgramExpressive.SURFACE), disabled);
+      final int markColor = ColorUtils.fromToArgb(role(XgramExpressive.ON_PRIMARY, forcedTheme), role(XgramExpressive.SURFACE, forcedTheme), disabled);
       final float inner = size * (1f - .15f * MathUtils.clamp(circle));
       final float offset = (size - inner) / 2f;
       if (partial < 1f) {
@@ -207,9 +221,12 @@ public final class XgramM3Controls {
         fixed.setCornerRadius(Screen.dp(XgramExpressive.CORNER_XL));
         shape = fixed;
       }
-      window.setBackgroundDrawable(new InsetDrawable(shape, Screen.dp(16f)));
+      window.setBackgroundDrawable(new InsetDrawable(shape, Screen.dp(WINDOW_INSET)));
       window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
       window.setDimAmount(DIALOG_DIM);
+      // the content inside the 28dp corners (the Material date and time pickers' accent header is square)
+      window.getDecorView().setClipToOutline(true);
+      capWidth(window);
     }
 
     final int onSurface = role(XgramExpressive.ON_SURFACE, forcedTheme);
@@ -225,9 +242,11 @@ public final class XgramM3Controls {
       ((TextView) message).setLinkTextColor(primary);
       ((TextView) message).setHighlightColor(XgramExpressive.withAlpha(primary, .2f));
     }
-    View titleTemplate = Views.tryFindAndroidView(context, dialog, "title_template");
-    if (titleTemplate != null) {
-      titleTemplate.setPaddingRelative(Screen.dp(DIALOG_PADDING), Screen.dp(DIALOG_PADDING), Screen.dp(DIALOG_PADDING), titleTemplate.getPaddingBottom());
+    View alertTitle = Views.tryFindAndroidView(context, dialog, "alertTitle");
+    if (alertTitle instanceof TextView) {
+      // DialogTitle drops an ellipsized title to the 18sp medium style on two lines: an M3 headline wraps instead
+      ((TextView) alertTitle).setSingleLine(false);
+      ((TextView) alertTitle).setMaxLines(4);
     }
 
     final int[] which = {DialogInterface.BUTTON_POSITIVE, DialogInterface.BUTTON_NEUTRAL, DialogInterface.BUTTON_NEGATIVE};
@@ -253,10 +272,7 @@ public final class XgramM3Controls {
         }
       }
     }
-    if (buttonBar != null) {
-      // the 40dp pills (in 48dp touch targets) 24dp from the dialog's sides and bottom
-      buttonBar.setPaddingRelative(Screen.dp(DIALOG_PADDING), Screen.dp(8f), Screen.dp(DIALOG_PADDING), Screen.dp(DIALOG_PADDING - 4f));
-    }
+    normalizeLayout(context, dialog, buttonBar);
 
     final ListView list = dialog.getListView();
     if (list != null) {
@@ -283,6 +299,316 @@ public final class XgramM3Controls {
   @ColorInt
   private static int role (int role, @Nullable ThemeDelegate forcedTheme) {
     return forcedTheme != null ? XgramExpressive.colorFor(role, forcedTheme.isDark()) : XgramExpressive.color(role);
+  }
+
+  // Dialog shell (M3E round 6): the window width, the platform layout's metrics, the hero icon and the filled action
+
+  /** The window background's inset around the 28dp container: the window is this much wider than the dialog on each side. */
+  private static final float WINDOW_INSET = 16f;
+  /** DialogTokens: the container is at most 560dp wide, at least 280dp where it fits, and keeps 24dp from the screen's sides. */
+  private static final float DIALOG_MIN_WIDTH = 280f, DIALOG_MAX_WIDTH = 560f, SCREEN_MARGIN = 24f;
+  /** 16dp between the headline (or the hero icon) and the supporting text. */
+  private static final float TITLE_GAP = 16f;
+
+  /** The window width that makes the container min(560dp, screen width - 48dp) wide, for a screen {@code screenWidthPx} wide. */
+  public static int dialogWindowWidth (int screenWidthPx) {
+    final int inset = Screen.dp(WINDOW_INSET);
+    int container = Math.min(Screen.dp(DIALOG_MAX_WIDTH), screenWidthPx - Screen.dp(SCREEN_MARGIN * 2f));
+    container = Math.max(container, Math.min(Screen.dp(DIALOG_MIN_WIDTH), screenWidthPx - inset * 2));
+    return Math.max(0, Math.min(screenWidthPx, container + inset * 2));
+  }
+
+  private static final WeakHashMap<Window, WidthCap> widthCaps = new WeakHashMap<>();
+
+  /**
+   * Keeps a dialog window at {@link #dialogWindowWidth}: set now and again on any layout pass after the screen width
+   * changed (folding or unfolding with the dialog open). Holds the window weakly; no allocation per pass.
+   */
+  private static final class WidthCap implements ViewTreeObserver.OnGlobalLayoutListener {
+    private final java.lang.ref.WeakReference<Window> window;
+    private int lastScreenWidthDp = -1;
+
+    WidthCap (Window window) {
+      this.window = new java.lang.ref.WeakReference<>(window);
+    }
+
+    void apply (boolean force) {
+      final Window window = this.window.get();
+      if (window == null) {
+        return;
+      }
+      final int screenWidthDp = window.getContext().getResources().getConfiguration().screenWidthDp;
+      if (!force && screenWidthDp == lastScreenWidthDp) {
+        return;
+      }
+      lastScreenWidthDp = screenWidthDp;
+      if (screenWidthDp <= 0) {
+        return;
+      }
+      final int width = dialogWindowWidth(Screen.dp(screenWidthDp));
+      if (width > 0 && window.getAttributes().width != width) {
+        window.setLayout(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+      }
+    }
+
+    @Override
+    public void onGlobalLayout () {
+      apply(false);
+    }
+  }
+
+  private static void capWidth (Window window) {
+    WidthCap cap = widthCaps.get(window);
+    if (cap == null) {
+      cap = new WidthCap(window);
+      widthCaps.put(window, cap);
+      window.getDecorView().getViewTreeObserver().addOnGlobalLayoutListener(cap);
+    }
+    cap.apply(true);
+  }
+
+  private static boolean isShown (@Nullable View view) {
+    return view != null && view.getVisibility() == View.VISIBLE;
+  }
+
+  private static void hide (@Nullable View view) {
+    if (view != null && view.getVisibility() != View.GONE) {
+      view.setVisibility(View.GONE);
+    }
+  }
+
+  private static void setHeight (@Nullable View view, int height) {
+    ViewGroup.LayoutParams params = view != null ? view.getLayoutParams() : null;
+    if (params != null && params.height != height) {
+      params.height = height;
+      view.setLayoutParams(params);
+    }
+  }
+
+  /**
+   * M3 metrics on the platform alert layout (alert_dialog_material with the XgramDialogM3 themes, Holo for a dialog
+   * still built with an old theme): 24dp around the content, 16dp under the headline, 24dp above the actions, no
+   * 48 / 64dp minimum heights and no hairlines; in the Holo tree also wrap-content buttons at the end, the neutral one
+   * at the start.
+   */
+  private static void normalizeLayout (Context context, AlertDialog dialog, @Nullable ViewGroup buttonBar) {
+    final int pad = Screen.dp(DIALOG_PADDING);
+    final boolean material = Views.tryFindAndroidView(context, dialog, "textSpacerNoTitle") != null;
+    final View topPanel = Views.tryFindAndroidView(context, dialog, "topPanel");
+    final View contentPanel = Views.tryFindAndroidView(context, dialog, "contentPanel");
+    final View customPanel = Views.tryFindAndroidView(context, dialog, "customPanel");
+    final View titleView = Views.tryFindAndroidView(context, dialog, "alertTitle");
+    final boolean hasTitle = isShown(topPanel) && isShown(titleView);
+    final boolean hasBody = isShown(contentPanel) || isShown(customPanel);
+    final boolean hasButtons = buttonBar != null;
+
+    final View titleTemplate = Views.tryFindAndroidView(context, dialog, "title_template");
+    if (titleTemplate != null) {
+      titleTemplate.setPaddingRelative(pad, pad, pad, hasBody ? Screen.dp(TITLE_GAP) : 0);
+      titleTemplate.setMinimumHeight(0);
+    }
+    hide(Views.tryFindAndroidView(context, dialog, "titleDividerNoCustom"));
+    hide(Views.tryFindAndroidView(context, dialog, "titleDivider"));
+    hide(Views.tryFindAndroidView(context, dialog, "titleDividerTop"));
+    if (topPanel != null) {
+      topPanel.setMinimumHeight(0);
+    }
+    if (contentPanel != null) {
+      contentPanel.setMinimumHeight(0);
+    }
+    if (customPanel != null) {
+      customPanel.setMinimumHeight(0);
+    }
+    setHeight(Views.tryFindAndroidView(context, dialog, "textSpacerNoTitle"), pad);
+    setHeight(Views.tryFindAndroidView(context, dialog, "textSpacerNoButtons"), pad);
+
+    final View message = dialog.findViewById(android.R.id.message);
+    if (message != null) {
+      if (material) {
+        message.setPaddingRelative(pad, 0, pad, 0);
+      } else {
+        View scrollView = Views.tryFindAndroidView(context, dialog, "scrollView");
+        if (scrollView != null) {
+          scrollView.setPadding(0, 0, 0, 0);
+        }
+        message.setPaddingRelative(pad, hasTitle ? 0 : pad, pad, hasButtons ? 0 : pad);
+      }
+    }
+
+    if (buttonBar != null) {
+      final View buttonPanel = Views.tryFindAndroidView(context, dialog, "buttonPanel");
+      if (buttonPanel != null && buttonPanel != buttonBar) {
+        buttonPanel.setPadding(0, 0, 0, 0);
+        buttonPanel.setMinimumHeight(0);
+        if (buttonPanel instanceof LinearLayout) {
+          ((LinearLayout) buttonPanel).setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
+        }
+      }
+      // the 40dp containers (in 48dp touch targets, 4dp above and below) 24dp from the body, the sides and the bottom
+      final int vertical = pad - Screen.dp(4f);
+      buttonBar.setPaddingRelative(pad, vertical, pad, vertical);
+      buttonBar.setMinimumHeight(0);
+      if (!material && buttonBar instanceof LinearLayout) {
+        normalizeHoloButtons((LinearLayout) buttonBar, dialog);
+      }
+    }
+    if (!material) {
+      final View parentPanel = Views.tryFindAndroidView(context, dialog, "parentPanel");
+      if (parentPanel != null) {
+        parentPanel.setPadding(0, 0, 0, 0);
+      }
+    }
+  }
+
+  private static final String HOLO_SPACER_TAG = "xgramR6B3HoloSpacer";
+
+  /** Holo's equal-width split buttons: wrap content at the end, the neutral one at the start, no dividers. */
+  private static void normalizeHoloButtons (LinearLayout bar, AlertDialog dialog) {
+    bar.setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
+    bar.setMeasureWithLargestChildEnabled(false);
+    bar.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+    View spacer = null;
+    for (int i = 0; i < bar.getChildCount(); i++) {
+      View child = bar.getChildAt(i);
+      if (HOLO_SPACER_TAG.equals(child.getTag())) {
+        spacer = child;
+        continue;
+      }
+      if (child instanceof TextView) {
+        if (child.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+          LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) child.getLayoutParams();
+          params.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+          params.weight = 0f;
+          child.setLayoutParams(params);
+        }
+      } else {
+        hide(child); // leftSpacer / rightSpacer
+      }
+    }
+    View neutral = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
+    if (neutral != null && neutral.getParent() == bar && isShown(neutral)) {
+      if (bar.indexOfChild(neutral) != 0) {
+        bar.removeView(neutral);
+        bar.addView(neutral, 0);
+      }
+      if (spacer == null) {
+        spacer = new View(bar.getContext());
+        spacer.setTag(HOLO_SPACER_TAG);
+        bar.addView(spacer, 1, new LinearLayout.LayoutParams(0, 1, 1f));
+      }
+    } else if (spacer != null) {
+      hide(spacer);
+    }
+  }
+
+  /**
+   * An M3 dialog with a hero icon: the 24dp icon in secondary centred above a centred headline, 16dp between them.
+   * Call on a shown dialog that has a title. Nothing with Expressive design off.
+   */
+  public static void heroIcon (@Nullable AlertDialog dialog, @DrawableRes int iconRes) {
+    if (dialog == null || iconRes == 0 || !XgramExpressive.isEnabled()) {
+      return;
+    }
+    final Context context = dialog.getContext();
+    final View template = Views.tryFindAndroidView(context, dialog, "title_template");
+    final View iconView = dialog.findViewById(android.R.id.icon);
+    final View title = Views.tryFindAndroidView(context, dialog, "alertTitle");
+    if (!(template instanceof LinearLayout) || !(iconView instanceof ImageView) || !(title instanceof TextView) || iconView.getParent() != template) {
+      return;
+    }
+    final LinearLayout column = (LinearLayout) template;
+    column.setOrientation(LinearLayout.VERTICAL);
+    column.setGravity(Gravity.CENTER_HORIZONTAL);
+    final ImageView icon = (ImageView) iconView;
+    android.graphics.drawable.Drawable drawable = Drawables.get(context.getResources(), XgramIconPack.map(iconRes));
+    if (drawable != null) {
+      drawable.setColorFilter(Paints.getColorFilter(role(XgramExpressive.SECONDARY)));
+    }
+    icon.setImageDrawable(drawable);
+    icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    icon.setVisibility(View.VISIBLE);
+    LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(Screen.dp(24f), Screen.dp(24f));
+    iconParams.bottomMargin = Screen.dp(TITLE_GAP);
+    icon.setLayoutParams(iconParams);
+    final TextView titleText = (TextView) title;
+    titleText.setGravity(Gravity.CENTER_HORIZONTAL);
+    titleText.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+    titleText.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+  }
+
+  /**
+   * Makes button {@code which} of a shown M3 dialog the filled one (the confirming action, "Download"): a 40dp primary
+   * pill (error when {@code destructive}) whose corners morph to 8dp while pressed, labelLarge in onPrimary, 16dp side
+   * padding; onSurface at .12 / .38 while disabled. Nothing with Expressive design off.
+   */
+  public static void fillButton (@Nullable AlertDialog dialog, int which, boolean destructive) {
+    if (dialog == null || !XgramExpressive.isEnabled()) {
+      return;
+    }
+    styleFilledButton(dialog.getButton(which), destructive, null);
+  }
+
+  /** The filled dialog action on {@code view} (see {@link #fillButton}), in the scheme of {@code forcedTheme} when it is set. */
+  public static void styleFilledButton (@Nullable View view, boolean destructive, @Nullable ThemeDelegate forcedTheme) {
+    if (!(view instanceof TextView)) {
+      return;
+    }
+    final TextView button = (TextView) view;
+    button.setAllCaps(false);
+    button.setPaintFlags(button.getPaintFlags() & ~Paint.FAKE_BOLD_TEXT_FLAG);
+    XgramExpressive.applyText(button, XgramExpressive.TS_LABEL_L, false);
+    final int content = role(destructive ? XgramExpressive.ON_ERROR : XgramExpressive.ON_PRIMARY, forcedTheme);
+    final int disabled = XgramExpressive.withAlpha(role(XgramExpressive.ON_SURFACE, forcedTheme), XgramExpressive.DISABLED_CONTENT);
+    button.setTextColor(new ColorStateList(
+      new int[][] {new int[] {-android.R.attr.state_enabled}, new int[0]},
+      new int[] {disabled, content}
+    ));
+    button.setMinHeight(Screen.dp(48f));
+    button.setMinimumHeight(Screen.dp(48f));
+    button.setMinWidth(Screen.dp(48f));
+    button.setMinimumWidth(Screen.dp(48f));
+    button.setPadding(Screen.dp(16f), button.getPaddingTop(), Screen.dp(16f), button.getPaddingBottom());
+    final FilledContainer container = new FilledContainer(destructive ? XgramExpressive.ERROR : XgramExpressive.PRIMARY, forcedTheme);
+    container.setHost(button);
+    final int inset = Screen.dp(4f);
+    button.setBackground(new RippleDrawable(ColorStateList.valueOf(XgramExpressive.withAlpha(content, XgramExpressive.STATE_PRESSED)),
+      new InsetDrawable(container, 0, inset, 0, inset), new InsetDrawable(container.newMask(), 0, inset, 0, inset)));
+  }
+
+  /** The container of a filled dialog action: its role, or onSurface at .12 while disabled; read at draw time. */
+  private static final class FilledContainer extends XgramExpressive.MorphDrawable {
+    private final int containerRole;
+    private final @Nullable ThemeDelegate forcedTheme;
+    private boolean enabled = true;
+
+    FilledContainer (int containerRole, @Nullable ThemeDelegate forcedTheme) {
+      super(0, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_S);
+      this.containerRole = containerRole;
+      this.forcedTheme = forcedTheme;
+    }
+
+    @Override
+    protected boolean onStateChange (int[] state) {
+      boolean isEnabled = false;
+      for (int s : state) {
+        if (s == android.R.attr.state_enabled) {
+          isEnabled = true;
+          break;
+        }
+      }
+      final boolean changed = isEnabled != enabled;
+      enabled = isEnabled;
+      final boolean result = super.onStateChange(state);
+      if (changed) {
+        invalidateSelf();
+      }
+      return result || changed;
+    }
+
+    @Override
+    public int getDrawColor () {
+      return enabled ? role(containerRole, forcedTheme) : XgramExpressive.withAlpha(role(XgramExpressive.ON_SURFACE, forcedTheme), XgramExpressive.DISABLED_CONTAINER);
+    }
   }
 
   private static boolean isNegativeColor (@ColorInt int color) {
@@ -343,10 +669,19 @@ public final class XgramM3Controls {
       textView.setTextColor(role(XgramExpressive.ON_SURFACE, forcedTheme));
       if (textView instanceof CheckedTextView) {
         // single and multiple choice lists: the radio / check in primary, onSurfaceVariant while unchecked
-        ((CheckedTextView) textView).setCheckMarkTintList(new ColorStateList(
+        final ColorStateList tint = new ColorStateList(
           new int[][] {new int[] {android.R.attr.state_checked}, new int[0]},
           new int[] {role(XgramExpressive.PRIMARY, forcedTheme), role(XgramExpressive.ON_SURFACE_VARIANT, forcedTheme)}
-        ));
+        );
+        ((CheckedTextView) textView).setCheckMarkTintList(tint);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+          // the Material list rows draw the radio / check as their start drawable
+          textView.setCompoundDrawableTintList(tint);
+        }
+      }
+      // M3 one-line list items: 56dp
+      if (textView.getMinHeight() < Screen.dp(56f)) {
+        textView.setMinHeight(Screen.dp(56f));
       }
     }
   }

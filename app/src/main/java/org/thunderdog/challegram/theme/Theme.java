@@ -917,6 +917,11 @@ public class Theme {
   // Themes
 
   public static int dialogTheme () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the Material alert layout (end-aligned actions that stack when too wide, the neutral one at the
+      // start, no Holo hairlines or split buttons); XgramM3Controls.styleAlert gives it the M3 roles, type and shape
+      return isDark() ? R.style.XgramDialogM3Dark : R.style.XgramDialogM3;
+    }
     return isDark() ? R.style.DialogThemeDark : R.style.DialogTheme;
   }
 

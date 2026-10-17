@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E round 6 (b3): the dialog themes Theme.dialogTheme() returns with Expressive design. Before Android 5 they
+     are the Telegram X dialog themes; values-v21 (and v31 / v34 for the accent) define the Material alert ones. -->
+<resources>
+  <style name="XgramDialogM3" parent="@style/DialogTheme" />
+  <style name="XgramDialogM3Dark" parent="@style/DialogThemeDark" />
+</resources>

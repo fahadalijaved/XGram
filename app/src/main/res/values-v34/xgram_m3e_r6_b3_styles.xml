@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E round 6 (b3): the Material alert dialogs (see values-v21) with the device's own primary role as the
+     accent (android.R.color.system_primary_*, the same color XgramExpressive.systemRole reads for PRIMARY). -->
+<resources>
+  <style name="XgramDialogM3" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:colorAccent">@android:color/system_primary_light</item>
+    <item name="android:textColorLink">@android:color/system_primary_light</item>
+    <item name="android:backgroundDimAmount">0.32</item>
+    <item name="android:windowElevation">6dp</item>
+  </style>
+  <style name="XgramDialogM3Dark" parent="@android:style/Theme.Material.Dialog.Alert">
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:colorAccent">@android:color/system_primary_dark</item>
+    <item name="android:textColorLink">@android:color/system_primary_dark</item>
+    <item name="android:backgroundDimAmount">0.32</item>
+    <item name="android:windowElevation">6dp</item>
+  </style>
+</resources>

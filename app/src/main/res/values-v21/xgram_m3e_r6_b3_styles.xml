@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E round 6 (b3): Material alert dialogs (alert_dialog_material: an end-aligned button bar with the neutral
+     action at the start that stacks when too wide, 24dp padding, no Holo hairlines or 64dp minimum heights).
+     XgramM3Controls.styleAlert draws the M3 container (surfaceContainerHigh, 28dp) over the transparent window and
+     colours every text from the roles. The accent (pickers, text fields) is the M3 baseline primary here; values-v31
+     and values-v34 take the device's dynamic primary, as the roles do. -->
+<resources>
+  <style name="XgramDialogM3" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:colorAccent">#ff6750a4</item>
+    <item name="android:textColorLink">#ff6750a4</item>
+    <item name="android:backgroundDimAmount">0.32</item>
+    <item name="android:windowElevation">6dp</item>
+  </style>
+  <style name="XgramDialogM3Dark" parent="@android:style/Theme.Material.Dialog.Alert">
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:colorAccent">#ffd0bcff</item>
+    <item name="android:textColorLink">#ffd0bcff</item>
+    <item name="android:backgroundDimAmount">0.32</item>
+    <item name="android:windowElevation">6dp</item>
+  </style>
+</resources>

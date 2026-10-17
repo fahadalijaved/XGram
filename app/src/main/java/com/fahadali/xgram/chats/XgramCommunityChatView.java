@@ -82,11 +82,13 @@ public final class XgramCommunityChatView extends ChatView implements AttachDele
     } else {
       placeholderRect.set(left, centerY - halfHeight, left + width, centerY + halfHeight);
     }
+    // XGram M3E r6: Reduce motion keeps the bar still
+    final boolean still = com.fahadali.xgram.appearance.XgramMotion.reduce();
     long t = AnimationUtils.currentAnimationTimeMillis() % PULSE_MS;
-    float pulse = .5f + .5f * (float) Math.cos(2.0 * Math.PI * t / PULSE_MS);
+    float pulse = still ? .5f : .5f + .5f * (float) Math.cos(2.0 * Math.PI * t / PULSE_MS);
     placeholderPaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST), .55f + .45f * pulse));
     c.drawRoundRect(placeholderRect, halfHeight, halfHeight, placeholderPaint);
-    if (getWindowToken() != null) {
+    if (!still && getWindowToken() != null) {
       postInvalidateOnAnimation();
     }
   }

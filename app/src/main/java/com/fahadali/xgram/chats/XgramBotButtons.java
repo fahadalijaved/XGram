@@ -107,6 +107,10 @@ public final class XgramBotButtons {
     final boolean callbackIsBase64 = data != null && decoded == null;
     final String callbackValue = data == null ? null : decoded != null ? decoded : Base64.encodeToString(data, Base64.NO_WRAP);
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return xgramShowSheet(c, button, view, text, hasText, value, url, canOpen, callbackValue, callbackIsBase64, query, userId);
+    }
+
     IntList ids = new IntList(8);
     StringList strings = new StringList(8);
     IntList icons = new IntList(8);
@@ -181,6 +185,57 @@ public final class XgramBotButtons {
       }
       return true;
     });
+    return true;
+  }
+
+  /**
+   * XGram M3E r6: the button as an info sheet titled with its text: a row per value (button text, text to copy, link,
+   * callback data in tabular figures, inline query, user ID), each copied with the "Copied" snackbar on a tap, and a
+   * filled Open with a tonal Share for a link the app can open. No Cancel row: the scrim, a drag or back closes it.
+   */
+  private static boolean xgramShowSheet (@NonNull ViewController<?> c, @NonNull TGInlineKeyboard.Button button, @NonNull View view, @Nullable String text, boolean hasText,
+                                         @Nullable String value, @Nullable String url, boolean canOpen, @Nullable String callbackValue, boolean callbackIsBase64,
+                                         @Nullable String query, long userId) {
+    java.util.List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row> rows = new java.util.ArrayList<>(6);
+    if (hasText) {
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(text, Lang.getString(R.string.XgramR6B3BotButtonText)).copy(text));
+    }
+    if (value != null) {
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(value, Lang.getString(R.string.XgramR6B3BotCopyText)).copy(value));
+    }
+    if (url != null) {
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(url, Lang.getString(R.string.XgramR5SheetsLinkLabel)).copy(url));
+    }
+    if (callbackValue != null) {
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(callbackValue, Lang.getString(callbackIsBase64 ? R.string.XgramR6B3BotCallbackBase64 : R.string.XgramR6B3BotCallback)).tabular().copy(callbackValue));
+    }
+    if (query != null) {
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(query, Lang.getString(R.string.XgramR6B3BotInlineQuery)).copy(query));
+    }
+    if (userId != 0) {
+      final String id = Long.toString(userId);
+      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(id, Lang.getString(R.string.XgramR6B3BotUserId)).tabular().copy(id));
+    }
+    if (rows.isEmpty() && !canOpen) {
+      return false;
+    }
+    final String fUrl = url;
+    final boolean[] shared = {false};
+    final com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action open = canOpen ?
+      new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.Open), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_FILLED, () -> button.performOpen(view)) : null;
+    final com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action share = canOpen ?
+      new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.Share), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_TONAL, () -> {
+        if (!shared[0]) {
+          shared[0] = true;
+          TD.shareLink(c, fUrl);
+        }
+      }) : null;
+    final CharSequence title = hasText ? text : fUrl;
+    if (canOpen) {
+      com.fahadali.xgram.appearance.XgramR5SheetsInfo.show(c, title, rows, share, open);
+    } else {
+      com.fahadali.xgram.appearance.XgramR5SheetsInfo.show(c, title, rows);
+    }
     return true;
   }
 

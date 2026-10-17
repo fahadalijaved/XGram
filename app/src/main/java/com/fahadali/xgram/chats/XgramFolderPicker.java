@@ -118,32 +118,58 @@ public final class XgramFolderPicker {
     }
     List<ListItem> items = new ArrayList<>(infos.length + 1);
     boolean allHidden = com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId());
+    // XGram M3E r6: a hidden folder gets a "Hidden" supporting line (not a suffix), and "New folder" is a tonal button
+    // with a + icon in the sheet's actions row instead of a blue row
+    final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final boolean canCreate = tdlib.canCreateChatFolder();
     for (int i = 0; i < infos.length; i++) {
       TdApi.ChatFolderInfo info = infos[i];
       boolean inFolder = allInFolder(tdlib, chatIds, folders[i]);
       CharSequence name = TD.toCharSequence(info.name);
-      if (allHidden || !tdlib.settings().isChatFolderEnabled(info.id)) {
+      final boolean hidden = allHidden || !tdlib.settings().isChatFolderEnabled(info.id);
+      final int icon = TD.findFolderIcon(info.icon, R.drawable.baseline_folder_24);
+      if (xgram && hidden) {
+        items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION_DOUBLE_LINE, R.id.chatFolder, icon, name, inFolder).setStringValue(Lang.getString(R.string.XgramR6B3FolderHidden)).setIntValue(info.id));
+        continue;
+      }
+      if (hidden) {
         name = Lang.getCharSequence(R.string.XgramFolderHiddenMark, name);
       }
-      items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.chatFolder, TD.findFolderIcon(info.icon, R.drawable.baseline_folder_24), name, inFolder).setIntValue(info.id));
+      items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.chatFolder, icon, name, inFolder).setIntValue(info.id));
     }
-    if (tdlib.canCreateChatFolder()) {
+    if (canCreate && !xgram) {
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_createNewFolder, R.drawable.baseline_create_new_folder_24, R.string.CreateNewFolder).setTextColorId(ColorId.textNeutral));
     }
-    if (items.isEmpty()) {
+    if (items.isEmpty() && !(xgram && canCreate)) {
       return;
     }
     LongSet busy = new LongSet();
     SettingsWrap[] settings = new SettingsWrap[1];
+    final boolean xgramActions = xgram && canCreate;
     settings[0] = context.showSettings(new SettingsWrapBuilder(R.id.btn_addChatToFolder)
       .addHeaderItem(Lang.getString(R.string.AddToFolder))
       .setRawItems(items)
       .setNeedSeparators(false)
-      .setDisableFooter(true)
+      .setDisableFooter(!xgramActions)
+      .setSaveStr(com.fahadali.xgram.appearance.XgramR5Sheets.sentenceCase(R.string.CreateNewFolder, R.string.XgramR6B3NewFolder))
+      .setCancelStr(Lang.getString(R.string.Done))
+      .setOnActionButtonClick((wrap, view, isCancel) -> {
+        if (isCancel) {
+          return false; // Done: the sheet closes
+        }
+        if (wrap.window != null) {
+          wrap.window.hideWindow(true);
+        }
+        context.context().navigation().navigateTo(EditChatFolderController.newFolder(context.context(), tdlib, TD.newChatFolder(chatIds)));
+        return true;
+      })
       .setDisableToggles(true)
       .setNeedRootInsets(true)
       .setSettingProcessor((item, view, isUpdate) -> {
         view.setIconColorId(item.getId() == R.id.btn_createNewFolder ? ColorId.inlineIcon : ColorId.NONE);
+        if (item.getViewType() == ListItem.TYPE_CHECKBOX_OPTION_DOUBLE_LINE && view.findCheckBox() != null) {
+          view.findCheckBox().setChecked(item.isSelected(), isUpdate); // XGram: the hidden folders' two-line rows
+        }
       })
       .setOnSettingItemClick((view, id, item, done, adapter, window) -> {
         if (item.getId() == R.id.btn_createNewFolder) {
@@ -171,6 +197,19 @@ public final class XgramFolderPicker {
           }
         });
       }));
+    if (xgramActions && settings[0] != null && settings[0].doneButton instanceof com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton) {
+      // XGram M3E r6: "New folder" is a tonal button (secondaryContainer) with a leading 20dp +
+      com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton button = (com.fahadali.xgram.appearance.XgramM3Sheets.FilledButton) settings[0].doneButton;
+      button.setRoles(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+      android.graphics.drawable.Drawable plus = org.thunderdog.challegram.tool.Drawables.get(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_add_24));
+      if (plus != null) {
+        final int size = org.thunderdog.challegram.tool.Screen.dp(com.fahadali.xgram.appearance.XgramM3Sheets.BUTTON_ICON_SIZE);
+        plus.setBounds(0, 0, size, size);
+        plus.setColorFilter(org.thunderdog.challegram.tool.Paints.getColorFilter(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER)));
+        button.setCompoundDrawablesRelative(plus, null, null, null);
+        button.setCompoundDrawablePadding(org.thunderdog.challegram.tool.Screen.dp(com.fahadali.xgram.appearance.XgramM3Sheets.BUTTON_ICON_LABEL_SPACE));
+      }
+    }
   }
 
   private interface Done {
@@ -298,6 +337,8 @@ public final class XgramFolderPicker {
     } else {
       text = Lang.getString(R.string.XgramFolderError, TD.toErrorString(error));
     }
-    UI.showToast(text, Toast.LENGTH_LONG);
+    if (!com.fahadali.xgram.appearance.XgramSnackbar.show(text, Toast.LENGTH_LONG)) { // XGram M3E r6: the snackbar
+      UI.showToast(text, Toast.LENGTH_LONG);
+    }
   }
 }

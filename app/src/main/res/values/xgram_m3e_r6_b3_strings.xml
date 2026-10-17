@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E round 6, batch 3: the dialog, sheet, menu and tooltip shell and XGram's own sheets (sentence case) -->
+<resources>
+  <string name="XgramR6B3DragHandle">Drag handle</string>
+  <string name="XgramR6B3Dismiss">Dismiss</string>
+  <string name="XgramR6B3Retry">Retry</string>
+  <string name="XgramR6B3LearnMore">Learn more</string>
+  <string name="XgramR6B3UpdateBadFile">The update failed its SHA-256 check and was deleted</string>
+  <string name="XgramR6B3DownloadAgain">Download again</string>
+  <string name="XgramR6B3FolderHidden">Hidden</string>
+  <string name="XgramR6B3NewFolder">New folder</string>
+  <string name="XgramR6B3Export">Export</string>
+  <string name="XgramR6B3ExportHtml">Web page (HTML)</string>
+  <string name="XgramR6B3ExportHtmlInfo">Styled, opens in any browser</string>
+  <string name="XgramR6B3ExportTextInfo">Smallest file, opens anywhere</string>
+  <string name="XgramR6B3ExportPreparing">Exporting chat…</string>
+  <string name="XgramR6B3ExportProgress">Exporting · %1$s…</string>
+  <string name="XgramR6B3ExportFileName">File name</string>
+  <string name="XgramR6B3ExportMessages">Messages</string>
+  <string name="XgramR6B3ExportLocation">Saved in</string>
+  <string name="XgramR6B3ExportAppStorage">App storage</string>
+  <string name="XgramR6B3BotButtonText">Button text</string>
+  <string name="XgramR6B3BotCopyText">Text to copy</string>
+  <string name="XgramR6B3BotCallback">Callback data</string>
+  <string name="XgramR6B3BotCallbackBase64">Callback data (Base64)</string>
+  <string name="XgramR6B3BotInlineQuery">Inline query</string>
+  <string name="XgramR6B3BotUserId">User ID</string>
+</resources>
