@@ -19,18 +19,23 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewOutlineProvider;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.dynamicanimation.animation.FloatValueHolder;
+import androidx.dynamicanimation.animation.SpringAnimation;
 
+import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.unsorted.Settings;
 
 import me.vkryl.android.ViewUtils;
 import me.vkryl.core.ColorUtils;
@@ -44,9 +49,9 @@ import me.vkryl.core.MathUtils;
  *   grids start clear of it (EmojiLayout gives their top spacer {@link #CONTENT_CLEARANCE_DP} more).</li>
  *   <li>Segments: 48 x 40dp, 2dp apart, 20dp icons, outlined in onSurfaceVariant at rest.</li>
  *   <li>Selection: a secondaryContainer pill under the selected segment, sliding to a newly selected segment on the
- *   spatial fast spring. Only the two segments of a change crossfade, each on its own effects spring: the outlined
- *   drawing in onSurfaceVariant to the filled one in onSecondaryContainer and back (XgramIconCrossfade, one drawable per
- *   state). A segment the pill slides over stays as it is.</li>
+ *   standard spatial default spring, one way only. Only the two segments of a change crossfade, driven by the pill's
+ *   own progress: the outlined drawing in onSurfaceVariant to the filled one in onSecondaryContainer and back
+ *   (XgramIconCrossfade, one drawable per state). A segment the pill slides over stays as it is.</li>
  *   <li>Press: the pressed segment's shape (the pill, or its state layer) springs from full to 8dp corners under the
  *   10% pressed state layer.</li>
  * </ul>
@@ -77,11 +82,20 @@ public final class XgramW2EmojiTypeGroup extends View {
   /** One drawable per state, also where both states use the same resource (see XgramIconCrossfade). */
   private final Drawable[] icons = new Drawable[COUNT], checkedIcons = new Drawable[COUNT];
   private final String[] labels = new String[COUNT];
-  /** The selection pill's position in segment indexes (0 .. COUNT - 1), springing between them. */
-  private final XgramExpressive.Spring indicator;
-  /** Each segment's selected state (0 .. 1): its icon and content color. */
-  private final XgramExpressive.Spring[] checkSprings = new XgramExpressive.Spring[COUNT];
+  /**
+   * The selection pill's position in segment indexes (0 .. COUNT - 1) on the standard spatial default spring (no
+   * visible overshoot). Everything else that moves with a selection (the icons' outlined to filled crossfade) is
+   * derived from it, so the pill and the icons can never disagree.
+   */
+  private final PillSpring indicator;
   private final XgramExpressive.Spring[] pressSprings = new XgramExpressive.Spring[COUNT];
+  /** The current trip: where the pill started, where it goes, and each segment's filled state when it started. */
+  private float travelFrom;
+  private int travelTarget;
+  private final float[] checkFrom = new float[COUNT];
+  private float lastValue;
+  /** A same-direction retarget keeps the pill's speed up to this fraction of omega x distance (no overshoot). */
+  private static final float ENTRY_SPEED_CAP = .5f;
   /** 0 shown, 1 hidden. */
   private final XgramExpressive.Spring hideSpring;
 
@@ -102,10 +116,12 @@ public final class XgramW2EmojiTypeGroup extends View {
     for (int i = 0; i < COUNT; i++) {
       icons[i] = Drawables.get(getResources(), ICONS[i]);
       checkedIcons[i] = Drawables.get(getResources(), ICONS_CHECKED[i]);
-      checkSprings[i] = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, i == selectedType ? 1f : 0f, (s, value) -> invalidate());
       pressSprings[i] = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+      checkFrom[i] = i == selectedType ? 1f : 0f;
     }
-    indicator = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, selectedType, (s, value) -> invalidate());
+    indicator = new PillSpring(XgramExpressive.STD_SPATIAL_DEFAULT, selectedType, this::onIndicatorFrame);
+    travelFrom = lastValue = selectedType;
+    travelTarget = selectedType;
     hideSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> applyHide(value));
     hideSpring.setThreshold(.002f);
     labels[TYPE_EMOJI] = Lang.getString(R.string.XgramW2EmojiTypeEmoji);
@@ -137,30 +153,179 @@ public final class XgramW2EmojiTypeGroup extends View {
     return selectedType;
   }
 
+  /**
+   * Sends the pill to {@code type} (EmojiLayout owns when: a tap, the content it follows, or a reset). Nothing when
+   * it is already there or on its way there.
+   */
   public void setSelectedType (int type, boolean animated) {
     if (type < 0 || type >= COUNT) {
       return;
     }
-    final boolean changed = this.selectedType != type;
-    this.selectedType = type;
-    animated = animated && getWidth() > 0;
-    if (animated) {
-      indicator.animateTo(type);
-    } else {
+    if (type == selectedType && indicator.getTarget() == type && (animated || (!indicator.isRunning() && indicator.getValue() == type))) {
+      return;
+    }
+    captureChecks();
+    travel(type, animated);
+  }
+
+  private void travel (int type, boolean animated) {
+    final int old = selectedType;
+    selectedType = type;
+    final float from = indicator.getValue();
+    travelFrom = from;
+    travelTarget = type;
+    if (!animated || getWidth() == 0 || Math.abs(from - type) < .001f) {
       indicator.setValue(type);
-    }
-    for (int i = 0; i < COUNT; i++) {
-      final float target = i == type ? 1f : 0f;
-      if (animated) {
-        checkSprings[i].animateTo(target);
-      } else {
-        checkSprings[i].setValue(target);
+      travelFrom = type;
+      for (int i = 0; i < COUNT; i++) {
+        checkFrom[i] = i == type ? 1f : 0f;
       }
+    } else {
+      // A reversal (or a start from rest) begins at rest, so the pill only ever travels one way; in the same
+      // direction it keeps its speed, capped so that it cannot overshoot
+      final float d = type - from, v = indicator.getVelocity();
+      final float omega = (float) Math.sqrt(XgramExpressive.stiffness(XgramExpressive.STD_SPATIAL_DEFAULT));
+      final float v0 = v * d > 0f ? Math.signum(d) * Math.min(Math.abs(v), ENTRY_SPEED_CAP * omega * Math.abs(d)) : 0f;
+      indicator.animateTo(type, v0);
     }
-    if (changed) {
+    lastValue = indicator.getValue();
+    if (old != type) {
       updateDescription();
     }
+    xgramLog("pill -> " + type + (animated ? "" : " (snap)") + " from " + from);
     invalidate();
+  }
+
+  private void captureChecks () {
+    for (int i = 0; i < COUNT; i++) {
+      checkFrom[i] = checkOf(i);
+    }
+  }
+
+  /**
+   * Segment {@code i}'s filled state (0 outlined, 1 filled), from the pill's progress on its current trip: only the
+   * segments the trip leaves and reaches change shape, and only as the pill moves.
+   */
+  private float checkOf (int i) {
+    final float span = travelTarget - travelFrom;
+    final float p = Math.abs(span) < 1e-4f ? 1f : MathUtils.clamp((indicator.getValue() - travelFrom) / span);
+    return checkFrom[i] + ((i == travelTarget ? 1f : 0f) - checkFrom[i]) * p;
+  }
+
+  private void onIndicatorFrame (float v) {
+    if (BuildConfig.DEBUG) {
+      final float dir = Math.signum(travelTarget - travelFrom);
+      if (dir != 0f && (v - lastValue) * dir < -.02f && Math.abs(travelTarget - v) > .05f) {
+        Log.w(LOG_TAG, "backwards " + lastValue + " -> " + v + " target " + travelTarget);
+      }
+    }
+    lastValue = v;
+    invalidate();
+  }
+
+  private static final String LOG_TAG = "XgramSwitch";
+
+  private static void xgramLog (String s) {
+    if (BuildConfig.DEBUG) {
+      Log.d(LOG_TAG, s);
+    }
+  }
+
+  /**
+   * The pill's spring: a unit-mass androidx spring on an M3E motion token, as XgramExpressive.Spring, that also
+   * reports its velocity and can start from a velocity of the caller's choice. Snaps under Reduce motion. Main thread
+   * only.
+   */
+  private static final class PillSpring {
+    interface Listener {
+      void onFrame (float value);
+    }
+
+    private final FloatValueHolder holder;
+    private final SpringAnimation animation;
+    private final Listener listener;
+    private float target, velocity;
+
+    PillSpring (int token, float initialValue, Listener listener) {
+      this.listener = listener;
+      this.target = initialValue;
+      this.holder = new FloatValueHolder(initialValue);
+      this.animation = new SpringAnimation(holder);
+      this.animation.setSpring(XgramExpressive.springForce(token, initialValue));
+      this.animation.setMinimumVisibleChange(.001f);
+      this.animation.addUpdateListener((a, value, v) -> {
+        velocity = v;
+        listener.onFrame(value);
+      });
+      this.animation.addEndListener((a, canceled, value, v) -> velocity = 0f);
+    }
+
+    float getValue () {
+      return holder.getValue();
+    }
+
+    float getTarget () {
+      return target;
+    }
+
+    boolean isRunning () {
+      return animation.isRunning();
+    }
+
+    /** Units per second while running, else 0. */
+    float getVelocity () {
+      return animation.isRunning() ? velocity : 0f;
+    }
+
+    /** Snaps to {@code v} and cancels the animation. The listener is not called. */
+    void setValue (float v) {
+      if (animation.isRunning()) {
+        animation.cancel();
+      }
+      holder.setValue(v);
+      target = v;
+      velocity = 0f;
+    }
+
+    /** Springs to {@code target} from {@code startVelocity} (units per second) instead of the running velocity. */
+    void animateTo (float target, float startVelocity) {
+      if (Settings.instance().needReduceMotion()) {
+        snapTo(target);
+        return;
+      }
+      this.target = target;
+      if (animation.isRunning()) {
+        animation.cancel();
+      }
+      if (holder.getValue() == target && startVelocity == 0f) {
+        velocity = 0f;
+        return;
+      }
+      velocity = startVelocity;
+      animation.setStartVelocity(startVelocity);
+      animation.animateToFinalPosition(target);
+    }
+
+    private void snapTo (float target) {
+      final boolean changed = holder.getValue() != target || animation.isRunning();
+      setValue(target);
+      if (changed) {
+        listener.onFrame(target);
+      }
+    }
+  }
+
+  /** 0 shown, 1 hidden (a little past either end on the spring). */
+  public float getHideFraction () {
+    return MathUtils.clamp(hideFactor);
+  }
+
+  /** The bottom of the switch as drawn, in the parent's coordinates; 0 while it is not shown. */
+  public int visibleBottom () {
+    if (getVisibility() != View.VISIBLE || getAlpha() == 0f) {
+      return 0;
+    }
+    return Math.round(getTop() + getTranslationY() + getHeight());
   }
 
   private void updateDescription () {
@@ -352,9 +517,8 @@ public final class XgramW2EmojiTypeGroup extends View {
     final float pressedCorner = Math.min(full, Screen.dpf(PRESSED_CORNER_DP));
     final float position = MathUtils.clamp(indicator.getValue(), 0f, COUNT - 1);
 
-    // The selection pill, squashed while the segment under it is pressed
-    final int nearest = Math.round(position);
-    final float indicatorPress = pressSprings[nearest].getValue();
+    // The selection pill, squashed while its own (the selected) segment is pressed
+    final float indicatorPress = MathUtils.clamp(pressSprings[selectedType].getValue());
     final float indicatorCorner = MathUtils.clamp(full + (pressedCorner - full) * indicatorPress, 0f, full);
     segmentRect(position, rect);
     fillPaint.setColor(indicatorColor);
@@ -362,7 +526,7 @@ public final class XgramW2EmojiTypeGroup extends View {
 
     final float iconScale = Screen.dpf(ICON_DP) / Screen.dpf(24f);
     for (int i = 0; i < COUNT; i++) {
-      final float check = MathUtils.clamp(checkSprings[i].getValue());
+      final float check = MathUtils.clamp(checkOf(i));
       final float press = pressSprings[i].getValue();
       segmentRect(i, rect);
 

@@ -429,7 +429,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
         headerView.setOutlineProvider(null);
         headerView.setTranslationZ(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3) + Screen.dp(1f));
       }
-      xgramSyncTypeGroup(false);
+      xgramTypeGroup.setSelectedType(xgramContentType(), false);
       xgramApplyGridInsets(); // pages made before the toolbar existed start clear of it too
     } else {
       xgramTypeGroup = null;
@@ -480,7 +480,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       this.adapter.notifyDataSetChanged();
       if (xgramTypeGroup != null) {
         xgramTypeGroup.setVisibility(allowMedia && !isOptimizedForDisplayMessageOptionsWindow ? VISIBLE : GONE); // XGram
-        xgramSyncTypeGroup(false);
+        xgramResetTypeGroup();
         xgramApplyGridInsets();
       }
     }
@@ -588,69 +588,250 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     }
   }
 
-  /** XGram: set while a tap on the toolbar switches pages, so the page change does not move the pill on its own. */
-  private boolean xgramTypeSyncLocked;
+  // XGram M3E: one owner for the switch's pill. A tap moves it once, at the tap, straight to the tapped segment, and
+  // the tapped type stays the target (xgramPendingType) until the content rests there or the user takes over: until
+  // then nothing the content reports (the page change, the media page's section slide and its end) can move it. A
+  // tap writes Settings first, so a page built later opens on the target. Content-driven changes (Trending, a sticker
+  // set, GIFs gone) move the pill once, at the start of their slide or cut. A finger dragging the pager owns it while
+  // it drags (xgramDragFollow). Debug builds log every step under the tag XgramSwitch.
 
-  private void xgramSyncTypeGroup (boolean animated) {
-    if (xgramTypeGroup == null || pager == null || adapter == null || xgramTypeSyncLocked) {
+  private static final int XGRAM_TYPE_EMOJI = com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_EMOJI;
+  private static final int XGRAM_TYPE_STICKERS = com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_STICKERS;
+  private static final int XGRAM_TYPE_GIFS = com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS;
+
+  private int xgramPendingType = -1;
+  private boolean xgramDragFollow, xgramResetOnIdle;
+
+  private static void xgramLog (String s) {
+    if (org.thunderdog.challegram.BuildConfig.DEBUG) {
+      android.util.Log.d("XgramSwitch", s);
+    }
+  }
+
+  private static @EmojiMediaType int xgramMediaTypeOf (int type) {
+    return type == XGRAM_TYPE_EMOJI ? EmojiMediaType.EMOJI : type == XGRAM_TYPE_GIFS ? EmojiMediaType.GIF : EmojiMediaType.STICKER;
+  }
+
+  /** XGram: the media page, once it has its view and a section (null while it is not built). */
+  private @Nullable EmojiMediaListController xgramMedia () {
+    ViewController<?> c = adapter != null ? adapter.getCachedItem(1) : null;
+    return c instanceof EmojiMediaListController && ((EmojiMediaListController) c).xgramIsReady() ? (EmojiMediaListController) c : null;
+  }
+
+  /** XGram: Stickers or GIFs: where the media page is or is going (Settings, which it opens on, before it exists). */
+  private int xgramMediaPageType () {
+    EmojiMediaListController m = xgramMedia();
+    int section = m != null ? m.getMediaSection() : Settings.instance().getEmojiMediaSection();
+    return section == EmojiMediaType.GIF ? XGRAM_TYPE_GIFS : XGRAM_TYPE_STICKERS;
+  }
+
+  /** XGram: the type the content shows, from destinations only (the pager's target page, the section slide's end). */
+  private int xgramContentType () {
+    return pager.getCurrentItem() == 0 ? XGRAM_TYPE_EMOJI : xgramMediaPageType();
+  }
+
+  /** XGram: the pill follows the content, unless a tap or a finger owns it. */
+  private void xgramUpdateTypeGroup (boolean animated) {
+    if (xgramTypeGroup == null || pager == null || adapter == null) {
       return;
     }
-    final int type;
-    if (pager.getCurrentItem() == 0) {
-      type = com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_EMOJI;
-    } else {
-      type = getCurrentMediaEmojiSection() == EmojiMediaType.GIF ? com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS : com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_STICKERS;
+    if (xgramPendingType != -1 || xgramDragFollow) {
+      xgramLog("content ignored: pending " + xgramPendingType);
+      return;
     }
-    xgramTypeGroup.setSelectedType(type, animated);
+    xgramTypeGroup.setSelectedType(xgramContentType(), animated);
+  }
+
+  private void xgramResetTypeGroup () {
+    xgramPendingType = -1;
+    xgramDragFollow = false;
+    if (xgramTypeGroup != null && pager != null && adapter != null) {
+      xgramTypeGroup.setSelectedType(xgramContentType(), false);
+    }
+  }
+
+  private void xgramClearPending (String why) {
+    if (xgramPendingType != -1) {
+      xgramLog("pending " + xgramPendingType + " cleared: " + why);
+      xgramPendingType = -1;
+    }
+  }
+
+  public boolean xgramHasTypeGroup () {
+    return xgramTypeGroup != null;
+  }
+
+  private static boolean xgramAnimationsOn () {
+    return !Settings.instance().needReduceMotion() && (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O || android.animation.ValueAnimator.areAnimatorsEnabled());
+  }
+
+  /** XGram: the media page is on screen and at rest, so a section change there can slide. */
+  public boolean xgramMediaPageIdleOnScreen () {
+    return pager != null && pager.getCurrentItem() == 1 && scrollState == ViewPager.SCROLL_STATE_IDLE && Math.abs(currentPageFactor - 1f) < .001f && xgramAnimationsOn();
+  }
+
+  /** XGram: how much of the grids' top clearance the switch covers right now (less while it hides). */
+  public int xgramVisibleClearance () {
+    final int clearance = xgramGridTopClearance();
+    return clearance == 0 ? 0 : Math.round(clearance * (1f - xgramTypeGroup.getHideFraction()));
+  }
+
+  /** XGram: where the section tabs look for the grid's current section: below the tabs' middle and the switch. */
+  public int xgramSectionProbe () {
+    return getHeaderSize() / 2 + xgramVisibleClearance();
   }
 
   private void xgramOnTypeSelected (int type) {
-    if (scrollState != ViewPager.SCROLL_STATE_IDLE || pager == null || adapter == null) {
+    if (xgramTypeGroup == null || pager == null || adapter == null || !allowMedia) {
+      return;
+    }
+    if (scrollState == ViewPager.SCROLL_STATE_DRAGGING) {
+      return; // a finger owns the pager
+    }
+    final EmojiMediaListController media = xgramMedia();
+    if (type == xgramTypeGroup.getSelectedType() && !xgramDragFollow) {
+      if (type == XGRAM_TYPE_STICKERS && xgramPendingType == -1 && pager.getCurrentItem() == 1 && scrollState == ViewPager.SCROLL_STATE_IDLE && media != null && media.xgramIsTrending()) {
+        media.showStickers(); // back from Trending (content-driven: the pill is there already)
+      }
+      return;
+    }
+    if (type == XGRAM_TYPE_GIFS && media != null && media.xgramGifAvailability() == 0) {
+      // No saved GIFs: the GIF search, decided before anything moves
+      if (listener != null) {
+        listener.onSearchRequested(this, false);
+      }
       return;
     }
     final int prevSection = getCurrentEmojiSection();
-    // The pill goes straight to the tapped segment. Switching to the media page reports its last section first (GIFs
-    // after the last visit was there), so Emoji -> Stickers sent the pill to GIFs and back: no syncs until the end.
-    if (xgramTypeGroup != null) {
-      xgramTypeGroup.setSelectedType(type, true);
+    final int page = type == XGRAM_TYPE_EMOJI ? 0 : 1;
+    final boolean wasSettling = scrollState == ViewPager.SCROLL_STATE_SETTLING;
+    xgramDragFollow = false;
+    xgramPendingType = type;
+    xgramLog("tap " + type + ": page " + pager.getCurrentItem() + " -> " + page + ", section " + (media != null ? media.getMediaSection() : -1));
+    Settings.instance().setEmojiPosition(page);
+    if (page == 1) {
+      Settings.instance().setEmojiMediaSection(xgramMediaTypeOf(type));
     }
-    xgramTypeSyncLocked = true;
-    try {
-      xgramSwitchToType(type, prevSection);
-    } finally {
-      xgramTypeSyncLocked = false;
+    xgramTypeGroup.setSelectedType(type, true); // the only pill move of this tap
+    if (page == 1 && media != null) {
+      media.xgramShowSection(xgramMediaTypeOf(type), !xgramMediaPageIdleOnScreen());
     }
-    xgramSyncTypeGroup(true);
+    if (pager.getCurrentItem() != page) {
+      pager.setCurrentItem(page, true);
+    }
+    if (wasSettling) {
+      xgramRearmAffectHeight(page);
+    }
+    if (listener != null) {
+      listener.onSectionSwitched(this, xgramMediaTypeOf(type), prevSection);
+    }
+    xgramShowTypeGroup();
+    xgramCheckPendingSettled(false);
   }
 
-  private void xgramSwitchToType (int type, int prevSection) {
-    if (type == com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_EMOJI) {
-      if (pager.getCurrentItem() != 0) {
-        pager.setCurrentItem(0, true);
-        if (listener != null) {
-          listener.onSectionSwitched(this, EmojiMediaType.EMOJI, prevSection);
-        }
+  /** XGram: the tapped type stops being the target once the content rests on it (or the pager rests elsewhere). */
+  private void xgramCheckPendingSettled (boolean pagerIdle) {
+    if (xgramTypeGroup == null || xgramPendingType == -1 || scrollState != ViewPager.SCROLL_STATE_IDLE) {
+      return;
+    }
+    final int page = xgramPendingType == XGRAM_TYPE_EMOJI ? 0 : 1;
+    if (pager.getCurrentItem() != page) {
+      if (pagerIdle) {
+        xgramClearPending("pager rests elsewhere");
+        xgramUpdateTypeGroup(true);
       }
+      return;
+    }
+    if (page == 1) {
+      EmojiMediaListController m = xgramMedia();
+      if (m == null || !m.xgramIsSectionSettled()) {
+        return;
+      }
+    }
+    xgramClearPending("settled");
+    xgramUpdateTypeGroup(true); // moves the pill only if the content ended elsewhere (GIFs that arrived empty)
+  }
+
+  /** XGram: the tabs follow the grid the pager now goes to, from where they are (a retarget mid-settle). */
+  private void xgramRearmAffectHeight (int targetPage) {
+    if (!affectHeight) {
+      return;
+    }
+    final float remaining = Math.abs(targetPage - currentPageFactor);
+    if (remaining < .01f) {
+      return;
+    }
+    fromHeightHideFactor = headerHideFactor;
+    fromPageFactor = currentPageFactor;
+    heightFactorDiff = (getDesiredPageFactor(targetPage) - headerHideFactor) / remaining;
+  }
+
+  /**
+   * XGram: the media page starts showing {@code nextType} (a slide, or a cut). A content-driven change moves the
+   * pill now, with the content; on screen the tabs come back with a slide to a grid at its top (no snap at its end),
+   * and a cut resets the scroll state now or once the pager rests.
+   */
+  public void xgramOnMediaSectionMoving (@EmojiMediaType int nextType, int nextScrollY, boolean slide) {
+    if (xgramTypeGroup == null || pager == null) {
+      return;
+    }
+    xgramLog((slide ? "slide" : "cut") + " to " + nextType + (xgramPendingType != -1 ? " (tap pending)" : ""));
+    if (xgramPendingType == -1) {
+      xgramUpdateTypeGroup(true);
+    }
+    if (pager.getCurrentItem() != 1) {
+      return; // off screen: onPageSelected does the button and the scroll state
+    }
+    if (slide) {
+      if (scrollState == ViewPager.SCROLL_STATE_IDLE && headerHideFactor > 0f && nextScrollY - headerHideFactor * getHeaderSize() < 0) {
+        if (hideAnimator == null) {
+          hideAnimator = new FactorAnimator(HIDE_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 210L, headerHideFactor);
+        } else {
+          hideAnimator.forceFactor(headerHideFactor);
+        }
+        com.fahadali.xgram.appearance.XgramAppMotion.use(hideAnimator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, true);
+        hideAnimator.animateTo(0f);
+      }
+    } else if (scrollState == ViewPager.SCROLL_STATE_IDLE) {
+      resetScrollState(false);
     } else {
-      final boolean switchPage = pager.getCurrentItem() != 1;
-      if (switchPage) {
-        pager.setCurrentItem(1, true);
+      xgramResetOnIdle = true;
+      xgramRearmAffectHeight(1);
+    }
+  }
+
+  /** XGram: the end of a media section slide reports the switch, unless a tap did (one report per tap). */
+  public boolean xgramShouldReportSectionSwitch () {
+    return xgramTypeGroup == null || xgramPendingType == -1;
+  }
+
+  /** XGram: a media section slide is over (it ended or turned back). */
+  public void xgramOnMediaSectionSettled () {
+    if (xgramTypeGroup == null) {
+      return;
+    }
+    if (xgramPendingType != -1) {
+      xgramCheckPendingSettled(false);
+    } else {
+      xgramUpdateTypeGroup(true);
+    }
+  }
+
+  /** XGram: the saved GIFs loaded empty: a GIFs tap still waiting opens the GIF search instead. */
+  public void xgramOnGifsUnavailable () {
+    if (xgramTypeGroup != null && xgramPendingType == XGRAM_TYPE_GIFS) {
+      xgramClearPending("no GIFs");
+      if (listener != null) {
+        listener.onSearchRequested(this, false);
       }
-      ViewController<?> c = adapter.getCachedItem(1);
-      if (c instanceof EmojiMediaListController) {
-        EmojiMediaListController media = (EmojiMediaListController) c;
-        if (type == com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS) {
-          // As the GIF section button: no saved GIFs opens the GIF search
-          if (media.getMediaSection() != EmojiMediaType.GIF && !media.showGIFs() && listener != null) {
-            listener.onSearchRequested(this, false);
-          }
-        } else if (media.getMediaSection() != EmojiMediaType.STICKER) {
-          media.showStickers();
-        }
-      }
-      if (switchPage && listener != null) {
-        listener.onSectionSwitched(this, getCurrentMediaEmojiSection(), prevSection);
-      }
+    }
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow();
+    if (xgramTypeGroup != null) {
+      xgramResetTypeGroup(); // XGram: no tap outlives the panel
     }
   }
 
@@ -798,6 +979,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     isOptimizedForDisplayMessageOptionsWindow = needOptimize;
     optimizeForDisplayTextFormattingLayout(needOptimize);
     checkBackground();
+    xgramClearPending("message options"); // XGram
     xgramApplyGridInsets(); // XGram: no floating toolbar there, so no top clearance
   }
 
@@ -974,6 +1156,10 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     }
 
     final int viewId = v.getId();
+    if (xgramTypeGroup != null && (viewId == R.id.btn_section || viewId == R.id.btn_stickerSet)) {
+      xgramClearPending("header"); // XGram: the user takes over from a switch tap
+      xgramShowTypeGroup();
+    }
     if (viewId == R.id.btn_stickerSet) {
       TGStickerSetInfo info = ((StickerSectionView) v).getStickerSet();
 
@@ -1103,7 +1289,11 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   }
 
   public int getHeaderBottom () {
-    return (int) (getHeaderSize() * (1f - headerHideFactor)) + Screen.dp(12f);
+    int bottom = (int) (getHeaderSize() * (1f - headerHideFactor)) + Screen.dp(12f);
+    if (xgramTypeGroup != null && xgramTypeGroup.getVisibility() == VISIBLE) {
+      bottom = Math.max(bottom, xgramTypeGroup.visibleBottom() + Screen.dp(12f)); // XGram: under the switch too
+    }
+    return bottom;
   }
 
   private void showOrHideHeader () {
@@ -1341,6 +1531,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       c.setBottomInset(parent.extraBottomInset, parent.extraBottomInsetWithoutKeyboard);
       parent.xgramApplyTopClearance(c); // XGram: the grids start clear of the floating toolbar
       container.addView(c.getValue());
+      if (position == 1 && parent.xgramTypeGroup != null) {
+        parent.post(() -> parent.xgramCheckPendingSettled(false)); // XGram: a switch tap made before the page existed
+      }
       return c;
     }
 
@@ -1419,7 +1612,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       setCircleVisible((hasLeft && position == 0) || (hasRight && position == 1), true, position == 0 ? R.drawable.baseline_backspace_24 : R.drawable.baseline_search_24, position == 0 ? -Screen.dp(BACKSPACE_OFFSET) : 0);
     }
     resetScrollState(false);
-    xgramSyncTypeGroup(true); // XGram
+    xgramUpdateTypeGroup(true); // XGram: a no-op while a tap or a finger owns the pill
     xgramShowTypeGroup(); // XGram: a new page brings the floating toolbar back
   }
 
@@ -1452,6 +1645,22 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   public void onPageScrollStateChanged (int state) {
     this.scrollState = state;
     setAffectHeight(state != ViewPager.SCROLL_STATE_IDLE);
+    if (xgramTypeGroup != null) {
+      // XGram: a finger takes over from a switch tap; at rest, a tap's target settles or the pill follows the page
+      if (state == ViewPager.SCROLL_STATE_DRAGGING) {
+        xgramClearPending("drag");
+      } else if (state == ViewPager.SCROLL_STATE_IDLE) {
+        if (xgramResetOnIdle) {
+          xgramResetOnIdle = false;
+          resetScrollState(false);
+        }
+        if (xgramPendingType != -1) {
+          xgramCheckPendingSettled(true);
+        } else {
+          xgramUpdateTypeGroup(true);
+        }
+      }
+    }
   }
 
   public boolean canSlideBack () {
@@ -1503,6 +1712,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   public @EmojiMediaType int getCurrentEmojiSection () {
     if (allowMedia) {
+      if (xgramTypeGroup != null && xgramPendingType != -1) {
+        return xgramMediaTypeOf(xgramPendingType); // XGram: where a switch tap goes
+      }
       int currentItem = pager.getCurrentItem();
       if (currentItem == 1) {
         return getCurrentMediaEmojiSection();
@@ -1525,10 +1737,6 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   public void setMediaSection (boolean isGif) {
     if (emojiHeaderView != null) {
       emojiHeaderView.setMediaSection(isGif);
-    }
-    if (xgramTypeGroup != null && !xgramTypeSyncLocked && pager != null && pager.getCurrentItem() == 1) {
-      // XGram: the media page switched between stickers and GIFs
-      xgramTypeGroup.setSelectedType(isGif ? com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS : com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_STICKERS, true);
     }
   }
 
