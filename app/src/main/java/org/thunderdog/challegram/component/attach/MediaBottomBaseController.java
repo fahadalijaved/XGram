@@ -284,7 +284,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
       public void getItemOffsets (Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
         int position = parent.getChildAdapterPosition(view);
         if (position != RecyclerView.NO_POSITION && recyclerView.getAdapter() != null && position == recyclerView.getAdapter().getItemCount() - 1 && mediaLayout.getCounterFactor() == 1f) {
-          outRect.set(0, 0, 0, MediaBottomBar.getBarHeight());
+          outRect.set(0, 0, 0, MediaBottomBar.getBarHeight() + mediaLayout.xgramCaptionPillHeight()); // XGram: and the caption field above the bar
         } else {
           outRect.setEmpty();
         }
@@ -549,6 +549,9 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   public int getRecyclerScrollY () {
     if (recyclerView == null) {
       return 0;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !recyclerView.canScrollVertically(-1)) {
+      return 0; // XGram: at the top, whatever offsets the decorations add (the sheet drag needs exactly 0)
     }
     RecyclerView.LayoutManager manager = getLayoutManager();
     if (!(manager instanceof LinearLayoutManager)) {
@@ -822,8 +825,8 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
         animatingHeight = false;
       }
     });
-    heightAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-    heightAnimator.setDuration(fast ? 150l : MediaLayout.REVEAL_DURATION);
+    heightAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR));
+    heightAnimator.setDuration(com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, fast ? 150l : MediaLayout.REVEAL_DURATION));
     heightAnimator.start();
   }
 

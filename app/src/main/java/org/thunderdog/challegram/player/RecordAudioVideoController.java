@@ -261,6 +261,9 @@ public class RecordAudioVideoController implements
         stopRecording(CLOSE_MODE_CANCEL, false);
       }
     }
+    // XGram: both are added in the constructor; without this every recreated activity leaks one controller
+    ThemeManager.instance().removeThemeListener(this);
+    Settings.instance().removeVideoPreferenceChangeListener(this);
   }
 
   @Override

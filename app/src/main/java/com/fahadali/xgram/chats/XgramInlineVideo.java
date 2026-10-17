@@ -1550,6 +1550,10 @@ public final class XgramInlineVideo {
           return true;
         }
         case MotionEvent.ACTION_UP: {
+          ViewParent p = getParent();
+          if (p != null) {
+            p.requestDisallowInterceptTouchEvent(false); // pairs the DOWN call: the parent chain is clean again
+          }
           int target = touchTarget;
           touchTarget = TARGET_NONE;
           if (target == TARGET_TRACK) {
@@ -1573,6 +1577,10 @@ public final class XgramInlineVideo {
           return true;
         }
         case MotionEvent.ACTION_CANCEL: {
+          ViewParent p = getParent();
+          if (p != null) {
+            p.requestDisallowInterceptTouchEvent(false); // pairs the DOWN call: the parent chain is clean again
+          }
           touchTarget = TARGET_NONE;
           dragging = false;
           invalidate();

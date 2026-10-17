@@ -1672,7 +1672,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramSelectionToolbar.addButton(R.id.menu_btn_reply, R.drawable.baseline_reply_24, Lang.getString(R.string.Reply), toolbarClick);
       xgramSelectionToolbar.addButton(R.id.menu_btn_copy, R.drawable.baseline_content_copy_24, Lang.getString(R.string.Copy), toolbarClick);
       xgramSelectionToolbar.addButton(R.id.menu_btn_forward, R.drawable.baseline_forward_24, Lang.getString(R.string.Share), toolbarClick);
-      xgramSelectionToolbar.addButton(R.id.menu_btn_delete, R.drawable.baseline_delete_24, Lang.getString(R.string.Delete), toolbarClick);
+      xgramSelectionToolbar.addButton(R.id.menu_btn_delete, R.drawable.baseline_delete_24, Lang.getString(R.string.Delete), toolbarClick, true); // XGram M3E r6: in error
       RelativeLayout.LayoutParams toolbarParams = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(64f));
       toolbarParams.addRule(RelativeLayout.CENTER_HORIZONTAL);
       toolbarParams.addRule(RelativeLayout.ABOVE, R.id.msg_bottom);
@@ -12202,6 +12202,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
     @Override
     public int xgramPullTextColor () {
       return manager.useBubbles() ? manager.getColor(ColorId.NONE, ColorId.bubble_dateText, ColorId.bubble_dateText_noWallpaper, org.thunderdog.challegram.theme.PropertyId.WALLPAPER_OVERRIDE_DATE) : Theme.textAccentColor();
+    }
+
+    @Override
+    public boolean xgramPullOverPhoto () {
+      // XGram M3E r6: over a photo or pattern wallpaper the label pill takes surfaceContainerHigh
+      return wallpaperView != null && wallpaperView.xgramShowsPhotoOrPattern();
     }
   };
 

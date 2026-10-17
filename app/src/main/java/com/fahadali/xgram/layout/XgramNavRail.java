@@ -1397,6 +1397,10 @@ public final class XgramNavRail {
       if (!xgram.drawerItemHidden("night")) {
         toggles.add(new Entry("night", R.id.btn_night, R.drawable.baseline_brightness_2_24, R.drawable.xgl_night, R.string.XgramNavRailNightMode));
       }
+      // Expressive design, between Night mode and Ghost mode as in the side menu (Android 13+)
+      if (XgramExpressive.isAvailable() && !xgram.drawerItemHidden("expressive")) {
+        toggles.add(new Entry("expressive", R.id.btn_xgramExpressive, R.drawable.baseline_palette_24, R.drawable.xgl_palette, R.string.XgramExpressive));
+      }
       if (!xgram.drawerItemHidden("ghost")) {
         toggles.add(new Entry("ghost", R.id.btn_xgramGhostMode, R.drawable.baseline_ghost_24, R.drawable.xgl_ghost, R.string.XgramGhostMode));
       }
@@ -1414,7 +1418,7 @@ public final class XgramNavRail {
         list.addView(row, params(match, Screen.dp(ROW_HEIGHT), 0, false));
       }
       for (Entry entry : toggles) {
-        boolean checked = entry.id == R.id.btn_night ? Theme.isDark() : xgram.isAnyGhostEnabled();
+        boolean checked = entry.id == R.id.btn_night ? Theme.isDark() : entry.id == R.id.btn_xgramExpressive ? XgramExpressive.isEnabled() : xgram.isAnyGhostEnabled();
         list.addView(switchRow(context, entry, checked), params(match, Screen.dp(ROW_HEIGHT), 0, false));
       }
     }
@@ -1481,6 +1485,20 @@ public final class XgramNavRail {
           if (id == R.id.btn_night) {
             toggler.setRadioEnabled(!toggler.isEnabled(), true);
             ThemeManager.instance().toggleNightMode();
+          } else if (id == R.id.btn_xgramExpressive) {
+            // The screen under the rail (it has a Tdlib: rebuilding the Material You themes needs one). The switch
+            // flips only once the restart is confirmed, as in the side menu and Appearance.
+            final NavigationController navigation = XgramNavRail.this.context.navigation(); // the activity (the parameter is a plain Context)
+            final ViewController<?> current = navigation != null ? navigation.getCurrentStackItem() : null;
+            final ViewController<?> c = current != null && current.tdlib() != null ? current : owner.railRoot();
+            if (c == null) {
+              return;
+            }
+            final boolean on = XgramExpressive.isEnabled();
+            c.openAlert(R.string.XgramExpressive, Lang.getString(R.string.XgramExpressiveInfo), Lang.getString(R.string.AppUpdateRestart), (dialog, which) -> {
+              XgramExpressive.setEnabled(c, !on);
+              toggler.setRadioEnabled(!on, true);
+            }, 0);
           } else {
             XgramSettings settings = XgramSettings.instance();
             boolean enable = !settings.isAnyGhostEnabled();

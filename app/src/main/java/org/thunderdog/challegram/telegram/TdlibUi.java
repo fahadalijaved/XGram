@@ -936,7 +936,8 @@ public class TdlibUi extends Handler {
     }
     infiniteView.initWithItems(ttlOptions, foundIndex);
 
-    final AlertDialog.Builder builder = new AlertDialog.Builder(context, useDarkMode ? R.style.DialogThemeDark : Theme.dialogTheme());
+    // XGram M3E r6: the forced dark alert is the Material one too (showAlert styles it through modifyAlert)
+    final AlertDialog.Builder builder = new AlertDialog.Builder(context, useDarkMode ? (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.style.XgramDialogM3Dark : R.style.DialogThemeDark) : Theme.dialogTheme());
     builder.setTitle(Lang.getString(R.string.MessageLifetime));
     if (message != 0) {
       builder.setMessage(Lang.getString(message));

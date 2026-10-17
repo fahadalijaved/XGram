@@ -165,6 +165,8 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
 
   private @Nullable SettingsAdapter xgramAdapter;
   private @Nullable RecyclerView xgramList;
+  /** XGram M3E r6: the list drawn in Compose (TgxPagesBatch1); null keeps the classic list. */
+  private @Nullable com.fahadali.xgram.compose.tgx.TgxSettingsRenderer xgramCompose;
   /** The rows of the lock group and the note under it; the rest only while a passcode is set. */
   private static final int XGRAM_BASE_COUNT = 5;
 
@@ -193,6 +195,7 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
     lastEnabledStatus = isPasscodeEnabled();
     com.fahadali.xgram.appearance.XgramM3Bars.attachLargeTitle(this, list);
     com.fahadali.xgram.appearance.XgramMotion.attachScrollLink(this, list, 0);
+    xgramCompose = com.fahadali.xgram.compose.tgx.TgxSettingsRenderer.attachIfAllowed(this, wrapper, list, -1, 0);
     return wrapper;
   }
 
@@ -613,6 +616,9 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
   @Override
   public void onFocus () {
     super.onFocus();
+    if (xgramCompose != null) {
+      xgramCompose.onFocus();
+    }
     if (specificChat != null) {
       chatPasscode = tdlib.chatPasscode(specificChat);
     }
@@ -798,7 +804,35 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
 
   @Override
   public View getViewForApplyingOffsets () {
+    if (xgramCompose != null && xgramCompose.getView() != null) {
+      return xgramCompose.getView();
+    }
     return xgramList != null ? xgramList : contentView;
+  }
+
+  @Override
+  public void onBlur () {
+    super.onBlur();
+    if (xgramCompose != null) {
+      xgramCompose.onBlur();
+    }
+  }
+
+  @Override
+  public boolean canSlideBackFrom (org.thunderdog.challegram.navigation.NavigationController navigationController, float x, float y) {
+    if (xgramCompose != null && !xgramCompose.canSlideBackFrom(navigationController, x, y)) {
+      return false;
+    }
+    return super.canSlideBackFrom(navigationController, x, y);
+  }
+
+  @Override
+  public void destroy () {
+    super.destroy();
+    if (xgramCompose != null) {
+      xgramCompose.destroy();
+      xgramCompose = null;
+    }
   }
 
   // Settings
@@ -896,6 +930,9 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
   @Override
   protected void handleLanguageDirectionChange () {
     super.handleLanguageDirectionChange();
+    if (xgramCompose != null) {
+      xgramCompose.onLanguageChanged();
+    }
     updateRtl(settingsList);
     updateRtl(autoLockWrap);
   }

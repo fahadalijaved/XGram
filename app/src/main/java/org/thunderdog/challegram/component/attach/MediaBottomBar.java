@@ -275,11 +275,12 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
     for (int i = 0; i < items.length; i++) {
       BarItem item = items[i];
       float cx = itemStartX + itemWidth * (i + .5f);
-      float selected = me.vkryl.core.MathUtils.clamp(1f - Math.abs(position - i));
+      final float iconPosition = xgramSwitchTo != -1 ? Math.max(Math.min(index, xgramSwitchTo), Math.min(Math.max(index, xgramSwitchTo), position)) : Math.round(position);
+      float selected = me.vkryl.core.MathUtils.clamp(1f - Math.abs(iconPosition - i)); // XGram: the indicator may overshoot, the icons do not
       if (item.icon != null) {
         final float iconX = cx - item.icon.getMinimumWidth() / 2f, iconY = iconCenterY - item.icon.getMinimumHeight() / 2f;
         if (selected < 1f) {
-          xgramIconPaint.setAlpha((int) (255f * (1f - selected) * itemsAlpha));
+          xgramIconPaint.setAlpha((int) (255f * itemsAlpha)); // XGram: the inactive icon stays opaque under the active one (no see-through dip mid-switch)
           Drawables.draw(c, item.icon, iconX, iconY, xgramIconPaint);
         }
         if (selected > 0f) {

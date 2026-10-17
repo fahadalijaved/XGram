@@ -19,6 +19,7 @@ import org.thunderdog.challegram.navigation.ViewController
 import org.thunderdog.challegram.ui.EditRightsController
 import org.thunderdog.challegram.ui.EditSessionController
 import org.thunderdog.challegram.ui.ListItem
+import org.thunderdog.challegram.ui.PasscodeSetupController
 import org.thunderdog.challegram.ui.PrivacyExceptionController
 import org.thunderdog.challegram.ui.RequestController
 import org.thunderdog.challegram.ui.Settings2FAController
@@ -46,6 +47,9 @@ internal object TgxPagesBatch1 {
     SettingsArchiveChatListController::class.java to TgxPageHints.DEFAULT,
     EditSessionController::class.java to TgxPageHints.DEFAULT,
     RequestController::class.java to TgxPageHints.DEFAULT,
+    // Passcode lock (XGram M3E r6, b8): btn_passcode, btn_passcode_change, btn_biometrics, btn_pattern, btn_passcode_auto,
+    // btn_notificationContent and btn_screenCapture are plain switch and value rows.
+    PasscodeSetupController::class.java to TgxPageHints.DEFAULT,
     // Its hero (a 96dp avatar with a camera badge) stays the real view on the page; its chats are native rows.
     XgramCommunitySettingsController::class.java to TgxChatRowsHints.INSTANCE,
   )

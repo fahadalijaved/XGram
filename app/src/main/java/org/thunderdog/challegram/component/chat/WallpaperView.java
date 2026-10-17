@@ -377,6 +377,15 @@ public class WallpaperView extends View implements ThemeChangeListener, ChatStyl
   public static final int OVERLAY_ALPHA = 0x70;
 
   /**
+   * XGram M3E: a photo or pattern wallpaper (not a color fill, and not hidden behind the solid surface) draws behind
+   * the messages, so pills over it take surfaceContainerHigh (XgramPullToNext.Host.xgramPullOverPhoto).
+   */
+  public boolean xgramShowsPhotoOrPattern () {
+    final TGBackground background = wallpaper;
+    return manager.useBubbles() && background != null && !background.isEmpty() && !background.isFill() && !xgramCovered(background);
+  }
+
+  /**
    * XGram: Material 3 Expressive replaces the theme's own wallpaper (none, the built-in cats or the theme default) with
    * a solid surface, like Google Messages. A wallpaper the user picked still draws; previews always draw.
    */

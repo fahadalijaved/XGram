@@ -511,7 +511,14 @@ public final class XgramChatLongPress {
       }
       if (xgram && xgramAlpha != null && xgramScale != null) {
         xgramScale.animateTo(com.fahadali.xgram.appearance.XgramM3Preview.revealScale());
-        xgramAlpha.animateTo(0f);
+        if (!xgramAlpha.isRunning() && xgramAlpha.getValue() == 0f) {
+          // Idle at 0 (hidden before its show spring ran): animateTo would return without its end listener, so the
+          // popup would never hear the hide finish and the static current would stay set
+          xgramAlpha.setValue(0f); // the target too, so xgramOnSettled reads a hide
+          xgramOnSettled();
+        } else {
+          xgramAlpha.animateTo(0f);
+        }
         return true;
       }
       animator.setDuration(140L);

@@ -397,6 +397,7 @@ public final class XgramR6B6Lists {
     }
     XgramM3Bars.LargeTitleDecoration decoration = new XgramM3Bars.LargeTitleDecoration(controller);
     recyclerView.addItemDecoration(decoration);
+    recyclerView.addOnScrollListener(decoration.snapListener); // the idle snap of a half-collapsed title, as XgramM3Bars.attachNow
     recyclerView.setTag(R.id.xgram_m3e_large_title, decoration);
   }
 
@@ -679,7 +680,7 @@ public final class XgramR6B6Lists {
   }
 
   /** The space the actions row of a sheet leaves under its 64dp band (dp), above the IME and navigation insets. */
-  public static final float ACTIONS_BOTTOM = 8f;
+  public static final float ACTIONS_BOTTOM = XgramR5Sheets.ACTIONS_BOTTOM; // the official 8dp (XgramM3Wheel.ACTIONS_BOTTOM)
 
   /** The height of a sheet's bottom actions: the 64dp band of {@link XgramR5Sheets#actionsRow} plus {@link #ACTIONS_BOTTOM}. */
   public static int actionsHeight () {

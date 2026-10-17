@@ -271,7 +271,7 @@ public class MediaGalleryAdapter extends RecyclerView.Adapter<MediaGalleryAdapte
 
   @Override
   public int measureHeight (int maxHeight) {
-    int decorationWidth = Screen.dp(4f);
+    int decorationWidth = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 2f : 4f); // XGram: the gallery's 2dp M3E gaps (MediaBottomGalleryController's GridSpacingItemDecoration)
     int decorationTotalWidth = decorationWidth * (manager.getSpanCount() + 1);
     int height = ((parent.getMeasuredWidth() - decorationTotalWidth) / manager.getSpanCount() + decorationWidth) * (int) Math.ceil((float) getItemCount() / (float) manager.getSpanCount()) + decorationWidth;
     return maxHeight < 0 ? height : Math.min(maxHeight, height);
@@ -279,7 +279,7 @@ public class MediaGalleryAdapter extends RecyclerView.Adapter<MediaGalleryAdapte
 
   @Override
   public int measureScrollTop (int position) {
-    int decorationWidth = Screen.dp(4f);
+    int decorationWidth = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 2f : 4f); // XGram: the gallery's 2dp M3E gaps (MediaBottomGalleryController's GridSpacingItemDecoration)
     int decorationTotalWidth = decorationWidth * (manager.getSpanCount() + 1);
 
     int spanCount = manager.getSpanCount();

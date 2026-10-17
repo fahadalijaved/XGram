@@ -1283,6 +1283,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       navigation.destroy();
     }
     Lang.removeLanguageListener(this);
+    ThemeManager.instance().removeThemeListener(this); // XGram: added in onCreate; a recreated activity must not stay in the singleton
     if (statusBar != null) {
       statusBar.performDestroy();
     }
