@@ -199,6 +199,11 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
     backend.setEvents(this);
     readCall(call);
     current = this;
+    try {
+      installLifecycle(); // normally done already (CallManager), unless the context was not ready then
+    } catch (Throwable t) {
+      Log.e(Log.TAG_VOIP, "XGram video: lifecycle", t);
+    }
   }
 
   private void readCall (TdApi.Call call) {
