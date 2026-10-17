@@ -119,7 +119,8 @@ public class TGReactions implements Destroyable, ReactionLoadListener {
   public void setReactions (@Nullable TdApi.MessageReactions reactions) {
     this.reactionsListEntry.clear();
     this.tdReactionsMap.clear();
-    this.reactions = filterUnsupported(reactions);
+    // XGram: Reactions in channels off: a channel post has none, so they are neither drawn nor take room, in every look
+    this.reactions = parent.xgramHidesReactions() ? null : filterUnsupported(reactions);
     this.chosenReactions.clear();
     this.totalCount = 0;
 

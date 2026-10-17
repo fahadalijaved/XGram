@@ -5402,6 +5402,30 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     return !isSponsoredMessage() && !isEventLog() && !xgramIsDeleted() && !Td.isEmpty(messageAvailableReactions) && (tdlib.hasPremium() || Td.hasNonPremiumReactions(messageAvailableReactions));
   }
 
+  /**
+   * XGram: Reactions in channels (Messages) is off and this is a post of a broadcast channel (not a group or a private
+   * chat): its reactions are not shown (TGReactions keeps none), a swipe offers no quick reactions and the message menu
+   * has no reaction bar (XgramReactionBar.mode). Asked from TGReactions while this message is being made too.
+   */
+  public final boolean xgramHidesReactions () {
+    return !com.fahadali.xgram.XgramSettings.instance().channelReactions() && tdlib.isChannel(msg.chatId);
+  }
+
+  /**
+   * XGram: Reactions in channels was switched. A channel post takes its reactions from the message again, so they
+   * come or go at once (the bubble grows or shrinks with them), and so do the quick reactions of its swipe. UI thread.
+   */
+  public final void xgramRefreshReactions () {
+    if (isDestroyed() || !tdlib.isChannel(msg.chatId)) {
+      return;
+    }
+    synchronized (this) {
+      updateInteractionInfo(isLayoutBuilt());
+    }
+    computeQuickButtons();
+    invalidate();
+  }
+
   public boolean canBeSaved () {
     return msg.canBeSaved || com.fahadali.xgram.XgramSettings.instance().saveProtected(); // XGram: copy and save protected content
   }
@@ -9222,7 +9246,8 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   private boolean canSendReaction (TdApi.ReactionType reactionType) {
-    return canBeReacted() && !tdlib.isSelfChat(msg.chatId) && Td.isAvailable(messageAvailableReactions, reactionType);
+    // XGram: Reactions in channels off: a swipe on a channel post offers no quick reactions
+    return canBeReacted() && !tdlib.isSelfChat(msg.chatId) && !xgramHidesReactions() && Td.isAvailable(messageAvailableReactions, reactionType);
   }
 
   private void computeQuickButtons () {
@@ -9753,6 +9778,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   private void highlightUnreadReactions () {
+    if (xgramHidesReactions()) {
+      return; // XGram: Reactions in channels off: no reaction plays over the post
+    }
     needHighlightUnreadReactions = true;
     if (combinedMessages != null) {
       for (TdApi.Message message : combinedMessages) {

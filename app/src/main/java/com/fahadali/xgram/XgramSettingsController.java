@@ -400,6 +400,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.hideFolders(tdlib.accountId()), isUpdate);
         } else if (id == R.id.btn_xgramPullToNext) {
           view.getToggler().setRadioEnabled(settings.pullToNext(), isUpdate);
+        } else if (id == R.id.btn_xgramR7ChannelReactions) {
+          view.getToggler().setRadioEnabled(settings.channelReactions(), isUpdate);
         } else if (id == R.id.btn_xgramSaveLastSeen) {
           view.getToggler().setRadioEnabled(settings.saveLastSeen(), isUpdate);
         } else if (id == R.id.btn_xgramShowSeconds) {
@@ -737,6 +739,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     // No header: the row is called Message menu already.
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items, link(R.id.btn_xgramMessageMenu, R.string.XgramMessageMenu));
+
+    items.add(header(R.string.XgramR7ChReactHeader));
+    addRows(items, toggle(R.id.btn_xgramR7ChannelReactions, R.string.XgramR7ChReactTitle, R.string.XgramR7ChReactSub));
+    items.add(description(R.string.XgramR7ChReactInfo));
 
     items.add(header(R.string.XgramHeaderGestures));
     addRows(items,
@@ -1634,6 +1640,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramPullToNext) {
       settings.setPullToNext(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramR7ChannelReactions) {
+      settings.setChannelReactions(adapter.toggleView(v)); // open chats follow (MessagesController listens)
       return;
     } else if (id == R.id.btn_xgramTwoPane) {
       settings.setTwoPaneLayout(adapter.toggleView(v));

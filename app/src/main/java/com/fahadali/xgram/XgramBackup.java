@@ -42,6 +42,8 @@ public final class XgramBackup {
     // Pure black night mode (Appearance, with Expressive design)
     XgramSettings.KEY_PURE_BLACK,
     XgramSettings.KEY_DRAG_DROP, XgramSettings.KEY_OPEN_BESIDE,
+    // Reactions in channels (Messages)
+    XgramSettings.KEY_CHANNEL_REACTIONS,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)

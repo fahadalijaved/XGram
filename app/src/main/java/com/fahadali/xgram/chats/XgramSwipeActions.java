@@ -247,10 +247,13 @@ public final class XgramSwipeActions {
     }
   }
 
-  /** Both swipe settings in one number: a message whose actions were built with other ones builds them again. */
+  /**
+   * Both swipe settings, and Reactions in channels (which takes the quick reactions off channel posts), in one number:
+   * a message whose actions were built with other ones builds them again.
+   */
   public static int settingsKey () {
     XgramSettings settings = XgramSettings.instance();
-    return settings.swipeAction(false) * 16 + settings.swipeAction(true);
+    return settings.swipeAction(false) * 16 + settings.swipeAction(true) + (settings.channelReactions() ? 0 : 256);
   }
 
   /** As a swipe starts: Bookmark shows the message's state now, it may have been bookmarked another way since. */

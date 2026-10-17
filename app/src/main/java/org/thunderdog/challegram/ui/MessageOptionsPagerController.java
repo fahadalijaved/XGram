@@ -1385,7 +1385,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       this.needShowMessageViews = !(!message.canGetViewers() || message.isUnread() || message.noUnread());
       this.needShowMessageOptions = options != null;
       // XGram: Reaction bar: the quick reactions at the top (Telegram X), under the options, or off (no popup picker)
-      this.xgramReactionBar = com.fahadali.xgram.chats.XgramReactionBar.mode(needShowMessageOptions);
+      this.xgramReactionBar = com.fahadali.xgram.chats.XgramReactionBar.mode(message, needShowMessageOptions); // Off for a channel post while Reactions in channels is off
       this.xgramReactionsInHeader = xgramReactionBar == com.fahadali.xgram.XgramSettings.REACTION_BAR_TOP;
       this.xgramReactionsInList = needShowMessageOptions && xgramReactionBar == com.fahadali.xgram.XgramSettings.REACTION_BAR_BOTTOM;
 
