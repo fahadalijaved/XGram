@@ -64,34 +64,6 @@ public final class XgramCallVideoLayer extends FrameLayoutFix implements XgramVi
     void onPresentationChanged (int presentation, boolean animated);
   }
 
-  // Snackbars float above the call screen's controls while it is attached (XgramSnackbar reads this)
-
-  private static @Nullable java.lang.ref.WeakReference<View> obstructionOwner;
-  private static int obstructionPx;
-
-  /** The call screen {@code owner} covers the bottom {@code px} of the window with its controls (0: no longer). */
-  public static void setBottomObstruction (View owner, int px) {
-    final View current = obstructionOwner != null ? obstructionOwner.get() : null;
-    if (px > 0) {
-      if (current != owner) {
-        obstructionOwner = new java.lang.ref.WeakReference<>(owner);
-      }
-      obstructionPx = px;
-    } else if (current == owner || current == null) {
-      obstructionOwner = null;
-      obstructionPx = 0;
-    }
-  }
-
-  /** How far from the bottom of the window a snackbar must stay, or 0. Main thread. */
-  public static int bottomObstruction () {
-    final View owner = obstructionOwner != null ? obstructionOwner.get() : null;
-    if (owner == null || owner.getWindowToken() == null || owner.getVisibility() != View.VISIBLE) {
-      return 0;
-    }
-    return obstructionPx;
-  }
-
   private static final float FIT_THRESHOLD = .7f;
   private static final float[] SCRIM_STOPS = {1f, .6f, .3f, .1f, 0f};
   private static final float[] SCRIM_POSITIONS = {0f, .25f, .5f, .75f, 1f};

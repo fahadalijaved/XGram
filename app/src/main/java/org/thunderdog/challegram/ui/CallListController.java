@@ -708,7 +708,7 @@ public class CallListController extends RecyclerViewController<Void> implements
         tdlib.ui().openChat(CallListController.this, call.getChatId(), null);
         return;
       }
-      tdlib.context().calls().makeCall(CallListController.this, call.getUserId(), null);
+      tdlib.context().calls().makeVideoCall(CallListController.this, call.getUserId(), null, call.isVideo()); // XGram: the same kind
     }
   }
 
@@ -717,7 +717,7 @@ public class CallListController extends RecyclerViewController<Void> implements
     Object tag = v.getTag();
     if (tag instanceof ListItem && ((ListItem) tag).getData() instanceof CallItem) {
       CallItem call = (CallItem) ((ListItem) tag).getData();
-      tdlib.context().calls().makeCall(CallListController.this, call.getUserId(), null);
+      tdlib.context().calls().makeVideoCall(CallListController.this, call.getUserId(), null, call.isVideo()); // XGram: the same kind
     }
   };
 

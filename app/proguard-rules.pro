@@ -42,6 +42,10 @@
 # Keep all related to VoIP
 -keep class org.thunderdog.challegram.voip.**
 -keepclassmembers class org.thunderdog.challegram.voip.** { *; }
+# XGram: video calls. tgcalls builds the camera capturer from native code (FindClass, <init>, init, onStateChanged,
+# onAspectRatioRequested, onDestroy) and tgvoip.cpp binds its native method by name; WebRTC calls the sinks' onFrame
+-keep class org.telegram.messenger.voip.VideoCameraCapturer { *; }
+-keep class * implements org.webrtc.VideoSink { public void onFrame(org.webrtc.VideoFrame); }
 # Keep sync services
 -keep class org.thunderdog.challegram.sync.**
 

@@ -1325,10 +1325,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     if (previousCallState != null && call.state.getConstructor() == TdApi.CallStateHangingUp.CONSTRUCTOR) {
       str = TD.getCallState2(call, previousCallState, callDuration, false);
     } else {
-      str = TD.getCallState(call, callDuration, false);
-      if (!call.isOutgoing && call.isVideo && call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && com.fahadali.xgram.call.XgramCallVideo.isAvailable()) {
-        str = Lang.getString(R.string.XgramVideoIncoming); // XGram
-      }
+      str = TD.getCallState(call, callDuration, false); // XGram: "Incoming video call" for one
       if (xgramVideo != null && xgramVideo.remoteVideoState() == org.thunderdog.challegram.voip.annotation.VideoState.PAUSED && call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR) {
         str = str + " \u00b7 " + Lang.getString(R.string.XgramVideoPaused); // XGram: the other side paused its video
       }
@@ -1880,8 +1877,8 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   /**
    * White status bar icons over video (Expressive), while this screen is focused and as wide as the window (in two
-   * panes the strip above the pane stays surface, with the theme's icons). Telegram X's window flags come back with
-   * updateWindowDecorSystemUiVisibility.
+   * panes the strip above the pane stays surface, with the theme's icons): an override of the activity's, which every
+   * later update of the bars keeps, until this screen gives it back.
    */
   private void xgramUpdateStatusBar () {
     final com.fahadali.xgram.appearance.XgramM3CallScreen screen = xgramScreen;
@@ -1894,35 +1891,10 @@ public class CallController extends ViewController<CallController.Arguments> imp
       return;
     }
     xgramLightStatusOverridden = override;
-    if (override) {
-      xgramSetLightStatusBar(false);
-    } else {
-      context().updateWindowDecorSystemUiVisibility();
-    }
+    context().xgramSetLightStatusBarOverride(override ? Boolean.FALSE : null);
   }
 
   private boolean xgramScreenShowsVideo;
-
-  private void xgramSetLightStatusBar (boolean light) {
-    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) {
-      return;
-    }
-    final android.view.Window window = context().getWindow();
-    if (window == null) {
-      return;
-    }
-    // As UI.setLightSystemBars, the status bar flag only
-    if (org.thunderdog.challegram.unsorted.Settings.instance().useEdgeToEdge() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-      final android.view.WindowInsetsController controller = window.getInsetsController();
-      if (controller != null) {
-        controller.setSystemBarsAppearance(light ? android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS : 0, android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
-      }
-    }
-    final View decor = window.getDecorView();
-    int visibility = decor.getSystemUiVisibility();
-    visibility = light ? visibility | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR : visibility & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
-    decor.setSystemUiVisibility(visibility);
-  }
 
   /** Telegram X's screen: the Video cell, and the speaker cell turned into Flip while the camera is on. */
   private void xgramUpdateClassicButtons (boolean animated) {

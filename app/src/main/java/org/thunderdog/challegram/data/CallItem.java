@@ -94,6 +94,11 @@ public class CallItem {
     return messages.get(0).date;
   }
 
+  /** XGram: the latest call of the group was a video call (calling back makes one too). */
+  public boolean isVideo () {
+    return ((TdApi.MessageCall) lastMessage().content).isVideo;
+  }
+
   public boolean isOutgoing () {
     return lastMessage().isOutgoing;
   }

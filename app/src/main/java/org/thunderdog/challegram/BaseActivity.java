@@ -928,6 +928,22 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     setWindowDecorSystemUiVisibility(lastWindowVisibility, false);
   }
 
+  // XGram: the status bar icons a page needs over its own content (the call screen over video: white), whatever the theme
+  private @Nullable Boolean xgramLightStatusBarOverride;
+
+  /** XGram: light (dark icons) or not, or null for the theme's again. Every later update of the bars keeps it. */
+  public void xgramSetLightStatusBarOverride (@Nullable Boolean light) {
+    final Boolean current = this.xgramLightStatusBarOverride;
+    if (current == null ? light != null : !current.equals(light)) {
+      this.xgramLightStatusBarOverride = light;
+      updateWindowDecorSystemUiVisibility();
+    }
+  }
+
+  private boolean xgramNeedLightStatusBar () {
+    return xgramLightStatusBarOverride != null ? xgramLightStatusBarOverride : Theme.needLightStatusBar();
+  }
+
   public void updateWindowContextTheme() {
     getWindow().getContext().getTheme().applyStyle(Theme.isDark() ? R.style.AppTheme_Dark : R.style.AppTheme, true);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -938,7 +954,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
 
   public void setWindowDecorSystemUiVisibility (int visibility, boolean remember) {
     boolean lightNavigationBar = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Config.USE_CUSTOM_NAVIGATION_COLOR && !Theme.isDark() && (visibility & View.SYSTEM_UI_FLAG_FULLSCREEN) == 0;
-    boolean lightStatusBar = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Theme.needLightStatusBar();
+    boolean lightStatusBar = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && xgramNeedLightStatusBar();
     UI.setLightSystemBars(getWindow(), lightNavigationBar, lightStatusBar, visibility, true);
     if (this.isWindowLight != lightNavigationBar) {
       this.isWindowLight = lightNavigationBar;
@@ -3697,7 +3713,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       UI.setNavigationBarColor(getWindow(), color, isGestureNavigationEnabled);
       if (this.isWindowLight != isLight || xgramForceSystemBars) {
         this.isWindowLight = isLight;
-        UI.setLightSystemBars(getWindow(), isLight, Theme.needLightStatusBar(), lastWindowVisibility, true);
+        UI.setLightSystemBars(getWindow(), isLight, xgramNeedLightStatusBar(), lastWindowVisibility, true);
       }
     }
   }
@@ -3724,7 +3740,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       xgramForceSystemBars = false;
     }
     if (!Config.USE_CUSTOM_NAVIGATION_COLOR && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      UI.setLightSystemBars(getWindow(), false, Theme.needLightStatusBar(), lastWindowVisibility, true);
+      UI.setLightSystemBars(getWindow(), false, xgramNeedLightStatusBar(), lastWindowVisibility, true);
     }
   }
 

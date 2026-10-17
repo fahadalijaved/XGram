@@ -13,16 +13,13 @@ package com.fahadali.xgram.appearance;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.ColorFilter;
 import android.graphics.LinearGradient;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
-import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
-import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.SystemClock;
@@ -43,7 +40,6 @@ import android.widget.LinearLayout;
 
 import androidx.annotation.ColorInt;
 import androidx.annotation.DrawableRes;
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.graphics.shapes.Morph;
 
@@ -168,7 +164,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
   private final EmojiTextView nameView;
   private final EmojiStatusHelper emojiStatus;
   private final TextView statusView;
-  private final StatusIndicator statusIndicator;
+  private final XgramLoadingIndicatorDrawable statusIndicator;
   private boolean statusIndicatorShown;
 
   private final View dismissCatcher;
@@ -305,7 +301,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
       statusView.setFontFeatureSettings("tnum"); // the duration does not shift as it counts
     }
     statusView.setCompoundDrawablePadding(Screen.dp(8f));
-    statusIndicator = new StatusIndicator(20f, XgramExpressive.PRIMARY);
+    statusIndicator = new XgramLoadingIndicatorDrawable(20f, XgramExpressive.PRIMARY);
     // Wrap content, so the leading indicator sits right next to the centered text
     lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     lp.topMargin = Screen.dp(STATUS_GAP);
@@ -521,9 +517,8 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
       }
     });
     actionArea.addView(swipe);
-    // The pill follows video when it can (XgramVideoMediaAware): a white hint over it, the camera as the answer glyph
-    final Object swipeObject = swipe;
-    swipeMedia = swipeObject instanceof XgramVideoMediaAware ? (XgramVideoMediaAware) swipeObject : null;
+    // The pill follows video (XgramVideoMediaAware): a white hint over it, the camera as the answer glyph
+    swipeMedia = swipe;
 
     retryRow = new LinearLayout(context);
     retryRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -1009,7 +1004,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
     answerVideoButton.setChecked(on, animated);
     setStateDescription(answerVideoButton, R.string.XgramVideoAnswerWith, on);
     if (swipeMedia != null) {
-      swipeMedia.setVideoAnswer(on && callIsVideo);
+      swipeMedia.setVideoAnswer(on && callIsVideo && videoAvailable);
     }
     if (notify && changed) {
       callback.onAnswerVideoChanged(on);
@@ -1362,14 +1357,14 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
     return true;
   }
 
-  // Snackbars float above the toggle row while the screen is attached (XgramCallVideoLayer.bottomObstruction)
+  // Snackbars float above the toggle row while the screen is attached (XgramSnackbar.setBottomObstruction)
 
   private void updateObstruction () {
     if (getHeight() <= 0 || !isAttachedToWindowCompat()) {
       return;
     }
     final int px = (getHeight() - bottomInset) - visualControlsTop() + Screen.dp(8f);
-    XgramCallVideoLayer.setBottomObstruction(this, Math.max(0, px));
+    XgramSnackbar.setBottomObstruction(this, Math.max(0, px));
   }
 
   private boolean isAttachedToWindowCompat () {
@@ -1380,7 +1375,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
   protected void onDetachedFromWindow () {
     super.onDetachedFromWindow();
     removeCallbacks(hideChrome);
-    XgramCallVideoLayer.setBottomObstruction(this, 0);
+    XgramSnackbar.setBottomObstruction(this, 0);
   }
 
   public void performDestroy () {
@@ -1398,7 +1393,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
       layer.release(); // the views of the video and the tile's go with their EGL resources
     }
     setKeepScreenOn(false);
-    XgramCallVideoLayer.setBottomObstruction(this, 0);
+    XgramSnackbar.setBottomObstruction(this, 0);
   }
 
   // Motion helpers
@@ -1890,103 +1885,6 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
         }
       }
       super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-    }
-  }
-
-  // Status indicator
-
-  /**
-   * The loading indicator in front of the status (XgramLoadingIndicator, as XgramLoadingIndicatorDrawable), in its role
-   * color or, over video, in an override color. While running it asks for the next frame after each draw.
-   */
-  private static final class StatusIndicator extends Drawable implements Animatable {
-    private final int sizePx;
-    private final int colorRole;
-    private @ColorInt int colorOverride;
-    private long startTime;
-    private boolean running;
-    private int alpha = 255;
-
-    StatusIndicator (float boxDp, int colorRole) {
-      this.sizePx = Screen.dp(boxDp);
-      this.colorRole = colorRole;
-      setBounds(0, 0, sizePx, sizePx);
-    }
-
-    /** 0 for the role color. */
-    void setColorOverride (@ColorInt int color) {
-      if (this.colorOverride != color) {
-        this.colorOverride = color;
-        invalidateSelf();
-      }
-    }
-
-    @Override
-    public void draw (@NonNull Canvas c) {
-      Rect b = getBounds();
-      if (b.isEmpty()) {
-        return;
-      }
-      if (startTime == 0L) {
-        startTime = SystemClock.uptimeMillis();
-      }
-      final int base = colorOverride != 0 ? colorOverride : XgramExpressive.color(colorRole);
-      final int color = XgramExpressive.withAlpha(base, alpha / 255f);
-      final float size = Math.min(b.width(), b.height()) * XgramLoadingIndicator.ACTIVE_INDICATOR_SCALE;
-      XgramLoadingIndicator.draw(c, b.exactCenterX(), b.exactCenterY(), size, color, SystemClock.uptimeMillis() - startTime);
-      if (running) {
-        invalidateSelf();
-      }
-    }
-
-    @Override
-    public void start () {
-      if (!running) {
-        running = true;
-        startTime = 0L;
-        invalidateSelf();
-      }
-    }
-
-    @Override
-    public void stop () {
-      running = false;
-    }
-
-    @Override
-    public boolean isRunning () {
-      return running;
-    }
-
-    @Override
-    public int getIntrinsicWidth () {
-      return sizePx;
-    }
-
-    @Override
-    public int getIntrinsicHeight () {
-      return sizePx;
-    }
-
-    @Override
-    public void setAlpha (int alpha) {
-      if (this.alpha != alpha) {
-        this.alpha = alpha;
-        invalidateSelf();
-      }
-    }
-
-    @Override
-    public int getAlpha () {
-      return alpha;
-    }
-
-    @Override
-    public void setColorFilter (@Nullable ColorFilter colorFilter) { }
-
-    @Override
-    public int getOpacity () {
-      return PixelFormat.TRANSLUCENT;
     }
   }
 

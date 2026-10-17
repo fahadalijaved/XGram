@@ -29,6 +29,8 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 
+import com.fahadali.xgram.call.XgramVideoMediaAware;
+
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.tool.Drawables;
@@ -43,9 +45,10 @@ import me.vkryl.core.MathUtils;
  * surfaceContainerHigh track slides right to answer (it turns the accept green) or left to decline (error, the phone
  * turning into a hang-up); short of 72% of the way it springs back. Tapping the handle nudges it. Chevrons drift
  * towards both ends and the phone wiggles while it rings (not with Reduce motion). Answer and Decline are also
- * accessibility actions. Main thread only, no allocation per frame.
+ * accessibility actions. For an incoming video call answered with video the answer glyphs are the camera, and over
+ * video the hint below the track turns white (XgramVideoMediaAware). Main thread only, no allocation per frame.
  */
-public final class XgramM3CallSwipe extends View {
+public final class XgramM3CallSwipe extends View implements XgramVideoMediaAware {
   public interface Listener {
     /** False when the call cannot be answered yet (the microphone permission is being asked): the handle goes back. */
     boolean onSwipeAnswer ();
@@ -66,8 +69,14 @@ public final class XgramM3CallSwipe extends View {
   private final TextPaint hintPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
   private final RectF rect = new RectF();
 
-  private final Drawable knobIcon, knobAnswerIcon, knobDeclineIcon, answerIcon, declineIcon;
+  // The knob's resting and answering glyphs and the answer end's: the phone, or the camera for an answer with video
+  private Drawable knobIcon, knobAnswerIcon, answerIcon;
+  private final Drawable knobDeclineIcon, declineIcon;
   private int knobIconColor, knobAnswerColor, knobDeclineColor, answerIconColor, declineIconColor;
+  private boolean videoAnswer;
+  private int answerActionId = View.NO_ID;
+  /** 0: the hint in onSurfaceVariant, 1: white over video. */
+  private float mediaFactor;
 
   private final String hint;
   private @Nullable String hintDrawn;
@@ -112,10 +121,7 @@ public final class XgramM3CallSwipe extends View {
     hint = Lang.getString(R.string.XgramM3CallSwipeHint);
     setContentDescription(hint);
     setFocusable(true);
-    ViewCompat.addAccessibilityAction(this, Lang.getString(R.string.XgramM3CallAnswer), (view, arguments) -> {
-      commitAnswer(0f);
-      return true;
-    });
+    addAnswerAction();
     ViewCompat.addAccessibilityAction(this, Lang.getString(R.string.XgramM3CallDecline), (view, arguments) -> {
       commitDecline(0f);
       return true;
@@ -124,6 +130,45 @@ public final class XgramM3CallSwipe extends View {
 
   public void setListener (@Nullable Listener listener) {
     this.listener = listener;
+  }
+
+  private void addAnswerAction () {
+    answerActionId = ViewCompat.addAccessibilityAction(this, Lang.getString(videoAnswer ? R.string.XgramVideoAnswerWith : R.string.XgramM3CallAnswer), (view, arguments) -> {
+      commitAnswer(0f);
+      return true;
+    });
+  }
+
+  // XgramVideoMediaAware
+
+  /** The answer glyphs become the camera (an incoming video call answered with video) or the phone again. */
+  @Override
+  public void setVideoAnswer (boolean video) {
+    if (this.videoAnswer == video) {
+      return;
+    }
+    this.videoAnswer = video;
+    final int res = XgramIconPack.map(video ? R.drawable.baseline_videocam_24 : R.drawable.baseline_phone_24);
+    // New instances: each is drawn at its own alpha, at most once per frame
+    knobIcon = Drawables.get(res);
+    knobAnswerIcon = Drawables.get(res);
+    answerIcon = Drawables.get(res);
+    knobIconColor = knobAnswerColor = answerIconColor = 0;
+    if (answerActionId != View.NO_ID) {
+      ViewCompat.removeAccessibilityAction(this, answerActionId);
+      answerActionId = View.NO_ID;
+    }
+    addAnswerAction();
+    invalidate();
+  }
+
+  @Override
+  public void setVideoMediaFactor (float factor) {
+    factor = MathUtils.clamp(factor);
+    if (this.mediaFactor != factor) {
+      this.mediaFactor = factor;
+      invalidate();
+    }
   }
 
   /** Ringing: the chevrons and the wiggle run while the pill is shown. */
@@ -487,8 +532,10 @@ public final class XgramM3CallSwipe extends View {
 
     // Hint
     if (hintDrawn != null) {
-      hintPaint.setColor(variant);
-      hintPaint.setAlpha(Math.round(((variant >>> 24) & 0xff) * (committed ? 0f : 1f - Math.abs(v) * .6f)));
+      // Under the track on the page: white over video
+      final int hintColor = mediaFactor > 0f ? ColorUtils.fromToArgb(variant, 0xccffffff, mediaFactor) : variant;
+      hintPaint.setColor(hintColor);
+      hintPaint.setAlpha(Math.round(((hintColor >>> 24) & 0xff) * (committed ? 0f : 1f - Math.abs(v) * .6f)));
       float top = trackH + Screen.dp(HINT_GAP);
       float baseline = top + Screen.dp(HINT_LINE) / 2f - (hintPaint.descent() + hintPaint.ascent()) / 2f;
       c.drawText(hintDrawn, (width - hintWidth) / 2f, baseline, hintPaint);

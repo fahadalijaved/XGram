@@ -640,6 +640,18 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       }
     }
 
+    if (xgramCanVideoCall()) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        if (xgramHasActions && (Config.USE_SECRET_SEARCH || mode != Mode.SECRET)) {
+          ids.append(R.id.btn_xgramProfileSearch); // XGram: Search left the actions row for Video
+          strings.append(R.string.Search);
+        }
+      } else {
+        ids.append(R.id.btn_xgramVideoCall); // XGram: a video call (the header keeps Telegram X's call button)
+        strings.append(R.string.XgramVideoCall);
+      }
+    }
+
     if (mode == Mode.USER && user.id != myUserId && !TD.isBot(user)) {
       ids.append(R.id.btn_newSecretChat);
       strings.append(R.string.StartEncryptedChat);
@@ -757,6 +769,16 @@ public class ProfileController extends ViewController<ProfileController.Args> im
 
   @Override
   public void onMoreItemPressed (int id) {
+    if (id == R.id.btn_xgramVideoCall) {
+      if (user != null && userFull != null) {
+        tdlib.context().calls().makeVideoCall(this, user.id, userFull, true); // XGram
+      }
+      return;
+    }
+    if (id == R.id.btn_xgramProfileSearch && chat != null) {
+      xgramSearchChat(); // XGram: Search, in More while the actions row shows Video
+      return;
+    }
     if (id == R.id.btn_xgramAddToFolder && chat != null) {
       com.fahadali.xgram.chats.XgramFolderPicker.show(this, chat.id); // XGram
       return;
@@ -2627,8 +2649,13 @@ public class ProfileController extends ViewController<ProfileController.Args> im
         if (BuildConfig.CALLS_AVAILABLE && userFull != null && (userFull.canBeCalled || userFull.hasPrivateCalls)) {
           actions.add(new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileCall, R.drawable.baseline_phone_24, Lang.getString(R.string.Call), false));
         }
+        // XGram: a video call for users whose app can take one; Search moves to the More menu to make room
+        final boolean video = xgramCanVideoCall();
+        if (video) {
+          actions.add(new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(R.id.btn_xgramProfileVideo, R.drawable.baseline_videocam_24, Lang.getString(R.string.Video), false));
+        }
         actions.add(mute);
-        if (canSearch) {
+        if (canSearch && !video) {
           actions.add(search);
         }
         break;
@@ -2647,6 +2674,12 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     return actions;
   }
 
+  /** XGram: whether this user can take a video call from this device (the profile's Video action, or "Video call" in More). */
+  private boolean xgramCanVideoCall () {
+    return BuildConfig.CALLS_AVAILABLE && user != null && !TD.isBot(user) && !tdlib.isSelfUserId(user.id) &&
+      com.fahadali.xgram.call.XgramCallVideo.isAvailable() && com.fahadali.xgram.call.XgramCallVideo.canVideoCall(userFull);
+  }
+
   private void xgramUpdateActions () {
     if (xgramActionsView != null && xgramHasActions && chat != null) {
       xgramActionsView.setActions(xgramBuildActions());
@@ -2663,6 +2696,10 @@ public class ProfileController extends ViewController<ProfileController.Args> im
     } else if (actionId == R.id.btn_xgramProfileCall) {
       if (user != null && userFull != null) {
         tdlib.context().calls().makeCall(this, user.id, userFull);
+      }
+    } else if (actionId == R.id.btn_xgramProfileVideo) {
+      if (user != null && userFull != null) {
+        tdlib.context().calls().makeVideoCall(this, user.id, userFull, true); // XGram
       }
     } else if (actionId == R.id.btn_xgramProfileMute) {
       if (xgramTopicId != 0) {

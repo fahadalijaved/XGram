@@ -28,9 +28,6 @@ import android.view.ViewParent;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
-import androidx.dynamicanimation.animation.FloatValueHolder;
-import androidx.dynamicanimation.animation.SpringAnimation;
-import androidx.dynamicanimation.animation.SpringForce;
 
 import com.fahadali.xgram.call.XgramCallVideo;
 import com.fahadali.xgram.call.XgramCallVideoLayer;
@@ -489,13 +486,12 @@ public final class XgramM3CallVideoTile extends FrameLayoutFix implements XgramC
   }
 
   /**
-   * One animated value: a spring with the Expressive token (with a start velocity for the fling; snapping with Reduce
-   * motion), or Telegram X's 180ms decelerate on its screen.
+   * One animated value: an XgramExpressive.Spring with the Expressive token (with a start velocity for the fling;
+   * snapping with Reduce motion), or Telegram X's 180ms decelerate on its screen.
    */
   private final class Motion implements FactorAnimator.Target {
     private final int token;
-    private final @Nullable FloatValueHolder holder;
-    private final @Nullable SpringAnimation spring;
+    private final @Nullable XgramExpressive.Spring spring;
     private final @Nullable FactorAnimator animator;
     private float from, to, value;
 
@@ -503,23 +499,17 @@ public final class XgramM3CallVideoTile extends FrameLayoutFix implements XgramC
       this.token = token;
       this.value = this.from = this.to = initial;
       if (expressive) {
-        holder = new FloatValueHolder(initial);
-        spring = new SpringAnimation(holder);
-        spring.setSpring(new SpringForce(initial).setStiffness(XgramExpressive.stiffness(token)).setDampingRatio(XgramExpressive.damping(token)));
-        spring.setMinimumVisibleChange(threshold);
-        spring.addUpdateListener((animation, v, speed) -> {
+        final XgramExpressive.Spring s = new XgramExpressive.Spring(token, initial, (sp, v) -> {
           value = v;
           onMotion(this);
+        }).setThreshold(threshold);
+        s.setEndListener(() -> {
+          value = s.getValue();
+          onMotionEnd(this);
         });
-        spring.addEndListener((animation, canceled, v, speed) -> {
-          if (!canceled) {
-            value = v;
-            onMotionEnd(this);
-          }
-        });
+        spring = s;
         animator = null;
       } else {
-        holder = null;
         spring = null;
         animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, 1f);
       }
@@ -540,10 +530,7 @@ public final class XgramM3CallVideoTile extends FrameLayoutFix implements XgramC
     void snap (float v) {
       to = from = value = v;
       if (spring != null) {
-        if (spring.isRunning()) {
-          spring.cancel();
-        }
-        holder.setValue(v);
+        spring.setValue(v);
       } else if (animator != null) {
         animator.forceFactor(1f);
       }
@@ -559,22 +546,8 @@ public final class XgramM3CallVideoTile extends FrameLayoutFix implements XgramC
       }
       to = target;
       if (spring != null) {
-        if (XgramMotion.reduce()) {
-          spring.cancel();
-          holder.setValue(target);
-          value = target;
-          onMotion(this);
-          onMotionEnd(this);
-          return;
-        }
-        spring.getSpring().setStiffness(XgramExpressive.stiffness(springToken)).setDampingRatio(XgramExpressive.damping(springToken));
-        if (!spring.isRunning()) {
-          holder.setValue(value);
-        }
-        if (startVelocity != 0f) {
-          spring.setStartVelocity(startVelocity);
-        }
-        spring.animateToFinalPosition(target);
+        spring.setToken(springToken);
+        spring.animateTo(target, startVelocity); // snaps (and ends) with Reduce motion
       } else if (animator != null) {
         from = value;
         animator.forceFactor(0f);

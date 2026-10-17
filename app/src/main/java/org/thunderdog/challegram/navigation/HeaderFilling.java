@@ -153,6 +153,8 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
 
     if (xgram) {
       xgramPhoneIcon = Drawables.get(parent.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_phone_24));
+      // A video call's chip shows the camera: its own instance, swapped (never crossfaded) with the phone
+      xgramVideoIcon = Drawables.get(parent.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_videocam_24));
       xgramMusicIcon = Drawables.get(parent.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_music_note_24));
       xgramClose = new com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton(parent, R.drawable.baseline_close_24);
     }
@@ -829,7 +831,10 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
 
   @Override
   public void onCurrentCallChanged (final Tdlib tdlib, @Nullable final TdApi.Call call) {
-    UI.post(() -> setCall(tdlib, call, false));
+    UI.post(() -> {
+      setCall(tdlib, call, false);
+      invalidate(); // XGram: the chip's glyph (video was turned on)
+    });
   }
 
   @Override
@@ -1468,7 +1473,7 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
   private static final float XGRAM_BAR = 64f, XGRAM_CHIP = 48f, XGRAM_CARD = 56f, XGRAM_MAX_WIDTH = 640f, XGRAM_BUTTON = 40f;
   private final com.fahadali.xgram.appearance.XgramExpressive.Spring[] xgramSprings = new com.fahadali.xgram.appearance.XgramExpressive.Spring[7];
   private float xgramPlayShape, xgramMuteShape;
-  private @Nullable Drawable xgramPhoneIcon, xgramMusicIcon;
+  private @Nullable Drawable xgramPhoneIcon, xgramMusicIcon, xgramVideoIcon;
   private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.DrawnIconButton xgramClose;
   private boolean xgramCloseVisible;
   private final Runnable xgramStopPlayback = () -> TdlibManager.instance().player().stopPlayback(true);
@@ -1665,6 +1670,19 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     c.drawRect(0, playerTop, width, playerBottom, Paints.fillingPaint(ColorUtils.alphaColor(dropShadowAlpha, color)));
   }
 
+  /** XGram: the chip's call is a video call, or used video (CallManager notifies the call listeners when it starts). */
+  private boolean xgramCallIsVideo () {
+    final TdApi.Call call = this.call;
+    if (call == null || !com.fahadali.xgram.call.XgramCallVideo.isAvailable()) {
+      return false;
+    }
+    if (call.isVideo) {
+      return true;
+    }
+    final com.fahadali.xgram.call.XgramCallVideo video = TdlibManager.instance().calls().video(call.id);
+    return video != null && video.wasVideoUsed();
+  }
+
   private void xgramDrawCall (Canvas c, int playerTop, float rectWidth, int playerBottom) {
     xgramCloseVisible = false;
     xgramDrawBand(c, playerTop, playerBottom);
@@ -1690,8 +1708,8 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     com.fahadali.xgram.appearance.XgramR5Calls.drawRoundRect(c, left, top, right, bottom, (bottom - top) / 2f, com.fahadali.xgram.appearance.XgramExpressive.withAlpha(fill, alpha));
     final int contentColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(content, alpha);
 
-    // 24dp phone icon 16dp in
-    com.fahadali.xgram.appearance.XgramR5Calls.drawIcon(c, xgramPhoneIcon, xgramMx(left + Screen.dp(16f + 12f)), cy, contentColor);
+    // 24dp phone icon 16dp in (the camera for a video call, or once video was used in it)
+    com.fahadali.xgram.appearance.XgramR5Calls.drawIcon(c, xgramCallIsVideo() && xgramVideoIcon != null ? xgramVideoIcon : xgramPhoneIcon, xgramMx(left + Screen.dp(16f + 12f)), cy, contentColor);
 
     // Mute toggle (40dp, tonal; muted: primary, its corners morphing from full to 12dp)
     final float toggleAlpha = alpha * callActiveFactor * (1f - callIncomingFactor);
