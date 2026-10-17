@@ -939,6 +939,7 @@ public class MediaLayout extends FrameLayoutFix implements
     addView(toView, 1);
     xgramLayoutNow(toView);
     xgramApplySwitch(0f);
+    xgramUpdatePill(); // the caption field leaves with the gallery tab
   }
 
   /** Measures and lays out a page just added, so its first frame is complete. */
@@ -1867,6 +1868,9 @@ public class MediaLayout extends FrameLayoutFix implements
   }
 
   private boolean xgramPillWanted () {
+    if (xgramSwitching && !(xgramSwitchTo instanceof MediaBottomGalleryController)) {
+      return false; // leaving the gallery: the field goes as the switch starts
+    }
     return xgramPill != null && target != null && !inSingleMediaMode() && isCounterVisible && xgramAllowCaption();
   }
 
