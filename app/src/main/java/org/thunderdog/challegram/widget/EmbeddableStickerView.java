@@ -62,12 +62,18 @@ public class EmbeddableStickerView extends LinearLayout implements ThemeInvalida
     captionTextView.setMovementMethod(LinkMovementMethod.getInstance());
     captionTextView.setHighlightColor(Theme.textLinkHighlightColor());
     addView(captionTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 16, 16, 8, 16, 8));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the caption in bodyMedium (20sp lines), centred, at most 320dp wide
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(captionTextView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+      captionTextView.setLineSpacing(org.thunderdog.challegram.tool.Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.lineHeightSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M) - com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)), 1f);
+      captionTextView.setMaxWidth(org.thunderdog.challegram.tool.Screen.dp(320f));
+    }
 
     recolor();
   }
 
   public void recolor () {
-    captionTextView.setTextColor(Theme.textDecentColor());
+    captionTextView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT) : Theme.textDecentColor());
     captionTextView.setHighlightColor(Theme.textLinkHighlightColor());
   }
 

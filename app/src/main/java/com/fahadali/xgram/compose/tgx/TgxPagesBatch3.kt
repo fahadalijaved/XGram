@@ -105,7 +105,9 @@ private object CloudSets : TgxPageHints {
     if (progress == -1f || view !is SettingView) {
       return null
     }
-    return TgxRowText(view.name, page.xgramPendingLabel(), progress = progress)
+    // "Downloading" while the ring has a value, the page's "Installing…" while it does not
+    val label = if (progress.isNaN()) page.xgramPendingLabel() else Lang.getString(R.string.XgramR6B5Downloading)
+    return TgxRowText(view.name, label, progress = progress)
   }
 
   override fun trailing(c: ViewController<*>, item: ListItem, view: View): (@Composable () -> Unit)? {

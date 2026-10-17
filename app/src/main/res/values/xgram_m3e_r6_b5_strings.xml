@@ -15,4 +15,5 @@
   <string name="XgramR6B5Clear">Clear</string>
   <string name="XgramR6B5HistoryCleared">History cleared</string>
   <string name="XgramR6B5SignupHint">This is how people see you in chats.</string>
+  <string name="XgramR6B5Downloading">Downloading</string>
 </resources>
