@@ -88,7 +88,8 @@ public final class XgramExpressive {
   public static boolean isEnabled () {
     int state = enabledState;
     if (state == -1) {
-      state = isAvailable() && Settings.instance().getBoolean(KEY, true) ? 1 : 0;
+      // Experimental: off until the user turns it on.
+      state = isAvailable() && Settings.instance().getBoolean(KEY, false) ? 1 : 0;
       enabledState = state;
     }
     return state == 1;
