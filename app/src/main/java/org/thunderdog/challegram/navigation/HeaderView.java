@@ -1285,7 +1285,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     if (XgramExpressive.isEnabled()) {
       // XGram: Material 3 app bar: the title starts at 56dp after the navigation icon (48dp box at 4dp), 16dp without one
       int top = Screen.dp(14f) + currentHeaderOffset;
-      int start = Screen.dp(item.getBackButton() != BackHeaderButton.TYPE_NONE ? 56f : 16f);
+      int start = Screen.dp(item.xgramEffectiveBackButton() != BackHeaderButton.TYPE_NONE ? 56f : 16f); // XGram M3E: none on a tab screen
       if (Lang.rtl()) {
         updated = Views.setMargins((FrameLayout.LayoutParams) textTitle.getLayoutParams(), menuWidth, top, start, 0);
       } else {
@@ -1296,7 +1296,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
       return;
     }
     int top = Screen.dp(15f) + currentHeaderOffset;
-    if (item.getBackButton() != BackHeaderButton.TYPE_NONE) {
+    if (item.xgramEffectiveBackButton() != BackHeaderButton.TYPE_NONE) {
       if (Lang.rtl()) {
         updated = Views.setMargins((FrameLayout.LayoutParams) textTitle.getLayoutParams(), menuWidth, top, Screen.dp(68f), 0);
       } else {
@@ -2257,8 +2257,8 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
     // title.setPadding(item.getBackButton() != BackHeaderButton.TYPE_NONE ? Size._68 : Size._18, 0, -, 0);
 
-    if (item.getBackButton() != BackHeaderButton.TYPE_NONE) {
-      backButton.setButtonFactor(item.getBackButton());
+    if (item.xgramEffectiveBackButton() != BackHeaderButton.TYPE_NONE) { // XGram M3E: none on a tab screen
+      backButton.setButtonFactor(item.xgramEffectiveBackButton());
       backButton.setVisibility(View.VISIBLE);
       if (item.getBackButtonResource() != 0) {
         if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -2806,10 +2806,10 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     removeView(menuPreview);
     ViewController<?> current = stack.getCurrent();
     if (current != null) {
-      if (current.getBackButton() == BackHeaderButton.TYPE_NONE) {
+      if (current.xgramEffectiveBackButton() == BackHeaderButton.TYPE_NONE) { // XGram M3E: none on a tab screen
         backButton.setVisibility(View.GONE);
       } else {
-        backButton.setButtonFactor(current.getBackButton());
+        backButton.setButtonFactor(current.xgramEffectiveBackButton());
         backButton.invalidate();
       }
       int menuId = getMenuId(current, true);
@@ -2904,7 +2904,7 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
         return BackHeaderButton.TYPE_BACK;
       }
     }
-    return c.getBackButton();
+    return c.xgramEffectiveBackButton(); // XGram M3E: none on a tab screen
   }
 
   public static int getHeaderHeight (ViewController<?> c) {

@@ -1356,6 +1356,76 @@ public final class XgramSettings {
     put(KEY_BOTTOM_NAV, value);
   }
 
+  // The floating navigation toolbar of Expressive design (com.fahadali.xgram.layout.XgramNavToolbar, Appearance >
+  // Layout > Navigation bar): its tabs (Chats always), where the profile photo goes and its colours. The tabs' order
+  // is XgramReorder.NAV_BAR. Read while the layout is checked, so cached.
+
+  public static final String KEY_NAV_TABS = "xgram_nav_tabs", KEY_NAV_PROFILE = "xgram_nav_profile", KEY_NAV_STYLE = "xgram_nav_style";
+  /** The photo: a button beside the bar (default), a tab in it, or not at all. */
+  public static final int NAV_PROFILE_BUTTON = 0, NAV_PROFILE_TAB = 1, NAV_PROFILE_OFF = 2;
+  /** The bar's colours: Standard (surface container, default) or Vibrant (primary container). */
+  public static final int NAV_STYLE_STANDARD = 0, NAV_STYLE_VIBRANT = 1;
+  /** Tabs by bit of XgramNavToolbar.DEST_* (Chats 0, Calls 1, Contacts 2, Saved 3, Settings 4): Telegram's set. */
+  public static final int NAV_TABS_DEFAULT = (1 << 0) | (1 << 2) | (1 << 4);
+
+  private volatile Integer navTabs, navProfile, navStyle;
+
+  /** The destinations that are tabs, a bit each (Chats always set). */
+  public int navTabs () {
+    Integer value = navTabs;
+    if (value == null) {
+      navTabs = value = pmc().getInt(KEY_NAV_TABS, NAV_TABS_DEFAULT) | 1;
+    }
+    return value;
+  }
+
+  public void setNavTabOn (int dest, boolean on) {
+    if (dest <= 0 || dest > 4) {
+      return; // Chats is always a tab; the profile has its own setting
+    }
+    int value = on ? navTabs() | (1 << dest) : navTabs() & ~(1 << dest);
+    navTabs = value;
+    putInt(KEY_NAV_TABS, value);
+  }
+
+  public int navProfile () {
+    Integer value = navProfile;
+    if (value == null) {
+      int stored = pmc().getInt(KEY_NAV_PROFILE, NAV_PROFILE_BUTTON);
+      navProfile = value = stored >= NAV_PROFILE_BUTTON && stored <= NAV_PROFILE_OFF ? stored : NAV_PROFILE_BUTTON;
+    }
+    return value;
+  }
+
+  public void setNavProfile (int mode) {
+    navProfile = mode;
+    putInt(KEY_NAV_PROFILE, mode);
+  }
+
+  public int navStyle () {
+    Integer value = navStyle;
+    if (value == null) {
+      navStyle = value = pmc().getInt(KEY_NAV_STYLE, NAV_STYLE_STANDARD) == NAV_STYLE_VIBRANT ? NAV_STYLE_VIBRANT : NAV_STYLE_STANDARD;
+    }
+    return value;
+  }
+
+  public void setNavStyle (int style) {
+    navStyle = style;
+    putInt(KEY_NAV_STYLE, style);
+  }
+
+  /** Telegram's layout: Chats, Contacts, Settings in that order, the photo beside the bar, Standard colours. */
+  public void resetNavBar () {
+    XgramReorder.reset(XgramReorder.NAV_BAR);
+    navTabs = NAV_TABS_DEFAULT;
+    navProfile = NAV_PROFILE_BUTTON;
+    navStyle = NAV_STYLE_STANDARD;
+    putInt(KEY_NAV_TABS, NAV_TABS_DEFAULT);
+    putInt(KEY_NAV_PROFILE, NAV_PROFILE_BUTTON);
+    putInt(KEY_NAV_STYLE, NAV_STYLE_STANDARD);
+  }
+
   // Settings search: the results opened last (search hit keys, newest first), shown before anything is typed.
   // Not a setting: left out of backups.
 

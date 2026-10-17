@@ -452,6 +452,69 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   private int xgramRequestedMode = XgramNavMotion.MODE_NONE;
   private float xgramTouchY;
 
+  // XGram M3E: the floating navigation toolbar of narrow windows (com.fahadali.xgram.layout.XgramNavToolbar) lives
+  // above the screens: it follows their transitions, its tab screens keep room for it, it hears the insets.
+
+  /** The floating navigation toolbar above the screens. Main thread only. */
+  public interface XgramBarListener {
+    /** How the screens move: {@link #onXgramTransitionBegin}'s kind. */
+    int KIND_NONE = 0, KIND_SHARED_AXIS = 1, KIND_CARD = 2, KIND_FADE = 3, KIND_SLIDE = 4, KIND_VERTICAL = 5;
+
+    /** A transition between {@code left} (the lower screen) and {@code right} starts (a push, a pop, a back gesture). */
+    void onXgramTransitionBegin (ViewController<?> left, ViewController<?> right, boolean forward, int kind);
+
+    /** A frame of the transition: the screens moved. */
+    void onXgramNavigationFrame ();
+
+    /** The transition ended, before the stack is updated: {@code navigated} false when a back gesture was cancelled. */
+    void onXgramTransitionEnd (boolean navigated);
+
+    void onXgramInsets (int bottomInset, int bottomInsetWithoutIme);
+
+    /** Extra bottom room for the lists of {@code c} (a tab screen keeps its last row clear of the toolbar), in px. */
+    int xgramBottomRoom (ViewController<?> c);
+  }
+
+  private @Nullable XgramBarListener xgramBarListener;
+
+  public void xgramSetBarListener (@Nullable XgramBarListener listener) {
+    this.xgramBarListener = listener;
+    if (xgramNav != null) {
+      // The predictive back card is cut out of the toolbar as it is out of the app bar
+      xgramNav.setCardHoleListener(listener instanceof XgramNavMotion.CardHoleListener ? (XgramNavMotion.CardHoleListener) listener : null);
+    }
+  }
+
+  /** The navigation bar's inset under the screens (the keyboard left out), in px. */
+  public int xgramBottomInsetWithoutIme () {
+    return bottomInsetWithoutIme;
+  }
+
+  /** The screens on display take their bottom insets again (the toolbar's room came or went). */
+  public void xgramReapplyBottomInsets () {
+    if (childWrappers != null) {
+      for (int i = childWrappers.size() - 1; i >= 0; i--) {
+        applyBottomInset(childWrappers.get(i));
+      }
+    }
+  }
+
+  private int xgramBarKind () {
+    if (xgramNav != null && xgramNav.isActive()) {
+      return xgramNav.isCard() ? XgramBarListener.KIND_CARD : XgramBarListener.KIND_SHARED_AXIS;
+    }
+    switch (translationMode) {
+      case TRANSLATION_FADE:
+        return XgramBarListener.KIND_FADE;
+      case TRANSLATION_HORIZONTAL:
+        return XgramBarListener.KIND_SLIDE;
+      case TRANSLATION_VERTICAL:
+        return XgramBarListener.KIND_VERTICAL;
+      default:
+        return XgramBarListener.KIND_NONE;
+    }
+  }
+
   private void xgramBegin (int mode, ViewController<?> left, ViewController<?> right, boolean forward, int direction, int predictiveGestureMode) {
     if (xgramNav == null || mode == XgramNavMotion.MODE_NONE || direction != TRANSLATION_HORIZONTAL || left.usePopupMode() || right.usePopupMode()) {
       return;
@@ -497,6 +560,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       if (card && finishMode == FINISH_NAVIGATION) {
         headerView.setTranslation(1f);
       }
+    }
+    if (xgramBarListener != null) {
+      xgramBarListener.onXgramTransitionEnd(finishMode == FINISH_NAVIGATION); // XGram M3E: every finish path
     }
   }
 
@@ -1032,6 +1098,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     int xgramMode = xgramRequestedMode;
     xgramRequestedMode = XgramNavMotion.MODE_NONE;
     xgramBegin(xgramMode, left, right, forward, direction, predictiveGestureMode);
+    if (xgramBarListener != null) {
+      xgramBarListener.onXgramTransitionBegin(left, right, forward, xgramBarKind()); // XGram M3E: the toolbar follows
+    }
   }
 
   private void onAfterShow () {
@@ -1660,6 +1729,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   private void updateHackyViews () {
     ((BaseActivity) context).updateHackyOverlaysPositions();
+    if (xgramBarListener != null) {
+      xgramBarListener.onXgramNavigationFrame(); // XGram M3E: the toolbar moves with its tab screen
+    }
   }
 
   public int getTotalTranslate () {
@@ -1696,6 +1768,10 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   @Override
   public boolean onSystemBackStarted (@NonNull BackEventCompat backEvent) {
+    ViewController<?> xgramCurrent = getCurrentStackItem();
+    if (xgramCurrent != null && xgramCurrent.xgramIsBarTab()) {
+      return false; // XGram M3E: a tab screen of the floating navigation toolbar fades back to the chat list (no card)
+    }
     if (swipeNavigationEnabled()) {
       if (openPreviewImpl(backEvent.getTouchY(), false, backEvent.getSwipeEdge() == BackEventCompat.EDGE_RIGHT ? PredictiveGesture.BACK_FROM_RIGHT_EDGE : PredictiveGesture.BACK_FROM_LEFT_EDGE)) {
         setFactor(backEvent.getProgress());
@@ -1828,7 +1904,16 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   public void applyBottomInset (ViewController<?> controller) {
     if (controller.supportsBottomInset()) {
-      controller.setBottomInset(bottomInset, bottomInsetWithoutIme);
+      // XGram M3E: a tab screen of the floating navigation toolbar keeps its last row clear of it (not while the
+      // keyboard is up: the toolbar steps aside then)
+      int room = xgramBarListener != null ? xgramBarListener.xgramBottomRoom(controller) : 0;
+      if (room <= 0) {
+        controller.setBottomInset(bottomInset, bottomInsetWithoutIme);
+      } else if (bottomInset > bottomInsetWithoutIme) {
+        controller.setBottomInset(bottomInset, bottomInsetWithoutIme + room);
+      } else {
+        controller.setBottomInset(bottomInset + room, bottomInsetWithoutIme + room);
+      }
     } else {
       View view = controller.getValue();
       Views.setPaddingBottom(view, bottomInset);
@@ -1839,6 +1924,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     if (this.bottomInset != bottomInset || this.bottomInsetWithoutIme != bottomInsetWithoutIme) {
       this.bottomInset = bottomInset;
       this.bottomInsetWithoutIme = bottomInsetWithoutIme;
+      if (xgramBarListener != null) {
+        xgramBarListener.onXgramInsets(bottomInset, bottomInsetWithoutIme); // XGram M3E: before the screens take them
+      }
       if (childWrappers != null) {
         for (ViewController<?> controller : childWrappers) {
           applyBottomInset(controller);

@@ -1125,8 +1125,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (Config.CHAT_FOLDERS_HIDE_BOTTOM_BAR_ON_SCROLL && displayTabsAtBottom()) {
       showBottomBar();
     }
-    // XGram M3E: the floating navigation toolbar: its band follows the page, its morph a dragging finger
-    xgramPagerPosition = position + actualPositionOffset;
+    // XGram M3E: the floating navigation toolbar: its band follows the page, its morph a dragging finger. The offset
+    // is the pager's own (right to left, the pages are reversed: the logical position goes down as it grows)
+    xgramPagerPosition = position == actualPosition ? position + actualPositionOffset : position - actualPositionOffset;
     com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
     if (toolbar != null) {
       toolbar.onPagerScrolled(xgramCallsFraction(), xgramPagerDragged && !hasFolders());
@@ -1141,6 +1142,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private void xgramOnPagerScrollState (int state) {
     if (state == androidx.viewpager.widget.ViewPager.SCROLL_STATE_DRAGGING) {
       xgramPagerDragged = true;
+      com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+      if (toolbar != null) {
+        toolbar.onPagerDragStarted(); // the finger takes over from a tap's springs
+      }
     } else if (state == androidx.viewpager.widget.ViewPager.SCROLL_STATE_IDLE) {
       xgramPagerDragged = false;
       com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();

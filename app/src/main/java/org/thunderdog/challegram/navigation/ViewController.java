@@ -670,6 +670,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       }
       cachedLockFocusView = null;
     }
+    com.fahadali.xgram.layout.XgramNavToolbar.onTransformModeChanged(this, inSearch); // XGram M3E: steps aside on a tab screen
   }
 
   @CallSuper
@@ -1033,7 +1034,48 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   protected boolean forceFadeMode () {
-    return false;
+    return xgramIsBarTab(); // XGram M3E: a tab screen of the floating navigation toolbar fades in and back out
+  }
+
+  // XGram M3E: a tab screen of the floating navigation toolbar (com.fahadali.xgram.layout.XgramNavToolbar): opened by
+  // the toolbar right above the chat list. While the toolbar is on screen it has no back arrow, fades back to the
+  // chat list (no edge swipe, no predictive back card) and keeps its lists' last row clear of the toolbar.
+
+  private int xgramBarTab = -1;
+
+  /** The toolbar's destination this screen was opened for (XgramNavToolbar.DEST_*), -1 for none. Before getValue(). */
+  public final void xgramSetBarTab (int dest) {
+    this.xgramBarTab = dest;
+  }
+
+  /** The toolbar's destination of this screen, whether the toolbar is on screen or not; -1 for none. */
+  public final int xgramBarTabRaw () {
+    return xgramBarTab;
+  }
+
+  /** A tab screen while the toolbar is on screen (on a wide window it is an ordinary screen again). */
+  public final boolean xgramIsBarTab () {
+    return xgramBarTab != -1 && com.fahadali.xgram.layout.XgramNavToolbar.isShownFor(this);
+  }
+
+  /** The navigation icon the app bar shows: none on a tab screen. */
+  final int xgramEffectiveBackButton () {
+    return xgramIsBarTab() ? BackHeaderButton.TYPE_NONE : getBackButton();
+  }
+
+  /** The toolbar came or went while this tab screen exists: what depends on the back arrow (header margins) follows. */
+  public void xgramOnBarTabChanged () {
+    // override
+  }
+
+  /** The list whose scrolling hides the toolbar on this tab screen; null: a RecyclerViewController's own, or none. */
+  public @Nullable RecyclerView xgramBarScrollView () {
+    return null;
+  }
+
+  /** The page colour the band behind the toolbar takes on this screen. */
+  public int xgramBarBandColor () {
+    return Theme.getColor(ColorId.background);
   }
 
   protected boolean forceFastAnimation () {
@@ -1498,10 +1540,12 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
   protected final void enterSelectMode () {
     setFlags(flags | FLAG_IN_SELECT_MODE);
+    com.fahadali.xgram.layout.XgramNavToolbar.onSelectModeChanged(this); // XGram M3E: steps aside on a tab screen
   }
 
   protected final void leaveSelectMode () {
     setFlags(flags & (~FLAG_IN_SELECT_MODE));
+    com.fahadali.xgram.layout.XgramNavToolbar.onSelectModeChanged(this); // XGram M3E: and comes back
   }
 
   public final void leaveTransformMode () {

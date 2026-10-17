@@ -345,6 +345,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
   }
 
+  /** A tab screen entered or left its selection mode (its search, if open, stays as it is). */
+  public static void onSelectModeChanged (@Nullable ViewController<?> c) {
+    XgramNavToolbar toolbar = c != null ? of(c.context()) : null;
+    if (toolbar != null) {
+      toolbar.onTransform(c, toolbar.transformSearching);
+    }
+  }
+
   public static int destOf (String key) {
     for (int i = 0; i < TAB_KEYS.length; i++) {
       if (TAB_KEYS[i].equals(key)) {
@@ -619,6 +627,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     pill.markDirty();
   }
 
+  /** A finger started dragging the pages: the morph follows it (also over a tap's page change still settling). */
+  public void onPagerDragStarted () {
+    ignorePagerScroll = false;
+  }
+
   /** The pager stopped: taps on the toolbar no longer hold back the pager-driven morph. */
   public void onPagerIdle () {
     ignorePagerScroll = false;
@@ -714,6 +727,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     // Tab screens left on the stack become ordinary screens again (back arrow, slide, no room)
     if (navigation != null && !navigation.isDestroyed()) {
       NavigationStack stack = navigation.getStack();
+      ViewController<?> top = navigation.getCurrentStackItem();
+      boolean topWasTab = top != null && top.xgramBarTabRaw() != -1;
       boolean any = false;
       for (int i = 0; i < stack.size(); i++) {
         ViewController<?> c = stack.get(i);
@@ -723,8 +738,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
           any = true;
         }
       }
+      if (topWasTab && !navigation.isAnimating() && !top.inTransformMode() && navigation.getHeaderView() != null) {
+        navigation.getHeaderView().setTitle(top); // its back arrow is back
+      }
       if (any || wasShown) {
-        reapplyTopHeader();
         navigation.xgramReapplyBottomInsets();
       }
     }

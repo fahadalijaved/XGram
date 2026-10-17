@@ -1121,9 +1121,15 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         account.context().changePreferredAccountId(account.id, TdlibManager.SWITCH_REASON_USER_CLICK);
       }
     } else if (viewId == R.id.btn_contacts) {
+      if (xgramOpenFromToolbar(com.fahadali.xgram.layout.XgramNavToolbar.DEST_CONTACTS)) {
+        return; // XGram M3E: a tab of the floating navigation toolbar
+      }
       openContacts();
       // openEmptyChat();
     } else if (viewId == R.id.btn_calls) {
+      if (xgramOpenFromToolbar(com.fahadali.xgram.layout.XgramNavToolbar.DEST_CALLS)) {
+        return; // XGram M3E: a tab of the floating navigation toolbar
+      }
       openCallList();
     } else if (viewId == R.id.btn_reportBug) {
       if (Test.NEED_CLICK) {
@@ -1145,6 +1151,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         break;
       }*/
     } else if (viewId == R.id.btn_settings) {
+      if (xgramOpenFromToolbar(com.fahadali.xgram.layout.XgramNavToolbar.DEST_SETTINGS)) {
+        return; // XGram M3E: a tab of the floating navigation toolbar
+      }
       openSettings();
     } else if (viewId == R.id.btn_proxy) {
       if (v instanceof TogglerView) {
@@ -1261,6 +1270,19 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       close(0f);
     }
   }*/
+
+  /**
+   * XGram M3E: Contacts, Calls or Settings while they are tabs of the floating navigation toolbar open as its tab
+   * screens (a tab change) and the side menu closes. False: they open as before.
+   */
+  private boolean xgramOpenFromToolbar (int dest) {
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = com.fahadali.xgram.layout.XgramNavToolbar.of(context);
+    if (toolbar != null && toolbar.openFromDrawer(dest)) {
+      close(0f, null);
+      return true;
+    }
+    return false;
+  }
 
   private void openSettings () {
     openController(new SettingsController(context, context.currentTdlib()));

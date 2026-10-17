@@ -172,7 +172,12 @@ private fun setProfileMode(host: XgramComposeHost, settings: XgramSettings, mode
       UI.showToast(s(R.string.XgramNavBarMadeRoom, XgramNavToolbar.tabTitle(last)), Toast.LENGTH_SHORT)
     }
   }
+  val leavingTab = settings.navProfile() == XgramSettings.NAV_PROFILE_TAB && mode != XgramSettings.NAV_PROFILE_TAB
   settings.setNavProfile(mode)
+  if (leavingTab && XgramNavToolbar.enabledTabCount() < 2) {
+    // The profile was the only tab beside Chats: Settings takes its place (as the bar would), and the page shows it
+    settings.setNavTabOn(XgramNavToolbar.DEST_SETTINGS, true)
+  }
   updateToolbar(host)
 }
 
