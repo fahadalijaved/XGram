@@ -55,6 +55,8 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
     // internal
     private float measuredWidth;
     private Drawable icon;
+    /** XGram M3E: the active (filled) drawing, always its own instance (see XgramIconCrossfade). */
+    private @androidx.annotation.Nullable Drawable activeIcon;
     private float factor;
 
     public BarItem (@DrawableRes int icon, int name, int backgroundColorId) {
@@ -172,6 +174,7 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
         maxTextWidth = item.measuredWidth;
       }
       item.icon = item.iconResource == 0 ? null : Drawables.get(getResources(), item.iconResource);
+      item.activeIcon = xgramM3() ? xgramActiveIcon(item.iconResource) : null;
       if (index == currentIndex) {
         item.factor = 1f;
       }
@@ -197,6 +200,10 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
   // secondary, inactive onSurfaceVariant. The indicator springs between the items (spatial fast). While items are
   // selected the bar becomes the selection toolbar in the same surfaceContainer: the items fade out (no reveal circle)
   // and MediaLayout fades the toolbar in.
+  // Icons: each item keeps two drawables, the rest one (outlined) and the active one (filled with the Classic pack),
+  // and only the two items of a switch crossfade, on the switch's spring, through XgramIconCrossfade: one drawable
+  // drawn twice per frame at two alphas came out at the last alpha for both passes (a VectorDrawable's alpha is
+  // synced once per frame), so the icons blinked out as a switch started and ended. The indicator only slides.
   private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramIndicator;
   private @androidx.annotation.Nullable android.text.TextPaint xgramLabelPaint;
   private @androidx.annotation.Nullable Paint xgramIconPaint, xgramIconActivePaint;
@@ -208,6 +215,23 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
 
   private static boolean xgramM3 () {
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  /**
+   * The active item's icon, a drawable of its own: the filled Material icon with the Classic pack (whose rest icon is
+   * the outlined Line drawing, as the navigation rail), the pack's own drawing with any other pack.
+   */
+  private @androidx.annotation.Nullable Drawable xgramActiveIcon (@DrawableRes int iconRes) {
+    if (iconRes == 0) {
+      return null;
+    }
+    if (com.fahadali.xgram.appearance.XgramIconPack.current() == com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X) {
+      Drawable filled = androidx.core.content.res.ResourcesCompat.getDrawable(getResources(), iconRes, null); // not through the icon pack table
+      if (filled != null) {
+        return filled.mutate();
+      }
+    }
+    return Drawables.get(getResources(), iconRes);
   }
 
   private static final float XGRAM_ITEM_TOP = 6f, XGRAM_INDICATOR_WIDTH = 56f, XGRAM_INDICATOR_HEIGHT = 32f,
@@ -264,35 +288,32 @@ public class MediaBottomBar extends FrameLayoutFix implements GestureDetector.On
     final int inactive = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
     final int activeIcon = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
     final int activeLabel = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY);
-    // Two icon paints (inactive, active) crossfaded by alpha, so no color filter is made per frame
+    // Two icon paints (inactive, active), rebuilt only when the theme colors change; the fades are layers
     if (xgramIconPaint == null || xgramIconColor != inactive) {
       xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, xgramIconColor = inactive);
     }
     if (xgramIconActivePaint == null || xgramIconActiveColor != activeIcon) {
       xgramIconActivePaint = Paints.createPorterDuffPaint(xgramIconActivePaint, xgramIconActiveColor = activeIcon);
     }
+    // Only the two items of a switch change, on the switch's own spring (clamped: the indicator may overshoot, the
+    // icons do not); an item the indicator slides over stays as it is
+    final float switchFactor = me.vkryl.core.MathUtils.clamp(factor);
     final String[] labels = xgramLabels(itemWidth);
     for (int i = 0; i < items.length; i++) {
       BarItem item = items[i];
       float cx = itemStartX + itemWidth * (i + .5f);
-      final float iconPosition = xgramSwitchTo != -1 ? Math.max(Math.min(index, xgramSwitchTo), Math.min(Math.max(index, xgramSwitchTo), position)) : Math.round(position);
-      float selected = me.vkryl.core.MathUtils.clamp(1f - Math.abs(iconPosition - i)); // XGram: the indicator may overshoot, the icons do not
+      final float selected;
+      if (xgramSwitchTo != -1 && xgramSwitchTo != index) {
+        selected = i == xgramSwitchTo ? switchFactor : i == index ? 1f - switchFactor : 0f;
+      } else {
+        selected = i == index ? 1f : 0f;
+      }
       if (item.icon != null) {
-        final float iconX = cx - item.icon.getMinimumWidth() / 2f, iconY = iconCenterY - item.icon.getMinimumHeight() / 2f;
-        if (selected < 1f) {
-          xgramIconPaint.setAlpha((int) (255f * itemsAlpha)); // XGram: the inactive icon stays opaque under the active one (no see-through dip mid-switch)
-          Drawables.draw(c, item.icon, iconX, iconY, xgramIconPaint);
-        }
-        if (selected > 0f) {
-          xgramIconActivePaint.setAlpha((int) (255f * selected * itemsAlpha));
-          Drawables.draw(c, item.icon, iconX, iconY, xgramIconActivePaint);
-        }
+        com.fahadali.xgram.appearance.XgramIconCrossfade.draw(c, item.icon, xgramIconPaint, item.activeIcon != null ? item.activeIcon : item.icon, xgramIconActivePaint, cx, iconCenterY, selected, itemsAlpha);
       }
       xgramLabelPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(ColorUtils.fromToArgb(inactive, activeLabel, selected), itemsAlpha));
       c.drawText(labels[i], cx, labelY, xgramLabelPaint);
     }
-    xgramIconPaint.setAlpha(255);
-    xgramIconActivePaint.setAlpha(255);
   }
 
   public void setCallback (Callback callback) {

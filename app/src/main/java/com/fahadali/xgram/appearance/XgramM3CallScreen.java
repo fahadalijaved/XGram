@@ -65,10 +65,11 @@ import me.vkryl.core.MathUtils;
  * XGram M3E: the voice call screen (CallController with Expressive design on), after Google Phone's Material 3
  * Expressive in-call screen.
  * <ul>
- * <li>Top bar: an M3 small app bar row: a 48dp minimise icon button, a tonal "Telegram call" chip (the Telegram glyph,
- * the call's state, "End-to-end encrypted" once connected, and the signal bars, its width springing as they come and
- * go) and the encryption key emoji in a tonal secondaryContainer chip that opens a key card (a floating
- * surfaceContainerHigh card, corner 28dp) with the big emoji and the check hint.</li>
+ * <li>Top bar: an M3 small app bar row: a 48dp minimise icon button, a tonal 36dp "Telegram call" chip
+ * (surfaceContainerHigh a step toward the halo's hue: the Telegram glyph in primary, the call's state, then the
+ * encryption lock and "End-to-end encrypted" once connected, and the signal bars, its width springing as they come
+ * and go) and the encryption key emoji in a tonal secondaryContainer chip of the same height that opens a key card (a
+ * floating surfaceContainerHigh card, corner 28dp) with the big emoji and the check hint.</li>
  * <li>Hero: the avatar (128dp, 120dp on short windows) on a halo that morphs between a circle and a 12-sided cookie
  * and turns while the call rings or connects (static with Reduce motion), the name in headlineMedium and the status in
  * titleMedium onSurfaceVariant, in sentence case, with the loading indicator while it is in progress.</li>
@@ -680,6 +681,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     // The brand chip tells the call's encryption state once it is connected (on the cover screen the key chip then
     // takes the room and the chip keeps the glyph and the bars)
     brandChip.setLabel(Lang.getString(state == TdApi.CallStateReady.CONSTRUCTOR ? R.string.XgramR6B2CallEncrypted : R.string.XgramM3CallBranding), animated && isLaidOutCompat());
+    brandChip.setEncrypted(state == TdApi.CallStateReady.CONSTRUCTOR, animated && isLaidOutCompat());
     if (this.mode != newMode) {
       this.mode = newMode;
       endButton.setDescription(Lang.getString(newMode == MODE_DECLINE ? R.string.XgramM3CallDecline : R.string.XgramM3CallEnd));
@@ -836,6 +838,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
 
     updateTint(accent);
     stage.color = haloColor;
+    brandChip.setTint(haloColor); // the top bar's chip takes a step toward the halo
 
     stage.invalidate();
     brandChip.invalidate();
@@ -1017,21 +1020,27 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
   // Brand chip
 
   /**
-   * The tonal "Telegram call" assist chip: a full-corner 32dp pill one container step above the page under it
-   * (onSurface at a container opacity over the tinted gradient, so it shows in light, dark and Pure black where a fixed
-   * surfaceContainerHigh would melt into the tinted top), holding the Telegram glyph, the label (labelMedium: the call,
-   * then its encryption state; left out when the bar is too narrow) and the signal bars once connected. The pill's
-   * width springs (SPATIAL_DEFAULT) as the label and the bars come and go, a new label crossfades (EFFECTS_FAST), a
-   * press draws the onSurface state layer. The view is measured once per change at the widest it can get; only the
-   * drawn pill moves, so nothing is laid out per frame. Main thread only.
+   * The tonal "Telegram call" chip of the top app bar row: a full-corner pill as tall as the key chip at the other end
+   * (36dp), filled with surfaceContainerHigh lifted a step toward the avatar halo's hue (a plain surfaceContainerHigh
+   * melts into the tinted top in dark; the halo step keeps it apart in light, dark and Pure black and ties it to the
+   * hero), holding the Telegram glyph in primary, then once the call is connected the encryption lock (primary) before
+   * the label (labelLarge onSurface: the call, then "End-to-end encrypted"; left out when the bar is too narrow, the
+   * lock stays) and the signal bars at the end. The pill's width springs (SPATIAL_DEFAULT) as the lock, the label and
+   * the bars come and go, the lock springs in, a new label crossfades (EFFECTS_FAST), a press draws the onSurface state
+   * layer. The view is measured once per change at the widest it can get; only the drawn pill moves, so nothing is laid
+   * out per frame. Main thread only.
    */
   private static final class BrandChip extends View {
-    private static final float H = 32f, PAD_START = 10f, PAD_END = 14f, GLYPH = 18f, GAP = 8f;
+    private static final float H = KEY_CHIP_H, PAD_START = 12f, PAD_END = 16f, GLYPH = 18f, GAP = 8f, LOCK = 16f, LOCK_GAP = 4f;
     private static final float BAR = 3f, BAR_GAP = 1.5f, BAR_STEP = 3f;
     private static final int BARS = 4;
+    /** How far the fill moves from surfaceContainerHigh toward the halo color. */
+    private static final float TINT_STEP = .35f;
 
-    private final Drawable glyph;
-    private int glyphColor;
+    private final Drawable glyph, lockGlyph;
+    private int glyphColor, lockColor;
+    private @ColorInt int tint;
+    private boolean encrypted;
     private final TextPaint textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
@@ -1050,17 +1059,19 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
       invalidate();
     };
 
-    private final XgramExpressive.Spring width, labelShown, labelSwap, bars, press;
+    private final XgramExpressive.Spring width, labelShown, labelSwap, bars, press, lock;
 
     BrandChip (Context context) {
       super(context);
       setWillNotDraw(false);
       glyph = Drawables.get(XgramIconPack.map(R.drawable.baseline_telegram_24));
-      textPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_M, false));
-      textPaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_M)));
+      lockGlyph = Drawables.get(R.drawable.baseline_lock_16);
+      textPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_L, false));
+      textPaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_L)));
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        textPaint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_M) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_M));
+        textPaint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_L) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_L));
       }
+      lock = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> invalidate());
       width = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> invalidate()).setThreshold(.5f);
       labelShown = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 1f, (s, value) -> invalidate());
       labelSwap = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 1f, (s, value) -> invalidate());
@@ -1120,10 +1131,36 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
       }
     }
 
-    private float contentWidth (boolean withLabel, boolean withBars) {
+    /** The encryption lock before the label, once the call is connected (end-to-end encrypted). */
+    void setEncrypted (boolean encrypted, boolean animated) {
+      if (this.encrypted == encrypted) {
+        return;
+      }
+      this.encrypted = encrypted;
+      if (animated && laidOut()) {
+        lock.animateTo(encrypted ? 1f : 0f);
+      } else {
+        lock.setValue(encrypted ? 1f : 0f);
+        invalidate();
+      }
+      requestLayout(); // the pill's target width changes
+    }
+
+    /** The avatar halo's color: the fill takes a step toward it. */
+    void setTint (@ColorInt int tint) {
+      if (this.tint != tint) {
+        this.tint = tint;
+        invalidate();
+      }
+    }
+
+    private float contentWidth (boolean withLabel, boolean withBars, boolean withLock) {
       float w = Screen.dp(PAD_START) + Screen.dp(GLYPH) + Screen.dp(PAD_END);
+      if (withLock) {
+        w += Screen.dp(GAP) + Screen.dp(LOCK);
+      }
       if (withLabel) {
-        w += Screen.dp(GAP) + labelWidth;
+        w += Screen.dp(withLock ? LOCK_GAP : GAP) + labelWidth;
       }
       if (withBars) {
         w += Screen.dp(GAP) + barsWidth();
@@ -1138,12 +1175,12 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     @Override
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
       final int avail = MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED ? Integer.MAX_VALUE : MeasureSpec.getSize(widthMeasureSpec);
-      labelFits = contentWidth(true, barsVisible) <= avail;
-      final float widest = Math.max(contentWidth(true, true), prevLabel != null ? contentWidth(false, true) + Screen.dp(GAP) + prevLabelWidth : 0f);
+      labelFits = contentWidth(true, barsVisible, encrypted) <= avail;
+      final float widest = Math.max(contentWidth(true, true, true), prevLabel != null ? contentWidth(false, true, true) + Screen.dp(GAP) + prevLabelWidth : 0f);
       final int w = (int) Math.ceil(Math.min(avail, widest));
       final int h = MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY ? MeasureSpec.getSize(heightMeasureSpec) : Screen.dp(H);
       setMeasuredDimension(w, h);
-      final float target = Math.min(w, contentWidth(labelFits, barsVisible));
+      final float target = Math.min(w, contentWidth(labelFits, barsVisible, encrypted));
       final boolean animated = laidOut();
       if (width.getTarget() != target || width.getValue() == 0f) {
         if (animated && width.getValue() > 0f) {
@@ -1184,10 +1221,10 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
       removeCallbacks(barsInvalidate);
     }
 
-    /** A container step above the page: onSurface at a container opacity, over the tinted gradient. */
-    private static int fillColor () {
-      final float alpha = XgramAmoled.isActive() ? .14f : Theme.isDark() ? .12f : .08f;
-      return XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), alpha);
+    /** The tonal fill: surfaceContainerHigh (the floating step with Pure black) a step toward the halo's hue. */
+    private int fillColor () {
+      final int container = XgramExpressive.color(XgramAmoled.floatingRole(XgramExpressive.SURFACE_CONTAINER_HIGH));
+      return tint != 0 ? ColorUtils.fromToArgb(container, tint, TINT_STEP) : container;
     }
 
     @Override
@@ -1212,32 +1249,57 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
       }
 
       final int content = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+      final int labelColor = XgramExpressive.color(XgramExpressive.ON_SURFACE);
+      final int accent = XgramExpressive.color(XgramExpressive.PRIMARY);
       final int save = c.save();
       c.clipRect(rect);
 
-      // The Telegram glyph at the start
+      // The Telegram glyph at the start, in primary
       final int g = Screen.dp(GLYPH);
       final int gx = Math.round(rtl ? rect.right - Screen.dp(PAD_START) - g : rect.left + Screen.dp(PAD_START));
       final int gy = Math.round(rect.centerY() - g / 2f);
       if (glyph != null) {
-        if (glyphColor != content) {
-          glyphColor = content;
-          glyph.setColorFilter(Paints.getColorFilter(content));
+        if (glyphColor != accent) {
+          glyphColor = accent;
+          glyph.setColorFilter(Paints.getColorFilter(accent));
         }
         glyph.setBounds(gx, gy, gx + g, gy + g);
         glyph.draw(c);
       }
 
-      // The label after it (the previous one fading out under the new one)
+      // The encryption lock after it, springing in once the call is connected
+      final float locked = MathUtils.clamp(lock.getValue());
+      float cursor = Screen.dp(PAD_START) + g; // from the start edge of the pill
+      if (locked > 0f && lockGlyph != null) {
+        final int l = Screen.dp(LOCK);
+        final float lockStart = cursor + Screen.dp(GAP);
+        final int lx = Math.round(rtl ? rect.right - lockStart - l : rect.left + lockStart);
+        final int ly = Math.round(rect.centerY() - l / 2f);
+        if (lockColor != accent) {
+          lockColor = accent;
+          lockGlyph.setColorFilter(Paints.getColorFilter(accent));
+        }
+        lockGlyph.setAlpha(Math.round(255f * locked)); // one draw of this drawable per frame
+        final int lockSave = c.save();
+        final float lockScale = .6f + .4f * locked;
+        c.scale(lockScale, lockScale, lx + l / 2f, ly + l / 2f);
+        lockGlyph.setBounds(lx, ly, lx + l, ly + l);
+        lockGlyph.draw(c);
+        c.restoreToCount(lockSave);
+      }
+      cursor += (Screen.dp(GAP) + Screen.dp(LOCK)) * locked;
+
+      // The label after them (the previous one fading out under the new one)
       final float shown = MathUtils.clamp(labelShown.getValue());
       if (shown > 0f) {
         final float baseline = rect.centerY() - (textPaint.ascent() + textPaint.descent()) / 2f;
-        final float textStart = rtl ? gx - Screen.dp(GAP) : gx + g + Screen.dp(GAP);
+        final float labelOffset = cursor + Screen.dp(GAP) + (Screen.dp(LOCK_GAP) - Screen.dp(GAP)) * locked;
+        final float textStart = rtl ? rect.right - labelOffset : rect.left + labelOffset;
         final float swap = MathUtils.clamp(labelSwap.getValue());
         if (prevLabel != null && swap < 1f) {
-          drawLabel(c, prevLabel, prevLabelWidth, textStart, baseline, content, shown * (1f - swap), rtl);
+          drawLabel(c, prevLabel, prevLabelWidth, textStart, baseline, labelColor, shown * (1f - swap), rtl);
         }
-        drawLabel(c, label, labelWidth, textStart, baseline, content, shown * swap, rtl);
+        drawLabel(c, label, labelWidth, textStart, baseline, labelColor, shown * swap, rtl);
       }
 
       // The signal bars at the end

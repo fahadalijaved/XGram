@@ -416,15 +416,21 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     if (xgramGroup) {
       xgramTypeGroup = new com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup(getContext());
       xgramTypeGroup.setCallback(this::xgramOnTypeSelected);
-      FrameLayoutFix.LayoutParams groupParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM);
-      groupParams.leftMargin = Screen.dp(16f);
-      groupParams.bottomMargin = xgramTypeGroupBottomMargin();
+      // Centred just under the section tabs, floating over the top of the grids
+      FrameLayoutFix.LayoutParams groupParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP);
+      groupParams.topMargin = headerSize + Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TOP_GAP_DP);
       xgramTypeGroup.setLayoutParams(groupParams);
       if (themeProvider != null) {
         themeProvider.addThemeInvalidateListener(xgramTypeGroup);
       }
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        // The tabs draw over the toolbar (raised past its elevation, without a shadow of their own), so it hides by
+        // sliding up behind them
+        headerView.setOutlineProvider(null);
+        headerView.setTranslationZ(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3) + Screen.dp(1f));
+      }
       xgramSyncTypeGroup(false);
-      xgramApplyGridInsets(); // pages made before the toolbar existed scroll clear of it too
+      xgramApplyGridInsets(); // pages made before the toolbar existed start clear of it too
     } else {
       xgramTypeGroup = null;
     }
@@ -450,17 +456,13 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       this.extraBottomInset = extraBottomInset;
       this.extraBottomInsetWithoutKeyboard = extraBottomInsetWithoutKeyboard;
       if (adapter != null) {
-        final int xgramClearance = xgramGridClearance(); // XGram: 0 without the floating toolbar
         for (int i = 0; i < adapter.cachedItems.size(); i++) {
           ViewController<?> controller = adapter.cachedItems.valueAt(i);
-          controller.setBottomInset(extraBottomInset + xgramClearance, extraBottomInsetWithoutKeyboard + xgramClearance);
+          controller.setBottomInset(extraBottomInset, extraBottomInsetWithoutKeyboard);
         }
       }
       if (circleButton != null) {
         Views.setBottomMargin(circleButton, Screen.dp(16f) - Screen.dp(4f) + extraBottomInsetWithoutKeyboard);
-      }
-      if (xgramTypeGroup != null) {
-        Views.setBottomMargin(xgramTypeGroup, xgramTypeGroupBottomMargin()); // XGram
       }
     }
   }
@@ -486,8 +488,10 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   private boolean xgramThemeListener;
 
-  // XGram M3E wave 2: Emoji / Stickers / GIFs as a connected button group (com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup)
-  // floating at the bottom start, centred on the FAB at the bottom end; it hides with the header like the FAB.
+  // XGram M3E: Emoji / Stickers / GIFs as a floating toolbar (com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup),
+  // centred at the top just under the section tabs, over the grids. It moves up with the tabs as they hide, and
+  // hides itself on scroll down and comes back on scroll up or at the top of a grid (its own spring). The grids start
+  // that much lower (their top spacer, MediaStickersAdapter.xgramSetTopClearance, and the GIF grid's first row).
 
   private @Nullable com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup xgramTypeGroup;
 
@@ -495,30 +499,92 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !useDarkMode ? 56f : 46f;
   }
 
-  private int xgramTypeGroupBottomMargin () {
-    return Screen.dp(16f) + (Screen.dp(xgramCircleSize()) - Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.HEIGHT_DP)) / 2 + extraBottomInsetWithoutKeyboard;
-  }
-
-  /**
-   * XGram M3E: extra bottom padding of the emoji, sticker and GIF grids while the floating toolbar shows, so their
-   * last row scrolls clear of it and of the FAB beside it (the higher top of the two, plus 8dp). 0 without it.
-   */
-  private int xgramGridClearance () {
+  /** XGram M3E: how much further down the emoji, sticker and GIF grids start, clear of the floating toolbar. 0 without it. */
+  public int xgramGridTopClearance () {
     if (xgramTypeGroup == null || !allowMedia || isOptimizedForDisplayMessageOptionsWindow) {
       return 0;
     }
-    final int toolbarTop = Screen.dp(16f) + (Screen.dp(xgramCircleSize()) - Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.HEIGHT_DP)) / 2 + Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.HEIGHT_DP);
-    final int fabTop = Screen.dp(16f) + Screen.dp(xgramCircleSize());
-    return Math.max(toolbarTop, fabTop) + Screen.dp(8f);
+    return Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.CONTENT_CLEARANCE_DP);
+  }
+
+  private void xgramApplyTopClearance (@Nullable ViewController<?> c) {
+    final int clearance = xgramGridTopClearance();
+    if (c instanceof EmojiListController) {
+      ((EmojiListController) c).xgramSetTopClearance(clearance);
+    } else if (c instanceof EmojiMediaListController) {
+      ((EmojiMediaListController) c).xgramSetTopClearance(clearance);
+    }
   }
 
   private void xgramApplyGridInsets () {
     if (adapter == null) {
       return;
     }
-    final int clearance = xgramGridClearance();
     for (int i = 0; i < adapter.cachedItems.size(); i++) {
-      adapter.cachedItems.valueAt(i).setBottomInset(extraBottomInset + clearance, extraBottomInsetWithoutKeyboard + clearance);
+      xgramApplyTopClearance(adapter.cachedItems.valueAt(i));
+    }
+  }
+
+  // XGram: the toolbar follows the scroll direction of the grid in view (past the touch slop), and shows at its top
+
+  private int xgramScrollY = Integer.MIN_VALUE;
+  private float xgramScrollTravel;
+  private boolean xgramScrollingDown;
+
+  private boolean xgramAtTop (int scrollY) {
+    return scrollY <= Screen.dp(4f);
+  }
+
+  private void xgramShowTypeGroup () {
+    xgramScrollTravel = 0;
+    if (xgramTypeGroup != null) {
+      xgramTypeGroup.setHidden(false, true);
+    }
+  }
+
+  /** The grid in view is at {@code scrollY} now (the scroll positions EmojiLayout follows for the header). */
+  private void xgramTrackScroll (int scrollY) {
+    if (xgramTypeGroup == null) {
+      return;
+    }
+    final int prevScrollY = xgramScrollY;
+    xgramScrollY = scrollY;
+    if (xgramAtTop(scrollY)) {
+      xgramShowTypeGroup();
+    } else if (prevScrollY != Integer.MIN_VALUE) {
+      xgramApplyScrollDelta(scrollY - prevScrollY);
+    }
+  }
+
+  /** XGram: the GIF grid scrolled by {@code dy} (EmojiLayout only knows its scroll position near its top). */
+  public void xgramOnScrolledBy (int dy) {
+    if (ignoreMovement || scrollState != ViewPager.SCROLL_STATE_IDLE) {
+      return;
+    }
+    xgramApplyScrollDelta(dy);
+  }
+
+  private void xgramApplyScrollDelta (int dy) {
+    if (xgramTypeGroup == null || dy == 0) {
+      return;
+    }
+    final boolean down = dy > 0;
+    if (down != xgramScrollingDown) {
+      xgramScrollingDown = down;
+      xgramScrollTravel = 0;
+    }
+    xgramScrollTravel = Math.min(xgramScrollTravel + Math.abs(dy), Screen.getTouchSlop() * 4f);
+    if (xgramScrollTravel >= Screen.getTouchSlop()) {
+      xgramTypeGroup.setHidden(down, true);
+    }
+  }
+
+  /** A new scroll position to follow from (another page or section, or after a jump): no direction yet. */
+  private void xgramResetScrollTracking (int scrollY) {
+    xgramScrollY = scrollY;
+    xgramScrollTravel = 0;
+    if (xgramAtTop(scrollY)) {
+      xgramShowTypeGroup();
     }
   }
 
@@ -715,6 +781,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     isOptimizedForDisplayMessageOptionsWindow = needOptimize;
     optimizeForDisplayTextFormattingLayout(needOptimize);
     checkBackground();
+    xgramApplyGridInsets(); // XGram: no floating toolbar there, so no top clearance
   }
 
   public void optimizeForDisplayTextFormattingLayout (boolean needOptimize) {
@@ -1013,7 +1080,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
         mediaSectionsView.setAlpha(alpha);
       }
       if (xgramTypeGroup != null) {
-        xgramTypeGroup.setHideFactor(factor); // XGram: hides with the header
+        xgramTypeGroup.setFollowY(y + offset); // XGram: stays under the section tabs as they slide up
       }
     }
   }
@@ -1078,6 +1145,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   private boolean ignoreMovement;
 
   private void resetScrollingCache (int scrollY, boolean silent) {
+    xgramResetScrollTracking(scrollY); // XGram
     lastY = scrollY;
     int headerOffset = (int) (headerHideFactor * (float) getHeaderSize());
     lastHeaderVisibleY = lastDesiredHeaderVisibleY = Math.max(0, scrollY - headerOffset);
@@ -1113,6 +1181,10 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     if (ignoreMovement || scrollState != ViewPager.SCROLL_STATE_IDLE) {
       return;
     }
+    if (xgramAtTop(y)) {
+      xgramShowTypeGroup(); // XGram: the GIF grid's direction comes from xgramOnScrolledBy
+    }
+    xgramScrollY = y;
     lastHeaderVisibleY = 0;
     lastY = y;
     setHeaderHideFactor(Math.min(1f, Math.max(0f, (float) y / (float) getHeaderSize())), false);
@@ -1129,6 +1201,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     if (ignoreMovement || scrollState != ViewPager.SCROLL_STATE_IDLE) {
       return;
     }
+    xgramTrackScroll(y); // XGram: the floating toolbar
 
     float hideFactor = Math.max(0f, Math.min(1f, (float) (y - lastHeaderVisibleY) / (float) getHeaderSize()));
 
@@ -1248,8 +1321,8 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
           c.bindThemeListeners(themeProvider);
         }
       }
-      final int xgramClearance = parent.xgramGridClearance(); // XGram: the grids scroll clear of the floating toolbar
-      c.setBottomInset(parent.extraBottomInset + xgramClearance, parent.extraBottomInsetWithoutKeyboard + xgramClearance);
+      c.setBottomInset(parent.extraBottomInset, parent.extraBottomInsetWithoutKeyboard);
+      parent.xgramApplyTopClearance(c); // XGram: the grids start clear of the floating toolbar
       container.addView(c.getValue());
       return c;
     }
@@ -1330,6 +1403,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     }
     resetScrollState(false);
     xgramSyncTypeGroup(true); // XGram
+    xgramShowTypeGroup(); // XGram: a new page brings the floating toolbar back
   }
 
   private boolean affectHeight;

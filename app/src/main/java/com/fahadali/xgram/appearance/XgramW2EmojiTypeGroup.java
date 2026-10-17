@@ -38,17 +38,20 @@ import me.vkryl.core.MathUtils;
 
 /**
  * XGram M3E: the Emoji / Stickers / GIFs switch of the emoji panel as one Material 3 Expressive floating toolbar,
- * floating at the panel's bottom start beside the backspace / search FAB at its end.
+ * centred at the top of the panel just under the section tabs, floating over the grids.
  * <ul>
  *   <li>Container: one surfaceContainerHigh pill (full corners), elevation level 3, 4dp padding, so 48dp tall. The
- *   grids under it scroll clear of it (EmojiLayout adds its height to their bottom inset).</li>
- *   <li>Segments: 48 x 40dp, 2dp apart, 20dp icons in onSurfaceVariant (outlined).</li>
- *   <li>Selection: a secondaryContainer pill under the selected segment with its filled icon in onSecondaryContainer;
- *   the pill slides to a newly selected segment on the spatial fast spring.</li>
+ *   grids start clear of it (EmojiLayout gives their top spacer {@link #CONTENT_CLEARANCE_DP} more).</li>
+ *   <li>Segments: 48 x 40dp, 2dp apart, 20dp icons, outlined in onSurfaceVariant at rest.</li>
+ *   <li>Selection: a secondaryContainer pill under the selected segment, sliding to a newly selected segment on the
+ *   spatial fast spring. Only the two segments of a change crossfade, each on its own effects spring: the outlined
+ *   drawing in onSurfaceVariant to the filled one in onSecondaryContainer and back (XgramIconCrossfade, one drawable per
+ *   state). A segment the pill slides over stays as it is.</li>
  *   <li>Press: the pressed segment's shape (the pill, or its state layer) springs from full to 8dp corners under the
  *   10% pressed state layer.</li>
  * </ul>
- * It hides with the panel header on scroll down and comes back on scroll up ({@link #setHideFactor}). Nothing is
+ * It follows the panel header as that slides up ({@link #setFollowY}), and hides on scroll down and comes back on
+ * scroll up ({@link #setHidden}, spatial default spring): it slides up behind the section tabs and fades. Nothing is
  * allocated while drawing: the two icon paints are rebuilt only when the theme colors change.
  */
 @SuppressLint("ViewConstructor")
@@ -62,16 +65,25 @@ public final class XgramW2EmojiTypeGroup extends View {
 
   /** The toolbar's height (40dp segments in 4dp padding) and the segment size, in dp. */
   public static final float HEIGHT_DP = 48f, SEGMENT_WIDTH_DP = 48f, SEGMENT_HEIGHT_DP = 40f, PADDING_DP = 4f;
+  /** The gap between the section tabs and the toolbar, in dp. */
+  public static final float TOP_GAP_DP = 8f;
+  /** How much further down the grids start under the toolbar: the gap above it, its height and 4dp under it. */
+  public static final float CONTENT_CLEARANCE_DP = TOP_GAP_DP + HEIGHT_DP + 4f;
   private static final float ICON_DP = 20f, PRESSED_CORNER_DP = XgramExpressive.CORNER_S;
 
   private static final int[] ICONS = {R.drawable.baseline_emoticon_outline_24, R.drawable.deproko_baseline_stickers_24, R.drawable.deproko_baseline_gif_24};
   private static final int[] ICONS_CHECKED = {R.drawable.baseline_emoticon_24, R.drawable.deproko_baseline_stickers_24, R.drawable.deproko_baseline_gif_filled_24};
 
+  /** One drawable per state, also where both states use the same resource (see XgramIconCrossfade). */
   private final Drawable[] icons = new Drawable[COUNT], checkedIcons = new Drawable[COUNT];
   private final String[] labels = new String[COUNT];
   /** The selection pill's position in segment indexes (0 .. COUNT - 1), springing between them. */
   private final XgramExpressive.Spring indicator;
+  /** Each segment's selected state (0 .. 1): its icon and content color. */
+  private final XgramExpressive.Spring[] checkSprings = new XgramExpressive.Spring[COUNT];
   private final XgramExpressive.Spring[] pressSprings = new XgramExpressive.Spring[COUNT];
+  /** 0 shown, 1 hidden. */
+  private final XgramExpressive.Spring hideSpring;
 
   private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
   private final RectF rect = new RectF();
@@ -81,17 +93,21 @@ public final class XgramW2EmojiTypeGroup extends View {
   private int selectedType = TYPE_EMOJI;
   private int pressedIndex = -1;
   private float downX, downY;
-  private float hideFactor;
+  private boolean hidden;
+  private float hideFactor, followY;
   private @Nullable Callback callback;
 
   public XgramW2EmojiTypeGroup (@NonNull Context context) {
     super(context);
     for (int i = 0; i < COUNT; i++) {
       icons[i] = Drawables.get(getResources(), ICONS[i]);
-      checkedIcons[i] = ICONS_CHECKED[i] == ICONS[i] ? icons[i] : Drawables.get(getResources(), ICONS_CHECKED[i]);
+      checkedIcons[i] = Drawables.get(getResources(), ICONS_CHECKED[i]);
+      checkSprings[i] = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, i == selectedType ? 1f : 0f, (s, value) -> invalidate());
       pressSprings[i] = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
     }
     indicator = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, selectedType, (s, value) -> invalidate());
+    hideSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> applyHide(value));
+    hideSpring.setThreshold(.002f);
     labels[TYPE_EMOJI] = Lang.getString(R.string.XgramW2EmojiTypeEmoji);
     labels[TYPE_STICKERS] = Lang.getString(R.string.Stickers);
     labels[TYPE_GIFS] = Lang.getString(R.string.GIFs);
@@ -127,10 +143,19 @@ public final class XgramW2EmojiTypeGroup extends View {
     }
     final boolean changed = this.selectedType != type;
     this.selectedType = type;
+    animated = animated && getWidth() > 0;
     if (animated) {
       indicator.animateTo(type);
     } else {
       indicator.setValue(type);
+    }
+    for (int i = 0; i < COUNT; i++) {
+      final float target = i == type ? 1f : 0f;
+      if (animated) {
+        checkSprings[i].animateTo(target);
+      } else {
+        checkSprings[i].setValue(target);
+      }
     }
     if (changed) {
       updateDescription();
@@ -142,17 +167,50 @@ public final class XgramW2EmojiTypeGroup extends View {
     setContentDescription(labels[selectedType]);
   }
 
-  /** 0 shown, 1 hidden (it slides down and fades with the panel header). Properties only, no layout. */
-  public void setHideFactor (float factor) {
-    factor = MathUtils.clamp(factor);
-    if (this.hideFactor != factor) {
-      this.hideFactor = factor;
-      setAlpha(1f - factor);
-      setTranslationY(Screen.dp(HEIGHT_DP + 24f) * factor);
-      if (factor >= 1f) {
-        releasePress();
-      }
+  // Placement
+
+  /** The panel header's translation: the toolbar sits under the section tabs, so it moves up with them. */
+  public void setFollowY (float y) {
+    if (this.followY != y) {
+      this.followY = y;
+      updatePlacement();
     }
+  }
+
+  /** Hides (on scroll down) or shows (on scroll up) the toolbar, on the spatial default spring. */
+  public void setHidden (boolean hidden, boolean animated) {
+    final float target = hidden ? 1f : 0f;
+    if (this.hidden == hidden && (hideSpring.getTarget() == target) && (animated || hideSpring.getValue() == target)) {
+      return;
+    }
+    this.hidden = hidden;
+    if (hidden) {
+      releasePress();
+    }
+    if (animated && getWidth() > 0 && getVisibility() == View.VISIBLE) {
+      hideSpring.animateTo(target);
+    } else {
+      hideSpring.setValue(target);
+      applyHide(target);
+    }
+  }
+
+  public boolean isHidden () {
+    return hidden;
+  }
+
+  private void applyHide (float value) {
+    if (this.hideFactor != value) {
+      this.hideFactor = value;
+      updatePlacement();
+    }
+  }
+
+  /** Properties only, no layout: it slides up behind the section tabs (the gap and its own height) and fades. */
+  private void updatePlacement () {
+    final float hide = MathUtils.clamp(hideFactor, -.2f, 1f); // a little past its place on the spring's way back
+    setAlpha(1f - MathUtils.clamp(hideFactor));
+    setTranslationY(followY - Screen.dp(TOP_GAP_DP + HEIGHT_DP) * hide);
   }
 
   // Layout
@@ -223,7 +281,7 @@ public final class XgramW2EmojiTypeGroup extends View {
   @SuppressLint("ClickableViewAccessibility")
   @Override
   public boolean onTouchEvent (MotionEvent e) {
-    if (hideFactor >= 1f || getAlpha() == 0f || !isEnabled()) {
+    if ((hidden && e.getAction() == MotionEvent.ACTION_DOWN) || hideFactor >= 1f || getAlpha() == 0f || !isEnabled()) {
       return false;
     }
     final float x = e.getX(), y = e.getY();
@@ -304,7 +362,7 @@ public final class XgramW2EmojiTypeGroup extends View {
 
     final float iconScale = Screen.dpf(ICON_DP) / Screen.dpf(24f);
     for (int i = 0; i < COUNT; i++) {
-      final float check = MathUtils.clamp(1f - Math.abs(position - i));
+      final float check = MathUtils.clamp(checkSprings[i].getValue());
       final float press = pressSprings[i].getValue();
       segmentRect(i, rect);
 
@@ -320,18 +378,8 @@ public final class XgramW2EmojiTypeGroup extends View {
       final float cx = rect.centerX(), cy = rect.centerY();
       final int save = c.save();
       c.scale(iconScale, iconScale, cx, cy);
-      final Drawable icon = icons[i], checkedIcon = checkedIcons[i];
-      if (check < 1f && icon != null) {
-        uncheckedIconPaint.setAlpha((int) (255f * (1f - check)));
-        Drawables.drawCentered(c, icon, cx, cy, uncheckedIconPaint);
-      }
-      if (check > 0f && checkedIcon != null) {
-        checkedIconPaint.setAlpha((int) (255f * check));
-        Drawables.drawCentered(c, checkedIcon, cx, cy, checkedIconPaint);
-      }
+      XgramIconCrossfade.draw(c, icons[i], uncheckedIconPaint, checkedIcons[i], checkedIconPaint, cx, cy, check, 1f);
       c.restoreToCount(save);
     }
-    uncheckedIconPaint.setAlpha(255);
-    checkedIconPaint.setAlpha(255);
   }
 }
