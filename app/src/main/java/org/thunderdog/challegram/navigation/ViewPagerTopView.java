@@ -48,6 +48,7 @@ import androidx.annotation.Px;
 import androidx.core.view.ViewCompat;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramPillStateLayer;
 
 import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.U;
@@ -473,7 +474,7 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
       int childCount = getChildCount();
       for (int index = 0; index < childCount; index++) {
         View childView = getChildAt(index);
-        if (childView instanceof BackgroundView) {
+        if (childView instanceof BackgroundView && !XgramExpressive.isEnabled()) { // XGram: Expressive items keep their pill state layer
           if (useDark) {
             RippleSupport.setTransparentBlackSelector(childView);
           } else {
@@ -499,7 +500,9 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
 
   private BackgroundView newBackgroundView (int i) {
     BackgroundView backgroundView = new BackgroundView(getContext());
-    if (isDark) {
+    if (XgramExpressive.isEnabled()) {
+      XgramPillStateLayer.attach(backgroundView, xgramItemStateShape); // XGram: the item presses in its own pill, not its rectangle
+    } else if (isDark) {
       RippleSupport.setTransparentBlackSelector(backgroundView);
     } else {
       RippleSupport.setTransparentWhiteSelector(backgroundView);
@@ -790,6 +793,78 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
     RectF rectF = Paints.getRectF();
     rectF.set(start, top, end, top + height);
     c.drawRoundRect(rectF, height / 2f, height / 2f, Paints.fillingPaint(color));
+  }
+
+  // XGram: Material 3 Expressive state layers (XgramPillStateLayer). Each item presses in its own pill, the selection
+  // pill's shape (its content with 16dp on each side, as tall as the selection pill, full corners), never in its
+  // rectangle: onSecondaryContainer at .10 on the selected pill, onSurface on the others.
+
+  /** XGram: another state layer shape for some items, e.g. the message options page's assist chips. */
+  public interface XgramItemShape {
+    /**
+     * Sets {@code outRect} to item {@code index}'s state layer inside its visible box ({@code itemWidth} x {@code height},
+     * left to right; mirrored for right-to-left) and returns its corner radius in px, or {@link Float#NaN} for the pill.
+     */
+    float getXgramItemShape (int index, float itemWidth, float height, @NonNull RectF outRect);
+  }
+
+  private @Nullable XgramItemShape xgramItemShape;
+
+  public void setXgramItemShape (@Nullable XgramItemShape shape) {
+    this.xgramItemShape = shape;
+  }
+
+  private final XgramPillStateLayer.Shape xgramItemStateShape = new XgramPillStateLayer.Shape() {
+    @Override
+    public float getStateLayerShape (@NonNull View view, @NonNull RectF outRect) {
+      return xgramItemStateLayerShape(view, outRect);
+    }
+
+    @Override
+    public boolean isStateLayerOnIndicator (@NonNull View view) {
+      if (!(view instanceof BackgroundView) || items == null) {
+        return false;
+      }
+      int index = ((BackgroundView) view).index;
+      return index >= 0 && index < items.size() && getItemSelectionFactor(index, selectionFactor) >= .5f;
+    }
+  };
+
+  /** The state layer of the item a BackgroundView stands for, in that view's own coordinates. */
+  private float xgramItemStateLayerShape (@NonNull View view, @NonNull RectF outRect) {
+    final int index = view instanceof BackgroundView ? ((BackgroundView) view).index : -1;
+    if (items == null || index < 0 || index >= items.size() || items.get(index).hidden) {
+      outRect.setEmpty();
+      return XgramPillStateLayer.CORNER_FULL;
+    }
+    final int viewWidth = view.getWidth(), viewHeight = view.getHeight();
+    final boolean wrapContent = shouldWrapContent();
+    // Wrapping, an item shows in the part of its view it currently takes (the view keeps its expanded width), at the
+    // end under right-to-left; else the whole view is the item
+    final float itemWidth = wrapContent ? Math.min(getItemWidth(index, selectionFactor), viewWidth) : viewWidth;
+    final boolean rtl = Lang.rtl();
+    final float boxLeft = wrapContent && rtl ? viewWidth - itemWidth : 0f;
+    if (xgramItemShape != null) {
+      final float radius = xgramItemShape.getXgramItemShape(index, itemWidth, viewHeight, outRect);
+      if (!Float.isNaN(radius)) {
+        if (rtl) {
+          final float left = itemWidth - outRect.right;
+          outRect.right = itemWidth - outRect.left;
+          outRect.left = left;
+        }
+        outRect.offset(boxLeft, 0f);
+        return radius;
+      }
+    }
+    final float half = Math.min(xgramPillHalf(index), itemWidth / 2f);
+    if (half <= 0f || viewHeight <= 0) {
+      outRect.setEmpty();
+      return XgramPillStateLayer.CORNER_FULL;
+    }
+    final float height = Math.min(Screen.dp(viewHeight >= Screen.dp(56f) ? 40f : 32f), viewHeight); // as xgramDrawPill
+    final float centerX = boxLeft + itemWidth / 2f, top = (viewHeight - height) / 2f;
+    outRect.set(centerX - half, top, centerX + half, top + height);
+    return XgramPillStateLayer.CORNER_FULL;
   }
 
   private void relayout () {
@@ -1679,7 +1754,7 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
     public void draw (@NonNull Canvas canvas) {
       int itemWidth = topView.getItemWidth(index, topView.selectionFactor);
       lastItemWidth = itemWidth;
-      if (itemWidth == getWidth()) {
+      if (itemWidth == getWidth() || XgramExpressive.isEnabled()) { // XGram: the pill state layer stays inside the item by itself
         super.draw(canvas);
         return;
       }

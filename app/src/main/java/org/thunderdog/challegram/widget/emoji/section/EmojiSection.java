@@ -263,6 +263,16 @@ public class EmojiSection implements FactorAnimator.Target {
   private static final android.graphics.RectF xgramPill = new android.graphics.RectF();
   private static Paint xgramIconPaint;
 
+  /** XGram: the category draws the Expressive pill look (not the dark panel), so it presses in that pill (EmojiSectionView). */
+  public boolean xgramHasPillLook () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !callback.isUseDarkMode();
+  }
+
+  /** XGram: the active category's pill is up (its state layer is onSecondaryContainer). */
+  public boolean xgramIsPillSelected () {
+    return !activeDisabled && selectionFactor >= .5f;
+  }
+
   private boolean xgramDraw (Canvas c, int cx, int cy) {
     if (callback.isUseDarkMode() || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       return false;

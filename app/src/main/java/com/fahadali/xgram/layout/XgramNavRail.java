@@ -904,6 +904,10 @@ public final class XgramNavRail {
       ripple.setCallback(this);
       setClickable(true);
       setFocusable(true);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        // Keyboard focus shows in the shape (the ripple's focused layer), not as the framework's rectangle
+        setDefaultFocusHighlightEnabled(false);
+      }
     }
 
     /** The content color the state layer is made of. */
@@ -1207,7 +1211,8 @@ public final class XgramNavRail {
 
     @Override
     protected int stateLayerColor () {
-      return color(XgramExpressive.ON_SECONDARY_CONTAINER); // NavigationRailColorTokens pressed / hovered state layer
+      // M3 state layer: onSecondaryContainer on the active indicator, onSurface on the other destinations
+      return color(active ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE);
     }
 
     @Override
@@ -1438,6 +1443,14 @@ public final class XgramNavRail {
       FrameLayout wrap = new FrameLayout(context);
       RowView row = new RowView(context, false, restIcon(res, entry.filled, entry.outlined), null, Lang.getString(entry.label), null);
       row.setTrailingReserve(Screen.dp(SWITCH_RESERVE));
+      if (id != R.id.btn_proxy) {
+        // The whole row is the switch (below): the row's state layer shows its press, hover and keyboard focus, in the
+        // row's pill instead of the framework's focus rectangle. Set before it is added, so the row follows the state.
+        row.setDuplicateParentStateEnabled(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          wrap.setDefaultFocusHighlightEnabled(false);
+        }
+      }
       wrap.addView(row, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
       final TogglerView toggler = new TogglerView(context);
       toggler.init(checked);
@@ -1743,7 +1756,7 @@ public final class XgramNavRail {
 
     @Override
     protected int stateLayerColor () {
-      return color(active ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE_VARIANT);
+      return color(active ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE); // M3 state layer, as the collapsed rail
     }
 
     @Override

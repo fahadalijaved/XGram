@@ -311,7 +311,7 @@ public final class XgramW2EmojiTypeGroup extends View {
       if (press > 0f) {
         // The pressed state layer in the segment's own shape (content color at 10%)
         final float corner = MathUtils.clamp(full + (pressedCorner - full) * press, 0f, full);
-        final int content = ColorUtils.fromToArgb(uncheckedContent, checkedContent, check);
+        final int content = ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_SURFACE), checkedContent, check); // M3: onSurface, onSecondaryContainer on the pill
         fillPaint.setColor(XgramExpressive.withAlpha(content, XgramExpressive.STATE_PRESSED * Math.min(1f, press)));
         c.drawRoundRect(rect, corner, corner, fillPaint);
       }

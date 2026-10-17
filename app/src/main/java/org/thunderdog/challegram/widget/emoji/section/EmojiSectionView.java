@@ -16,7 +16,10 @@ package org.thunderdog.challegram.widget.emoji.section;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.RectF;
 import android.view.View;
+
+import androidx.annotation.NonNull;
 
 import org.thunderdog.challegram.tool.Screen;
 
@@ -25,6 +28,28 @@ public class EmojiSectionView extends View {
 
   public EmojiSectionView (Context context) {
     super(context);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive: the category presses in its 40 x 32dp pill (the active category's shape)
+      com.fahadali.xgram.appearance.XgramPillStateLayer.attach(this, new com.fahadali.xgram.appearance.XgramPillStateLayer.Shape() {
+        @Override
+        public float getStateLayerShape (@NonNull View view, @NonNull RectF outRect) {
+          if (section == null || !section.xgramHasPillLook()) {
+            outRect.setEmpty();
+          } else {
+            // Centered where EmojiSection.draw centers it
+            final float cx = getMeasuredWidth() / 2, cy = getMeasuredHeight() / 2;
+            final float halfWidth = Math.min(Screen.dp(20f), getMeasuredWidth() / 2f), halfHeight = Math.min(Screen.dp(16f), getMeasuredHeight() / 2f);
+            outRect.set(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight);
+          }
+          return com.fahadali.xgram.appearance.XgramPillStateLayer.CORNER_FULL;
+        }
+
+        @Override
+        public boolean isStateLayerOnIndicator (@NonNull View view) {
+          return section != null && section.xgramIsPillSelected();
+        }
+      });
+    }
   }
 
   private EmojiSection section;

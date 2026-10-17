@@ -448,33 +448,47 @@ final class XgramM3TopicTabs extends RecyclerView.ItemDecoration implements Recy
     c.drawText(text, left + (width - textWidth) / 2f, baseline(paint, centerY), paint);
   }
 
-  // Press feedback of a tab: an onSurface state layer in the pill's shape
+  // Press feedback of a tab: a state layer in the pill's shape, onSurface, or onSecondaryContainer on the selected
+  // tab's pill (the tab view is selected, see ForumTabsView.TabView)
 
   static Drawable tabBackground (boolean vertical) {
-    return new StateRipple(XgramExpressive.ON_SURFACE, new PillMask(vertical));
+    return new StateRipple(XgramExpressive.ON_SURFACE, XgramExpressive.ON_SECONDARY_CONTAINER, new PillMask(vertical));
   }
 
-  /** A ripple whose color follows the theme (checked on every press). */
+  /** A ripple whose color follows the theme and the tab's selection (checked on every state change). */
   private static final class StateRipple extends RippleDrawable {
-    private final int role;
+    private final int role, selectedRole;
     private int color;
+    /** False while RippleDrawable's constructor runs (the fields above are not set yet). */
+    private final boolean ready;
 
-    StateRipple (int role, Drawable mask) {
-      this(role, XgramExpressive.color(role), mask);
+    StateRipple (int role, int selectedRole, Drawable mask) {
+      this(role, selectedRole, XgramExpressive.color(role), mask);
     }
 
-    private StateRipple (int role, int color, Drawable mask) {
+    private StateRipple (int role, int selectedRole, int color, Drawable mask) {
       super(ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(color)), null, mask);
       this.role = role;
+      this.selectedRole = selectedRole;
       this.color = color;
+      this.ready = true;
     }
 
     @Override
     protected boolean onStateChange (int[] stateSet) {
-      int now = XgramExpressive.color(role);
-      if (now != color) {
-        color = now;
-        setColor(ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(now)));
+      if (ready) {
+        boolean selected = false;
+        for (int state : stateSet) {
+          if (state == android.R.attr.state_selected) {
+            selected = true;
+            break;
+          }
+        }
+        int now = XgramExpressive.color(selected ? selectedRole : role);
+        if (now != color) {
+          color = now;
+          setColor(ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(now)));
+        }
       }
       return super.onStateChange(stateSet);
     }
