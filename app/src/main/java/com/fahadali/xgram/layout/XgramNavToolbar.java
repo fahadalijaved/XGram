@@ -1003,7 +1003,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
     forceMask = transform ? forceMask | FORCE_TRANSFORM : forceMask & ~FORCE_TRANSFORM;
     applyFollow(tabRoot ? 1f : 0f, 0f);
-    updateHidden(isVisibleNow());
+    updateHidden(true);
     if (tabRoot) {
       setTarget(computeSelected(top), isLaidOut());
     }
@@ -1172,8 +1172,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return;
     }
     float target = scrollHidden || forceMask != 0 ? 1f : 0f;
-    // Force-hiding (and showing) animates only while the toolbar is on screen
-    if (animated && isVisibleNow()) {
+    // Hiding and showing animate only while the toolbar is on a tab screen (also back from slid away, while invisible)
+    if (animated && canAnimateHide()) {
       hideSpring.animateTo(target);
     } else {
       hideSpring.setValue(target);
@@ -1210,6 +1210,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   private boolean isVisibleNow () {
     return isLaidOut() && host.getVisibility() == View.VISIBLE && (preview || (shown && followAlpha > 0f));
+  }
+
+  /** On a tab screen and laid out: it may be slid away (invisible), it still slides back in. */
+  private boolean canAnimateHide () {
+    return isLaidOut() && (preview || (shown && followAlpha > 0f));
   }
 
   // Tabs
