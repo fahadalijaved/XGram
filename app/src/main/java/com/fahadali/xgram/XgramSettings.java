@@ -886,7 +886,7 @@ public final class XgramSettings {
 
   // Side menu
 
-  /** Side menu items that can be hidden: contacts, hub, calls, saved, invite, proxy, help, night, ghost. */
+  /** Side menu items that can be hidden (XgramDrawerItemsController.KEYS and TOGGLE_KEYS, all but settings), shown by default. */
   public boolean drawerItemHidden (String item) {
     return pmc().getBoolean("xgram_drawer_hide_" + item, false);
   }

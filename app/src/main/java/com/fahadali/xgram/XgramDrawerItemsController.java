@@ -30,13 +30,30 @@ import java.util.List;
 
 /** Settings → XGram → Side menu: which items the drawer shows (exteraGram custom drawer), and in what order. */
 public final class XgramDrawerItemsController extends RecyclerViewController<Void> implements View.OnClickListener {
-  // Telegram X's order. Settings can't be hidden, only moved; Night mode and Ghost mode sit below the line.
+  // Telegram X's order. Settings can't be hidden, only moved; Night mode, Expressive design and Ghost mode sit below the line.
   // XGram: public for the Compose Side menu page (xgram-m3e)
   public static final String[] KEYS = {"contacts", "hub", "calls", "saved", "bookmarks", "saved_by_chat", "settings", "invite", "proxy", "help"};
   public static final int[] NAMES = {R.string.Contacts, R.string.XgramHub, R.string.Calls, R.string.SavedMessages, R.string.XgramBookmarks, R.string.XgramSavedByChat, R.string.Settings, R.string.InviteFriends, R.string.Proxy, R.string.Help};
-  public static final String[] TOGGLE_KEYS = {"night", "ghost"};
-  public static final int[] TOGGLE_NAMES = {R.string.NightMode, R.string.XgramGhostMode};
+  public static final String[] TOGGLE_KEYS = {"night", "expressive", "ghost"};
+  public static final int[] TOGGLE_NAMES = {R.string.NightMode, R.string.XgramExpressive, R.string.XgramGhostMode};
   public static final String KEY_SETTINGS = "settings";
+  /** The Expressive design switch: only on Android 13 or newer (XgramExpressive.isAvailable), like the option itself. */
+  public static final String KEY_EXPRESSIVE = "expressive";
+
+  /** Whether the side menu can show this item on this device; the settings lists leave out the others. */
+  public static boolean isAvailable (String key) {
+    return !KEY_EXPRESSIVE.equals(key) || com.fahadali.xgram.appearance.XgramExpressive.isAvailable();
+  }
+
+  /** The switches below the side menu's line: they move only among themselves. */
+  public static boolean isToggleKey (@Nullable String key) {
+    for (String toggleKey : TOGGLE_KEYS) {
+      if (toggleKey.equals(key)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /** The stored key of a side menu item, in the drawer itself or on this screen; null for anything else. */
   @Nullable
@@ -66,6 +83,8 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
       return "help";
     } else if (id == R.id.btn_night) {
       return "night";
+    } else if (id == R.id.btn_xgramExpressive) {
+      return KEY_EXPRESSIVE;
     } else if (id == R.id.btn_xgramGhostMode) {
       return "ghost";
     }
@@ -108,10 +127,9 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
     };
     adapter.setItems(buildItems(), false);
     recyclerView.setAdapter(adapter);
-    reorder = new XgramReorder.Ui(recyclerView, adapter, XgramReorder.DRAWER, XgramDrawerItemsController::keyOf, item -> {
-      String key = keyOf(item);
-      return "night".equals(key) || "ghost".equals(key) ? "toggles" : "main"; // the line in the side menu stays between them
-    }, this::updateDrawer);
+    reorder = new XgramReorder.Ui(recyclerView, adapter, XgramReorder.DRAWER, XgramDrawerItemsController::keyOf,
+      item -> isToggleKey(keyOf(item)) ? "toggles" : "main", // the line in the side menu stays between them
+      this::updateDrawer);
   }
 
   /** Rows of this page. The settings search indexes these too. */
@@ -141,7 +159,7 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
       }
     }
     for (String key : TOGGLE_KEYS) {
-      if (XgramSettings.instance().drawerItemHidden(key)) {
+      if (isAvailable(key) && XgramSettings.instance().drawerItemHidden(key)) {
         count++;
       }
     }
@@ -160,6 +178,9 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     // No separator rows: they would be dragged along. XgramReorder draws the lines.
     for (String key : XgramReorder.ordered(XgramReorder.DRAWER, keys)) {
+      if (!isAvailable(key)) {
+        continue;
+      }
       int name = 0;
       for (int i = 0; i < keys.length; i++) {
         if (keys[i].equals(key)) {
