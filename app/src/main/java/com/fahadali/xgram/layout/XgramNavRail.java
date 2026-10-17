@@ -162,12 +162,12 @@ public final class XgramNavRail {
   static final int DEST_CHATS = 0, DEST_CALLS = 1, DEST_CONTACTS = 2, DEST_SAVED = 3, DEST_SETTINGS = 4;
 
   /** Filled (the active destination) Material icons; with another icon pack, that pack's drawing of them. */
-  private static final int[] DEST_FILLED = {
+  static final int[] DEST_FILLED = {
     R.drawable.baseline_chat_bubble_24, R.drawable.baseline_call_24, R.drawable.baseline_perm_contact_calendar_24,
     R.drawable.baseline_bookmark_24, R.drawable.baseline_settings_24
   };
   /** Outlined (every other destination): the XGram Line family, as the rest of Material 3 Expressive with the Classic pack. */
-  private static final int[] DEST_OUTLINED = {
+  static final int[] DEST_OUTLINED = {
     R.drawable.xgl_chat_bubble, R.drawable.xgl_phone, R.drawable.xgl_contacts,
     R.drawable.xgl_bookmark, R.drawable.xgl_settings
   };
@@ -176,8 +176,8 @@ public final class XgramNavRail {
   private static final String[] DEST_KEY = {null, "calls", "contacts", "saved", "settings"};
 
   /** Missed calls are looked up again at most this often while screens change (a missed call looks them up at once). */
-  private static final long MISSED_CHECK_INTERVAL_MS = 30_000L;
-  private static final int MISSED_FETCH = 20;
+  static final long MISSED_CHECK_INTERVAL_MS = 30_000L;
+  static final int MISSED_FETCH = 20;
 
   private final BaseActivity context;
   private final XgramTwoPane owner;
@@ -540,7 +540,7 @@ public final class XgramNavRail {
   }
 
   /** An incoming call nobody answered (not one declined here). */
-  private static boolean isMissedCall (@Nullable TdApi.Message message) {
+  static boolean isMissedCall (@Nullable TdApi.Message message) {
     if (message == null || message.isOutgoing || message.content == null || message.content.getConstructor() != TdApi.MessageCall.CONSTRUCTOR) {
       return false;
     }
@@ -763,7 +763,7 @@ public final class XgramNavRail {
 
   // Drawing helpers
 
-  private static TextPaint newPaint (int ts) {
+  static TextPaint newPaint (int ts) {
     TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     paint.setTypeface(XgramExpressive.typeface(ts, false));
     paint.setTextSize(Screen.dpf(XgramExpressive.textSizeSp(ts)));
@@ -772,7 +772,7 @@ public final class XgramNavRail {
   }
 
   /** Distance from a line's vertical center to its baseline. */
-  private static float centerOffset (Paint paint) {
+  static float centerOffset (Paint paint) {
     Paint.FontMetrics metrics = paint.getFontMetrics();
     return -(metrics.ascent + metrics.descent) / 2f;
   }
@@ -786,12 +786,12 @@ public final class XgramNavRail {
   }
 
   /** A rest-state icon: outlined (XGram Line) with the Classic pack, the pack's own drawing otherwise. */
-  private static Drawable restIcon (Resources res, int filled, int outlined) {
+  static Drawable restIcon (Resources res, int filled, int outlined) {
     return Drawables.get(res, classicPack() ? outlined : filled);
   }
 
   /** The active destination's icon: the filled Material icon with the Classic pack, the pack's own drawing otherwise. */
-  private static Drawable activeIcon (Resources res, int filled, int outlined) {
+  static Drawable activeIcon (Resources res, int filled, int outlined) {
     if (classicPack()) {
       Drawable drawable = ResourcesCompat.getDrawable(res, filled, null); // not through the icon pack table
       if (drawable != null) {
@@ -819,7 +819,7 @@ public final class XgramNavRail {
     GLYPH_PAINT.setStrokeJoin(Paint.Join.ROUND);
   }
 
-  private static void drawIcon (Canvas c, @Nullable Drawable drawable, float cx, float cy, float sizePx, int color, float alpha) {
+  static void drawIcon (Canvas c, @Nullable Drawable drawable, float cx, float cy, float sizePx, int color, float alpha) {
     if (drawable == null || alpha <= 0f) {
       return;
     }
@@ -870,12 +870,12 @@ public final class XgramNavRail {
 
   /** A badge count as the expanded rail's trailing text (and the descriptions): null for none. */
   @Nullable
-  private static String badgeText (int count) {
+  static String badgeText (int count) {
     return count > 0 ? Strings.buildCounter(count) : null;
   }
 
   /** "Chats, 5 unread" / "Calls, 2 missed" for screen readers. */
-  private static String describe (int dest, int count, boolean dot) {
+  static String describe (int dest, int count, boolean dot) {
     String label = Lang.getString(DEST_LABEL[dest]);
     if (count > 0) {
       return Lang.getString(dest == DEST_CALLS ? R.string.XgramNavRailMissed : R.string.XgramNavRailUnread, label, Strings.buildCounter(count));
@@ -890,7 +890,7 @@ public final class XgramNavRail {
    * A view with an M3 state layer (ripple: hover, focus and press) on a shape inside it: the indicator of a
    * destination, the circle of an icon button, a row. The state layer is the content color at 10%.
    */
-  private abstract static class StateView extends View {
+  abstract static class StateView extends View {
     private final GradientDrawable mask;
     private final RippleDrawable ripple;
     private int rippleColor;

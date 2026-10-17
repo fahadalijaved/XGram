@@ -122,7 +122,10 @@ public class CallListController extends RecyclerViewController<Void> implements
     return messages != null && !messages.isEmpty();
   }
 
-  /** XGram M3E: MainController moves its pager down while the connection pill is in: the list scrolls that much more. */
+  /**
+   * XGram M3E: MainController moves its pager down while the connection pill is in: the list scrolls that much more.
+   * XGram: also the room of the bottom navigation bar (XgramNavBar), so the last call clears it.
+   */
   private int xgramPillRoom;
 
   public void xgramSetPillRoom (int px) {

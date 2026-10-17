@@ -361,6 +361,18 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     syncRootHeader();
     syncLeftHeader();
     syncRail();
+    // The bottom navigation bar of narrow windows (XgramNavBar) comes or goes with the window and the rail
+    try {
+      if (root != null) {
+        root.xgramUpdateNavBar();
+      }
+      if (leftMain != null && leftMain != root) {
+        leftMain.xgramUpdateNavBar(); // kept for the next unfold: never has one
+      }
+    } catch (Throwable t) {
+      Log.e("XGram: bottom navigation bar failed", t);
+      android.util.Log.e("XGram", "bottom navigation bar failed", t);
+    }
   }
 
   // Navigation rail (Material 3 Expressive)
@@ -476,6 +488,22 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   public static boolean isRailShown (@Nullable BaseActivity context) {
     XgramTwoPane twoPane = context != null ? context.xgramTwoPane() : null;
     return twoPane != null && twoPane.railShown;
+  }
+
+  /**
+   * A narrow window (a phone or a Fold's cover screen, in either orientation: the rail's 600 x 480dp not reached) with
+   * one pane and no rail: where the chat list gets the bottom navigation bar ({@link XgramNavBar}) when it is on.
+   * With both on, the rail shows on wide windows and the bar on narrow ones.
+   */
+  public static boolean isNavBarWindow (@Nullable BaseActivity context) {
+    if (context == null) {
+      return false;
+    }
+    XgramTwoPane twoPane = context.xgramTwoPane();
+    if (twoPane != null && (twoPane.isActive || twoPane.railShown)) {
+      return false;
+    }
+    return !isWideEnough(context, false);
   }
 
   /**

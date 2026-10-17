@@ -386,6 +386,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramNavRail) {
           view.getToggler().setRadioEnabled(settings.navRail(), isUpdate);
           setReason(view, com.fahadali.xgram.layout.XgramNavRail.settingReason());
+        } else if (id == R.id.btn_xgramBottomNav) {
+          view.getToggler().setRadioEnabled(settings.bottomNav(), isUpdate);
         } else if (id == R.id.btn_xgramHideFab) {
           view.getToggler().setRadioEnabled(settings.hideFab(), isUpdate);
         } else if (id == R.id.btn_xgramConnectionStatusStart) {
@@ -675,13 +677,18 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
     items.add(header(R.string.XgramLayout));
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram M3E: the navigation rail of wide windows (only with Expressive design)
+      // XGram M3E: the navigation rail of wide windows (only with Expressive design); the bottom navigation bar of
+      // narrow ones (both looks)
       addRows(items,
         toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub),
-        toggle(R.id.btn_xgramNavRail, R.string.XgramNavRailOption, R.string.XgramNavRailOptionSub)
+        toggle(R.id.btn_xgramNavRail, R.string.XgramNavRailOption, R.string.XgramNavRailOptionSub),
+        toggle(R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption, R.string.XgramBottomNavOptionSub)
       );
     } else {
-      addRows(items, toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub));
+      addRows(items,
+        toggle(R.id.btn_xgramTwoPane, R.string.XgramTwoPane, R.string.XgramTwoPaneSub),
+        toggle(R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption, R.string.XgramBottomNavOptionSub)
+      );
     }
     items.add(description(R.string.XgramTwoPaneInfo));
     addRows(items,
@@ -1642,6 +1649,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       settings.setNavRail(adapter.toggleView(v));
       if (context.xgramTwoPane() != null) {
         context.xgramTwoPane().update(); // the rail comes or goes at once, and the chat list's header with it
+      }
+      return;
+    } else if (id == R.id.btn_xgramBottomNav) {
+      settings.setBottomNav(adapter.toggleView(v));
+      if (context.xgramTwoPane() != null) {
+        context.xgramTwoPane().update(); // the bottom navigation bar comes or goes at once (the chat list hears it too)
       }
       return;
     } else if (id == R.id.btn_xgramExportSettings) {

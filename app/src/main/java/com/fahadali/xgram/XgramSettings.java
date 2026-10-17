@@ -1313,6 +1313,27 @@ public final class XgramSettings {
     pmc().putInt(KEY_MISSED_CALLS_SEEN + accountId, date);
   }
 
+  // Navigation bar (Appearance > Layout, see com.fahadali.xgram.layout.XgramNavBar): the floating bar at the bottom of
+  // the chat list on narrow windows (wide ones keep the rail). Read while the layout is checked, so cached.
+
+  public static final String KEY_BOTTOM_NAV = "xgram_bottom_nav";
+
+  private volatile Boolean bottomNav;
+
+  /** On narrow windows (a phone, a Fold's cover screen) the chat list's Chats and Calls tabs are a bar at the bottom. */
+  public boolean bottomNav () {
+    Boolean value = bottomNav;
+    if (value == null) {
+      bottomNav = value = pmc().getBoolean(KEY_BOTTOM_NAV, false);
+    }
+    return value;
+  }
+
+  public void setBottomNav (boolean value) {
+    bottomNav = value;
+    put(KEY_BOTTOM_NAV, value);
+  }
+
   // Settings search: the results opened last (search hit keys, newest first), shown before anything is typed.
   // Not a setting: left out of backups.
 

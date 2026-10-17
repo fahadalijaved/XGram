@@ -196,7 +196,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       checkComposeWrapPaddings();
     }
     // XGram M3E: the update snackbar floats above the bottom folder tabs too, as the connection one does
-    Views.setPaddingBottom(updateSnackBar, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramConnSnackInset() : extraBottomInsetWithoutIme);
+    Views.setPaddingBottom(updateSnackBar, xgramUpdateSnackInset());
     if (xgramConnSnackBar != null) {
       Views.setPaddingBottom(xgramConnSnackBar, xgramConnSnackInset()); // XGram
     }
@@ -207,7 +207,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private void updateBottomBarMargins () {
     if (bottomBar != null) {
       // XGram M3E: the floating update snackbar leaves the bottom bar where it is, above the navigation bar
-      float snackFactor = updateSnackBar != null && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? updateSnackBar.getVisibilityFactor() : 0f;
+      float snackFactor = updateSnackBar != null && xgramSnackPushes() ? updateSnackBar.getVisibilityFactor() : 0f;
       int height = Math.round(extraBottomInsetWithoutIme * (1f - snackFactor));
       Views.setBottomMargin(bottomBar, height);
       bottomBarSpace.setLayoutHeight(height, true);
@@ -288,6 +288,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     contentView.addView(composeWrap);
     xgramUpdateComposeVisibility();
     xgramConnSetup(); // XGram M3E: connection pill and snackbar
+    xgramContentView = contentView;
+    xgramUpdateNavBar(); // XGram: the bottom navigation bar of narrow windows (Appearance > Layout)
 
     makeStartupChecks();
 
@@ -331,6 +333,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           }
           xgramFolderMenu = true; // XGram M3E: the connection pill (3dp up) would draw over the folder menu
           xgramConnUpdateSuppressed();
+          xgramUpdateNavBarHidden(); // XGram: so would the bottom navigation bar, over the bottom folder tabs' menu
         }
 
         @Override
@@ -349,6 +352,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           selectedPagerItemId = INVALID_PAGER_ITEM_ID;
           xgramFolderMenu = false;
           xgramConnUpdateSuppressed();
+          xgramUpdateNavBarHidden(); // XGram
         }
 
         @Override
@@ -918,6 +922,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     composeWrap.forceHide();
     xgramSearching = true; // XGram
     xgramConnUpdateSuppressed();
+    xgramUpdateNavBarHidden();
   }
 
   @Override
@@ -926,6 +931,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     composeWrap.showIfWasHidden();
     xgramSearching = false; // XGram
     xgramConnUpdateSuppressed();
+    xgramUpdateNavBarHidden();
   }
 
   // XGram M3E: no connection pill while chats are selected (the selection app bar is up)
@@ -935,6 +941,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     super.onEnterSelectMode();
     xgramSelecting = true;
     xgramConnUpdateSuppressed();
+    xgramUpdateNavBarHidden(); // XGram: the selection takes the bottom (its floating toolbar, the counter)
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && composeWrap != null && !inSearchMode()) {
       // XGram M3E: the selection's floating toolbar (ChatsController) takes the bottom: the compose FAB steps aside
       composeWrap.forceHide();
@@ -946,6 +953,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     super.onLeaveSelectMode();
     xgramSelecting = false;
     xgramConnUpdateSuppressed();
+    xgramUpdateNavBarHidden();
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && composeWrap != null && !inSearchMode()) {
       composeWrap.showIfWasHidden(); // XGram M3E
     }
@@ -953,10 +961,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   /**
    * XGram M3E: what a floating toolbar over the chat list keeps clear of at the bottom (the navigation bar and, when
-   * the folder tabs are at the bottom, their bar), as the snackbars do.
+   * the folder tabs are at the bottom, their bar), as the snackbars do. Not the bottom navigation bar (XgramNavBar):
+   * it steps aside while chats are selected.
    */
   public int xgramFloatingBottomInset () {
-    return xgramConnSnackInset();
+    return xgramBottomBarsInset();
   }
 
   /*@Override
@@ -1117,6 +1126,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramRailPageChanged(); // XGram M3E: the app bar title and the rail's pill follow the page
     if (!inSearchMode()) {
       composeWrap.show();
+      if (xgramNavBar != null) {
+        xgramNavBar.setScrollHidden(false); // XGram: another page brings the bottom navigation bar back, as the FAB
+      }
     }
     if (hasFolders()) {
       if (composeWrap.getMainButtonId() != R.id.btn_float_compose) {
@@ -1185,9 +1197,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private void checkComposeWrapPaddings () {
     if (composeWrap != null) {
-      int paddingBottom = (displayTabsAtBottom() ? getHeaderHeight() : 0) + extraBottomInsetWithoutIme;
+      // XGram: the FAB floats above the bottom navigation bar (XgramNavBar), which floats above the folder tabs
+      int paddingBottom = xgramBottomBarsInset() + xgramNavBarRoom();
       composeWrap.setPadding(composeWrap.getPaddingLeft(), composeWrap.getPaddingTop(), composeWrap.getPaddingRight(), paddingBottom);
       composeWrap.setClipToPadding(paddingBottom == 0);
+    }
+    if (xgramNavBar != null) {
+      xgramNavBar.setBottomOffset(xgramBottomBarsInset()); // XGram
     }
   }
 
@@ -1195,7 +1211,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (!Config.CHAT_FOLDERS_HIDE_BOTTOM_BAR_ON_SCROLL && displayTabsAtBottom()) {
       Views.setBottomMargin(getViewPager(), getHeaderHeight());
       // XGram M3E: the floating update snackbar does not push the content up
-      Views.setBottomMargin(pagerWrap, updateSnackBar != null && !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Math.round(updateSnackBar.getHeight() * updateSnackBar.getVisibilityFactor()) : 0); // FIXME
+      Views.setBottomMargin(pagerWrap, updateSnackBar != null && xgramSnackPushes() ? Math.round(updateSnackBar.getHeight() * updateSnackBar.getVisibilityFactor()) : 0); // FIXME
     } else {
       Views.setBottomMargin(getViewPager(), 0);
       Views.setBottomMargin(pagerWrap, 0);
@@ -1325,6 +1341,21 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       return;
     }
     xgramPillRoom = px;
+    xgramApplyPageRooms();
+  }
+
+  /** XGram: bottom padding the pages add for the bottom navigation bar (XgramNavBar), so their last row clears it. */
+  private int xgramPagesNavBarRoom;
+
+  private void xgramSetNavBarRoom (int px) {
+    if (xgramPagesNavBarRoom == px) {
+      return;
+    }
+    xgramPagesNavBarRoom = px;
+    xgramApplyPageRooms();
+  }
+
+  private void xgramApplyPageRooms () {
     SparseArrayCompat<ViewController<?>> controllers = getAllCachedControllers();
     if (controllers != null) {
       for (int i = 0; i < controllers.size(); i++) {
@@ -1334,11 +1365,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramApplyPillRoom(pendingChatsController);
   }
 
+  /** The connection pill's room and the bottom navigation bar's, both as the pages' extra bottom padding. */
   private void xgramApplyPillRoom (@Nullable ViewController<?> c) {
+    final int room = xgramPillRoom + xgramPagesNavBarRoom;
     if (c instanceof ChatsController) {
-      ((ChatsController) c).xgramSetPillRoom(xgramPillRoom);
+      ((ChatsController) c).xgramSetPillRoom(room);
     } else if (c instanceof CallListController) {
-      ((CallListController) c).xgramSetPillRoom(xgramPillRoom);
+      ((CallListController) c).xgramSetPillRoom(room);
     }
   }
 
@@ -1392,8 +1425,28 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
   }
 
+  /** Where the floating snackbars sit: above the navigation bar, the bottom folder tabs and the bottom navigation bar. */
   private int xgramConnSnackInset () {
+    return xgramBottomBarsInset() + xgramNavBarRoom();
+  }
+
+  /** XGram: the navigation bar and, when the folder tabs are at the bottom, their bar. */
+  private int xgramBottomBarsInset () {
     return extraBottomInsetWithoutIme + (displayTabsAtBottom() ? getHeaderHeight() : 0);
+  }
+
+  /**
+   * XGram: the update snackbar's bottom padding. It floats (above the bottom folder tabs and the bottom navigation
+   * bar) with Expressive design or while the bottom navigation bar shows; otherwise it sits on the navigation bar and
+   * pushes the bottom folder tabs and the list up, as in Telegram X.
+   */
+  private int xgramUpdateSnackInset () {
+    return xgramSnackPushes() ? extraBottomInsetWithoutIme : xgramConnSnackInset();
+  }
+
+  /** XGram: the classic update snackbar pushes the bottom folder tabs and the list up (not over the bottom bar). */
+  private boolean xgramSnackPushes () {
+    return !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramNavBar == null;
   }
 
   private void xgramConnCheckSnackBar () {
@@ -1510,7 +1563,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (updateSnackBar == null) {
       updateSnackBar = new SnackBar(context);
       // XGram M3E: it floats above the bottom folder tabs as the connection snackbar does (see onBottomInsetChanged)
-      Views.setPaddingBottom(updateSnackBar, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramConnSnackInset() : extraBottomInsetWithoutIme);
+      Views.setPaddingBottom(updateSnackBar, xgramUpdateSnackInset());
       updateSnackBar.setCallback(new SnackBar.Callback() {
         @Override
         public void onSnackBarTransition (SnackBar v, float factor) {
@@ -1519,6 +1572,12 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
             // room, 8dp above it, as for the connection snackbar
             xgramStopFabSettle();
             composeWrap.setTranslationY(-xgramFabLiftFor(v) * factor);
+            return;
+          }
+          if (xgramNavBar != null) {
+            // XGram: above the bottom navigation bar (see xgramUpdateSnackInset) it leaves the folder tabs and the
+            // list where they are; the FAB, already above the bar, makes room for the snackbar itself
+            composeWrap.setTranslationY(-Math.max(0, v.getMeasuredHeight() - v.getPaddingBottom()) * factor);
             return;
           }
           float offsetBySnackBar = v.getMeasuredHeight() * factor;
@@ -1585,6 +1644,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     com.fahadali.xgram.appearance.XgramMotion.removeLiftListener(xgramFabLift); // XGram: extended FAB
     com.fahadali.xgram.XgramSettings.instance().removeListener(xgramSettingsListener); // XGram
     xgramConnDestroy(); // XGram
+    if (xgramNavBar != null) {
+      xgramNavBar.destroy(); // XGram: its badge and theme listeners go
+    }
     tdlib.listeners().removeOptionListener(this);
     context().appUpdater().removeListener(this);
     tdlib.context().global().removeCountersListener(this);
@@ -1847,9 +1909,12 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     return com.fahadali.xgram.layout.XgramTwoPane.isRailShown(context);
   }
 
-  /** XGram M3E: the app bar shows the page's title, not the Chats / Calls tabs (never on the hidden right pane root). */
+  /**
+   * XGram M3E: the app bar shows the page's title, not the Chats / Calls tabs (never on the hidden right pane root):
+   * they are on the navigation rail, or on the bottom navigation bar (XgramNavBar, also in the classic look).
+   */
   private boolean xgramRailTitle () {
-    return xgramRailShown() && !hasFolders() && !xgramIsHiddenRoot();
+    return (xgramRailShown() || xgramNavBar != null) && !hasFolders() && !xgramIsHiddenRoot();
   }
 
   /** XGram: the navigation rail came or went (XgramTwoPane re-applies the header for the ☰ and the tabs). */
@@ -1859,9 +1924,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramFitToggleHeader();
   }
 
-  /** XGram M3E: the header again (folder tabs came or went), for the navigation rail's title or tabs. */
+  /** XGram M3E: the header again (folder tabs came or went), for the navigation rail's (or bar's) title or tabs. */
   private void xgramReapplyHeader () {
-    if (xgramRailShown() && headerView != null && isFocused() && !inTransformMode()) {
+    if ((xgramRailShown() || xgramNavBar != null) && headerView != null && isFocused() && !inTransformMode()) {
       headerView.setTitle(this);
     }
   }
@@ -1882,9 +1947,12 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
   }
 
-  /** XGram M3E: the page changed: the app bar title (Chats or Calls) and the navigation rail's pill follow it. */
+  /**
+   * XGram M3E: the page changed: the app bar title (Chats or Calls) and the navigation rail's pill (or the bottom
+   * navigation bar's indicator) follow it.
+   */
   private void xgramRailPageChanged () {
-    if (!xgramRailShown()) {
+    if (!xgramRailShown() && xgramNavBar == null) {
       return;
     }
     if (xgramRailTitle() && headerView != null) {
@@ -1893,6 +1961,112 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
     if (twoPane != null) {
       twoPane.onRailPageChanged(this);
+    }
+    if (xgramNavBar != null) {
+      xgramNavBar.onPageChanged();
+    }
+  }
+
+  // XGram: the floating navigation bar at the bottom of the chat list on narrow windows (XgramNavBar, Appearance >
+  // Layout > Navigation bar). Chats and Calls are its pages, as with the navigation rail of wide windows; the ☰ and
+  // the side menu stay.
+
+  private @Nullable FrameLayoutFix xgramContentView;
+  private @Nullable com.fahadali.xgram.layout.XgramNavBar xgramNavBar;
+  /** Whether the header was last built with the bar (no Chats / Calls tabs) or without it. */
+  private boolean xgramNavBarHeader;
+
+  /** On a narrow window with one pane and no rail, for the chat list on screen (never the panes' own chat list). */
+  private boolean xgramNeedNavBar () {
+    if (isDestroyed() || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP || !com.fahadali.xgram.XgramSettings.instance().bottomNav()) {
+      return false; // (its state layers are ripples, its shadow an elevation)
+    }
+    if (xgramIsHiddenRoot() || com.fahadali.xgram.layout.XgramTwoPane.isPaneChatList(this)) {
+      return false;
+    }
+    return com.fahadali.xgram.layout.XgramTwoPane.isNavBarWindow(context);
+  }
+
+  /**
+   * XGram: the bottom navigation bar comes or goes (its setting, the window, the rail, two panes; XgramTwoPane#update
+   * on every change) and follows the destinations, the page and the badges.
+   */
+  public void xgramUpdateNavBar () {
+    if (xgramContentView == null || composeWrap == null) {
+      return; // no view yet: onCreateView checks it
+    }
+    final boolean need = xgramNeedNavBar();
+    boolean changed = false;
+    if (need && xgramNavBar == null) {
+      com.fahadali.xgram.layout.XgramNavBar bar = new com.fahadali.xgram.layout.XgramNavBar(context, this);
+      bar.setBottomOffset(xgramBottomBarsInset());
+      int index = xgramContentView.indexOfChild(composeWrap); // under the FAB and its menu
+      bar.attach(xgramContentView, index != -1 ? index : xgramContentView.getChildCount());
+      xgramNavBar = bar;
+      changed = true;
+    } else if (!need && xgramNavBar != null) {
+      com.fahadali.xgram.layout.XgramNavBar bar = xgramNavBar;
+      xgramNavBar = null;
+      bar.destroy();
+      xgramContentView.removeView(bar.view());
+      changed = true;
+    }
+    if (changed) {
+      xgramLayoutNavBar();
+    }
+    xgramSyncNavBarHeader();
+    if (xgramNavBar != null) {
+      xgramNavBar.setForceHidden(xgramNavBarForceHidden(), false);
+      xgramNavBar.sync();
+    }
+  }
+
+  /** Search, chat selection and the bottom folder tabs' menu take the bottom of the list: the bar steps aside. */
+  private boolean xgramNavBarForceHidden () {
+    return xgramSearching || xgramSelecting || (xgramFolderMenu && displayTabsAtBottom());
+  }
+
+  /** The FAB, the snackbars and the pages make room for the bar (or take it back); the bar sits on what is below. */
+  private void xgramLayoutNavBar () {
+    checkComposeWrapPaddings(); // places the bar too
+    Views.setPaddingBottom(updateSnackBar, xgramUpdateSnackInset());
+    if (xgramConnSnackBar != null) {
+      Views.setPaddingBottom(xgramConnSnackBar, xgramConnSnackInset());
+    }
+    updateBottomBarMargins();
+    checkPagerMargins();
+    xgramSetNavBarRoom(xgramNavBarRoom());
+  }
+
+  /** What the FAB, the snackbars and the pages keep clear for the bottom navigation bar, in px. */
+  private int xgramNavBarRoom () {
+    return xgramNavBar != null ? com.fahadali.xgram.layout.XgramNavBar.room() : 0;
+  }
+
+  /**
+   * The header again when the bar came or went since it was built: the Chats / Calls tabs, or the page's title. A
+   * header built later (on the way back from a chat, or once search or selection ends) picks it up by itself.
+   */
+  private void xgramSyncNavBarHeader () {
+    final boolean shown = xgramNavBar != null;
+    if (xgramNavBarHeader == shown) {
+      return;
+    }
+    if (headerView == null || !isFocused() || inTransformMode()) {
+      xgramNavBarHeader = shown;
+      return;
+    }
+    if (navigationController != null && navigationController.isAnimating()) {
+      return; // the next stack change tries again
+    }
+    headerView.setTitle(this);
+    xgramNavBarHeader = shown;
+  }
+
+  /** The bar steps aside while search, chat selection or the bottom folder tabs' menu last (and comes back after). */
+  private void xgramUpdateNavBarHidden () {
+    if (xgramNavBar != null) {
+      xgramNavBar.setForceHidden(xgramNavBarForceHidden(), isFocused());
     }
   }
 
@@ -1999,6 +2173,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         composeWrap.xgramSetExtendedLabel(Lang.getString(xgramFabLabelRes));
       }
     }
+    if (xgramNavBar != null) {
+      xgramNavBar.onLanguageChanged(); // XGram: its labels, and the order of its destinations for the text direction
+    }
   }
 
   /**
@@ -2049,6 +2226,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   public boolean showComposeWrap (ViewController<?> controller) {
     if (!inSearchMode() && (controller == null || getCurrentPagerItem() == controller)) {
       composeWrap.show();
+      if (xgramNavBar != null) {
+        xgramNavBar.setScrollHidden(false); // XGram: the bottom navigation bar comes back with the FAB
+      }
       return true;
     }
     return false;
@@ -2069,6 +2249,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           }
         }
         composeWrap.hide();
+        if (xgramNavBar != null) {
+          xgramNavBar.setScrollHidden(true); // XGram: scrolling down hides the bottom navigation bar with the FAB
+        }
         if (Config.CHAT_FOLDERS_HIDE_BOTTOM_BAR_ON_SCROLL) {
           hideBottomBar();
         }
@@ -2564,6 +2747,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       UI.post(this::xgramUpdateComposeVisibility);
     } else if (com.fahadali.xgram.XgramSettings.KEY_ALL_CHATS_LABEL.equals(key)) {
       UI.post(this::onFoldersAppearanceChanged);
+    } else if (com.fahadali.xgram.XgramSettings.KEY_BOTTOM_NAV.equals(key)) {
+      UI.post(this::xgramUpdateNavBar); // the bottom navigation bar comes or goes at once
     } else if (com.fahadali.xgram.XgramSettings.hideFoldersKey(tdlib.accountId()).equals(key)) {
       UI.post(() -> {
         if (!isDestroyed() && Settings.instance().chatFoldersEnabled()) {
@@ -3691,6 +3876,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (twoPane != null) {
         twoPane.onRailDestinationsChanged(); // Calls is a page of this list only without folders
       }
+      xgramUpdateNavBar(); // XGram: the same for the bottom navigation bar; the folder tabs may be at the bottom now
+      xgramLayoutNavBar();
     }
   }
 

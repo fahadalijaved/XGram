@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram round 7: the floating navigation bar at the bottom of the chat list on narrow screens (XgramNavBar) -->
+<resources>
+  <!-- The Saved messages destination's label under its icon (the full name stays its description) -->
+  <string name="XgramBottomNavSaved">Saved</string>
+  <!-- Appearance > Layout -->
+  <string name="XgramBottomNavOption">Navigation bar</string>
+  <string name="XgramBottomNavOptionSub">Chats, Contacts and Settings at the bottom on phones</string>
+  <item type="id" name="btn_xgramBottomNav" />
+</resources>

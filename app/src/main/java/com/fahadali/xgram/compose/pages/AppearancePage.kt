@@ -161,6 +161,15 @@ fun AppearancePage() {
           host.activity.xgramTwoPane()?.update()
         }
       }
+      // The floating navigation bar at the bottom of the chat list on narrow windows (both looks); with the rail on
+      // too, the rail shows on wide windows and the bar on narrow ones
+      switch(
+        R.id.btn_xgramBottomNav, s(R.string.XgramBottomNavOption), s(R.string.XgramBottomNavOptionSub),
+        checked = settings.bottomNav()
+      ) {
+        settings.setBottomNav(it)
+        host.activity.xgramTwoPane()?.update()
+      }
     }
     description(R.string.XgramTwoPaneInfo)
     // How wide the panes are: half each, or the width set with the handle on the line between them. Both only with
