@@ -191,6 +191,14 @@ public class ChartLayout extends FrameLayout implements FactorAnimator.Target, A
   // Impl
 
 
+  /**
+   * XGram M3E: a chart card's role: surfaceContainerLow, or with Pure black (where that is the black page itself) the
+   * card step. BaseChartView paints the selection dots' background in the same role.
+   */
+  public static int xgramCardRole () {
+    return com.fahadali.xgram.appearance.XgramAmoled.role(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT);
+  }
+
   private int chartType;
   private BaseChartView<?, ?> chartView;
   private TdApi.Sticker placeholderSticker;
@@ -202,7 +210,7 @@ public class ChartLayout extends FrameLayout implements FactorAnimator.Target, A
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram M3E: each chart on a surfaceContainerLow card with 28dp corners (kept over the list's tile corners),
       // the chart clipped to it
-      com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable card = com.fahadali.xgram.appearance.XgramR5Sheets.applyCard(this, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
+      com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable card = com.fahadali.xgram.appearance.XgramR5Sheets.applyCard(this, xgramCardRole(), com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
       card.setCornerTarget(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL, false);
       if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
         setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);

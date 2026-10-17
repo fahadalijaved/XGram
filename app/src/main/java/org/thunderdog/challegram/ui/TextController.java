@@ -611,7 +611,8 @@ public class TextController extends ViewController<TextController.Arguments> imp
       top = hasFirst ? top - padding : -corner;
       bottom = hasLast ? bottom + padding : parent.getHeight() + corner;
       rect.set(Screen.dp(XGRAM_TILE_INSET), top, parent.getWidth() - Screen.dp(XGRAM_TILE_INSET), bottom);
-      tilePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW));
+      // with Pure black, surfaceContainerLow is the black page itself: the tile takes the card step there
+      tilePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.role(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT)));
       c.drawRoundRect(rect, corner, corner, tilePaint);
 
       numberPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));

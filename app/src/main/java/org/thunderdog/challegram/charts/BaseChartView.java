@@ -311,7 +311,7 @@ public abstract class BaseChartView<T extends ChartData, L extends LineViewData>
             // card's surfaceContainerLow (the chart sits on that card, see ChartLayout)
             final int onSurfaceVariant = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
             final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
-            final int card = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW);
+            final int card = com.fahadali.xgram.appearance.XgramExpressive.color(org.thunderdog.challegram.widget.ChartLayout.xgramCardRole());
             signaturePaint.setColor(onSurfaceVariant);
             signaturePaint2.setColor(onSurfaceVariant);
             bottomSignaturePaint.setColor(onSurfaceVariant);
