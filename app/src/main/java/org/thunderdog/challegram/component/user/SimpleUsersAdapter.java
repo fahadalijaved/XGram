@@ -197,12 +197,31 @@ public class SimpleUsersAdapter extends RecyclerView.Adapter<SimpleUsersAdapter.
       return 0;
     }
     int fullHeight = Screen.dp(UserView.DEFAULT_HEIGHT) * users.size() + (needCounter ? Screen.dp(42f) : 0);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      fullHeight += Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) * Math.max(0, users.size() - 1); // XGram: the 2dp gaps between tiles
+    }
     return maxHeight < 0 ? fullHeight : Math.min(maxHeight, fullHeight);
   }
 
   @Override
   public int measureScrollTop (int position) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: a tile's top is after the tiles above it and their 2dp gaps (the decoration gives each but the first one)
+      return (Screen.dp(UserView.DEFAULT_HEIGHT) + Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP)) * position;
+    }
     return Screen.dp(UserView.DEFAULT_HEIGHT) * position;
+  }
+
+  /**
+   * XGram M3E: the segmented groups of the attach sheet's contact and bot lists (16dp inset, 2dp gaps, the tiles'
+   * corners by position). Null with Expressive design off.
+   */
+  @Nullable
+  public static RecyclerView.ItemDecoration xgramNewTileDecoration () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return null;
+    }
+    return new com.fahadali.xgram.appearance.XgramR5People.TileGroupDecoration(SimpleUserHolder.VIEW_TYPE_USER);
   }
 
   static class SimpleUserHolder extends RecyclerView.ViewHolder {
@@ -238,6 +257,11 @@ public class SimpleUsersAdapter extends RecyclerView.Adapter<SimpleUsersAdapter.
           if (onClickListener != null || onLongClickListener != null) {
             userView.setOnClickListener(onClickListener);
             userView.setOnLongClickListener(onLongClickListener);
+            if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+              // XGram M3E: a segmented surfaceBright tile (xgramNewTileDecoration) pressing to 16dp corners
+              com.fahadali.xgram.appearance.XgramR5People.bindTile(userView);
+              userView.xgramSetSelectableTile(onLongClickListener != null);
+            } else
             ViewUtils.setBackground(userView, Theme.fillingSelector(ColorId.chatBackground));
             Views.setClickable(userView);
           }

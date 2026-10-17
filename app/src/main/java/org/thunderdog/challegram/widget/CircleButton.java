@@ -497,7 +497,52 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   private float xgramLabelWidth, xgramExtend;
 
   public boolean xgramHasLabel () {
-    return xgramLabel != null && xgramFab && xgramToggle;
+    return xgramLabel != null && xgramFab && (xgramToggle || xgramPlainExtended);
+  }
+
+  // XGram M3E round 6: an extended FAB that is not a FAB menu's toggle (the map's "Directions"): icon and label in
+  // the FAB's container, anchored to the view's end, laid out at xgramLayoutWidth().
+
+  private boolean xgramPlainExtended;
+
+  /** Makes this FAB a plain extended FAB with {@code label} (null: a plain FAB again). Expressive FAB sizes only. */
+  public void xgramSetPlainExtendedLabel (@Nullable CharSequence label) {
+    if (xgramMorph == null || !xgramFab || xgramToggle) {
+      return;
+    }
+    this.xgramPlainExtended = !StringUtils.isEmpty(label);
+    this.xgramLabel = xgramPlainExtended ? label.toString() : null;
+    this.xgramExtend = xgramPlainExtended ? 1f : 0f;
+    xgramMeasureLabel();
+    xgramApplyShape();
+  }
+
+  /**
+   * XGram M3E round 6: the container and content roles and the corner of an Expressive button (a 40dp small FAB on
+   * surfaceContainerHigh with 12dp corners, a filled tonal icon button on secondaryContainer...). {@code floating}
+   * draws the container as a floating surface (the chip step with Pure black). A FAB keeps its corner when pressed;
+   * an icon button still morphs to 8dp.
+   */
+  public void xgramSetContainer (int containerRole, int contentRole, float cornerDp, boolean floating) {
+    if (xgramMorph == null || xgramChatFab) {
+      return;
+    }
+    this.xgramContainerRole = containerRole;
+    this.xgramIconRole = contentRole;
+    if (floating) {
+      xgramMorph.setFloatingColorRole(containerRole);
+    } else {
+      xgramMorph.setColorRole(containerRole);
+    }
+    xgramMorph.setCorners(cornerDp, cornerDp, cornerDp, cornerDp);
+    xgramMask.setCorners(cornerDp, cornerDp, cornerDp, cornerDp);
+    if (cornerDp != XgramExpressive.CORNER_FULL) {
+      xgramMorph.setPressedCorner(cornerDp);
+      xgramMask.setPressedCorner(cornerDp);
+    }
+    xgramUpdateRippleColor();
+    invalidate();
+    invalidateOutline();
   }
 
   /** Makes the toggle FAB an extended FAB with {@code label} (null: a plain FAB again). */
@@ -568,7 +613,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     final float size = Math.min(xgramSizeDp, xgramSizeDp + (56f - xgramSizeDp) * p);
     final float corner = Math.max(0f, Math.min(size / 2f, fabCorner + (28f - fabCorner) * p));
     // The shrinking container stays in the top end corner of the FAB's box
-    final int gravity = xgramToggle ? Gravity.TOP | (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) : Gravity.CENTER;
+    final int gravity = xgramToggle || xgramPlainExtended ? Gravity.TOP | (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) : Gravity.CENTER;
     final float containerW = xgramContainerDp(size); // XGram: an extended FAB is wider, anchored to the end
     xgramMorph.setSize(containerW, size, gravity);
     xgramMask.setSize(containerW, size, gravity);
@@ -944,7 +989,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
 
     if (xgramRipple != null) {
       xgramUpdateRippleColor();
-      if (xgramToggle && sticker == null && icon != null) {
+      if ((xgramToggle || xgramPlainExtended) && sticker == null && icon != null) {
         xgramDrawToggleIcon(c, width);
         return;
       }

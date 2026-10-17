@@ -199,6 +199,10 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     themeProvider.addThemeBackgroundColorListener(this, ColorId.placeholder);
     setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, mapHeight, Gravity.TOP));
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramStyle(shadowView, mapHeight);
+    }
+
     // Google Maps initialization
 
     Background.instance().post(() -> {
@@ -216,6 +220,78 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     if (v.getId() == R.id.btn_gps) {
       checkLocationSettings(true, false);
     }
+  }
+
+  // XGram M3E: the map is a card with 16dp corners, 16dp in from the sheet's sides under its 28dp top; the spot under
+  // the pin is a soft 6x3dp onSurface shadow at 30% (no cross); my location a 40dp filled tonal icon button
+  // (secondaryContainer); no shadow under the map. At night the map takes the dark scheme's surfaces (black with
+  // Pure black); the pin lifts on the spatial fast spring.
+
+  private boolean xgram;
+
+  private void xgramStyle (View shadowView, int mapHeight) {
+    this.xgram = true;
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, mapHeight, Gravity.TOP);
+    params.leftMargin = params.rightMargin = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+    setLayoutParams(params);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+      setOutlineProvider(new android.view.ViewOutlineProvider() {
+        @Override
+        public void getOutline (View view, android.graphics.Outline outline) {
+          outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L));
+        }
+      });
+      setClipToOutline(true);
+    }
+    shadowView.setVisibility(View.GONE);
+    pinXView.setImageDrawable(new android.graphics.drawable.Drawable() {
+      private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+      private final android.graphics.RectF oval = new android.graphics.RectF();
+
+      @Override
+      public void draw (@androidx.annotation.NonNull android.graphics.Canvas c) {
+        paint.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE), .3f));
+        oval.set(getBounds());
+        c.drawOval(oval, paint);
+      }
+
+      @Override
+      public int getIntrinsicWidth () {
+        return Screen.dp(6f);
+      }
+
+      @Override
+      public int getIntrinsicHeight () {
+        return Screen.dp(3f);
+      }
+
+      @Override
+      public void setAlpha (int alpha) { }
+
+      @Override
+      public void setColorFilter (@Nullable android.graphics.ColorFilter colorFilter) { }
+
+      @Override
+      public int getOpacity () {
+        return android.graphics.PixelFormat.TRANSLUCENT;
+      }
+    });
+    pinXView.clearColorFilter();
+    myLocationButton.setIcon(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_gps_fixed_24));
+    myLocationButton.xgramSetContainer(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, false);
+    myLocationButton.setContentDescription(org.thunderdog.challegram.core.Lang.getString(R.string.XgramR6B7MyLocation));
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      myLocationButton.setTooltipText(myLocationButton.getContentDescription());
+    }
+  }
+
+  private void xgramStyleMap (GoogleMap googleMap) {
+    if (!xgram) {
+      return;
+    }
+    try {
+      googleMap.setMapStyle(Theme.isDark() ? new com.google.android.gms.maps.model.MapStyleOptions(com.fahadali.xgram.appearance.XgramR6B7Places.nightMapStyle()) : null);
+    } catch (Throwable ignored) { }
   }
 
   public void setCallback (Callback callback) {
@@ -311,8 +387,8 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     final float factorDiff = toFactor - fromFactor;
 
     pinAnimator = AnimatorUtils.simpleValueAnimator();
-    pinAnimator.setDuration(120l);
-    pinAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+    pinAnimator.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 120l));
+    pinAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.interp(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
     pinAnimator.addUpdateListener(animation -> setPinFactor(fromFactor + factorDiff * AnimatorUtils.getFraction(animation)));
     pinAnimator.addListener(new AnimatorListenerAdapter() {
       @Override
@@ -333,7 +409,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
 
   private void updatePin () {
     pinView.setTranslationY((float) -Screen.dp(10f) * pinFactor);
-    pinXView.setAlpha(pinFactor);
+    pinXView.setAlpha(Math.max(0f, Math.min(1f, pinFactor))); // XGram: the spring may overshoot
   }
 
   // Callbacks
@@ -420,6 +496,7 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
   public void onMapReady (GoogleMap googleMap) {
     this.googleMap = googleMap;
     pinView.setAlpha(1f);
+    xgramStyleMap(googleMap); // XGram
 
     try {
       if (checkLocationPermission()) {
@@ -531,8 +608,8 @@ public class MediaLocationMapView extends FrameLayoutFix implements OnMapReadyCa
     final float factorDiff = toFactor - fromFactor;
 
     myLocationButtonAnimator = AnimatorUtils.simpleValueAnimator();
-    myLocationButtonAnimator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-    myLocationButtonAnimator.setDuration(150l);
+    myLocationButtonAnimator.setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR));
+    myLocationButtonAnimator.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 150l));
     myLocationButtonAnimator.addUpdateListener(animation -> setMyLocationButtonFactor(fromFactor + factorDiff * AnimatorUtils.getFraction(animation)));
     myLocationButtonAnimator.addListener(new AnimatorListenerAdapter() {
       @Override

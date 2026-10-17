@@ -52,6 +52,60 @@ public class MediaLocationPointView extends View implements FactorAnimator.Targe
     locationIcon = Drawables.get(getResources(), R.drawable.baseline_location_on_24);
     sendIcon = Drawables.get(getResources(), R.drawable.deproko_baseline_send_24);
     progressComponent.setAlpha(1f);
+    if (xgram) {
+      xgramLocationIcon = Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_location_on_24));
+      xgramSendIcon = Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_send_24));
+      // XGram M3E: springs instead of the 180ms decelerate fades: colour on effects, the icon morph on spatial
+      com.fahadali.xgram.appearance.XgramAppMotion.use(gpsLocated, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(isCustom, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(isPlace, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, true);
+    }
+  }
+
+  // XGram M3E: the send tile's leading visual: a 40dp primaryContainer container whose 12dp corners round into a
+  // circle as the location pin turns into the send arrow (a place picked), both in onPrimaryContainer.
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private Drawable xgramLocationIcon, xgramSendIcon;
+
+  @Override
+  protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+    super.onSizeChanged(w, h, oldw, oldh);
+    if (xgram && w > 0 && h > 0) {
+      final int size = Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.LEADING);
+      final int left = getPaddingLeft() + (w - getPaddingLeft() - getPaddingRight() - size) / 2;
+      final int top = getPaddingTop() + (h - getPaddingTop() - getPaddingBottom() - size) / 2;
+      progressComponent.setBounds(left, top, left + size, top + size);
+    }
+  }
+
+  private void xgramDraw (Canvas c) {
+    final float cx = getPaddingLeft() + (getMeasuredWidth() - getPaddingLeft() - getPaddingRight()) / 2f;
+    final float cy = getPaddingTop() + (getMeasuredHeight() - getPaddingTop() - getPaddingBottom()) / 2f;
+    final float activeFactor = Math.max(gpsLocated.getFloatValue(), isCustom.getFloatValue());
+    final float place = isPlace.getFloatValue(); // may overshoot on its spring
+    final float p = me.vkryl.core.MathUtils.clamp(place);
+    final float leading = com.fahadali.xgram.appearance.XgramR6B7Places.LEADING;
+    final float corner = com.fahadali.xgram.appearance.XgramR6B7Places.LEADING_CORNER + (leading / 2f - com.fahadali.xgram.appearance.XgramR6B7Places.LEADING_CORNER) * p;
+    com.fahadali.xgram.appearance.XgramR6B7Places.drawContainer(c, cx, cy, leading, corner, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER));
+    final int content = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER);
+    progressComponent.forceColor(content);
+    progressComponent.draw(c);
+    if (activeFactor > 0f && p < 1f) {
+      final int saveCount = c.save();
+      final float scale = 1f - .4f * p;
+      c.scale(scale, scale, cx, cy);
+      com.fahadali.xgram.appearance.XgramR6B7Places.drawIcon(c, xgramLocationIcon, cx, cy, content, activeFactor * (1f - p));
+      c.restoreToCount(saveCount);
+    }
+    if (p > 0f) {
+      final int saveCount = c.save();
+      final float scale = .6f + .4f * Math.max(0f, place);
+      c.rotate(-45f * (1f - p), cx, cy);
+      c.scale(scale * .85f, scale * .85f, cx, cy);
+      com.fahadali.xgram.appearance.XgramR6B7Places.drawIcon(c, xgramSendIcon, cx, cy, content, p);
+      c.restoreToCount(saveCount);
+    }
   }
 
   private boolean needAnimation () {
@@ -88,6 +142,10 @@ public class MediaLocationPointView extends View implements FactorAnimator.Targe
 
   @Override
   protected void onDraw (Canvas c) {
+    if (xgram) {
+      xgramDraw(c);
+      return;
+    }
     float cx = getPaddingLeft() + (getMeasuredWidth() - getPaddingLeft() - getPaddingRight()) / 2;
     float cy = getPaddingTop() + (getMeasuredHeight() - getPaddingTop() - getPaddingBottom()) / 2;
 
