@@ -5,6 +5,6 @@
   <string name="XgramBottomNavSaved">Saved</string>
   <!-- Appearance > Layout -->
   <string name="XgramBottomNavOption">Navigation bar</string>
-  <string name="XgramBottomNavOptionSub">Chats, Contacts and Settings at the bottom on phones</string>
+  <string name="XgramBottomNavOptionSub">Your side menu\'s destinations at the bottom on phones</string>
   <item type="id" name="btn_xgramBottomNav" />
 </resources>

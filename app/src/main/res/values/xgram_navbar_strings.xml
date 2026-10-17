@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E: the floating navigation toolbar of narrow windows (XgramNavToolbar) and its page (Appearance > Layout) -->
+<resources>
+  <!-- The profile: a tab label, the photo button's description and its long press -->
+  <string name="XgramNavProfileLabel">Profile</string>
+  <string name="XgramNavProfileA11y">Profile, %1$s</string>
+  <string name="XgramNavSwitchAccount">Switch account</string>
+
+  <!-- Appearance > Layout > Navigation bar -->
+  <string name="XgramNavBarSub">At the bottom on phones and the cover screen. Wide windows keep the navigation rail.</string>
+  <string name="XgramNavBarStyle">Colours</string>
+  <string name="XgramNavBarStyleStandard">Standard</string>
+  <string name="XgramNavBarStyleVibrant">Vibrant</string>
+  <string name="XgramNavBarTabs">Tabs</string>
+  <string name="XgramNavBarMax">Up to 4 tabs</string>
+  <string name="XgramNavBarMin">At least 2 tabs</string>
+  <string name="XgramNavBarSavedSub">Opens the chat</string>
+  <string name="XgramNavBarInfo">Up to 4 tabs. Contacts, Settings and Profile stay on screen as tabs; Saved messages opens the chat. With the bar, folder tabs are at the top.</string>
+  <string name="XgramNavBarProfile">Your profile</string>
+  <string name="XgramNavBarProfileButton">Beside</string>
+  <string name="XgramNavBarProfileTab">In the bar</string>
+  <string name="XgramNavBarProfileOff">Off</string>
+  <string name="XgramNavBarProfileInfo">Your photo opens your profile. Long press it to switch accounts.</string>
+  <string name="XgramNavBarMadeRoom">%1$s was taken out to make room</string>
+  <string name="XgramNavBarReset">Reset to Telegram\'s layout</string>
+  <!-- Appearance's row: the setting off, or the tabs and "+ your photo" -->
+  <string name="XgramNavBarOff">Off</string>
+  <string name="XgramNavBarWithPhoto">%1$s + your photo</string>
+
+  <item type="id" name="btn_xgramNavBarTab" />
+  <item type="id" name="btn_xgramNavBarProfile" />
+  <item type="id" name="btn_xgramNavBarStyle" />
+  <item type="id" name="btn_xgramNavBarReset" />
+</resources>
