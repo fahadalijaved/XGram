@@ -13,7 +13,6 @@
 
 package com.fahadali.xgram.compose.pages
 
-import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,7 +53,6 @@ import org.thunderdog.challegram.BuildConfig
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
 import org.thunderdog.challegram.tool.Strings
-import org.thunderdog.challegram.tool.UI
 import org.thunderdog.challegram.unsorted.Settings
 import org.thunderdog.challegram.util.AppUpdater
 
@@ -86,10 +84,17 @@ fun UpdatesPage() {
           manualCheck.pending = false
           if (state == AppUpdater.State.NONE) {
             val error = XgramUpdates.lastError()
-            UI.showToast(
-              if (error != null) s(R.string.XgramUpdateCheckFailed, error) else s(R.string.XgramUpdateLatest),
-              Toast.LENGTH_SHORT
-            )
+            // XGram M3E r6: the snackbar (a toast when no activity is resumed); a failed check offers Retry
+            if (error != null) {
+              com.fahadali.xgram.appearance.XgramR6B3Shell.snackbar(s(R.string.XgramUpdateCheckFailed, error), true, s(R.string.XgramR6B3Retry), Runnable {
+                if (updater.state() == AppUpdater.State.NONE && XgramUpdates.channel() != XgramUpdates.CHANNEL_OFF) {
+                  manualCheck.pending = true
+                  updater.checkForUpdatesNow()
+                }
+              })
+            } else {
+              com.fahadali.xgram.appearance.XgramR6B3Shell.snackbar(s(R.string.XgramUpdateLatest), false)
+            }
           }
         }
         host.changed()
@@ -171,8 +176,14 @@ fun UpdatesPage() {
             action(
               R.id.btn_xgramUpdateCheck, Lang.getDownloadProgress(downloaded, total, true), icon = icon, enabled = false,
               below = {
+                // XGram M3E r6: the determinate wavy indicator moves on the motion scheme's spatial spring between updates
+                val shown by animateFloatAsState(
+                  targetValue = progress,
+                  animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                  label = "xgramUpdateProgress"
+                )
                 LinearWavyProgressIndicator(
-                  progress = { progress },
+                  progress = { shown.coerceIn(0f, 1f) },
                   modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 )
               }
@@ -199,7 +210,7 @@ fun UpdatesPage() {
         s(R.string.XgramUpdateInstalledValue, BuildConfig.VERSION_NAME, s(if (kind == 1) R.string.XgramUpdateKindStable else R.string.XgramUpdateKindCi))
       }
       value(R.id.btn_xgramUpdateInstalled, s(R.string.XgramUpdateInstalled), installed, icon = R.drawable.baseline_info_24) {
-        UI.copyText(BuildConfig.VERSION_NAME, R.string.CopiedText)
+        com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(BuildConfig.VERSION_NAME) // XGram M3E r6: the "Copied" snackbar
       }
     }
 

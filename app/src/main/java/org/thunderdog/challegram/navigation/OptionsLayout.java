@@ -98,6 +98,17 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
 
     if (xgramExpressive) {
       ViewUtils.setBackground(this, new XgramSheetBackground());
+      // XGram M3E r6: the drag handle's accessibility (BottomSheetDragHandleView): the sheet announces itself as the
+      // handle, and its "Dismiss" action closes it as a drag down does (PopupLayout)
+      setContentDescription(Lang.getString(org.thunderdog.challegram.R.string.XgramR6B3DragHandle));
+      androidx.core.view.ViewCompat.addAccessibilityAction(this, Lang.getString(org.thunderdog.challegram.R.string.XgramR6B3Dismiss), (view, arguments) -> {
+        org.thunderdog.challegram.widget.PopupLayout popup = org.thunderdog.challegram.widget.PopupLayout.parentOf(view);
+        if (popup != null && !popup.isWindowHidden()) {
+          popup.hideWindow(true);
+          return true;
+        }
+        return false;
+      });
     } else
     ViewUtils.setBackground(this, new Drawable() {
       @Override

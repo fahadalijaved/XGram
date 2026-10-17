@@ -637,16 +637,17 @@ public final class XgramUpdates {
   }
 
   /**
-   * XGram M3E r5: the changelog as an M3 dialog: "What's new", the version as a supporting line (bodyMedium,
-   * onSurfaceVariant), then the notes with their formatting and links (bodyMedium, onSurfaceVariant) in a scroll capped
-   * at 60% of the screen; "Download" while it isn't downloaded yet (else "Open post") and "Close".
+   * XGram M3E: the changelog as an M3 sheet (round 6; a dialog in round 5): "What's new", the version as a supporting
+   * line (bodyMedium, onSurfaceVariant), then the notes with their formatting and links (bodyMedium, onSurfaceVariant)
+   * in a scroll capped at 60% of the screen; [Open post] ... a filled "Download" while it isn't downloaded yet, else a
+   * filled "Open post".
    */
   private static void showWhatsNewM3 (ViewController<?> c, Found found, @Nullable Runnable download) {
     final android.content.Context context = c.context();
     final int maxHeight = Math.round(org.thunderdog.challegram.tool.Screen.currentHeight() * .6f);
     android.widget.LinearLayout column = new android.widget.LinearLayout(context);
     column.setOrientation(android.widget.LinearLayout.VERTICAL);
-    column.setPadding(org.thunderdog.challegram.tool.Screen.dp(24f), 0, org.thunderdog.challegram.tool.Screen.dp(24f), 0);
+    column.setPadding(org.thunderdog.challegram.tool.Screen.dp(16f), 0, org.thunderdog.challegram.tool.Screen.dp(16f), 0); // XGram M3E r6: a sheet's 16dp
 
     android.widget.TextView versionView = new org.thunderdog.challegram.widget.NoScrollTextView(context);
     com.fahadali.xgram.appearance.XgramExpressive.applyText(versionView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
@@ -680,16 +681,41 @@ public final class XgramUpdates {
     scroll.addView(notes, new android.widget.FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
     column.addView(scroll, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
 
-    AlertDialog.Builder b = new AlertDialog.Builder(context, Theme.dialogTheme());
-    b.setTitle(Lang.getString(R.string.XgramUpdateWhatsNew));
-    b.setView(column);
-    if (download != null && c.context().appUpdater().state() == AppUpdater.State.AVAILABLE) {
-      b.setPositiveButton(Lang.getString(R.string.XgramUpdateDownload), (dialog, which) -> download.run());
-    } else {
-      b.setPositiveButton(Lang.getString(R.string.XgramUpdateOpenPost), (dialog, which) -> openPost(c, found));
-    }
-    b.setNegativeButton(Lang.getString(R.string.XgramUpdateClose), (dialog, which) -> dialog.dismiss());
-    c.showAlert(b);
+    // XGram M3E r6: a changelog is long content: a sheet (headlineSmall title, the notes, then [Open post] ... [Download]
+    // with Download filled, or a filled Open post once it is downloaded); it closes by its scrim, a drag or back
+    final boolean canDownload = download != null && c.context().appUpdater().state() == AppUpdater.State.AVAILABLE;
+    c.showPopup(Lang.getString(R.string.XgramUpdateWhatsNew), true, org.thunderdog.challegram.util.text.Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsLayout) -> {
+      final int width = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(c.context().getControllerWidth(optionsLayout));
+      optionsLayout.addView(column, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+      column.measure(android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED));
+      final int notesHeight = notes.getCurrentHeight(Math.max(0, width - org.thunderdog.challegram.tool.Screen.dp(32f))) + notes.getPaddingTop() + notes.getPaddingBottom();
+      int height = versionView.getMeasuredHeight() + Math.min(Math.max(notesHeight, scroll.getMeasuredHeight()), maxHeight);
+
+      final android.widget.TextView start, end;
+      if (canDownload) {
+        start = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(context, Lang.getString(R.string.XgramUpdateOpenPost), com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+        start.setOnClickListener(v -> {
+          popupLayout.hideWindow(true);
+          openPost(c, found);
+        });
+        end = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(context, Lang.getString(R.string.XgramUpdateDownload), false, null);
+        end.setOnClickListener(v -> {
+          popupLayout.hideWindow(true);
+          download.run();
+        });
+      } else {
+        start = null;
+        end = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(context, Lang.getString(R.string.XgramUpdateOpenPost), false, null);
+        end.setOnClickListener(v -> {
+          popupLayout.hideWindow(true);
+          openPost(c, found);
+        });
+      }
+      android.widget.LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(context, start, end);
+      optionsLayout.addView(actions);
+      height += ((android.widget.LinearLayout.LayoutParams) actions.getLayoutParams()).height;
+      return height;
+    }, null, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S);
   }
 
   /** Opens the post with the APK (in the Updates topic, or in the channel). */
@@ -718,8 +744,16 @@ public final class XgramUpdates {
    * the file is deleted (the update can be downloaded again) and an error is shown.
    */
   public static void verifyThenInstall (@Nullable Tdlib tdlib, @Nullable Found found, @NonNull Runnable install) {
+    verifyThenInstall(tdlib, found, install, null);
+  }
+
+  /**
+   * {@link #verifyThenInstall(Tdlib, Found, Runnable)}; with Expressive design a mismatch shows the snackbar with a
+   * "Download again" action running {@code downloadAgain} (the toast otherwise).
+   */
+  public static void verifyThenInstall (@Nullable Tdlib tdlib, @Nullable Found found, @NonNull Runnable install, @Nullable Runnable downloadAgain) {
     if (tdlib == null || found == null) {
-      UI.showToast(R.string.XgramUpdateBadFile, Toast.LENGTH_LONG);
+      showBadFile(downloadAgain);
       return;
     }
     if (verifying) {
@@ -738,10 +772,22 @@ public final class XgramUpdates {
         } else {
           Log.w("XGram update: SHA-256 mismatch, expected %s, got %s", found.sha256, actual);
           tdlib.send(new TdApi.DeleteFile(file.id), (result, error) -> { });
-          UI.showToast(R.string.XgramUpdateBadFile, Toast.LENGTH_LONG);
+          showBadFile(downloadAgain);
         }
       });
     }, "XgramUpdateHash").start();
+  }
+
+  /** The downloaded file was bad and deleted: the M3E snackbar with "Download again", Telegram X's toast otherwise. */
+  private static void showBadFile (@Nullable Runnable downloadAgain) {
+    if (downloadAgain != null && com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.XgramR6B3UpdateBadFile), Toast.LENGTH_LONG,
+      Lang.getString(R.string.XgramR6B3DownloadAgain), downloadAgain)) {
+      return;
+    }
+    if (com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.XgramUpdateBadFile), Toast.LENGTH_LONG)) {
+      return;
+    }
+    UI.showToast(R.string.XgramUpdateBadFile, Toast.LENGTH_LONG);
   }
 
   private static @Nullable String sha256 (@Nullable String path) {

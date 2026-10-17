@@ -99,6 +99,8 @@ public class TooltipOverlayView extends ViewGroup {
   private static final float PIVOT_HEIGHT = 5f;
   private static final float PIVOT_WIDTH = 10f;
   private static final float BACKGROUND_RADIUS = 6f;
+  /** XGram M3E r6: PlainTooltipTokens (at most 200dp wide) and TooltipDefaults.caretSize (16 x 8dp). */
+  private static final float XGRAM_PLAIN_MAX_WIDTH = 200f, XGRAM_CARET_WIDTH = 16f, XGRAM_CARET_HEIGHT = 8f;
 
   public TooltipContentView newContent (Tdlib tdlib, CharSequence text, int textFlags) {
     TdApi.FormattedText formattedText = new TdApi.FormattedText(text.toString(), TD.toEntities(text, false));
@@ -125,17 +127,43 @@ public class TooltipOverlayView extends ViewGroup {
     }
   }
 
-  /** XGram M3E: colors of a plain (inverse surface) or rich (surfaceContainer) Material 3 tooltip. */
+  /**
+   * XGram M3E: colors of a plain (inverse surface) or rich (surfaceContainer) Material 3 tooltip, in the current theme
+   * or, for a tooltip over media (a provider that only forces a theme, see {@link #overrideColorProvider}), in that
+   * theme's light or dark scheme (Pure black included), never the forced Telegram X theme's own colors.
+   */
   private static final class XgramTooltipColors implements ColorProvider {
     private final TooltipInfo info;
+    private final @Nullable ThemeDelegate forcedTheme;
 
-    XgramTooltipColors (TooltipInfo info) {
+    XgramTooltipColors (TooltipInfo info, @Nullable ThemeDelegate forcedTheme) {
       this.info = info;
+      this.forcedTheme = forcedTheme;
+    }
+
+    private int role (int role) {
+      return forcedTheme != null ? XgramExpressive.colorFor(role, forcedTheme.isDark()) : XgramExpressive.color(role);
+    }
+
+    private int containerRole () {
+      if (!info.xgramRich) {
+        return XgramExpressive.INVERSE_SURFACE;
+      }
+      if (forcedTheme != null) {
+        return forcedTheme.isDark() && com.fahadali.xgram.appearance.XgramAmoled.isEnabled() ? XgramExpressive.SURFACE_CONTAINER_HIGHEST : XgramExpressive.SURFACE_CONTAINER;
+      }
+      return com.fahadali.xgram.appearance.XgramAmoled.floatingRole(XgramExpressive.SURFACE_CONTAINER);
+    }
+
+    @Nullable
+    @Override
+    public ThemeDelegate forcedTheme () {
+      return forcedTheme;
     }
 
     @Override
     public int tooltipColor () {
-      return XgramExpressive.color(info.xgramRich ? com.fahadali.xgram.appearance.XgramAmoled.floatingRole(XgramExpressive.SURFACE_CONTAINER) : XgramExpressive.INVERSE_SURFACE);
+      return role(containerRole());
     }
 
     @Override
@@ -145,7 +173,7 @@ public class TooltipOverlayView extends ViewGroup {
 
     @Override
     public int defaultTextColor () {
-      return XgramExpressive.color(info.xgramRich ? XgramExpressive.ON_SURFACE_VARIANT : XgramExpressive.INVERSE_ON_SURFACE);
+      return role(info.xgramRich ? XgramExpressive.ON_SURFACE_VARIANT : XgramExpressive.INVERSE_ON_SURFACE);
     }
 
     @Override
@@ -155,7 +183,31 @@ public class TooltipOverlayView extends ViewGroup {
 
     @Override
     public int clickableTextColor (boolean isPressed) {
-      return XgramExpressive.color(info.xgramRich ? XgramExpressive.PRIMARY : XgramExpressive.INVERSE_PRIMARY);
+      return role(info.xgramRich ? XgramExpressive.PRIMARY : XgramExpressive.INVERSE_PRIMARY);
+    }
+
+    /** The subhead of a rich tooltip: titleSmall in onSurface. */
+    int subheadColor () {
+      return role(XgramExpressive.ON_SURFACE);
+    }
+
+    /** The action of a rich tooltip: labelLarge in primary. */
+    int actionColor () {
+      return role(XgramExpressive.PRIMARY);
+    }
+  }
+
+  /** XGram M3E: a provider that only forces a theme (the media viewer's hints): the xgram tooltip colors in its scheme. */
+  private static final class XgramForcedColors implements ColorProvider {
+    private final ThemeDelegate theme;
+
+    XgramForcedColors (ThemeDelegate theme) {
+      this.theme = theme;
+    }
+
+    @Override
+    public ThemeDelegate forcedTheme () {
+      return theme;
     }
   }
 
@@ -268,10 +320,15 @@ public class TooltipOverlayView extends ViewGroup {
       }
     }
 
+    /** XGram M3E r6: the flex style the text was built with (bodySmall plain, bodyMedium rich), null for Telegram X's. */
+    private @Nullable org.thunderdog.challegram.util.text.TextStyleProvider xgramStyle;
+
     @Override
     public boolean layout (TooltipInfo info, int parentWidth, int parentHeight, int maxWidth) {
-      if (text == null || text.getMaxWidth() != maxWidth) {
-        text = new Text.Builder(tdlib, formattedText, urlOpenParameters, maxWidth, Paints.robotoStyleProvider(info.textSize).setAllowSp(info.allowSp), info.colorProvider, (text, specificMedia) -> {
+      final org.thunderdog.challegram.util.text.TextStyleProvider xgramStyle = info.xgramTextStyle();
+      if (text == null || text.getMaxWidth() != maxWidth || xgramStyle != this.xgramStyle) {
+        this.xgramStyle = xgramStyle;
+        text = new Text.Builder(tdlib, formattedText, urlOpenParameters, maxWidth, xgramStyle != null ? xgramStyle : Paints.robotoStyleProvider(info.textSize).setAllowSp(info.allowSp), info.colorProvider, (text, specificMedia) -> {
           if (this.text == text) {
             if (!text.invalidateMediaContent(info.iconReceiver, specificMedia)) {
               text.requestMedia(info.iconReceiver);
@@ -318,9 +375,21 @@ public class TooltipOverlayView extends ViewGroup {
       final String currentLang = message.getCurrentTranslatedLanguage();
       originalLanguage = Lang.getLanguageName(message.getOriginalMessageLanguage(), Lang.getString(R.string.TranslateLangUnknown));
       translatedLanguage = Lang.getLanguageName(message.getCurrentTranslatedLanguage(), currentLang != null ? currentLang : originalLanguage);
-      arrowX = (int) U.measureText(originalLanguage, Paints.getRegularTextPaint(14));
-      width = (int)(arrowX + U.measureText(translatedLanguage, Paints.getRegularTextPaint(14)) + Screen.dp(18));
+      arrowX = (int) U.measureText(originalLanguage, XgramExpressive.isEnabled() ? xgramPaint() : Paints.getRegularTextPaint(14));
+      width = (int)(arrowX + U.measureText(translatedLanguage, XgramExpressive.isEnabled() ? xgramPaint() : Paints.getRegularTextPaint(14)) + Screen.dp(18));
       arrow = Drawables.get(R.drawable.round_keyboard_arrow_right_16);
+    }
+
+    private static @Nullable android.text.TextPaint xgramLanguagePaint;
+
+    /** XGram M3E r6: the plain tooltip's bodySmall in Google Sans Flex (the color is set per draw). */
+    private static android.text.TextPaint xgramPaint () {
+      if (xgramLanguagePaint == null) {
+        xgramLanguagePaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+        xgramLanguagePaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_BODY_S, false));
+        xgramLanguagePaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_S)));
+      }
+      return xgramLanguagePaint;
     }
 
     @Override
@@ -358,6 +427,17 @@ public class TooltipOverlayView extends ViewGroup {
 
     @Override
     public void draw (Canvas c, ColorProvider colorProvider, int left, int top, int right, int bottom, float alpha, ComplexReceiver iconReceiver) {
+      if (XgramExpressive.isEnabled()) {
+        // XGram M3E r6: the tooltip's own text colors (inverseOnSurface, inversePrimary) and type, centred in its 16dp
+        final android.text.TextPaint paint = xgramPaint();
+        final float baseline = top + Screen.dp(8f) - (paint.descent() + paint.ascent()) / 2f;
+        paint.setColor(ColorUtils.alphaColor(alpha, colorProvider.defaultTextColor()));
+        c.drawText(originalLanguage, left, baseline, paint);
+        paint.setColor(ColorUtils.alphaColor(alpha, colorProvider.clickableTextColor(false)));
+        c.drawText(translatedLanguage, left + arrowX + Screen.dp(18), baseline, paint);
+        Drawables.draw(c, arrow, left + arrowX + Screen.dp(1), top, Paints.getPorterDuffPaint(ColorUtils.alphaColor(alpha, colorProvider.defaultTextColor())));
+        return;
+      }
       c.drawText(originalLanguage, left, top + Screen.dp(14), Paints.getRegularTextPaint(14, Theme.getColor(ColorId.tooltip_text)));
       c.drawText(translatedLanguage, left + arrowX + Screen.dp(18), top + Screen.dp(14), Paints.getRegularTextPaint(14, Theme.getColor(ColorId.tooltip_textLink)));
       Drawables.draw(c, arrow, left + arrowX + Screen.dp(1), top, PorterDuffPaint.get(ColorId.tooltip_text));
@@ -422,6 +502,15 @@ public class TooltipOverlayView extends ViewGroup {
     // icon are rich tooltips (surfaceContainer, 12dp corners, 16dp/12dp padding, a soft shadow)
     private final boolean xgram;
     private boolean xgramRich;
+    /** XGram M3E r6: plain or rich is decided once per content (a plain layout first), so repositioning never flips it. */
+    private boolean xgramRichDecided;
+    /** XGram M3E r6: the rich tooltip's titleSmall subhead and its text button action (labelLarge, primary). */
+    private @Nullable CharSequence xgramSubhead, xgramActionText;
+    private @Nullable Runnable xgramAction;
+    private @Nullable android.text.StaticLayout xgramSubheadLayout;
+    private final RectF xgramActionRect = new RectF();
+    private boolean xgramActionPressed;
+    private int xgramExtrasWidth = -1, xgramExtraWidthPx;
 
     private int padStart (boolean hasIcon) {
       return xgram ? Screen.dp(xgramRich ? 16f : 8f) : Screen.dp(hasIcon ? INNER_PADDING_LEFT_WITH_ICON : INNER_PADDING_LEFT);
@@ -432,7 +521,80 @@ public class TooltipOverlayView extends ViewGroup {
     }
 
     private int padVertical (boolean hasIcon) {
-      return xgram ? Screen.dp(xgramRich ? 12f : 6f) : Screen.dp(hasIcon ? INNER_PADDING_VERTICAL_WITH_ICON : INNER_PADDING_VERTICAL);
+      return xgram ? Screen.dp(xgramRich ? 12f : 4f) : Screen.dp(hasIcon ? INNER_PADDING_VERTICAL_WITH_ICON : INNER_PADDING_VERTICAL);
+    }
+
+    /** XGram M3E r6: rich tooltips have no caret (M3), plain ones the TooltipDefaults caret. */
+    private boolean noPivot () {
+      return BitwiseUtils.hasFlag(flags, FLAG_NO_PIVOT) || (xgram && xgramRich);
+    }
+
+    private int pivotWidth () {
+      return Screen.dp(xgram ? XGRAM_CARET_WIDTH : PIVOT_WIDTH);
+    }
+
+    private int pivotHeight () {
+      return Screen.dp(xgram ? XGRAM_CARET_HEIGHT : PIVOT_HEIGHT);
+    }
+
+    /** The text style of an xgram tooltip: bodySmall plain, bodyMedium rich. */
+    @Nullable
+    org.thunderdog.challegram.util.text.TextStyleProvider xgramTextStyle () {
+      if (!xgram) {
+        return null;
+      }
+      final int ts = xgramRich ? XgramExpressive.TS_BODY_M : XgramExpressive.TS_BODY_S;
+      return com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(ts, XgramExpressive.textSizeSp(ts));
+    }
+
+    /** Height of the subhead block (the subhead and 4dp under it), 0 without one. */
+    private int xgramSubheadHeight () {
+      return xgramSubheadLayout != null ? xgramSubheadLayout.getHeight() + Screen.dp(4f) : 0;
+    }
+
+    /**
+     * Height the action block adds (4dp above the 36dp action row, the bottom padding 8dp instead of 12dp: 36dp in all),
+     * 0 without one.
+     */
+    private int xgramActionHeight () {
+      return xgram && xgramRich && xgramActionText != null ? Screen.dp(36f) : 0;
+    }
+
+    private static @Nullable android.text.TextPaint xgramSubheadPaint, xgramActionPaint;
+
+    private static android.text.TextPaint xgramPaint (boolean action) {
+      android.text.TextPaint paint = action ? xgramActionPaint : xgramSubheadPaint;
+      if (paint == null) {
+        final int ts = action ? XgramExpressive.TS_LABEL_L : XgramExpressive.TS_TITLE_S;
+        paint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+        paint.setTypeface(XgramExpressive.typeface(ts, false));
+        paint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(ts)));
+        if (action) {
+          xgramActionPaint = paint;
+        } else {
+          xgramSubheadPaint = paint;
+        }
+      }
+      return paint;
+    }
+
+    /** Lays out the subhead for {@code width}; the subhead's own width, 0 without one. */
+    private int xgramLayoutExtras (int width) {
+      xgramSubheadLayout = null;
+      int extraWidth = 0;
+      if (!xgram || !xgramRich || width <= 0) {
+        return 0;
+      }
+      if (xgramSubhead != null && xgramSubhead.length() > 0) {
+        final android.text.TextPaint paint = xgramPaint(false);
+        final int subheadWidth = Math.min(width, (int) Math.ceil(android.text.Layout.getDesiredWidth(xgramSubhead, paint)));
+        xgramSubheadLayout = new android.text.StaticLayout(xgramSubhead, paint, Math.max(1, subheadWidth), android.text.Layout.Alignment.ALIGN_NORMAL, 1f, Screen.dp(4f), false);
+        extraWidth = subheadWidth;
+      }
+      if (xgramActionText != null) {
+        extraWidth = Math.max(extraWidth, Math.min(width, (int) Math.ceil(xgramPaint(true).measureText(xgramActionText, 0, xgramActionText.length()))));
+      }
+      return extraWidth;
     }
 
     private int backgroundRadius () {
@@ -483,8 +645,12 @@ public class TooltipOverlayView extends ViewGroup {
       this.originalView = originalView;
       this.viewProvider = viewProvider;
       this.locationProvider = locationProvider;
-      this.xgram = colorProvider == null && XgramExpressive.isEnabled();
-      this.colorProvider = colorProvider != null ? colorProvider : xgram ? new XgramTooltipColors(this) : parent.defaultProvider;
+      this.xgram = (colorProvider == null || colorProvider instanceof XgramForcedColors) && XgramExpressive.isEnabled();
+      if (xgram) {
+        this.colorProvider = new XgramTooltipColors(this, colorProvider instanceof XgramForcedColors ? ((XgramForcedColors) colorProvider).theme : null);
+      } else {
+        this.colorProvider = colorProvider != null ? colorProvider : parent.defaultProvider;
+      }
       this.offsetProvider = offsetProvider;
       this.controller = controller;
       this.textSize = textSize;
@@ -513,6 +679,8 @@ public class TooltipOverlayView extends ViewGroup {
     public void reset (TooltipContentView popupView, @DrawableRes int iconRes) {
       this.popupView = popupView;
       this.icon = Drawables.get(iconRes);
+      this.xgramRichDecided = false; // XGram: new content, plain or rich again
+      this.xgramExtrasWidth = -1;
       layout(parentView.getMeasuredWidth(), parentView.getMeasuredHeight());
       parentView.invalidate();
     }
@@ -708,7 +876,12 @@ public class TooltipOverlayView extends ViewGroup {
 
     private void setIsVisible (boolean isVisible, boolean animated) {
       if (this.isVisible.getValue() != isVisible) {
-        if (isVisible && this.isVisible.getFloatValue() == 0f && !BitwiseUtils.hasFlag(flags, FLAG_NO_PIVOT)) {
+        if (xgram) {
+          // XGram M3E r6: in on SPATIAL_FAST (scaling from the caret with a slight overshoot), out on EFFECTS_FAST
+          final int token = isVisible ? XgramExpressive.SPATIAL_FAST : XgramExpressive.EFFECTS_FAST;
+          this.isVisible.setInterpolator(isVisible ? com.fahadali.xgram.appearance.XgramAppMotion.spring(token) : com.fahadali.xgram.appearance.XgramAppMotion.springClamped(token));
+          this.isVisible.setDuration(com.fahadali.xgram.appearance.XgramAppMotion.springDuration(token));
+        } else if (isVisible && this.isVisible.getFloatValue() == 0f && !BitwiseUtils.hasFlag(flags, FLAG_NO_PIVOT)) {
           this.isVisible.setInterpolator(AnimatorUtils.OVERSHOOT_INTERPOLATOR);
           this.isVisible.setDuration(BubbleLayout.REVEAL_DURATION);
         } else {
@@ -746,6 +919,50 @@ public class TooltipOverlayView extends ViewGroup {
       int innerPaddingLeft = Screen.dp(hasIcon ? INNER_PADDING_LEFT_WITH_ICON : INNER_PADDING_LEFT);
       int innerPaddingVertical = Screen.dp(hasIcon ? INNER_PADDING_VERTICAL_WITH_ICON : INNER_PADDING_VERTICAL);
       int iconOffset = hasIcon ? Screen.dp(ICON_SIZE) + Screen.dp(ICON_HORIZONTAL_MARGIN) : 0;
+      if (xgram && xgramAction != null && !xgramActionRect.isEmpty()) {
+        // XGram M3E r6: the rich tooltip's action
+        switch (e.getActionMasked()) {
+          case MotionEvent.ACTION_DOWN: {
+            if (xgramActionRect.contains(e.getX(), e.getY())) {
+              xgramActionPressed = true;
+              parentView.invalidate();
+              return true;
+            }
+            break;
+          }
+          case MotionEvent.ACTION_MOVE: {
+            if (xgramActionPressed) {
+              if (!xgramActionRect.contains(e.getX(), e.getY())) {
+                xgramActionPressed = false;
+                parentView.invalidate();
+              }
+              return true;
+            }
+            break;
+          }
+          case MotionEvent.ACTION_UP: {
+            if (xgramActionPressed) {
+              xgramActionPressed = false;
+              parentView.invalidate();
+              if (xgramActionRect.contains(e.getX(), e.getY())) {
+                final Runnable action = xgramAction;
+                hide(true);
+                action.run();
+              }
+              return true;
+            }
+            break;
+          }
+          case MotionEvent.ACTION_CANCEL: {
+            if (xgramActionPressed) {
+              xgramActionPressed = false;
+              parentView.invalidate();
+              return true;
+            }
+            break;
+          }
+        }
+      }
       return popupView.onTouchEvent(this, v, e);
     }
 
@@ -755,14 +972,14 @@ public class TooltipOverlayView extends ViewGroup {
     private final Path backgroundPath = new Path();
 
     private void buildPath (Path backgroundPath, RectF contentRect) {
-      int pivotWidth = Screen.dp(PIVOT_WIDTH);
+      int pivotWidth = pivotWidth();
       int backgroundRadius = backgroundRadius();
-      int pivotHeight = Screen.dp(PIVOT_HEIGHT);
+      int pivotHeight = pivotHeight();
 
       backgroundPath.reset();
       backgroundPath.setFillType(Path.FillType.EVEN_ODD);
       RectF rectF = Paints.getRectF();
-      if (BitwiseUtils.hasFlag(flags, FLAG_NO_PIVOT)) {
+      if (noPivot()) {
         backgroundPath.addRoundRect(contentRect, backgroundRadius, backgroundRadius, Path.Direction.CW);
       } else if (alignBottom) {
         backgroundPath.moveTo(contentRect.left, contentRect.top + backgroundRadius);
@@ -946,30 +1163,48 @@ public class TooltipOverlayView extends ViewGroup {
       if (!fillWidth && this.maxWidthDp > 0) {
         maxWidth = Math.min(Screen.dp(this.maxWidthDp), maxWidth);
       }
-      boolean textChanged = popupView.layout(this, parentWidth, parentHeight, maxWidth - innerPaddingLeft - innerPaddingRight - iconOffset);
+      boolean textChanged;
+      int xgramExtraWidth = 0;
       if (xgram) {
-        boolean rich = hasIcon || popupView.xgramLineCount() > 1;
-        if (rich != xgramRich) {
-          xgramRich = rich;
+        // XGram M3E r6: a plain tooltip (bodySmall, at most 200dp, 8 / 4dp padding) unless it has an icon, a subhead,
+        // an action or more than one line there; then a rich one (bodyMedium, 16 / 12dp padding, no caret)
+        if (!xgramRichDecided) {
+          xgramRichDecided = true;
+          xgramRich = hasIcon || xgramSubhead != null || xgramActionText != null;
+          if (!xgramRich) {
+            popupView.layout(this, parentWidth, parentHeight, Math.min(maxWidth, Screen.dp(XGRAM_PLAIN_MAX_WIDTH)) - padStart(false) - padEnd(false));
+            xgramRich = popupView.xgramLineCount() > 1;
+          }
           innerPaddingLeft = padStart(hasIcon);
           innerPaddingRight = padEnd(hasIcon);
           innerPaddingVertical = padVertical(hasIcon);
-          popupView.layout(this, parentWidth, parentHeight, maxWidth - innerPaddingLeft - innerPaddingRight - iconOffset);
+        }
+        if (!xgramRich && !fillWidth) {
+          maxWidth = Math.min(maxWidth, Screen.dp(XGRAM_PLAIN_MAX_WIDTH));
+        }
+        final int textWidth = maxWidth - innerPaddingLeft - innerPaddingRight - iconOffset;
+        textChanged = popupView.layout(this, parentWidth, parentHeight, textWidth);
+        if (textWidth != xgramExtrasWidth) {
+          xgramExtrasWidth = textWidth;
+          xgramExtraWidthPx = xgramLayoutExtras(textWidth);
           textChanged = true;
         }
+        xgramExtraWidth = xgramExtraWidthPx;
+      } else {
+        textChanged = popupView.layout(this, parentWidth, parentHeight, maxWidth - innerPaddingLeft - innerPaddingRight - iconOffset);
       }
 
       int triangleHeight = Screen.dp(12f);
-      int totalHeight = popupView.getHeight() + innerPaddingVertical * 2 + triangleHeight;
+      int totalHeight = popupView.getHeight() + innerPaddingVertical * 2 + triangleHeight + xgramSubheadHeight() + xgramActionHeight();
 
       this.alignBottom = position[1] + innerRect.top - totalHeight < HeaderView.getTopOffset() && position[1] + innerRect.bottom + totalHeight < parentHeight;
       this.pivotX = position[0] + innerRect.centerX();
       this.pivotY = alignBottom ? position[1] + innerRect.bottom : position[1] + innerRect.top;
 
-      int pivotHeight = BitwiseUtils.hasFlag(flags, FLAG_NO_PIVOT) ? horizontalMargin : Screen.dp(PIVOT_HEIGHT);
+      int pivotHeight = noPivot() ? horizontalMargin : pivotHeight();
 
-      int contentWidth = innerPaddingLeft + innerPaddingRight + popupView.getWidth() + iconOffset;
-      int contentHeight = innerPaddingVertical * 2 + popupView.getHeight();
+      int contentWidth = innerPaddingLeft + innerPaddingRight + Math.max(popupView.getWidth(), xgramExtraWidth) + iconOffset;
+      int contentHeight = innerPaddingVertical * 2 + popupView.getHeight() + xgramSubheadHeight() + xgramActionHeight();
 
       if (hasIcon) {
         contentWidth = Math.max(contentWidth, innerPaddingLeft * 2 + Screen.dp(ICON_SIZE));
@@ -993,7 +1228,7 @@ public class TooltipOverlayView extends ViewGroup {
       }
       contentRect.offset(Math.max(0, horizontalMargin - contentRect.left), 0);
       contentRect.offset(Math.min(0, (parentWidth - horizontalMargin) - contentRect.right), 0);
-      int checkBound = Screen.dp(PIVOT_WIDTH) / 2 + backgroundRadius();
+      int checkBound = pivotWidth() / 2 + backgroundRadius();
       if (pivotX - checkBound < contentRect.left) {
         contentRect.offset((pivotX - checkBound) - contentRect.left, 0);
       } else if (pivotX + checkBound > contentRect.right) {
@@ -1018,7 +1253,7 @@ public class TooltipOverlayView extends ViewGroup {
     public void draw (Canvas c) {
       float factor = this.isVisible.getFloatValue();
       float alpha = MathUtils.clamp(factor);
-      float scale = .8f + .2f * factor;
+      float scale = xgram && com.fahadali.xgram.appearance.XgramMotion.reduce() ? 1f : .8f + .2f * factor; // XGram: Reduce motion fades only
 
       Rect rect = Paints.getRect();
       rect.left = pivotX - popupView.getWidth() / 2;
@@ -1028,7 +1263,7 @@ public class TooltipOverlayView extends ViewGroup {
       final int saveCount;
       if (needSave) {
         saveCount = c.save();
-        if (BitwiseUtils.hasFlag(flags, FLAG_NO_PIVOT)) {
+        if (noPivot()) {
           c.scale(scale, scale, contentRect.centerX(), contentRect.centerY());
         } else {
           c.scale(scale, scale, pivotX, pivotY);
@@ -1095,7 +1330,37 @@ public class TooltipOverlayView extends ViewGroup {
         innerPaddingVertical = padVertical(false);
         iconOffset = verticalOffset = 0;
       }
-      popupView.draw(c, colorProvider, (int) (contentRect.left + innerPaddingLeft + iconOffset), (int) (contentRect.top + innerPaddingVertical + verticalOffset), (int) (contentRect.right - innerPaddingRight), (int) (contentRect.bottom - innerPaddingVertical), alpha, iconReceiver);
+      final int subheadHeight = xgramSubheadHeight();
+      if (subheadHeight > 0 && xgramSubheadLayout != null && colorProvider instanceof XgramTooltipColors) {
+        // XGram M3E r6: the rich tooltip's subhead (titleSmall, onSurface) above the supporting text
+        final android.text.TextPaint paint = xgramPaint(false);
+        paint.setColor(ColorUtils.alphaColor(alpha, ((XgramTooltipColors) colorProvider).subheadColor()));
+        final int subheadSave = c.save();
+        final float subheadLeft = Lang.rtl() ? contentRect.right - innerPaddingRight - xgramSubheadLayout.getWidth() : contentRect.left + innerPaddingLeft + iconOffset;
+        c.translate(subheadLeft, contentRect.top + innerPaddingVertical);
+        xgramSubheadLayout.draw(c);
+        c.restoreToCount(subheadSave);
+      }
+      popupView.draw(c, colorProvider, (int) (contentRect.left + innerPaddingLeft + iconOffset), (int) (contentRect.top + innerPaddingVertical + verticalOffset + subheadHeight), (int) (contentRect.right - innerPaddingRight), (int) (contentRect.bottom - innerPaddingVertical - xgramActionHeight()), alpha, iconReceiver);
+      if (xgramActionHeight() > 0 && xgramActionText != null && colorProvider instanceof XgramTooltipColors) {
+        // XGram M3E r6: the action, a text button (labelLarge, primary) in the 36dp row 8dp above the bottom, at the start
+        final android.text.TextPaint paint = xgramPaint(true);
+        final float labelWidth = paint.measureText(xgramActionText, 0, xgramActionText.length());
+        final float rowBottom = contentRect.bottom - Screen.dp(8f), rowTop = rowBottom - Screen.dp(36f);
+        final float labelLeft = Lang.rtl() ? contentRect.right - innerPaddingRight - labelWidth : contentRect.left + innerPaddingLeft;
+        final float stateInset = Screen.dp(8f);
+        xgramActionRect.set(Math.max(contentRect.left + Screen.dp(4f), labelLeft - stateInset), rowTop, Math.min(contentRect.right - Screen.dp(4f), labelLeft + labelWidth + stateInset), rowBottom);
+        final int actionColor = ((XgramTooltipColors) colorProvider).actionColor();
+        if (xgramActionPressed) {
+          final float radius = xgramActionRect.height() / 2f;
+          c.drawRoundRect(xgramActionRect, radius, radius, Paints.fillingPaint(ColorUtils.alphaColor(alpha * XgramExpressive.STATE_PRESSED, actionColor)));
+        }
+        paint.setColor(ColorUtils.alphaColor(alpha, actionColor));
+        final float baseline = xgramActionRect.centerY() - (paint.descent() + paint.ascent()) / 2f;
+        c.drawText(xgramActionText, 0, xgramActionText.length(), labelLeft, baseline, paint);
+      } else {
+        xgramActionRect.setEmpty();
+      }
       if (needSave) {
         c.restoreToCount(saveCount);
       }
@@ -1121,6 +1386,9 @@ public class TooltipOverlayView extends ViewGroup {
   public ColorProvider overrideColorProvider (@Nullable ThemeDelegate forcedTheme) {
     if (forcedTheme == null)
       return null;
+    if (XgramExpressive.isEnabled()) {
+      return new XgramForcedColors(forcedTheme); // XGram M3E r6: the M3 tooltip in the forced theme's scheme
+    }
     return new ColorProvider() {
       @Override
       public ThemeDelegate forcedTheme () {
@@ -1195,9 +1463,24 @@ public class TooltipOverlayView extends ViewGroup {
     @Nullable
     private TdlibUi.UrlOpenParameters urlOpenParameters;
     private List<RunnableData<TooltipInfo>> onBuild;
+    private @Nullable CharSequence xgramSubhead, xgramActionText;
+    private @Nullable Runnable xgramAction;
 
     private TooltipBuilder (TooltipOverlayView parentView) {
       this.parentView = parentView;
+    }
+
+    /** XGram M3E r6: a rich tooltip's subhead (titleSmall, above the supporting text). Ignored with Expressive design off. */
+    public TooltipBuilder xgramSubhead (@Nullable CharSequence subhead) {
+      this.xgramSubhead = subhead;
+      return this;
+    }
+
+    /** XGram M3E r6: a rich tooltip's action, a text button that hides the tooltip and runs. Ignored with Expressive design off. */
+    public TooltipBuilder xgramAction (@Nullable CharSequence label, @Nullable Runnable action) {
+      this.xgramActionText = label != null && label.length() > 0 && action != null ? label : null;
+      this.xgramAction = this.xgramActionText != null ? action : null;
+      return this;
     }
 
     public TooltipBuilder (TooltipBuilder clone) {
@@ -1219,6 +1502,9 @@ public class TooltipOverlayView extends ViewGroup {
       this.maxWidthDp = clone.maxWidthDp;
       this.urlOpenParameters = clone.urlOpenParameters;
       this.onBuild = clone.onBuild != null ? new ArrayList<>(clone.onBuild) : null;
+      this.xgramSubhead = clone.xgramSubhead;
+      this.xgramActionText = clone.xgramActionText;
+      this.xgramAction = clone.xgramAction;
     }
 
     public TooltipBuilder anchor (View originalView) {
@@ -1371,7 +1657,10 @@ public class TooltipOverlayView extends ViewGroup {
 
     public TooltipInfo show (ViewController<?> controller, Tdlib tdlib, int iconRes, CharSequence text) {
       if (originalView == null && viewProvider == null && locationProvider == null) {
-        UI.showToast(text, Toast.LENGTH_SHORT);
+        // XGram M3E r6: no anchor for a tooltip: the snackbar (XgramSnackbar.show is false with Expressive design off)
+        if (!com.fahadali.xgram.appearance.XgramSnackbar.show(text, Toast.LENGTH_SHORT)) {
+          UI.showToast(text, Toast.LENGTH_SHORT);
+        }
         return null;
       } else {
         return icon(iconRes).needBlink(iconRes == R.drawable.baseline_info_24 || iconRes == R.drawable.baseline_error_24).controller(controller != null ? controller.getParentOrSelf() : null).show(tdlib, text).hideDelayed(3500, TimeUnit.MILLISECONDS);
@@ -1400,6 +1689,11 @@ public class TooltipOverlayView extends ViewGroup {
 
     public TooltipInfo show (TooltipContentView view) {
       TooltipInfo info = new TooltipInfo(parentView, originalView, viewProvider, locationProvider, colorProvider, offsetProvider, controller, clickCallback, textSize, allowSp, iconRes, previewFile, imageFile, gifFile, maxWidthDp, flags, view);
+      if (info.xgram) {
+        info.xgramSubhead = xgramSubhead != null && xgramSubhead.length() > 0 ? xgramSubhead : null;
+        info.xgramActionText = xgramActionText;
+        info.xgramAction = xgramAction;
+      }
       if (onBuild != null) {
         for (RunnableData<TooltipInfo> act : onBuild) {
           act.runWithData(info);

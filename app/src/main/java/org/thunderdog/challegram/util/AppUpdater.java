@@ -485,7 +485,8 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
       b.setNeutralButton(Lang.getString(R.string.XgramUpdateWhatsNew), (dialog, which) -> XgramUpdates.showWhatsNew(c, found, this::downloadUpdate));
     }
     b.setNegativeButton(Lang.getString(R.string.XgramR5SheetsLater), (dialog, which) -> dialog.dismiss());
-    c.showAlert(b);
+    // XGram M3E r6: [What's new] ... [Later] [Download], Download the filled action
+    com.fahadali.xgram.appearance.XgramM3Controls.fillButton(c.showAlert(b), android.content.DialogInterface.BUTTON_POSITIVE, false);
   }
 
   @Override
@@ -589,7 +590,8 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
         // XGram: the installer opens only when the file's SHA-256 matches the post's "SHA-256:" line.
         final Tdlib.UpdateFileInfo updateFile = telegramChannelFile;
         XgramUpdates.verifyThenInstall(telegramChannelTdlib, xgramUpdate, () ->
-          UI.openFile(new TdlibContext(context, telegramChannelTdlib), updateFile.document.fileName, new File(updateFile.document.document.local.path), updateFile.document.mimeType, 0)
+          UI.openFile(new TdlibContext(context, telegramChannelTdlib), updateFile.document.fileName, new File(updateFile.document.document.local.path), updateFile.document.mimeType, 0),
+          this::downloadUpdate // XGram M3E r6: "Download again" on the snackbar of a bad file
         );
         break;
       }

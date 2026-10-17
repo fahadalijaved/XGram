@@ -81,6 +81,8 @@ import tgx.td.ChatPosition;
 public final class XgramCommunityController extends RecyclerViewController<Long> implements View.OnClickListener, View.OnLongClickListener, BaseView.ActionListProvider, TdlibCache.CommunityDataChangeListener, XgramCommunities.Listener, MoreDelegate {
   private static final int TYPE_CHAT_ROW = 1;
   private static final int TYPE_LOADING_ROW = 2;
+  /** XGram M3E r6: the empty state (no chats, nothing found) and the card of a failed full-info request. */
+  private static final int TYPE_EMPTY_ROW = 3, TYPE_ERROR_CARD = 4;
   private static final long REBUILD_DELAY_MS = 200;
   /** notifyItemChanged payload: the item animator keeps the bound view instead of fading a new one in. */
   private static final Object REBIND = new Object();
@@ -203,7 +205,18 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     ids.append(R.id.btn_xgramCommunitySettings);
     titles.append(R.string.Settings);
     ids.append(R.id.btn_xgramCommunityMerge);
-    titles.append(XgramCommunities.isMergeEnabled(tdlib, communityId) ? R.string.XgramCommunityShowSeparate : R.string.XgramCommunityShowOne);
+    final boolean merged = XgramCommunities.isMergeEnabled(tdlib, communityId);
+    if (XgramExpressive.isEnabled()) {
+      // XGram M3E r6: "Show as one chat" as a checkable menu item (checked while the community is one chat)
+      titles.append(R.string.XgramCommunityShowOne);
+      showMore(ids.get(), titles.get(), 0);
+      org.thunderdog.challegram.widget.PopupLayout popup = context().getCurrentPopupWindow();
+      if (popup != null && popup.getBoundView() instanceof org.thunderdog.challegram.navigation.MenuMoreWrap) {
+        ((org.thunderdog.challegram.navigation.MenuMoreWrap) popup.getBoundView()).xgramSetCheckable(R.id.btn_xgramCommunityMerge, merged);
+      }
+      return;
+    }
+    titles.append(merged ? R.string.XgramCommunityShowSeparate : R.string.XgramCommunityShowOne);
     showMore(ids.get(), titles.get(), 0);
   }
 
@@ -215,7 +228,9 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     } else if (id == R.id.btn_xgramCommunityMerge && communityId != 0) {
       boolean merged = XgramCommunities.isMergeEnabled(tdlib, communityId);
       XgramCommunities.setMergeMode(tdlib, communityId, merged ? XgramCommunities.MODE_SEPARATE : XgramCommunities.MODE_ONE_CHAT);
-      UI.showToast(R.string.XgramCommunityMergeLocal, android.widget.Toast.LENGTH_SHORT);
+      if (!com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.XgramCommunityMergeLocal), android.widget.Toast.LENGTH_SHORT)) {
+        UI.showToast(R.string.XgramCommunityMergeLocal, android.widget.Toast.LENGTH_SHORT); // XGram M3E r6: the snackbar
+      }
     }
   }
 
@@ -285,6 +300,16 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
           view.setLoading(true, 38f);
           return new SettingHolder(view);
         }
+        if (customViewType == TYPE_EMPTY_ROW) {
+          // XGram M3E r6: the M3E empty state (a burst with an icon, a headline, supporting text)
+          XgramListStateView view = new XgramListStateView(parent.getContext());
+          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+          view.setWrapContent(true);
+          return new SettingHolder(view);
+        }
+        if (customViewType == TYPE_ERROR_CARD) {
+          return new SettingHolder(newErrorCard(parent.getContext()));
+        }
         throw new IllegalArgumentException("customViewType=" + customViewType);
       }
 
@@ -301,29 +326,29 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
             params.height = height;
             view.setLayoutParams(params);
           }
+        } else if (customViewType == TYPE_EMPTY_ROW) {
+          XgramListStateView state = (XgramListStateView) view;
+          if (item.getStringResource() == R.string.NothingFound) {
+            state.setEmpty(R.drawable.baseline_search_24, Lang.getString(R.string.NothingFound), null);
+          } else {
+            state.setEmpty(R.drawable.baseline_forum_24, null, Lang.getString(R.string.XgramCommunityEmpty));
+          }
+          // alone, centred on the page; above the note about the chats this device has seen, its own height
+          int height = getItems().size() == 1 ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT;
+          ViewGroup.LayoutParams params = view.getLayoutParams();
+          if (params != null && params.height != height) {
+            params.height = height;
+            view.setLayoutParams(params);
+          }
+        } else if (customViewType == TYPE_ERROR_CARD) {
+          bindErrorCard(view);
         }
       }
     };
     recyclerView.setAdapter(adapter);
     tdlib.cache().subscribeToCommunityUpdates(communityId(), this);
     XgramCommunities.addListener(this);
-    tdlib.send(new TdApi.GetCommunityFullInfo(communityId()), (full, error) -> {
-      if (full != null) {
-        tdlib.cache().xgramOnCommunityFullLoaded(communityId(), full);
-      }
-      if (error != null) {
-        android.util.Log.w("XGram", "GetCommunityFullInfo " + communityId() + ": " + error.code + " " + error.message);
-      }
-      runOnUiThreadOptional(() -> {
-        if (error != null) {
-          loadError = error.message;
-          useKnownChats = true;
-        } else {
-          fetchedFull = full;
-        }
-        buildItems();
-      });
-    });
+    requestFullInfo();
     tdlib.ui().postDelayed(() -> {
       if (!isDestroyed()) {
         if (communityFull() == null) {
@@ -333,6 +358,121 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       }
     }, 2500);
     buildItems();
+  }
+
+  /** Asks TDLib for the community's chat list (on opening, and on Retry in the error card). */
+  private void requestFullInfo () {
+    tdlib.send(new TdApi.GetCommunityFullInfo(communityId()), (full, error) -> {
+      if (full != null) {
+        tdlib.cache().xgramOnCommunityFullLoaded(communityId(), full);
+      }
+      if (error != null) {
+        android.util.Log.w("XGram", "GetCommunityFullInfo " + communityId() + ": " + error.code + " " + error.message);
+      }
+      runOnUiThreadOptional(() -> {
+        retrying = false;
+        if (error != null) {
+          loadError = error.message;
+          useKnownChats = true;
+        } else {
+          loadError = null;
+          fetchedFull = full;
+        }
+        buildItems();
+        // the error card stays when the structure is the same: bind it again (its text and the Retry button)
+        List<ListItem> shown = adapter.getItems();
+        for (int i = 0; i < shown.size(); i++) {
+          if (shown.get(i).getViewType() == ListItem.TYPE_CUSTOM - TYPE_ERROR_CARD) {
+            adapter.notifyItemChanged(i);
+          }
+        }
+      });
+    });
+  }
+
+  // XGram M3E r6: the error card (TDLib didn't send the chat list): surfaceContainerHigh with large corners 16dp in from
+  // the sides, an error icon, the reason in bodyMedium and a Retry text button that asks again.
+
+  private boolean retrying;
+
+  private View newErrorCard (Context context) {
+    android.widget.FrameLayout frame = new android.widget.FrameLayout(context);
+    frame.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    frame.setPadding(Screen.dp(16f), Screen.dp(8f), Screen.dp(16f), Screen.dp(8f));
+
+    android.widget.LinearLayout card = new android.widget.LinearLayout(context);
+    card.setOrientation(android.widget.LinearLayout.VERTICAL);
+    card.setPaddingRelative(Screen.dp(16f), Screen.dp(16f), Screen.dp(8f), Screen.dp(4f));
+    com.fahadali.xgram.appearance.XgramR5Sheets.applyCard(card, XgramExpressive.SURFACE_CONTAINER_HIGH, XgramExpressive.CORNER_L);
+
+    android.widget.LinearLayout row = new android.widget.LinearLayout(context);
+    row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+    RoleIconView icon = new RoleIconView(context, XgramExpressive.ERROR);
+    icon.setImageDrawable(org.thunderdog.challegram.tool.Drawables.get(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_error_24)));
+    android.widget.LinearLayout.LayoutParams iconParams = new android.widget.LinearLayout.LayoutParams(Screen.dp(24f), Screen.dp(24f));
+    iconParams.setMarginEnd(Screen.dp(16f));
+    row.addView(icon, iconParams);
+    android.widget.TextView text = new org.thunderdog.challegram.widget.NoScrollTextView(context);
+    text.setId(R.id.text_title);
+    XgramExpressive.applyText(text, XgramExpressive.TS_BODY_M, false);
+    text.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+    addThemeTextColorListener(text, org.thunderdog.challegram.theme.ColorId.textLight);
+    text.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    android.widget.LinearLayout.LayoutParams textParams = new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    textParams.setMarginEnd(Screen.dp(8f));
+    row.addView(text, textParams);
+    card.addView(row, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    android.widget.TextView retry = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(context, Lang.getString(R.string.XgramR6B3Retry), XgramExpressive.PRIMARY, null);
+    retry.setId(R.id.btn_retry);
+    retry.setOnClickListener(v -> {
+      if (!retrying && !isDestroyed()) {
+        retrying = true;
+        v.setEnabled(false);
+        requestFullInfo();
+      }
+    });
+    android.widget.LinearLayout.LayoutParams retryParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f));
+    retryParams.gravity = android.view.Gravity.END;
+    retryParams.topMargin = Screen.dp(8f);
+    retryParams.bottomMargin = Screen.dp(4f);
+    card.addView(retry, retryParams);
+    frame.addView(card, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    return frame;
+  }
+
+  private void bindErrorCard (View view) {
+    View text = view.findViewById(R.id.text_title);
+    if (text instanceof android.widget.TextView) {
+      ((android.widget.TextView) text).setText(loadError != null ? Lang.getString(R.string.XgramCommunityPartialError, loadError) : Lang.getString(R.string.XgramCommunityPartial));
+    }
+    View retry = view.findViewById(R.id.btn_retry);
+    if (retry != null) {
+      retry.setEnabled(!retrying);
+    }
+  }
+
+  /** An icon tinted with a color role, read at draw time (theme changes). */
+  private static final class RoleIconView extends android.widget.ImageView {
+    private final int role;
+    private int appliedColor;
+
+    RoleIconView (Context context, int role) {
+      super(context);
+      this.role = role;
+      setScaleType(ScaleType.CENTER_INSIDE);
+      setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+    }
+
+    @Override
+    protected void onDraw (android.graphics.Canvas canvas) {
+      final int color = XgramExpressive.color(role);
+      if (color != appliedColor) {
+        appliedColor = color;
+        setColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN);
+      }
+      super.onDraw(canvas);
+    }
   }
 
   // Like chats and topic lists: slide in once the chats are there, not on "Loading" swapped out mid-slide.
@@ -837,7 +977,7 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       }
       addRows(items, found);
       if (items.isEmpty()) {
-        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.NothingFound));
+        items.add(XgramExpressive.isEnabled() ? new ListItem(ListItem.TYPE_CUSTOM - TYPE_EMPTY_ROW, 0, 0, R.string.NothingFound) : new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.NothingFound));
       }
     } else {
       addSection(items, R.string.XgramCommunityChatsIn, joined);
@@ -845,10 +985,20 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       addSection(items, R.string.XgramCommunityHiddenChats, hidden);
     }
     if (items.isEmpty()) {
-      items.add(pendingChats.isEmpty() ? new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityEmpty) : loadingItem());
+      if (!pendingChats.isEmpty()) {
+        items.add(loadingItem());
+      } else if (XgramExpressive.isEnabled()) {
+        items.add(new ListItem(ListItem.TYPE_CUSTOM - TYPE_EMPTY_ROW, 0, 0, R.string.XgramCommunityEmpty)); // XGram M3E r6
+      } else {
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramCommunityEmpty));
+      }
     }
     if (full == null && searchQuery.isEmpty()) {
-      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loadError != null ? Lang.getString(R.string.XgramCommunityPartialError, loadError) : Lang.getString(R.string.XgramCommunityPartial)));
+      if (XgramExpressive.isEnabled() && loadError != null) {
+        items.add(new ListItem(ListItem.TYPE_CUSTOM - TYPE_ERROR_CARD)); // XGram M3E r6: the error card with Retry
+      } else {
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loadError != null ? Lang.getString(R.string.XgramCommunityPartialError, loadError) : Lang.getString(R.string.XgramCommunityPartial)));
+      }
     }
     updateHeader(chatIds.size());
     if (sameStructure(adapter.getItems(), items)) {
