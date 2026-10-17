@@ -1075,6 +1075,9 @@ public class TdlibFilesManager implements GlobalConnectionListener {
 
   public boolean setDownloadInPrivateChats (int autoDownloadFlags) {
     if (downloadInPrivateChats != autoDownloadFlags) {
+      if (autoDownloadFlags == 0) {
+        rememberDownloadSelection(DOWNLOAD_PRIVATE_SHIFT, downloadInPrivateChats);
+      }
       downloadInPrivateChats = autoDownloadFlags;
       saveAutoDownloadSettings();
       return true;
@@ -1092,6 +1095,9 @@ public class TdlibFilesManager implements GlobalConnectionListener {
 
   public boolean setDownloadInGroupChats (int autoDownloadFlags) {
     if (downloadInGroupChats != autoDownloadFlags) {
+      if (autoDownloadFlags == 0) {
+        rememberDownloadSelection(DOWNLOAD_GROUPS_SHIFT, downloadInGroupChats);
+      }
       downloadInGroupChats = autoDownloadFlags;
       saveAutoDownloadSettings();
       return true;
@@ -1109,6 +1115,9 @@ public class TdlibFilesManager implements GlobalConnectionListener {
 
   public boolean setDownloadInChannelChats (int autoDownloadFlags) {
     if (downloadInChannelChats != autoDownloadFlags) {
+      if (autoDownloadFlags == 0) {
+        rememberDownloadSelection(DOWNLOAD_CHANNELS_SHIFT, downloadInChannelChats);
+      }
       downloadInChannelChats = autoDownloadFlags;
       saveAutoDownloadSettings();
       return true;
@@ -1118,6 +1127,84 @@ public class TdlibFilesManager implements GlobalConnectionListener {
 
   public String getDownloadInChannelChatsList () {
     return buildDownloadString(downloadInChannelChats);
+  }
+
+  // XGram: the switch of each chat type's automatic media download (Data and storage). Turning it off downloads
+  // nothing there and keeps the media types it had; turning it back on restores them, or Telegram X's defaults when
+  // there were none. Any change to nothing (the switch or the picker) remembers the selection it replaces.
+
+  public static final int DOWNLOAD_CHAT_PRIVATE = 0;
+  public static final int DOWNLOAD_CHAT_GROUPS = 1;
+  public static final int DOWNLOAD_CHAT_CHANNELS = 2;
+
+  private static final String DOWNLOAD_SAVED_KEY = "xgram_autodownload_saved";
+
+  private static int downloadShiftOf (int chatType) {
+    switch (chatType) {
+      case DOWNLOAD_CHAT_PRIVATE:
+        return DOWNLOAD_PRIVATE_SHIFT;
+      case DOWNLOAD_CHAT_GROUPS:
+        return DOWNLOAD_GROUPS_SHIFT;
+      case DOWNLOAD_CHAT_CHANNELS:
+        return DOWNLOAD_CHANNELS_SHIFT;
+    }
+    throw new IllegalArgumentException(Integer.toString(chatType));
+  }
+
+  public int getDownloadFlags (int chatType) {
+    switch (chatType) {
+      case DOWNLOAD_CHAT_PRIVATE:
+        return downloadInPrivateChats;
+      case DOWNLOAD_CHAT_GROUPS:
+        return downloadInGroupChats;
+      case DOWNLOAD_CHAT_CHANNELS:
+        return downloadInChannelChats;
+    }
+    throw new IllegalArgumentException(Integer.toString(chatType));
+  }
+
+  public boolean setDownloadFlags (int chatType, int autoDownloadFlags) {
+    switch (chatType) {
+      case DOWNLOAD_CHAT_PRIVATE:
+        return setDownloadInPrivateChats(autoDownloadFlags);
+      case DOWNLOAD_CHAT_GROUPS:
+        return setDownloadInGroupChats(autoDownloadFlags);
+      case DOWNLOAD_CHAT_CHANNELS:
+        return setDownloadInChannelChats(autoDownloadFlags);
+    }
+    throw new IllegalArgumentException(Integer.toString(chatType));
+  }
+
+  public boolean isAutoDownloadEnabled (int chatType) {
+    return getDownloadFlags(chatType) != 0;
+  }
+
+  public boolean setAutoDownloadEnabled (int chatType, boolean isEnabled) {
+    if (isAutoDownloadEnabled(chatType) == isEnabled) {
+      return false;
+    }
+    if (!isEnabled) {
+      return setDownloadFlags(chatType, 0);
+    }
+    final int shift = downloadShiftOf(chatType);
+    int flags = (Settings.instance().getInt(makeKey(DOWNLOAD_SAVED_KEY, tdlib.id()), 0) >> shift) & DOWNLOAD_ALL_MEDIAS;
+    if (flags == 0) {
+      flags = (DOWNLOAD_DEFAULTS >> shift) & 0xff;
+    }
+    return setDownloadFlags(chatType, flags);
+  }
+
+  private void rememberDownloadSelection (int shift, int flags) {
+    flags &= DOWNLOAD_ALL_MEDIAS;
+    if (flags == 0) {
+      return;
+    }
+    final String key = makeKey(DOWNLOAD_SAVED_KEY, tdlib.id());
+    final int saved = Settings.instance().getInt(key, 0);
+    final int updated = (saved & ~(0xff << shift)) | (flags << shift);
+    if (updated != saved) {
+      Settings.instance().putInt(key, updated);
+    }
   }
 
   public int getExcludeOverWiFi () {

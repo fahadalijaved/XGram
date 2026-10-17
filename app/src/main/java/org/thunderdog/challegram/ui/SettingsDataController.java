@@ -16,9 +16,11 @@ package org.thunderdog.challegram.ui;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Canvas;
 import android.os.Bundle;
 import android.util.SparseIntArray;
 import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.annotation.IdRes;
 import androidx.annotation.Nullable;
@@ -39,6 +41,9 @@ import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibFilesManager;
 import org.thunderdog.challegram.telegram.TdlibManager;
 import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.v.CustomRecyclerView;
@@ -46,6 +51,7 @@ import org.thunderdog.challegram.voip.annotation.DataSavingOption;
 
 import java.util.List;
 
+import me.vkryl.android.widget.FrameLayoutFix;
 import me.vkryl.core.ArrayUtils;
 
 public class SettingsDataController extends RecyclerViewController<SettingsDataController.Args> implements View.OnClickListener, ViewController.SettingsIntDelegate,
@@ -173,10 +179,13 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
           }
         } else if (itemId == R.id.btn_inPrivateChats) {
           view.setData(tdlib.files().getDownloadInPrivateChatsList());
+          setAutoDownloadToggler(view, TdlibFilesManager.DOWNLOAD_CHAT_PRIVATE, isUpdate);
         } else if (itemId == R.id.btn_inGroupChats) {
           view.setData(tdlib.files().getDownloadInGroupChatsList());
+          setAutoDownloadToggler(view, TdlibFilesManager.DOWNLOAD_CHAT_GROUPS, isUpdate);
         } else if (itemId == R.id.btn_inChannelChats) {
           view.setData(tdlib.files().getDownloadInChannelChatsList());
+          setAutoDownloadToggler(view, TdlibFilesManager.DOWNLOAD_CHAT_CHANNELS, isUpdate);
         } else if (itemId == R.id.btn_mediaWiFiLimits) {
           view.setData(tdlib.files().getDownloadLimitOverWiFiString());
         } else if (itemId == R.id.btn_mediaMobileLimits) {
@@ -214,6 +223,14 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
           view.setData(networkStats != null ? networkStats.getWiFiEntry() : Lang.getString(R.string.Calculating));
         } else if (itemId == R.id.btn_resetNetworkStats) {
           view.setData(networkStats != null ? networkStats.getDateEntry() : Lang.getString(R.string.LoadingInformation));
+        }
+      }
+
+      @Override
+      public void modifySettingView (int viewType, SettingView settingView) {
+        // Only the Automatic media download rows use this type here.
+        if (viewType == ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER && settingView.getToggler() != null) {
+          setupAutoDownloadRow(settingView);
         }
       }
     };
@@ -263,11 +280,11 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
 
         new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.AutomaticMediaDownload),
         new ListItem(ListItem.TYPE_SHADOW_TOP),
-        new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_inPrivateChats, 0, R.string.InPrivateChats),
+        new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_inPrivateChats, 0, R.string.InPrivateChats),
         new ListItem(ListItem.TYPE_SEPARATOR_FULL),
-        new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_inGroupChats, 0, R.string.InGroups),
+        new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_inGroupChats, 0, R.string.InGroups),
         new ListItem(ListItem.TYPE_SEPARATOR_FULL),
-        new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_inChannelChats, 0, R.string.InChannels),
+        new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_inChannelChats, 0, R.string.InChannels),
         new ListItem(ListItem.TYPE_SEPARATOR_FULL),
         new ListItem(ListItem.TYPE_SETTING, R.id.btn_showAdvanced, 0, R.string.Advanced),
         new ListItem(ListItem.TYPE_SHADOW_BOTTOM),
@@ -449,7 +466,8 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
   @Override
   public void onClick (View v) {
     final int id = v.getId();
-    final boolean toggleResult = adapter.toggleView(v);
+    // XGram: a tap on an Automatic media download row opens its media types; only its switch toggles.
+    final boolean toggleResult = autoDownloadChatType(id) == -1 && adapter.toggleView(v);
 
     if (id == R.id.btn_resetNetworkStats) {
       showOptions(Lang.getString(R.string.ResetStatsHint), new int[] {R.id.btn_delete, R.id.btn_cancel}, new String[] {Lang.getString(R.string.Reset), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_forever_24, R.drawable.baseline_cancel_24}, (itemView, optionId) -> {
@@ -588,6 +606,79 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
         adapter.notifyItemRangeRemoved(index, 2);
         adapter.notifyItemRangeInserted(index, advancedItems.length);
       }
+    }
+  }
+
+  // XGram: Automatic media download rows as Telegram's split rows. The row opens the media types; the switch after a
+  // divider turns the chat type's download off (nothing downloads) or back on (the previous media types, or Telegram X's
+  // defaults). The toggler has a click of its own, so the Compose renderer draws the row as an M3 split switch row.
+
+  private static int autoDownloadChatType (int id) {
+    if (id == R.id.btn_inPrivateChats) {
+      return TdlibFilesManager.DOWNLOAD_CHAT_PRIVATE;
+    } else if (id == R.id.btn_inGroupChats) {
+      return TdlibFilesManager.DOWNLOAD_CHAT_GROUPS;
+    } else if (id == R.id.btn_inChannelChats) {
+      return TdlibFilesManager.DOWNLOAD_CHAT_CHANNELS;
+    }
+    return -1;
+  }
+
+  private void setAutoDownloadToggler (SettingView view, int chatType, boolean isUpdate) {
+    if (view.getToggler() != null) {
+      view.getToggler().setRadioEnabled(tdlib.files().isAutoDownloadEnabled(chatType), isUpdate);
+      view.getToggler().setContentDescription(view.getName());
+    }
+  }
+
+  private void setupAutoDownloadRow (SettingView view) {
+    final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    // From the row's end to the divider: the switch's own view (66dp, M3E 72dp) and a gap before it.
+    final int dividerEnd = Screen.dp(expressive ? 80f : 70f);
+    // The name and the media types end 17dp before the divider (SettingView adds 17dp to the forced padding).
+    view.forcePadding(0, dividerEnd);
+    AutoDownloadDivider divider = new AutoDownloadDivider(view.getContext(), dividerEnd, expressive);
+    divider.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    view.addView(divider);
+    addThemeInvalidateListener(divider);
+    view.getToggler().setOnClickListener(v -> toggleAutoDownload(view));
+  }
+
+  private void toggleAutoDownload (SettingView view) {
+    if (isDestroyed() || !(view.getTag() instanceof ListItem)) {
+      return;
+    }
+    final int id = ((ListItem) view.getTag()).getId();
+    final int chatType = autoDownloadChatType(id);
+    if (chatType == -1) {
+      return;
+    }
+    final boolean isEnabled = !tdlib.files().isAutoDownloadEnabled(chatType);
+    if (tdlib.files().setAutoDownloadEnabled(chatType, isEnabled)) {
+      adapter.updateValuedSettingById(id);
+    }
+  }
+
+  /** The vertical line between an Automatic media download row and its switch (start side in RTL). */
+  private static final class AutoDownloadDivider extends View {
+    private final int end;
+    private final boolean expressive;
+
+    AutoDownloadDivider (Context context, int end, boolean expressive) {
+      super(context);
+      this.end = end;
+      this.expressive = expressive;
+      setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      final int width = Math.max(1, Screen.dp(expressive ? 1f : .5f));
+      final int height = Math.min(Screen.dp(32f), getMeasuredHeight());
+      final int left = Lang.rtl() ? end - width : getMeasuredWidth() - end;
+      final int top = (getMeasuredHeight() - height) / 2;
+      final int color = expressive ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT) : Theme.separatorColor();
+      c.drawRect(left, top, left + width, top + height, Paints.fillingPaint(color));
     }
   }
 
