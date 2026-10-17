@@ -131,7 +131,7 @@ public class MediaStickersAdapter extends RecyclerView.Adapter<MediaStickersAdap
 
     position--;
 
-    int scrollY = LayoutParams.getKeyboardTopViewHeight(layoutParams);
+    int scrollY = xgramKeyboardTopHeight(); // XGram: with the top clearance
     if (position == 0) {
       return scrollY;
     }
@@ -356,7 +356,39 @@ public class MediaStickersAdapter extends RecyclerView.Adapter<MediaStickersAdap
         }
         break;
       }
+      case StickerHolder.TYPE_KEYBOARD_TOP: {
+        // XGram: the spacer follows the top clearance (xgramSetTopClearance)
+        final int height = xgramKeyboardTopHeight();
+        ViewGroup.LayoutParams params = holder.itemView.getLayoutParams();
+        if (params != null && params.height != height) {
+          params.height = height;
+          holder.itemView.setLayoutParams(params);
+        }
+        break;
+      }
     }
+  }
+
+  // XGram M3E: the emoji panel's floating Emoji / Stickers / GIFs toolbar sits under the section tabs, over the top
+  // of the grid, so the top spacer (TYPE_KEYBOARD_TOP) gets that much more. measureScrollTop counts it too, so the
+  // scroll positions (the header hiding, the section tracking, the jumps to a set) stay what they were.
+
+  private int xgramTopClearance;
+
+  /** XGram: extra height of the top spacer, in px (0 for none). */
+  public void xgramSetTopClearance (int clearance) {
+    if (this.xgramTopClearance != clearance) {
+      this.xgramTopClearance = clearance;
+      for (int i = 0; i < items.size(); i++) {
+        if (items.get(i).viewType == StickerHolder.TYPE_KEYBOARD_TOP) {
+          notifyItemChanged(i);
+        }
+      }
+    }
+  }
+
+  private int xgramKeyboardTopHeight () {
+    return LayoutParams.getKeyboardTopViewHeight(layoutParams) + xgramTopClearance;
   }
 
   @Override
@@ -750,7 +782,7 @@ public class MediaStickersAdapter extends RecyclerView.Adapter<MediaStickersAdap
         }
         case TYPE_KEYBOARD_TOP: {
           View view = new View(context);
-          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, LayoutParams.getKeyboardTopViewHeight(adapter.layoutParams)));
+          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, adapter.xgramKeyboardTopHeight()));
           return new StickerHolder(view);
         }
         case TYPE_SEPARATOR: {

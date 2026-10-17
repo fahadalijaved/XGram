@@ -161,6 +161,23 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
   private MediaGifsAdapter gifsAdapter;
   private RecyclerView gifsView;
 
+  private int xgramTopClearance;
+
+  /** XGram M3E: extra room at the top of the sticker and GIF grids for the emoji panel's floating toolbar, in px. */
+  public void xgramSetTopClearance (int clearance) {
+    final boolean changed = this.xgramTopClearance != clearance;
+    this.xgramTopClearance = clearance;
+    if (stickersAdapter != null) {
+      stickersAdapter.xgramSetTopClearance(clearance);
+    }
+    if (trendingAdapter != null) {
+      trendingAdapter.xgramSetTopClearance(clearance);
+    }
+    if (changed && gifsView != null) {
+      gifsView.invalidateItemDecorations();
+    }
+  }
+
   @Override
   protected View onCreateView (Context context) {
     stickersAdapter = new MediaStickersAdapter(this, stickersController, false, this) {
@@ -190,11 +207,13 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
         Settings.instance().setNewSetting(Settings.SETTING_FLAG_EXPAND_RECENT_STICKERS, needExpand);
       }
     };
+    stickersAdapter.xgramSetTopClearance(xgramTopClearance); // XGram
     stickersController.setArguments(getArguments());
     stickersController.setAdapter(stickersAdapter);
     stickersController.setSpanCount(spanCount);
 
     trendingAdapter = new MediaStickersAdapter(this, trendingSetsController, true, this);
+    trendingAdapter.xgramSetTopClearance(xgramTopClearance); // XGram
     trendingAdapter.setItem(new MediaStickersAdapter.StickerItem(MediaStickersAdapter.StickerHolder.TYPE_PROGRESS));
     trendingSetsController.setArguments(getArguments());
     trendingSetsController.setAdapter(trendingAdapter);
@@ -430,6 +449,7 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
         @Override
         public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
           if (contentView.isSectionStable() && contentView.getCurrentSection() == SECTION_GIFS && getArguments() != null && getArguments().getCurrentItem() == 1) {
+            getArguments().xgramOnScrolledBy(dy); // XGram: the floating toolbar follows the scroll direction
             getArguments().moveHeaderFull(getGIFsScrollY());
             getArguments().onSectionInteractedScroll(EmojiMediaType.GIF, dy != 0);
           }
@@ -445,7 +465,7 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
         @Override
         public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
           int position = parent.getChildAdapterPosition(view);
-          outRect.top = manager.isFirstRow(position) ? Screen.dp(4f) + EmojiLayout.getHeaderSize() : 0;
+          outRect.top = manager.isFirstRow(position) ? Screen.dp(4f) + EmojiLayout.getHeaderSize() + xgramTopClearance : 0; // XGram: clear of the floating toolbar
           outRect.right = manager.isLastInRow(position) ? 0 : Screen.dp(3f);
           outRect.bottom = Screen.dp(3f);
         }

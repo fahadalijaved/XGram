@@ -104,6 +104,19 @@ public class EmojiListController extends ViewController<EmojiLayout> implements 
   private MediaStickersAdapter trendingAdapter;
   private EmojiToneHelper toneHelper;
 
+  private int xgramTopClearance;
+
+  /** XGram M3E: extra room at the top of the grids for the emoji panel's floating toolbar (EmojiLayout), in px. */
+  public void xgramSetTopClearance (int clearance) {
+    this.xgramTopClearance = clearance;
+    if (adapter != null) {
+      adapter.xgramSetTopClearance(clearance);
+    }
+    if (trendingAdapter != null) {
+      trendingAdapter.xgramSetTopClearance(clearance);
+    }
+  }
+
   private boolean useDarkMode;
 
   @Override
@@ -122,6 +135,7 @@ public class EmojiListController extends ViewController<EmojiLayout> implements 
     adapter = new MediaStickersAdapter(this, emojiController, false, this, null, false,  toneHelper);
     adapter.setClassicEmojiClickListener(this::onClassicEmojiClick);
     adapter.setRepaintingColorId(ColorId.text);
+    adapter.xgramSetTopClearance(xgramTopClearance); // XGram
 
     this.useDarkMode = getArgumentsStrict().useDarkMode();
 
@@ -159,6 +173,7 @@ public class EmojiListController extends ViewController<EmojiLayout> implements 
     });
 
     trendingAdapter = new MediaStickersAdapter(this, trendingSetsController, false, this);
+    trendingAdapter.xgramSetTopClearance(xgramTopClearance); // XGram
     trendingAdapter.setItem(new MediaStickersAdapter.StickerItem(MediaStickersAdapter.StickerHolder.TYPE_PROGRESS));
     trendingSetsController.setArguments(getArguments());
     trendingSetsController.setAdapter(trendingAdapter);

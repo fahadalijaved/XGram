@@ -259,9 +259,11 @@ public class EmojiSection implements FactorAnimator.Target {
   }
 
   // XGram: Material 3 Expressive category: a 40x32dp secondaryContainer pill grows behind the active icon,
-  // onSecondaryContainer active icon, onSurfaceVariant inactive
+  // onSecondaryContainer active icon, onSurfaceVariant inactive. The outlined icon crossfades to the filled one
+  // (XgramIconCrossfade: icon and activeIcon are separate drawables), no swap halfway.
   private static final android.graphics.RectF xgramPill = new android.graphics.RectF();
-  private static Paint xgramIconPaint;
+  private static Paint xgramIconPaint, xgramActiveIconPaint;
+  private static int xgramIconColor, xgramActiveIconColor;
 
   /** XGram: the category draws the Expressive pill look (not the dark panel), so it presses in that pill (EmojiSectionView). */
   public boolean xgramHasPillLook () {
@@ -283,10 +285,17 @@ public class EmojiSection implements FactorAnimator.Target {
       xgramPill.set(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight);
       c.drawRoundRect(xgramPill, halfHeight, halfHeight, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), factor)));
     }
-    final Drawable icon = factor > .5f && this.activeIcon != null ? activeIcon : this.icon;
-    int color = me.vkryl.core.ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), factor);
-    xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, color);
-    Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2, cy - icon.getMinimumHeight() / 2, xgramIconPaint);
+    final int restColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    final int activeColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+    if (xgramIconPaint == null || xgramIconColor != restColor) {
+      xgramIconPaint = Paints.createPorterDuffPaint(xgramIconPaint, xgramIconColor = restColor);
+    }
+    if (xgramActiveIconPaint == null || xgramActiveIconColor != activeColor) {
+      xgramActiveIconPaint = Paints.createPorterDuffPaint(xgramActiveIconPaint, xgramActiveIconColor = activeColor);
+    }
+    // Without a filled drawing, the one icon still changes color through the crossfade (drawn opaque, see XgramIconCrossfade)
+    final Drawable activeIcon = this.activeIcon != null ? this.activeIcon : this.icon;
+    com.fahadali.xgram.appearance.XgramIconCrossfade.draw(c, icon, xgramIconPaint, activeIcon, xgramActiveIconPaint, cx, cy, factor, 1f);
     return true;
   }
 
