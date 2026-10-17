@@ -25,8 +25,9 @@ import com.fahadali.xgram.compose.ui.str
 import org.thunderdog.challegram.R
 
 /**
- * Side Menu: the header's phone number, then which items the drawer shows and in what order. Night mode and Ghost
- * mode sit below the drawer's line, so they are a group of their own and move only among themselves.
+ * Side Menu: the header's phone number, then which items the drawer shows and in what order. Night mode, Expressive
+ * design (Android 13+) and Ghost mode sit below the drawer's line, so they are a group of their own and move only
+ * among themselves.
  */
 @Composable
 fun SideMenuPage() {
@@ -35,6 +36,7 @@ fun SideMenuPage() {
     val settings = XgramSettings.instance()
     val mainKeys = XgramReorder.ordered(XgramReorder.DRAWER, XgramDrawerItemsController.KEYS)
     val toggleKeys = XgramReorder.ordered(XgramReorder.DRAWER, XgramDrawerItemsController.TOGGLE_KEYS)
+      .filter { XgramDrawerItemsController.isAvailable(it) }
 
     // The same option as in Privacy: the header shows the @username instead of the number.
     group {

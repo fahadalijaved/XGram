@@ -846,6 +846,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     if (!xgram.drawerItemHidden("night")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_night, R.drawable.baseline_brightness_2_24, R.string.NightMode, R.id.btn_night, Theme.isDark()));
     }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isAvailable() && !xgram.drawerItemHidden("expressive")) {
+      // XGram: the Appearance switch, in both looks (Android 13+); turning it on or off restarts the app.
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_xgramExpressive, R.drawable.baseline_palette_24, R.string.XgramExpressive, R.id.btn_xgramExpressive, com.fahadali.xgram.appearance.XgramExpressive.isEnabled()));
+    }
     if (!xgram.drawerItemHidden("ghost")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM_WITH_RADIO, R.id.btn_xgramGhostMode, R.drawable.baseline_ghost_24, R.string.XgramGhostMode, R.id.btn_xgramGhostMode, xgram.isAnyGhostEnabled())); // XGram
     }
@@ -870,9 +874,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
 
   // XGram: Material 3 Expressive side menu rows (the modal navigation drawer / expanded navigation rail item):
   // 56dp high, a full-corner pill 12dp in from both sides (secondaryContainer when active, onSurface 10% when
-  // pressed), 24dp icon at 28dp centred in the row, labelLarge label at 64dp. The switch rows (Night mode, Ghost mode,
-  // Proxy) press as the same pill instead of Telegram X's full-width gray highlight, with the switch's end at 28dp,
-  // mirroring the icon. Only with Expressive design on.
+  // pressed), 24dp icon at 28dp centred in the row, labelLarge label at 64dp. The switch rows (Night mode, Expressive
+  // design, Ghost mode, Proxy) press as the same pill instead of Telegram X's full-width gray highlight, with the
+  // switch's end at 28dp, mirroring the icon. Only with Expressive design on.
 
   private static final float XGRAM_ITEM_HEIGHT = 56f, XGRAM_ICON_SIZE = 24f, XGRAM_ITEM_INSET = 12f;
 
@@ -908,6 +912,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         }
       }
       me.vkryl.android.ViewUtils.setBackground(row, com.fahadali.xgram.appearance.XgramM3Profile.drawerItemBackground(0));
+      // The pill is an InsetDrawable, and a view takes its background's padding: the 12dp insets would push the
+      // DrawerItemView (icon and label) 12dp in from the other rows and the switch 12dp further from the edge.
+      row.setPadding(0, 0, 0, 0);
     }
   }
 
@@ -961,6 +968,34 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   public void xgramRefreshHeader () {
     if (headerView != null) {
       headerView.xgramRefreshUser();
+    }
+  }
+
+  /**
+   * XGram: the side menu's Expressive design switch, with Appearance's confirm (AppearancePage.expressive): the app
+   * restarts in the other look. The switch moves only once it is confirmed.
+   */
+  private void xgramToggleExpressive () {
+    // The screen the menu is open over: the drawer has no Tdlib, and rebuilding the Material You themes needs one.
+    final ViewController<?> c = xgramOwner();
+    if (c == null || !com.fahadali.xgram.appearance.XgramExpressive.isAvailable()) {
+      return;
+    }
+    final boolean on = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    c.openAlert(R.string.XgramExpressive, Lang.getString(R.string.XgramExpressiveInfo), Lang.getString(R.string.AppUpdateRestart), (dialog, which) -> {
+      com.fahadali.xgram.appearance.XgramExpressive.setEnabled(c, !on);
+      xgramUpdateExpressiveToggle();
+    }, 0);
+  }
+
+  /** XGram: the Expressive design switch follows the setting (Appearance turns it on or off too). */
+  private void xgramUpdateExpressiveToggle () {
+    int index = adapter != null ? adapter.indexOfViewById(R.id.btn_xgramExpressive) : -1;
+    if (index != -1) {
+      ListItem item = adapter.getItems().get(index);
+      boolean on = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      item.setSelected(on); // what a rebind shows
+      adapter.setToggled(item, on);
     }
   }
 
@@ -1129,6 +1164,8 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       });
     } else if (viewId == R.id.btn_night) {
       ThemeManager.instance().toggleNightMode();
+    } else if (viewId == R.id.btn_xgramExpressive) {
+      xgramToggleExpressive(); // XGram
     } else if (viewId == R.id.btn_xgramGhostMode) {
       // XGram: quick ghost mode switch, like AyuGram's drawer toggle. Off turns every ghost option off.
       com.fahadali.xgram.XgramSettings settings = com.fahadali.xgram.XgramSettings.instance();
@@ -1577,6 +1614,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       if (ghostIndex != -1) {
         adapter.setToggled(adapter.getItems().get(ghostIndex), com.fahadali.xgram.XgramSettings.instance().isAnyGhostEnabled());
       }
+      xgramUpdateExpressiveToggle();
 
       if (Lang.rtl()) {
         contentView.setTranslationX(getScreenWidth());
