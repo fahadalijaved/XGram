@@ -48,8 +48,6 @@
   <string name="XgramR6B6ScChatFolders">Chat folders</string>
   <string name="XgramR6B6ScChatHistory">Chat history for new members</string>
   <string name="XgramR6B6ScChatListStyle">Chat list style</string>
-  <string name="XgramR6B6ScChatListStyleOptFormatting">Text formatting</string>
-  <string name="XgramR6B6ScChatListStyleOptIcons">Media icons</string>
   <string name="XgramR6B6ScChatMode">Chats appearance</string>
   <string name="XgramR6B6ScChatPermissions">Chat permissions</string>
   <string name="XgramR6B6ScChatStyleBubbles">Bubbles in chats</string>

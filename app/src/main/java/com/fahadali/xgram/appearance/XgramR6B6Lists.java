@@ -110,8 +110,6 @@ public final class XgramR6B6Lists {
     R.string.ChatFolders, R.string.XgramR6B6ScChatFolders,
     R.string.ChatHistory, R.string.XgramR6B6ScChatHistory,
     R.string.ChatListStyle, R.string.XgramR6B6ScChatListStyle,
-    R.string.ChatListStyleOptFormatting, R.string.XgramR6B6ScChatListStyleOptFormatting,
-    R.string.ChatListStyleOptIcons, R.string.XgramR6B6ScChatListStyleOptIcons,
     R.string.ChatMode, R.string.XgramR6B6ScChatMode,
     R.string.ChatPermissions, R.string.XgramR6B6ScChatPermissions,
     R.string.ChatStyleBubbles, R.string.XgramR6B6ScChatStyleBubbles,
