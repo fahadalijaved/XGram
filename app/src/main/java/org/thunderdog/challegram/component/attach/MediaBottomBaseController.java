@@ -491,19 +491,43 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     if (newStartHeight <= startHeight) {
       return;
     }
-    if (isMoving || animatingHeight || currentHeight > startHeight) {
+    if (isMoving || animatingHeight || xgramSettling || currentHeight > startHeight) {
       startHeight = newStartHeight;
       return;
     }
     final float fromHeight = startHeight;
     final float heightDiff = newStartHeight - startHeight;
     com.fahadali.xgram.appearance.XgramExpressive.Spring spring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, 0f, (s, value) -> {
-      if (!xgramSwitching && !isMoving && !animatingHeight) {
+      if (!xgramSwitching && !isMoving && !animatingHeight && !xgramSettling) {
         applyStartHeight(Math.round(fromHeight + heightDiff * value));
       }
     });
     spring.setThreshold(.5f / Math.max(1f, Math.abs(heightDiff)));
     spring.animateTo(1f);
+  }
+
+  /** XGram M3E: whether {@code view} is this page's list (the nested scroll that hands the drag to the sheet). */
+  public final boolean xgramIsList (@Nullable View view) {
+    return view != null && view == recyclerView;
+  }
+
+  /** XGram: the extra grab room above the drawn handle band (dp, scaled with the corners): a 28dp touch target. */
+  private static final float XGRAM_HANDLE_GRAB = 8f;
+
+  /**
+   * XGram M3E: whether {@code y} (the page's coordinates) is on the handle band the sheet top draws above the list (or
+   * just above it), where a drag moves the sheet (MediaContentView). False once the sheet is full height (no band).
+   */
+  public final boolean xgramIsOnHandleBand (float y) {
+    if (recyclerView == null || recyclerView.getVisibility() != View.VISIBLE || !xgramHasSheetTop() || xgramSwitching) {
+      return false;
+    }
+    final float corner = xgramSheetCorner();
+    if (corner <= 0f) {
+      return false;
+    }
+    final float top = recyclerView.getTop() + recyclerView.getTranslationY();
+    return y < top && y >= top - xgramSheetBand(corner) - Screen.dp(XGRAM_HANDLE_GRAB) * corner;
   }
 
   public void xgramDrawSheetTop (android.graphics.Canvas c, int width) {
@@ -550,9 +574,17 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     if (recyclerView == null) {
       return 0;
     }
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !recyclerView.canScrollVertically(-1)) {
-      return 0; // XGram: at the top, whatever offsets the decorations add (the sheet drag needs exactly 0)
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: at the top exactly 0, whatever offsets the decorations add (the sheet drag needs exactly 0), and never 0
+      // (nor below) while the list can still scroll up: a measured position that came out 0 there (an adapter's
+      // estimate, a page whose list is not a MeasuredAdapterDelegate one) made a drag down collapse the sheet
+      // instead of scrolling the list back
+      return recyclerView.canScrollVertically(-1) ? Math.max(1, measureRecyclerScrollY()) : 0;
     }
+    return measureRecyclerScrollY();
+  }
+
+  private int measureRecyclerScrollY () {
     RecyclerView.LayoutManager manager = getLayoutManager();
     if (!(manager instanceof LinearLayoutManager)) {
       return 0;
@@ -739,7 +771,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
       return;
     }
 
-    if (isMoving || animatingHeight || currentHeight > startHeight) {
+    if (isMoving || animatingHeight || xgramSettling || currentHeight > startHeight) {
       startHeight = newStartHeight;
       return;
     }
@@ -784,6 +816,10 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
           mediaLayout.setBottomBarFactor(barFactor);
           mediaLayout.setHeaderFactor(1f - barFactor);
         }
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: the scrim fades as the sheet is dragged down below its start height (and comes back with it)
+          mediaLayout.xgramSetSheetScrim(currentHeight < startHeight && startHeight > 0 ? (float) currentHeight / (float) startHeight : 1f);
+        }
       }
     }
   }
@@ -795,6 +831,10 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   private ValueAnimator heightAnimator;
 
   protected void animateCurrentHeight (int toHeight, boolean fast) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramAnimateHeight(toHeight, 0f); // XGram M3E: on the spatial default spring
+      return;
+    }
     if (animatingHeight) {
       animatingHeight = false;
       if (heightAnimator != null) {
@@ -853,6 +893,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
 
   public void onBottomBarAnimationStart (boolean beforeExit) {
     if (beforeExit) {
+      xgramStopSettle(); // XGram M3E: the sheet hides from where it is
       useBottomBarChange = true;
       barChangeFromHeight = currentHeight;
       barChangeHeightDiff = -currentHeight;
@@ -870,8 +911,101 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   }
 
   public void onRecyclerMovementStarted () {
+    xgramStopSettle(); // XGram M3E: a drag catches a settling sheet where it is
     moveStartHeight = currentHeight;
     isMoving = true;
+  }
+
+  // XGram M3E: the release of a sheet drag (from the list, the handle band or the navigation bar, MediaContentView)
+  // through XgramSheetDrag.target with the finger's velocity (px/s, positive downwards): full height, the start height,
+  // or away (the hide carries the velocity, MediaLayout#xgramSetDismissVelocity); a sheet with unsaved changes or a
+  // cancelled gesture stays. The height settles on the spatial default spring starting with that velocity, never
+  // above full height (the overshoot is cut there); a drag catches it on the way. Reduce motion snaps.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramMotion.Value xgramHeightSpring;
+  private boolean xgramSettling;
+  private int xgramSettleTarget;
+
+  /** XGram M3E: true while the height settles after a drag (or springs to full or start height). */
+  public final boolean xgramIsSettling () {
+    return xgramSettling;
+  }
+
+  public void xgramReleaseDrag (float velocity, boolean commit) {
+    if (!isMoving) {
+      return;
+    }
+    isMoving = false;
+    useBottomBarChange = false;
+    mediaLayout.prepareHeader();
+    final int expandedHeight = canExpandHeight() ? getMaxHeight() : startHeight;
+    final int target = com.fahadali.xgram.appearance.XgramSheetDrag.target(currentHeight, startHeight, expandedHeight, velocity, commit && canMinimizeHeight());
+    if (target == com.fahadali.xgram.appearance.XgramSheetDrag.HIDDEN) {
+      useBottomBarChange = true;
+      barChangeFromHeight = currentHeight;
+      barChangeHeightDiff = -currentHeight;
+      mediaLayout.xgramSetDismissVelocity(velocity);
+      mediaLayout.hideBottomBarAndDismiss();
+    } else {
+      xgramAnimateHeight(target == com.fahadali.xgram.appearance.XgramSheetDrag.EXPANDED ? expandedHeight : startHeight, -velocity);
+    }
+  }
+
+  private void xgramStopSettle () {
+    if (xgramSettling) {
+      xgramSettling = false;
+      if (xgramHeightSpring != null) {
+        xgramHeightSpring.cancel();
+      }
+    }
+  }
+
+  /** Springs the sheet height to {@code toHeight}, starting at {@code velocity} (px/s, positive while growing). */
+  private void xgramAnimateHeight (int toHeight, float velocity) {
+    if (animatingHeight) {
+      animatingHeight = false;
+      if (heightAnimator != null) {
+        heightAnimator.cancel();
+        heightAnimator = null;
+      }
+    }
+    xgramStopSettle();
+    if (currentHeight == toHeight) {
+      return;
+    }
+    if (com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+      setCurrentHeight(toHeight, true);
+      return;
+    }
+    xgramSettleTarget = toHeight;
+    xgramSettling = true;
+    if (xgramHeightSpring == null) {
+      xgramHeightSpring = new com.fahadali.xgram.appearance.XgramMotion.Value(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, currentHeight, (v, value, springVelocity) -> {
+        if (!xgramSettling) {
+          return;
+        }
+        final int maxHeight = getMaxHeight();
+        if (xgramSettleTarget >= maxHeight && value >= maxHeight) {
+          // full height: no overshoot past the top (the page behind would show and hide every frame)
+          xgramSettling = false;
+          v.cancel();
+          setCurrentHeight(maxHeight, true);
+          return;
+        }
+        setCurrentHeight(Math.round(Math.min(value, maxHeight)), true);
+      });
+      xgramHeightSpring.setThreshold(.5f);
+      xgramHeightSpring.setEndListener(() -> {
+        if (xgramSettling) {
+          xgramSettling = false;
+          setCurrentHeight(xgramSettleTarget, true);
+        }
+      });
+    } else {
+      xgramHeightSpring.setSpring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT);
+      xgramHeightSpring.setValue(currentHeight);
+    }
+    xgramHeightSpring.animateTo(toHeight, velocity);
   }
 
   public boolean handleFling (boolean toUp) {
@@ -1026,6 +1160,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
   @Override
   public void destroy () {
     super.destroy();
+    xgramStopSettle(); // XGram M3E
     if (recyclerView != null) {
       Views.destroyRecyclerView(recyclerView);
     }

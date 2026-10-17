@@ -75,7 +75,7 @@ import me.vkryl.core.lambda.RunnableBool;
 import tgx.td.Td;
 
 @SuppressLint("ViewConstructor")
-public class StickerSetWrap extends FrameLayoutFix implements StickersListController.StickerSetProvider, MediaStickersAdapter.OffsetProvider, View.OnClickListener, FactorAnimator.Target, PopupLayout.PopupHeightProvider, StickersListener, RootFrameLayout.InsetsChangeListener {
+public class StickerSetWrap extends FrameLayoutFix implements StickersListController.StickerSetProvider, MediaStickersAdapter.OffsetProvider, View.OnClickListener, FactorAnimator.Target, PopupLayout.PopupHeightProvider, StickersListener, RootFrameLayout.InsetsChangeListener, com.fahadali.xgram.appearance.XgramSheetDrag.Sheet {
   private final HeaderView headerView;
   private final StickersListController stickersController;
   private final FrameLayoutFix bottomWrap;
@@ -767,6 +767,31 @@ public class StickerSetWrap extends FrameLayoutFix implements StickersListContro
   @Override
   public int provideReverseOffset () {
     return Screen.currentActualHeight() - provideOffset() - Screen.dp(56f) - Size.getHeaderPortraitSize();
+  }
+
+  // XGram M3E: the sheet drag (XgramSheetDrag through PopupLayout). The sticker grid grows the sheet to full height as
+  // it scrolls; a drag down with the grid at its top, or on the header, moves the whole sheet (the scrim with it),
+  // which closes past half its height or on a fling and springs back otherwise; upwards the header scrolls the grid.
+
+  @Override
+  public boolean xgramSheetContains (float x, float y) {
+    return y >= headerView.getTranslationY();
+  }
+
+  @Nullable
+  @Override
+  public androidx.recyclerview.widget.RecyclerView xgramSheetList () {
+    return stickersController.xgramRecyclerView();
+  }
+
+  @Override
+  public boolean xgramSheetOnList (float x, float y) {
+    return y >= headerView.getTranslationY() + Size.getHeaderPortraitSize();
+  }
+
+  @Override
+  public boolean xgramSheetGrabsUp (float x, float y) {
+    return y < headerView.getTranslationY() + Size.getHeaderPortraitSize();
   }
 
   // Click logic

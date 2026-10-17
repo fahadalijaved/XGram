@@ -39,7 +39,7 @@ import org.thunderdog.challegram.widget.PopupLayout;
 import me.vkryl.android.widget.FrameLayoutFix;
 
 public abstract class BottomSheetViewController<T> extends ViewPagerController<T> implements
-  PopupLayout.TouchSectionProvider, PopupLayout.PopupHeightProvider {
+  PopupLayout.TouchSectionProvider, PopupLayout.PopupHeightProvider, com.fahadali.xgram.appearance.XgramSheetDrag.Sheet {
 
   protected FrameLayoutFix wrapView;
   protected RelativeLayout contentView;
@@ -333,6 +333,9 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
   protected void setHeaderPosition (float y) {
     y = Math.max(y, HeaderView.getTopOffset());
     headerTranslationY = y;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramUpdateScrim(); // XGram M3E: the scrim fades as the sheet scrolls away
+    }
     float realHeaderOffset = y;
     if (headerView != null) {
       headerView.setTranslationY(realHeaderOffset);
@@ -463,6 +466,101 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
   public int getCurrentPopupHeight () {
     return (getTargetHeight() - getTopEdge() - (int) ((float) HeaderView.getTopOffset())) + Math.max(wrapView.getMeasuredHeight() - getTargetHeight(), 0)
       + (int) Math.ceil(xgramSheetOverhang()); // XGram: the handle band above the header leaves the screen too
+  }
+
+  // XGram M3E: the sheet drag (XgramSheetDrag through PopupLayout). The sheet grows with its page's list: the list's
+  // top offset is the space above the sheet, so scrolling the list moves the sheet up to full height, and only then
+  // the items. A drag down on the sheet whose list is at its top (the start) moves the whole sheet; one on the handle
+  // band or the header scrolls the list first. Released between the start and full height, the sheet settles at the
+  // nearer one (leaning 35% towards the way it went) on a spring; a sheet that hides by scroll fades its scrim as it
+  // goes down.
+
+  @Override
+  public boolean xgramSheetContains (float x, float y) {
+    return y >= getTopEdge() + HeaderView.getTopOffset() - xgramSheetOverhang();
+  }
+
+  @Nullable
+  @Override
+  public RecyclerView xgramSheetList () {
+    ViewController<?> c = findCurrentCachedController();
+    return c instanceof BottomSheetViewController.BottomSheetBaseControllerPage ? ((BottomSheetBaseControllerPage) c).getRecyclerView() : null;
+  }
+
+  @Override
+  public boolean xgramSheetOnList (float x, float y) {
+    return y >= headerTranslationY + (headerView != null ? getHeaderHeight() : 0);
+  }
+
+  @Override
+  public boolean xgramSheetGrabsUp (float x, float y) {
+    // the handle band above the header: nothing else takes a drag there
+    final float edge = getTopEdge() + HeaderView.getTopOffset();
+    return y < edge && y >= edge - xgramSheetOverhang();
+  }
+
+  /** XGram M3E: whether the next idle list snaps the sheet (after a drag or its fling), and the way it last went. */
+  boolean xgramSnapArmed;
+  int xgramSnapDirection;
+
+  @Override
+  public void xgramSheetRelease (@NonNull RecyclerView list, float velocity) {
+    xgramSnapArmed = true;
+    xgramSnapDirection = velocity < 0f ? 1 : -1;
+    if (!list.fling(0, Math.round(-velocity))) {
+      // too slow to fling: settle now, as the list's idle state would after a drag of its own (ScrollListener)
+      xgramSnapArmed = false;
+      if (canHideByScroll() && getTopEdge() > getContentOffset()) {
+        if (getContentVisibleHeight() > getHideByScrollBorder()) {
+          com.fahadali.xgram.appearance.XgramMotion.sheetScrollByOr(list, 0, getTopEdge() - getContentOffset());
+        } else {
+          hidePopupWindow(true);
+        }
+      } else {
+        xgramSnapSheet(list, xgramSnapDirection);
+      }
+    }
+  }
+
+  /**
+   * XGram M3E: settles a sheet released between its start and full height at the nearer one ({@code direction}: 1
+   * when it last went up, -1 down) with the sheet snap spring. False when it is at one of them already.
+   */
+  protected boolean xgramSnapSheet (@NonNull RecyclerView list, int direction) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return false;
+    }
+    final int contentOffset = getContentOffset();
+    final float edge = headerTranslationY - HeaderView.getTopOffset();
+    if (contentOffset <= 0 || edge <= .5f || edge >= contentOffset - .5f) {
+      return false;
+    }
+    final float expanded = 1f - edge / contentOffset; // 0 at the start, 1 at full height
+    final float threshold = direction > 0 ? com.fahadali.xgram.appearance.XgramSheetDrag.EXPAND_FRACTION : 1f - com.fahadali.xgram.appearance.XgramSheetDrag.EXPAND_FRACTION;
+    // a sheet whose items all show at the start has nothing more to show at full height: it goes back
+    final ViewController<?> c = findCurrentCachedController();
+    final boolean taller = !(c instanceof BottomSheetViewController.BottomSheetBaseControllerPage) || ((BottomSheetBaseControllerPage) c).getItemsHeight(list) > getContentMinHeight();
+    final int by = taller && expanded >= threshold ? Math.round(edge) : Math.round(edge - contentOffset);
+    if (by == 0) {
+      return false;
+    }
+    if (com.fahadali.xgram.appearance.XgramMotion.reduce()) {
+      list.scrollBy(0, by);
+      return false;
+    }
+    com.fahadali.xgram.appearance.XgramMotion.sheetScrollByOr(list, 0, by);
+    return list.getScrollState() != RecyclerView.SCROLL_STATE_IDLE; // animations off scroll at once (no idle follows)
+  }
+
+  /** XGram M3E: a sheet that hides by scroll fades its scrim below its start (once it has shown). */
+  private void xgramUpdateScrim () {
+    final PopupLayout popup = popupLayout;
+    if (popup == null || !canHideByScroll() || !popup.hadCompletelyShown() || popup.isWindowHidden()) {
+      return;
+    }
+    final float below = headerTranslationY - HeaderView.getTopOffset() - getContentOffset();
+    final float range = Math.max(1f, getTargetHeight() - getContentOffset() - HeaderView.getTopOffset());
+    popup.xgramSetScrimScale(below > 0f ? 1f - below / range : 1f);
   }
 
   public int maxItemsScrollYOffset () {
@@ -714,7 +812,12 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
     @Override
     public void onScrollStateChanged (@NonNull RecyclerView recyclerView, int newState) {
       super.onScrollStateChanged(recyclerView, newState);
+      if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+        controller.xgramSnapArmed = true; // XGram M3E: a drag of the user's own settles the sheet once the list is idle
+      }
       if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+        final boolean xgramSnap = controller.xgramSnapArmed;
+        controller.xgramSnapArmed = false;
         if (ignoreScrollChangeState) {
           ignoreScrollChangeState = false;
           return;
@@ -737,6 +840,8 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
               } else {
                 controller.hidePopupWindow(true);
               }
+            } else if (xgramSnap && controller.xgramSnapSheet(recyclerView, controller.xgramSnapDirection)) {
+              ignoreScrollChangeState = true; // XGram M3E: between the start and full height, the sheet settles
             }
           }
         }
@@ -745,6 +850,9 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
 
     @Override
     public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
+      if (dy != 0) {
+        controller.xgramSnapDirection = dy > 0 ? 1 : -1; // XGram M3E: the way the sheet last went (up as the list scrolls on)
+      }
       ViewController<?> c = controller.findCurrentCachedController();
       boolean canHideByScroll = controller.canHideByScroll() && recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_SETTLING;
       int contentOffset = controller.getContentOffset();

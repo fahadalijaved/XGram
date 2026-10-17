@@ -50,7 +50,7 @@ import org.thunderdog.challegram.widget.RootFrameLayout;
 
 import me.vkryl.android.widget.FrameLayoutFix;
 
-public abstract class PreviewLayout extends FrameLayoutFix implements View.OnClickListener, PopupLayout.ShowListener, PopupLayout.DismissListener, RootFrameLayout.InsetsChangeListener {
+public abstract class PreviewLayout extends FrameLayoutFix implements View.OnClickListener, PopupLayout.ShowListener, PopupLayout.DismissListener, RootFrameLayout.InsetsChangeListener, com.fahadali.xgram.appearance.XgramSheetDrag.Sheet {
   protected EmbeddedService nativeEmbed;
   protected int footerHeight;
   protected final ViewController<?> parent;
@@ -102,6 +102,20 @@ public abstract class PreviewLayout extends FrameLayoutFix implements View.OnCli
   /** XGram M3E r5: true while the preview plays full screen (the status bar inset then counts again). */
   protected boolean xgramIsFullscreen () {
     return false;
+  }
+
+  // XGram M3E: the sheet drag (XgramSheetDrag through PopupLayout) starts on the 48dp handle band only: the embedded
+  // player under it keeps its own gestures. Far or fast enough down the sheet closes, otherwise it springs back.
+
+  @Override
+  public boolean xgramSheetContains (float x, float y) {
+    return xgramSheet && !xgramIsFullscreen() && y >= 0f && y < Screen.dp(XGRAM_BAND_DP);
+  }
+
+  @androidx.annotation.Nullable
+  @Override
+  public androidx.recyclerview.widget.RecyclerView xgramSheetList () {
+    return null;
   }
 
   private final android.graphics.RectF xgramRect = new android.graphics.RectF();
