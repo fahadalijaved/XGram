@@ -206,6 +206,9 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
         userView.getStickerSmallView().setTag(reactionsObj);
         if (reactionsObj != null) {
           userView.setReaction(reactionsObj);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            userView.xgramSetLocked(needPremiumRestriction() && reactionsObj.isPremium()); // XGram M3E r6: the lock badge
+          }
           if (type == TYPE_ENABLED_REACTIONS) {
             if (availableReactions == null) {
               userView.setChecked(false, isUpdate);
@@ -254,11 +257,15 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
       }
     });
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      recyclerView.addItemDecoration(new XgramReactionGrid(adapter, manager.getSpanSizeLookup())); // XGram M3E r6
+    } else {
     GridSpacingItemDecoration decoration = new GridSpacingItemDecoration(4, Screen.dp(3f), true, true, true);
     decoration.setNeedDraw(true, ListItem.TYPE_REACTION_CHECKBOX);
     decoration.setDrawColorId(ColorId.filling);
     decoration.setSpanSizeLookup(manager.getSpanSizeLookup());
     recyclerView.addItemDecoration(decoration);
+    }
     recyclerView.setItemAnimator(null);
     recyclerView.setLayoutManager(manager);
     recyclerView.setAdapter(adapter);
@@ -701,5 +708,113 @@ public class EditEnabledReactionsController extends EditBaseController<EditEnabl
   @Override
   public int getViewportHeight () {
     return -1;
+  }
+
+  /**
+   * XGram M3E r6: the reaction grid as one surfaceBright group with 16dp corners, 16dp from the list's sides with 8dp
+   * inside it, its four columns of tiles 4dp apart (each tile is the cell's own background, see
+   * ReactionCheckboxSettingsView). The offsets are given on top of the shared list decoration's (16dp sides and the
+   * 2dp row gap), which it takes back for these cells. Nothing is allocated while drawing.
+   */
+  private static final class XgramReactionGrid extends RecyclerView.ItemDecoration {
+    private static final int SPAN_COUNT = 4;
+    private static final float PANEL_PADDING = 8f, TILE_GAP = 2f;
+
+    private final SettingsAdapter adapter;
+    private final GridLayoutManager.SpanSizeLookup lookup;
+    private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.RectF rect = new android.graphics.RectF();
+
+    XgramReactionGrid (SettingsAdapter adapter, GridLayoutManager.SpanSizeLookup lookup) {
+      this.adapter = adapter;
+      this.lookup = lookup;
+    }
+
+    private boolean isCell (int position) {
+      return position >= 0 && position < adapter.getItemCount() && adapter.getItemViewType(position) == ListItem.TYPE_REACTION_CHECKBOX;
+    }
+
+    @Override
+    public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      outRect.set(0, 0, 0, 0);
+      final int position = parent.getChildAdapterPosition(view);
+      if (!isCell(position)) {
+        return;
+      }
+      final boolean shared = com.fahadali.xgram.appearance.XgramExpressive.hasListDecoration(parent);
+      final int sharedSide = shared ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET) : 0;
+      final int sharedTop = shared && position > 0 && com.fahadali.xgram.appearance.XgramExpressive.isRowType(adapter.getItemViewType(position - 1)) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : 0;
+
+      final int width = parent.getWidth() > 0 ? parent.getWidth() : parent.getMeasuredWidth();
+      final int available = width - parent.getPaddingLeft() - parent.getPaddingRight();
+      if (available <= 0) {
+        return;
+      }
+      final boolean rtl = parent.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+      final int span = lookup.getSpanIndex(position, SPAN_COUNT);
+      final int column = rtl ? SPAN_COUNT - 1 - span : span;
+      final float contentStart = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET + PANEL_PADDING);
+      final float cellWidth = (available - contentStart * 2f) / SPAN_COUNT;
+      final float spanWidth = available / (float) SPAN_COUNT;
+      final float gap = Screen.dp(TILE_GAP);
+      final float left = contentStart + column * cellWidth + gap - column * spanWidth;
+      final float right = (column + 1) * spanWidth - (contentStart + (column + 1) * cellWidth - gap);
+
+      // the first and the last row get the panel's own padding above and below
+      final int firstCell = firstCellOf(position);
+      final boolean firstRow = position - firstCell < SPAN_COUNT;
+      final boolean lastRow = isLastRow(position, firstCell);
+      outRect.left = Math.round(left) - sharedSide;
+      outRect.right = Math.round(right) - sharedSide;
+      outRect.top = Math.round(gap + (firstRow ? Screen.dp(PANEL_PADDING) : 0)) - sharedTop;
+      outRect.bottom = Math.round(gap + (lastRow ? Screen.dp(PANEL_PADDING) : 0));
+    }
+
+    private int firstCellOf (int position) {
+      int first = position;
+      while (isCell(first - 1)) {
+        first--;
+      }
+      return first;
+    }
+
+    private boolean isLastRow (int position, int firstCell) {
+      int last = position;
+      while (isCell(last + 1)) {
+        last++;
+      }
+      return (position - firstCell) / SPAN_COUNT == (last - firstCell) / SPAN_COUNT;
+    }
+
+    @Override
+    public void onDraw (@NonNull android.graphics.Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      float top = Float.MAX_VALUE, bottom = -Float.MAX_VALUE;
+      int minPosition = Integer.MAX_VALUE, maxPosition = -1;
+      final int childCount = parent.getChildCount();
+      for (int i = 0; i < childCount; i++) {
+        View child = parent.getChildAt(i);
+        int position = parent.getChildAdapterPosition(child);
+        if (!isCell(position)) {
+          continue;
+        }
+        final float ty = child.getTranslationY();
+        top = Math.min(top, child.getTop() + ty);
+        bottom = Math.max(bottom, child.getBottom() + ty);
+        minPosition = Math.min(minPosition, position);
+        maxPosition = Math.max(maxPosition, position);
+      }
+      if (maxPosition == -1) {
+        return;
+      }
+      final float corner = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+      final float padding = Screen.dp(PANEL_PADDING) + Screen.dp(TILE_GAP);
+      // a group running past the list's top or bottom keeps its corners off screen
+      top = isCell(minPosition - 1) ? -corner : top - padding;
+      bottom = isCell(maxPosition + 1) ? parent.getHeight() + corner : bottom + padding;
+      final float inset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+      rect.set(parent.getPaddingLeft() + inset, top, parent.getWidth() - parent.getPaddingRight() - inset, bottom);
+      paint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT));
+      c.drawRoundRect(rect, corner, corner, paint);
+    }
   }
 }

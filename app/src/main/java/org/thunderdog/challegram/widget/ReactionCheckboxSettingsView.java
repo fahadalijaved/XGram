@@ -98,6 +98,98 @@ public class ReactionCheckboxSettingsView extends LinearLayout implements ThemeI
 
     checkedFactor = new BoolAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 165L);
     checkedFactor.setValue(true, false);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramInit();
+    }
+  }
+
+  // XGram M3E r6: each reaction is a selectable tile inside the grid's surfaceBright group: secondaryContainer while
+  // selected, its corners morphing from full to 16dp (SPATIAL_FAST), an 18dp M3 checkbox badge (or the quick
+  // reaction's number) ringed in the tile color at the sticker's top end, a labelSmall caption, and a tertiaryContainer
+  // lock badge for a premium reaction that cannot be picked. No allocation while drawing.
+
+  private static final float XGRAM_BADGE = 18f, XGRAM_BADGE_RING = 2f, XGRAM_LOCK = 20f;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramTile;
+  private @Nullable String xgramNumberText;
+  private @Nullable android.text.TextPaint xgramNumberPaint;
+  private @Nullable android.graphics.drawable.Drawable xgramLockIcon;
+  private boolean xgramLocked;
+
+  private void xgramInit () {
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(captionTextView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S, false);
+    xgramTile = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(this,
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER),
+      com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+    xgramTile.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    xgramTile.setCornerTarget(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L, false);
+    xgramNumberPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    xgramNumberPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S, false));
+    xgramNumberPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S)));
+    xgramNumberPaint.setTextAlign(android.graphics.Paint.Align.CENTER);
+    xgramNumberPaint.setFontFeatureSettings("tnum");
+    com.fahadali.xgram.appearance.XgramAppMotion.use(checkedFactor, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, false);
+    xgramApplyChecked(checkedFactor.getFloatValue());
+  }
+
+  /** A premium reaction this account cannot pick: a lock badge at the sticker's bottom end. */
+  public void xgramSetLocked (boolean locked) {
+    if (this.xgramLocked != locked) {
+      this.xgramLocked = locked;
+      invalidate();
+    }
+  }
+
+  private void xgramApplyChecked (float factor) {
+    final float f = me.vkryl.core.MathUtils.clamp(factor);
+    if (xgramTile != null) {
+      xgramTile.setAlpha(Math.round(255f * f));
+    }
+    captionTextView.setTextColor(ColorUtils.fromToArgb(
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE),
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), f));
+  }
+
+  private void xgramDrawBadges (Canvas c) {
+    final float value = checkedFactor.getFloatValue();
+    final float f = me.vkryl.core.MathUtils.clamp(value);
+    final float stickerTop = Screen.dp(16f), stickerSize = Screen.dp(48f);
+    final boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+    final float half = getWidth() / 2f;
+    final float badge = Screen.dp(XGRAM_BADGE);
+    final float cx = rtl ? half - Screen.dp(18f) : half + Screen.dp(18f);
+    final float cy = stickerTop + badge / 2f;
+    final int tileColor = ColorUtils.fromToArgb(
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_BRIGHT),
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), f);
+    // the ring in the tile color, so the badge reads over the sticker
+    c.drawCircle(cx, cy, badge / 2f + Screen.dp(XGRAM_BADGE_RING), Paints.fillingPaint(tileColor));
+    if (number > 0 && xgramNumberText != null && xgramNumberPaint != null) {
+      // a quick reaction's place: the number on a primary dot that springs in
+      com.fahadali.xgram.appearance.XgramM3Controls.drawCheckbox(c, cx - badge / 2f, cy - badge / 2f, badge, 0f, 0f, 0f, 1f, 1f - f);
+      final float scale = Math.max(0f, value);
+      if (scale > 0f) {
+        c.drawCircle(cx, cy, badge / 2f * scale, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY)));
+        xgramNumberPaint.setColor(ColorUtils.alphaColor(f, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY)));
+        final android.graphics.Paint.FontMetrics metrics = xgramNumberPaint.getFontMetrics();
+        c.drawText(xgramNumberText, cx, cy - (metrics.ascent + metrics.descent) / 2f, xgramNumberPaint);
+      }
+    } else {
+      com.fahadali.xgram.appearance.XgramM3Controls.drawCheckbox(c, cx - badge / 2f, cy - badge / 2f, badge, f, 0f, 0f, 1f, 1f);
+    }
+    if (xgramLocked) {
+      final float lock = Screen.dp(XGRAM_LOCK);
+      final float lx = rtl ? half - Screen.dp(18f) : half + Screen.dp(18f);
+      final float ly = stickerTop + stickerSize - lock / 2f;
+      c.drawCircle(lx, ly, lock / 2f + Screen.dp(XGRAM_BADGE_RING), Paints.fillingPaint(tileColor));
+      c.drawCircle(lx, ly, lock / 2f, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.TERTIARY_CONTAINER)));
+      if (xgramLockIcon == null) {
+        xgramLockIcon = org.thunderdog.challegram.tool.Drawables.get(com.fahadali.xgram.appearance.XgramIconPack.map(org.thunderdog.challegram.R.drawable.baseline_lock_16));
+      }
+      if (xgramLockIcon != null) {
+        org.thunderdog.challegram.tool.Drawables.draw(c, xgramLockIcon, lx - xgramLockIcon.getMinimumWidth() / 2f, ly - xgramLockIcon.getMinimumHeight() / 2f,
+          Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_TERTIARY_CONTAINER)));
+      }
+    }
   }
 
   public StickerSmallView getStickerSmallView () {
@@ -125,6 +217,9 @@ public class ReactionCheckboxSettingsView extends LinearLayout implements ThemeI
   public void recolor () {
     captionTextView.setTextColor(Theme.getColor(ColorId.text));
     captionTextView.setHighlightColor(Theme.getColor(ColorId.text));
+    if (xgramTile != null) {
+      xgramApplyChecked(checkedFactor.getFloatValue()); // XGram M3E r6: onSurface / onSecondaryContainer
+    }
   }
 
   public void attach () {
@@ -166,6 +261,11 @@ public class ReactionCheckboxSettingsView extends LinearLayout implements ThemeI
     }
 
     this.number = number;
+    if (xgramTile != null) {
+      // XGram M3E r6: the tile squares to 16dp while selected, back to full corners otherwise
+      xgramNumberText = number > 0 ? Integer.toString(number) : null;
+      xgramTile.setCornerTarget(checked ? com.fahadali.xgram.appearance.XgramExpressive.CORNER_L : com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, animated);
+    }
 
     if (!animated) {
       counter.setCount(Math.max(0, number), false);
@@ -191,6 +291,10 @@ public class ReactionCheckboxSettingsView extends LinearLayout implements ThemeI
   @Override
   protected void dispatchDraw (Canvas c) {
     super.dispatchDraw(c);
+    if (xgramTile != null) {
+      xgramDrawBadges(c); // XGram M3E r6
+      return;
+    }
 
     c.save();
 
@@ -231,6 +335,15 @@ public class ReactionCheckboxSettingsView extends LinearLayout implements ThemeI
 
   @Override
   public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+    if (xgramTile != null) {
+      // XGram M3E r6: the spring may overshoot; alpha and colors take it clamped
+      final float clamped = me.vkryl.core.MathUtils.clamp(factor);
+      stickerSmallView.setAlpha(clamped / 2f + 0.5f);
+      captionTextView.setAlpha(clamped / 2f + 0.5f);
+      xgramApplyChecked(factor);
+      invalidate();
+      return;
+    }
     stickerSmallView.setAlpha(factor / 2f + 0.5f);
     captionTextView.setAlpha(factor / 2f + 0.5f);
     invalidate();

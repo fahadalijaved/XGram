@@ -105,7 +105,8 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
     super(context, tdlib);
     this.parent = parent;
 
-    text = new ReplaceAnimator<>(this::updateTexts, AnimatorUtils.DECELERATE_INTERPOLATOR, 300L);
+    // XGram M3E r6: the original and the translation cross-fade on the EFFECTS_DEFAULT spring
+    text = new ReplaceAnimator<>(this::updateTexts, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 300L));
     translationCounterDrawable = new TranslationCounterDrawable(Drawables.get(R.drawable.baseline_translate_24));
     translationCounterDrawable.setColors(ColorId.icon, ColorId.background ,ColorId.iconActive);
     translationCounterDrawable.setInvalidateCallback(this::updateAnimations);
@@ -155,6 +156,15 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
     headerView.setBackgroundHeight(Screen.dp(67));
     headerView.setWillNotDraw(false);
     addThemeInvalidateListener(headerView);
+    if (xgramM3()) {
+      // XGram M3E r6: a 64dp sheet header: the 8dp band of the drag handle, then the 56dp bar (laid out, not shifted)
+      // with the M3 close icon button and the language as an M3 menu button
+      headerCell.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(XGRAM_HEADER_HEIGHT), Gravity.TOP, Screen.dp(56), 0, Screen.dp(60), 0));
+      headerCell.setTranslationY(0f);
+      headerCell.setPadding(0, Screen.dp(XGRAM_HANDLE_BAND), 0, 0);
+      headerView.setBackgroundHeight(Screen.dp(XGRAM_HEADER_HEIGHT));
+      com.fahadali.xgram.appearance.XgramM3Sheets.applyNavigationButton(headerView.getBackButton(), Theme.getColor(ColorId.text));
+    }
 
     wrapView = (FrameLayout) super.onCreateView(context);
     wrapView.setBackgroundColor(0);
@@ -221,6 +231,9 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
       wrapView.addView(linearLayout, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(20), Gravity.BOTTOM, Screen.dp(44), 0, Screen.dp(18), Screen.dp(16)));
 
     }
+    if (message != null && xgramM3()) {
+      xgramStyleFooter(context);
+    }
 
     messageTextView = new MessageTextView(context);
     textMediaReceiver = new ComplexReceiver(messageTextView);
@@ -253,6 +266,9 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
     if (message != null) {
       layoutParams.bottomMargin = Screen.dp(48 - 6);
     }
+    if (message != null && xgramM3()) {
+      layoutParams.bottomMargin = Screen.dp(XGRAM_FOOTER_BOTTOM + XGRAM_FOOTER_ROW); // XGram M3E r6: above the footer row
+    }
 
     text.replace(makeTextWrapper(currentText = originalText), false);
     mTranslationsManager.requestTranslation(StringUtils.isEmpty(parent.defaultLanguageToTranslate) ? Lang.getDefaultLanguageToTranslateV2(messageOriginalLanguage) : parent.defaultLanguageToTranslate);
@@ -279,7 +295,7 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
   }
 
   public void setHeaderPosition (float y) {
-    float y2 = parent.getTargetHeight() - Screen.dp(48);
+    float y2 = parent.getTargetHeight() - Screen.dp(xgramM3() ? XGRAM_FOOTER_BOTTOM + XGRAM_FOOTER_ROW : 48);
     float y3 = y + parent.getHeaderHeight();
     float translation = Math.max(y3 - y2, 0);
 
@@ -302,6 +318,105 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
     languagePopupLayout.languageRecyclerWrap.setTranslationY(y);
     languagePopupLayout.show();
     languagePopupLayout.languageRecyclerWrap.setPivotY(pivotY);
+    if (xgramM3()) {
+      // XGram M3E r6: the menu button's arrow turns over while its menu is open
+      headerCell.xgramSetExpanded(true, true);
+      languagePopupLayout.setDismissListener(popup -> headerCell.xgramSetExpanded(false, true));
+    }
+  }
+
+  // XGram M3E round 6: the sheet's M3 header, toggle and footer
+
+  /** Header (dp): the 8dp band of the drag handle above the 56dp bar. Footer: a 48dp row 8dp above the bottom. */
+  private static final float XGRAM_HANDLE_BAND = 8f, XGRAM_HEADER_HEIGHT = 64f, XGRAM_FOOTER_ROW = 48f, XGRAM_FOOTER_BOTTOM = 8f;
+
+  private static boolean xgramM3 () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  }
+
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramToggleContainer;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramToggleSpring;
+
+  /**
+   * The Original / Translated switch as an M3 40dp icon toggle: a secondaryContainer circle fades in under the
+   * translate icon while the text is translated (or translating), on EFFECTS_DEFAULT, and the press morphs it to 12dp.
+   */
+  private void xgramSetupToggle () {
+    if (translationHeaderButton == null) {
+      return;
+    }
+    xgramToggleContainer = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(translationHeaderButton,
+      com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER),
+      com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
+    xgramToggleContainer.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    xgramToggleContainer.setSize(40f, 40f, Gravity.CENTER);
+    final boolean on = mTranslationsManager.getCurrentTranslatedLanguage() != null;
+    xgramToggleSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, on ? 1f : 0f, (s, value) -> xgramApplyToggle(value));
+    xgramApplyToggle(on ? 1f : 0f);
+    translationHeaderButton.setContentDescription(Lang.getString(R.string.Translation));
+  }
+
+  private void xgramApplyToggle (float value) {
+    if (xgramToggleContainer != null) {
+      xgramToggleContainer.setAlpha(Math.round(255f * me.vkryl.core.MathUtils.clamp(value)));
+    }
+    if (translationHeaderButton != null) {
+      translationHeaderButton.invalidate();
+    }
+  }
+
+  private void xgramSetToggled (boolean toggled) {
+    if (xgramToggleSpring != null) {
+      xgramToggleSpring.animateTo(toggled ? 1f : 0f);
+    }
+  }
+
+  /**
+   * The footer as an M3 row at 24dp from the sides: the 24dp avatar, the sender in labelLarge (onSurface), the date in
+   * labelMedium with tabular figures (onSurfaceVariant), and a tonal "Copy" button at the end (not for protected
+   * messages). It follows the sheet like Telegram X's (setHeaderPosition moves the same views).
+   */
+  private void xgramStyleFooter (Context context) {
+    final boolean rtl = Lang.rtl();
+    final int row = Screen.dp(XGRAM_FOOTER_ROW), bottom = Screen.dp(XGRAM_FOOTER_BOTTOM), side = Screen.dp(24f);
+    if (senderAvatarView != null) {
+      final int avatar = Screen.dp(24f);
+      senderAvatarView.setLayoutParams(FrameLayoutFix.newParams(avatar, avatar, Gravity.BOTTOM | (rtl ? Gravity.RIGHT : Gravity.LEFT),
+        rtl ? 0 : side, 0, rtl ? side : 0, bottom + (row - avatar) / 2));
+    }
+    if (linearLayout == null) {
+      return;
+    }
+    final int start = side + Screen.dp(24f) + Screen.dp(12f);
+    linearLayout.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+    linearLayout.setGravity(Gravity.CENTER_VERTICAL);
+    linearLayout.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, row, Gravity.BOTTOM, rtl ? side : start, 0, rtl ? start : side, bottom));
+    if (senderTextView != null) {
+      senderTextView.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+    }
+    if (dateTextView != null) {
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(dateTextView, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false);
+      dateTextView.setFontFeatureSettings("tnum");
+      dateTextView.setTextColor(Theme.getColor(ColorId.textLight));
+      addThemeTextColorListener(dateTextView, ColorId.textLight);
+      LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      params.gravity = Gravity.CENTER_VERTICAL;
+      params.setMarginStart(Screen.dp(8f));
+      dateTextView.setLayoutParams(params);
+    }
+    if (!isProtected) {
+      android.widget.TextView copy = com.fahadali.xgram.appearance.XgramR5Sheets.tonalButton(context, Lang.getString(R.string.Copy), null);
+      copy.setOnClickListener(v -> {
+        TdApi.FormattedText shown = currentText;
+        if (shown != null && !StringUtils.isEmpty(shown.text)) {
+          UI.copyText(shown.text, R.string.CopiedText);
+        }
+      });
+      LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(com.fahadali.xgram.appearance.XgramM3Sheets.BUTTON_HEIGHT));
+      params.gravity = Gravity.CENTER_VERTICAL;
+      params.setMarginStart(Screen.dp(12f));
+      linearLayout.addView(copy, params);
+    }
   }
 
   private void updateAnimations () {
@@ -374,6 +489,9 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
   private void setTranslatedStatus (int status, boolean animated) {
     translationCounterDrawable.setStatus(status, animated);
+    if (xgramM3()) {
+      xgramSetToggled(status == TranslationCounterDrawable.TRANSLATE_STATUS_SUCCESS || status == TranslationCounterDrawable.TRANSLATE_STATUS_LOADING);
+    }
     if (status == TranslationCounterDrawable.TRANSLATE_STATUS_DEFAULT) {
       headerCell.setTitle(Lang.getLanguageName(messageOriginalLanguage, Lang.getString(R.string.TranslateLangUnknown)), animated);
       headerCell.setSubtitle(Lang.getString(R.string.TranslateOriginal), animated);
@@ -398,6 +516,9 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
   }
 
   private void onTranslationError (String message) {
+    if (xgramM3() && com.fahadali.xgram.appearance.XgramSnackbar.show(message, android.widget.Toast.LENGTH_LONG)) {
+      return; // XGram M3E r6: feedback is a snackbar, not a tooltip
+    }
     parent.tooltipManager().builder(translationHeaderButton).show(tdlib, message).hideDelayed(3500, TimeUnit.MILLISECONDS);
   }
 
@@ -436,6 +557,12 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
     translationHeaderButton.setCustomDrawable(translationCounterDrawable);
     headerView.getBackButton().setTranslationY(Screen.dp(7.5f));
     translationHeaderButton.setTranslationY(Screen.dp(7.5f));
+    if (xgramM3()) {
+      // XGram M3E r6: both icon buttons in the 56dp bar under the handle band, the translate button an M3 icon toggle
+      headerView.getBackButton().setTranslationY(Screen.dp(XGRAM_HANDLE_BAND));
+      translationHeaderButton.setTranslationY(Screen.dp(XGRAM_HANDLE_BAND));
+      xgramSetupToggle();
+    }
   }
 
   @Override
@@ -454,6 +581,9 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
   }
 
   protected void onCustomShowComplete () {
+    if (xgramM3()) {
+      return; // XGram M3E r6: no tooltip, the language is an M3 menu button with its arrow
+    }
     String current = mTranslationsManager.getCurrentTranslatedLanguage();
     if (current == null || StringUtils.equalsOrBothEmpty(current, messageOriginalLanguage)) {
       parent.tooltipManager().builder(headerCell).locate((targetView, outRect) -> {
@@ -669,7 +799,7 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
     @Override
     protected int getHeaderHeight () {
-      return Screen.dp(67);
+      return Screen.dp(xgramM3() ? XGRAM_HEADER_HEIGHT : 67); // XGram M3E r6: the 64dp M3 sheet header
     }
 
     @Override
@@ -1036,6 +1166,17 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
       textPaint.setTypeface(Fonts.getRobotoMedium());
       TextStyleProvider textStyleProvider = new TextStyleProvider(textPaint);
       textStyleProvider.setTextSize(12);
+      if (xgramM3()) {
+        // XGram M3E r6: the sender in labelLarge, onSurface
+        textPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false));
+        textStyleProvider.setTextSize(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L));
+        senderText = new Text.Builder(senderString, maxWidth, textStyleProvider, () -> Theme.getColor(ColorId.text))
+          .singleLine()
+          .clipTextArea()
+          .view(this)
+          .build();
+        return;
+      }
       senderText = new Text.Builder(senderString, maxWidth, textStyleProvider, () -> Theme.getColor(ColorId.textLight))
         .singleLine()
         .clipTextArea()
@@ -1045,6 +1186,10 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
     @Override
     protected void onDraw (Canvas canvas) {
+      if (xgramM3() && senderText != null) {
+        senderText.draw(canvas, 0, (getMeasuredHeight() - Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L))) / 2 - Screen.dp(1));
+        return;
+      }
       senderText.draw(canvas, 0, (getMeasuredHeight() - Screen.dp(12)) / 2 - Screen.dp(1) );
     }
   }

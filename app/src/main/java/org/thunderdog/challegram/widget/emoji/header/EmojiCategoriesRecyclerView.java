@@ -88,6 +88,9 @@ public class EmojiCategoriesRecyclerView extends CustomRecyclerView implements D
   public void init (ViewController<?> controller, RunnableData<String> onSelectCategoryListener) {
     emojiSearchTypesAdapter = new EmojiSearchTypesAdapter(controller, layoutManager);
     emojiSearchTypesAdapter.setOnSectionClickListener(onSelectCategoryListener);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      emojiSearchTypesAdapter.xgramActiveListener = this::xgramOnActiveChanged; // XGram M3E r6: the sliding pill
+    }
     setAdapter(emojiSearchTypesAdapter);
 
     controller.tdlib().send(new TdApi.GetEmojiCategories(new TdApi.EmojiCategoryTypeDefault()), (emojiCategories, error) -> {
@@ -137,8 +140,83 @@ public class EmojiCategoriesRecyclerView extends CustomRecyclerView implements D
     emojiSearchTypesAdapter.setActiveIndex(-1);
   }
 
+  // XGram M3E r6: the active category sits on a secondaryContainer pill that slides between categories on
+  // SPATIAL_FAST and fades in and out on EFFECTS_FAST (both snap with Reduce motion); the bar, its edge fades
+  // included, is the sheet color (ColorId.drawer, surfaceContainerLow) instead of Telegram X's filling
+
+  private static final float XGRAM_PILL_HEIGHT = 32f, XGRAM_PILL_INSET = 1f;
+  private final android.graphics.RectF xgramPillRect = new android.graphics.RectF();
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPillPosition, xgramPillVisibility;
+  private int xgramPillIndex = -1;
+  private int xgramFillColor;
+
+  private void xgramOnActiveChanged (int index) {
+    if (xgramPillPosition == null) {
+      xgramPillPosition = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, Math.max(0, index), (s, value) -> invalidate());
+      xgramPillVisibility = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> invalidate());
+    }
+    if (index >= 0) {
+      if (xgramPillIndex < 0 || xgramPillVisibility.getValue() <= 0f) {
+        xgramPillPosition.setValue(index); // appears in place, then slides from there
+      } else {
+        xgramPillPosition.animateTo(index);
+      }
+      xgramPillVisibility.animateTo(1f);
+    } else {
+      xgramPillVisibility.animateTo(0f);
+    }
+    xgramPillIndex = index;
+    invalidate();
+  }
+
+  private void xgramDrawPill (Canvas canvas) {
+    if (xgramPillPosition == null || xgramPillVisibility == null || getChildCount() == 0) {
+      return;
+    }
+    final float visibility = MathUtils.clamp(xgramPillVisibility.getValue());
+    if (visibility <= 0f) {
+      return;
+    }
+    // any child on screen anchors the pill's position in category units (every category is the same width)
+    final View anchor = getChildAt(0);
+    final int anchorPosition = getChildAdapterPosition(anchor);
+    if (anchorPosition == NO_POSITION) {
+      return;
+    }
+    final float itemWidth = Screen.dp(CATEGORY_WIDTH);
+    final float left = anchor.getLeft() + anchor.getTranslationX() + (xgramPillPosition.getValue() - anchorPosition) * itemWidth + Screen.dp(XGRAM_PILL_INSET);
+    final float height = Screen.dp(XGRAM_PILL_HEIGHT);
+    final float top = (getMeasuredHeight() - height) / 2f;
+    xgramPillRect.set(left, top, left + itemWidth - Screen.dp(XGRAM_PILL_INSET) * 2, top + height);
+    final int color = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+    canvas.drawRoundRect(xgramPillRect, height / 2f, height / 2f, Paints.fillingPaint(me.vkryl.core.ColorUtils.alphaColor(visibility, color)));
+  }
+
   @Override
   protected void dispatchDraw (Canvas canvas) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      final int fill = Theme.getColor(ColorId.drawer);
+      if (fill != xgramFillColor) {
+        xgramFillColor = fill;
+        gradientDrawableLeft.setColors(new int[] {0, fill});
+        gradientDrawableRight.setColors(new int[] {0, fill});
+      }
+      final int sL = getFirstItemX();
+      final int sR = computeHorizontalScrollRange() - computeHorizontalScrollOffset() - computeHorizontalScrollExtent();
+      canvas.drawRect(sL, 0, getMeasuredWidth(), getMeasuredHeight(), Paints.fillingPaint(fill));
+      xgramDrawPill(canvas);
+      super.dispatchDraw(canvas);
+      gradientDrawableLeft.setAlpha((int) ((1f - (MathUtils.clamp((float) sL / Screen.dp(SHADOW_SIZE)))) * 255));
+      gradientDrawableLeft.setBounds(0, 0, Screen.dp(SHADOW_SIZE), getMeasuredHeight());
+      gradientDrawableLeft.draw(canvas);
+      gradientDrawableRight.setAlpha(255);
+      gradientDrawableRight.setBounds(sL - Screen.dp(SHADOW_SIZE), 0, sL, getMeasuredHeight());
+      gradientDrawableRight.draw(canvas);
+      gradientDrawableRight.setAlpha((int) (MathUtils.clamp((float) sR / Screen.dp(SHADOW_SIZE)) * 255));
+      gradientDrawableRight.setBounds(getMeasuredWidth() - Screen.dp(SHADOW_SIZE), 0, getMeasuredWidth(), getMeasuredHeight());
+      gradientDrawableRight.draw(canvas);
+      return;
+    }
     int sL = getFirstItemX();
     int sR = computeHorizontalScrollRange() - computeHorizontalScrollOffset() - computeHorizontalScrollExtent();
 
@@ -261,6 +339,8 @@ public class EmojiCategoriesRecyclerView extends CustomRecyclerView implements D
     private final RecyclerView.LayoutManager manager;
     private RunnableData<String> onSectionClickListener;
     private int activeIndex = -1;
+    /** XGram M3E r6: told about every change of the active category (the pill under it slides there). */
+    private @androidx.annotation.Nullable me.vkryl.core.lambda.RunnableInt xgramActiveListener;
 
     public EmojiSearchTypesAdapter (ViewController<?> context, RecyclerView.LayoutManager manager) {
       this.context = context;
@@ -313,6 +393,9 @@ public class EmojiCategoriesRecyclerView extends CustomRecyclerView implements D
       }
 
       this.activeIndex = activeIndex;
+      if (xgramActiveListener != null) {
+        xgramActiveListener.runWithInt(activeIndex);
+      }
       if (activeIndex != -1) {
         View view = manager.findViewByPosition(activeIndex);
         if (view instanceof StickerSmallView) {

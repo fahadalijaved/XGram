@@ -37,22 +37,40 @@ public final class XgramTranslateProviderPicker {
       titles[i] = XgramTranslator.name(providers[i]);
       ids[i] = i + 1;
     }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E r6: an M3 single-choice sheet with the current service checked; a tap picks it
+      int current = -1;
+      for (int i = 0; i < providers.length; i++) {
+        if (providers[i] == XgramSettings.instance().translateProvider()) {
+          current = i;
+          break;
+        }
+      }
+      if (com.fahadali.xgram.appearance.XgramR6B1Pickers.showChoiceSheet(c, Lang.getString(R.string.XgramR6B1TranslationService), null, titles, current, true, null,
+        index -> choose(c, providers[index], onChosen))) {
+        return;
+      }
+    }
     c.showOptions(Lang.getString(R.string.XgramTrProvider), ids, titles, null, null, (itemView, optionId) -> {
-      int provider = providers[optionId - 1];
-      XgramSettings settings = XgramSettings.instance();
-      if (provider == settings.translateProvider()) {
-        return true;
-      }
-      if (XgramTranslator.isThirdParty(provider) && !settings.translateNoticeShown(provider)) {
-        String name = XgramTranslator.name(provider);
-        c.showConfirm(XgramTranslator.info(provider), Lang.getString(R.string.XgramTrUse, name), () -> {
-          settings.setTranslateNoticeShown(provider);
-          onChosen.runWithInt(provider);
-        });
-      } else {
-        onChosen.runWithInt(provider);
-      }
+      choose(c, providers[optionId - 1], onChosen);
       return true;
     });
+  }
+
+  /** Saves {@code provider} through {@code onChosen}; a third-party service asks once, saying the text goes to it. */
+  private static void choose (ViewController<?> c, int provider, RunnableInt onChosen) {
+    XgramSettings settings = XgramSettings.instance();
+    if (provider == settings.translateProvider()) {
+      return;
+    }
+    if (XgramTranslator.isThirdParty(provider) && !settings.translateNoticeShown(provider)) {
+      String name = XgramTranslator.name(provider);
+      c.showConfirm(XgramTranslator.info(provider), Lang.getString(R.string.XgramTrUse, name), () -> {
+        settings.setTranslateNoticeShown(provider);
+        onChosen.runWithInt(provider);
+      });
+    } else {
+      onChosen.runWithInt(provider);
+    }
   }
 }

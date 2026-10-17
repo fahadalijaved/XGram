@@ -10,6 +10,7 @@ import android.view.View;
 import androidx.annotation.ColorInt;
 import androidx.annotation.Dimension;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
@@ -26,8 +27,9 @@ import me.vkryl.android.animator.ListAnimator;
 import me.vkryl.android.animator.ReplaceAnimator;
 
 public class ToggleHeaderView2 extends View {
-  private final ReplaceAnimator<TrimmedText> titleR = new ReplaceAnimator<>((r) -> invalidate(), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
-  private final ReplaceAnimator<TrimmedText> subtitleR = new ReplaceAnimator<>((r) -> invalidate(), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
+  // XGram M3E r6: the title and subtitle changes slide on the SPATIAL_DEFAULT spring (clamped: it fades them too)
+  private final ReplaceAnimator<TrimmedText> titleR = new ReplaceAnimator<>((r) -> invalidate(), com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 180L));
+  private final ReplaceAnimator<TrimmedText> subtitleR = new ReplaceAnimator<>((r) -> invalidate(), com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 180L));
   private final Drawable arrowDrawable;
 
   @Dimension(unit = Dimension.DP)
@@ -137,8 +139,51 @@ public class ToggleHeaderView2 extends View {
     return paint;
   }
 
+  // XGram M3E r6: an M3 menu button: the title then the 24dp arrow_drop_down, which turns over while the menu is open
+
+  private static final float XGRAM_ARROW_SIZE = 24f, XGRAM_ARROW_GAP = 4f;
+  private @Nullable Drawable xgramArrow;
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramArrowSpring;
+
+  /** The language menu opened or closed: the arrow turns over on SPATIAL_FAST (snaps with Reduce motion). */
+  public void xgramSetExpanded (boolean expanded, boolean animated) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    if (xgramArrowSpring == null) {
+      xgramArrowSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
+    }
+    if (animated) {
+      xgramArrowSpring.animateTo(expanded ? 1f : 0f);
+    } else {
+      xgramArrowSpring.setValue(expanded ? 1f : 0f);
+      invalidate();
+    }
+  }
+
+  private void xgramDrawArrow (@NonNull Canvas c, float titleCenterY) {
+    if (xgramArrow == null) {
+      xgramArrow = Drawables.get(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.xgram_r6_b1_arrow_drop_down_24));
+    }
+    if (xgramArrow == null) {
+      return;
+    }
+    final float size = Screen.dp(XGRAM_ARROW_SIZE);
+    final float cx = getPaddingLeft() + getTitleWidth() + Screen.dp(XGRAM_ARROW_GAP) + size / 2f;
+    final float rotation = xgramArrowSpring != null ? 180f * xgramArrowSpring.getValue() : 0f;
+    final int saveCount = c.save();
+    if (rotation != 0f) {
+      c.rotate(rotation, cx, titleCenterY);
+    }
+    Drawables.draw(c, xgramArrow, cx - xgramArrow.getMinimumWidth() / 2f, titleCenterY - xgramArrow.getMinimumHeight() / 2f, PorterDuffPaint.get(colorSet.iconColorId()));
+    c.restoreToCount(saveCount);
+  }
+
   private void trimTexts () {
     int avail = getMeasuredWidth() - Screen.dp(textPaddingDp) - Screen.dp(12f);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      avail = getMeasuredWidth() - getPaddingLeft() - Screen.dp(XGRAM_ARROW_GAP + XGRAM_ARROW_SIZE + 8f); // room for the arrow
+    }
     for (ListAnimator.Entry<TrimmedText> entry : titleR) {
       entry.item.measure(avail, titlePaint(colorSet.titleColor()));
     }
@@ -184,6 +229,10 @@ public class ToggleHeaderView2 extends View {
       entry.item.draw(c, getPaddingLeft(), getPaddingTop() + textTop + Screen.dp(19) + offset2, entry.getVisibility(), subtitlePaint(colorSet.subtitleColor()));
     }
 
+    if (xgramM3) {
+      xgramDrawArrow(c, getPaddingTop() + Screen.dp(textTopDp) + Screen.dp(11f)); // the title line's middle
+      return;
+    }
     Drawables.draw(c, arrowDrawable, getTitleWidth() + Screen.dp(2), getPaddingTop() + triangleTop, PorterDuffPaint.get(colorSet.iconColorId()));
   }
 

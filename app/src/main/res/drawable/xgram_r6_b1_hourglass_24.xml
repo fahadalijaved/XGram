@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E round 6: an hourglass in the XGram Line style, for "In 8 hours" -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="24dp"
+  android:height="24dp"
+  android:viewportWidth="24"
+  android:viewportHeight="24">
+  <path
+    android:pathData="M6.5 3L17.5 3M6.5 21L17.5 21M8 3C8 7.5 12 8.5 12 12C12 15.5 8 16.5 8 21M16 3C16 7.5 12 8.5 12 12C12 15.5 16 16.5 16 21"
+    android:fillColor="#00000000"
+    android:strokeColor="#FF000000"
+    android:strokeWidth="1.8"
+    android:strokeLineCap="round"
+    android:strokeLineJoin="round" />
+</vector>

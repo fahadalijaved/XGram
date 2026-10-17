@@ -951,71 +951,32 @@ public class TdlibUi extends Handler {
     UI.getContext(context).showAlert(builder, useDarkMode ? ThemeSet.getBuiltinTheme(ThemeId.NIGHT_BLACK) : null);
   }
 
-  /** The controller an M3 sheet opened from {@code context} belongs to (the navigation's current page), or null. */
-  @Nullable
-  private static ViewController<?> xgramSheetHost (Context context) {
-    final BaseActivity activity = UI.getContext(context);
-    if (activity == null) {
-      return null;
-    }
-    final NavigationController navigation = activity.navigation();
-    final ViewController<?> c = navigation != null ? navigation.getCurrentStackItem() : null;
-    return c != null && !c.isDestroyed() ? c : null;
-  }
-
   /**
-   * XGram M3E: the self-destruct timer in an M3 sheet: a headlineSmall title, the explanation in bodyMedium, the band
-   * wheel and Cancel / Done. With the media viewer's dark forced theme every color is the dark scheme's
-   * (XgramM3Wheel.color). False when there is no page to open the sheet from (the dialog is shown then).
+   * XGram M3E r6: the self-destruct timer (and the secret chat and media viewer timers) as the M3 single-choice list in
+   * the M3 sheet (XgramR6B1Pickers.showChoiceSheet): a headlineSmall title, the explanation in bodyMedium, one radio
+   * tile per duration with the current one checked and scrolled into view, and Cancel / Done. With the media viewer's
+   * dark forced theme every color is the dark scheme's. The sheet opens from the page on screen (XgramR6B1Pickers.host),
+   * so no Holo dialog is left; false only when the app has no page at all.
    */
   private boolean xgramShowTTLSheet (Context context, List<TTLOption> options, int foundIndex, boolean useDarkMode, @StringRes int message, @Nullable RunnableData<TTLOption> callback) {
-    final ViewController<?> c = xgramSheetHost(context);
+    final ViewController<?> c = com.fahadali.xgram.appearance.XgramR6B1Pickers.host(context);
     if (c == null) {
       return false;
     }
     final ThemeDelegate forcedTheme = useDarkMode ? ThemeSet.getBuiltinTheme(ThemeId.NIGHT_BLACK) : null;
-    c.showPopup(null, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
-      int contentHeight = 0;
-      final Context ctx = c.context();
-      TextView titleView = com.fahadali.xgram.appearance.XgramM3Wheel.newTitle(ctx, com.fahadali.xgram.appearance.XgramR5Calls.sentence(R.string.MessageLifetime, R.string.XgramR5CallsSelfDestructTimer), forcedTheme);
-      optionsWrap.addView(titleView);
-      contentHeight += com.fahadali.xgram.appearance.XgramM3Wheel.measureHeight(titleView, c.context().getControllerWidth(titleView));
-      if (message != 0) {
-        TextView textView = com.fahadali.xgram.appearance.XgramM3Wheel.newSupportingText(ctx, Lang.getString(message), forcedTheme);
-        optionsWrap.addView(textView);
-        contentHeight += com.fahadali.xgram.appearance.XgramM3Wheel.measureHeight(textView, c.context().getControllerWidth(textView));
-      }
-
-      final InfiniteRecyclerView<TTLOption> wheel = new InfiniteRecyclerView<>(ctx, false);
-      if (forcedTheme != null) {
-        wheel.setForcedTheme(forcedTheme);
-      } else {
-        wheel.addThemeListeners(c);
-      }
-      wheel.initWithItems(options, foundIndex);
-      wheel.setLayoutParams(new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, InfiniteRecyclerView.getItemHeight() * 5));
-      if (forcedTheme == null) {
-        c.addThemeInvalidateListener(wheel);
-      }
-      optionsWrap.addView(wheel);
-      contentHeight += InfiniteRecyclerView.getItemHeight() * 5;
-
-      final TextView done = com.fahadali.xgram.appearance.XgramM3Wheel.newConfirmButton(ctx, forcedTheme);
-      done.setText(Lang.getString(R.string.Done));
-      final com.fahadali.xgram.appearance.XgramM3Wheel.Actions actions = com.fahadali.xgram.appearance.XgramM3Wheel.newActions(ctx, forcedTheme, null, Lang.getString(R.string.Cancel), done);
-      actions.cancel.setOnClickListener(v -> popupLayout.hideWindow(true));
-      done.setOnClickListener(v -> {
-        TTLOption option = wheel.getCurrentItem();
-        popupLayout.hideWindow(true);
-        if (option != null && callback != null) {
-          callback.runWithData(option);
+    final CharSequence[] labels = new CharSequence[options.size()];
+    for (int i = 0; i < labels.length; i++) {
+      labels[i] = options.get(i).getTtlString();
+    }
+    return com.fahadali.xgram.appearance.XgramR6B1Pickers.showChoiceSheet(c,
+      com.fahadali.xgram.appearance.XgramR5Calls.sentence(R.string.MessageLifetime, R.string.XgramR5CallsSelfDestructTimer),
+      message != 0 ? Lang.getString(message) : null,
+      labels, foundIndex, false, forcedTheme,
+      index -> {
+        if (callback != null && index >= 0 && index < options.size()) {
+          callback.runWithData(options.get(index));
         }
       });
-      optionsWrap.addView(actions.view);
-      contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT + com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_BOTTOM);
-      return contentHeight;
-    }, forcedTheme);
-    return true;
   }
 
   public static final int MUTE_ENABLE = 0;
@@ -7810,10 +7771,12 @@ public class TdlibUi extends Handler {
 
   public void openVoiceChatInvitation (ViewController<?> context, TdApi.InternalLinkTypeVideoChat invitation) {
     // TODO some confirmation screen & join voice chat if agreed
+    com.fahadali.xgram.appearance.XgramR6B1Prompts.showVoiceChatUnsupported(invitation); // XGram M3E r6: say so, with "Open in browser"
   }
 
   public void openVoiceChat (ViewController<?> context, int groupCallId, @Nullable UrlOpenParameters openParameters) {
     // TODO open voice chat layer
+    com.fahadali.xgram.appearance.XgramR6B1Prompts.showVoiceChatUnsupported(null); // XGram M3E r6: say so instead of nothing
   }
 
   // Suggestions by emoji
@@ -8313,6 +8276,9 @@ public class TdlibUi extends Handler {
   }
 
   public void showBirthdatePicker (ViewController<?> controller, @Nullable TdApi.Birthdate currentBirthdate) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramShowBirthdayDialog(controller, currentBirthdate)) {
+      return; // XGram M3E r6: the M3 date-input dialog; Telegram X's wheel (below) only when it could not be shown
+    }
     int day, month, year;
     if (currentBirthdate != null) {
       day = currentBirthdate.day;
@@ -8378,6 +8344,29 @@ public class TdlibUi extends Handler {
         });
         return false;
       }
+    );
+  }
+
+  /**
+   * XGram M3E r6: the birthday as the M3 date-input dialog (XgramR5ChatPickers.showBirthdayPicker): Month, Day and an
+   * optional Year, the confirmation of the date inside the dialog, and "Remove birthday" when one is set. The request
+   * result comes back to the dialog, which closes on success and shows the error otherwise. False when the dialog
+   * could not be shown.
+   */
+  private boolean xgramShowBirthdayDialog (ViewController<?> controller, @Nullable TdApi.Birthdate currentBirthdate) {
+    return com.fahadali.xgram.compose.XgramR5ChatPickers.showBirthdayPicker(controller.context(),
+      currentBirthdate != null ? currentBirthdate.day : 0,
+      currentBirthdate != null ? currentBirthdate.month : 0,
+      currentBirthdate != null ? currentBirthdate.year : 0,
+      currentBirthdate != null,
+      (newDay, newMonth, newYear, result) ->
+        tdlib.send(new TdApi.SetBirthdate(new TdApi.Birthdate(newDay, newMonth, newYear)), (ok, error) ->
+          UI.post(() -> result.done(error != null ? TD.toErrorString(error) : null))
+        ),
+      result ->
+        tdlib.send(new TdApi.SetBirthdate(null), (ok, error) ->
+          UI.post(() -> result.done(error != null ? TD.toErrorString(error) : null))
+        )
     );
   }
 

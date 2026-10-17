@@ -128,7 +128,7 @@ public class TGInlineKeyboard {
     this.isCustom = true;
     this.disableCustomPadding = disableCustomPadding;
 
-    Button button = new Button(this, parent, text.toUpperCase(Locale.ROOT), iconRes, maxWidth - getButtonPadding() * 2);
+    Button button = new Button(this, parent, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? text : text.toUpperCase(Locale.ROOT), iconRes, maxWidth - getButtonPadding() * 2); // XGram M3E r6: labels as written
     button.setClickListener(listener);
     button.setViewProvider(viewProvider);
 
@@ -484,7 +484,8 @@ public class TGInlineKeyboard {
     }
 
     private String uppercase (String text) {
-      return useWhiteMode() ? text : text.toUpperCase(Locale.ROOT);
+      // XGram M3E r6: with Expressive design bot buttons keep their labels as the bot wrote them (no ALL CAPS)
+      return useWhiteMode() || com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? text : text.toUpperCase(Locale.ROOT);
     }
 
     public void set (TdApi.InlineKeyboardButton button, int maxWidth) {
