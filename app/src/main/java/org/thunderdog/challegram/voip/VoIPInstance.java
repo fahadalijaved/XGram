@@ -110,6 +110,12 @@ public abstract class VoIPInstance implements Destroyable {
 
   protected abstract void handleNetworkTypeChange (@CallNetworkType int type);
 
+  /**
+   * XGram: sends the camera capture {@code videoCapture} (N.newVideoCapture), or stops sending video with 0 (the other
+   * side then sees the video off). Main thread.
+   */
+  public void setVideoCapture (long videoCapture) { }
+
   // Getters
 
   public abstract CharSequence collectDebugLog ();

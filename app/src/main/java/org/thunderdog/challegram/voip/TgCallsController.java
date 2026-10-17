@@ -28,12 +28,16 @@ import org.thunderdog.challegram.voip.annotation.VideoState;
 public class TgCallsController extends VoIPInstance {
   private final String version;
   private long nativePtr;
-  public TgCallsController (@NonNull Tdlib tdlib, @NonNull TdApi.Call call, @NonNull CallConfiguration configuration, @NonNull CallOptions options, @NonNull ConnectionStateListener stateListener, String version) {
+  /**
+   * @param videoCapture XGram: the camera capture to send from the start (N.newVideoCapture), or 0
+   * @param remoteVideoSink XGram: an org.webrtc.VideoSink for the other side's video, or null
+   */
+  public TgCallsController (@NonNull Tdlib tdlib, @NonNull TdApi.Call call, @NonNull CallConfiguration configuration, @NonNull CallOptions options, @NonNull ConnectionStateListener stateListener, String version, long videoCapture, @Nullable Object remoteVideoSink) {
     super(tdlib, call, configuration, options, stateListener);
     if (configuration.state.encryptionKey.length != 256)
       throw new IllegalArgumentException(Integer.toString(configuration.state.encryptionKey.length));
     this.version = version;
-    this.nativePtr = newInstance(version, configuration, options);
+    this.nativePtr = newInstance(version, configuration, options, videoCapture, remoteVideoSink);
   }
 
   private long nativePtr () {
@@ -46,7 +50,9 @@ public class TgCallsController extends VoIPInstance {
   private native long newInstance (
     @NonNull String version,
     @NonNull CallConfiguration configuration,
-    @NonNull CallOptions options
+    @NonNull CallOptions options,
+    long videoCapture,
+    @Nullable Object remoteVideoSink
   );
 
   private native long preferredConnectionId (long ptr);
@@ -60,6 +66,7 @@ public class TgCallsController extends VoIPInstance {
   private native void updateMicrophoneDisabled (long ptr, boolean isDisabled);
   private native void updateEchoCancellationStrength (long ptr, int strength);
   private native void updateAudioOutputGainControlEnabled (long ptr, boolean isEnabled);
+  private native void updateVideoCapture (long ptr, long videoCapture);
   private native void destroyInstance (long ptr);
 
   @Override
@@ -100,6 +107,13 @@ public class TgCallsController extends VoIPInstance {
   @Override
   public long getConnectionId () {
     return preferredConnectionId(nativePtr());
+  }
+
+  @Override
+  public void setVideoCapture (long videoCapture) {
+    if (nativePtr != 0) {
+      updateVideoCapture(nativePtr, videoCapture);
+    }
   }
 
   @Nullable

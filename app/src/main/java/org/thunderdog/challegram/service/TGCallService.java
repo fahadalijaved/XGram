@@ -415,6 +415,7 @@ public class TGCallService extends Service implements
   public void onDestroy () {
     this.isDestroyed = true;
     Log.v(Log.TAG_VOIP, "TGCallService.onDestroy");
+    xgramUnbindVideo();
 
     setCall(null);
     updateCurrentState();
@@ -470,10 +471,103 @@ public class TGCallService extends Service implements
       }
     }
     configureDeviceForCall();
+    xgramBindVideo();
     updateCurrentSound();
     showNotification();
     updateStats();
     checkInitiated();
+  }
+
+  // XGram: video calls (com.fahadali.xgram.call.XgramCallVideo): the speaker comes on for video and goes back to the
+  // earpiece when it ends (unless you changed the route), the proximity sensor leaves the screen alone, and the
+  // notifications say it is a video call.
+
+  private @Nullable com.fahadali.xgram.call.XgramCallVideo xgramVideo;
+  private boolean xgramVideoActive, xgramVideoUsed;
+
+  private final com.fahadali.xgram.call.XgramCallVideo.Listener xgramVideoListener = video -> {
+    if (video == xgramVideo) {
+      xgramOnVideoChanged(video);
+    }
+  };
+
+  private void xgramBindVideo () {
+    final com.fahadali.xgram.call.XgramCallVideo video = !isDestroyed && call != null && tdlib != null ? tdlib.context().calls().video(call.id) : null;
+    if (xgramVideo == video) {
+      return;
+    }
+    if (xgramVideo != null) {
+      xgramVideo.removeListener(xgramVideoListener);
+    }
+    xgramVideo = video;
+    xgramVideoActive = false;
+    xgramVideoUsed = video != null && video.wasVideoUsed();
+    if (video != null) {
+      video.addListener(xgramVideoListener);
+      xgramOnVideoChanged(video);
+    }
+  }
+
+  private void xgramUnbindVideo () {
+    if (xgramVideo != null) {
+      xgramVideo.removeListener(xgramVideoListener);
+      xgramVideo = null;
+    }
+    xgramVideoActive = false;
+  }
+
+  private void xgramOnVideoChanged (com.fahadali.xgram.call.XgramCallVideo video) {
+    final boolean active = !video.isReleased() && video.isVideoActive();
+    if (xgramVideoActive != active) {
+      xgramVideoActive = active;
+      final CallSettings settings = getCallSettings();
+      if (settings != null) {
+        if (active) {
+          if (settings.getSpeakerMode() == CallSettings.SPEAKER_MODE_EARPIECE && !isHeadsetPlugged && !isBtHeadsetConnected) {
+            settings.setSpeakerMode(CallSettings.SPEAKER_MODE_SPEAKER_DEFAULT);
+            video.autoSpeaker = true;
+          }
+        } else {
+          // Android 12+ reports the speaker it picked as SPEAKER_MODE_SPEAKER
+          final int mode = settings.getSpeakerMode();
+          if (video.autoSpeaker && (mode == CallSettings.SPEAKER_MODE_SPEAKER_DEFAULT || mode == CallSettings.SPEAKER_MODE_SPEAKER)) {
+            settings.setSpeakerMode(CallSettings.SPEAKER_MODE_EARPIECE);
+          }
+          video.autoSpeaker = false;
+        }
+      }
+      if (active && isProximityNear && proximityWakelock != null) {
+        try {
+          if (proximityWakelock.isHeld()) {
+            proximityWakelock.release(1);
+          }
+        } catch (Throwable t) {
+          Log.e(Log.TAG_VOIP, "Failed to release proximity wakelock", t);
+        }
+        isProximityNear = false;
+      }
+    }
+    final boolean used = video.wasVideoUsed();
+    if (xgramVideoUsed != used) {
+      xgramVideoUsed = used;
+      xgramUpdateOngoingNotification();
+    }
+  }
+
+  /** XGram: the ongoing notification again (same id), e.g. once the call turned into a video call. */
+  public void xgramUpdateOngoingNotification () {
+    if (ongoingCallNotification != null && !isDestroyed) {
+      ongoingCallNotification = null;
+      showNotification();
+    }
+  }
+
+  private boolean xgramIsVideoCall () {
+    return call != null && (call.isVideo || (xgramVideo != null && xgramVideo.wasVideoUsed()));
+  }
+
+  public boolean isWiredHeadsetPlugged () {
+    return isHeadsetPlugged;
   }
 
   private void startRatingActivity () {
@@ -756,6 +850,9 @@ public class TGCallService extends Service implements
       if (isHeadsetPlugged || am.isSpeakerphoneOn() || (isBtHeadsetConnected && am.isBluetoothScoOn())) {
         return;
       }
+      if (xgramVideo != null && xgramVideo.isVideoActive()) {
+        return; // XGram: the screen stays on while video goes on
+      }
       boolean newIsNear = event.values[0] < Math.min(event.sensor.getMaximumRange(), 3);
       if (newIsNear != isProximityNear) {
         if (Log.isEnabled(Log.TAG_VOIP)) {
@@ -883,7 +980,7 @@ public class TGCallService extends Service implements
       builder.setLargeIcon(bitmap);
     }
     if (xgramStyle && xgramHangUp != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      builder.setStyle(Notification.CallStyle.forOngoingCall(xgramPerson(bitmap), xgramHangUp));
+      builder.setStyle(Notification.CallStyle.forOngoingCall(xgramPerson(bitmap), xgramHangUp).setIsVideo(xgramIsVideoCall()));
       builder.setCategory(Notification.CATEGORY_CALL);
       builder.setOngoing(true);
       if (xgramConnected) {
@@ -968,7 +1065,7 @@ public class TGCallService extends Service implements
     }
 
     builder
-      .setContentTitle(Lang.getString(R.string.CallBrandingIncoming))
+      .setContentTitle(Lang.getString(call.isVideo && com.fahadali.xgram.call.XgramCallVideo.isAvailable() ? R.string.XgramVideoIncoming : R.string.CallBrandingIncoming))
       .setContentText(TD.getUserName(user))
       .setSmallIcon(CALL_ICON_RES)
       .setContentIntent(PendingIntent.getActivity(UI.getContext(), 0, Intents.valueOfCall(), PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
@@ -987,10 +1084,11 @@ public class TGCallService extends Service implements
       Intent answerIntent = new Intent();
       Intents.secureIntent(answerIntent, false);
       answerIntent.setAction(Intents.ACTION_ANSWER_CALL);
+      final PendingIntent xgramVideoAnswer = xgramVideoAnswerIntent();
       if (xgramStyle) {
         // XGram M3E: the CallStyle's own decline and answer buttons, no coloured spans
         xgramDecline = PendingIntent.getBroadcast(this, 0, endIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false));
-        xgramAnswer = PendingIntent.getBroadcast(this, 0, answerIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false));
+        xgramAnswer = xgramVideoAnswer != null ? xgramVideoAnswer : PendingIntent.getBroadcast(this, 0, answerIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false));
       } else {
         CharSequence endTitle = Lang.getString(R.string.DeclineCall);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -1003,7 +1101,7 @@ public class TGCallService extends Service implements
           answerTitle = new SpannableString(answerTitle);
           ((SpannableString) answerTitle).setSpan(new ForegroundColorSpan(Theme.getColor(ColorId.circleButtonPositive)), 0, answerTitle.length(), 0);
         }
-        builder.addAction(R.drawable.round_call_24_white, answerTitle, PendingIntent.getBroadcast(this, 0, answerIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
+        builder.addAction(R.drawable.round_call_24_white, answerTitle, xgramVideoAnswer != null ? xgramVideoAnswer : PendingIntent.getBroadcast(this, 0, answerIntent, PendingIntent.FLAG_ONE_SHOT | Intents.mutabilityFlags(false)));
       }
       builder.setPriority(Notification.PRIORITY_MAX);
     }
@@ -1021,7 +1119,7 @@ public class TGCallService extends Service implements
       builder.setLargeIcon(bitmap);
     }
     if (xgramStyle && xgramDecline != null && xgramAnswer != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      builder.setStyle(Notification.CallStyle.forIncomingCall(xgramPerson(bitmap), xgramDecline, xgramAnswer));
+      builder.setStyle(Notification.CallStyle.forIncomingCall(xgramPerson(bitmap), xgramDecline, xgramAnswer).setIsVideo(call.isVideo));
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
       incomingNotification = builder.build();
@@ -1030,6 +1128,21 @@ public class TGCallService extends Service implements
     }
     U.startForeground(this, TdlibNotificationManager.ID_FOREGROUND_INCOMING_CALL_NOTIFICATION, incomingNotification);
     return true;
+  }
+
+  /**
+   * XGram: for an incoming video call, "Answer" opens the call screen and answers there (the camera and the permission
+   * dialog need the activity); the extra carries this call's token, so nothing else can answer it. Null for voice.
+   */
+  private @Nullable PendingIntent xgramVideoAnswerIntent () {
+    final com.fahadali.xgram.call.XgramCallVideo video = call != null && call.isVideo && tdlib != null ? tdlib.context().calls().video(call.id) : null;
+    if (video == null) {
+      return null;
+    }
+    Intent intent = Intents.valueOfCall()
+      .putExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_VIDEO, video.answerToken())
+      .putExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_CALL_ID, call.id);
+    return PendingIntent.getActivity(this, 2, intent, PendingIntent.FLAG_UPDATE_CURRENT | Intents.mutabilityFlags(false));
   }
 
   private void startRinging () {
@@ -1382,6 +1495,10 @@ public class TGCallService extends Service implements
         tdlib = tgcalls.tdlib();
       }
       lastDebugLog = tgcalls.collectDebugLog();
+      final com.fahadali.xgram.call.XgramCallVideo video = tdlib != null ? tdlib.context().calls().video(call.id) : null;
+      if (video != null) { // XGram
+        video.onInstanceReleased();
+      }
       tgcalls.performDestroy();
       tgcalls = null;
     }
@@ -1449,7 +1566,23 @@ public class TGCallService extends Service implements
       public void onSignallingDataEmitted (byte[] data) {
         tdlib.client().send(new TdApi.SendCallSignalingData(call.id, data), tdlib.silentHandler());
       }
+
+      @Override
+      public void onRemoteMediaStateChanged (VoIPInstance context, int audioState, int videoState) {
+        // XGram: the other side's camera (a tgcalls thread)
+        UI.post(() -> {
+          final com.fahadali.xgram.call.XgramCallVideo video = tdlib.context().calls().video(call.id);
+          if (video != null) {
+            video.onRemoteMediaState(audioState, videoState);
+          }
+        });
+      }
     };
+
+    // XGram: the camera, if it should run now, and the sink for the other side's video
+    final com.fahadali.xgram.call.XgramCallVideo callVideo = tdlib.context().calls().video(call.id);
+    final long xgramCapture = callVideo != null ? callVideo.captureForNewInstance() : 0;
+    final Object xgramRemoteSink = callVideo != null ? callVideo.backend().remoteSink() : null;
 
     VoIPInstance tgcallsTemp;
     try {
@@ -1463,12 +1596,17 @@ public class TGCallService extends Service implements
         lastNetworkType,
         audioGainControlEnabled,
         echoCancellationStrength,
-        isMicDisabled
+        isMicDisabled,
+        xgramCapture,
+        xgramRemoteSink
       );
     } catch (Throwable t) {
       tgcallsTemp = null;
     }
     final VoIPInstance tgcalls = tgcallsTemp;
+    if (tgcalls != null && callVideo != null) {
+      callVideo.onInstanceCreated(tgcalls, xgramCapture != 0);
+    }
 
     if (tgcalls != null) {
       this.callListener = new PrivateCallListener() {

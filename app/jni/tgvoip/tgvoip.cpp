@@ -28,8 +28,10 @@
 #include <tgcalls/v2/InstanceV2ReferenceImpl.h>
 
 #include <tgcalls/VideoCaptureInterface.h>
+#include <tgcalls/StaticThreads.h>
 #include <platform/android/AndroidInterface.h>
 #include <platform/android/AndroidContext.h>
+#include <platform/android/VideoCameraCapturer.h>
 
 #include <utility>
 #include <jni.h>
@@ -416,7 +418,52 @@ public:
 struct TgCallsContext {
   std::unique_ptr<tgcalls::Instance> tgcalls;
   std::shared_ptr<JniWrapper> javaController;
+  // XGram: the camera capture the instance sends (nullptr: video off for the other side)
+  std::shared_ptr<tgcalls::VideoCaptureInterface> videoCapture;
+  // XGram: the other side's video; tgcalls keeps only a weak_ptr to it
+  std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> remoteVideoSink;
 };
+
+// XGram: a camera capture owned by Java (com.fahadali.xgram.call.video.XgramVideoBackendImpl); an instance that sends
+// it holds its own reference, so the capture lives on until both let it go.
+struct XgramVideoCapture {
+  std::shared_ptr<tgcalls::VideoCaptureInterface> capture;
+};
+
+// Match with voip/annotation/VideoState.java (0 INACTIVE, 1 PAUSED, 2 ACTIVE)
+static tgcalls::VideoState xgramVideoState (jint state) {
+  return state == 2 ? tgcalls::VideoState::Active : state == 1 ? tgcalls::VideoState::Paused : tgcalls::VideoState::Inactive;
+}
+
+// XGram: VideoCameraCapturer.nativeGetJavaVideoCapturerObserver, bound by hand. The JNI symbol tgcalls defines for it
+// lives in the static tgcalls archive, which release builds link with --exclude-libs,ALL (and --gc-sections), so it
+// would not be found there; defining the same symbol again would clash at link time.
+static jobject xgramCapturerObserver (JNIEnv *env, jclass clazz, jlong ptr) {
+  auto *capturer = reinterpret_cast<tgcalls::VideoCameraCapturer *>((intptr_t) ptr);
+  return capturer != nullptr ? capturer->GetJavaVideoCapturerObserver(env).Release() : nullptr;
+}
+
+// Main thread only: FindClass needs a thread called from Java, so the app's class loader is used.
+static bool xgramRegisterCapturer (JNIEnv *env) {
+  static bool registered = false;
+  if (registered) {
+    return true;
+  }
+  jclass clazz = env->FindClass("org/telegram/messenger/voip/VideoCameraCapturer");
+  if (clazz == nullptr) {
+    env->ExceptionClear();
+    return false;
+  }
+  static const JNINativeMethod methods[] = {
+    {"nativeGetJavaVideoCapturerObserver", "(J)Lorg/webrtc/CapturerObserver;", (void *) xgramCapturerObserver}
+  };
+  registered = env->RegisterNatives(clazz, methods, 1) == JNI_OK;
+  if (!registered) {
+    env->ExceptionClear();
+  }
+  env->DeleteLocalRef(clazz);
+  return registered;
+}
 
 jbyteArray toJavaByteArray (JNIEnv *env, const std::vector<uint8_t> &data) {
   auto size = (jsize) data.size();
@@ -433,7 +480,9 @@ JNI_FUNC(jstring, toHexString, jbyteArray jArray) {
 JNI_OBJECT_FUNC(jlong, voip_TgCallsController, newInstance,
          jstring jVersion,
          jobject jConfiguration,
-         jobject jOptions) {
+         jobject jOptions,
+         jlong jVideoCapture,
+         jobject jRemoteVideoSink) {
 
   if (!tgcalls::initialize(env)) {
     return 0;
@@ -590,6 +639,10 @@ JNI_OBJECT_FUNC(jlong, voip_TgCallsController, newInstance,
 
   std::shared_ptr<JniWrapper> javaController = std::make_shared<JniWrapper>(env, thiz, tgcalls::javaTgCallsController);
 
+  // XGram: the camera, when it is on as the call connects (it can also be attached later, see updateVideoCapture)
+  auto *videoHolder = jni::jlong_to_ptr<XgramVideoCapture *>(jVideoCapture);
+  std::shared_ptr<tgcalls::VideoCaptureInterface> videoCapture = videoHolder != nullptr ? videoHolder->capture : nullptr;
+
   tgcalls::Descriptor descriptor = {
     .version = version,
     .config = tgcalls::Config {
@@ -623,7 +676,7 @@ JNI_OBJECT_FUNC(jlong, voip_TgCallsController, newInstance,
       std::move(encryptionKey),
       isOutgoingCall
     ),
-    .videoCapture = nullptr,
+    .videoCapture = videoCapture,
     .stateUpdated = [javaController](tgcalls::State state) {
       javaController->runSafely([javaController, state](JNIEnv *env) {
         jint javaState = toJavaCallState(env, state);
@@ -678,7 +731,13 @@ JNI_OBJECT_FUNC(jlong, voip_TgCallsController, newInstance,
 
   auto *context = new TgCallsContext;
   context->javaController = javaController;
+  context->videoCapture = videoCapture;
   context->tgcalls = tgcalls::Meta::Create(version, std::move(descriptor));
+  if (jRemoteVideoSink != nullptr) {
+    // XGram: the other side's video goes to Java (com.fahadali.xgram.call.video.XgramFanoutSink)
+    context->remoteVideoSink = std::shared_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>>(webrtc::JavaToNativeVideoSink(env, jRemoteVideoSink));
+    context->tgcalls->setIncomingVideoOutput(context->remoteVideoSink);
+  }
   context->tgcalls->setNetworkType(networkType);
   context->tgcalls->setAudioOutputGainControlEnabled(audioOutputGainControlEnabled);
   context->tgcalls->setEchoCancellationStrength(echoCancellationStrength);
@@ -772,6 +831,19 @@ JNI_OBJECT_FUNC(void, voip_TgCallsController, fetchNetworkStats, jlong ptr, jobj
   }
 }
 
+// XGram: attach the camera to a running call, or detach it (0). This tgcalls reports our video as Active whenever a
+// capture is attached and Inactive otherwise (it never sends Paused), so turning video off or pausing it in the
+// background must detach the capture, or the other side keeps a frozen frame. It re-offers once the handshake is done.
+JNI_OBJECT_FUNC(void, voip_TgCallsController, updateVideoCapture, jlong ptr, jlong jVideoCapture) {
+  auto context = jni::jlong_to_ptr<TgCallsContext *>(ptr);
+  if (context == nullptr || context->tgcalls == nullptr) {
+    return;
+  }
+  auto *holder = jni::jlong_to_ptr<XgramVideoCapture *>(jVideoCapture);
+  context->videoCapture = holder != nullptr ? holder->capture : nullptr;
+  context->tgcalls->setVideoCapture(context->videoCapture);
+}
+
 JNI_OBJECT_FUNC(void, voip_TgCallsController, destroyInstance, jlong ptr) {
   auto context = jni::jlong_to_ptr<TgCallsContext *>(ptr);
   if (context == nullptr) {
@@ -820,6 +892,50 @@ JNI_OBJECT_FUNC(void, voip_TgCallsController, destroyInstance, jlong ptr) {
       delete context;
     });
   });
+}
+
+// XGram: camera captures (N.newVideoCapture and friends). At most one is alive per process: AndroidInterface hands
+// every capturer the video source made last. Main thread.
+
+JNI_FUNC(jlong, newVideoCapture, jboolean jFront) {
+  if (!tgcalls::initialize(env) || !xgramRegisterCapturer(env)) {
+    return 0;
+  }
+  // Builds the Java VideoCameraCapturer on this thread (FindClass needs the app's class loader)
+  auto platformContext = std::make_shared<tgcalls::AndroidContext>(env);
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    return 0;
+  }
+  auto *holder = new XgramVideoCapture;
+  // Starts Active; the capturer is made on the tgcalls media thread, which calls the Java init(JZ)V
+  holder->capture = tgcalls::VideoCaptureInterface::Create(
+    tgcalls::StaticThreads::getThreads(),
+    jFront == JNI_TRUE ? "front" : "back",
+    false,
+    platformContext
+  );
+  return jni::ptr_to_jlong(holder);
+}
+
+JNI_FUNC(void, setVideoCaptureState, jlong jCapture, jint jState) {
+  auto *holder = jni::jlong_to_ptr<XgramVideoCapture *>(jCapture);
+  if (holder != nullptr && holder->capture != nullptr) {
+    holder->capture->setState(xgramVideoState(jState));
+  }
+}
+
+JNI_FUNC(void, switchVideoCaptureDevice, jlong jCapture, jboolean jFront) {
+  // Front to front again reopens the camera (fold and unfold: the front sensor follows the active display)
+  auto *holder = jni::jlong_to_ptr<XgramVideoCapture *>(jCapture);
+  if (holder != nullptr && holder->capture != nullptr) {
+    holder->capture->switchToDevice(jFront == JNI_TRUE ? "front" : "back", false);
+  }
+}
+
+JNI_FUNC(void, destroyVideoCapture, jlong jCapture) {
+  // An instance may still hold the capture: it dies with the last reference (the Java onDestroy then closes the camera)
+  delete jni::jlong_to_ptr<XgramVideoCapture *>(jCapture);
 }
 
 JNI_FUNC(jobjectArray, getTgCallsVersions) {

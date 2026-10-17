@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram video calls -->
+<resources>
+  <string name="XgramVideoCall">Video call</string>
+  <string name="XgramVideoCallBranding">Telegram video call</string>
+  <string name="XgramVideoIncoming">Incoming video call</string>
+  <string name="XgramVideoFlip">Flip</string>
+  <string name="XgramVideoFlipToRear">Switch to the rear camera</string>
+  <string name="XgramVideoFlipToFront">Switch to the front camera</string>
+  <string name="XgramVideoFrontCamera">Front camera</string>
+  <string name="XgramVideoRearCamera">Rear camera</string>
+  <string name="XgramVideoOn">On</string>
+  <string name="XgramVideoOff">Off</string>
+  <string name="XgramVideoStateDesc">%1$s, %2$s</string>
+  <string name="XgramVideoAnswerWith">Answer with video</string>
+  <string name="XgramVideoAudioOutput">Audio output: %1$s</string>
+  <string name="XgramVideoRoutePhone">Phone</string>
+  <string name="XgramVideoYours">Your video</string>
+  <string name="XgramVideoFrom">Video from %1$s</string>
+  <string name="XgramVideoSwap">Swap videos</string>
+  <string name="XgramVideoMoveTopLeft">Move to top left</string>
+  <string name="XgramVideoMoveTopRight">Move to top right</string>
+  <string name="XgramVideoMoveBottomLeft">Move to bottom left</string>
+  <string name="XgramVideoMoveBottomRight">Move to bottom right</string>
+  <string name="XgramVideoPaused">Video paused</string>
+  <string name="XgramVideoUnsupportedCalling">%1$s can\'t take video calls. Calling with voice.</string>
+  <string name="XgramVideoUnsupportedPeer">%1$s\'s app can\'t do video calls</string>
+  <string name="XgramVideoCameraDenied">Calling without video. Camera access is off.</string>
+  <string name="XgramVideoAnsweredNoCamera">Answered without video. Camera access is off.</string>
+  <string name="XgramVideoAllowCamera">Allow camera access</string>
+  <string name="XgramVideoAllowCameraText">To turn on video, allow XGram to use the camera in Settings.</string>
+  <string name="XgramVideoCameraFailed">Couldn\'t start the camera</string>
+</resources>

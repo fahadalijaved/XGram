@@ -137,6 +137,11 @@ public final class N {
 
   // Unavailable in legacy flavor
   public static native String[] getTgCallsVersions ();
+  // XGram: camera captures for video calls (tgvoip.cpp), unavailable in legacy flavor. Main thread; 0 on failure.
+  public static native long newVideoCapture (boolean front);
+  public static native void setVideoCaptureState (long capture, int state);
+  public static native void switchVideoCaptureDevice (long capture, boolean front);
+  public static native void destroyVideoCapture (long capture);
   public static native String toHexString (byte[] array);
 
   private static boolean loaded;

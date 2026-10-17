@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram video calls: view and option ids (btn_video is Telegram X's, in ids.xml) -->
+<resources>
+  <item name="btn_flipCamera" type="id" />
+  <item name="btn_callRoute" type="id" />
+  <item name="btn_videoCall" type="id" />
+  <item name="btn_xgramAnswerVideo" type="id" />
+  <item name="btn_xgramProfileVideo" type="id" />
+  <item name="btn_xgramVideoCall" type="id" />
+</resources>
