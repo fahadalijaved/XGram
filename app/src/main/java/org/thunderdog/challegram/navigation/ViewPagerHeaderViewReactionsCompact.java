@@ -135,6 +135,9 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
     topView.setTextFromToColorId(ColorId.headerTabInactiveText, ColorId.headerTabActiveText);
     topView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
     topView.setSelectionChangeListener(this);
+    if (xgramM3) {
+      topView.setXgramItemShape(this::xgramItemStateShape); // XGram: on the options page a counter presses in its assist chip
+    }
 
     adapter = new A(topView);
 
@@ -369,6 +372,20 @@ public class ViewPagerHeaderViewReactionsCompact extends FrameLayoutFix implemen
       XgramM3Sheets.drawAssistChipOutline(c, xgramRect, alpha);
       x += itemWidth;
     }
+  }
+
+  /**
+   * The state layer of a counter while its assist chip shows (the options page, see xgramDrawChips): the chip, 32dp
+   * tall from 8dp into the item to its end, 8dp corners. On the other pages the counters are tabs: their pill (NaN).
+   */
+  private float xgramItemStateShape (int index, float itemWidth, float height, @NonNull RectF outRect) {
+    if (!state.needShowMessageOptions || index < 1 || index > state.xgramChipCount || xgramSelection >= .5f) {
+      return Float.NaN;
+    }
+    final float chipHeight = Math.min(Screen.dp(XgramM3Sheets.CHIP_HEIGHT), height);
+    final float top = (height - chipHeight) / 2f;
+    outRect.set(Math.min(Screen.dp(XgramM3Sheets.CHIP_LEADING_ICON_SPACE), itemWidth), top, itemWidth, top + chipHeight);
+    return Screen.dp(XgramExpressive.CORNER_S);
   }
 
   // XGram: with the popup picker's grid hidden until expanded, a swipe up on the reaction strip expands it (the picker

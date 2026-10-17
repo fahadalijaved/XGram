@@ -582,6 +582,7 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
         xgramSelection.setValue(target);
       }
       xgramBoundKey = key;
+      setSelected(selected); // the pill state layer turns onSecondaryContainer (XgramM3TopicTabs.tabBackground)
       int count = topic != null ? Math.max(0, topic.unreadCount) : 0;
       if (count != xgramBadgeCount) {
         xgramBadgeCount = count;

@@ -51,6 +51,23 @@ public class StickerSectionView extends View implements Destroyable, FactorAnima
     super(context);
     receiver = new ImageReceiver(this, 0);
     gifReceiver = new GifReceiver(this);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram: Material 3 Expressive: the set presses in the 36dp circle the active set sits on (see onDraw)
+      com.fahadali.xgram.appearance.XgramPillStateLayer.attach(this, new com.fahadali.xgram.appearance.XgramPillStateLayer.Shape() {
+        @Override
+        public float getStateLayerShape (@NonNull View view, @NonNull android.graphics.RectF outRect) {
+          final float cx = getMeasuredWidth() / 2, cy = getMeasuredHeight() / 2;
+          final float radius = Math.min(Screen.dp(18f), Math.min(getMeasuredWidth(), getMeasuredHeight()) / 2f);
+          outRect.set(cx - radius, cy - radius, cx + radius, cy + radius);
+          return com.fahadali.xgram.appearance.XgramPillStateLayer.CORNER_FULL;
+        }
+
+        @Override
+        public boolean isStateLayerOnIndicator (@NonNull View view) {
+          return selectionFactor >= .5f;
+        }
+      });
+    }
   }
 
   public void attach () {
