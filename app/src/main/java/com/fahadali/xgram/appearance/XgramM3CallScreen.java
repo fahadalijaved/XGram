@@ -1137,7 +1137,11 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
 
   @Override
   public void onTileDragging (boolean dragging) {
-    scheduleChromeHide();
+    if (dragging) {
+      removeCallbacks(hideChrome); // no auto-hide while dragging, and a drag does not bring the chrome back (8.10)
+    } else {
+      scheduleChromeHide();
+    }
   }
 
   // Video presentation: the hero, the colors and the background
@@ -1320,10 +1324,35 @@ public final class XgramM3CallScreen extends FrameLayoutFix implements XgramCall
 
   @Override
   public boolean dispatchKeyEvent (KeyEvent event) {
+    if (chromeHidden && isVideoShown() && isFocusOrConfirmKey(event.getKeyCode())) {
+      // Hidden controls are untouchable for keys too: the key that brings them back does nothing else (volume, media
+      // and Back keys pass through)
+      if (event.getAction() == KeyEvent.ACTION_DOWN) {
+        setChromeShown(true, true);
+        scheduleChromeHide();
+      }
+      return true;
+    }
     if (!chromeHidden && isVideoShown()) {
       scheduleChromeHide();
     }
     return super.dispatchKeyEvent(event);
+  }
+
+  private static boolean isFocusOrConfirmKey (int code) {
+    switch (code) {
+      case KeyEvent.KEYCODE_TAB:
+      case KeyEvent.KEYCODE_DPAD_UP:
+      case KeyEvent.KEYCODE_DPAD_DOWN:
+      case KeyEvent.KEYCODE_DPAD_LEFT:
+      case KeyEvent.KEYCODE_DPAD_RIGHT:
+      case KeyEvent.KEYCODE_DPAD_CENTER:
+      case KeyEvent.KEYCODE_ENTER:
+      case KeyEvent.KEYCODE_NUMPAD_ENTER:
+      case KeyEvent.KEYCODE_SPACE:
+        return true;
+    }
+    return false;
   }
 
   @Override

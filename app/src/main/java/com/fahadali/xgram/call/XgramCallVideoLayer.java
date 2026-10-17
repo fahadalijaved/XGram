@@ -329,6 +329,7 @@ public final class XgramCallVideoLayer extends FrameLayoutFix implements XgramVi
     localReady = false;
     localAlpha.setValue(0f);
     localStage.view().setVisibility(View.VISIBLE); // drawn at alpha 0, so its texture is ready for the first frame
+    localStage.clear(); // a frame that raced the last unbind would hold back this binding's first frame
     v.backend().setTarget(XgramVideoBackend.FEED_LOCAL, localStage, true);
   }
 
@@ -358,6 +359,7 @@ public final class XgramCallVideoLayer extends FrameLayoutFix implements XgramVi
     remoteAlpha.setValue(0f);
     remoteStage.view().setVisibility(View.VISIBLE);
     updateRemoteScale();
+    remoteStage.clear(); // a frame that raced the last unbind would hold back this binding's first frame
     v.backend().setTarget(XgramVideoBackend.FEED_REMOTE, remoteStage, true);
   }
 

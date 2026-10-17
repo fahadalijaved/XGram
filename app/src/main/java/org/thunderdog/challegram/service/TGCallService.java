@@ -1139,6 +1139,12 @@ public class TGCallService extends Service implements
     if (video == null) {
       return null;
     }
+    // Locked: no activity of the app shows over the lock screen, so the answer would wait for the unlock while the
+    // call keeps ringing. The broadcast answers there at once; the camera follows the Video toggle after the unlock
+    final android.app.KeyguardManager keyguard = (android.app.KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+    if (keyguard != null && (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1 ? keyguard.isDeviceLocked() : keyguard.isKeyguardLocked())) {
+      return null;
+    }
     Intent intent = Intents.valueOfCall()
       .putExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_VIDEO, video.answerToken())
       .putExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_CALL_ID, call.id);

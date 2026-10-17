@@ -45,6 +45,7 @@ import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.unsorted.Settings;
 
 import java.util.List;
@@ -200,6 +201,9 @@ public final class XgramW2EmojiTypeGroup extends View {
     a11y = new A11y(this);
     ViewCompat.setAccessibilityDelegate(this, a11y);
     setFocusable(true);
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      setDefaultFocusHighlightEnabled(false); // the segment's own ring is the only focus indicator
+    }
   }
 
   public void setCallback (@Nullable Callback callback) {
@@ -428,7 +432,7 @@ public final class XgramW2EmojiTypeGroup extends View {
 
   /** The bottom of the switch as drawn, in the parent's coordinates; 0 while it is not shown. */
   public int visibleBottom () {
-    if (getVisibility() != View.VISIBLE || getAlpha() == 0f) {
+    if (getVisibility() != View.VISIBLE || (isDocked() ? followAlpha : getAlpha()) == 0f) {
       return 0;
     }
     return Math.round(getTop() + getTranslationY() + getHeight());
@@ -441,16 +445,21 @@ public final class XgramW2EmojiTypeGroup extends View {
     }
   }
 
-  /** Properties only, no layout: the row slides up behind the section tabs by its own height and fades; docked, it moves and fades with the tabs. */
+  /** Properties only, no layout: the row slides up behind the section tabs by its own height and fades; docked, it moves with the tabs and its contents fade with them. */
   private void updatePlacement () {
     if (isDocked()) {
-      setAlpha(MathUtils.clamp(followAlpha));
+      // The zone stays opaque, as the tabs' own surface (it covers the off-page strip under it): only its contents
+      // fade with the tabs (onDraw)
+      setAlpha(1f);
       setTranslationY(followY);
+      invalidate();
       return;
     }
-    final float hide = MathUtils.clamp(hideFactor, -.2f, 1f); // a little past its place on the spring's way back
+    // Never past its place: an overshoot would open a gap under the tabs. It slides by its height plus the 1dp it is
+    // tucked under them
+    final float hide = MathUtils.clamp(hideFactor);
     setAlpha(1f - MathUtils.clamp(hideFactor));
-    setTranslationY(followY - Screen.dp(ROW_HEIGHT_DP) * hide);
+    setTranslationY(followY - (Screen.dp(ROW_HEIGHT_DP) + Screen.dp(1f)) * hide);
   }
 
   // Layout
@@ -477,13 +486,16 @@ public final class XgramW2EmojiTypeGroup extends View {
       segmentWidth = Screen.dpf(DOCKED_SEGMENT_WIDTH_DP);
       segmentHeight = Math.min(height, Screen.dpf(DOCKED_SEGMENT_HEIGHT_DP));
       groupLeft = Screen.dpf(rtl ? DOCKED_END_MARGIN_DP : DOCKED_STRIP_GAP_DP);
+      segmentTop = (height - segmentHeight) / 2f;
     } else {
       final float group = Math.min(width - 2f * Screen.dpf(ROW_SIDE_MARGIN_DP), Screen.dpf(ROW_MAX_GROUP_DP));
       segmentWidth = Math.max(0f, (group - gap * (COUNT - 1)) / COUNT);
       segmentHeight = Math.min(height, Screen.dpf(ROW_SEGMENT_HEIGHT_DP));
       groupLeft = (width - (segmentWidth * COUNT + gap * (COUNT - 1))) / 2f;
+      // The row is tucked 1dp under the section tabs (EmojiLayout): centred in what shows below them
+      final float tuck = Screen.dp(1f);
+      segmentTop = tuck + (height - tuck - segmentHeight) / 2f;
     }
-    segmentTop = (height - segmentHeight) / 2f;
     pitch = segmentWidth + gap;
     full = segmentHeight / 2f;
 
@@ -556,7 +568,7 @@ public final class XgramW2EmojiTypeGroup extends View {
   }
 
   private boolean isInteractive () {
-    return getVisibility() == View.VISIBLE && isEnabled() && getAlpha() >= .5f && getHideFraction() <= .5f && segmentWidth > 0f;
+    return getVisibility() == View.VISIBLE && isEnabled() && (isDocked() ? followAlpha : getAlpha()) >= .5f && getHideFraction() <= .5f && segmentWidth > 0f;
   }
 
   // Touch
@@ -588,7 +600,8 @@ public final class XgramW2EmojiTypeGroup extends View {
     final int action = e.getActionMasked();
     if (!isInteractive()) {
       releasePress();
-      return action != MotionEvent.ACTION_DOWN;
+      // Docked, the opaque zone swallows the gesture: nothing under it (the off-page strip) can be pressed
+      return action != MotionEvent.ACTION_DOWN || (isDocked() && getVisibility() == View.VISIBLE);
     }
     final float x = e.getX(), y = e.getY();
     switch (action) {
@@ -700,6 +713,11 @@ public final class XgramW2EmojiTypeGroup extends View {
     if (segmentWidth <= 0f) {
       return;
     }
+    // Docked: the zone stays opaque, its contents fade with the tabs
+    if (isDocked() && followAlpha <= 0f) {
+      return;
+    }
+    final int layer = isDocked() && followAlpha < 1f ? Views.saveLayerAlpha(c, 0, 0, width, height, Math.round(255f * MathUtils.clamp(followAlpha)), Canvas.ALL_SAVE_FLAG) : -1;
 
     // Where the pill is, and how much of each segment it covers
     final boolean rtl = Lang.rtl();
@@ -793,7 +811,7 @@ public final class XgramW2EmojiTypeGroup extends View {
       final float left = segmentLeft(focused, rtl);
       rect.set(
         Math.max(stroke / 2f, left - offset),
-        Math.max(stroke / 2f, segmentTop - offset),
+        Math.max((isDocked() ? 0f : Screen.dp(1f)) + stroke / 2f, segmentTop - offset), // the row: not under the tabs
         Math.min(width - stroke / 2f, left + segmentWidth + offset),
         Math.min(height - stroke / 2f, segmentTop + segmentHeight + offset)
       );
@@ -803,6 +821,9 @@ public final class XgramW2EmojiTypeGroup extends View {
       ringPath.addRoundRect(rect, radii, Path.Direction.CW);
       ringPaint.setColor(XgramExpressive.color(XgramExpressive.SECONDARY));
       c.drawPath(ringPath, ringPaint);
+    }
+    if (layer != -1) {
+      c.restoreToCount(layer);
     }
   }
 

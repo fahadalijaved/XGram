@@ -62,11 +62,13 @@ public final class XgramSheetDrag {
 
   /**
    * The state a released sheet goes to. Heights are the visible sheet heights (px): {@code height} now,
-   * {@code startHeight} at rest and {@code expandedHeight} at full height (equal to {@code startHeight} when the sheet
-   * cannot be taller). {@code velocity} is the finger's (px/s, positive downwards). {@code canHide} false (a sheet with
-   * unsaved changes, a cancelled gesture) keeps it open.
+   * {@code fromHeight} where the drag started, {@code startHeight} at rest and {@code expandedHeight} at full height
+   * (equal to {@code startHeight} when the sheet cannot be taller). {@code velocity} is the finger's (px/s, positive
+   * downwards). {@code canHide} false (a sheet with unsaved changes, a cancelled gesture) keeps it open. A slow
+   * release takes its direction from how far the drag went (Compose's AnchoredDraggable), never from the sign of a
+   * near-zero velocity.
    */
-  public static int target (float height, float startHeight, float expandedHeight, float velocity, boolean canHide) {
+  public static int target (float height, float fromHeight, float startHeight, float expandedHeight, float velocity, boolean canHide) {
     final float fling = Screen.dpf(FLING_DP);
     final boolean canExpand = expandedHeight - startHeight > 1f;
     if (velocity >= fling) {
@@ -85,11 +87,11 @@ public final class XgramSheetDrag {
     }
     final float projected = height - velocity * PROJECTION;
     if (projected < startHeight) {
-      return canHide && startHeight > 0f && velocity >= 0f && (startHeight - projected) / startHeight >= HIDE_FRACTION ? HIDDEN : START;
+      return canHide && startHeight > 0f && (startHeight - projected) / startHeight >= HIDE_FRACTION ? HIDDEN : START;
     }
     if (canExpand) {
       final float f = (projected - startHeight) / (expandedHeight - startHeight);
-      return f >= (velocity < 0f ? EXPAND_FRACTION : 1f - EXPAND_FRACTION) ? EXPANDED : START;
+      return f >= (height > fromHeight ? EXPAND_FRACTION : 1f - EXPAND_FRACTION) ? EXPANDED : START;
     }
     return START;
   }
@@ -160,6 +162,11 @@ public final class XgramSheetDrag {
      */
     default boolean xgramSheetGrabsUp (float x, float y) {
       return false;
+    }
+
+    /** The popup took a drag on the sheet (its handle band, its title, or its list at the top): where it starts from. */
+    default void xgramSheetDragStarted () {
+      // override
     }
 
     /**

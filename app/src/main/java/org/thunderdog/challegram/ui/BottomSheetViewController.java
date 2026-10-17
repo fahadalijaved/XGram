@@ -499,14 +499,27 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
     return y < edge && y >= edge - xgramSheetOverhang();
   }
 
-  /** XGram M3E: whether the next idle list snaps the sheet (after a drag or its fling), and the way it last went. */
+  /**
+   * XGram M3E: whether the next idle list snaps the sheet (after a drag or its fling), and where the sheet's edge was
+   * when that drag started: the way it went is how far it travelled from there, never the sign of a near-zero velocity
+   * or of a 1px jitter.
+   */
   boolean xgramSnapArmed;
-  int xgramSnapDirection;
+  float xgramSnapFromEdge;
+
+  /** 1 when the sheet went up since its drag started, -1 down (or not at all). */
+  int xgramSnapDirection () {
+    return headerTranslationY < xgramSnapFromEdge ? 1 : -1;
+  }
+
+  @Override
+  public void xgramSheetDragStarted () {
+    xgramSnapFromEdge = headerTranslationY; // a drag on the handle band or the header (the list never sees it)
+  }
 
   @Override
   public void xgramSheetRelease (@NonNull RecyclerView list, float velocity) {
     xgramSnapArmed = true;
-    xgramSnapDirection = velocity < 0f ? 1 : -1;
     if (!list.fling(0, Math.round(-velocity))) {
       // too slow to fling: settle now, as the list's idle state would after a drag of its own (ScrollListener)
       xgramSnapArmed = false;
@@ -517,7 +530,7 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
           hidePopupWindow(true);
         }
       } else {
-        xgramSnapSheet(list, xgramSnapDirection);
+        xgramSnapSheet(list, xgramSnapDirection());
       }
     }
   }
@@ -814,10 +827,16 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
       super.onScrollStateChanged(recyclerView, newState);
       if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
         controller.xgramSnapArmed = true; // XGram M3E: a drag of the user's own settles the sheet once the list is idle
+        controller.xgramSnapFromEdge = controller.headerTranslationY; // XGram M3E: where that drag started
       }
       if (newState == RecyclerView.SCROLL_STATE_IDLE) {
         final boolean xgramSnap = controller.xgramSnapArmed;
         controller.xgramSnapArmed = false;
+        if (controller.popupLayout != null && controller.popupLayout.xgramIsDraggingSheet()) {
+          // XGram M3E: the popup's drag stopped this list (stopScroll): its release settles the sheet
+          ignoreScrollChangeState = false;
+          return;
+        }
         if (ignoreScrollChangeState) {
           ignoreScrollChangeState = false;
           return;
@@ -840,7 +859,7 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
               } else {
                 controller.hidePopupWindow(true);
               }
-            } else if (xgramSnap && controller.xgramSnapSheet(recyclerView, controller.xgramSnapDirection)) {
+            } else if (xgramSnap && controller.xgramSnapSheet(recyclerView, controller.xgramSnapDirection())) {
               ignoreScrollChangeState = true; // XGram M3E: between the start and full height, the sheet settles
             }
           }
@@ -850,9 +869,6 @@ public abstract class BottomSheetViewController<T> extends ViewPagerController<T
 
     @Override
     public void onScrolled (@NonNull RecyclerView recyclerView, int dx, int dy) {
-      if (dy != 0) {
-        controller.xgramSnapDirection = dy > 0 ? 1 : -1; // XGram M3E: the way the sheet last went (up as the list scrolls on)
-      }
       ViewController<?> c = controller.findCurrentCachedController();
       boolean canHideByScroll = controller.canHideByScroll() && recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_SETTLING;
       int contentOffset = controller.getContentOffset();

@@ -700,6 +700,7 @@ public class MediaLayout extends FrameLayoutFix implements
   private boolean hidden;
 
   public void setForceHidden () {
+    xgramPendingSection = -1; // XGram M3E: no deferred tab switch on the way out
     if (!hidden) {
       hidden = true;
       onCurrentColorChanged();
@@ -711,6 +712,7 @@ public class MediaLayout extends FrameLayoutFix implements
   }
 
   public void forceHide () {
+    xgramPendingSection = -1;
     if (!hidden) {
       hidden = true;
       popupLayout.hideWindow(false);
@@ -820,11 +822,36 @@ public class MediaLayout extends FrameLayoutFix implements
 
   private int requestedPermissionIndex = -1;
 
+  // XGram M3E: a tab tapped while the sheet height settles (after a drag, expandFully, collapseToStart) switches once
+  // the settle ends, instead of being dropped after its click feedback. A settle to full height drops it (the bar is
+  // leaving); a new drag or the hide clears it.
+  private int xgramPendingSection = -1;
+  private boolean xgramPendingIgnorePermissions;
+
+  void xgramClearPendingSection () {
+    xgramPendingSection = -1;
+  }
+
+  void xgramOnHeightSettled (MediaBottomBaseController<?> c) {
+    if (c == getCurrentController() && xgramPendingSection >= 0 && bottomBar != null && !hidden && popupLayout != null && !popupLayout.isWindowHidden()) {
+      final int i = xgramPendingSection;
+      xgramPendingSection = -1;
+      bottomBar.setSelectedIndex(i, xgramPendingIgnorePermissions);
+    }
+  }
+
   @Override
   public boolean onBottomPrepareSectionChange (int fromIndex, int toIndex, boolean ignorePermissionsRequest) {
-    if (counterFactor != 0f || (counterAnimator != null && counterAnimator.isAnimating()) || getCurrentController().isAnimating() || getCurrentController().xgramIsSettling()) {
-      return false; // XGram: nor while the sheet height still settles after a drag
+    if (counterFactor != 0f || (counterAnimator != null && counterAnimator.isAnimating()) || getCurrentController().isAnimating()) {
+      return false;
     }
+    if (getCurrentController().xgramIsSettling()) {
+      // XGram: the sheet height still settles: the tap waits for it
+      xgramPendingSection = getCurrentController().xgramSettlesToStart() ? toIndex : -1;
+      xgramPendingIgnorePermissions = ignorePermissionsRequest;
+      return false;
+    }
+    xgramPendingSection = -1;
 
     switch (toIndex) {
       case 3: {

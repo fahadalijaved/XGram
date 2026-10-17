@@ -365,7 +365,10 @@ public class MediaContentView extends FrameLayoutFix implements GestureDetector.
 
   @Override
   public boolean onStartNestedScroll (@NonNull View child, @NonNull View target, int axes, int type) {
-    xgramNested = xgram && type == ViewCompat.TYPE_TOUCH && (axes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0 && !intercepting &&
+    if (type != ViewCompat.TYPE_TOUCH) {
+      return false; // a fling's start (before the touch's stop) must not reset the touch's nested state
+    }
+    xgramNested = xgram && (axes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0 && !intercepting &&
       base.xgramIsList(target) && !base.isAnimating() && base.canMoveRecycler();
     xgramNestedMoving = false;
     xgramNestedOffset = 0;

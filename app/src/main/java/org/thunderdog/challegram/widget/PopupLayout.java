@@ -650,8 +650,8 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
           final float x = e.getX() - sheet.getLeft() - sheet.getTranslationX(), y = e.getY() - sheet.getTop() - sheet.getTranslationY();
           final XgramSheetDrag.Sheet provider = xgramSheet();
           if (provider != null) {
-            if (!provider.xgramSheetContains(x, y)) {
-              xgramDragTracking = false; // the scrim above the sheet
+            if (x < 0f || x >= sheet.getWidth() || !provider.xgramSheetContains(x, y)) {
+              xgramDragTracking = false; // the scrim above the sheet, or beside it (a sheet narrower than the window)
             } else {
               xgramDragList = provider.xgramSheetList();
               xgramDownScroller = xgramDragList != null && provider.xgramSheetOnList(x, y) && XgramSheetDrag.isUnder(xgramDragList, sheet, x, y) ? xgramDragList : null;
@@ -719,6 +719,14 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     xgramDragging = true;
     xgramDragTracking = false;
     xgramDownScroller = null;
+    if (xgramDragList != null) {
+      // The list never saw this gesture's DOWN: its fling or settling scroll would go on under the finger
+      xgramDragList.stopScroll();
+    }
+    final XgramSheetDrag.Sheet provider = xgramSheet();
+    if (provider != null) {
+      provider.xgramSheetDragStarted();
+    }
     xgramBeginSheetMove();
     xgramDragStartTranslation = xgramSheetTranslation();
     xgramDragOriginY = xgramDragLastY = y;
@@ -809,6 +817,9 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
           if (commit) {
             provider.xgramSheetRelease(list, velocity);
           }
+          if (!hasCompletelyShown && !isHidden) {
+            xgramOnRevealEnd(1f); // the drag took the sheet from its show spring: the reveal ends here (also on CANCEL)
+          }
         } else {
           xgramReleaseSheet(velocity, commit);
         }
@@ -822,7 +833,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     xgramRebaseHeight();
     final float height = currentHeight;
     final float visible = height - Math.max(0f, xgramSheetTranslation());
-    final boolean dismiss = commit && !isHidden && XgramSheetDrag.target(visible, height, height, velocity, true) == XgramSheetDrag.HIDDEN;
+    final boolean dismiss = commit && !isHidden && XgramSheetDrag.target(visible, height - Math.max(0f, xgramDragStartTranslation), height, height, velocity, true) == XgramSheetDrag.HIDDEN;
     if (dismiss) {
       xgramDragFling = -velocity / height;
       xgramDragDismiss = true;
@@ -869,8 +880,11 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
 
   @Override
   public boolean onStartNestedScroll (@NonNull View child, @NonNull View target, int axes, int type) {
+    if (type != ViewCompat.TYPE_TOUCH) {
+      return false; // a fling's start (before the touch's stop) must not reset the touch's nested state
+    }
     boolean nested = false;
-    if (type == ViewCompat.TYPE_TOUCH && (axes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0 && xgramGesture && !xgramDragging && xgramCanDragSheet()) {
+    if ((axes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0 && xgramGesture && !xgramDragging && xgramCanDragSheet()) {
       final XgramSheetDrag.Sheet provider = xgramSheet();
       nested = provider != null && target == provider.xgramSheetList();
     }
@@ -938,6 +952,8 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
       xgramNestedMoving = false;
       if (factor < 1f) {
         xgramReleaseSheet(xgramTracker.velocityY(), xgramDispatchAction == MotionEvent.ACTION_UP);
+      } else if (!hasCompletelyShown && !isHidden) {
+        xgramOnRevealEnd(1f); // the move took the sheet from its show spring and it is back in place: the reveal ends
       }
     }
   }
@@ -1600,6 +1616,11 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
 
   public boolean hadCompletelyShown () {
     return hasCompletelyShown;
+  }
+
+  /** XGram M3E: the popup's own sheet drag is going on (its release settles the sheet, not the list's idle state). */
+  public boolean xgramIsDraggingSheet () {
+    return xgramDragging;
   }
 
   public void onCustomShowComplete () {

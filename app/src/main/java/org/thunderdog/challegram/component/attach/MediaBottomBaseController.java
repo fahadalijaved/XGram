@@ -219,6 +219,14 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
 
   public void onViewportChanged (int width, int height) {
     if (recyclerView != null) {
+      if (xgramSettling) {
+        // XGram M3E: a fold, an unfold or a rotation during the release spring. Its target (and its frames) belong to
+        // the old screen: it lands on the new screen's state instead (startHeight is still the old one here, so a
+        // target above it can only be full height)
+        lastIsExpanded = xgramSettleTarget > startHeight;
+        xgramStopSettle();
+        mediaLayout.xgramClearPendingSection();
+      }
       resetStartHeights(false);
       updateRecyclerTop(height);
     }
@@ -484,6 +492,20 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     // override
   }
 
+  /**
+   * XGram M3E: the start height grows while the sheet moves or settles. A settle on its way to the old start goes on
+   * to the new one (the running spring keeps its velocity), so the sheet does not rest below its start (the bar partly
+   * slid off, the scrim dimmed) until the next drag.
+   */
+  private void xgramRaiseStartHeight (int newStartHeight) {
+    final int previousStartHeight = startHeight;
+    startHeight = newStartHeight;
+    if (xgramSettling && xgramSettleTarget == previousStartHeight && xgramHeightSpring != null) {
+      xgramSettleTarget = newStartHeight;
+      xgramHeightSpring.animateTo(newStartHeight);
+    }
+  }
+
   /** XGram: {@link #expandStartHeight} after a tab switch, on the standard spatial spring (snaps with Reduce motion). */
   private void xgramExpandStartHeight (MeasuredAdapterDelegate adapter) {
     this.contentHeight = adapter.measureHeight(-1);
@@ -492,7 +514,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
       return;
     }
     if (isMoving || animatingHeight || xgramSettling || currentHeight > startHeight) {
-      startHeight = newStartHeight;
+      xgramRaiseStartHeight(newStartHeight);
       return;
     }
     final float fromHeight = startHeight;
@@ -772,7 +794,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     }
 
     if (isMoving || animatingHeight || xgramSettling || currentHeight > startHeight) {
-      startHeight = newStartHeight;
+      xgramRaiseStartHeight(newStartHeight);
       return;
     }
 
@@ -912,6 +934,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
 
   public void onRecyclerMovementStarted () {
     xgramStopSettle(); // XGram M3E: a drag catches a settling sheet where it is
+    mediaLayout.xgramClearPendingSection(); // XGram M3E: and drops a tab tapped during that settle
     moveStartHeight = currentHeight;
     isMoving = true;
   }
@@ -931,6 +954,11 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     return xgramSettling;
   }
 
+  /** XGram M3E: the height settles to the start height (the bar stays): a tab tapped meanwhile switches once it ends. */
+  public final boolean xgramSettlesToStart () {
+    return xgramSettling && xgramSettleTarget == startHeight;
+  }
+
   public void xgramReleaseDrag (float velocity, boolean commit) {
     if (!isMoving) {
       return;
@@ -939,7 +967,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
     useBottomBarChange = false;
     mediaLayout.prepareHeader();
     final int expandedHeight = canExpandHeight() ? getMaxHeight() : startHeight;
-    final int target = com.fahadali.xgram.appearance.XgramSheetDrag.target(currentHeight, startHeight, expandedHeight, velocity, commit && canMinimizeHeight());
+    final int target = com.fahadali.xgram.appearance.XgramSheetDrag.target(currentHeight, moveStartHeight, startHeight, expandedHeight, velocity, commit && canMinimizeHeight());
     if (target == com.fahadali.xgram.appearance.XgramSheetDrag.HIDDEN) {
       useBottomBarChange = true;
       barChangeFromHeight = currentHeight;
@@ -990,6 +1018,7 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
           xgramSettling = false;
           v.cancel();
           setCurrentHeight(maxHeight, true);
+          mediaLayout.xgramOnHeightSettled(this); // a start as tall as full height: a tab tapped during the settle
           return;
         }
         setCurrentHeight(Math.round(Math.min(value, maxHeight)), true);
@@ -999,12 +1028,17 @@ public abstract class MediaBottomBaseController<T> extends ViewController<T> {
         if (xgramSettling) {
           xgramSettling = false;
           setCurrentHeight(xgramSettleTarget, true);
+          mediaLayout.xgramOnHeightSettled(this); // a tab tapped during the settle
         }
       });
     } else {
       xgramHeightSpring.setSpring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT);
       xgramHeightSpring.setValue(currentHeight);
     }
+    // The start velocity by the distance: a fast fling that has little way to go would carry the sheet far past its
+    // target (below the start height the bar slides out and the scrim dims, then both come back). About 2% overshoot
+    final float cap = .5f * (float) Math.sqrt(com.fahadali.xgram.appearance.XgramExpressive.stiffness(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT)) * Math.abs(toHeight - currentHeight);
+    velocity = Math.max(-cap, Math.min(cap, velocity));
     xgramHeightSpring.animateTo(toHeight, velocity);
   }
 

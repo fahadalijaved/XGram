@@ -79,6 +79,9 @@ public final class VideoCameraCapturer {
   private @Nullable SurfaceTextureHelper textureHelper;
   private @Nullable String deviceName;
   private boolean front, capturing, wantActive, disposed;
+  /** The side last asked for, and the last native state: a resume reopens a camera that failed to open (null capturer). */
+  private boolean requestedFront = true;
+  private int lastState = -1;
 
   /** Frames go to the native source (what the call sends) and to the local preview. No allocation per frame. */
   private final CapturerObserver tee = new CapturerObserver() {
@@ -203,6 +206,7 @@ public final class VideoCameraCapturer {
     if (disposed) {
       return;
     }
+    requestedFront = useFront;
     final Context context = AppContext.get();
     try {
       if (enumerator == null) {
@@ -311,7 +315,17 @@ public final class VideoCameraCapturer {
     if (disposed) {
       return;
     }
+    // Only a real non-active -> active step (the retry, a resume) reopens a camera that failed to open synchronously:
+    // the first active state right after init must not, or a second failure would come within milliseconds
+    final boolean resumed = state == 2 && lastState != -1 && lastState != 2;
+    lastState = state;
     wantActive = state == 2;
+    if (wantActive && capturer == null) {
+      if (resumed) {
+        open(requestedFront); // create() starts the capture (wantActive); a failure reports the error again
+      }
+      return;
+    }
     if (wantActive && !capturing && capturer != null) {
       startCapture();
     } else if (!wantActive && capturing) {

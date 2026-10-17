@@ -546,6 +546,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (shown) {
       inset = navigation != null ? Math.max(0, navigation.xgramBottomInsetWithoutIme()) : 0;
       attachHost();
+      onLanguageChanged(); // the language may have changed while it was hidden (nothing reached it then)
       if (badges != null) {
         badges.start();
       }
@@ -577,6 +578,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     boolean tabsChanged = !Arrays.equals(dests, this.dests);
     if (tabsChanged || wasButton != buttonMode || wasVibrant != vibrant || iconPack != XgramIconPack.current()) {
       rebuildTabs(dests);
+      dropStaleTabScreens();
       requestFit(true);
       if (tabsChanged && root != null && isRootOf(root)) {
         root.xgramOnToolbarChanged(); // the Chats / Calls header tabs follow the Calls tab
@@ -829,8 +831,16 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     View navigationView = navigation.getValue();
     holeOffsetX = navigationView.getLeft() - host.getLeft();
     holeOffsetY = navigationView.getTop() - host.getTop();
-    if (tabL && tabR && !forward) {
-      setTarget(computeSelected(left), true); // back to the chat list: the pill morphs with the fade
+    if (tabL && tabR) {
+      // Between two tab roots (back to the chat list, or a tab screen open() is fading in): the pill morphs with the
+      // fade, which starts only once the incoming screen is ready (its asynchronous wait)
+      setTarget(computeSelected(forward ? right : left), true);
+    } else if (tabL && !tabR && !forward) {
+      // Back to a tab root from an ordinary screen: the stack below may have changed since the toolbar last settled
+      int d = computeSelected(left);
+      if (d != selectedDest) {
+        setTarget(d, kind == KIND_CARD); // over the card the toolbar is visible: it springs; else it is still hidden
+      }
     }
     boolean enteringTab = forward ? tabR : tabL;
     if (enteringTab && (scrollHidden || (forceMask & FORCE_TRANSFORM) != 0)) {
@@ -1000,7 +1010,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   /** The stack settled: what is on top decides where the toolbar is and what it shows (9.4). */
   private void settle () {
-    if (destroyed || preview || !shown || navigation == null || transitionActive || navigation.isAnimating()) {
+    if (destroyed || preview || !shown || navigation == null || transitionActive) {
+      return;
+    }
+    if (navigation.isAnimating()) {
+      // A navigation the toolbar did not see begin (made or shown while it ran, a rebase after sign-in): try again
+      // once it is done. Delayed, so the main looper does not spin through an asynchronous wait
+      UI.cancel(settleRunnable);
+      UI.post(settleRunnable, 16L);
       return;
     }
     ViewController<?> top = navigation.getCurrentStackItem();
@@ -1072,6 +1089,36 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       }
     }
     reapplyTopHeader();
+    navigation.xgramReapplyBottomInsets();
+  }
+
+  /**
+   * The tabs changed: a tab screen on the stack whose destination is no longer a tab (Settings removed, Profile no
+   * longer in the bar) becomes an ordinary screen again (back arrow, slide, no room), as in {@link #destroy()}.
+   */
+  private void dropStaleTabScreens () {
+    if (navigation == null || navigation.isDestroyed()) {
+      return;
+    }
+    NavigationStack stack = navigation.getStack();
+    ViewController<?> top = navigation.getCurrentStackItem();
+    boolean any = false, topDropped = false;
+    for (int i = 0; i < stack.size(); i++) {
+      ViewController<?> c = stack.get(i);
+      int d = c != null ? c.xgramBarTabRaw() : -1;
+      if (d != -1 && !hasTab(d) && !(d == DEST_PROFILE && buttonMode)) {
+        c.xgramSetBarTab(-1);
+        c.xgramOnBarTabChanged();
+        any = true;
+        topDropped |= c == top;
+      }
+    }
+    if (!any) {
+      return;
+    }
+    if (topDropped && !navigation.isAnimating() && !top.inTransformMode() && navigation.getHeaderView() != null) {
+      navigation.getHeaderView().setTitle(top); // its back arrow is back
+    }
     navigation.xgramReapplyBottomInsets();
   }
 
@@ -1615,7 +1662,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return;
     }
     c.xgramSetBarTab(dest); // before its view is made: no back arrow, its margins and room as a tab screen
-    setTarget(dest, true);
+    // The selection moves when the fade begins (onXgramTransitionBegin), after the screen's asynchronous wait
     navigation.setControllerAnimated(c, false, true);
   }
 
@@ -1669,7 +1716,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
     TdApi.Chat chat = tdlib.chat(ChatId.fromUserId(userId));
     if (chat != null) {
-      tdlib.ui().openChat(from, chat.id, new TdlibUi.ChatOpenParameters());
+      tdlib.ui().openChat(from, chat.id, new TdlibUi.ChatOpenParameters().keepStack()); // a normal push (4.3)
       return;
     }
     tdlib.send(new TdApi.CreatePrivateChat(userId, true), (remoteChat, error) -> {
@@ -1679,7 +1726,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         final long chatId = remoteChat.id;
         UI.post(() -> {
           if (!from.isDestroyed()) {
-            tdlib.ui().openChat(from, chatId, new TdlibUi.ChatOpenParameters());
+            tdlib.ui().openChat(from, chatId, new TdlibUi.ChatOpenParameters().keepStack());
           }
         });
       }

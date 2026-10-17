@@ -69,6 +69,7 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
   public static int lastTileCorner = CORNER_TOP_END;
 
   private static final long CAMERA_RETRY_MS = 500L;
+  private static final long SWITCH_TIMEOUT_MS = 3000L;
 
   // Availability
 
@@ -278,7 +279,8 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
    * while an incoming call still rings) or the other side's video. Intent level, so Home does not flap the route.
    */
   public boolean isVideoActive () {
-    return (wantsVideo && !pendingIncoming && !finished) || remoteVideo == VideoState.ACTIVE;
+    // The other side's video paused (sent by some other clients) is still video: the route and the sensor stay
+    return (wantsVideo && !pendingIncoming && !finished) || remoteVideo == VideoState.ACTIVE || remoteVideo == VideoState.PAUSED;
   }
 
   /** Video was used in this call (DiscardCall's isVideo, the notification, the call chip). */
@@ -362,6 +364,9 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
         captureState = VideoState.ACTIVE;
         cameraRetries = 0;
       } else if (captureState != VideoState.ACTIVE) {
+        // A resume: wait for a new first frame (one still in flight while the camera stopped may have used it up)
+        localFrame = false;
+        backend.resetFirstFrame(XgramVideoBackend.FEED_LOCAL);
         backend.setCaptureState(capture, VideoState.ACTIVE);
         captureState = VideoState.ACTIVE;
         cameraRetries = 0;
@@ -381,6 +386,7 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
         captureState = state;
       }
       UI.removePendingRunnable(cameraRetry);
+      endSwitch();
       localFrame = false;
       backend.resetFirstFrame(XgramVideoBackend.FEED_LOCAL);
     }
@@ -472,15 +478,30 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
     notifyChanged();
   }
 
+  // One camera switch at a time: `front` changes only when it lands, and WebRTC refuses a second one while the first
+  // is open (a false "Couldn't start the camera"). The timeout covers a switch that never reports back (the capturer
+  // was gone, so it went through create())
+  private boolean switching;
+  private final Runnable switchTimeout = this::endSwitch;
+
+  private void endSwitch () {
+    switching = false;
+    UI.removePendingRunnable(switchTimeout);
+  }
+
   public void flipCamera () {
-    if (isCapturing()) {
+    if (isCapturing() && !switching) {
+      switching = true;
+      UI.post(switchTimeout, SWITCH_TIMEOUT_MS);
       backend.switchCamera(capture, !front);
     }
   }
 
   /** The front camera again after a fold or unfold (the cover and inner selfie cameras are different sensors). */
   public void reopenFrontCamera () {
-    if (isCapturing() && front) {
+    if (isCapturing() && front && !switching) {
+      switching = true;
+      UI.post(switchTimeout, SWITCH_TIMEOUT_MS);
       backend.switchCamera(capture, true);
     }
   }
@@ -516,6 +537,7 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
 
   @Override
   public void onCameraSwitched (boolean front, boolean ok) {
+    endSwitch();
     if (released) {
       return;
     }
@@ -528,6 +550,7 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
 
   @Override
   public void onCameraError (String reason) {
+    endSwitch();
     if (released || capture == 0) {
       return;
     }
@@ -560,6 +583,7 @@ public final class XgramCallVideo implements XgramVideoBackend.Events {
       return;
     }
     UI.removePendingRunnable(cameraRetry);
+    endSwitch();
     if (instance != null && attached) {
       instance.setVideoCapture(0);
     }

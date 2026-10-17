@@ -426,9 +426,10 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
           xgramShowTypeTooltip(type, bounds); // icon-only segments (docked, or a very narrow row)
         }
       });
-      // A full-width row right under the section tabs, over the top of the grids
-      FrameLayoutFix.LayoutParams groupParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.ROW_HEIGHT_DP), Gravity.TOP);
-      groupParams.topMargin = headerSize;
+      // A full-width row right under the section tabs, over the top of the grids: tucked 1dp under them (they are
+      // higher and opaque), so no seam opens between their edges
+      FrameLayoutFix.LayoutParams groupParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.ROW_HEIGHT_DP) + Screen.dp(1f), Gravity.TOP);
+      groupParams.topMargin = headerSize - Screen.dp(1f);
       xgramTypeGroup.setLayoutParams(groupParams);
       if (themeProvider != null) {
         themeProvider.addThemeInvalidateListener(xgramTypeGroup);
@@ -868,9 +869,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       params.topMargin = 0;
     } else {
       params.width = ViewGroup.LayoutParams.MATCH_PARENT;
-      params.height = Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.ROW_HEIGHT_DP);
+      params.height = Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.ROW_HEIGHT_DP) + Screen.dp(1f); // tucked 1dp under the tabs
       params.gravity = Gravity.TOP;
-      params.topMargin = headerSize;
+      params.topMargin = headerSize - Screen.dp(1f);
     }
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
       // Docked: above the tab row (no outline, so no shadow); the row: under it, so it hides behind the tabs
@@ -1402,6 +1403,10 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     if (animated) {
       if (hideAnimator == null) {
         hideAnimator = new FactorAnimator(HIDE_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 210L, headerHideFactor);
+      }
+      if (xgramTypeGroup != null) {
+        // XGram M3E: every slide of the tabs on the same curve (xgramOnMediaSectionMoving uses this animator too)
+        com.fahadali.xgram.appearance.XgramAppMotion.use(hideAnimator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, true);
       }
       hideAnimator.animateTo(factor);
     } else {
