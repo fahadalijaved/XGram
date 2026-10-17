@@ -196,6 +196,9 @@ public class TextController extends ViewController<TextController.Arguments> imp
     contentView.setHideSections();
     contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     contentView.setSectionedAdapter(adapter = new TextAdapter(contentView, this));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      contentView.addItemDecoration(new XgramTextTile(adapter)); // XGram: the text on one tile with a line number gutter
+    }
 
     handler = new Handler(Looper.getMainLooper(), this);
 
@@ -459,20 +462,41 @@ public class TextController extends ViewController<TextController.Arguments> imp
 
   private TextAdapter adapter;
 
+  // XGram M3E: the text sits on one surfaceContainerLow tile with 16dp corners, 16dp from the screen edges; each line is
+  // monospace bodySmall after a line number gutter in labelSmall onSurfaceVariant with tabular figures (XgramTextTile).
+
+  private static final float XGRAM_TILE_INSET = 16f, XGRAM_TILE_PADDING = 12f, XGRAM_GUTTER = 32f, XGRAM_GUTTER_GAP = 12f, XGRAM_TILE_MARGIN = 16f;
+  private static @androidx.annotation.Nullable org.thunderdog.challegram.util.text.TextStyleProvider xgramMonoProvider;
+
+  /** Monospace bodySmall (any thread: the lines are built in the background). */
+  private static synchronized org.thunderdog.challegram.util.text.TextStyleProvider xgramMonoProvider () {
+    if (xgramMonoProvider == null) {
+      android.graphics.Typeface mono = android.graphics.Typeface.MONOSPACE;
+      android.graphics.Typeface monoBold = android.graphics.Typeface.create(mono, android.graphics.Typeface.BOLD);
+      android.graphics.Typeface monoItalic = android.graphics.Typeface.create(mono, android.graphics.Typeface.ITALIC);
+      org.thunderdog.challegram.tool.Fonts.TextPaintStorage storage = new org.thunderdog.challegram.tool.Fonts.TextPaintStorage(mono, monoBold, monoItalic, null, mono, monoBold, 0);
+      xgramMonoProvider = new org.thunderdog.challegram.util.text.TextStyleProvider(storage).setTextSize(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S));
+    }
+    return xgramMonoProvider;
+  }
+
   private static class LineCell {
     private int id;
     private String idStr;
     private TextWrapper wrapper;
     private final int horizontalPadding, verticalPadding;
+    private final int xgramStart; // XGram: the text's start (tile, gutter); 0 with Expressive design off
     private final MultipleViewProvider holder = new MultipleViewProvider();
 
     public LineCell (ViewController<?> context, int id, String line) {
-      this.horizontalPadding = Screen.dp(6f);
-      this.verticalPadding = Screen.dp(3f);
+      final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      this.horizontalPadding = xgram ? Screen.dp(XGRAM_TILE_INSET + XGRAM_TILE_PADDING) : Screen.dp(6f);
+      this.verticalPadding = xgram ? Screen.dp(2f) : Screen.dp(3f);
+      this.xgramStart = xgram ? Screen.dp(XGRAM_TILE_INSET + XGRAM_TILE_PADDING + XGRAM_GUTTER + XGRAM_GUTTER_GAP) : 0;
 
       this.id = id;
       this.idStr = Integer.toString(id + 1);
-      this.wrapper = new TextWrapper(line, TGMessage.getTextStyleProvider(), TextColorSets.Regular.NORMAL)
+      this.wrapper = new TextWrapper(line, xgram ? xgramMonoProvider() : TGMessage.getTextStyleProvider(), TextColorSets.Regular.NORMAL)
         .setEntities(Text.makeEntities(line, Text.ENTITY_FLAGS_EXTERNAL, null, context.tdlib(), null), null)
         .addTextFlags(Text.FLAG_CUSTOM_LONG_PRESS | Text.FLAG_NO_TRIM | Text.FLAG_ARTICLE)
         .setViewProvider(holder);
@@ -491,7 +515,7 @@ public class TextController extends ViewController<TextController.Arguments> imp
 
     public void prepareText (int width) {
       if (width > 0) {
-        wrapper.prepare(width - horizontalPadding * 2);
+        wrapper.prepare(xgramStart > 0 ? Math.max(Screen.dp(48f), width - xgramStart - horizontalPadding) : width - horizontalPadding * 2);
         prepared = true;
       }
     }
@@ -517,7 +541,97 @@ public class TextController extends ViewController<TextController.Arguments> imp
     }
 
     public void draw (View view, Canvas c) {
+      if (xgramStart > 0) {
+        wrapper.draw(c, xgramStart, view.getMeasuredWidth() - horizontalPadding, 0, verticalPadding);
+        return;
+      }
       wrapper.draw(c, horizontalPadding, view.getMeasuredWidth() - horizontalPadding, 0, verticalPadding);
+    }
+  }
+
+  /**
+   * XGram M3E: one surfaceContainerLow tile behind all the lines (its rounded ends only where the first and the last
+   * line are), 16dp from the screen edges and 16dp from the app bar and the bottom, and the line numbers in its gutter.
+   */
+  private static class XgramTextTile extends RecyclerView.ItemDecoration {
+    private final TextAdapter adapter;
+    private final android.graphics.Paint tilePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    private final android.text.TextPaint numberPaint = new android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.RectF rect = new android.graphics.RectF();
+
+    XgramTextTile (TextAdapter adapter) {
+      this.adapter = adapter;
+      numberPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S, false));
+      numberPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_S)));
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        numberPaint.setFontFeatureSettings("tnum");
+      }
+    }
+
+    @Override
+    public void getItemOffsets (@NonNull android.graphics.Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      outRect.set(0, 0, 0, 0);
+      final int position = parent.getChildAdapterPosition(view);
+      if (position == RecyclerView.NO_POSITION) {
+        return;
+      }
+      if (position == 0) {
+        outRect.top = Screen.dp(XGRAM_TILE_MARGIN + XGRAM_TILE_PADDING);
+      }
+      if (position == adapter.getItemCount() - 1) {
+        outRect.bottom = Screen.dp(XGRAM_TILE_MARGIN + XGRAM_TILE_PADDING);
+      }
+    }
+
+    @Override
+    public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+      final int childCount = parent.getChildCount();
+      if (childCount == 0) {
+        return;
+      }
+      final float corner = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+      final float padding = Screen.dp(XGRAM_TILE_PADDING);
+      final int last = adapter.getItemCount() - 1;
+      float top = Float.MAX_VALUE, bottom = -Float.MAX_VALUE;
+      boolean hasFirst = false, hasLast = false;
+      for (int i = 0; i < childCount; i++) {
+        final View child = parent.getChildAt(i);
+        final int position = parent.getChildAdapterPosition(child);
+        if (position == RecyclerView.NO_POSITION) {
+          continue;
+        }
+        top = Math.min(top, child.getTop() + child.getTranslationY());
+        bottom = Math.max(bottom, child.getBottom() + child.getTranslationY());
+        hasFirst |= position == 0;
+        hasLast |= position == last;
+      }
+      if (top > bottom) {
+        return;
+      }
+      top = hasFirst ? top - padding : -corner;
+      bottom = hasLast ? bottom + padding : parent.getHeight() + corner;
+      rect.set(Screen.dp(XGRAM_TILE_INSET), top, parent.getWidth() - Screen.dp(XGRAM_TILE_INSET), bottom);
+      tilePaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW));
+      c.drawRoundRect(rect, corner, corner, tilePaint);
+
+      numberPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
+      final float gutterEnd = Screen.dp(XGRAM_TILE_INSET + XGRAM_TILE_PADDING + XGRAM_GUTTER);
+      for (int i = 0; i < childCount; i++) {
+        final View child = parent.getChildAt(i);
+        if (!(child instanceof LineView)) {
+          continue;
+        }
+        final LineCell cell = ((LineView) child).getCell();
+        if (cell == null) {
+          continue;
+        }
+        final String number = cell.getIdStr();
+        final float width = numberPaint.measureText(number);
+        // on the first line of the text (bodySmall's 16dp line), right-aligned in the gutter; text and numbers stay
+        // left to right, as the text itself (logs, code) does
+        final float baseline = child.getTop() + child.getTranslationY() + cell.verticalPadding + Screen.dp(12.5f);
+        c.drawText(number, gutterEnd - width, baseline, numberPaint);
+      }
     }
   }
 
@@ -632,7 +746,22 @@ public class TextController extends ViewController<TextController.Arguments> imp
     }
 
     public int getItemHeight (int adapterPosition) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && adapterPosition >= 0 && adapterPosition < lines.size()) {
+        // XGram: the tile's top and bottom space count in the scroll range
+        int extra = (adapterPosition == 0 ? Screen.dp(XGRAM_TILE_MARGIN + XGRAM_TILE_PADDING) : 0) +
+          (adapterPosition == lineCount - 1 ? Screen.dp(XGRAM_TILE_MARGIN + XGRAM_TILE_PADDING) : 0);
+        return lines.get(adapterPosition).getHeight(0) + extra;
+      }
       return adapterPosition < 0 || adapterPosition >= lines.size() ? 0 : lines.get(adapterPosition).getHeight(0);
+    }
+
+    /**
+     * XGram M3E: a text's lines are not letter groups: with Expressive design the shared section groups (16dp insets
+     * and a 24dp subheader gap above every line, and the scroll range they add) stay off; XgramTextTile lays the text out.
+     */
+    @Override
+    public boolean isReady () {
+      return !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && super.isReady();
     }
 
     @Override

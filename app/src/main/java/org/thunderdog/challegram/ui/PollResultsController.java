@@ -226,6 +226,11 @@ public class PollResultsController extends RecyclerViewController<PollResultsCon
 
       @Override
       protected void setText(ListItem item, CustomTextView view, boolean isUpdate) {
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          xgramStyleText(item, view);
+          view.setText(item.getString(), null, false); // the type style's own weight, not bold
+          return;
+        }
         super.setText(item, view, isUpdate);
 
         final int viewId = view.getId();
@@ -246,7 +251,7 @@ public class PollResultsController extends RecyclerViewController<PollResultsCon
       protected void setRecyclerViewData(ListItem item, RecyclerView recyclerView, boolean isInitialization) {
         ListCache listCache = (ListCache) item.getData();
         if (isInitialization) {
-          recyclerView.setItemAnimator(new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
+          recyclerView.setItemAnimator(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramAppMotion.listAnimator() : new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l)); // XGram: voters enter on springs
           if (NEED_CENTER_DECORATION) {
             recyclerView.addItemDecoration(new CenterDecoration() {
               @Override
@@ -281,6 +286,27 @@ public class PollResultsController extends RecyclerViewController<PollResultsCon
     // recyclerView.addItemDecoration(decoration);
 
     tdlib.listeners().addPollListener(getPoll().id, this);
+  }
+
+  // XGram M3E: the question on a surfaceContainerHigh card with 28dp corners in headlineSmall; each answer over its
+  // voters in titleMedium.
+
+  private void xgramStyleText (ListItem item, CustomTextView view) {
+    final int viewId = view.getId();
+    if (viewId == R.id.text_title) {
+      view.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S)));
+      view.setPadding(Screen.dp(24f), Screen.dp(20f), Screen.dp(24f), Screen.dp(20f));
+      view.setTextColorId(ColorId.text);
+      if (!(view.getBackground() instanceof com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable)) {
+        com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable card = com.fahadali.xgram.appearance.XgramR5Sheets.applyCard(view, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
+        card.setCornerTarget(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL, false); // kept over the list's tile corners
+      }
+    } else if (viewId == R.id.text_subtitle) {
+      view.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M)));
+      view.setPadding(Screen.dp(16f), Screen.dp(16f), Screen.dp(16f), Screen.dp(8f));
+      view.setTextColorId(ColorId.text);
+      ViewSupport.setThemedBackground(view, ColorId.NONE, PollResultsController.this);
+    }
   }
 
   private int findOption (int optionId) {

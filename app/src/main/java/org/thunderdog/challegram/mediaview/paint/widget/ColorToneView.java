@@ -120,6 +120,15 @@ public class ColorToneView extends View implements ClickHelper.Delegate {
     xgramRect.set(0, 0, viewWidth, viewHeight);
     xgramFill.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH));
     c.drawRoundRect(xgramRect, corner, corner, xgramFill);
+    xgramDrawSquare(c, com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT));
+  }
+
+  /** The tone square with 16dp corners and the 24dp ring thumb (the theme editor draws only this). */
+  private void xgramDrawSquare (Canvas c, int outlineColor) {
+    final int viewWidth = getMeasuredWidth(), viewHeight = getMeasuredHeight();
+    if (xgramStroke.getStyle() != Paint.Style.STROKE) {
+      xgramStroke.setStyle(Paint.Style.STROKE);
+    }
     if (hue == -1 || bitmap == null || bitmap.isRecycled()) {
       return;
     }
@@ -150,7 +159,7 @@ public class ColorToneView extends View implements ClickHelper.Delegate {
       xgramStroke.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.white(1f));
       c.drawCircle(cx, cy, outer - ring / 2f, xgramStroke);
       xgramStroke.setStrokeWidth(outline);
-      xgramStroke.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT));
+      xgramStroke.setColor(outlineColor);
       c.drawCircle(cx, cy, outer + outline / 2f, xgramStroke);
     }
   }
@@ -277,6 +286,11 @@ public class ColorToneView extends View implements ClickHelper.Delegate {
   protected void onDraw (Canvas c) {
     if (xgramMedia) {
       xgramDrawCard(c);
+      return;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the theme editor's tone area with 16dp corners and a 24dp ring thumb
+      xgramDrawSquare(c, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT));
       return;
     }
     if (hue == -1 || bitmap == null || bitmap.isRecycled()) {

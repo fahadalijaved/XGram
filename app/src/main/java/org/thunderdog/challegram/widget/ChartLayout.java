@@ -168,6 +168,9 @@ public class ChartLayout extends FrameLayout implements FactorAnimator.Target, A
 
   private static final int ANIMATOR_PROGRESS = 0;
   private final BoolAnimator isVisible = new BoolAnimator(ANIMATOR_PROGRESS, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 120l, true);
+  {
+    com.fahadali.xgram.appearance.XgramAppMotion.use(isVisible, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram
+  }
 
   @Override
   public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
@@ -196,6 +199,16 @@ public class ChartLayout extends FrameLayout implements FactorAnimator.Target, A
     this.tdlib = tdlib;
     this.delegate = delegate;
     this.chartType = type;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: each chart on a surfaceContainerLow card with 28dp corners (kept over the list's tile corners),
+      // the chart clipped to it
+      com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable card = com.fahadali.xgram.appearance.XgramR5Sheets.applyCard(this, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
+      card.setCornerTarget(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL, false);
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+        setClipToOutline(true);
+      }
+    } else
     ViewSupport.setThemedBackground(this, ColorId.filling, themeProvider);
 
     tdlib.send(new TdApi.GetAnimatedEmoji(ContentPreview.EMOJI_ABACUS.textRepresentation), (animatedEmoji, error) -> {

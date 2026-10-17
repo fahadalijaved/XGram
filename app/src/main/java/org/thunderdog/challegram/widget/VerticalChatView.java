@@ -68,7 +68,11 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
     super(context, tdlib);
 
     Views.setClickable(this);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      setBackground(com.fahadali.xgram.appearance.XgramExpressiveC.transparentSelector(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L)); // XGram: a 16dp-corner state layer
+    } else {
     RippleSupport.setTransparentSelector(this);
+    }
 
     avatarReceiver = new AvatarReceiver(this);
     // XGram: Material 3 Expressive: the badge ring is the sheet color (surfaceContainerLow), the share sheet's cells
@@ -194,7 +198,7 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
       availWidth -= Screen.dp(SECURE_OFFSET);
     }
     if (availWidth > 0 && !StringUtils.isEmpty(title)) {
-      trimmedTitle = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? new Text.Builder(title, availWidth, Paints.robotoStyleProvider(12f), this).singleLine().allBold().build() : new Text.Builder(title, availWidth, Paints.robotoStyleProvider(13), this).singleLine().build(); // XGram M3E: labelMedium
+      trimmedTitle = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? new Text.Builder(title, availWidth, com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M)), this).singleLine().build() : new Text.Builder(title, availWidth, Paints.robotoStyleProvider(13), this).singleLine().build(); // XGram M3E: labelMedium in Google Sans Flex
     } else {
       trimmedTitle = null;
     }
@@ -296,6 +300,11 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
   public int defaultTextColor () {
     boolean isSecret = chat != null && chat.isSecret();
     final float checkFactor = checkBoxHelper != null ? checkBoxHelper.getCheckFactor() : 0f;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the name in onSurface (a secret chat's in tertiary), primary while selected
+      final int base = com.fahadali.xgram.appearance.XgramExpressive.color(isSecret ? com.fahadali.xgram.appearance.XgramExpressive.TERTIARY : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+      return checkFactor == 0f ? base : ColorUtils.fromToArgb(base, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), checkFactor);
+    }
     return isSecret ? Theme.getColor(ColorId.textSecure) : checkFactor == 0f ? Theme.textAccentColor() : ColorUtils.fromToArgb(Theme.textAccentColor(), Theme.getColor(ColorId.textSearchQueryHighlight), checkFactor);
   }
 
@@ -351,7 +360,7 @@ public class VerticalChatView extends BaseView implements Destroyable, ChatListe
       if (isSecret) {
         Drawable d = Icons.getSecureSmallDrawable();
         startX = getMeasuredWidth() / 2 - (trimmedTitle.getWidth() + d.getMinimumWidth()) / 2;
-        Drawables.draw(c, d, startX, startY + trimmedTitle.getHeight() / 2 - d.getMinimumHeight() / 2, Paints.getGreenPorterDuffPaint());
+        Drawables.draw(c, d, startX, startY + trimmedTitle.getHeight() / 2 - d.getMinimumHeight() / 2, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.TERTIARY)) : Paints.getGreenPorterDuffPaint()); // XGram: tertiary lock
         startX += d.getMinimumWidth();
       } else {
         startX = getMeasuredWidth() / 2 - trimmedTitle.getWidth() / 2;
