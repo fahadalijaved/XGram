@@ -657,7 +657,8 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     TdlibAccount account = (TdlibAccount) ((ListItem) v.getTag()).getData();
 
     ids.append(R.id.btn_removeAccount);
-    icons.append(R.drawable.baseline_delete_forever_24);
+    // XGram M3E: the log out glyph (the preview's toolbar maps it through the icon pack and draws it in error)
+    icons.append(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.baseline_logout_24 : R.drawable.baseline_delete_forever_24);
     strings.append(R.string.LogOut);
     context.setStateListenerArgument(account);
 

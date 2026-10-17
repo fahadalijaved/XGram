@@ -86,6 +86,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private String name = "";
   private final List<TdApi.Sticker> icons = new ArrayList<>();
   private IconView preview;
+  @Nullable private ColorRow colorRow; // M3E round 6: a new topic's color swatches
   private MaterialEditTextGroup nameInput;
   private Adapter adapter;
   private boolean isSaving;
@@ -143,6 +144,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       recyclerView.addItemDecoration(new ExpressiveDecoration());
       addThemeInvalidateListener(recyclerView);
       applyExpressivePadding(recyclerView);
+      // M3E round 6: the page title large above the card, the app bar's small title fading in as it scrolls away
+      com.fahadali.xgram.appearance.XgramM3Bars.attachLargeTitle(this, recyclerView);
     }
 
     if (!isGeneral()) {
@@ -228,6 +231,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     color = colors[(index + 1) % colors.length];
     preview.bind(this);
     adapter.notifyItemRangeChanged(2, 1);
+    if (colorRow != null) {
+      colorRow.onColorChanged(index); // M3E round 6: the ring moves to the new swatch
+    }
   }
 
   @Override
@@ -413,6 +419,120 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   }
 
   /**
+   * M3E round 6: the six server colors of a new topic as 40dp swatches spread over the card; the chosen one has a 2dp
+   * ring in onSurface and a check, which spring in (SPATIAL_FAST) as the old ring fades. 48dp touch slots.
+   */
+  private final class ColorRow extends View {
+    private static final float SWATCH = 40f, RING_GAP = 3f, RING = 2f, SIDE = 16f;
+    private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final XgramExpressive.Spring select;
+    private int previousIndex = -1;
+    @Nullable private Drawable check;
+
+    ColorRow (Context context) {
+      super(context);
+      ring.setStyle(Paint.Style.STROKE);
+      ring.setStrokeWidth(Screen.dp(RING));
+      select = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 1f, (s, value) -> invalidate());
+      setClickable(true);
+      setContentDescription(Lang.getString(R.string.XgramR6B2TopicColor));
+    }
+
+    /** The color changed elsewhere (a tap on the preview): the ring springs from {@code fromIndex} to the new one. */
+    void onColorChanged (int fromIndex) {
+      previousIndex = fromIndex;
+      select.setValue(0f);
+      select.animateTo(1f);
+      invalidate();
+    }
+
+    private int selectedIndex (int[] colors) {
+      for (int i = 0; i < colors.length; i++) {
+        if (colors[i] == color) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    private float slotWidth (int count) {
+      return count > 0 ? (getWidth() - Screen.dp(SIDE) * 2f) / count : 0f;
+    }
+
+    private float centerX (int index, int count) {
+      float x = Screen.dp(SIDE) + slotWidth(count) * (index + .5f);
+      return Lang.rtl() ? getWidth() - x : x;
+    }
+
+    @Override
+    public boolean onTouchEvent (android.view.MotionEvent e) {
+      final int[] colors = ForumTopicIconDrawable.serverColors();
+      switch (e.getActionMasked()) {
+        case android.view.MotionEvent.ACTION_DOWN:
+          return true;
+        case android.view.MotionEvent.ACTION_UP: {
+          float slot = slotWidth(colors.length);
+          if (slot <= 0f) {
+            return true;
+          }
+          float x = Lang.rtl() ? getWidth() - e.getX() : e.getX();
+          int index = (int) Math.floor((x - Screen.dp(SIDE)) / slot);
+          if (index >= 0 && index < colors.length && colors[index] != color) {
+            previousIndex = selectedIndex(colors);
+            color = colors[index];
+            select.setValue(0f);
+            select.animateTo(1f);
+            performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+            if (preview != null) {
+              preview.bind(ForumTopicEditController.this);
+            }
+            adapter.notifyItemRangeChanged(2, 1); // the "no icon" bubble takes the color too
+          }
+          return true;
+        }
+      }
+      return super.onTouchEvent(e);
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      final int[] colors = ForumTopicIconDrawable.serverColors();
+      final int selected = selectedIndex(colors);
+      final float cy = getHeight() / 2f, radius = Screen.dp(SWATCH) / 2f;
+      final float value = select.getValue();
+      final int ringColor = XgramExpressive.color(XgramExpressive.ON_SURFACE);
+      for (int i = 0; i < colors.length; i++) {
+        final int swatch = colors[i] | 0xff000000;
+        final float cx = centerX(i, colors.length);
+        float ringFactor = i == selected ? value : i == previousIndex ? 1f - me.vkryl.core.MathUtils.clamp(value) : 0f;
+        // The chosen swatch shrinks a little inside its ring, as M3's selected color chips
+        final float swatchRadius = radius - (Screen.dp(RING_GAP) + Screen.dp(RING)) * me.vkryl.core.MathUtils.clamp(ringFactor);
+        fill.setColor(swatch);
+        c.drawCircle(cx, cy, swatchRadius, fill);
+        if (ringFactor > 0f) {
+          ring.setColor(XgramExpressive.withAlpha(ringColor, me.vkryl.core.MathUtils.clamp(ringFactor)));
+          c.drawCircle(cx, cy, radius - Screen.dp(RING) / 2f, ring);
+        }
+        if (i == selected) {
+          if (check == null) {
+            check = org.thunderdog.challegram.tool.Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_check_24));
+          }
+          if (check != null) {
+            final boolean light = androidx.core.graphics.ColorUtils.calculateLuminance(swatch) > .5;
+            final int checkColor = XgramExpressive.withAlpha(light ? 0xff000000 : 0xffffffff, me.vkryl.core.MathUtils.clamp(value) * (light ? .7f : 1f));
+            final float scale = .6f + .4f * value;
+            final int save = c.save();
+            c.scale(scale, scale, cx, cy);
+            org.thunderdog.challegram.tool.Drawables.drawCentered(c, check, cx, cy, Paints.getPorterDuffPaint(checkColor));
+            c.restoreToCount(save);
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * M3E: 8dp above the name card, and a surfaceBright container (list corners) behind the icon grid with 8dp above
    * its first and below its last row. The list's 16dp side padding insets the card, the title and the grid alike.
    */
@@ -542,6 +662,23 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           layout.addView(input, params);
           addThemeInvalidateListener(layout);
           preview.bind(ForumTopicEditController.this);
+          if (expressive && isCreating()) {
+            // M3E round 6: a new topic picks its color from a row of swatches under the name, in the same card
+            LinearLayout card = new LinearLayout(context);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            card.setBackground(layout.getBackground());
+            layout.setBackground(null);
+            layout.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            card.addView(layout);
+            ColorRow colorRow = ForumTopicEditController.this.colorRow = new ColorRow(context);
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f));
+            rowParams.bottomMargin = Screen.dp(8f);
+            card.addView(colorRow, rowParams);
+            addThemeInvalidateListener(card);
+            addThemeInvalidateListener(colorRow);
+            return new Holder(card);
+          }
           return new Holder(layout);
         }
         case VIEW_TYPE_TITLE: {
@@ -551,8 +688,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           addThemeTextColorListener(title, ColorId.textNeutral);
           title.setPadding(Screen.dp(16f), Screen.dp(16f), Screen.dp(16f), Screen.dp(8f));
           if (expressive) {
-            // M3E: a labelLarge section header; textNeutral already resolves to primary
-            XgramExpressive.applyText(title, XgramExpressive.TS_LABEL_L, false);
+            // M3E: a titleSmall section header in primary (textNeutral resolves to it), 16dp from the container's edge
+            XgramExpressive.applyText(title, XgramExpressive.TS_TITLE_S, false);
             title.setPadding(Screen.dp(16f), Screen.dp(20f), Screen.dp(16f), Screen.dp(8f));
           }
           title.setText(Lang.getString(isCreating() ? R.string.XgramTopicIconCreateHint : R.string.XgramTopicIcon));

@@ -93,11 +93,12 @@ public final class XgramM3CallSwipe extends View {
       hintPaint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_L) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_L));
     }
 
-    knobIcon = Drawables.get(R.drawable.baseline_phone_24);
-    knobAnswerIcon = Drawables.get(R.drawable.baseline_phone_24);
-    knobDeclineIcon = Drawables.get(R.drawable.baseline_phone_24);
-    answerIcon = Drawables.get(R.drawable.baseline_phone_24);
-    declineIcon = Drawables.get(R.drawable.baseline_call_end_24);
+    // Through the icon pack, as every glyph with Expressive design
+    knobIcon = Drawables.get(XgramIconPack.map(R.drawable.baseline_phone_24));
+    knobAnswerIcon = Drawables.get(XgramIconPack.map(R.drawable.baseline_phone_24));
+    knobDeclineIcon = Drawables.get(XgramIconPack.map(R.drawable.baseline_phone_24));
+    answerIcon = Drawables.get(XgramIconPack.map(R.drawable.baseline_phone_24));
+    declineIcon = Drawables.get(XgramIconPack.map(R.drawable.baseline_call_end_24));
 
     offset = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
     press = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());

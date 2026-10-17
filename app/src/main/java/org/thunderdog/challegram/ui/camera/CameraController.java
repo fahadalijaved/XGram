@@ -193,6 +193,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
   private CameraControlButton switchCameraButton, flashButton;
   private FrameLayoutFix switchCameraButtonParent;
   private TextView durationView;
+  private @Nullable android.widget.ImageView xgramQrClose; // XGram M3E: the QR scanner's close button
 
   private CameraManager<?> manager;
 
@@ -262,6 +263,26 @@ public class CameraController extends ViewController<Void> implements CameraDele
       contentShadow.setVisibility(View.GONE); // XGram: no bottom shadow gradient
     }
     rootLayout.addView(contentShadow);
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the QR scanner's close button, a 48dp filled tonal icon button over the camera at the top start
+      xgramQrClose = new android.widget.ImageView(context);
+      xgramQrClose.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+      xgramQrClose.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_close_24));
+      xgramQrClose.setColorFilter(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER));
+      com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(xgramQrClose, com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), com.fahadali.xgram.appearance.XgramExpressive.CORNER_FULL, com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
+      final String closeLabel = org.thunderdog.challegram.core.Lang.getString(R.string.XgramR6B2QrClose);
+      xgramQrClose.setContentDescription(closeLabel);
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        xgramQrClose.setTooltipText(closeLabel);
+      }
+      xgramQrClose.setOnClickListener(v -> context().performBackPress(false));
+      final boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+      xgramQrClose.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.TOP | (rtl ? Gravity.RIGHT : Gravity.LEFT),
+        rtl ? 0 : Screen.dp(16f), Screen.getStatusBarHeight() + Screen.dp(8f), rtl ? Screen.dp(16f) : 0, 0));
+      xgramQrClose.setVisibility(View.GONE);
+      rootLayout.addView(xgramQrClose);
+    }
 
     if (needLegacy()) {
       manager = new CameraManagerLegacy(context, this);
@@ -869,6 +890,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
       blurView.setVisibility(View.VISIBLE);
       rootLayout.setQrMode(false, qrModeDebug);
     }
+    if (xgramQrClose != null) {
+      xgramQrClose.setVisibility(isInQrScanMode() ? View.VISIBLE : View.GONE); // XGram M3E
+    }
   }
 
   /**
@@ -1299,6 +1323,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
     switchCameraButtonParent.setRotation(rotation);
     flashButton.setComponentRotation(rotation);
     durationView.setRotation(rotation);
+    if (xgramQrClose != null) {
+      xgramQrClose.setRotation(rotation); // XGram M3E
+    }
   }
 
   private int getOutputRotation () {

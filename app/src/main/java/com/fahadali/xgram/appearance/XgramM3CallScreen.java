@@ -23,10 +23,13 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.SystemClock;
 import android.text.Layout;
+import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 
@@ -62,9 +65,10 @@ import me.vkryl.core.MathUtils;
  * XGram M3E: the voice call screen (CallController with Expressive design on), after Google Phone's Material 3
  * Expressive in-call screen.
  * <ul>
- * <li>Top bar: a "Telegram call" labelMedium chip (surfaceContainerHigh) with the signal bars once connected, and the
- * encryption key emoji in a tonal secondaryContainer chip that opens a key card (a floating surfaceContainerHigh card,
- * corner 28dp) with the big emoji and the check hint.</li>
+ * <li>Top bar: an M3 small app bar row: a 48dp minimise icon button, a tonal "Telegram call" chip (the Telegram glyph,
+ * the call's state, "End-to-end encrypted" once connected, and the signal bars, its width springing as they come and
+ * go) and the encryption key emoji in a tonal secondaryContainer chip that opens a key card (a floating
+ * surfaceContainerHigh card, corner 28dp) with the big emoji and the check hint.</li>
  * <li>Hero: the avatar (128dp, 120dp on short windows) on a halo that morphs between a circle and a 12-sided cookie
  * and turns while the call rings or connects (static with Reduce motion), the name in headlineMedium and the status in
  * titleMedium onSurfaceVariant, in sentence case, with the loading indicator while it is in progress.</li>
@@ -83,6 +87,8 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     void onMessageClick ();
     /** The branding chip (debug builds: the call log). */
     void onBrandClick ();
+    /** The minimise icon button of the top bar: back to the chats, the call goes on. */
+    void onMinimize ();
     /** False when the call cannot be answered yet (the microphone permission is being asked). */
     boolean onAnswer ();
     void onDecline (boolean isHangUp);
@@ -92,7 +98,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
 
   // Geometry (dp)
 
-  private static final float TOP_GAP = 8f, TOP_BAR = 48f, SIDE = 16f, CHIP_H = 32f, KEY_CHIP_H = 36f;
+  private static final float TOP_GAP = 8f, TOP_BAR = 48f, SIDE = 16f, BAR_EDGE = 4f, KEY_CHIP_H = 36f, BAR_CHIP_GAP = 8f;
   private static final float STAGE = 184f, AVATAR = 128f, STAGE_COMPACT = 160f, AVATAR_COMPACT = 120f;
   private static final float COMPACT_HEIGHT = 720f;
   private static final float NAME_GAP = 20f, STATUS_GAP = 6f, COLUMN_MAX = 560f, CARD_MAX = 400f;
@@ -106,12 +112,9 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
 
   // Views
 
-  private final FrameLayoutFix topBar;
-  private final LinearLayout brandChip;
-  private final OutlineChip brandOutline;
-  private final ImageView brandIcon;
-  private final TextView brandText;
-  private final BarsView barsView;
+  private final TopBar topBar;
+  private final ImageView backButton;
+  private final BrandChip brandChip;
   private final EmojiTextView keyChip;
   private final Drawable keyLock;
 
@@ -140,7 +143,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
 
   // Motion
 
-  private final Fade toggleFade, endFade, swipeFade, retryFade, barsFade;
+  private final Fade toggleFade, endFade, swipeFade, retryFade;
   private final XgramExpressive.Spring keyShown, keyExpanded;
 
   // State
@@ -278,44 +281,39 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     keyCard.addView(keyHint, lp);
     addView(keyCard);
 
-    // Top bar
+    // Top bar: an M3 small app bar row. The minimise icon button (48dp, 4dp from the edge, so its icon sits 16dp in),
+    // the tonal brand chip after it at 56dp, and the key chip at the end; TopBar keeps the brand chip clear of it.
 
-    topBar = new FrameLayoutFix(context);
-    topBar.setPadding(Screen.dp(SIDE), 0, Screen.dp(SIDE), 0);
+    final boolean rtl = Lang.rtl();
+    topBar = new TopBar(context);
+    topBar.setPadding(Screen.dp(rtl ? SIDE : BAR_EDGE), 0, Screen.dp(rtl ? BAR_EDGE : SIDE), 0);
     topBar.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(TOP_BAR), Gravity.TOP));
     topBar.setAlpha(0f);
 
-    final boolean rtl = Lang.rtl();
-    brandChip = new LinearLayout(context);
-    brandChip.setOrientation(LinearLayout.HORIZONTAL);
-    brandChip.setGravity(Gravity.CENTER_VERTICAL);
-    brandChip.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
-    brandChip.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(CHIP_H), (rtl ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL));
-    // An outlined assist chip: a fill would vanish on the tinted top of the gradient in every scheme
-    brandOutline = new OutlineChip();
-    brandChip.setBackground(brandOutline);
+    backButton = new ImageView(context);
+    backButton.setScaleType(ImageView.ScaleType.CENTER);
+    backButton.setImageResource(XgramIconPack.map(R.drawable.baseline_arrow_back_24));
+    if (rtl) {
+      backButton.setScaleX(-1f); // the arrow points to the start
+    }
+    backButton.setContentDescription(Lang.getString(R.string.XgramR6B2CallMinimize));
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      backButton.setTooltipText(Lang.getString(R.string.XgramR6B2CallMinimize));
+    }
+    backButton.setOnClickListener(v -> callback.onMinimize());
+    XgramAppMotion.iconButton(backButton, XgramExpressive.ON_SURFACE);
+    backButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(TOP_BAR), Screen.dp(TOP_BAR), (rtl ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL));
+    topBar.addView(backButton);
 
-    brandIcon = new ImageView(context);
-    brandIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-    brandIcon.setImageDrawable(Drawables.get(R.drawable.deproko_logo_telegram_18));
-    brandChip.addView(brandIcon, new LinearLayout.LayoutParams(Screen.dp(16f), Screen.dp(16f)));
-
-    brandText = new TextView(context);
-    brandText.setScrollDisabled(true);
-    brandText.setSingleLine(true);
-    brandText.setEllipsize(TextUtils.TruncateAt.END);
-    XgramExpressive.applyText(brandText, XgramExpressive.TS_LABEL_M, false);
-    brandText.setText(Lang.getString(R.string.XgramM3CallBranding));
-    LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    chipLp.setMarginStart(Screen.dp(8f));
-    brandChip.addView(brandText, chipLp);
-
-    barsView = new BarsView(context);
-    chipLp = new LinearLayout.LayoutParams(Screen.dp(16f), Screen.dp(14f));
-    chipLp.setMarginStart(Screen.dp(8f));
-    barsView.setLayoutParams(chipLp);
-    barsView.setVisibility(View.GONE);
-    brandChip.addView(barsView);
+    brandChip = new BrandChip(context);
+    FrameLayout.LayoutParams brandLp = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(TOP_BAR), (rtl ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
+    if (rtl) {
+      brandLp.rightMargin = Screen.dp(TOP_BAR + BAR_EDGE);
+    } else {
+      brandLp.leftMargin = Screen.dp(TOP_BAR + BAR_EDGE);
+    }
+    brandChip.setLayoutParams(brandLp);
+    brandChip.setLabel(Lang.getString(R.string.XgramM3CallBranding), false);
     topBar.addView(brandChip);
 
     keyChip = new EmojiTextView(context);
@@ -325,7 +323,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     keyChip.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 16f);
     keyChip.setPadding(Screen.dp(12f), 0, Screen.dp(14f), 0);
     keyChip.setCompoundDrawablePadding(Screen.dp(6f));
-    keyLock = Drawables.get(R.drawable.baseline_lock_16);
+    keyLock = Drawables.get(XgramIconPack.map(R.drawable.baseline_lock_16));
     keyLock.setBounds(0, 0, keyLock.getMinimumWidth(), keyLock.getMinimumHeight());
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
       keyChip.setCompoundDrawablesRelative(keyLock, null, null, null);
@@ -422,7 +420,6 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     endFade = new Fade(endButton, .7f, false);
     swipeFade = new Fade(swipe, .9f, false);
     retryFade = new Fade(retryRow, .8f, false);
-    barsFade = new Fade(barsView, .6f, true);
     keyShown = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> updateKeyViews());
     keyShown.setEndListener(this::updateKeyViews);
     keyExpanded = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> updateKeyViews());
@@ -457,9 +454,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
   /** The debug log toggle (the branding chip) for builds that show it. */
   public void setBrandClickable (boolean clickable) {
     if (clickable) {
-      brandChip.setBackground(XgramAppMotion.ThemedRipple.ofRole(XgramExpressive.ON_SURFACE_VARIANT, brandOutline,
-        new XgramExpressiveC.PressMorphMask(10000f, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_FULL)));
-      brandChip.setOnClickListener(v -> callback.onBrandClick());
+      brandChip.setOnClickListener(v -> callback.onBrandClick()); // the chip draws its own pressed state layer
     }
   }
 
@@ -513,8 +508,12 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     if (visible) {
       keyChip.setVisibility(View.VISIBLE);
     }
+    final boolean changed = keyShown.getTarget() != (visible ? 1f : 0f);
     springTo(keyShown, visible ? 1f : 0f, animated);
     updateKeyViews();
+    if (changed) {
+      topBar.requestLayout(); // the brand chip makes room for the key chip (or takes it back), once per change
+    }
   }
 
   public void setKeyExpanded (boolean expanded) {
@@ -606,8 +605,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
   }
 
   public void setCallBars (int count, boolean visible, boolean animated) {
-    barsView.setCount(count);
-    barsFade.set(visible, animated);
+    brandChip.setBars(count, visible, animated && isLaidOutCompat());
   }
 
   /** Popup open and close progress: the chips fade in and the controls rise into place. */
@@ -679,6 +677,9 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     this.callId = call.id;
     this.callState = state;
     this.callOutgoing = call.isOutgoing;
+    // The brand chip tells the call's encryption state once it is connected (on the cover screen the key chip then
+    // takes the room and the chip keeps the glyph and the bars)
+    brandChip.setLabel(Lang.getString(state == TdApi.CallStateReady.CONSTRUCTOR ? R.string.XgramR6B2CallEncrypted : R.string.XgramM3CallBranding), animated && isLaidOutCompat());
     if (this.mode != newMode) {
       this.mode = newMode;
       endButton.setDescription(Lang.getString(newMode == MODE_DECLINE ? R.string.XgramM3CallDecline : R.string.XgramM3CallEnd));
@@ -826,8 +827,7 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
 
     nameView.setTextColor(onSurface);
     statusView.setTextColor(variant);
-    brandText.setTextColor(variant);
-    brandIcon.setColorFilter(Paints.getColorFilter(variant));
+    backButton.setColorFilter(Paints.getColorFilter(onSurface));
     keyChip.setTextColor(onSecondary);
     keyLock.setColorFilter(Paints.getColorFilter(onSecondary));
     keyTitle.setTextColor(onSurface);
@@ -838,8 +838,8 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     stage.color = haloColor;
 
     stage.invalidate();
-    barsView.invalidate();
     brandChip.invalidate();
+    backButton.invalidate();
     keyChip.invalidate();
     keyCard.invalidate();
     muteButton.invalidate();
@@ -981,104 +981,290 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     emojiStatus.draw(c, x, y);
   }
 
-  // Outlined chip (M3 assist chip: 1dp outlineVariant, full corners, no fill)
+  // Top bar: keeps the brand chip clear of the key chip at the end
 
-  private static final class OutlineChip extends Drawable {
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF rect = new RectF();
-    private int alpha = 255;
-
-    OutlineChip () {
-      paint.setStyle(Paint.Style.STROKE);
-      paint.setStrokeWidth(Screen.dp(1f));
-    }
-
-    @Override
-    public void draw (@androidx.annotation.NonNull Canvas c) {
-      float half = paint.getStrokeWidth() / 2f;
-      rect.set(getBounds());
-      rect.inset(half, half);
-      if (rect.isEmpty()) {
-        return;
-      }
-      paint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.OUTLINE_VARIANT), alpha / 255f));
-      float radius = rect.height() / 2f;
-      c.drawRoundRect(rect, radius, radius, paint);
-    }
-
-    @Override
-    public void setAlpha (int alpha) {
-      if (this.alpha != alpha) {
-        this.alpha = alpha;
-        invalidateSelf();
-      }
-    }
-
-    @Override
-    public void setColorFilter (@Nullable android.graphics.ColorFilter colorFilter) { }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public int getOpacity () {
-      return android.graphics.PixelFormat.TRANSLUCENT;
-    }
-  }
-
-  // Signal bars
-
-  private static final class BarsView extends View {
-    private static final int MAX = 4;
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF rect = new RectF();
-    private int count = -1;
-    private long lastUpdate;
-    private final Runnable delayedInvalidate = () -> {
-      lastUpdate = SystemClock.elapsedRealtime();
-      invalidate();
-    };
-
-    BarsView (Context context) {
+  /**
+   * The M3 small app bar row. Before measuring, the brand chip's end margin is set to the key chip's width while the key
+   * is shown (its target, so the chip makes room as the key chip springs in): the brand chip then hides its label when
+   * the rest no longer fits (the cover screen), and springs its width there. Once per key change, never per frame.
+   */
+  private final class TopBar extends FrameLayoutFix {
+    TopBar (Context context) {
       super(context);
     }
 
-    /** At most one redraw a second, as Telegram X's CallStrengthView. */
-    void setCount (int count) {
-      boolean changed = Math.max(this.count, 0) != Math.max(count, 0);
-      this.count = count;
-      if (!changed) {
+    @Override
+    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      final int width = MeasureSpec.getSize(widthMeasureSpec);
+      int keySpace = 0;
+      if (keyShown != null && keyShown.getTarget() == 1f && keyChip.getVisibility() != View.GONE) {
+        keyChip.measure(MeasureSpec.makeMeasureSpec(Math.max(0, width), MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(Screen.dp(KEY_CHIP_H), MeasureSpec.EXACTLY));
+        keySpace = keyChip.getMeasuredWidth() + Screen.dp(BAR_CHIP_GAP);
+      }
+      ViewGroup.LayoutParams params = brandChip.getLayoutParams();
+      if (params instanceof FrameLayout.LayoutParams) {
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) params;
+        if (Lang.rtl()) {
+          lp.leftMargin = keySpace;
+        } else {
+          lp.rightMargin = keySpace;
+        }
+      }
+      super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
+  }
+
+  // Brand chip
+
+  /**
+   * The tonal "Telegram call" assist chip: a full-corner 32dp pill one container step above the page under it
+   * (onSurface at a container opacity over the tinted gradient, so it shows in light, dark and Pure black where a fixed
+   * surfaceContainerHigh would melt into the tinted top), holding the Telegram glyph, the label (labelMedium: the call,
+   * then its encryption state; left out when the bar is too narrow) and the signal bars once connected. The pill's
+   * width springs (SPATIAL_DEFAULT) as the label and the bars come and go, a new label crossfades (EFFECTS_FAST), a
+   * press draws the onSurface state layer. The view is measured once per change at the widest it can get; only the
+   * drawn pill moves, so nothing is laid out per frame. Main thread only.
+   */
+  private static final class BrandChip extends View {
+    private static final float H = 32f, PAD_START = 10f, PAD_END = 14f, GLYPH = 18f, GAP = 8f;
+    private static final float BAR = 3f, BAR_GAP = 1.5f, BAR_STEP = 3f;
+    private static final int BARS = 4;
+
+    private final Drawable glyph;
+    private int glyphColor;
+    private final TextPaint textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF rect = new RectF();
+    private final RectF barRect = new RectF();
+
+    private String label = "";
+    private @Nullable String prevLabel;
+    private float labelWidth, prevLabelWidth;
+    private boolean labelFits = true;
+
+    private int barCount = -1;
+    private boolean barsVisible;
+    private long barsUpdate;
+    private final Runnable barsInvalidate = () -> {
+      barsUpdate = SystemClock.elapsedRealtime();
+      invalidate();
+    };
+
+    private final XgramExpressive.Spring width, labelShown, labelSwap, bars, press;
+
+    BrandChip (Context context) {
+      super(context);
+      setWillNotDraw(false);
+      glyph = Drawables.get(XgramIconPack.map(R.drawable.baseline_telegram_24));
+      textPaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_M, false));
+      textPaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_M)));
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        textPaint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_M) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_M));
+      }
+      width = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> invalidate()).setThreshold(.5f);
+      labelShown = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 1f, (s, value) -> invalidate());
+      labelSwap = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 1f, (s, value) -> invalidate());
+      labelSwap.setEndListener(() -> prevLabel = null);
+      bars = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> invalidate());
+      press = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> invalidate());
+      setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+    }
+
+    private boolean laidOut () {
+      return getWidth() > 0 && getHeight() > 0;
+    }
+
+    void setLabel (String text, boolean animated) {
+      if (text == null || text.equals(label)) {
         return;
       }
-      long now = SystemClock.elapsedRealtime();
-      removeCallbacks(delayedInvalidate);
-      if (lastUpdate == 0L || now - lastUpdate >= 1000L) {
-        lastUpdate = now;
-        invalidate();
+      final boolean crossfade = animated && laidOut() && !label.isEmpty() && labelShown.getValue() > 0f;
+      prevLabel = crossfade ? label : null;
+      prevLabelWidth = labelWidth;
+      label = text;
+      labelWidth = textPaint.measureText(text);
+      setContentDescription(text);
+      if (crossfade) {
+        labelSwap.setValue(0f);
+        labelSwap.animateTo(1f);
       } else {
-        postDelayed(delayedInvalidate, 1000L - (now - lastUpdate));
+        labelSwap.setValue(1f);
       }
+      requestLayout(); // whether it still fits
+      invalidate();
+    }
+
+    /** The signal bars: {@code count} redraws at most once a second, as Telegram X's CallStrengthView. */
+    void setBars (int count, boolean visible, boolean animated) {
+      final boolean countChanged = Math.max(barCount, 0) != Math.max(count, 0);
+      barCount = count;
+      if (countChanged) {
+        final long now = SystemClock.elapsedRealtime();
+        removeCallbacks(barsInvalidate);
+        if (barsUpdate == 0L || now - barsUpdate >= 1000L) {
+          barsUpdate = now;
+          invalidate();
+        } else {
+          postDelayed(barsInvalidate, 1000L - (now - barsUpdate));
+        }
+      }
+      if (barsVisible != visible) {
+        barsVisible = visible;
+        if (animated && laidOut()) {
+          bars.animateTo(visible ? 1f : 0f);
+        } else {
+          bars.setValue(visible ? 1f : 0f);
+          invalidate();
+        }
+        requestLayout(); // the label may no longer fit, and the pill's target width changes
+      }
+    }
+
+    private float contentWidth (boolean withLabel, boolean withBars) {
+      float w = Screen.dp(PAD_START) + Screen.dp(GLYPH) + Screen.dp(PAD_END);
+      if (withLabel) {
+        w += Screen.dp(GAP) + labelWidth;
+      }
+      if (withBars) {
+        w += Screen.dp(GAP) + barsWidth();
+      }
+      return w;
+    }
+
+    private static float barsWidth () {
+      return Screen.dp(BAR) * BARS + Screen.dp(BAR_GAP) * (BARS - 1);
+    }
+
+    @Override
+    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      final int avail = MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED ? Integer.MAX_VALUE : MeasureSpec.getSize(widthMeasureSpec);
+      labelFits = contentWidth(true, barsVisible) <= avail;
+      final float widest = Math.max(contentWidth(true, true), prevLabel != null ? contentWidth(false, true) + Screen.dp(GAP) + prevLabelWidth : 0f);
+      final int w = (int) Math.ceil(Math.min(avail, widest));
+      final int h = MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY ? MeasureSpec.getSize(heightMeasureSpec) : Screen.dp(H);
+      setMeasuredDimension(w, h);
+      final float target = Math.min(w, contentWidth(labelFits, barsVisible));
+      final boolean animated = laidOut();
+      if (width.getTarget() != target || width.getValue() == 0f) {
+        if (animated && width.getValue() > 0f) {
+          width.animateTo(target);
+        } else {
+          width.setValue(target);
+        }
+      }
+      final float shown = labelFits ? 1f : 0f;
+      if (labelShown.getTarget() != shown) {
+        if (animated) {
+          labelShown.animateTo(shown);
+        } else {
+          labelShown.setValue(shown);
+        }
+      }
+    }
+
+    @Override
+    protected void drawableStateChanged () {
+      super.drawableStateChanged();
+      if (press != null) {
+        press.animateTo(isPressed() && isClickable() ? 1f : 0f);
+      }
+    }
+
+    @Override
+    public boolean onTouchEvent (MotionEvent e) {
+      if (e.getAction() == MotionEvent.ACTION_DOWN && !rect.contains(e.getX(), e.getY())) {
+        return false; // the view is as wide as the chip can get: only the drawn pill takes a press
+      }
+      return super.onTouchEvent(e);
     }
 
     @Override
     protected void onDetachedFromWindow () {
       super.onDetachedFromWindow();
-      removeCallbacks(delayedInvalidate);
+      removeCallbacks(barsInvalidate);
+    }
+
+    /** A container step above the page: onSurface at a container opacity, over the tinted gradient. */
+    private static int fillColor () {
+      final float alpha = XgramAmoled.isActive() ? .14f : Theme.isDark() ? .12f : .08f;
+      return XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), alpha);
     }
 
     @Override
     protected void onDraw (Canvas c) {
-      final float bar = Screen.dp(3f), gap = Screen.dp(1.5f);
-      final float total = bar * MAX + gap * (MAX - 1);
-      final float bottom = getHeight() / 2f + Screen.dp(6f);
-      final float step = Screen.dp(3f);
-      float x = (getWidth() - total) / 2f;
-      final int on = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
-      final int off = XgramExpressive.withAlpha(on, XgramExpressive.DISABLED_CONTENT);
-      for (int i = 0; i < MAX; i++) {
-        rect.set(x, bottom - step * (i + 1) - Screen.dp(1f), x + bar, bottom);
-        paint.setColor(count > i ? on : off);
-        c.drawRoundRect(rect, bar / 2f, bar / 2f, paint);
-        x += bar + gap;
+      final boolean rtl = Lang.rtl();
+      final float w = Math.min(getWidth(), Math.max(0f, width.getValue()));
+      if (w <= 0f) {
+        rect.setEmpty();
+        return;
       }
+      final float h = Screen.dp(H);
+      final float top = (getHeight() - h) / 2f;
+      final float left = rtl ? getWidth() - w : 0f;
+      rect.set(left, top, left + w, top + h);
+      final float radius = h / 2f;
+      paint.setColor(fillColor());
+      c.drawRoundRect(rect, radius, radius, paint);
+      final float pressed = MathUtils.clamp(press.getValue());
+      if (pressed > 0f) {
+        paint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.STATE_PRESSED * pressed));
+        c.drawRoundRect(rect, radius, radius, paint);
+      }
+
+      final int content = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+      final int save = c.save();
+      c.clipRect(rect);
+
+      // The Telegram glyph at the start
+      final int g = Screen.dp(GLYPH);
+      final int gx = Math.round(rtl ? rect.right - Screen.dp(PAD_START) - g : rect.left + Screen.dp(PAD_START));
+      final int gy = Math.round(rect.centerY() - g / 2f);
+      if (glyph != null) {
+        if (glyphColor != content) {
+          glyphColor = content;
+          glyph.setColorFilter(Paints.getColorFilter(content));
+        }
+        glyph.setBounds(gx, gy, gx + g, gy + g);
+        glyph.draw(c);
+      }
+
+      // The label after it (the previous one fading out under the new one)
+      final float shown = MathUtils.clamp(labelShown.getValue());
+      if (shown > 0f) {
+        final float baseline = rect.centerY() - (textPaint.ascent() + textPaint.descent()) / 2f;
+        final float textStart = rtl ? gx - Screen.dp(GAP) : gx + g + Screen.dp(GAP);
+        final float swap = MathUtils.clamp(labelSwap.getValue());
+        if (prevLabel != null && swap < 1f) {
+          drawLabel(c, prevLabel, prevLabelWidth, textStart, baseline, content, shown * (1f - swap), rtl);
+        }
+        drawLabel(c, label, labelWidth, textStart, baseline, content, shown * swap, rtl);
+      }
+
+      // The signal bars at the end
+      final float barsShown = MathUtils.clamp(bars.getValue());
+      if (barsShown > 0f) {
+        final float total = barsWidth();
+        float x = rtl ? rect.left + Screen.dp(PAD_END) : rect.right - Screen.dp(PAD_END) - total;
+        final float bottom = rect.centerY() + Screen.dp(6.5f);
+        final int on = XgramExpressive.withAlpha(content, barsShown);
+        final int off = XgramExpressive.withAlpha(content, XgramExpressive.DISABLED_CONTENT * barsShown);
+        final float bar = Screen.dp(BAR), barRadius = bar / 2f;
+        for (int i = 0; i < BARS; i++) {
+          barRect.set(x, bottom - Screen.dp(BAR_STEP) * (i + 1) - Screen.dp(1f), x + bar, bottom);
+          paint.setColor(barCount > i ? on : off);
+          c.drawRoundRect(barRect, barRadius, barRadius, paint);
+          x += bar + Screen.dp(BAR_GAP);
+        }
+      }
+      c.restoreToCount(save);
+    }
+
+    private void drawLabel (Canvas c, String text, float textWidth, float start, float baseline, int color, float alpha, boolean rtl) {
+      if (alpha <= 0f || text == null || text.isEmpty()) {
+        return;
+      }
+      textPaint.setColor(XgramExpressive.withAlpha(color, alpha));
+      c.drawText(text, rtl ? start - textWidth : start, baseline, textPaint);
     }
   }
 

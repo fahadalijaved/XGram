@@ -55,6 +55,13 @@ public final class XgramPullToNext implements FactorAnimator.Target {
     /** Pill and text colors that follow the wallpaper. */
     int xgramPullBackgroundColor ();
     int xgramPullTextColor ();
+    /**
+     * XGram M3E: true over a photo wallpaper, where the label pill takes surfaceContainerHigh instead of
+     * secondaryContainer.
+     */
+    default boolean xgramPullOverPhoto () {
+      return false;
+    }
   }
 
   /** What releasing opens. */
@@ -111,6 +118,11 @@ public final class XgramPullToNext implements FactorAnimator.Target {
         if (releaseAnimator != null && releaseAnimator.isAnimating()) {
           releaseAnimator.cancel();
           setOffset(0f);
+        }
+        if (xgramRelease != null && xgramRelease.isRunning()) { // XGram M3E
+          xgramRelease.cancel();
+          setOffset(0f);
+          xgramOnReleased();
         }
         tracking = true;
         pulling = false;
@@ -197,6 +209,23 @@ public final class XgramPullToNext implements FactorAnimator.Target {
 
   private void animateBack () {
     if (offset == 0f) {
+      xgramOnReleased();
+      return;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the messages spring back (SPATIAL_DEFAULT, a snap with Reduce motion)
+      if (xgramRelease == null) {
+        xgramRelease = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> {
+          if (!pulling) {
+            offset = Math.max(0f, releaseFrom * value);
+            view.invalidate();
+          }
+        });
+        xgramRelease.setEndListener(this::xgramOnReleased);
+      }
+      releaseFrom = offset;
+      xgramRelease.setValue(1f);
+      xgramRelease.animateTo(0f);
       return;
     }
     if (releaseAnimator == null) {
@@ -250,6 +279,7 @@ public final class XgramPullToNext implements FactorAnimator.Target {
         loading = false;
         target = topics != null ? pickTopic(tdlib, chatId, topicId, topics.topics) : null;
         noTarget = target == null;
+        xgramRequestAvatar(); // XGram M3E
         view.invalidate();
       }));
     } else {
@@ -261,6 +291,7 @@ public final class XgramPullToNext implements FactorAnimator.Target {
         loading = false;
         target = chats != null ? pickChannel(tdlib, chatId, chats.chatIds) : null;
         noTarget = target == null;
+        xgramRequestAvatar(); // XGram M3E
         view.invalidate();
       }));
     }
@@ -310,6 +341,7 @@ public final class XgramPullToNext implements FactorAnimator.Target {
     noTarget = false;
     targetChatId = 0;
     targetTopicId = 0;
+    xgramClearAvatar(); // XGram M3E
   }
 
   // Drawing
@@ -361,6 +393,10 @@ public final class XgramPullToNext implements FactorAnimator.Target {
       hint = Lang.getString(armed ? R.string.XgramPullRelease : (host.xgramPullTopicId() != 0 ? R.string.XgramPullNextTopic : R.string.XgramPullNextChannel));
     }
     float textTop = cy + radius + Screen.dp(8f);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramDrawPill(c, width, height, cx, textTop, alpha, title, hint);
+      return;
+    }
     if (textTop + Screen.dp(18f) > height) {
       return; // not enough room yet
     }
@@ -433,5 +469,155 @@ public final class XgramPullToNext implements FactorAnimator.Target {
 
   private static int alphaColor (float alpha, int color) {
     return me.vkryl.core.ColorUtils.alphaColor(alpha, color);
+  }
+
+  // XGram M3E: the label as a full-corner tonal pill (secondaryContainer, surfaceContainerHigh over a photo wallpaper)
+  // holding the target chat's 24dp avatar, its title in labelLarge and the hint in labelMedium onSurfaceVariant. It
+  // scales in from .8 on EFFECTS_FAST as a pull starts and turns primaryContainer with the disk once releasing opens
+  // the target. The texts are measured and ellipsized only when they change, nothing is allocated per frame.
+
+  private static final float PILL_ONE_LINE = 40f, PILL_TWO_LINES = 52f, PILL_AVATAR = 24f, PILL_GAP = 8f;
+  private static final float PILL_PAD_AVATAR = 8f, PILL_PAD = 16f;
+
+  @Nullable private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramRelease, xgramPillShown;
+  @Nullable private org.thunderdog.challegram.loader.AvatarReceiver xgramAvatar;
+  @Nullable private TextPaint xgramTitlePaint, xgramHintPaint;
+  private final RectF xgramPill = new RectF();
+  @Nullable private String xgramTitleSource, xgramHintSource;
+  @Nullable private CharSequence xgramTitleText, xgramHintText;
+  private float xgramTitleWidth, xgramHintWidth;
+  private int xgramTextMax = -1;
+
+  /** The target chat's avatar for the pill (a channel; a topic of this forum has none), only for the gesture. */
+  private void xgramRequestAvatar () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    if (target == null || target.topic != null) {
+      xgramClearAvatar();
+      return;
+    }
+    if (xgramAvatar == null) {
+      xgramAvatar = new org.thunderdog.challegram.loader.AvatarReceiver(view);
+      xgramAvatar.attach();
+    }
+    if (!xgramAvatar.isDisplayingChat(target.chatId)) {
+      xgramAvatar.requestChat(host.tdlib(), target.chatId, org.thunderdog.challegram.loader.AvatarReceiver.Options.NONE);
+    }
+  }
+
+  /** Drops the avatar's data and its update listeners (the receiver lives only while a pull shows it). */
+  private void xgramClearAvatar () {
+    if (xgramAvatar != null) {
+      xgramAvatar.destroy();
+    }
+  }
+
+  /** The messages are back in place: the pill's entrance resets, the avatar lets go of its chat. */
+  private void xgramOnReleased () {
+    if (pulling) {
+      return;
+    }
+    if (xgramPillShown != null) {
+      xgramPillShown.setValue(0f);
+    }
+    xgramClearAvatar();
+  }
+
+  private void xgramEnsurePaints () {
+    if (xgramTitlePaint == null) {
+      xgramTitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+      xgramTitlePaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false));
+      xgramHintPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+      xgramHintPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M, false));
+    }
+    xgramTitlePaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L)));
+    xgramHintPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_M)));
+  }
+
+  private void xgramLayoutTexts (String title, @Nullable String hint, int maxWidth) {
+    if (maxWidth == xgramTextMax && TextUtils.equals(title, xgramTitleSource) && TextUtils.equals(hint, xgramHintSource)) {
+      return;
+    }
+    xgramTextMax = maxWidth;
+    xgramTitleSource = title;
+    xgramHintSource = hint;
+    xgramTitleText = TextUtils.ellipsize(title, xgramTitlePaint, Math.max(0, maxWidth), TextUtils.TruncateAt.END);
+    xgramTitleWidth = xgramTitlePaint.measureText(xgramTitleText, 0, xgramTitleText.length());
+    if (hint != null) {
+      xgramHintText = TextUtils.ellipsize(hint, xgramHintPaint, Math.max(0, maxWidth), TextUtils.TruncateAt.END);
+      xgramHintWidth = xgramHintPaint.measureText(xgramHintText, 0, xgramHintText.length());
+    } else {
+      xgramHintText = null;
+      xgramHintWidth = 0f;
+    }
+  }
+
+  private void xgramDrawPill (Canvas c, int width, int height, float cx, float top, float alpha, String title, @Nullable String hint) {
+    if (top + Screen.dp(PILL_ONE_LINE) > height) {
+      return; // not enough room yet
+    }
+    if (xgramPillShown == null) {
+      xgramPillShown = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> view.invalidate());
+    }
+    if (xgramPillShown.getTarget() != 1f) {
+      xgramPillShown.animateTo(1f);
+    }
+    final float shown = Math.max(0f, Math.min(1f, xgramPillShown.getValue()));
+    if (shown <= 0f) {
+      return;
+    }
+    xgramEnsurePaints();
+    final boolean twoLines = hint != null && top + Screen.dp(PILL_TWO_LINES) <= height;
+    final boolean hasAvatar = xgramAvatar != null && !xgramAvatar.isEmpty() && target != null && target.topic == null;
+    final float padStart = Screen.dp(hasAvatar ? PILL_PAD_AVATAR : PILL_PAD), padEnd = Screen.dp(PILL_PAD);
+    final float avatarSpace = hasAvatar ? Screen.dp(PILL_AVATAR) + Screen.dp(PILL_GAP) : 0f;
+    final int maxText = (int) (width - Screen.dp(32f) - padStart - padEnd - avatarSpace);
+    xgramLayoutTexts(title, twoLines ? hint : null, maxText);
+    final float textWidth = Math.max(xgramTitleWidth, twoLines ? xgramHintWidth : 0f);
+    final float pillWidth = padStart + avatarSpace + textWidth + padEnd;
+    final float pillHeight = Screen.dp(twoLines ? PILL_TWO_LINES : PILL_ONE_LINE);
+
+    final float armedFactor = xgramArmed != null ? Math.max(0f, Math.min(1f, xgramArmed.getValue())) : 0f;
+    final int restRole = host.xgramPullOverPhoto() ? com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH : com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER;
+    final int restContent = host.xgramPullOverPhoto() ? com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE : com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER;
+    final int container = me.vkryl.core.ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(restRole), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER), armedFactor);
+    final int titleColor = me.vkryl.core.ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(restContent), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), armedFactor);
+    final int hintColor = me.vkryl.core.ColorUtils.fromToArgb(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), armedFactor);
+
+    final float scale = .8f + .2f * shown;
+    final float a = alpha * shown;
+    final int saveCount = c.save();
+    c.scale(scale, scale, cx, top);
+    xgramPill.set(cx - pillWidth / 2f, top, cx + pillWidth / 2f, top + pillHeight);
+    com.fahadali.xgram.appearance.XgramM3Content.drawPill(c, xgramPill.left, xgramPill.top, xgramPill.right, xgramPill.bottom, alphaColor(a, container));
+
+    final boolean rtl = Lang.rtl();
+    float textStart = rtl ? xgramPill.right - padStart - avatarSpace : xgramPill.left + padStart + avatarSpace;
+    if (hasAvatar) {
+      final int size = Screen.dp(PILL_AVATAR);
+      final int left = Math.round(rtl ? xgramPill.right - padStart - size : xgramPill.left + padStart);
+      final int avatarTop = Math.round(xgramPill.centerY() - size / 2f);
+      xgramAvatar.setBounds(left, avatarTop, left + size, avatarTop + size);
+      xgramAvatar.setPaintAlpha(a);
+      if (xgramAvatar.needPlaceholder()) {
+        xgramAvatar.drawPlaceholder(c);
+      }
+      xgramAvatar.draw(c);
+      xgramAvatar.restorePaintAlpha();
+    }
+    final float titleLine = Screen.dp(20f), hintLine = Screen.dp(16f);
+    final float blockTop = xgramPill.centerY() - (titleLine + (twoLines && xgramHintText != null ? hintLine : 0f)) / 2f;
+    if (xgramTitleText != null) {
+      xgramTitlePaint.setColor(alphaColor(a, titleColor));
+      final float baseline = blockTop + titleLine / 2f - (xgramTitlePaint.ascent() + xgramTitlePaint.descent()) / 2f;
+      c.drawText(xgramTitleText, 0, xgramTitleText.length(), rtl ? textStart - xgramTitleWidth : textStart, baseline, xgramTitlePaint);
+    }
+    if (twoLines && xgramHintText != null) {
+      xgramHintPaint.setColor(alphaColor(a, hintColor));
+      final float baseline = blockTop + titleLine + hintLine / 2f - (xgramHintPaint.ascent() + xgramHintPaint.descent()) / 2f;
+      c.drawText(xgramHintText, 0, xgramHintText.length(), rtl ? textStart - xgramHintWidth : textStart, baseline, xgramHintPaint);
+    }
+    c.restoreToCount(saveCount);
   }
 }

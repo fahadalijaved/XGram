@@ -107,8 +107,9 @@ public final class XgramM3CallButton extends View {
       return;
     }
     this.iconRes = res;
-    this.icon = res != 0 ? Drawables.get(res) : null;
-    this.iconSelected = res != 0 && style == STYLE_TOGGLE ? Drawables.get(res) : null;
+    // Through the icon pack, as every glyph with Expressive design
+    this.icon = res != 0 ? Drawables.get(XgramIconPack.map(res)) : null;
+    this.iconSelected = res != 0 && style == STYLE_TOGGLE ? Drawables.get(XgramIconPack.map(res)) : null;
     this.iconColor = 0;
     this.iconSelectedColor = 0;
     invalidate();

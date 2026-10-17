@@ -548,15 +548,25 @@ public final class XgramM3Chat {
 
   /**
    * The vibrant floating toolbar: a primaryContainer pill, 64dp tall with 8dp padding, holding 48dp icon buttons in
-   * onPrimaryContainer with a .10 state layer. It enters with a scale (.8 to 1) and a fade on the spatial default
-   * spring. It floats over the messages, so it keeps a small elevation like a FAB.
+   * onPrimaryContainer with a .10 state layer (a destructive one, delete, in error) and a plain tooltip naming each. It
+   * enters with a scale (.8 to 1) and a fade on a spatial spring (SPATIAL_DEFAULT, or the token given), and only fades
+   * with Reduce motion. It floats over the content, so it keeps a small elevation like a FAB.
    */
   public static final class FloatingToolbar extends android.widget.LinearLayout {
+    private static final long REDUCED_FADE_MS = 150L;
+
     private final XgramExpressive.Spring visibility;
     private boolean shown;
-    private @ColorInt int contentColor;
+    private @ColorInt int contentColor, errorColor;
+    private final android.util.SparseBooleanArray destructive = new android.util.SparseBooleanArray();
+    private final android.util.SparseIntArray icons = new android.util.SparseIntArray();
 
     public FloatingToolbar (Context context) {
+      this(context, XgramExpressive.SPATIAL_DEFAULT);
+    }
+
+    /** {@code springToken}: the spatial spring it enters and leaves on (XgramExpressive.SPATIAL_*). */
+    public FloatingToolbar (Context context, int springToken) {
       super(context);
       setOrientation(android.widget.LinearLayout.HORIZONTAL);
       setGravity(android.view.Gravity.CENTER_VERTICAL);
@@ -571,7 +581,8 @@ public final class XgramM3Chat {
       setVisibility(View.GONE);
       setAlpha(0f);
       contentColor = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
-      visibility = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> applyVisibility(value));
+      errorColor = XgramExpressive.color(XgramExpressive.ERROR);
+      visibility = new XgramExpressive.Spring(springToken, 0f, (s, value) -> applyVisibility(value));
       visibility.setEndListener(() -> {
         if (!shown) {
           setVisibility(View.GONE);
@@ -580,17 +591,54 @@ public final class XgramM3Chat {
     }
 
     public android.widget.ImageView addButton (int id, int iconRes, CharSequence description, View.OnClickListener onClick) {
+      return addButton(id, iconRes, description, onClick, false);
+    }
+
+    /** {@code isDestructive}: the icon and its state layer in error (delete). */
+    public android.widget.ImageView addButton (int id, int iconRes, CharSequence description, View.OnClickListener onClick, boolean isDestructive) {
       android.widget.ImageView button = new android.widget.ImageView(getContext());
       button.setId(id);
       button.setScaleType(android.widget.ImageView.ScaleType.CENTER);
       button.setImageResource(XgramIconPack.map(iconRes));
-      button.setColorFilter(contentColor);
+      icons.put(id, iconRes);
+      destructive.put(id, isDestructive);
+      final int color = isDestructive ? errorColor : contentColor;
+      button.setColorFilter(color);
       button.setContentDescription(description);
-      button.setBackground(XgramExpressiveC.iconButtonRipple(contentColor, 48f));
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        button.setTooltipText(description); // a plain tooltip on long press, never a toast
+      }
+      button.setBackground(XgramExpressiveC.iconButtonRipple(color, 48f));
       button.setOnClickListener(onClick);
       button.setLayoutParams(new android.widget.LinearLayout.LayoutParams(Screen.dp(48f), Screen.dp(48f)));
       addView(button);
       return button;
+    }
+
+    /**
+     * Shows or hides the button {@code id} and gives it {@code iconRes} (through the icon pack) and {@code description}.
+     * The drawable is only replaced when the icon changes, so a refresh does not flicker.
+     */
+    public void setButton (int id, boolean visible, int iconRes, @Nullable CharSequence description) {
+      View view = findViewById(id);
+      if (!(view instanceof android.widget.ImageView)) {
+        return;
+      }
+      android.widget.ImageView button = (android.widget.ImageView) view;
+      int visibility = visible ? View.VISIBLE : View.GONE;
+      if (button.getVisibility() != visibility) {
+        button.setVisibility(visibility);
+      }
+      if (iconRes != 0 && icons.get(id) != iconRes) {
+        icons.put(id, iconRes);
+        button.setImageResource(XgramIconPack.map(iconRes));
+      }
+      if (description != null && !android.text.TextUtils.equals(button.getContentDescription(), description)) {
+        button.setContentDescription(description);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          button.setTooltipText(description);
+        }
+      }
     }
 
     /** True while at least one button is visible. */
@@ -611,6 +659,20 @@ public final class XgramM3Chat {
       if (shown && getVisibility() != View.VISIBLE) {
         setVisibility(View.VISIBLE);
       }
+      if (animated && XgramMotion.reduce()) {
+        // Reduce motion: a short crossfade at full size, no scale
+        visibility.setValue(shown ? 1f : 0f);
+        setScaleX(1f);
+        setScaleY(1f);
+        animate().cancel();
+        animate().alpha(shown ? 1f : 0f).setDuration(REDUCED_FADE_MS).withEndAction(() -> {
+          if (!this.shown) {
+            setVisibility(View.GONE);
+          }
+        }).start();
+        return;
+      }
+      animate().cancel();
       if (animated) {
         visibility.animateTo(shown ? 1f : 0f);
       } else {
@@ -637,13 +699,16 @@ public final class XgramM3Chat {
     @Override
     protected void dispatchDraw (Canvas c) {
       int color = XgramExpressive.color(XgramExpressive.ON_PRIMARY_CONTAINER);
-      if (color != contentColor) {
+      int error = XgramExpressive.color(XgramExpressive.ERROR);
+      if (color != contentColor || error != errorColor) {
         contentColor = color;
+        errorColor = error;
         for (int i = 0; i < getChildCount(); i++) {
           View child = getChildAt(i);
           if (child instanceof android.widget.ImageView) {
-            ((android.widget.ImageView) child).setColorFilter(color);
-            child.setBackground(XgramExpressiveC.iconButtonRipple(color, 48f));
+            int tint = destructive.get(child.getId()) ? error : color;
+            ((android.widget.ImageView) child).setColorFilter(tint);
+            child.setBackground(XgramExpressiveC.iconButtonRipple(tint, 48f));
           }
         }
       }

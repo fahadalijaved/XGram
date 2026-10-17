@@ -442,7 +442,8 @@ public final class XgramR5Calls {
 
   /** Whether a chat action is destructive (drawn in error in the floating toolbars). */
   public static boolean isDestructiveAction (int id) {
-    return id == R.id.btn_removeChatFromListOrClearHistory;
+    return id == R.id.btn_removeChatFromListOrClearHistory ||
+      id == R.id.btn_removeAccount; // the account preview's "Log out" (side menu)
   }
 
   // Unsupported links

@@ -935,6 +935,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     super.onEnterSelectMode();
     xgramSelecting = true;
     xgramConnUpdateSuppressed();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && composeWrap != null && !inSearchMode()) {
+      // XGram M3E: the selection's floating toolbar (ChatsController) takes the bottom: the compose FAB steps aside
+      composeWrap.forceHide();
+    }
   }
 
   @Override
@@ -942,6 +946,17 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     super.onLeaveSelectMode();
     xgramSelecting = false;
     xgramConnUpdateSuppressed();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && composeWrap != null && !inSearchMode()) {
+      composeWrap.showIfWasHidden(); // XGram M3E
+    }
+  }
+
+  /**
+   * XGram M3E: what a floating toolbar over the chat list keeps clear of at the bottom (the navigation bar and, when
+   * the folder tabs are at the bottom, their bar), as the snackbars do.
+   */
+  public int xgramFloatingBottomInset () {
+    return xgramConnSnackInset();
   }
 
   /*@Override
@@ -1536,7 +1551,12 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         }
       });
       updateSnackBar.addThemeListeners(this);
-      updateSnackBar.setText(Lang.getString(R.string.AppUpdateReady));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: XGram's own words, sentence case ("XGram 1.2.3 is ready to install"), never "Telegram X"
+        updateSnackBar.setText(com.fahadali.xgram.appearance.XgramR6B2Chat.updateReadyText(context().appUpdater().displayVersion()));
+      } else {
+        updateSnackBar.setText(Lang.getString(R.string.AppUpdateReady));
+      }
       mainWrap.addView(updateSnackBar);
       xgramConnHideSnackBar(); // XGram M3E: one snackbar at a time, the update one wins
     }
@@ -3340,7 +3360,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           if (topView != null) {
             UI.forceVibrateError(topView);
           }
-        } else {
+        } else if (!com.fahadali.xgram.appearance.XgramSnackbar.show(message, Toast.LENGTH_LONG)) { // XGram M3E: a snackbar
           UI.showCustomToast(message, Toast.LENGTH_LONG, 0);
         }
       });
@@ -3358,7 +3378,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   @AnyThread
   private void createChatFolderInviteLink (int chatFolderId, TdApi.ChatFolder chatFolder, long[] shareableChatIds) {
     if (shareableChatIds.length == 0) {
-      UI.showCustomToast(R.string.ChatFolderInviteLinkNoChatsToShare, Toast.LENGTH_SHORT, 0);
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        UI.showToast(R.string.ChatFolderInviteLinkNoChatsToShare, Toast.LENGTH_SHORT); // XGram M3E: a snackbar (any thread)
+      } else {
+        UI.showCustomToast(R.string.ChatFolderInviteLinkNoChatsToShare, Toast.LENGTH_SHORT, 0);
+      }
       return;
     }
     tdlib.createChatFolderInviteLink(chatFolderId, /* name */ "", shareableChatIds, (inviteLink, error) -> runOnUiThreadOptional(() -> {

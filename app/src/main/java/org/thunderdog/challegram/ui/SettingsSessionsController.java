@@ -409,7 +409,11 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
       Td.sort(newSessions);
       this.sessions = new Tdlib.SessionsInfo(new TdApi.Sessions(newSessions, sessions.inactiveSessionTtlDays));
       buildCells();
-      UI.showCustomToast(Lang.getStringSecure(session.isPasswordPending ? R.string.ScanQRAuthorizedToastPasswordPending : R.string.ScanQRAuthorizedToast, Lang.boldCreator(), session.applicationName), Toast.LENGTH_LONG, 0);
+      final CharSequence authorized = Lang.getStringSecure(session.isPasswordPending ? R.string.ScanQRAuthorizedToastPasswordPending : R.string.ScanQRAuthorizedToast, Lang.boldCreator(), session.applicationName);
+      if (com.fahadali.xgram.appearance.XgramSnackbar.show(authorized, Toast.LENGTH_LONG)) {
+        return; // XGram M3E: an M3 snackbar instead of the toast
+      }
+      UI.showCustomToast(authorized, Toast.LENGTH_LONG, 0);
     });
   }
 

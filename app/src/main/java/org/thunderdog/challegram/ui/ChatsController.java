@@ -608,6 +608,106 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
     Views.applyBottomInset(chatsView, extraBottomInset + com.fahadali.xgram.layout.XgramTwoPane.fabSpace(this) + xgramPillRoom); // XGram
+    xgramUpdateToolbarMargin(); // XGram M3E
+  }
+
+  // XGram M3E: chat selection's floating toolbar (com.fahadali.xgram.appearance.XgramR6B2Chat). It takes pin, mute,
+  // archive and delete from the selection app bar, as MessagesController's toolbar does for messages.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramM3Chat.FloatingToolbar xgramSelectionToolbar;
+
+  private static final int[] XGRAM_HEADER_ACTIONS = {R.id.menu_btn_pinUnpin, R.id.menu_btn_muteUnmute, R.id.menu_btn_delete};
+
+  /** Above the navigation bar and, on a page of the main chat list, the bottom folder tabs. */
+  private void xgramUpdateToolbarMargin () {
+    if (xgramSelectionToolbar == null || !(xgramSelectionToolbar.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) {
+      return;
+    }
+    int inset = extraBottomInset;
+    ViewController<?> parent = getParentOrSelf();
+    if (parent instanceof MainController) {
+      inset = Math.max(inset, ((MainController) parent).xgramFloatingBottomInset());
+    }
+    final int margin = com.fahadali.xgram.appearance.XgramR6B2Chat.toolbarBottomMargin(inset);
+    ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) xgramSelectionToolbar.getLayoutParams();
+    if (params.bottomMargin != margin) {
+      params.bottomMargin = margin;
+      xgramSelectionToolbar.setLayoutParams(params);
+    }
+  }
+
+  private void xgramOnToolbarAction (View v) {
+    if (getSelectedChatCount() == 0) {
+      return;
+    }
+    final int id = v.getId();
+    if (id == R.id.more_btn_archive) {
+      final int archiveId = xgramArchiveAction();
+      if (archiveId != 0) {
+        onMoreItemPressed(archiveId);
+      }
+    } else {
+      onMenuItemPressed(id, v);
+    }
+  }
+
+  /** R.id.more_btn_unarchive, R.id.more_btn_archive (as the overflow chose it), or 0 when neither applies. */
+  private int xgramArchiveAction () {
+    int canArchive = 0, canUnarchive = 0;
+    for (int i = 0; i < getSelectedChatCount(); i++) {
+      TdApi.Chat chat = selectedChats.valueAt(i);
+      if (tdlib.canArchiveOrUnarchiveChat(chat)) {
+        if (ChatPosition.isArchived(chat)) {
+          canUnarchive++;
+        } else {
+          canArchive++;
+        }
+      }
+    }
+    return canArchive + canUnarchive > 0 ? (canUnarchive > 0 ? R.id.more_btn_unarchive : R.id.more_btn_archive) : 0;
+  }
+
+  /** The selection app bar keeps close, the count and the overflow: its pin, mute and delete buttons go. */
+  private void xgramHideHeaderActions (@Nullable LinearLayout menu, @Nullable HeaderView header) {
+    if (xgramSelectionToolbar == null) {
+      return;
+    }
+    for (int id : XGRAM_HEADER_ACTIONS) {
+      if (menu != null) {
+        View button = menu.findViewById(id);
+        if (button != null && button.getVisibility() != View.GONE) {
+          button.setVisibility(View.GONE);
+        }
+      }
+      if (header != null) {
+        header.updateButton(R.id.menu_chatBulkActions, id, View.GONE, 0);
+      }
+    }
+  }
+
+  private void xgramUpdateSelectionToolbar (boolean animated) {
+    if (xgramSelectionToolbar == null) {
+      return;
+    }
+    final boolean selecting = getSelectedChatCount() > 0;
+    if (selecting) {
+      int mode = canPinUnpinSelectedChats();
+      xgramSelectionToolbar.setButton(R.id.menu_btn_pinUnpin, shouldShowPin(mode),
+        mode == ACTION_MODE_ALL_ENABLED ? R.drawable.deproko_baseline_pin_undo_24 : R.drawable.deproko_baseline_pin_24,
+        Lang.getString(mode == ACTION_MODE_ALL_ENABLED ? R.string.Unpin : R.string.Pin));
+      mode = canMuteUnmuteSelectedChats();
+      xgramSelectionToolbar.setButton(R.id.menu_btn_muteUnmute, mode != ACTION_MODE_NONE,
+        mode == ACTION_MODE_ALL_ENABLED ? R.drawable.baseline_notifications_off_24 : R.drawable.baseline_notifications_24,
+        Lang.getString(mode == ACTION_MODE_ALL_ENABLED ? R.string.Mute : R.string.Unmute));
+      final int archiveId = xgramArchiveAction();
+      xgramSelectionToolbar.setButton(R.id.more_btn_archive, archiveId != 0,
+        archiveId == R.id.more_btn_unarchive ? R.drawable.baseline_unarchive_24 : R.drawable.baseline_archive_24,
+        Lang.getString(archiveId == R.id.more_btn_unarchive ? R.string.Unarchive : R.string.Archive));
+      mode = canDeleteSelectedChats();
+      xgramSelectionToolbar.setButton(R.id.menu_btn_delete, mode != ACTION_MODE_NONE && mode != ACTION_MODE_MIXED, R.drawable.baseline_delete_24, Lang.getString(R.string.Delete));
+      xgramUpdateToolbarMargin();
+    }
+    xgramSelectionToolbar.setShown(selecting && xgramSelectionToolbar.hasVisibleButtons(), animated && xgramSelectionToolbar.getParent() != null);
   }
 
   /** XGram M3E: MainController moves its pager down while the connection pill is in: the list scrolls that much more. */
@@ -768,6 +868,16 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       chatsView.setTotalRes(filter.getTotalStringRes());
     tdlib.ui().attachViewportToRecyclerView(chatsViewport, chatsView);
     contentView.addView(chatsView);
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !isInForceTouchMode()) {
+      // XGram M3E: chat selection's actions (pin, mute, archive, delete) in a floating toolbar, centred above the
+      // bottom inset (and the bottom folder tabs); the selection app bar keeps close, the count and the overflow
+      xgramSelectionToolbar = com.fahadali.xgram.appearance.XgramR6B2Chat.newChatSelectionToolbar(context, this::xgramOnToolbarAction);
+      xgramSelectionToolbar.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(com.fahadali.xgram.appearance.XgramR6B2Chat.TOOLBAR_HEIGHT), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+      xgramUpdateToolbarMargin();
+      addThemeInvalidateListener(xgramSelectionToolbar);
+      contentView.addView(xgramSelectionToolbar);
+    }
 
     Views.setScrollBarPosition(chatsView);
 
@@ -1402,6 +1512,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       if (value) totalButtonsCount++;
 
       header.addMoreButton(menu, this, getSelectHeaderIconColorId());
+      xgramHideHeaderActions(menu, null); // XGram M3E: they are on the floating toolbar
     }
   }
 
@@ -1421,7 +1532,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       mode = canDeleteSelectedChats();
       headerView.updateButton(R.id.menu_chatBulkActions, R.id.menu_btn_delete, (value = mode != ACTION_MODE_NONE && mode != ACTION_MODE_MIXED) ? View.VISIBLE : View.GONE, 0);
       if (value) totalButtonsCount++;
+      xgramHideHeaderActions(null, headerView); // XGram M3E: they are on the floating toolbar
     }
+    xgramUpdateSelectionToolbar(true); // XGram M3E
   }
 
   private static final int ACTION_MODE_NONE = 0;
@@ -1527,6 +1640,10 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         } else {
           canBlock++;
         }
+      }
+
+      if (xgramSelectionToolbar != null) {
+        canArchive = canUnarchive = 0; // XGram M3E: archive is on the floating toolbar
       }
 
       if (selectedChats.size() < tdlib.getCounter(chatList()).totalChatCount) {
@@ -2124,6 +2241,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   public void onLeaveSelectMode () {
     super.onLeaveSelectMode();
     cancelSelectionSignals();
+    if (xgramSelectionToolbar != null) {
+      xgramSelectionToolbar.setShown(false, true); // XGram M3E
+    }
   }
 
   private List<CancellationSignal> pendingSelections;
@@ -2498,6 +2618,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         selectUnselectChat(selectedChats.valueAt(0), false);
       }
     }
+    xgramUpdateSelectionToolbar(true); // XGram M3E: nothing selected, the toolbar leaves
   }
 
   @Override

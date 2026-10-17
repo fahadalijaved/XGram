@@ -247,7 +247,7 @@ public class EditSessionController extends EditBaseController<EditSessionControl
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_INFO_MULTILINE, R.id.btn_sessionDevice, R.drawable.baseline_devices_other_24, R.string.SessionDevice, false));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_sessionPlatform, SessionIconKt.asIcon(session), (session.platform + " " + session.systemVersion).trim(), false));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_sessionPlatform, xgramM3 ? com.fahadali.xgram.appearance.XgramIconPack.map(com.fahadali.xgram.appearance.XgramM3Sessions.iconOf(session)) /* XGram M3E: the Devices list's platform glyph */ : SessionIconKt.asIcon(session), (session.platform + " " + session.systemVersion).trim(), false));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_sessionCountry, R.drawable.baseline_location_on_24, StringUtils.isEmpty(session.location) ? Lang.getString(R.string.SessionLocationUnknown) : session.location, false));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
