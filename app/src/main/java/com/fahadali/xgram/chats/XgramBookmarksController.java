@@ -95,7 +95,10 @@ public final class XgramBookmarksController extends RecyclerViewController<Void>
     List<XgramBookmarks.Bookmark> bookmarks = XgramBookmarks.list(tdlib);
     List<ListItem> items = new ArrayList<>();
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-    if (bookmarks.isEmpty()) {
+    if (bookmarks.isEmpty() && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the empty state (an icon on a soft burst, the hint under it)
+      items.add(new ListItem(ListItem.TYPE_ICONIZED_EMPTY, 0, R.drawable.baseline_bookmark_24, R.string.XgramBookmarksEmpty));
+    } else if (bookmarks.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramBookmarksEmpty));
     } else {
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
@@ -164,6 +167,10 @@ public final class XgramBookmarksController extends RecyclerViewController<Void>
       return false;
     }
     XgramBookmarks.Bookmark bookmark = (XgramBookmarks.Bookmark) data;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramShowMenu(v, bookmark);
+      return true;
+    }
     showOptions(null, new int[] {R.id.btn_delete, R.id.btn_cancel},
       new String[] {Lang.getString(R.string.XgramRemoveBookmark), Lang.getString(R.string.Cancel)},
       new int[] {OptionColor.RED, OptionColor.NORMAL},
@@ -175,5 +182,38 @@ public final class XgramBookmarksController extends RecyclerViewController<Void>
         return true;
       });
     return true;
+  }
+
+  // XGram M3E (round 6): a long press opens the M3 menu at the row (Remove bookmark in error), then a snackbar with
+  // Undo; the Compose rows read the chat, the message's preview and date here (TgxPagesBatch2).
+
+  private void xgramShowMenu (View anchor, XgramBookmarks.Bookmark bookmark) {
+    List<com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry> entries = new ArrayList<>();
+    entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(R.id.btn_delete, Lang.getString(R.string.XgramRemoveBookmark), R.drawable.baseline_delete_24, () -> {
+      if (isDestroyed()) {
+        return;
+      }
+      XgramBookmarks.setBookmarked(tdlib, bookmark.chatId, bookmark.messageId, false);
+      rebuild();
+      com.fahadali.xgram.appearance.XgramSnackbar.showUndo(Lang.getString(R.string.XgramR6B5BookmarkRemoved), () -> {
+        XgramBookmarks.setBookmarked(tdlib, bookmark.chatId, bookmark.messageId, true);
+        if (!isDestroyed()) {
+          rebuild();
+        }
+      });
+    }).destructive());
+    com.fahadali.xgram.appearance.XgramR5Chat.showMenu(anchor, getThemeListeners(), entries);
+  }
+
+  /** The message's text (or "Media"), or null while it loads. */
+  @androidx.annotation.Nullable
+  public String xgramPreviewOf (XgramBookmarks.Bookmark bookmark) {
+    return previews.get(keyOf(bookmark));
+  }
+
+  /** When the message was sent (unix seconds), or when it was bookmarked while the message loads. */
+  public long xgramDateOf (XgramBookmarks.Bookmark bookmark) {
+    TdApi.Message message = messages.get(keyOf(bookmark));
+    return message != null ? message.date : bookmark.addedAt / 1000L;
   }
 }

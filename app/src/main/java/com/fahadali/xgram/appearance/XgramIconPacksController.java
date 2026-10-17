@@ -73,9 +73,10 @@ public class XgramIconPacksController extends ViewController<Void> {
     return XgramIconPack.description(pack);
   }
 
-  // XGram M3E (round 5): a list with the large title, the packs as selectable cards (surfaceBright, secondaryContainer
-  // with a check badge for the pack in use; 20dp corners, 16dp pressed), two columns from 600dp, the note as a
-  // description, and the restart confirmed in an M3 dialog.
+  // XGram M3E (round 5, 6): a list with the large title (its app bar lifts on scroll), a titleSmall "Packs" header, the
+  // packs as selectable cards (surfaceBright, secondaryContainer with a check badge for the pack in use; 20dp corners,
+  // 16dp pressed), two columns from 600dp, the note as a description, and the restart confirmed in an M3 dialog that
+  // shows the pack's icons.
 
   private static final float XGRAM_MIN_CELL = 280f;
   private static final Object XGRAM_TOP = new Object(), XGRAM_INFO = new Object();
@@ -122,8 +123,7 @@ public class XgramIconPacksController extends ViewController<Void> {
       public androidx.recyclerview.widget.RecyclerView.ViewHolder onCreateViewHolder (@androidx.annotation.NonNull ViewGroup parent, int viewType) {
         View view;
         if (viewType == 2) {
-          view = new View(parent.getContext());
-          view.setLayoutParams(new androidx.recyclerview.widget.RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(8f)));
+          view = XgramR5Security.newSectionHeader(parent.getContext());
         } else if (viewType == 1) {
           view = XgramR5Security.newDescription(parent.getContext());
         } else {
@@ -141,7 +141,9 @@ public class XgramIconPacksController extends ViewController<Void> {
       @Override
       public void onBindViewHolder (@androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView.ViewHolder holder, int position) {
         Object row = rows.get(position);
-        if (row == XGRAM_INFO) {
+        if (row == XGRAM_TOP) {
+          XgramR5Security.bindSectionHeader((TextView) holder.itemView, Lang.getString(R.string.XgramR6B5Packs), true);
+        } else if (row == XGRAM_INFO) {
           XgramR5Security.bindDescription((TextView) holder.itemView, Lang.getString(R.string.XgramIconPackInfo));
         } else if (row instanceof Integer) {
           int pack = (Integer) row;
@@ -150,19 +152,66 @@ public class XgramIconPacksController extends ViewController<Void> {
       }
     });
     XgramM3Bars.attachLargeTitle(this, recyclerView);
+    XgramMotion.attachScrollLink(this, recyclerView, 0); // the app bar lifts once the list scrolls
     return recyclerView;
   }
 
   private void xgramChoose (int pack) {
     android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(context(), Theme.dialogTheme());
     b.setTitle(Lang.getString(R.string.XgramR5SecurityUseIconPack, Lang.getString(XgramIconPack.name(pack))));
-    b.setMessage(Lang.getString(R.string.XgramIconPackInfo));
+    b.setMessage(Lang.getString(R.string.XgramR6B5IconPackRestart));
+    // What the pack looks like: its icons in a row, 24dp, under the message
+    XgramPackIconsRow icons = new XgramPackIconsRow(context(), pack);
+    icons.setPadding(Screen.dp(24f), Screen.dp(12f), Screen.dp(24f), Screen.dp(4f));
+    b.setView(icons);
     b.setPositiveButton(Lang.getString(R.string.AppUpdateRestart), (dialog, which) -> {
       XgramIconPack.set(pack);
       UI.post(() -> XgramApp.restart(context()), 250);
     });
     b.setNegativeButton(Lang.getString(R.string.Cancel), (dialog, which) -> dialog.dismiss());
     showAlert(b);
+  }
+
+  /**
+   * XGram M3E: the restart confirm's preview: the pack's icons in a row (24dp, 12dp apart, as many as fit) in
+   * onSurfaceVariant, read when drawn.
+   */
+  private static final class XgramPackIconsRow extends View {
+    private final Drawable[] icons;
+
+    XgramPackIconsRow (Context context, int pack) {
+      super(context);
+      int[] res = preview(pack);
+      icons = new Drawable[res.length];
+      for (int i = 0; i < res.length; i++) {
+        // Straight from resources: Drawables.get would turn Telegram X's icons into the current pack's.
+        Drawable d = ResourcesCompat.getDrawable(context.getResources(), res[i], null);
+        icons[i] = d != null ? d.mutate() : null;
+      }
+      setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+    }
+
+    @Override
+    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      setMeasuredDimension(getDefaultSize(getSuggestedMinimumWidth(), widthMeasureSpec), getPaddingTop() + Screen.dp(24f) + getPaddingBottom());
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      final int size = Screen.dp(24f), gap = Screen.dp(12f);
+      final int available = getWidth() - getPaddingLeft() - getPaddingRight();
+      final int count = Math.min(icons.length, Math.max(0, (available + gap) / (size + gap)));
+      final boolean rtl = Lang.rtl();
+      final android.graphics.Paint paint = Paints.getPorterDuffPaint(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
+      for (int i = 0; i < count; i++) {
+        Drawable d = icons[i];
+        if (d == null) {
+          continue;
+        }
+        final int x = rtl ? getWidth() - getPaddingRight() - size - i * (size + gap) : getPaddingLeft() + i * (size + gap);
+        Drawables.draw(c, d, x + (size - d.getMinimumWidth()) / 2f, getPaddingTop() + (size - d.getMinimumHeight()) / 2f, paint);
+      }
+    }
   }
 
   /** XGram M3E: a pack as a selectable card: titleMedium name, bodyMedium words, ten of its icons, a check badge. */

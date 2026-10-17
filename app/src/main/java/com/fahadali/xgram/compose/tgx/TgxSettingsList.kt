@@ -14,7 +14,13 @@
 package com.fahadali.xgram.compose.tgx
 
 import android.text.Spanned
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -25,6 +31,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,6 +39,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -42,6 +50,7 @@ import androidx.compose.material3.ListItemColors
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonColors
@@ -72,10 +81,13 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -90,7 +102,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fahadali.xgram.appearance.XgramExpressive
+import com.fahadali.xgram.appearance.XgramM3Bars
+import com.fahadali.xgram.appearance.XgramMotion
 import com.fahadali.xgram.appearance.XgramR5Lists
+import com.fahadali.xgram.appearance.XgramR6B5Pages
 import com.fahadali.xgram.appearance.XgramShapes
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.theme.XgramM3Theme
@@ -104,6 +119,7 @@ import com.fahadali.xgram.compose.ui.tgxIcon
 import com.fahadali.xgram.compose.ui.xgramNoSwipeBack
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
@@ -131,19 +147,30 @@ internal fun TgxSettingsScreen(r: TgxSettingsRenderer) {
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer),
         contentAlignment = Alignment.TopCenter
       ) {
-        SettingsList(blocks, r.listState, padding, animateItems = true)
+        // A form's column stops at 480dp (XgramR5People.FORM_MAX_WIDTH), a page's at 720dp
+        SettingsList(blocks, r.listState, padding, modifier = if (r.formWidth) Modifier.widthIn(max = 480.dp) else Modifier, animateItems = true)
       }
       val request = r.scrollRequest.intValue
       LaunchedEffect(request, blocks) {
         r.applyPendingScroll()
       }
-      LaunchedEffect(r, density) {
-        val start = with(density) { 24.dp.toPx() }
-        val distance = with(density) { 32.dp.toPx() }
+      LaunchedEffect(r) {
         snapshotFlow {
           if (r.listState.firstVisibleItemIndex == 0) r.listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
         }.collect { offset ->
-          r.onListScrolled(offset, start, distance)
+          r.onListScrolled(offset)
+        }
+      }
+      if (r.largeTitle) {
+        // A title the list left half collapsed snaps to the nearer end (as the classic list and the Compose app bar)
+        val snapSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+        LaunchedEffect(r, snapSpec) {
+          snapshotFlow { r.listState.isScrollInProgress }.collect { scrolling ->
+            if (!scrolling) {
+              // Its own coroutine: a finger taking over cancels the snap, never this effect
+              launch { r.snapTitle(snapSpec) }
+            }
+          }
         }
       }
     }
@@ -170,19 +197,83 @@ private class TgxListPadding(private val r: TgxSettingsRenderer, private val den
 /** The Done button (56dp, 16dp above the navigation bar) plus the 16dp gap between it and the last row. */
 private val FloatingButtonClearance: Dp = 72.dp
 
-/** The page title as the list's first item (XgramM3Bars.LargeTitleDecoration's place): headlineMedium. */
+/**
+ * The page title as the list's first item, where XgramM3Bars.LargeTitleDecoration draws it in the classic list:
+ * displaySmall as SettingsTopAppBar(large = true) (headlineMedium for a page whose hints ask for TITLE_MEDIUM), with the
+ * page's bodyMedium subtitle under it. It fades out over the first 60% of its own height as the list scrolls, while
+ * Telegram X's small title fades in (TgxSettingsRenderer.onListScrolled); the scroll is read in the layer only.
+ */
 @Composable
 internal fun TgxLargeTitle(r: TgxSettingsRenderer) {
   r.langVersion.intValue
   val name = r.controller.name?.toString().orEmpty()
-  Text(
-    name,
-    modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
-    style = MaterialTheme.typography.headlineMedium,
-    color = MaterialTheme.colorScheme.onSurface,
-    maxLines = 2,
-    overflow = TextOverflow.Ellipsis
+  val subtitle = r.hints.largeSubtitle(r.controller)?.toString()?.takeIf { it.isNotEmpty() }
+  val medium = r.titleStyle == XgramM3Bars.TITLE_MEDIUM
+  val type = MaterialTheme.typography
+  val cs = MaterialTheme.colorScheme
+  val fade = remember(r) {
+    Modifier
+      .onSizeChanged { r.titleHeightPx = it.height }
+      .graphicsLayer {
+        val state = r.listState
+        val offset = if (state.firstVisibleItemIndex == 0) state.firstVisibleItemScrollOffset else Int.MAX_VALUE
+        alpha = (1f - r.collapseOf(offset) / TgxSettingsRenderer.TITLE_FADE_SPAN).coerceIn(0f, 1f)
+      }
+  }
+  Column(
+    // The title's last baseline sits where the classic list's does: 64dp of page under the header, 96dp with a subtitle
+    modifier = Modifier.fillMaxWidth().then(fade).padding(top = if (medium) 8.dp else 0.dp, bottom = if (subtitle != null) 24.dp else 12.dp)
+  ) {
+    Text(
+      name,
+      modifier = Modifier.semantics { heading() },
+      style = if (medium) type.headlineMedium else type.displaySmall,
+      color = cs.onSurface,
+      maxLines = 2,
+      overflow = TextOverflow.Ellipsis
+    )
+    if (subtitle != null) {
+      Text(subtitle, style = type.bodyMedium, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+  }
+}
+
+// Shared row content for the pages' hints (TgxPagesBatch1..3)
+
+/**
+ * A chat's avatar as a row's 40dp leading content (the M3 list item's leading avatar): Telegram X's avatar receiver in
+ * a small view, [bind] asks it for the chat (it skips a chat it already shows).
+ */
+@Composable
+internal fun TgxChatAvatar(bind: (XgramR6B5Pages.AvatarView) -> Unit) {
+  AndroidView(
+    factory = { context -> XgramR6B5Pages.AvatarView(context) },
+    modifier = Modifier.size(40.dp),
+    update = { view -> bind(view) },
+    onRelease = { view -> view.destroy() }
   )
+}
+
+/** A row's trailing time or count: labelMedium in onSurfaceVariant, tabular figures. */
+@Composable
+internal fun TgxTrailingLabel(text: String) {
+  Text(
+    text,
+    style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    maxLines = 1
+  )
+}
+
+/** A trailing badge chip: labelSmall with full corners in [container] ("Deleted" in errorContainer). */
+@Composable
+internal fun TgxBadge(text: String, container: Color, content: Color) {
+  Box(
+    modifier = Modifier.heightIn(min = 20.dp).clip(CircleShape).background(container).padding(horizontal = 8.dp, vertical = 2.dp),
+    contentAlignment = Alignment.Center
+  ) {
+    Text(text, style = MaterialTheme.typography.labelSmall, color = content, maxLines = 1)
+  }
 }
 
 /**
@@ -237,6 +328,7 @@ private fun TgxGroupRow(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap, shap
     TgxRowKind.RADIO -> TgxRadioRow(r, row, s, shapes, placed)
     TgxRowKind.CHECKBOX -> TgxCheckboxRow(r, row, s, shapes, placed)
     TgxRowKind.VALUE, TgxRowKind.BUTTON -> TgxValueRow(r, row, s, shapes, placed)
+    TgxRowKind.CHAT -> TgxChatRow(r, row, s, shapes, placed)
     TgxRowKind.SLIDER -> TgxSliderRow(r, row, s, shapes, placed)
     TgxRowKind.HIDDEN -> Unit
     TgxRowKind.HEADER -> SettingsHeader(s.title?.toString().orEmpty(), 0, 8.dp)
@@ -450,20 +542,25 @@ private fun TgxRowIcon(icon: Int, rotated: Boolean, destructive: Boolean, enable
   }
 }
 
-/** A row's text with Telegram X's bold and italic (Spanned), or plain. */
+/**
+ * A row's text with Telegram X's bold and italic (Spanned), or plain; cut with an ellipsis after [maxLines], in
+ * tabular figures when [tabular] (IDs, times). The list item's own style (bodyLarge, bodyMedium) is kept.
+ */
 @Composable
-private fun TgxText(text: CharSequence?, color: Color = Color.Unspecified) {
+private fun TgxText(text: CharSequence?, color: Color = Color.Unspecified, maxLines: Int = Int.MAX_VALUE, tabular: Boolean = false) {
+  val style = if (tabular) LocalTextStyle.current.copy(fontFeatureSettings = "tnum") else LocalTextStyle.current
+  val overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis
   if (text is Spanned) {
     val styled = remember(text) { TgxSpans.styled(text) }
-    Text(styled, color = color)
+    Text(styled, color = color, maxLines = maxLines, overflow = overflow, style = style)
   } else {
-    Text(text?.toString().orEmpty(), color = color)
+    Text(text?.toString().orEmpty(), color = color, maxLines = maxLines, overflow = overflow, style = style)
   }
 }
 
 /** The title's color: red for Telegram X's destructive rows, primary for its text buttons; dimmed rows keep theirs. */
 @Composable
-private fun TgxTitle(s: TgxRowSnap) {
+private fun TgxTitle(s: TgxRowSnap, maxLines: Int = Int.MAX_VALUE) {
   val cs = MaterialTheme.colorScheme
   val color = when {
     s.dimmed -> Color.Unspecified
@@ -471,13 +568,44 @@ private fun TgxTitle(s: TgxRowSnap) {
     s.kind == TgxRowKind.BUTTON -> cs.primary
     else -> Color.Unspecified
   }
-  TgxText(s.title, color)
+  TgxText(s.title, color, maxLines)
 }
 
-/** The value line, in the role of Telegram X's value color (red: error, accent: primary). */
+/**
+ * The value line, in the role of Telegram X's value color (red: error, accent: primary), with the page's line limit
+ * and figures; a shimmer bar while the page is still loading it.
+ */
 private fun supportingOf(s: TgxRowSnap): (@Composable () -> Unit)? {
+  if (s.textLoading) {
+    return TgxShimmerLine
+  }
   val subtitle = s.subtitle ?: return null
-  return { TgxText(subtitle, toneColor(s)) }
+  return { TgxText(subtitle, toneColor(s), s.subtitleLines, s.tabular) }
+}
+
+private val TgxShimmerLine: @Composable () -> Unit = { TgxShimmer() }
+
+/**
+ * A supporting line that is still loading: a 12dp bar with full corners in onSurfaceVariant whose opacity breathes
+ * (drawn in the draw phase only); still with Reduce motion.
+ */
+@Composable
+private fun TgxShimmer() {
+  val base = MaterialTheme.colorScheme.onSurfaceVariant
+  val still = remember { XgramMotion.reduce() }
+  val pulse = if (still) null else rememberInfiniteTransition(label = "tgxShimmer").animateFloat(
+    initialValue = .08f,
+    targetValue = .20f,
+    animationSpec = infiniteRepeatable(tween(durationMillis = 900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+    label = "tgxShimmerAlpha"
+  )
+  Box(
+    modifier = Modifier
+      .padding(vertical = 4.dp)
+      .size(width = 168.dp, height = 12.dp)
+      .clip(CircleShape)
+      .drawBehind { drawRect(base.copy(alpha = pulse?.value ?: .14f)) }
+  )
 }
 
 @Composable
@@ -495,6 +623,32 @@ private fun toneColor(s: TgxRowSnap): Color {
 /** A row's progress (a download, a request): Telegram X's spinner as an M3 Expressive loading indicator. */
 private val TgxBusy: @Composable () -> Unit = {
   ContainedLoadingIndicator(modifier = Modifier.size(36.dp))
+}
+
+/**
+ * The trailing content of a row: the busy indicator, the page's progress ring ([TgxRowText.progress]) or what the page
+ * puts there.
+ */
+private fun trailingOf(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap): (@Composable () -> Unit)? {
+  if (s.busy) {
+    return TgxBusy
+  }
+  val progress = s.progress
+  if (progress != -1f) {
+    return { TgxProgressRing(progress) }
+  }
+  val view = row.holder?.itemView ?: return null
+  return r.hints.trailing(r.controller, row.item, view)
+}
+
+/** A download's progress as a 24dp M3E wavy ring; indeterminate while it is unknown (NaN), an install. */
+@Composable
+private fun TgxProgressRing(progress: Float) {
+  if (progress.isNaN()) {
+    CircularWavyProgressIndicator(modifier = Modifier.size(24.dp))
+  } else {
+    CircularWavyProgressIndicator(progress = { progress }, modifier = Modifier.size(24.dp))
+  }
 }
 
 /**
@@ -578,8 +732,8 @@ private fun TgxRadioRow(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap, shap
     modifier = modifier.semantics { role = Role.RadioButton },
     radio = true,
     leadingContent = { RadioButton(selected = s.checked, onClick = null, enabled = enabled, colors = tgxRadioColors(s)) },
-    // A language pack downloading, a pack being applied.
-    trailingContent = if (s.busy) TgxBusy else null
+    // A language pack downloading, a pack being applied; else the page's preview (an emoji set's)
+    trailingContent = trailingOf(r, row, s)
   ) {
     TgxTitle(s)
   }
@@ -620,9 +774,23 @@ private fun TgxCheckboxRow(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap, s
 @Composable
 private fun TgxValueRow(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap, shapes: ListItemShapes, modifier: Modifier) {
   val view = row.holder?.itemView
-  val trailing = if (s.busy) TgxBusy else if (view != null) r.hints.trailing(row.item, view) else null
-  TgxListItem(r, row, s, shapes, modifier, leadingContent = leadingOf(s), trailingContent = trailing) {
+  val leading = (if (view != null) r.hints.leading(r.controller, row.item, view) else null) ?: leadingOf(s)
+  TgxListItem(r, row, s, shapes, modifier, leadingContent = leading, trailingContent = trailingOf(r, row, s)) {
     TgxTitle(s)
+  }
+}
+
+/**
+ * A chat, or a message of one ([TgxRowKind.CHAT]): the page's leading avatar (the row's icon as a tonal circle
+ * without one), a one-line bodyLarge headline, the supporting text with the page's line limit, the page's trailing
+ * date or badge. Taps and long presses reach the real row.
+ */
+@Composable
+private fun TgxChatRow(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap, shapes: ListItemShapes, modifier: Modifier) {
+  val view = row.holder?.itemView
+  val leading = (if (view != null) r.hints.leading(r.controller, row.item, view) else null) ?: leadingOf(s)
+  TgxListItem(r, row, s, shapes, modifier, leadingContent = leading, trailingContent = trailingOf(r, row, s)) {
+    TgxTitle(s, maxLines = 1)
   }
 }
 

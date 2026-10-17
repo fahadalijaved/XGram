@@ -16,6 +16,9 @@ import android.graphics.Rect
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -76,6 +79,10 @@ class TgxSettingsRenderer private constructor(
     /** Rows of a group share a content type per view type, so the list reuses a row only for one alike. */
     internal const val TYPE_ROW_BASE = 100_000
 
+    /** The small title comes in over the last 60% of the large title's collapse, the large one is gone by 60%. */
+    internal const val TITLE_FADE_SPAN = .6f
+    internal const val TITLE_FADE_START = 1f - TITLE_FADE_SPAN
+
     /**
      * Draws [c]'s list in Compose when allowed, else returns null and changes nothing. [index]: where the Compose list
      * goes in [parent] (-1: right above the list). Call once the adapter is set.
@@ -105,6 +112,12 @@ class TgxSettingsRenderer private constructor(
   internal val composeHost = TgxComposeHost(this)
   internal val listState = LazyListState()
   internal val largeTitle: Boolean = hints.largeTitle(controller)
+  /** XgramM3Bars.TITLE_LARGE (displaySmall, as the Compose pages and the classic list) or TITLE_MEDIUM. */
+  internal val titleStyle: Int = hints.titleStyle(controller)
+  /** The large title's height (its list item), measured; the small title and the snap use it as the collapse range. */
+  internal var titleHeightPx = 0
+  /** A form page: the column is at most 480dp wide ([TgxPageHints.formWidth]). */
+  internal val formWidth: Boolean = hints.formWidth(controller)
   /** Telegram X's floating Done button sits over the list's end (EditBaseController): the list leaves room for it. */
   internal val floatingClearance: Boolean = controller is EditBaseController<*>
 
@@ -376,7 +389,15 @@ class TgxSettingsRenderer private constructor(
     val view = holder.itemView
     val kind = row.kind
     val partial = (kind == TgxRowKind.SWITCH || kind == TgxRowKind.SPLIT_SWITCH) && hints.isPartial(controller, row.item, view)
-    return TgxRead.read(kind, view, row.item, row.holderType, partial)
+    val snap = TgxRead.read(kind, view, row.item, row.holderType, partial)
+    if (kind == TgxRowKind.VALUE || kind == TgxRowKind.RADIO || kind == TgxRowKind.CHAT) {
+      // The page's own wording of the row (a sender as the headline, a two-line preview, IDs in tabular figures)
+      val text = hints.text(controller, row.item, view)
+      if (text != null) {
+        return TgxRead.withText(snap, text)
+      }
+    }
+    return snap
   }
 
   private fun reread(row: TgxRow) {
@@ -741,15 +762,53 @@ class TgxSettingsRenderer private constructor(
     return -1
   }
 
-  /** The list scrolled: the large title fades Telegram X's small title in, the header lifts. */
-  internal fun onListScrolled(offset: Int, titleStart: Float, titleDistance: Float) {
+  /**
+   * The list scrolled: the large title crossfades with Telegram X's small title over the title's own height (as
+   * XgramM3Bars.LargeTitleDecoration and SettingsTopAppBar: the small one fades in over the last 60%), the header lifts.
+   */
+  internal fun onListScrolled(offset: Int) {
     if (destroyed) {
       return
     }
     if (largeTitle) {
-      HeaderView.xgramSetTitleAlpha(controller, if (offset == Int.MAX_VALUE) 1f else (offset - titleStart) / titleDistance)
+      HeaderView.xgramSetTitleAlpha(controller, if (offset == Int.MAX_VALUE) 1f else (collapseOf(offset) - TITLE_FADE_START) / TITLE_FADE_SPAN)
     }
     XgramMotion.updateScrollLink(controller, offset, offset > 0)
+  }
+
+  /**
+   * The list stopped with the large title half collapsed: it goes to the nearer end on [spec] (the fast spatial
+   * spring), at once with Reduce motion. A page too short to collapse stays where the finger left it.
+   */
+  internal suspend fun snapTitle(spec: AnimationSpec<Float>) {
+    val state = listState
+    val range = titleHeightPx
+    if (destroyed || !largeTitle || range <= 0 || state.firstVisibleItemIndex != 0) {
+      return
+    }
+    val offset = state.firstVisibleItemScrollOffset
+    if (offset <= 0 || offset >= range) {
+      return
+    }
+    val target = if (offset * 2 >= range) range else 0
+    if (target > offset && !state.canScrollForward) {
+      return
+    }
+    val delta = (target - offset).toFloat()
+    if (XgramMotion.reduce()) {
+      state.scrollBy(delta)
+    } else {
+      state.animateScrollBy(delta, spec)
+    }
+  }
+
+  /** How far the large title has collapsed (0..1) at [offset] px of scroll into the list's first item. */
+  internal fun collapseOf(offset: Int): Float {
+    if (offset == Int.MAX_VALUE) {
+      return 1f
+    }
+    val range = titleHeightPx
+    return if (range > 0) (offset.toFloat() / range).coerceIn(0f, 1f) else 0f
   }
 
   // Page events (from the controller's hooks)

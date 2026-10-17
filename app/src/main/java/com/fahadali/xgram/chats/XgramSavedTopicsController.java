@@ -77,11 +77,22 @@ public final class XgramSavedTopicsController extends RecyclerViewController<Voi
     List<ListItem> items = new ArrayList<>();
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     if (topics.isEmpty()) {
-      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loading ? R.string.LoadingInformation : R.string.XgramSavedByChatEmpty));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the loading indicator, then the empty state (an icon on a soft burst)
+        items.add(loading ? new ListItem(ListItem.TYPE_PROGRESS) : new ListItem(ListItem.TYPE_ICONIZED_EMPTY, 0, R.drawable.baseline_bookmark_24, R.string.XgramSavedByChatEmpty));
+      } else {
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, loading ? R.string.LoadingInformation : R.string.XgramSavedByChatEmpty));
+      }
     } else {
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       for (TdApi.SavedMessagesTopic topic : topics) {
-        items.add(new ListItem(ListItem.TYPE_CHAT_SMALL, R.id.btn_xgramSavedTopic).setData(wrap(topic)).setLongId(topic.id));
+        ListItem item = new ListItem(ListItem.TYPE_CHAT_SMALL, R.id.btn_xgramSavedTopic).setData(wrap(topic)).setLongId(topic.id);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: what the Compose row shows (TgxChatRowsHints): the last message and its date
+          item.setStringValue(preview(topic.lastMessage));
+          item.setIntValue(topic.lastMessage != null ? topic.lastMessage.date : 0);
+        }
+        items.add(item);
       }
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     }

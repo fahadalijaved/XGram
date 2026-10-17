@@ -108,10 +108,13 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     Background.instance().post(() -> {
       List<Object> loaded = new ArrayList<>();
       if (XgramExpressive.isEnabled()) {
-        loaded.add(EXPRESSIVE_NOTE);
+        // XGram M3E (round 6): the colors in use first (the wallpaper's), the way out of them, then the themes for
+        // when Expressive design is off under one supporting line
+        loaded.add(XGRAM_WALLPAPER);
         if (XgramSettingDeps.themesLocked()) {
           loaded.add(XGRAM_TURN_OFF); // XGram M3E: the way out of the lock, Appearance's own confirm
         }
+        loaded.add(EXPRESSIVE_NOTE);
       }
       loaded.add(R.string.XgramIconThemes);
       addThemes(context, loaded, XgramThemePack.ICON_KEYS);
@@ -155,8 +158,11 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
   private boolean xgram;
   private static final Object XGRAM_SELECTION = new Object();
   private static final Object XGRAM_TURN_OFF = new Object();
+  private static final Object XGRAM_WALLPAPER = new Object();
   private static final float XGRAM_MIN_CELL = 168f;
-  private static final int XGRAM_TYPE_TURN_OFF = 4;
+  private static final int XGRAM_TYPE_TURN_OFF = 4, XGRAM_TYPE_WALLPAPER = 5;
+  /** The cards' padding: the previews are clipped to the card's corner minus it (8dp at rest, 20dp selected). */
+  private static final float XGRAM_CARD_PADDING = 8f;
 
   private void xgramCreateView (Context context, CustomRecyclerView recyclerView) {
     final GridLayoutManager manager = new GridLayoutManager(context, XgramR5Security.spanCount(Screen.currentWidth(), XGRAM_MIN_CELL, 2));
@@ -184,14 +190,78 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
   private View xgramNewTurnOff (Context context) {
     android.widget.FrameLayout frame = new android.widget.FrameLayout(context);
     frame.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-    frame.setPadding(Screen.dp(16f), Screen.dp(4f), Screen.dp(16f), Screen.dp(8f));
-    XgramM3Sheets.FilledButton button = new XgramM3Sheets.FilledButton(context, XgramExpressive.SECONDARY_CONTAINER, XgramExpressive.ON_SECONDARY_CONTAINER);
+    frame.setPadding(Screen.dp(16f), Screen.dp(8f), Screen.dp(16f), 0);
+    // The list's tonal pill (40dp in a 48dp target, full corners morphing on press, labelLarge)
+    XgramR5Lists.PillButton button = new XgramR5Lists.PillButton(context);
+    button.setPrimary(false);
     button.setText(Lang.getString(R.string.XgramR5SecurityTurnOffExpressive));
     button.setOnClickListener(v -> xgramConfirmTurnOff());
-    android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f), Gravity.CENTER_HORIZONTAL);
-    params.topMargin = params.bottomMargin = Screen.dp(4f);
-    frame.addView(button, params);
+    frame.addView(button, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(48f), Gravity.CENTER_HORIZONTAL));
+    addThemeInvalidateListener(button);
     return frame;
+  }
+
+  /**
+   * The colors in use: a full-width selectable card, always checked (secondaryContainer, the check badge on the
+   * preview), with a small chat drawn in the wallpaper's roles and "Wallpaper colors" next to it.
+   */
+  private static final class XgramWallpaperCard extends LinearLayout {
+    final XgramR6B5Pages.WallpaperPreview preview;
+    final XgramR5Security.SelectableCard card;
+
+    XgramWallpaperCard (Context context) {
+      super(context);
+      setOrientation(HORIZONTAL);
+      setGravity(Gravity.CENTER_VERTICAL);
+      setLayoutDirection(Lang.rtl() ? LAYOUT_DIRECTION_RTL : LAYOUT_DIRECTION_LTR);
+      final int padding = Screen.dp(XGRAM_CARD_PADDING);
+      setPadding(padding, padding, padding, padding);
+      card = XgramR5Security.attachSelectableCard(this);
+      card.setChecked(true, false);
+      preview = new XgramR6B5Pages.WallpaperPreview(context);
+      preview.setCard(card, padding);
+      addView(preview, new LayoutParams(Screen.dp(136f), Screen.dp(132f)));
+
+      LinearLayout texts = new LinearLayout(context);
+      texts.setOrientation(VERTICAL);
+      TextView title = new XgramR5Lists.RoleText(context, XgramExpressive.TS_TITLE_M, XgramExpressive.ON_SECONDARY_CONTAINER);
+      title.setText(Lang.getString(R.string.XgramR6B5WallpaperColors));
+      texts.addView(title);
+      TextView supporting = new XgramR5Lists.RoleText(context, XgramExpressive.TS_BODY_M, XgramExpressive.ON_SECONDARY_CONTAINER);
+      supporting.setText(Lang.getString(R.string.XgramR6B5WallpaperColorsInfo));
+      LayoutParams supportingParams = new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      supportingParams.topMargin = Screen.dp(4f);
+      texts.addView(supporting, supportingParams);
+      LayoutParams textsParams = new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+      textsParams.setMarginStart(Screen.dp(16f));
+      textsParams.setMarginEnd(Screen.dp(8f));
+      addView(texts, textsParams);
+
+      RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      params.leftMargin = params.rightMargin = Screen.dp(16f);
+      params.topMargin = Screen.dp(8f);
+      setLayoutParams(params);
+      setClickable(false);
+      setContentDescription(Lang.getString(R.string.XgramR6B5WallpaperColors) + ". " + Lang.getString(R.string.XgramR6B5WallpaperColorsInfo));
+      setWillNotDraw(false);
+    }
+
+    @Override
+    public void invalidateDrawable (@NonNull android.graphics.drawable.Drawable drawable) {
+      super.invalidateDrawable(drawable);
+      if (preview != null) {
+        preview.invalidate(); // the clip follows the card's corner
+      }
+    }
+
+    @Override
+    protected void dispatchDraw (Canvas c) {
+      super.dispatchDraw(c);
+      // The check badge at the preview's top end
+      final float inset = Screen.dpf(XgramR5Security.BADGE_SIZE / 2f + 6f);
+      final float cx = Lang.rtl() ? preview.getLeft() + inset : preview.getRight() - inset;
+      card.drawBadge(c, cx, preview.getTop() + inset);
+    }
   }
 
   private View xgramNewAllThemes (Context context) {
@@ -240,27 +310,35 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     chevron.setLayoutParams(chevronParams);
   }
 
-  /** The preview clipped to CORNER_M (the path is built when the size changes, not per frame). */
+  /**
+   * The preview clipped to its card's corner minus the card's padding (8dp at rest, 20dp selected), following the
+   * card's corner spring; the path is rebuilt only when that corner or the size changes, not per frame.
+   */
   private static final class XgramPreviewView extends PreviewView {
     private final android.graphics.Path clip = new android.graphics.Path();
     private final RectF clipRect = new RectF();
+    private final XgramR5Security.SelectableCard card;
+    private float clipCorner = -1f;
+    private int clipWidth = -1, clipHeight = -1;
 
-    XgramPreviewView (Context context) {
+    XgramPreviewView (Context context, XgramR5Security.SelectableCard card) {
       super(context);
+      this.card = card;
       setXgram();
     }
 
     @Override
-    protected void onSizeChanged (int w, int h, int oldw, int oldh) {
-      super.onSizeChanged(w, h, oldw, oldh);
-      clip.rewind();
-      clipRect.set(0, 0, w, h);
-      float corner = Math.min(Screen.dpf(XgramExpressive.CORNER_M), Math.min(w, h) / 2f);
-      clip.addRoundRect(clipRect, corner, corner, android.graphics.Path.Direction.CW);
-    }
-
-    @Override
     android.graphics.Path xgramClip () {
+      final int w = getWidth(), h = getHeight();
+      final float corner = Math.max(0f, Math.min(card.cornerPx() - Screen.dpf(XGRAM_CARD_PADDING), Math.min(w, h) / 2f));
+      if (corner != clipCorner || w != clipWidth || h != clipHeight) {
+        clipCorner = corner;
+        clipWidth = w;
+        clipHeight = h;
+        clip.rewind();
+        clipRect.set(0, 0, w, h);
+        clip.addRoundRect(clipRect, corner, corner, android.graphics.Path.Direction.CW);
+      }
       return clip;
     }
   }
@@ -271,13 +349,15 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     final TextView name;
     final XgramR5Security.SelectableCard card;
 
+    private boolean locked;
+
     XgramCell (Context context) {
       super(context);
       setOrientation(VERTICAL);
       setGravity(Gravity.CENTER_HORIZONTAL);
-      setPadding(Screen.dp(8f), Screen.dp(8f), Screen.dp(8f), Screen.dp(12f));
+      setPadding(Screen.dp(XGRAM_CARD_PADDING), Screen.dp(XGRAM_CARD_PADDING), Screen.dp(XGRAM_CARD_PADDING), Screen.dp(12f));
       card = XgramR5Security.attachSelectableCard(this);
-      preview = new XgramPreviewView(context);
+      preview = new XgramPreviewView(context, card);
       preview.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
       addView(preview, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(132f)));
       name = new TextView(context);
@@ -292,6 +372,7 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     }
 
     void bind (Item item, boolean selected, boolean locked, boolean animated) {
+      this.locked = locked;
       preview.set(item.theme, false);
       name.setText(item.theme.name);
       setContentDescription(item.theme.name);
@@ -300,15 +381,27 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
       setSelected(selected);
       setEnabled(!locked);
       setClickable(!locked);
-      setAlpha(locked ? XgramExpressive.DISABLED_CONTENT : 1f);
-      name.setTextColor(XgramExpressive.color(selected ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE));
+      // Locked (Expressive design is on): dimmed once, the content at .38 on its card (the supporting line above says
+      // when they apply), and no check badge: the wallpaper colors are the ones in use
+      setAlpha(1f);
+      preview.setAlpha(locked ? XgramExpressive.DISABLED_CONTENT : 1f);
+      final int nameColor = XgramExpressive.color(selected ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE);
+      name.setTextColor(locked ? XgramExpressive.withAlpha(nameColor, XgramExpressive.DISABLED_CONTENT) : nameColor);
       invalidate();
+    }
+
+    @Override
+    public void invalidateDrawable (@NonNull android.graphics.drawable.Drawable drawable) {
+      super.invalidateDrawable(drawable);
+      if (preview != null) {
+        preview.invalidate(); // the preview's clip follows the card's corner spring
+      }
     }
 
     @Override
     protected void dispatchDraw (Canvas c) {
       super.dispatchDraw(c);
-      if (card.badgeFactor() > 0f) {
+      if (card.badgeFactor() > 0f && !locked) {
         final float inset = Screen.dpf(XgramR5Security.BADGE_SIZE / 2f + 6f);
         final float cx = Lang.rtl() ? preview.getLeft() + inset : preview.getRight() - inset;
         card.drawBadge(c, cx, preview.getTop() + inset);
@@ -437,12 +530,17 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
       if (row == XGRAM_TURN_OFF) {
         return XGRAM_TYPE_TURN_OFF;
       }
+      if (row == XGRAM_WALLPAPER) {
+        return XGRAM_TYPE_WALLPAPER;
+      }
       return row instanceof Item ? 0 : row == FOOTER ? 1 : row == EXPRESSIVE_NOTE ? 3 : 2;
     }
 
     private Holder xgramCreateHolder (@NonNull ViewGroup parent, int viewType) {
       Context context = parent.getContext();
       switch (viewType) {
+        case XGRAM_TYPE_WALLPAPER:
+          return new Holder(new XgramWallpaperCard(context));
         case XGRAM_TYPE_TURN_OFF:
           return new Holder(xgramNewTurnOff(context));
         case 3:
@@ -466,11 +564,12 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
 
     private void xgramBind (@NonNull Holder holder, int position, boolean animated) {
       Object row = rows.get(position);
-      if (row == XGRAM_TURN_OFF) {
-        return; // the filled button reads its roles when drawn
+      if (row == XGRAM_TURN_OFF || row == XGRAM_WALLPAPER) {
+        return; // the pill and the card read their roles when drawn
       }
       if (row == EXPRESSIVE_NOTE) {
-        XgramR5Security.bindDescription((TextView) holder.itemView, Lang.getString(R.string.XgramExpressiveThemesNote));
+        // One supporting line over the themes, which apply when Expressive design is off
+        XgramR5Security.bindDescription((TextView) holder.itemView, Lang.getString(R.string.XgramR6B5ThemesOff));
         return;
       }
       if (row == FOOTER) {

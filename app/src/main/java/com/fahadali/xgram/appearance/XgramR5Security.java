@@ -67,7 +67,7 @@ public final class XgramR5Security {
 
   public static final float GUTTER = 16f;
 
-  /** A titleSmall section header in primary: 16dp sides, 24dp above (8dp when it opens the page), 8dp below. */
+  /** A titleSmall section header in primary: 16dp sides, 20dp above (8dp when it opens the page), 8dp below (Compose SettingsHeader). */
   public static TextView newSectionHeader (Context context) {
     TextView title = new TextView(context);
     XgramExpressive.applyText(title, XgramExpressive.TS_TITLE_S, false);
@@ -83,10 +83,10 @@ public final class XgramR5Security {
     }
     title.setTextColor(XgramExpressive.color(XgramExpressive.PRIMARY));
     title.setGravity(Lang.rtl() ? android.view.Gravity.RIGHT : android.view.Gravity.LEFT);
-    title.setPadding(Screen.dp(GUTTER), Screen.dp(first ? 8f : 24f), Screen.dp(GUTTER), Screen.dp(8f));
+    title.setPadding(Screen.dp(GUTTER), Screen.dp(first ? 8f : 20f), Screen.dp(GUTTER), Screen.dp(8f));
   }
 
-  /** A bodyMedium description in onSurfaceVariant with the 16dp page gutter. */
+  /** A bodyMedium description in onSurfaceVariant with the 16dp page gutter, 12dp above and 4dp below (Compose SettingsDescription). */
   public static TextView newDescription (Context context) {
     TextView text = new TextView(context);
     XgramExpressive.applyText(text, XgramExpressive.TS_BODY_M, false);
@@ -102,7 +102,7 @@ public final class XgramR5Security {
     }
     text.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
     text.setGravity(Lang.rtl() ? android.view.Gravity.RIGHT : android.view.Gravity.LEFT);
-    text.setPadding(Screen.dp(GUTTER), Screen.dp(8f), Screen.dp(GUTTER), Screen.dp(8f));
+    text.setPadding(Screen.dp(GUTTER), Screen.dp(12f), Screen.dp(GUTTER), Screen.dp(4f));
   }
 
   // Adaptive grid

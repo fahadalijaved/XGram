@@ -77,9 +77,19 @@ public final class XgramR5SheetsInfo {
       return this;
     }
 
+    int badgeContainerRole = XgramExpressive.TERTIARY_CONTAINER, badgeContentRole = XgramExpressive.ON_TERTIARY_CONTAINER;
+
     /** A labelSmall badge with full corners in tertiaryContainer after the supporting line ("Current"). */
     public Row badge (@Nullable CharSequence badge) {
       this.badge = badge;
+      return this;
+    }
+
+    /** {@link #badge(CharSequence)} in other roles: "Deleted" in errorContainer, "Edited 2×" in secondaryContainer. */
+    public Row badge (@Nullable CharSequence badge, int containerRole, int contentRole) {
+      this.badge = badge;
+      this.badgeContainerRole = containerRole;
+      this.badgeContentRole = contentRole;
       return this;
     }
 
@@ -274,12 +284,12 @@ public final class XgramR5SheetsInfo {
       if (!TextUtils.isEmpty(row.badge)) {
         TextView badge = new NoScrollTextView(context);
         XgramExpressive.applyText(badge, XgramExpressive.TS_LABEL_S, false);
-        badge.setTextColor(XgramExpressive.color(XgramExpressive.ON_TERTIARY_CONTAINER));
+        badge.setTextColor(XgramExpressive.color(row.badgeContentRole));
         badge.setGravity(Gravity.CENTER);
         badge.setSingleLine(true);
         badge.setPadding(Screen.dp(8f), 0, Screen.dp(8f), 0);
         badge.setText(row.badge);
-        XgramR5Sheets.applyCard(badge, XgramExpressive.TERTIARY_CONTAINER, XgramExpressive.CORNER_FULL);
+        XgramR5Sheets.applyCard(badge, row.badgeContainerRole, XgramExpressive.CORNER_FULL);
         LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(20f));
         if (!TextUtils.isEmpty(row.supporting)) {
           badgeParams.setMarginStart(Screen.dp(8f));

@@ -72,6 +72,9 @@ public class SettingsLogOutController extends RecyclerViewController<Integer> im
 
   @Override
   public View getCustomHeaderCell () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return null; // XGram M3E: the large title with "Alternative options" under it, not the two-line header
+    }
     return headerCell;
   }
 
@@ -95,6 +98,7 @@ public class SettingsLogOutController extends RecyclerViewController<Integer> im
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         @IdRes int itemId = item.getId();
         view.setIconColorId(itemId == R.id.btn_logout || itemId == R.id.btn_deleteAccount ? ColorId.iconNegative : ColorId.NONE);
+        xgramBindErrorIcon(itemId, view);
       }
 
       @Override
@@ -153,6 +157,32 @@ public class SettingsLogOutController extends RecyclerViewController<Integer> im
     adapter.setItems(items, false);
 
     recyclerView.setAdapter(adapter);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the classic list's large title carries the header's second line (the Compose rows: TgxComposePages)
+      com.fahadali.xgram.appearance.XgramM3Bars.setLargeTitleSubtitle(recyclerView, Lang.getString(R.string.SignOutAlt));
+    }
+  }
+
+  // XGram M3E: Log out and Delete account as error rows in the classic list: an errorContainer icon circle over the
+  // row's icon, the label in error (textNegative). The Compose rows draw the same from textNegative (TgxComposePages).
+
+  private com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier xgramLogOutIcon, xgramDeleteIcon;
+
+  private void xgramBindErrorIcon (int itemId, SettingView view) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return;
+    }
+    if (xgramLogOutIcon == null) {
+      xgramLogOutIcon = new com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier(R.drawable.baseline_logout_24, com.fahadali.xgram.appearance.XgramM3Sessions.ICON_TOP_SETTING);
+      xgramDeleteIcon = new com.fahadali.xgram.appearance.XgramM3Sessions.ErrorIconModifier(R.drawable.baseline_delete_alert_24, com.fahadali.xgram.appearance.XgramM3Sessions.ICON_TOP_SETTING);
+    }
+    view.removeDrawModifier(xgramLogOutIcon);
+    view.removeDrawModifier(xgramDeleteIcon);
+    if (itemId == R.id.btn_logout) {
+      view.addDrawModifier(xgramLogOutIcon, false);
+    } else if (itemId == R.id.btn_deleteAccount) {
+      view.addDrawModifier(xgramDeleteIcon, false);
+    }
   }
 
   @Override
