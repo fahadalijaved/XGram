@@ -162,8 +162,9 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
   private RecyclerView gifsView;
 
   private int xgramTopClearance;
+  private @Nullable com.fahadali.xgram.appearance.XgramScrollIndicator xgramStickersIndicator, xgramGifsIndicator;
 
-  /** XGram M3E: extra room at the top of the sticker and GIF grids for the emoji panel's floating toolbar, in px. */
+  /** XGram M3E: extra room at the top of the sticker and GIF grids for the emoji panel's switch row, in px. */
   public void xgramSetTopClearance (int clearance) {
     final boolean changed = this.xgramTopClearance != clearance;
     this.xgramTopClearance = clearance;
@@ -175,6 +176,21 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
     }
     if (changed && gifsView != null) {
       gifsView.invalidateItemDecorations();
+    }
+    if (changed) {
+      // The scroll indicators start below the tabs and the switch's row
+      if (xgramStickersIndicator != null) {
+        xgramStickersIndicator.setTopInset(EmojiLayout.getHeaderSize() + clearance);
+        if (stickersController.recyclerView != null) {
+          stickersController.recyclerView.invalidate();
+        }
+      }
+      if (xgramGifsIndicator != null) {
+        xgramGifsIndicator.setTopInset(EmojiLayout.getHeaderSize() + clearance);
+        if (gifsView != null) {
+          gifsView.invalidate();
+        }
+      }
     }
   }
 
@@ -376,9 +392,9 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
       setEnableStickersAnimations(true);
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram: a Material 3 scroll indicator below the section tabs
-        com.fahadali.xgram.appearance.XgramScrollIndicator.install(stickersController.recyclerView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
+        xgramStickersIndicator = com.fahadali.xgram.appearance.XgramScrollIndicator.install(stickersController.recyclerView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
           .setIgnoreScrollbarFlag(true)
-          .setTopInset(EmojiLayout.getHeaderSize());
+          .setTopInset(EmojiLayout.getHeaderSize() + xgramTopClearance);
       }
       stickersController.recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
         @Override
@@ -472,15 +488,15 @@ public class EmojiMediaListController extends ViewController<EmojiLayout> implem
       });
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram: a Material 3 scroll indicator below the section tabs
-        com.fahadali.xgram.appearance.XgramScrollIndicator.install(gifsView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
+        xgramGifsIndicator = com.fahadali.xgram.appearance.XgramScrollIndicator.install(gifsView, com.fahadali.xgram.appearance.XgramScrollIndicator.MODE_VISUAL)
           .setIgnoreScrollbarFlag(true)
-          .setTopInset(EmojiLayout.getHeaderSize());
+          .setTopInset(EmojiLayout.getHeaderSize() + xgramTopClearance);
       }
       gifsView.addItemDecoration(new RecyclerView.ItemDecoration() {
         @Override
         public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
           int position = parent.getChildAdapterPosition(view);
-          outRect.top = manager.isFirstRow(position) ? Screen.dp(4f) + EmojiLayout.getHeaderSize() + xgramTopClearance : 0; // XGram: clear of the floating toolbar
+          outRect.top = manager.isFirstRow(position) ? Screen.dp(4f) + EmojiLayout.getHeaderSize() + xgramTopClearance + (xgramTopClearance > 0 ? Screen.dp(2f) : 0) : 0; // XGram: clear of the switch's row, level with the sticker grid
           outRect.right = manager.isLastInRow(position) ? 0 : Screen.dp(3f);
           outRect.bottom = Screen.dp(3f);
         }

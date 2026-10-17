@@ -415,17 +415,27 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
     if (xgramGroup) {
       xgramTypeGroup = new com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup(getContext());
-      xgramTypeGroup.setCallback(this::xgramOnTypeSelected);
-      // Centred just under the section tabs, floating over the top of the grids
-      FrameLayoutFix.LayoutParams groupParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP);
-      groupParams.topMargin = headerSize + Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TOP_GAP_DP);
+      xgramTypeGroup.setCallback(new com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.Callback() {
+        @Override
+        public void onEmojiTypeSelected (int type) {
+          xgramOnTypeSelected(type);
+        }
+
+        @Override
+        public void onEmojiTypeLongPressed (int type, @NonNull android.graphics.Rect bounds) {
+          // Only where the segments show no labels (not the row at these widths)
+        }
+      });
+      // A full-width row right under the section tabs, over the top of the grids
+      FrameLayoutFix.LayoutParams groupParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.ROW_HEIGHT_DP), Gravity.TOP);
+      groupParams.topMargin = headerSize;
       xgramTypeGroup.setLayoutParams(groupParams);
       if (themeProvider != null) {
         themeProvider.addThemeInvalidateListener(xgramTypeGroup);
       }
       if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-        // The tabs draw over the toolbar (raised past its elevation, without a shadow of their own), so it hides by
-        // sliding up behind them
+        // The tabs draw over the switch's row (raised, without a shadow of their own), so it hides by sliding up
+        // behind them
         headerView.setOutlineProvider(null);
         headerView.setTranslationZ(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3) + Screen.dp(1f));
       }
@@ -488,8 +498,8 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   private boolean xgramThemeListener;
 
-  // XGram M3E: Emoji / Stickers / GIFs as a floating toolbar (com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup),
-  // centred at the top just under the section tabs, over the grids. It moves up with the tabs as they hide, and
+  // XGram M3E: Emoji / Stickers / GIFs as a connected button group (com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup)
+  // in a full-width row right under the section tabs, over the grids. It moves up with the tabs as they hide, and
   // hides itself on scroll down and comes back on scroll up or at the top of a grid (its own spring). The grids start
   // that much lower (their top spacer, MediaStickersAdapter.xgramSetTopClearance, and the GIF grid's first row).
 
@@ -1590,6 +1600,9 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   public void onPageScrolled (int position, float positionOffset, int positionOffsetPixels) {
     positionOffset = ViewPager.clampPositionOffset(positionOffset);
     setCurrentPageFactor((float) position + positionOffset);
+    if (xgramTypeGroup != null && xgramDragFollow) {
+      xgramTypeGroup.followPages(currentPageFactor, xgramMediaPageType()); // XGram: the pill follows the finger
+    }
 
     if (affectHeight) {
       float factor = fromHeightHideFactor + Math.abs(fromPageFactor - currentPageFactor) * heightFactorDiff;
@@ -1649,12 +1662,16 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       // XGram: a finger takes over from a switch tap; at rest, a tap's target settles or the pill follows the page
       if (state == ViewPager.SCROLL_STATE_DRAGGING) {
         xgramClearPending("drag");
+        xgramDragFollow = true;
       } else if (state == ViewPager.SCROLL_STATE_IDLE) {
         if (xgramResetOnIdle) {
           xgramResetOnIdle = false;
           resetScrollState(false);
         }
-        if (xgramPendingType != -1) {
+        if (xgramDragFollow) {
+          xgramDragFollow = false;
+          xgramTypeGroup.endFollow(xgramContentType());
+        } else if (xgramPendingType != -1) {
           xgramCheckPendingSettled(true);
         } else {
           xgramUpdateTypeGroup(true);
@@ -1795,6 +1812,12 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       if (pager != null) {
         pager.checkRtl();
       }
+      if (xgramTypeGroup != null) {
+        requestLayout(); // XGram: the switch's placement follows the direction
+      }
+    }
+    if (xgramTypeGroup != null) {
+      xgramTypeGroup.onLanguageChanged(); // XGram: its labels and their fit
     }
   }
 
