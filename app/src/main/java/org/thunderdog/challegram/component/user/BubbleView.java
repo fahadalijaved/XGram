@@ -166,7 +166,10 @@ public class BubbleView implements AttachDelegate, Destroyable {
 
   private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
   private static final float XGRAM_AVATAR = 24f, XGRAM_AVATAR_INSET = 4f, XGRAM_GAP = 8f, XGRAM_CLOSE = 18f;
-  private static @Nullable android.graphics.drawable.Drawable xgramCloseIcon;
+  // The close icon is this chip's own drawable, not one shared by every chip: each chip draws it at its own alpha (a chip
+  // coming in or going out fades), and a VectorDrawable keeps the alpha it was given last for every draw of that frame
+  // (see XgramIconCrossfade), so with one shared drawable every chip's close icon blinked while any chip faded.
+  private @Nullable android.graphics.drawable.Drawable xgramCloseIcon;
   private @Nullable android.graphics.Paint xgramIconPaint;
   private int xgramIconColor;
 

@@ -260,6 +260,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     final Drawable xgramCheck = xgramChoice ? Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_check_24)) : null;
     final int lockEndOffset = Screen.dp(xgramM3Layout ? 12 + 16 : 17 + 16);
     final Drawable finalIcon = menuItem.iconResId != 0 ? Drawables.get(getResources(), menuItem.iconResId) : menuItem.icon;
+    final Drawable lockIcon = menuItem.isLocked ? Drawables.get(getResources(), R.drawable.baseline_lock_16) : null; // XGram: once per row, not per frame
     final AvatarReceiver receiver = (menuItem.messageSenderId != null && menuItem.iconResId == 0) ?
       complexAvatarReceiver.getAvatarReceiver(Td.getSenderId(menuItem.messageSenderId)) : null;
     if (receiver != null) {
@@ -288,13 +289,10 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
           receiver.draw(canvas);
         }
 
-        if (menuItem.isLocked) {
-          Drawable icon = Drawables.get(getResources(), R.drawable.baseline_lock_16);
-          if (icon != null) {
-            float x = getMeasuredWidth() - lockEndOffset;
-            float y = (getMeasuredHeight() - icon.getMinimumHeight()) / 2f;
-            Drawables.draw(canvas, icon, x, y, XgramExpressive.isEnabled() ? Paints.getPorterDuffPaint(xgramRole(XgramExpressive.ON_SURFACE_VARIANT)) : PorterDuffPaint.get(ColorId.text));
-          }
+        if (lockIcon != null) {
+          float x = getMeasuredWidth() - lockEndOffset;
+          float y = (getMeasuredHeight() - lockIcon.getMinimumHeight()) / 2f;
+          Drawables.draw(canvas, lockIcon, x, y, XgramExpressive.isEnabled() ? Paints.getPorterDuffPaint(xgramRole(XgramExpressive.ON_SURFACE_VARIANT)) : PorterDuffPaint.get(ColorId.text));
         }
 
         if (xgramChoice) {

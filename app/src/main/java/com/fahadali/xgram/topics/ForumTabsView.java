@@ -725,8 +725,21 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       setMeasuredDimension(width, MeasureSpec.getSize(heightMeasureSpec));
     }
 
+    // The icon of a switch, "+" or All tab: loaded once per resource, not inflated again on every draw (a tab redraws on
+    // every frame of the selection's spring)
+    @Nullable private Drawable iconDrawable;
+    private @DrawableRes int iconDrawableRes;
+
+    private Drawable icon (@DrawableRes int res) {
+      if (iconDrawable == null || iconDrawableRes != res) {
+        iconDrawable = Drawables.get(getResources(), res);
+        iconDrawableRes = res;
+      }
+      return iconDrawable;
+    }
+
     private void drawIcon (Canvas c, @DrawableRes int res, float cx, float cy, boolean active) {
-      Drawable icon = Drawables.get(getResources(), res);
+      Drawable icon = icon(res);
       Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f,
         Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? xgramLabelColor(active) : Theme.getColor(active ? ColorId.textNeutral : ColorId.icon)));
     }
@@ -789,8 +802,30 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
 
     /** One of the two colors, never a blend: Paints' color filters are cached for every color they get. */
     private void xgramDrawIcon (Canvas c, @DrawableRes int res, float cx, float cy, int color) {
-      Drawable icon = Drawables.get(getResources(), res);
+      Drawable icon = icon(res);
       Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(color));
+    }
+
+    // The rail's All icon follows the selection: the onSurfaceVariant drawing crossfades to the onSecondaryContainer one
+    // (XgramIconCrossfade, a drawing of its own per state, two paints rebuilt only when the theme changes), instead of
+    // its color jumping halfway through the pill's spring.
+    @Nullable private Drawable xgramAllActiveIcon;
+    private static @Nullable Paint xgramAllRestPaint, xgramAllActivePaint;
+    private static int xgramAllRestColor, xgramAllActiveColor;
+
+    private void xgramDrawAllIcon (Canvas c, float cx, float cy, float factor) {
+      final int restColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+      final int activeColor = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER);
+      if (xgramAllRestPaint == null || xgramAllRestColor != restColor) {
+        xgramAllRestPaint = Paints.createPorterDuffPaint(xgramAllRestPaint, xgramAllRestColor = restColor);
+      }
+      if (xgramAllActivePaint == null || xgramAllActiveColor != activeColor) {
+        xgramAllActivePaint = Paints.createPorterDuffPaint(xgramAllActivePaint, xgramAllActiveColor = activeColor);
+      }
+      if (xgramAllActiveIcon == null) {
+        xgramAllActiveIcon = Drawables.get(getResources(), R.drawable.baseline_forum_24);
+      }
+      com.fahadali.xgram.appearance.XgramIconCrossfade.draw(c, icon(R.drawable.baseline_forum_24), xgramAllRestPaint, xgramAllActiveIcon, xgramAllActivePaint, cx, cy, factor, 1f);
     }
 
     private void xgramDrawHorizontal (Canvas c) {
@@ -841,7 +876,7 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
       float iconCenterY = XgramM3TopicTabs.railIconCenterY();
       int iconSize = Screen.dp(XgramM3TopicTabs.RAIL_ICON_DP);
       if (type == TYPE_ALL) {
-        xgramDrawIcon(c, R.drawable.baseline_forum_24, centerX, iconCenterY, f >= .5f ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER) : inactive);
+        xgramDrawAllIcon(c, centerX, iconCenterY, f);
       } else {
         Drawable icon = emoji != null ? emoji : bubble;
         if (icon != null) {

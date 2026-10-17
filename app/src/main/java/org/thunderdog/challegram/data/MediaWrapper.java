@@ -190,7 +190,11 @@ public class MediaWrapper implements FileProgressComponent.SimpleListener, FileP
       this.nativeEmbed = nativeEmbed;
       int iconRes = nativeEmbed.getIcon();
       if (iconRes != 0) {
-        this.embedIcon = ResourcesCompat.getDrawable(UI.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(iconRes), null);
+        Drawable loaded = ResourcesCompat.getDrawable(UI.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(iconRes), null);
+        // XGram: mutated, so each preview's icon is a drawing of its own. Unmutated, every icon of that resource shares
+        // one vector state, whose alpha is the last one set in a frame for all of them (see XgramIconCrossfade): a
+        // preview fading in or out blinked the embed icons of the others.
+        this.embedIcon = loaded != null ? loaded.mutate() : null;
       }
       this.fileProgress.setDownloadedIconRes(FileProgressComponent.PLAY_ICON);
       this.fileProgress.setPausedIconRes(FileProgressComponent.PLAY_ICON);

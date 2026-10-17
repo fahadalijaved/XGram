@@ -30,7 +30,6 @@ import org.thunderdog.challegram.tool.PorterDuffPaint;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
-import org.thunderdog.challegram.util.DrawableProvider;
 import org.thunderdog.challegram.util.text.Letters;
 import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.util.text.TextColorSets;
@@ -1203,13 +1202,13 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
       float primaryContentAlpha = requestedPlaceholder.extraDrawableRes != 0 ? 1f - isFullScreen.getFloatValue() : 1f;
       if (primaryContentAlpha > 0f) {
         if (requestedPlaceholder.drawableRes != 0) {
-          drawPlaceholderDrawable(c, requestedPlaceholder.drawableRes, avatarContentColorId, alpha * primaryContentAlpha);
+          drawPlaceholderDrawable(c, requestedPlaceholder.drawableRes, avatarContentColorId, alpha * primaryContentAlpha, false);
         } else {
           drawPlaceholderLetters(c, requestedPlaceholder.letters, alpha * primaryContentAlpha);
         }
       }
       if (primaryContentAlpha < 1f) {
-        drawPlaceholderDrawable(c, requestedPlaceholder.extraDrawableRes, avatarContentColorId, alpha * (1f - primaryContentAlpha) * .75f);
+        drawPlaceholderDrawable(c, requestedPlaceholder.extraDrawableRes, avatarContentColorId, alpha * (1f - primaryContentAlpha) * .75f, true);
       }
     }
 
@@ -1271,13 +1270,36 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
     }
   }
 
-  private void drawPlaceholderDrawable (Canvas c, int resId, int colorId, float alpha) {
+  // XGram: this receiver's own placeholder drawings (the main one and the full screen extra), loaded once per resource.
+  // Not the target view's shared sparse drawables: a view may draw several receivers at their own alphas in one frame
+  // (chips fading in or out, two avatars cross-fading), and one VectorDrawable drawn more than once in a frame takes the
+  // last alpha for every draw (see XgramIconCrossfade), so their icons blinked; and in a view that is no DrawableProvider
+  // a new drawable was inflated on every frame.
+  private @Nullable Drawable placeholderDrawable, placeholderExtraDrawable;
+  private int placeholderDrawableRes, placeholderExtraDrawableRes;
+
+  private Drawable getPlaceholderDrawable (int resId, boolean extra) {
+    if (extra) {
+      if (placeholderExtraDrawable == null || placeholderExtraDrawableRes != resId) {
+        placeholderExtraDrawable = Drawables.get(resId);
+        placeholderExtraDrawableRes = resId;
+      }
+      return placeholderExtraDrawable;
+    }
+    if (placeholderDrawable == null || placeholderDrawableRes != resId) {
+      placeholderDrawable = Drawables.get(resId);
+      placeholderDrawableRes = resId;
+    }
+    return placeholderDrawable;
+  }
+
+  private void drawPlaceholderDrawable (Canvas c, int resId, int colorId, float alpha, boolean extra) {
     float currentRadiusPx = Math.min(getWidth(), getHeight()) / 2f;
     float radiusPx = primaryPlaceholderRadius != 0f ? Screen.dp(primaryPlaceholderRadius) : currentRadiusPx;
-    View view = getTargetView();
-    Drawable drawable = view instanceof DrawableProvider ?
-      ((DrawableProvider) view).getSparseDrawable(resId, colorId) :
-      Drawables.get(resId);
+    Drawable drawable = getPlaceholderDrawable(resId, extra);
+    if (drawable == null) {
+      return;
+    }
     float scale = radiusPx < currentRadiusPx ? radiusPx / currentRadiusPx : 1f;
     float size = Math.max(drawable.getMinimumWidth(), drawable.getMinimumHeight()) * scale;
     float maxSize = (float) Math.sqrt(2.0) * (currentRadiusPx - Screen.dp(1f));
