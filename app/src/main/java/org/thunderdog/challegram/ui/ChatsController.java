@@ -3475,6 +3475,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         return true;
       }
     }
+    // XGram: long-pressing the avatar selects the chat (as in Telegram); the rest of the row keeps its long press.
+    // Archive and community rows keep their own long-press menus.
+    if (chat != null && chat.xgramCommunityId() == 0 && canSelectChat(chat)) {
+      v.dropPress(x, y);
+      v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+      selectUnselectChat(chat, true);
+      return true;
+    }
     return false;
   }
 }
