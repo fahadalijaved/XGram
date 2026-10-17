@@ -362,6 +362,15 @@ public class EditNameController extends EditBaseController<EditNameController.Ar
         case Mode.SIGNUP: {
           TdApi.TermsOfService termsOfService = getArgumentsStrict().authState.termsOfService;
           CharSequence text = TD.formatString(this, termsOfService.text.text, termsOfService.text.entities, null, null);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            // XGram M3E r6: a large sheet with the text and [Back] ... [Agree], not a long alert
+            com.fahadali.xgram.appearance.XgramR6B8Login.showTerms(this, text, () -> {
+              setDoneInProgress(true);
+              boolean disableNotification = notifyContacts == null || !notifyContacts.isSelected(); // XGram: "Tell my contacts I joined"
+              tdlib.client().send(new TdApi.RegisterUser(firstName, lastName, disableNotification), this);
+            });
+            break;
+          }
           openAlert(R.string.TermsOfService, text, Lang.getString(R.string.TermsOfServiceDone), (dialog, which) -> {
             setDoneInProgress(true);
             boolean disableNotification = notifyContacts == null || !notifyContacts.isSelected(); // XGram: "Tell my contacts I joined"

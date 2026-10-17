@@ -42,8 +42,10 @@ import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.navigation.HeaderView;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.Tdlib;
@@ -122,8 +124,15 @@ public final class XgramR6B8Login {
   public static TextView newHeadline (@NonNull Context context, int textStyle) {
     XgramR5Lists.RoleText headline = new XgramR5Lists.RoleText(context, textStyle, XgramExpressive.ON_SURFACE);
     headline.setGravity(Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT);
-    headline.setLineSpacing(Screen.dp(XgramExpressive.lineHeightSp(textStyle) - XgramExpressive.textSizeSp(textStyle)), 1f);
+    applyLineHeight(headline, textStyle);
     return headline;
+  }
+
+  /** The type scale line height of {@code textStyle} (Android 9 and later; the font's own line spacing before). */
+  public static void applyLineHeight (@NonNull TextView view, int textStyle) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      view.setLineHeight(Math.round(Screen.dpf(XgramExpressive.lineHeightSp(textStyle))));
+    }
   }
 
   /** Supporting text of a page: bodyMedium in onSurfaceVariant (links in primary), start aligned. */
@@ -145,7 +154,7 @@ public final class XgramR6B8Login {
   /** Gives an existing text view the page supporting text style (bodyMedium, start aligned, M3 line height). */
   public static void styleSupporting (@NonNull TextView view) {
     XgramExpressive.applyText(view, XgramExpressive.TS_BODY_M, false);
-    view.setLineSpacing(Screen.dp(XgramExpressive.lineHeightSp(XgramExpressive.TS_BODY_M) - XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_M)), 1f);
+    applyLineHeight(view, XgramExpressive.TS_BODY_M);
     view.setGravity(Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT);
   }
 
@@ -244,22 +253,31 @@ public final class XgramR6B8Login {
 
   // Supporting text of a field
 
+  /** The colour of a supporting text line: onSurfaceVariant, primary with a leading check (good), or error. */
+  public static final int TONE_NEUTRAL = 0, TONE_GOOD = 1, TONE_ERROR = 2;
+
   /**
-   * The supporting text line of a filled field (or of the code boxes): bodySmall, onSurfaceVariant or error, with
-   * links in primary. It fades in and out and changes colour on EFFECTS_FAST; while hidden it is GONE.
+   * The supporting text line of a filled field (or of the code boxes): bodySmall in onSurfaceVariant, primary with a
+   * leading check (a good state: a free username) or error, links in primary. It fades in and out and changes colour
+   * on EFFECTS_FAST; while hidden it is GONE.
    */
   public static final class SupportingText extends NoScrollTextView {
-    private final XgramExpressive.Spring errorSpring, alphaSpring;
+    private final XgramExpressive.Spring errorSpring, goodSpring, alphaSpring;
     private boolean shown;
+    private int tone = TONE_NEUTRAL;
+    private @Nullable Drawable check;
+    private int checkTint;
 
     public SupportingText (@NonNull Context context) {
       super(context);
       XgramExpressive.applyText(this, XgramExpressive.TS_BODY_S, false);
-      setLineSpacing(Screen.dp(XgramExpressive.lineHeightSp(XgramExpressive.TS_BODY_S) - XgramExpressive.textSizeSp(XgramExpressive.TS_BODY_S)), 1f);
+      applyLineHeight(this, XgramExpressive.TS_BODY_S);
       setIncludeFontPadding(false);
       setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
       setLinkTextColor(XgramExpressive.color(XgramExpressive.PRIMARY));
+      setCompoundDrawablePadding(Screen.dp(4f));
       errorSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> invalidate());
+      goodSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> invalidate());
       alphaSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> setAlpha(clamp(value)));
       alphaSpring.setEndListener(() -> {
         if (!shown && getVisibility() != View.GONE) {
@@ -272,12 +290,30 @@ public final class XgramR6B8Login {
     }
 
     public boolean isError () {
-      return shown && errorSpring.getTarget() == 1f;
+      return shown && tone == TONE_ERROR;
+    }
+
+    public boolean isTextShown () {
+      return shown;
     }
 
     /** {@code text} (null or empty hides the line), in error or not. */
     public void set (@Nullable CharSequence text, boolean isError, boolean animated) {
+      set(text, isError ? TONE_ERROR : TONE_NEUTRAL, animated);
+    }
+
+    /** {@code text} (null or empty hides the line) in {@code tone} ({@link #TONE_NEUTRAL}, {@link #TONE_GOOD}, {@link #TONE_ERROR}). */
+    public void set (@Nullable CharSequence text, int tone, boolean animated) {
       final boolean show = !TextUtils.isEmpty(text);
+      final boolean isError = tone == TONE_ERROR;
+      final boolean isGood = tone == TONE_GOOD;
+      this.tone = show ? tone : TONE_NEUTRAL;
+      setCheck(show && isGood);
+      if (!animated) {
+        goodSpring.setValue(show && isGood ? 1f : 0f);
+      } else if (show) {
+        goodSpring.animateTo(isGood ? 1f : 0f);
+      }
       if (show) {
         setText(text);
         final boolean links = text instanceof Spanned && ((Spanned) text).getSpans(0, text.length(), ClickableSpan.class).length > 0;
@@ -314,13 +350,36 @@ public final class XgramR6B8Login {
       }
     }
 
+    private void setCheck (boolean visible) {
+      if (visible == (check != null)) {
+        return;
+      }
+      if (visible) {
+        Drawable icon = Drawables.get(getResources(), XgramIconPack.map(R.drawable.baseline_check_circle_24));
+        if (icon != null) {
+          icon = icon.mutate();
+          final int size = Screen.dp(16f);
+          icon.setBounds(0, 0, size, size);
+          checkTint = 0;
+        }
+        check = icon;
+      } else {
+        check = null;
+      }
+      setCompoundDrawablesRelative(check, null, null, null);
+    }
+
     @Override
     protected void onDraw (Canvas c) {
-      final float f = clamp(errorSpring.getValue());
-      final int rest = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
-      final int color = f <= 0f ? rest : ColorUtils.fromToArgb(rest, XgramExpressive.color(XgramExpressive.ERROR), f);
+      final float error = clamp(errorSpring.getValue()), good = clamp(goodSpring.getValue());
+      final int rest = mix(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), XgramExpressive.color(XgramExpressive.PRIMARY), good);
+      final int color = mix(rest, XgramExpressive.color(XgramExpressive.ERROR), error);
       if (getCurrentTextColor() != color) {
         setTextColor(color);
+      }
+      if (check != null && checkTint != color) {
+        checkTint = color;
+        check.setTint(color);
       }
       final int link = XgramExpressive.color(XgramExpressive.PRIMARY);
       if (getLinkTextColors() == null || getLinkTextColors().getDefaultColor() != link) {
@@ -328,6 +387,215 @@ public final class XgramR6B8Login {
       }
       super.onDraw(c);
     }
+  }
+
+  // Text that changes with a fade
+
+  /**
+   * A text in a type scale role whose changes fade through: the old text out and the new one in on EFFECTS_DEFAULT
+   * (the step titles of the two-step verification setup). Snaps before its first layout; Reduce motion snaps too.
+   */
+  public static final class FadeText extends XgramR5Lists.RoleText {
+    private final XgramExpressive.Spring fade;
+    private @Nullable CharSequence pending;
+    private boolean hasPending;
+
+    public FadeText (@NonNull Context context, int textStyle, int role) {
+      super(context, textStyle, role);
+      setGravity(Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT);
+      applyLineHeight(this, textStyle);
+      fade = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, 1f, (s, value) -> setAlpha(clamp(value)));
+      fade.setEndListener(() -> {
+        if (hasPending && fade.getTarget() == 0f) {
+          hasPending = false;
+          setText(pending);
+          pending = null;
+          fade.animateTo(1f);
+        }
+      });
+    }
+
+    public void setTextAnimated (@Nullable CharSequence text) {
+      if (!isLaidOut() || getVisibility() != View.VISIBLE) {
+        hasPending = false;
+        pending = null;
+        fade.setValue(1f);
+        setAlpha(1f);
+        setText(text);
+        return;
+      }
+      if (!hasPending && TextUtils.equals(getText(), text)) {
+        if (fade.getTarget() != 1f) {
+          fade.animateTo(1f);
+        }
+        return;
+      }
+      pending = text;
+      hasPending = true;
+      if (!fade.isRunning() && fade.getValue() <= 0f) {
+        hasPending = false;
+        setText(pending);
+        pending = null;
+        fade.animateTo(1f);
+      } else {
+        fade.animateTo(0f);
+      }
+    }
+  }
+
+  // A header that folds away
+
+  /**
+   * Shows its child at a part of its height (the parent clips the rest) and fades with it, on SPATIAL_DEFAULT (clamped:
+   * a height never overshoots): the hero and headline of the phone page fold away while the country list is open.
+   * Reduce motion snaps. One layout per spring frame, only while it moves.
+   */
+  public static final class Collapse extends FrameLayout {
+    public interface Listener {
+      void onCollapseChanged (float expanded);
+    }
+
+    private final XgramExpressive.Spring spring;
+    private @Nullable Listener listener;
+
+    public Collapse (@NonNull Context context) {
+      super(context);
+      spring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 1f, (s, value) -> {
+        requestLayout();
+        apply();
+      });
+      spring.setThreshold(.002f);
+    }
+
+    public void setListener (@Nullable Listener listener) {
+      this.listener = listener;
+      if (listener != null) {
+        listener.onCollapseChanged(expandedFactor());
+      }
+    }
+
+    public float expandedFactor () {
+      return clamp(spring.getValue());
+    }
+
+    public boolean isExpanded () {
+      return spring.getTarget() == 1f;
+    }
+
+    public void setExpanded (boolean expanded, boolean animated) {
+      final float target = expanded ? 1f : 0f;
+      if (animated && isLaidOut()) {
+        spring.animateTo(target);
+      } else {
+        spring.setValue(target);
+        requestLayout();
+        apply();
+      }
+    }
+
+    private void apply () {
+      final float f = expandedFactor();
+      setAlpha(f);
+      setImportantForAccessibility(f > 0f ? IMPORTANT_FOR_ACCESSIBILITY_AUTO : IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+      if (listener != null) {
+        listener.onCollapseChanged(f);
+      }
+    }
+
+    @Override
+    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+      setMeasuredDimension(getMeasuredWidth(), Math.round(getMeasuredHeight() * expandedFactor()));
+    }
+  }
+
+  // The trailing arrow of a dropdown field
+
+  /** arrow_drop_down in onSurfaceVariant, turning to point up while the dropdown is open (SPATIAL_FAST). */
+  public static final class DropdownArrow extends ImageView {
+    private final XgramExpressive.Spring turn;
+    private int tint;
+
+    public DropdownArrow (@NonNull Context context) {
+      super(context);
+      setScaleType(ScaleType.CENTER);
+      setImageResource(XgramIconPack.map(R.drawable.xgram_r6_b8_arrow_drop_down_24));
+      setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+      turn = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> setRotation(180f * value));
+    }
+
+    public void setExpanded (boolean expanded, boolean animated) {
+      if (animated && isLaidOut()) {
+        turn.animateTo(expanded ? 1f : 0f);
+      } else {
+        turn.setValue(expanded ? 1f : 0f);
+        setRotation(expanded ? 180f : 0f);
+      }
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      final int color = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+      if (tint != color) {
+        tint = color;
+        setColorFilter(color);
+      }
+      super.onDraw(c);
+    }
+  }
+
+  /** The prefix of a filled field ("+" before a calling code): bodyLarge in onSurfaceVariant, read when drawn. */
+  public static TextView newPrefix (@NonNull Context context, @NonNull CharSequence text) {
+    XgramR5Lists.RoleText prefix = new XgramR5Lists.RoleText(context, XgramExpressive.TS_BODY_L, XgramExpressive.ON_SURFACE_VARIANT);
+    prefix.setText(text);
+    prefix.setSingleLine(true);
+    prefix.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+    return prefix;
+  }
+
+  // Heroes of the login and security pages
+
+  /** The hero icon of a code page: an SMS bubble, a phone for a call, the chat bubble for a code in Telegram. */
+  @DrawableRes
+  public static int codeHeroIcon (@Nullable TdApi.AuthenticationCodeType type) {
+    if (type != null) {
+      switch (type.getConstructor()) {
+        case TdApi.AuthenticationCodeTypeCall.CONSTRUCTOR:
+        case TdApi.AuthenticationCodeTypeFlashCall.CONSTRUCTOR:
+        case TdApi.AuthenticationCodeTypeMissedCall.CONSTRUCTOR:
+          return R.drawable.baseline_call_24;
+        case TdApi.AuthenticationCodeTypeTelegramMessage.CONSTRUCTOR:
+          return R.drawable.baseline_chat_bubble_24;
+      }
+    }
+    return R.drawable.xgram_r6_b8_sms_24;
+  }
+
+  /**
+   * How many boxes the code of {@code type} gets: 0 for a word or phrase (the plain field stays) and for a flash call
+   * (TDLib checks the caller itself), else its length.
+   */
+  public static int codeBoxes (@Nullable TdApi.AuthorizationState state) {
+    if (state == null) {
+      return 0;
+    }
+    if (state.getConstructor() == TdApi.AuthorizationStateWaitCode.CONSTRUCTOR) {
+      TdApi.AuthenticationCodeInfo info = ((TdApi.AuthorizationStateWaitCode) state).codeInfo;
+      if (info == null || info.type == null) {
+        return 0;
+      }
+      switch (info.type.getConstructor()) {
+        case TdApi.AuthenticationCodeTypeSmsWord.CONSTRUCTOR:
+        case TdApi.AuthenticationCodeTypeSmsPhrase.CONSTRUCTOR:
+        case TdApi.AuthenticationCodeTypeFlashCall.CONSTRUCTOR:
+          return 0;
+      }
+      return TD.codeLength(state, 0);
+    }
+    if (state.getConstructor() == TdApi.AuthorizationStateWaitEmailCode.CONSTRUCTOR) {
+      return TD.codeLength(state, 0);
+    }
+    return 0;
   }
 
   // Segmented code input
@@ -389,6 +657,18 @@ public final class XgramR6B8Login {
 
     public int getCount () {
       return count;
+    }
+
+    /** A theme change invalidates this view: the boxes and the line under them read their roles again. */
+    @Override
+    public void invalidate () {
+      super.invalidate();
+      if (boxes != null) {
+        boxes.invalidate();
+      }
+      if (supporting != null) {
+        supporting.invalidate();
+      }
     }
 
     public boolean isActive () {
@@ -665,8 +945,25 @@ public final class XgramR6B8Login {
       tonal = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> {
         container.invalidateSelf();
         invalidate();
+        applyShift();
       });
       setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
+    }
+
+    private float tonalShiftDp;
+
+    /**
+     * A text button whose label lines up with the column sits {@code dp} outside it (its state layer's padding); as a
+     * tonal button its container lines up instead, so it moves in by {@code dp} with the colour.
+     */
+    public void setTonalShift (float dp) {
+      this.tonalShiftDp = dp;
+      applyShift();
+    }
+
+    private void applyShift () {
+      final float shift = Screen.dpf(tonalShiftDp) * clamp(tonal.getValue());
+      setTranslationX(Lang.rtl() ? -shift : shift);
     }
 
     public void setTonal (boolean isTonal, boolean animated) {
@@ -682,6 +979,7 @@ public final class XgramR6B8Login {
         tonal.setValue(target);
         container.invalidateSelf();
         invalidate();
+        applyShift();
       }
     }
 
@@ -789,6 +1087,7 @@ public final class XgramR6B8Login {
       this.owner = owner;
       this.connection = XgramConnection.track(owner.tdlib());
       this.pill = XgramConnectionPill.attach(parent);
+      pill.setSource(connection);
       if (content != null) {
         final int room = pill.getReservedHeight();
         pill.setOffsetListener(shown -> content.setTranslationY(room * shown));
@@ -820,12 +1119,10 @@ public final class XgramR6B8Login {
      */
     public boolean blockWhileOffline (@Nullable View fab) {
       final Tdlib tdlib = owner.tdlib();
-      if (destroyed || tdlib == null || !tdlib.context().watchDog().isOffline()) {
-        return false;
+      if (destroyed || fab == null || fab.getAlpha() <= 0f || tdlib == null || !tdlib.context().watchDog().isOffline()) {
+        return false; // no FAB on screen: the page's own network prompt
       }
-      if (fab != null) {
-        owner.showInfoTooltip(fab, Lang.getString(R.string.XgramR6B8Offline));
-      }
+      owner.showInfoTooltip(fab, Lang.getString(R.string.XgramR6B8Offline));
       return true;
     }
 
@@ -836,6 +1133,72 @@ public final class XgramR6B8Login {
         connection.release();
       }
     }
+  }
+
+  // Terms of service at sign-up
+
+  /**
+   * The terms of service as a large M3 sheet instead of a long alert: the 28dp top and handle of the sheets, the title
+   * in titleLarge, the text in bodyMedium (links in primary) in a scroll of at most 70% of the screen, and a sticky
+   * actions row: [Back] ... [Agree] (filled). Back, the scrim or a drag only close the sheet; Agree closes it and runs
+   * {@code onAgree}. Null when the page can't show popups now.
+   */
+  @Nullable
+  public static org.thunderdog.challegram.widget.PopupLayout showTerms (@NonNull ViewController<?> c, @NonNull CharSequence text, @NonNull Runnable onAgree) {
+    if (c.isDestroyed()) {
+      return null;
+    }
+    final int maxScrollHeight = Math.round(Screen.currentHeight() * .7f);
+    return c.showPopup(XgramR5Lists.sentence(R.string.TermsOfService, R.string.XgramR6B8Terms), true, org.thunderdog.challegram.util.text.Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsLayout) -> {
+      final Context context = optionsLayout.getContext();
+      final int width = XgramM3Sheets.sheetWidth(c.context().getControllerWidth(optionsLayout));
+
+      XgramR5Lists.RoleText body = new XgramR5Lists.RoleText(context, XgramExpressive.TS_BODY_M, XgramExpressive.ON_SURFACE) {
+        @Override
+        protected void onDraw (Canvas canvas) {
+          final int link = XgramExpressive.color(XgramExpressive.PRIMARY);
+          if (getLinkTextColors() == null || getLinkTextColors().getDefaultColor() != link) {
+            setLinkTextColor(link);
+          }
+          super.onDraw(canvas);
+        }
+      };
+      applyLineHeight(body, XgramExpressive.TS_BODY_M);
+      body.setGravity(Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT);
+      body.setText(text);
+      body.setMovementMethod(LinkMovementMethod.getInstance());
+      body.setHighlightColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY), XgramExpressive.STATE_PRESSED));
+      body.setPadding(Screen.dp(24f), Screen.dp(4f), Screen.dp(24f), Screen.dp(16f));
+
+      ScrollView scroll = new ScrollView(context) {
+        @Override
+        protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+          int maxHeight = maxScrollHeight;
+          if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+            maxHeight = Math.min(maxHeight, MeasureSpec.getSize(heightMeasureSpec));
+          }
+          super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST));
+        }
+      };
+      scroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+      scroll.setVerticalScrollBarEnabled(false);
+      scroll.addView(body, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      optionsLayout.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      body.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+      int height = Math.min(body.getMeasuredHeight(), maxScrollHeight);
+
+      TextView back = XgramR5Sheets.textButton(context, Lang.getString(R.string.XgramR6B8Back), XgramExpressive.PRIMARY, null);
+      back.setOnClickListener(v -> popupLayout.hideWindow(true));
+      TextView agree = XgramR5Sheets.filledButton(context, Lang.getString(R.string.XgramR6B8Agree), false, null);
+      agree.setOnClickListener(v -> {
+        popupLayout.hideWindow(true);
+        onAgree.run();
+      });
+      LinearLayout row = XgramR5Sheets.actionsRow(context, back, agree);
+      optionsLayout.addView(row);
+      height += ((LinearLayout.LayoutParams) row.getLayoutParams()).height;
+      return height;
+    }, null, XgramExpressive.TS_TITLE_L);
   }
 
   // Helpers

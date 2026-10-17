@@ -3,7 +3,6 @@
   <!-- XGram M3E round 6, batch 8: login, account security and form fields (XgramR6B8Login) -->
   <string name="XgramR6B8CodeBoxes">Code, %1$d digits</string>
   <string name="XgramR6B8Offline">You\'re offline. Try again once you\'re connected.</string>
-  <string name="XgramR6B8ChooseCountry">Choose country</string>
   <!-- Phone entry: sentence case titles of Telegram X's title case strings -->
   <string name="XgramR6B8YourPhone">Your phone number</string>
   <string name="XgramR6B8AddAccount">Add account</string>
@@ -29,7 +28,6 @@
   <string name="XgramR6B8QrStep2">Go to Settings, then Devices, then Link desktop device</string>
   <string name="XgramR6B8QrStep3">Point the camera at this code</string>
   <string name="XgramR6B8QrUsePhone">Use phone number instead</string>
-  <string name="XgramR6B8QrScanned">Code scanned</string>
   <!-- Usernames and public links -->
   <string name="XgramR6B8ChannelLink">Channel link</string>
   <string name="XgramR6B8GroupLink">Group link</string>
@@ -40,7 +38,6 @@
   <string name="XgramR6B8UsernamesBot">Bot links</string>
   <string name="XgramR6B8Active">Active</string>
   <string name="XgramR6B8Inactive">Inactive</string>
-  <string name="XgramR6B8Reorder">Drag to reorder</string>
   <!-- Terms of service at sign-up -->
   <string name="XgramR6B8Terms">Terms of service</string>
   <string name="XgramR6B8Agree">Agree</string>

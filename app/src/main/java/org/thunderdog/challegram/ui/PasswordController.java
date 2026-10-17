@@ -472,6 +472,133 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   private @Nullable View xgramLinks;
   private @Nullable TextView xgramHeadline;
 
+  // XGram M3E (round 6): the login column (XgramR6B8Login): a hero (an SMS bubble, a phone, an envelope, a lock or a
+  // key) above the headline; the code as one box per digit; the password hint and every error as the field's supporting
+  // text, an error with a spring shake (the page text keeps the "code sent to" hint); a fading step title while a
+  // password is set up; the resend link a tonal button once its countdown is over; the connection pill under the app bar.
+
+  private @Nullable com.fahadali.xgram.appearance.XgramR5Security.HeroView xgramHero;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.FadeText xgramStepTitle;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.CodeInput xgramCodeInput;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.Shake xgramShake;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.ConnectionWatch xgramConnection;
+  private @Nullable CharSequence xgramFieldHint;
+  private boolean xgramFieldError;
+
+  private boolean isPasswordMode () {
+    switch (mode) {
+      case MODE_TRANSFER_OWNERSHIP_CONFIRM:
+      case MODE_CUSTOM_CONFIRM:
+      case MODE_CONFIRM:
+      case MODE_UNLOCK_EDIT:
+      case MODE_LOGIN:
+        return true;
+    }
+    return false;
+  }
+
+  @androidx.annotation.DrawableRes
+  private int xgramHeroIcon () {
+    switch (mode) {
+      case MODE_CODE:
+      case MODE_CODE_CHANGE:
+      case MODE_CODE_PHONE_CONFIRM:
+        return com.fahadali.xgram.appearance.XgramR6B8Login.codeHeroIcon(authenticationCodeType());
+      case MODE_CODE_EMAIL:
+      case MODE_EMAIL_RECOVERY:
+      case MODE_LOGIN_EMAIL_RECOVERY:
+      case MODE_EMAIL_LOGIN:
+      case MODE_2FA_RECOVERY_EMAIL_CHANGE:
+      case MODE_LOGIN_EMAIL_CHANGE:
+        return R.drawable.xgram_r6_b8_mail_24;
+      case MODE_NEW:
+      case MODE_EDIT:
+        return R.drawable.baseline_vpn_key_24;
+    }
+    return R.drawable.baseline_lock_24;
+  }
+
+  /** The boxes of this page's code; 0 keeps the plain field (passwords, emails, word codes, recovery codes of unknown length). */
+  private int xgramCodeLength () {
+    switch (mode) {
+      case MODE_CODE:
+      case MODE_CODE_CHANGE:
+      case MODE_CODE_PHONE_CONFIRM:
+      case MODE_CODE_EMAIL:
+        return com.fahadali.xgram.appearance.XgramR6B8Login.codeBoxes(authState);
+      case MODE_EMAIL_RECOVERY:
+      case MODE_LOGIN_EMAIL_RECOVERY:
+        return getArguments() != null ? getArguments().codeLength : 0;
+    }
+    return 0;
+  }
+
+  /** "Hint: ..." of a password page, shown under the field instead of in its label. */
+  private @Nullable CharSequence xgramPasswordHint () {
+    String hint = null;
+    if (mode == MODE_LOGIN) {
+      if (authState != null && authState.getConstructor() == TdApi.AuthorizationStateWaitPassword.CONSTRUCTOR) {
+        hint = ((TdApi.AuthorizationStateWaitPassword) authState).passwordHint;
+      }
+    } else if (isPasswordMode() && state != null) {
+      hint = state.passwordHint;
+    }
+    return StringUtils.isEmpty(hint) ? null : Lang.getString(R.string.Hint, hint);
+  }
+
+  private CharSequence xgramStepTitleText (int step) {
+    switch (step) {
+      case STEP_REPEAT_PASSWORD:
+        return Lang.getString(R.string.XgramR6B8StepRepeat);
+      case STEP_PASSWORD_HINT:
+        return Lang.getString(R.string.XgramR6B8StepHint);
+      case STEP_EMAIL_RECOVERY:
+      case STEP_EMAIL_RECOVERY_CONFIRM:
+        return Lang.getString(R.string.XgramR6B8StepEmail);
+    }
+    return Lang.getString(mode == MODE_EDIT ? R.string.XgramR6B8StepNew : R.string.XgramR6B8StepCreate);
+  }
+
+  /** An error under the field or the boxes (with the shake), or none: the field's supporting text is its hint again. */
+  private void xgramShowFieldError (@Nullable CharSequence error) {
+    final boolean isError = !StringUtils.isEmpty(error);
+    if (!isError && !xgramFieldError) {
+      return;
+    }
+    xgramFieldError = isError;
+    if (xgramCodeInput != null && xgramCodeInput.isActive()) {
+      xgramCodeInput.setSupporting(isError ? error : null, isError);
+      return;
+    }
+    if (isError) {
+      editText.xgramSetSupportingText(error, true);
+      if (xgramShake != null) {
+        xgramShake.play(editText);
+      }
+    } else {
+      editText.xgramSetSupportingText(xgramFieldHint, false);
+    }
+  }
+
+  private void xgramUpdateCodeInput () {
+    final boolean codeState = authState != null && (authState.getConstructor() == TdApi.AuthorizationStateWaitCode.CONSTRUCTOR || authState.getConstructor() == TdApi.AuthorizationStateWaitEmailCode.CONSTRUCTOR);
+    if (!codeState) {
+      return; // the login moved on (MainActivity opens the next page over this one): the boxes stay as they are
+    }
+    if (xgramHero != null) {
+      xgramHero.setIcon(xgramHeroIcon());
+    }
+    if (xgramCodeInput != null) {
+      final boolean wasActive = xgramCodeInput.isActive();
+      xgramCodeInput.setCount(xgramCodeLength());
+      if (wasActive != xgramCodeInput.isActive() && xgramFieldError) {
+        // the error moves with the input it belongs to
+        xgramFieldError = false;
+        editText.xgramSetSupportingText(xgramFieldHint, false);
+      }
+    }
+  }
+
   private void xgramLayout (Context context, FrameLayoutFix contentView) {
     contentView.removeView(editText);
     contentView.removeView(hintView);
@@ -479,57 +606,69 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       contentView.removeView(xgramLinks);
     }
 
-    android.widget.ScrollView scroll = new android.widget.ScrollView(context);
-    scroll.setVerticalScrollBarEnabled(false);
-    scroll.setClipToPadding(false);
-    FrameLayoutFix wrap = new FrameLayoutFix(context);
-    scroll.addView(wrap, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-    android.widget.LinearLayout column = new android.widget.LinearLayout(context) {
-      @Override
-      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-        final int max = Screen.dp(480f);
-        if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED && MeasureSpec.getSize(widthMeasureSpec) > max) {
-          widthMeasureSpec = MeasureSpec.makeMeasureSpec(max, MeasureSpec.EXACTLY);
-        }
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-      }
-    };
-    column.setOrientation(android.widget.LinearLayout.VERTICAL);
-    column.setPadding(Screen.dp(16f), Screen.dp(24f), Screen.dp(16f), Screen.dp(104f)); // the FAB stays clear of the links
-    wrap.addView(column, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP));
+    final android.widget.LinearLayout column = com.fahadali.xgram.appearance.XgramR6B8Login.newColumn(context);
+    final android.widget.ScrollView scroll = com.fahadali.xgram.appearance.XgramR6B8Login.wrapInScroll(context, column);
     final boolean rtl = Lang.rtl();
     final int startGravity = rtl ? Gravity.RIGHT : Gravity.LEFT;
 
-    xgramHeadline = new NoScrollTextView(context);
-    com.fahadali.xgram.appearance.XgramExpressive.applyText(xgramHeadline, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_M, false);
+    xgramHero = com.fahadali.xgram.appearance.XgramR6B8Login.newHero(context, xgramHeroIcon());
+    addThemeInvalidateListener(xgramHero);
+    column.addView(xgramHero);
+
+    xgramHeadline = com.fahadali.xgram.appearance.XgramR6B8Login.newHeadline(context);
     xgramHeadline.setText(getName());
-    xgramHeadline.setGravity(startGravity);
-    xgramHeadline.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE));
-    addThemeTextColorListener(xgramHeadline, ColorId.text);
+    addThemeInvalidateListener(xgramHeadline);
     column.addView(xgramHeadline, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-    com.fahadali.xgram.appearance.XgramExpressive.applyText(hintView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
-    hintView.setGravity(startGravity);
+    if (mode == MODE_NEW || mode == MODE_EDIT) {
+      xgramStepTitle = new com.fahadali.xgram.appearance.XgramR6B8Login.FadeText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+      xgramStepTitle.setText(xgramStepTitleText(step));
+      addThemeInvalidateListener(xgramStepTitle);
+      android.widget.LinearLayout.LayoutParams stepParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      stepParams.topMargin = Screen.dp(16f);
+      column.addView(xgramStepTitle, stepParams);
+    }
+
+    com.fahadali.xgram.appearance.XgramR6B8Login.styleSupporting(hintView);
     android.widget.LinearLayout.LayoutParams hintParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     hintParams.topMargin = Screen.dp(8f);
     column.addView(hintView, hintParams);
 
+    // The field, with the code boxes over it: the field stays the input (hidden while the boxes show)
+    FrameLayoutFix fieldFrame = new FrameLayoutFix(context);
+    fieldFrame.addView(editText, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    xgramCodeInput = new com.fahadali.xgram.appearance.XgramR6B8Login.CodeInput(context, editText);
+    addThemeInvalidateListener(xgramCodeInput);
+    fieldFrame.addView(xgramCodeInput, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     android.widget.LinearLayout.LayoutParams fieldParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-    fieldParams.topMargin = Screen.dp(16f);
-    column.addView(editText, fieldParams);
+    fieldParams.topMargin = Screen.dp(24f);
+    column.addView(fieldFrame, fieldParams);
     editText.applyRtl(rtl);
     if ((editText.getEditText().getInputType() & android.text.InputType.TYPE_MASK_VARIATION) == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD) {
       com.fahadali.xgram.appearance.XgramR5Security.attachVisibilityToggle(editText);
     }
+    xgramShake = new com.fahadali.xgram.appearance.XgramR6B8Login.Shake(editText);
+    xgramCodeInput.setCount(xgramCodeLength());
+    if (isPasswordMode()) {
+      // the label names the field; the hint is its supporting text
+      editText.setHint(R.string.login_Password);
+      xgramFieldHint = xgramPasswordHint();
+      editText.xgramSetSupportingText(xgramFieldHint, false);
+    }
 
     if (xgramLinks != null) {
       for (TextView link : new TextView[] {forgotView, cancelResetView}) {
-        com.fahadali.xgram.appearance.XgramM3Controls.styleButton(link);
+        if (link instanceof com.fahadali.xgram.appearance.XgramR6B8Login.LinkButton) {
+          com.fahadali.xgram.appearance.XgramExpressive.applyText(link, com.fahadali.xgram.appearance.XgramExpressive.TS_LABEL_L, false);
+          ((com.fahadali.xgram.appearance.XgramR6B8Login.LinkButton) link).setTonalShift(12f);
+        } else {
+          com.fahadali.xgram.appearance.XgramM3Controls.styleButton(link);
+          link.setFontFeatureSettings("tnum"); // the resend countdown keeps its width
+        }
         link.setPadding(Screen.dp(12f), 0, Screen.dp(12f), 0);
         link.setGravity(Gravity.CENTER_VERTICAL | startGravity);
-        link.setFontFeatureSettings("tnum"); // the resend countdown keeps its width
       }
-      com.fahadali.xgram.appearance.XgramExpressive.applyText(resetWaitView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
+      com.fahadali.xgram.appearance.XgramR6B8Login.styleSupporting(resetWaitView);
       resetWaitView.setFontFeatureSettings("tnum");
       resetWaitView.setPadding(Screen.dp(12f), Screen.dp(8f), Screen.dp(12f), Screen.dp(8f));
       android.widget.LinearLayout.LayoutParams linksParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -541,12 +680,11 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     contentView.addView(scroll, 0, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
     // The small title in the app bar is the headline's: it fades in as the headline scrolls away
-    HeaderView.xgramSetTitleAlpha(this, 0f);
-    scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-      if (xgramHeadline != null) {
-        HeaderView.xgramSetTitleAlpha(this, (scrollY - xgramHeadline.getBottom() + Screen.dp(16f)) / (float) Screen.dp(24f));
-      }
-    });
+    com.fahadali.xgram.appearance.XgramR6B8Login.linkTitle(this, scroll, xgramHeadline);
+    // The connection pill of a login page, for the account being logged in
+    if (isUnauthorized()) {
+      xgramConnection = com.fahadali.xgram.appearance.XgramR6B8Login.ConnectionWatch.attach(this, contentView, scroll);
+    }
   }
 
   @Override
@@ -644,7 +782,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
 
     CharSequence hint = null;
 
-    forgotView = new NoScrollTextView(context);
+    forgotView = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? new com.fahadali.xgram.appearance.XgramR6B8Login.LinkButton(context) : new NoScrollTextView(context); // XGram M3E r6: a text button that turns tonal
     forgotView.setId(R.id.btn_forgotPassword);
     forgotView.setTextColor(Theme.getColor(ColorId.textNeutral));
     addThemeTextColorListener(forgotView, ColorId.textNeutral);
@@ -1084,6 +1222,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   @Override
   public void onTextChanged (MaterialEditTextGroup v, CharSequence charSequence) {
     String text = charSequence.toString();
+    if (xgramFieldError) {
+      xgramShowFieldError(null); // XGram M3E r6: editing clears the error under the field
+    }
     if ((mode == MODE_NEW && step == STEP_EMAIL_RECOVERY)) {
       setIsInputOK(Strings.isValidEmail(text));
     } else if (mode == MODE_LOGIN_EMAIL_CHANGE) {
@@ -1126,6 +1267,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   private void animateNextFactor (float toFactor) {
     if (nextAnimator == null) {
       nextAnimator = new FactorAnimator(NEXT_ANIMATOR, this, AnimatorUtils.ANTICIPATE_OVERSHOOT_INTERPOLATOR, 300, nextFactor);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(nextAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_FAST, false); // XGram M3E r6: the FAB pops in on a spring
     }
     nextAnimator.animateTo(toFactor);
   }
@@ -1149,6 +1291,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       }
       case FORGET_ANIMATOR: {
         float easeFactor = (AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(.5f + factor * .5f) / AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(.5f)) * factor;
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          easeFactor = Math.max(0f, Math.min(1f, factor)); // XGram M3E r6: the spring eases it already
+        }
         forgotView.setAlpha(easeFactor);
         resetWaitView.setAlpha(easeFactor);
         cancelResetView.setAlpha(easeFactor);
@@ -1156,6 +1301,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       }
       case HINT_ANIMATOR: {
         float easeFactor = (AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(.5f + factor * .5f) / AnimatorUtils.DECELERATE_INTERPOLATOR.getInterpolation(.5f)) * factor;
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          easeFactor = Math.max(0f, Math.min(1f, factor)); // XGram M3E r6: the spring eases it already
+        }
         hintView.setAlpha(easeFactor);
         break;
       }
@@ -1199,6 +1347,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   private void animateHint (float toFactor) {
     if (hintAnimator == null) {
       hintAnimator = new FactorAnimator(HINT_ANIMATOR, this, AnimatorUtils.LINEAR_INTERPOLATOR, 180l, hintView.getAlpha());
+      com.fahadali.xgram.appearance.XgramAppMotion.use(hintAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram M3E r6
     }
     hintAnimator.animateTo(toFactor);
   }
@@ -1208,6 +1357,16 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   }
 
   private void setHint (CharSequence text, boolean isError) {
+    if (xgramCodeInput != null) {
+      // XGram M3E r6: an error goes under the field, the page text above keeps its hint
+      if (isError) {
+        xgramShowFieldError(text);
+      } else {
+        xgramShowFieldError(null);
+        hintView.setText(text);
+      }
+      return;
+    }
     hintView.setText(text);
     hintView.setTextColor(isError ? Theme.textRedColor() : Theme.textDecentColor());
     removeThemeListenerByTarget(hintView);
@@ -1216,6 +1375,10 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   }
 
   private void setHintText (@Nullable CharSequence text, boolean isError) {
+    if (xgramCodeInput != null && isError && !StringUtils.isEmpty(text)) {
+      xgramShowFieldError(text); // XGram M3E r6: at once, under the field
+      return;
+    }
     if (StringUtils.isEmpty(text)) {
       animateHint(0f);
       if (hintView.getAlpha() == 0f) {
@@ -1240,6 +1403,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   private void animateForget (float toFactor) {
     if (forgetAnimator == null) {
       forgetAnimator = new FactorAnimator(FORGET_ANIMATOR, this, AnimatorUtils.LINEAR_INTERPOLATOR, 180l, forgotView.getAlpha());
+      com.fahadali.xgram.appearance.XgramAppMotion.use(forgetAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram M3E r6
     }
     forgetAnimator.animateTo(toFactor);
   }
@@ -1274,6 +1438,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   private void animateRecoverProgressFactor (float toFactor) {
     if (recoverProgressAnimator == null) {
       recoverProgressAnimator = new FactorAnimator(RECOVERY_PROGRESS_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(recoverProgressAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram M3E r6
     }
     recoverProgressAnimator.animateTo(toFactor);
   }
@@ -1301,6 +1466,7 @@ public class PasswordController extends ViewController<PasswordController.Args> 
         updateAuthInputType();
       }
     }
+    xgramUpdateCodeInput(); // XGram M3E r6: a new code type can have another hero and length
     sendFirebaseSmsIfNeeded(false);
   }
 
@@ -1422,7 +1588,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   }
 
   private void updatePasswordResetTextViews () {
-    if (state != null && state.pendingResetDate == 0) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E r6: the links keep their button padding (xgramLayout)
+    } else if (state != null && state.pendingResetDate == 0) {
       forgotView.setPadding(Screen.dp(16f), Screen.dp(15f), Screen.dp(12f), Screen.dp(16f));
     } else {
       forgotView.setPadding(Screen.dp(16f), Screen.dp(6f), Screen.dp(12f), Screen.dp(16f));
@@ -1742,6 +1910,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
         this.step = step;
         break;
       }
+    }
+    if (xgramStepTitle != null) {
+      xgramStepTitle.setTextAnimated(xgramStepTitleText(this.step)); // XGram M3E r6
     }
     switch (step) {
       case STEP_PASSWORD:
@@ -2072,6 +2243,12 @@ public class PasswordController extends ViewController<PasswordController.Args> 
                 editText.resetWithHint(R.string.EnterCode, false, () -> {
                   nextButton.setIcon(R.drawable.baseline_check_24);
                   editText.getEditText().setInputType(InputType.TYPE_CLASS_NUMBER);
+                  if (xgramCodeInput != null && emailAddressAuthenticationCodeInfo.length > 0) {
+                    xgramCodeInput.setCount(emailAddressAuthenticationCodeInfo.length); // XGram M3E r6: the code in boxes
+                    if (xgramHero != null) {
+                      xgramHero.setIcon(R.drawable.xgram_r6_b8_mail_24);
+                    }
+                  }
                   setForgetText(R.string.ChangeEmailResend);
                   setHintText(Lang.getStringBold(R.string.ChangeEmailConfirmCode, input), false);
                 });
@@ -2169,6 +2346,11 @@ public class PasswordController extends ViewController<PasswordController.Args> 
           navigateBack();
         }
       }
+
+      @Override
+      public void setLinkReady (boolean ready) {
+        xgramSetLinkReady(ready);
+      }
     }, fromEmailSetup, state);
   }
 
@@ -2217,7 +2399,19 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       public void emailSupport () {
         sendLoginHelpEmail();
       }
+
+      @Override
+      public void setLinkReady (boolean ready) {
+        xgramSetLinkReady(ready);
+      }
     }, state);
+  }
+
+  /** XGram M3E r6: the resend link turns into a filled tonal button once it can send a new code. */
+  private void xgramSetLinkReady (boolean ready) {
+    if (forgotView instanceof com.fahadali.xgram.appearance.XgramR6B8Login.LinkButton) {
+      ((com.fahadali.xgram.appearance.XgramR6B8Login.LinkButton) forgotView).setTonal(ready, true);
+    }
   }
 
   // XGram: on the 2FA login screen the "no recovery email" text comes with "Reset account", see com.fahadali.xgram.login.ResetAccount.
@@ -2301,6 +2495,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   public void onClick (View v) {
     final int viewId = v.getId();
     if (viewId == R.id.btn_done) {
+      if (xgramConnection != null && xgramConnection.blockWhileOffline(nextButton)) {
+        return; // XGram M3E r6: no network, the FAB explains itself
+      }
       proceed();
     } else if (viewId == R.id.btn_cancelReset) {
       openAlert(R.string.ResetPassword, R.string.CancelPasswordReset, Lang.getString(R.string.CancelPasswordResetYes), (dialog, which) -> {
@@ -2350,6 +2547,10 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     }
     if (phoneCodeLinks != null) { // XGram
       phoneCodeLinks.destroy();
+    }
+    if (xgramConnection != null) { // XGram M3E r6
+      xgramConnection.destroy();
+      xgramConnection = null;
     }
   }
 

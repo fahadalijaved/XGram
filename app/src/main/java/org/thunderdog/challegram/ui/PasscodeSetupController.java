@@ -27,6 +27,8 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
@@ -48,9 +50,13 @@ import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.unsorted.Passcode;
 import org.thunderdog.challegram.util.StringList;
+import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.NoScrollTextView;
 import org.thunderdog.challegram.widget.SeparatorView;
 import org.thunderdog.challegram.widget.ShadowView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.widget.FrameLayoutFix;
@@ -88,6 +94,9 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
 
   @Override
   public CharSequence getName () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.PasscodeTitle, R.string.XgramR6B8PasscodeLock); // XGram M3E r6
+    }
     return Lang.getString(R.string.PasscodeTitle);
   }
 
@@ -108,6 +117,10 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
   }
 
   private void checkItemsAvailability () {
+    if (xgramAdapter != null) {
+      xgramSyncLockItems(); // XGram M3E r6
+      return;
+    }
     boolean isAvailable = getPasscodeMode() != Passcode.MODE_BIOMETRICS && BiometricAuthentication.isAvailable();
     biometricsSeparator.setVisibility(isAvailable ? View.VISIBLE : View.GONE);
     biometricsView.setVisibility(isAvailable ? View.VISIBLE : View.GONE);
@@ -145,8 +158,203 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
     return headerCell;
   }
 
+  // XGram M3E r6: the page as a SettingsAdapter list (the same ids and handlers) in segmented groups, under the large
+  // title: switches for the lock, biometrics, hidden input, notification content and screen capture, the change and
+  // auto-lock rows, icon-pack icons and sentence-case labels. The secret chat page names the chat in its note instead
+  // of a two-line header.
+
+  private @Nullable SettingsAdapter xgramAdapter;
+  private @Nullable RecyclerView xgramList;
+  /** The rows of the lock group and the note under it; the rest only while a passcode is set. */
+  private static final int XGRAM_BASE_COUNT = 5;
+
+  private String xgramLabel (@StringRes int tgxRes, @StringRes int sentenceRes) {
+    return com.fahadali.xgram.appearance.XgramR5Lists.sentence(tgxRes, sentenceRes);
+  }
+
+  private View xgramCreateView (Context context) {
+    FrameLayoutFix wrapper = new FrameLayoutFix(context);
+    ViewSupport.setThemedBackground(wrapper, ColorId.background, this);
+    CustomRecyclerView list = (CustomRecyclerView) Views.inflate(context(), R.layout.recycler_custom, null);
+    list.setItemAnimator(com.fahadali.xgram.appearance.XgramAppMotion.listAnimator());
+    list.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
+    list.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    com.fahadali.xgram.appearance.XgramMotion.stretch(list, com.fahadali.xgram.appearance.XgramMotion.EDGE_BOTH);
+    xgramAdapter = new SettingsAdapter(this) {
+      @Override
+      protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
+        xgramBind(item, view, isUpdate);
+      }
+    };
+    xgramAdapter.setItems(xgramItems(), false);
+    list.setAdapter(xgramAdapter);
+    wrapper.addView(list);
+    xgramList = list;
+    lastEnabledStatus = isPasscodeEnabled();
+    com.fahadali.xgram.appearance.XgramM3Bars.attachLargeTitle(this, list);
+    com.fahadali.xgram.appearance.XgramMotion.attachScrollLink(this, list, 0);
+    return wrapper;
+  }
+
+  private ArrayList<ListItem> xgramItems () {
+    ArrayList<ListItem> items = new ArrayList<>();
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_passcode, R.drawable.baseline_lock_24, xgramLabel(R.string.PasscodeItem, R.string.XgramR6B8PasscodeLock)));
+    items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_passcode_change, R.drawable.mrgrigri_baseline_textbox_password_24, xgramLabel(R.string.ChangePasscode, R.string.XgramR6B8ChangePasscode)));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, specificChat != null ? Lang.getStringBold(R.string.SecretPasscodeInfo, tdlib.chatTitle(specificChat)) : Lang.getString(R.string.ChangePasscodeInfo), false));
+    if (isPasscodeEnabled()) {
+      items.addAll(xgramLockItems());
+    }
+    return items;
+  }
+
+  /** The options of a set passcode (the rows TGX shows in its auto-lock part). */
+  private ArrayList<ListItem> xgramLockItems () {
+    ArrayList<ListItem> items = new ArrayList<>();
+    final boolean biometrics = getPasscodeMode() != Passcode.MODE_BIOMETRICS && BiometricAuthentication.isAvailable();
+    final boolean visibility = getPasscodeMode() != Passcode.MODE_BIOMETRICS;
+    final boolean autoLock = specificChat == null;
+    if (biometrics || visibility || autoLock) {
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      if (biometrics) {
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_biometrics, R.drawable.baseline_fingerprint_24, BiometricAuthentication.ONLY_FINGERPRINT ?
+          xgramLabel(R.string.passcode_fingerprint, R.string.XgramR6B8UnlockFingerprint) :
+          xgramLabel(R.string.passcode_biometrics, R.string.XgramR6B8UnlockBiometrics)));
+      }
+      if (visibility) {
+        items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_pattern, R.drawable.baseline_eye_off_24, xgramLabel(R.string.passcode_passcodeInvisibility, R.string.XgramR6B8PasscodeInvisibility)));
+      }
+      if (autoLock) {
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_passcode_auto, R.drawable.xgram_r6_b8_timer_24, xgramLabel(R.string.AutoLock, R.string.XgramR6B8AutoLock)));
+      }
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      if (autoLock) {
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.passcode_auto_hint));
+      }
+    }
+    if (specificChat == null) {
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_notificationContent, R.drawable.baseline_notifications_24, xgramLabel(R.string.AllowNotifications, R.string.XgramR6B8NotificationsContent)));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.AllowNotificationsInfo));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_screenCapture, R.drawable.xgram_r6_b8_screenshot_24, xgramLabel(R.string.ScreenCapture, R.string.XgramR6B8ScreenCapture)));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.ScreenCaptureInfo));
+    }
+    return items;
+  }
+
+  private void xgramBind (ListItem item, SettingView view, boolean isUpdate) {
+    final int id = item.getId();
+    if (id == R.id.btn_passcode) {
+      view.getToggler().setRadioEnabled(isPasscodeEnabled(), isUpdate);
+    } else if (id == R.id.btn_passcode_change) {
+      view.setIgnoreEnabled(true);
+      view.setVisuallyEnabled(isPasscodeEnabled(), isUpdate);
+    } else if (id == R.id.btn_biometrics) {
+      final boolean enabled = needUnlockWithBiometrics();
+      view.getToggler().setRadioEnabled(enabled, isUpdate);
+      view.setData(Lang.getMarkdownString(this, useStrongBiometrics(enabled) ? R.string.BiometricsStrong : R.string.BiometricsWeak));
+    } else if (id == R.id.btn_pattern) {
+      view.getToggler().setRadioEnabled(!isPasscodeVisible(), isUpdate);
+    } else if (id == R.id.btn_passcode_auto) {
+      if (autoLockOptions == null) {
+        autoLockOptions = Passcode.instance().getAutolockModeNames();
+      }
+      view.setData(autoLockOptions[Passcode.instance().getAutolockMode()]);
+    } else if (id == R.id.btn_notificationContent) {
+      view.getToggler().setRadioEnabled(Passcode.instance().displayNotifications(), isUpdate);
+    } else if (id == R.id.btn_screenCapture) {
+      view.getToggler().setRadioEnabled(Passcode.instance().allowScreenshots(), isUpdate);
+    }
+  }
+
+  /** The lock options in or out (exact ranges), or rebuilt when the ones that apply changed (another passcode type). */
+  private void xgramSyncLockItems () {
+    if (xgramAdapter == null) {
+      return;
+    }
+    List<ListItem> items = xgramAdapter.getItems();
+    final int shownCount = Math.max(0, items.size() - XGRAM_BASE_COUNT);
+    if (!isPasscodeEnabled()) {
+      if (shownCount > 0) {
+        xgramAdapter.removeRange(XGRAM_BASE_COUNT, shownCount);
+      }
+      return;
+    }
+    ArrayList<ListItem> lock = xgramLockItems();
+    if (shownCount == 0) {
+      items.addAll(lock);
+      xgramAdapter.notifyItemRangeInserted(XGRAM_BASE_COUNT, lock.size());
+      return;
+    }
+    boolean same = shownCount == lock.size();
+    for (int i = 0; same && i < lock.size(); i++) {
+      ListItem now = items.get(XGRAM_BASE_COUNT + i);
+      same = now.getId() == lock.get(i).getId() && now.getViewType() == lock.get(i).getViewType();
+    }
+    if (same) {
+      for (ListItem row : lock) {
+        if (row.getId() != 0) {
+          xgramAdapter.updateValuedSettingById(row.getId());
+        }
+      }
+    } else {
+      xgramAdapter.removeRange(XGRAM_BASE_COUNT, shownCount);
+      items.addAll(lock);
+      xgramAdapter.notifyItemRangeInserted(XGRAM_BASE_COUNT, lock.size());
+    }
+  }
+
+  private void xgramOnClick (View v) {
+    final int viewId = v.getId();
+    if (viewId == R.id.btn_passcode) {
+      if (!isPasscodeEnabled()) {
+        showPasscodeOptions(v);
+      } else {
+        disablePasscode();
+        updateEnabledStatus(true);
+      }
+    } else if (viewId == R.id.btn_passcode_change) {
+      if (isPasscodeEnabled()) {
+        showPasscodeOptions(v);
+      }
+    } else if (viewId == R.id.btn_biometrics) {
+      if (needUnlockWithBiometrics()) {
+        disableUnlockByBiometrics();
+        xgramAdapter.updateValuedSettingById(R.id.btn_biometrics);
+      } else if (!BiometricAuthentication.isAvailable() || BiometricAuthentication.isMissingEnrolledData(useStrongBiometrics(false))) {
+        int errorRes = BiometricAuthentication.ONLY_FINGERPRINT ? R.string.fingerprint_hint3 : R.string.biometrics_hint3;
+        context.tooltipManager().builder(v).icon(R.drawable.baseline_error_24).show(tdlib, errorRes).hideDelayed();
+      } else {
+        PasscodeController c = new PasscodeController(context, tdlib);
+        if (specificChat != null) {
+          c.setArguments(new PasscodeController.Args(specificChat, chatPasscode, null));
+        }
+        c.setPasscodeMode(PasscodeController.MODE_SETUP);
+        c.setInBiometricsSetup();
+        navigateTo(c);
+      }
+    } else if (viewId == R.id.btn_pattern) {
+      setPasscodeVisible(!xgramAdapter.toggleView(v));
+    } else if (viewId == R.id.btn_notificationContent) {
+      Passcode.instance().setDisplayNotifications(xgramAdapter.toggleView(v));
+      TdlibManager.instance().onUpdateAllNotifications();
+    } else if (viewId == R.id.btn_screenCapture) {
+      Passcode.instance().setAllowScreenshots(xgramAdapter.toggleView(v));
+      UI.checkDisallowScreenshots();
+    } else if (viewId == R.id.btn_passcode_auto) {
+      showAutoLockOptions();
+    }
+  }
+
   @Override
   protected View onCreateView (Context context) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return xgramCreateView(context);
+    }
     if (specificChat != null) {
       headerCell = new DoubleHeaderView(context);
       headerCell.setThemedTextColor(this);
@@ -341,6 +549,10 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
   }
 
   private void updateAutolockVisibility (boolean animated) {
+    if (xgramAdapter != null) {
+      xgramSyncLockItems(); // XGram M3E r6: the rows in or out, the list animator moves the rest
+      return;
+    }
     boolean isEnabled = isPasscodeEnabled();
 
     if (!animated) {
@@ -365,6 +577,10 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
   }
 
   private void updateAutoLockInfo () {
+    if (xgramAdapter != null) {
+      xgramAdapter.updateValuedSettingById(R.id.btn_passcode_auto); // XGram M3E r6
+      return;
+    }
     if (autoLockView != null) {
       if (autoLockOptions == null) {
         autoLockOptions = Passcode.instance().getAutolockModeNames();
@@ -377,6 +593,12 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
 
   public void updateEnabledStatus (boolean animated) {
     lastEnabledStatus = isPasscodeEnabled();
+    if (xgramAdapter != null) { // XGram M3E r6
+      xgramAdapter.updateValuedSettingById(R.id.btn_passcode);
+      xgramAdapter.updateValuedSettingById(R.id.btn_passcode_change);
+      xgramSyncLockItems();
+      return;
+    }
     passcodeView.getToggler().setRadioEnabled(lastEnabledStatus, animated);
     if (animated) {
       changeView.setEnabledAnimated(lastEnabledStatus);
@@ -394,9 +616,13 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
     if (specificChat != null) {
       chatPasscode = tdlib.chatPasscode(specificChat);
     }
-    boolean biometricsEnabled = needUnlockWithBiometrics();
-    biometricsView.getToggler().setRadioEnabled(biometricsEnabled, biometricsView.getVisibility() == View.VISIBLE && isFocused());
-    biometricsView.setData(Lang.getMarkdownString(this, useStrongBiometrics(biometricsEnabled) ? R.string.BiometricsStrong : R.string.BiometricsWeak));
+    if (xgramAdapter != null) {
+      xgramAdapter.updateValuedSettingById(R.id.btn_biometrics); // XGram M3E r6
+    } else {
+      boolean biometricsEnabled = needUnlockWithBiometrics();
+      biometricsView.getToggler().setRadioEnabled(biometricsEnabled, biometricsView.getVisibility() == View.VISIBLE && isFocused());
+      biometricsView.setData(Lang.getMarkdownString(this, useStrongBiometrics(biometricsEnabled) ? R.string.BiometricsStrong : R.string.BiometricsWeak));
+    }
     if (!removedPasscodeItem && isAttachedToNavigationController()) {
       removedPasscodeItem = true;
       if (isPasscodeEnabled()) {
@@ -494,6 +720,10 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
 
   @Override
   public void onClick (View v) {
+    if (xgramAdapter != null) {
+      xgramOnClick(v); // XGram M3E r6
+      return;
+    }
     final int viewId = v.getId();
     if (viewId == R.id.btn_passcode) {
       boolean enabled = !isPasscodeEnabled();
@@ -568,7 +798,7 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
 
   @Override
   public View getViewForApplyingOffsets () {
-    return contentView;
+    return xgramList != null ? xgramList : contentView;
   }
 
   // Settings

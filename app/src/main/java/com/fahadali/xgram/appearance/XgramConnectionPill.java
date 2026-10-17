@@ -223,6 +223,16 @@ public final class XgramConnectionPill extends View {
     updateShown(animated);
   }
 
+  /**
+   * XGram M3E r6: the tracker this pill shows (a login screen of an account being added has its own, see
+   * {@link XgramConnection#track}); its stuck tap retries through it. Null is the shared tracker.
+   */
+  private @Nullable XgramConnection source;
+
+  public void setSource (@Nullable XgramConnection source) {
+    this.source = source;
+  }
+
   /** Hidden while the chat list searches, selects or has its FAB menu open. */
   public void setSuppressed (boolean suppressed, boolean animated) {
     if (this.suppressed != suppressed) {
@@ -370,7 +380,7 @@ public final class XgramConnectionPill extends View {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         performHapticFeedback(HapticFeedbackConstants.CONFIRM);
       }
-      XgramConnection.instance().retry();
+      (source != null ? source : XgramConnection.instance()).retry();
       return true;
     }
     if (state == XgramConnection.OFFLINE) {

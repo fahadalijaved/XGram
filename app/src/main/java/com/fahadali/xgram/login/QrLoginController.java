@@ -39,6 +39,16 @@ import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
+import com.fahadali.xgram.appearance.XgramButtonGroupView;
+import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramIconPack;
+import com.fahadali.xgram.appearance.XgramR5Lists;
+import com.fahadali.xgram.appearance.XgramR5People;
+import com.fahadali.xgram.appearance.XgramR5Security;
+import com.fahadali.xgram.appearance.XgramR5Sheets;
+import com.fahadali.xgram.appearance.XgramR6B8Login;
+import com.fahadali.xgram.appearance.XgramShapes;
+import com.fahadali.xgram.appearance.XgramSnackbar;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.common.BitMatrix;
@@ -105,6 +115,9 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
 
   @Override
   public CharSequence getName () {
+    if (XgramExpressive.isEnabled()) {
+      return Lang.getString(R.string.xgram_login_QrButton); // XGram M3E r6: "Log in with QR code", the large title
+    }
     return Lang.getString(R.string.xgram_login_QrTitle);
   }
 
@@ -120,6 +133,9 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
 
   @Override
   protected View onCreateView (Context context) {
+    if (XgramExpressive.isEnabled()) {
+      return xgramCreateView(context);
+    }
     ScrollView scrollView = new ScrollView(context);
     scrollView.setFillViewport(true);
     ViewSupport.setThemedBackground(scrollView, ColorId.filling, this);
@@ -226,6 +242,223 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
     return view;
   }
 
+  // XGram M3E r6: the login column (XgramR6B8Login) with the large title; the code stays dark on its own white CORNER_XL
+  // square (scanner contrast in every theme) inside a 28dp surfaceContainerHighest card, an M3E loading indicator while
+  // there is no link, the card morphing into a circle with a check once scanned; the steps as three segmented tiles with
+  // numbered primaryContainer badges; a filled "Open in Telegram", a connected Save | Share group and a text button
+  // back to the phone number; snackbars instead of toasts; the connection pill under the app bar.
+
+  private static final int XGRAM_LOADING = 0, XGRAM_CODE = 1, XGRAM_SCANNED = 2, XGRAM_ENDED = 3;
+
+  private @Nullable XgramExpressive.MorphDrawable xgramCard;
+  private @Nullable View xgramSquare, xgramIndicator;
+  private @Nullable XgramR5Security.HeroView xgramCheck;
+  private @Nullable XgramExpressive.Spring xgramCodeSpring;
+  private @Nullable XgramR6B8Login.ConnectionWatch xgramConnection;
+  private int xgramState = XGRAM_LOADING;
+
+  private View xgramCreateView (Context context) {
+    FrameLayout root = new FrameLayout(context);
+    ViewSupport.setThemedBackground(root, ColorId.filling, this);
+    root.setKeepScreenOn(true); // the code has to stay visible while the other phone scans it
+
+    LinearLayout column = XgramR6B8Login.newColumn(context);
+    ScrollView scroll = XgramR6B8Login.wrapInScroll(context, column);
+    root.addView(scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    final boolean rtl = Lang.rtl();
+
+    TextView headline = XgramR6B8Login.newHeadline(context);
+    headline.setText(getName());
+    addThemeInvalidateListener(headline);
+    column.addView(headline, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    statusView = XgramR6B8Login.newSupporting(context);
+    statusView.setText(Lang.getString(R.string.xgram_login_QrRefresh));
+    addThemeInvalidateListener(statusView);
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    params.topMargin = Screen.dp(8f);
+    column.addView(statusView, params);
+
+    // The card, the white square with the code, the loading indicator and the check over it
+    qrSize = Math.max(Screen.dp(160f), Math.min(Screen.dp(240f), Screen.smallestActualSide() - Screen.dp(144f)));
+    FrameLayout card = new FrameLayout(context);
+    xgramCard = XgramR5Sheets.applyCard(card, XgramExpressive.SURFACE_CONTAINER_HIGHEST, XgramExpressive.CORNER_XL);
+    xgramCard.setHost(card);
+    addThemeInvalidateListener(card);
+    final int cardPadding = Screen.dp(16f);
+    card.setPadding(cardPadding, cardPadding, cardPadding, cardPadding);
+    FrameLayout square = new FrameLayout(context);
+    GradientDrawable white = new GradientDrawable();
+    white.setColor(LIGHT);
+    white.setCornerRadius(Screen.dp(XgramExpressive.CORNER_XL));
+    square.setBackground(white);
+    final int quietZone = Screen.dp(16f);
+    square.setPadding(quietZone, quietZone, quietZone, quietZone);
+    qrView = new ImageView(context);
+    qrView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    qrView.setContentDescription(Lang.getString(R.string.xgram_login_QrTitle));
+    square.addView(qrView, new FrameLayout.LayoutParams(qrSize, qrSize));
+    square.setAlpha(0f);
+    card.addView(square, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+    xgramSquare = square;
+    XgramR5Sheets.IndicatorView indicator = new XgramR5Sheets.IndicatorView(context, 48f, XgramExpressive.PRIMARY);
+    card.addView(indicator, new FrameLayout.LayoutParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER));
+    xgramIndicator = indicator;
+    xgramCheck = new XgramR5Security.HeroView(context, XgramShapes.COOKIE_9, R.drawable.baseline_check_24, XgramR6B8Login.HERO_ICON);
+    xgramCheck.setAlpha(0f);
+    addThemeInvalidateListener(xgramCheck);
+    card.addView(xgramCheck, new FrameLayout.LayoutParams(Screen.dp(XgramR6B8Login.HERO_SIZE), Screen.dp(XgramR6B8Login.HERO_SIZE), Gravity.CENTER));
+    xgramCodeSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> {
+      final float f = Math.max(0f, Math.min(1f, value));
+      square.setAlpha(f);
+      indicator.setAlpha(xgramState == XGRAM_LOADING ? 1f - f : 0f);
+    });
+    params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    params.gravity = Gravity.CENTER_HORIZONTAL;
+    params.topMargin = Screen.dp(24f);
+    column.addView(card, params);
+
+    // The steps: three segmented tiles, a numbered badge each
+    final int[] steps = {R.string.XgramR6B8QrStep1, R.string.XgramR6B8QrStep2, R.string.XgramR6B8QrStep3};
+    for (int i = 0; i < steps.length; i++) {
+      LinearLayout tile = new LinearLayout(context);
+      tile.setOrientation(LinearLayout.HORIZONTAL);
+      tile.setLayoutDirection(View.LAYOUT_DIRECTION_LTR); // the children are added in visual order below
+      tile.setGravity(Gravity.CENTER_VERTICAL);
+      tile.setMinimumHeight(Screen.dp(56f));
+      tile.setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
+      XgramExpressive.MorphDrawable tileBackground = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_NONE, Float.NaN);
+      tileBackground.setColorRole(XgramExpressive.SURFACE_BRIGHT);
+      tileBackground.setSegment(i == 0 ? XgramExpressive.SEGMENT_FIRST : i == steps.length - 1 ? XgramExpressive.SEGMENT_LAST : XgramExpressive.SEGMENT_MIDDLE);
+      tile.setBackground(tileBackground);
+      addThemeInvalidateListener(tile);
+
+      XgramR5Lists.RoleText badge = new XgramR5Lists.RoleText(context, XgramExpressive.TS_LABEL_L, XgramExpressive.ON_PRIMARY_CONTAINER);
+      badge.setText(String.valueOf(i + 1));
+      badge.setGravity(Gravity.CENTER);
+      badge.setFontFeatureSettings("tnum");
+      XgramExpressive.MorphDrawable badgeBackground = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_FULL, Float.NaN);
+      badgeBackground.setColorRole(XgramExpressive.PRIMARY_CONTAINER);
+      badge.setBackground(badgeBackground);
+      addThemeInvalidateListener(badge);
+      LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(Screen.dp(32f), Screen.dp(32f));
+
+      XgramR5Lists.RoleText text = new XgramR5Lists.RoleText(context, XgramExpressive.TS_BODY_L, XgramExpressive.ON_SURFACE);
+      text.setText(Lang.getString(steps[i]));
+      text.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
+      addThemeInvalidateListener(text);
+      LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+      if (rtl) {
+        textParams.rightMargin = Screen.dp(16f);
+        tile.addView(text, textParams);
+        tile.addView(badge, badgeParams);
+      } else {
+        textParams.leftMargin = Screen.dp(16f);
+        tile.addView(badge, badgeParams);
+        tile.addView(text, textParams);
+      }
+      LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      tileParams.topMargin = Screen.dp(i == 0 ? 24f : XgramExpressive.LIST_GAP);
+      column.addView(tile, tileParams);
+    }
+
+    // This phone can't scan its own screen: hand the link to Telegram here, or save the code for another screen
+    FrameLayout openApp = XgramR5People.newHeroButton(context, Lang.getString(R.string.xgram_login_QrOpenApp), XgramExpressive.PRIMARY, XgramExpressive.ON_PRIMARY, v -> openInTelegram());
+    params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    params.topMargin = Screen.dp(12f);
+    column.addView(openApp, params);
+    column.addView(xgramCaption(context, R.string.xgram_login_QrOpenAppHint), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    XgramButtonGroupView saveGroup = new XgramButtonGroupView(context);
+    List<XgramButtonGroupView.Action> actions = new ArrayList<>(2);
+    actions.add(new XgramButtonGroupView.Action(R.id.btn_xgramQrSave, XgramIconPack.map(R.drawable.baseline_file_download_24), Lang.getString(R.string.xgram_login_QrSave), false));
+    actions.add(new XgramButtonGroupView.Action(R.id.btn_xgramQrShare, XgramIconPack.map(R.drawable.baseline_share_24), Lang.getString(R.string.xgram_login_QrShare), false));
+    saveGroup.setActions(actions);
+    saveGroup.setCallback((view, actionId) -> {
+      if (actionId == R.id.btn_xgramQrSave) {
+        saveQr(false);
+      } else if (actionId == R.id.btn_xgramQrShare) {
+        saveQr(true);
+      }
+    });
+    addThemeInvalidateListener(saveGroup);
+    params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(XgramButtonGroupView.HEIGHT_DP));
+    params.topMargin = Screen.dp(8f);
+    params.leftMargin = params.rightMargin = -Screen.dp(16f); // the group has its own 16dp sides
+    column.addView(saveGroup, params);
+    column.addView(xgramCaption(context, R.string.xgram_login_QrSaveHint), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    TextView usePhone = XgramR5Sheets.textButton(context, Lang.getString(R.string.XgramR6B8QrUsePhone), XgramExpressive.PRIMARY, null);
+    usePhone.setId(R.id.btn_xgramQrCancel);
+    usePhone.setOnClickListener(this);
+    params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(48f));
+    params.gravity = Gravity.CENTER_HORIZONTAL;
+    params.topMargin = Screen.dp(16f);
+    column.addView(usePhone, params);
+
+    XgramR6B8Login.linkTitle(this, scroll, headline);
+    xgramConnection = XgramR6B8Login.ConnectionWatch.attach(this, root, scroll);
+
+    tdlib.listeners().addAuthorizationChangeListener(this);
+    TdApi.AuthorizationStateWaitOtherDeviceConfirmation state = getArguments();
+    showLink(state != null ? state.link : null);
+    // The link may have changed between MainActivity creating this screen and the listener being added.
+    TdApi.AuthorizationState current = tdlib.authorizationState();
+    if (current instanceof TdApi.AuthorizationStateWaitOtherDeviceConfirmation) {
+      showLink(((TdApi.AuthorizationStateWaitOtherDeviceConfirmation) current).link);
+    }
+    return root;
+  }
+
+  /** A centred bodySmall caption in onSurfaceVariant, 4dp under the control it explains. */
+  private TextView xgramCaption (Context context, int textRes) {
+    XgramR5Lists.RoleText caption = new XgramR5Lists.RoleText(context, XgramExpressive.TS_BODY_S, XgramExpressive.ON_SURFACE_VARIANT);
+    caption.setGravity(Gravity.CENTER);
+    caption.setText(Lang.getString(textRes));
+    caption.setPadding(Screen.dp(8f), Screen.dp(4f), Screen.dp(8f), 0);
+    addThemeInvalidateListener(caption);
+    return caption;
+  }
+
+  /** The card's content: the indicator while loading, the code, the check once scanned, nothing once the login ended. */
+  private void xgramSetState (int state) {
+    if (xgramCard == null || xgramCodeSpring == null || xgramCheck == null || xgramIndicator == null || xgramSquare == null) {
+      return;
+    }
+    final int previous = xgramState;
+    xgramState = state;
+    final boolean animated = xgramCard.getBounds().width() > 0;
+    if (animated) {
+      xgramCodeSpring.animateTo(state == XGRAM_CODE ? 1f : 0f);
+    } else {
+      xgramCodeSpring.setValue(state == XGRAM_CODE ? 1f : 0f);
+      xgramSquare.setAlpha(state == XGRAM_CODE ? 1f : 0f);
+    }
+    xgramIndicator.setAlpha(state == XGRAM_LOADING ? 1f - Math.max(0f, Math.min(1f, xgramCodeSpring.getValue())) : 0f);
+    xgramCard.setCornerTarget(state == XGRAM_SCANNED ? XgramExpressive.CORNER_FULL : Float.NaN, animated);
+    if (state == XGRAM_SCANNED && previous != XGRAM_SCANNED) {
+      XgramR6B8Login.popIn(xgramCheck);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        xgramCheck.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
+      }
+    } else if (state != XGRAM_SCANNED) {
+      xgramCheck.setAlpha(0f);
+    }
+  }
+
+  /** XGram M3E r6: a snackbar with Expressive design, a toast without it or when no page can show one. Any thread. */
+  private static void xgramNotify (CharSequence text) {
+    UI.post(() -> {
+      if (!XgramSnackbar.show(text, Toast.LENGTH_SHORT)) {
+        UI.showToast(text, Toast.LENGTH_SHORT);
+      }
+    });
+  }
+
+  private static void xgramNotify (int textRes) {
+    xgramNotify(Lang.getString(textRes));
+  }
+
   @Override
   public void onFocus () {
     super.onFocus();
@@ -254,6 +487,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
         shownLink = null;
         qrView.setImageBitmap(null);
         statusView.setText(Lang.getString(R.string.xgram_login_QrScanned));
+        xgramSetState(XGRAM_SCANNED); // XGram M3E r6
       } else if (!cancelled && state.getConstructor() == TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR) {
         // TDLib ended the QR login by itself. MainActivity keeps this screen for that state, so don't leave a dead code here.
         cancelled = true;
@@ -261,8 +495,9 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
         shownLink = null;
         qrView.setImageBitmap(null);
         statusView.setText(Lang.getString(R.string.xgram_login_QrEnded));
+        xgramSetState(XGRAM_ENDED); // XGram M3E r6
         if (isFocused()) {
-          UI.showToast(R.string.xgram_login_QrEnded, Toast.LENGTH_SHORT);
+          xgramNotify(R.string.xgram_login_QrEnded);
           navigateBack();
         }
       }
@@ -275,6 +510,9 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
     }
     shownLink = link;
     statusView.setText(Lang.getString(R.string.xgram_login_QrRefresh));
+    if (xgramState != XGRAM_CODE) {
+      xgramSetState(XGRAM_LOADING); // XGram M3E r6: the indicator until the code is drawn
+    }
     final int generation = ++encodeGeneration;
     final int size = qrSize;
     Background.instance().post(() -> {
@@ -282,6 +520,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
       runOnUiThreadOptional(() -> {
         if (generation == encodeGeneration && bitmap != null) {
           qrView.setImageBitmap(bitmap);
+          xgramSetState(XGRAM_CODE); // XGram M3E r6
         }
       });
     });
@@ -320,7 +559,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
   private String currentLink () {
     String link = cancelled ? null : shownLink;
     if (StringUtils.isEmpty(link)) {
-      UI.showToast(R.string.xgram_login_QrNotReady, Toast.LENGTH_SHORT);
+      xgramNotify(R.string.xgram_login_QrNotReady);
       return null;
     }
     return link;
@@ -365,7 +604,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
     }
     List<ComponentName> others = handlers(context, intent, false);
     if (others.isEmpty()) {
-      UI.showToast(R.string.xgram_login_QrNoApp, Toast.LENGTH_SHORT);
+      xgramNotify(R.string.xgram_login_QrNoApp);
       return;
     }
     Intent target;
@@ -386,7 +625,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
       context.startActivity(target);
     } catch (Throwable t) {
       Log.e("XGram: cannot open the QR login link", t);
-      UI.showToast(R.string.xgram_login_QrNoApp, Toast.LENGTH_SHORT);
+      xgramNotify(R.string.xgram_login_QrNoApp);
     }
   }
 
@@ -405,7 +644,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
     Background.instance().post(() -> {
       Bitmap bitmap = encode(link, SAVED_SIZE, 4);
       if (bitmap == null) {
-        UI.showToast(R.string.xgram_login_QrSaveFailed, Toast.LENGTH_SHORT);
+        xgramNotify(R.string.xgram_login_QrSaveFailed);
         return;
       }
       if (share) {
@@ -416,9 +655,9 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
         boolean saved = saveToPictures(bitmap, "XGram-login-QR-" + System.currentTimeMillis() + ".png");
         bitmap.recycle();
         if (saved) {
-          UI.showToast(Lang.getString(R.string.xgram_login_QrSaved, SAVED_FOLDER), Toast.LENGTH_SHORT);
+          xgramNotify(Lang.getString(R.string.xgram_login_QrSaved, SAVED_FOLDER));
         } else {
-          UI.showToast(R.string.xgram_login_QrSaveFailed, Toast.LENGTH_SHORT);
+          xgramNotify(R.string.xgram_login_QrSaveFailed);
         }
       }
     });
@@ -498,7 +737,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
 
   private void shareQr (@Nullable Uri uri) {
     if (uri == null) {
-      UI.showToast(R.string.xgram_login_QrSaveFailed, Toast.LENGTH_SHORT);
+      xgramNotify(R.string.xgram_login_QrSaveFailed);
       return;
     }
     Context context = context();
@@ -514,7 +753,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
       context.startActivity(chooser);
     } catch (Throwable t) {
       Log.e("XGram: cannot share the QR code", t);
-      UI.showToast(R.string.XgramExportNoApp, Toast.LENGTH_SHORT);
+      xgramNotify(R.string.XgramExportNoApp);
     }
   }
 
@@ -546,6 +785,10 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
   public void destroy () {
     super.destroy();
     tdlib.listeners().removeAuthorizationChangeListener(this);
+    if (xgramConnection != null) { // XGram M3E r6
+      xgramConnection.destroy();
+      xgramConnection = null;
+    }
     encodeGeneration++;
     // Back button, swipe back or the button above: if it still waits for a scan, end it, or this slot stays stuck.
     cancel();

@@ -57,6 +57,8 @@ public final class PhoneCodeLinks implements Handler.Callback {
     void requestNextCode ();
     void requestQrLogin ();
     void emailSupport ();
+    /** XGram M3E r6: true once the countdown is over and the link sends a new code (it then becomes a tonal button). */
+    default void setLinkReady (boolean ready) { }
   }
 
   public static final String PHONE_CODE_EXPIRED = "PHONE_CODE_EXPIRED";
@@ -119,6 +121,7 @@ public final class PhoneCodeLinks implements Handler.Callback {
     this.state = null;
     handler.removeMessages(MSG_TICK);
     host.setLinkText(null);
+    host.setLinkReady(false);
   }
 
   private @Nullable TdApi.AuthenticationCodeType nextType () {
@@ -173,11 +176,14 @@ public final class PhoneCodeLinks implements Handler.Callback {
     int left = nextType() != null ? secondsLeft() : 0;
     if (action == null) {
       host.setLinkText(Lang.getString(R.string.DidNotGetTheCode));
+      host.setLinkReady(false);
     } else if (left > 0) {
       host.setLinkText(Lang.getString(R.string.xgram_login_NextCodeIn, action, EmailCodeLinks.formatCountdown(left)));
+      host.setLinkReady(false);
       handler.sendEmptyMessageDelayed(MSG_TICK, 1000L);
     } else {
       host.setLinkText(action);
+      host.setLinkReady(true);
     }
   }
 

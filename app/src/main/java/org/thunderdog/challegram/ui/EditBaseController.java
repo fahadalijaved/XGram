@@ -133,7 +133,8 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
 
   protected RecyclerView onCreateRecyclerView () {
     RecyclerView recyclerView = (RecyclerView) Views.inflate(context(), R.layout.recycler, contentView);
-    recyclerView.setItemAnimator(itemAnimator = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
+    // XGram M3E r6: the spring list animator with Expressive design
+    recyclerView.setItemAnimator(itemAnimator = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? com.fahadali.xgram.appearance.XgramAppMotion.listAnimator() : new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, 180l));
     recyclerView.setHasFixedSize(true);
     recyclerView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false) {
       // XGram: on a Compose page (composeRenderer) the list is parked and empty; rows are the renderer's views.
@@ -410,6 +411,7 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
     if (needDoneFadeIn) {
       needDoneFadeIn = false;
       FactorAnimator animator = new FactorAnimator(DONE_FADE_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(animator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram M3E r6
       animator.setStartDelay(120l);
       animator.animateTo(1f);
     }

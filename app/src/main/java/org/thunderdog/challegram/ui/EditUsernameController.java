@@ -25,6 +25,7 @@ import android.view.inputmethod.EditorInfo;
 
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
@@ -32,6 +33,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.component.base.SettingView;
+import org.thunderdog.challegram.component.user.RemoveHelper;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGFoundChat;
@@ -94,6 +96,16 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
 
   @Override
   public CharSequence getName () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram M3E r6: sentence case while the language is Telegram X's English
+      if (isBotEdit) {
+        return com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.BotUsername, R.string.XgramR6B8BotLink);
+      } else if (chatId != 0) {
+        return tdlib.isChannel(chatId) ?
+          com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.ChannelLink, R.string.XgramR6B8ChannelLink) :
+          com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.GroupLink, R.string.XgramR6B8GroupLink);
+      }
+      return Lang.getString(R.string.Username);
+    }
     if (isBotEdit) {
       return Lang.getString(R.string.BotUsername);
     } else {
@@ -113,6 +125,9 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
   }
 
   private static ListItem valueOfUsername (String username, boolean isEditable) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return xgramValueOfUsername(username, true).setBoolValue(isEditable);
+    }
     return new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_username, 0, username, true)
       .setBoolValue(isEditable)
       .setStringValue(username);
@@ -166,6 +181,10 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
         if (isBotEdit) {
           editText.setInputEnabled(false);
         }
+        if (xgram && item.getId() == R.id.input && xgramInput != editText) {
+          xgramInput = editText; // XGram M3E r6: the availability is this field's supporting text
+          xgramApplyState();
+        }
       }
 
       @Override
@@ -179,6 +198,9 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
           view.setVisuallyEnabled(isActive && !isEditable && !isLoading, isUpdate);
           view.findCheckBox().setDisabled(isEditable, isUpdate);
           view.findCheckBox().setChecked(isActive, isUpdate);
+          if (xgram) { // XGram M3E r6: the state under the name
+            view.setData(Lang.getString(isActive ? R.string.XgramR6B8Active : R.string.XgramR6B8Inactive));
+          }
         }
       }
     };
@@ -247,7 +269,11 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
         @Override
         public void onSwiped (@NonNull RecyclerView.ViewHolder viewHolder, int direction) { }
       });
-      helper.attachToRecyclerView(recyclerView);
+      if (xgram) {
+        xgramAttachReorder(recyclerView); // XGram M3E r6: RemoveHelper's spring lift and a tick on each slot
+      } else {
+        helper.attachToRecyclerView(recyclerView);
+      }
       @StringRes int titleRes, hintRes;
       titleRes = selectResource(
         R.string.UsernamesMy,
@@ -261,7 +287,16 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
         R.string.UsernamesChannelHint,
         R.string.UsernamesBotHint
       );
-      items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, titleRes));
+      if (xgram) { // XGram M3E r6: a sentence case header
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, com.fahadali.xgram.appearance.XgramR5Lists.sentence(titleRes, selectResource(
+          R.string.XgramR6B8UsernamesMy,
+          R.string.XgramR6B8UsernamesChat,
+          R.string.XgramR6B8UsernamesChannel,
+          R.string.XgramR6B8UsernamesBot
+        ))));
+      } else {
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, titleRes));
+      }
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       int startIndex = items.size();
       boolean first = true;
@@ -279,6 +314,10 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
           first = false;
         } else {
           items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+        }
+        if (xgram) {
+          items.add(xgramValueOfUsername(disabledUsername, false)); // XGram M3E r6
+          continue;
         }
         items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_username, 0, disabledUsername, false)
           .setStringValue(disabledUsername)
@@ -841,7 +880,91 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
 
   private int state;
 
+  // XGram M3E r6: the check result is the field's supporting text (onSurfaceVariant while checking, primary with a
+  // check when free, error when taken or invalid) instead of a recoloured row under it; usernames are two-line rows
+  // ("@", the name, Active or Inactive, a checkbox) reordered through RemoveHelper (the spring lift, a tick per slot).
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private @Nullable MaterialEditTextGroup xgramInput;
+
+  private void xgramApplyState () {
+    if (xgramInput == null) {
+      return;
+    }
+    switch (state) {
+      case STATE_CHECKING: {
+        xgramInput.xgramSetSupportingText(checkingItem.getString(), com.fahadali.xgram.appearance.XgramR6B8Login.TONE_NEUTRAL);
+        break;
+      }
+      case STATE_CHECKED: {
+        final int colorId = checkedItem.getTextColorId(ColorId.NONE);
+        final int tone = colorId == ColorId.textSecure ? com.fahadali.xgram.appearance.XgramR6B8Login.TONE_GOOD :
+          colorId == ColorId.textNegative ? com.fahadali.xgram.appearance.XgramR6B8Login.TONE_ERROR :
+          com.fahadali.xgram.appearance.XgramR6B8Login.TONE_NEUTRAL;
+        xgramInput.xgramSetSupportingText(checkedItem.getString(), tone);
+        break;
+      }
+      default: {
+        xgramInput.xgramSetSupportingText(null, com.fahadali.xgram.appearance.XgramR6B8Login.TONE_NEUTRAL);
+        break;
+      }
+    }
+  }
+
+  private static ListItem xgramValueOfUsername (String username, boolean isActive) {
+    return new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_CHECKBOX, R.id.btn_username, R.drawable.baseline_alternate_email_24, username, isActive)
+      .setStringValue(username);
+  }
+
+  private void xgramAttachReorder (RecyclerView recyclerView) {
+    RemoveHelper.attach(recyclerView, new RemoveHelper.ExtendedCallback() {
+      private boolean isMovable (@Nullable ListItem item) {
+        return item != null && item.getId() == R.id.btn_username && item.isSelected();
+      }
+
+      @Override
+      public int makeDragFlags (RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder) {
+        Object tag = viewHolder.itemView.getTag();
+        return activeUsernames.size() > 1 && tag instanceof ListItem && isMovable((ListItem) tag) ? ItemTouchHelper.UP | ItemTouchHelper.DOWN : 0;
+      }
+
+      @Override
+      public boolean onMove (RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, RecyclerView.ViewHolder target) {
+        Object fromTag = viewHolder.itemView.getTag(), toTag = target.itemView.getTag();
+        if (fromTag instanceof ListItem && toTag instanceof ListItem && isMovable((ListItem) fromTag) && isMovable((ListItem) toTag)) {
+          int fromUsernameIndex = toUsernameIndex(viewHolder.getBindingAdapterPosition());
+          int toUsernameIndex = toUsernameIndex(target.getBindingAdapterPosition());
+          moveUsername(fromUsernameIndex, toUsernameIndex);
+          saveUsernamesOrder(false);
+          return true;
+        }
+        return false;
+      }
+
+      @Override
+      public void onCompleteMovement (int fromPosition, int toPosition) { }
+
+      @Override
+      public boolean isLongPressDragEnabled () {
+        return true;
+      }
+
+      @Override
+      public boolean canRemove (RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, int position) {
+        return false;
+      }
+
+      @Override
+      public void onRemove (RecyclerView.ViewHolder viewHolder) { }
+    });
+  }
+
   private void setState (int state) {
+    if (xgram) {
+      this.state = state;
+      xgramApplyState();
+      return;
+    }
     if (this.state != state) {
       int prevState = this.state;
       this.state = state;
@@ -891,6 +1014,15 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
         }
         helpSequence = Strings.replaceBoldTokens(Lang.getString(res), ColorId.textLight);
       }
+      if (xgram && helpSequence instanceof android.text.Spannable) {
+        // XGram M3E r6: bold in Google Sans Flex (bodyMedium, emphasized), never Roboto
+        android.text.Spannable spannable = (android.text.Spannable) helpSequence;
+        for (CustomTypefaceSpan span : spannable.getSpans(0, spannable.length(), CustomTypefaceSpan.class)) {
+          if (span.getTypeface() != null) {
+            span.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, true));
+          }
+        }
+      }
     }
     int usernameLength = currentUsernames.editableUsername.length();
     if (usernameLength >= MIN_USERNAME_LENGTH && usernameLength <= TdConstants.MAX_USERNAME_LENGTH && chatId == 0) {
@@ -900,7 +1032,7 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
       b.append(" ");
       String tMeUrl = tdlib.tMeUrl(currentUsernames.editableUsername);
       b.append(tMeUrl);
-      b.setSpan(new CustomTypefaceSpan(Fonts.getRobotoRegular(), ColorId.textLink), b.length() - tMeUrl.length(), b.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+      b.setSpan(xgram ? new CustomTypefaceSpan(null, ColorId.textLink) /* XGram M3E r6: the text's own font, the link in primary */ : new CustomTypefaceSpan(Fonts.getRobotoRegular(), ColorId.textLink), b.length() - tMeUrl.length(), b.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
       return b;
     }
     return helpSequence;
@@ -918,6 +1050,9 @@ public class EditUsernameController extends EditBaseController<EditUsernameContr
   private CharSequence getResultString (@ResultType int resultType) {
     switch (resultType) {
       case ResultType.AVAILABLE: {
+        if (xgram) { // XGram M3E r6: the supporting text's primary and check say it, no Roboto span
+          return Lang.getString(sourceUsernames.editableUsername.equals(currentUsernames.editableUsername) ? (chatId != 0 ? R.string.LinkCurrent : R.string.UsernameCurrent) : R.string.UsernameAvailable, currentUsernames.editableUsername);
+        }
         SpannableStringBuilder b = new SpannableStringBuilder(Lang.getString(sourceUsernames.editableUsername.equals(currentUsernames.editableUsername) ? (chatId != 0 ? R.string.LinkCurrent : R.string.UsernameCurrent) : R.string.UsernameAvailable, currentUsernames.editableUsername));
         b.setSpan(new CustomTypefaceSpan(Fonts.getRobotoMedium(), ColorId.textSecure), 0, currentUsernames.editableUsername.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         return b;

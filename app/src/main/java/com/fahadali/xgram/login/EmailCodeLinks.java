@@ -51,6 +51,8 @@ public final class EmailCodeLinks implements Handler.Callback {
     @NonNull View linkView ();
     /** Goes back to the email screen, if it is right below this one. */
     void useDifferentEmail ();
+    /** XGram M3E r6: true once the resend wait is over and the link sends a new code (it then becomes a tonal button). */
+    default void setLinkReady (boolean ready) { }
   }
 
   private static final long RESEND_COOLDOWN_MS = 30_000L;
@@ -127,6 +129,7 @@ public final class EmailCodeLinks implements Handler.Callback {
     handler.removeMessages(MSG_TICK);
     host.setWaitText(null);
     host.setLinkText(null);
+    host.setLinkReady(false);
     return false;
   }
 
@@ -166,6 +169,7 @@ public final class EmailCodeLinks implements Handler.Callback {
     } else {
       host.setLinkText(Lang.getString(R.string.xgram_login_ResendEmailCode));
     }
+    host.setLinkReady(state.emailAddressResetState == null && !fromEmailSetup && resendLeft <= 0);
     int resetLeft = pendingResetSecondsLeft();
     if (resetLeft > 0) {
       host.setWaitText(Lang.getString(R.string.xgram_login_ResetEmailPending, formatCountdown(resetLeft)));
