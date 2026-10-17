@@ -68,11 +68,56 @@ public class CallManager implements GlobalCallListener {
 
   CallManager (TdlibManager context) {
     context.global().addCallListener(this);
+    try {
+      com.fahadali.xgram.call.XgramCallVideo.installLifecycle(); // XGram: the camera runs only while an activity is started
+    } catch (Throwable t) {
+      Log.e(Log.TAG_VOIP, "XGram video: lifecycle", t);
+    }
   }
 
   private Tdlib currentCallTdlib;
   private @Nullable TdApi.Call currentCall;
   private boolean currentCallAcknowledged;
+  // XGram: the video of the current call (null on devices without video, see XgramCallVideo.isAvailable)
+  private @Nullable com.fahadali.xgram.call.XgramCallVideo currentVideo;
+
+  /** XGram: the video of the current call, or null. */
+  public @Nullable com.fahadali.xgram.call.XgramCallVideo video () {
+    return currentVideo != null && !currentVideo.isReleased() ? currentVideo : null;
+  }
+
+  /** XGram: the video of the call {@code callId} while it is the current one, or null. */
+  public @Nullable com.fahadali.xgram.call.XgramCallVideo video (int callId) {
+    com.fahadali.xgram.call.XgramCallVideo video = video();
+    return video != null && video.callId() == callId ? video : null;
+  }
+
+  private void xgramStartVideo (Tdlib tdlib, TdApi.Call call) {
+    xgramStopVideo();
+    if (!com.fahadali.xgram.call.XgramCallVideo.isAvailable()) {
+      return;
+    }
+    com.fahadali.xgram.call.XgramVideoBackend backend;
+    try {
+      backend = tgx.flavor.Flavor.createVideoBackend();
+    } catch (Throwable t) {
+      Log.e(Log.TAG_VOIP, "XGram video: no backend", t);
+      backend = null;
+    }
+    if (backend != null) {
+      currentVideo = new com.fahadali.xgram.call.XgramCallVideo(tdlib, call, backend);
+      if (call.isOutgoing && call.isVideo) {
+        currentVideo.setWantsVideo(true);
+      }
+    }
+  }
+
+  private void xgramStopVideo () {
+    if (currentVideo != null) {
+      currentVideo.release();
+      currentVideo = null;
+    }
+  }
 
   public void addCurrentCallListener (CurrentCallListener listener) {
     listeners.add(listener);
@@ -88,7 +133,17 @@ public class CallManager implements GlobalCallListener {
     if (currentCall == null && call == null) {
       return;
     }
+    if (!UI.inUiThread()) { // XGram: the video lives on the main thread
+      UI.post(() -> setCurrentCall(tdlib, call));
+      return;
+    }
     if (currentCall == null || call == null) {
+      // XGram: the call's video comes before its screen (and the camera goes the moment it ends)
+      if (call != null) {
+        xgramStartVideo(tdlib, call);
+      } else {
+        xgramStopVideo();
+      }
       this.currentCallTdlib = tdlib;
       this.currentCall = call;
       this.currentCallAcknowledged = call == null || UI.getUiState() != UI.State.RESUMED || UI.isNavigationBusyWithSomething();
@@ -113,6 +168,9 @@ public class CallManager implements GlobalCallListener {
     } else {
       currentCallTdlib = tdlib;
       currentCall = call;
+      if (currentVideo != null) { // XGram
+        currentVideo.onCallUpdated(call);
+      }
     }
   }
 
@@ -151,6 +209,13 @@ public class CallManager implements GlobalCallListener {
   private void notifyCallListeners () {
     for (CurrentCallListener listener : listeners) {
       listener.onCurrentCallChanged(currentCallTdlib, currentCall);
+    }
+  }
+
+  /** XGram: the current call changed in a way its chip shows (video was turned on). */
+  public void notifyCurrentCallChanged () {
+    if (currentCall != null && currentCallAcknowledged) {
+      notifyCallListeners();
     }
   }
 
@@ -208,6 +273,9 @@ public class CallManager implements GlobalCallListener {
       VoIPServerConfig.setConfig(((TdApi.CallStateReady) call.state).config);
     }
     if (TD.isFinished(call)) {
+      if (currentVideo != null && currentVideo.callId() == call.id) { // XGram: the camera closes the moment the call ends
+        currentVideo.onCallUpdated(call);
+      }
       setCurrentCall(null, null);
 
       Runnable act;
@@ -265,12 +333,15 @@ debugCall id:long debug:string = Ok;
   @Retention(RetentionPolicy.SOURCE)
   @IntDef({
     AlertType.MICROPHONE_HARDWARE_MISSING,
-    AlertType.MICROPHONE_PERMISSION_MISSING
+    AlertType.MICROPHONE_PERMISSION_MISSING,
+    AlertType.ANDROID_VERSION_UNSUPPORTED,
+    AlertType.CAMERA_PERMISSION_MISSING
   })
   private @interface AlertType {
     int MICROPHONE_HARDWARE_MISSING = 1,
         MICROPHONE_PERMISSION_MISSING = 2,
-        ANDROID_VERSION_UNSUPPORTED = 3;
+        ANDROID_VERSION_UNSUPPORTED = 3,
+        CAMERA_PERMISSION_MISSING = 4; // XGram: video calls
   }
 
   private void showAlert (@AlertType int alertType) {
@@ -292,6 +363,10 @@ debugCall id:long debug:string = Ok;
       case AlertType.MICROPHONE_PERMISSION_MISSING -> {
         b.setTitle(Lang.getString(R.string.MicrophonePermission));
         b.setMessage(Lang.getString(R.string.MicrophonePermissionDesc));
+      }
+      case AlertType.CAMERA_PERMISSION_MISSING -> {
+        b.setTitle(Lang.getString(R.string.XgramVideoAllowCamera));
+        b.setMessage(Lang.getString(R.string.XgramVideoAllowCameraText));
       }
       default ->
         throw new UnsupportedOperationException(Integer.toString(alertType));
@@ -315,6 +390,10 @@ debugCall id:long debug:string = Ok;
         return com.fahadali.xgram.appearance.XgramR6B1Prompts.showCallMicrophone(host);
       case AlertType.MICROPHONE_HARDWARE_MISSING:
         return com.fahadali.xgram.appearance.XgramR6B1Prompts.showNoMicrophone(host);
+      case AlertType.CAMERA_PERMISSION_MISSING:
+        // XGram: "Allow camera access" with [Not now] [Open settings]
+        return com.fahadali.xgram.appearance.XgramR6B1Prompts.showSettingsPrompt(host, R.drawable.baseline_videocam_24,
+          Lang.getString(R.string.XgramVideoAllowCamera), Lang.getString(R.string.XgramVideoAllowCameraText), Intents::openPermissionSettings);
       default:
         return false;
     }
@@ -326,6 +405,68 @@ debugCall id:long debug:string = Ok;
 
   public void declineIncomingCall (Tdlib tdlib, int callId, boolean isVideo) {
     discardCall(tdlib, callId, isVideo);
+  }
+
+  // XGram: the permissions of a call (the microphone, and the camera for video), asked for together
+
+  public interface CallPermissionsResult {
+    void onResult (boolean mic, boolean camera, boolean cameraPermanentlyDenied);
+  }
+
+  private static boolean isGranted (String permission) {
+    return Build.VERSION.SDK_INT < Build.VERSION_CODES.M || AppContext.get().checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+  }
+
+  /** The microphone, plus the camera when {@code wantCamera}; {@code after} runs at once when nothing is missing. */
+  public void checkCallPermissions (@Nullable BaseActivity activity, boolean wantCamera, CallPermissionsResult after) {
+    final boolean mic = isGranted(Manifest.permission.RECORD_AUDIO);
+    final boolean camera = isGranted(Manifest.permission.CAMERA);
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || (mic && (!wantCamera || camera)) || activity == null) {
+      after.onResult(mic, camera, false);
+      return;
+    }
+    final String[] missing;
+    if (!mic && wantCamera && !camera) {
+      missing = new String[] {Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA};
+    } else if (!mic) {
+      missing = new String[] {Manifest.permission.RECORD_AUDIO};
+    } else {
+      missing = new String[] {Manifest.permission.CAMERA};
+    }
+    activity.requestCustomPermissions(missing, (code, permissions, grantResults, grantCount) -> {
+      final boolean micNow = isGranted(Manifest.permission.RECORD_AUDIO);
+      final boolean cameraNow = isGranted(Manifest.permission.CAMERA);
+      final boolean permanent = wantCamera && !cameraNow && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA);
+      after.onResult(micNow, cameraNow, permanent);
+    });
+  }
+
+  /** XGram: the camera alert (a hero sheet with Expressive design, Telegram X's dialog otherwise). */
+  public void showCameraPermissionAlert () {
+    showAlert(AlertType.CAMERA_PERMISSION_MISSING);
+  }
+
+  /** XGram: the microphone alert of a call. */
+  public void showMicrophonePermissionAlert () {
+    showAlert(AlertType.MICROPHONE_PERMISSION_MISSING);
+  }
+
+  /** XGram: a short notice: a snackbar with Expressive design (with an optional action), a toast otherwise. */
+  public static void xgramNotice (CharSequence text, @Nullable CharSequence actionText, @Nullable Runnable action) {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() &&
+      com.fahadali.xgram.appearance.XgramSnackbar.show(text, Toast.LENGTH_LONG, actionText, action)) {
+      return;
+    }
+    UI.showToast(text, Toast.LENGTH_LONG);
+  }
+
+  /** XGram: a notice about the camera, with "Settings" when it was denied for good. */
+  public static void xgramCameraNotice (CharSequence text, boolean permanentlyDenied) {
+    if (permanentlyDenied) {
+      xgramNotice(text, Lang.getString(R.string.Settings), Intents::openPermissionSettings);
+    } else {
+      xgramNotice(text, null, null);
+    }
   }
 
   public boolean checkRecordPermissions (final Context context, final Tdlib tdlib, final @Nullable TdApi.Call call, final long userId, final @Nullable ViewController<?> makeCallContext) {
@@ -359,7 +500,11 @@ debugCall id:long debug:string = Ok;
   }
 
   public void makeCallDelayed (final ViewController<?> context, final long userId, @Nullable final TdApi.UserFullInfo userFull, final boolean needPrompt) {
-    UI.post(() -> makeCall(context, userId, userFull, needPrompt), 180l);
+    makeCallDelayed(context, userId, userFull, needPrompt, false);
+  }
+
+  public void makeCallDelayed (final ViewController<?> context, final long userId, @Nullable final TdApi.UserFullInfo userFull, final boolean needPrompt, final boolean isVideo) {
+    UI.post(() -> makeCall(context, userId, userFull, needPrompt, isVideo), 180l);
   }
 
   public boolean hasActiveCall () {
@@ -385,15 +530,33 @@ debugCall id:long debug:string = Ok;
     makeCall(context, userId, userFull, Settings.instance().needOutboundCallsPrompt());
   }
 
+  /** XGram: a video call when {@code isVideo} (a voice call when the other side cannot take video). */
+  public void makeCall (final ViewController<?> context, final long userId, @Nullable TdApi.UserFullInfo userFull, final boolean needPrompt, final boolean isVideo) {
+    xgramMakeCall(context, userId, userFull, needPrompt, isVideo);
+  }
+
+  /**
+   * XGram: a video call when {@code isVideo} (a voice call otherwise), with the outbound calls prompt as set. Not an
+   * overload of makeCall: makeCall (context, userId, userFull, needPrompt) has the same signature.
+   */
+  public void makeVideoCall (final ViewController<?> context, final long userId, @Nullable TdApi.UserFullInfo userFull, final boolean isVideo) {
+    xgramMakeCall(context, userId, userFull, Settings.instance().needOutboundCallsPrompt(), isVideo);
+  }
+
   public void makeCall (final ViewController<?> context, final long userId, @Nullable TdApi.UserFullInfo userFull, final boolean needPrompt) {
+    xgramMakeCall(context, userId, userFull, needPrompt, false);
+  }
+
+  private void xgramMakeCall (final ViewController<?> context, final long userId, @Nullable TdApi.UserFullInfo userFull, final boolean needPrompt, final boolean isVideoRequested) {
     if (userId == 0) {
       return;
     }
     if (Looper.myLooper() != Looper.getMainLooper()) {
       final TdApi.UserFullInfo userFullFinal = userFull;
-      UI.post(() -> makeCall(context, userId, userFullFinal, needPrompt));
+      UI.post(() -> xgramMakeCall(context, userId, userFullFinal, needPrompt, isVideoRequested));
       return;
     }
+    boolean isVideo = isVideoRequested;
     if (userFull == null) {
       userFull = context.tdlib().cache().userFull(userId);
     }
@@ -433,14 +596,14 @@ debugCall id:long debug:string = Ok;
           hangUp(pendingCallTdlib, pendingCall.id, () -> {
             if (!signal[0]) {
               signal[0] = true;
-              makeCall(context, userId, userFullFinal, false);
+              makeCall(context, userId, userFullFinal, false, isVideoRequested);
             }
           });
           UI.post(() -> {
             if (!signal[0]) {
               signal[0] = true;
               // XGram M3E r6: "Couldn't start the call" snackbar with "Try again" instead of the toast
-              if (!com.fahadali.xgram.appearance.XgramR6B1Prompts.showCallFailed(() -> makeCall(context, userId, userFullFinal, false))) {
+              if (!com.fahadali.xgram.appearance.XgramR6B1Prompts.showCallFailed(() -> makeCall(context, userId, userFullFinal, false, isVideoRequested))) {
                 UI.showToast(R.string.VoipFailed, Toast.LENGTH_SHORT);
               }
             }
@@ -480,33 +643,68 @@ debugCall id:long debug:string = Ok;
         if (error != null) {
           UI.showError(error);
         } else {
-          makeCall(context, userId, remoteUserFull, needPrompt);
+          xgramMakeCall(context, userId, remoteUserFull, needPrompt, isVideoRequested);
         }
       });
       return;
     }
+    final boolean canVideo = com.fahadali.xgram.call.XgramCallVideo.isAvailable() && com.fahadali.xgram.call.XgramCallVideo.canVideoCall(userFull);
     if (needPrompt) {
       final TdApi.UserFullInfo userFullFinal = userFull;
-      context.showOptions(Lang.getStringBold(R.string.CallX, context.tdlib().cache().userName(userId)), new int[]{R.id.btn_phone_call, R.id.btn_cancel}, new String[]{Lang.getString(R.string.Call), Lang.getString(R.string.Cancel)}, null, new int[]{R.drawable.baseline_call_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+      final int[] ids, icons;
+      final String[] titles;
+      if (canVideo) {
+        // XGram: both kinds, the requested one first
+        final int[] callItem = {R.id.btn_phone_call, R.string.Call, R.drawable.baseline_call_24};
+        final int[] videoItem = {R.id.btn_videoCall, R.string.XgramVideoCall, R.drawable.baseline_videocam_24};
+        final int[] first = isVideo ? videoItem : callItem, second = isVideo ? callItem : videoItem;
+        ids = new int[] {first[0], second[0], R.id.btn_cancel};
+        titles = new String[] {Lang.getString(first[1]), Lang.getString(second[1]), Lang.getString(R.string.Cancel)};
+        icons = new int[] {first[2], second[2], R.drawable.baseline_cancel_24};
+      } else {
+        ids = new int[] {R.id.btn_phone_call, R.id.btn_cancel};
+        titles = new String[] {Lang.getString(R.string.Call), Lang.getString(R.string.Cancel)};
+        icons = new int[] {R.drawable.baseline_call_24, R.drawable.baseline_cancel_24};
+      }
+      context.showOptions(Lang.getStringBold(R.string.CallX, context.tdlib().cache().userName(userId)), ids, titles, null, icons, (itemView, id) -> {
         if (id == R.id.btn_phone_call) {
-          makeCallDelayed(context, userId, userFullFinal, false);
+          makeCallDelayed(context, userId, userFullFinal, false, false);
+        } else if (id == R.id.btn_videoCall) {
+          makeCallDelayed(context, userId, userFullFinal, false, true);
         }
         return true;
       });
       // UI.getCurrentStackItem(context);
       return;
     }
-    if (!checkRecordPermissions(context.context(), context.tdlib(), null, userId, null)) {
-      return;
-    }
-    context.context().closeAllMedia(false);
-    context.tdlib().send(new TdApi.CreateCall(userId, VoIP.getProtocol(), false), (callId, error) -> {
-      if (error != null) {
-        Log.e(Log.TAG_VOIP, "Failed to create call: %s", TD.toErrorString(error));
-        UI.showError(error);
-      } else {
-        Log.v(Log.TAG_VOIP, "#%d: call created, user_id:%d", callId.id, userId);
+    if (isVideo && !canVideo) {
+      // XGram: the other side cannot take video: a voice call, and a word about it
+      isVideo = false;
+      if (com.fahadali.xgram.call.XgramCallVideo.isAvailable()) {
+        xgramNotice(Lang.getStringBold(R.string.XgramVideoUnsupportedCalling, context.tdlib().cache().userName(userId)), null, null);
       }
+    }
+    // XGram: the microphone (and the camera for video) together; the call goes on once they are granted (before, a
+    // grant for an outgoing call did nothing)
+    final boolean wantVideo = isVideo;
+    checkCallPermissions(context.context(), wantVideo, (mic, camera, cameraPermanentlyDenied) -> {
+      if (!mic) {
+        showAlert(AlertType.MICROPHONE_PERMISSION_MISSING);
+        return;
+      }
+      final boolean video = wantVideo && camera;
+      if (wantVideo && !camera) {
+        xgramCameraNotice(Lang.getString(R.string.XgramVideoCameraDenied), cameraPermanentlyDenied);
+      }
+      context.context().closeAllMedia(false);
+      context.tdlib().send(new TdApi.CreateCall(userId, VoIP.getProtocol(), video), (callId, error) -> {
+        if (error != null) {
+          Log.e(Log.TAG_VOIP, "Failed to create call: %s", TD.toErrorString(error));
+          UI.showError(error);
+        } else {
+          Log.v(Log.TAG_VOIP, "#%d: call created, user_id:%d, video:%b", callId.id, userId, video);
+        }
+      });
     });
   }
 
@@ -586,8 +784,11 @@ debugCall id:long debug:string = Ok;
       }
     }
     int duration = getCallDuration(tdlib, callId);
-    Log.v(Log.TAG_VOIP, "#%d: DiscardCall, isDisconnect: %b, connectionId: %d, duration: %d", callId, isDisconnect, connectionId, duration);
-    tdlib.client().send(new TdApi.DiscardCall(callId, isDisconnect, null, Math.max(0, duration), false, connectionId), object -> {
+    // XGram: a video call (or one that used video) is discarded as one
+    final com.fahadali.xgram.call.XgramCallVideo video = video(callId);
+    final boolean isVideo = call.isVideo || (video != null && video.wasVideoUsed());
+    Log.v(Log.TAG_VOIP, "#%d: DiscardCall, isDisconnect: %b, connectionId: %d, duration: %d, video: %b", callId, isDisconnect, connectionId, duration, isVideo);
+    tdlib.client().send(new TdApi.DiscardCall(callId, isDisconnect, null, Math.max(0, duration), isVideo, connectionId), object -> {
       Log.v(Log.TAG_VOIP, "#%d: DiscardCall completed: %s", callId, object);
     });
   }

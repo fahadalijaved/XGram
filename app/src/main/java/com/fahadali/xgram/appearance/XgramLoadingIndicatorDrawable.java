@@ -19,6 +19,7 @@ import android.graphics.drawable.Animatable;
 import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
 
+import androidx.annotation.ColorInt;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -31,6 +32,7 @@ import org.thunderdog.challegram.tool.Screen;
 public final class XgramLoadingIndicatorDrawable extends Drawable implements Animatable {
   private final int sizePx;
   private final int colorRole;
+  private @ColorInt int colorOverride;
   private long startTime;
   private boolean running;
   private int alpha = 255;
@@ -39,6 +41,14 @@ public final class XgramLoadingIndicatorDrawable extends Drawable implements Ani
     this.sizePx = Screen.dp(boxDp);
     this.colorRole = colorRole;
     setBounds(0, 0, sizePx, sizePx);
+  }
+
+  /** A fixed color in place of the role's (the call screen's status over video: white), or 0 for the role again. */
+  public void setColorOverride (@ColorInt int color) {
+    if (this.colorOverride != color) {
+      this.colorOverride = color;
+      invalidateSelf();
+    }
   }
 
   @Override
@@ -50,7 +60,7 @@ public final class XgramLoadingIndicatorDrawable extends Drawable implements Ani
     if (startTime == 0L) {
       startTime = SystemClock.uptimeMillis();
     }
-    int color = XgramExpressive.withAlpha(XgramExpressive.color(colorRole), alpha / 255f);
+    int color = XgramExpressive.withAlpha(colorOverride != 0 ? colorOverride : XgramExpressive.color(colorRole), alpha / 255f);
     float size = Math.min(b.width(), b.height()) * XgramLoadingIndicator.ACTIVE_INDICATOR_SCALE;
     XgramLoadingIndicator.draw(c, b.exactCenterX(), b.exactCenterY(), size, color, SystemClock.uptimeMillis() - startTime);
     if (running) {

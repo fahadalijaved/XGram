@@ -366,7 +366,9 @@ public class VoIP {
     @CallNetworkType int networkType,
     boolean audioGainControlEnabled,
     int echoCancellationStrength,
-    boolean isMicDisabled
+    boolean isMicDisabled,
+    long videoCapture,
+    @Nullable Object remoteVideoSink
   ) throws IllegalArgumentException {
     final String[] tgCallsVersions;
     if (BuildConfig.CALLS_AVAILABLE) {
@@ -429,7 +431,9 @@ public class VoIP {
             configuration,
             options,
             connectionStateListener,
-            version
+            version,
+            videoCapture,
+            remoteVideoSink
           );
         } catch (Throwable t) {
           Log.i("Unknown tgcalls %s", t, version);

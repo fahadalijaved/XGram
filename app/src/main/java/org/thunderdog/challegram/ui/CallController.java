@@ -276,6 +276,14 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   private FrameLayoutFix buttonWrap;
   private ButtonView muteButtonView, speakerButtonView;
+  // XGram: video calls with Expressive design off: the Video cell, the stage and the tile (Telegram X's look)
+  private @Nullable ButtonView xgramVideoButtonView;
+  private @Nullable TextView xgramBrandView;
+  private @Nullable com.fahadali.xgram.call.XgramCallVideoLayer xgramClassicLayer;
+  private @Nullable com.fahadali.xgram.appearance.XgramM3CallVideoTile xgramClassicTile;
+  private @Nullable FactorAnimator xgramAvatarFade;
+  private @DrawableRes int xgramSpeakerIcon = R.drawable.baseline_volume_up_24;
+  private static final int ANIMATOR_XGRAM_AVATAR = 7;
 
   private float lastHeaderFactor;
 
@@ -296,6 +304,9 @@ public class CallController extends ViewController<CallController.Arguments> imp
         brandWrap.setAlpha(factor);
       }
       avatarView.invalidate();
+      if (xgramAvatarFade != null) {
+        xgramSetClassicVideoFactor(xgramAvatarFade.getFactor()); // XGram: the scrim over video follows the header too
+      }
     }
   }
 
@@ -515,6 +526,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     brandView.setEllipsize(TextUtils.TruncateAt.END);
     brandView.setLayoutParams(lp);
     brandView.setText(Lang.uppercase(Lang.getString(R.string.VoipBranding)));
+    xgramBrandView = brandView;
     if (Log.checkLogLevel(Log.LEVEL_INFO) || BuildConfig.EXPERIMENTAL) {
       brandView.setOnClickListener(new View.OnClickListener() {
         @Override
@@ -648,9 +660,47 @@ public class CallController extends ViewController<CallController.Arguments> imp
     speakerButtonView.setIcon(R.drawable.baseline_volume_up_24);
     speakerButtonView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(72f), Screen.dp(72f), Gravity.RIGHT | Gravity.BOTTOM));
 
-    buttonWrap = new FrameLayoutFix(context);
+    // XGram: with video, four cells [Mute][Video][Message][Speaker | Flip], centered at W * (2i + 1) / 8
+    final boolean xgramVideoRow = com.fahadali.xgram.call.XgramCallVideo.isAvailable();
+    final ButtonView videoButtonView;
+    if (xgramVideoRow) {
+      videoButtonView = new ButtonView(context);
+      videoButtonView.setId(R.id.btn_video);
+      videoButtonView.setOnClickListener(this);
+      videoButtonView.setIcon(R.drawable.baseline_videocam_24);
+      videoButtonView.setContentDescription(Lang.getString(R.string.Video));
+      videoButtonView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(72f), Screen.dp(72f), Gravity.LEFT | Gravity.BOTTOM));
+    } else {
+      videoButtonView = null;
+    }
+    xgramVideoButtonView = videoButtonView;
+
+    buttonWrap = new FrameLayoutFix(context) {
+      @Override
+      protected void onLayout (boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        if (videoButtonView == null) {
+          return;
+        }
+        final int width = right - left;
+        final int cellBottom = (bottom - top) - getPaddingBottom();
+        layoutCell(muteButtonView, width, 0, cellBottom);
+        layoutCell(videoButtonView, width, 1, cellBottom);
+        layoutCell(messageButtonView, width, 2, cellBottom);
+        layoutCell(speakerButtonView, width, 3, cellBottom);
+      }
+
+      private void layoutCell (View view, int width, int index, int cellBottom) {
+        final int cx = width * (2 * index + 1) / 8;
+        final int w = view.getMeasuredWidth(), h = view.getMeasuredHeight();
+        view.layout(cx - w / 2, cellBottom - h, cx - w / 2 + w, cellBottom);
+      }
+    };
     buttonWrap.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(76f) + extraBottomInset, Gravity.BOTTOM));
     buttonWrap.addView(muteButtonView);
+    if (videoButtonView != null) {
+      buttonWrap.addView(videoButtonView);
+    }
     buttonWrap.addView(messageButtonView);
     buttonWrap.addView(speakerButtonView);
     Views.setPaddingBottom(buttonWrap, extraBottomInset);
@@ -667,6 +717,21 @@ public class CallController extends ViewController<CallController.Arguments> imp
     callControlsLayout.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     contentView.addView(callControlsLayout);
     callControlsLayout.setCall(tdlib, call, false);
+
+    // XGram: video (the stage over the photo, under the texts; the tile above everything)
+    if (xgramVideoRow) {
+      xgramClassicLayer = new com.fahadali.xgram.call.XgramCallVideoLayer(context, com.fahadali.xgram.call.XgramCallVideoLayer.STYLE_CLASSIC, (presentation, animated) -> xgramOnClassicPresentation(presentation, animated));
+      xgramClassicLayer.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      contentView.addView(xgramClassicLayer, contentView.indexOfChild(avatarView) + 1);
+      xgramClassicTile = new com.fahadali.xgram.appearance.XgramM3CallVideoTile(context, false, () -> {
+        if (xgramClassicLayer != null) {
+          xgramClassicLayer.toggleSwap();
+        }
+      });
+      contentView.addView(xgramClassicTile);
+      xgramClassicLayer.setTile(xgramClassicTile);
+      contentView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> xgramLayoutClassicVideo());
+    }
 
     // XGram: tabletop posture
     contentView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
@@ -692,6 +757,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
       muteButtonView.setIsActive(callSettings.isMicMuted(), false);
       speakerButtonView.setIsActive(callSettings.isSpeakerModeEnabled(), false);
     }
+    xgramBindVideo();
 
     return contentView;
   }
@@ -725,10 +791,12 @@ public class CallController extends ViewController<CallController.Arguments> imp
     tdlib.cache().addUserDataListener(call.userId, this);
     this.callSettings = tdlib.cache().getCallSettings(call.id);
 
+    screen.setVideoAvailable(com.fahadali.xgram.call.XgramCallVideo.isAvailable());
     screen.setCall(call, false);
     setTexts();
     updateCallState();
     updateCallButtons();
+    xgramBindVideo();
     return screen;
   }
 
@@ -749,16 +817,38 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
     @Override
     public void onSpeakerClick () {
-      if (!TD.isFinished(call)) {
-        if (callSettings == null) {
-          callSettings = new CallSettings(tdlib, call.id);
-        }
-        if (callSettings.isSpeakerModeEnabled()) {
-          callSettings.setSpeakerMode(CallSettings.SPEAKER_MODE_EARPIECE);
-        } else {
-          callSettings.toggleSpeakerMode(CallController.this);
-        }
+      xgramToggleAudioRoute();
+    }
+
+    @Override
+    public void onVideoClick () {
+      xgramOnVideoClick();
+    }
+
+    @Override
+    public void onFlipClick () {
+      if (xgramVideo != null) {
+        xgramVideo.flipCamera();
       }
+    }
+
+    @Override
+    public void onAudioRouteClick () {
+      xgramToggleAudioRoute();
+    }
+
+    @Override
+    public void onAnswerVideoChanged (boolean on) {
+      // The preview while it rings (only with the camera already allowed: nothing is asked for here)
+      if (xgramVideo != null && call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && !call.isOutgoing) {
+        xgramVideo.setWantsVideo(on && call.isVideo);
+      }
+    }
+
+    @Override
+    public void onVideoPresentationChanged (boolean video) {
+      xgramScreenShowsVideo = video;
+      xgramUpdateStatusBar();
     }
 
     @Override
@@ -783,12 +873,9 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
     @Override
     public boolean onAnswer () {
-      // Without the microphone permission it is asked for first, and the call is answered once it is granted
-      if (!tdlib.context().calls().checkRecordPermissions(context(), tdlib, call, call.userId, null)) {
-        return false;
-      }
-      CallController.this.onCallAccept(call);
-      return true;
+      // Without the microphone (or, for video, the camera) permission it is asked for first, and the call is answered
+      // once the answer comes; false then, so the pill springs back
+      return xgramAnswer();
     }
 
     @Override
@@ -817,6 +904,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     if (debugView != null) {
       screen.removeView(debugView);
       debugView = null;
+      screen.setDebugShown(false);
       return;
     }
     final TextView view = new TextView(context());
@@ -851,7 +939,11 @@ public class CallController extends ViewController<CallController.Arguments> imp
       }
     });
     debugView = view;
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+      view.setTranslationZ(Screen.dp(8f)); // above the video tile and the chrome
+    }
     screen.addView(debugView);
+    screen.setDebugShown(true);
   }
 
   /** Pending (both ways), exchanging keys, or ready but not connected yet. */
@@ -904,6 +996,10 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   @Override
   public void onCallAccept (TdApi.Call call) {
+    if (xgramScreen == null && xgramVideo != null && call.isVideo && call.id == this.call.id) {
+      xgramAnswer(); // XGram: Telegram X's answer of a video call asks for the camera too
+      return;
+    }
     tdlib.context().calls().acceptCall(context(), tdlib, call.id);
   }
 
@@ -914,7 +1010,8 @@ public class CallController extends ViewController<CallController.Arguments> imp
 
   @Override
   public void onCallRestart (TdApi.Call call) {
-    tdlib.context().calls().makeCall(this, call.userId, null);
+    // XGram: call again the way it was (video once it was a video call or used video)
+    tdlib.context().calls().makeVideoCall(this, call.userId, null, call.isVideo || xgramVideoUsed);
   }
 
   public boolean compareUserId (long userId) {
@@ -958,12 +1055,24 @@ public class CallController extends ViewController<CallController.Arguments> imp
       xgramUnlockPortrait();
     }
     xgramUpdateFold();
+    if ((changes & com.fahadali.xgram.layout.XgramWindow.CHANGE_SIZE_CLASS) != 0) {
+      // The cover and the inner selfie cameras are different sensors: the front camera opens again on the new one
+      UI.removePendingRunnable(this.xgramReopenCamera);
+      UI.post(this.xgramReopenCamera, 300L);
+    }
+  };
+
+  private final Runnable xgramReopenCamera = () -> {
+    if (!isDestroyed() && this.xgramVideo != null) {
+      this.xgramVideo.reopenFrontCamera();
+    }
   };
 
   private void xgramUpdateFold () {
     if (xgramScreen != null) {
       if (!isDestroyed()) {
         xgramScreen.setFoldTop(com.fahadali.xgram.layout.XgramWindow.tabletopFoldTop(xgramScreen));
+        xgramUpdateStatusBar(); // the screen may have become a pane, or the whole window
       }
       return;
     }
@@ -1054,6 +1163,10 @@ public class CallController extends ViewController<CallController.Arguments> imp
         }
         break;
       }
+      case ANIMATOR_XGRAM_AVATAR: {
+        xgramSetClassicVideoFactor(factor);
+        break;
+      }
     }
   }
 
@@ -1086,16 +1199,13 @@ public class CallController extends ViewController<CallController.Arguments> imp
     } else if (viewId == R.id.btn_openChat) {
       tdlib.ui().openPrivateChat(this, call.userId, null);
     } else if (viewId == R.id.btn_speaker) {
-      if (!TD.isFinished(call)) {
-        if (callSettings == null) {
-          callSettings = new CallSettings(tdlib, call.id);
-        }
-        if (callSettings.isSpeakerModeEnabled()) {
-          callSettings.setSpeakerMode(CallSettings.SPEAKER_MODE_EARPIECE);
-        } else {
-          callSettings.toggleSpeakerMode(this);
-        }
+      if (xgramVideo != null && xgramVideo.isCameraOn()) {
+        xgramVideo.flipCamera(); // XGram: the cell flips the camera while it is on
+        return;
       }
+      xgramToggleAudioRoute();
+    } else if (viewId == R.id.btn_video) {
+      xgramOnVideoClick(); // XGram
     }
   }
 
@@ -1145,6 +1255,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     } else {
       callControlsLayout.setCall(tdlib, call, navigationController != null);
     }
+    xgramSyncVideo();
   }
 
   @Override
@@ -1214,7 +1325,10 @@ public class CallController extends ViewController<CallController.Arguments> imp
     if (previousCallState != null && call.state.getConstructor() == TdApi.CallStateHangingUp.CONSTRUCTOR) {
       str = TD.getCallState2(call, previousCallState, callDuration, false);
     } else {
-      str = TD.getCallState(call, callDuration, false);
+      str = TD.getCallState(call, callDuration, false); // XGram: "Incoming video call" for one
+      if (xgramVideo != null && xgramVideo.remoteVideoState() == org.thunderdog.challegram.voip.annotation.VideoState.PAUSED && call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR) {
+        str = str + " \u00b7 " + Lang.getString(R.string.XgramVideoPaused); // XGram: the other side paused its video
+      }
       if (!call.isOutgoing && call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && tdlib.context().isMultiUser()) {
         String longName = tdlib.accountLongName();
         if (longName != null) {
@@ -1225,6 +1339,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     if (xgramScreen != null) { // XGram
       xgramScreen.setStatus(xgramStatus(str), xgramInProgress());
       xgramScreen.setTogglesVisible(!TD.isFinished(call) && !(call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && !call.isOutgoing), isFocused());
+      xgramScreen.setConnected(call.state.getConstructor() == TdApi.CallStateReady.CONSTRUCTOR && callDuration >= 0);
     } else {
       stateView.setText(Lang.uppercase(str));
       setButtonsVisible(!TD.isFinished(call) && !(call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR && !call.isOutgoing), isFocused());
@@ -1249,6 +1364,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
   @Override
   protected void onFocusStateChanged () {
     updateFlashing();
+    xgramUpdateVisible(); // XGram: the camera runs only while you can see this screen
   }
 
   private void updateControlsAlpha () {
@@ -1265,7 +1381,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
     }
     if (buttonWrap != null) {
       muteButtonView.setIsActive(callSettings != null && callSettings.isMicMuted(), isFocused());
-      speakerButtonView.setIsActive(callSettings != null && callSettings.isSpeakerModeEnabled(), isFocused());
+      xgramUpdateClassicButtons(isFocused());
     }
   }
 
@@ -1437,6 +1553,7 @@ public class CallController extends ViewController<CallController.Arguments> imp
       oneShot = true;
     }
     tdlib.context().calls().acknowledgeCurrentCall(call.id);
+    xgramCheckAnswerIntent(); // XGram: "Answer" in the notification of a video call
   }
 
   @Override
@@ -1465,17 +1582,28 @@ public class CallController extends ViewController<CallController.Arguments> imp
   }
 
   public void replaceCall (TdApi.Call call) {
+    final boolean newCall = this.call.id != call.id;
     tdlib.cache().unsubscribeFromCallUpdates(this.call.id, this);
     previousCallState = null;
+    if (newCall) {
+      xgramUnbindVideo(); // XGram: the old call's video goes at once (voice, no animation)
+    }
     updateCall(call);
     tdlib.cache().subscribeToCallUpdates(call.id, this);
     tdlib.context().calls().acknowledgeCurrentCall(call.id);
+    xgramBindVideo();
     updateCallState();
+    xgramCheckAnswerIntent();
   }
 
   @Override
   public void destroy () {
     super.destroy();
+    UI.removePendingRunnable(xgramReopenCamera);
+    xgramUnbindVideo(); // XGram
+    if (xgramAvatarFade != null) {
+      xgramAvatarFade.cancel();
+    }
     Screen.removeStatusBarHeightListener(this);
     if (context().xgramWindow() != null) {
       context().xgramWindow().removeListener(xgramWindowListener); // XGram
@@ -1492,5 +1620,375 @@ public class CallController extends ViewController<CallController.Arguments> imp
   @Override
   protected boolean usePopupMode () {
     return true;
+  }
+
+  // XGram: video calls (com.fahadali.xgram.call.XgramCallVideo). The call's video lives in CallManager; this screen
+  // shows it, says when it is visible (the camera runs only then), and runs the permission flows of the Video toggle and
+  // of answering.
+
+  private @Nullable com.fahadali.xgram.call.XgramCallVideo xgramVideo;
+  private boolean xgramVideoUsed, xgramPeerRequested, xgramLightStatusOverridden;
+
+  private final com.fahadali.xgram.call.XgramCallVideo.Listener xgramVideoListener = new com.fahadali.xgram.call.XgramCallVideo.Listener() {
+    @Override
+    public void onCallVideoChanged (com.fahadali.xgram.call.XgramCallVideo video) {
+      if (video != xgramVideo || isDestroyed()) {
+        return;
+      }
+      if (video.wasVideoUsed()) {
+        xgramVideoUsed = true;
+      }
+      if (video.isReleased()) {
+        xgramUnbindVideo();
+        return;
+      }
+      if (xgramClassicLayer != null) {
+        xgramClassicLayer.update(isFocused());
+      }
+      xgramUpdateClassicButtons(isFocused());
+      xgramUpdateBrand();
+      updateCallState(); // the paused video in the status
+    }
+
+    @Override
+    public void onCameraFailed (com.fahadali.xgram.call.XgramCallVideo video) {
+      if (video == xgramVideo && !isDestroyed()) {
+        org.thunderdog.challegram.telegram.CallManager.xgramNotice(Lang.getString(R.string.XgramVideoCameraFailed), null, null);
+      }
+    }
+
+    @Override
+    public void onCameraSwitched (com.fahadali.xgram.call.XgramCallVideo video, boolean front, boolean ok) {
+      if (video != xgramVideo || isDestroyed()) {
+        return;
+      }
+      if (!ok) {
+        org.thunderdog.challegram.telegram.CallManager.xgramNotice(Lang.getString(R.string.XgramVideoCameraFailed), null, null);
+      }
+      xgramUpdateClassicButtons(isFocused());
+    }
+  };
+
+  private void xgramBindVideo () {
+    final com.fahadali.xgram.call.XgramCallVideo video = tdlib.context().calls().video(call.id);
+    if (video == xgramVideo) {
+      xgramSyncVideo();
+      return;
+    }
+    xgramUnbindVideo();
+    xgramVideo = video;
+    if (video == null) {
+      return;
+    }
+    if (video.wasVideoUsed()) {
+      xgramVideoUsed = true;
+    }
+    video.addListener(xgramVideoListener);
+    if (xgramScreen != null) {
+      xgramScreen.setVideo(video);
+    } else if (xgramClassicLayer != null) {
+      xgramClassicLayer.setPeerName(TD.getUserName(user));
+      if (xgramClassicTile != null) {
+        xgramClassicTile.setPeerName(TD.getUserName(user));
+      }
+      xgramClassicLayer.setVideo(video, false);
+    }
+    xgramFetchPeer();
+    xgramSyncVideo();
+    xgramUpdateVisible();
+    xgramUpdateClassicButtons(false);
+    xgramUpdateBrand();
+  }
+
+  private void xgramUnbindVideo () {
+    final com.fahadali.xgram.call.XgramCallVideo video = xgramVideo;
+    if (video == null) {
+      return;
+    }
+    xgramVideo = null;
+    video.removeListener(xgramVideoListener);
+    video.setScreenVisible(this, false);
+    if (xgramScreen != null) {
+      xgramScreen.setVideo(null);
+    }
+    if (xgramClassicLayer != null) {
+      xgramClassicLayer.setVideo(null, false);
+    }
+    xgramUpdateStatusBar();
+  }
+
+  /** While an incoming video call rings: the preview follows the answer-with-video toggle (Expressive only). */
+  private void xgramSyncVideo () {
+    final com.fahadali.xgram.call.XgramCallVideo video = xgramVideo;
+    if (video == null || video.isReleased()) {
+      return;
+    }
+    if (xgramScreen != null && !call.isOutgoing && call.isVideo && call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR) {
+      video.setWantsVideo(xgramScreen.isAnswerWithVideo());
+    }
+  }
+
+  private void xgramUpdateVisible () {
+    if (xgramVideo != null) {
+      xgramVideo.setScreenVisible(this, isFocused() && !isDestroyed());
+    }
+    xgramUpdateStatusBar();
+  }
+
+  /** Whether the other side's app can do video (the Video toggle's disabled look), once per screen. */
+  private void xgramFetchPeer () {
+    final TdApi.UserFullInfo cached = tdlib.cache().userFull(call.userId);
+    if (cached != null) {
+      xgramSetPeerSupportsVideo(cached.supportsVideoCalls);
+      return;
+    }
+    if (xgramPeerRequested) {
+      return;
+    }
+    xgramPeerRequested = true;
+    final long userId = call.userId;
+    tdlib.send(new TdApi.GetUserFullInfo(userId), (userFull, error) -> {
+      if (userFull != null) {
+        tdlib.ui().post(() -> {
+          if (!isDestroyed() && call.userId == userId) {
+            xgramSetPeerSupportsVideo(userFull.supportsVideoCalls);
+          }
+        });
+      }
+    });
+  }
+
+  private void xgramSetPeerSupportsVideo (boolean supports) {
+    if (xgramVideo != null) {
+      xgramVideo.setPeerSupportsVideo(supports);
+    }
+    if (xgramScreen != null) {
+      xgramScreen.setPeerSupportsVideo(supports);
+    }
+    xgramUpdateClassicButtons(isFocused());
+  }
+
+  /** The speaker or the audio route (you chose it: the speaker that video turned on stays as you leave it). */
+  private void xgramToggleAudioRoute () {
+    if (TD.isFinished(call)) {
+      return;
+    }
+    if (xgramVideo != null) {
+      xgramVideo.autoSpeaker = false;
+    }
+    if (callSettings == null) {
+      callSettings = new CallSettings(tdlib, call.id);
+    }
+    if (callSettings.isSpeakerModeEnabled()) {
+      callSettings.setSpeakerMode(CallSettings.SPEAKER_MODE_EARPIECE);
+    } else {
+      callSettings.toggleSpeakerMode(this);
+    }
+  }
+
+  /** The Video toggle: off; or on, once the other side can take it and the camera is allowed. */
+  private void xgramOnVideoClick () {
+    final com.fahadali.xgram.call.XgramCallVideo video = xgramVideo;
+    if (video == null || TD.isFinished(call)) {
+      return;
+    }
+    if (video.wantsVideo()) {
+      video.setWantsVideo(false);
+      return;
+    }
+    if (Boolean.FALSE.equals(video.peerSupportsVideo()) && !call.isVideo) {
+      org.thunderdog.challegram.telegram.CallManager.xgramNotice(Lang.getStringBold(R.string.XgramVideoUnsupportedPeer, TD.getUserSingleName(call.userId, user)), null, null);
+      return;
+    }
+    if (com.fahadali.xgram.call.XgramCallVideo.cameraGranted()) {
+      video.setWantsVideo(true);
+      return;
+    }
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) {
+      return;
+    }
+    final BaseActivity activity = context();
+    activity.requestCustomPermissions(new String[] {android.Manifest.permission.CAMERA}, (code, permissions, grantResults, grantCount) -> {
+      if (isDestroyed() || video.isReleased()) {
+        return;
+      }
+      if (com.fahadali.xgram.call.XgramCallVideo.cameraGranted()) {
+        video.setWantsVideo(true);
+      } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && !activity.shouldShowRequestPermissionRationale(android.Manifest.permission.CAMERA)) {
+        tdlib.context().calls().showCameraPermissionAlert(); // denied for good: [Not now] [Open settings]
+      }
+      // Denied this time: nothing, you just said no
+    });
+  }
+
+  /**
+   * Answers the incoming call: with video for a video call (with Expressive design: as the toggle above the pill says),
+   * asking for the microphone and the camera first when needed. True when it was answered right away; false when a
+   * permission request went out (the answer comes with its result) or it could not be answered.
+   */
+  private boolean xgramAnswer () {
+    final TdApi.Call target = call;
+    final com.fahadali.xgram.call.XgramCallVideo video = xgramVideo;
+    final boolean withVideo = target.isVideo && video != null && (xgramScreen == null || xgramScreen.isAnswerWithVideo());
+    final boolean[] answered = new boolean[1];
+    tdlib.context().calls().checkCallPermissions(context(), withVideo, (mic, camera, cameraPermanentlyDenied) -> {
+      if (!mic) {
+        tdlib.context().calls().showMicrophonePermissionAlert();
+        return;
+      }
+      final TdApi.Call fresh = tdlib.cache().getCall(target.id);
+      if (fresh == null || fresh.state.getConstructor() != TdApi.CallStatePending.CONSTRUCTOR || fresh.isOutgoing) {
+        return;
+      }
+      if (video != null && !video.isReleased()) {
+        video.setWantsVideo(withVideo && camera);
+      }
+      if (withVideo && !camera) {
+        org.thunderdog.challegram.telegram.CallManager.xgramCameraNotice(Lang.getString(R.string.XgramVideoAnsweredNoCamera), cameraPermanentlyDenied);
+      }
+      answered[0] = true;
+      tdlib.context().calls().acceptCall(context(), tdlib, fresh.id);
+    });
+    return answered[0];
+  }
+
+  /** "Answer" in the notification of a video call opens this screen with the call's token: it answers here. */
+  private void xgramCheckAnswerIntent () {
+    if (isDestroyed() || !isFocused()) {
+      return;
+    }
+    final android.content.Intent intent = context().getIntent();
+    if (intent == null) {
+      return;
+    }
+    final long token = intent.getLongExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_VIDEO, 0L);
+    if (token == 0L) {
+      return;
+    }
+    final int callId = intent.getIntExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_CALL_ID, 0);
+    intent.removeExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_VIDEO);
+    intent.removeExtra(com.fahadali.xgram.call.XgramCallVideo.EXTRA_ANSWER_CALL_ID);
+    final com.fahadali.xgram.call.XgramCallVideo video = xgramVideo;
+    if (video != null && callId == call.id && token == video.answerToken() && !call.isOutgoing &&
+      call.state.getConstructor() == TdApi.CallStatePending.CONSTRUCTOR) {
+      xgramAnswer();
+    }
+  }
+
+  /**
+   * White status bar icons over video (Expressive), while this screen is focused and as wide as the window (in two
+   * panes the strip above the pane stays surface, with the theme's icons): an override of the activity's, which every
+   * later update of the bars keeps, until this screen gives it back.
+   */
+  private void xgramUpdateStatusBar () {
+    final com.fahadali.xgram.appearance.XgramM3CallScreen screen = xgramScreen;
+    boolean override = false;
+    if (screen != null && !isDestroyed() && isFocused() && xgramVideo != null && screen.getWidth() > 0) {
+      final View root = screen.getRootView();
+      override = xgramScreenShowsVideo && root != null && screen.getWidth() >= root.getWidth() - 1;
+    }
+    if (override == xgramLightStatusOverridden) {
+      return;
+    }
+    xgramLightStatusOverridden = override;
+    context().xgramSetLightStatusBarOverride(override ? Boolean.FALSE : null);
+  }
+
+  private boolean xgramScreenShowsVideo;
+
+  /** Telegram X's screen: the Video cell, and the speaker cell turned into Flip while the camera is on. */
+  private void xgramUpdateClassicButtons (boolean animated) {
+    if (buttonWrap == null || speakerButtonView == null) {
+      return;
+    }
+    final com.fahadali.xgram.call.XgramCallVideo video = xgramVideo;
+    final boolean cameraOn = video != null && !video.isReleased() && video.isCameraOn();
+    if (xgramVideoButtonView != null) {
+      xgramVideoButtonView.setIsActive(cameraOn, animated);
+      final boolean peerCannot = video != null && Boolean.FALSE.equals(video.peerSupportsVideo()) && !call.isVideo;
+      xgramVideoButtonView.setAlpha(peerCannot ? .4f : 1f);
+    }
+    final int icon = cameraOn ? (video.isFront() ? R.drawable.baseline_camera_rear_24 : R.drawable.baseline_camera_front_24) : R.drawable.baseline_volume_up_24;
+    if (icon != xgramSpeakerIcon) {
+      xgramSpeakerIcon = icon;
+      speakerButtonView.setIcon(icon);
+      speakerButtonView.invalidate();
+    }
+    speakerButtonView.setContentDescription(cameraOn ? Lang.getString(video.isFront() ? R.string.XgramVideoFlipToRear : R.string.XgramVideoFlipToFront) : null);
+    speakerButtonView.setIsActive(!cameraOn && callSettings != null && callSettings.isSpeakerModeEnabled(), animated);
+  }
+
+  private void xgramUpdateBrand () {
+    if (xgramBrandView != null) {
+      final boolean video = com.fahadali.xgram.call.XgramCallVideo.isAvailable() && (call.isVideo || xgramVideoUsed);
+      xgramBrandView.setText(Lang.uppercase(Lang.getString(video ? R.string.XgramVideoCallBranding : R.string.VoipBranding)));
+    }
+  }
+
+  /** Telegram X's screen: the photo fades away under video. */
+  private void xgramOnClassicPresentation (int presentation, boolean animated) {
+    final boolean video = presentation != com.fahadali.xgram.call.XgramCallVideoLayer.PRESENT_VOICE;
+    if (xgramAvatarFade == null) {
+      xgramAvatarFade = new FactorAnimator(ANIMATOR_XGRAM_AVATAR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, 0f);
+    }
+    if (animated) {
+      xgramAvatarFade.animateTo(video ? 1f : 0f);
+    } else {
+      xgramAvatarFade.forceFactor(video ? 1f : 0f);
+    }
+    if (avatarView != null && avatarView.getParent() instanceof View) {
+      ((View) avatarView.getParent()).setKeepScreenOn(video);
+    }
+  }
+
+  private void xgramSetClassicVideoFactor (float factor) {
+    if (avatarView != null) {
+      avatarView.setAlpha(1f - factor);
+    }
+    if (xgramClassicLayer != null) {
+      // The photo's own shadow goes with it: the same scrim over the video
+      xgramClassicLayer.setScrims(Screen.dp(212f), factor * lastHeaderFactor, -1, 0f);
+    }
+  }
+
+  /** Telegram X's screen: the stage follows the photo (tabletop: above the fold), the tile goes between the state and the buttons. */
+  private void xgramLayoutClassicVideo () {
+    final com.fahadali.xgram.appearance.XgramM3CallVideoTile tile = xgramClassicTile;
+    if (tile == null || avatarView == null || stateView == null || isDestroyed()) {
+      return;
+    }
+    final View parent = (View) tile.getParent();
+    if (parent == null || parent.getWidth() <= 0) {
+      return;
+    }
+    if (xgramClassicLayer != null) {
+      xgramClassicLayer.setStageBounds(avatarView.getTop(), avatarView.getBottom());
+    }
+    final int width = parent.getWidth(), height = parent.getHeight();
+    final float density = Screen.density();
+    int tileW, tileH;
+    if (width <= height) {
+      tileW = Screen.dp(MathUtils.clamp((float) Math.floor(.28f * width / density), 96f, 144f));
+      tileH = Math.round(tileW * 4f / 3f);
+    } else {
+      tileH = Screen.dp(MathUtils.clamp((float) Math.floor(.28f * height / density), 96f, 144f));
+      tileW = Math.round(tileH * 4f / 3f);
+    }
+    final int left = Screen.dp(16f), right = width - Screen.dp(16f);
+    final int top = stateView.getBottom() + Screen.dp(16f);
+    final int bottom = Math.min(avatarView.getBottom(), height - (Screen.dp(76f) + extraBottomInset)) - Screen.dp(16f);
+    if (bottom - top < tileH) {
+      tileH = Math.max(0, bottom - top);
+      tileW = tileH * 3 / 4;
+    }
+    tile.setTileSize(tileW, tileH);
+    final int mw = Math.max(1, tileW), mh = Math.max(1, tileH);
+    if (tile.getMeasuredWidth() != mw || tile.getMeasuredHeight() != mh) {
+      tile.measure(View.MeasureSpec.makeMeasureSpec(mw, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(mh, View.MeasureSpec.EXACTLY));
+    }
+    if (tile.getLeft() != 0 || tile.getTop() != 0 || tile.getWidth() != mw || tile.getHeight() != mh) {
+      tile.layout(0, 0, mw, mh);
+    }
+    tile.setTileBounds(left, top, right, Math.max(top, bottom), true);
   }
 }

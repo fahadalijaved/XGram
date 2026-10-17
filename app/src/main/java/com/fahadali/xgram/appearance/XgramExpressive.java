@@ -212,6 +212,27 @@ public final class XgramExpressive {
       animation.animateToFinalPosition(target);
     }
 
+    /**
+     * Springs to {@code target} starting at {@code startVelocity} (units per second, e.g. a fling's), so a thrown value
+     * carries on where the finger left it; 0 keeps the running velocity, as {@link #animateTo(float)}. Snaps when Reduce
+     * motion is on.
+     */
+    public void animateTo (float target, float startVelocity) {
+      if (startVelocity == 0f || Settings.instance().needReduceMotion()) {
+        animateTo(target);
+        return;
+      }
+      this.target = target;
+      animation.setStartVelocity(startVelocity);
+      animation.animateToFinalPosition(target);
+    }
+
+    /** The motion token of the next animations (a faster fade for a swap, for instance); a running one follows it. */
+    public Spring setToken (int token) {
+      animation.getSpring().setStiffness(STIFFNESS[token]).setDampingRatio(DAMPING[token]);
+      return this;
+    }
+
     /** Snaps to {@code v} and cancels the animation. The listener is not called. */
     public void setValue (float v) {
       if (animation.isRunning()) {

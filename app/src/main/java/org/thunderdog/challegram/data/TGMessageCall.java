@@ -216,7 +216,8 @@ public class TGMessageCall extends TGMessage {
             return false;
           }
           performClickSoundFeedback();
-          tdlib.context().calls().makeCall(controller(), userId, null);
+          // XGram: call back the way it was (a video call card calls back with video)
+          tdlib.context().calls().makeVideoCall(controller(), userId, null, callRaw.isVideo);
           return true;
         }
         break;

@@ -2773,7 +2773,8 @@ public class TD {
       case TdApi.CallStatePending.CONSTRUCTOR:
         TdApi.CallStatePending state = (TdApi.CallStatePending) call.state;
         if (!call.isOutgoing) {
-          return Lang.getString(R.string.IncomingCall);
+          // XGram: an incoming video call says so where this device can take video
+          return Lang.getString(call.isVideo && com.fahadali.xgram.call.XgramCallVideo.isAvailable() ? R.string.XgramVideoIncoming : R.string.IncomingCall);
         } else if (!state.isCreated) {
           return Lang.getString(R.string.VoipConnecting);
         } else if (!state.isReceived) {

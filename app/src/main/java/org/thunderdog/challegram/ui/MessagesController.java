@@ -6175,7 +6175,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
         return true;
       } else if (id == R.id.btn_messageCall) {
         cancelSheduledKeyboardOpeningAndHideAllKeyboards();
-        tdlib.context().calls().makeCall(this, tdlib.calleeUserId(selectedMessage.getMessage()), null);
+        // XGram: the kind of the selected call (a video call calls back with video)
+        final TdApi.MessageContent callContent = selectedMessage.getMessage().content;
+        final boolean isVideo = callContent.getConstructor() == TdApi.MessageCall.CONSTRUCTOR && ((TdApi.MessageCall) callContent).isVideo;
+        tdlib.context().calls().makeVideoCall(this, tdlib.calleeUserId(selectedMessage.getMessage()), null, isVideo);
         return true;
       } else if (id == R.id.btn_messageShareCallLogs) {
         VoIPLogs.Pair logFiles = (VoIPLogs.Pair) selectedMessageTag;
