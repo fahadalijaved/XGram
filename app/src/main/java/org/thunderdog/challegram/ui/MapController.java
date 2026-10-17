@@ -405,7 +405,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
             TGMessageLocation.TimeResult result = TGMessageLocation.buildLiveLocationSubtitle(tdlib, Math.max(msg.date, msg.editDate));
             TdApi.MessageLiveLocation location = ((TdApi.MessageLiveLocation) msg.content);
             long expiresIn = Math.max(0, (long) (msg.date + location.location.livePeriod) * 1000l - System.currentTimeMillis());
-            view.setLiveLocation(Lang.getString(R.string.StopSharingLiveLocation), result.text, true, true, location.expiresIn == 0, location.location.livePeriod, expiresIn > 0 ? SystemClock.uptimeMillis() + expiresIn : 0);
+            view.setLiveLocation(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.StopSharingLiveLocation, R.string.XgramR6B7StopSharingLiveLocation), result.text, true, true, location.expiresIn == 0, location.location.livePeriod, expiresIn > 0 ? SystemClock.uptimeMillis() + expiresIn : 0); // XGram: sentence case
             view.setInProgress(inShareProgress, isUpdate);
             if (result.nextLiveLocationUpdateTime != -1) {
               view.scheduleSubtitleUpdater(new Runnable() {
@@ -610,6 +610,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     if (nowHidden != isHidden) {
       if (directionHideAnimator == null) {
         directionHideAnimator = new BoolAnimator(ANIMATOR_DIRECTION_HIDE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(directionHideAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true); // XGram
       }
       directionHideAnimator.setValue(isHidden, hasFocused);
     }
@@ -890,6 +891,7 @@ public abstract class MapController<V extends View, T> extends ViewController<Ma
     if (hasMyLocation != (myAnimator != null && myAnimator.getValue())) {
       if (myAnimator == null) {
         myAnimator = new BoolAnimator(ANIMATOR_MY, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(myAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
       }
       myAnimator.setValue(hasMyLocation, true);
     }

@@ -134,7 +134,7 @@ public class HashtagChatController extends ViewPagerController<HashtagChatContro
       imageView.setScaleType(ImageView.ScaleType.CENTER);
       imageView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.round_keyboard_arrow_left_24));
       imageView.setColorFilter(Theme.textAccentColor());
-      imageView.setAlpha(.15f);
+      imageView.setAlpha(xgramChevronAlpha()); // XGram M3E: no faded chevron
       addThemeFilterListener(imageView, ColorId.text);
       imageView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(24f), Size.getHeaderPortraitSize(), Gravity.LEFT, Screen.dp(68f) - Screen.dp(12f), 0, 0, 0));
       headerCell.addView(imageView);
@@ -201,8 +201,13 @@ public class HashtagChatController extends ViewPagerController<HashtagChatContro
       v2.setAlpha(totalFactor);
       View v3 = headerCell.getChildAt(2);
       v3.setTranslationX(x);
-      v3.setAlpha(.15f * totalFactor);
+      v3.setAlpha(xgramChevronAlpha() * totalFactor);
     }
+  }
+
+  /** XGram M3E: the faded back chevron of the second page's title is dropped (the app bar has its own back button). */
+  private static float xgramChevronAlpha () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 0f : .15f;
   }
 
   @Override

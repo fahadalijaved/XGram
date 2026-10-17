@@ -484,7 +484,7 @@ public final class XgramR6B7Places {
       void onCaptionChanged (@NonNull String text);
     }
 
-    private final View pill;
+    private final FrameLayoutFix pill;
     private final ImageView emojiButton;
     private final EditText input;
     private final XgramExpressive.MorphDrawable pillBackground;

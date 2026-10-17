@@ -361,6 +361,8 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
     removeThemeListenerByTarget(textView);
     textView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
     addThemeTextColorListener(textView, ColorId.textNeutral); // primary while Expressive design maps it
+    // The headline lifts and the supporting text rises in on the spatial spring
+    com.fahadali.xgram.appearance.XgramAppMotion.use(dataAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
   }
 
   /** XGram M3E: Telegram X's title case place headers, in sentence case while the English strings are in use. */

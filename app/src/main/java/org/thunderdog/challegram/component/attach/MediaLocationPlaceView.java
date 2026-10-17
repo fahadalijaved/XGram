@@ -484,7 +484,7 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
   }
 
   public void setDefaultLiveLocation (boolean needWaves) {
-    setLiveLocation(Lang.getString(R.string.ShareLiveLocation), Lang.getString(R.string.SendLiveLocationInfo), false, needWaves, false, 0, 0);
+    setLiveLocation(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.ShareLiveLocation, R.string.XgramR6B7ShareLiveLocation), Lang.getString(R.string.SendLiveLocationInfo), false, needWaves, false, 0, 0); // XGram: sentence case
   }
 
   private Runnable subtitleUpdater;
@@ -546,6 +546,7 @@ public class MediaLocationPlaceView extends FrameLayoutFix implements AttachDele
     if (nowInProgress != inProgress) {
       if (progressAnimator == null) {
         progressAnimator = new BoolAnimator(ANIMATOR_PROGRESS, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+        com.fahadali.xgram.appearance.XgramAppMotion.use(progressAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, true); // XGram
       }
       if (progressComponent == null) {
         progressComponent = ProgressComponent.simpleInstance(this, 5f, receiver.getLeft(), receiver.getTop(), receiver.getWidth(), receiver.getHeight());

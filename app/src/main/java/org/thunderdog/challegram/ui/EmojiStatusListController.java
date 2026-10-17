@@ -1382,6 +1382,52 @@ public class EmojiStatusListController extends ViewController<EmojiLayout> imple
       xgram ? Lang.getString(R.string.SetEmojiAsStatusTimed) : Lang.uppercase(Lang.getString(R.string.SetEmojiAsStatusTimed)), R.id.btn_setEmojiStatusTimed, ColorId.textNeutral));
   }
 
+  /**
+   * XGram M3E: a timed status is one choice from a short list: a single-choice radio list in the M3 sheet (1 hour,
+   * 2 hours, 8 hours, 2 days, a custom time) with [Cancel] [Set as status]; the custom time opens the date and time
+   * picker.
+   */
+  private void xgramShowTimedStatusSheet (@NonNull ViewController<?> context, View v, @NonNull TGStickerObj sticker, long emojiId, @NonNull StickerSmallView stickerSmallView) {
+    final int group = R.id.btn_setEmojiStatusTimed;
+    org.thunderdog.challegram.navigation.SettingsWrapBuilder b = new org.thunderdog.challegram.navigation.SettingsWrapBuilder(group);
+    b.setRawItems(new ListItem[] {
+      new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_setEmojiStatusTimed1Hour, 0, R.string.SetEmojiAsStatusTimed1Hour, group, true),
+      new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_setEmojiStatusTimed2Hours, 0, R.string.SetEmojiAsStatusTimed2Hours, group, false),
+      new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_setEmojiStatusTimed8Hours, 0, R.string.SetEmojiAsStatusTimed8Hours, group, false),
+      new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_setEmojiStatusTimed2Days, 0, R.string.SetEmojiAsStatusTimed2Days, group, false),
+      new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_setEmojiStatusTimedCustom, 0, R.string.SetEmojiAsStatusTimedCustom, group, false)
+    });
+    b.setAllowResize(false);
+    b.setSaveStr(R.string.SetEmojiAsStatus);
+    b.setIntDelegate((id, result) -> {
+      final int choice = result.get(id);
+      if (choice == R.id.btn_setEmojiStatusTimedCustom) {
+        context.showDateTimePicker(tdlib, Lang.getString(R.string.SetEmojiAsStatus), R.string.SetTodayAt, R.string.SetTomorrowAt, R.string.SetDateAt, millis -> {
+          long expirationDate = millis / 1000L;
+          stickerSmallView.onSetEmojiStatus(v, sticker, emojiId, expirationDate);
+          tdlib.send(new TdApi.SetEmojiStatus(new TdApi.EmojiStatus(new TdApi.EmojiStatusTypeCustomEmoji(emojiId), (int) expirationDate)), tdlib.typedOkHandler());
+          stickerSmallView.closePreviewIfNeeded();
+        }, null);
+        return;
+      }
+      final int duration;
+      if (choice == R.id.btn_setEmojiStatusTimed2Hours) {
+        duration = 2 * 60 * 60;
+      } else if (choice == R.id.btn_setEmojiStatusTimed8Hours) {
+        duration = 8 * 60 * 60;
+      } else if (choice == R.id.btn_setEmojiStatusTimed2Days) {
+        duration = 2 * 24 * 60 * 60;
+      } else {
+        duration = 60 * 60;
+      }
+      long expirationDate = System.currentTimeMillis() / 1000L + duration;
+      stickerSmallView.onSetEmojiStatus(v, sticker, emojiId, expirationDate);
+      tdlib.send(new TdApi.SetEmojiStatus(new TdApi.EmojiStatus(new TdApi.EmojiStatusTypeCustomEmoji(emojiId), (int) expirationDate)), tdlib.typedOkHandler());
+      stickerSmallView.closePreviewIfNeeded();
+    });
+    context.showSettings(b);
+  }
+
   @Override
   public void onMenuStickerPreviewClick (View v, ViewController<?> context, @NonNull TGStickerObj sticker, @Nullable StickerSmallView stickerSmallView) {
     if (stickerSmallView == null) {
@@ -1395,6 +1441,10 @@ public class EmojiStatusListController extends ViewController<EmojiLayout> imple
       stickerSmallView.onSetEmojiStatus(v, sticker, emojiId, 0);
       stickerSmallView.closePreviewIfNeeded();
     } else if (viewId == R.id.btn_setEmojiStatusTimed) {
+      if (context != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramShowTimedStatusSheet(context, v, sticker, emojiId, stickerSmallView);
+        return;
+      }
       if (context != null) {
         context.showOptions(null, new int[] {
           R.id.btn_setEmojiStatusTimed1Hour,
