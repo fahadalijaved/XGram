@@ -722,6 +722,14 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
   public boolean onLongClick (View v) {
     if (v.getTag() != null && v.getTag() instanceof String) {
       String text = (String) v.getTag();
+      if (!StringUtils.isEmpty(text) && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        // XGram M3E: the button's name in a plain tooltip under it (as XgramNavRail's), never a toast: the framework
+        // shows the view's tooltip once this listener leaves the long press unhandled
+        if (!android.text.TextUtils.equals(v.getTooltipText(), text)) {
+          v.setTooltipText(text);
+        }
+        return false;
+      }
       if (!StringUtils.isEmpty(text)) {
         Toast toast = Toast.makeText(getContext(), text, Toast.LENGTH_SHORT);
         toast.setGravity(Gravity.RIGHT | Gravity.TOP, v.getRight(), HeaderView.getSize(true) - Screen.dp(8f));

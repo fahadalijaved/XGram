@@ -806,6 +806,38 @@ public final class XgramDragDrop {
         break;
       }
     }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && c.context() != null) {
+      // XGram M3E: an M3 dialog, "Send to Chat?" with what was dropped: [Send as files] ... [Cancel] [Send]
+      final boolean[] handled = new boolean[1];
+      android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(c.context(), Theme.dialogTheme())
+        .setTitle(Lang.getString(R.string.XgramDropSendTo, c.tdlib().chatTitle(chatId)))
+        .setPositiveButton(Lang.getString(R.string.Send), (dialog, which) -> {
+          handled[0] = true;
+          action.send(false);
+        })
+        .setNegativeButton(Lang.getString(R.string.Cancel), (dialog, which) -> {
+          handled[0] = true;
+          if (!files.isEmpty()) {
+            deleteFiles(files);
+          }
+        })
+        .setOnDismissListener(dialog -> {
+          if (!handled[0] && !files.isEmpty()) {
+            deleteFiles(files); // dismissed without a choice: the copies go
+          }
+        });
+      if (!StringUtils.isEmpty(what)) {
+        b.setMessage(what);
+      }
+      if (hasMedia) {
+        b.setNeutralButton(files.size() == 1 ? Lang.getString(R.string.SendAsFile) : Lang.plural(R.string.SendAsXFiles, files.size()), (dialog, which) -> {
+          handled[0] = true;
+          action.send(true);
+        });
+      }
+      com.fahadali.xgram.appearance.XgramR5Calls.showAlert(c.context(), b);
+      return;
+    }
     int[] ids, colors, icons;
     String[] titles;
     if (hasMedia) {
@@ -924,8 +956,86 @@ public final class XgramDragDrop {
       }
     }
 
+    // XGram M3E: the whole chat's drop zone is a primaryContainer card (28dp corners, a 2dp dashed primary outline)
+    // with a cookie hero holding the icon and the label in titleMedium; a chat row target is a secondaryContainer tile
+    // with a primary outline. Roles are read at draw time; the paths are built once and only moved.
+    private final android.graphics.Path xgramUnitCookie = new android.graphics.Path(), xgramCookie = new android.graphics.Path();
+    private final android.graphics.Matrix xgramMatrix = new android.graphics.Matrix();
+    private boolean xgramCookieBuilt;
+    @Nullable private Drawable xgramIcon;
+    @Nullable private TextPaint xgramLabelPaint;
+
+    private void xgramDraw (@NonNull Canvas canvas) {
+      final Rect bounds = getBounds();
+      final int primary = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY);
+      if (!wholeView) {
+        final float insetX = Screen.dp(8f), insetY = Screen.dp(2f), radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+        rect.set(bounds.left + insetX, bounds.top + insetY, bounds.right - insetX, bounds.bottom - insetY);
+        if (rect.width() <= 0 || rect.height() <= 0) {
+          return;
+        }
+        // Over the row (an overlay): the tile is see-through so the chat under it stays readable
+        fill.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER), .6f));
+        stroke.setColor(primary);
+        canvas.drawRoundRect(rect, radius, radius, fill);
+        canvas.drawRoundRect(rect, radius, radius, stroke);
+        return;
+      }
+      final float inset = Screen.dp(16f), radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
+      rect.set(bounds.left + inset, bounds.top + inset, bounds.right - inset, bounds.bottom - inset);
+      if (rect.width() <= 0 || rect.height() <= 0) {
+        return;
+      }
+      fill.setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER), .94f));
+      stroke.setColor(primary);
+      canvas.drawRoundRect(rect, radius, radius, fill);
+      canvas.drawRoundRect(rect, radius, radius, stroke);
+      if (label == null) {
+        return;
+      }
+      // The hero: a 72dp cookie in primary with the icon in onPrimary, the label under it
+      final float hero = Screen.dp(72f), gap = Screen.dp(16f);
+      if (xgramLabelPaint == null) {
+        xgramLabelPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        xgramLabelPaint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false));
+      }
+      xgramLabelPaint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M)));
+      xgramLabelPaint.setColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER));
+      final float labelHeight = xgramLabelPaint.descent() - xgramLabelPaint.ascent();
+      final float blockTop = rect.centerY() - (hero + gap + labelHeight) / 2f;
+      final float cx = rect.centerX(), cy = blockTop + hero / 2f;
+      if (!xgramCookieBuilt) {
+        xgramCookieBuilt = true;
+        try {
+          com.fahadali.xgram.appearance.XgramShapes.toPath(com.fahadali.xgram.appearance.XgramShapes.COOKIE_9, xgramUnitCookie);
+        } catch (Throwable t) {
+          xgramUnitCookie.rewind();
+          xgramUnitCookie.addCircle(.5f, .5f, .5f, android.graphics.Path.Direction.CW);
+        }
+      }
+      xgramCookie.set(xgramUnitCookie);
+      com.fahadali.xgram.appearance.XgramShapes.fit(xgramCookie, cx, cy, hero, 0f, xgramMatrix);
+      final Paint heroPaint = fill;
+      heroPaint.setColor(primary);
+      canvas.drawPath(xgramCookie, heroPaint);
+      if (xgramIcon == null) {
+        xgramIcon = org.thunderdog.challegram.tool.Drawables.get(host.getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_file_download_24));
+      }
+      if (xgramIcon != null) {
+        org.thunderdog.challegram.tool.Drawables.drawCentered(canvas, xgramIcon, cx, cy, org.thunderdog.challegram.tool.Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY)));
+      }
+      final float maxWidth = rect.width() - Screen.dp(32f);
+      final CharSequence text = android.text.TextUtils.ellipsize(label, xgramLabelPaint, Math.max(0f, maxWidth), android.text.TextUtils.TruncateAt.END);
+      final float textWidth = xgramLabelPaint.measureText(text, 0, text.length());
+      canvas.drawText(text, 0, text.length(), cx - textWidth / 2f, blockTop + hero + gap - xgramLabelPaint.ascent(), xgramLabelPaint);
+    }
+
     @Override
     public void draw (@NonNull Canvas canvas) {
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        xgramDraw(canvas);
+        return;
+      }
       Rect bounds = getBounds();
       float inset = Screen.dp(wholeView ? 12f : 4f);
       float radius = Screen.dp(wholeView ? 16f : 12f);
@@ -1111,7 +1221,17 @@ public final class XgramDragDrop {
       scale = Math.min(1f, maxSize / (float) Math.max(source.width(), source.height()));
       width = Math.max(1, Math.round(source.width() * scale));
       height = Math.max(1, Math.round(source.height() * scale));
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the shadow is a card with 16dp corners (built once)
+        final float radius = Math.min(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L), Math.min(width, height) / 2f);
+        xgramClip = new android.graphics.Path();
+        xgramClip.addRoundRect(new RectF(0, 0, width, height), radius, radius, android.graphics.Path.Direction.CW);
+      } else {
+        xgramClip = null;
+      }
     }
+
+    @Nullable private final android.graphics.Path xgramClip;
 
     @Override
     public void onProvideShadowMetrics (Point outShadowSize, Point outShadowTouchPoint) {
@@ -1123,6 +1243,9 @@ public final class XgramDragDrop {
     public void onDrawShadow (@NonNull Canvas canvas) {
       int saveCount = canvas.save();
       try {
+        if (xgramClip != null) {
+          canvas.clipPath(xgramClip); // XGram M3E
+        }
         canvas.scale(scale, scale);
         canvas.translate(-source.left, -source.top);
         canvas.clipRect(source);

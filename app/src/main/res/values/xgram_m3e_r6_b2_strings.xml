@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 6, batch 2: the call screen, Devices and the QR scanner, the chat list chrome and forum topics.
+       Sentence case; a label that replaces a Telegram&#160;X title-case string only does so over Telegram&#160;X's
+       English (a translation keeps its own string). -->
+
+  <!-- Call screen: the minimise icon button and the brand chip's encryption state -->
+  <string name="XgramR6B2CallMinimize">Back to chats</string>
+  <string name="XgramR6B2CallEncrypted">End-to-end encrypted</string>
+
+  <!-- "Update ready" snackbar of the chat list -->
+  <string name="XgramR6B2UpdateDownloaded">XGram update downloaded</string>
+  <string name="XgramR6B2UpdateReadyVersion">XGram %1$s is ready to install</string>
+
+  <!-- App lock button of the chat list's app bar -->
+  <string name="XgramR6B2LockApp">Lock app</string>
+  <string name="XgramR6B2LockInstant">Instant auto-lock is on</string>
+  <string name="XgramR6B2LockChange">Change</string>
+
+  <!-- QR scanner (Settings > Devices > Scan QR) -->
+  <string name="XgramR6B2QrClose">Close</string>
+  <string name="XgramR6B2QrTitle">Scan QR code</string>
+
+  <!-- Forum topics: leaves the reorder mode; the color swatches of a new topic -->
+  <string name="XgramR6B2TopicsDone">Done</string>
+  <string name="XgramR6B2TopicColor">Topic color</string>
+</resources>

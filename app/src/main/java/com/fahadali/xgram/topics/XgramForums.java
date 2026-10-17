@@ -670,6 +670,25 @@ public final class XgramForums {
     int current = !tdlib.isForum(chat.id) ? 0 : hasForumTabs(tdlib, chat) ? 1 : 2;
     int[] ids = {R.id.btn_xgramTopicsOff, R.id.btn_xgramTopicsTabs, R.id.btn_xgramTopicsList};
     String[] titles = {Lang.getString(R.string.XgramTopicsOff), Lang.getString(R.string.XgramTopicsTabs), Lang.getString(R.string.XgramTopicsList)};
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: an M3 sheet of radio rows (the current mode checked) under the explanation, not a list of options
+      // with a check glyph
+      org.thunderdog.challegram.ui.ListItem[] items = new org.thunderdog.challegram.ui.ListItem[ids.length];
+      for (int i = 0; i < ids.length; i++) {
+        items[i] = new org.thunderdog.challegram.ui.ListItem(org.thunderdog.challegram.ui.ListItem.TYPE_RADIO_OPTION, ids[i], 0, titles[i], R.id.btn_xgramTopicsOff, i == current);
+      }
+      context.showSettings(new org.thunderdog.challegram.navigation.SettingsWrapBuilder(R.id.btn_xgramTopicsOff)
+        .addHeaderItem(Lang.getString(R.string.XgramTopicsDesc))
+        .setRawItems(items)
+        .setIntDelegate((id, result) -> {
+          final int selectedId = result.get(R.id.btn_xgramTopicsOff);
+          final int mode = selectedId == R.id.btn_xgramTopicsTabs ? 1 : selectedId == R.id.btn_xgramTopicsList ? 2 : 0;
+          if (selectedId != 0 && mode != current) {
+            applyTopicsMode(tdlib, chat, mode, onChanged);
+          }
+        }));
+      return;
+    }
     int[] colors = {ViewController.OptionColor.NORMAL, ViewController.OptionColor.NORMAL, ViewController.OptionColor.NORMAL};
     int[] icons = new int[3];
     icons[current] = R.drawable.baseline_check_24;
@@ -702,6 +721,32 @@ public final class XgramForums {
       }
       return true;
     });
+  }
+
+  /** XGram M3E: the topics mode chosen in the radio sheet, applied as the options above do (a basic group upgrades). */
+  private static void applyTopicsMode (Tdlib tdlib, TdApi.Chat chat, int mode, Runnable onChanged) {
+    boolean isForum = mode != 0, hasTabs = mode == 1;
+    RunnableLong apply = supergroupChatId -> tdlib.send(new TdApi.ToggleSupergroupIsForum(tgx.td.ChatId.toSupergroupId(supergroupChatId), isForum, hasTabs), (ok, error) -> tdlib.ui().post(() -> {
+      if (error != null) {
+        UI.showError(error);
+      } else {
+        onChanged.run();
+      }
+    }));
+    if (tgx.td.ChatId.isBasicGroup(chat.id)) {
+      if (!isForum) {
+        return;
+      }
+      tdlib.upgradeToSupergroup(chat.id, (fromChatId, toChatId, error) -> {
+        if (error != null) {
+          tdlib.ui().post(() -> UI.showError(error));
+        } else {
+          apply.runWithLong(toChatId);
+        }
+      });
+    } else {
+      apply.runWithLong(chat.id);
+    }
   }
 
   public static boolean isTopicMuted (Tdlib tdlib, long chatId, TdApi.ForumTopic topic) {

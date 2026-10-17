@@ -89,29 +89,38 @@ public final class XgramM3Sessions {
   }
 
   /**
-   * The leading icon: with the Classic icon pack (outlined with Expressive design) an outlined phone, tablet, desktop or
-   * globe for the platform; any other pack draws its own glyph of Telegram X's platform icon.
+   * The leading icon, one Material Symbols glyph per platform (mapped through the icon pack by the caller): the Android
+   * robot (XGram and Telegram X's own sessions too, never Telegram X's crossed robot), a phone for iPhone, a tablet for
+   * iPad, a monitor for Windows, a laptop or a monitor for a Mac, the pack's Linux desktop, a globe for the browsers,
+   * the pack's controller and "other" glyphs. Another icon pack that draws its own glyph of Telegram X's platform icon
+   * keeps it; the brand logos Telegram X draws (Windows, Chrome, Safari...) never show.
    */
   @DrawableRes
   public static int iconOf (@NonNull TdApi.Session session) {
-    if (XgramIconPack.current() != XgramIconPack.PACK_TELEGRAM_X) {
-      return SessionIconKt.asIcon(session);
+    final int tgx = SessionIconKt.asIcon(session);
+    if (XgramIconPack.current() != XgramIconPack.PACK_TELEGRAM_X && XgramIconPack.map(tgx) != tgx) {
+      return tgx; // the pack's own glyph
     }
     if (session.apiId == 21724) { // Telegram X (and XGram) on Android
-      return R.drawable.xgram_m3e_r4pre_device_phone_24;
+      return R.drawable.baseline_device_android_24;
     }
     switch (session.deviceType.getConstructor()) {
       case TdApi.SessionDeviceTypeAndroid.CONSTRUCTOR:
+        return R.drawable.baseline_device_android_24;
       case TdApi.SessionDeviceTypeIphone.CONSTRUCTOR:
       case TdApi.SessionDeviceTypeApple.CONSTRUCTOR:
         return R.drawable.xgram_m3e_r4pre_device_phone_24;
       case TdApi.SessionDeviceTypeIpad.CONSTRUCTOR:
         return R.drawable.xgram_m3e_r4pre_device_tablet_24;
       case TdApi.SessionDeviceTypeWindows.CONSTRUCTOR:
-      case TdApi.SessionDeviceTypeMac.CONSTRUCTOR:
+        return R.drawable.xgram_m3e_r4pre_device_desktop_24;
+      case TdApi.SessionDeviceTypeMac.CONSTRUCTOR: {
+        final String model = session.deviceModel;
+        return model != null && model.toLowerCase(java.util.Locale.ROOT).contains("macbook") ? R.drawable.xgram_m3e_r6_b2_device_laptop_24 : R.drawable.xgram_m3e_r4pre_device_desktop_24;
+      }
       case TdApi.SessionDeviceTypeLinux.CONSTRUCTOR:
       case TdApi.SessionDeviceTypeUbuntu.CONSTRUCTOR:
-        return R.drawable.xgram_m3e_r4pre_device_desktop_24;
+        return R.drawable.baseline_device_linux_24;
       case TdApi.SessionDeviceTypeFirefox.CONSTRUCTOR:
       case TdApi.SessionDeviceTypeOpera.CONSTRUCTOR:
       case TdApi.SessionDeviceTypeEdge.CONSTRUCTOR:
@@ -120,8 +129,10 @@ public final class XgramM3Sessions {
       case TdApi.SessionDeviceTypeVivaldi.CONSTRUCTOR:
       case TdApi.SessionDeviceTypeBrave.CONSTRUCTOR:
         return R.drawable.xgram_m3e_r4pre_device_web_24;
+      case TdApi.SessionDeviceTypeXbox.CONSTRUCTOR:
+        return R.drawable.baseline_device_xbox_24;
       default:
-        return SessionIconKt.asIcon(session); // consoles and unknown devices keep Telegram X's glyph
+        return R.drawable.baseline_device_other_24;
     }
   }
 
@@ -489,6 +500,10 @@ public final class XgramM3Sessions {
     private final RectF rect = new RectF();
     private final @Nullable Drawable check;
     private boolean checked, onTile;
+    // M3E motion: the container fills (or empties) and the check scales in on EFFECTS_FAST; the label's room for the
+    // check changes once per toggle (one layout), never per frame
+    private final XgramExpressive.Spring checkedSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> invalidate());
+    private boolean checkedBound;
 
     ChipView (Context context, @StringRes int textRes) {
       this(context, Lang.getString(textRes));
@@ -512,12 +527,20 @@ public final class XgramM3Sessions {
     }
 
     void setChecked (boolean checked, boolean onTile) {
-      if (this.checked != checked || this.onTile != onTile) {
+      if (this.checked != checked || this.onTile != onTile || !checkedBound) {
         final boolean paddingChanged = this.checked != checked;
+        // Animated only for a toggle of a chip already on screen (a recycled row snaps to its session's state)
+        final boolean animated = checkedBound && paddingChanged && getWindowToken() != null && getWidth() > 0;
         this.checked = checked;
         this.onTile = onTile;
+        this.checkedBound = true;
         if (paddingChanged) {
           updatePadding();
+        }
+        if (animated) {
+          checkedSpring.animateTo(checked ? 1f : 0f);
+        } else {
+          checkedSpring.setValue(checked ? 1f : 0f);
         }
         invalidate();
       }
@@ -540,37 +563,42 @@ public final class XgramM3Sessions {
 
     @Override
     protected void onDraw (Canvas c) {
-      int container, content;
-      if (checked) {
-        container = XgramExpressive.color(onTile ? XgramExpressive.PRIMARY : XgramExpressive.SECONDARY_CONTAINER);
-        content = XgramExpressive.color(onTile ? XgramExpressive.ON_PRIMARY : XgramExpressive.ON_SECONDARY_CONTAINER);
-      } else {
-        container = XgramExpressive.color(onTile ? XgramExpressive.OUTLINE : XgramExpressive.OUTLINE_VARIANT);
-        content = XgramExpressive.color(onTile ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE_VARIANT);
-      }
+      // 0 = unselected (outline), 1 = selected (filled, with the check): the springs crossfade the two
+      final float on = me.vkryl.core.MathUtils.clamp(checkedSpring.getValue());
+      int fill = XgramExpressive.color(onTile ? XgramExpressive.PRIMARY : XgramExpressive.SECONDARY_CONTAINER);
+      int outline = XgramExpressive.color(onTile ? XgramExpressive.OUTLINE : XgramExpressive.OUTLINE_VARIANT);
+      int content = me.vkryl.core.ColorUtils.fromToArgb(
+        XgramExpressive.color(onTile ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE_VARIANT),
+        XgramExpressive.color(onTile ? XgramExpressive.ON_PRIMARY : XgramExpressive.ON_SECONDARY_CONTAINER), on);
       if (!isEnabled()) {
         final int onSurface = XgramExpressive.color(onTile ? XgramExpressive.ON_SECONDARY_CONTAINER : XgramExpressive.ON_SURFACE);
-        container = XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTAINER);
+        fill = outline = XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTAINER);
         content = XgramExpressive.withAlpha(onSurface, XgramExpressive.DISABLED_CONTENT);
       }
       final float radius = Screen.dpf(XgramExpressive.CORNER_S);
-      paint.setColor(container);
-      if (checked) {
-        paint.setStyle(Paint.Style.FILL);
-        rect.set(0, 0, getWidth(), getHeight());
-        c.drawRoundRect(rect, radius, radius, paint);
-        if (check != null) {
-          final int size = Screen.dp(CHIP_ICON);
-          final float x = Lang.rtl() ? getWidth() - Screen.dp(CHIP_ICON_START) - size : Screen.dp(CHIP_ICON_START);
-          final float y = (getHeight() - size) / 2f;
-          Drawables.draw(c, check, x, y, Paints.getPorterDuffPaint(content));
-        }
-      } else {
+      if (on < 1f) {
         final float stroke = Screen.dpf(1f);
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(stroke);
+        paint.setColor(XgramExpressive.withAlpha(outline, 1f - on));
         rect.set(stroke / 2f, stroke / 2f, getWidth() - stroke / 2f, getHeight() - stroke / 2f);
         c.drawRoundRect(rect, radius - stroke / 2f, radius - stroke / 2f, paint);
+      }
+      if (on > 0f) {
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(XgramExpressive.withAlpha(fill, on));
+        rect.set(0, 0, getWidth(), getHeight());
+        c.drawRoundRect(rect, radius, radius, paint);
+        if (check != null && checked) {
+          final int size = Screen.dp(CHIP_ICON);
+          final float x = Lang.rtl() ? getWidth() - Screen.dp(CHIP_ICON_START) - size : Screen.dp(CHIP_ICON_START);
+          final float y = (getHeight() - size) / 2f;
+          final float scale = .6f + .4f * on;
+          final int save = c.save();
+          c.scale(scale, scale, x + size / 2f, y + size / 2f);
+          Drawables.draw(c, check, x, y, Paints.getPorterDuffPaint(content));
+          c.restoreToCount(save);
+        }
       }
       if (getCurrentTextColor() != content) {
         setTextColor(content);

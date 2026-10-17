@@ -107,10 +107,83 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
   @Override
   public void fillMenuItems (int id, org.thunderdog.challegram.navigation.HeaderView header, android.widget.LinearLayout menu) {
     if (id == R.id.menu_xgramTopics) {
+      if (XgramExpressive.isEnabled()) {
+        // XGram M3E: a filled "Done" leaves the reorder mode (shown only then, in the search button's place)
+        xgramDoneButton = new com.fahadali.xgram.appearance.XgramR5Lists.PillButton(context());
+        xgramDoneButton.setPrimary(true);
+        xgramDoneButton.setText(Lang.getString(R.string.XgramR6B2TopicsDone));
+        xgramDoneButton.setOnClickListener(v -> {
+          if (reorderMode) {
+            onMoreItemPressed(R.id.btn_xgramReorderTopics);
+          }
+        });
+        android.widget.LinearLayout.LayoutParams params = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(48f));
+        params.gravity = Gravity.CENTER_VERTICAL;
+        params.leftMargin = params.rightMargin = Screen.dp(4f);
+        xgramDoneButton.setLayoutParams(params);
+        addThemeInvalidateListener(xgramDoneButton);
+        menu.addView(xgramDoneButton);
+      }
       header.addSearchButton(menu, this);
       header.addMoreButton(menu, this);
+      xgramSearchButton = menu.findViewById(R.id.menu_btn_search);
+      xgramUpdateReorderChrome(false);
     } else {
       super.fillMenuItems(id, header, menu);
+    }
+  }
+
+  // XGram M3E: reorder mode. The app bar shows a filled "Done" (the search button steps aside), the pinned topics a
+  // trailing drag handle; both spring in and out.
+
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramR5Lists.PillButton xgramDoneButton;
+  private @androidx.annotation.Nullable View xgramSearchButton;
+
+  private boolean xgramShowsHandle (@androidx.annotation.Nullable TdApi.ForumTopic topic) {
+    return reorderMode && searchResults == null && topic != null && topic.isPinned && !topic.info.isHidden;
+  }
+
+  private void xgramUpdateReorderChrome (boolean animated) {
+    if (!XgramExpressive.isEnabled()) {
+      return;
+    }
+    final boolean reduce = com.fahadali.xgram.appearance.XgramMotion.reduce();
+    if (xgramDoneButton != null) {
+      final boolean show = reorderMode;
+      xgramDoneButton.animate().cancel();
+      if (show && xgramDoneButton.getVisibility() != View.VISIBLE) {
+        xgramDoneButton.setVisibility(View.VISIBLE);
+        if (animated && !reduce) {
+          xgramDoneButton.setAlpha(0f);
+          xgramDoneButton.setScaleX(.8f);
+          xgramDoneButton.setScaleY(.8f);
+          xgramDoneButton.animate().alpha(1f).scaleX(1f).scaleY(1f)
+            .setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.spring(XgramExpressive.SPATIAL_FAST))
+            .setDuration(com.fahadali.xgram.appearance.XgramAppMotion.springDuration(XgramExpressive.SPATIAL_FAST))
+            .start();
+        } else {
+          xgramDoneButton.setAlpha(1f);
+          xgramDoneButton.setScaleX(1f);
+          xgramDoneButton.setScaleY(1f);
+        }
+      } else if (!show) {
+        xgramDoneButton.setVisibility(View.GONE);
+      }
+    }
+    if (xgramSearchButton != null) {
+      final int visibility = reorderMode ? View.GONE : View.VISIBLE;
+      if (xgramSearchButton.getVisibility() != visibility) {
+        xgramSearchButton.setVisibility(visibility);
+      }
+    }
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView != null) {
+      for (int i = 0; i < recyclerView.getChildCount(); i++) {
+        View child = recyclerView.getChildAt(i);
+        if (child instanceof ForumTopicView) {
+          ((ForumTopicView) child).xgramSetReorderHandle(xgramShowsHandle(((ForumTopicView) child).getForumTopic()), animated);
+        }
+      }
     }
   }
 
@@ -488,7 +561,10 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     if (recyclerView == null) {
       return;
     }
-    if (dragging) {
+    if (dragging && XgramExpressive.isEnabled()) {
+      // XGram M3E: the neighbours slide on the list's spring animator (SPATIAL_DEFAULT), not the 180ms one
+      recyclerView.setItemAnimator(xgramIdleAnimator());
+    } else if (dragging) {
       if (dragAnimator == null) {
         dragAnimator = new org.thunderdog.challegram.component.attach.CustomItemAnimator(me.vkryl.android.AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
       }
@@ -712,9 +788,10 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       XgramForums.markAllTopicsAsRead(tdlib, chat.id);
     } else if (id == R.id.btn_xgramReorderTopics) {
       reorderMode = !reorderMode;
-      if (reorderMode) {
+      if (reorderMode && !com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.XgramReorderTopicsHint), android.widget.Toast.LENGTH_LONG)) {
         org.thunderdog.challegram.tool.UI.showToast(R.string.XgramReorderTopicsHint, android.widget.Toast.LENGTH_LONG);
       }
+      xgramUpdateReorderChrome(true); // XGram M3E
     } else if (id == R.id.btn_xgramViewAsMessages) {
       if (context().isNavigationBusy()) {
         return;
@@ -794,6 +871,9 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       }
       boolean moved = list.movePinnedLocally(viewHolder.getBindingAdapterPosition(), target.getBindingAdapterPosition());
       reorderChanged |= moved;
+      if (moved && XgramExpressive.isEnabled()) {
+        recyclerView.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK); // XGram M3E: a tick on each swap
+      }
       return moved;
     }
 
@@ -966,7 +1046,9 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     @Override
     public void onBindViewHolder (@NonNull Holder holder, int position) {
       if (holder.itemView instanceof ForumTopicView) {
-        ((ForumTopicView) holder.itemView).setTopic(rowFor(visibleTopic(position)));
+        TdApi.ForumTopic topic = visibleTopic(position);
+        ((ForumTopicView) holder.itemView).setTopic(rowFor(topic));
+        ((ForumTopicView) holder.itemView).xgramSetReorderHandle(xgramShowsHandle(topic), false); // XGram M3E
       } else if (holder.itemView instanceof XgramListStateView) {
         XgramListStateView view = (XgramListStateView) holder.itemView;
         boolean alone = visibleCount() == 0;

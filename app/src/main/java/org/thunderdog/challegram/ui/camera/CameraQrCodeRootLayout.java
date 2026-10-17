@@ -22,6 +22,7 @@ import android.graphics.RectF;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -86,8 +87,42 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
   private boolean qrDebugRegions;
   private int qrSubtitle;
 
+  // XGram M3E (com.fahadali.xgram.appearance): a 50% scrim with a 28dp rounded cut-out, 4dp rounded corner arcs in
+  // the dark scheme's primary that spring to the detected code (SPATIAL_DEFAULT, a snap with Reduce motion), the title
+  // in headlineSmall and the hint in bodyMedium (Google Sans Flex), and the loading indicator in the cut-out while the
+  // code that was found is being confirmed. Telegram X's drawing with Expressive design off.
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private final Paint xgramScrimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint xgramCornerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint xgramFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Path xgramScrimPath = new Path();
+  private final Path xgramCornerPath = new Path();
+  private final RectF xgramRect = new RectF(), xgramArc = new RectF();
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramMove, xgramTextShown;
+  private @Nullable android.text.StaticLayout xgramTitle, xgramSubtitle;
+  private int xgramTextWidth;
+  private long xgramFoundSince;
+
   public CameraQrCodeRootLayout (@NonNull Context context) {
     super(context);
+    if (xgram) {
+      xgramScrimPaint.setColor(0x80000000);
+      xgramScrimPath.setFillType(Path.FillType.EVEN_ODD);
+      xgramCornerPaint.setStyle(Paint.Style.STROKE);
+      xgramCornerPaint.setStrokeWidth(Screen.dp(4f));
+      xgramCornerPaint.setStrokeCap(Paint.Cap.ROUND);
+      xgramCornerPaint.setStrokeJoin(Paint.Join.ROUND);
+      xgramMove = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 1f, (s, value) -> {
+        if (futureLocation != null) {
+          currentLocation.x = MathUtils.fromTo(initialCurrentLocation.x, futureLocation.x, value);
+          currentLocation.y = MathUtils.fromTo(initialCurrentLocation.y, futureLocation.y, value);
+          currentLocation.size = MathUtils.fromTo(initialCurrentLocation.size, futureLocation.size, value);
+          updateBoundingBoxPaths();
+          invalidate();
+        }
+      });
+      xgramTextShown = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT, 1f, (s, value) -> invalidate());
+    }
     dimmerPaint.setColor(0x7f000000);
     cornerPaint.setColor(Theme.getColor(ColorId.white));
     cornerPaint.setStyle(Paint.Style.STROKE);
@@ -100,6 +135,9 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
   }
 
   private void updateTexts (int width) {
+    if (xgram) {
+      xgramUpdateTexts(width);
+    }
     TextColorSet forceWhite = () -> Color.WHITE;
     qrTextTitle = new Text.Builder(Lang.getString(R.string.ScanQRFullTitle), width, Paints.robotoStyleProvider(31), forceWhite).allBold().addFlags(Text.FLAG_ALIGN_CENTER).singleLine().build();
     qrTextSubtitle = new Text.Builder(Lang.getString(qrSubtitle == 0 ? R.string.ScanQRFullSubtitle : qrSubtitle), width, Paints.robotoStyleProvider(16), forceWhite).addFlags(Text.FLAG_ALIGN_CENTER).maxLineCount(2).build();
@@ -155,6 +193,7 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
     animateQrLocation(nx, ny, qrSize);
     qrFoundAnimator.setValue(true, true);
     qrTextAnimator.setValue(false, true);
+    xgramSetTextShown(false); // XGram M3E
   }
 
   @Override
@@ -182,8 +221,148 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
   private void animateQrLocation (float x, float y, float size) {
     initialCurrentLocation.copyFrom(currentLocation);
     futureLocation = new QrBoxLocation(x, y, size);
+    if (xgramMove != null) {
+      // XGram M3E: the cut-out and its corners spring to the code (a snap with Reduce motion)
+      xgramMove.setValue(0f);
+      xgramMove.animateTo(1f);
+      return;
+    }
     qrParamsAnimator.setValue(false, false);
     qrParamsAnimator.setValue(true, true);
+  }
+
+  // XGram M3E
+
+  private void xgramSetTextShown (boolean shown) {
+    if (xgramTextShown != null) {
+      xgramTextShown.animateTo(shown ? 1f : 0f);
+    }
+  }
+
+  @SuppressWarnings("deprecation")
+  private void xgramUpdateTexts (int width) {
+    if (width <= 0) {
+      return;
+    }
+    xgramTextWidth = width;
+    final int white = com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+    final int variant = com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    android.text.TextPaint title = xgramPaint(com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S, white);
+    android.text.TextPaint subtitle = xgramPaint(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, variant);
+    String titleText = com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.ScanQRFullTitle, R.string.XgramR6B2QrTitle);
+    String subtitleText = Lang.getString(qrSubtitle == 0 ? R.string.ScanQRFullSubtitle : qrSubtitle);
+    xgramTitle = new android.text.StaticLayout(titleText, title, width, android.text.Layout.Alignment.ALIGN_CENTER, 1f, 0f, false);
+    xgramSubtitle = new android.text.StaticLayout(subtitleText, subtitle, width, android.text.Layout.Alignment.ALIGN_CENTER, 1f, Screen.dp(4f), false);
+  }
+
+  private static android.text.TextPaint xgramPaint (int ts, int color) {
+    android.text.TextPaint paint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+    paint.setTypeface(com.fahadali.xgram.appearance.XgramExpressive.typeface(ts, false));
+    paint.setTextSize(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(ts)));
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+      paint.setLetterSpacing(com.fahadali.xgram.appearance.XgramExpressive.trackingSp(ts) / com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(ts));
+    }
+    paint.setColor(color);
+    return paint;
+  }
+
+  /**
+   * The scrim with the rounded cut-out at {@code x, y} ({@code size} square), the four corner arcs along its rounded
+   * corners, the texts (above the cut-out in portrait, in the free side in landscape, turned with the device) and,
+   * while a found code is being confirmed, the contained loading indicator in the middle of the cut-out.
+   */
+  private void xgramDrawOverlay (Canvas canvas, float x, float y, float size, Rect textRegion) {
+    final int width = getWidth(), height = getHeight();
+    final float radius = Math.max(0f, Math.min(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL), size / 4f));
+    xgramRect.set(x, y, x + size, y + size);
+
+    // Scrim with the cut-out (only rebuilt here, while the cut-out moves; no allocation)
+    xgramScrimPath.rewind();
+    xgramScrimPath.addRect(0, 0, width, height, Path.Direction.CW);
+    if (size > 0f) {
+      xgramScrimPath.addRoundRect(xgramRect, radius, radius, Path.Direction.CW);
+    }
+    canvas.drawPath(xgramScrimPath, xgramScrimPaint);
+
+    // Corner arcs: each runs along the edge, round the corner and along the other edge
+    if (size > 0f) {
+      final float arm = Math.min(Screen.dp(20f), Math.max(0f, size / 2f - radius - Screen.dp(4f)));
+      final float d = radius * 2f;
+      xgramCornerPath.rewind();
+      // top start
+      xgramCornerPath.moveTo(x, y + radius + arm);
+      xgramCornerPath.lineTo(x, y + radius);
+      xgramArc.set(x, y, x + d, y + d);
+      xgramCornerPath.arcTo(xgramArc, 180f, 90f, false);
+      xgramCornerPath.lineTo(x + radius + arm, y);
+      // top end
+      xgramCornerPath.moveTo(x + size - radius - arm, y);
+      xgramCornerPath.lineTo(x + size - radius, y);
+      xgramArc.set(x + size - d, y, x + size, y + d);
+      xgramCornerPath.arcTo(xgramArc, 270f, 90f, false);
+      xgramCornerPath.lineTo(x + size, y + radius + arm);
+      // bottom end
+      xgramCornerPath.moveTo(x + size, y + size - radius - arm);
+      xgramCornerPath.lineTo(x + size, y + size - radius);
+      xgramArc.set(x + size - d, y + size - d, x + size, y + size);
+      xgramCornerPath.arcTo(xgramArc, 0f, 90f, false);
+      xgramCornerPath.lineTo(x + size - radius - arm, y + size);
+      // bottom start
+      xgramCornerPath.moveTo(x + radius + arm, y + size);
+      xgramCornerPath.lineTo(x + radius, y + size);
+      xgramArc.set(x, y + size - d, x + d, y + size);
+      xgramCornerPath.arcTo(xgramArc, 90f, 90f, false);
+      xgramCornerPath.lineTo(x, y + size - radius - arm);
+      xgramCornerPaint.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+      canvas.drawPath(xgramCornerPath, xgramCornerPaint);
+    }
+
+    // Title and hint
+    final float textAlpha = xgramTextShown != null ? MathUtils.clamp(xgramTextShown.getValue()) : 1f;
+    if (xgramTitle != null && xgramSubtitle != null && textAlpha > 0f && textRegion != null) {
+      final int gap = Screen.dp(8f);
+      final int blockHeight = xgramTitle.getHeight() + gap + xgramSubtitle.getHeight();
+      final float centerX, top;
+      if (qrModePortrait) {
+        centerX = width / 2f;
+        final float minTop = Screen.getStatusBarHeight() + Screen.dp(8f + 48f + 8f); // under the close button
+        top = Math.max(minTop, initialLocation.y - Screen.dp(32f) - blockHeight);
+      } else {
+        centerX = textRegion.centerX();
+        top = textRegion.centerY() - blockHeight / 2f;
+      }
+      final int saveCount = canvas.save();
+      canvas.rotate(qrRotation, centerX, top + blockHeight / 2f);
+      canvas.translate(centerX - xgramTextWidth / 2f, top);
+      final int titleColor = xgramTitle.getPaint().getColor(), subtitleColor = xgramSubtitle.getPaint().getColor();
+      xgramTitle.getPaint().setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(titleColor, textAlpha));
+      xgramTitle.draw(canvas);
+      xgramTitle.getPaint().setColor(titleColor);
+      canvas.translate(0, xgramTitle.getHeight() + gap);
+      xgramSubtitle.getPaint().setColor(com.fahadali.xgram.appearance.XgramExpressive.withAlpha(subtitleColor, textAlpha));
+      xgramSubtitle.draw(canvas);
+      xgramSubtitle.getPaint().setColor(subtitleColor);
+      canvas.restoreToCount(saveCount);
+    }
+
+    // The code was found: the contained loading indicator while it is confirmed
+    if (qrFoundAnimator.getValue() && size > 0f) {
+      final long now = android.os.SystemClock.uptimeMillis();
+      if (xgramFoundSince == 0L) {
+        xgramFoundSince = now;
+      }
+      final boolean reduce = com.fahadali.xgram.appearance.XgramMotion.reduce();
+      final float cx = xgramRect.centerX(), cy = xgramRect.centerY();
+      xgramFillPaint.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY_CONTAINER));
+      canvas.drawCircle(cx, cy, Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.LOADING_CONTAINER_DP) / 2f, xgramFillPaint);
+      com.fahadali.xgram.appearance.XgramLoadingIndicator.draw(canvas, cx, cy, Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.LOADING_ACTIVE_DP),
+        com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER), reduce ? 0L : now - xgramFoundSince);
+      if (!reduce) {
+        postInvalidateOnAnimation();
+      }
+    } else {
+      xgramFoundSince = 0L;
+    }
   }
 
   private void updateBoundingBoxPaths () {
@@ -234,6 +413,11 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
     qrFoundAnimator.setValue(false, false);
     qrParamsAnimator.setValue(false, false);
     qrTextAnimator.setValue(true, true);
+    if (xgramMove != null) {
+      xgramMove.setValue(1f); // XGram M3E: stops the spring, the cut-out goes back to its place
+      futureLocation = null;
+    }
+    xgramSetTextShown(true); // XGram M3E
     currentLocation.set(initialLocation.x, initialLocation.y, initialLocation.size);
     updateBoundingBoxPaths();
   }
@@ -248,6 +432,7 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
     } else if (id == ANIMATOR_RESET && finalFactor == 1f) {
       qrFoundAnimator.setValue(false, false);
       qrTextAnimator.setValue(true, true);
+      xgramSetTextShown(true); // XGram M3E
       animateQrLocation(initialLocation.x, initialLocation.y, initialLocation.size);
     }
   }
@@ -326,6 +511,10 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
         activeGuideLinePart3 = guideLinePart3;
       }
 
+      if (xgram) {
+        // XGram M3E: the scrim with a rounded cut-out, the corner arcs, the texts and the loading indicator
+        xgramDrawOverlay(canvas, x, y, size, activeGuideLinePart3);
+      } else {
       // draw surrounding boxes to create dimming around the box
       canvas.drawRect(0, 0, canvas.getWidth(), y, dimmerPaint);
       canvas.drawRect(0, y, x, getHeight(), dimmerPaint);
@@ -353,6 +542,7 @@ class CameraQrCodeRootLayout extends CameraRootLayout implements FactorAnimator.
         //}
         canvas.restore();
       }
+      } // XGram M3E: end of Telegram X's overlay
 
       if (qrDebugRegions) {
         //canvas.drawRect(activeGuideLinePart1, dbgPaint);

@@ -772,6 +772,16 @@ public class CallController extends ViewController<CallController.Arguments> imp
     }
 
     @Override
+    public void onMinimize () {
+      // As the system back: the chats come back and the call goes on (the call bar reopens this screen)
+      if (navigationController != null && navigationController.getStackSize() > 1) {
+        navigateBack();
+      } else {
+        context().performBackPress(false);
+      }
+    }
+
+    @Override
     public boolean onAnswer () {
       // Without the microphone permission it is asked for first, and the call is answered once it is granted
       if (!tdlib.context().calls().checkRecordPermissions(context(), tdlib, call, call.userId, null)) {
@@ -1441,6 +1451,17 @@ public class CallController extends ViewController<CallController.Arguments> imp
   protected boolean forceFadeMode () {
     ViewController<?> c = previousStackItem();
     return c != null && c.getId() == R.id.controller_call;
+  }
+
+  @Override
+  public boolean performOnBackPressed (boolean fromTop, boolean commit) {
+    if (xgramScreen != null && xgramScreen.isKeyExpanded()) { // XGram M3E: back closes the key card first
+      if (commit) {
+        xgramScreen.setKeyExpanded(false);
+      }
+      return true;
+    }
+    return super.performOnBackPressed(fromTop, commit);
   }
 
   public void replaceCall (TdApi.Call call) {
