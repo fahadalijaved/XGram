@@ -588,8 +588,11 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     }
   }
 
+  /** XGram: set while a tap on the toolbar switches pages, so the page change does not move the pill on its own. */
+  private boolean xgramTypeSyncLocked;
+
   private void xgramSyncTypeGroup (boolean animated) {
-    if (xgramTypeGroup == null || pager == null || adapter == null) {
+    if (xgramTypeGroup == null || pager == null || adapter == null || xgramTypeSyncLocked) {
       return;
     }
     final int type;
@@ -606,6 +609,21 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       return;
     }
     final int prevSection = getCurrentEmojiSection();
+    // The pill goes straight to the tapped segment. Switching to the media page reports its last section first (GIFs
+    // after the last visit was there), so Emoji -> Stickers sent the pill to GIFs and back: no syncs until the end.
+    if (xgramTypeGroup != null) {
+      xgramTypeGroup.setSelectedType(type, true);
+    }
+    xgramTypeSyncLocked = true;
+    try {
+      xgramSwitchToType(type, prevSection);
+    } finally {
+      xgramTypeSyncLocked = false;
+    }
+    xgramSyncTypeGroup(true);
+  }
+
+  private void xgramSwitchToType (int type, int prevSection) {
     if (type == com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_EMOJI) {
       if (pager.getCurrentItem() != 0) {
         pager.setCurrentItem(0, true);
@@ -634,7 +652,6 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
         listener.onSectionSwitched(this, getCurrentMediaEmojiSection(), prevSection);
       }
     }
-    xgramSyncTypeGroup(true);
   }
 
   private void checkBackground () {
@@ -1509,7 +1526,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     if (emojiHeaderView != null) {
       emojiHeaderView.setMediaSection(isGif);
     }
-    if (xgramTypeGroup != null && pager != null && pager.getCurrentItem() == 1) {
+    if (xgramTypeGroup != null && !xgramTypeSyncLocked && pager != null && pager.getCurrentItem() == 1) {
       // XGram: the media page switched between stickers and GIFs
       xgramTypeGroup.setSelectedType(isGif ? com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS : com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_STICKERS, true);
     }
