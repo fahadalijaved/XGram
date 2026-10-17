@@ -74,9 +74,26 @@ public class LineViewData {
         com.fahadali.xgram.appearance.XgramExpressive.ERROR_CONTAINER
     };
 
+    /**
+     * XGram M3E: series 5 to 8 in the light scheme. The containers (tone 90) all but vanish on the chart card
+     * (surfaceContainerLow, tone 96), so they take the on-containers (tone 10 to 30) there. Dark keeps the containers:
+     * there the on-containers (tone 90) would look like series 1 to 4 (tone 80).
+     */
+    private static final int[] XGRAM_SERIES_LIGHT_EXTRA = {
+        com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY_CONTAINER,
+        com.fahadali.xgram.appearance.XgramExpressive.ON_TERTIARY_CONTAINER,
+        com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER,
+        com.fahadali.xgram.appearance.XgramExpressive.ON_ERROR_CONTAINER
+    };
+
     public void updateColors() {
         if (xgramIndex >= 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-            lineColor = com.fahadali.xgram.appearance.XgramExpressive.color(XGRAM_SERIES[xgramIndex % XGRAM_SERIES.length]);
+            final int slot = xgramIndex % XGRAM_SERIES.length;
+            int role = XGRAM_SERIES[slot];
+            if (slot >= 4 && !Theme.isDark()) {
+                role = XGRAM_SERIES_LIGHT_EXTRA[slot - 4];
+            }
+            lineColor = com.fahadali.xgram.appearance.XgramExpressive.color(role);
             paint.setColor(lineColor);
             bottomLinePaint.setColor(lineColor);
             selectionPaint.setColor(lineColor);

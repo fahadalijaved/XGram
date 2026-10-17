@@ -322,9 +322,12 @@
   "tgx": [
    "baseline_access_time_24",
    "baseline_schedule_24",
-   "baseline_watch_later_24"
+   "baseline_watch_later_24",
+   "dotvhs_baseline_time_30m_24"
   ],
-  "where": []
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java"
+  ]
  },
  "history": {
   "tgx": [
@@ -334,9 +337,12 @@
  },
  "calendar": {
   "tgx": [
-   "baseline_date_range_24"
+   "baseline_date_range_24",
+   "dotvhs_baseline_time_1y_24"
   ],
-  "where": []
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java"
+  ]
  },
  "night": {
   "tgx": [
@@ -1725,11 +1731,15 @@
  "small_arrow_down": {
   "tgx": [
    "baseline_small_arrow_down_18",
-   "baseline_small_arrow_down_24"
+   "baseline_small_arrow_down_24",
+   "xgram_r6_b1_arrow_drop_down_24",
+   "xgram_r6_b8_arrow_drop_down_24"
   ],
   "where": [
    "java/org/thunderdog/challegram/component/emoji/MediaStickersAdapter.java",
-   "java/org/thunderdog/challegram/navigation/ViewPagerHeaderViewReactionsCompact.java"
+   "java/org/thunderdog/challegram/navigation/ViewPagerHeaderViewReactionsCompact.java",
+   "java/org/thunderdog/challegram/navigation/ToggleHeaderView2.java",
+   "java/com/fahadali/xgram/appearance/XgramR6B8Login.java"
   ]
  },
  "message_check": {
@@ -1886,10 +1896,15 @@
  },
  "timer": {
   "tgx": [
-   "baseline_timer_16"
+   "baseline_timer_16",
+   "xgram_r6_b1_timer_24",
+   "xgram_r6_b8_timer_24",
+   "dotvhs_baseline_time_2h_24"
   ],
   "where": [
-   "java/org/thunderdog/challegram/data/ContentPreview.java"
+   "java/org/thunderdog/challegram/data/ContentPreview.java",
+   "java/org/thunderdog/challegram/ui/PasscodeSetupController.java",
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java"
   ]
  },
  "timer_off": {
@@ -2422,10 +2437,12 @@
  },
  "mail": {
   "tgx": [
-   "baseline_mail_96"
+   "baseline_mail_96",
+   "xgram_r6_b8_mail_24"
   ],
   "where": [
-   "java/org/thunderdog/challegram/ui/SettingHolder.java"
+   "java/org/thunderdog/challegram/ui/SettingHolder.java",
+   "java/org/thunderdog/challegram/ui/PasswordController.java"
   ]
  },
  "redo": {
@@ -2658,6 +2675,47 @@
   ],
   "where": [
    "java/com/fahadali/xgram/XgramReorder.java"
+  ]
+ },
+ "hourglass": {
+  "tgx": [
+   "xgram_r6_b1_hourglass_24",
+   "dotvhs_baseline_time_8h_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java"
+  ]
+ },
+ "device_laptop": {
+  "tgx": [
+   "xgram_m3e_r6_b2_device_laptop_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/appearance/XgramM3Sessions.java"
+  ]
+ },
+ "sms": {
+  "tgx": [
+   "xgram_r6_b8_sms_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/appearance/XgramR6B8Login.java"
+  ]
+ },
+ "screenshot": {
+  "tgx": [
+   "xgram_r6_b8_screenshot_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/ui/PasscodeSetupController.java"
+  ]
+ },
+ "lock_open": {
+  "tgx": [
+   "xgram_m3e_r6_b2_lock_open_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/navigation/LockHeaderButton.java"
   ]
  }
 }

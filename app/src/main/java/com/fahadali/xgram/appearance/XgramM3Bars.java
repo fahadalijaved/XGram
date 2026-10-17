@@ -17,6 +17,10 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.os.Build;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextDirectionHeuristics;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.View;
@@ -262,12 +266,23 @@ public final class XgramM3Bars {
     private final TextPaint paint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint subtitlePaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final Paint.FontMetrics metrics = new Paint.FontMetrics();
-    private CharSequence lastName, lastEllipsized, lastSubtitle, lastSubtitleEllipsized;
-    private int lastWidth = -1, lastSubtitleWidth = -1;
+    private CharSequence lastSubtitle, lastSubtitleEllipsized;
+    private int lastSubtitleWidth = -1;
+
+    /**
+     * The title wrapped to at most two lines and ellipsized after that, as the Compose app bars (maxLines = 2), built
+     * for {@link #layoutName} at {@link #layoutWidth} in the paint of {@link #style}.
+     */
+    @Nullable
+    private StaticLayout titleLayout;
+    private CharSequence layoutName;
+    private int layoutWidth = -1;
+    private boolean layoutRtl;
 
     /** The geometry for {@link #style} with or without a subtitle: the area's height and the baselines from its top (px). */
     private int style = -1;
     private boolean hasSubtitle;
+    private int titleLines = 1;
     private int areaHeight;
     private float titleBaseline, subtitleBaseline;
 
@@ -291,24 +306,71 @@ public final class XgramM3Bars {
       p.setLetterSpacing(XgramExpressive.trackingSp(ts) / XgramExpressive.textSizeSp(ts));
     }
 
-    /** Builds the paints and the geometry when the style or the subtitle's presence changes (not per frame). */
-    private void measure (int style, boolean hasSubtitle) {
-      if (this.style == style && this.hasSubtitle == hasSubtitle && areaHeight > 0) {
-        return;
+    /**
+     * The title in {@link #paint} wrapped to {@code available} px, at most two lines, each {@code titleLine} below the
+     * previous one as in the geometry of {@link #measure}. Aligned to the page's start, as one drawn line was before:
+     * the layout's own direction follows the text, so the alignment flips where the text and the page differ.
+     */
+    @Nullable
+    private StaticLayout buildTitleLayout (@Nullable CharSequence name, int available, float titleLine, boolean rtl) {
+      if (TextUtils.isEmpty(name) || available <= 0) {
+        return null;
       }
-      this.style = style;
-      this.hasSubtitle = hasSubtitle;
-      this.lastEllipsized = null;
-      this.lastSubtitleEllipsized = null;
+      final boolean textRtl = TextDirectionHeuristics.FIRSTSTRONG_LTR.isRtl(name, 0, name.length());
+      final Layout.Alignment alignment = textRtl == rtl ? Layout.Alignment.ALIGN_NORMAL : Layout.Alignment.ALIGN_OPPOSITE;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        paint.getFontMetrics(metrics);
+        final float spacingAdd = titleLine - (metrics.descent - metrics.ascent);
+        return StaticLayout.Builder.obtain(name, 0, name.length(), paint, available)
+          .setAlignment(alignment)
+          .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_LTR)
+          .setIncludePad(false)
+          .setLineSpacing(spacingAdd, 1f)
+          .setMaxLines(2)
+          .setEllipsize(TextUtils.TruncateAt.END)
+          .build();
+      }
+      // No line limit before Android 6: one ellipsized line, as before
+      final CharSequence line = TextUtils.ellipsize(name, paint, available, TextUtils.TruncateAt.END);
+      //noinspection deprecation
+      return new StaticLayout(line, paint, available, alignment, 1f, 0f, false);
+    }
+
+    /**
+     * Builds the paints, the title's layout and the geometry when the style, the subtitle's presence, the title or the
+     * width changes (not per frame). Returns whether the area's height changed, so the list's insets are stale.
+     */
+    private boolean measure (int style, boolean hasSubtitle, @Nullable CharSequence name, int available) {
       final boolean large = style != TITLE_MEDIUM;
       final int ts = large ? XgramExpressive.TS_DISPLAY_S : XgramExpressive.TS_HEADLINE_M;
-      applyStyle(paint, ts);
-      applyStyle(subtitlePaint, XgramExpressive.TS_BODY_M);
+      final boolean styleChanged = this.style != style || areaHeight <= 0;
+      if (styleChanged) {
+        applyStyle(paint, ts);
+        applyStyle(subtitlePaint, XgramExpressive.TS_BODY_M);
+        this.lastSubtitleEllipsized = null;
+      }
+      final float titleLine = Screen.sp(XgramExpressive.lineHeightSp(ts));
+      final boolean rtl = Lang.rtl();
+      if (styleChanged || layoutWidth != available || layoutRtl != rtl || !TextUtils.equals(layoutName, name)) {
+        layoutName = name;
+        layoutWidth = available;
+        layoutRtl = rtl;
+        titleLayout = buildTitleLayout(name, available, titleLine, rtl);
+      }
+      final int lines = titleLayout != null ? Math.max(1, titleLayout.getLineCount()) : 1;
+      if (!styleChanged && this.hasSubtitle == hasSubtitle && this.titleLines == lines) {
+        return false;
+      }
+      final int oldAreaHeight = areaHeight;
+      this.style = style;
+      this.hasSubtitle = hasSubtitle;
+      this.titleLines = lines;
 
       final float expanded = large ? (hasSubtitle ? LARGE_EXPANDED_SUBTITLE : LARGE_EXPANDED) : (hasSubtitle ? MEDIUM_EXPANDED_SUBTITLE : MEDIUM_EXPANDED);
       // Compose's expanded row: the bar's expanded height minus its collapsed row
       final float rowBase = Screen.dpf(expanded - BAR_COLLAPSED);
-      final float titleLine = Screen.sp(XgramExpressive.lineHeightSp(ts));
+      // A title wrapped to two lines takes two line heights, as Compose's (maxLines = 2)
+      final float titleBlock = titleLine * lines;
       paint.getFontMetrics(metrics);
       final float titleAscent = -metrics.ascent;
       final float titleLeading = Math.max(0f, (titleLine - (metrics.descent - metrics.ascent)) / 2f);
@@ -319,8 +381,8 @@ public final class XgramM3Bars {
         subtitleAscent = -metrics.ascent;
         subtitleLeading = Math.max(0f, (subtitleLine - (metrics.descent - metrics.ascent)) / 2f);
       }
-      final float block = titleLine + subtitleLine;
-      final float lastBaseline = hasSubtitle ? titleLine + subtitleLeading + subtitleAscent : titleLeading + titleAscent;
+      final float block = titleBlock + subtitleLine;
+      final float lastBaseline = hasSubtitle ? titleBlock + subtitleLeading + subtitleAscent : titleBlock - titleLine + titleLeading + titleAscent;
       // M3 TwoRowsTopAppBar: the last baseline that far above the row's bottom, moved up as far as the block needs to
       // fit; a block taller than the row (large font sizes) grows the row.
       final float row = Math.max(rowBase, block);
@@ -332,11 +394,16 @@ public final class XgramM3Bars {
       areaHeight = Math.round(Screen.dpf(expanded) - Size.getHeaderPortraitSize() + (row - rowBase));
       final float blockTop = areaHeight - block - Math.max(0f, fromBottom);
       titleBaseline = blockTop + titleLeading + titleAscent;
-      subtitleBaseline = blockTop + titleLine + subtitleLeading + subtitleAscent;
+      subtitleBaseline = blockTop + titleBlock + subtitleLeading + subtitleAscent;
+      return areaHeight != oldAreaHeight;
     }
 
-    private void measureFor (RecyclerView parent) {
-      measure(styleOf(parent), !TextUtils.isEmpty(subtitleOf(parent)));
+    private static int titleWidth (RecyclerView parent) {
+      return parent.getWidth() - 2 * Screen.dp(TITLE_START);
+    }
+
+    private boolean measureFor (RecyclerView parent) {
+      return measure(styleOf(parent), !TextUtils.isEmpty(subtitleOf(parent)), controller.getName(), titleWidth(parent));
     }
 
     @Nullable
@@ -373,7 +440,11 @@ public final class XgramM3Bars {
         return;
       }
       final CharSequence subtitle = subtitleOf(parent);
-      measure(styleOf(parent), !TextUtils.isEmpty(subtitle));
+      final CharSequence name = controller.getName();
+      if (measure(styleOf(parent), !TextUtils.isEmpty(subtitle), name, titleWidth(parent))) {
+        // The title changed its line count since the last layout: the area above the first item is now another height
+        parent.post(parent::invalidateItemDecorations);
+      }
       final View first = firstItem(parent);
       if (first == null) {
         HeaderView.xgramSetTitleAlpha(controller, 1f);
@@ -388,25 +459,22 @@ public final class XgramM3Bars {
         return;
       }
 
-      final CharSequence name = controller.getName();
       if (TextUtils.isEmpty(name)) {
         return;
       }
       final int start = Screen.dp(TITLE_START);
       final int available = parent.getWidth() - start * 2;
-      if (available <= 0) {
+      final StaticLayout layout = titleLayout;
+      if (available <= 0 || layout == null) {
         return;
       }
       final boolean rtl = Lang.rtl();
-      if (lastEllipsized == null || lastWidth != available || !TextUtils.equals(lastName, name)) {
-        lastName = name;
-        lastWidth = available;
-        lastEllipsized = TextUtils.ellipsize(name, paint, available, TextUtils.TruncateAt.END);
-      }
-      final CharSequence text = lastEllipsized;
+      // Up to two lines, the first baseline where the one line was; the layout aligns each line to the page's start
       paint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), alpha));
-      final float textWidth = paint.measureText(text, 0, text.length());
-      c.drawText(text, 0, text.length(), rtl ? parent.getWidth() - start - textWidth : start, areaTop + titleBaseline, paint);
+      final int saveCount = c.save();
+      c.translate(start, areaTop + titleBaseline - layout.getLineBaseline(0));
+      layout.draw(c);
+      c.restoreToCount(saveCount);
 
       if (!TextUtils.isEmpty(subtitle)) {
         if (lastSubtitleEllipsized == null || lastSubtitleWidth != available || !TextUtils.equals(lastSubtitle, subtitle)) {

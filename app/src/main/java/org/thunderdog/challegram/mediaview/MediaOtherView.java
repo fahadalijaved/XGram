@@ -126,9 +126,17 @@ public class MediaOtherView extends FrameLayoutFix implements Destroyable {
     @Override
     protected void onAttachedToWindow () {
       super.onAttachedToWindow();
-      if (xgramBadge != null) {
-        xgramBadge.springIn();
+      if (xgramBadge == null) {
+        return;
       }
+      // The strip re-attaches thumbnails as it scrolls: those keep their badge as it is (scale 1), only the strip's
+      // first show and items added while it is still spring in
+      final android.view.ViewParent thumb = getParent();
+      final android.view.ViewParent strip = thumb != null ? thumb.getParent() : null;
+      if (strip instanceof androidx.recyclerview.widget.RecyclerView && ((androidx.recyclerview.widget.RecyclerView) strip).getScrollState() != androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
+        return;
+      }
+      xgramBadge.springIn();
     }
 
     @Override

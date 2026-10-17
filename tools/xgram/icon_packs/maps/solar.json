@@ -325,5 +325,10 @@
  "clear_formatting": "eraser",
  "content_cut": "scissors",
  "animals_filled_blink": "paw",
- "drag_handle": "grip-horizontal"
+ "drag_handle": "grip-horizontal",
+ "hourglass": "hourglass",
+ "device_laptop": "laptop",
+ "sms": "chat-round-dots",
+ "screenshot": "full-screen-square",
+ "lock_open": "lock-unlocked"
 }

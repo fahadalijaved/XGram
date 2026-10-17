@@ -53,6 +53,11 @@ public final class XgramBookmarks {
     }
   }
 
+  /** Bookmarks the message as added at {@code addedAtMillis}: an undone removal goes back to its place in {@link #list}. */
+  public static void setBookmarked (Tdlib tdlib, long chatId, long messageId, long addedAtMillis) {
+    Settings.instance().pmc().putLong(key(tdlib, chatId, messageId), addedAtMillis);
+  }
+
   /** Bookmarks of an account, newest first. */
   public static List<Bookmark> list (Tdlib tdlib) {
     String prefix = PREFIX + tdlib.id() + "_";

@@ -623,7 +623,8 @@ public class PageBlockRichText extends PageBlock {
       }
       if (xgramCard != XGRAM_CARD_NONE) {
         // XGram M3E: the details tile (20dp, as list tiles) or the pull quote card (20dp)
-        xgramDrawCard(c, viewWidth, view.getMeasuredHeight(), com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER,
+        // Pure black: surfaceContainer is black like the page, so the card takes the card step (#121212)
+        xgramDrawCard(c, viewWidth, view.getMeasuredHeight(), com.fahadali.xgram.appearance.XgramAmoled.role(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH),
           detailsOpened != null ? com.fahadali.xgram.appearance.XgramExpressive.LIST_OUTER_CORNER : com.fahadali.xgram.appearance.XgramExpressive.CORNER_L_INC);
       }
 

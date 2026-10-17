@@ -256,6 +256,8 @@ MAP = {
     'andrejsharapov_baseline_message_check_24': 'message_check',
     'baseline_unsubscribe_24': 'unsubscribe',
     'baseline_timer_16': 'timer',
+    # XGram M3E round 6: the schedule sheet's "In 2 hours", the passcode auto-lock row
+    'dotvhs_baseline_time_2h_24': 'timer', 'xgram_r6_b1_timer_24': 'timer', 'xgram_r6_b8_timer_24': 'timer',
     'baseline_timer_off_16': 'timer_off',
     'baseline_incognito_circle_18': 'incognito_circle',
     'deproko_baseline_instantview_24': 'instantview',
@@ -264,5 +266,6 @@ MAP = {
     'dotvhs_baseline_visibility_message_24': 'visibility_message',
     'dotvhs_baseline_command_24': 'command',
     'baseline_mail_96': 'mail',
+    'xgram_r6_b8_mail_24': 'mail',  # XGram M3E round 6: the email code and recovery pages
     'deproko_baseline_animals_filled_blink_24': 'animals_filled_blink',
 }

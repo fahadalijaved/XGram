@@ -67,6 +67,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TimeInput
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerLayoutType
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
@@ -103,7 +104,6 @@ import com.fahadali.xgram.appearance.XgramAppMotion
 import com.fahadali.xgram.appearance.XgramExpressive
 import com.fahadali.xgram.appearance.XgramIconPack
 import com.fahadali.xgram.appearance.XgramMotion
-import com.fahadali.xgram.appearance.XgramSnackbar
 import com.fahadali.xgram.compose.theme.XgramM3Theme
 import org.drinkless.tdlib.TdApi
 import org.thunderdog.challegram.R
@@ -575,7 +575,6 @@ object XgramR5ChatPickers {
                 TextButton(onClick = dismiss, shapes = ButtonDefaults.shapes()) {
                   Text(Lang.getString(R.string.Cancel))
                 }
-                Spacer(Modifier.width(8.dp))
                 Button(
                   onClick = {
                     past = false
@@ -605,7 +604,7 @@ object XgramR5ChatPickers {
               )
               Box(modifier = Modifier.padding(horizontal = 24.dp)) {
                 if (dial) {
-                  TimePicker(state = timeState)
+                  TimePicker(state = timeState, layoutType = TimePickerLayoutType.Vertical)
                 } else {
                   TimeInput(state = timeState)
                 }
@@ -632,39 +631,45 @@ object XgramR5ChatPickers {
                     contentDescription = Lang.getString(if (dial) R.string.XgramR5ChatTimeTypeIn else R.string.XgramR5ChatTimeDial)
                   )
                 }
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = { timeStep = false }, shapes = ButtonDefaults.shapes()) {
-                  Text(Lang.getString(R.string.XgramR6B1Back))
-                }
-                Spacer(Modifier.width(8.dp))
-                Button(
-                  onClick = {
-                    val now = System.currentTimeMillis() + offset
-                    val picked = momentOf(dateState.selectedDateMillis ?: minDay, timeState.hour, timeState.minute)
-                    if (picked > now) {
-                      dismiss()
-                      onPick(picked)
-                    } else {
-                      // Already passed: the clock moves to the earliest time left and the dialog stays
-                      past = true
-                      XgramSnackbar.show(Lang.getString(R.string.XgramR6B1PastTime), android.widget.Toast.LENGTH_SHORT)
-                      val earliest = Calendar.getInstance()
-                      earliest.timeInMillis = now
-                      earliest.add(Calendar.MINUTE, 2)
-                      if (utcDay(earliest.timeInMillis) == (dateState.selectedDateMillis ?: minDay)) {
-                        timeState.hour = earliest.get(Calendar.HOUR_OF_DAY)
-                        timeState.minute = earliest.get(Calendar.MINUTE)
-                      } else {
-                        // Two minutes from now is already tomorrow: back to the calendar
-                        timeStep = false
-                      }
-                    }
-                  },
-                  shapes = ButtonDefaults.shapes(),
-                  modifier = Modifier.weight(1f, fill = false),
-                  contentPadding = ButtonDefaults.SmallContentPadding
+                // Back and the confirm button share one end-aligned row, where the button is the
+                // only weighted child and can take all the width the dial toggle and Back leave
+                Row(
+                  modifier = Modifier.weight(1f),
+                  horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
+                  verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Text(label.label(moment), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                  TextButton(onClick = { timeStep = false }, shapes = ButtonDefaults.shapes()) {
+                    Text(Lang.getString(R.string.XgramR6B1Back))
+                  }
+                  Spacer(Modifier.width(8.dp))
+                  Button(
+                    onClick = {
+                      val now = System.currentTimeMillis() + offset
+                      val picked = momentOf(dateState.selectedDateMillis ?: minDay, timeState.hour, timeState.minute)
+                      if (picked > now) {
+                        dismiss()
+                        onPick(picked)
+                      } else {
+                        // Already passed: the inline error shows and the clock moves to the earliest time left
+                        past = true
+                        val earliest = Calendar.getInstance()
+                        earliest.timeInMillis = now
+                        earliest.add(Calendar.MINUTE, 2)
+                        if (utcDay(earliest.timeInMillis) == (dateState.selectedDateMillis ?: minDay)) {
+                          timeState.hour = earliest.get(Calendar.HOUR_OF_DAY)
+                          timeState.minute = earliest.get(Calendar.MINUTE)
+                        } else {
+                          // Two minutes from now is already tomorrow: back to the calendar
+                          timeStep = false
+                        }
+                      }
+                    },
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.weight(1f, fill = false),
+                    contentPadding = ButtonDefaults.SmallContentPadding
+                  ) {
+                    Text(label.label(moment), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                  }
                 }
               }
             }
@@ -930,28 +935,31 @@ object XgramR5ChatPickers {
           verticalAlignment = Alignment.CenterVertically
         ) {
           if (canRemove && !confirming && onRemove != null) {
-            TextButton(
-              onClick = {
-                busy = true
-                error = null
-                onRemove.onRemove { failure ->
-                  busy = false
-                  if (failure == null) {
-                    dismiss()
-                  } else {
-                    error = failure
+            // The Remove slot is the only weighted child: it takes all the width Cancel and Save leave
+            Box(Modifier.weight(1f)) {
+              TextButton(
+                onClick = {
+                  busy = true
+                  error = null
+                  onRemove.onRemove { failure ->
+                    busy = false
+                    if (failure == null) {
+                      dismiss()
+                    } else {
+                      error = failure
+                    }
                   }
-                }
-              },
-              enabled = !busy,
-              shapes = ButtonDefaults.shapes(),
-              colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-              modifier = Modifier.weight(1f, fill = false)
-            ) {
-              Text(Lang.getString(R.string.XgramM3eR4preSbRemoveBirthday), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
+                enabled = !busy,
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+              ) {
+                Text(Lang.getString(R.string.XgramM3eR4preSbRemoveBirthday), maxLines = 1, overflow = TextOverflow.Ellipsis)
+              }
             }
+          } else {
+            Spacer(Modifier.weight(1f))
           }
-          Spacer(Modifier.weight(1f))
           TextButton(
             onClick = {
               if (confirming) {

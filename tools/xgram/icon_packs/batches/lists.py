@@ -102,6 +102,8 @@ MAP = {
     'baseline_arrow_downward_24': 'arrow_downward',
     'templarian_baseline_source_merge_24': 'source_merge',
     'baseline_small_arrow_down_18': 'small_arrow_down', 'baseline_small_arrow_down_24': 'small_arrow_down',
+    # XGram M3E round 6: the dropdown arrows of the M3 menu button and the phone page's country field
+    'xgram_r6_b1_arrow_drop_down_24': 'small_arrow_down', 'xgram_r6_b8_arrow_drop_down_24': 'small_arrow_down',
     'baseline_keyboard_arrow_left_24': 'keyboard_arrow_left', 'round_keyboard_arrow_left_24': 'keyboard_arrow_left',
     'ic_map_pin_44': 'ic_map_pin',
     'baseline_ballot_16': 'ballot',

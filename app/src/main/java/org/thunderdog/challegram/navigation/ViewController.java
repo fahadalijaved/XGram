@@ -1759,7 +1759,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         });
     }
     if (xgramErrorView != null) {
-      xgramBindInputAlert(dialog, inputView, xgramErrorView, value, defaultValue, needReset, callback, hideKeyboard);
+      xgramBindInputAlert(dialog, inputView, xgramErrorView, defaultValue, needReset, callback, hideKeyboard);
     }
     return inputView;
   }
@@ -1780,12 +1780,12 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
 
   /**
    * XGram M3E r6: an input dialog's M3 behaviour: a refused value puts the field in its error state with the error line
-   * under it (both cleared on the next edit), the keyboard's Done confirms, and Done stays disabled while the field is
-   * empty when it opened empty (confirming nothing would change nothing). The buttons do what Telegram X's do.
+   * under it (both cleared on the next edit) and the keyboard's Done confirms. An empty value is the callback's to
+   * accept or refuse (optional report comments, a theme without an author), as in Telegram X. The buttons do what
+   * Telegram X's do.
    */
-  private void xgramBindInputAlert (AlertDialog dialog, MaterialEditTextGroup inputView, TextView errorView, @Nullable CharSequence value, @Nullable String defaultValue, boolean needReset, InputAlertCallback callback, boolean hideKeyboard) {
+  private void xgramBindInputAlert (AlertDialog dialog, MaterialEditTextGroup inputView, TextView errorView, @Nullable String defaultValue, boolean needReset, InputAlertCallback callback, boolean hideKeyboard) {
     final Button positive = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
-    final boolean emptyIsNoOp = StringUtils.isEmpty(value);
     final Runnable refuse = () -> {
       inputView.setInErrorState(true);
       errorView.setVisibility(View.VISIBLE);
@@ -1802,9 +1802,6 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
           refuse.run();
         }
       });
-      if (emptyIsNoOp) {
-        positive.setEnabled(!StringUtils.isEmpty(inputView.getText()));
-      }
     }
     if (needReset) {
       final Button neutral = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
@@ -1830,9 +1827,6 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         if (errorView.getVisibility() != View.GONE) {
           errorView.setVisibility(View.GONE);
         }
-        if (emptyIsNoOp && positive != null) {
-          positive.setEnabled(!StringUtils.isEmpty(s));
-        }
       }
 
       @Override
@@ -1841,7 +1835,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     final int imeOptions = inputView.getEditText().getImeOptions();
     inputView.getEditText().setImeOptions((imeOptions & ~android.view.inputmethod.EditorInfo.IME_MASK_ACTION) | android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
     inputView.setDoneListener(v -> {
-      if (positive != null && positive.isEnabled()) {
+      if (positive != null) {
         positive.performClick();
       }
       return true;

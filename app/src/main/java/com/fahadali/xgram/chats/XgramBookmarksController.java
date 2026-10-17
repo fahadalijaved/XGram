@@ -196,7 +196,8 @@ public final class XgramBookmarksController extends RecyclerViewController<Void>
       XgramBookmarks.setBookmarked(tdlib, bookmark.chatId, bookmark.messageId, false);
       rebuild();
       com.fahadali.xgram.appearance.XgramSnackbar.showUndo(Lang.getString(R.string.XgramR6B5BookmarkRemoved), () -> {
-        XgramBookmarks.setBookmarked(tdlib, bookmark.chatId, bookmark.messageId, true);
+        // Back where it was in the list, with its own date while the message loads
+        XgramBookmarks.setBookmarked(tdlib, bookmark.chatId, bookmark.messageId, bookmark.addedAt);
         if (!isDestroyed()) {
           rebuild();
         }

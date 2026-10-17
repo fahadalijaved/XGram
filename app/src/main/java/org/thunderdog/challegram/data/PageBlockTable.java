@@ -216,14 +216,15 @@ public class PageBlockTable extends PageBlock implements Destroyable {
     final float r = Math.min(Screen.dpf(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L), Math.min(xgramCardRect.width(), xgramCardRect.height()) / 2f);
     xgramCard.rewind();
     xgramCard.addRoundRect(xgramCardRect, r, r, android.graphics.Path.Direction.CW);
-    c.drawPath(xgramCard, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW)));
+    // Pure black: the card, the stripes and the page would all be black, so each steps up one level
+    c.drawPath(xgramCard, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.role(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_LOW, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH))));
     final int saveCount = c.save();
     c.clipPath(xgramCard);
     for (Cell cell : cellsList) {
       if (cell.cell.isHeader) {
-        c.drawRect(cell.bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH)));
+        c.drawRect(cell.bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.role(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST))));
       } else if (table.isStriped && cell.cellPositionStartY() % 2 == 0) {
-        c.drawRect(cell.bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER)));
+        c.drawRect(cell.bounds, Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.role(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST))));
       }
       if (table.isBordered) {
         c.drawRect(cell.bounds, Paints.strokeSeparatorPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT)));

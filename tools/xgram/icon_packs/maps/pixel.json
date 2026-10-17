@@ -325,5 +325,10 @@
  "clear_formatting": "eraser",
  "content_cut": "cut",
  "animals_filled_blink": "dog",
- "drag_handle": {"drawn": "drag_handle"}
+ "drag_handle": {"drawn": "drag_handle"},
+ "hourglass": "hourglass",
+ "device_laptop": "laptop",
+ "sms": "message-processing",
+ "screenshot": "crop",
+ "lock_open": "unlock"
 }

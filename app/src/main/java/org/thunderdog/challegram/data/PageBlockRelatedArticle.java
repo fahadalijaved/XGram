@@ -244,7 +244,8 @@ public class PageBlockRelatedArticle extends PageBlock {
     xgramRadii[4] = xgramRadii[5] = xgramRadii[6] = xgramRadii[7] = bottom;
     xgramTile.rewind();
     xgramTile.addRoundRect(xgramTileRect, xgramRadii, android.graphics.Path.Direction.CW);
-    c.drawPath(xgramTile, org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER)));
+    // Pure black: surfaceContainer is black like the page (filling, surface), so the tile takes the card step
+    c.drawPath(xgramTile, org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramAmoled.role(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER, com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH))));
   }
 
   @Override

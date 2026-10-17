@@ -924,6 +924,7 @@ public final class XgramR6B8Login {
   public static final class LinkButton extends NoScrollTextView {
     private final XgramExpressive.MorphDrawable container;
     private final XgramExpressive.Spring tonal;
+    private final android.graphics.drawable.RippleDrawable stateLayer;
 
     public LinkButton (@NonNull Context context) {
       super(context);
@@ -941,7 +942,10 @@ public final class XgramR6B8Login {
       container.setHost(this);
       Drawable inset = new InsetDrawable(container, 0, Screen.dp(4f), 0, Screen.dp(4f));
       Drawable mask = new InsetDrawable(container.newMask(), 0, Screen.dp(4f), 0, Screen.dp(4f));
-      setBackground(XgramAppMotion.ThemedRipple.ofRole(XgramExpressive.PRIMARY, inset, mask));
+      // The state layer follows the label (draw): primary as a text button, onSecondaryContainer as a tonal one. A plain
+      // RippleDrawable, so a theme change cannot reset it to primary behind draw()'s back (ThemedRipple would).
+      stateLayer = new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(XgramExpressive.color(XgramExpressive.PRIMARY))), inset, mask);
+      setBackground(stateLayer);
       tonal = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> {
         container.invalidateSelf();
         invalidate();
@@ -987,12 +991,21 @@ public final class XgramR6B8Login {
       return tonal.getTarget() == 1f;
     }
 
+    /** The colour the state layer was last derived from. */
+    private int lastStateBase;
+
     @Override
     public void draw (@NonNull Canvas c) {
       // before the background: the container and label colours of this frame (theme changes and the tonal spring)
       final float f = clamp(tonal.getValue());
       container.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER), f));
-      int text = mix(XgramExpressive.color(XgramExpressive.PRIMARY), XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER), f);
+      // M3: a text button's state layer is primary, a filled tonal button's onSecondaryContainer, as its label
+      final int base = mix(XgramExpressive.color(XgramExpressive.PRIMARY), XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER), f);
+      if (base != lastStateBase) {
+        lastStateBase = base;
+        stateLayer.setColor(android.content.res.ColorStateList.valueOf(XgramExpressiveC.stateLayerColor(base)));
+      }
+      int text = base;
       if (!isEnabled()) {
         text = XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.ON_SURFACE), XgramExpressive.DISABLED_CONTENT);
       }
