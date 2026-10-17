@@ -72,7 +72,8 @@ public class ColorDirectionView extends View {
 
   @Override
   protected void onDraw (Canvas c) {
-    if (factor == 0f) {
+    if (factor == 0f || com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: no dotted trail: the swatch floats right over the tone card's ring thumb
       return;
     }
 

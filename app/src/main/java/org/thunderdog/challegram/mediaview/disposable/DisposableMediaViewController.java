@@ -128,13 +128,22 @@ public abstract class DisposableMediaViewController extends ViewController<Dispo
 
   @Override
   public void launchShowAnimation (PopupLayout popup) {
+    // XGram M3E: the reveal runs on the default spatial spring (the subclasses clamp it for alpha)
+    com.fahadali.xgram.appearance.XgramAppMotion.use(revealAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, false);
     revealAnimator.animateTo(1f);
   }
 
   @Override
   public boolean launchHideAnimation (PopupLayout popup, FactorAnimator originalAnimator) {
+    // XGram M3E: back to the message without overshooting past it
+    com.fahadali.xgram.appearance.XgramAppMotion.use(revealAnimator, com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, true);
     revealAnimator.animateTo(0f);
     return true;
+  }
+
+  /** XGram: Expressive design is on. */
+  protected static boolean xgram () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
   }
 
   private static final long REVEAL_ANIMATION_DURATION = 280;

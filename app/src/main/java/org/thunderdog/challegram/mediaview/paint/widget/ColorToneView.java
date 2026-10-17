@@ -51,6 +51,110 @@ public class ColorToneView extends View implements ClickHelper.Delegate {
     this.preview = preview;
   }
 
+  // XGram M3E: the photo editor's tone picker is a floating card over the media: the dark scheme's
+  // surfaceContainerHigh with 28dp corners at elevation 3 (no shadow view), the tone square 12dp inside it with 16dp
+  // corners and a 24dp ring thumb (the colour, a 2dp white ring, a 1dp outline).
+
+  private static final float XGRAM_CARD_INSET = 12f, XGRAM_THUMB = 24f;
+  private boolean xgramMedia;
+  private final Paint xgramFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint xgramStroke = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final RectF xgramRect = new RectF();
+
+  /** The photo editor's card style; with Expressive design off this does nothing. */
+  public void xgramSetMediaStyle () {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || xgramMedia) {
+      return;
+    }
+    xgramMedia = true;
+    xgramStroke.setStyle(Paint.Style.STROKE);
+    final int inset = Screen.dp(XGRAM_CARD_INSET);
+    setPadding(inset, inset, inset, inset);
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+      setElevation(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3));
+      setOutlineProvider(new android.view.ViewOutlineProvider() {
+        @Override
+        public void getOutline (View view, android.graphics.Outline outline) {
+          outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL));
+        }
+      });
+    }
+  }
+
+  /** The ring thumb's colour and place in the photo editor (the hue stays as set). */
+  public void xgramSetThumb (int color, float saturation, float value) {
+    color = ColorUtils.color(255, color);
+    if (this.circleColor != color || this.saturation != saturation || this.value != value) {
+      this.circleColor = color;
+      this.saturation = saturation;
+      this.value = value;
+      invalidate();
+    }
+  }
+
+  /** The saturation under {@code x} in the parent's coordinates, on the (inset) tone square. */
+  public float xgramSaturationAt (float x) {
+    final int width = getMeasuredWidth() - getPaddingLeft() - getPaddingRight();
+    return width > 0 ? MathUtils.clamp((x - getLeft() - getPaddingLeft()) / (float) width) : 0f;
+  }
+
+  /** The value under {@code y} in the parent's coordinates, on the (inset) tone square: 1 at its top, 0 at its bottom. */
+  public float xgramValueAt (float y) {
+    final int height = getMeasuredHeight() - getPaddingTop() - getPaddingBottom();
+    return height > 0 ? MathUtils.clamp(1f - (y - getTop() - getPaddingTop()) / (float) height) : 0f;
+  }
+
+  /** Where {@code saturation} is on the tone square, in the parent's coordinates. */
+  public float xgramXFor (float saturation) {
+    return getLeft() + getPaddingLeft() + (getMeasuredWidth() - getPaddingLeft() - getPaddingRight()) * MathUtils.clamp(saturation);
+  }
+
+  /** Where {@code value} is on the tone square, in the parent's coordinates. */
+  public float xgramYFor (float value) {
+    return getTop() + getPaddingTop() + (getMeasuredHeight() - getPaddingTop() - getPaddingBottom()) * (1f - MathUtils.clamp(value));
+  }
+
+  private void xgramDrawCard (Canvas c) {
+    final int viewWidth = getMeasuredWidth(), viewHeight = getMeasuredHeight();
+    final float corner = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
+    xgramRect.set(0, 0, viewWidth, viewHeight);
+    xgramFill.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGH));
+    c.drawRoundRect(xgramRect, corner, corner, xgramFill);
+    if (hue == -1 || bitmap == null || bitmap.isRecycled()) {
+      return;
+    }
+    final int startX = getPaddingLeft(), startY = getPaddingTop();
+    final int width = viewWidth - startX - getPaddingRight(), height = viewHeight - startY - getPaddingBottom();
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    if (paint == null) {
+      paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+      paint.setShader(new BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+    }
+    final float rounding = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L);
+    c.save();
+    c.translate(startX, startY);
+    xgramRect.set(0, 0, bitmap.getWidth(), bitmap.getHeight());
+    final float sx = (float) width / xgramRect.right, sy = (float) height / xgramRect.bottom;
+    c.scale(sx, sy, 0, 0);
+    c.drawRoundRect(xgramRect, rounding / sx, rounding / sy, paint);
+    c.restore();
+
+    if (this.saturation != -1f && this.value != -1f) {
+      final float cx = calculateCenterX(), cy = calculateCenterY();
+      final float outer = Screen.dpf(XGRAM_THUMB) / 2f, ring = Screen.dpf(2f), outline = Screen.dpf(1f);
+      xgramFill.setColor(circleColor);
+      c.drawCircle(cx, cy, outer - ring, xgramFill);
+      xgramStroke.setStrokeWidth(ring);
+      xgramStroke.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.white(1f));
+      c.drawCircle(cx, cy, outer - ring / 2f, xgramStroke);
+      xgramStroke.setStrokeWidth(outline);
+      xgramStroke.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.OUTLINE_VARIANT));
+      c.drawCircle(cx, cy, outer + outline / 2f, xgramStroke);
+    }
+  }
+
   private int prevWidth, prevHeight;
 
   @Override
@@ -171,6 +275,10 @@ public class ColorToneView extends View implements ClickHelper.Delegate {
 
   @Override
   protected void onDraw (Canvas c) {
+    if (xgramMedia) {
+      xgramDrawCard(c);
+      return;
+    }
     if (hue == -1 || bitmap == null || bitmap.isRecycled()) {
       return;
     }

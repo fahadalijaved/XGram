@@ -49,6 +49,21 @@ public class BlurButtonsWrap extends FrameLayoutFix implements View.OnClickListe
     params.leftMargin = Screen.dp(64f) + Screen.dp(22f) + Screen.dp(18f) - Screen.dp(12f);
     params.rightMargin = Screen.dp(22f) - Screen.dp(12f);
 
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: Off / Radial / Linear as a connected button group over media, 40dp in a 56dp row
+      FrameLayoutFix.LayoutParams groupParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, android.view.Gravity.CENTER_VERTICAL);
+      groupParams.leftMargin = params.leftMargin;
+      groupParams.rightMargin = Screen.dp(16f);
+      xgramGroup = new com.fahadali.xgram.appearance.XgramButtonGroupView(context);
+      xgramGroup.setConnectedOnMedia();
+      xgramGroup.setLayoutParams(groupParams);
+      xgramGroup.setCallback((view, actionId) -> xgramSelect(actionId));
+      xgramBind(-1);
+      addView(xgramGroup);
+      setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f)));
+      return;
+    }
+
     buttonsWrap = new LinearLayout(context);
     buttonsWrap.setOrientation(LinearLayout.HORIZONTAL);
 
@@ -73,7 +88,41 @@ public class BlurButtonsWrap extends FrameLayoutFix implements View.OnClickListe
     setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(42f)));
   }
 
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramButtonGroupView xgramGroup;
+  private final java.util.ArrayList<com.fahadali.xgram.appearance.XgramButtonGroupView.Action> xgramActions = new java.util.ArrayList<>(3);
+
+  private void xgramBind (int selected) {
+    if (xgramGroup == null) {
+      return;
+    }
+    xgramActions.clear();
+    for (int i = 0; i < 3; i++) {
+      xgramActions.add(new com.fahadali.xgram.appearance.XgramButtonGroupView.Action(i, 0, Lang.getString(i == 0 ? R.string.Off : i == 1 ? R.string.BlurRadial : R.string.BlurLinear), i == selected));
+    }
+    xgramGroup.setActions(xgramActions);
+  }
+
+  private void xgramSelect (int index) {
+    if (listener != null && !listener.allowBlurChanges()) {
+      return;
+    }
+    if (index >= 0 && index < 3 && activeIndex != index) {
+      this.activeIndex = index;
+      xgramBind(index);
+      if (listener != null) {
+        listener.onBlurModeChanged(this, index);
+      }
+    }
+  }
+
   public void setData (int selected) {
+    if (xgramGroup != null) {
+      if (this.activeIndex != selected) {
+        this.activeIndex = selected;
+        xgramBind(selected);
+      }
+      return;
+    }
     if (this.activeIndex != selected) {
       if (this.activeIndex != -1) {
         BlurButton button = (BlurButton) buttonsWrap.getChildAt(activeIndex);

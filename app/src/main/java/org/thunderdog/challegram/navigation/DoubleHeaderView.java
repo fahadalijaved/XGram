@@ -233,12 +233,25 @@ public class DoubleHeaderView extends FrameLayoutFix implements RtlCheckListener
   private boolean progressFadingOut;
   private float progressFadeFactor;
 
+  // XGram M3E: a page's load progress is a flat M3 linear progress under the app bar (the page puts the bar in its
+  // content and hands it over here), not a header-coloured line at the bottom of the title.
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B4Media.LinearProgressView xgramProgressView;
+
+  public void xgramSetProgressView (@Nullable com.fahadali.xgram.appearance.XgramR6B4Media.LinearProgressView view) {
+    this.xgramProgressView = view;
+  }
+
   public void animateProgress (float progress) {
+    if (xgramProgressView != null && XgramExpressive.isEnabled()) {
+      xgramProgressView.setProgress(progress);
+      return;
+    }
     if (progress < progressFactor) {
       return;
     }
     if (progressAnimator == null) {
       progressAnimator = new FactorAnimator(PROGRESS_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 320, 0f);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(progressAnimator, XgramExpressive.STD_SPATIAL_DEFAULT, true); // XGram
     }
     progressAnimator.animateTo(progress);
   }
@@ -257,6 +270,7 @@ public class DoubleHeaderView extends FrameLayoutFix implements RtlCheckListener
           if (factor == 1f && !progressFadingOut) {
             progressFadingOut = true;
             FactorAnimator animator = new FactorAnimator(PROGRESS_FADE_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 280l);
+            com.fahadali.xgram.appearance.XgramAppMotion.use(animator, XgramExpressive.EFFECTS_DEFAULT, true); // XGram
             animator.animateTo(1f);
           }
         }
@@ -278,6 +292,18 @@ public class DoubleHeaderView extends FrameLayoutFix implements RtlCheckListener
 
   @Override
   protected void onDraw (Canvas c) {
+    if (XgramExpressive.isEnabled()) {
+      // XGram M3E: a flat M3 linear progress (4dp, primary over a secondaryContainer track) fading out when done
+      final float alpha = 1f - progressFadeFactor;
+      if (alpha > 0f) {
+        final float thickness = Screen.dpf(4f);
+        com.fahadali.xgram.appearance.XgramWavyLinear.draw(c, 0f, getMeasuredWidth(), getMeasuredHeight() - thickness, progressFactor,
+          XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY), alpha),
+          XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER), alpha),
+          thickness, 0f, 0f, Screen.dpf(4f), true);
+      }
+      return;
+    }
     int viewWidth = getMeasuredWidth();
     int viewHeight = getMeasuredHeight();
     int height = Screen.dp(2f);

@@ -126,6 +126,8 @@ public class WebkitController<T> extends ViewController<T> {
           }
         });
       }
+    } else if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      webView.setWebViewClient(new XgramWebClient());
     } else {
       webView.setWebViewClient(new WebViewClient());
     }
@@ -135,11 +137,54 @@ public class WebkitController<T> extends ViewController<T> {
         onPageProgress((float) newProgress / 100f);
       }
     });
+
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the load progress is a flat linear progress under the app bar, and a failed load shows the
+      // empty state with a tonal Retry over the page
+      xgramProgressView = new com.fahadali.xgram.appearance.XgramR6B4Media.LinearProgressView(context);
+      xgramProgressView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(com.fahadali.xgram.appearance.XgramR6B4Media.LinearProgressView.HEIGHT_DP), android.view.Gravity.TOP));
+      headerCell.xgramSetProgressView(xgramProgressView);
+      xgramErrorView = new com.fahadali.xgram.appearance.XgramR6B4Media.LoadErrorView(context);
+      xgramErrorView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      xgramErrorView.setOnRetry(v -> {
+        xgramErrorView.hide();
+        if (webView != null) {
+          webView.reload();
+        }
+      });
+    }
+
     onCreateWebView(headerCell, webView);
 
     contentView.addView(webView);
+    if (xgramErrorView != null) {
+      contentView.addView(xgramErrorView);
+    }
+    if (xgramProgressView != null) {
+      contentView.addView(xgramProgressView);
+    }
 
     return contentView;
+  }
+
+  // XGram M3E: load errors of the page itself (not of its images or scripts) show XgramR6B4Media.LoadErrorView
+
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramR6B4Media.LinearProgressView xgramProgressView;
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramR6B4Media.LoadErrorView xgramErrorView;
+
+  private void xgramOnLoadError (boolean mainFrame, @androidx.annotation.Nullable CharSequence reason) {
+    if (mainFrame && xgramErrorView != null && !isDestroyed()) {
+      xgramErrorView.show(reason);
+    }
+  }
+
+  private class XgramWebClient extends WebViewClient {
+    @Override
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.M)
+    public void onReceivedError (WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+      super.onReceivedError(view, request, error);
+      xgramOnLoadError(request != null && request.isForMainFrame(), error != null ? error.getDescription() : null);
+    }
   }
 
   @Override
