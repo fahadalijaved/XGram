@@ -407,13 +407,27 @@ public class SettingsController extends ViewController<Void> implements
     Views.applyBottomInset(contentView, extraBottomInset);
   }
 
+  // XGram M3E: Settings as a tab screen of the floating navigation toolbar (XgramNavToolbar)
+
+  @Override
+  public @Nullable RecyclerView xgramBarScrollView () {
+    return contentView;
+  }
+
+  @Override
+  public void xgramOnBarTabChanged () {
+    if (headerCell != null) {
+      headerCell.setInnerMargins(Screen.dp(xgramIsBarTab() ? 16f : 56f), Screen.dp(49f)); // the back arrow came or went
+    }
+  }
+
   @Override
   protected View onCreateView (Context context) {
     this.headerCell = new ComplexHeaderView(context, tdlib, this);
     this.headerCell.setAvatarExpandListener((headerView1, expandFactor, byCollapse, allowanceFactor, collapseFactor) -> updateButtonsColor());
     this.headerCell.setAllowEmptyClick();
     this.headerCell.initWithController(this, true);
-    this.headerCell.setInnerMargins(Screen.dp(56f), Screen.dp(49f));
+    this.headerCell.setInnerMargins(Screen.dp(xgramIsBarTab() ? 16f : 56f), Screen.dp(49f)); // XGram M3E: no back arrow on a tab screen
     this.headerCell.setPhotoOpenCallback(this);
     this.headerCell.setOnEmojiStatusClickListener(v -> {
       EmojiStatusSelectorEmojiPage.Wrapper c = new EmojiStatusSelectorEmojiPage.Wrapper(context, tdlib, SettingsController.this, new EmojiStatusSelectorEmojiPage.AnimationsEmojiStatusSetDelegate() {

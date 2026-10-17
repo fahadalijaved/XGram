@@ -32,12 +32,14 @@ import com.fahadali.xgram.compose.ChoiceSpec
 import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
+import com.fahadali.xgram.compose.XgramPage
 import com.fahadali.xgram.compose.ui.GroupScope
 import com.fahadali.xgram.compose.ui.PageScope
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.layout.XgramNavRail
+import com.fahadali.xgram.layout.XgramNavToolbar
 import com.fahadali.xgram.layout.XgramWindow
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.ui.MessagesController
@@ -162,13 +164,20 @@ fun AppearancePage() {
         }
       }
       // The floating navigation bar at the bottom of the chat list on narrow windows (both looks); with the rail on
-      // too, the rail shows on wide windows and the bar on narrow ones
-      switch(
-        R.id.btn_xgramBottomNav, s(R.string.XgramBottomNavOption), s(R.string.XgramBottomNavOptionSub),
-        checked = settings.bottomNav()
-      ) {
-        settings.setBottomNav(it)
-        host.activity.xgramTwoPane()?.update()
+      // too, the rail shows on wide windows and the bar on narrow ones. Expressive design: the M3E floating toolbar,
+      // whose page sets it up (its tabs, the photo, the colours); the same id, so settings search still finds it
+      if (XgramExpressive.isEnabled()) {
+        link(R.id.btn_xgramBottomNav, s(R.string.XgramBottomNavOption), subtitle = XgramNavToolbar.summary()) {
+          host.openPage(XgramPage.NAV_BAR)
+        }
+      } else {
+        switch(
+          R.id.btn_xgramBottomNav, s(R.string.XgramBottomNavOption), s(R.string.XgramBottomNavOptionSub),
+          checked = settings.bottomNav()
+        ) {
+          settings.setBottomNav(it)
+          host.activity.xgramTwoPane()?.update()
+        }
       }
     }
     description(R.string.XgramTwoPaneInfo)

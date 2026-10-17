@@ -103,6 +103,15 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
   @Nullable private XgramNavRail rail;
   private boolean railShown;
 
+  /**
+   * Material 3 Expressive floating navigation toolbar of narrow windows (one pane, no rail), above the screens. Made the
+   * first time it is needed, hidden (not destroyed) while two panes or the rail take over, so it keeps its state.
+   */
+  @Nullable private XgramNavToolbar toolbar;
+  /** The chat list the toolbar was last shown for, and whether it was: it hears when that changes. */
+  @Nullable private MainController toolbarRoot;
+  private boolean toolbarRootShown;
+
   public XgramTwoPane (BaseActivity context, NavigationController navigation, ViewGroup container) {
     this.context = context;
     this.navigation = navigation;
@@ -361,6 +370,14 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     syncRootHeader();
     syncLeftHeader();
     syncRail();
+    // The floating navigation toolbar of narrow windows (XgramNavToolbar, Expressive design) comes or goes with the
+    // window, two panes and the rail
+    try {
+      syncToolbar(root);
+    } catch (Throwable t) {
+      Log.e("XGram: navigation toolbar failed", t);
+      android.util.Log.e("XGram", "navigation toolbar failed", t);
+    }
     // The bottom navigation bar of narrow windows (XgramNavBar) comes or goes with the window and the rail
     try {
       if (root != null) {
@@ -504,6 +521,78 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       return false;
     }
     return !isWideEnough(context, false);
+  }
+
+  // Floating navigation toolbar (Material 3 Expressive)
+
+  /**
+   * One pane and no rail, whatever the width: where the floating navigation toolbar ({@link XgramNavToolbar}) shows
+   * when it is on (a phone, the cover screen in either orientation, the inner screen with the rail and two panes off
+   * or the rail too tall for it).
+   */
+  public static boolean isToolbarWindow (@Nullable BaseActivity context) {
+    XgramTwoPane twoPane = context != null ? context.xgramTwoPane() : null;
+    return twoPane != null && !(twoPane.isActive || twoPane.railShown);
+  }
+
+  /** The floating navigation toolbar (while it exists; it may be hidden). */
+  @Nullable
+  public XgramNavToolbar toolbar () {
+    return toolbar;
+  }
+
+  /** Expressive design and the Navigation bar setting, past login, one pane and no rail. */
+  private boolean toolbarNeeded (@Nullable MainController root) {
+    return wantsToolbar(root) && !isActive && !railShown;
+  }
+
+  private boolean wantsToolbar (@Nullable MainController root) {
+    return root != null && !navigation.isDestroyed() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP &&
+      XgramExpressive.isEnabled() && XgramSettings.instance().bottomNav();
+  }
+
+  /**
+   * Makes the toolbar the first time it is needed, shows or hides it, binds it to the chat list at the root (an
+   * account switch rebinds its badges and photo) and tells that chat list when the toolbar came or went for it (its
+   * folder tabs, header tabs, FAB and room follow). The setting off, or Expressive design off: it goes.
+   */
+  private void syncToolbar (@Nullable MainController root) {
+    if (!wantsToolbar(root)) {
+      if (toolbar != null) {
+        XgramNavToolbar old = toolbar;
+        toolbar = null;
+        old.destroy();
+      }
+      notifyToolbarRoot(root, false);
+      return;
+    }
+    boolean need = toolbarNeeded(root);
+    if (toolbar == null) {
+      if (!need) {
+        notifyToolbarRoot(root, false);
+        return;
+      }
+      toolbar = new XgramNavToolbar(context, this, navigation, container);
+    }
+    toolbar.sync(root);
+    toolbar.setShown(need);
+    notifyToolbarRoot(root, toolbar.isRootOf(root));
+  }
+
+  private void notifyToolbarRoot (@Nullable MainController root, boolean shown) {
+    if (root == toolbarRoot && shown == toolbarRootShown) {
+      return;
+    }
+    MainController oldRoot = toolbarRoot;
+    boolean oldShown = toolbarRootShown;
+    toolbarRoot = root;
+    toolbarRootShown = shown;
+    if (oldRoot != null && oldRoot != root && oldShown && !oldRoot.isDestroyed()) {
+      oldRoot.xgramOnToolbarChanged();
+    }
+    if (root != null && !root.isDestroyed() && (shown || (root == oldRoot && oldShown))) {
+      root.xgramOnToolbarChanged();
+    }
   }
 
   /**
@@ -871,6 +960,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
 
   /** Called by the activity's content layout after its own measure pass. */
   public void onMeasure (ViewGroup parent) {
+    if (toolbar != null) {
+      toolbar.measureHost(parent); // over the navigation's width, from above the pill to the window's bottom
+    }
     boolean panes = isActive && leftNavigation != null;
     XgramNavRail rail = railShown ? this.rail : null;
     if (!panes && rail == null) {
@@ -907,6 +999,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
 
   /** Called by the activity's content layout after its own layout pass. */
   public void onLayout (ViewGroup parent) {
+    if (toolbar != null) {
+      toolbar.layoutHost(parent); // the navigation bar's strip included (its inset is not a margin here)
+    }
     boolean panes = isActive && leftNavigation != null;
     XgramNavRail rail = railShown ? this.rail : null;
     if (!panes && rail == null) {
@@ -1354,6 +1449,9 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     if (rail != null) {
       rail.onThemeChanged();
     }
+    if (toolbar != null) {
+      toolbar.onThemeChanged();
+    }
   }
 
   @Override
@@ -1426,6 +1524,13 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       container.removeView(rail.view());
       rail = null;
     }
+    if (toolbar != null) {
+      XgramNavToolbar old = toolbar;
+      toolbar = null;
+      old.destroy();
+    }
+    toolbarRoot = null;
+    toolbarRootShown = false;
     if (railShown) {
       org.thunderdog.challegram.navigation.DrawerController drawer = context.getDrawer();
       if (drawer != null) {

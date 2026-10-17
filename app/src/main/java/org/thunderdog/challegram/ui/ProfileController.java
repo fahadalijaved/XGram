@@ -1025,6 +1025,14 @@ public class ProfileController extends ViewController<ProfileController.Args> im
   }
 
   @Override
+  public void xgramOnBarTabChanged () {
+    // XGram M3E: the own profile as a tab screen of the floating navigation toolbar: the back arrow came or went
+    if (headerCell != null) {
+      headerCell.setInnerMargins(Screen.dp(xgramIsBarTab() ? 16f : 56f), calculateMenuWidth());
+    }
+  }
+
+  @Override
   protected int getFloatingButtonId () {
     if (xgramNeedActions()) {
       return 0; // XGram: Message is in the actions row
@@ -1707,7 +1715,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       headerCell = new ComplexHeaderView(context, tdlib, this);
       headerCell.setAvatarExpandListener((headerView1, expandFactor1, byCollapse, allowanceFactor, collapseFactor) -> updateButtonsColor());
       headerCell.setInnerRightMarginStart(Screen.dp(49f));
-      headerCell.setInnerMargins(Screen.dp(56f), calculateMenuWidth());
+      headerCell.setInnerMargins(Screen.dp(xgramIsBarTab() ? 16f : 56f), calculateMenuWidth()); // XGram M3E: no back arrow on a tab screen
       if (xgramTopicId == 0) {
         headerCell.setAllowEmptyClick();
       }

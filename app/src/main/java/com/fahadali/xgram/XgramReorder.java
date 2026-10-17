@@ -58,6 +58,8 @@ public final class XgramReorder {
   private XgramReorder () { }
 
   public static final String DRAWER = "drawer", MESSAGE_MENU = "menu", CHAT_ACTIONS = "chat_actions";
+  /** The floating navigation toolbar's tabs (com.fahadali.xgram.layout.XgramNavToolbar.TAB_KEYS). */
+  public static final String NAV_BAR = "navbar";
   /** Stored as "xgram_order_" + list, a comma separated list of keys (included in the XGram backup). */
   public static final String KEY_PREFIX = "xgram_order_";
 

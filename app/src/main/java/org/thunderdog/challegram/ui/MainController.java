@@ -290,6 +290,13 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramConnSetup(); // XGram M3E: connection pill and snackbar
     xgramContentView = contentView;
     xgramUpdateNavBar(); // XGram: the bottom navigation bar of narrow windows (Appearance > Layout)
+    // XGram M3E: the floating navigation toolbar's morph follows a finger dragging the pages (XgramNavToolbar)
+    pager.addOnPageChangeListener(new androidx.viewpager.widget.ViewPager.SimpleOnPageChangeListener() {
+      @Override
+      public void onPageScrollStateChanged (int state) {
+        xgramOnPagerScrollState(state);
+      }
+    });
 
     makeStartupChecks();
 
@@ -1118,6 +1125,58 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (Config.CHAT_FOLDERS_HIDE_BOTTOM_BAR_ON_SCROLL && displayTabsAtBottom()) {
       showBottomBar();
     }
+    // XGram M3E: the floating navigation toolbar: its band follows the page, its morph a dragging finger. The offset
+    // is the pager's own (right to left, the pages are reversed: the logical position goes down as it grows)
+    xgramPagerPosition = position == actualPosition ? position + actualPositionOffset : position - actualPositionOffset;
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+    if (toolbar != null) {
+      toolbar.onPagerScrolled(xgramCallsFraction(), xgramPagerDragged && !hasFolders());
+    }
+  }
+
+  /** XGram M3E: where the pages are (position and offset), for the toolbar's band. */
+  private float xgramPagerPosition;
+  /** XGram M3E: a finger dragged the pages (until they stop): the toolbar's morph follows the pager directly. */
+  private boolean xgramPagerDragged;
+
+  private void xgramOnPagerScrollState (int state) {
+    if (state == androidx.viewpager.widget.ViewPager.SCROLL_STATE_DRAGGING) {
+      xgramPagerDragged = true;
+      com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+      if (toolbar != null) {
+        toolbar.onPagerDragStarted(); // the finger takes over from a tap's springs
+      }
+    } else if (state == androidx.viewpager.widget.ViewPager.SCROLL_STATE_IDLE) {
+      xgramPagerDragged = false;
+      com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+      if (toolbar != null) {
+        toolbar.onPagerIdle();
+      }
+    }
+  }
+
+  /** XGram M3E: 0 on Chats, 1 on Calls, in between while the pages move (0 with folders). */
+  public float xgramCallsFraction () {
+    return hasFolders() ? 0f : MathUtils.clamp(xgramPagerPosition - POSITION_CHATS);
+  }
+
+  /**
+   * XGram M3E: the band behind the floating navigation toolbar on this screen: the page's colour (the chats' filling,
+   * the calls' background), mixed while the pages move.
+   */
+  public int xgramBarBandColor () {
+    return ColorUtils.fromToArgb(Theme.getColor(ColorId.filling), Theme.getColor(ColorId.background), xgramCallsFraction());
+  }
+
+  /** XGram M3E: Chats or Calls without an animation (the toolbar's tab screen goes back to that page). */
+  public void xgramSetPageSilently (boolean calls) {
+    if (getViewPager() == null || hasFolders()) {
+      return;
+    }
+    int position = calls ? POSITION_CALLS : POSITION_CHATS;
+    if (getCurrentPagerItemPosition() != position) {
+      setCurrentPagerPosition(position, false);
+    }
   }
 
   @Override
@@ -1128,6 +1187,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       composeWrap.show();
       if (xgramNavBar != null) {
         xgramNavBar.setScrollHidden(false); // XGram: another page brings the bottom navigation bar back, as the FAB
+      }
+      com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+      if (toolbar != null) {
+        toolbar.setScrollHidden(false); // XGram M3E: and the floating navigation toolbar
       }
     }
     if (hasFolders()) {
@@ -1167,6 +1230,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramFabLabelRes = labelRes;
     composeWrap.xgramSetExtendedLabel(labelRes != 0 ? Lang.getString(labelRes) : null);
     com.fahadali.xgram.appearance.XgramMotion.notifyActive(getCurrentPagerItem()); // the page's lift again: extended at its top
+    if (xgramToolbar() != null) {
+      checkComposeWrapPaddings(); // XGram M3E: a wider or narrower FAB may fit beside the floating toolbar, or not
+    }
   }
 
   @Override
@@ -1196,14 +1262,64 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   private void checkComposeWrapPaddings () {
-    if (composeWrap != null) {
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+    if (composeWrap != null && toolbar != null) {
+      xgramPlaceFabByToolbar(toolbar);
+    } else if (composeWrap != null) {
       // XGram: the FAB floats above the bottom navigation bar (XgramNavBar), which floats above the folder tabs
       int paddingBottom = xgramBottomBarsInset() + xgramNavBarRoom();
-      composeWrap.setPadding(composeWrap.getPaddingLeft(), composeWrap.getPaddingTop(), composeWrap.getPaddingRight(), paddingBottom);
+      composeWrap.setPadding(0, composeWrap.getPaddingTop(), 0, paddingBottom);
       composeWrap.setClipToPadding(paddingBottom == 0);
     }
     if (xgramNavBar != null) {
       xgramNavBar.setBottomOffset(xgramBottomBarsInset()); // XGram
+    }
+  }
+
+  /**
+   * XGram M3E: the compose button with the floating navigation toolbar (XgramNavToolbar). Above it, 16dp over the
+   * pill and end-aligned with the profile button (so the collapsed FAB stands right over it); or, on a wide and low
+   * window where the extended FAB clears the toolbar by 16dp at its usual end margin, on the toolbar's row.
+   */
+  private void xgramPlaceFabByToolbar (com.fahadali.xgram.layout.XgramNavToolbar toolbar) {
+    final int margin = composeWrap.xgramFabMarginPx();
+    final int fabSize = Screen.dp(margin >= Screen.dp(24f) ? 80f : 56f); // the Medium FAB keeps 24dp from the edges
+    final int endInset = toolbar.groupEndInsetPx();
+    final boolean inline = endInset > margin + xgramFabExtendedWidthPx() + Screen.dp(16f);
+    int paddingBottom, end = 0;
+    if (inline) {
+      // Centred on the pill's row: 16 + 32dp above the navigation bar
+      paddingBottom = Math.max(0, xgramBottomBarsInset() + Screen.dp(48f) - fabSize / 2 - margin);
+    } else {
+      paddingBottom = xgramBottomBarsInset() + com.fahadali.xgram.layout.XgramNavToolbar.room();
+      end = Math.max(0, endInset - margin);
+    }
+    final boolean rtl = Lang.rtl();
+    composeWrap.setPadding(rtl ? end : 0, composeWrap.getPaddingTop(), rtl ? 0 : end, paddingBottom);
+    composeWrap.setClipToPadding(paddingBottom == 0);
+    toolbar.setInline(inline);
+  }
+
+  /**
+   * XGram M3E: the extended FAB's full width ("New chat", "Call"), also while it is collapsed. A hidden FAB (Hide the
+   * compose button) counts as the usual "New chat" one, so the toolbar's band does not depend on it.
+   */
+  private int xgramFabExtendedWidthPx () {
+    if (composeWrap != null && composeWrap.getVisibility() != View.GONE) {
+      for (int i = composeWrap.getChildCount() - 1; i >= 0; i--) {
+        View child = composeWrap.getChildAt(i);
+        if (child instanceof org.thunderdog.challegram.widget.CircleButton) {
+          return ((org.thunderdog.challegram.widget.CircleButton) child).xgramLayoutWidth();
+        }
+      }
+    }
+    return Screen.dp(121f);
+  }
+
+  /** XGram M3E: the floating navigation toolbar moved its group (a new width, tabs, profile button): the FAB follows. */
+  public void xgramOnToolbarLayout () {
+    if (!isDestroyed()) {
+      checkComposeWrapPaddings();
     }
   }
 
@@ -1284,7 +1400,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     conn.addListener(xgramConnListener);
     xgramConnPill.setDisplay(conn.getState(), conn.getText(), false);
     if (composeWrap != null) {
-      composeWrap.xgramOnToggle = this::xgramConnUpdateSuppressed;
+      composeWrap.xgramOnToggle = () -> {
+        xgramConnUpdateSuppressed();
+        xgramUpdateNavBarHidden(); // XGram M3E: the floating navigation toolbar steps aside while the FAB menu is open
+      };
     }
     xgramConnCheckSnackBar();
   }
@@ -1427,7 +1546,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   /** Where the floating snackbars sit: above the navigation bar, the bottom folder tabs and the bottom navigation bar. */
   private int xgramConnSnackInset () {
-    return xgramBottomBarsInset() + xgramNavBarRoom();
+    // XGram M3E: above the floating navigation toolbar, the floating snackbar (12dp gap) ends where its band starts
+    return xgramBottomBarsInset() + xgramNavBarRoom() + (xgramToolbar() != null ? Screen.dp(4f) : 0);
   }
 
   /** XGram: the navigation bar and, when the folder tabs are at the bottom, their bar. */
@@ -1914,7 +2034,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
    * they are on the navigation rail, or on the bottom navigation bar (XgramNavBar, also in the classic look).
    */
   private boolean xgramRailTitle () {
-    return (xgramRailShown() || xgramNavBar != null) && !hasFolders() && !xgramIsHiddenRoot();
+    return (xgramRailShown() || xgramNavBar != null || xgramToolbarHasCallsTab()) && !hasFolders() && !xgramIsHiddenRoot();
   }
 
   /** XGram: the navigation rail came or went (XgramTwoPane re-applies the header for the ☰ and the tabs). */
@@ -1926,7 +2046,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   /** XGram M3E: the header again (folder tabs came or went), for the navigation rail's (or bar's) title or tabs. */
   private void xgramReapplyHeader () {
-    if ((xgramRailShown() || xgramNavBar != null) && headerView != null && isFocused() && !inTransformMode()) {
+    if ((xgramRailShown() || xgramNavBar != null || xgramToolbarHasCallsTab()) && headerView != null && isFocused() && !inTransformMode()) {
       headerView.setTitle(this);
     }
   }
@@ -1952,7 +2072,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
    * navigation bar's indicator) follow it.
    */
   private void xgramRailPageChanged () {
-    if (!xgramRailShown() && xgramNavBar == null) {
+    if (!xgramRailShown() && !xgramHasBottomNav()) {
       return;
     }
     if (xgramRailTitle() && headerView != null) {
@@ -1964,6 +2084,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
     if (xgramNavBar != null) {
       xgramNavBar.onPageChanged();
+    }
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+    if (toolbar != null) {
+      toolbar.onPageChanged(); // XGram M3E: the floating navigation toolbar's selection
     }
   }
 
@@ -1978,6 +2102,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   /** On a narrow window with one pane and no rail, for the chat list on screen (never the panes' own chat list). */
   private boolean xgramNeedNavBar () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return false; // XGram M3E: Expressive design has the floating navigation toolbar instead (XgramNavToolbar)
+    }
     if (isDestroyed() || Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP || !com.fahadali.xgram.XgramSettings.instance().bottomNav()) {
       return false; // (its state layers are ripples, its shadow an elevation)
     }
@@ -2035,12 +2162,77 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
     updateBottomBarMargins();
     checkPagerMargins();
-    xgramSetNavBarRoom(xgramNavBarRoom());
+    // XGram M3E: the pages' last row ends where the floating navigation toolbar's band starts
+    xgramSetNavBarRoom(xgramToolbar() != null ? com.fahadali.xgram.layout.XgramNavToolbar.listRoom() : xgramNavBarRoom());
   }
 
   /** What the FAB, the snackbars and the pages keep clear for the bottom navigation bar, in px. */
   private int xgramNavBarRoom () {
+    if (xgramToolbar() != null) {
+      return com.fahadali.xgram.layout.XgramNavToolbar.room(); // XGram M3E: the floating navigation toolbar
+    }
     return xgramNavBar != null ? com.fahadali.xgram.layout.XgramNavBar.room() : 0;
+  }
+
+  // XGram M3E: the floating navigation toolbar of narrow windows (XgramNavToolbar, owned by XgramTwoPane above the
+  // screens). Its tab screens (Contacts, Settings, the profile) open right above this chat list.
+
+  /** The floating navigation toolbar, while it shows for this chat list. */
+  private @Nullable com.fahadali.xgram.layout.XgramNavToolbar xgramToolbar () {
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = twoPane != null ? twoPane.toolbar() : null;
+    return toolbar != null && toolbar.isRootOf(this) ? toolbar : null;
+  }
+
+  private boolean xgramToolbarShownHere () {
+    return xgramToolbar() != null;
+  }
+
+  /** Calls is one of the toolbar's tabs: the Chats / Calls header tabs give way to the page's title. */
+  private boolean xgramToolbarHasCallsTab () {
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+    return toolbar != null && toolbar.hasTab(com.fahadali.xgram.layout.XgramNavToolbar.DEST_CALLS);
+  }
+
+  /** A bottom navigation of either kind: the classic bar or the floating toolbar. */
+  private boolean xgramHasBottomNav () {
+    return xgramNavBar != null || xgramToolbar() != null;
+  }
+
+  /**
+   * XGram M3E: the floating navigation toolbar came, went or changed its tabs for this chat list: the folder tabs go
+   * to the top (or back), the header shows the page's title or the Chats / Calls tabs, the FAB, the snackbars and the
+   * pages make room.
+   */
+  public void xgramOnToolbarChanged () {
+    if (isDestroyed() || pagerWrap == null) {
+      return;
+    }
+    checkTabs();
+    checkMenu();
+    checkMargins();
+    xgramReapplyHeader();
+    xgramSyncNavBarHeader();
+    xgramLayoutNavBar();
+    xgramUpdateNavBarHidden();
+  }
+
+  /** XGram M3E: the chat list's reasons for the floating toolbar to step aside (XgramNavToolbar.FORCE_*). */
+  private int xgramToolbarForceMask () {
+    int mask = 0;
+    if (xgramSearching) {
+      mask |= com.fahadali.xgram.layout.XgramNavToolbar.FORCE_SEARCH;
+    }
+    if (xgramSelecting) {
+      mask |= com.fahadali.xgram.layout.XgramNavToolbar.FORCE_SELECT;
+    }
+    if (xgramFolderMenu && displayTabsAtBottom()) {
+      mask |= com.fahadali.xgram.layout.XgramNavToolbar.FORCE_FOLDER_MENU;
+    }
+    if (composeWrap != null && composeWrap.xgramIsOpen()) {
+      mask |= com.fahadali.xgram.layout.XgramNavToolbar.FORCE_FAB_MENU;
+    }
+    return mask;
   }
 
   /**
@@ -2048,7 +2240,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
    * header built later (on the way back from a chat, or once search or selection ends) picks it up by itself.
    */
   private void xgramSyncNavBarHeader () {
-    final boolean shown = xgramNavBar != null;
+    final boolean shown = xgramNavBar != null || xgramToolbarHasCallsTab();
     if (xgramNavBarHeader == shown) {
       return;
     }
@@ -2067,6 +2259,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private void xgramUpdateNavBarHidden () {
     if (xgramNavBar != null) {
       xgramNavBar.setForceHidden(xgramNavBarForceHidden(), isFocused());
+    }
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+    if (toolbar != null) {
+      toolbar.setForceHidden(xgramToolbarForceMask(), isFocused()); // XGram M3E
     }
   }
 
@@ -2176,6 +2372,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (xgramNavBar != null) {
       xgramNavBar.onLanguageChanged(); // XGram: its labels, and the order of its destinations for the text direction
     }
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+    if (toolbar != null) {
+      toolbar.onLanguageChanged(); // XGram M3E: its labels and the order of its tabs, fitted again
+    }
   }
 
   /**
@@ -2229,6 +2429,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (xgramNavBar != null) {
         xgramNavBar.setScrollHidden(false); // XGram: the bottom navigation bar comes back with the FAB
       }
+      com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+      if (toolbar != null) {
+        toolbar.setScrollHidden(false); // XGram M3E: in the same frame as the FAB
+      }
       return true;
     }
     return false;
@@ -2251,6 +2455,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         composeWrap.hide();
         if (xgramNavBar != null) {
           xgramNavBar.setScrollHidden(true); // XGram: scrolling down hides the bottom navigation bar with the FAB
+        }
+        com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+        if (toolbar != null) {
+          toolbar.setScrollHidden(true); // XGram M3E: the floating navigation toolbar slides away with the FAB
         }
         if (Config.CHAT_FOLDERS_HIDE_BOTTOM_BAR_ON_SCROLL) {
           hideBottomBar();
@@ -2748,7 +2956,17 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     } else if (com.fahadali.xgram.XgramSettings.KEY_ALL_CHATS_LABEL.equals(key)) {
       UI.post(this::onFoldersAppearanceChanged);
     } else if (com.fahadali.xgram.XgramSettings.KEY_BOTTOM_NAV.equals(key)) {
-      UI.post(this::xgramUpdateNavBar); // the bottom navigation bar comes or goes at once
+      if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+        // XGram M3E: the floating navigation toolbar belongs to the window (XgramTwoPane)
+        UI.post(() -> {
+          com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+          if (twoPane != null && !isDestroyed()) {
+            twoPane.update();
+          }
+        });
+      } else {
+        UI.post(this::xgramUpdateNavBar); // the bottom navigation bar comes or goes at once
+      }
     } else if (com.fahadali.xgram.XgramSettings.hideFoldersKey(tdlib.accountId()).equals(key)) {
       UI.post(() -> {
         if (!isDestroyed() && Settings.instance().chatFoldersEnabled()) {
@@ -3773,7 +3991,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   private boolean displayTabsAtBottom () {
-    return hasFolders() && !tdlib.settings().displayFoldersAtTop();
+    // XGram M3E: with the floating navigation toolbar the folder tabs are at the top, as in Telegram (the setting stays)
+    return hasFolders() && !tdlib.settings().displayFoldersAtTop() && !xgramToolbarShownHere();
   }
 
   private void initPagerSections () {

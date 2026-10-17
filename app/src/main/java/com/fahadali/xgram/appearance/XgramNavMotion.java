@@ -227,6 +227,22 @@ public final class XgramNavMotion {
     return active;
   }
 
+  /**
+   * XGram M3E: hears where the predictive back card is, so a view above the screens (the floating navigation toolbar,
+   * com.fahadali.xgram.layout.XgramNavToolbar) cuts it out of itself as the app bar does.
+   */
+  public interface CardHoleListener {
+    /** {@code rectInRoot}: the card in the navigation's root view (reused: copy it), null once the card is gone. */
+    void onCardHole (@Nullable RectF rectInRoot, float radius, float alpha);
+  }
+
+  private @Nullable CardHoleListener cardHoleListener;
+  private final RectF cardRectInRoot = new RectF();
+
+  public void setCardHoleListener (@Nullable CardHoleListener listener) {
+    this.cardHoleListener = listener;
+  }
+
   public boolean isCard () {
     return active && (mode == MODE_CARD_SYSTEM || mode == MODE_CARD_FINGER);
   }
@@ -477,6 +493,11 @@ public final class XgramNavMotion {
     cardHole.rewind();
     cardHole.addRoundRect(cardRect, r, r, Path.Direction.CW);
     headerView.xgramSetCardHole(cardHole, alpha);
+    if (cardHoleListener != null) {
+      cardRectInRoot.set(cardRect);
+      cardRectInRoot.offset(headerX, headerY); // in the root, not the app bar
+      cardHoleListener.onCardHole(cardRectInRoot, r, alpha);
+    }
     if (floatingButton != null) {
       // On the card: same pivot (the screen centre, see prepareCard), scale, offset and alpha.
       floatingButton.xgramCardTransform(width / 2f, height / 2f, scale, x, y, alpha);
@@ -634,6 +655,9 @@ public final class XgramNavMotion {
     try {
       if (card) {
         headerView.xgramSetCardHole(null, 0f);
+        if (cardHoleListener != null) {
+          cardHoleListener.onCardHole(null, 0f, 0f);
+        }
         if (headerMoved && !navigated) {
           headerView.setTranslation(headerTranslation0);
         }
