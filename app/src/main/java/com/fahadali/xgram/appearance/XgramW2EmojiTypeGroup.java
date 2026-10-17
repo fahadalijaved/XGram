@@ -27,6 +27,7 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 
@@ -73,8 +74,13 @@ import me.vkryl.core.MathUtils;
  * </ul>
  * It follows the panel header as that slides up ({@link #setFollowY}), and hides on scroll down and comes back on
  * scroll up ({@link #setHidden}, spatial default spring): it slides up behind the section tabs and fades (never while
- * TalkBack explores by touch). Nothing is allocated while drawing: the icon paints are rebuilt only when the theme
- * colors change.
+ * TalkBack explores by touch).
+ * <p>
+ * On a panel 600dp or wider ({@link #PLACEMENT_DOCKED}) it docks in the tab row instead, at its end: icon-only 48 x 32dp
+ * segments on the tabs' line in a {@link #DOCKED_ZONE_WIDTH_DP} zone, following the tabs as they slide and fade, and
+ * the grids keep their usual top. Where the segments show no labels, a long press shows the label as a tooltip, and
+ * a keyboard focus ring (secondary, 3dp, 2dp out) marks the focused segment. Nothing is allocated while drawing: the
+ * icon paints are rebuilt only when the theme colors change.
  */
 @SuppressLint("ViewConstructor")
 public final class XgramW2EmojiTypeGroup extends View {
@@ -87,8 +93,15 @@ public final class XgramW2EmojiTypeGroup extends View {
     void onEmojiTypeLongPressed (int type, @NonNull Rect bounds);
   }
 
+  public static final int PLACEMENT_ROW = 0, PLACEMENT_DOCKED = 1;
+
   /** The row's height, and how much further down the grids start under it: the row exactly. */
   public static final float ROW_HEIGHT_DP = 48f, CONTENT_CLEARANCE_DP = ROW_HEIGHT_DP;
+  private static final float DOCKED_SEGMENT_WIDTH_DP = 48f, DOCKED_SEGMENT_HEIGHT_DP = 32f, DOCKED_STRIP_GAP_DP = 8f, DOCKED_END_MARGIN_DP = 12f;
+  /** Docked: the zone at the tab row's end (8dp from the tab strip, three 48dp segments 2dp apart, 12dp from the edge). */
+  public static final float DOCKED_ZONE_WIDTH_DP = DOCKED_STRIP_GAP_DP + 3 * DOCKED_SEGMENT_WIDTH_DP + 2 * XgramM3Connected.GAP + DOCKED_END_MARGIN_DP;
+  /** The narrowest panel the switch docks in (narrower ones cannot spare the tab row, wider ones the row). */
+  public static final float DOCKED_MIN_PANEL_DP = 600f;
   private static final float ROW_SEGMENT_HEIGHT_DP = 40f, ROW_SIDE_MARGIN_DP = 12f, ROW_MAX_GROUP_DP = 412f;
   private static final float CONTENT_PAD_DP = 12f, ICON_DP = 20f, ICON_GAP_DP = 8f;
   private static final int MODE_ICON_LABEL = 0, MODE_LABEL = 1, MODE_ICON = 2;
@@ -126,6 +139,7 @@ public final class XgramW2EmojiTypeGroup extends View {
   private int followType = TYPE_STICKERS;
 
   private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+  private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
   private final TextPaint textPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
   private final Paint.FontMetrics fontMetrics = new Paint.FontMetrics();
   private @Nullable Paint restIconPaint, pillIconPaint;
@@ -135,6 +149,12 @@ public final class XgramW2EmojiTypeGroup extends View {
   private final float[] radii = new float[8];
   private final RectF rect = new RectF();
   private final float[] coverage = new float[COUNT], fill = new float[COUNT];
+  /** This frame's corners (left side, right side) of each segment and of the pill, for the focus ring. */
+  private final float[] segmentLeftRadius = new float[COUNT], segmentRightRadius = new float[COUNT];
+  private float pillLeftRadius, pillRightRadius;
+  private final Path ringPath = new Path();
+  private final Rect longPressBounds = new Rect();
+  private final Runnable longPress = this::onLongPress;
 
   // Geometry in px (layoutGeometry)
   private float groupLeft, segmentWidth, segmentHeight, segmentTop, pitch, full, gap, baseline;
@@ -146,7 +166,8 @@ public final class XgramW2EmojiTypeGroup extends View {
   private int pressedIndex = -1, hoverIndex = -1;
   private float downX, downY;
   private boolean hidden;
-  private float hideFactor, followY;
+  private float hideFactor, followY, followAlpha = 1f;
+  private int placement = PLACEMENT_ROW;
   private @Nullable Callback callback;
   private final @Nullable AccessibilityManager accessibilityManager;
   private final A11y a11y;
@@ -173,6 +194,8 @@ public final class XgramW2EmojiTypeGroup extends View {
       textPaint.setLetterSpacing(XgramExpressive.trackingSp(ts) / XgramExpressive.textSizeSp(ts));
     }
     loadLabels();
+    ringPaint.setStyle(Paint.Style.STROKE);
+    ringPaint.setStrokeWidth(Screen.dpf(3f));
     accessibilityManager = (AccessibilityManager) context.getSystemService(Context.ACCESSIBILITY_SERVICE);
     a11y = new A11y(this);
     ViewCompat.setAccessibilityDelegate(this, a11y);
@@ -327,6 +350,36 @@ public final class XgramW2EmojiTypeGroup extends View {
 
   // Placement
 
+  /** {@link #PLACEMENT_ROW} under the tabs, or {@link #PLACEMENT_DOCKED} in the tab row (EmojiLayout lays it out). */
+  public void setPlacement (int placement) {
+    if (this.placement == placement) {
+      return;
+    }
+    this.placement = placement;
+    if (placement == PLACEMENT_DOCKED) {
+      setHidden(false, false); // docked, it only follows the tabs
+    }
+    releasePress();
+    layoutGeometry();
+    updatePlacement();
+    a11y.invalidateRoot();
+    invalidate();
+  }
+
+  private boolean isDocked () {
+    return placement == PLACEMENT_DOCKED;
+  }
+
+  /** Docked: the tab strips' alpha, as the tabs slide up and fade. */
+  public void setFollowAlpha (float alpha) {
+    if (this.followAlpha != alpha) {
+      this.followAlpha = alpha;
+      if (isDocked()) {
+        updatePlacement();
+      }
+    }
+  }
+
   /** The panel header's translation: the switch sits under the section tabs, so it moves up with them. */
   public void setFollowY (float y) {
     if (this.followY != y) {
@@ -339,9 +392,9 @@ public final class XgramW2EmojiTypeGroup extends View {
     return accessibilityManager != null && accessibilityManager.isEnabled() && accessibilityManager.isTouchExplorationEnabled();
   }
 
-  /** Hides (on scroll down) or shows (on scroll up) the switch, on the spatial default spring; never hides for TalkBack. */
+  /** Hides (on scroll down) or shows (on scroll up) the switch, on the spatial default spring; never hides for TalkBack, nor docked. */
   public void setHidden (boolean hidden, boolean animated) {
-    if (hidden && isTouchExploring()) {
+    if (hidden && (isDocked() || isTouchExploring())) {
       return;
     }
     final float target = hidden ? 1f : 0f;
@@ -368,9 +421,9 @@ public final class XgramW2EmojiTypeGroup extends View {
     return hidden;
   }
 
-  /** 0 shown, 1 hidden. */
+  /** 0 shown, 1 hidden (always 0 docked). */
   public float getHideFraction () {
-    return MathUtils.clamp(hideFactor);
+    return isDocked() ? 0f : MathUtils.clamp(hideFactor);
   }
 
   /** The bottom of the switch as drawn, in the parent's coordinates; 0 while it is not shown. */
@@ -388,8 +441,13 @@ public final class XgramW2EmojiTypeGroup extends View {
     }
   }
 
-  /** Properties only, no layout: it slides up behind the section tabs by its own height and fades. */
+  /** Properties only, no layout: the row slides up behind the section tabs by its own height and fades; docked, it moves and fades with the tabs. */
   private void updatePlacement () {
+    if (isDocked()) {
+      setAlpha(MathUtils.clamp(followAlpha));
+      setTranslationY(followY);
+      return;
+    }
     final float hide = MathUtils.clamp(hideFactor, -.2f, 1f); // a little past its place on the spring's way back
     setAlpha(1f - MathUtils.clamp(hideFactor));
     setTranslationY(followY - Screen.dp(ROW_HEIGHT_DP) * hide);
@@ -399,7 +457,7 @@ public final class XgramW2EmojiTypeGroup extends View {
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-    // EmojiLayout gives exact sizes (the row: its width x 48dp)
+    // EmojiLayout gives exact sizes (the row: its width x 48dp; docked: the zone x the tabs' height)
     setMeasuredDimension(getDefaultSize(0, widthMeasureSpec), getDefaultSize(0, heightMeasureSpec));
   }
 
@@ -412,11 +470,19 @@ public final class XgramW2EmojiTypeGroup extends View {
   /** The group, the segments and one content look for all three (icon and label, label, or icon), measured. */
   private void layoutGeometry () {
     final int width = getWidth(), height = getHeight();
+    final boolean rtl = Lang.rtl();
     gap = Screen.dpf(XgramM3Connected.GAP);
-    final float group = Math.min(width - 2f * Screen.dpf(ROW_SIDE_MARGIN_DP), Screen.dpf(ROW_MAX_GROUP_DP));
-    segmentWidth = Math.max(0f, (group - gap * (COUNT - 1)) / COUNT);
-    segmentHeight = Math.min(height, Screen.dpf(ROW_SEGMENT_HEIGHT_DP));
-    groupLeft = (width - (segmentWidth * COUNT + gap * (COUNT - 1))) / 2f;
+    if (isDocked()) {
+      // 8dp from the tab strip, 12dp from the panel's edge, on the tabs' line
+      segmentWidth = Screen.dpf(DOCKED_SEGMENT_WIDTH_DP);
+      segmentHeight = Math.min(height, Screen.dpf(DOCKED_SEGMENT_HEIGHT_DP));
+      groupLeft = Screen.dpf(rtl ? DOCKED_END_MARGIN_DP : DOCKED_STRIP_GAP_DP);
+    } else {
+      final float group = Math.min(width - 2f * Screen.dpf(ROW_SIDE_MARGIN_DP), Screen.dpf(ROW_MAX_GROUP_DP));
+      segmentWidth = Math.max(0f, (group - gap * (COUNT - 1)) / COUNT);
+      segmentHeight = Math.min(height, Screen.dpf(ROW_SEGMENT_HEIGHT_DP));
+      groupLeft = (width - (segmentWidth * COUNT + gap * (COUNT - 1))) / 2f;
+    }
     segmentTop = (height - segmentHeight) / 2f;
     pitch = segmentWidth + gap;
     full = segmentHeight / 2f;
@@ -431,8 +497,7 @@ public final class XgramW2EmojiTypeGroup extends View {
         labelOnly = false;
       }
     }
-    mode = iconAndLabel ? MODE_ICON_LABEL : labelOnly ? MODE_LABEL : MODE_ICON;
-    final boolean rtl = Lang.rtl();
+    mode = isDocked() ? MODE_ICON : iconAndLabel ? MODE_ICON_LABEL : labelOnly ? MODE_LABEL : MODE_ICON;
     for (int i = 0; i < COUNT; i++) {
       switch (mode) {
         case MODE_ICON_LABEL: {
@@ -497,9 +562,23 @@ public final class XgramW2EmojiTypeGroup extends View {
   // Touch
 
   private void releasePress () {
+    removeCallbacks(longPress);
     if (pressedIndex != -1) {
       pressSprings[pressedIndex].animateTo(0f);
       pressedIndex = -1;
+    }
+  }
+
+  /** Icon only: a long press shows the segment's label (the following UP selects nothing: the press is released). */
+  private void onLongPress () {
+    final int index = pressedIndex;
+    if (index == -1 || mode != MODE_ICON) {
+      return;
+    }
+    releasePress();
+    if (callback != null) {
+      columnBounds(index, longPressBounds);
+      callback.onEmojiTypeLongPressed(index, longPressBounds);
     }
   }
 
@@ -523,6 +602,9 @@ public final class XgramW2EmojiTypeGroup extends View {
         downY = y;
         pressedIndex = index;
         pressSprings[index].animateTo(1f);
+        if (mode == MODE_ICON) {
+          postDelayed(longPress, ViewConfiguration.getLongPressTimeout());
+        }
         return true;
       }
       case MotionEvent.ACTION_MOVE: {
@@ -641,7 +723,9 @@ public final class XgramW2EmojiTypeGroup extends View {
       final float left = groupLeft + slot * pitch;
       final float rest = innerCorner + (full - innerCorner) * fill[i];
       final float inner = MathUtils.clamp(rest + (pressedCorner - rest) * pressSprings[i].getValue(), 0f, full);
-      setRadii(slot == 0 ? full : inner, slot == COUNT - 1 ? full : inner);
+      segmentLeftRadius[i] = slot == 0 ? full : inner;
+      segmentRightRadius[i] = slot == COUNT - 1 ? full : inner;
+      setRadii(segmentLeftRadius[i], segmentRightRadius[i]);
       rect.set(left, segmentTop, left + segmentWidth, segmentTop + segmentHeight);
       final Path path = segmentPaths[i];
       path.rewind();
@@ -655,7 +739,9 @@ public final class XgramW2EmojiTypeGroup extends View {
     final int targetSlot = Math.round(slotOf(selectedType, rtl));
     final float squash = MathUtils.clamp(pressSprings[selectedType].getValue()) * fill[selectedType];
     final float pillInner = MathUtils.clamp(full + (pressedCorner - full) * squash, 0f, full);
-    setRadii(targetSlot == 0 ? full : pillInner, targetSlot == COUNT - 1 ? full : pillInner);
+    pillLeftRadius = targetSlot == 0 ? full : pillInner;
+    pillRightRadius = targetSlot == COUNT - 1 ? full : pillInner;
+    setRadii(pillLeftRadius, pillRightRadius);
     rect.set(pillLeft, segmentTop, pillRight, segmentTop + segmentHeight);
     pillPath.rewind();
     pillPath.addRoundRect(rect, radii, Path.Direction.CW);
@@ -697,6 +783,26 @@ public final class XgramW2EmojiTypeGroup extends View {
         drawContent(c, i, rtl, true, restContent, pillContent);
         c.restoreToCount(save);
       }
+    }
+
+    // Keyboard focus: a ring in secondary, 3dp wide, 2dp out from the focused segment's shape (kept inside the view)
+    final int focused = a11y.getKeyboardFocusedVirtualViewId();
+    if (focused >= 0 && focused < COUNT) {
+      final boolean onPill = focused == selectedType && coverage[focused] >= COVERED;
+      final float stroke = ringPaint.getStrokeWidth(), offset = Screen.dpf(2f) + stroke / 2f;
+      final float left = segmentLeft(focused, rtl);
+      rect.set(
+        Math.max(stroke / 2f, left - offset),
+        Math.max(stroke / 2f, segmentTop - offset),
+        Math.min(width - stroke / 2f, left + segmentWidth + offset),
+        Math.min(height - stroke / 2f, segmentTop + segmentHeight + offset)
+      );
+      final float max = Math.max(0f, Math.min(rect.width(), rect.height()) / 2f);
+      setRadii(Math.min(max, (onPill ? pillLeftRadius : segmentLeftRadius[focused]) + offset), Math.min(max, (onPill ? pillRightRadius : segmentRightRadius[focused]) + offset));
+      ringPath.rewind();
+      ringPath.addRoundRect(rect, radii, Path.Direction.CW);
+      ringPaint.setColor(XgramExpressive.color(XgramExpressive.SECONDARY));
+      c.drawPath(ringPath, ringPaint);
     }
   }
 
@@ -765,6 +871,11 @@ public final class XgramW2EmojiTypeGroup extends View {
     protected void onPopulateNodeForHost (@NonNull AccessibilityNodeInfoCompat node) {
       //noinspection deprecation
       node.setCollectionInfo(AccessibilityNodeInfoCompat.CollectionInfoCompat.obtain(1, COUNT, false, AccessibilityNodeInfoCompat.CollectionInfoCompat.SELECTION_MODE_SINGLE));
+    }
+
+    @Override
+    protected void onVirtualViewKeyboardFocusChanged (int virtualViewId, boolean hasFocus) {
+      XgramW2EmojiTypeGroup.this.invalidate(); // the focus ring
     }
 
     @Override

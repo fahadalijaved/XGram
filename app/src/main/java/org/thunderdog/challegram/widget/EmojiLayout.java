@@ -423,7 +423,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
         @Override
         public void onEmojiTypeLongPressed (int type, @NonNull android.graphics.Rect bounds) {
-          // Only where the segments show no labels (not the row at these widths)
+          xgramShowTypeTooltip(type, bounds); // icon-only segments (docked, or a very narrow row)
         }
       });
       // A full-width row right under the section tabs, over the top of the grids
@@ -492,6 +492,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
         xgramTypeGroup.setVisibility(allowMedia && !isOptimizedForDisplayMessageOptionsWindow ? VISIBLE : GONE); // XGram
         xgramResetTypeGroup();
         xgramApplyGridInsets();
+        requestLayout(); // the docked switch's room in the tab row
       }
     }
   }
@@ -511,7 +512,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   /** XGram M3E: how much further down the emoji, sticker and GIF grids start, clear of the floating toolbar. 0 without it. */
   public int xgramGridTopClearance () {
-    if (xgramTypeGroup == null || !allowMedia || isOptimizedForDisplayMessageOptionsWindow) {
+    if (xgramTypeGroup == null || !allowMedia || isOptimizedForDisplayMessageOptionsWindow || xgramDocked) {
       return 0;
     }
     return Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.CONTENT_CLEARANCE_DP);
@@ -610,7 +611,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
   private static final int XGRAM_TYPE_GIFS = com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.TYPE_GIFS;
 
   private int xgramPendingType = -1;
-  private boolean xgramDragFollow, xgramResetOnIdle;
+  private boolean xgramDragFollow, xgramResetOnIdle, xgramDocked;
 
   private static void xgramLog (String s) {
     if (org.thunderdog.challegram.BuildConfig.DEBUG) {
@@ -843,6 +844,77 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
     if (xgramTypeGroup != null) {
       xgramResetTypeGroup(); // XGram: no tap outlives the panel
     }
+  }
+
+  // XGram M3E: on a panel 600dp or wider (the inner screen without two panes, a landscape cover) the switch docks in
+  // the tab row, at its end, where a short panel cannot spare a band: a 168dp zone over the tab row (raised past it,
+  // filled with its surface, so the media strip slides in under it), the tab strips ending 168dp short of the edge, and
+  // the grids at their usual top. Narrower panels have the row under the tabs. Laid out from onMeasure, before the
+  // children measure: only the layout params' fields change (no setLayoutParams during a measure pass).
+
+  private void xgramUpdatePlacement (int width) {
+    if (xgramTypeGroup == null || width <= 0) {
+      return;
+    }
+    final boolean docked = width >= Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.DOCKED_MIN_PANEL_DP);
+    final boolean rtl = Lang.rtl();
+    final int headerSize = getHeaderSize();
+    final int zoneWidth = Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.DOCKED_ZONE_WIDTH_DP);
+    final FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) xgramTypeGroup.getLayoutParams();
+    if (docked) {
+      params.width = zoneWidth;
+      params.height = headerSize;
+      params.gravity = Gravity.TOP | (rtl ? Gravity.LEFT : Gravity.RIGHT);
+      params.topMargin = 0;
+    } else {
+      params.width = ViewGroup.LayoutParams.MATCH_PARENT;
+      params.height = Screen.dp(com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.ROW_HEIGHT_DP);
+      params.gravity = Gravity.TOP;
+      params.topMargin = headerSize;
+    }
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+      // Docked: above the tab row (no outline, so no shadow); the row: under it, so it hides behind the tabs
+      xgramTypeGroup.setTranslationZ(docked ? headerView.getTranslationZ() + Screen.dp(1f) : 0f);
+    }
+    final int inset = docked && xgramTypeGroup.getVisibility() == VISIBLE ? zoneWidth : 0;
+    boolean insetChanged = xgramSetStripInset(emojiHeaderView, inset, rtl);
+    insetChanged |= xgramSetStripInset(mediaSectionsView, inset, rtl);
+    if (insetChanged) {
+      headerView.forceLayout();
+      xgramPositionsStale = true;
+    }
+    if (docked != xgramDocked) {
+      xgramDocked = docked;
+      xgramTypeGroup.setPlacement(docked ? com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.PLACEMENT_DOCKED : com.fahadali.xgram.appearance.XgramW2EmojiTypeGroup.PLACEMENT_ROW);
+      post(this::xgramApplyGridInsets); // the grids' top clearance (none docked), outside the measure pass
+    }
+  }
+
+  /** The tab strips' slide offsets (their measured widths) are stale once their margins changed. */
+  private boolean xgramPositionsStale;
+
+  private static boolean xgramSetStripInset (@Nullable View strip, int inset, boolean rtl) {
+    if (strip == null || !(strip.getLayoutParams() instanceof ViewGroup.MarginLayoutParams)) {
+      return false;
+    }
+    final ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) strip.getLayoutParams();
+    final int left = rtl ? inset : 0, right = rtl ? 0 : inset;
+    if (params.leftMargin == left && params.rightMargin == right) {
+      return false;
+    }
+    params.leftMargin = left;
+    params.rightMargin = right;
+    strip.forceLayout();
+    return true;
+  }
+
+  private void xgramShowTypeTooltip (int type, @NonNull android.graphics.Rect bounds) {
+    if (xgramTypeGroup == null || parentController == null) {
+      return;
+    }
+    final int labelRes = type == XGRAM_TYPE_EMOJI ? R.string.XgramW2EmojiTypeEmoji : type == XGRAM_TYPE_GIFS ? R.string.GIFs : R.string.Stickers;
+    final android.graphics.Rect target = new android.graphics.Rect(bounds);
+    UI.getContext(getContext()).tooltipManager().builder(xgramTypeGroup).locate((v, outRect) -> outRect.set(target)).show(parentController.tdlib(), labelRes).hideDelayed();
   }
 
   private void checkBackground () {
@@ -1294,6 +1366,7 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
       }
       if (xgramTypeGroup != null) {
         xgramTypeGroup.setFollowY(y + offset); // XGram: stays under the section tabs as they slide up
+        xgramTypeGroup.setFollowAlpha(alpha); // XGram: docked in the tab row, it fades with the tabs
       }
     }
   }
@@ -1695,12 +1768,16 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+    xgramUpdatePlacement(MeasureSpec.getSize(widthMeasureSpec)); // XGram: before the children measure
     if (forceHeight > 0) {
       super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(forceHeight, MeasureSpec.EXACTLY));
     } else {
       super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
-    checkWidth(getMeasuredWidth());
+    if (!checkWidth(getMeasuredWidth()) && xgramPositionsStale) {
+      updatePositions(); // XGram: the tab strips' widths changed (the docked switch)
+    }
+    xgramPositionsStale = false;
   }
 
   public boolean checkWidth (int width) {
