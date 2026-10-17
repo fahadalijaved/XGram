@@ -98,6 +98,7 @@
   <string name="XgramR6B6ScFolderLink">Folder link</string>
   <string name="XgramR6B6ScGiftFromUnknown">Unknown sender</string>
   <string name="XgramR6B6ScGiftLinkActivated">Activated gift link</string>
+  <string name="XgramR6B6ScGiftLinkRedeem">Use gift link</string>
   <string name="XgramR6B6ScGroupInfo">Group info</string>
   <string name="XgramR6B6ScGroupLink">Group link</string>
   <string name="XgramR6B6ScGroupPrivate">Private group</string>

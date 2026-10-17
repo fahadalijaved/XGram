@@ -101,8 +101,100 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
     return R.id.controller_newChannel_link;
   }
 
+  // XGram M3E: a plain app bar ("Channel type") instead of the expanding avatar header; Public and Private as radio
+  // tiles of one segmented group; the t.me/ link in an M3 filled field (its prefix kept) with the hint as supporting
+  // text; a private link with a tonal Copy and a text Revoke under it. On the page color.
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private @androidx.annotation.Nullable View xgramLinkActions;
+  private @androidx.annotation.Nullable String xgramInviteLinkUrl;
+
+  @Override
+  public CharSequence getName () {
+    if (xgram) {
+      return Lang.getString(R.string.XgramR6B6ChannelType);
+    }
+    return super.getName();
+  }
+
+  private View xgramCreateView (Context context) {
+    contentView = new LinearLayout(context);
+    contentView.setOrientation(LinearLayout.VERTICAL);
+    contentView.setPadding(0, Screen.dp(8f), 0, Screen.dp(24f));
+
+    publicRadio = addOption(context, R.id.btn_publicChannel, true, R.string.ChannelPublic, R.string.ChannelPublicInfo, 0);
+    privateRadio = addOption(context, R.id.btn_privateChannel, false, R.string.ChannelPrivate, R.string.ChannelPrivateInfo, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP));
+
+    linkView = new PrefixEditText(context);
+    linkView.setFocusable(false);
+    linkView.setFocusableInTouchMode(false);
+    linkView.setId(R.id.edit_link);
+    linkView.setTextColor(Theme.textAccentColor());
+    addThemeTextAccentColorListener(linkView);
+    addThemeInvalidateListener(linkView);
+    com.fahadali.xgram.appearance.XgramExpressive.applyText(linkView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+    linkView.setBackground(null);
+    linkView.setPadding(Screen.dp(16f), Screen.dp(16f), Screen.dp(16f), Screen.dp(16f));
+    linkView.setSingleLine(true);
+    linkView.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+    linkView.setInputType(linkView.getInputType() | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+    linkView.setPrefix("t.me/");
+
+    // An M3 filled field: surfaceContainerHighest with 4dp top corners and its active indicator (2dp primary focused)
+    FrameLayoutFix field = new FrameLayoutFix(context) {
+      @Override
+      protected void dispatchDraw (android.graphics.Canvas c) {
+        super.dispatchDraw(c);
+        final boolean focused = linkView.isFocused();
+        final float height = Screen.dp(focused ? 2f : 1f);
+        c.drawRect(0, getHeight() - height, getWidth(), getHeight(), org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(focused ? com.fahadali.xgram.appearance.XgramExpressive.PRIMARY : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT)));
+      }
+    };
+    com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable fieldBackground = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS, Float.NaN);
+    fieldBackground.setCorners(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS, com.fahadali.xgram.appearance.XgramExpressive.CORNER_XS, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE);
+    fieldBackground.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+    field.setBackground(fieldBackground);
+    field.addView(linkView, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    linkView.setOnFocusChangeListener((v, hasFocus) -> field.invalidate());
+    addThemeInvalidateListener(field);
+    LinearLayout.LayoutParams fieldParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    fieldParams.leftMargin = fieldParams.rightMargin = Screen.dp(16f);
+    fieldParams.topMargin = Screen.dp(24f);
+    contentView.addView(field, fieldParams);
+
+    com.fahadali.xgram.appearance.XgramR5Lists.RoleText supporting = new com.fahadali.xgram.appearance.XgramR5Lists.RoleText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    supporting.setGravity(Lang.gravity());
+    supporting.setPadding(Screen.dp(32f), Screen.dp(4f), Screen.dp(32f), Screen.dp(8f));
+    supporting.setText(Lang.getString(R.string.ChannelUsernameHelp));
+    addThemeInvalidateListener(supporting);
+    contentView.addView(supporting, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    hintView = supporting;
+
+    // The private link's actions: [Revoke] [Copy]
+    TextView revoke = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(context, com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.RevokeLink), com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
+    revoke.setId(R.id.btn_revokeLink);
+    revoke.setOnClickListener(this);
+    addThemeInvalidateListener(revoke);
+    TextView copy = com.fahadali.xgram.appearance.XgramR5Sheets.tonalButton(context, Lang.getString(R.string.CopyLink), null);
+    copy.setId(R.id.btn_copyLink);
+    copy.setOnClickListener(this);
+    addThemeInvalidateListener(copy);
+    LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(context, null, revoke, copy);
+    actions.setVisibility(View.GONE);
+    contentView.addView(actions);
+    xgramLinkActions = actions;
+
+    scrollView = new ComplexScrollView(context);
+    ViewSupport.setThemedBackground(scrollView, ColorId.background, this);
+    scrollView.addView(contentView);
+    scrollView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    return scrollView;
+  }
+
   @Override
   protected View onCreateView (Context context) {
+    if (xgram) {
+      return xgramCreateView(context);
+    }
     contentView = new LinearLayout(context);
     contentView.setOrientation(LinearLayout.VERTICAL);
     contentView.setPadding(0, Size.getHeaderSizeDifference(false), 0, 0);
@@ -193,6 +285,9 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
   private String username;
 
   private void updateLink () {
+    if (xgramLinkActions != null) {
+      xgramLinkActions.setVisibility(privateRadio.isChecked() ? View.VISIBLE : View.GONE); // XGram M3E: Copy and Revoke under a private link
+    }
     if (privateRadio.isChecked()) {
       linkView.setEditable(false);
       if (inviteLink == null) {
@@ -225,7 +320,41 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
         updateLink();
         hintView.setText(Lang.getString(R.string.ChannelPrivateLinkHelp));
       }
+    } else if (viewId == R.id.btn_copyLink) {
+      // XGram M3E: the private link's tonal Copy
+      if (xgramInviteLinkUrl != null) {
+        UI.copyText(xgramInviteLinkUrl, R.string.CopiedLink);
+      }
+    } else if (viewId == R.id.btn_revokeLink) {
+      // XGram M3E: Revoke makes a new primary link
+      if (!xgramRevoking && chat != null) {
+        xgramRevoking = true;
+        tdlib.send(new TdApi.ReplacePrimaryChatInviteLink(chat.id), (newInviteLink, error) -> runOnUiThreadOptional(() -> {
+          xgramRevoking = false;
+          if (error != null) {
+            UI.showError(error);
+          } else {
+            xgramSetInviteLink(newInviteLink.inviteLink);
+            updateLink();
+          }
+        }));
+      }
     }
+  }
+
+  private boolean xgramRevoking;
+
+  /** The primary link as shown after t.me/ (no protocol, no host), and the whole link to copy. */
+  private void xgramSetInviteLink (String url) {
+    xgramInviteLinkUrl = url;
+    String link = StringUtils.urlWithoutProtocol(url);
+    for (String host : TdConstants.TME_HOSTS) {
+      if (link.startsWith(host)) {
+        link = link.substring(host.length() + 1);
+        break;
+      }
+    }
+    inviteLink = link;
   }
 
   private RadioView addOption (Context context, @IdRes int id, boolean isChecked, @StringRes int titleResId, @StringRes int hintResId, int offset) {
@@ -238,7 +367,15 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
     content.setOnClickListener(this);
     content.setLayoutParams(lp);
     Views.setClickable(content);
-    RippleSupport.setTransparentSelector(content);
+    if (xgram) {
+      // XGram M3E: a radio tile of the two-tile group (Public first, Private last)
+      lp.leftMargin = lp.rightMargin = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
+      content.setPadding(0, Screen.dp(14f), 0, Screen.dp(14f));
+      com.fahadali.xgram.appearance.XgramR5People.bindTile(content).setSegment(id == R.id.btn_publicChannel ? com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_FIRST : com.fahadali.xgram.appearance.XgramExpressive.SEGMENT_LAST);
+      addThemeInvalidateListener(content);
+    } else {
+      RippleSupport.setTransparentSelector(content);
+    }
 
     FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(Screen.dp(20f), Screen.dp(20f));
     params.topMargin = Screen.dp(2f);
@@ -273,6 +410,11 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
     text.setTextColor(Theme.textAccentColor());
     addThemeTextAccentColorListener(text);
     text.setTypeface(Fonts.getRobotoRegular());
+    if (xgram) {
+      // XGram M3E: bodyLarge, sentence case
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(text, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
+      text.setText(com.fahadali.xgram.appearance.XgramR6B6Lists.title(titleResId));
+    }
     text.setSingleLine();
     text.setEllipsize(TextUtils.TruncateAt.END);
     text.setLayoutParams(params);
@@ -296,6 +438,9 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
     text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13f);
     text.setTextColor(Theme.textDecentColor());
     text.setTypeface(Fonts.getRobotoRegular());
+    if (xgram) {
+      com.fahadali.xgram.appearance.XgramExpressive.applyText(text, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false); // XGram M3E
+    }
     addThemeTextDecentColorListener(text);
     text.setLayoutParams(params);
     content.addView(text);
@@ -314,6 +459,7 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
         if (error != null) {
           UI.showError(error);
         } else {
+          xgramInviteLinkUrl = chatInviteLink.inviteLink; // XGram M3E: the whole link for Copy
           inviteLink = StringUtils.urlWithoutProtocol(chatInviteLink.inviteLink);
           for (String host : TdConstants.TME_HOSTS) {
             if (inviteLink.startsWith(host)) {
@@ -331,7 +477,7 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
 
   @Override
   public View getCustomHeaderCell () {
-    return headerView;
+    return xgram ? null : headerView; // XGram M3E: a plain app bar
   }
 
   @Override
@@ -341,7 +487,7 @@ public class CreateChannelLinkController extends ViewController<CreateChannelLin
 
   @Override
   protected int getHeaderHeight () {
-    return Size.getHeaderBigPortraitSize(false);
+    return xgram ? Size.getHeaderPortraitSize() : Size.getHeaderBigPortraitSize(false);
   }
 
   @Override

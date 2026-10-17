@@ -76,8 +76,140 @@ public class CreateChannelController extends ViewController<String[]> implements
   private EditHeaderView headerCell;
   private TextView hintView;
 
+  // XGram M3E: a standard app bar ("New channel"); the content holds the 96dp avatar picker, the filled "Channel name"
+  // field and the filled description field (both with length counters), the hint as bodySmall supporting text under
+  // it, on the page color, at most 480dp wide. The EditHeaderView stays as the photo's holder, off screen.
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private @androidx.annotation.Nullable org.thunderdog.challegram.widget.MaterialEditTextGroup xgramNameField;
+  private @androidx.annotation.Nullable org.thunderdog.challegram.widget.AvatarView xgramAvatar;
+  private boolean xgramReady;
+
+  @Override
+  public CharSequence getName () {
+    if (xgram) {
+      return com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.NewChannel);
+    }
+    return super.getName();
+  }
+
+  private View xgramCreateView (Context context) {
+    final String[] args = getArguments();
+    android.widget.ScrollView scrollView = new android.widget.ScrollView(context);
+    scrollView.setFillViewport(true);
+    scrollView.setVerticalScrollBarEnabled(false);
+    ViewSupport.setThemedBackground(scrollView, ColorId.background, this);
+
+    LinearLayout column = new LinearLayout(context) {
+      @Override
+      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+        // the fields: the width less 16dp on each side, at most 480dp, centred
+        if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+          int want = Math.max(0, Math.min(MeasureSpec.getSize(widthMeasureSpec) - Screen.dp(32f), Screen.dp(com.fahadali.xgram.appearance.XgramR5People.FORM_MAX_WIDTH)));
+          for (int i = 1; i < getChildCount(); i++) {
+            ViewGroup.LayoutParams params = getChildAt(i).getLayoutParams();
+            if (params != null && params.width != want) {
+              params.width = want;
+            }
+          }
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+      }
+    };
+    column.setOrientation(LinearLayout.VERTICAL);
+    column.setGravity(Gravity.CENTER_HORIZONTAL);
+    scrollView.addView(column, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    org.thunderdog.challegram.widget.AvatarView avatarView = new org.thunderdog.challegram.widget.AvatarView(context);
+    avatarView.setId(R.id.avatar);
+    avatarView.xgramSetPicker(true);
+    avatarView.setContentDescription(Lang.getString(R.string.SetChannelPhoto));
+    avatarView.setOnClickListener(v -> {
+      if (!isCreating) {
+        hideSoftwareKeyboard();
+        avatarPickerManager.showMenuForNonCreatedChat(headerCell, true);
+      }
+    });
+    addThemeInvalidateListener(avatarView);
+    LinearLayout.LayoutParams avatarParams = new LinearLayout.LayoutParams(Screen.dp(com.fahadali.xgram.appearance.XgramR6B6Lists.AVATAR_HERO), Screen.dp(com.fahadali.xgram.appearance.XgramR6B6Lists.AVATAR_HERO));
+    avatarParams.topMargin = avatarParams.bottomMargin = Screen.dp(16f);
+    column.addView(avatarView, avatarParams);
+    xgramAvatar = avatarView;
+
+    org.thunderdog.challegram.widget.MaterialEditTextGroup nameField = new org.thunderdog.challegram.widget.MaterialEditTextGroup(context, tdlib, true);
+    nameField.applyRtl(Lang.rtl());
+    nameField.addThemeListeners(this);
+    nameField.setHint(com.fahadali.xgram.appearance.XgramR6B6Lists.title(R.string.ChannelName));
+    nameField.addLengthCounter(false);
+    nameField.setMaxLength(TdConstants.MAX_CHAT_TITLE_LENGTH);
+    nameField.getEditText().setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+    nameField.getEditText().setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+    nameField.getEditText().setNextFocusDownId(R.id.edit_description);
+    nameField.getEditText().setFilters(new InputFilter[] {
+      new CodePointCountFilter(TdConstants.MAX_CHAT_TITLE_LENGTH),
+      new CharacterStyleFilter()
+    });
+    if (args != null && args[0] != null) {
+      nameField.setText(args[0]);
+    }
+    xgramReady = args != null && args[0] != null && args[0].trim().length() > 0;
+    nameField.setTextListener((v, text) -> {
+      final boolean ready = text != null && text.toString().trim().length() > 0;
+      if (xgramReady != ready) { // as EditHeaderView does: only when it changes
+        xgramReady = ready;
+        onReadyStateChanged(ready);
+      }
+    });
+    LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    nameParams.bottomMargin = Screen.dp(8f);
+    column.addView(nameField, nameParams);
+    xgramNameField = nameField;
+
+    org.thunderdog.challegram.widget.MaterialEditTextGroup descField = new org.thunderdog.challegram.widget.MaterialEditTextGroup(context, tdlib, true);
+    descField.applyRtl(Lang.rtl());
+    descField.addThemeListeners(this);
+    descField.setHint(Lang.getString(R.string.Description));
+    descField.addLengthCounter(false);
+    descField.setMaxLength(TdConstants.MAX_CHANNEL_DESCRIPTION_LENGTH);
+    descView = descField.getEditText();
+    descView.setId(R.id.edit_description);
+    descView.setSingleLine(false);
+    descView.setMaxLines(4);
+    descView.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+    descView.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+    descView.setFilters(new InputFilter[] {
+      new CodePointCountFilter(TdConstants.MAX_CHANNEL_DESCRIPTION_LENGTH),
+      new EmojiFilter(),
+      new CharacterStyleFilter()
+    });
+    if (args != null && args[1] != null) {
+      descField.setText(args[1]);
+    }
+    column.addView(descField, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    com.fahadali.xgram.appearance.XgramR5Lists.RoleText supporting = new com.fahadali.xgram.appearance.XgramR5Lists.RoleText(context, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT);
+    supporting.setGravity(Lang.gravity());
+    supporting.setPadding(Screen.dp(16f), Screen.dp(4f), Screen.dp(16f), Screen.dp(24f));
+    supporting.setText(Lang.getString(R.string.DescriptionInfo));
+    addThemeInvalidateListener(supporting);
+    column.addView(supporting, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    hintView = supporting;
+
+    // The photo's holder for the avatar picker manager (not shown)
+    headerCell = new EditHeaderView(context, this);
+    headerCell.xgramSetOnPhotoChanged(() -> runOnUiThreadOptional(() -> {
+      if (xgramAvatar != null) {
+        xgramAvatar.xgramSetImageFile(headerCell.getImageFile());
+      }
+    }));
+    setLockFocusView(nameField.getEditText());
+    return scrollView;
+  }
+
   @Override
   protected View onCreateView (Context context) {
+    if (xgram) {
+      return xgramCreateView(context);
+    }
     LinearLayout contentView;
 
     contentView = new LinearLayout(context);
@@ -195,11 +327,14 @@ public class CreateChannelController extends ViewController<String[]> implements
   public void hideSoftwareKeyboard () {
     super.hideSoftwareKeyboard();
     Keyboard.hideList(headerCell == null ? null : headerCell.getInputView(), descView);
+    if (xgramNameField != null) {
+      Keyboard.hide(xgramNameField.getEditText()); // XGram M3E
+    }
   }
 
   @Override
   public View getCustomHeaderCell () {
-    return headerCell;
+    return xgram ? null : headerCell; // XGram M3E: a standard app bar, no input in it
   }
 
   @Override
@@ -209,11 +344,14 @@ public class CreateChannelController extends ViewController<String[]> implements
 
   @Override
   protected int getHeaderHeight () {
-    return Size.getHeaderBigPortraitSize(false);
+    return xgram ? Size.getHeaderPortraitSize() : Size.getHeaderBigPortraitSize(false);
   }
 
   @Override
   protected int getFloatingButtonId () {
+    if (xgram) {
+      return getTitle().isEmpty() ? 0 : R.drawable.baseline_arrow_forward_24; // XGram M3E: the name is in the content
+    }
     return headerCell.isInputEmpty() ? 0 : R.drawable.baseline_arrow_forward_24;
   }
 
@@ -235,12 +373,15 @@ public class CreateChannelController extends ViewController<String[]> implements
         setLockFocusView(descView);
       } else {
         floatingButton.hide();
-        setLockFocusView(headerCell.getInputView());
+        setLockFocusView(xgramNameField != null ? xgramNameField.getEditText() : headerCell.getInputView());
       }
     }
   }
 
   public String getTitle () {
+    if (xgramNameField != null) {
+      return xgramNameField.getText().toString().trim(); // XGram M3E
+    }
     return headerCell.getInput().trim();
   }
 
@@ -262,6 +403,9 @@ public class CreateChannelController extends ViewController<String[]> implements
     isCreating = !isCreating;
     headerCell.setInputEnabled(!isCreating);
     descView.setEnabled(!isCreating);
+    if (xgramNameField != null) {
+      xgramNameField.setInputEnabled(!isCreating); // XGram M3E
+    }
   }
 
   public void createChannel () {

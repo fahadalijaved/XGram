@@ -18,4 +18,5 @@
   <string name="XgramR6B6DeleteChannel">Delete channel</string>
   <string name="XgramR6B6Close">Close</string>
   <string name="XgramR6B6ChangePhoto">Change photo</string>
+  <string name="XgramR6B6ChannelType">Channel type</string>
 </resources>

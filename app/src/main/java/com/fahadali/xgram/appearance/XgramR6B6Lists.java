@@ -162,6 +162,7 @@ public final class XgramR6B6Lists {
     R.string.FolderLink, R.string.XgramR6B6ScFolderLink,
     R.string.GiftFromUnknown, R.string.XgramR6B6ScGiftFromUnknown,
     R.string.GiftLinkActivated, R.string.XgramR6B6ScGiftLinkActivated,
+    R.string.GiftLinkRedeem, R.string.XgramR6B6ScGiftLinkRedeem,
     R.string.GroupInfo, R.string.XgramR6B6ScGroupInfo,
     R.string.GroupLink, R.string.XgramR6B6ScGroupLink,
     R.string.GroupPrivate, R.string.XgramR6B6ScGroupPrivate,
