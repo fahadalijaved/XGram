@@ -313,7 +313,7 @@ public class RemoveHelper implements FactorAnimator.Target {
       if (morph != null) {
         morph.setCornerTarget(XgramExpressive.CORNER_L, true);
         if (!recolored && morph.getDrawColor() == XgramExpressive.color(XgramExpressive.SURFACE_BRIGHT)) {
-          morph.setColorRole(XgramExpressive.SURFACE_CONTAINER_HIGH);
+          morph.setFloatingColorRole(XgramExpressive.SURFACE_CONTAINER_HIGH);
           recolored = true;
         }
       }

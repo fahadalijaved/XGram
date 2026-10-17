@@ -161,7 +161,6 @@ public class ModernOptions {
       LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(ctx, privacy, cancel, agree);
       LinearLayout.LayoutParams actionsParams = (LinearLayout.LayoutParams) actions.getLayoutParams();
       actionsParams.topMargin = Screen.dp(16f);
-      actionsParams.bottomMargin = Screen.dp(8f);
       actions.setLayoutParams(actionsParams);
 
       optionsLayout.addView(hero);

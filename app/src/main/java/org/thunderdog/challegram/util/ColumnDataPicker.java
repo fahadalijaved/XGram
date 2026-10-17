@@ -243,7 +243,7 @@ public final class ColumnDataPicker implements Destroyable {
           });
         }
         optionsWrap.addView(actions.view);
-        contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT);
+        contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT + com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_BOTTOM);
       } else {
         optionsWrap.addView(commitButton);
         contentHeight += Screen.dp(56f);

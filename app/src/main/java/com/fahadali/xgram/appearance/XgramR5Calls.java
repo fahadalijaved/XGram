@@ -238,12 +238,25 @@ public final class XgramR5Calls {
     fill.setStyle(Paint.Style.FILL);
   }
 
-  /** {@code icon} tinted {@code color}, centred on {@code cx, cy}. */
+  private static @Nullable Paint iconPaint;
+
+  /**
+   * {@code icon} tinted {@code color}, centred on {@code cx, cy}. Tinted with the opaque colour's cached filter and
+   * faded through the paint's alpha, so an animated alpha (a navigation fade) creates no filter per frame.
+   */
   public static void drawIcon (Canvas c, @Nullable Drawable icon, float cx, float cy, @ColorInt int color) {
     if (icon == null || (color >>> 24) == 0) {
       return;
     }
-    Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, Paints.getPorterDuffPaint(color));
+    if (iconPaint == null) {
+      iconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    }
+    final android.graphics.ColorFilter filter = Paints.getColorFilter(color | 0xff000000);
+    if (iconPaint.getColorFilter() != filter) {
+      iconPaint.setColorFilter(filter);
+    }
+    iconPaint.setAlpha(color >>> 24);
+    Drawables.draw(c, icon, cx - icon.getMinimumWidth() / 2f, cy - icon.getMinimumHeight() / 2f, iconPaint);
   }
 
   /**

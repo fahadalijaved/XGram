@@ -62,6 +62,11 @@ public class HapticMenuHelper implements View.OnTouchListener, View.OnLongClickL
 
     public boolean isCheckbox, isCheckboxSelected;
     public BoolAnimator isCheckboxSelectedAnimated;
+    /**
+     * XGram M3E: a single choice among others rather than a checkbox (a checkbox row underneath): the chosen row sits on
+     * the secondaryContainer pill with a trailing check, and a tap does not toggle it.
+     */
+    public boolean isChoice;
 
     private Tdlib tdlib;
     private long userId;
@@ -129,6 +134,12 @@ public class HapticMenuHelper implements View.OnTouchListener, View.OnLongClickL
         isCheckboxSelectedAnimated.forceValue(checkboxSelected, checkboxSelected ? 1f : 0f);
       }
       return this;
+    }
+
+    /** XGram M3E: see {@link #isChoice}. */
+    public MenuItem setIsChoice (boolean chosen) {
+      this.isChoice = true;
+      return setIsCheckbox(true, chosen);
     }
 
     public MenuItem setOnClickListener (OnItemClickListener onClickListener) {

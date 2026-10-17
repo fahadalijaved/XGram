@@ -314,10 +314,9 @@ public final class XgramMessageActions {
 
   private static void showTranscription (ViewController<?> context, String text) {
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram M3E r5: the transcription as a list item (tap copies) with a tonal "Copy", no Cancel row
-      java.util.List<com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row> rows = new ArrayList<>(1);
-      rows.add(new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Row(text, null).maxLines(0).copy(text));
-      com.fahadali.xgram.appearance.XgramR5SheetsInfo.show(context, Lang.getString(R.string.XgramTranscribe), rows,
+      // XGram M3E r5: the transcription in a surfaceContainerHigh card (as the Quote and AI sheets) with a tonal
+      // "Copy", no Cancel row
+      com.fahadali.xgram.appearance.XgramR5SheetsInfo.showText(context, Lang.getString(R.string.XgramTranscribe), text,
         new com.fahadali.xgram.appearance.XgramR5SheetsInfo.Action(Lang.getString(R.string.Copy), com.fahadali.xgram.appearance.XgramR5SheetsInfo.ACTION_TONAL,
           () -> com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(text)));
       return;

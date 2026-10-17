@@ -136,7 +136,7 @@ public final class XgramR5Lists {
     } else if (stringRes == R.string.NothingFound || stringRes == R.string.RegionNotFound) {
       return R.drawable.baseline_search_24;
     } else if (stringRes == R.string.NoContacts) {
-      return R.drawable.baseline_person_24;
+      return R.drawable.baseline_group_96; // as the Contacts page's empty state
     } else if (stringRes == R.string.BlockListEmpty) {
       return R.drawable.baseline_block_24;
     } else if (stringRes == R.string.NoArchive) {
@@ -144,7 +144,7 @@ public final class XgramR5Lists {
     } else if (stringRes == R.string.NoChats || stringRes == R.string.NoGroups || stringRes == R.string.NoGroupsToShow ||
       stringRes == R.string.NoChannels || stringRes == R.string.NoPrivateChats || stringRes == R.string.NoBotsChats ||
       stringRes == R.string.NoUnreadChats || stringRes == R.string.NoCommentChats) {
-      return R.drawable.baseline_chat_bubble_24;
+      return R.drawable.baseline_forum_96; // as the main chat list's empty state (JoinedUsersView)
     } else if (stringRes == R.string.NoStickerSets) {
       return R.drawable.deproko_baseline_stickers_24;
     } else if (stringRes == R.string.NoMasks) {
@@ -194,6 +194,14 @@ public final class XgramR5Lists {
 
   /** {@link #bindEmpty(XgramListStateView, int, CharSequence)} for a SettingsAdapter item. */
   public static void bindEmpty (@NonNull XgramListStateView view, @NonNull ListItem item) {
+    if (item.getStringResource() == R.string.NoContacts && item.getIconResource() == 0) {
+      // The same state as the Contacts page: people, "No contacts" and its supporting line (the line only with the
+      // sentence case English title: a translation keeps Telegram X's string alone)
+      final String title = sentence(R.string.NoContacts, R.string.XgramR5PeopleNoContacts);
+      final boolean english = !title.equals(Lang.getString(R.string.NoContacts));
+      view.setEmpty(XgramIconPack.map(R.drawable.baseline_group_96), title, english ? Lang.getString(R.string.XgramR5PeopleNoContactsHint) : null);
+      return;
+    }
     bindEmpty(view, emptyIcon(item.getStringResource(), item.getIconResource()), item.getString());
   }
 

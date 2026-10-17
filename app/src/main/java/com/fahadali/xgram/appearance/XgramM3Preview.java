@@ -139,7 +139,8 @@ public final class XgramM3Preview {
   // Floating toolbar
 
   public static final float BAR_HEIGHT = 64f, BAR_PADDING = 8f, BAR_GAP = 12f, BUTTON_HEIGHT = 48f;
-  private static final float SLOT_MAX = 64f, SLOT_MIN = 40f;
+  // 48dp slots, like the sticker preview's toolbar and the chat list's long-press toolbar
+  private static final float SLOT_MAX = 48f, SLOT_MIN = 40f;
 
   /** Space the toolbar takes under the card: the gap and the bar. */
   public static int barSpace () {
@@ -168,7 +169,7 @@ public final class XgramM3Preview {
 
   /**
    * The M3E floating toolbar of the preview's actions: a full-corner pill in the card's color, 64dp tall with 8dp
-   * padding and a level 3 shadow, holding 48dp tall buttons up to 64dp wide (narrower when many share the width). A
+   * padding and a level 3 shadow, holding 48dp buttons (narrower when many share the width). A
    * button whose tag is a {@link Hover} gets a secondaryContainer pill behind it while it is under the finger.
    */
   public static final class ActionBar extends LinearLayout {

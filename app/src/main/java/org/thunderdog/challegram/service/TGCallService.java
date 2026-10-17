@@ -491,7 +491,13 @@ public class TGCallService extends Service implements
   }
 
   @Override
-  public void onCallStateChanged (int callId, int newState) { }
+  public void onCallStateChanged (int callId, int newState) {
+    // XGram: the call is connected (tgcalls set its start time), so the ongoing notification gets its timer now,
+    // not on the next UI state change (TDLib sends no updateCall between Ready and Discarded). On the UI thread.
+    if (newState == CallState.ESTABLISHED && !isDestroyed && call != null && call.id == callId) {
+      showNotification();
+    }
+  }
 
   private int callBarsCount = -1;
 

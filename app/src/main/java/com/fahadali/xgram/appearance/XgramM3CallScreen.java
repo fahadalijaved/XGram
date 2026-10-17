@@ -475,7 +475,9 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     }, R.drawable.baseline_premium_star_28, 22);
     nameView.setText(TD.getUserName(user));
     int statusWidth = user != null && user.isPremium ? emojiStatus.getWidth(Screen.dp(7f)) : 0;
-    nameView.setPadding(0, 0, statusWidth, 0);
+    // The status follows the name: on its left in RTL (as UserView draws it)
+    final boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+    nameView.setPadding(rtl ? statusWidth : 0, 0, rtl ? 0 : statusWidth, 0);
     tintValid = false;
     syncColors(true);
   }
@@ -967,8 +969,14 @@ public final class XgramM3CallScreen extends FrameLayoutFix {
     if (layout == null || layout.getLineCount() == 0) {
       return;
     }
-    int end = view.getPaddingLeft() + (int) layout.getLineRight(0) + Screen.dp(7f);
-    int x = Math.min(end, view.getWidth() - view.getPaddingRight() + Screen.dp(7f));
+    int x;
+    if (org.thunderdog.challegram.core.Lang.rtl()) {
+      // Before the name (the left padding is the status width and its 7dp gap)
+      x = Math.max(0, view.getPaddingLeft() + (int) layout.getLineLeft(0) - Screen.dp(7f) - emojiStatus.getWidth());
+    } else {
+      int end = view.getPaddingLeft() + (int) layout.getLineRight(0) + Screen.dp(7f);
+      x = Math.min(end, view.getWidth() - view.getPaddingRight() + Screen.dp(7f));
+    }
     int y = (view.getHeight() - Screen.dp(25f)) / 2;
     emojiStatus.draw(c, x, y);
   }

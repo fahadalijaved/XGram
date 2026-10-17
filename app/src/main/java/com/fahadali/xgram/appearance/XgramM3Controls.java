@@ -195,18 +195,12 @@ public final class XgramM3Controls {
   public static void styleAlert (Context context, AlertDialog dialog, @Nullable ThemeDelegate forcedTheme) {
     final Window window = dialog.getWindow();
     if (window != null) {
-      final Drawable shape;
-      if (forcedTheme == null) {
-        // read at draw time: a day / night switch while the dialog is open repaints it
-        XgramExpressive.MorphDrawable morph = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_XL, Float.NaN);
-        morph.setColorRole(XgramExpressive.SURFACE_CONTAINER_HIGH);
-        shape = morph;
-      } else {
-        GradientDrawable fixed = new GradientDrawable();
-        fixed.setColor(role(XgramExpressive.SURFACE_CONTAINER_HIGH, forcedTheme));
-        fixed.setCornerRadius(Screen.dp(XgramExpressive.CORNER_XL));
-        shape = fixed;
-      }
+      // Resolved now, like the text and button colours below: the window and its content stay in the scheme the
+      // dialog opened in (a day / night switch while it is open repaints neither)
+      GradientDrawable fixed = new GradientDrawable();
+      fixed.setColor(role(XgramExpressive.SURFACE_CONTAINER_HIGH, forcedTheme));
+      fixed.setCornerRadius(Screen.dp(XgramExpressive.CORNER_XL));
+      final Drawable shape = fixed;
       window.setBackgroundDrawable(new InsetDrawable(shape, Screen.dp(16f)));
       window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
       window.setDimAmount(DIALOG_DIM);
@@ -221,9 +215,9 @@ public final class XgramM3Controls {
     View message = dialog.findViewById(android.R.id.message);
     styleText(message, XgramExpressive.TS_BODY_M, onSurfaceVariant);
     if (message instanceof TextView) {
-      // links in primary, pressed with a primary highlight at .2
+      // links in primary, pressed with a primary state layer (.10, like ColorId.textLinkPressHighlight)
       ((TextView) message).setLinkTextColor(primary);
-      ((TextView) message).setHighlightColor(XgramExpressive.withAlpha(primary, .2f));
+      ((TextView) message).setHighlightColor(XgramExpressive.withAlpha(primary, XgramExpressive.STATE_PRESSED));
     }
     View titleTemplate = Views.tryFindAndroidView(context, dialog, "title_template");
     if (titleTemplate != null) {
@@ -298,7 +292,8 @@ public final class XgramM3Controls {
   private static void styleInputs (@Nullable View view, @ColorInt int primary) {
     if (view instanceof EditText) {
       EditText editText = (EditText) view;
-      editText.setHighlightColor(XgramExpressive.withAlpha(primary, .3f));
+      // primary at .40, like ColorId.textSelectionHighlight
+      editText.setHighlightColor(XgramExpressive.withAlpha(primary, .40f));
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         tint(editText.getTextCursorDrawable(), primary);
         tint(editText.getTextSelectHandle(), primary);

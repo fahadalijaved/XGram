@@ -378,9 +378,8 @@ public final class XgramR5People {
     final int padding = Screen.dp(16f);
     text.setPadding(padding, padding, padding, padding);
     text.setId(android.R.id.text1);
-    XgramExpressive.MorphDrawable card = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_L, Float.NaN);
-    card.setFloatingColorRole(XgramExpressive.SURFACE_CONTAINER_HIGH);
-    text.setBackground(card);
+    // The in-sheet card step, as the Quote and AI cards (a plain role: the card step under Pure black, not the chip)
+    XgramR5Sheets.applyCard(text, XgramExpressive.SURFACE_CONTAINER_HIGH, XgramExpressive.CORNER_L);
     FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     params.leftMargin = params.rightMargin = Screen.dp(16f);
     params.topMargin = params.bottomMargin = Screen.dp(8f);
@@ -454,13 +453,14 @@ public final class XgramR5People {
     layout.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     XgramListStateView stateView = new XgramListStateView(context);
     layout.addView(stateView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(236f)));
-    XgramM3Sheets.FilledButton button = new XgramM3Sheets.FilledButton(context, XgramExpressive.SECONDARY_CONTAINER, XgramExpressive.ON_SECONDARY_CONTAINER);
+    // The page-level tonal button of XgramR5Lists: 24dp sides, the 40dp pill in a 48dp touch target
+    XgramR5Lists.PillButton button = new XgramR5Lists.PillButton(context);
     button.setText(action);
     button.setOnClickListener(onClick);
     button.setId(android.R.id.button1);
-    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(XgramM3Sheets.BUTTON_HEIGHT));
-    params.topMargin = Screen.dp(16f);
-    params.bottomMargin = Screen.dp(24f);
+    LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(48f));
+    params.topMargin = Screen.dp(12f);
+    params.bottomMargin = Screen.dp(20f);
     layout.addView(button, params);
     return layout;
   }

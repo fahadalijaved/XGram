@@ -112,7 +112,7 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
 
   public void setText (@StringRes int res) {
     this.text = res != 0 ? new Letters(xgram ? Lang.getString(res) : Lang.uppercase(Lang.getString(res))) : null; // XGram M3E: sentence case
-    this.textWidth = text != null ? (int) U.measureText(text.text, Paints.getBoldPaint15(text.needFakeBold)) : 0;
+    this.textWidth = text != null ? (int) U.measureText(text.text, xgramAddStyle ? xgramLabelPaint() : Paints.getBoldPaint15(text.needFakeBold)) : 0;
 
     this.icon = null;
     this.iconRes = 0;
@@ -217,9 +217,29 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
     }
     xgramAddStyle = true;
     xgramDoneText = new Letters(Lang.getString(doneRes));
-    xgramDoneTextWidth = (int) U.measureText(xgramDoneText.text, Paints.getBoldPaint15(xgramDoneText.needFakeBold));
+    // labelLarge, as every other M3 button
+    xgramDoneTextWidth = (int) U.measureText(xgramDoneText.text, xgramLabelPaint());
+    if (text != null) {
+      textWidth = (int) U.measureText(text.text, xgramLabelPaint());
+    }
     requestLayout();
     invalidate();
+  }
+
+  private static @Nullable android.text.TextPaint xgramLabelPaint;
+
+  /** labelLarge (14sp, medium) for the Add / Added label; the colour is set per draw. */
+  private static android.text.TextPaint xgramLabelPaint () {
+    if (xgramLabelPaint == null) {
+      android.text.TextPaint paint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG);
+      paint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_L, false));
+      paint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_L)));
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+        paint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_L) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_L));
+      }
+      xgramLabelPaint = paint;
+    }
+    return xgramLabelPaint;
   }
 
   private void xgramDrawAddStyle (Canvas c, int width, int height) {
@@ -253,7 +273,9 @@ public class NonMaterialButton extends View implements FactorAnimator.Target, Cl
       final float labelAlpha = done < .5f ? 1f - done / .5f : (done - .5f) / .5f;
       final int labelWidth = showDone ? xgramDoneTextWidth : textWidth;
       final int color = ColorUtils.alphaColor(innerAlpha * labelAlpha, content);
-      c.drawText(label.text, width / 2f - labelWidth / 2f, height / 2f + Screen.dp(5f), Paints.getBoldPaint15(label.needFakeBold, color));
+      final android.text.TextPaint paint = xgramLabelPaint();
+      paint.setColor(color);
+      c.drawText(label.text, width / 2f - labelWidth / 2f, height / 2f - (paint.ascent() + paint.descent()) / 2f, paint);
     }
   }
 

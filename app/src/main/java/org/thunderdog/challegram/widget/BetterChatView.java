@@ -647,11 +647,12 @@ public class BetterChatView extends BaseView implements Destroyable, RemoveHelpe
 
     if (xgramHasCallButton()) {
       if (xgramCallButton == null) {
-        xgramCallButton = new XgramR5People.RowIconButton(this, true);
+        // A standard icon button in primary, as the call message card's call-back button (XgramR5Calls.CallCard)
+        xgramCallButton = new XgramR5People.RowIconButton(this, false);
       }
       final float half = Screen.dp(XgramM3Sheets.ICON_BUTTON_SIZE) / 2f;
       xgramCallButton.layout(rtl ? padding + half : width - padding - half, height / 2f);
-      xgramCallButton.draw(c, getSparseDrawable(XgramIconPack.map(R.drawable.baseline_call_24), ColorId.NONE), XgramExpressive.ON_SECONDARY_CONTAINER);
+      xgramCallButton.draw(c, getSparseDrawable(XgramIconPack.map(R.drawable.baseline_call_24), ColorId.NONE), XgramExpressive.PRIMARY);
     } else if (xgramCallButton != null) {
       xgramCallButton.hide();
     }

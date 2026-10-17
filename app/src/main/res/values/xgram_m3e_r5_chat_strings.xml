@@ -2,7 +2,7 @@
 <resources>
   <!-- XGram M3E round 5, chat canvas. Sentence-case strings are used only while Telegram&#160;X's string is the bundled English one, so translations are kept. -->
   <!-- The wallpaper picker with Pure black on in a dark theme -->
-  <string name="XgramR5ChatPureBlackNote">Pure black shows colour backgrounds as black</string>
+  <string name="XgramR5ChatPureBlackNote">Pure black shows color backgrounds as black</string>
   <!-- Preview mode chats: sentence case for Telegram&#160;X's title-case English -->
   <string name="XgramR5ChatScheduledMessages">Scheduled messages</string>
   <string name="XgramR5ChatTabVideoMessages">Video messages</string>
@@ -15,6 +15,7 @@
   <string name="XgramR5ChatEmptyRemindersTitle">No reminders</string>
   <string name="XgramR5ChatEmptyRemindersText">Hold the send button to set a reminder.</string>
   <string name="XgramR5ChatEmptySearchTitle">No messages found</string>
+  <string name="XgramR5ChatEmptySecretTitle">Secret chat</string>
   <!-- The link preview editor menu (the composer's link preview) -->
   <string name="XgramR5ChatPreviewAbove">Show above text</string>
   <string name="XgramR5ChatPreviewBelow">Show below text</string>

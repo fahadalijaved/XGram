@@ -108,8 +108,9 @@ public final class XgramR5Chat {
       themeProvider.addThemeTextColorListener(note, ColorId.textLight); // onSurfaceVariant
     }
     note.setText(Lang.getString(R.string.XgramR5ChatPureBlackNote));
-    note.setGravity(Gravity.CENTER_VERTICAL | (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT));
-    note.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    // Aligned by the app language (the root's layout direction is always LTR)
+    note.setGravity(Lang.gravity(Gravity.CENTER_VERTICAL));
+    note.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
     int side = Screen.dp(16f);
     note.setPadding(side, Screen.dp(8f), side, Screen.dp(4f));
     ViewSupport.setThemedBackground(note, ColorId.drawer, themeProvider); // the picker's sheet color
@@ -217,7 +218,7 @@ public final class XgramR5Chat {
       };
       final View item;
       if (entry.checkbox) {
-        org.thunderdog.challegram.util.HapticMenuHelper.MenuItem menuItem = new org.thunderdog.challegram.util.HapticMenuHelper.MenuItem(entry.id, entry.title, 0).setIsCheckbox(true, entry.checked);
+        org.thunderdog.challegram.util.HapticMenuHelper.MenuItem menuItem = new org.thunderdog.challegram.util.HapticMenuHelper.MenuItem(entry.id, entry.title, entry.iconRes).setIsChoice(entry.checked);
         item = moreWrap.addItem(null, menuItem, listener);
       } else {
         TextView textItem = moreWrap.addItem(entry.id, entry.title, entry.iconRes, null, listener);
@@ -435,8 +436,9 @@ public final class XgramR5Chat {
       title.setVisibility(titleText != null && titleText.length() > 0 ? View.VISIBLE : View.GONE);
       body.setText(bodyText);
       body.setVisibility(bodyText != null && bodyText.length() > 0 ? View.VISIBLE : View.GONE);
-      body.setGravity(bodyStart ? (Gravity.CENTER_VERTICAL | Gravity.START) : Gravity.CENTER);
-      body.setTextAlignment(bodyStart ? View.TEXT_ALIGNMENT_VIEW_START : View.TEXT_ALIGNMENT_CENTER);
+      // Aligned by the app language (the root's layout direction is always LTR)
+      body.setGravity(bodyStart ? Lang.gravity(Gravity.CENTER_VERTICAL) : Gravity.CENTER);
+      body.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
       this.onSayHi = onSayHi;
       chip.setText(Lang.getString(R.string.XgramR5ChatSayHi));
       chip.setVisibility(onSayHi != null ? View.VISIBLE : View.GONE);

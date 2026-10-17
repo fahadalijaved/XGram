@@ -11,4 +11,5 @@
   <string name="XgramR5ListsNoOtherSessions">No other active sessions</string>
   <string name="XgramR5ListsUnconfirmed">Unconfirmed</string>
   <string name="XgramR5ListsCustomDays">Custom: %1$s</string>
+  <string name="XgramR5ListsNumberOfDays">Number of days</string>
 </resources>

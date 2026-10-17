@@ -2048,7 +2048,7 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
         }
       });
       optionsWrap.addView(actions.view);
-      contentHeight += org.thunderdog.challegram.tool.Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT);
+      contentHeight += org.thunderdog.challegram.tool.Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT + com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_BOTTOM);
       return contentHeight;
     }, null);
   }

@@ -77,7 +77,7 @@ public final class XgramR5SheetsInfo {
       return this;
     }
 
-    /** A labelSmall badge with full corners in tertiaryContainer after the supporting line ("Current"). */
+    /** A labelSmall badge with full corners in primaryContainer after the supporting line ("Current"). */
     public Row badge (@Nullable CharSequence badge) {
       this.badge = badge;
       return this;
@@ -126,12 +126,19 @@ public final class XgramR5SheetsInfo {
     }
   }
 
-  /** Copies {@code value} and confirms it with the "Copied" snackbar (a toast when the app is in the background). */
-  public static void copy (@Nullable String value) {
+  /**
+   * Copies {@code value} (formatting kept, as UI.copyText) and confirms it with the "Copied" snackbar (a toast when
+   * the app is in the background), unless the system shows its own clipboard confirmation (Android 13+, as UIHandler).
+   * Every sheet's Copy goes through here, so they all confirm the same way.
+   */
+  public static void copy (@Nullable CharSequence value) {
     if (TextUtils.isEmpty(value)) {
       return;
     }
     UI.copyText(value, 0);
+    if (org.thunderdog.challegram.config.Device.HAS_BUILTIN_CLIPBOARD_TOASTS) {
+      return;
+    }
     final String copied = Lang.getString(R.string.XgramR5SheetsCopied);
     if (!XgramSnackbar.show(copied, Toast.LENGTH_SHORT)) {
       UI.showToast(R.string.CopiedText, Toast.LENGTH_SHORT);
@@ -181,48 +188,107 @@ public final class XgramR5SheetsInfo {
 
       list.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
       int height = Math.min(list.getMeasuredHeight(), maxScrollHeight);
-
-      if (actions != null && actions.length > 0) {
-        View start = null;
-        View[] end = new View[actions.length];
-        for (int i = 0; i < actions.length; i++) {
-          final Action action = actions[i];
-          if (action == null) {
-            continue;
-          }
-          TextView button;
-          switch (action.kind) {
-            case ACTION_FILLED:
-              button = XgramR5Sheets.filledButton(context, action.label, false, null);
-              break;
-            case ACTION_TONAL:
-              button = XgramR5Sheets.tonalButton(context, action.label, null);
-              break;
-            case ACTION_TEXT:
-            default:
-              button = XgramR5Sheets.textButton(context, action.label, XgramExpressive.PRIMARY, null);
-              break;
-          }
-          button.setOnClickListener(v -> {
-            if (!action.keepOpen) {
-              popupLayout.hideWindow(true);
-            }
-            if (action.onClick != null) {
-              action.onClick.run();
-            }
-          });
-          if (action.atStart && start == null) {
-            start = button;
-          } else {
-            end[i] = button;
-          }
-        }
-        LinearLayout row = XgramR5Sheets.actionsRow(context, start, end);
-        optionsLayout.addView(row);
-        height += ((LinearLayout.LayoutParams) row.getLayoutParams()).height;
-      }
+      height += addActions(context, popupLayout, optionsLayout, actions);
       return height;
     }, null, XgramExpressive.TS_TITLE_L);
+  }
+
+  /**
+   * A text sheet (a transcription): the text in bodyLarge in a 16dp inset surfaceContainerHigh card with 16dp corners
+   * and padding (as the Quote and AI sheets), scrolling within 60% of the screen, then the actions row.
+   */
+  @Nullable
+  public static PopupLayout showText (@NonNull ViewController<?> c, @Nullable CharSequence title, @NonNull CharSequence text, @Nullable Action... actions) {
+    if (c.isDestroyed()) {
+      return null;
+    }
+    final int maxScrollHeight = Math.round(Screen.currentHeight() * .6f);
+    return c.showPopup(title, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsLayout) -> {
+      final Context context = optionsLayout.getContext();
+      final int width = XgramM3Sheets.sheetWidth(c.context().getControllerWidth(optionsLayout));
+
+      TextView textView = new NoScrollTextView(context);
+      XgramExpressive.applyText(textView, XgramExpressive.TS_BODY_L, false);
+      textView.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
+      c.addThemeTextColorListener(textView, org.thunderdog.challegram.theme.ColorId.text); // onSurface
+      textView.setHighlightColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY), .40f)); // ColorId.textSelectionHighlight
+      textView.setGravity(Lang.gravity());
+      textView.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
+      textView.setPadding(Screen.dp(16f), Screen.dp(16f), Screen.dp(16f), Screen.dp(16f));
+      textView.setTextIsSelectable(true);
+      textView.setText(text);
+
+      ScrollView scrollView = new ScrollView(context) {
+        @Override
+        protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+          int maxHeight = maxScrollHeight;
+          if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+            maxHeight = Math.min(maxHeight, MeasureSpec.getSize(heightMeasureSpec));
+          }
+          super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST));
+        }
+      };
+      scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+      scrollView.setVerticalScrollBarEnabled(true);
+      scrollView.addView(textView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      XgramR5Sheets.applyCard(scrollView, XgramExpressive.SURFACE_CONTAINER_HIGH, XgramExpressive.CORNER_L);
+      scrollView.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+      scrollView.setClipToOutline(true);
+      LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      cardParams.leftMargin = cardParams.rightMargin = Screen.dp(16f);
+      cardParams.topMargin = Screen.dp(8f);
+      cardParams.bottomMargin = Screen.dp(8f);
+      optionsLayout.addView(scrollView, cardParams);
+
+      textView.measure(View.MeasureSpec.makeMeasureSpec(width - Screen.dp(32f), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+      int height = Math.min(textView.getMeasuredHeight(), maxScrollHeight) + cardParams.topMargin + cardParams.bottomMargin;
+      height += addActions(context, popupLayout, optionsLayout, actions);
+      return height;
+    }, null, XgramExpressive.TS_TITLE_L);
+  }
+
+  /** The actions row of a sheet; the height it takes (0 without actions). */
+  private static int addActions (Context context, PopupLayout popupLayout, ViewGroup optionsLayout, @Nullable Action[] actions) {
+    if (actions == null || actions.length == 0) {
+      return 0;
+    }
+    View start = null;
+    View[] end = new View[actions.length];
+    for (int i = 0; i < actions.length; i++) {
+      final Action action = actions[i];
+      if (action == null) {
+        continue;
+      }
+      TextView button;
+      switch (action.kind) {
+        case ACTION_FILLED:
+          button = XgramR5Sheets.filledButton(context, action.label, false, null);
+          break;
+        case ACTION_TONAL:
+          button = XgramR5Sheets.tonalButton(context, action.label, null);
+          break;
+        case ACTION_TEXT:
+        default:
+          button = XgramR5Sheets.textButton(context, action.label, XgramExpressive.PRIMARY, null);
+          break;
+      }
+      button.setOnClickListener(v -> {
+        if (!action.keepOpen) {
+          popupLayout.hideWindow(true);
+        }
+        if (action.onClick != null) {
+          action.onClick.run();
+        }
+      });
+      if (action.atStart && start == null) {
+        start = button;
+      } else {
+        end[i] = button;
+      }
+    }
+    LinearLayout row = XgramR5Sheets.actionsRow(context, start, end);
+    optionsLayout.addView(row);
+    return ((LinearLayout.LayoutParams) row.getLayoutParams()).height + ((LinearLayout.LayoutParams) row.getLayoutParams()).bottomMargin;
   }
 
   private static View newTile (Context context, Row row, int segment) {
@@ -272,15 +338,16 @@ public final class XgramR5SheetsInfo {
         line.addView(supporting, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0f));
       }
       if (!TextUtils.isEmpty(row.badge)) {
-        TextView badge = new NoScrollTextView(context);
-        XgramExpressive.applyText(badge, XgramExpressive.TS_LABEL_S, false);
-        badge.setTextColor(XgramExpressive.color(XgramExpressive.ON_TERTIARY_CONTAINER));
+        // The sticker sets' "New" badge spec (TrendingPackHeaderView): 16dp, 6dp sides, primaryContainer; the label's
+        // colour is read when drawn, like the container's
+        TextView badge = new XgramR5Lists.RoleText(context, XgramExpressive.TS_LABEL_S, XgramExpressive.ON_PRIMARY_CONTAINER);
         badge.setGravity(Gravity.CENTER);
         badge.setSingleLine(true);
-        badge.setPadding(Screen.dp(8f), 0, Screen.dp(8f), 0);
+        badge.setIncludeFontPadding(false);
+        badge.setPadding(Screen.dp(6f), 0, Screen.dp(6f), 0);
         badge.setText(row.badge);
-        XgramR5Sheets.applyCard(badge, XgramExpressive.TERTIARY_CONTAINER, XgramExpressive.CORNER_FULL);
-        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(20f));
+        XgramR5Sheets.applyCard(badge, XgramExpressive.PRIMARY_CONTAINER, XgramExpressive.CORNER_FULL);
+        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(16f));
         if (!TextUtils.isEmpty(row.supporting)) {
           badgeParams.setMarginStart(Screen.dp(8f));
         }

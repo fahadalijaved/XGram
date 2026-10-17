@@ -127,7 +127,11 @@ public final class XgramAiTools {
         item(R.id.btn_cancel, R.string.Cancel, R.drawable.baseline_cancel_24)
       }, (v, id) -> {
         if (id == R.id.btn_copyText) {
-          UI.copyText(TD.toCopyText(summary), R.string.CopiedText);
+          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+            com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(TD.toCopyText(summary)); // XGram M3E: as every sheet's Copy
+          } else {
+            UI.copyText(TD.toCopyText(summary), R.string.CopiedText);
+          }
         } else if (id == R.id.btn_xgramAiTranslate) {
           pickLanguage(c, language -> summarize(c, message, language));
         }
@@ -249,7 +253,11 @@ public final class XgramAiTools {
           input.setInput(asMarkdown ? TD.toMarkdown(result) : TD.toCharSequence(result), true, true);
         }
       } else if (id == R.id.btn_copyText) {
-        UI.copyText(TD.toCopyText(result), R.string.CopiedText);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(TD.toCopyText(result)); // XGram M3E: as every sheet's Copy
+        } else {
+          UI.copyText(TD.toCopyText(result), R.string.CopiedText);
+        }
       }
       return true;
     });
@@ -558,7 +566,7 @@ public final class XgramAiTools {
         end.add(apply);
         LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(context, null, end.toArray(new View[0]));
         optionsLayout.addView(actions);
-        totalHeight += ((LinearLayout.LayoutParams) actions.getLayoutParams()).height;
+        totalHeight += ((LinearLayout.LayoutParams) actions.getLayoutParams()).height + ((LinearLayout.LayoutParams) actions.getLayoutParams()).bottomMargin;
       } else {
         View spacer = new View(context);
         optionsLayout.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(8f)));

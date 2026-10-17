@@ -81,16 +81,17 @@ fun ChoiceSheet(spec: ChoiceSpec<*>, onDismiss: () -> Unit) {
         .verticalScroll(rememberScrollState())
         .padding(start = 16.dp, end = 16.dp, bottom = 24.dp)
     ) {
+      // 16dp in, at the tiles' edge, as the View sheets' titles (OptionsLayout)
       Text(
         spec.title,
-        modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+        modifier = Modifier.padding(bottom = 8.dp),
         style = MaterialTheme.typography.titleLarge
       )
       val info = spec.info
       if (info != null) {
         Text(
           info,
-          modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 16.dp),
+          modifier = Modifier.padding(bottom = 16.dp),
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )

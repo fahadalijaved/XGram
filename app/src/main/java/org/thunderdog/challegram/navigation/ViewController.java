@@ -2884,7 +2884,6 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     // 8dp under the info, as the M3 dialog's 24dp between its text and its actions (the row has 12dp above its buttons)
     LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) actions.view.getLayoutParams();
     params.topMargin = Screen.dp(8f);
-    params.bottomMargin = Screen.dp(8f);
     actions.view.setLayoutParams(params);
     optionsWrap.addView(actions.view);
     return params.height + params.topMargin + params.bottomMargin;
@@ -3179,11 +3178,17 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
   }
 
   public final PopupLayout showDateTimePicker (Tdlib tdlib, CharSequence title, @StringRes int todayRes, @StringRes int tomorrowRes, @StringRes int futureRes, final RunnableLong callback, final @Nullable ThemeDelegate forcedTheme) {
-    return showPopup(title, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
+    // XGram M3E: the title is the wheel sheets' own headlineSmall one (XgramM3Wheel.newTitle), as in ColumnDataPicker
+    return showPopup(com.fahadali.xgram.appearance.XgramM3Wheel.on() ? null : title, true, Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsWrap) -> {
       int contentHeight = 0;
       int pickerHeight = InfiniteRecyclerView.getItemHeight() * 5;
 
       final boolean xgramM3 = com.fahadali.xgram.appearance.XgramM3Wheel.on(); // XGram M3E: band and bottom actions
+      if (xgramM3 && !android.text.TextUtils.isEmpty(title)) {
+        android.widget.TextView titleView = com.fahadali.xgram.appearance.XgramM3Wheel.newTitle(context, title, forcedTheme);
+        optionsWrap.addView(titleView);
+        contentHeight += com.fahadali.xgram.appearance.XgramM3Wheel.measureHeight(titleView, context().getControllerWidth(titleView));
+      }
 
       LinearLayout datePickerWrap = new LinearLayout(context);
       datePickerWrap.setOrientation(LinearLayout.HORIZONTAL);
@@ -3377,7 +3382,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
         // XGram M3E: [Cancel] [Send today at 10:00] at the end instead of the full-width uppercase bar
         xgramActions = com.fahadali.xgram.appearance.XgramM3Wheel.newActions(context, forcedTheme, null, Lang.getString(R.string.Cancel), sendView);
         xgramActions.cancel.setOnClickListener(v -> popupLayout.hideWindow(true));
-        contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT);
+        contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT + com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_BOTTOM);
       } else {
         xgramActions = null;
         Views.setClickable(sendView);

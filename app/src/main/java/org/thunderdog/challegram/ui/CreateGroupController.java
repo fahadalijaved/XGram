@@ -383,6 +383,7 @@ public class CreateGroupController extends ViewController<Void> implements EditH
           } else {
             adapter.notifyItemRemoved(index + 1);
             adapter.notifyItemChanged(members.size() + 1);
+            adapter.notifyItemChanged(0); // XGram M3E: the member count in the subheader
           }
         }
       }

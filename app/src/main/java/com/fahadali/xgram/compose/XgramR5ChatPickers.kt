@@ -225,7 +225,12 @@ object XgramR5ChatPickers {
         neutral()
       }
       Spacer(Modifier.weight(1f))
-      buttons()
+      Row(
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        buttons()
+      }
     }
   }
 

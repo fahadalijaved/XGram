@@ -245,9 +245,13 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     final int maxWidth = Screen.dp(250);
     // XGram: Material 3 menu item spec with M3E on: 24dp icon 12dp from the start, label 12dp after it, 12dp trailing padding.
     final boolean xgramM3Layout = XgramExpressive.isEnabled();
-    final int textRightOffset = xgramM3Layout ? Screen.dp(menuItem.isLocked ? 40 : 12) : Screen.dp(menuItem.isLocked ? 41 : 17);
+    // XGram M3E: a single choice (no checkbox): the label 12dp in (48dp with an icon), a trailing check 12dp from the end
+    final boolean xgramChoice = xgramM3Layout && menuItem.isChoice;
+    final boolean xgramChoiceNoIcon = xgramChoice && menuItem.iconResId == 0 && menuItem.icon == null;
+    final int textRightOffset = xgramM3Layout ? Screen.dp(menuItem.isLocked ? 40 : xgramChoice ? 48 : 12) : Screen.dp(menuItem.isLocked ? 41 : 17);
     final int iconCenterX = Screen.dp(xgramM3Layout ? 24f : 29f);
-    final int textStartX = Screen.dp(xgramM3Layout ? 48f : 59f);
+    final int textStartX = Screen.dp(xgramChoiceNoIcon ? 12f : xgramM3Layout ? 48f : 59f);
+    final Drawable xgramCheck = xgramChoice ? Drawables.get(getResources(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_check_24)) : null;
     final int lockEndOffset = Screen.dp(xgramM3Layout ? 12 + 16 : 17 + 16);
     final Drawable finalIcon = menuItem.iconResId != 0 ? Drawables.get(getResources(), menuItem.iconResId) : menuItem.icon;
     final AvatarReceiver receiver = (menuItem.messageSenderId != null && menuItem.iconResId == 0) ?
@@ -289,6 +293,21 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
           }
         }
 
+        if (xgramChoice) {
+          final boolean rtl = Lang.rtl();
+          if (finalIcon != null) {
+            final float iconX = rtl ? getMeasuredWidth() - iconCenterX : iconCenterX;
+            Drawables.draw(canvas, finalIcon, iconX - finalIcon.getMinimumWidth() / 2f, (getMeasuredHeight() - finalIcon.getMinimumHeight()) / 2f,
+              forcedTheme != null ? PorterDuffPaint.get(ColorId.icon) : Paints.getPorterDuffPaint(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT)));
+          }
+          final float chosen = menuItem.isCheckboxSelectedAnimated != null ? menuItem.isCheckboxSelectedAnimated.getFloatValue() : menuItem.isCheckboxSelected ? 1f : 0f;
+          if (xgramCheck != null && chosen > 0f) {
+            final int color = forcedTheme != null ? forcedTheme.getColor(ColorId.text) : XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER);
+            final float x = rtl ? Screen.dp(12f) : getMeasuredWidth() - Screen.dp(12f) - xgramCheck.getMinimumWidth();
+            Drawables.draw(canvas, xgramCheck, x, (getMeasuredHeight() - xgramCheck.getMinimumHeight()) / 2f, Paints.getPorterDuffPaint(ColorUtils.alphaColor(chosen, color)));
+          }
+          return;
+        }
         if (menuItem.isCheckbox) {
           int fillingColor, checkColor, outlineColor;
           if (forcedTheme != null) {
@@ -348,10 +367,14 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     frameLayout.setId(menuItem.id);
     if (menuItem.isCheckbox) {
       menuItem.isCheckboxSelectedAnimated = new BoolAnimator(frameLayout, AnimatorUtils.DECELERATE_INTERPOLATOR, 165l, menuItem.isCheckboxSelected);
-      frameLayout.setOnClickListener(v -> {
-        menuItem.isCheckboxSelected = menuItem.isCheckboxSelectedAnimated.toggleValue(true);
-        listener.onClick(v);
-      });
+      if (xgramChoice) {
+        frameLayout.setOnClickListener(listener); // a choice is not toggled: the menu closes on it
+      } else {
+        frameLayout.setOnClickListener(v -> {
+          menuItem.isCheckboxSelected = menuItem.isCheckboxSelectedAnimated.toggleValue(true);
+          listener.onClick(v);
+        });
+      }
     } else {
       frameLayout.setOnClickListener(listener);
     }
@@ -377,6 +400,10 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       titleTextItem.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL | Lang.gravity()));
     }
     titleTextItem.setMaxWidth(maxWidth);
+    if (xgramChoice && Lang.rtl()) {
+      // XGram M3E: the trailing check is on the left in RTL
+      titleTextItem.setPadding(textRightOffset, titleTextItem.getPaddingTop(), textStartX, titleTextItem.getPaddingBottom());
+    }
 
     TextView subtitleTextItem;
     if (!StringUtils.isEmpty(menuItem.subtitle)) {

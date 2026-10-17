@@ -443,7 +443,8 @@ public abstract class TelegramViewController<T> extends ViewController<T> {
           // XGram M3E: the section subheaders in sentence case (while the strings are the bundled English ones)
           final int res = item.getStringResource();
           if (res == R.string.ChatsAndContacts || res == R.string.GlobalSearch) {
-            Views.setMediumText(view, com.fahadali.xgram.appearance.XgramR5People.sentence(res, res == R.string.GlobalSearch ? R.string.XgramR5PeopleGlobalSearch : R.string.XgramR5PeopleChatsAndContacts));
+            // Text only, like the Expressive SettingsAdapter.setHeaderText: the holder's titleSmall typeface stays
+            view.setText(com.fahadali.xgram.appearance.XgramR5People.sentence(res, res == R.string.GlobalSearch ? R.string.XgramR5PeopleGlobalSearch : R.string.XgramR5PeopleChatsAndContacts));
             return;
           }
         }

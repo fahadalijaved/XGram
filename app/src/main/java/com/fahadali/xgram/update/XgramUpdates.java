@@ -651,7 +651,8 @@ public final class XgramUpdates {
     android.widget.TextView versionView = new org.thunderdog.challegram.widget.NoScrollTextView(context);
     com.fahadali.xgram.appearance.XgramExpressive.applyText(versionView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
     versionView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
-    versionView.setTextAlignment(android.view.View.TEXT_ALIGNMENT_VIEW_START);
+    versionView.setGravity(Lang.gravity());
+    versionView.setTextAlignment(android.view.View.TEXT_ALIGNMENT_GRAVITY);
     versionView.setText(Lang.getString(R.string.XgramUpdateWhatsNewTitle, found.versionName));
     column.addView(versionView, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
 

@@ -1702,7 +1702,13 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
       final int on = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), toggleAlpha);
       com.fahadali.xgram.appearance.XgramR5Calls.drawToggleButton(c, toggleCx, cy, Screen.dp(XGRAM_BUTTON), xgramMuteShape, 0f, off, on, content);
       final int iconColor = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(ColorUtils.fromToArgb(content, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY), callMuteFactor), toggleAlpha);
-      com.fahadali.xgram.appearance.XgramR5Calls.drawIcon(c, micIcon, toggleCx, cy, iconColor);
+      // The icon crossfades content to onPrimary through alpha (two cached filters, none per frame of the morph)
+      if (callMuteFactor < 1f) {
+        com.fahadali.xgram.appearance.XgramR5Calls.drawIcon(c, micIcon, toggleCx, cy, com.fahadali.xgram.appearance.XgramExpressive.withAlpha(content, toggleAlpha * (1f - callMuteFactor)));
+      }
+      if (callMuteFactor > 0f) {
+        com.fahadali.xgram.appearance.XgramR5Calls.drawIcon(c, micIcon, toggleCx, cy, com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_PRIMARY), toggleAlpha * callMuteFactor));
+      }
       if (callMuteFactor > 0f) {
         final int behind = ColorUtils.fromToArgb(androidx.core.graphics.ColorUtils.compositeColors(off, fill | 0xff000000), com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), callMuteFactor);
         DrawAlgorithms.drawCross(c, toggleCx, cy, callMuteFactor, iconColor, behind);
@@ -1949,7 +1955,10 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
     playbackSpeedLayout.setTranslationY((playerTop + playerBottom) / 2f - Screen.dp(24 + 8));
     if (xgram) { // XGram M3E: over the speed chip
       xgramBox(true, playerTop, playerBottom, width);
-      playbackSpeedLayout.setTranslationX(xgramSpeedChipRight() - xgramSpeedChipWidth() / 2f - width + Screen.dp(24 + 8));
+      // LTR: the menu's right edge 32dp past the chip centre; RTL (a LEFT-gravity menu, the chip mirrored): its left
+      // edge 32dp before the mirrored centre
+      final float center = xgramSpeedChipRight() - xgramSpeedChipWidth() / 2f;
+      playbackSpeedLayout.setTranslationX(Lang.rtl() ? xgramMx(center) - Screen.dp(24 + 8) : center - width + Screen.dp(24 + 8));
     } else {
       playbackSpeedLayout.setTranslationX(getRightButtonCenter(0, 2) + Screen.dp( 24 + 8));
     }

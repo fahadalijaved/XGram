@@ -152,18 +152,21 @@ public final class XgramM3Sessions {
 
       RelativeLayout.LayoutParams params;
 
-      // 0: last active time, trailing, on the title's baseline
-      time = new RoleTextView(context, XgramExpressive.TS_LABEL_M, XgramExpressive.ON_SURFACE_VARIANT);
+      // 0: last active time, trailing, on the title's baseline (labelSmall with tabular figures, as list metadata)
+      time = new RoleTextView(context, XgramExpressive.TS_LABEL_S, XgramExpressive.ON_SURFACE_VARIANT);
       time.setId(R.id.session_time);
       time.setPadding(rtl ? 0 : Screen.dp(12f), 0, rtl ? Screen.dp(12f) : 0, 0);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        time.setFontFeatureSettings("tnum");
+      }
       params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
       params.addRule(rtl ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
       params.addRule(RelativeLayout.ALIGN_BASELINE, R.id.session_title);
       time.setLayoutParams(params);
       addView(time);
 
-      // 1: device, titleMedium
-      title = new RoleTextView(context, XgramExpressive.TS_TITLE_M, XgramExpressive.ON_SURFACE);
+      // 1: device, bodyLarge (the list item headline)
+      title = new RoleTextView(context, XgramExpressive.TS_BODY_L, XgramExpressive.ON_SURFACE);
       title.setId(R.id.session_title);
       params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
       if (rtl) {
@@ -219,7 +222,7 @@ public final class XgramM3Sessions {
       secret.setLayoutParams(params);
       addView(secret);
 
-      calls = new ChipView(context, XgramR5Lists.sentence(R.string.SessionCalls, R.string.XgramM3eR4preSbCalls));
+      calls = new ChipView(context, XgramR5Lists.sentence(R.string.SessionCalls, R.string.XgramM3eR4preSbIncomingCalls)); // as the session page's toggle
       calls.setId(R.id.session_calls);
       calls.setOnClickListener(onClickListener);
       params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(CHIP_HEIGHT));
@@ -335,8 +338,8 @@ public final class XgramM3Sessions {
 
       RelativeLayout.LayoutParams params;
 
-      // 0: last active time, trailing, on the title's baseline
-      RoleTextView time = new RoleTextView(context, XgramExpressive.TS_LABEL_M, XgramExpressive.ON_SURFACE_VARIANT);
+      // 0: last active time, trailing, on the title's baseline (labelSmall with tabular figures, as list metadata)
+      RoleTextView time = new RoleTextView(context, XgramExpressive.TS_LABEL_S, XgramExpressive.ON_SURFACE_VARIANT);
       time.setId(R.id.session_time);
       time.setPadding(rtl ? 0 : Screen.dp(12f), 0, rtl ? Screen.dp(12f) : 0, 0);
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -348,8 +351,8 @@ public final class XgramM3Sessions {
       time.setLayoutParams(params);
       addView(time);
 
-      // 1: domain, titleMedium
-      RoleTextView title = new RoleTextView(context, XgramExpressive.TS_TITLE_M, XgramExpressive.ON_SURFACE);
+      // 1: domain, bodyLarge (the list item headline)
+      RoleTextView title = new RoleTextView(context, XgramExpressive.TS_BODY_L, XgramExpressive.ON_SURFACE);
       title.setId(R.id.session_title);
       params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
       if (rtl) {

@@ -900,6 +900,16 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
       final int start = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12 : 16);
       languageView.setPadding(start, 0, Screen.dp((isSelected || isOriginal || isRecent) ? 40 : (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 12 : 16)), 0);
       languageView.updateDrawable();
+      if (languageView.xgramState != null) {
+        // XGram M3E: the selected language on the item's own secondaryContainer pill (the ripple's content, so a
+        // press still shows), its label and check in onSecondaryContainer
+        if (isSelected) {
+          languageView.xgramState.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
+        } else {
+          languageView.xgramState.setColor(0);
+        }
+        languageView.xgramApplyTitleColor();
+      }
       languageView.invalidate();
     }
   }
@@ -912,6 +922,7 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
     private boolean isSelected;
     private boolean isOriginal;
     private boolean isRecent;
+    private @Nullable com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable xgramState;
 
     public LanguageView (@NonNull Context context, @Nullable ViewController<?> themeProvider) {
       super(context);
@@ -936,35 +947,36 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
       subtitleView.setMaxLines(1);
       addView(subtitleView, FrameLayoutFix.newParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM, 0, 0, 0, Screen.dp(6)));
       if (themeProvider != null) {
-        themeProvider.addThemeTextColorListener(titleView, ColorId.text);
+        if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          themeProvider.addThemeTextColorListener(titleView, ColorId.text);
+        } else {
+          themeProvider.addThemeInvalidateListener(this); // XGram M3E: the title's role is applied when drawn
+        }
         themeProvider.addThemeTextColorListener(subtitleView, ColorId.textLight);
       }
       if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
         // XGram M3E: an M3 menu item: bodyLarge / bodySmall, a 12dp-corner onSurfaceVariant state layer, and the
-        // selected language on a secondaryContainer pill with a primary check (dispatchDraw)
+        // selected language on a secondaryContainer pill (the state layer's own content, 4dp in like MenuMoreWrap's
+        // items) with an onSecondaryContainer label and check (dispatchDraw)
         com.fahadali.xgram.appearance.XgramExpressive.applyText(titleView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_L, false);
         com.fahadali.xgram.appearance.XgramExpressive.applyText(subtitleView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_S, false);
-        com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable state = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(this, 0,
+        xgramState = com.fahadali.xgram.appearance.XgramExpressive.attachPressMorph(this, 0,
           com.fahadali.xgram.appearance.XgramExpressive.CORNER_M, com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
-        state.setSize(ITEM_WIDTH - 8f, ITEM_HEIGHT, Gravity.CENTER);
-        setWillNotDraw(false);
+        xgramState.setSize(ITEM_WIDTH - 8f, ITEM_HEIGHT - 8f, Gravity.CENTER);
+        xgramApplyTitleColor();
+      }
+    }
+
+    /** XGram M3E: onSecondaryContainer on the selected pill, onSurface otherwise (re-read when drawn: theme changes). */
+    void xgramApplyTitleColor () {
+      final int color = com.fahadali.xgram.appearance.XgramExpressive.color(isSelected ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE);
+      if (titleView.getCurrentTextColor() != color) {
+        titleView.setTextColor(color);
       }
     }
 
     // XGram M3E menu item geometry (dp)
     private static final float ITEM_WIDTH = 178f, ITEM_HEIGHT = 48f;
-    private final android.graphics.RectF xgramRect = new android.graphics.RectF();
-
-    @Override
-    protected void onDraw (Canvas canvas) {
-      super.onDraw(canvas);
-      if (isSelected && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-        // the selected item's pill, inside the state layer's box (4dp from the menu's sides)
-        xgramRect.set(Screen.dp(4f), 0, getMeasuredWidth() - Screen.dp(4f), getMeasuredHeight());
-        final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
-        canvas.drawRoundRect(xgramRect, radius, radius, org.thunderdog.challegram.tool.Paints.fillingPaint(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER)));
-      }
-    }
 
     public void updateDrawable () {
       if (isSelected) {
@@ -985,11 +997,18 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
     @Override
     protected void dispatchDraw (Canvas canvas) {
+      if (xgramState != null) {
+        xgramApplyTitleColor();
+      }
       super.dispatchDraw(canvas);
       if (drawable != null) {
         // XGram M3E: the icon centred in the 48dp item
         final int top = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? (getMeasuredHeight() - drawable.getMinimumHeight()) / 2 : Screen.dp(13);
-        Drawables.draw(canvas, drawable, getMeasuredWidth() - Screen.dp(40), top, PorterDuffPaint.get(isSelected ? ColorId.iconActive : ColorId.icon));
+        if (xgramState != null) {
+          Drawables.draw(canvas, drawable, getMeasuredWidth() - Screen.dp(40), top, org.thunderdog.challegram.tool.Paints.getPorterDuffPaint(com.fahadali.xgram.appearance.XgramExpressive.color(isSelected ? com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER : com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT)));
+        } else {
+          Drawables.draw(canvas, drawable, getMeasuredWidth() - Screen.dp(40), top, PorterDuffPaint.get(isSelected ? ColorId.iconActive : ColorId.icon));
+        }
       }
     }
   }

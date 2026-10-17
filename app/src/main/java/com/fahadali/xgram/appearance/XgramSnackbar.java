@@ -73,6 +73,8 @@ public final class XgramSnackbar extends TextView implements RootFrameLayout.Mar
 
   private @Nullable CharSequence actionText;
   private @Nullable Runnable actionRunnable;
+  /** The action as an accessibility action (TalkBack cannot tap the drawn button), View.NO_ID with no action. */
+  private int a11yActionId = View.NO_ID;
   private float actionTextWidth;
   private boolean actionPressed;
   private final RectF actionRect = new RectF();
@@ -157,6 +159,16 @@ public final class XgramSnackbar extends TextView implements RootFrameLayout.Mar
     bar.updateBottomMargin(parent);
     final boolean hasAction = bar.actionRunnable != null;
     bar.durationMs = hasAction ? ACTION_MS : duration == Toast.LENGTH_LONG ? LONG_MS : SHORT_MS;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      // The user's "Time to take action" accessibility setting
+      try {
+        android.view.accessibility.AccessibilityManager manager = (android.view.accessibility.AccessibilityManager) activity.getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (manager != null) {
+          bar.durationMs = manager.getRecommendedTimeoutMillis((int) bar.durationMs,
+            android.view.accessibility.AccessibilityManager.FLAG_CONTENT_TEXT | (hasAction ? android.view.accessibility.AccessibilityManager.FLAG_CONTENT_CONTROLS : 0));
+        }
+      } catch (Throwable ignored) { }
+    }
     bar.scheduleHide();
     if (isNew) {
       bar.visibility.animateTo(1f);
@@ -179,6 +191,21 @@ public final class XgramSnackbar extends TextView implements RootFrameLayout.Mar
     // the text ends 8dp before the action button, which ends 8dp before the bar's end
     final int end = actionRunnable != null ? Screen.dp(ACTION_END_DP + ACTION_GAP_DP + ACTION_PADDING_DP * 2) + (int) Math.ceil(actionTextWidth) : Screen.dp(16f);
     setPaddingRelative(Screen.dp(16f), Screen.dp(14f), end, Screen.dp(14f));
+    if (a11yActionId != View.NO_ID) {
+      androidx.core.view.ViewCompat.removeAccessibilityAction(this, a11yActionId);
+      a11yActionId = View.NO_ID;
+    }
+    if (actionRunnable != null && actionText != null) {
+      a11yActionId = androidx.core.view.ViewCompat.addAccessibilityAction(this, actionText.toString(), (v, args) -> {
+        final Runnable a = actionRunnable;
+        actionRunnable = null;
+        if (a != null) {
+          a.run();
+        }
+        dismiss();
+        return true;
+      });
+    }
     invalidate();
   }
 

@@ -543,6 +543,7 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
 
   private @Nullable StaticLayout xgramTitleLayout, xgramBodyLayout, xgramJoinedLayout;
   private @Nullable TextPaint xgramTitlePaint, xgramBodyPaint, xgramCounterPaint;
+  private final Paint.FontMetrics xgramCounterMetrics = new Paint.FontMetrics(); // reused: no allocation per frame
   private final Paint xgramPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
   private final Paint xgramIconPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
   private final Path xgramShape = new Path();
@@ -721,8 +722,8 @@ public class JoinedUsersView extends View implements Destroyable, FactorAnimator
             c.save();
             c.scale(textScale, textScale, cx, cy);
           }
-          Paint.FontMetrics fm = xgramCounterPaint.getFontMetrics();
-          c.drawText(moreCounter, cx - xgramCounterWidth / 2f, cy - (fm.ascent + fm.descent) / 2f, xgramCounterPaint);
+          xgramCounterPaint.getFontMetrics(xgramCounterMetrics);
+          c.drawText(moreCounter, cx - xgramCounterWidth / 2f, cy - (xgramCounterMetrics.ascent + xgramCounterMetrics.descent) / 2f, xgramCounterPaint);
           if (textScale != 1f) {
             c.restore();
           }

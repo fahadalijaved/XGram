@@ -148,7 +148,7 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
   }
 
   // XGram M3E (round 5): a large title over an adaptive grid of selectable cards (at least 2 columns of 168dp, 4 on
-  // the unfolded Fold), the note as a description, titleSmall headers, "All themes" as a segmented tile with a chevron.
+  // the unfolded Fold), the note as a description, titleSmall headers, "All themes" as a segmented link tile.
   // While Expressive design locks the themes (XgramSettingDeps.themesLocked) the cards are drawn disabled and a tonal
   // button under the note turns Expressive design off with Appearance's own confirm.
 
@@ -185,11 +185,12 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     android.widget.FrameLayout frame = new android.widget.FrameLayout(context);
     frame.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     frame.setPadding(Screen.dp(16f), Screen.dp(4f), Screen.dp(16f), Screen.dp(8f));
-    XgramM3Sheets.FilledButton button = new XgramM3Sheets.FilledButton(context, XgramExpressive.SECONDARY_CONTAINER, XgramExpressive.ON_SECONDARY_CONTAINER);
+    // The page-level tonal button of XgramR5Lists: 24dp sides, the 40dp pill in a 48dp touch target
+    XgramR5Lists.PillButton button = new XgramR5Lists.PillButton(context);
     button.setText(Lang.getString(R.string.XgramR5SecurityTurnOffExpressive));
     button.setOnClickListener(v -> xgramConfirmTurnOff());
-    android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f), Gravity.CENTER_HORIZONTAL);
-    params.topMargin = params.bottomMargin = Screen.dp(4f);
+    android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(48f), Gravity.CENTER_HORIZONTAL);
+    params.topMargin = params.bottomMargin = 0;
     frame.addView(button, params);
     return frame;
   }
@@ -211,10 +212,7 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     XgramExpressive.applyText(title, XgramExpressive.TS_BODY_L, false);
     title.setMaxLines(2);
     frame.addView(title, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL));
-    android.widget.ImageView chevron = new android.widget.ImageView(context);
-    chevron.setScaleType(android.widget.ImageView.ScaleType.CENTER);
-    chevron.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-    frame.addView(chevron, new android.widget.FrameLayout.LayoutParams(Screen.dp(24f), Screen.dp(24f), Gravity.CENTER_VERTICAL));
+    // No chevron: an Android 16 link tile (Compose SettingsGroup.link)
     frame.setOnClickListener(v -> navigateTo(new SettingsThemeController(context, tdlib)));
     return frame;
   }
@@ -227,17 +225,9 @@ public final class XgramThemesController extends RecyclerViewController<Void> {
     title.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE));
     title.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
     android.widget.FrameLayout.LayoutParams titleParams = (android.widget.FrameLayout.LayoutParams) title.getLayoutParams();
-    titleParams.leftMargin = Screen.dp(rtl ? 56f : 16f);
-    titleParams.rightMargin = Screen.dp(rtl ? 16f : 56f);
+    titleParams.leftMargin = titleParams.rightMargin = Screen.dp(16f);
     titleParams.topMargin = titleParams.bottomMargin = Screen.dp(12f);
     title.setLayoutParams(titleParams);
-    android.widget.ImageView chevron = (android.widget.ImageView) frame.getChildAt(1);
-    chevron.setImageResource(XgramIconPack.map(rtl ? R.drawable.baseline_keyboard_arrow_left_24 : R.drawable.round_keyboard_arrow_right_24));
-    chevron.setColorFilter(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
-    android.widget.FrameLayout.LayoutParams chevronParams = (android.widget.FrameLayout.LayoutParams) chevron.getLayoutParams();
-    chevronParams.gravity = Gravity.CENTER_VERTICAL | (rtl ? Gravity.LEFT : Gravity.RIGHT);
-    chevronParams.leftMargin = chevronParams.rightMargin = Screen.dp(16f);
-    chevron.setLayoutParams(chevronParams);
   }
 
   /** The preview clipped to CORNER_M (the path is built when the size changes, not per frame). */

@@ -631,13 +631,18 @@ public class SettingsSessionsController extends RecyclerViewController<Void> imp
     for (int i = 0; i < ids.length; i++) {
       items[i] = new ListItem(ListItem.TYPE_RADIO_OPTION, ids[i], 0, labels[i], R.id.btn_sessionTtl, ids[i] == checkedId);
     }
+    // One tap applies the choice and closes the sheet (as Telegram X's options did): no Cancel / Save footer
     showSettings(new org.thunderdog.challegram.navigation.SettingsWrapBuilder(R.id.btn_sessionTtl)
+      .setDisableFooter(true)
       .addHeaderItem(Lang.getString(R.string.SessionTerminateTtl))
       .setRawItems(items)
-      .setIntDelegate((id, result) -> {
-        final int selectedId = result.get(R.id.btn_sessionTtl);
+      .setOnSettingItemClick((view, settingsId, item, doneButton, adapter, window) -> {
+        if (window != null) {
+          window.hideWindow(true);
+        }
+        final int selectedId = item.getId();
         if (selectedId == R.id.btn_terminateInCustom) {
-          openInputAlert(Lang.getString(R.string.SessionTerminatesCustomAlertTitle), Lang.getString(R.string.SessionTerminatesCustomAlertHint), R.string.Done, R.string.Cancel, String.valueOf(inactiveSessionTtlDays), (inputView, value) -> {
+          openInputAlert(com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.SessionTerminatesCustomAlertTitle, R.string.XgramR5ListsNumberOfDays), Lang.getString(R.string.SessionTerminatesCustomAlertHint), R.string.Done, R.string.Cancel, String.valueOf(inactiveSessionTtlDays), (inputView, value) -> {
             int data = StringUtils.parseInt(value, -1);
             if (data < 1 || data > 366)
               return false;

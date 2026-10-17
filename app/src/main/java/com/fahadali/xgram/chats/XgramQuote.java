@@ -269,7 +269,11 @@ public final class XgramQuote {
           int[] selection = selectionOf(textView, touchedSelection);
           int[] range = XgramQuoteText.range(text, selection[0], selection[1]);
           if (range != null) {
-            UI.copyText(TD.toCopyText(Td.substring(text, range[0], range[1])), R.string.CopiedText);
+            if (XgramExpressive.isEnabled()) {
+              com.fahadali.xgram.appearance.XgramR5SheetsInfo.copy(TD.toCopyText(Td.substring(text, range[0], range[1]))); // XGram M3E: as every sheet's Copy
+            } else {
+              UI.copyText(TD.toCopyText(Td.substring(text, range[0], range[1])), R.string.CopiedText);
+            }
           }
         }
         dropSelection.run();
@@ -292,7 +296,6 @@ public final class XgramQuote {
         LinearLayout actions = XgramR5Sheets.actionsRow(context, null, copy, replyButton);
         LinearLayout.LayoutParams actionsParams = (LinearLayout.LayoutParams) actions.getLayoutParams();
         actionsParams.topMargin = Screen.dp(8f);
-        actionsParams.bottomMargin = Screen.dp(8f);
         actions.setLayoutParams(actionsParams);
         optionsLayout.addView(actions);
         return totalHeight + Screen.dp(8f) + actionsParams.height + actionsParams.topMargin + actionsParams.bottomMargin;
@@ -439,7 +442,7 @@ public final class XgramQuote {
       textView.setTextColor(Theme.getColor(ColorId.text));
       m.addThemeTextColorListener(textView, ColorId.text);
       textView.setLinkTextColor(XgramExpressive.color(XgramExpressive.PRIMARY));
-      textView.setHighlightColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY), .3f));
+      textView.setHighlightColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.PRIMARY), .40f)); // ColorId.textSelectionHighlight
       textView.setTextIsSelectable(true);
       textView.setText(display);
       return;

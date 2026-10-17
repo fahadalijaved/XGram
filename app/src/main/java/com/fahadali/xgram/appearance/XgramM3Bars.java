@@ -249,7 +249,7 @@ public final class XgramM3Bars {
 
     LargeTitleDecoration (ViewController<?> controller) {
       this.controller = controller;
-      paint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_HEADLINE_M, true));
+      paint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_HEADLINE_M, false)); // weight 400, as Compose's headlineMedium title
       paint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_HEADLINE_M)));
     }
 

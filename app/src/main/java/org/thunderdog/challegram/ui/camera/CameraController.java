@@ -516,7 +516,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
     v.setIncludeFontPadding(false);
     v.setGravity(Gravity.CENTER_VERTICAL);
     v.setBackground(com.fahadali.xgram.appearance.XgramR5Media.onMediaPill());
-    v.setPadding(Screen.dp(12f), Screen.dp(6f), Screen.dp(14f), Screen.dp(6f));
+    // 12dp on the dot side, 14dp at the text end (the dot is on the right in RTL)
+    final boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+    v.setPadding(Screen.dp(rtl ? 14f : 12f), Screen.dp(6f), Screen.dp(rtl ? 12f : 14f), Screen.dp(6f));
     android.graphics.drawable.GradientDrawable dot = new android.graphics.drawable.GradientDrawable();
     dot.setShape(android.graphics.drawable.GradientDrawable.OVAL);
     dot.setColor(com.fahadali.xgram.appearance.XgramM3MediaChrome.onMedia(com.fahadali.xgram.appearance.XgramExpressive.ERROR));

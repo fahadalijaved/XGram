@@ -1012,7 +1012,7 @@ public class TdlibUi extends Handler {
         }
       });
       optionsWrap.addView(actions.view);
-      contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT);
+      contentHeight += Screen.dp(com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_HEIGHT + com.fahadali.xgram.appearance.XgramM3Wheel.ACTIONS_BOTTOM);
       return contentHeight;
     }, forcedTheme);
     return true;

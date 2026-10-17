@@ -104,7 +104,7 @@ public class XgramIconPacksController extends ViewController<Void> {
       }
     });
     recyclerView.setLayoutManager(manager);
-    XgramR5Security.attachAdaptiveGrid(recyclerView, manager, XGRAM_MIN_CELL, 1, 2);
+    XgramR5Security.attachAdaptiveGrid(recyclerView, manager, XGRAM_MIN_CELL, 1, 2, position -> rows.get(position) instanceof Integer);
     recyclerView.setAdapter(new androidx.recyclerview.widget.RecyclerView.Adapter<androidx.recyclerview.widget.RecyclerView.ViewHolder>() {
       @Override
       public int getItemCount () {
@@ -177,7 +177,7 @@ public class XgramIconPacksController extends ViewController<Void> {
 
     XgramPackCard (Context context) {
       super(context);
-      card = XgramR5Security.attachSelectableCard(this, XgramExpressive.LIST_OUTER_CORNER, XgramExpressive.LIST_PRESSED_CORNER);
+      card = XgramR5Security.attachSelectableCard(this);
       setClickable(true);
       setFocusable(true);
     }

@@ -77,7 +77,19 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
       xgramPress = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(0f, .002f, invalidate);
       xgramLabelAlpha = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(0f, .002f, invalidate);
       xgramLabelScale = new com.fahadali.xgram.appearance.XgramScrollIndicator.Anim(1f, .002f, invalidate);
-      addItemDecoration(new XgramSectionGroups()); // XGram M3E: letter sections as segmented groups
+    }
+  }
+
+  private boolean xgramGroups;
+
+  /**
+   * XGram M3E: letter sections as segmented groups (Contacts). Opt-in: the other users (the text and log viewers, the
+   * country picker) keep Telegram X's layout and letter gutter.
+   */
+  public void xgramEnableSectionGroups () {
+    if (xgram && !xgramGroups) {
+      xgramGroups = true;
+      addItemDecoration(new XgramSectionGroups());
     }
   }
 
@@ -465,7 +477,7 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
           j++;
         }
       }
-      if (xgram) {
+      if (xgramGroups) {
         totalScrollY += xgramExtraHeight(); // XGram M3E: subheaders and gaps
       }
     }
@@ -628,7 +640,7 @@ public class SectionedRecyclerView extends RecyclerView implements Runnable {
     super.draw(c);
 
     // Sections drawing (XGram M3E: the subheaders of XgramSectionGroups instead of the letter gutter)
-    if (showSections && !xgram) {
+    if (showSections && !xgramGroups) {
       letterPaint.setColor(Theme.textDecentColor());
       boolean rtl = Lang.rtl();
       int viewWidth = getMeasuredWidth();

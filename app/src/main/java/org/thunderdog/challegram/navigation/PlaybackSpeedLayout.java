@@ -718,9 +718,12 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
       drawable = Drawables.get(getResources(), drawableRes);
     }
 
-    /** XGram M3E: the current speed on a secondaryContainer pill (CORNER_M, 8dp in) with a primary check; a press is a state layer. */
+    /**
+     * XGram M3E: the current speed on a secondaryContainer pill (CORNER_M, 4dp in, as MenuMoreWrap's items) with its
+     * label and check in onSecondaryContainer; a press is a state layer.
+     */
     private void xgramDraw (Canvas canvas) {
-      final float inset = Screen.dp(8f), vInset = Screen.dp(2f);
+      final float inset = Screen.dp(4f), vInset = Screen.dp(4f);
       xgramRect.set(inset, vInset, getMeasuredWidth() - inset, getMeasuredHeight() - vInset);
       final float radius = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_M);
       final float active = isActive.getFloatValue();
@@ -744,7 +747,7 @@ public class PlaybackSpeedLayout extends MenuMoreWrapAbstract implements View.On
         Drawables.draw(canvas, drawable, iconX, Screen.dp(12), Paints.getPorterDuffPaint(color));
       }
       if (xgramCheck != null && active > 0f) {
-        final int color = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY), active);
+        final int color = com.fahadali.xgram.appearance.XgramExpressive.withAlpha(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SECONDARY_CONTAINER), active);
         Drawables.draw(canvas, xgramCheck, iconX, Screen.dp(12), Paints.getPorterDuffPaint(color));
       }
     }

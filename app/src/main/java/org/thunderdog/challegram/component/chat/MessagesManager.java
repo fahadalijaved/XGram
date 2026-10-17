@@ -2856,7 +2856,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       return;
     }
     if (controller.isSecretChat()) {
-      view.bind(R.drawable.baseline_lock_24, Lang.getString(R.string.SecretChats),
+      view.bind(R.drawable.baseline_lock_24, com.fahadali.xgram.appearance.XgramR5Chat.englishOr(R.string.XgramR5ChatEmptySecretTitle, R.string.SecretChats),
         Lang.getString(R.string.format_EncryptedDescription, Lang.getString(R.string.EncryptedDescription1), Lang.getString(R.string.EncryptedDescription2), Lang.getString(R.string.EncryptedDescription3), Lang.getString(R.string.EncryptedDescription4)),
         true, controller.xgramCanSayHi() ? controller::xgramSayHi : null);
       return;

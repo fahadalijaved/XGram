@@ -67,7 +67,7 @@ public final class XgramR5Security {
 
   public static final float GUTTER = 16f;
 
-  /** A titleSmall section header in primary: 16dp sides, 24dp above (8dp when it opens the page), 8dp below. */
+  /** A titleSmall section header in primary: 32dp sides (the tile content edge), 20dp above (8dp when it opens the page), 8dp below. */
   public static TextView newSectionHeader (Context context) {
     TextView title = new TextView(context);
     XgramExpressive.applyText(title, XgramExpressive.TS_TITLE_S, false);
@@ -83,10 +83,11 @@ public final class XgramR5Security {
     }
     title.setTextColor(XgramExpressive.color(XgramExpressive.PRIMARY));
     title.setGravity(Lang.rtl() ? android.view.Gravity.RIGHT : android.view.Gravity.LEFT);
-    title.setPadding(Screen.dp(GUTTER), Screen.dp(first ? 8f : 24f), Screen.dp(GUTTER), Screen.dp(8f));
+    // At the tile content edge (the 16dp gutter plus the tile's own 16dp), 20dp above like the Compose SettingsHeader
+    title.setPadding(Screen.dp(GUTTER + 16f), Screen.dp(first ? 8f : 20f), Screen.dp(GUTTER + 16f), Screen.dp(8f));
   }
 
-  /** A bodyMedium description in onSurfaceVariant with the 16dp page gutter. */
+  /** A bodyMedium description in onSurfaceVariant at the tile content edge (32dp). */
   public static TextView newDescription (Context context) {
     TextView text = new TextView(context);
     XgramExpressive.applyText(text, XgramExpressive.TS_BODY_M, false);
@@ -102,7 +103,7 @@ public final class XgramR5Security {
     }
     text.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
     text.setGravity(Lang.rtl() ? android.view.Gravity.RIGHT : android.view.Gravity.LEFT);
-    text.setPadding(Screen.dp(GUTTER), Screen.dp(8f), Screen.dp(GUTTER), Screen.dp(8f));
+    text.setPadding(Screen.dp(GUTTER + 16f), Screen.dp(8f), Screen.dp(GUTTER + 16f), Screen.dp(8f));
   }
 
   // Adaptive grid
@@ -134,7 +135,15 @@ public final class XgramR5Security {
   }
 
   public static void attachAdaptiveGrid (RecyclerView recyclerView, GridLayoutManager manager, float minCellDp, int minSpans, int maxSpans) {
-    recyclerView.addItemDecoration(new GridSpacing());
+    attachAdaptiveGrid(recyclerView, manager, minCellDp, minSpans, maxSpans, null);
+  }
+
+  /**
+   * {@link #attachAdaptiveGrid(RecyclerView, GridLayoutManager, float, int, int)} where {@code isCell} tells the cells
+   * from the full-width rows (needed when a single column makes a cell span every column).
+   */
+  public static void attachAdaptiveGrid (RecyclerView recyclerView, GridLayoutManager manager, float minCellDp, int minSpans, int maxSpans, @androidx.annotation.Nullable CellTest isCell) {
+    recyclerView.addItemDecoration(new GridSpacing(isCell));
     recyclerView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
       final int width = right - left;
       if (width <= 0 || width == oldRight - oldLeft) {
@@ -145,10 +154,17 @@ public final class XgramR5Security {
         v.post(() -> {
           if (manager.getSpanCount() != spans) {
             manager.setSpanCount(spans);
+            // The insets cached for the old column count would stay on the views reused from scrap
+            recyclerView.invalidateItemDecorations();
           }
         });
       }
     });
+  }
+
+  /** Whether the adapter position is a grid cell (not a row placing itself across the grid). */
+  public interface CellTest {
+    boolean isCell (int position);
   }
 
   /**
@@ -156,6 +172,17 @@ public final class XgramR5Security {
    * rows spanning every column get no offsets (they place themselves).
    */
   public static final class GridSpacing extends RecyclerView.ItemDecoration {
+    private final @androidx.annotation.Nullable CellTest isCell;
+
+    public GridSpacing () {
+      this(null);
+    }
+
+    /** {@code isCell} tells the cells from the full-width rows; null infers it from the span size. */
+    public GridSpacing (@androidx.annotation.Nullable CellTest isCell) {
+      this.isCell = isCell;
+    }
+
     @Override
     public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
       outRect.set(0, 0, 0, 0);
@@ -164,7 +191,9 @@ public final class XgramR5Security {
       }
       final GridLayoutManager.LayoutParams params = (GridLayoutManager.LayoutParams) view.getLayoutParams();
       final int spans = ((GridLayoutManager) parent.getLayoutManager()).getSpanCount();
-      if (params.getSpanSize() >= spans || spans <= 0) {
+      final int position = parent.getChildAdapterPosition(view);
+      final boolean cell = isCell != null ? position != RecyclerView.NO_POSITION && isCell.isCell(position) : params.getSpanSize() < spans;
+      if (!cell || spans <= 0) {
         return;
       }
       final int column = params.getSpanIndex();
@@ -568,6 +597,8 @@ public final class XgramR5Security {
     private @androidx.annotation.Nullable DotsView dots;
     private @androidx.annotation.Nullable KeypadView keypad;
     private @androidx.annotation.Nullable PatternView pattern;
+    private @androidx.annotation.Nullable View biometricsButton;
+    private final int[] xgramLoc = new int[2];
     private int content = CONTENT_NONE;
 
     private CharSequence restingText;
@@ -760,6 +791,7 @@ public final class XgramR5Security {
      * and no pattern line); {@code biometrics} adds the fingerprint button (in the keypad's free key with a PIN).
      */
     public void setContent (int content, int pinSize, boolean feedback, boolean biometrics) {
+      biometricsButton = null;
       this.content = content;
       slot.removeAllViews();
       dots = null;
@@ -835,11 +867,26 @@ public final class XgramR5Security {
         onUserInput();
         callback.onLockBiometrics();
       });
+      biometricsButton = button;
       return button;
+    }
+
+    /**
+     * Whether a screen point is on the fingerprint button, so the gesture overlay laid over this view
+     * (PasscodeController) can let a touch there through.
+     */
+    public boolean isOnBiometricsButton (float rawX, float rawY) {
+      final View b = biometricsButton;
+      if (b == null || !b.isShown()) {
+        return false;
+      }
+      b.getLocationOnScreen(xgramLoc);
+      return rawX >= xgramLoc[0] && rawX < xgramLoc[0] + b.getWidth() && rawY >= xgramLoc[1] && rawY < xgramLoc[1] + b.getHeight();
     }
 
     /** Password mode: the filled field and the full-width Unlock button (48dp, at most the column's 360dp). */
     public void setPasswordViews (View field, View unlockButton, boolean biometrics) {
+      biometricsButton = null;
       this.content = CONTENT_PASSWORD;
       slot.removeAllViews();
       dots = null;

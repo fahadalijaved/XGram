@@ -498,6 +498,11 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
     if (xgramModes != null) {
       xgramModes.refreshColors();
     }
+    if (xgramLock != null && gestureView != null) {
+      final int primary = XgramExpressive.color(XgramExpressive.PRIMARY);
+      gestureView.setGestureColor(primary);
+      gestureView.setUncertainGestureColor(primary);
+    }
   }
 
   @Override
@@ -789,7 +794,16 @@ public class PasscodeController extends ViewController<PasscodeController.Args> 
 
   private void showGestureWrap () {
     if (gestureView == null) {
-      gestureView = new GestureOverlayView(context());
+      gestureView = new GestureOverlayView(context()) {
+        @Override
+        public boolean dispatchTouchEvent (MotionEvent e) {
+          // XGram M3E: a touch starting on the lock's fingerprint button (under this overlay) goes to the button
+          if (e.getActionMasked() == MotionEvent.ACTION_DOWN && xgramLock != null && xgramLock.isOnBiometricsButton(e.getRawX(), e.getRawY())) {
+            return false;
+          }
+          return super.dispatchTouchEvent(e);
+        }
+      };
       gestureView.setGestureStrokeWidth(Screen.dp(3f));
       gestureView.setOrientation(GestureOverlayView.ORIENTATION_VERTICAL);
       gestureView.setGestureColor(Theme.getColor(ColorId.passcodeIcon));

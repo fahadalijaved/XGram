@@ -55,6 +55,8 @@ public final class XgramM3Wheel {
   public static final float BAND_INSET = 16f;
   /** The bottom actions row (dp): 40dp buttons with 12dp above and below. */
   public static final float ACTIONS_HEIGHT = 64f;
+  /** The gap under every sheet's actions row (its bottom margin), so the buttons end at the same height in each sheet. */
+  public static final float ACTIONS_BOTTOM = 8f;
   /** Space between two buttons of the actions row (dp). */
   private static final float ACTIONS_GAP = 8f;
 
@@ -225,8 +227,9 @@ public final class XgramM3Wheel {
     view.setTextColor(color(XgramExpressive.ON_SURFACE, forcedTheme));
     view.setMaxLines(2);
     view.setEllipsize(TextUtils.TruncateAt.END);
-    view.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-    view.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    // Aligned by the app language (popup windows follow the system locale's direction)
+    view.setGravity(Lang.gravity(Gravity.CENTER_VERTICAL));
+    view.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
     view.setPadding(Screen.dp(16f), 0, Screen.dp(16f), Screen.dp(8f));
     view.setText(title);
     view.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -238,7 +241,8 @@ public final class XgramM3Wheel {
     TextView view = new NoScrollTextView(context);
     XgramExpressive.applyText(view, XgramExpressive.TS_BODY_M, false);
     view.setTextColor(color(XgramExpressive.ON_SURFACE_VARIANT, forcedTheme));
-    view.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+    view.setGravity(Lang.gravity());
+    view.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
     view.setPadding(Screen.dp(16f), 0, Screen.dp(16f), Screen.dp(16f));
     view.setText(text);
     view.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -323,7 +327,9 @@ public final class XgramM3Wheel {
     row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR); // children are added in visual order below
     row.setGravity(Gravity.CENTER_VERTICAL);
     row.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
-    row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ACTIONS_HEIGHT)));
+    LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ACTIONS_HEIGHT));
+    rowParams.bottomMargin = Screen.dp(ACTIONS_BOTTOM);
+    row.setLayoutParams(rowParams);
 
     TextView neutral = null;
     if (!TextUtils.isEmpty(neutralText)) {

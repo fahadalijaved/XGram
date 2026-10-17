@@ -206,8 +206,13 @@ public final class XgramR5Composer {
    * cut to its 16dp corners by the container.
    */
   public static XgramExpressive.MorphDrawable applyTile (@NonNull View v) {
-    XgramExpressive.MorphDrawable tile = new XgramExpressive.MorphDrawable(0, TILE_CORNER, TILE_PRESSED_CORNER);
-    tile.setColorRole(XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+    // Read at draw time: with Pure black the floating container is the chip step, so the tile takes the card step
+    XgramExpressive.MorphDrawable tile = new XgramExpressive.MorphDrawable(0, TILE_CORNER, TILE_PRESSED_CORNER) {
+      @Override
+      public int getDrawColor () {
+        return tileColor();
+      }
+    };
     tile.setHost(v);
     v.setBackground(tile);
     v.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
@@ -228,8 +233,16 @@ public final class XgramR5Composer {
     final float inset = Screen.dpf(4f) * (1f - f);
     tileRect.set(inset, inset, width - inset, height - inset);
     final float radius = Math.min(Screen.dpf(TILE_PRESSED_CORNER), Math.min(tileRect.width(), tileRect.height()) / 2f);
-    tilePaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST), f));
+    tilePaint.setColor(XgramExpressive.withAlpha(tileColor(), f));
     c.drawRoundRect(tileRect, radius, radius, tilePaint);
+  }
+
+  /**
+   * surfaceContainerHighest; the card step with Pure black, where the floating container around the tiles is
+   * surfaceContainerHighest itself ({@link XgramAmoled#floatingRole}).
+   */
+  private static int tileColor () {
+    return XgramExpressive.color(XgramAmoled.isActive() ? XgramExpressive.SURFACE_CONTAINER_HIGH : XgramExpressive.SURFACE_CONTAINER_HIGHEST);
   }
 
   private static final Paint tilePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -385,6 +398,14 @@ public final class XgramR5Composer {
     }
 
     void onHoverChanged () {
+      // The icon under the finger turns onSecondaryContainer on its pill (set here: a hardware-accelerated
+      // invalidate of the button alone does not run this toolbar's dispatchDraw)
+      for (int i = 0; i < getChildCount(); i++) {
+        final View child = getChildAt(i);
+        if (child.getTag() instanceof ToolbarItem) {
+          applyItemColor(child, (ToolbarItem) child.getTag());
+        }
+      }
       if (tooltipHost != null) {
         tooltipHost.invalidate();
       }
@@ -447,7 +468,11 @@ public final class XgramR5Composer {
     }
 
     private static void applyItemColor (View view, ToolbarItem item) {
-      final int role = item.toggled ? XgramExpressive.PRIMARY : item.contentRole;
+      // On a filled slot (toggled, or the pill under the finger) the content is onSecondaryContainer, like the chat
+      // preview's and the chat list's toolbars; a destructive action keeps error. A threshold, not a blend: no new
+      // colour filter per frame
+      final boolean filled = item.toggled || item.hover.factor() > .5f;
+      final int role = filled && item.contentRole != XgramExpressive.ERROR ? XgramExpressive.ON_SECONDARY_CONTAINER : item.contentRole;
       final int color = XgramExpressive.color(role);
       if (item.appliedColor == color) {
         return;

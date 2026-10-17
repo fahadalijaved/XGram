@@ -291,6 +291,7 @@ public class ContactsController extends TelegramViewController<ContactsControlle
     ViewSupport.setThemedBackground(contentView, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? ColorId.background : ColorId.filling, this);
 
     recyclerView = new SectionedRecyclerView(context);
+    recyclerView.xgramEnableSectionGroups(); // XGram M3E: the letter sections as segmented groups
     Views.applyBottomInset(recyclerView, extraBottomInset);
     recyclerView.setSectionedAdapter(adapter = new ContactsAdapter(recyclerView, this));
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {

@@ -495,7 +495,9 @@ public class PasswordController extends ViewController<PasswordController.Args> 
       }
     };
     column.setOrientation(android.widget.LinearLayout.VERTICAL);
-    column.setPadding(Screen.dp(16f), Screen.dp(24f), Screen.dp(16f), Screen.dp(104f)); // the FAB stays clear of the links
+    // 8dp above the headline: its baseline near 40dp, as the large title of the other flexible app bars (XgramM3Bars);
+    // the FAB stays clear of the links
+    column.setPadding(Screen.dp(16f), Screen.dp(8f), Screen.dp(16f), Screen.dp(104f));
     wrap.addView(column, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP));
     final boolean rtl = Lang.rtl();
     final int startGravity = rtl ? Gravity.RIGHT : Gravity.LEFT;
@@ -544,7 +546,8 @@ public class PasswordController extends ViewController<PasswordController.Args> 
     HeaderView.xgramSetTitleAlpha(this, 0f);
     scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
       if (xgramHeadline != null) {
-        HeaderView.xgramSetTitleAlpha(this, (scrollY - xgramHeadline.getBottom() + Screen.dp(16f)) / (float) Screen.dp(24f));
+        // the same fade as XgramM3Bars.LargeTitleDecoration: from 24dp of scroll, over 32dp
+        HeaderView.xgramSetTitleAlpha(this, (scrollY - Screen.dp(24f)) / (float) Screen.dp(32f));
       }
     });
   }

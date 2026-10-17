@@ -193,6 +193,8 @@ public final class XgramR5Sheets {
 
   /** The bottom actions row of a sheet (dp): 40dp buttons with 12dp above and below. */
   public static final float ACTIONS_HEIGHT = XgramM3Wheel.ACTIONS_HEIGHT;
+  /** The row's bottom margin ({@link XgramM3Wheel#ACTIONS_BOTTOM}): callers count it in the sheet's height. */
+  public static final float ACTIONS_BOTTOM = XgramM3Wheel.ACTIONS_BOTTOM;
   private static final float ACTIONS_GAP = 8f;
 
   /**
@@ -207,7 +209,9 @@ public final class XgramR5Sheets {
     row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR); // children are added in visual order below
     row.setGravity(Gravity.CENTER_VERTICAL);
     row.setPadding(Screen.dp(16f), 0, Screen.dp(16f), 0);
-    row.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ACTIONS_HEIGHT)));
+    LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(ACTIONS_HEIGHT));
+    rowParams.bottomMargin = Screen.dp(ACTIONS_BOTTOM);
+    row.setLayoutParams(rowParams);
 
     View spacer = new View(context);
     spacer.setLayoutParams(new LinearLayout.LayoutParams(0, 1, 1f));
