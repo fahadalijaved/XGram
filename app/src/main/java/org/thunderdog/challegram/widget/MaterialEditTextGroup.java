@@ -219,15 +219,185 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
     setWillNotDraw(false);
     final int pad = Screen.dp(16f);
     editText.setPadding(pad, editText.getPaddingTop(), pad, editText.getPaddingBottom());
+    // XGram M3E r6: the input and the label in bodyLarge (Google Sans Flex); the label floats to bodySmall (see updateScale)
+    XgramExpressive.applyText(editText, XgramExpressive.TS_BODY_L, false);
     if (hintView != null) {
       hintView.setPadding(pad, 0, pad, 0);
+      XgramExpressive.applyText(hintView, XgramExpressive.TS_BODY_L, false);
       hintView.setTextColor(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT));
     }
   }
 
+  /** The label's role now: error while the field is in error, primary while focused, onSurfaceVariant otherwise. */
+  private int xgramHintRole () {
+    return inErrorState ? XgramExpressive.ERROR : hasFocus ? XgramExpressive.PRIMARY : XgramExpressive.ON_SURFACE_VARIANT;
+  }
+
   private void xgramUpdateHintColor () {
     if (xgram && hintView != null) {
-      hintView.setTextColor(XgramExpressive.color(hasFocus ? XgramExpressive.PRIMARY : XgramExpressive.ON_SURFACE_VARIANT));
+      hintView.setTextColor(XgramExpressive.color(xgramHintRole()));
+    }
+  }
+
+  // XGram M3E r6: the supporting text line under the filled field (bodySmall: a hint, a check result or an error) and a
+  // leading element, a trailing one and a prefix inside it (the country field's flag and arrow, the "+" of a calling code)
+
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.SupportingText xgramSupporting;
+  private @Nullable View xgramLeading, xgramTrailing;
+  private @Nullable TextView xgramPrefix;
+
+  /** {@code text} under the field (null or empty hides it); an error also turns the indicator and the label to error. */
+  public void xgramSetSupportingText (@Nullable CharSequence text, boolean isError) {
+    xgramSetSupportingText(text, isError ? com.fahadali.xgram.appearance.XgramR6B8Login.TONE_ERROR : com.fahadali.xgram.appearance.XgramR6B8Login.TONE_NEUTRAL);
+  }
+
+  /** {@link #xgramSetSupportingText(CharSequence, boolean)} in a tone of XgramR6B8Login (neutral, good with a check, error). */
+  public void xgramSetSupportingText (@Nullable CharSequence text, int tone) {
+    if (!xgram) {
+      return;
+    }
+    final boolean empty = TextUtils.isEmpty(text);
+    if (xgramSupporting == null) {
+      if (empty) {
+        setInErrorState(false);
+        setInGoodState(false);
+        return;
+      }
+      xgramSupporting = new com.fahadali.xgram.appearance.XgramR6B8Login.SupportingText(getContext());
+      final int counterRoom = Screen.dp(lengthCounter != null ? 64f : 16f);
+      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM | (isRtl ? Gravity.RIGHT : Gravity.LEFT));
+      params.leftMargin = isRtl ? counterRoom : Screen.dp(16f);
+      params.rightMargin = isRtl ? Screen.dp(16f) : counterRoom;
+      xgramSupporting.setLayoutParams(params);
+      xgramSupporting.setGravity(isRtl ? Gravity.RIGHT : Gravity.LEFT);
+      xgramSupporting.setPadding(0, Screen.dp(4f), 0, 0);
+      addView(xgramSupporting);
+      if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(xgramSupporting);
+      }
+    }
+    xgramSupporting.set(text, tone, isLaidOut());
+    setInErrorState(!empty && tone == com.fahadali.xgram.appearance.XgramR6B8Login.TONE_ERROR);
+    setInGoodState(!empty && tone == com.fahadali.xgram.appearance.XgramR6B8Login.TONE_GOOD);
+  }
+
+  /** True while the supporting text shows an error. */
+  public boolean xgramHasSupportingError () {
+    return xgramSupporting != null && xgramSupporting.isError();
+  }
+
+  /** {@code view} (48dp wide) at the start of the field, e.g. a flag; the input and the label start 52dp in. */
+  public void xgramSetLeading (@Nullable View view) {
+    if (!xgram) {
+      return;
+    }
+    if (xgramLeading != null) {
+      removeView(xgramLeading);
+    }
+    xgramLeading = view;
+    if (view != null) {
+      addView(view, FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.TOP | (isRtl ? Gravity.RIGHT : Gravity.LEFT)));
+      if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(view);
+      }
+    }
+    xgramUpdatePaddings();
+  }
+
+  /** {@code view} (48dp wide) at the end of the field, e.g. a dropdown arrow; the input and the label end 52dp before it. */
+  public void xgramSetTrailing (@Nullable View view) {
+    if (!xgram) {
+      return;
+    }
+    if (xgramTrailing != null) {
+      removeView(xgramTrailing);
+    }
+    xgramTrailing = view;
+    if (view != null) {
+      addView(view, FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.TOP | (isRtl ? Gravity.LEFT : Gravity.RIGHT)));
+      if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(view);
+      }
+    }
+    xgramUpdatePaddings();
+  }
+
+  /** {@code text} (e.g. "+") before the input, shown while the label is up. */
+  public void xgramSetPrefix (@Nullable CharSequence text) {
+    if (!xgram) {
+      return;
+    }
+    if (xgramPrefix != null) {
+      removeView(xgramPrefix);
+      xgramPrefix = null;
+    }
+    if (!TextUtils.isEmpty(text)) {
+      xgramPrefix = com.fahadali.xgram.appearance.XgramR6B8Login.newPrefix(getContext(), text);
+      xgramPrefix.setPadding(0, editText.getPaddingTop(), 0, editText.getPaddingBottom());
+      xgramPrefix.setGravity(Gravity.CENTER_VERTICAL);
+      xgramPrefix.setAlpha(factor);
+      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | (isRtl ? Gravity.RIGHT : Gravity.LEFT));
+      params.topMargin = ((FrameLayoutFix.LayoutParams) editText.getLayoutParams()).topMargin;
+      addView(xgramPrefix, params);
+      if (themeProvider != null) {
+        themeProvider.addThemeInvalidateListener(xgramPrefix);
+      }
+    }
+    xgramUpdatePaddings();
+  }
+
+  private void xgramUpdatePaddings () {
+    final int start = Screen.dp(xgramLeading != null ? 52f : 16f);
+    final int end = Screen.dp(xgramTrailing != null ? 52f : 16f);
+    int prefix = 0;
+    if (xgramPrefix != null) {
+      prefix = (int) Math.ceil(xgramPrefix.getPaint().measureText(xgramPrefix.getText().toString())) + Screen.dp(2f);
+      FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) xgramPrefix.getLayoutParams();
+      params.leftMargin = isRtl ? 0 : start;
+      params.rightMargin = isRtl ? start : 0;
+      xgramPrefix.setLayoutParams(params);
+    }
+    editText.setPadding(isRtl ? end : start + prefix, editText.getPaddingTop(), isRtl ? start + prefix : end, editText.getPaddingBottom());
+    if (hintView != null) {
+      hintView.setPadding(isRtl ? end : start, 0, isRtl ? start : end, 0);
+    }
+  }
+
+  @Override
+  protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+    if (xgram && (xgramSupporting != null || xgramSupportingCounter)) {
+      // the room under the input for the supporting text row: the counter's line, or the supporting text's lines
+      int room = xgramSupportingCounter ? Screen.dp(20f) : 0;
+      if (xgramSupporting != null && xgramSupporting.getVisibility() != View.GONE) {
+        FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) xgramSupporting.getLayoutParams();
+        final int widthSpec;
+        if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) {
+          widthSpec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+        } else {
+          widthSpec = MeasureSpec.makeMeasureSpec(Math.max(0, MeasureSpec.getSize(widthMeasureSpec) - getPaddingLeft() - getPaddingRight() - params.leftMargin - params.rightMargin), MeasureSpec.EXACTLY);
+        }
+        xgramSupporting.measure(widthSpec, MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+        room = Math.max(room, xgramSupporting.getMeasuredHeight());
+      }
+      FrameLayoutFix.LayoutParams editParams = (FrameLayoutFix.LayoutParams) editText.getLayoutParams();
+      editParams.bottomMargin = room;
+    }
+    super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+  }
+
+  @Override
+  protected void onLayout (boolean changed, int left, int top, int right, int bottom) {
+    super.onLayout(changed, left, top, right, bottom);
+    if (xgram && (xgramLeading != null || xgramTrailing != null)) {
+      // the leading and trailing elements sit in the middle of the container (the label and the input), not of the
+      // whole group (the supporting text is under it)
+      final int center = editText.getBottom() / 2;
+      for (View v : new View[] {xgramLeading, xgramTrailing}) {
+        if (v != null && v.getVisibility() != View.GONE) {
+          final int h = v.getMeasuredHeight();
+          v.layout(v.getLeft(), center - h / 2, v.getRight(), center - h / 2 + h);
+        }
+      }
     }
   }
 
@@ -236,6 +406,12 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
     super.onDraw(c);
     if (!xgram) {
       return;
+    }
+    if (hintView != null) {
+      final int hintColor = XgramExpressive.color(xgramHintRole());
+      if (hintView.getCurrentTextColor() != hintColor) {
+        hintView.setTextColor(hintColor); // a theme change set the placeholder colour again
+      }
     }
     final int bottom = editText.getBottom();
     if (bottom <= 0 || getWidth() <= 0) {
@@ -706,6 +882,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   private void animateAlphaFactor (float factor) {
     if (textAlphaAnimator == null) {
       textAlphaAnimator = new FactorAnimator(ANIMATOR_TEXT_ALPHA, this, AnimatorUtils.DECELERATE_INTERPOLATOR, DURATION - 20l, textAlpha);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(textAlphaAnimator, XgramExpressive.EFFECTS_FAST, true); // XGram M3E r6
     }
     textAlphaAnimator.animateTo(factor);
   }
@@ -724,10 +901,22 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
       this.factor = factor;
       updateScale();
       editText.applyActiveFactor(factor);
+      if (xgramPrefix != null) {
+        xgramPrefix.setAlpha(Math.max(0f, Math.min(1f, factor)));
+      }
     }
   }
 
   private void updateScale () {
+    if (hintView != null && xgram) {
+      // XGram M3E r6: bodyLarge up to bodySmall (16 to 12)
+      final float scaleFactor = factor * (1f - reverseScaleFactor);
+      float scale = 1f - .25f * scaleFactor;
+      hintView.setScaleX(scale);
+      hintView.setScaleY(scale);
+      hintView.setTranslationY((float) -Screen.dp(20f) * scaleFactor);
+      return;
+    }
     if (hintView != null) {
       final float scaleFactor = factor * (1f - reverseScaleFactor);
       float scale = 1f - .23076923f * scaleFactor;
@@ -743,6 +932,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   private void animateFactor (float toFactor) {
     if (animator == null) {
       animator = new FactorAnimator(ANIMATOR_FACTOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, DURATION, factor);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(animator, XgramExpressive.STD_SPATIAL_FAST, true); // XGram M3E r6: the label floats on a spring
     }
     animator.animateTo(toFactor);
   }
@@ -876,6 +1066,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   public void resetWithHint (final CharSequence pendingHint, final @Nullable CharSequence text, boolean isPassword, Runnable between) {
     if (fadeAnimator == null) {
       fadeAnimator = new FactorAnimator(ANIMATOR_FADE, this, AnimatorUtils.LINEAR_INTERPOLATOR, 360l, fadeFactor);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(fadeAnimator, XgramExpressive.EFFECTS_SLOW, true); // XGram M3E r6: out and in on one spring
     } else {
       fadeAnimator.forceFactor(0f);
       fadeFactor = 0f;
@@ -898,6 +1089,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
     if (this.inErrorState != inErrorState) {
       this.inErrorState = inErrorState;
       animateErrorState(inErrorState ? 1f : 0f);
+      xgramUpdateHintColor(); // XGram M3E r6: the label in error too
     }
   }
 
@@ -908,6 +1100,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   private void animateErrorState (float toFactor) {
     if (errorAnimator == null) {
       errorAnimator = new FactorAnimator(ANIMATOR_ERROR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(errorAnimator, XgramExpressive.EFFECTS_FAST, true); // XGram M3E r6
     }
     errorAnimator.animateTo(toFactor);
   }
@@ -927,6 +1120,7 @@ public class MaterialEditTextGroup extends FrameLayoutFix implements View.OnFocu
   private void animateGoodState (float toFactor) {
     if (goodAnimator == null) {
       goodAnimator = new FactorAnimator(ANIMATOR_GOOD, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(goodAnimator, XgramExpressive.EFFECTS_FAST, true); // XGram M3E r6
     }
     goodAnimator.animateTo(toFactor);
   }

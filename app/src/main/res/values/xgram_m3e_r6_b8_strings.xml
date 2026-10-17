@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram M3E round 6, batch 8: login, account security and form fields (XgramR6B8Login) -->
+  <string name="XgramR6B8CodeBoxes">Code, %1$d digits</string>
+  <string name="XgramR6B8Offline">You\'re offline. Try again once you\'re connected.</string>
+  <!-- Phone entry: sentence case titles of Telegram X's title case strings -->
+  <string name="XgramR6B8YourPhone">Your phone number</string>
+  <string name="XgramR6B8AddAccount">Add account</string>
+  <string name="XgramR6B8NewNumber">New number</string>
+  <string name="XgramR6B8AddContact">Add contact</string>
+  <!-- Password steps (two-step verification setup) -->
+  <string name="XgramR6B8StepCreate">Create a password</string>
+  <string name="XgramR6B8StepNew">Choose a new password</string>
+  <string name="XgramR6B8StepRepeat">Confirm your password</string>
+  <string name="XgramR6B8StepHint">Add a hint</string>
+  <string name="XgramR6B8StepEmail">Add a recovery email</string>
+  <!-- Passcode lock -->
+  <string name="XgramR6B8PasscodeLock">Passcode lock</string>
+  <string name="XgramR6B8ChangePasscode">Change passcode</string>
+  <string name="XgramR6B8AutoLock">Auto-lock</string>
+  <string name="XgramR6B8PasscodeInvisibility">Hide passcode input</string>
+  <string name="XgramR6B8UnlockFingerprint">Unlock with fingerprint</string>
+  <string name="XgramR6B8UnlockBiometrics">Unlock with biometrics</string>
+  <string name="XgramR6B8NotificationsContent">Show notification content</string>
+  <string name="XgramR6B8ScreenCapture">Allow screen capture</string>
+  <!-- QR code login -->
+  <string name="XgramR6B8QrStep1">Open Telegram on a phone where you\'re logged in</string>
+  <string name="XgramR6B8QrStep2">Go to Settings, then Devices, then Link desktop device</string>
+  <string name="XgramR6B8QrStep3">Point the camera at this code</string>
+  <string name="XgramR6B8QrUsePhone">Use phone number instead</string>
+  <!-- Usernames and public links -->
+  <string name="XgramR6B8ChannelLink">Channel link</string>
+  <string name="XgramR6B8GroupLink">Group link</string>
+  <string name="XgramR6B8BotLink">Bot link</string>
+  <string name="XgramR6B8UsernamesMy">Active usernames</string>
+  <string name="XgramR6B8UsernamesChat">Chat links</string>
+  <string name="XgramR6B8UsernamesChannel">Channel links</string>
+  <string name="XgramR6B8UsernamesBot">Bot links</string>
+  <string name="XgramR6B8Active">Active</string>
+  <string name="XgramR6B8Inactive">Inactive</string>
+  <!-- Terms of service at sign-up -->
+  <string name="XgramR6B8Terms">Terms of service</string>
+  <string name="XgramR6B8Agree">Agree</string>
+  <string name="XgramR6B8Back">Back</string>
+</resources>

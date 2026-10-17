@@ -110,6 +110,23 @@ public class PhoneController extends EditBaseController<Void> implements Setting
   @Override
   public CharSequence getName () {
     String result;
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E r6: sentence case while the language is Telegram X's English (its own titles are title case)
+      switch (mode) {
+        case MODE_ADD_CONTACT:
+          result = com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.AddContact, R.string.XgramR6B8AddContact);
+          break;
+        case MODE_CHANGE_NUMBER:
+          result = com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.NewNumber, R.string.XgramR6B8NewNumber);
+          break;
+        case MODE_LOGIN:
+          result = isAccountAdd ? com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.AddAccount, R.string.XgramR6B8AddAccount) : com.fahadali.xgram.appearance.XgramR5Lists.sentence(R.string.YourPhone, R.string.XgramR6B8YourPhone);
+          break;
+        default:
+          throw new IllegalArgumentException("mode == " + mode);
+      }
+      return Lang.getDebugString(result, tdlib != null && tdlib.account().isDebug());
+    }
     switch (mode) {
       case MODE_ADD_CONTACT:
         result = Lang.getString(R.string.AddContact);
@@ -172,6 +189,12 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     if (numberView != null) {
       if (event == Lang.EVENT_PACK_CHANGED || (event == Lang.EVENT_STRING_CHANGED && arg1 == getNumberHint())) {
         numberView.setHint(getNumberHint());
+      }
+    }
+    if (xgramHeadline != null && (event == Lang.EVENT_PACK_CHANGED || event == Lang.EVENT_STRING_CHANGED)) {
+      xgramHeadline.setText(getName()); // XGram M3E r6
+      if (xgramHint != null) {
+        xgramHint.setText(xgramHintText());
       }
     }
   }
@@ -342,6 +365,10 @@ public class PhoneController extends EditBaseController<Void> implements Setting
         setInCountryMode(false);
         clearCountry();
         codeView.setText("");
+      } else if (xgramFirstResult() != null) { // XGram M3E r6: the results start with their group's top
+        ListItem item = xgramFirstResult();
+        this.selectedCallingCode = item.getStringValue();
+        setCountry((TdApi.CountryInfo) item.getData(), true, true);
       } else if (currentResults != null && !currentResults.isEmpty() && currentResults.get(0).getViewType() == ListItem.TYPE_COUNTRY) {
         ListItem item = currentResults.get(0);
         this.selectedCallingCode = item.getStringValue();
@@ -368,11 +395,15 @@ public class PhoneController extends EditBaseController<Void> implements Setting
       this.baseItems.add(lastNameItem = new ListItem(ListItem.TYPE_EDITTEXT_NO_PADDING_REUSABLE, R.id.edit_last_name, 0, R.string.login_LastName).setStringValue(initialLastName));
     }
     hintItem = new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, mode == MODE_ADD_CONTACT ? 0 : mode == MODE_CHANGE_NUMBER ? R.string.ChangePhoneHelp : R.string.login_SmsHint).setTextColorId(ColorId.textLight);
-    if (mode != MODE_ADD_CONTACT) {
+    if (mode != MODE_ADD_CONTACT && !xgram) { // XGram M3E r6: the hint is the header's supporting text
       this.baseItems.add(hintItem);
     }
     if (mode == MODE_LOGIN) { // XGram: QR code login, no SMS or email needed when another device is logged in
-      this.baseItems.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramQrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, R.string.xgram_login_QrButton));
+      if (xgram) { // XGram M3E r6: a tonal button under the fields
+        this.baseItems.add(new ListItem(ListItem.TYPE_BUTTON, R.id.btn_xgramQrLogin, 0, R.string.xgram_login_QrButton));
+      } else {
+        this.baseItems.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramQrLogin, R.drawable.xt3000_baseline_qrcode_scan_24, R.string.xgram_login_QrButton));
+      }
     }
 
     if (isAccountAdd) {
@@ -403,6 +434,8 @@ public class PhoneController extends EditBaseController<Void> implements Setting
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         if (item.getId() == R.id.btn_syncContacts) {
           // Do smth?
+        } else if (item.getId() == R.id.result) {
+          view.setData("+" + item.getStringValue()); // XGram M3E r6: a country row's calling code under its name
         }
       }
 
@@ -559,6 +592,9 @@ public class PhoneController extends EditBaseController<Void> implements Setting
           makeTestRequest();
         }
 
+        if (xgram) {
+          xgramStyleNumberRow(numberWrap);
+        }
         return new SettingHolder(numberWrap);
       }
 
@@ -578,8 +614,188 @@ public class PhoneController extends EditBaseController<Void> implements Setting
     adapter.setItems(baseItems, isAccountAdd);
     recyclerView.setAdapter(adapter);
 
+    if (xgram) {
+      xgramLayout(context, contentView, recyclerView, countryWrap); // before the countries load: setCountry fills the flag
+    }
     TGLegacyManager.instance().addEmojiListener(adapter);
     loadCountries();
+  }
+
+  // XGram M3E r6: the login column (XgramR6B8Login). A header (a 96dp hero, the headlineMedium title, the bodyMedium
+  // hint) folds away while the country list is open or the keyboard leaves no room; the country is an M3 filled
+  // dropdown field (flag leading, arrow trailing) over one segmented group of results; the calling code is a 96dp field
+  // with a "+" prefix, 8dp before the number; errors are the number field's supporting text, with a spring shake.
+
+  private final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+  private @Nullable android.widget.LinearLayout xgramColumn;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.Collapse xgramHeader, xgramHeroCollapse;
+  private @Nullable TextView xgramHeadline, xgramHint;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.LeadingFlag xgramFlag;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.DropdownArrow xgramArrow;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.Shake xgramShake;
+  private @Nullable com.fahadali.xgram.appearance.XgramR6B8Login.ConnectionWatch xgramConnection;
+  private int xgramBottomInset;
+  private boolean xgramErrorShown;
+
+  private @Nullable CharSequence xgramHintText () {
+    return mode == MODE_ADD_CONTACT ? null : Lang.getString(mode == MODE_CHANGE_NUMBER ? R.string.ChangePhoneHelp : R.string.login_SmsHint);
+  }
+
+  private void xgramLayout (Context context, FrameLayoutFix contentView, RecyclerView recyclerView, FrameLayoutFix countryWrap) {
+    contentView.removeView(recyclerView);
+    contentView.removeView(countryWrap);
+
+    android.widget.LinearLayout column = new android.widget.LinearLayout(context) {
+      @Override
+      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(com.fahadali.xgram.appearance.XgramR5People.capWidthSpec(widthMeasureSpec, com.fahadali.xgram.appearance.XgramR6B8Login.COLUMN_MAX_WIDTH), heightMeasureSpec);
+      }
+    };
+    column.setOrientation(android.widget.LinearLayout.VERTICAL);
+    xgramColumn = column;
+
+    // Header: hero, title, hint
+    android.widget.LinearLayout headerContent = new android.widget.LinearLayout(context);
+    headerContent.setOrientation(android.widget.LinearLayout.VERTICAL);
+    headerContent.setPadding(Screen.dp(16f), Screen.dp(24f), Screen.dp(16f), Screen.dp(16f));
+
+    xgramHeroCollapse = new com.fahadali.xgram.appearance.XgramR6B8Login.Collapse(context);
+    com.fahadali.xgram.appearance.XgramR5Security.HeroView hero = com.fahadali.xgram.appearance.XgramR6B8Login.newHero(context, mode == MODE_ADD_CONTACT ? R.drawable.baseline_person_add_24 : R.drawable.baseline_phone_24);
+    addThemeInvalidateListener(hero);
+    android.widget.FrameLayout.LayoutParams heroParams = new android.widget.FrameLayout.LayoutParams(Screen.dp(com.fahadali.xgram.appearance.XgramR6B8Login.HERO_SIZE), Screen.dp(com.fahadali.xgram.appearance.XgramR6B8Login.HERO_SIZE), Gravity.TOP | (Lang.rtl() ? Gravity.RIGHT : Gravity.LEFT));
+    heroParams.bottomMargin = Screen.dp(24f);
+    xgramHeroCollapse.addView(hero, heroParams);
+    headerContent.addView(xgramHeroCollapse, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    xgramHeadline = com.fahadali.xgram.appearance.XgramR6B8Login.newHeadline(context);
+    xgramHeadline.setText(getName());
+    addThemeInvalidateListener(xgramHeadline);
+    headerContent.addView(xgramHeadline, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    CharSequence hint = xgramHintText();
+    if (hint != null) {
+      xgramHint = com.fahadali.xgram.appearance.XgramR6B8Login.newSupporting(context);
+      xgramHint.setText(hint);
+      addThemeInvalidateListener(xgramHint);
+      android.widget.LinearLayout.LayoutParams hintParams = new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+      hintParams.topMargin = Screen.dp(8f);
+      headerContent.addView(xgramHint, hintParams);
+    }
+
+    xgramHeader = new com.fahadali.xgram.appearance.XgramR6B8Login.Collapse(context);
+    xgramHeader.addView(headerContent, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+    // The small app bar title takes over as the header folds away
+    xgramHeader.setListener(expanded -> HeaderView.xgramSetTitleAlpha(this, 1f - expanded));
+    column.addView(xgramHeader, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    // The country: a filled dropdown field, the flag leading and the arrow trailing
+    countryWrap.setPadding(Screen.dp(16f), Screen.dp(8f), Screen.dp(16f), 0);
+    xgramFlag = new com.fahadali.xgram.appearance.XgramR6B8Login.LeadingFlag(context);
+    countryView.xgramSetLeading(xgramFlag);
+    xgramArrow = new com.fahadali.xgram.appearance.XgramR6B8Login.DropdownArrow(context);
+    countryView.xgramSetTrailing(xgramArrow);
+    column.addView(countryWrap, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    column.addView(recyclerView, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+    contentView.addView(column, 0, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP));
+
+    // The header folds away when the keyboard leaves no room for the fields under it
+    column.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      if (bottom - top != oldBottom - oldTop) {
+        v.post(() -> xgramUpdateHeaderRoom(oldBottom - oldTop > 0));
+      }
+    });
+
+    if (mode == MODE_LOGIN) {
+      xgramConnection = com.fahadali.xgram.appearance.XgramR6B8Login.ConnectionWatch.attach(this, contentView, column);
+    }
+  }
+
+  /** The header shows while the page has room for it above the fields (the keyboard takes the rest), never in country mode. */
+  private void xgramUpdateHeaderRoom (boolean animated) {
+    if (xgramColumn == null || xgramHeader == null) {
+      return;
+    }
+    final int height = xgramColumn.getHeight();
+    if (height <= 0) {
+      return;
+    }
+    final int available = height - xgramBottomInset;
+    xgramHeader.setExpanded(!inCountryMode && available >= Screen.dp(280f), animated);
+    if (xgramHeroCollapse != null) {
+      xgramHeroCollapse.setExpanded(available >= Screen.dp(480f), animated);
+    }
+  }
+
+  /** The number row: a 96dp calling code field with a "+" prefix, the number 8dp after it, both filled fields. */
+  private void xgramStyleNumberRow (FrameLayoutFix numberWrap) {
+    numberWrap.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    numberWrap.setPadding(Screen.dp(16f), Screen.dp(8f), Screen.dp(16f), Screen.dp(8f));
+    View plusView = numberWrap.getChildAt(0);
+    if (plusView != null) {
+      plusView.setVisibility(View.GONE); // the code field's prefix instead; the view stays, setCustom counts children
+    }
+    codeView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(96f), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP));
+    codeView.setHint(R.string.login_Code);
+    codeView.xgramSetPrefix("+");
+    FrameLayoutFix.LayoutParams numberParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP);
+    numberParams.leftMargin = Screen.dp(96f + 8f);
+    numberView.setLayoutParams(numberParams);
+    xgramShake = new com.fahadali.xgram.appearance.XgramR6B8Login.Shake(numberView);
+  }
+
+  /** An error as the number field's supporting text (with the shake), or none. */
+  private void xgramShowError (@Nullable CharSequence error) {
+    final boolean isError = !StringUtils.isEmpty(error);
+    if (!isError && !xgramErrorShown) {
+      return;
+    }
+    xgramErrorShown = isError;
+    numberView.xgramSetSupportingText(isError ? error : null, isError);
+    if (isError && xgramShake != null) {
+      xgramShake.play(numberView);
+    }
+  }
+
+  /** The first country of the results (the list starts with the group's top in Expressive design), or null. */
+  @Nullable
+  private ListItem xgramFirstResult () {
+    if (!xgram || currentResults == null) {
+      return null;
+    }
+    for (ListItem item : currentResults) {
+      if (item.getId() == R.id.result && item.getData() instanceof TdApi.CountryInfo) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  /** The results as one segmented group of two-line rows (flag and name, "+code" under it), or one "not found" line. */
+  private static void xgramGroupResults (ArrayList<ListItem> results) {
+    if (results.isEmpty()) {
+      results.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.RegionNotFound));
+      return;
+    }
+    ArrayList<ListItem> rows = new ArrayList<>(results.size() + 2);
+    rows.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    for (ListItem result : results) {
+      rows.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.result, 0, result.getString(), false)
+        .setData(result.getData())
+        .setStringValue(result.getStringValue()));
+    }
+    rows.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    results.clear();
+    results.addAll(rows);
+  }
+
+  @Override
+  protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
+    super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
+    if (xgramBottomInset != extraBottomInset) {
+      xgramBottomInset = extraBottomInset;
+      xgramUpdateHeaderRoom(true);
+    }
   }
 
   private int countryRes;
@@ -635,6 +851,12 @@ public class PhoneController extends EditBaseController<Void> implements Setting
       }
     } else {
       displayText = "";
+    }
+    if (xgramFlag != null) {
+      // XGram M3E r6: the flag leads the field, the text is the name alone
+      String flag = country != null ? Emoji.getEmojiFlagFromCountry(country.countryCode) : null;
+      xgramFlag.setFlag(!StringUtils.isEmpty(flag) ? Emoji.instance().replaceEmoji(flag) : null);
+      displayText = country != null ? country.name : "";
     }
 
     countryView.setText(displayText, isFocused());
@@ -1011,6 +1233,9 @@ public class PhoneController extends EditBaseController<Void> implements Setting
         }
       }
 
+      if (xgram) {
+        xgramGroupResults(results); // XGram M3E r6
+      }
       if (results.isEmpty()) {
         results.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.RegionNotFound));
       }
@@ -1028,6 +1253,10 @@ public class PhoneController extends EditBaseController<Void> implements Setting
   private void setInCountryMode (final boolean inCountryMode) {
     if (this.inCountryMode != inCountryMode) {
       this.inCountryMode = inCountryMode;
+      if (xgramArrow != null) { // XGram M3E r6: the header folds away over the open list, the arrow points up
+        xgramArrow.setExpanded(inCountryMode, true);
+        xgramUpdateHeaderRoom(true);
+      }
       countryView.getEditText().setNextFocusDownId(inCountryMode ? View.NO_ID : R.id.login_code);
       if (inCountryMode) {
         updateDoneState();
@@ -1065,6 +1294,12 @@ public class PhoneController extends EditBaseController<Void> implements Setting
   }
 
   private void showError (@Nullable CharSequence res) {
+    if (xgram) {
+      if (numberView != null) {
+        xgramShowError(res); // XGram M3E r6
+      }
+      return;
+    }
     updateHint(res != null, res != null ? res : mode == MODE_ADD_CONTACT ? null : Lang.getString(mode == MODE_CHANGE_NUMBER ? R.string.ChangePhoneHelp : R.string.login_SmsHint), res != null);
   }
 
@@ -1072,6 +1307,9 @@ public class PhoneController extends EditBaseController<Void> implements Setting
 
   @Override
   protected boolean onDoneClick () {
+    if (xgramConnection != null && xgramConnection.blockWhileOffline(getDoneButton())) {
+      return true; // XGram M3E r6: no network, the FAB explains itself
+    }
     return makeRequest();
   }
 
@@ -1193,7 +1431,9 @@ public class PhoneController extends EditBaseController<Void> implements Setting
                   if (userIds[0] == 0) {
                     suggestInvitingUser(userIds[0], contacts.importerCount[0]);
                   } else {
-                    UI.showToast(R.string.ContactAdded, Toast.LENGTH_SHORT);
+                    if (!com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.ContactAdded), Toast.LENGTH_SHORT)) { // XGram M3E r6: a snackbar
+                      UI.showToast(R.string.ContactAdded, Toast.LENGTH_SHORT);
+                    }
                     if (StringUtils.isEmpty(initialPhoneNumber)) {
                       tdlib.ui().openPrivateChat(PhoneController.this, userIds[0], null);
                     } else {
@@ -1446,6 +1686,10 @@ public class PhoneController extends EditBaseController<Void> implements Setting
   public void destroy () {
     super.destroy();
     TGLegacyManager.instance().removeEmojiListener(adapter);
+    if (xgramConnection != null) { // XGram M3E r6
+      xgramConnection.destroy();
+      xgramConnection = null;
+    }
   }
 
   @Override

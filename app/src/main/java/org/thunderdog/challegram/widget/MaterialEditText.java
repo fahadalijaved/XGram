@@ -115,6 +115,7 @@ public class MaterialEditText extends CustomEmojiEditText implements FactorAnima
   private void animateActiveFactor (float toFactor) {
     if (activeAnimator == null) {
       activeAnimator = new FactorAnimator(ACTIVE_ANIMATOR, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 120l, factor);
+      com.fahadali.xgram.appearance.XgramAppMotion.use(activeAnimator, XgramExpressive.EFFECTS_FAST, true); // XGram M3E r6
     } else {
       activeAnimator.forceFactor(factor);
     }
@@ -182,7 +183,7 @@ public class MaterialEditText extends CustomEmojiEditText implements FactorAnima
       final int scrollLeft = getScrollX();
       int color = ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT), XgramExpressive.color(XgramExpressive.PRIMARY), factor);
       if (goodFactor != 0f)
-        color = ColorUtils.fromToArgb(color, Theme.getColor(ColorId.inputPositive), goodFactor);
+        color = ColorUtils.fromToArgb(color, XgramExpressive.color(XgramExpressive.PRIMARY), goodFactor); // XGram M3E r6: a good state is primary (a role, never inputPositive)
       if (errorFactor != 0f)
         color = ColorUtils.fromToArgb(color, XgramExpressive.color(XgramExpressive.ERROR), errorFactor);
       c.drawRect(scrollLeft, height - size, width + scrollLeft, height, Paints.fillingPaint(color));
