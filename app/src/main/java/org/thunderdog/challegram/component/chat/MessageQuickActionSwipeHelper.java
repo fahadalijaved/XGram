@@ -12,7 +12,6 @@ public class MessageQuickActionSwipeHelper {
   public static final float SWIPE_VERTICAL_LOCK_WIDTH = Screen.px(Screen.smallestSide() * 0.75f);
 
   private final TGMessage message;
-  private final boolean useBubbles;
 
   private float currentDx;
   private float currentDy;
@@ -28,7 +27,14 @@ public class MessageQuickActionSwipeHelper {
 
   public MessageQuickActionSwipeHelper (TGMessage message) {
     this.message = message;
-    this.useBubbles = message.useBubbles();
+  }
+
+  /**
+   * XGram: asked now, not kept from when the message was made: the chat style (Bubbles or Modern) can change while
+   * the message lives on, and its swipe then locked and unlocked as in the old style.
+   */
+  private boolean useBubbles () {
+    return message.useBubbles();
   }
 
   public void translate (float dx, float dy, boolean bySwipe) {
@@ -41,7 +47,7 @@ public class MessageQuickActionSwipeHelper {
     actualDy = clampActualDy(isLeft, actualDy);
 
     if (dx != 0f) {
-      lockedBecauseNotReadyInBubbleMode &= useBubbles && Math.abs(actualDx) < Screen.dp(SWIPE_BUBBLE_MOVE_MAX);
+      lockedBecauseNotReadyInBubbleMode &= useBubbles() && Math.abs(actualDx) < Screen.dp(SWIPE_BUBBLE_MOVE_MAX);
       lockedBecauseSmallDy &= Math.abs(currentDy) < Screen.dp(SWIPE_VERTICAL_HEIGHT) / 2f;
       moveFactor = Math.min(1f, Math.abs(dx) / Screen.dp(SWIPE_THRESHOLD_WIDTH));
     } else {
@@ -67,7 +73,7 @@ public class MessageQuickActionSwipeHelper {
     actualDx = 0f;
     actualDy = 0f;
     lockedBecauseSmallDy = true;
-    lockedBecauseNotReadyInBubbleMode = useBubbles;
+    lockedBecauseNotReadyInBubbleMode = useBubbles();
     lockedBecauseSwipeStarted = false;
     moveFactor = 0f;
     quickActionNumber = 0;
@@ -99,7 +105,7 @@ public class MessageQuickActionSwipeHelper {
   }
 
   private boolean isLockedVerticalSwipe () {
-    boolean lockedBecauseReadyInFlatMode = !useBubbles && Math.abs(actualDx) > Screen.dp(SWIPE_VERTICAL_LOCK_WIDTH);
+    boolean lockedBecauseReadyInFlatMode = !useBubbles() && Math.abs(actualDx) > Screen.dp(SWIPE_VERTICAL_LOCK_WIDTH);
     return lockedBecauseNotReadyInBubbleMode || lockedBecauseReadyInFlatMode || lockedBecauseSmallDy || lockedBecauseSwipeStarted;
   }
 }

@@ -667,6 +667,58 @@ public class CustomTouchHelper extends RecyclerView.ItemDecoration
     select(null, ACTION_STATE_IDLE);
   }
 
+  /**
+   * XGram: the list left the window (a screen opened over the chat, the activity recreated for a theme or Expressive
+   * design, the panes rebuilt) with a swipe still going: no finger up and no frame will end it. Its items go back
+   * in place (Callback#xgramOnGestureDropped) and nothing of it is kept for the next touch. Before, the swipe kept
+   * its selected holder, its recover animation and its pending cleanup (a finished swipe waits in postDispatchSwipe,
+   * which gave up for good on a detached list), so the message stayed half swiped and its swipe state stale.
+   */
+  public void xgramDropGesture () {
+    if (mRecyclerView == null) {
+      return;
+    }
+    mRecyclerView.removeCallbacks(mScrollRunnable);
+    mActivePointerId = ACTIVE_POINTER_ID_NONE;
+    releaseVelocityTracker();
+    final ViewHolder selected = mSelected;
+    mSelected = null;
+    mActionState = ACTION_STATE_IDLE;
+    mDx = mDy = 0f;
+    if (selected != null) {
+      endRecoverAnimation(selected, true);
+      removeChildDrawingOrderCallbackIfNecessary(selected.itemView);
+      mCallback.clearView(mRecyclerView, selected);
+      mCallback.xgramOnGestureDropped(mRecyclerView, selected);
+    }
+    final int recoverAnimSize = mRecoverAnimations.size();
+    if (recoverAnimSize > 0) {
+      final List<RecoverAnimation> animations = new ArrayList<>(mRecoverAnimations);
+      mRecoverAnimations.clear();
+      for (int i = recoverAnimSize - 1; i >= 0; i--) {
+        final RecoverAnimation anim = animations.get(i);
+        anim.mOverridden = true; // its end, and a swipe waiting in postDispatchSwipe, do nothing now
+        if (!anim.mEnded) {
+          anim.cancel();
+          if (!anim.mEnded) {
+            // never started: give the holder back to the pool as the animation's end would have
+            anim.mEnded = true;
+            anim.mViewHolder.setIsRecyclable(true);
+          }
+        }
+        removeChildDrawingOrderCallbackIfNecessary(anim.mViewHolder.itemView);
+        mCallback.clearView(mRecyclerView, anim.mViewHolder);
+        mCallback.xgramOnGestureDropped(mRecyclerView, anim.mViewHolder);
+      }
+    }
+    mPendingCleanup.clear();
+    mOverdrawChild = null;
+    mOverdrawChildPosition = -1;
+    if (selected != null) {
+      mCallback.onSelectedChanged(null, ACTION_STATE_IDLE);
+    }
+  }
+
   private void postDispatchSwipe(final RecoverAnimation anim, final int swipeDir) {
     // wait until animations are complete.
     mRecyclerView.post(new Runnable() {
@@ -1947,6 +1999,14 @@ public class CustomTouchHelper extends RecyclerView.ItemDecoration
      */
     public void clearView(RecyclerView recyclerView, ViewHolder viewHolder) {
       // sUICallback.clearView(viewHolder.itemView);
+    }
+
+    /**
+     * XGram: a gesture on {@code viewHolder} was dropped before it could end (the list left the window, see
+     * {@link CustomTouchHelper#xgramDropGesture}). Put the item back as the end of the gesture would have;
+     * {@link #clearView} came first. No {@link #onSwiped}: the action of a swipe cut off like this does not run.
+     */
+    public void xgramOnGestureDropped (RecyclerView recyclerView, ViewHolder viewHolder) {
     }
 
     /**
