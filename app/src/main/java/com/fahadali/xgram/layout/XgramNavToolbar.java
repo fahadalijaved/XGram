@@ -49,6 +49,7 @@ import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramIconCrossfade;
 import com.fahadali.xgram.appearance.XgramIconPack;
 import com.fahadali.xgram.appearance.XgramNavMotion;
+import com.fahadali.xgram.appearance.XgramSnackbar;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
@@ -803,6 +804,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   }
 
   private void detachHost () {
+    XgramSnackbar.setBottomObstruction(host, 0); // XGram
     ViewParent parent = host.getParent();
     if (parent instanceof ViewGroup) {
       ((ViewGroup) parent).removeView(host);
@@ -1218,6 +1220,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     int visibility = visible ? View.VISIBLE : View.INVISIBLE;
     if (host.getVisibility() != visibility) {
       host.setVisibility(visibility);
+    }
+    if (!preview) {
+      // XGram: snackbars (the M3E toast) float above the toolbar while it is on a tab screen and not sliding away: at
+      // its band top, as the chat list's own snackbars; not over a sheet above it
+      boolean obstructs = visible && !destroyed && !away && hideSpring.getTarget() < 1f;
+      XgramSnackbar.setBottomObstruction(host, obstructs ? listRoom() : 0, true);
     }
   }
 

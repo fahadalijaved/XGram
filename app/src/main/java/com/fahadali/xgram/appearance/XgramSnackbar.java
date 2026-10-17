@@ -64,9 +64,19 @@ public final class XgramSnackbar extends TextView implements RootFrameLayout.Mar
 
   private static @Nullable WeakReference<XgramSnackbar> current;
 
-  // XGram: a view at the bottom of the window that snackbars float above while it is attached (the call screen's controls)
-  private static @Nullable WeakReference<View> obstructionOwner;
-  private static int obstructionPx;
+  // XGram: views at the bottom of the window that snackbars float above while they are attached and visible (the call
+  // screen's controls, the floating navigation toolbar); the highest one wins
+  private static final class Obstruction {
+    final WeakReference<View> owner;
+    int px;
+    boolean ownWindowOnly;
+
+    Obstruction (View owner) {
+      this.owner = new WeakReference<>(owner);
+    }
+  }
+
+  private static final java.util.ArrayList<Obstruction> obstructions = new java.util.ArrayList<>();
 
   /**
    * XGram: {@code owner} covers the bottom {@code px} of the window (above the bottom inset) while it is attached and
@@ -74,25 +84,53 @@ public final class XgramSnackbar extends TextView implements RootFrameLayout.Mar
    * clears it, from that owner only. Main thread.
    */
   public static void setBottomObstruction (View owner, int px) {
-    final View currentOwner = obstructionOwner != null ? obstructionOwner.get() : null;
-    if (px > 0) {
-      if (currentOwner != owner) {
-        obstructionOwner = new WeakReference<>(owner);
+    setBottomObstruction(owner, px, false);
+  }
+
+  /**
+   * {@link #setBottomObstruction(View, int)}; with {@code ownWindowOnly} it counts only for a snackbar in the owner's
+   * window, not for one over a popup above it (the navigation toolbar under a sheet). Main thread, no allocation for an
+   * owner already set (the toolbar reports on every frame of its slide).
+   */
+  public static void setBottomObstruction (View owner, int px, boolean ownWindowOnly) {
+    Obstruction found = null;
+    for (int i = obstructions.size() - 1; i >= 0; i--) {
+      final Obstruction o = obstructions.get(i);
+      final View v = o.owner.get();
+      if (v == null) {
+        obstructions.remove(i);
+      } else if (v == owner) {
+        found = o;
       }
-      obstructionPx = px;
-    } else if (currentOwner == owner || currentOwner == null) {
-      obstructionOwner = null;
-      obstructionPx = 0;
+    }
+    if (px > 0) {
+      if (found == null) {
+        found = new Obstruction(owner);
+        obstructions.add(found);
+      }
+      found.px = px;
+      found.ownWindowOnly = ownWindowOnly;
+    } else if (found != null) {
+      obstructions.remove(found);
     }
   }
 
-  /** How far above the bottom inset a snackbar must stay, or 0. */
-  private static int bottomObstruction () {
-    final View owner = obstructionOwner != null ? obstructionOwner.get() : null;
-    if (owner == null || owner.getWindowToken() == null || owner.getVisibility() != View.VISIBLE) {
-      return 0;
+  /** How far above the bottom inset a snackbar in {@code parent} must stay, or 0. */
+  private static int bottomObstruction (@Nullable View parent) {
+    final View parentRoot = parent != null ? parent.getRootView() : null;
+    int px = 0;
+    for (int i = 0; i < obstructions.size(); i++) {
+      final Obstruction o = obstructions.get(i);
+      final View owner = o.owner.get();
+      if (owner == null || owner.getWindowToken() == null || owner.getVisibility() != View.VISIBLE) {
+        continue;
+      }
+      if (o.ownWindowOnly && owner.getRootView() != parentRoot) {
+        continue;
+      }
+      px = Math.max(px, o.px);
     }
-    return obstructionPx;
+    return px;
   }
 
   private final XgramExpressive.Spring visibility;
@@ -275,7 +313,7 @@ public final class XgramSnackbar extends TextView implements RootFrameLayout.Mar
 
   private void updateBottomMargin (FrameLayout parent) {
     FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) getLayoutParams();
-    int bottom = bottomInsetIn(parent) + Math.max(Screen.dp(BOTTOM_GAP_DP), bottomObstruction());
+    int bottom = bottomInsetIn(parent) + Math.max(Screen.dp(BOTTOM_GAP_DP), bottomObstruction(parent));
     if (params.bottomMargin != bottom) {
       params.bottomMargin = bottom;
       setLayoutParams(params);
@@ -292,7 +330,7 @@ public final class XgramSnackbar extends TextView implements RootFrameLayout.Mar
     if (getParent() instanceof ViewGroup) {
       bottom = Math.max(bottom, bottomInsetIn((ViewGroup) getParent()));
     }
-    params.bottomMargin = Math.max(gap, bottomObstruction()) + bottom;
+    params.bottomMargin = Math.max(gap, bottomObstruction(getParent() instanceof View ? (View) getParent() : null)) + bottom;
   }
 
   @Override
