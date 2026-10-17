@@ -76,10 +76,25 @@ public final class XgramConnection implements GlobalConnectionListener, GlobalAc
   private final Runnable flashEndRunnable = () -> setDisplay(HIDDEN, displayText, true);
   private final Runnable dispatchRunnable = this::onRawChanged;
 
+  /**
+   * XGram M3E r6: the account this tracker follows, or null for the shared one that follows the current account. A
+   * login screen of an account being added is not on the current account, so it gets a tracker of its own
+   * ({@link #track}) with the same debounce.
+   */
+  private final @Nullable Tdlib fixed;
+  private boolean released;
+
   private XgramConnection () {
+    this(null);
+  }
+
+  private XgramConnection (@Nullable Tdlib fixed) {
+    this.fixed = fixed;
     TdlibManager.instance().global().addConnectionListener(this);
-    TdlibManager.instance().global().addAccountListener(this);
-    readRaw(TdlibManager.instance().current());
+    if (fixed == null) {
+      TdlibManager.instance().global().addAccountListener(this);
+    }
+    readRaw(target());
     if (raw != ConnectionState.CONNECTED) {
       long now = SystemClock.uptimeMillis();
       episodeStart = now;
@@ -88,6 +103,34 @@ public final class XgramConnection implements GlobalConnectionListener, GlobalAc
       scheduleEnter(now);
       scheduleStuck();
     }
+  }
+
+  @Nullable
+  private Tdlib target () {
+    return fixed != null ? fixed : TdlibManager.instance().current();
+  }
+
+  /**
+   * The shared tracker when {@code tdlib} is the current account; otherwise a tracker of {@code tdlib} alone. Call
+   * {@link #release} when done with it (a no-op on the shared one).
+   */
+  public static XgramConnection track (@NonNull Tdlib tdlib) {
+    if (tdlib == TdlibManager.instance().current()) {
+      return instance();
+    }
+    return new XgramConnection(tdlib);
+  }
+
+  /** Ends a tracker made by {@link #track} for another account; the shared tracker stays. */
+  public void release () {
+    if (fixed == null || released) {
+      return;
+    }
+    released = true;
+    listeners.clear();
+    cancelTimers();
+    UI.cancel(dispatchRunnable);
+    TdlibManager.instance().global().removeConnectionListener(this);
   }
 
   // Public API
@@ -131,20 +174,23 @@ public final class XgramConnection implements GlobalConnectionListener, GlobalAc
 
   @Override
   public void onConnectionStateChanged (Tdlib tdlib, int newState, boolean isCurrent) {
-    if (isCurrent) {
+    if (fixed != null ? tdlib == fixed : isCurrent) {
       dispatch();
     }
   }
 
   @Override
   public void onConnectionDisplayStatusChanged (Tdlib tdlib, boolean isCurrent) {
-    if (isCurrent) {
+    if (fixed != null ? tdlib == fixed : isCurrent) {
       dispatch();
     }
   }
 
   @Override
   public void onAccountSwitched (TdlibAccount newAccount, TdApi.User profile, int reason, TdlibAccount oldAccount) {
+    if (fixed != null) {
+      return; // a tracker of one account doesn't follow the current one
+    }
     if (Looper.myLooper() != Looper.getMainLooper()) {
       UI.post(this::resetForAccount);
     } else {
@@ -153,6 +199,9 @@ public final class XgramConnection implements GlobalConnectionListener, GlobalAc
   }
 
   private void dispatch () {
+    if (released) {
+      return;
+    }
     if (Looper.myLooper() != Looper.getMainLooper()) {
       UI.cancel(dispatchRunnable);
       UI.post(dispatchRunnable);
@@ -194,8 +243,11 @@ public final class XgramConnection implements GlobalConnectionListener, GlobalAc
   }
 
   private void onRawChanged () {
+    if (released) {
+      return;
+    }
     final int prevRaw = raw;
-    readRaw(TdlibManager.instance().current());
+    readRaw(target());
     final long now = SystemClock.uptimeMillis();
     if (raw == ConnectionState.CONNECTED) {
       UI.cancel(enterRunnable);
