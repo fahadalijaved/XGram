@@ -177,6 +177,9 @@ public class ChatFolderIconSelector {
     popupLayout.setDismissListener(popup -> delegate.onDismiss());
     popupLayout.setHideKeyboard();
     popupLayout.setNeedRootInsets();
+    if (xgram) {
+      popupLayout.xgramSetSheetDrag(true); // XGram M3E: the shared sheet drag (XgramSheetDrag), the scrim following it
+    }
     popupLayout.showSimplePopupView(popupView, popupHeight);
   }
 
@@ -297,21 +300,16 @@ public class ChatFolderIconSelector {
   }
 
   /**
-   * The frame PopupLayout slides in and out; the sheet in it is at most 640dp wide, centred, and follows a drag that
-   * starts on its handle or title: far or fast enough down it closes, otherwise it springs back.
+   * The frame PopupLayout slides in and out; the sheet in it is at most 640dp wide and centred. Its drag is the shared
+   * sheet drag of PopupLayout (XgramSheetDrag, turned on in show()): the frame moves with the scrim fading, far or fast
+   * enough down it closes, otherwise it springs back.
    */
-  private final class XgramSheetFrame extends FrameLayoutFix {
+  private static final class XgramSheetFrame extends FrameLayoutFix {
     private final View sheet;
-    private final int touchSlop;
-    private float startY;
-    private boolean tracking, dragging;
-    private @Nullable android.view.VelocityTracker velocityTracker;
-    private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring settle;
 
     XgramSheetFrame (Context context, View sheet) {
       super(context);
       this.sheet = sheet;
-      this.touchSlop = android.view.ViewConfiguration.get(context).getScaledTouchSlop();
     }
 
     @Override
@@ -327,78 +325,11 @@ public class ChatFolderIconSelector {
     }
 
     @Override
-    public boolean onInterceptTouchEvent (android.view.MotionEvent e) {
-      switch (e.getActionMasked()) {
-        case android.view.MotionEvent.ACTION_DOWN: {
-          startY = e.getY();
-          tracking = e.getY() - sheet.getTop() - sheet.getTranslationY() <= Screen.dp(XGRAM_TITLE_AREA);
-          dragging = false;
-          break;
-        }
-        case android.view.MotionEvent.ACTION_MOVE: {
-          if (tracking && !dragging && e.getY() - startY > touchSlop) {
-            dragging = true;
-            startY = e.getY();
-            return true;
-          }
-          break;
-        }
-      }
-      return false;
-    }
-
-    @Override
     public boolean onTouchEvent (android.view.MotionEvent e) {
-      final int action = e.getActionMasked();
-      if (!dragging) {
-        // a touch that started on the title (nothing under it took it) comes here directly
-        if (!tracking) {
-          return false;
-        }
-        if (action == android.view.MotionEvent.ACTION_MOVE && e.getY() - startY > touchSlop) {
-          dragging = true;
-          startY = e.getY();
-        } else {
-          if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
-            tracking = false;
-          }
-          return true;
-        }
-      }
-      if (velocityTracker == null) {
-        velocityTracker = android.view.VelocityTracker.obtain();
-      }
-      velocityTracker.addMovement(e);
-      switch (e.getActionMasked()) {
-        case android.view.MotionEvent.ACTION_MOVE: {
-          if (settle != null) {
-            settle.cancel();
-          }
-          sheet.setTranslationY(Math.max(0f, e.getY() - startY));
-          return true;
-        }
-        case android.view.MotionEvent.ACTION_UP:
-        case android.view.MotionEvent.ACTION_CANCEL: {
-          velocityTracker.computeCurrentVelocity(1000);
-          final float velocity = velocityTracker.getYVelocity();
-          velocityTracker.recycle();
-          velocityTracker = null;
-          dragging = tracking = false;
-          final float dy = sheet.getTranslationY();
-          if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP && (dy > sheet.getHeight() / 4f || velocity > Screen.dp(800f))) {
-            hide(true);
-          } else if (dy != 0f) {
-            if (settle == null) {
-              settle = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, dy, (s, value) -> sheet.setTranslationY(Math.max(0f, value))).setThreshold(.5f);
-            } else {
-              settle.setValue(dy);
-            }
-            settle.animateTo(0f);
-          }
-          return true;
-        }
-      }
-      return true;
+      // a touch on the sheet nothing in it took (its title) stays on the sheet: it neither closes it nor reaches the
+      // scrim, and still drags it (PopupLayout intercepts the drag)
+      final boolean onSheet = e.getY() >= sheet.getTop() + sheet.getTranslationY() && e.getX() >= sheet.getLeft() && e.getX() < sheet.getRight();
+      return onSheet || super.onTouchEvent(e);
     }
   }
 

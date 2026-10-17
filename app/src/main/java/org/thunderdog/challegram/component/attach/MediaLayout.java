@@ -822,8 +822,8 @@ public class MediaLayout extends FrameLayoutFix implements
 
   @Override
   public boolean onBottomPrepareSectionChange (int fromIndex, int toIndex, boolean ignorePermissionsRequest) {
-    if (counterFactor != 0f || (counterAnimator != null && counterAnimator.isAnimating()) || getCurrentController().isAnimating()) {
-      return false;
+    if (counterFactor != 0f || (counterAnimator != null && counterAnimator.isAnimating()) || getCurrentController().isAnimating() || getCurrentController().xgramIsSettling()) {
+      return false; // XGram: nor while the sheet height still settles after a drag
     }
 
     switch (toIndex) {
@@ -908,9 +908,22 @@ public class MediaLayout extends FrameLayoutFix implements
   // XGram: Material 3 Expressive tab switch. MediaBottomBar drives it with one spring (standard spatial default) that
   // also moves its indicator. The incoming page is added in place (translation 0, alpha 0) and laid out before its first
   // frame. One sheet, drawn here under both pages, goes from the outgoing page's height to the incoming one's; the
-  // outgoing page fades out by .35 (shared axis fade through), the incoming one fades in after it and grows from .92
-  // about the sheet top. The outgoing page pauses once it is invisible; the location map resumes only after the fade
-  // passes .35. Reduce motion: a 150ms crossfade at the incoming height. Expressive design off keeps Telegram X's slide.
+  // outgoing page fades out by .6 of the spring's travel, the incoming one fades in from .25 and grows from .92 about the
+  // sheet top. The fades overlap: a strict fade through (out by .35, in from .35) left the sheet empty for a frame or two,
+  // as the spring covers its first third within about three frames. The outgoing page pauses once it is invisible; the
+  // location map resumes as the incoming page starts to show. Reduce motion: a 150ms crossfade at the incoming height.
+  // Expressive design off keeps Telegram X's slide.
+
+  /** XGram: where (in the switch spring's travel) the outgoing page is gone and the incoming one starts to show. */
+  private static final float XGRAM_SWITCH_OUT_END = .6f, XGRAM_SWITCH_IN_START = .25f;
+
+  private static float xgramSwitchOutAlpha (float p) {
+    return 1f - com.fahadali.xgram.appearance.XgramMotion.clamp01(p / XGRAM_SWITCH_OUT_END);
+  }
+
+  private static float xgramSwitchInAlpha (float p) {
+    return com.fahadali.xgram.appearance.XgramMotion.clamp01((p - XGRAM_SWITCH_IN_START) / (1f - XGRAM_SWITCH_IN_START));
+  }
 
   private boolean xgramSwitching, xgramSwitchReduce, xgramFromPausedEarly, xgramResumePending;
   private @Nullable MediaBottomBaseController<?> xgramSwitchTo;
@@ -975,8 +988,8 @@ public class MediaLayout extends FrameLayoutFix implements
     final int height = xgramSwitchReduce ? targetHeight : Math.round(fromHeight + (targetHeight - fromHeight) * factor);
     from.xgramSetTransitionHeight(height);
     to.xgramSetTransitionHeight(height);
-    final float outAlpha = xgramSwitchReduce ? 1f - p : com.fahadali.xgram.appearance.XgramNavMotion.outAlpha(p);
-    final float inAlpha = xgramSwitchReduce ? p : com.fahadali.xgram.appearance.XgramNavMotion.inAlpha(p);
+    final float outAlpha = xgramSwitchReduce ? 1f - p : xgramSwitchOutAlpha(p);
+    final float inAlpha = xgramSwitchReduce ? p : xgramSwitchInAlpha(p);
     fromView.setAlpha(outAlpha);
     toView.setAlpha(inAlpha);
     final float scale = xgramSwitchReduce ? 1f : .92f + .08f * factor;
@@ -988,7 +1001,7 @@ public class MediaLayout extends FrameLayoutFix implements
       xgramFromPausedEarly = true;
       from.onActivityPause(); // the gallery camera, the map: nothing renders unseen
     }
-    if (xgramResumePending && p >= com.fahadali.xgram.appearance.XgramNavMotion.FADE_THRESHOLD) {
+    if (xgramResumePending && p >= XGRAM_SWITCH_IN_START) {
       xgramResumePending = false;
       to.onActivityResume();
     }
@@ -1083,6 +1096,134 @@ public class MediaLayout extends FrameLayoutFix implements
       invalidateOutline();
     }
     onCurrentColorChanged();
+  }
+
+  // XGram M3E: the navigation bar is part of the sheet, so a vertical drag on it drags the sheet (up to full height,
+  // down to close) like one on the handle band or the list: MediaLayout takes the drag from the bar once it moves past
+  // the slop vertically and hands it to the page (MediaContentView#xgramStartMove); sideways the bar keeps it (its
+  // fling switches tabs). At full height the top app bar that replaces the handle does the same (the list at its top).
+  // While items are selected the bar is the selection bar and keeps every touch (the send button's menu is a press and
+  // drag).
+
+  private final com.fahadali.xgram.appearance.XgramSheetDrag.Tracker xgramBarTracker = new com.fahadali.xgram.appearance.XgramSheetDrag.Tracker();
+  private boolean xgramBarTracking, xgramBarDragging;
+  private @Nullable MediaContentView xgramBarDragView;
+  private float xgramBarOffsetX, xgramBarOffsetY;
+
+  @Override
+  public boolean onInterceptTouchEvent (MotionEvent e) {
+    if (xgramInterceptBarDrag(e)) {
+      return true;
+    }
+    return super.onInterceptTouchEvent(e);
+  }
+
+  @Override
+  public boolean onTouchEvent (MotionEvent e) {
+    if (xgramBarDragging) {
+      xgramOnBarDrag(e);
+      return true;
+    }
+    return super.onTouchEvent(e);
+  }
+
+  private boolean xgramInterceptBarDrag (MotionEvent e) {
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_DOWN: {
+        xgramBarDragging = false;
+        xgramBarDragView = null;
+        xgramBarTracking = false;
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !hidden && counterFactor == 0f) {
+          final MediaBottomBar bar = bottomBar;
+          final boolean onBar = bar != null && bar.getParent() == this && mode == MODE_DEFAULT && bottomBarFactor == 1f &&
+            e.getY() >= bar.getTop() + bar.getTranslationY() && e.getX() >= bar.getLeft() && e.getX() < bar.getRight();
+          // at full height the sheet's top app bar drags it down too, while the list is at its top (not in search)
+          final HeaderView header = headerView;
+          final MediaBottomBaseController<?> c = getCurrentController();
+          final boolean onHeader = !onBar && header != null && header.getParent() == this && headerFactor == 1f && c != null && !c.inSearchMode() &&
+            e.getY() >= header.getTop() + header.getTranslationY() && e.getY() < header.getBottom() + header.getTranslationY() && c.getRecyclerScrollY() == 0;
+          xgramBarTracking = onBar || onHeader;
+        }
+        if (xgramBarTracking) {
+          xgramBarTracker.down(e);
+        }
+        return false;
+      }
+      case MotionEvent.ACTION_MOVE: {
+        if (xgramBarDragging) {
+          return true;
+        }
+        if (!xgramBarTracking) {
+          return false;
+        }
+        xgramBarTracker.add(e);
+        final float dx = xgramBarTracker.dx(e), dy = xgramBarTracker.dy(e);
+        final int slop = xgramBarTracker.slop(getContext());
+        if (Math.abs(dy) > slop && Math.abs(dy) > Math.abs(dx)) {
+          xgramBarTracking = false;
+          final MediaBottomBaseController<?> c = getCurrentController();
+          final MediaContentView view = c != null ? c.contentView : null;
+          if (view != null && xgramFindOffset(view) && view.xgramStartMove(e.getY() + xgramBarOffsetY)) {
+            xgramBarDragView = view;
+            xgramBarDragging = true;
+            return true;
+          }
+        } else if (Math.abs(dx) > slop) {
+          xgramBarTracking = false; // a sideways gesture: the bar's own (a fling switches tabs)
+        }
+        return false;
+      }
+      case MotionEvent.ACTION_UP:
+      case MotionEvent.ACTION_CANCEL: {
+        xgramBarTracking = false;
+        if (!xgramBarDragging) {
+          xgramBarTracker.end();
+        }
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /** Sets the offset from this view's coordinates to {@code view}'s (a page's content view under it); false when it is not. */
+  private boolean xgramFindOffset (View view) {
+    float x = 0f, y = 0f;
+    View v = view;
+    while (v != this) {
+      x -= v.getLeft() + v.getTranslationX();
+      y -= v.getTop() + v.getTranslationY();
+      if (!(v.getParent() instanceof View)) {
+        return false;
+      }
+      final View parentView = (View) v.getParent();
+      x += parentView.getScrollX();
+      y += parentView.getScrollY();
+      v = parentView;
+    }
+    xgramBarOffsetX = x;
+    xgramBarOffsetY = y;
+    return true;
+  }
+
+  private void xgramOnBarDrag (MotionEvent e) {
+    final MediaContentView view = xgramBarDragView;
+    xgramBarTracker.add(e);
+    final int action = e.getActionMasked();
+    if (action == MotionEvent.ACTION_MOVE) {
+      if (view != null) {
+        e.offsetLocation(xgramBarOffsetX, xgramBarOffsetY);
+        view.xgramMove(e);
+        e.offsetLocation(-xgramBarOffsetX, -xgramBarOffsetY);
+      }
+    } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+      final float velocity = xgramBarTracker.velocityY();
+      xgramBarDragging = false;
+      xgramBarDragView = null;
+      xgramBarTracker.end();
+      if (view != null) {
+        view.xgramEndMove(velocity, action == MotionEvent.ACTION_UP);
+      }
+    }
   }
 
   @Override
@@ -1197,6 +1338,38 @@ public class MediaLayout extends FrameLayoutFix implements
     hide(false);
   }
 
+  // XGram M3E: the scrim follows the sheet dragged below its start height (MediaBottomBaseController#setCurrentHeight),
+  // and a sheet released downwards leaves with the finger's velocity (createCustomHideAnimator)
+
+  private float xgramDismissVelocity;
+
+  /** XGram M3E: how much of the popup's scrim shows while the sheet is dragged down (1 at its start height). */
+  public void xgramSetSheetScrim (float scale) {
+    if (popupLayout != null && !hidden) {
+      popupLayout.xgramSetScrimScale(scale);
+    }
+  }
+
+  /** XGram M3E: the finger's velocity (px/s, positive downwards) the next hide starts with. */
+  public void xgramSetDismissVelocity (float velocity) {
+    this.xgramDismissVelocity = velocity;
+  }
+
+  /** XGram M3E: puts the hide on the standard spatial fast spring starting at the release velocity (clamped to 0..1). */
+  private void xgramApplyDismissVelocity (ValueAnimator animator) {
+    final float velocity = xgramDismissVelocity;
+    xgramDismissVelocity = 0f;
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || velocity <= 0f || com.fahadali.xgram.appearance.XgramMotion.reduce() || currentController == null) {
+      return;
+    }
+    final float distance = Math.max(1, currentController.getCurrentHeight());
+    final float v0 = com.fahadali.xgram.appearance.XgramMotion.progressVelocity(velocity, distance, 1f);
+    com.fahadali.xgram.appearance.XgramMotion.applySpring(animator, com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, v0,
+      com.fahadali.xgram.appearance.XgramMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST));
+    final android.animation.TimeInterpolator spring = animator.getInterpolator();
+    animator.setInterpolator(f -> com.fahadali.xgram.appearance.XgramMotion.clamp01(spring.getInterpolation(f)));
+  }
+
   private int currentStartHeight;
 
   private void prepareRevealAnimation () {
@@ -1290,6 +1463,7 @@ public class MediaLayout extends FrameLayoutFix implements
     });
     animator.addListener(endListener);
     animator.setInterpolator(com.fahadali.xgram.appearance.XgramMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_FAST, AnimatorUtils.DECELERATE_INTERPOLATOR));
+    xgramApplyDismissVelocity(animator); // XGram M3E: a sheet flung or dragged away keeps its speed
     getCurrentController().onBottomBarAnimationStart(true);
     return animator;
   }
@@ -1373,6 +1547,8 @@ public class MediaLayout extends FrameLayoutFix implements
   public void performDestroy () {
     setContentVisible(true);
     isDestroyed = true;
+    xgramBarTracker.recycle(); // XGram M3E
+    xgramBarDragging = xgramBarTracking = false;
     onCurrentColorChanged();
     for (ViewController<?> controller : controllers) {
       if (controller != null) {

@@ -153,7 +153,7 @@ import tgx.td.Td;
 
 public class ShareController extends TelegramViewController<ShareController.Args> implements
   FactorAnimator.Target, Runnable, PopupLayout.PopupHeightProvider,
-  View.OnClickListener, Menu, PopupLayout.TouchSectionProvider,
+  View.OnClickListener, Menu, PopupLayout.TouchSectionProvider, com.fahadali.xgram.appearance.XgramSheetDrag.Sheet,
   EmojiLayout.Listener, BaseView.ActionListProvider, EmojiToneHelper.Delegate,
   ChatListListener, Filter<TdApi.Chat>, InputView.SelectionChangeListener {
   private static final int MODE_MESSAGES = 0;
@@ -2515,6 +2515,31 @@ public class ShareController extends TelegramViewController<ShareController.Args
   @Override
   public boolean shouldTouchOutside (float x, float y) {
     return headerView != null && y < headerView.getTranslationY() - HeaderView.getSize(true);
+  }
+
+  // XGram M3E: the sheet drag (XgramSheetDrag through PopupLayout). The chat grid grows the sheet to full height as it
+  // scrolls; a drag down with the grid at its top, or on the header, moves the whole sheet (the scrim with it), which
+  // closes past half its height or on a fling and springs back otherwise; upwards the header scrolls the grid.
+
+  @Override
+  public boolean xgramSheetContains (float x, float y) {
+    return headerView != null && y >= headerView.getTranslationY();
+  }
+
+  @Nullable
+  @Override
+  public RecyclerView xgramSheetList () {
+    return recyclerView;
+  }
+
+  @Override
+  public boolean xgramSheetOnList (float x, float y) {
+    return headerView != null && y >= headerView.getTranslationY() + HeaderView.getSize(false);
+  }
+
+  @Override
+  public boolean xgramSheetGrabsUp (float x, float y) {
+    return headerView != null && !inSearchMode() && y < headerView.getTranslationY() + HeaderView.getSize(false);
   }
 
   private PopupLayout popupLayout;

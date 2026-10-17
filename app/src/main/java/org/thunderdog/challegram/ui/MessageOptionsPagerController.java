@@ -1164,6 +1164,24 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     return headerView != null && y < getPickerTop() - HeaderView.getSize(true);
   }
 
+  @Nullable
+  @Override
+  public RecyclerView xgramSheetList () {
+    // XGram M3E: the sheet drag goes through the open reaction picker's grid, the page's list otherwise
+    if (reactionsPickerVisibility != null && reactionsPickerVisibility.getValue() && reactionsPickerRecyclerView != null) {
+      return reactionsPickerRecyclerView;
+    }
+    return super.xgramSheetList();
+  }
+
+  @Override
+  public boolean xgramSheetOnList (float x, float y) {
+    if (reactionsPickerVisibility != null && reactionsPickerVisibility.getValue()) {
+      return y >= getPickerTop(); // XGram M3E: the open picker's grid fills the sheet under its top app bar
+    }
+    return super.xgramSheetOnList(x, y);
+  }
+
   @Override
   public boolean onBackgroundTouchDown (PopupLayout popupLayout, MotionEvent e) {
     if (reactionsPickerVisibility != null && reactionsPickerVisibility.getValue()) {

@@ -593,6 +593,11 @@ public class StickersListController extends ViewController<StickersListControlle
     recyclerView.smoothScrollBy(0, y);
   }
 
+  /** XGram M3E: the sticker grid, the list the sticker set sheet grows with (its sheet drag, XgramSheetDrag). */
+  public @Nullable RecyclerView xgramRecyclerView () {
+    return recyclerView;
+  }
+
   private static int calculateSpanCount (int width, int height, boolean isEmoji) {
     int minSide = Math.min(width, height);
     int minWidth = isEmoji ? Screen.dp(42) : (minSide / 4);

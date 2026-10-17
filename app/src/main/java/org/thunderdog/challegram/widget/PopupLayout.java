@@ -22,9 +22,7 @@ import android.graphics.Canvas;
 import android.os.Build;
 import android.view.Gravity;
 import android.view.MotionEvent;
-import android.view.VelocityTracker;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.WindowManager;
@@ -32,10 +30,15 @@ import android.widget.FrameLayout;
 import android.widget.PopupWindow;
 
 import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.NestedScrollingParent3;
+import androidx.core.view.ViewCompat;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramMotion;
+import com.fahadali.xgram.appearance.XgramSheetDrag;
 
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.Log;
@@ -69,7 +72,7 @@ import me.vkryl.core.BitwiseUtils;
 import me.vkryl.core.ColorUtils;
 import me.vkryl.core.lambda.Destroyable;
 
-public class PopupLayout extends RootFrameLayout implements FactorAnimator.Target, BaseActivity.ActivityListener, Keyboard.OnStateChangeListener, ActivityResultHandler, Destroyable {
+public class PopupLayout extends RootFrameLayout implements FactorAnimator.Target, BaseActivity.ActivityListener, Keyboard.OnStateChangeListener, ActivityResultHandler, Destroyable, NestedScrollingParent3 {
   public interface TouchSectionProvider {
     boolean shouldTouchOutside (float x, float y);
   }
@@ -484,6 +487,9 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
       return true;
     }
     if (XgramExpressive.isEnabled()) {
+      if (xgramDragTracking && xgramSheet() != null) {
+        return xgramOnSheetTouch(e); // XGram M3E: on the sheet, not on the scrim
+      }
       return xgramOnScrimTouch(e);
     }
     if (e.getAction() == MotionEvent.ACTION_DOWN) {
@@ -497,26 +503,50 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     return true;
   }
 
-  // XGram M3E round 6: the scrim closes the popup when the finger lifts (as a platform dialog's outside touch), and the
-  // bottom sheets (option, confirm, info and settings sheets) follow a vertical drag: from the handle band, the title,
-  // static rows, or a list that is at its top. Past a third of the sheet or on a fling (1000dp/s) it springs out with
-  // the scrim fading with it; otherwise it springs back (SPATIAL_DEFAULT). Reduce motion snaps. Nothing with Expressive
-  // design off, and nothing for a popup that disables cancelling on touch.
-
-  private static final float XGRAM_FLING_DP = 1000f, XGRAM_RUBBER_DP = 16f;
+  // XGram M3E: the scrim closes the popup when the finger lifts (as a platform dialog's outside touch), and the bottom
+  // sheets follow a vertical drag through XgramSheetDrag, the one sheet drag behaviour of the app (the attach sheet's
+  // height drag goes by the same rules): option, confirm, info, picker and settings sheets, and the sheets that say
+  // more about themselves through XgramSheetDrag.Sheet (the message menu with its reaction and viewer pages, the
+  // BottomSheetViewController sheets, share, sticker set and emoji pack sheets, the embed preview). A drag starts on the
+  // handle band, the title or static rows, or on a list once it is at its top; a drag that starts on a sheet's list
+  // while it is scrolled reaches the sheet when the list gets to its top (nested scrolling, touch only), and the sheet
+  // comes back up before the list scrolls again. On a sheet that grows with its list, a drag on its handle band or title
+  // scrolls that list first (the sheet grows and shrinks), then moves the sheet. The scrim fades as the sheet goes
+  // down. Released, the sheet closes (XgramSheetDrag.target: a fling down, or below half its height) on the standard
+  // spatial fast spring with the finger's velocity, or springs back (SPATIAL_DEFAULT). Reduce motion snaps. Nothing
+  // with Expressive design off, and nothing for a popup that disables cancelling on touch.
 
   private boolean xgramScrimPending;
   private int xgramSheetDrag = -1; // -1: by the kind of sheet, 0: off, 1: on
-  private boolean xgramDragTracking, xgramDragging, xgramDragDismiss;
-  private float xgramDownX, xgramDownY, xgramDragOriginY, xgramDragStartTranslation, xgramDragFling;
+  private final XgramSheetDrag.Tracker xgramTracker = new XgramSheetDrag.Tracker();
+  private boolean xgramGesture; // the touch started while the sheet could follow a drag
+  private int xgramDispatchAction = -1;
+  private boolean xgramDragTracking, xgramDragging, xgramDragDismiss, xgramDragUp;
+  private float xgramDragOriginY, xgramDragLastY, xgramDragStartTranslation, xgramDragFling;
   private @Nullable View xgramDownScroller;
-  private @Nullable VelocityTracker xgramVelocity;
+  private @Nullable RecyclerView xgramDragList;
   private @Nullable XgramMotion.Value xgramDragSpring;
-  private int xgramTouchSlop = -1;
+  private boolean xgramNested, xgramNestedMoving;
+  private final int[] xgramNestedConsumed = new int[2];
+  private float xgramScrimScale = 1f;
 
-  /** Turns drag to dismiss on or off for this popup's bottom sheet (by default: option and settings sheets only). */
+  /** Turns drag to dismiss on or off for this popup's bottom sheet (by default: the sheets it knows, see xgramCanDragSheet). */
   public void xgramSetSheetDrag (boolean enabled) {
     this.xgramSheetDrag = enabled ? 1 : 0;
+  }
+
+  /**
+   * XGram M3E: the share of the scrim that shows (1 by default) while a sheet moves away by other means than this
+   * popup's own slide: a sheet that hides by scrolling, the attach sheet's height. Multiplies the reveal factor.
+   */
+  public void xgramSetScrimScale (float scale) {
+    scale = XgramMotion.clamp01(scale);
+    if (this.xgramScrimScale != scale) {
+      this.xgramScrimScale = scale;
+      if (XgramExpressive.isEnabled()) {
+        backgroundView.setAlpha(XgramMotion.clamp01(factor) * scale);
+      }
+    }
   }
 
   /** Whether {@link #getBoundView()} is the settings choice sheet (ViewController.showSettings): a full-height frame holding the list. */
@@ -526,12 +556,30 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
       ((ViewGroup) boundView).getChildCount() > 0 && ((ViewGroup) boundView).getChildAt(0) instanceof androidx.recyclerview.widget.RecyclerView;
   }
 
+  /**
+   * The sheet when it tells more about itself: the bound controller, the height or touch provider (a
+   * BottomSheetViewController whose bound controller is its page) or the bound view.
+   */
+  @Nullable
+  private XgramSheetDrag.Sheet xgramSheet () {
+    if (boundController instanceof XgramSheetDrag.Sheet) {
+      return (XgramSheetDrag.Sheet) boundController;
+    }
+    if (popupHeightProvider instanceof XgramSheetDrag.Sheet) {
+      return (XgramSheetDrag.Sheet) popupHeightProvider;
+    }
+    if (touchSectionProvider instanceof XgramSheetDrag.Sheet) {
+      return (XgramSheetDrag.Sheet) touchSectionProvider;
+    }
+    return boundView instanceof XgramSheetDrag.Sheet ? (XgramSheetDrag.Sheet) boundView : null;
+  }
+
   private boolean xgramCanDragSheet () {
     if (!XgramExpressive.isEnabled() || animationType != ANIMATION_TYPE_SIMPLE || boundView == null || isHidden || isDismissed ||
       disableCancelOnTouchDown || !revealAnimationLaunched || xgramPendingReveal != null || xgramSheetDrag == 0) {
       return false;
     }
-    return xgramSheetDrag == 1 || boundView instanceof OptionsLayout || xgramIsSettingsSheet();
+    return xgramSheetDrag == 1 || boundView instanceof OptionsLayout || xgramIsSettingsSheet() || xgramSheet() != null;
   }
 
   /** The deepest view under ({@code x}, {@code y}) (in {@code view}'s coordinates) that can scroll vertically now, or null. */
@@ -558,22 +606,28 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     return view.canScrollVertically(1) || view.canScrollVertically(-1) ? view : null;
   }
 
-  private void xgramTrackVelocity (MotionEvent e, boolean reset) {
-    if (reset || xgramVelocity == null) {
-      if (xgramVelocity == null) {
-        xgramVelocity = VelocityTracker.obtain();
+  @Override
+  public boolean dispatchTouchEvent (MotionEvent e) {
+    // XGram M3E: the finger's velocity for every sheet release (the popup's own drag and a list's nested one)
+    final int action = e.getActionMasked();
+    if (action == MotionEvent.ACTION_DOWN) {
+      xgramGesture = xgramCanDragSheet();
+      if (xgramGesture) {
+        xgramTracker.down(e);
       } else {
-        xgramVelocity.clear();
+        xgramTracker.end();
       }
+    } else if (xgramGesture) {
+      xgramTracker.add(e);
     }
-    xgramVelocity.addMovement(e);
-  }
-
-  private void xgramRecycleVelocity () {
-    if (xgramVelocity != null) {
-      xgramVelocity.recycle();
-      xgramVelocity = null;
+    xgramDispatchAction = action;
+    final boolean result = super.dispatchTouchEvent(e);
+    xgramDispatchAction = -1;
+    if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+      xgramGesture = false;
+      xgramTracker.end();
     }
+    return result;
   }
 
   @Override
@@ -589,15 +643,23 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
       case MotionEvent.ACTION_DOWN: {
         xgramDragging = false;
         xgramDownScroller = null;
-        xgramDragTracking = xgramCanDragSheet();
+        xgramDragList = null;
+        xgramDragTracking = xgramGesture;
         if (xgramDragTracking) {
           final View sheet = boundView;
-          xgramDownX = e.getX();
-          xgramDownY = e.getY();
-          xgramDownScroller = xgramFindVerticalScroller(sheet, e.getX() - sheet.getLeft() - sheet.getTranslationX(), e.getY() - sheet.getTop() - sheet.getTranslationY());
-          xgramTrackVelocity(e, true);
-          if (xgramTouchSlop < 0) {
-            xgramTouchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+          final float x = e.getX() - sheet.getLeft() - sheet.getTranslationX(), y = e.getY() - sheet.getTop() - sheet.getTranslationY();
+          final XgramSheetDrag.Sheet provider = xgramSheet();
+          if (provider != null) {
+            if (!provider.xgramSheetContains(x, y)) {
+              xgramDragTracking = false; // the scrim above the sheet
+            } else {
+              xgramDragList = provider.xgramSheetList();
+              xgramDownScroller = xgramDragList != null && provider.xgramSheetOnList(x, y) && XgramSheetDrag.isUnder(xgramDragList, sheet, x, y) ? xgramDragList : null;
+              xgramDragUp = xgramDragList == null || provider.xgramSheetGrabsUp(x, y);
+            }
+          } else {
+            xgramDownScroller = xgramFindVerticalScroller(sheet, x, y);
+            xgramDragUp = true;
           }
         }
         return false;
@@ -606,36 +668,42 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
         if (xgramDragging) {
           return true;
         }
-        if (!xgramDragTracking) {
-          return false;
-        }
-        xgramTrackVelocity(e, false);
-        final float dx = e.getX() - xgramDownX, dy = e.getY() - xgramDownY;
-        if (Math.abs(dy) > xgramTouchSlop && Math.abs(dy) > Math.abs(dx)) {
-          final View scroller = xgramDownScroller;
-          final boolean atTop = scroller == null || !scroller.canScrollVertically(-1);
-          final boolean still = scroller == null || (!scroller.canScrollVertically(-1) && !scroller.canScrollVertically(1));
-          if ((dy > 0f && atTop) || (dy < 0f && still)) {
-            xgramStartDrag(e.getY());
-            return true;
-          }
-          xgramDragTracking = false; // the list scrolls this gesture
-          xgramRecycleVelocity();
-        } else if (Math.abs(dx) > xgramTouchSlop) {
-          xgramDragTracking = false; // a sideways gesture
-          xgramRecycleVelocity();
-        }
-        return false;
+        return xgramDragTracking && xgramCheckDragStart(e);
       }
       case MotionEvent.ACTION_UP:
       case MotionEvent.ACTION_CANCEL: {
         if (!xgramDragging) {
           xgramDragTracking = false;
           xgramDownScroller = null;
-          xgramRecycleVelocity();
         }
         return false;
       }
+    }
+    return false;
+  }
+
+  /** Starts the sheet drag once the finger moved past the slop in a direction the sheet follows from where it landed. */
+  private boolean xgramCheckDragStart (MotionEvent e) {
+    final float dx = xgramTracker.dx(e), dy = xgramTracker.dy(e);
+    final int slop = xgramTracker.slop(getContext());
+    if (Math.abs(dy) > slop && Math.abs(dy) > Math.abs(dx)) {
+      final View scroller = xgramDownScroller;
+      final boolean start;
+      if (scroller != null) {
+        // on a list: it scrolls, unless it is at its top and the drag goes down (or, on a sheet of a fixed height,
+        // it cannot scroll at all: the rubber band)
+        start = dy > 0f ? XgramSheetDrag.atTop(scroller) : xgramDragList == null && !scroller.canScrollVertically(-1) && !scroller.canScrollVertically(1);
+      } else {
+        // the handle band, the title or static rows: down always, up where the sheet grows from there
+        start = dy > 0f || xgramDragUp;
+      }
+      if (start) {
+        xgramStartDrag(e.getY());
+        return true;
+      }
+      xgramDragTracking = false; // the list scrolls this gesture
+    } else if (Math.abs(dx) > slop) {
+      xgramDragTracking = false; // a sideways gesture
     }
     return false;
   }
@@ -651,61 +719,116 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     xgramDragging = true;
     xgramDragTracking = false;
     xgramDownScroller = null;
-    if (xgramShowSpring != null) {
-      xgramShowSpring.setEndListener(null);
-      xgramShowSpring.cancel();
-      xgramShowSpring = null;
-    }
-    xgramStopDragSpring();
-    // the same height the hide animation will use (launchHideAnimation), so a release never makes the sheet jump
-    final View content = getContentChild();
-    final float translation = currentHeight * (1f - factor);
-    currentHeight = Math.max(1, popupHeightProvider != null ? popupHeightProvider.getCurrentPopupHeight() : content != null ? content.getMeasuredHeight() : 1);
-    setRevealFactor(1f - translation / currentHeight);
-    xgramDragStartTranslation = translation;
-    xgramDragOriginY = y;
+    xgramBeginSheetMove();
+    xgramDragStartTranslation = xgramSheetTranslation();
+    xgramDragOriginY = xgramDragLastY = y;
     final ViewParent parent = getParent();
     if (parent != null) {
       parent.requestDisallowInterceptTouchEvent(true);
     }
   }
 
+  /** Takes the sheet from its springs: it moves on from where it is now. */
+  private void xgramBeginSheetMove () {
+    if (xgramShowSpring != null) {
+      xgramShowSpring.setEndListener(null);
+      xgramShowSpring.cancel();
+      xgramShowSpring = null;
+    }
+    xgramStopDragSpring();
+    xgramRebaseHeight();
+  }
+
+  /**
+   * Measures the sheet as the hide animation will (launchHideAnimation) and keeps its translation, so neither a move
+   * nor a release makes it jump (the height of a sheet that grows with its list changes as the list scrolls).
+   */
+  private void xgramRebaseHeight () {
+    final View content = getContentChild();
+    final float translation = xgramSheetTranslation();
+    currentHeight = Math.max(1, popupHeightProvider != null ? popupHeightProvider.getCurrentPopupHeight() : content != null ? content.getMeasuredHeight() : 1);
+    setRevealFactor(1f - translation / currentHeight);
+  }
+
+  /** How far the sheet is below its place (px; negative in the rubber band above it). */
+  private float xgramSheetTranslation () {
+    return currentHeight * (1f - factor);
+  }
+
+  private void xgramSetSheetTranslation (float translation) {
+    setRevealFactor(1f - translation / Math.max(1, currentHeight));
+  }
+
   private void xgramOnDragEvent (MotionEvent e) {
     switch (e.getActionMasked()) {
       case MotionEvent.ACTION_MOVE: {
-        xgramTrackVelocity(e, false);
-        float translation = xgramDragStartTranslation + (e.getY() - xgramDragOriginY);
-        if (translation < 0f) {
-          // a rubber band upwards: at most 16dp (an option sheet paints 24dp below its bottom)
-          final float max = Screen.dp(XGRAM_RUBBER_DP), pull = -translation;
-          translation = -(max * pull / (pull + max));
+        final float y = e.getY();
+        final RecyclerView list = xgramDragList;
+        if (list == null) {
+          // a sheet of a fixed height follows the finger, with a rubber band upwards (an option sheet paints 24dp
+          // below its bottom)
+          float translation = xgramDragStartTranslation + (y - xgramDragOriginY);
+          if (translation < 0f) {
+            translation = -XgramSheetDrag.rubber(-translation);
+          }
+          xgramSetSheetTranslation(translation);
+        } else {
+          // a sheet that grows with its list: downwards the list goes back to its top first, upwards the sheet comes
+          // back up first; the rest moves the other one
+          final float delta = y - xgramDragLastY;
+          float translation = Math.max(0f, xgramSheetTranslation());
+          if (delta > 0f) {
+            if (translation <= 0f && list.canScrollVertically(-1)) {
+              list.scrollBy(0, -Math.round(delta));
+            } else {
+              translation += delta;
+            }
+          } else if (delta < 0f) {
+            final float back = Math.min(translation, -delta);
+            translation -= back;
+            final int rest = Math.round(-delta - back);
+            if (rest > 0 && translation <= 0f) {
+              list.scrollBy(0, rest);
+            }
+          }
+          xgramSetSheetTranslation(translation);
         }
-        setRevealFactor(1f - translation / currentHeight);
+        xgramDragLastY = y;
         break;
       }
       case MotionEvent.ACTION_UP:
       case MotionEvent.ACTION_CANCEL: {
-        xgramTrackVelocity(e, false);
-        float velocity = 0f;
-        if (xgramVelocity != null) {
-          xgramVelocity.computeCurrentVelocity(1000);
-          velocity = xgramVelocity.getYVelocity();
-        }
-        xgramRecycleVelocity();
         xgramDragging = false;
-        final float translation = currentHeight * (1f - factor);
-        final float fling = Screen.dp(XGRAM_FLING_DP);
-        final boolean dismiss = e.getActionMasked() == MotionEvent.ACTION_UP && !isHidden &&
-          (velocity > fling || (translation > currentHeight / 3f && velocity > -fling));
-        if (dismiss) {
-          xgramDragFling = -velocity / currentHeight;
-          xgramDragDismiss = true;
-          hideWindow(true);
+        final boolean commit = e.getActionMasked() == MotionEvent.ACTION_UP;
+        final float velocity = xgramTracker.velocityY();
+        final RecyclerView list = xgramDragList;
+        final XgramSheetDrag.Sheet provider = xgramSheet();
+        xgramDragList = null;
+        if (list != null && provider != null && factor >= 1f) {
+          // only the list moved: it flings, or the sheet settles as after any scroll
+          if (commit) {
+            provider.xgramSheetRelease(list, velocity);
+          }
         } else {
-          xgramSettleAfterDrag(-velocity / currentHeight);
+          xgramReleaseSheet(velocity, commit);
         }
         break;
       }
+    }
+  }
+
+  /** The end of a drag that moved the sheet: away, or back to its place. {@code commit} false never closes it. */
+  private void xgramReleaseSheet (float velocity, boolean commit) {
+    xgramRebaseHeight();
+    final float height = currentHeight;
+    final float visible = height - Math.max(0f, xgramSheetTranslation());
+    final boolean dismiss = commit && !isHidden && XgramSheetDrag.target(visible, height, height, velocity, true) == XgramSheetDrag.HIDDEN;
+    if (dismiss) {
+      xgramDragFling = -velocity / height;
+      xgramDragDismiss = true;
+      hideWindow(true);
+    } else {
+      xgramSettleAfterDrag(-velocity / height);
     }
   }
 
@@ -739,6 +862,101 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     XgramMotion.Value spring = xgramDragSpringFor(XgramExpressive.STD_SPATIAL_FAST);
     spring.setEndListener(() -> xgramOnRevealEnd(0f));
     spring.animateTo(0f, Math.min(0f, factorVelocity));
+  }
+
+  // XGram M3E: nested scrolling (androidx NestedScrollingParent3, touches only, never a fling's momentum): the list of
+  // a sheet that grows with it hands the drag to the sheet at its top, and takes it back once the sheet is in place.
+
+  @Override
+  public boolean onStartNestedScroll (@NonNull View child, @NonNull View target, int axes, int type) {
+    boolean nested = false;
+    if (type == ViewCompat.TYPE_TOUCH && (axes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0 && xgramGesture && !xgramDragging && xgramCanDragSheet()) {
+      final XgramSheetDrag.Sheet provider = xgramSheet();
+      nested = provider != null && target == provider.xgramSheetList();
+    }
+    xgramNested = nested;
+    xgramNestedMoving = false;
+    return nested;
+  }
+
+  @Override
+  public void onNestedScrollAccepted (@NonNull View child, @NonNull View target, int axes, int type) {
+    // nothing to set up: the sheet moves only once the list reaches its top
+  }
+
+  @Override
+  public void onNestedPreScroll (@NonNull View target, int dx, int dy, @NonNull int[] consumed, int type) {
+    if (type == ViewCompat.TYPE_TOUCH && xgramNested && xgramNestedMoving && dy > 0) {
+      // the finger goes back up: the sheet comes back to its place before the list scrolls
+      final float translation = xgramSheetTranslation();
+      if (translation > 0f) {
+        final float back = Math.min(translation, dy);
+        xgramSetSheetTranslation(translation - back);
+        consumed[1] += Math.round(back);
+      }
+    }
+  }
+
+  @Override
+  public void onNestedScroll (@NonNull View target, int dxConsumed, int dyConsumed, int dxUnconsumed, int dyUnconsumed, int type, @NonNull int[] consumed) {
+    if (type == ViewCompat.TYPE_TOUCH && xgramNested && dyUnconsumed < 0) {
+      // the list is at its top and the finger goes on down: the sheet follows it
+      if (!xgramNestedMoving) {
+        xgramNestedMoving = true;
+        xgramBeginSheetMove();
+      }
+      xgramSetSheetTranslation(Math.max(0f, xgramSheetTranslation()) - dyUnconsumed);
+      consumed[1] += dyUnconsumed;
+    }
+  }
+
+  @Override
+  public void onNestedScroll (@NonNull View target, int dxConsumed, int dyConsumed, int dxUnconsumed, int dyUnconsumed, int type) {
+    xgramNestedConsumed[0] = xgramNestedConsumed[1] = 0;
+    onNestedScroll(target, dxConsumed, dyConsumed, dxUnconsumed, dyUnconsumed, type, xgramNestedConsumed);
+  }
+
+  @Override
+  public boolean onNestedPreFling (@NonNull View target, float velocityX, float velocityY) {
+    // the sheet moved: its release decides (onStopNestedScroll), the list does not fling. Not ViewGroup's: this popup
+    // has no nested scrolling parent of its own (and ViewGroup has none of these before Android 5)
+    return xgramNested && xgramNestedMoving && xgramSheetTranslation() > 0f;
+  }
+
+  @Override
+  public boolean onNestedFling (@NonNull View target, float velocityX, float velocityY, boolean consumed) {
+    return false;
+  }
+
+  @Override
+  public void onStopNestedScroll (@NonNull View target, int type) {
+    if (type != ViewCompat.TYPE_TOUCH || !xgramNested) {
+      return;
+    }
+    xgramNested = false;
+    if (xgramNestedMoving) {
+      xgramNestedMoving = false;
+      if (factor < 1f) {
+        xgramReleaseSheet(xgramTracker.velocityY(), xgramDispatchAction == MotionEvent.ACTION_UP);
+      }
+    }
+  }
+
+  /** A touch on the sheet that nothing in it took (it came to the popup itself): it may still drag the sheet, never closes it. */
+  private boolean xgramOnSheetTouch (MotionEvent e) {
+    switch (e.getActionMasked()) {
+      case MotionEvent.ACTION_MOVE: {
+        xgramCheckDragStart(e); // once it starts, onTouchEvent hands the drag to xgramOnDragEvent
+        return true;
+      }
+      case MotionEvent.ACTION_UP:
+      case MotionEvent.ACTION_CANCEL: {
+        xgramDragTracking = false;
+        xgramDownScroller = null;
+        return true;
+      }
+    }
+    return true;
   }
 
   /** The scrim (Expressive design): closes the popup when the finger lifts, not when it lands. */
@@ -1275,8 +1493,13 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
       }
     }
     xgramStopDragSpring();
-    xgramRecycleVelocity();
+    xgramTracker.recycle();
+    xgramGesture = false;
     xgramDragging = false;
+    xgramDragTracking = false;
+    xgramNested = xgramNestedMoving = false;
+    xgramDragList = null;
+    xgramDownScroller = null;
   }
 
   /** XGram: a sheet that slides up from the bottom (predictive back shrinks it). */
@@ -1355,7 +1578,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
             view.setTranslationY(view instanceof OptionsLayout ? translation : Math.max(0f, translation));
           }
         }
-        backgroundView.setAlpha(Math.max(0f, Math.min(1f, factor)));
+        backgroundView.setAlpha(Math.max(0f, Math.min(1f, factor)) * xgramScrimScale);
         return;
       }
       switch (animationType) {
