@@ -331,11 +331,66 @@ index 7d0908a..9e96c13 100644
 +    return "WrappedNativeVideoEncoder (unavailable)";
    }
  }
+diff --git a/sdk/android/src/java/org/webrtc/AndroidVideoDecoder.java b/sdk/android/src/java/org/webrtc/AndroidVideoDecoder.java
+index 47cb568..6fe4386 100644
+--- a/sdk/android/src/java/org/webrtc/AndroidVideoDecoder.java
++++ b/sdk/android/src/java/org/webrtc/AndroidVideoDecoder.java
+@@ -182,6 +182,16 @@ class AndroidVideoDecoder implements VideoDecoder, VideoSink {
+       codec.start();
+     } catch (IllegalStateException | IllegalArgumentException e) {
+       Logging.e(TAG, "initDecode failed", e);
++      // XGram: release() does not free the codec while running is false, so the failed hardware
++      // component would stay allocated for as long as this decoder is reachable.
++      if (codec != null) {
++        try {
++          codec.release();
++        } catch (RuntimeException re) {
++          Logging.e(TAG, "codec.release failed", re);
++        }
++        codec = null;
++      }
+       release();
+       return VideoCodecStatus.FALLBACK_SOFTWARE;
+     }
+diff --git a/sdk/android/src/java/org/webrtc/HardwareVideoEncoder.java b/sdk/android/src/java/org/webrtc/HardwareVideoEncoder.java
+index 4512d9a..2e6d2c4 100644
+--- a/sdk/android/src/java/org/webrtc/HardwareVideoEncoder.java
++++ b/sdk/android/src/java/org/webrtc/HardwareVideoEncoder.java
+@@ -294,7 +294,18 @@ class HardwareVideoEncoder implements VideoEncoder {
+       codec.start();
+     } catch (IllegalArgumentException | IllegalStateException e) {
+       Logging.e(TAG, "initEncodeInternal failed", e);
+-      release();
++      // XGram: release() only drops the codec reference when the output thread never started, so
++      // free the configured hardware encoder here, after the EGL surface that wraps its input
++      // surface.
++      MediaCodecWrapper failedCodec = codec;
++      release(); // frees textureEglBase/textureInputSurface, sets codec = null
++      if (failedCodec != null) {
++        try {
++          failedCodec.release();
++        } catch (RuntimeException re) {
++          Logging.e(TAG, "codec.release failed", re);
++        }
++      }
+       return VideoCodecStatus.FALLBACK_SOFTWARE;
+     }
+ 
 diff --git a/sdk/android/src/java/org/webrtc/MediaCodecVideoDecoderFactory.java b/sdk/android/src/java/org/webrtc/MediaCodecVideoDecoderFactory.java
-index 9a73bc4..38a6dbe 100644
+index 9a73bc4..fec78cb 100644
 --- a/sdk/android/src/java/org/webrtc/MediaCodecVideoDecoderFactory.java
 +++ b/sdk/android/src/java/org/webrtc/MediaCodecVideoDecoderFactory.java
-@@ -46,7 +46,15 @@ class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
+@@ -19,7 +19,9 @@ import android.media.MediaCodecList;
+ import android.os.Build;
+ import androidx.annotation.Nullable;
+ import java.util.ArrayList;
++import java.util.HashMap;
+ import java.util.List;
++import java.util.Map;
+ 
+ /** Factory for decoders backed by Android MediaCodec API. */
+ @SuppressWarnings("deprecation") // API level 16 requires use of deprecated methods.
+@@ -46,7 +48,15 @@ class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
    @Nullable
    @Override
    public VideoDecoder createDecoder(VideoCodecInfo codecType) {
@@ -352,6 +407,33 @@ index 9a73bc4..38a6dbe 100644
      MediaCodecInfo info = findCodecForType(type);
  
      if (info == null) {
+@@ -77,6 +87,26 @@ class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
+ 
+         supportedCodecInfos.add(new VideoCodecInfo(
+             name, MediaCodecUtils.getCodecProperties(type, /* highProfile= */ false)));
++
++        if (type == VideoCodecMimeType.H264) {
++          // XGram: there is no software H.264 decoder in this build. MediaCodec AVC decoders
++          // decode Baseline and Main, and WebRTC depacketizes both packetization modes, so
++          // advertise what the removed software list had (except 4:4:4). Without these, a peer
++          // that sends Baseline, Main or packetization-mode 0 makes SetReceiverParameters fail,
++          // and the call gets no incoming video in any codec.
++          for (String profileLevelId : new String[] {"42e01f", "42001f", "4d001f"}) {
++            for (String packetizationMode : new String[] {"1", "0"}) {
++              Map<String, String> params = new HashMap<>();
++              params.put(VideoCodecInfo.H264_FMTP_LEVEL_ASYMMETRY_ALLOWED, "1");
++              params.put(VideoCodecInfo.H264_FMTP_PACKETIZATION_MODE, packetizationMode);
++              params.put(VideoCodecInfo.H264_FMTP_PROFILE_LEVEL_ID, profileLevelId);
++              VideoCodecInfo extra = new VideoCodecInfo(name, params);
++              if (!supportedCodecInfos.contains(extra)) {
++                supportedCodecInfos.add(extra);
++              }
++            }
++          }
++        }
+       }
+     }
+ 
 diff --git a/sdk/android/src/jni/video_decoder_fallback.cc b/sdk/android/src/jni/video_decoder_fallback.cc
 index 86d643d..1331400 100644
 --- a/sdk/android/src/jni/video_decoder_fallback.cc
