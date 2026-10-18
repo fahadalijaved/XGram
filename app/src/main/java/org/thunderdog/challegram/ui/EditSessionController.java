@@ -108,7 +108,11 @@ public class EditSessionController extends EditBaseController<EditSessionControl
       if (session.isCurrent) {
         navigateTo(new SettingsLogOutController(context, tdlib));
       } else {
-        showOptions(null, new int[] {R.id.btn_terminateSession, R.id.btn_cancel}, new String[] {Lang.getString(session.isPasswordPending ? R.string.TerminateIncompleteSession : R.string.TerminateSession), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_dangerous_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+        // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+        xgramShowConfirm(null,
+          Lang.getString(session.isPasswordPending ? R.string.XgramConfirmTerminateLoginAttempt : R.string.XgramConfirmTerminateSession),
+          Lang.getString(session.isPasswordPending ? R.string.XgramConfirmTerminateLoginAttemptText : R.string.XgramConfirmTerminateSessionText),
+          new int[] {R.id.btn_terminateSession, R.id.btn_cancel}, new String[] {Lang.getString(session.isPasswordPending ? R.string.TerminateIncompleteSession : R.string.TerminateSession), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_dangerous_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
           if (id == R.id.btn_terminateSession) {
             navigateBack();
             getArgumentsStrict().sessionTerminationListener.run();

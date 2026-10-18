@@ -1246,6 +1246,17 @@ public class SettingHolder extends RecyclerView.ViewHolder {
         CustomTextView textView = new CustomTextView(context, tdlib);
         textView.setPadding(Screen.dp(16f), Screen.dp(12f), Screen.dp(16f), Screen.dp(12f));
         textView.setTextColorId(ColorId.textLight);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          // XGram M3E: the supporting text of a settings choice sheet (every TYPE_INFO is one: showSettings), bodyMedium
+          // in onSurfaceVariant with no background of its own, so it sits on the sheet's surfaceContainerLow, not on a
+          // square band of Telegram X's filling (surface: a darker band than the sheet in dark themes). A shared style:
+          // its size is never changed on this view
+          textView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M,
+            com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)));
+          if (themeProvider != null) {
+            themeProvider.addThemeInvalidateListener(textView);
+          }
+        } else
         ViewSupport.setThemedBackground(textView, ColorId.filling, themeProvider);
         textView.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return new SettingHolder(textView);

@@ -808,7 +808,8 @@ public class CallListController extends RecyclerViewController<Void> implements
                   }).setSaveStr(R.string.Delete).setSaveColorId(ColorId.textNegative)
                 );
               } else {
-                showOptions(null, new int[] {R.id.btn_delete, R.id.btn_cancel}, new String[] {Lang.getString(R.string.DeleteEntry), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_sweep_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+                // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+                xgramShowConfirm(null, Lang.getString(R.string.QDeleteCallFromRecent), Lang.getString(R.string.XgramConfirmDeleteForMeOne), new int[] {R.id.btn_delete, R.id.btn_cancel}, new String[] {Lang.getString(R.string.DeleteEntry), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_sweep_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
                   if (id == R.id.btn_delete) {
                     tdlib.deleteMessages(chatId, call.getMessageIds(), false);
                   }

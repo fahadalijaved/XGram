@@ -144,6 +144,20 @@ public class SettingsWrapBuilder {
     return this;
   }
 
+  /** XGram M3E: the sheet's headline row (see {@link #xgramSetHeadline}), or null. */
+  public @Nullable
+  ListItem xgramHeadline;
+
+  /**
+   * XGram M3E: a headline (headlineSmall) above the header items while Expressive design is on; ignored otherwise.
+   * {@code id} (or 0) lets the caller update its text later (adapter.indexOfViewById, then notifyItemChanged).
+   */
+  public SettingsWrapBuilder xgramSetHeadline (@IdRes int id, @Nullable CharSequence headline) {
+    this.xgramHeadline = headline == null || headline.length() == 0 ? null :
+      new ListItem(ListItem.TYPE_CUSTOM - com.fahadali.xgram.appearance.XgramConfirmSheets.HEADLINE_ROW, id, 0, headline, false);
+    return this;
+  }
+
   public SettingsWrapBuilder setRawItems (ListItem[] rawItems) {
     this.rawItems = rawItems;
     return this;

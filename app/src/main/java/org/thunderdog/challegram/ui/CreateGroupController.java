@@ -483,7 +483,8 @@ public class CreateGroupController extends ViewController<Void> implements EditH
 
   private void onUserClick (TGUser user) {
     pickedUser = user;
-    showOptions(null, new int[] {R.id.btn_deleteMember, R.id.btn_cancel}, new String[] {Lang.getString(R.string.GroupDontAdd), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24}, this::onOptionItemPressed);
+    // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+    xgramShowConfirm(null, Lang.getString(R.string.XgramConfirmRemoveMember, user.getName()), Lang.getString(R.string.XgramConfirmRemoveMemberText), new int[] {R.id.btn_deleteMember, R.id.btn_cancel}, new String[] {Lang.getString(R.string.GroupDontAdd), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24}, this::onOptionItemPressed);
   }
 
   public boolean onOptionItemPressed (View optionItemView, int id) {

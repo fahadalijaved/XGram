@@ -120,7 +120,10 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   public void clearRecentStickers () {
     if (themeProvider != null && mediaSectionsView.hasRecents()) {
-      themeProvider.showOptions(null, new int[] {R.id.btn_done, R.id.btn_cancel}, new String[] {
+      // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+      themeProvider.xgramShowConfirm(null,
+        Lang.getString(animatedEmojiOnly ? R.string.XgramConfirmClearRecentStatuses : R.string.XgramConfirmClearRecentStickers),
+        Lang.getString(R.string.XgramConfirmClearRecentText), new int[] {R.id.btn_done, R.id.btn_cancel}, new String[] {
         Lang.getString(animatedEmojiOnly ? R.string.ClearRecentEmojiStatuses : R.string.ClearRecentStickers),
         Lang.getString(R.string.Cancel)
       }, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_auto_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
@@ -147,7 +150,8 @@ public class EmojiLayout extends FrameLayoutFix implements ViewPager.OnPageChang
 
   private void clearRecentEmoji () {
     if (themeProvider != null) {
-      themeProvider.showOptions(null, new int[] {R.id.btn_delete, R.id.btn_cancel}, new String[] {Lang.getString(R.string.ClearRecentEmojiAction), Lang.getString(R.string.Cancel)}, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_auto_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+      // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+      themeProvider.xgramShowConfirm(null, Lang.getString(R.string.XgramConfirmClearRecentEmoji), Lang.getString(R.string.XgramConfirmClearRecentText), new int[] {R.id.btn_delete, R.id.btn_cancel}, new String[] {Lang.getString(R.string.ClearRecentEmojiAction), Lang.getString(R.string.Cancel)}, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_auto_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
         if (id == R.id.btn_delete) {
           Emoji.instance().clearRecents();
           ViewController<?> c = adapter.getCachedItem(0);

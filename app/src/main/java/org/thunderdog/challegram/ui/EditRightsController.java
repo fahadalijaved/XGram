@@ -328,7 +328,9 @@ public class EditRightsController extends EditBaseController<EditRightsControlle
         );
       }
     } else if (viewId == R.id.btn_dismissAdmin) {
-      showOptions(null, new int[] {R.id.btn_dismissAdmin, R.id.btn_cancel}, new String[] {Lang.getString(R.string.DismissAdmin), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+      // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+      final TdApi.MessageSender xgramSenderId = getArgumentsStrict().senderId;
+      xgramShowConfirm(null, xgramSenderId != null ? Lang.getString(R.string.XgramConfirmDismissAdmin, tdlib.senderName(xgramSenderId, true)) : null, Lang.getString(R.string.XgramConfirmDismissAdminText), new int[] {R.id.btn_dismissAdmin, R.id.btn_cancel}, new String[] {Lang.getString(R.string.DismissAdmin), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
         if (id == R.id.btn_dismissAdmin && !isDoneInProgress()) {
           Td.setAllAdministratorRights(targetAdmin.rights, false);
           updateValues();

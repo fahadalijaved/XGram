@@ -330,8 +330,16 @@ public class TdlibUi extends Handler {
     final String name = tdlib.senderName(senderId, true);
     final CharSequence text = Lang.pluralBold(R.string.QDeleteXMessagesFromY, deletingMessages.length, name);
 
-    SettingsWrap wrap = context.showSettings(new SettingsWrapBuilder(R.id.btn_deleteSupergroupMessages).setHeaderItem(
-      new ListItem(ListItem.TYPE_INFO, R.id.text_title, 0, text, false)).setRawItems(
+    final SettingsWrapBuilder builder = new SettingsWrapBuilder(R.id.btn_deleteSupergroupMessages);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the question is the sheet's headline (still R.id.text_title, so the role below lands in it), and who
+      // the messages are deleted for is its supporting text
+      builder.xgramSetHeadline(R.id.text_title, text)
+        .addHeaderItem(com.fahadali.xgram.appearance.XgramConfirmSheets.deleteMessagesText(deletingMessages.length, false, false, true, null));
+    } else {
+      builder.setHeaderItem(new ListItem(ListItem.TYPE_INFO, R.id.text_title, 0, text, false));
+    }
+    SettingsWrap wrap = context.showSettings(builder.setRawItems(
       new ListItem[] {
         new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_banMember, 0, senderId.getConstructor() == TdApi.MessageSenderUser.CONSTRUCTOR ? R.string.RestrictUser : tdlib.isChannel(((TdApi.MessageSenderChat) senderId).chatId) ? R.string.BanChannel : R.string.BanChat, false),
         new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_reportSpam, 0, R.string.ReportSpam, false),
@@ -542,8 +550,15 @@ public class TdlibUi extends Handler {
 
     final int noRevokeCountFinal = noRevokeCount;
 
-    context.showSettings(new SettingsWrapBuilder(R.id.btn_deleteMessagesWithRevoke)
-      .addHeaderItem(title)
+    final SettingsWrapBuilder builder = new SettingsWrapBuilder(R.id.btn_deleteMessagesWithRevoke);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the question as the sheet's headline, the warning (or that it cannot be undone) as its supporting text
+      builder.xgramSetHeadline(0, com.fahadali.xgram.appearance.XgramConfirmSheets.deleteMessagesHeadline(deletingMessages.length, false, false))
+        .addHeaderItem(noRevokeCount > 0 ? Lang.pluralBold(R.string.DeleteXForMeWarning, noRevokeCount) : Lang.getString(R.string.NoUndoWarn));
+    } else {
+      builder.addHeaderItem(title);
+    }
+    context.showSettings(builder
       .setRawItems(
       new ListItem[]{
         new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_revokeMessages, 0, revokeFor, revokeByDefault)
@@ -650,11 +665,15 @@ public class TdlibUi extends Handler {
                 allScheduled ? (tdlib.isSelfChat(chatId) ? R.string.DeleteXReminders : R.string.DeleteXScheduled) :
                   (tdlib.isSelfChat(chatId) ? R.string.DeleteXMessages : R.string.DeleteXForMe), messages.length);
 
+      boolean xgramForEveryone = false; // XGram M3E: for the supporting text below
+      String xgramUserName = null;
       if (!allScheduled) {
         for (MessageWithProperties msg : messages) {
           if (!msg.properties.canBeDeletedOnlyForSelf) {
+            xgramForEveryone = true;
             if (ChatId.isUserChat(chatId)) {
-              deleteActionMsg = Lang.getString(R.string.DeleteForMeAndX, tdlib.cache().userFirstName(tdlib.chatUserId(chatId)));
+              xgramUserName = tdlib.cache().userFirstName(tdlib.chatUserId(chatId));
+              deleteActionMsg = Lang.getString(R.string.DeleteForMeAndX, xgramUserName);
             } else {
               deleteActionMsg = Lang.getString(R.string.DeleteForEveryone);
             }
@@ -663,9 +682,16 @@ public class TdlibUi extends Handler {
         }
       }
 
-      context.showOptions(null,
+      // XGram M3E: Telegram X shows the action tile alone (it was the whole message). As the M3E confirm sheet it gets
+      // the question as its headline, who the messages are deleted for as its supporting text, and a plain "Delete";
+      // Expressive design off keeps Telegram X's sheet
+      final boolean xgramExpressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      final boolean xgramSelfChat = tdlib.isSelfChat(chatId);
+      context.xgramShowConfirm(null,
+        xgramExpressive ? com.fahadali.xgram.appearance.XgramConfirmSheets.deleteMessagesHeadline(messages.length, allScheduled, xgramSelfChat) : null,
+        xgramExpressive ? com.fahadali.xgram.appearance.XgramConfirmSheets.deleteMessagesText(messages.length, allScheduled, xgramSelfChat, xgramForEveryone, xgramUserName) : null,
         new int[] {R.id.menu_btn_delete, R.id.btn_cancel},
-        new String[] {deleteActionMsg, Lang.getString(R.string.Cancel)},
+        new String[] {xgramExpressive ? Lang.getString(R.string.Delete) : deleteActionMsg, Lang.getString(R.string.Cancel)},
         new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL},
         new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24},
         (itemView, id) -> {
@@ -4939,6 +4965,7 @@ public class TdlibUi extends Handler {
       int checkId = join ? R.id.btn_returnToChat : R.id.btn_removeChatFromList;
       if (!join && ChatId.isBasicGroup(chatId)) {
         SettingsWrapBuilder b = new SettingsWrapBuilder(R.id.btn_removeChatFromList).setSaveStr(R.string.LeaveDoneGroup).setSaveColorId(ColorId.textNegative);
+        b.xgramSetHeadline(0, Lang.getString(R.string.XgramConfirmLeaveGroup)); // XGram M3E: the headline (Expressive design only; a member's sheet had no text)
         if (informationStr != null) {
           b.addHeaderItem(informationStr);
         }
@@ -4951,7 +4978,9 @@ public class TdlibUi extends Handler {
         });
         context.showSettings(b);
       } else {
-        context.showOptions(informationStr, new int[]{checkId, R.id.btn_cancel}, new String[]{Lang.getString(confirmButtonRes), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[]{R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+        // XGram M3E: "Leave group?" / "Leave channel?" as the confirm sheet's headline, the hint as its supporting text
+        final CharSequence xgramHeadline = join ? null : Lang.getString(isChannel ? R.string.XgramConfirmLeaveChannel : R.string.XgramConfirmLeaveGroup);
+        context.xgramShowConfirm(informationStr, xgramHeadline, null, new int[]{checkId, R.id.btn_cancel}, new String[]{Lang.getString(confirmButtonRes), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[]{R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
           if (id == checkId) {
             act.runWithBool(false);
           }
