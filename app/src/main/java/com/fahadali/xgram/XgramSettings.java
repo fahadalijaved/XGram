@@ -1479,15 +1479,62 @@ public final class XgramSettings {
     putInt(KEY_NAV_STYLE, style);
   }
 
-  /** Telegram's layout: Chats, Contacts, Settings in that order, the photo beside the bar, Standard colours. */
+  // With the floating navigation toolbar: where the chat list's compose button goes, and whether the side menu (its ☰
+  // and edge swipe) stays. Both only apply while the toolbar is shown.
+
+  public static final String KEY_NAV_FAB = "xgram_nav_fab", KEY_NAV_HIDE_DRAWER = "xgram_nav_hide_drawer";
+  /**
+   * The compose button: at the window's end edge whatever the bar's width, staying there while the bar hides (default);
+   * or end-aligned with the bar and its photo, hiding with them.
+   */
+  public static final int NAV_FAB_SIDE = 0, NAV_FAB_WITH_BAR = 1;
+
+  private volatile Integer navFab;
+  private volatile Boolean navHideDrawer;
+
+  public int navFab () {
+    Integer value = navFab;
+    if (value == null) {
+      navFab = value = pmc().getInt(KEY_NAV_FAB, NAV_FAB_SIDE) == NAV_FAB_WITH_BAR ? NAV_FAB_WITH_BAR : NAV_FAB_SIDE;
+    }
+    return value;
+  }
+
+  public void setNavFab (int mode) {
+    navFab = mode;
+    putInt(KEY_NAV_FAB, mode);
+  }
+
+  /** No side menu (no ☰, no edge swipe) while the toolbar is shown: its items are in the chat list's ⋮ menu. */
+  public boolean navHideDrawer () {
+    Boolean value = navHideDrawer;
+    if (value == null) {
+      navHideDrawer = value = pmc().getBoolean(KEY_NAV_HIDE_DRAWER, false);
+    }
+    return value;
+  }
+
+  public void setNavHideDrawer (boolean value) {
+    navHideDrawer = value;
+    put(KEY_NAV_HIDE_DRAWER, value);
+  }
+
+  /**
+   * Telegram's layout: Chats, Contacts, Settings in that order, the photo beside the bar, Standard colours, the compose
+   * button at the side and the side menu.
+   */
   public void resetNavBar () {
     XgramReorder.reset(XgramReorder.NAV_BAR);
     navTabs = NAV_TABS_DEFAULT;
     navProfile = NAV_PROFILE_BUTTON;
     navStyle = NAV_STYLE_STANDARD;
+    navFab = NAV_FAB_SIDE;
+    navHideDrawer = false;
     putInt(KEY_NAV_TABS, NAV_TABS_DEFAULT);
     putInt(KEY_NAV_PROFILE, NAV_PROFILE_BUTTON);
     putInt(KEY_NAV_STYLE, NAV_STYLE_STANDARD);
+    putInt(KEY_NAV_FAB, NAV_FAB_SIDE);
+    put(KEY_NAV_HIDE_DRAWER, false);
   }
 
   // Settings search: the results opened last (search hit keys, newest first), shown before anything is typed.

@@ -34,8 +34,8 @@ import org.thunderdog.challegram.tool.UI
 /**
  * Appearance > Layout > Navigation bar (Expressive design): the floating navigation toolbar of narrow windows. A live
  * preview of it (the real pill and photo, a tap moves the selection), the switch and the colours, the tabs (up to 4,
- * Chats always, in the user's order), where the profile photo goes, and a reset to Telegram's layout. Every change
- * reaches the toolbar at once.
+ * Chats always, in the user's order), where the profile photo goes, where the chat list's New chat button goes, whether
+ * the side menu stays, and a reset to Telegram's layout. Every change reaches the toolbar at once.
  */
 @Composable
 fun NavBarPage() {
@@ -109,6 +109,36 @@ fun NavBarPage() {
     }
     description(R.string.XgramNavBarProfileInfo)
 
+    // The chat list's compose button: at the window's edge (stays when the bar hides), or with the bar's group
+    header(R.string.XgramNavBarFab)
+    val fabMode = settings.navFab()
+    group {
+      radio(
+        R.id.btn_xgramNavBarFab, s(R.string.XgramNavBarFabSide), selected = fabMode == XgramSettings.NAV_FAB_SIDE,
+        subtitle = s(R.string.XgramNavBarFabSideSub), key = "side"
+      ) {
+        setFabMode(host, settings, XgramSettings.NAV_FAB_SIDE)
+      }
+      radio(
+        R.id.btn_xgramNavBarFab, s(R.string.XgramNavBarFabWithBar), selected = fabMode == XgramSettings.NAV_FAB_WITH_BAR,
+        subtitle = s(R.string.XgramNavBarFabWithBarSub), key = "bar"
+      ) {
+        setFabMode(host, settings, XgramSettings.NAV_FAB_WITH_BAR)
+      }
+    }
+
+    // No menu button and no edge swipe while the bar is shown: the side menu's items go to the chat list's overflow
+    group {
+      switch(
+        R.id.btn_xgramNavBarHideDrawer, s(R.string.XgramNavBarHideDrawer), s(R.string.XgramNavBarHideDrawerSub),
+        checked = settings.navHideDrawer()
+      ) {
+        settings.setNavHideDrawer(it)
+        updateToolbar(host)
+      }
+    }
+    description(R.string.XgramNavBarHideDrawerInfo)
+
     group {
       action(R.id.btn_xgramNavBarReset, s(R.string.XgramNavBarReset), icon = R.drawable.baseline_replay_24) {
         settings.resetNavBar()
@@ -178,6 +208,14 @@ private fun setProfileMode(host: XgramComposeHost, settings: XgramSettings, mode
     // The profile was the only tab beside Chats: Settings takes its place (as the bar would), and the page shows it
     settings.setNavTabOn(XgramNavToolbar.DEST_SETTINGS, true)
   }
+  updateToolbar(host)
+}
+
+private fun setFabMode(host: XgramComposeHost, settings: XgramSettings, mode: Int) {
+  if (mode == settings.navFab()) {
+    return
+  }
+  settings.setNavFab(mode)
   updateToolbar(host)
 }
 

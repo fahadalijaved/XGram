@@ -22,6 +22,16 @@
   <string name="XgramNavBarProfileOff">Off</string>
   <string name="XgramNavBarProfileInfo">Your photo opens your profile. Long press it to switch accounts.</string>
   <string name="XgramNavBarMadeRoom">%1$s was taken out to make room</string>
+  <!-- Where the chat list's compose button goes with the bar -->
+  <string name="XgramNavBarFab">New chat button</string>
+  <string name="XgramNavBarFabSide">At the side</string>
+  <string name="XgramNavBarFabSideSub">At the edge of the screen. It stays when the bar hides.</string>
+  <string name="XgramNavBarFabWithBar">With the navigation bar</string>
+  <string name="XgramNavBarFabWithBarSub">Lined up with the bar, and hides with it</string>
+  <!-- The side menu while the bar is shown; its items go to the chat list's ⋮ menu -->
+  <string name="XgramNavBarHideDrawer">Hide the side menu</string>
+  <string name="XgramNavBarHideDrawerSub">No menu button or edge swipe while the navigation bar is shown</string>
+  <string name="XgramNavBarHideDrawerInfo">What the side menu had is in the ⋮ menu at the top of the chat list, unless it is a tab. Long press your photo to switch accounts.</string>
   <string name="XgramNavBarReset">Reset to Telegram\'s layout</string>
   <!-- Appearance's row: the setting off, or the tabs and "+ your photo" -->
   <string name="XgramNavBarOff">Off</string>
@@ -31,4 +41,9 @@
   <item type="id" name="btn_xgramNavBarProfile" />
   <item type="id" name="btn_xgramNavBarStyle" />
   <item type="id" name="btn_xgramNavBarReset" />
+  <item type="id" name="btn_xgramNavBarFab" />
+  <item type="id" name="btn_xgramNavBarHideDrawer" />
+  <!-- The chat list's ⋮ menu while the side menu is hidden: its own menu id and the Switch account entry -->
+  <item type="id" name="menu_xgramMainNoDrawer" />
+  <item type="id" name="btn_xgramNavSwitchAccount" />
 </resources>
