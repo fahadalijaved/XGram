@@ -248,7 +248,7 @@ public class NavigationProcessor extends Handler {
           navigation.setShadowsVisibility(View.GONE);
         }
 
-        if (next != null) {
+        if (next != null && !next.xgramKeepsWarm()) { // XGram M3E: a warm tab screen leaves alive (XgramNavToolbar)
           next.attachNavigationController(navigation);
           next.destroy();
           next.detachNavigationController();

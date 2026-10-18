@@ -1078,6 +1078,20 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return Theme.getColor(ColorId.background);
   }
 
+  /**
+   * A warm tab screen: the toolbar keeps this one instance alive when it leaves the stack (another tab, Back to the chat
+   * list) and shows it again as it was, so the stack skips its destroy() then; the toolbar destroys it when it lets go.
+   */
+  private boolean xgramKeepWarm;
+
+  public final void xgramSetKeepWarm (boolean keep) {
+    this.xgramKeepWarm = keep;
+  }
+
+  public final boolean xgramKeepsWarm () {
+    return xgramKeepWarm && !isDestroyed();
+  }
+
   protected boolean forceFastAnimation () {
     if (forceFadeModeOnce) {
       forceFadeModeOnce = false;

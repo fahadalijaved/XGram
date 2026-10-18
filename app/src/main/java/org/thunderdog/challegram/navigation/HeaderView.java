@@ -1583,7 +1583,9 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     }
 
     if (useHeightSwitch) {
-      height = fromHeight + heightDiff * raptor;
+      // XGram M3E: a tab switch takes the new height at the fade-through's crossover (no drop-down)
+      float heightRaptor = xgramFadeThrough ? (raptor >= com.fahadali.xgram.appearance.XgramNavMotion.FADE_THRESHOLD ? 1f : 0f) : raptor;
+      height = fromHeight + heightDiff * heightRaptor;
       float heightFactor = (height - Size.getHeaderPortraitSize()) / (float) Size.getMaximumHeaderSizeDifference();
 
       filling.layout((int) height, heightFactor);
@@ -1663,8 +1665,8 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
         break;
       }
       case MODE_FADE: {
-        title.setAlpha((1f - raptor) * xgramTextAlpha(title, baseItem));
-        preview.setAlpha(raptor * xgramTextAlpha(preview, previewItem));
+        title.setAlpha(xgramOutAlpha(raptor) * xgramTextAlpha(title, baseItem));
+        preview.setAlpha(xgramInAlpha(raptor) * xgramTextAlpha(preview, previewItem));
 
         break;
       }
@@ -1672,14 +1674,14 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
     if (useMenuSwitch) {
       if (useMenu) {
-        menu.setAlpha(1f - raptor);
+        menu.setAlpha(xgramOutAlpha(raptor));
         if (translationMode == MODE_VERTICAL) {
           //noinspection ResourceType
           menu.setTranslationY(translateForward ? -(Size.getHeaderPortraitSize() + getEffectiveTopOffset()) * raptor : currentY * raptor);
         }
       }
       if (useMenuPreview) {
-        menuPreview.setAlpha(raptor);
+        menuPreview.setAlpha(xgramInAlpha(raptor));
         if (translationMode == MODE_VERTICAL) {
           //noinspection ResourceType
           menuPreview.setTranslationY(translateForward ? currentY * (1f - raptor) : -((Size.getHeaderPortraitSize() + getEffectiveTopOffset()) * (1f - raptor)));
@@ -1689,13 +1691,13 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
     if (useBackFade) {
       if (backFade) {
-        backButton.setAlpha(raptor);
+        backButton.setAlpha(xgramInAlpha(raptor));
         if (translationMode == MODE_VERTICAL) {
           backButton.setTranslationY(-(Size.getHeaderPortraitSize() + getEffectiveTopOffset()) * (1f - raptor));
         }
         backButton.setTranslationX(preview.getTranslationX());
       } else {
-        backButton.setAlpha(1f - raptor);
+        backButton.setAlpha(xgramOutAlpha(raptor));
         if (translationMode == MODE_VERTICAL) {
           backButton.setTranslationY((Size.getHeaderPortraitSize() + getEffectiveTopOffset()) * raptor);
         }
@@ -2320,6 +2322,24 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
   public void xgramSetSharedAxis (boolean sharedAxis) {
     this.xgramSharedAxis = sharedAxis;
+  }
+
+  // XGram M3E: a tab switch of the floating navigation toolbar (NavigationController#xgramSetTabSwitch): the title, the
+  // menu and the navigation icon fade through with the screens (out by XgramNavMotion.FADE_THRESHOLD, in after it) and
+  // the height jumps to the new screen's at that point, while both titles are invisible: Settings' and the profile's
+  // big header is there at rest instead of dropping down (and nothing re-lays out its texts on every frame).
+  private boolean xgramFadeThrough;
+
+  void xgramSetFadeThrough (boolean fadeThrough) {
+    this.xgramFadeThrough = fadeThrough;
+  }
+
+  private float xgramOutAlpha (float raptor) {
+    return xgramFadeThrough ? com.fahadali.xgram.appearance.XgramNavMotion.outAlpha(raptor) : 1f - raptor;
+  }
+
+  private float xgramInAlpha (float raptor) {
+    return xgramFadeThrough ? com.fahadali.xgram.appearance.XgramNavMotion.inAlpha(raptor) : raptor;
   }
 
   private int getTextSwitchModeForView (View view) {

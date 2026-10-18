@@ -499,6 +499,57 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     }
   }
 
+  /**
+   * Destroys a screen kept alive off the stack (a warm tab screen of the toolbar) as the stack destroys its own. One
+   * still on the stack is left to the stack.
+   */
+  public void xgramDestroyDetached (@NonNull ViewController<?> c) {
+    if (c.isDestroyed() || getStack().indexOf(c) != -1) {
+      return;
+    }
+    c.attachNavigationController(this);
+    c.destroy();
+    c.detachNavigationController();
+  }
+
+  // A tab switch of the toolbar: a tab screen fading in right above the chat list (from it or from another tab
+  // screen), or Back from one to the chat list. The screen shows at once (no wait for its data: a warm one has it),
+  // the switch is one short fade-through (EFFECTS_FAST, the pill's morph starts in the same frame; instant with Reduce
+  // motion) and the app bar takes the new screen's height at the crossover instead of growing to it, so the big
+  // header of Settings and of the profile is there at rest (no drop-down).
+
+  private boolean xgramTabSwitch;
+
+  /** {@code right} is a tab screen and {@code left} another one or the chat list at the root. */
+  private boolean xgramIsTabSwitch (@Nullable ViewController<?> left, @Nullable ViewController<?> right) {
+    if (xgramNav == null || left == null || right == null || !right.xgramIsBarTab()) {
+      return false;
+    }
+    return left.xgramIsBarTab() || left == getStack().get(0);
+  }
+
+  /**
+   * The toolbar opens a tab screen (a fade rebase right above the chat list), or Back returns to one (from a screen
+   * pushed over it): it is live already, or its rows fill in on screen, so it never waits for its data.
+   */
+  private boolean xgramSkipsWait (ViewController<?> controller, int mode) {
+    if (xgramNav == null || !controller.xgramIsBarTab()) {
+      return false;
+    }
+    return ((mode & MODE_REBASE) == MODE_REBASE && (mode & MODE_FADE) == MODE_FADE) || (mode & MODE_BACKWARD) == MODE_BACKWARD;
+  }
+
+  private void xgramSetTabSwitch (boolean on, int backdropColor) {
+    boolean was = xgramTabSwitch;
+    xgramTabSwitch = on;
+    if (headerView != null) {
+      headerView.xgramSetFadeThrough(on);
+    }
+    if (xgramNav != null && (on || was)) {
+      xgramNav.setFadeBackdrop(on ? backdropColor : 0); // the page colour shows between the two screens
+    }
+  }
+
   private int xgramBarKind () {
     if (xgramNav != null && xgramNav.isActive()) {
       return xgramNav.isCard() ? XgramBarListener.KIND_CARD : XgramBarListener.KIND_SHARED_AXIS;
@@ -553,6 +604,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   private void xgramEnd (int finishMode) {
     if (headerView != null) {
       headerView.xgramSetSharedAxis(false);
+    }
+    if (xgramTabSwitch) {
+      xgramSetTabSwitch(false, 0); // XGram M3E: the tab switch's fade-through is over
     }
     if (xgramNav != null && xgramNav.isActive()) {
       boolean card = xgramNav.isCard();
@@ -1145,7 +1199,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       }
     }
 
-    if (USE_ASYNC_IN_STEP_2 || !controller.needAsynchronousAnimation() || !isAttachedToWindow) {
+    if (USE_ASYNC_IN_STEP_2 || !controller.needAsynchronousAnimation() || !isAttachedToWindow || xgramSkipsWait(controller, mode)) { // XGram M3E: a tab screen shows at once
       controller.executeAnimationReadyListeners();
       animateNavigate(controller, direction, forward, rebase, fastAnimation);
     } else {
@@ -1184,10 +1238,16 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
     xgramRequestedMode = xgramNav != null ? XgramNavMotion.MODE_SHARED_AXIS : XgramNavMotion.MODE_NONE;
     if (forward) {
-      prepareFactorAnimation(left = getStack().getPrevious(), right = controller, true, direction, PredictiveGesture.NONE);
+      left = getStack().getPrevious();
+      right = controller;
     } else {
-      prepareFactorAnimation(left = controller, right = getStack().getCurrent(), false, direction, PredictiveGesture.NONE);
+      left = controller;
+      right = getStack().getCurrent();
     }
+    // XGram M3E: a tab switch of the floating navigation toolbar fades through (set before the app bar's preview opens)
+    final boolean xgramThrough = direction == TRANSLATION_FADE && xgramIsTabSwitch(left, right);
+    xgramSetTabSwitch(xgramThrough, xgramThrough ? (forward ? right : left).xgramBarBandColor() : 0);
+    prepareFactorAnimation(left, right, forward, direction, PredictiveGesture.NONE);
 
     final boolean[] isDone = new boolean[1];
     Runnable onDone = () -> {
@@ -1204,6 +1264,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
         } else {
           headerView.applyPreview(getStack().getCurrent());
           processor.setNextAsCurrent();
+        }
+        if (xgramThrough && left != null && !left.isDestroyed()) {
+          left.getValue().setAlpha(1f); // XGram M3E: the fade-through took the screen it left (kept, or the chat list) to 0
         }
         completeNextLayout();
         if (Views.HARDWARE_LAYER_ENABLED) {
@@ -1244,13 +1307,14 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       // Shared axis (and Telegram X's slide when it cannot run) on SPATIAL_DEFAULT, sheets on STD_SPATIAL_DEFAULT, fades on EFFECTS.
       int token;
       if (direction == TRANSLATION_FADE) {
-        token = fastAnimation ? XgramExpressive.EFFECTS_FAST : XgramExpressive.EFFECTS_DEFAULT;
+        token = fastAnimation || xgramThrough ? XgramExpressive.EFFECTS_FAST : XgramExpressive.EFFECTS_DEFAULT;
       } else if (direction == TRANSLATION_VERTICAL) {
         token = XgramExpressive.STD_SPATIAL_DEFAULT;
       } else {
         token = xgramNav.getMode() == XgramNavMotion.MODE_SHARED_AXIS ? XgramExpressive.SPATIAL_DEFAULT : XgramExpressive.STD_SPATIAL_DEFAULT;
       }
-      animator.setDuration(XgramMotion.duration(token));
+      // XGram M3E: a tab switch is instant with Reduce motion
+      animator.setDuration(xgramThrough && Settings.instance().needReduceMotion() ? 0L : XgramMotion.duration(token));
       animator.setInterpolator(XgramMotion.interpolator(token));
     } else switch (direction) {
       case TRANSLATION_FADE: {
@@ -1535,6 +1599,8 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   private static final int FINISH_PREVIEW_FORCE = 3;
 
   private void finishTransaction (int mode) {
+    // XGram M3E: a tab switch's fade-through left one of its screens at 0 (a warm tab screen is shown again later)
+    final ViewController<?> xgramThroughLeft = xgramTabSwitch ? currentLeft : null, xgramThroughRight = xgramTabSwitch ? currentRight : null;
     xgramEnd(mode);
     completeNextLayout();
 
@@ -1569,6 +1635,12 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
         processor.removePrevious(current);
         break;
       }
+    }
+    if (xgramThroughLeft != null && !xgramThroughLeft.isDestroyed()) {
+      xgramThroughLeft.getValue().setAlpha(1f);
+    }
+    if (xgramThroughRight != null && !xgramThroughRight.isDestroyed()) {
+      xgramThroughRight.getValue().setAlpha(1f);
     }
 
     layoutIfRequested();
@@ -1645,7 +1717,15 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     switch (translationMode) {
       case TRANSLATION_FADE: {
         headerView.setTranslation(factor);
-        rightWrap.setAlpha(1f - factor);
+        if (xgramTabSwitch) {
+          // XGram M3E: fade-through: the screen that leaves is gone by FADE_THRESHOLD, the new one fades in after it
+          float p = translatingForward ? 1f - factor : factor;
+          float outAlpha = XgramNavMotion.outAlpha(p), inAlpha = XgramNavMotion.inAlpha(p);
+          leftWrap.setAlpha(translatingForward ? outAlpha : inAlpha);
+          rightWrap.setAlpha(translatingForward ? inAlpha : outAlpha);
+        } else {
+          rightWrap.setAlpha(1f - factor);
+        }
 
         break;
       }

@@ -290,7 +290,7 @@ public class NavigationStack {
         ViewController<?> first = stack.get(0);
         int i = 0;
         for (ViewController<?> c : stack) {
-          if (i != 0 && !c.isDestroyed()) {
+          if (i != 0 && !c.isDestroyed() && !c.xgramKeepsWarm()) { // XGram M3E: a warm tab screen leaves alive (XgramNavToolbar)
             c.attachNavigationController(navigation);
             c.destroy();
             c.detachNavigationController();
