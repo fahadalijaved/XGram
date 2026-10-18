@@ -2516,6 +2516,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       int lineTop;
       int lineBottom;
       boolean mergeTop, mergeBottom;
+      int lineWidth = Screen.dp(3f);
 
       if (useBubbles) {
         lineTop = replyData != null ? (topContentEdge + (useBubble() ? xBubblePadding + xBubblePaddingSmall : Screen.dp(8f)) + (useBubbleName() ? getBubbleNameHeight() : 0)) : forwardY;
@@ -2529,7 +2530,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         mergeBottom = mergeTop = false;
       } else {
         if ((flags & FLAG_MERGE_FORWARD) != 0 && (flags & FLAG_HEADER_ENABLED) == 0) {
-          lineTop = 0;
+          lineTop = -lineWidth; // XGram: past the row, so the row clip ends the bar during the back card, not an anti-aliased edge
           mergeTop = true;
         } else {
           lineTop = forwardY;
@@ -2537,7 +2538,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         }
 
         if ((flags & FLAG_MERGE_BOTTOM) != 0) {
-          lineBottom = height;
+          lineBottom = height + lineWidth;
           mergeBottom = true;
         } else {
           lineBottom = forwardY + getForwardHeight() + (replyData != null ? ReplyComponent.height() : 0);
@@ -2545,7 +2546,6 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         }
       }
 
-      int lineWidth = Screen.dp(3f);
       int lineLeft = getForwardLeft();
       int lineRight = lineLeft + lineWidth;
 
