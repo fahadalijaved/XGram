@@ -716,6 +716,11 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
           U.run(onDone);
         } else {
           int seconds = Math.max(5, TD.getFloodErrorSeconds(error.code, error.message, 5));
+          // XGram: APP_PUSH_* (e.g. APP_PUSH_APIKEY_MISSING: no push credential for this api_id on Telegram's side) won't
+          // fix itself in 5 seconds; retrying every 5 s for every account only drains the battery and invites flood waits
+          if (error.message != null && error.message.startsWith("APP_PUSH_")) {
+            seconds = Math.max(seconds, 30 * 60);
+          }
           if (seconds > 60 && isDebugInstance()) {
             TDLib.Tag.notifications("Unable to register device token, flood is %d seconds, ignoring: %s, accountId:%d", seconds, TD.toErrorString(error), accountId);
             Log.w(Log.TAG_FCM, "Unable to register device token (flood %ds, ignored): %s", seconds, TD.toErrorString(error)); // XGram: reaches the safety log
