@@ -742,6 +742,8 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
         }
         items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_secret_pushToken, 0, "Token", false));
         items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramPushRegisterAgain, R.drawable.baseline_sync_24, R.string.XgramPushRegisterAgain)); // XGram
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
         items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_secret_pushStats, 0, "Packages received", false));
         items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
         items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_secret_pushDate, 0, "Last received on", false));
@@ -1220,6 +1222,37 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
       if (!StringUtils.isEmpty(configuration)) {
         UI.copyText(configuration, R.string.CopiedText);
       }
+    } else if (viewId == R.id.btn_xgramPushRegisterAgain) {
+      // XGram: every logged-in account registers its push token with Telegram again
+      final java.util.List<Tdlib> accounts = new ArrayList<>();
+      for (TdlibAccount account : TdlibManager.instance()) {
+        Tdlib accountTdlib = account.activeTdlib();
+        if (accountTdlib != null) {
+          accounts.add(accountTdlib);
+        }
+      }
+      // One count per account plus one held until the loop ends, so the toast comes once, after the last account
+      final java.util.concurrent.atomic.AtomicInteger pending = new java.util.concurrent.atomic.AtomicInteger(accounts.size() + 1);
+      final java.util.concurrent.atomic.AtomicBoolean anyStarted = new java.util.concurrent.atomic.AtomicBoolean();
+      final Runnable finishOne = () -> {
+        if (pending.decrementAndGet() == 0 && anyStarted.get()) {
+          UI.post(() -> {
+            UI.showToast(R.string.XgramPushRegistered, Toast.LENGTH_SHORT);
+            if (!isDestroyed() && adapter != null) {
+              adapter.updateValuedSettingById(R.id.btn_secret_pushToken);
+            }
+          });
+        }
+      };
+      for (Tdlib accountTdlib : accounts) {
+        if (accountTdlib.xgramReregisterDeviceToken(finishOne)) {
+          anyStarted.set(true);
+        } else {
+          finishOne.run();
+        }
+      }
+      finishOne.run();
+      UI.showToast(anyStarted.get() ? R.string.XgramPushRegistering : R.string.XgramPushNoToken, Toast.LENGTH_SHORT);
     } else if (viewId == R.id.btn_secret_appFingerprint) {
       UI.copyText(U.getApkFingerprint("SHA1"), R.string.CopiedText);
     } else if (viewId == R.id.btn_secret_pushStats) {

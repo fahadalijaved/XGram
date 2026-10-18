@@ -668,6 +668,25 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     runOnTdlibThread(() -> checkDeviceTokenImpl(null));
   }
 
+  /**
+   * XGram: forgets this account's remembered push registration and registers the device token with Telegram again
+   * (Push Services, "Register again"). checkDeviceTokenImpl skips a token it already registered, so a registration
+   * made before the app's push credentials existed on Telegram's side would otherwise stay as it was.
+   * {@code onDone} runs once Telegram accepts it (errors retry as in checkDeviceTokenImpl).
+   *
+   * @return false when there is no token yet or the account is not logged in
+   */
+  public boolean xgramReregisterDeviceToken (@Nullable Runnable onDone) {
+    if (context.getToken() == null || authorizationStatus() != Status.READY) {
+      return false;
+    }
+    runOnTdlibThread(() -> {
+      TdlibSettingsManager.unregisterDevice(id());
+      checkDeviceTokenImpl(onDone);
+    });
+    return true;
+  }
+
   synchronized void checkDeviceTokenImpl (@Nullable Runnable onDone) {
     final TdApi.DeviceToken deviceToken = context.getToken();
     if (deviceToken == null || authorizationStatus() != Status.READY)

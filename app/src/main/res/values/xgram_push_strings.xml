@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <item type="id" name="btn_xgramPushRegisterAgain" />
+  <string name="XgramPushRegisterAgain">Register again</string>
+  <string name="XgramPushRegistering">Registering with Telegram…</string>
+  <string name="XgramPushRegistered">Registered. Send yourself a test message</string>
+  <string name="XgramPushNoToken">No push token yet</string>
+</resources>
