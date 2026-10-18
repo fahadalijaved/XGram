@@ -36,6 +36,7 @@ import org.thunderdog.challegram.tool.Icons;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.PorterDuffPaint;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.text.Counter;
 import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.widget.SparseDrawableView;
@@ -45,32 +46,22 @@ import com.fahadali.xgram.appearance.XgramExpressive;
 import me.vkryl.core.collection.IntList;
 
 /**
- * One row of the forum topic list: topic icon, name, time, "Sender: last message" preview and badges.
+ * One row of the forum topic list: topic icon, name, time, "Sender: last message" preview and badges. It has the
+ * chat list's rows' geometry in the chat list view's mode (ChatView.Metrics: One line, Two lines, Three lines, Three
+ * lines with bigger text): the topic icon in the photo's place and size, the title row, the lines under it and the
+ * badges where a chat's are, springing with the chat list's rows when the view changes (XgramChatListMode).
  */
 public final class ForumTopicView extends SparseDrawableView {
+  /** The height of a topic row now (it springs while the chat list view changes). */
   public static int getViewHeight () {
-    return Screen.dp(64f);
+    return com.fahadali.xgram.chats.XgramChatListMode.rowHeightPx();
   }
 
-  private static int getIconSize () {
-    return Screen.dp(30f);
-  }
-
-  private static int getIconLeft () {
-    return Screen.dp(14f);
-  }
-
-  private static int getIconTop () {
-    return Screen.dp(9f);
-  }
-
-  public static int getTextLeft () {
-    return Screen.dp(XgramExpressive.isEnabled() ? XGRAM_TEXT_LEFT : 58f);
-  }
-
-  // XGram M3E: a 40dp leading container 16dp from the start, the text 16dp after it (list item spec)
-  private static final float XGRAM_LEADING_LEFT = 16f, XGRAM_LEADING_SIZE = 40f, XGRAM_TEXT_LEFT = 72f;
-  private static final float XGRAM_ICON_SIZE = 24f, XGRAM_EMOJI_SIZE = 26f;
+  // The topic icon in the photo's place: Telegram X's design draws it bare at 0.6 of the photo (30dp beside the
+  // 52dp photos of two lines); Expressive design in a surfaceContainerHighest circle of the photo's size, the icon
+  // at 0.6 and a custom emoji at 0.65 of it (24dp and 26dp in a 40dp container, as the list item spec)
+  private static final float ICON_RATIO = .6f;
+  private static final float XGRAM_ICON_RATIO = .6f, XGRAM_EMOJI_RATIO = .65f;
 
   // XGram M3E: labelMedium time, primary and weight 700 while the topic has unread messages (as ChatView)
   private static Paint xgramTimePaint, xgramTimePaintUnread;
@@ -101,24 +92,13 @@ public final class ForumTopicView extends SparseDrawableView {
     return ChatView.getTimePaint();
   }
 
-  private static int getTitleTop () {
-    return Screen.dp(9f);
+  /** The row's geometry now: the chat list view's spring while it changes, the topic's mode otherwise. */
+  private ChatView.Metrics metrics () {
+    return com.fahadali.xgram.chats.XgramChatListMode.metrics(topic != null ? topic.getListMode() : Settings.instance().getChatListMode());
   }
 
-  private static int getTimeBaseline () {
-    return Screen.dp(25f);
-  }
-
-  private static int getIconRowTop () {
-    return Screen.dp(9f);
-  }
-
-  private static int getTextTop () {
-    return Screen.dp(35f);
-  }
-
-  private static int getCounterCenterY () {
-    return Screen.dp(45f);
+  private static float clamp01 (float value) {
+    return value < 0f ? 0f : value > 1f ? 1f : value;
   }
 
   private final Tdlib tdlib;
@@ -303,6 +283,7 @@ public final class ForumTopicView extends SparseDrawableView {
       }
       this.topic = topic;
       if (topic != null) {
+        topic.checkListMode(); // a row made before the chat list view changed lays itself out for the new one
         topic.checkLayout(getMeasuredWidth());
         topic.attachToView(this);
       }
@@ -319,6 +300,9 @@ public final class ForumTopicView extends SparseDrawableView {
 
   private void requestContent () {
     Text text = topic != null ? topic.getText() : null;
+    if (text == null && topic != null) {
+      text = topic.getFadeText(); // the old lines fade out with their custom emoji while the new mode has no text
+    }
     if (text != null) {
       text.requestMedia(textMediaReceiver);
     } else {
@@ -388,7 +372,8 @@ public final class ForumTopicView extends SparseDrawableView {
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-    super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(getViewHeight(), MeasureSpec.EXACTLY));
+    // The chat list row's height, springing while the view changes (the list asks for a layout each frame)
+    super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(Math.round(metrics().height), MeasureSpec.EXACTLY));
     if (topic != null && topic.checkLayout(getMeasuredWidth())) {
       requestContent();
     }
@@ -418,90 +403,174 @@ public final class ForumTopicView extends SparseDrawableView {
       }
     }
 
-    // Icon
+    // The row's geometry (ChatView.Metrics). While the chat list view changes (XgramChatListMode) it springs from the
+    // old mode to the new one, as the chat list's rows: the icon, the title row and the badges move, and the lines
+    // under the title that only one of the two modes has fade through (the old mode's out over the first half, the
+    // new mode's in over the second).
+    final int mode = topic.getListMode();
+    final ChatView.Metrics m = metrics();
+    final boolean oneLineMode = mode == Settings.CHAT_MODE_1LINE;
+    final float oneLine = clamp01(m.oneLine);
+    final boolean modeTransition = com.fahadali.xgram.chats.XgramChatListMode.isAnimating() && mode == com.fahadali.xgram.chats.XgramChatListMode.targetMode();
+    final float modeFraction = modeTransition ? clamp01(com.fahadali.xgram.chats.XgramChatListMode.fraction()) : 1f;
+    final float linesInAlpha = modeTransition ? clamp01(modeFraction * 2f - 1f) : 1f;
+    final float linesOutAlpha = modeTransition && topic.getFadeMode() != 0 ? clamp01(1f - modeFraction * 2f) : 0f;
+    // The title row and the lines under it move together: the title's shift from where the topic's own mode puts it
+    final int textLeft = ChatView.getLeftPadding(mode);
+    final int titleDx = Math.round(m.textLeft) - textLeft;
+    final int titleTop = Math.round(m.titleTop);
+    final float timeBaseline = m.timeBaseline;
+    final int clipSaveCount;
+    if (modeTransition) {
+      clipSaveCount = org.thunderdog.challegram.tool.Views.save(c);
+      c.clipRect(0, 0, viewWidth, getMeasuredHeight());
+    } else {
+      clipSaveCount = -1;
+    }
+
+    // Icon, in the photo's place and at its scale
     Drawable icon = emojiIcon != null ? emojiIcon : topic.getIconDrawable();
+    final float leadingSize = m.avatar;
+    final float cx = rtl ? viewWidth - m.avatarLeft - leadingSize / 2f : m.avatarLeft + leadingSize / 2f;
+    final float cy = m.avatarTop + leadingSize / 2f;
+    final int iconSize;
     if (xgramM3) {
-      // In a 40dp surfaceContainerHighest circle, like a list item's leading avatar (on the page's surface while the
+      // In a surfaceContainerHighest circle, like a list item's leading avatar (on the page's surface while the
       // row is a lifted card of that color)
-      float leadingSize = Screen.dp(XGRAM_LEADING_SIZE);
-      float leadingLeft = Screen.dp(XGRAM_LEADING_LEFT);
-      float cx = rtl ? viewWidth - leadingLeft - leadingSize / 2f : leadingLeft + leadingSize / 2f;
-      float cy = getViewHeight() / 2f;
       xgramLeadingPaint.setColor(me.vkryl.core.ColorUtils.fromToArgb(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST), XgramExpressive.color(XgramExpressive.SURFACE), me.vkryl.core.MathUtils.clamp(xgramDragValue)));
       c.drawCircle(cx, cy, leadingSize / 2f, xgramLeadingPaint);
-      int size = Screen.dp(emojiIcon != null ? XGRAM_EMOJI_SIZE : XGRAM_ICON_SIZE);
-      int left = Math.round(cx - size / 2f), top = Math.round(cy - size / 2f);
-      icon.setBounds(left, top, left + size, top + size);
+      iconSize = Math.round(leadingSize * (emojiIcon != null ? XGRAM_EMOJI_RATIO : XGRAM_ICON_RATIO));
     } else {
-      int iconSize = getIconSize();
-      int iconLeft = rtl ? viewWidth - getIconLeft() - iconSize : getIconLeft();
-      icon.setBounds(iconLeft, getIconTop(), iconLeft + iconSize, getIconTop() + iconSize);
+      iconSize = Math.round(leadingSize * ICON_RATIO);
     }
+    final int iconLeft = Math.round(cx - iconSize / 2f), iconTop = Math.round(cy - iconSize / 2f);
+    icon.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize);
     icon.draw(c);
+
+    // Who is typing in the topic
+    final org.thunderdog.challegram.telegram.TdlibStatusManager.Helper status = topic.statusHelper();
+    final org.thunderdog.challegram.telegram.TdlibStatusManager.ChatState state = status.drawingState();
+    final float statusVisibility = state != null ? state.visibility() : 0f;
+    // In one line the typing icon takes the time's place (there is no line under the title for it): a fade through
+    // with Expressive design, Telegram X's crossfade otherwise (as ChatView)
+    float timeAlpha = 1f, oneLineStatusAlpha = 0f;
+    if (oneLineMode && state != null && statusVisibility > 0f) {
+      final float visibility = clamp01(statusVisibility);
+      if (xgramM3) {
+        timeAlpha = visibility >= .5f ? 0f : 1f - visibility * 2f;
+        oneLineStatusAlpha = visibility <= .5f ? 0f : visibility * 2f - 1f;
+      } else {
+        timeAlpha = 1f - visibility;
+        oneLineStatusAlpha = visibility;
+      }
+    }
 
     // Time
     final float xgramTrailing = xgramM3 ? 1f - xgramHandleFactor() : 1f; // XGram M3E: the reorder handle takes their place
+    final float timeDrawAlpha = xgramTrailing * timeAlpha;
     String time = topic.getTime();
-    if (!time.isEmpty()) {
+    if (!time.isEmpty() && timeDrawAlpha > 0f) {
       if (xgramM3) {
         boolean unread = topic.hasUnread();
         Paint paint = xgramTimePaint(unread);
         float timeWidth = unread ? paint.measureText(time) : topic.getTimeWidth();
         float timeX = rtl ? viewWidth - topic.getTimeLeft() - topic.getTimeWidth() : topic.getTimeLeft() + topic.getTimeWidth() - timeWidth;
-        if (xgramTrailing < 1f) {
-          paint.setColor(XgramExpressive.withAlpha(paint.getColor(), xgramTrailing));
+        if (timeDrawAlpha < 1f) {
+          paint.setColor(XgramExpressive.withAlpha(paint.getColor(), timeDrawAlpha));
         }
-        if (xgramTrailing > 0f) {
-          c.drawText(time, timeX, getTimeBaseline(), paint);
-        }
+        c.drawText(time, timeX, timeBaseline, paint);
       } else {
-        c.drawText(time, rtl ? viewWidth - topic.getTimeLeft() - topic.getTimeWidth() : topic.getTimeLeft(), getTimeBaseline(), getTimePaint());
+        // The shared paint: its alpha is put back after
+        Paint paint = getTimePaint();
+        final int paintAlpha = paint.getAlpha();
+        if (timeDrawAlpha < 1f) {
+          paint.setAlpha(Math.round(paintAlpha * timeDrawAlpha));
+        }
+        c.drawText(time, rtl ? viewWidth - topic.getTimeLeft() - topic.getTimeWidth() : topic.getTimeLeft(), timeBaseline, paint);
+        if (timeDrawAlpha < 1f) {
+          paint.setAlpha(paintAlpha);
+        }
+      }
+    }
+    if (oneLineStatusAlpha > 0f && xgramTrailing > 0f) {
+      final TdApi.ChatAction action = state.action();
+      if (action != null) {
+        // Its end edge on the time's: the title never reflows, one line keeps 24dp for the time (TGForumTopic.timeReserve)
+        final float startX = topic.getTimeLeft() + topic.getTimeWidth() - org.thunderdog.challegram.tool.DrawAlgorithms.getStatusWidth(action);
+        final float alpha = oneLineStatusAlpha * xgramTrailing;
+        final int color = xgramM3 ? XgramExpressive.color(XgramExpressive.PRIMARY) : org.thunderdog.challegram.theme.Theme.getColor(ColorId.textLight);
+        org.thunderdog.challegram.tool.DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - startX : startX, timeBaseline - Screen.dp(4f), me.vkryl.core.ColorUtils.alphaColor(alpha, color), this, !xgramM3 && alpha == 1f ? ColorId.textLight : ColorId.NONE);
       }
     }
 
-    // Title, mute and lock
+    // Title, mute and lock. In RTL Telegram X draws the title from the start without mirroring it (as ChatView); one
+    // line has the ticks and badges on the title's row, so there the whole row is mirrored
+    final boolean mirrorTitle = rtl && oneLineMode;
     Text title = topic.getTitle();
     if (title != null) {
-      title.draw(c, getTextLeft(), getTitleTop());
+      final int titleX = textLeft + titleDx;
+      title.draw(c, mirrorTitle ? viewWidth - titleX - title.getWidth() : titleX, titleTop);
     }
     if (topic.isMuted()) {
-      Drawables.drawRtl(c, Icons.getChatMuteDrawable(ColorId.chatListMute), topic.getMuteLeft(), getIconRowTop() + Screen.dp(2f), Paints.getChatsMutePaint(), viewWidth, rtl);
+      Drawables.drawRtl(c, Icons.getChatMuteDrawable(ColorId.chatListMute), topic.getMuteLeft() + titleDx, Math.round(m.muteTop), Paints.getChatsMutePaint(), viewWidth, rtl);
     }
     int checksRight = topic.getChecksRight();
     if (topic.isClosed()) {
       Drawable lock = getSparseDrawable(R.drawable.baseline_lock_16, ColorId.iconLight);
-      Drawables.drawRtl(c, lock, topic.getLockLeft(), getTimeBaseline() - Screen.dp(12f), PorterDuffPaint.get(ColorId.iconLight), viewWidth, rtl);
+      Drawables.drawRtl(c, lock, topic.getLockLeft(), Math.round(timeBaseline) - Screen.dp(12f), PorterDuffPaint.get(ColorId.iconLight), viewWidth, rtl);
       checksRight -= Screen.dp(20f);
     }
 
-    // Sending state and read ticks
+    // Sending state and read ticks. trailingX: where the cluster at the end (time, lock, ticks) starts, one line's
+    // badges end 8dp before it
+    final int clockTop = Math.round(m.clockTop);
+    int trailingX = checksRight + Screen.dp(7f);
     if (topic.isSending()) {
       int x = checksRight - Screen.dp(10f) - Screen.dp(Icons.CLOCK_SHIFT_X);
-      Drawables.drawRtl(c, Icons.getClockIcon(ColorId.iconLight), x, getTimeBaseline() - Screen.dp(11f) - Screen.dp(Icons.CLOCK_SHIFT_Y), Paints.getIconLightPorterDuffPaint(), viewWidth, rtl);
+      Drawables.drawRtl(c, Icons.getClockIcon(ColorId.iconLight), x, clockTop - Screen.dp(Icons.CLOCK_SHIFT_Y), Paints.getIconLightPorterDuffPaint(), viewWidth, rtl);
+      trailingX = checksRight - Screen.dp(20f);
     } else if (topic.isOutgoing()) {
       boolean unread = topic.isUnread();
-      int x = checksRight + (unread ? Screen.dp(4f) : 0) - Screen.dp(Icons.TICKS_SHIFT_X) - Screen.dp(14f);
-      Drawables.drawRtl(c, unread ? Icons.getSingleTick(ColorId.ticks) : Icons.getDoubleTick(ColorId.ticks), x, getTimeBaseline() - Screen.dp(11f) - Screen.dp(Icons.TICKS_SHIFT_Y), unread ? Paints.getTicksPaint() : Paints.getTicksReadPaint(), viewWidth, rtl);
+      int right = checksRight + (unread ? Screen.dp(4f) : 0);
+      int x = right - Screen.dp(Icons.TICKS_SHIFT_X) - Screen.dp(14f);
+      Drawables.drawRtl(c, unread ? Icons.getSingleTick(ColorId.ticks) : Icons.getDoubleTick(ColorId.ticks), x, clockTop - Screen.dp(Icons.TICKS_SHIFT_Y), unread ? Paints.getTicksPaint() : Paints.getTicksReadPaint(), viewWidth, rtl);
+      trailingX = right - Screen.dp(24 - 8 + 3);
     }
 
-    // Counters, or a pin for pinned topics without unread messages
-    float counterRight = viewWidth - getRightPaddingPx();
-    float counterRadius = ChatView.getCounterRadius();
-    float counterCenterY = getCounterCenterY();
+    // Counters, on the second line at the end or in one line before the ticks, sliding between the two while the view
+    // changes (as ChatView); a pin for pinned topics without unread messages. Right to left: unread, mention, reaction.
+    final float counterRadius = ChatView.getCounterRadius();
+    final float counterCenterY = m.counterCenterY;
+    final float multiLineRight = viewWidth - getRightPaddingPx();
+    final float oneLineRight = trailingX - Screen.dp(8f);
+    final int counterGap = Screen.dp(7f);
     Counter counter = topic.getCounter();
-    counter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, xgramTrailing);
-    counterRight -= counter.getScaledWidth(Screen.dp(7f));
     Counter mentionCounter = topic.getMentionCounter();
-    mentionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, xgramTrailing, this, ColorId.badgeText);
-    counterRight -= mentionCounter.getScaledWidth(Screen.dp(7f));
     Counter reactionsCounter = topic.getReactionsCounter();
     // XGram M3E: the heart takes the badge's own (tertiary) content color
-    reactionsCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, xgramTrailing, this, xgramM3 ? ColorId.NONE : topic.isMuted() ? ColorId.badgeMutedText : ColorId.badgeText);
-    counterRight -= reactionsCounter.getScaledWidth(Screen.dp(7f));
-    if (topic.isPinned() && counterRight == viewWidth - getRightPaddingPx() && xgramTrailing > 0f) {
+    final int reactionsColorId = xgramM3 ? ColorId.NONE : topic.isMuted() ? ColorId.badgeMutedText : ColorId.badgeText;
+    if (rtl && oneLine >= .5f) {
+      // Mirrored in one line: from the start edge of the slot towards the title
+      float counterLeft = viewWidth - oneLineRight;
+      counter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, xgramTrailing);
+      counterLeft += counter.getScaledWidth(counterGap);
+      mentionCounter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, xgramTrailing, this, ColorId.badgeText);
+      counterLeft += mentionCounter.getScaledWidth(counterGap);
+      reactionsCounter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, xgramTrailing, this, reactionsColorId);
+    } else {
+      float counterRight = rtl || oneLine <= 0f ? multiLineRight : multiLineRight + (oneLineRight - multiLineRight) * oneLine;
+      counter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, xgramTrailing);
+      counterRight -= counter.getScaledWidth(counterGap);
+      mentionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, xgramTrailing, this, ColorId.badgeText);
+      counterRight -= mentionCounter.getScaledWidth(counterGap);
+      reactionsCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, xgramTrailing, this, reactionsColorId);
+    }
+    final float badgesWidth = counter.getScaledWidth(counterGap) + mentionCounter.getScaledWidth(counterGap) + reactionsCounter.getScaledWidth(counterGap);
+    if (topic.isPinned() && badgesWidth == 0f && xgramTrailing > 0f) {
       // XGram M3E: the pin through the icon pack
       Drawable pin = getSparseDrawable(xgramM3 ? com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_pin_16) : R.drawable.deproko_baseline_pin_16, ColorId.iconLight);
-      int pinLeft = viewWidth - getRightPaddingPx() - pin.getMinimumWidth();
+      final float pinRight = multiLineRight + (oneLineRight - multiLineRight) * oneLine;
+      int pinLeft = Math.round(pinRight) - pin.getMinimumWidth();
       Paint pinPaint = PorterDuffPaint.get(ColorId.iconLight);
       if (xgramTrailing < 1f) {
         // XGram M3E: fading out for the reorder handle (a paint of its own: the shared one keeps its alpha)
@@ -525,53 +594,85 @@ public final class ForumTopicView extends SparseDrawableView {
       xgramHandlePaint.setAlpha(Math.round(255 * (1f - xgramTrailing)));
       Drawable handle = getSparseDrawable(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_drag_handle_24), ColorId.NONE);
       int handleLeft = viewWidth - Screen.dp(16f) - handle.getMinimumWidth();
-      Drawables.drawRtl(c, handle, handleLeft, (int) (getViewHeight() / 2f - handle.getMinimumHeight() / 2f), xgramHandlePaint, viewWidth, rtl);
+      Drawables.drawRtl(c, handle, handleLeft, (int) (getMeasuredHeight() / 2f - handle.getMinimumHeight() / 2f), xgramHandlePaint, viewWidth, rtl);
       xgramHandlePaint.setAlpha(255);
     }
 
-    // "Sender: text", sliding away while someone is typing in the topic (as in chats)
-    org.thunderdog.challegram.telegram.TdlibStatusManager.Helper status = topic.statusHelper();
-    org.thunderdog.challegram.telegram.TdlibStatusManager.ChatState state = status.drawingState();
-    float statusVisibility = state != null ? state.visibility() : 0f;
-    float textAlpha = 1f - statusVisibility;
-    int textTop = getTextTop();
-    if (textAlpha > 0f) {
-      int dy = (int) (Screen.dp(14f) * statusVisibility);
-      int saveCount = dy != 0 ? org.thunderdog.challegram.tool.Views.save(c) : -1;
-      if (dy != 0) {
-        c.translate(0, dy);
-      }
-      Text prefix = topic.getPrefix();
-      if (prefix != null) {
-        prefix.draw(c, getTextLeft(), textTop, null, textAlpha);
-      }
-      Text text = topic.getText();
-      if (text != null) {
-        IntList iconIds = topic.getTextIconIds();
-        if (iconIds != null) {
-          int x = topic.getTextLeft();
-          for (int i = 0; i < iconIds.size(); i++) {
-            Drawable d = getSparseDrawable(iconIds.get(i), ColorId.NONE);
-            int y = textTop + text.getLineHeight(false) / 2 - d.getMinimumHeight() / 2;
-            Drawables.drawRtl(c, d, x, y, PorterDuffPaint.get(ColorId.chatListIcon, textAlpha), viewWidth, rtl);
-            x += Screen.dp(18f);
-          }
-        }
-        text.draw(c, topic.getTextLeft(), textTop, null, textAlpha, textMediaReceiver);
-      }
-      if (saveCount != -1) {
-        org.thunderdog.challegram.tool.Views.restore(c, saveCount);
-      }
+    // The lines under the title: "Sender: text" (two lines) or the sender over the text (three lines), none in one
+    // line; sliding away while someone is typing in the topic (as in chats)
+    final float textAlpha = 1f - statusVisibility;
+    if (linesOutAlpha > 0f) {
+      // The old mode's lines, at the old mode's places shifted with the title row; custom emoji only while the new
+      // mode has no text of its own
+      final int fadeMode = topic.getFadeMode();
+      final ChatView.Metrics fadeMetrics = ChatView.metricsOf(fadeMode);
+      drawLines(c, fadeMode, topic.getFadePrefix(), topic.getFadeText(), topic.getFadeTextLeft(), topic.getFadeIcons(), linesOutAlpha, true,
+        topic.getText() == null ? textMediaReceiver : null, Math.round(m.textLeft - fadeMetrics.textLeft), Math.round(m.titleTop - fadeMetrics.titleTop), viewWidth, rtl);
     }
-    if (statusVisibility > 0f) {
+    final ChatView.Metrics ownMetrics = modeTransition ? ChatView.metricsOf(mode) : m;
+    final int linesDy = modeTransition ? Math.round(m.titleTop - ownMetrics.titleTop) : 0;
+    final float linesAlpha = textAlpha * linesInAlpha;
+    if (linesAlpha > 0f && !oneLineMode) {
+      final int dy = (int) (Screen.dp(14f) * statusVisibility);
+      // Mid-change the icons go through a layer, as the old lines may draw the same drawable at another alpha
+      drawLines(c, mode, topic.getPrefix(), topic.getText(), topic.getTextLeft(), topic.getTextIconIds(), linesAlpha, modeTransition,
+        textMediaReceiver, titleDx, linesDy + dy, viewWidth, rtl);
+    }
+    final float statusLinesAlpha = statusVisibility * linesInAlpha;
+    if (statusLinesAlpha > 0f && !oneLineMode) {
       Text statusText = status.drawingText();
       if (statusText != null) {
-        float top = textTop - Screen.dp(14f) * textAlpha;
-        int x = getTextLeft();
-        org.thunderdog.challegram.tool.DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - x : x, top + statusText.getLineHeight() / 2f, me.vkryl.core.ColorUtils.alphaColor(statusVisibility, statusText.getTextColor()), this, statusVisibility == 1f ? ColorId.textLight : ColorId.NONE);
-        statusText.draw(c, x, (int) top, null, statusVisibility);
+        float top = ChatView.getTextTop(mode) + linesDy - Screen.dp(14f) * textAlpha;
+        int x = textLeft + titleDx;
+        org.thunderdog.challegram.tool.DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - x : x, top + statusText.getLineHeight() / 2f, me.vkryl.core.ColorUtils.alphaColor(statusLinesAlpha, statusText.getTextColor()), this, statusLinesAlpha == 1f ? ColorId.textLight : ColorId.NONE);
+        statusText.draw(c, x, (int) top, null, statusLinesAlpha);
       }
     }
+
+    if (clipSaveCount != -1) {
+      org.thunderdog.challegram.tool.Views.restore(c, clipSaveCount);
+    }
+  }
+
+  /**
+   * The lines under the title of {@code mode}, as ChatView's: the prefix (sender, "Draft") with the text after it (two
+   * lines) or under it (three lines), and the text's icons, at {@code alpha}, shifted by {@code dx} (in the row's own
+   * start-based x, as every x here) and {@code dy}. {@code iconLayers}: each icon at full alpha in a layer of
+   * {@code alpha}, for frames where another pass may draw the same drawable at another alpha.
+   */
+  private void drawLines (Canvas c, int mode, @Nullable Text prefix, @Nullable Text text, int textLeft, @Nullable IntList icons, float alpha, boolean iconLayers, @Nullable ComplexReceiver receiver, int dx, int dy, int viewWidth, boolean rtl) {
+    if (alpha <= 0f || (prefix == null && text == null)) {
+      return;
+    }
+    int textTop = ChatView.getTextTop(mode) + dy;
+    if (prefix != null) {
+      prefix.draw(c, ChatView.getLeftPadding(mode) + dx, textTop, null, alpha);
+    }
+    if (text == null) {
+      return;
+    }
+    if (mode != Settings.CHAT_MODE_2LINE) {
+      if (prefix != null) {
+        textTop += prefix.getNextLineHeight();
+      } else if (text.getLineCount() == 1) {
+        textTop += Screen.dp(2f); // ChatView.getSingleLineOffset
+      }
+    }
+    if (icons != null) {
+      int x = textLeft + dx;
+      for (int i = 0; i < icons.size(); i++) {
+        Drawable d = getSparseDrawable(icons.get(i), ColorId.NONE);
+        int y = textTop + text.getLineHeight(false) / 2 - d.getMinimumHeight() / 2;
+        if (iconLayers) {
+          final float iconCx = (rtl ? viewWidth - x - d.getMinimumWidth() : x) + d.getMinimumWidth() / 2f;
+          com.fahadali.xgram.appearance.XgramIconCrossfade.drawSingle(c, d, PorterDuffPaint.get(ColorId.chatListIcon), iconCx, y + d.getMinimumHeight() / 2f, alpha);
+        } else {
+          Drawables.drawRtl(c, d, x, y, PorterDuffPaint.get(ColorId.chatListIcon, alpha), viewWidth, rtl);
+        }
+        x += Screen.dp(18f);
+      }
+    }
+    text.draw(c, textLeft + dx, textTop, null, alpha, receiver);
   }
 
   @Nullable

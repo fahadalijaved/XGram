@@ -1308,7 +1308,8 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
 
   /** The topics line as the prefix (the second line). True when it took the place of the usual sender prefix. */
   private boolean xgramSetTopicsPrefix () {
-    if (xgramTopicsLine == null || showDraft()) {
+    // Only three lines have a line of their own for the topics; two lines and one line are the chat list's rows
+    if (xgramTopicsLine == null || showDraft() || !com.fahadali.xgram.chats.XgramChatListMode.isThreeLines(listMode)) {
       return false;
     }
     flags |= FLAG_HAS_PREFIX;
@@ -1329,7 +1330,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   /** With the topics on the second line, the message's sender goes in front of the text: "Sender: message". */
   private void xgramPrependSender (ContentPreview preview) {
     // A preview that names its author itself ("Alice pinned ...") keeps the name out of the front.
-    if (xgramTopicsLine == null || preview.hideAuthor || (flags & FLAG_MESSAGE) == 0 || chat == null || chat.lastMessage == null || showDraft() || StringUtils.isEmpty(text)) {
+    if (xgramTopicsLine == null || !com.fahadali.xgram.chats.XgramChatListMode.isThreeLines(listMode) || preview.hideAuthor || (flags & FLAG_MESSAGE) == 0 || chat == null || chat.lastMessage == null || showDraft() || StringUtils.isEmpty(text)) {
       return;
     }
     final String sender;

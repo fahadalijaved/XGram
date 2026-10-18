@@ -197,6 +197,10 @@ public class Drawables {
   public static Drawable load (Resources resources, int res) {
     if (res == 0)
       return null;
+    // XGram: the mute and secret lock glyphs by titles keep Telegram X's small size with an icon pack
+    Drawable titleGlyph = com.fahadali.xgram.appearance.XgramTitleGlyphs.load(resources, res);
+    if (titleGlyph != null)
+      return titleGlyph;
     res = com.fahadali.xgram.appearance.XgramIconPack.map(res); // XGram: icon packs
     Drawable drawable = ResourcesCompat.getDrawable(resources, res, null);
     if (drawable == null)

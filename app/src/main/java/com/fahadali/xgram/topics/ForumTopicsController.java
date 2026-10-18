@@ -495,6 +495,10 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
     // With Expressive design new topics, reorders and removals spring (plain changes redraw in place).
     recyclerView.setItemAnimator(xgramIdleAnimator());
     recyclerView.setAdapter(adapter);
+    org.thunderdog.challegram.unsorted.Settings.instance().addChatListModeListener(chatListModeListener);
+    if (com.fahadali.xgram.chats.XgramChatListMode.isAnimating()) {
+      listenToModeFrames(); // opened while the chat list view springs: the rows follow it to the end
+    }
     new ItemTouchHelper(new ReorderCallback()).attachToRecyclerView(recyclerView);
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
       @Override
@@ -617,6 +621,90 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
       row.setTopic(topic);
     }
     return row;
+  }
+
+  // The chat list view (One line, Two lines, Three lines): the topic rows change with it as the chat list's rows do,
+  // springing to the new height on XgramChatListMode's frames (at once with Reduce motion), the old lines fading out.
+
+  private final org.thunderdog.challegram.unsorted.Settings.ChatListModeChangeListener chatListModeListener = newMode -> onChatListModeChanged();
+  private boolean modeListening;
+  private final com.fahadali.xgram.chats.XgramChatListMode.Listener modeFrameListener = new com.fahadali.xgram.chats.XgramChatListMode.Listener() {
+    @Override
+    public void onChatListModeFrame () {
+      CustomRecyclerView recyclerView = getRecyclerView();
+      if (recyclerView != null && recyclerView.getWindowToken() != null) { // off screen: the rows take the final height
+        relayoutRows();
+      }
+    }
+
+    @Override
+    public void onChatListModeEnd () {
+      onModeEnd();
+    }
+  };
+
+  private void onChatListModeChanged () {
+    if (!org.thunderdog.challegram.tool.UI.inUiThread()) {
+      runOnUiThreadOptional(this::onChatListModeChanged);
+      return;
+    }
+    if (isDestroyed()) {
+      return;
+    }
+    for (TGForumTopic row : rows.values()) {
+      row.checkListMode(); // keeps the old lines to fade out while the rows spring
+    }
+    if (com.fahadali.xgram.chats.XgramChatListMode.isAnimating()) {
+      listenToModeFrames();
+    } else {
+      relayoutRows();
+    }
+  }
+
+  private void listenToModeFrames () {
+    if (!modeListening) {
+      modeListening = true;
+      com.fahadali.xgram.chats.XgramChatListMode.addFrameListener(modeFrameListener);
+    }
+  }
+
+  private void stopModeFrames () {
+    if (modeListening) {
+      modeListening = false;
+      com.fahadali.xgram.chats.XgramChatListMode.removeFrameListener(modeFrameListener);
+    }
+  }
+
+  private void onModeEnd () {
+    stopModeFrames();
+    for (TGForumTopic row : rows.values()) {
+      row.endModeTransition();
+    }
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView != null) {
+      for (int i = 0; i < recyclerView.getChildCount(); i++) {
+        View child = recyclerView.getChildAt(i);
+        if (child instanceof ForumTopicView) {
+          ((ForumTopicView) child).onTopicChanged(); // the new text's custom emoji, asked for again
+        }
+      }
+    }
+    relayoutRows();
+  }
+
+  /** The rows on screen measure again (RecyclerView skips a child whose specs did not change, its height did). */
+  private void relayoutRows () {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return;
+    }
+    for (int i = 0; i < recyclerView.getChildCount(); i++) {
+      View child = recyclerView.getChildAt(i);
+      if (child instanceof ForumTopicView) {
+        child.requestLayout();
+        child.invalidate();
+      }
+    }
   }
 
   // ForumTopicList.Listener
@@ -927,6 +1015,8 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
   public void destroy () {
     super.destroy();
     cancelPendingSearch();
+    org.thunderdog.challegram.unsorted.Settings.instance().removeChatListModeListener(chatListModeListener);
+    stopModeFrames();
     for (TGForumTopic row : rows.values()) {
       row.statusHelper().detachFromAnyChat();
     }
