@@ -39,7 +39,6 @@ import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.ui.ChatsController;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.SettingHolder;
-import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.widget.BaseView;
 import org.thunderdog.challegram.widget.ListInfoView;
 import org.thunderdog.challegram.widget.NoScrollTextView;
@@ -53,7 +52,7 @@ public class ChatsViewHolder extends RecyclerView.ViewHolder {
   public static @Px int measureHeightForType (@ViewType int viewType) {
     switch (viewType) {
       case ChatsAdapter.VIEW_TYPE_CHAT:
-        return ChatView.getViewHeight(Settings.instance().getChatListMode());
+        return com.fahadali.xgram.chats.XgramChatListMode.rowHeightPx(); // XGram: springs while the chat list view changes
       case ChatsAdapter.VIEW_TYPE_INFO:
         return SettingHolder.measureHeightForType(ListItem.TYPE_LIST_INFO_VIEW);
       case ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS:
@@ -64,6 +63,9 @@ public class ChatsViewHolder extends RecyclerView.ViewHolder {
   }
 
   public void setChat (TGChat chat, boolean needBackground, boolean noSeparator, boolean isSelected) {
+    if (chat != null) {
+      chat.checkChatListMode(); // XGram: a row made on TDLib's thread may have read the view before it changed
+    }
     ((ChatView) itemView).setChat(chat);
     ((ChatView) itemView).setNeedBackground(needBackground);
     ((ChatView) itemView).setIsSelected(isSelected, false);

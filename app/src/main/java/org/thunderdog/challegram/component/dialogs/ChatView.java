@@ -151,7 +151,7 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
   }
 
   public static int getAvatarLeft (int chatListMode) {
-    return Screen.dp(/*inMultiLineMode ? 6f : */7f);
+    return Screen.dp(chatListMode == Settings.CHAT_MODE_1LINE ? 10f : /*inMultiLineMode ? 6f : */7f);
   }
 
   public static int getAvatarRadius (int chatListMode) {
@@ -159,7 +159,8 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
   }
 
   public static int getDefaultAvatarCacheSize () {
-    return getAvatarSize(Settings.instance().getChatListMode());
+    // XGram: never below the two lines size, so the small one line photos don't make every avatar in the app blurry
+    return Math.max(getAvatarSize(Settings.instance().getChatListMode()), getAvatarSize(Settings.CHAT_MODE_2LINE));
   }
 
   public static int getCounterRadius () {
@@ -167,6 +168,9 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
   }
 
   public static int getLeftPadding (int chatListMode) {
+    if (chatListMode == Settings.CHAT_MODE_1LINE) {
+      return getAvatarLeft(chatListMode) + getAvatarSize(chatListMode) + Screen.dp(12f); // XGram: 10 + 36 + 12
+    }
     return chatListMode != Settings.CHAT_MODE_2LINE ? getAvatarLeft(chatListMode) + getAvatarSize(chatListMode) + Screen.dp(11f) : getViewHeight(chatListMode);
   }
 
@@ -243,6 +247,8 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   public static int getViewHeight (int chatListMode) {
     switch (chatListMode) {
+      case Settings.CHAT_MODE_1LINE:
+        return Screen.dp(48f); // XGram
       case Settings.CHAT_MODE_3LINE_BIG:
         return Screen.dp(82f);
       case Settings.CHAT_MODE_3LINE:
@@ -255,6 +261,8 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   public static float getAvatarSizeDp (int chatListMode) {
     switch (chatListMode) {
+      case Settings.CHAT_MODE_1LINE:
+        return 36f; // XGram
       case Settings.CHAT_MODE_3LINE_BIG:
         return 60f;
       case Settings.CHAT_MODE_3LINE:
@@ -271,6 +279,8 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   private static int getAvatarTop (int chatListMode) {
     switch (chatListMode) {
+      case Settings.CHAT_MODE_1LINE:
+        return Screen.dp(6f); // XGram
       case Settings.CHAT_MODE_3LINE_BIG:
         return Screen.dp(11f);
       case Settings.CHAT_MODE_3LINE:
@@ -286,6 +296,8 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   private static int getCounterOffset (int chatsListMode) {
     switch (chatsListMode) {
+      case Settings.CHAT_MODE_1LINE:
+        return Screen.dp(13f); // XGram: centred on the one row, 24dp
       case Settings.CHAT_MODE_3LINE:
         return Screen.dp(42f);
       case Settings.CHAT_MODE_3LINE_BIG:
@@ -340,6 +352,8 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   private static int getMuteTop (int chatListMode) {
     switch (chatListMode) {
+      case Settings.CHAT_MODE_1LINE:
+        return Screen.dp(12f); // XGram: the 24dp icons centred on the row
       case Settings.CHAT_MODE_3LINE:
       case Settings.CHAT_MODE_3LINE_BIG:
         return Screen.dp(9f);
@@ -351,6 +365,10 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   public static int getTitleTop2 (int chatListMode) {
     switch (chatListMode) {
+      case Settings.CHAT_MODE_1LINE:
+        // XGram: the title centred on the 48dp row, from the real title style (Roboto or Google Sans Flex metrics).
+        // Measures the font: draw code reads it from metricsOf instead.
+        return Screen.dp(24f) - Text.getLineHeight(TGChat.xgramOneLineTitleProvider(), false) / 2;
       case Settings.CHAT_MODE_3LINE:
       case Settings.CHAT_MODE_3LINE_BIG:
         return Screen.dp(10f);
@@ -366,6 +384,119 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   public static int getAvatarTopFull (int chatListMode) {
     return getAvatarTop(chatListMode) + getAvatarRadius(chatListMode);
+  }
+
+  // XGram: a row's geometry as one object, so a change of the chat list view (XgramChatListMode) can spring between two.
+
+  /** A row's geometry in px. {@link #oneLine} is 1 in one line and 0 otherwise (between the two while it changes). */
+  public static final class Metrics {
+    public float height, avatar, avatarLeft, avatarTop, textLeft, titleTop, timeBaseline, muteTop, clockTop,
+      counterCenterY, textTop, badgeScale, oneLine;
+
+    public void set (Metrics m) {
+      height = m.height;
+      avatar = m.avatar;
+      avatarLeft = m.avatarLeft;
+      avatarTop = m.avatarTop;
+      textLeft = m.textLeft;
+      titleTop = m.titleTop;
+      timeBaseline = m.timeBaseline;
+      muteTop = m.muteTop;
+      clockTop = m.clockTop;
+      counterCenterY = m.counterCenterY;
+      textTop = m.textTop;
+      badgeScale = m.badgeScale;
+      oneLine = m.oneLine;
+    }
+
+    /** {@code from} to {@code to} at {@code f} (a spring may take it a little past 1). */
+    public void lerp (Metrics from, Metrics to, float f) {
+      height = from.height + (to.height - from.height) * f;
+      avatar = from.avatar + (to.avatar - from.avatar) * f;
+      avatarLeft = from.avatarLeft + (to.avatarLeft - from.avatarLeft) * f;
+      avatarTop = from.avatarTop + (to.avatarTop - from.avatarTop) * f;
+      textLeft = from.textLeft + (to.textLeft - from.textLeft) * f;
+      titleTop = from.titleTop + (to.titleTop - from.titleTop) * f;
+      timeBaseline = from.timeBaseline + (to.timeBaseline - from.timeBaseline) * f;
+      muteTop = from.muteTop + (to.muteTop - from.muteTop) * f;
+      clockTop = from.clockTop + (to.clockTop - from.clockTop) * f;
+      counterCenterY = from.counterCenterY + (to.counterCenterY - from.counterCenterY) * f;
+      textTop = from.textTop + (to.textTop - from.textTop) * f;
+      badgeScale = from.badgeScale + (to.badgeScale - from.badgeScale) * f;
+      oneLine = from.oneLine + (to.oneLine - from.oneLine) * f;
+    }
+  }
+
+  private static final Metrics[] xgramModeMetrics = new Metrics[Settings.CHAT_MODE_1LINE + 1];
+  private static float xgramMetricsDensity;
+  private static boolean xgramMetricsExpressive;
+
+  private static int xgramKnownMode (int chatListMode) {
+    switch (chatListMode) {
+      case Settings.CHAT_MODE_1LINE:
+      case Settings.CHAT_MODE_3LINE:
+      case Settings.CHAT_MODE_3LINE_BIG:
+        return chatListMode;
+      case Settings.CHAT_MODE_2LINE:
+      default:
+        return Settings.CHAT_MODE_2LINE; // as every switch over the mode does
+    }
+  }
+
+  /** The resting geometry of a mode. Cached (per density and design), so it is cheap in onDraw. Do not modify. */
+  public static Metrics metricsOf (int chatListMode) {
+    final float density = Screen.density();
+    final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    if (density != xgramMetricsDensity || expressive != xgramMetricsExpressive) {
+      xgramMetricsDensity = density;
+      xgramMetricsExpressive = expressive;
+      java.util.Arrays.fill(xgramModeMetrics, null);
+    }
+    final int mode = xgramKnownMode(chatListMode);
+    Metrics m = xgramModeMetrics[mode];
+    if (m == null) {
+      m = new Metrics();
+      m.height = getViewHeight(mode);
+      m.avatar = getAvatarSize(mode);
+      m.avatarLeft = getAvatarLeft(mode);
+      m.avatarTop = getAvatarTop(mode);
+      m.textLeft = getLeftPadding(mode);
+      m.titleTop = getTitleTop2(mode);
+      m.timeBaseline = getTitleTop(mode);
+      m.muteTop = getMuteTop(mode);
+      m.clockTop = getClockTop(mode);
+      m.counterCenterY = getCounterTop(mode);
+      m.textTop = mode == Settings.CHAT_MODE_1LINE ? getViewHeight(mode) : getTextTop(mode);
+      // The online dot, schedule clock, check and community stack: at the two lines size from 52dp photos up, 3/4 at most smaller
+      m.badgeScale = Math.max(.75f, Math.min(1f, m.avatar / (float) getAvatarSize(Settings.CHAT_MODE_2LINE)));
+      m.oneLine = mode == Settings.CHAT_MODE_1LINE ? 1f : 0f;
+      xgramModeMetrics[mode] = m;
+    }
+    return m;
+  }
+
+  /** This row's geometry now: the chat list view's spring while it changes, the row's own mode otherwise. */
+  private Metrics xgramMetrics () {
+    final TGChat chat = this.chat;
+    if (chat == null || chat.followsGlobalMode()) {
+      return com.fahadali.xgram.chats.XgramChatListMode.metrics(getChatListMode());
+    }
+    return metricsOf(getChatListMode());
+  }
+
+  /** XGram: the row's height now (it springs while the chat list view changes), for the list's decorations. */
+  public static int xgramCurrentHeight (@Nullable TGChat chat) {
+    if (chat == null || chat.followsGlobalMode()) {
+      return Math.round(com.fahadali.xgram.chats.XgramChatListMode.metrics(chat != null ? chat.getListMode() : Settings.instance().getChatListMode()).height);
+    }
+    return getViewHeight(chat.getListMode());
+  }
+
+  /** XGram: where Telegram X's row separator starts: 72dp, the text start (58dp) in one line. */
+  public int xgramSeparatorLeft () {
+    final float oneLine = Math.max(0f, Math.min(1f, xgramMetrics().oneLine));
+    final int multi = Screen.dp(72f), single = getLeftPadding(Settings.CHAT_MODE_1LINE);
+    return Math.round(multi + (single - multi) * oneLine);
   }
 
   public void attach () {
@@ -495,6 +626,9 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   private void requestTextContent () {
     Text text = chat != null ? chat.getText() : null;
+    if (text == null && chat != null) {
+      text = chat.xgramFadeText(); // XGram: the old lines fade out with their custom emoji while the new mode has no text
+    }
     if (text != null) {
       text.requestMedia(textMediaReceiver);
     } else {
@@ -624,7 +758,8 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-    super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(getViewHeight(getChatListMode()), MeasureSpec.EXACTLY));
+    // XGram: the height springs while the chat list view changes (XgramChatListMode); the list asks for a layout each frame
+    super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(Math.round(xgramMetrics().height), MeasureSpec.EXACTLY));
     layoutReceiver();
     if (chat != null && chat.checkLayout(getMeasuredWidth())) {
       requestContent();
@@ -632,8 +767,9 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
   }
 
   public boolean canStartDrag (float x, float y) {
-    int chatListMode = getChatListMode();
-    int threshold = ChatView.getAvatarLeft(chatListMode) * 2 + ChatView.getAvatarSize(chatListMode);
+    // XGram: the photo's column (2 x its inset + the photo), 56dp in one line: the pinned drag and the long press selection
+    final Metrics m = xgramMetrics();
+    int threshold = Math.round(m.avatarLeft * 2f + m.avatar);
     if (Lang.rtl()) {
       return x >= getMeasuredWidth() - threshold;
     } else {
@@ -642,9 +778,11 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
   }
 
   private void layoutReceiver () {
-    int chatListMode = getChatListMode();
-    int left = Lang.rtl() ? getMeasuredWidth() - getAvatarLeft(chatListMode) - getAvatarSize(chatListMode) : getAvatarLeft(chatListMode);
-    avatarReceiver.setBounds(left, getAvatarTop(chatListMode), left + getAvatarSize(chatListMode), getAvatarTop(chatListMode) + getAvatarSize(chatListMode));
+    final Metrics m = xgramMetrics();
+    final int size = Math.round(m.avatar), avatarLeft = Math.round(m.avatarLeft), top = Math.round(m.avatarTop);
+    int left = Lang.rtl() ? getMeasuredWidth() - avatarLeft - size : avatarLeft;
+    avatarReceiver.setBounds(left, top, left + size, top + size);
+    avatarReceiver.xgramSetBadgeScale(m.badgeScale); // XGram: the online dot follows the smaller one line photo
   }
 
   public TGChat getChat () {
@@ -690,6 +828,28 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     boolean rtl = Lang.rtl();
     int viewWidth = getMeasuredWidth();
 
+    // XGram: the row's geometry (see Metrics). While the chat list view changes (XgramChatListMode) it springs from the
+    // old mode to the new one: the photo, the title row and the counters move, and the lines under the title that only
+    // one of the two modes has fade through (the old mode's out over the first half, the new mode's in over the second).
+    final Metrics xgramMetrics = xgramMetrics();
+    final boolean oneLineMode = chatListMode == Settings.CHAT_MODE_1LINE;
+    final float oneLine = clamp01(xgramMetrics.oneLine);
+    final boolean modeTransition = chat.followsGlobalMode() && com.fahadali.xgram.chats.XgramChatListMode.isAnimating() &&
+      chatListMode == com.fahadali.xgram.chats.XgramChatListMode.targetMode();
+    final float modeFraction = modeTransition ? clamp01(com.fahadali.xgram.chats.XgramChatListMode.fraction()) : 1f;
+    final float linesInAlpha = modeTransition ? clamp01(modeFraction * 2f - 1f) : 1f;
+    final float linesOutAlpha = modeTransition && chat.xgramFadeMode() != 0 ? clamp01(1f - modeFraction * 2f) : 0f;
+    // The title row and the lines under it move together: the title's shift from where the row's own mode puts it
+    final int titleDx = Math.round(xgramMetrics.textLeft) - getLeftPadding(chatListMode);
+    final int titleTop = Math.round(xgramMetrics.titleTop);
+    final int clipSaveCount;
+    if (modeTransition) {
+      clipSaveCount = Views.save(c);
+      c.clipRect(0, 0, viewWidth, getMeasuredHeight());
+    } else {
+      clipSaveCount = -1;
+    }
+
     final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     // XGram M3E: what lies under the photo, for the cut-outs of its online dot, schedule clock and check: the row's
     // surface, the selection / open-chat tile over it, or the dragged tile
@@ -721,43 +881,79 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
       com.fahadali.xgram.appearance.XgramM3Profile.drawSelectionTile(c, viewWidth, getMeasuredHeight(), isSelected.getFloatValue());
     }
 
-    if (xgramM3) {
-      boolean unread = chat.xgramHasUnread();
-      Paint paint = xgramTimePaint(unread);
-      float timeWidth = unread ? paint.measureText(chat.getTime()) : chat.getTimeWidth();
-      float timeX = rtl ? viewWidth - chat.getTimeLeft() - chat.getTimeWidth() : chat.getTimeLeft() + chat.getTimeWidth() - timeWidth;
-      c.drawText(chat.getTime(), timeX, getTitleTop(chatListMode), paint);
-    } else {
-      c.drawText(chat.getTime(), (rtl ? viewWidth - chat.getTimeLeft() - chat.getTimeWidth() : chat.getTimeLeft()), getTitleTop(chatListMode), timePaint);
+    TdlibStatusManager.Helper status = chat.statusHelper();
+    TdlibStatusManager.ChatState state = status != null ? status.drawingState() : null;
+    float statusVisibility = state != null ? state.visibility() : 0f;
+
+    // XGram: in one line the typing icon takes the time's place (there is no line under the title for it): a fade
+    // through with Expressive design, Telegram X's crossfade otherwise
+    float timeAlpha = 1f, oneLineStatusAlpha = 0f;
+    if (oneLineMode && state != null && statusVisibility > 0f) {
+      final float visibility = clamp01(statusVisibility);
+      if (xgramM3) {
+        timeAlpha = visibility >= .5f ? 0f : 1f - visibility * 2f;
+        oneLineStatusAlpha = visibility <= .5f ? 0f : visibility * 2f - 1f;
+      } else {
+        timeAlpha = 1f - visibility;
+        oneLineStatusAlpha = visibility;
+      }
+    }
+    final float timeBaseline = xgramMetrics.timeBaseline;
+    if (timeAlpha > 0f) {
+      if (xgramM3) {
+        boolean unread = chat.xgramHasUnread();
+        Paint paint = xgramTimePaint(unread);
+        float timeWidth = unread ? paint.measureText(chat.getTime()) : chat.getTimeWidth();
+        float timeX = rtl ? viewWidth - chat.getTimeLeft() - chat.getTimeWidth() : chat.getTimeLeft() + chat.getTimeWidth() - timeWidth;
+        xgramDrawTime(c, chat.getTime(), timeX, timeBaseline, paint, timeAlpha);
+      } else {
+        xgramDrawTime(c, chat.getTime(), (rtl ? viewWidth - chat.getTimeLeft() - chat.getTimeWidth() : chat.getTimeLeft()), timeBaseline, timePaint, timeAlpha);
+      }
+    }
+    if (oneLineStatusAlpha > 0f) {
+      final TdApi.ChatAction action = state.action();
+      if (action != null) {
+        // Its end edge on the time's: the title never reflows, one line keeps 24dp for the time (TGChat.layoutTime)
+        final float startX = chat.getTimeLeft() + chat.getTimeWidth() - DrawAlgorithms.getStatusWidth(action);
+        final int color = xgramM3 ? com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY) : Theme.getColor(ColorId.textLight);
+        DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - startX : startX, timeBaseline - Screen.dp(4f), ColorUtils.alphaColor(oneLineStatusAlpha, color), this, !xgramM3 && oneLineStatusAlpha == 1f ? ColorId.textLight : ColorId.NONE);
+      }
     }
 
+    // XGram: in RTL Telegram X draws the title and its emoji status from the start without mirroring them, and mirrors
+    // the rest; one line has the ticks and badges on the title's row, so there the whole row is mirrored
+    final boolean mirrorTitle = rtl && oneLineMode;
     Text title = chat.getTitle();
     if (title != null) {
-      int titleX = getLeftPadding(chatListMode);
-      int titleTop = getTitleTop2(chatListMode);
+      int titleX = getLeftPadding(chatListMode) + titleDx;
       if (chat.isSecretChat()) {
         Drawable d = Icons.getSecureDrawable();
         Drawables.drawRtl(c, d, titleX - Screen.dp(7f), titleTop + title.getHeight() / 2 - d.getMinimumHeight() / 2, Paints.getGreenPorterDuffPaint(), viewWidth, rtl);
         titleX += Screen.dp(14f);
       }
 
-      title.draw(c, titleX, titleTop);
+      title.draw(c, mirrorTitle ? viewWidth - titleX - title.getWidth() : titleX, titleTop);
     }
 
     EmojiStatusHelper.EmojiStatusDrawable emojiStatus = chat.getEmojiStatus();
     if (emojiStatus != null) {
-      emojiStatus.draw(c, chat.getEmojiStatusLeft(), getTitleTop2(chatListMode), 1f, emojiStatusReceiver);
+      final int emojiStatusLeft = chat.getEmojiStatusLeft() + titleDx;
+      emojiStatus.draw(c, mirrorTitle ? viewWidth - emojiStatusLeft - emojiStatus.getWidth() : emojiStatusLeft, titleTop, 1f, emojiStatusReceiver);
     }
 
+    final int muteTop = Math.round(xgramMetrics.muteTop);
     if (chat.showVerify()) {
-      Drawables.drawRtl(c, Icons.getChatVerifyDrawable(), chat.getVerifyLeft(), getMuteTop(chatListMode), Paints.getVerifyPaint(), viewWidth, rtl);
+      Drawables.drawRtl(c, Icons.getChatVerifyDrawable(), chat.getVerifyLeft() + titleDx, muteTop, Paints.getVerifyPaint(), viewWidth, rtl);
     }
 
     if ((chat.showScam() || chat.showFake()) && chat.getChatMark() != null) {
       int additionalPadding = Screen.dp(4f);
 
-      int chatMarkLeft = chat.getVerifyLeft() + Screen.dp(10f);
-      int chatMarkY = getTitleTop2(chatListMode) + Screen.dp(0.5f);
+      int chatMarkLeft = chat.getVerifyLeft() + titleDx + Screen.dp(10f);
+      if (mirrorTitle) {
+        chatMarkLeft = viewWidth - chatMarkLeft - chat.getChatMark().getWidth();
+      }
+      int chatMarkY = titleTop + Screen.dp(0.5f);
 
       RectF rct = Paints.getRectF();
       rct.set(chatMarkLeft - additionalPadding, chatMarkY, chatMarkLeft + chat.getChatMark().getWidth() + additionalPadding, chatMarkY + chat.getChatMark().getLineHeight(true));
@@ -767,15 +963,21 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     }
 
     if (chat.showMute()) {
-      Drawables.drawRtl(c, Icons.getChatMuteDrawable(ColorId.chatListMute), chat.getMuteLeft(), getMuteTop(chatListMode), Paints.getChatsMutePaint(), viewWidth, rtl);
+      Drawables.drawRtl(c, Icons.getChatMuteDrawable(ColorId.chatListMute), chat.getMuteLeft() + titleDx, muteTop, Paints.getChatsMutePaint(), viewWidth, rtl);
     }
 
+    // The ticks (or the sending clock, the views, the draft in one line) and the reactions preview, from the time to
+    // the start; trailingX ends at the start edge of what was drawn, where one line's counters go
+    final int clockTop = Math.round(xgramMetrics.clockTop);
+    int trailingX = chat.getChecksRight() + getTimePaddingLeft();
     if (chat.isSending()) {
       int x = chat.getChecksRight() - Screen.dp(10f) - Screen.dp(Icons.CLOCK_SHIFT_X);
-      Drawables.drawRtl(c, Icons.getClockIcon(ColorId.iconLight), x, getClockTop(chatListMode) - Screen.dp(Icons.CLOCK_SHIFT_Y), Paints.getIconLightPorterDuffPaint(), viewWidth, rtl);
+      Drawables.drawRtl(c, Icons.getClockIcon(ColorId.iconLight), x, clockTop - Screen.dp(Icons.CLOCK_SHIFT_Y), Paints.getIconLightPorterDuffPaint(), viewWidth, rtl);
+      trailingX = chat.getChecksRight() - Screen.dp(20f);
     } else {
       int x = chat.getChecksRight();
-      int y = getClockTop(chatListMode);
+      int y = clockTop;
+      boolean drawn = false;
       if (chat.isOutgoing() && !chat.isSelfChat()) {
         if (chat.showViews()) {
           y -= Screen.dp(.5f);
@@ -791,30 +993,76 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
           Drawables.drawRtl(c, unread ? Icons.getSingleTick(ColorId.ticks) : Icons.getDoubleTick(ColorId.ticks), iconX, y - Screen.dp(Icons.TICKS_SHIFT_Y), unread ? Paints.getTicksPaint() : Paints.getTicksReadPaint(), viewWidth, rtl);
           x -= Screen.dp(24 - 8 + 3);
         }
+        drawn = true;
+      } else if (oneLineMode && chat.showDraft()) {
+        // XGram: one line has no "Draft:" line, a pencil in the error color stands where the ticks would
+        Drawable d = getSparseDrawable(R.drawable.baseline_edit_12, ColorId.NONE);
+        if (d != null) {
+          final float iconLeft = x - d.getMinimumWidth();
+          final float cx = (rtl ? viewWidth - iconLeft - d.getMinimumWidth() : iconLeft) + d.getMinimumWidth() / 2f;
+          final Paint paint = xgramM3 ? xgramIconPaint(XGRAM_PAINT_DRAFT, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ERROR)) : PorterDuffPaint.get(ColorId.textNegative);
+          com.fahadali.xgram.appearance.XgramIconCrossfade.drawSingle(c, d, paint, cx, xgramMetrics.height / 2f, 1f);
+          x -= d.getMinimumWidth();
+          drawn = true;
+        }
       }
       if (chat.needDrawReactionsPreview()) {
-        chat.getReactionsCounterDrawable().draw(c, x - chat.getReactionsWidth(), y + Screen.dp(6f));
+        chat.getReactionsCounterDrawable().draw(c, mirrorTitle ? viewWidth - x : x - chat.getReactionsWidth(), y + Screen.dp(6f));
+        int reactionsWidth = chat.getReactionsWidth();
+        if (reactionsWidth > 0) {
+          x -= reactionsWidth + Screen.dp(3f);
+          drawn = true;
+        }
+      }
+      if (drawn) {
+        trailingX = x;
       }
     }
 
+    // Counters: on the second line at the end, or in one line before the ticks, 8dp from them (from the time when
+    // there are none), sliding between the two while the view changes. Right to left: unread, mention, reaction.
     Counter counter = chat.getCounter();
-    float counterRight = viewWidth - getRightPadding();
-    float counterRadius = getCounterRadius();
-    float counterCenterY = getCounterTop(chatListMode);
-    counter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f);
-    counterRight -= counter.getScaledWidth(getTimePaddingLeft());
-
     Counter mentionCounter = chat.getMentionCounter();
-    mentionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, ColorId.badgeText);
-    counterRight -= mentionCounter.getScaledWidth(getTimePaddingLeft());
-
     Counter reactionCounter = chat.getReactionsCounter();
-    reactionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, chat.notificationsEnabled() ? ColorId.badgeText : ColorId.badgeMutedText);
-    counterRight -= reactionCounter.getScaledWidth(getTimePaddingLeft());
+    final float counterRadius = getCounterRadius();
+    final float counterCenterY = xgramMetrics.counterCenterY;
+    final float oneLineRight = trailingX - Screen.dp(8f);
+    final int reactionColorId = chat.notificationsEnabled() ? ColorId.badgeText : ColorId.badgeMutedText;
+    if (rtl && oneLine >= .5f) {
+      // Mirrored in one line: from the start edge of the slot towards the title
+      float counterLeft = viewWidth - oneLineRight;
+      counter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, 1f);
+      counterLeft += counter.getScaledWidth(getTimePaddingLeft());
+      mentionCounter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, 1f, this, ColorId.badgeText);
+      counterLeft += mentionCounter.getScaledWidth(getTimePaddingLeft());
+      reactionCounter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, 1f, this, reactionColorId);
+    } else {
+      final float multiLineRight = viewWidth - getRightPadding();
+      float counterRight = rtl || oneLine <= 0f ? multiLineRight : multiLineRight + (oneLineRight - multiLineRight) * oneLine;
+      counter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f);
+      counterRight -= counter.getScaledWidth(getTimePaddingLeft());
 
-    TdlibStatusManager.Helper status = chat.statusHelper();
-    TdlibStatusManager.ChatState state = status != null ? status.drawingState() : null;
-    float statusVisibility = state != null ? state.visibility() : 0f;
+      mentionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, ColorId.badgeText);
+      counterRight -= mentionCounter.getScaledWidth(getTimePaddingLeft());
+
+      reactionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, reactionColorId);
+      counterRight -= reactionCounter.getScaledWidth(getTimePaddingLeft());
+    }
+
+    if (oneLine > 0f && chat.xgramIsPinnedRow()) {
+      // XGram: one line shows a pin where there is no badge (official Telegram); it gives way as a badge comes in
+      final float badges = Math.max(counter.getVisibility(), Math.max(mentionCounter.getVisibility(), reactionCounter.getVisibility()));
+      final float pinAlpha = (1f - badges) * oneLine;
+      Drawable d = pinAlpha > 0f ? getSparseDrawable(R.drawable.deproko_baseline_pin_14, ColorId.NONE) : null;
+      if (d != null) {
+        final float iconLeft = oneLineRight - d.getMinimumWidth();
+        final float cx = (rtl ? viewWidth - iconLeft - d.getMinimumWidth() : iconLeft) + d.getMinimumWidth() / 2f;
+        final Paint paint = xgramM3 ? xgramIconPaint(XGRAM_PAINT_PIN, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT)) : PorterDuffPaint.get(ColorId.iconLight);
+        // Full alpha inside a layer: a VectorDrawable drawn at a per-draw alpha takes the frame's last one (XgramIconCrossfade)
+        com.fahadali.xgram.appearance.XgramIconCrossfade.drawSingle(c, d, paint, cx, counterCenterY, pinAlpha);
+      }
+    }
+
     float textAlpha = 1f - statusVisibility;
     float statusAlpha = statusVisibility;
     float statusShift = 1f;
@@ -829,66 +1077,34 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
         statusShift = 0f;
       }
     }
-    if (textAlpha > 0f) {
-      final int dy = (int) (Screen.dp(14f) * statusVisibility * statusShift);
-      final boolean needRestore = dy != 0;
-      final int saveCount;
-      if (needRestore) {
-        saveCount = Views.save(c);
-        c.translate(0, dy);
-      } else {
-        saveCount = -1;
-      }
-
-      int textTop = getTextTop(chatListMode);
-      Text prefix = chat.getPrefix();
-      if (prefix != null) {
-        int titleColor = ColorUtils.alphaColor(textAlpha, chat.showDraft() ? Theme.textRedColor() : Theme.textAccentColor());
-        prefix.draw(c, getLeftPadding(chatListMode), textTop, null, textAlpha);
-      }
-      Text text = chat.getText();
-      if (text != null) {
-        if (chatListMode != Settings.CHAT_MODE_2LINE) {
-          if (prefix != null) {
-            textTop += prefix.getNextLineHeight();
-          } else if (text.getLineCount() == 1) {
-            textTop += getSingleLineOffset(chatListMode);
-          }
-        }
-        IntList prefixIcons = chat.getTextIconIds();
-        if (prefixIcons != null) {
-          int x = chat.getTextLeft();
-          for (int i = 0; i < prefixIcons.size(); i++) {
-            Paint paint = PorterDuffPaint.get(chat.getTextIconColorId(), textAlpha);
-            int iconId = prefixIcons.get(i);
-            Drawable d = getSparseDrawable(iconId, ColorId.NONE);
-            int y = textTop + text.getLineHeight(false) / 2 - d.getMinimumHeight() / 2;
-            if (iconId == R.drawable.baseline_camera_alt_16) {
-              y += Screen.dp(.5f);
-            }
-            Drawables.drawRtl(c, d, x, y, paint, viewWidth, rtl);
-            x += Screen.dp(18f); //  + d.getMinimumWidth();
-
-          }
-        }
-
-        text.draw(c, chat.getTextLeft(), textTop, null, textAlpha, textMediaReceiver);
-      }
-
-      if (needRestore) {
-        Views.restore(c, saveCount);
-      }
+    // XGram: the old mode's lines fading out while the chat list view changes (TGChat keeps them until it ends), at the
+    // old mode's places shifted with the title row. Custom emoji only while the new mode has no text of its own.
+    if (linesOutAlpha > 0f) {
+      final Metrics fadeMetrics = metricsOf(chat.xgramFadeMode());
+      xgramDrawLines(c, chat.xgramFadeMode(), chat.xgramFadePrefix(), chat.xgramFadeText(), chat.xgramFadeTextLeft(),
+        chat.xgramFadeIcons(), chat.xgramFadeIconColorId(), linesOutAlpha, true, chat.getText() == null ? textMediaReceiver : null,
+        Math.round(xgramMetrics.textLeft - fadeMetrics.textLeft), Math.round(xgramMetrics.titleTop - fadeMetrics.titleTop), viewWidth, rtl);
     }
-    if (statusAlpha > 0f) {
+    final Metrics ownMetrics = modeTransition ? metricsOf(chatListMode) : xgramMetrics;
+    final int linesDy = modeTransition ? Math.round(xgramMetrics.titleTop - ownMetrics.titleTop) : 0;
+    final float linesAlpha = textAlpha * linesInAlpha;
+    if (linesAlpha > 0f && !oneLineMode) {
+      final int dy = (int) (Screen.dp(14f) * statusVisibility * statusShift);
+      // Mid-change the icons go through a layer, as the old lines may draw the same drawable at another alpha
+      xgramDrawLines(c, chatListMode, chat.getPrefix(), chat.getText(), chat.getTextLeft(), chat.getTextIconIds(), chat.getTextIconColorId(),
+        linesAlpha, modeTransition, textMediaReceiver, titleDx, linesDy + dy, viewWidth, rtl);
+    }
+    final float statusLinesAlpha = statusAlpha * linesInAlpha;
+    if (statusLinesAlpha > 0f && !oneLineMode) {
       Text text = status.drawingText();
       if (text != null) {
-        float top = getTextTop(chatListMode) - Screen.dp(14f) * (xgramM3 ? (1f - statusVisibility) * statusShift : textAlpha);
+        float top = getTextTop(chatListMode) + linesDy - Screen.dp(14f) * (xgramM3 ? (1f - statusVisibility) * statusShift : textAlpha);
         if (chatListMode != Settings.CHAT_MODE_2LINE && text.getLineCount() == 1) {
           top += getSingleLineOffset(chatListMode);
         }
-        DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - getLeftPadding(chatListMode) : getLeftPadding(chatListMode), top + text.getLineHeight() / 2f, ColorUtils.alphaColor(statusAlpha, text.getTextColor()), this, statusAlpha == 1f ? ColorId.textLight : ColorId.NONE);
-        int x = getLeftPadding(chatListMode);
-        text.draw(c, x, (int) top, null, statusAlpha);
+        final int x = getLeftPadding(chatListMode) + titleDx;
+        DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - x : x, top + text.getLineHeight() / 2f, ColorUtils.alphaColor(statusLinesAlpha, text.getTextColor()), this, statusLinesAlpha == 1f ? ColorId.textLight : ColorId.NONE);
+        text.draw(c, x, (int) top, null, statusLinesAlpha);
       }
     }
 
@@ -900,11 +1116,12 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
       int color = Theme.getColor(ColorId.text);
       // M3E: a single tonal card, see xgramDrawCommunityStack.
       boolean m3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      final float badgeScale = xgramMetrics.badgeScale; // XGram: smaller with the one line photo
       if (m3) {
-        xgramDrawCommunityStack(c, radius, rtl);
+        xgramDrawCommunityStack(c, radius, rtl, badgeScale);
       } else
       for (int i = m3 ? 1 : 2; i >= 1; i--) {
-        float shift = m3 ? Screen.dp(6f) * (rtl ? -1 : 1) : Screen.dp(4f) * i * (rtl ? 1 : -1), inset = m3 ? Screen.dp(4f) : Screen.dp(3.5f) * i;
+        float shift = m3 ? Screen.dp(6f) * (rtl ? -1 : 1) : Screen.dp(4f) * i * badgeScale * (rtl ? 1 : -1), inset = m3 ? Screen.dp(4f) : Screen.dp(3.5f) * i * badgeScale;
         xgramCardRect.set(avatarReceiver.getLeft() + shift, avatarReceiver.getTop() + inset, avatarReceiver.getRight() + shift, avatarReceiver.getBottom() - inset);
         int cardColor = m3 ?
           com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER) :
@@ -919,18 +1136,107 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
     avatarReceiver.draw(c);
 
     final int cutOutColor = xgramCutOut != 0 ? xgramCutOut : Theme.fillingColor();
-    DrawAlgorithms.drawIcon(c, avatarReceiver, 315f, chat.getScheduleAnimator().getFloatValue(), cutOutColor, getSparseDrawable(R.drawable.baseline_watch_later_10, ColorId.badgeMuted), PorterDuffPaint.get(ColorId.badgeMuted, chat.getScheduleAnimator().getFloatValue()));
-    DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, isSelected.getFloatValue(), cutOutColor);
+    // XGram: the schedule clock and the selection check at the photo's scale (3/4 with the one line photo)
+    DrawAlgorithms.drawIcon(c, avatarReceiver, 315f, chat.getScheduleAnimator().getFloatValue(), cutOutColor, getSparseDrawable(R.drawable.baseline_watch_later_10, ColorId.badgeMuted), PorterDuffPaint.get(ColorId.badgeMuted, chat.getScheduleAnimator().getFloatValue()), xgramMetrics.badgeScale);
+    DrawAlgorithms.drawSimplestCheckBox(c, avatarReceiver, isSelected.getFloatValue(), cutOutColor, xgramMetrics.badgeScale);
+
+    if (clipSaveCount != -1) {
+      Views.restore(c, clipSaveCount);
+    }
+  }
+
+  private static float clamp01 (float value) {
+    return value < 0f ? 0f : value > 1f ? 1f : value;
+  }
+
+  /** XGram: the time at {@code alpha} (one line fades it for the typing icon), the shared paint's alpha put back after. */
+  private static void xgramDrawTime (Canvas c, String time, float x, float baseline, Paint paint, float alpha) {
+    if (alpha >= 1f) {
+      c.drawText(time, x, baseline, paint);
+      return;
+    }
+    final int paintAlpha = paint.getAlpha();
+    paint.setAlpha(Math.round(paintAlpha * alpha));
+    c.drawText(time, x, baseline, paint);
+    paint.setAlpha(paintAlpha);
+  }
+
+  private static final int XGRAM_PAINT_DRAFT = 0, XGRAM_PAINT_PIN = 1;
+  private static final Paint[] xgramIconPaints = new Paint[2];
+  private static final int[] xgramIconPaintColors = new int[2];
+
+  /**
+   * XGram M3E: a color filter paint for a role color (PorterDuffPaint only takes the color ids it was made for), one
+   * per icon, so its filter is made again only when the theme changes the role, never per frame.
+   */
+  private static Paint xgramIconPaint (int slot, int color) {
+    Paint paint = xgramIconPaints[slot];
+    if (paint == null) {
+      paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG | Paint.FILTER_BITMAP_FLAG);
+      paint.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN));
+      xgramIconPaints[slot] = paint;
+      xgramIconPaintColors[slot] = color;
+    } else if (xgramIconPaintColors[slot] != color) {
+      xgramIconPaintColors[slot] = color;
+      paint.setColorFilter(new android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.SRC_IN));
+    }
+    return paint;
+  }
+
+  /**
+   * The lines under the title: the prefix (sender, topic, "Draft"), the icons and the text of {@code mode}, at
+   * {@code alpha}, shifted by {@code dx} (in the row's own start-based x, as every x here) and {@code dy}.
+   * {@code iconLayers}: each icon at full alpha in a layer of {@code alpha}, for frames where another pass may draw the
+   * same drawable at another alpha.
+   */
+  private void xgramDrawLines (Canvas c, int mode, @Nullable Text prefix, @Nullable Text text, int textLeft, @Nullable IntList icons, int iconColorId, float alpha, boolean iconLayers, @Nullable ComplexReceiver receiver, int dx, int dy, int viewWidth, boolean rtl) {
+    if (alpha <= 0f || (prefix == null && text == null)) {
+      return;
+    }
+    int textTop = getTextTop(mode) + dy;
+    if (prefix != null) {
+      prefix.draw(c, getLeftPadding(mode) + dx, textTop, null, alpha);
+    }
+    if (text == null) {
+      return;
+    }
+    if (mode != Settings.CHAT_MODE_2LINE) {
+      if (prefix != null) {
+        textTop += prefix.getNextLineHeight();
+      } else if (text.getLineCount() == 1) {
+        textTop += getSingleLineOffset(mode);
+      }
+    }
+    if (icons != null) {
+      int x = textLeft + dx;
+      for (int i = 0; i < icons.size(); i++) {
+        int iconId = icons.get(i);
+        Drawable d = getSparseDrawable(iconId, ColorId.NONE);
+        int y = textTop + text.getLineHeight(false) / 2 - d.getMinimumHeight() / 2;
+        if (iconId == R.drawable.baseline_camera_alt_16) {
+          y += Screen.dp(.5f);
+        }
+        if (iconLayers) {
+          final float cx = (rtl ? viewWidth - x - d.getMinimumWidth() : x) + d.getMinimumWidth() / 2f;
+          com.fahadali.xgram.appearance.XgramIconCrossfade.drawSingle(c, d, PorterDuffPaint.get(iconColorId), cx, y + d.getMinimumHeight() / 2f, alpha);
+        } else {
+          Drawables.drawRtl(c, d, x, y, PorterDuffPaint.get(iconColorId, alpha), viewWidth, rtl);
+        }
+        x += Screen.dp(18f); //  + d.getMinimumWidth();
+      }
+    }
+    text.draw(c, textLeft + dx, textTop, null, alpha, receiver);
   }
 
   /**
    * XGram M3E: the community's stack: one tonal card the size of the photo, 4dp up and 4dp toward the end (the start
    * side is clipped by the screen edge with the M3E avatar inset), and a 2dp ring in the row's surface color around the
    * photo, so the card reads as a card behind it rather than a stray shadow. On the selection tile (secondaryContainer,
-   * the card's own color) the two colors swap: a surface card and a ring in the tile's color.
+   * the card's own color) the two colors swap: a surface card and a ring in the tile's color. Scaled with the photo
+   * ({@code scale}, 3/4 in one line).
    */
-  private void xgramDrawCommunityStack (Canvas c, float radius, boolean rtl) {
-    final float shift = Screen.dp(4f) * (rtl ? -1 : 1), lift = Screen.dp(4f), ring = Screen.dp(2f);
+  private void xgramDrawCommunityStack (Canvas c, float radius, boolean rtl, float scale) {
+    final float shift = Screen.dp(4f) * scale * (rtl ? -1 : 1), lift = Screen.dp(4f) * scale, ring = Screen.dp(2f) * scale;
     final int surface = Theme.fillingColor();
     final int tonal = com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.SECONDARY_CONTAINER);
     final float onTile = isDragging ? 0f : com.fahadali.xgram.layout.XgramTwoPane.isHighlighted(tdlib, chat.getChatId()) ? 1f : Math.max(0f, Math.min(1f, isSelected.getFloatValue()));

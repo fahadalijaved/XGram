@@ -133,7 +133,25 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
     super.destroy();
     cancelLocationRequest();
     context().appUpdater().removeListener(this);
+    Settings.instance().removeChatListModeListener(xgramChatListModeListener);
   }
+
+  // XGram M3E: "Chat list view", the card of preview tiles and its "Bigger text" switch (the classic look keeps Telegram
+  // X's row and its popup, with One line added).
+
+  private static final int XGRAM_TYPE_CHAT_LIST_VIEW = 1;
+  private @androidx.annotation.Nullable com.fahadali.xgram.appearance.XgramChatListViewCard xgramChatListViewCard;
+
+  /** The view changed elsewhere (the popup, XGram's own page): the card and the switch follow. */
+  private final Settings.ChatListModeChangeListener xgramChatListModeListener = newChatListMode -> {
+    if (xgramChatListViewCard != null) {
+      xgramChatListViewCard.setMode(newChatListMode, true);
+    }
+    if (adapter != null) {
+      adapter.updateValuedSettingById(R.id.btn_xgramChatListBigText);
+      adapter.updateValuedSettingById(R.id.btn_chatListStyle);
+    }
+  };
 
   private void cancelLocationRequest () {
     if (locationHelper != null) {
@@ -221,18 +239,13 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
         } else if (itemId == R.id.btn_secret_batmanTransitions) {
           v.getToggler().setRadioEnabled(Settings.instance().getNewSetting(Settings.SETTING_FLAG_BATMAN_POLL_TRANSITIONS), isUpdate);
         } else if (itemId == R.id.btn_chatListStyle) {
-          switch (Settings.instance().getChatListMode()) {
-            case Settings.CHAT_MODE_3LINE_BIG:
-              v.setData(R.string.ChatListStyle3);
-              break;
-            case Settings.CHAT_MODE_3LINE:
-              v.setData(R.string.ChatListStyle2);
-              break;
-            case Settings.CHAT_MODE_2LINE:
-            default:
-              v.setData(R.string.ChatListStyle1);
-              break;
-          }
+          v.setData(com.fahadali.xgram.chats.XgramChatListMode.name(Settings.instance().getChatListMode())); // XGram: One line too
+        } else if (itemId == R.id.btn_xgramChatListBigText) {
+          // XGram M3E: only three lines have bigger text; otherwise the switch keeps the choice for when they are picked
+          final boolean enabled = com.fahadali.xgram.chats.XgramChatListMode.isBigTextEnabled();
+          v.getToggler().setRadioEnabled(com.fahadali.xgram.chats.XgramChatListMode.isBigTextChecked(), isUpdate);
+          v.setData(enabled ? R.string.XgramChatListBigTextSub : R.string.XgramChatListBigTextOff);
+          v.setEnabledAnimated(enabled, isUpdate);
         } else if (itemId == R.id.btn_autoNightModeScheduled_location) {
           if (isUpdate) {
             v.setEnabledAnimated(locationHelper == null);
@@ -371,6 +384,36 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
           }
         }
       }
+
+      @Override
+      protected SettingHolder initCustom (android.view.ViewGroup parent, int customViewType) {
+        if (customViewType == XGRAM_TYPE_CHAT_LIST_VIEW) {
+          // XGram M3E: the card is the group's first tile (bindListRow makes its themed background a surfaceBright
+          // tile); in the Compose renderer of Telegram X pages it is a row drawn by the real view
+          com.fahadali.xgram.appearance.XgramChatListViewCard card = new com.fahadali.xgram.appearance.XgramChatListViewCard(parent.getContext());
+          card.setId(R.id.btn_xgramChatListView);
+          card.setLayoutParams(new RecyclerView.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+          ViewSupport.setThemedBackground(card, org.thunderdog.challegram.theme.ColorId.filling, SettingsThemeController.this);
+          SettingsThemeController.this.addThemeInvalidateListener(card);
+          card.setListener(newMode -> {
+            Settings.instance().setChatListMode(newMode);
+            updateValuedSettingById(R.id.btn_xgramChatListBigText);
+          });
+          return new SettingHolder(card);
+        }
+        return super.initCustom(parent, customViewType);
+      }
+
+      @Override
+      protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+        if (customViewType == XGRAM_TYPE_CHAT_LIST_VIEW && view instanceof com.fahadali.xgram.appearance.XgramChatListViewCard) {
+          com.fahadali.xgram.appearance.XgramChatListViewCard card = (com.fahadali.xgram.appearance.XgramChatListViewCard) view;
+          xgramChatListViewCard = card;
+          card.setMode(Settings.instance().getChatListMode(), isUpdate);
+        } else {
+          super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
+        }
+      }
     };
 
     ArrayList<ListItem> items = new ArrayList<>();
@@ -400,14 +443,28 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_icon, 0, R.string.Icons).setDrawModifier(new DrawableModifier(R.drawable.baseline_star_20, R.drawable.baseline_account_balance_wallet_20, R.drawable.baseline_location_on_20, R.drawable.baseline_favorite_20)));
 
-      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_chatListStyle, 0, R.string.ChatListStyle));
+      final boolean xgramChatListCard = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      if (!xgramChatListCard) { // XGram M3E: the chat list view has a card of its own below
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_chatListStyle, 0, R.string.ChatListStyle));
+      }
 
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_chatBackground, 0, R.string.Wallpaper));
       items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_chatFontSize, 0, R.string.TextSize));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+
+      if (xgramChatListCard) {
+        // XGram M3E: Chat list view, preview tiles of One line, Two lines and Three lines, and Bigger text for three lines
+        items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramChatListView));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        items.add(new ListItem(ListItem.TYPE_CUSTOM - XGRAM_TYPE_CHAT_LIST_VIEW, R.id.btn_xgramChatListView));
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramChatListBigText, 0, R.string.XgramChatListBigText));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+        Settings.instance().addChatListModeListener(xgramChatListModeListener);
+      }
 
       items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.ColorTheme));
 
@@ -1201,6 +1258,11 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
       Settings.instance().setNewSetting(Settings.SETTING_FLAG_BATMAN_POLL_TRANSITIONS, adapter.toggleView(v));
     } else if (viewId == R.id.btn_chatListStyle) {
       showChatListOptions();
+    } else if (viewId == R.id.btn_xgramChatListBigText) {
+      if (com.fahadali.xgram.chats.XgramChatListMode.isBigTextEnabled()) {
+        com.fahadali.xgram.chats.XgramChatListMode.setBigText(!com.fahadali.xgram.chats.XgramChatListMode.isBigTextChecked());
+        adapter.updateValuedSettingById(R.id.btn_xgramChatListBigText);
+      }
     } else if (viewId == R.id.btn_instantViewMode) {
       showInstantViewOptions();
     } else if (viewId == R.id.btn_chatSwipes) {
@@ -1687,26 +1749,8 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
   }
 
   private void showChatListOptions () {
-    int chatListStyle = Settings.instance().getChatListMode();
-    showSettings(new SettingsWrapBuilder(R.id.btn_chatListStyle).setRawItems(new ListItem[]{
-      /*new SettingItem(SettingItem.TYPE_CHECKBOX_OPTION, R.id.btn_chatListStyleOptIcons, 0, R.string.ChatListStyleOptIcons, R.id.btn_chatListStyleOptIcons, Settings.instance().),
-      new SettingItem(SettingItem.TYPE_CHECKBOX_OPTION, R.id.btn_chatListStyleOptFormatting, 0, R.string.ChatListStyleOptFormatting, R.id.btn_chatListStyleOptFormatting, Settings.instance().),*/
-      new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_chatListStyle1, 0, R.string.ChatListStyle1, R.id.btn_chatListStyle, chatListStyle == Settings.CHAT_MODE_2LINE),
-      new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_chatListStyle2, 0, R.string.ChatListStyle2, R.id.btn_chatListStyle, chatListStyle == Settings.CHAT_MODE_3LINE),
-      new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_chatListStyle3, 0, R.string.ChatListStyle3, R.id.btn_chatListStyle, chatListStyle == Settings.CHAT_MODE_3LINE_BIG),
-    }).setIntDelegate((id, result) -> {
-      int newChatListStyle = Settings.instance().getChatListMode();
-      int chatListStyleResultId = result.get(R.id.btn_chatListStyle);
-      if (chatListStyleResultId == R.id.btn_chatListStyle1) {
-        newChatListStyle = Settings.CHAT_MODE_2LINE;
-      } else if (chatListStyleResultId == R.id.btn_chatListStyle2) {
-        newChatListStyle = Settings.CHAT_MODE_3LINE;
-      } else if (chatListStyleResultId == R.id.btn_chatListStyle3) {
-        newChatListStyle = Settings.CHAT_MODE_3LINE_BIG;
-      }
-      Settings.instance().setChatListMode(newChatListStyle);
-      adapter.updateValuedSettingById(R.id.btn_chatListStyle);
-    }).setAllowResize(false)); //.setHeaderItem(new SettingItem(SettingItem.TYPE_INFO, 0, 0, UI.getString(R.string.MarkdownHint), false))
+    // XGram: Telegram X's popup with One line added
+    com.fahadali.xgram.chats.XgramChatListMode.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_chatListStyle));
   }
 
   private void showEarpieceOptions (boolean isVideo) {

@@ -9,28 +9,62 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+
 package com.fahadali.xgram.compose.pages
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ListItemShapes
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.fahadali.xgram.XgramReorder
 import com.fahadali.xgram.XgramSettingDeps
 import com.fahadali.xgram.XgramSettings
+import com.fahadali.xgram.appearance.XgramChatListViewCard
+import com.fahadali.xgram.chats.XgramChatListMode
 import com.fahadali.xgram.chats.XgramChatLongPress
 import com.fahadali.xgram.chats.XgramCommunities
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramPage
+import com.fahadali.xgram.compose.ui.LocalXgramHighlight
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
 import org.thunderdog.challegram.R
+import org.thunderdog.challegram.unsorted.Settings
 
-/** Chat List: folders, merged communities, what a long press on a chat does, the screen around the list. */
+/** Chat List: the chat list view, folders, merged communities, what a long press on a chat does, the screen around the list. */
 @Composable
 fun ChatListPage() {
   val host = LocalXgramHost.current
   SettingsPage(title = str(R.string.XgramChatList)) {
     val settings = XgramSettings.instance()
     val accountId = host.tdlib.accountId()
+
+    // One line, two lines or three lines: the tiles pick it at once, the chat list springs to it
+    header(R.string.XgramChatListView)
+    group {
+      custom(CHAT_LIST_VIEW_KEY, R.id.btn_xgramChatListView) { shapes ->
+        ChatListViewCardRow(shapes)
+      }
+      val bigTextEnabled = XgramChatListMode.isBigTextEnabled()
+      switch(
+        R.id.btn_xgramChatListBigText, s(R.string.XgramChatListBigText),
+        s(if (bigTextEnabled) R.string.XgramChatListBigTextSub else R.string.XgramChatListBigTextOff),
+        checked = XgramChatListMode.isBigTextChecked(), enabled = bigTextEnabled
+      ) {
+        XgramChatListMode.setBigText(it)
+      }
+    }
+    description(R.string.XgramChatListViewInfo)
 
     header(R.string.XgramHeaderFolders)
     group {
@@ -92,5 +126,41 @@ fun ChatListPage() {
         settings.setConnectionStatusAtStart(it)
       }
     }
+  }
+}
+
+private const val CHAT_LIST_VIEW_KEY = "chatListView"
+
+/**
+ * The chat list view card (the same native view as on the Themes page) in the group's shape, on the group's card color,
+ * pulsing to secondaryContainer when settings search points at it (search knows the row by its id alone).
+ */
+@Composable
+private fun ChatListViewCardRow(shapes: ListItemShapes) {
+  val host = LocalXgramHost.current
+  val cs = MaterialTheme.colorScheme
+  val highlight = LocalXgramHighlight.current
+  val p = if (highlight != null && highlight.matches(R.id.btn_xgramChatListView, null)) highlight.progress.value else 0f
+  val container = if (p > 0f) lerp(cs.surfaceBright, cs.secondaryContainer, p) else cs.surfaceBright
+  Box(Modifier.fillMaxWidth().clip(shapes.shape).background(container)) {
+    AndroidView(
+      factory = { context ->
+        XgramChatListViewCard(context).also { card ->
+          card.setListener { mode ->
+            Settings.instance().setChatListMode(mode)
+            host.changed() // the switch below follows
+          }
+        }
+      },
+      update = { card ->
+        // Read: the card follows a change made elsewhere (Themes, the popup) and every theme or Pure black change
+        host.version
+        host.themeVersion
+        host.isDark
+        card.setMode(Settings.instance().chatListMode, true)
+        card.invalidateTiles()
+      },
+      modifier = Modifier.fillMaxWidth()
+    )
   }
 }

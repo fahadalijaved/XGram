@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+  <!-- XGram: chat list view (One line, the picker card, Bigger text) -->
+  <item type="id" name="btn_chatListStyle0" />
+  <item type="id" name="btn_xgramChatListView" />
+  <item type="id" name="btn_xgramChatListBigText" />
   <!-- XGram: forum topics -->
   <item type="id" name="controller_xgramForumTopics" />
   <item type="id" name="controller_xgramTopicEdit" />

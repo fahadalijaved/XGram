@@ -307,6 +307,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(R.string.XgramAboutSupportInfo);
         } else if (id == R.id.btn_xgramAvatarCorners) {
           view.setData(avatarCornersName(settings.avatarCorners()));
+        } else if (id == R.id.btn_xgramChatListView) {
+          view.setData(com.fahadali.xgram.chats.XgramChatListMode.name(org.thunderdog.challegram.unsorted.Settings.instance().getChatListMode()));
         } else if (id == R.id.btn_xgramChatLongPress) {
           view.setData(com.fahadali.xgram.chats.XgramChatLongPress.modeName(settings.chatLongPress()));
         } else if (id == R.id.btn_xgramChatActionsOrder) {
@@ -716,6 +718,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   }
 
   private void buildChatList (List<ListItem> items) {
+    // One line, two lines or three lines: Telegram X's popup with One line added (Expressive design has the tiles)
+    items.add(header(R.string.XgramChatListView));
+    addRows(items, link(R.id.btn_xgramChatListView, R.string.XgramChatListView));
+
     items.add(header(R.string.XgramHeaderFolders));
     addRows(items, toggle(R.id.btn_xgramHideFolders, R.string.XgramHideFolders, R.string.XgramHideFoldersSub));
     items.add(description(R.string.XgramChatListFoldersInfo));
@@ -1813,6 +1819,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramIconPack) {
       navigateTo(new com.fahadali.xgram.appearance.XgramIconPacksController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramChatListView) {
+      com.fahadali.xgram.chats.XgramChatListMode.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramChatListView));
       return;
     } else if (id == R.id.btn_xgramChatLongPress) {
       com.fahadali.xgram.chats.XgramChatLongPress.showModePicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramChatLongPress));

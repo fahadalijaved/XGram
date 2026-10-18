@@ -249,7 +249,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   private int lastCounterAddWidth;
 
   private void layoutContent () {
-    if (listMode == Settings.CHAT_MODE_2LINE) {
+    if (listMode == Settings.CHAT_MODE_2LINE || listMode == Settings.CHAT_MODE_1LINE) { // XGram: one line has no text to lay out
       layoutText();
     } else {
       setPrefix();
@@ -272,6 +272,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
         if (lastCounterAddWidth != newWidth) {
           layoutContent();
         }
+        xgramCheckOneLineReserve(); // XGram: one line's title makes room for the badges (their target width, once)
       }
     }
     currentViews.invalidate();
@@ -304,6 +305,12 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   public void checkChatListMode () {
     int newMode = xgramForcedMode != 0 ? xgramForcedMode : Settings.instance().getChatListMode(); // XGram: the community page sets its own
     if (listMode != newMode) {
+      // XGram: while the chat list view springs to the new mode, a row on screen keeps its old lines to fade them out
+      if (xgramForcedMode == 0 && currentWidth > 0 && (flags & FLAG_ATTACHED) != 0 && com.fahadali.xgram.chats.XgramChatListMode.isAnimating()) {
+        xgramStashLines();
+      } else {
+        xgramDropStash();
+      }
       listMode = newMode;
       currentWidth = 0;
       if (avatarPlaceholder != null) {
@@ -311,6 +318,126 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       }
       currentViews.requestLayout();
       currentViews.invalidate();
+    }
+  }
+
+  // XGram: one line chat list view (Settings.CHAT_MODE_1LINE) and the spring between views (XgramChatListMode).
+
+  /** Follows the chat list's view: false for a row with a mode of its own (the community page). */
+  public boolean followsGlobalMode () {
+    return xgramForcedMode == 0;
+  }
+
+  /** A pinned chat (not the archive): one line marks it with a pin where there is no badge. */
+  public boolean xgramIsPinnedRow () {
+    return !isArchive() && chat != null && chatList != null && isPinned();
+  }
+
+  private int xgramFadeMode;
+  @Nullable private Text xgramFadePrefix, xgramFadeText;
+  private int xgramFadeTextLeft;
+  @Nullable private IntList xgramFadeIcons;
+  private @PorterDuffColorId int xgramFadeIconColorId;
+
+  private void xgramStashLines () {
+    xgramFadeMode = listMode;
+    xgramFadePrefix = getPrefix();
+    xgramFadeText = trimmedText;
+    xgramFadeTextLeft = textLeft;
+    xgramFadeIconColorId = textIconColorId;
+    if (textIconIds != null && textIconIds.size() > 0) {
+      if (xgramFadeIcons == null) {
+        xgramFadeIcons = new IntList(textIconIds.size());
+      } else {
+        xgramFadeIcons.clear();
+      }
+      for (int i = 0; i < textIconIds.size(); i++) {
+        xgramFadeIcons.append(textIconIds.get(i));
+      }
+    } else if (xgramFadeIcons != null) {
+      xgramFadeIcons.clear();
+    }
+    if (xgramFadePrefix == null && xgramFadeText == null) {
+      xgramDropStash(); // one line: nothing under the title to fade out
+    }
+  }
+
+  private void xgramDropStash () {
+    xgramFadeMode = 0;
+    xgramFadePrefix = xgramFadeText = null;
+    if (xgramFadeIcons != null) {
+      xgramFadeIcons.clear();
+    }
+  }
+
+  /** The mode whose lines fade out while the view changes, or 0. */
+  public int xgramFadeMode () {
+    return xgramFadeMode;
+  }
+
+  public @Nullable Text xgramFadePrefix () {
+    return xgramFadeMode != 0 ? xgramFadePrefix : null;
+  }
+
+  public @Nullable Text xgramFadeText () {
+    return xgramFadeMode != 0 ? xgramFadeText : null;
+  }
+
+  public int xgramFadeTextLeft () {
+    return xgramFadeTextLeft;
+  }
+
+  public @Nullable IntList xgramFadeIcons () {
+    return xgramFadeMode != 0 && xgramFadeIcons != null && xgramFadeIcons.size() > 0 ? xgramFadeIcons : null;
+  }
+
+  public @PorterDuffColorId int xgramFadeIconColorId () {
+    return xgramFadeIconColorId;
+  }
+
+  /** The view change ended: the old lines go, and the views ask for the new text's media (custom emoji) again. */
+  public void xgramEndModeTransition () {
+    if (xgramFadeMode != 0) {
+      xgramDropStash();
+      currentViews.invalidateContent(this);
+      currentViews.invalidate();
+    }
+  }
+
+  /** The style of one line's title (the row centres it with this style's line height). */
+  public static TextStyleProvider xgramOneLineTitleProvider () {
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_TITLE_M, false, 16f);
+    }
+    return getTitleStyleProvider(Settings.CHAT_MODE_1LINE);
+  }
+
+  private int xgramOneLineReserve = -1;
+
+  /**
+   * What one line's title leaves at its end for the trailing cluster beyond what layoutTitle subtracts for every mode:
+   * the draft pencil, the badges at their target width (so an animating badge never rebuilds the title per frame), or
+   * the pin when there is no badge.
+   */
+  private int xgramComputeOneLineReserve () {
+    int reserve = 0;
+    if (showDraft()) {
+      reserve += Screen.dp(12f) + ChatView.getTimePaddingLeft();
+    }
+    final int gap = ChatView.getTimePaddingLeft();
+    final float badges = counter.getScaledOrTargetWidth(gap, true) + mentionCounter.getScaledOrTargetWidth(gap, true) + reactionsCounter.getScaledOrTargetWidth(gap, true);
+    if (badges > 0f) {
+      reserve += Math.round(badges) + Screen.dp(8f);
+    } else if (xgramIsPinnedRow()) {
+      reserve += Screen.dp(14f) + Screen.dp(8f);
+    }
+    return reserve;
+  }
+
+  /** One line: lays the title out again when what it has to leave for the badges, pin or draft changed. */
+  private void xgramCheckOneLineReserve () {
+    if (listMode == Settings.CHAT_MODE_1LINE && currentWidth > 0 && title != null && xgramComputeOneLineReserve() != xgramOneLineReserve) {
+      layoutTitle(false);
     }
   }
 
@@ -473,6 +600,8 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
             setText();
           }
           layoutTitle(false);
+        } else if (pinStateChanged) {
+          xgramCheckOneLineReserve(); // XGram: one line's pin takes room at the title's end
         }
         return true;
       }
@@ -818,6 +947,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     mentionCounter.setCount(hasMentions ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, false, allowAnimation && needAnimateChanges());
     counter.setCount(hasMentions && unreadCount == 1 ? 0 : unreadCount, !notificationsEnabled(), allowAnimation && needAnimateChanges());
     xgramCheckUnreadStyle();
+    xgramCheckOneLineReserve();
   }
 
   public boolean needAnimateChanges () {
@@ -937,7 +1067,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   private int lastAvailWidth = -1;
 
   public void layoutTitle (boolean changed) {
-    int avail = currentWidth - ChatView.getLeftPadding(listMode) - timeWidth - ChatView.getTimePaddingRight() - ChatView.getTimePaddingLeft();
+    int avail = currentWidth - ChatView.getLeftPadding(listMode) - xgramTimeReserve() - ChatView.getTimePaddingRight() - ChatView.getTimePaddingLeft();
     final boolean isSecret = isSecretChat();
     if (showMute()) {
       avail = avail - ChatView.getMuteOffset() - Icons.getChatMuteDrawableWidth();
@@ -981,6 +1111,11 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       int reactionsWidth = reactionsCounterDrawable.getTargetWidth();
       avail -= reactionsWidth + (reactionsWidth > 0 ? Screen.dp(3) : 0);
     }
+    if (listMode == Settings.CHAT_MODE_1LINE) {
+      // XGram: one line keeps the badges (or the pin) and the draft pencil on the title's row
+      xgramOneLineReserve = xgramComputeOneLineReserve();
+      avail = Math.max(0, avail - xgramOneLineReserve);
+    }
 
     boolean xgramUnread = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramHasUnread();
     if (xgramTitleUnread != xgramUnread) {
@@ -989,7 +1124,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     }
     if (changed || lastAvailWidth != avail) {
       lastAvailWidth = avail;
-      if (StringUtils.isEmpty(title)) {
+      if (StringUtils.isEmpty(title) || (listMode == Settings.CHAT_MODE_1LINE && avail < Screen.dp(1f))) { // XGram: no room on a very narrow one line row
         trimmedTitle = null;
       } else {
         trimmedTitle = new Text.Builder(title, avail, xgramTitleStyleProvider(), isSecretChat() ? TextColorSets.Regular.SECURE : TextColorSets.Regular.NORMAL)
@@ -1279,8 +1414,13 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
 
   private void layoutTime () {
     timeLeft = currentWidth - ChatView.getTimePaddingRight() - timeWidth;
-    checkRight = timeLeft - ChatView.getTimePaddingLeft();
+    // XGram: one line keeps at least 24dp for the time, where the typing icon takes its place, so nothing reflows
+    checkRight = currentWidth - ChatView.getTimePaddingRight() - xgramTimeReserve() - ChatView.getTimePaddingLeft();
     reactionsRight = checkRight - ChatView.getTimePaddingLeft();
+  }
+
+  private int xgramTimeReserve () {
+    return listMode == Settings.CHAT_MODE_1LINE ? Math.max(timeWidth, Screen.dp(24f)) : timeWidth;
   }
 
   public String getTime () {
@@ -1352,6 +1492,21 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   private void layoutText () {
+    if (listMode == Settings.CHAT_MODE_1LINE) {
+      // XGram: one line shows no message preview. setText still keeps the flags, the preview and the visible message
+      // (read receipts, refreshes), only no Text is built.
+      lastCounterAddWidth = getCounterAddWidth();
+      textLeft = ChatView.getLeftPadding(listMode);
+      textIconsPadding = 0;
+      xgramTextUnread = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && xgramHasUnread();
+      if (trimmedText != null) {
+        trimmedText = null;
+        currentViews.invalidateContent(this);
+      }
+      layoutChatAction();
+      xgramCheckOneLineReserve(); // a draft came or went
+      return;
+    }
     int avail = currentWidth - ChatView.getLeftPadding(listMode) - ChatView.getRightPadding() - (lastCounterAddWidth = getCounterAddWidth());
     textLeft = ChatView.getLeftPadding(listMode);
     if ((flags & FLAG_HAS_PREFIX) != 0 && prefix != null && listMode == Settings.CHAT_MODE_2LINE) {
@@ -1394,7 +1549,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   private int textIconsPadding;
 
   private static TextStyleProvider getTextStyleProvider (int chatListMode) {
-    return Paints.robotoStyleProvider(chatListMode == Settings.CHAT_MODE_3LINE ? 15 : 16);
+    return Paints.robotoStyleProvider(chatListMode == Settings.CHAT_MODE_3LINE ? 15 : 16); // XGram: 16 in one line (no text drawn there)
   }
 
   // XGram: Material 3 Expressive chat list typography: Google Sans Flex titleMedium, weight 700 while unread.
@@ -1428,7 +1583,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   private static TextStyleProvider getTitleStyleProvider (int chatListMode) {
-    return Paints.robotoStyleProvider(chatListMode == Settings.CHAT_MODE_3LINE ? 16 : 17);
+    return Paints.robotoStyleProvider(chatListMode == Settings.CHAT_MODE_3LINE || chatListMode == Settings.CHAT_MODE_1LINE ? 16 : 17); // XGram: 16 in one line
   }
 
   public @Nullable IntList getTextIconIds () {
@@ -1440,6 +1595,11 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   private void setPrefix () {
+    if (listMode == Settings.CHAT_MODE_1LINE) {
+      this.prefix = null; // XGram: one line shows neither the sender nor the topic
+      layoutText();
+      return;
+    }
     if (xgramSetTopicsPrefix()) { // XGram: the community page shows the forum's topics here
       return;
     }
@@ -1511,7 +1671,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   }
 
   private boolean isSingleLine () {
-    return listMode == Settings.CHAT_MODE_2LINE || (flags & FLAG_HAS_PREFIX) != 0;
+    return listMode == Settings.CHAT_MODE_2LINE || listMode == Settings.CHAT_MODE_1LINE || (flags & FLAG_HAS_PREFIX) != 0;
   }
 
   private void setTextValue (String text, TextEntity[] entities, boolean isTranslatable) {
@@ -1829,6 +1989,11 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   public void layoutChatAction () {
     if (statusHelper == null)
       return;
+    if (listMode == Settings.CHAT_MODE_1LINE) {
+      // XGram: one line draws only the action's icon, in the time's place (ChatView); drawingState works without a text
+      statusHelper.setDrawingText(null);
+      return;
+    }
     String chatActionText = statusHelper.fullText();
     Text trimmedChatAction;
     if (StringUtils.isEmpty(chatActionText)) {
