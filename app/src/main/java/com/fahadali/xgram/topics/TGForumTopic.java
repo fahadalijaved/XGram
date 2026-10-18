@@ -347,7 +347,17 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
       return false;
     }
     if (currentWidth > 0 && isViewAttached && com.fahadali.xgram.chats.XgramChatListMode.isAnimating()) {
-      stashLines();
+      // A change interrupting another: the lines still fading out keep fading from where they are; otherwise the
+      // lines on screen now (the interrupted target's, at the alpha they had reached; all of them for a fresh change),
+      // as TGChat.checkChatListMode
+      final float f = com.fahadali.xgram.chats.XgramChatListMode.interruptedFraction();
+      final float oldStashAlpha = fadeMode != 0 ? fadeStartAlpha * Math.max(0f, Math.min(1f, 1f - 2f * f)) : 0f;
+      if (oldStashAlpha > 0f) {
+        fadeStartAlpha = oldStashAlpha;
+      } else {
+        stashLines();
+        fadeStartAlpha = Math.max(0f, Math.min(1f, 2f * f - 1f));
+      }
     } else {
       dropStash();
     }
@@ -364,6 +374,7 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
   @Nullable private Text fadePrefix, fadeText;
   private int fadeTextLeft;
   @Nullable private IntList fadeIcons;
+  private float fadeStartAlpha = 1f;
 
   private void stashLines () {
     fadeMode = listMode;
@@ -425,6 +436,11 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
   @Nullable
   public IntList getFadeIcons () {
     return fadeMode != 0 && fadeIcons != null && fadeIcons.size() > 0 ? fadeIcons : null;
+  }
+
+  /** The stashed lines' alpha when the change began: below 1 after an interrupted one (as TGChat.xgramFadeStartAlpha). */
+  public float getFadeStartAlpha () {
+    return fadeStartAlpha;
   }
 
   /** Has unread messages: with Expressive design the title, time and preview are emphasized then (as chats). */

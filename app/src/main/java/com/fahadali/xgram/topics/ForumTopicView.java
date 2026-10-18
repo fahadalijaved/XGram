@@ -101,6 +101,19 @@ public final class ForumTopicView extends SparseDrawableView {
     return value < 0f ? 0f : value > 1f ? 1f : value;
   }
 
+  /**
+   * Right to left: a badge's Gravity.RIGHT anchor between its multi-line place ({@code multiLineRight}, its end edge)
+   * and its mirrored one line place ({@code oneLineLeft}, its start edge), at {@code oneLine} (ChatView.xgramRtlCounterX).
+   */
+  private static float rtlCounterX (Counter badge, float multiLineRight, float oneLineLeft, float radius, float oneLine) {
+    final float multiLine = multiLineRight - radius;
+    if (oneLine <= 0f) {
+      return multiLine;
+    }
+    final float single = oneLineLeft + badge.getWidth() - radius;
+    return multiLine + (single - multiLine) * oneLine;
+  }
+
   private final Tdlib tdlib;
   private final ComplexReceiver textMediaReceiver;
   private TGForumTopic topic;
@@ -414,7 +427,8 @@ public final class ForumTopicView extends SparseDrawableView {
     final boolean modeTransition = com.fahadali.xgram.chats.XgramChatListMode.isAnimating() && mode == com.fahadali.xgram.chats.XgramChatListMode.targetMode();
     final float modeFraction = modeTransition ? clamp01(com.fahadali.xgram.chats.XgramChatListMode.fraction()) : 1f;
     final float linesInAlpha = modeTransition ? clamp01(modeFraction * 2f - 1f) : 1f;
-    final float linesOutAlpha = modeTransition && topic.getFadeMode() != 0 ? clamp01(1f - modeFraction * 2f) : 0f;
+    // An interrupted change starts from where the old lines were (TGForumTopic.getFadeStartAlpha, as ChatView)
+    final float linesOutAlpha = modeTransition && topic.getFadeMode() != 0 ? topic.getFadeStartAlpha() * clamp01(1f - modeFraction * 2f) : 0f;
     // The title row and the lines under it move together: the title's shift from where the topic's own mode puts it
     final int textLeft = ChatView.getLeftPadding(mode);
     final int titleDx = Math.round(m.textLeft) - textLeft;
@@ -496,20 +510,34 @@ public final class ForumTopicView extends SparseDrawableView {
       final TdApi.ChatAction action = state.action();
       if (action != null) {
         // Its end edge on the time's: the title never reflows, one line keeps 24dp for the time (TGForumTopic.timeReserve)
-        final float startX = topic.getTimeLeft() + topic.getTimeWidth() - org.thunderdog.challegram.tool.DrawAlgorithms.getStatusWidth(action);
+        final float timeEnd = topic.getTimeLeft() + topic.getTimeWidth();
+        final int statusWidth = org.thunderdog.challegram.tool.DrawAlgorithms.getStatusWidth(action);
+        final float reserve = timeEnd - topic.getChecksRight() - Screen.dp(7f); // TGForumTopic.timeReserve
+        final float startX = timeEnd - statusWidth, statusY = timeBaseline - Screen.dp(4f);
         final float alpha = oneLineStatusAlpha * xgramTrailing;
         final int color = xgramM3 ? XgramExpressive.color(XgramExpressive.PRIMARY) : org.thunderdog.challegram.theme.Theme.getColor(ColorId.textLight);
-        org.thunderdog.challegram.tool.DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - startX : startX, timeBaseline - Screen.dp(4f), me.vkryl.core.ColorUtils.alphaColor(alpha, color), this, !xgramM3 && alpha == 1f ? ColorId.textLight : ColorId.NONE);
+        // Choosing a location (36dp of waves) would reach over the ticks or the lock: it is made to fit the reserve
+        // instead, as ChatView (the 26dp upload bars draw within it)
+        final int save = statusWidth > reserve && reserve > 0f && action.getConstructor() == TdApi.ChatActionChoosingLocation.CONSTRUCTOR ? org.thunderdog.challegram.tool.Views.save(c) : -1;
+        if (save != -1) {
+          final float s = reserve / statusWidth;
+          c.scale(s, s, rtl ? viewWidth - timeEnd : timeEnd, statusY);
+        }
+        org.thunderdog.challegram.tool.DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - startX : startX, statusY, me.vkryl.core.ColorUtils.alphaColor(alpha, color), this, !xgramM3 && alpha == 1f ? ColorId.textLight : ColorId.NONE);
+        if (save != -1) {
+          org.thunderdog.challegram.tool.Views.restore(c, save);
+        }
       }
     }
 
     // Title, mute and lock. In RTL Telegram X draws the title from the start without mirroring it (as ChatView); one
-    // line has the ticks and badges on the title's row, so there the whole row is mirrored
-    final boolean mirrorTitle = rtl && oneLineMode;
+    // line has the ticks and badges on the title's row, so there the whole row is mirrored. While the view changes the
+    // mirroring follows the spring (0 unmirrored, 1 mirrored), so nothing jumps across the row.
+    final float mirror = rtl ? oneLine : 0f;
     Text title = topic.getTitle();
     if (title != null) {
       final int titleX = textLeft + titleDx;
-      title.draw(c, mirrorTitle ? viewWidth - titleX - title.getWidth() : titleX, titleTop);
+      title.draw(c, mirror > 0f ? Math.round(titleX + (viewWidth - 2f * titleX - title.getWidth()) * mirror) : titleX, titleTop);
     }
     if (topic.isMuted()) {
       Drawables.drawRtl(c, Icons.getChatMuteDrawable(ColorId.chatListMute), topic.getMuteLeft() + titleDx, Math.round(m.muteTop), Paints.getChatsMutePaint(), viewWidth, rtl);
@@ -549,16 +577,20 @@ public final class ForumTopicView extends SparseDrawableView {
     Counter reactionsCounter = topic.getReactionsCounter();
     // XGram M3E: the heart takes the badge's own (tertiary) content color
     final int reactionsColorId = xgramM3 ? ColorId.NONE : topic.isMuted() ? ColorId.badgeMutedText : ColorId.badgeText;
-    if (rtl && oneLine >= .5f) {
-      // Mirrored in one line: from the start edge of the slot towards the title
-      float counterLeft = viewWidth - oneLineRight;
-      counter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, xgramTrailing);
+    if (rtl) {
+      // Mirrored in one line: from the start edge of the slot towards the title. Each badge slides between its place
+      // at the end of the second line and its one line place (both as Gravity.RIGHT anchors), so none jumps mid-change
+      // (as ChatView).
+      float multiRight = multiLineRight, counterLeft = viewWidth - oneLineRight;
+      counter.draw(c, rtlCounterX(counter, multiRight, counterLeft, counterRadius, oneLine), counterCenterY, Gravity.RIGHT, xgramTrailing);
+      multiRight -= counter.getScaledWidth(counterGap);
       counterLeft += counter.getScaledWidth(counterGap);
-      mentionCounter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, xgramTrailing, this, ColorId.badgeText);
+      mentionCounter.draw(c, rtlCounterX(mentionCounter, multiRight, counterLeft, counterRadius, oneLine), counterCenterY, Gravity.RIGHT, xgramTrailing, this, ColorId.badgeText);
+      multiRight -= mentionCounter.getScaledWidth(counterGap);
       counterLeft += mentionCounter.getScaledWidth(counterGap);
-      reactionsCounter.draw(c, counterLeft + counterRadius, counterCenterY, Gravity.LEFT, xgramTrailing, this, reactionsColorId);
+      reactionsCounter.draw(c, rtlCounterX(reactionsCounter, multiRight, counterLeft, counterRadius, oneLine), counterCenterY, Gravity.RIGHT, xgramTrailing, this, reactionsColorId);
     } else {
-      float counterRight = rtl || oneLine <= 0f ? multiLineRight : multiLineRight + (oneLineRight - multiLineRight) * oneLine;
+      float counterRight = oneLine <= 0f ? multiLineRight : multiLineRight + (oneLineRight - multiLineRight) * oneLine;
       counter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, xgramTrailing);
       counterRight -= counter.getScaledWidth(counterGap);
       mentionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, xgramTrailing, this, ColorId.badgeText);
@@ -601,12 +633,15 @@ public final class ForumTopicView extends SparseDrawableView {
     // The lines under the title: "Sender: text" (two lines) or the sender over the text (three lines), none in one
     // line; sliding away while someone is typing in the topic (as in chats)
     final float textAlpha = 1f - statusVisibility;
-    if (linesOutAlpha > 0f) {
+    // While someone is typing the old mode hid its lines as well (textAlpha), so they stay hidden instead of flashing
+    // in (as ChatView)
+    final float stashAlpha = linesOutAlpha * clamp01(textAlpha);
+    if (stashAlpha > 0f) {
       // The old mode's lines, at the old mode's places shifted with the title row; custom emoji only while the new
       // mode has no text of its own
       final int fadeMode = topic.getFadeMode();
       final ChatView.Metrics fadeMetrics = ChatView.metricsOf(fadeMode);
-      drawLines(c, fadeMode, topic.getFadePrefix(), topic.getFadeText(), topic.getFadeTextLeft(), topic.getFadeIcons(), linesOutAlpha, true,
+      drawLines(c, fadeMode, topic.getFadePrefix(), topic.getFadeText(), topic.getFadeTextLeft(), topic.getFadeIcons(), stashAlpha, true,
         topic.getText() == null ? textMediaReceiver : null, Math.round(m.textLeft - fadeMetrics.textLeft), Math.round(m.titleTop - fadeMetrics.titleTop), viewWidth, rtl);
     }
     final ChatView.Metrics ownMetrics = modeTransition ? ChatView.metricsOf(mode) : m;
