@@ -658,6 +658,9 @@ public final class ForumTopicView extends SparseDrawableView {
       Text statusText = status.drawingText();
       if (statusText != null) {
         float top = ChatView.getTextTop(mode) + linesDy - Screen.dp(14f) * textAlpha;
+        if (mode != Settings.CHAT_MODE_2LINE && statusText.getLineCount() == 1) {
+          top += Screen.dp(2f); // ChatView.getSingleLineOffset, as ChatView's status line
+        }
         int x = textLeft + titleDx;
         org.thunderdog.challegram.tool.DrawAlgorithms.drawStatus(c, state, rtl ? viewWidth - x : x, top + statusText.getLineHeight() / 2f, me.vkryl.core.ColorUtils.alphaColor(statusLinesAlpha, statusText.getTextColor()), this, statusLinesAlpha == 1f ? ColorId.textLight : ColorId.NONE);
         statusText.draw(c, x, (int) top, null, statusLinesAlpha);
