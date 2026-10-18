@@ -794,7 +794,9 @@ public class DrawAlgorithms {
         pathHelper = rectF;
       }
 
-      path.moveTo(rect.left, rect.top - topLeftRadius);
+      // XGram: the contour starts where the top-left arc starts. It started topLeftRadius above the rect: a zero-width
+      // spike up the left edge (two reversals of direction), which a stroke of the path shows. Fills are unchanged.
+      path.moveTo(rect.left, rect.top + topLeftRadius);
       if (topLeftRadius != 0) {
         rectF.set(rect.left, rect.top, rect.left + topLeftRadius * 2, rect.top + topLeftRadius * 2);
         path.arcTo(rectF, -180, 90);
@@ -814,7 +816,7 @@ public class DrawAlgorithms {
         rectF.set(rect.left, rect.bottom - bottomLeftRadius * 2, rect.left + bottomLeftRadius * 2, rect.bottom);
         path.arcTo(rectF, 90, 90);
       }
-      path.lineTo(rect.left, rect.top - topLeftRadius);
+      path.lineTo(rect.left, rect.top + topLeftRadius);
       path.close();
 
       /*path.moveTo(rect.left + topLeftRadius, rect.top);
