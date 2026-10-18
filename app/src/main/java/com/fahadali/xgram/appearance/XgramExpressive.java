@@ -1309,6 +1309,7 @@ public final class XgramExpressive {
       case ListItem.TYPE_EMPTY_OFFSET_SMALL:
       case ListItem.TYPE_EMPTY_OFFSET_NO_HEAD:
       case ListItem.TYPE_PADDING:
+      case ListItem.TYPE_INFO: // a settings sheet's supporting text (SettingHolder: no background of its own), not a tile
         return false;
     }
     return true;

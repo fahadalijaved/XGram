@@ -311,8 +311,13 @@ public class EditRightsController extends EditBaseController<EditRightsControlle
           return true;
         });
       } else {
-        showSettings(new SettingsWrapBuilder(R.id.btn_unblockSender)
-          .setHeaderItem(new ListItem(ListItem.TYPE_INFO, 0, 0, Lang.getStringBold(R.string.QUnblockX, tdlib.senderName(args.senderId)), false))
+        final SettingsWrapBuilder xgramUnblock = new SettingsWrapBuilder(R.id.btn_unblockSender);
+        if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+          xgramUnblock.xgramSetHeadline(0, Lang.getString(R.string.QUnblockX, tdlib.senderName(args.senderId))); // XGram M3E: the question is the headline
+        } else {
+          xgramUnblock.setHeaderItem(new ListItem(ListItem.TYPE_INFO, 0, 0, Lang.getStringBold(R.string.QUnblockX, tdlib.senderName(args.senderId)), false));
+        }
+        showSettings(xgramUnblock
           .setIntDelegate((id, result) -> {
             boolean addBackToGroup = result.get(RightId.READ_MESSAGES) != 0;
             if (addBackToGroup) {

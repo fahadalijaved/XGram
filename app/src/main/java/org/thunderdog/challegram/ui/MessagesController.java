@@ -9094,9 +9094,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     // XGram M3E: one pin in Saved Messages is the confirm sheet ([Cancel] [Unpin message]): a headline and supporting
     // text for it (Telegram X shows the tile alone); Expressive design off is unchanged
     final boolean xgramConfirm = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && pinnedCount == 1 && isSelfChat();
+    // XGram M3E: several pins in Saved Messages are the same confirm sheet: "Unpin N messages?" is its headline
+    final boolean xgramConfirmMany = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && pinnedCount > 1 && isSelfChat();
     showOptions(new Options.Builder()
-      .title(xgramConfirm ? Lang.getString(R.string.XgramConfirmUnpinMessage) : null)
-      .info(pinnedCount > 1 ? Lang.pluralBold(R.string.UnpinXMessages, pinnedCount) : xgramConfirm ? Lang.getString(R.string.XgramConfirmUnpinMessageText) : null)
+      .title(xgramConfirm ? Lang.getString(R.string.XgramConfirmUnpinMessage) : xgramConfirmMany ? Lang.plural(R.string.UnpinXMessages, pinnedCount) : null)
+      .info(xgramConfirmMany ? Lang.getString(R.string.XgramConfirmUnpinMessagesText) : pinnedCount > 1 ? Lang.pluralBold(R.string.UnpinXMessages, pinnedCount) : xgramConfirm ? Lang.getString(R.string.XgramConfirmUnpinMessageText) : null)
       .item(canPinAnyMessage(false) ? new OptionItem.Builder()
         .id(R.id.btn_unpinMessage)
         .name(Lang.getString(pinnedCount == 1 ? R.string.UnpinMessage : R.string.UnpinMessagesConfirm))
@@ -9236,6 +9238,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private TopBarView.Item newReportItem (long chatId, boolean isBlock) {
     return new TopBarView.Item(R.id.btn_reportChat, isBlock ? R.string.BlockContact : R.string.ReportSpam, v -> {
       showSettings(new SettingsWrapBuilder(R.id.btn_reportSpam)
+        .xgramSetHeadline(0, Lang.getString(R.string.XgramConfirmReportSpam)) // XGram M3E (Expressive design only)
         .addHeaderItem(new ListItem(ListItem.TYPE_INFO, 0, 0, Lang.getStringBold(R.string.ReportChatSpam, chat.title), false))
         .setRawItems(getChatUserId() != 0 ? new ListItem[] {
           new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_reportSpam, 0, R.string.ReportSpam, true),

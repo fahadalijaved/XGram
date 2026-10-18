@@ -2152,18 +2152,21 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     // text under it (the leading TYPE_INFO header items, bodyMedium: SettingHolder) go above the SHADOW_TOP that opens
     // the rows' group: outside it (XgramExpressive.isInGroup) they get no tile inset, so their text keeps the sheet's
     // 16dp margin, as the headline and text of the option confirm sheets (OptionsLayout)
-    final boolean xgramHeadline = b.xgramHeadline != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    // A sheet with no headline does the same with its leading TYPE_INFO: inside the group it would be an inset row
+    // whose (unpainted) tile turns the first checkbox or radio tile into a middle one with 4dp top corners
+    final boolean xgramExpressiveSheet = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    final boolean xgramHeadline = b.xgramHeadline != null && xgramExpressiveSheet;
     int xgramLeadingInfo = 0;
     if (xgramHeadline) {
       items.add(b.xgramHeadline);
-      if (b.headerItems != null) {
-        while (xgramLeadingInfo < b.headerItems.size() && b.headerItems.get(xgramLeadingInfo).getViewType() == ListItem.TYPE_INFO) {
-          items.add(b.headerItems.get(xgramLeadingInfo));
-          xgramLeadingInfo++;
-        }
+    }
+    if (xgramExpressiveSheet && b.headerItems != null) {
+      while (xgramLeadingInfo < b.headerItems.size() && b.headerItems.get(xgramLeadingInfo).getViewType() == ListItem.TYPE_INFO) {
+        items.add(b.headerItems.get(xgramLeadingInfo));
+        xgramLeadingInfo++;
       }
     }
-    final boolean xgramHeadlineTextFollows = xgramLeadingInfo > 0;
+    final boolean xgramHeadlineTextFollows = xgramHeadline && xgramLeadingInfo > 0;
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     if (b.headerItems != null && b.headerItems.size() > xgramLeadingInfo) {
       if (xgramLeadingInfo == 0) {
@@ -2603,9 +2606,10 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     final int[] colors = {OptionColor.RED, OptionColor.NORMAL};
     final int[] icons = {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24};
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      // XGram M3E r5: the confirm sheet gets a question as its headline when the caller gave no text
+      // XGram M3E r5: the confirm sheet gets a question as its headline, with the caller's text (discard edit, caption)
+      // as its supporting text
       Options options = getOptions(info, ids, titles, colors, icons, Text.LINE_COUNT_UNLIMITED);
-      showOptions(new Options(options.info, StringUtils.isEmpty(info) ? Lang.getString(R.string.XgramR5SheetsUnsavedTitle) : null, null, options.items, options.maxLineCount), delegate);
+      showOptions(new Options(options.info, Lang.getString(R.string.XgramR5SheetsUnsavedTitle), null, options.items, options.maxLineCount), delegate);
       return;
     }
     showOptions(info, ids, titles, colors, icons, delegate);

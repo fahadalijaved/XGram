@@ -612,6 +612,7 @@ public class ChatStatisticsController extends RecyclerViewController<ChatStatist
     final long chatId = getArgumentsStrict().chatId;
     final ListItem headerItem = new ListItem(ListItem.TYPE_INFO, 0, 0, Lang.getStringBold(R.string.MemberCannotJoinGroup, tdlib.cache().userName(content.getUserId())), false);
     showSettings(new SettingsWrapBuilder(R.id.btn_blockSender)
+      .xgramSetHeadline(0, Lang.getString(R.string.XgramConfirmRemoveMember, tdlib.senderName(content.getSenderId(), true))) // XGram M3E (Expressive design only)
       .addHeaderItem(headerItem)
       .setIntDelegate((id, result) -> {
         boolean blockUser = result.get(R.id.btn_restrictMember) != 0;

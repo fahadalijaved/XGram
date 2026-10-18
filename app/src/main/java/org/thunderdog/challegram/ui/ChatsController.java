@@ -2105,8 +2105,13 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
     String actionStr = Lang.plural(clearHistory ? R.string.ClearXHistories : R.string.DeleteXChats, selectedChats.size());
 
+    // XGram M3E: the headline of these confirm sheets (Expressive design only)
+    final String xgramHeadline = clearHistory ?
+      (totalCount == 1 ? Lang.getString(R.string.XgramConfirmClearHistory) : Lang.getString(R.string.XgramConfirmClearXHistories, totalCount)) :
+      (totalCount == 1 ? Lang.getString(R.string.XgramConfirmDeleteChat) : Lang.getString(R.string.XgramConfirmDeleteXChats, totalCount));
+
     RunnableBool deleter = needRevoke -> {
-      showOptions(Lang.getString(R.string.NoUndoWarn), new int[] {R.id.btn_delete, R.id.btn_cancel}, new String[] {actionStr, Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {clearHistory ? R.drawable.templarian_baseline_broom_24 : R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (v, optionId) -> {
+      xgramShowConfirm(Lang.getString(R.string.NoUndoWarn), xgramHeadline, null, new int[] {R.id.btn_delete, R.id.btn_cancel}, new String[] {actionStr, Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {clearHistory ? R.drawable.templarian_baseline_broom_24 : R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (v, optionId) -> {
         if (optionId == R.id.btn_delete) {
           final int size = selectedChats.size();
           AtomicInteger remaining = new AtomicInteger(size);
@@ -2127,6 +2132,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     if (revokeCount > 0) {
       showSettings(new SettingsWrapBuilder(R.id.btn_removeChatFromList)
         .setAllowResize(false)
+        .xgramSetHeadline(0, xgramHeadline)
         .addHeaderItem(info)
         .setRawItems(new ListItem[]{
           new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_clearChatHistory, 0, Lang.pluralBold(R.string.RevokeForX, revokeCount), R.id.btn_clearChatHistory, false)
@@ -2139,7 +2145,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         })
       );
     } else {
-      showOptions(info,
+      xgramShowConfirm(info, xgramHeadline, null,
         new int[]{R.id.btn_delete, R.id.btn_cancel},
         new String[]{actionStr, Lang.getString(R.string.Cancel)},
         new int[]{OptionColor.RED, OptionColor.NORMAL},

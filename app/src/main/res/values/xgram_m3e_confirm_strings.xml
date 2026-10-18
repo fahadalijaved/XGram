@@ -41,4 +41,14 @@
   <string name="XgramConfirmClearRecentStatuses">Clear recent statuses?</string>
   <string name="XgramConfirmClearRecentEmoji">Clear recent emoji?</string>
   <string name="XgramConfirmClearRecentText">They will be removed from the Recent section.</string>
+  <string name="XgramConfirmDeleteChat">Delete chat?</string>
+  <string name="XgramConfirmDeleteXChats">Delete %1$s chats?</string>
+  <string name="XgramConfirmClearHistory">Clear history?</string>
+  <string name="XgramConfirmClearXHistories">Clear history in %1$s chats?</string>
+  <string name="XgramConfirmClearCallHistory">Clear call history?</string>
+  <string name="XgramConfirmBlockUser">Block %1$s?</string>
+  <string name="XgramConfirmLogOut">Log out?</string>
+  <string name="XgramConfirmRevokeLink">Revoke link?</string>
+  <string name="XgramConfirmReportSpam">Report spam?</string>
+  <string name="XgramConfirmUnpinMessagesText">They will be removed from the pinned messages.</string>
 </resources>

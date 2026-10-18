@@ -443,8 +443,13 @@ public class TdlibUi extends Handler {
       return;
     }
 
-    c.showSettings(new SettingsWrapBuilder(R.id.btn_unblockSender)
-      .addHeaderItem(new ListItem(ListItem.TYPE_INFO, 0, 0, Lang.getString(R.string.QUnblockX, tdlib.senderName(senderId)), false))
+    final SettingsWrapBuilder xgramUnblock = new SettingsWrapBuilder(R.id.btn_unblockSender);
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramUnblock.xgramSetHeadline(0, Lang.getString(R.string.QUnblockX, tdlib.senderName(senderId))); // XGram M3E: the question is the headline
+    } else {
+      xgramUnblock.addHeaderItem(new ListItem(ListItem.TYPE_INFO, 0, 0, Lang.getString(R.string.QUnblockX, tdlib.senderName(senderId)), false));
+    }
+    c.showSettings(xgramUnblock
       .setIntDelegate((id, result) -> {
         boolean addBackToGroup = result.get(R.id.btn_inviteBack) != 0;
         tdlib.setChatMemberStatus(chatId, senderId, addBackToGroup ? new TdApi.ChatMemberStatusMember() : new TdApi.ChatMemberStatusLeft(), currentStatus, null);
@@ -469,7 +474,7 @@ public class TdlibUi extends Handler {
     if (senderId.getConstructor() == TdApi.MessageSenderChat.CONSTRUCTOR)
       return;
     if (ChatId.getType(chatId) == TdApi.ChatTypeBasicGroup.CONSTRUCTOR) {
-      c.showOptions(Lang.getStringBold(R.string.MemberCannotJoinRegularGroup, tdlib.senderName(senderId, true)), new int[] {R.id.btn_blockSender, R.id.btn_cancel}, new String[]{Lang.getString(R.string.RemoveFromGroup), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[]{R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+      c.xgramShowConfirm(Lang.getStringBold(R.string.MemberCannotJoinRegularGroup, tdlib.senderName(senderId, true)), Lang.getString(R.string.XgramConfirmRemoveMember, tdlib.senderName(senderId, true)), null, new int[] {R.id.btn_blockSender, R.id.btn_cancel}, new String[]{Lang.getString(R.string.RemoveFromGroup), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[]{R.drawable.baseline_remove_circle_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
         if (id == R.id.btn_blockSender) {
           tdlib.setChatMemberStatus(chatId, senderId, new TdApi.ChatMemberStatusLeft(), currentStatus, null);
         }
@@ -479,6 +484,7 @@ public class TdlibUi extends Handler {
     }
     final ListItem headerItem = new ListItem(ListItem.TYPE_INFO, 0, 0, getBlockString(chatId, senderId, true), false);
     c.showSettings(new SettingsWrapBuilder(R.id.btn_blockSender)
+      .xgramSetHeadline(0, Lang.getString(R.string.XgramConfirmRemoveMember, tdlib.senderName(senderId, true))) // XGram M3E (Expressive design only)
       .addHeaderItem(headerItem)
       .setIntDelegate((id, result) -> {
         boolean blockUser = result.get(R.id.btn_restrictMember) != 0;
@@ -618,6 +624,7 @@ public class TdlibUi extends Handler {
       }
       context.runOnUiThreadOptional(() ->
         context.showSettings(new SettingsWrapBuilder(R.id.btn_delete)
+          .xgramSetHeadline(0, Lang.getString(R.string.XgramConfirmClearCallHistory)) // XGram M3E (Expressive design only)
           .addHeaderItem(Lang.getMarkdownString(context, R.string.DeleteCallHistoryConfirm))
           .setRawItems(new ListItem[] {
             new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_deleteAll, 0, R.string.DeleteCallHistoryForEveryone, false)
@@ -4904,7 +4911,7 @@ public class TdlibUi extends Handler {
           if (canReturnAfterLeave)
             informationStr = hasPublicLink ? Lang.getString(isChannel ? R.string.LeaveReturnPublicLinkHintChannel : R.string.LeaveReturnPublicLinkHintGroup) : null;
           else
-            informationStr = Lang.getString(isChannel ? R.string.LeaveNoReturnHintGroup : R.string.LeaveNoReturnHintChannel);
+            informationStr = Lang.getString(isChannel ? R.string.LeaveNoReturnHintChannel : R.string.LeaveNoReturnHintGroup); // XGram: Telegram X had the two hints swapped
           confirmButtonRes = isChannel ? R.string.LeaveChannel : R.string.LeaveMegaMenu;
         } else {
           newStatus = new TdApi.ChatMemberStatusMember();
@@ -5049,6 +5056,7 @@ public class TdlibUi extends Handler {
     if (tdlib.canRevokeChat(chatId) || (tdlib.canClearHistoryForAllUsers(chatId) && tdlib.canClearHistoryOnlyForSelf(chatId))) {
       context.showSettings(new SettingsWrapBuilder(R.id.btn_removeChatFromList)
         .setAllowResize(false)
+        .xgramSetHeadline(0, Lang.getString(R.string.XgramConfirmClearHistory)) // XGram M3E (Expressive design only)
         .addHeaderItem(tdlib.isSelfChat(chatId) ? Lang.getMarkdownString(context, R.string.ClearSavedMessagesConfirm) : Lang.getString(R.string.ClearHistoryConfirm))
         .setSaveColorId(ColorId.textNegative)
         .setSaveStr(R.string.Delete)
@@ -5087,8 +5095,8 @@ public class TdlibUi extends Handler {
         info = Lang.getString(revoke ? R.string.ClearHistoryAllConfirm : R.string.ClearHistoryConfirm);
         confirmButton = Lang.getString(revoke ? R.string.ClearHistoryAll : R.string.ClearHistory);
       }
-      context.showOptions(
-        info,
+      context.xgramShowConfirm(
+        info, Lang.getString(R.string.XgramConfirmClearHistory), null, // XGram M3E: the headline (Expressive design only)
         new int[]{R.id.btn_clearChatHistory, R.id.btn_cancel},
         new String[]{confirmButton, Lang.getString(R.string.Cancel)},
         new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL},
@@ -5184,6 +5192,7 @@ public class TdlibUi extends Handler {
           if (tdlib.canRevokeChat(chatId)) {
             context.showSettings(new SettingsWrapBuilder(R.id.btn_removeChatFromList)
               .setAllowResize(false)
+              .xgramSetHeadline(0, Lang.getString(R.string.XgramConfirmDeleteChat)) // XGram M3E (Expressive design only)
               .addHeaderItem(info)
               .setRawItems(new ListItem[]{
                 new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_clearChatHistory, 0, Lang.getString(R.string.DeleteSecretChatHistoryForOtherParty, userName), R.id.btn_clearChatHistory, false)
@@ -5200,7 +5209,7 @@ public class TdlibUi extends Handler {
               })
             );
           } else {
-            context.showOptions(info, new int[] {R.id.btn_removeChatFromList, R.id.btn_cancel}, new String[] {Lang.getString(deleteAndStop ? R.string.DeleteAndStop : R.string.DeleteChat), Lang.getString(R.string.Cancel)}, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, resultId) -> {
+            context.xgramShowConfirm(info, Lang.getString(R.string.XgramConfirmDeleteChat), null, new int[] {R.id.btn_removeChatFromList, R.id.btn_cancel}, new String[] {Lang.getString(deleteAndStop ? R.string.DeleteAndStop : R.string.DeleteChat), Lang.getString(R.string.Cancel)}, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, resultId) -> {
               if (resultId == R.id.btn_removeChatFromList) {
                 if (blockUser) {
                   tdlib.blockSender(new TdApi.MessageSenderUser(userId), new TdApi.BlockListMain(), blockResult -> deleter.runWithBool(false));
@@ -5226,6 +5235,7 @@ public class TdlibUi extends Handler {
             CharSequence info = Lang.getStringBold(R.string.DeleteSecretChatConfirm, userName);
             context.showSettings(new SettingsWrapBuilder(R.id.btn_removeChatFromList)
               .setAllowResize(false)
+              .xgramSetHeadline(0, Lang.getString(R.string.XgramConfirmDeleteChat)) // XGram M3E (Expressive design only)
               .addHeaderItem(info)
               .setRawItems(new ListItem[] {
                 new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_clearChatHistory, 0, Lang.getString(R.string.DeleteSecretChatHistoryForOtherParty, userName), R.id.btn_clearChatHistory, false)
@@ -5248,7 +5258,7 @@ public class TdlibUi extends Handler {
               })
             );
           } else {
-            context.showOptions(Lang.getStringBold(secretChat.state.getConstructor() == TdApi.SecretChatStatePending.CONSTRUCTOR ? R.string.DeleteSecretChatPendingConfirm : R.string.DeleteSecretChatClosedConfirm, userName), new int[] {R.id.btn_removeChatFromList, R.id.btn_cancel}, new String[]{Lang.getString(R.string.DeleteChat), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[]{R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+            context.xgramShowConfirm(Lang.getStringBold(secretChat.state.getConstructor() == TdApi.SecretChatStatePending.CONSTRUCTOR ? R.string.DeleteSecretChatPendingConfirm : R.string.DeleteSecretChatClosedConfirm, userName), Lang.getString(R.string.XgramConfirmDeleteChat), null, new int[] {R.id.btn_removeChatFromList, R.id.btn_cancel}, new String[]{Lang.getString(R.string.DeleteChat), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[]{R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
               if (id == R.id.btn_removeChatFromList) {
                 if (blockUser) {
                   tdlib.blockSender(new TdApi.MessageSenderUser(secretChat.userId), new TdApi.BlockListMain(), blockResult -> deleter.runWithBool(false));
@@ -5268,7 +5278,7 @@ public class TdlibUi extends Handler {
             if (status != null && TD.isMember(status, false)) {
               leaveJoinChat(context, chatId, false, after);
             } else {
-              context.showOptions(Lang.getString(R.string.AreYouSureDeleteThisChat), new int[] {R.id.btn_removeChatFromList, R.id.btn_cancel}, new String[] {Lang.getString(R.string.DeleteChat), Lang.getString(R.string.Cancel)}, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+              context.xgramShowConfirm(Lang.getString(R.string.AreYouSureDeleteThisChat), Lang.getString(R.string.XgramConfirmDeleteChat), null, new int[] {R.id.btn_removeChatFromList, R.id.btn_cancel}, new String[] {Lang.getString(R.string.DeleteChat), Lang.getString(R.string.Cancel)}, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
                 if (id == R.id.btn_removeChatFromList) {
                   deleter.runWithBool(false);
                 }
@@ -5622,7 +5632,7 @@ public class TdlibUi extends Handler {
           return true;
         });
       } else if (id == R.id.btn_revokeLink) {
-        context.showOptions(Lang.getString(context.tdlib().isChannel(chatId) ? R.string.AreYouSureRevokeInviteLinkChannel : R.string.AreYouSureRevokeInviteLinkGroup), new int[] {R.id.btn_revokeLink, R.id.btn_cancel}, new String[] {Lang.getString(R.string.RevokeLink), Lang.getString(R.string.Cancel)}, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_link_off_24, R.drawable.baseline_cancel_24}, (itemView2, id2) -> {
+        context.xgramShowConfirm(Lang.getString(context.tdlib().isChannel(chatId) ? R.string.AreYouSureRevokeInviteLinkChannel : R.string.AreYouSureRevokeInviteLinkGroup), Lang.getString(R.string.XgramConfirmRevokeLink), null, new int[] {R.id.btn_revokeLink, R.id.btn_cancel}, new String[] {Lang.getString(R.string.RevokeLink), Lang.getString(R.string.Cancel)}, new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_link_off_24, R.drawable.baseline_cancel_24}, (itemView2, id2) -> {
           if (id2 == R.id.btn_revokeLink) {
             context.tdlib().client().send(new TdApi.RevokeChatInviteLink(chatId, link.inviteLink), result -> {
               if (result.getConstructor() == TdApi.ChatInviteLinks.CONSTRUCTOR && onLinkRevoked != null) {
@@ -6461,7 +6471,7 @@ public class TdlibUi extends Handler {
   }
 
   private static void removeAccount (ViewController<?> context, final TdlibAccount account, boolean isSignOut) {
-    context.showOptions(Lang.getStringBold(isSignOut ? R.string.SignOutHint2 : R.string.RemoveAccountHint2, account.getName()), new int[]{R.id.btn_removeAccount, R.id.btn_cancel}, new String[]{Lang.getString(R.string.LogOut), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_logout_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+    context.xgramShowConfirm(Lang.getStringBold(isSignOut ? R.string.SignOutHint2 : R.string.RemoveAccountHint2, account.getName()), Lang.getString(R.string.XgramConfirmLogOut), null, new int[]{R.id.btn_removeAccount, R.id.btn_cancel}, new String[]{Lang.getString(R.string.LogOut), Lang.getString(R.string.Cancel)}, new int[]{ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL}, new int[] {R.drawable.baseline_logout_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
       if (id == R.id.btn_removeAccount) {
         account.tdlib().signOut();
       }

@@ -797,8 +797,14 @@ public class CallListController extends RecyclerViewController<Void> implements
             CharSequence text = Lang.getStringBold(R.string.QDeleteCallFromRecent);
             tdlib.checkMessageProperties(call.getMessages(), properties -> properties.canBeDeletedForAllUsers, canBeDeletedForAllUsers -> runOnUiThreadOptional(() -> {
               if (canBeDeletedForAllUsers) {
+                final SettingsWrapBuilder xgramBuilder = new SettingsWrapBuilder(R.id.btn_delete);
+                if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+                  xgramBuilder.xgramSetHeadline(R.id.text_title, Lang.getString(R.string.QDeleteCallFromRecent)); // XGram M3E: the question is the headline
+                } else {
+                  xgramBuilder.setHeaderItem(new ListItem(ListItem.TYPE_INFO, R.id.text_title, 0, text, false));
+                }
                 showSettings(
-                  new SettingsWrapBuilder(R.id.btn_delete).setHeaderItem(new ListItem(ListItem.TYPE_INFO, R.id.text_title, 0, text, false)).setRawItems(
+                  xgramBuilder.setRawItems(
                     new ListItem[] {
                       new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_deleteAll, 0, Lang.getStringBold(R.string.DeleteForUser, firstName), false)
                     }).setIntDelegate((id, result) -> {

@@ -368,6 +368,11 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
     }
     headerView.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexProvider(ts, false, XgramExpressive.textSizeSp(ts)));
     headerView.setMaxLineCount(2);
+    if (ts == XgramExpressive.TS_HEADLINE_S) {
+      // A confirm sheet's headline: 16dp down to its supporting text (12 here, the text's own 4dp top), as the M3
+      // dialog and the settings confirm sheets (XgramConfirmSheets.bindSheetHeadline); a headline alone keeps 6dp
+      headerView.setPadding(Screen.dp(16f), 0, Screen.dp(16f), Screen.dp(textView.getVisibility() == View.VISIBLE ? 12f : 6f));
+    }
     if (headerView.getVisibility() == View.VISIBLE) {
       headerView.setText(headerView.getText(), null, false);
     }
