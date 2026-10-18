@@ -136,6 +136,17 @@ fun AppearancePage() {
           }
         )
       }
+      // The chat's floating buttons in the avatars' shape: only Expressive design draws them as M3 FABs. Open chats
+      // (the other pane) redraw now; their buttons take the shape before they draw (CircleButton.draw).
+      if (XgramExpressive.isEnabled()) {
+        switch(
+          R.id.btn_xgramChatFabsAvatarShape, s(R.string.XgramChatFabsAvatarShape), s(R.string.XgramChatFabsAvatarShapeSub),
+          checked = settings.chatFabsAvatarShape()
+        ) {
+          settings.setChatFabsAvatarShape(it)
+          XgramUi.invalidateAll(host.activity)
+        }
+      }
       switch(R.id.btn_xgramShowSeconds, s(R.string.XgramShowSeconds), s(R.string.XgramShowSecondsSub), checked = settings.showSeconds()) {
         settings.setShowSeconds(it)
       }

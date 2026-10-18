@@ -750,6 +750,24 @@ public final class XgramSettings {
     avatarRadiusFactor = percent < 0 ? -1f : percent / 100f;
   }
 
+  /** "Chat buttons match avatar shape" (Appearance, Expressive design): the chat's floating buttons take the avatars' shape. */
+  public static final String KEY_CHAT_FABS_AVATAR_SHAPE = "xgram_chat_fabs_avatar_shape";
+  private volatile int chatFabsAvatarShape = -1; // -1: not read yet
+
+  /** Off by default: the M3E rounded square. Cached for CircleButton.xgramChatFabCornerDp, read while those buttons draw. */
+  public boolean chatFabsAvatarShape () {
+    int value = chatFabsAvatarShape;
+    if (value < 0) {
+      chatFabsAvatarShape = value = pmc().getBoolean(KEY_CHAT_FABS_AVATAR_SHAPE, false) ? 1 : 0;
+    }
+    return value == 1;
+  }
+
+  public void setChatFabsAvatarShape (boolean value) {
+    chatFabsAvatarShape = value ? 1 : 0;
+    pmc().putBoolean(KEY_CHAT_FABS_AVATAR_SHAPE, value);
+  }
+
   private int chatLongPress = -1;
 
   /** What holding a chat in the chat list does: 0 Telegram X preview, 1 quick actions, 2 compact preview. */

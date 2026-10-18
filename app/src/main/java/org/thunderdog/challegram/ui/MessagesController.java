@@ -6496,11 +6496,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
     int baseY = needSearchControlsTranslate() ? (int) ((float) barHeight * MathUtils.clamp(searchControlsFactor)) : 0;
     float fromY = bottomButtonFactor == 1f ? baseY : baseY + (int) ((float) barHeight * (1f - bottomButtonFactor));
     float alpha = (1f - 1f * collapseFactor * (1f - bottomButtonFactor)) * (1f - searchControlsFactor);
-    // XGram: with Expressive design the bar collapses into a 56dp FAB one slot above the scroll FAB: its centre 44dp
-    // from the end (16dp margin + 28dp) and 44dp + 68dp above the input bar, 20dp + 68dp above the bar's own centre
+    // XGram: with Expressive design the bar collapses into a chat FAB (CircleButton.XGRAM_CHAT_FAB_DP, 48dp) one slot
+    // above the scroll FAB: its centre 16dp + half the FAB from the end and above the input bar, plus one pitch
+    // (xgramFabPitch); the bar's own centre is 24dp up, so 16dp + half the FAB - 24dp (16dp for the 48dp FAB) + pitch
     final boolean xgramFabs = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     int moveBy = xgramFabPitch();
-    float toY = -getButtonsOffset() - Screen.dp(xgramFabs ? 20f : 16f) - moveBy - moveBy * mentionButtonFactor + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme); //  -getReplyOffset() - (Screen.dp(74f) - Screen.dp(48f)) / 2f;
+    float toY = -getButtonsOffset() - Screen.dp(xgramFabs ? 16f + CircleButton.XGRAM_CHAT_FAB_DP / 2f - 24f : 16f) - moveBy - moveBy * mentionButtonFactor + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme); //  -getReplyOffset() - (Screen.dp(74f) - Screen.dp(48f)) / 2f;
     bottomBar.setCollapseFactor(collapseFactor);
     bottomBar.setAlpha(alpha);
     int dx = (int) ((bottomBar.getMeasuredWidth() / 2f - Screen.dp(16f) - Screen.dp(xgramFabs ? CircleButton.XGRAM_CHAT_FAB_DP : 48f) / 2f) * detachFactor);
@@ -6895,12 +6896,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   /**
-   * XGram M3E: the floating chat buttons are M3 FABs (CircleButton draws the 56dp, 16dp-corner secondaryContainer
-   * container). Each is laid out at 64dp so its M3 badge fits on the container's corner; the wrap's 12dp margins
-   * (moved inside it for the shadow's room) put the container 16dp from the screen edge and 16dp above the input bar
-   * (the M3 FAB margins).
+   * XGram M3E: the floating chat buttons are M3 FABs (CircleButton draws the 48dp secondaryContainer container, a
+   * 14dp-corner rounded square or the avatars' shape). Each is laid out at 56dp (8dp over the FAB, the touch target
+   * with it) so its M3 badge fits on the container's corner; the wrap's 12dp margins (moved inside it for the shadow's
+   * room) and the 4dp around the container put it 16dp from the screen edge and 16dp above the input bar (the M3 FAB
+   * margins).
    * The counts move from Telegram X's counter views into those badges, and the wraps pop in and out from the FAB's
-   * own centre. The search arrows get 16dp margins for their 56dp FABs. Nothing with Expressive design off.
+   * own centre. The search arrows' 56dp views get the margins that put their containers there too
+   * (CircleCounterBadgeView.xgramFabMargin). Nothing with Expressive design off.
    */
   private void xgramSetupChatFabs () {
     if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -6933,9 +6936,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     for (CircleCounterBadgeView badge : new CircleCounterBadgeView[] {goToNextFoundMessageButtonBadge, goToPrevFoundMessageButtonBadge}) {
       if (badge != null && badge.getLayoutParams() instanceof RelativeLayout.LayoutParams) {
         RelativeLayout.LayoutParams badgeParams = (RelativeLayout.LayoutParams) badge.getLayoutParams();
-        badgeParams.rightMargin = badgeParams.bottomMargin = Screen.dp(16f);
+        badgeParams.rightMargin = badgeParams.bottomMargin = CircleCounterBadgeView.xgramFabMargin();
         badge.setLayoutParams(badgeParams);
-        badge.xgramMakeShadowRoom(); // the 16dp margins move inside it: the 56dp FAB had no room past its container
+        badge.xgramMakeShadowRoom(); // the margins move inside it, to 16dp of room past the container
       }
     }
   }
@@ -6954,18 +6957,19 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   /**
-   * XGram M3E: the 56dp FAB the bottom bar collapses into is taller than the 48dp bar, and the bar's view is clipped to
-   * its bounds, so the button lost its top and bottom (the bell above the scroll button in channels). The view gets
-   * this much room above and below the bar as padding, and a negative bottom margin keeps the bar where it was. 0 with
-   * Expressive design off.
+   * XGram M3E: a chat FAB taller than the 48dp bar (the 56dp one of before) would stick out of the bar it collapses
+   * from, and the bar's view is clipped to its bounds, so the button lost its top and bottom (the bell above the scroll
+   * button in channels). The view gets the overflow as room above and below the bar as padding, and a negative bottom
+   * margin keeps the bar where it was: none for the 48dp FAB (CircleButton.XGRAM_CHAT_FAB_DP), which fits the bar as
+   * Telegram X's circle does (ChatBottomBarView collapses to that size). 0 with Expressive design off.
    */
   private static int xgramBottomBarRoom () {
-    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(8f) : 0;
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(Math.max(0f, (CircleButton.XGRAM_CHAT_FAB_DP - 48f) / 2f)) : 0;
   }
 
-  /** XGram: the step between stacked floating buttons: Telegram X's 58dp, 68dp for the 56dp M3 FABs (12dp apart). */
+  /** XGram: the step between stacked floating buttons: Telegram X's 58dp, the M3 FAB and 12dp (60dp for the 48dp FAB). */
   private static int xgramFabPitch () {
-    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(68f) : Screen.dp(74f) - Screen.dp(16f);
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(CircleButton.XGRAM_CHAT_FAB_DP + 12f) : Screen.dp(74f) - Screen.dp(16f);
   }
 
   /** XGram: a floating chat button grows from .6 with the spring's overshoot (Expressive design, not with Reduce motion). */

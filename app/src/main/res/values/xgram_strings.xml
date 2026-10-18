@@ -462,6 +462,8 @@
   <string name="XgramAvatarCornersRounded">Rounded</string>
   <string name="XgramAvatarCornersSquircle">Rounded square</string>
   <string name="XgramAvatarCornersSquare">Square</string>
+  <string name="XgramChatFabsAvatarShape">Chat buttons match avatar shape</string>
+  <string name="XgramChatFabsAvatarShapeSub">Scroll, mention and other floating buttons in chats</string>
   <string name="XgramBookmarksInfo">Bookmarks are stored on this device only. Long-press one to remove it.</string>
   <!-- XGram: Telegram AI tools -->
   <string name="XgramSummarize">Summarize</string>

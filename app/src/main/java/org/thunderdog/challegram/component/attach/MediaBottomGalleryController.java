@@ -236,9 +236,9 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
     if (mediaLayout.needCameraButton()) {
       cameraBadgeView = new CircleCounterBadgeView(this, R.id.btn_camera, this::onCameraButtonClick, null);
       cameraBadgeView.init(R.drawable.deproko_baseline_camera_26, 48f, 4f, ColorId.circleButtonChat, ColorId.circleButtonChatIcon);
-      cameraBadgeView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(CircleCounterBadgeView.BUTTON_WRAPPER_WIDTH), Screen.dp(74f), Gravity.BOTTOM | Gravity.RIGHT, 0, 0, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 16 : 12), Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 16 : 12) + mediaLayout.getCameraButtonOffset())); // XGram M3E: the FAB's 16dp margins
+      cameraBadgeView.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(CircleCounterBadgeView.BUTTON_WRAPPER_WIDTH), Screen.dp(74f), Gravity.BOTTOM | Gravity.RIGHT, 0, 0, xgramCameraMargin(), xgramCameraMargin() + mediaLayout.getCameraButtonOffset())); // XGram M3E: the FAB's 16dp margins
       contentView.addView(cameraBadgeView);
-      cameraBadgeView.xgramMakeShadowRoom(); // XGram M3E: its 16dp margins move inside it, so its bounds no longer cut the FAB's shadow
+      cameraBadgeView.xgramMakeShadowRoom(); // XGram M3E: its margins move inside it, so its bounds no longer cut the FAB's shadow
     }
 
     return contentView;
@@ -827,8 +827,17 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
   protected void onBottomInsetChanged (int extraBottomInset, int extraBottomInsetWithoutIme, boolean isImeInset) {
     super.onBottomInsetChanged(extraBottomInset, extraBottomInsetWithoutIme, isImeInset);
     if (cameraBadgeView != null) {
-      cameraBadgeView.xgramSetBottomMargin(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 16 : 12) + mediaLayout.getCameraButtonOffset() + extraBottomInsetWithoutIme); // XGram M3E: the FAB's 16dp margins
+      cameraBadgeView.xgramSetBottomMargin(xgramCameraMargin() + mediaLayout.getCameraButtonOffset() + extraBottomInsetWithoutIme); // XGram M3E: the FAB's 16dp margins
     }
+  }
+
+  /**
+   * XGram M3E: the camera button's margins, which put its chat FAB's container 16dp from the edge and above the bar
+   * (CircleCounterBadgeView.xgramFabMargin: 12dp for the 48dp FAB in its 56dp view); Telegram X's 12dp with Expressive
+   * design off.
+   */
+  private static int xgramCameraMargin () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? CircleCounterBadgeView.xgramFabMargin() : Screen.dp(12);
   }
 
   private @Nullable Media.GalleryBucket currentBucket;

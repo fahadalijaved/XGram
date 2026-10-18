@@ -325,7 +325,9 @@ public final class ForumTopicsController extends RecyclerViewController<ForumTop
 
       mentionButton = new org.thunderdog.challegram.widget.CircleButton(context);
       mentionButton.init(R.drawable.baseline_alternate_email_24, 48f, 4f, ColorId.circleButtonChat, ColorId.circleButtonChatIcon);
-      // XGram M3E: the chat's 56dp FAB (CircleButton.XGRAM_CHAT_FAB_DP) with its own badge, as in the chat
+      // XGram M3E: the chat's 48dp FAB (CircleButton.XGRAM_CHAT_FAB_DP) in a 56dp view, with its own badge and shape
+      // (the avatars' with "Chat buttons match avatar shape"), as in the chat; the wrap's 12dp margins and the 4dp
+      // around the container put it 16dp from the edges
       int xgramFabSize = mentionButton.xgramIsChatFab() ? Screen.dp(org.thunderdog.challegram.widget.CircleButton.XGRAM_CHAT_FAB_DP + 8f) : Screen.dp(48f) + padding * 2;
       mentionButton.setLayoutParams(new FrameLayout.LayoutParams(xgramFabSize, xgramFabSize, Gravity.RIGHT | Gravity.BOTTOM));
       mentionButton.setOnClickListener(v -> openNextMention());

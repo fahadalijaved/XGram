@@ -54,8 +54,10 @@ public class ChatBottomBarView extends BaseView {
   // filled tonal button: secondaryContainer, 40dp tall (the small button), 16dp side margins, labelLarge in
   // onSecondaryContainer, full corners that morph to 8dp (shape.corner.small, the small button's pressed shape) while
   // pressed, the onSecondaryContainer state layer at 10%. When the scroll button shows it collapses into one of the
-  // chat's M3 FABs: 56dp, 16dp corners, the same secondaryContainer, the icon in onSecondaryContainer, elevation level
-  // 3 (6dp) whose shadow only shows while it floats.
+  // chat's M3 FABs: CircleButton.XGRAM_CHAT_FAB_DP (48dp, the bar's height), their corners (CircleButton
+  // .xgramChatFabCornerDp: the 14dp rounded square or the avatars' shape, read while drawing, so the outline and the
+  // ripple's mask follow a change), the same secondaryContainer, the icon in onSecondaryContainer, elevation level 3
+  // (6dp) whose shadow only shows while it floats.
   private final boolean xgramM3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
   private com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPress;
   private boolean xgramPressed;
@@ -110,10 +112,14 @@ public class ChatBottomBarView extends BaseView {
     setElevation(Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.ELEVATION_3));
   }
 
+  private float xgramFabCornerDp = Float.NaN;
+
   private float xgramRadius (RectF rectF) {
     float full = Math.min(rectF.width(), rectF.height()) / 2f;
-    // The button's full corners go to the FAB's 16dp as it collapses
-    float resting = full + (Math.min(full, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_L)) - full) * collapseFactor;
+    // The button's full corners go to the chat FAB's as it collapses
+    float fabSize = Screen.dp(org.thunderdog.challegram.widget.CircleButton.XGRAM_CHAT_FAB_DP);
+    float fabCorner = com.fahadali.xgram.appearance.XgramExpressive.cornerPx(org.thunderdog.challegram.widget.CircleButton.xgramChatFabCornerDp(), fabSize, fabSize);
+    float resting = full + (Math.min(full, fabCorner) - full) * collapseFactor;
     float pressed = Math.min(resting, Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_S));
     float press = xgramPress != null ? xgramPress.getValue() * (1f - collapseFactor) : 0f;
     return Math.max(0f, resting + (pressed - resting) * press);
@@ -192,7 +198,7 @@ public class ChatBottomBarView extends BaseView {
   private RectF buildRectF () {
     int fromWidth = getMeasuredWidth();
     int fromHeight = getMeasuredHeight();
-    int toSize = Screen.dp(xgramM3 ? org.thunderdog.challegram.widget.CircleButton.XGRAM_CHAT_FAB_DP : 48f); // XGram: the 56dp M3 FAB
+    int toSize = Screen.dp(xgramM3 ? org.thunderdog.challegram.widget.CircleButton.XGRAM_CHAT_FAB_DP : 48f); // XGram: the chat's M3 FAB
 
     RectF rectF = Paints.getRectF();
 
@@ -378,6 +384,24 @@ public class ChatBottomBarView extends BaseView {
     }
     drawable.invalidateSelf();
     invalidate();
+  }
+
+  @Override
+  public void draw (@NonNull Canvas c) {
+    if (xgramM3) {
+      // XGram: the chat FAB shape changed (Settings: the option, the avatar shape) since the last frame. The fill and
+      // the mask read it while drawing; the outline (the FAB's shadow) and the ripple's cached mask are rebuilt here,
+      // before the background draws. Nothing on the usual frame.
+      final float corner = org.thunderdog.challegram.widget.CircleButton.xgramChatFabCornerDp();
+      if (corner != xgramFabCornerDp) {
+        final boolean changed = !Float.isNaN(xgramFabCornerDp);
+        xgramFabCornerDp = corner;
+        if (changed) {
+          update();
+        }
+      }
+    }
+    super.draw(c);
   }
 
   @Override
