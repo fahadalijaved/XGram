@@ -442,8 +442,14 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     this.navigationController = null;
     this.headerView = null;
     this.floatingButton = null;
-    setBottomInset(0, 0);
+    if (!xgramKeepsWarm() && !xgramKeepInsetOnDetach) {
+      setBottomInset(0, 0); // XGram M3E: a screen the toolbar only hides keeps its inset (no relayout when it comes back)
+    }
+    xgramKeepInsetOnDetach = false;
   }
+
+  /** XGram M3E: set by NavigationController#removeChildWrapper for the stack's base screen a toolbar tab screen covers (it comes back as it was). */
+  boolean xgramKeepInsetOnDetach;
 
   protected final NavigationStack navigationStack () {
     return navigationController != null ? navigationController.getStack() : null;

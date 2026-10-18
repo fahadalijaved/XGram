@@ -230,6 +230,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   // chat list change, when their tab goes, when the window changes size and when it hides or goes itself.
   private final ViewController<?>[] warm = new ViewController<?>[TAB_KEYS.length];
   private final Runnable dropDetachedRunnable = this::dropDetachedWarm;
+  // Settings and the profile read these once, when their view is made: a warm one would keep showing the old state
+  private final Runnable staleWarmRunnable = this::dropWarmForContent;
+  private final XgramSettings.Listener contentSettingsListener = key -> {
+    if (XgramSettings.KEY_SHOW_PEER_IDS.equals(key) || XgramSettings.KEY_HIDE_PHONE.equals(key)) {
+      UI.cancel(staleWarmRunnable);
+      UI.post(staleWarmRunnable); // never inside XgramSettings' listener loop
+    }
+  };
 
   private final ThemeChangeListener themeListener = new ThemeChangeListener() {
     @Override
@@ -311,6 +319,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     } else {
       this.away = true;
       ThemeManager.instance().addThemeListener(themeListener);
+      XgramSettings.instance().addListener(contentSettingsListener);
       navigation.xgramSetBarListener(this);
       this.inset = Math.max(0, navigation.xgramBottomInsetWithoutIme());
     }
@@ -734,6 +743,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
     if (!preview) {
       ThemeManager.instance().removeThemeListener(themeListener);
+      XgramSettings.instance().removeListener(contentSettingsListener);
+      UI.cancel(staleWarmRunnable);
       if (navigation != null) {
         navigation.xgramSetBarListener(null);
       }
@@ -1753,6 +1764,28 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     for (int dest = 0; dest < warm.length; dest++) {
       ViewController<?> c = warm[dest];
       if (c != null && (c.isDestroyed() || navigation.getStack().indexOf(c) == -1)) {
+        forgetWarm(dest);
+      }
+    }
+  }
+
+  /**
+   * A setting the tab screens read once changed (Show peer IDs, Hide phone): the ones off the stack go; the one on the
+   * stack is no longer kept (warm[dest] stays, so adoptWarm does not keep it again): the stack destroys it when it
+   * leaves, warmScreen() then sees isDestroyed() and a new one is made.
+   */
+  private void dropWarmForContent () {
+    if (destroyed || navigation == null) {
+      return;
+    }
+    for (int dest = 0; dest < warm.length; dest++) {
+      ViewController<?> c = warm[dest];
+      if (c == null) {
+        continue;
+      }
+      if (!c.isDestroyed() && navigation.getStack().indexOf(c) != -1) {
+        c.xgramSetKeepWarm(false);
+      } else {
         forgetWarm(dest);
       }
     }

@@ -305,6 +305,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       contentWrapper.removeView(controller.getValue());
     }
     controller.onCleanAfterHide();
+    // XGram M3E: the chat list a toolbar tab screen was put over keeps its bottom inset (no relayout of its lists when it comes back)
+    ViewController<?> xgramTop = getStack().getCurrent();
+    controller.xgramKeepInsetOnDetach = xgramBarListener != null && getStack().size() > 0 && getStack().get(0) == controller && xgramTop != null && xgramTop != controller && xgramTop.xgramIsBarTab();
     controller.detachNavigationController();
     controller.onAttachStateChanged(this, false);
     checkDisallowScreenshots();

@@ -2950,11 +2950,12 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
   /**
    * Visibility of the switching floating button at {@code raptor} (0: base screen, 1: preview screen). XGram: during
-   * the Expressive shared axis it fades through like the screens (out by .35, in from .35), so the button of a screen
-   * that leaves never lingers over the one that comes in.
+   * the Expressive shared axis and a toolbar tab switch's fade-through it fades through like the screens (out by .35,
+   * in from .35), so the button of a screen that leaves never lingers over the one that comes in (and is invisible when
+   * the tab switch's height jumps at .35).
    */
   private float xgramFloatFactor (float raptor) {
-    if (xgramSharedAxis && useFloatSwitch == 1) {
+    if ((xgramSharedAxis || xgramFadeThrough) && useFloatSwitch == 1) {
       return baseHasFloat ? com.fahadali.xgram.appearance.XgramNavMotion.outAlpha(raptor) : com.fahadali.xgram.appearance.XgramNavMotion.inAlpha(raptor);
     }
     return baseHasFloat ? 1f - raptor : raptor;
