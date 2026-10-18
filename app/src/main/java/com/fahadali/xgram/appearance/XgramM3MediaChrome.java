@@ -49,6 +49,11 @@ public final class XgramM3MediaChrome {
   public static final float TRACK_BUFFERED_ALPHA = .40f;
   /** Contained loading indicator: 48dp container, 38dp active indicator. */
   public static final float LOADING_CONTAINER_DP = 48f, LOADING_ACTIVE_DP = 38f;
+  /**
+   * Hide controls while playing: how far the viewer's title bar (up) and its caption with the controls (down) slide
+   * out as they fade, and the in-chat player's controls.
+   */
+  public static final float CHROME_SLIDE_DP = 8f, INLINE_CHROME_SLIDE_DP = 4f;
 
   /** {@code role} in the dark scheme, for anything drawn on media. */
   @ColorInt

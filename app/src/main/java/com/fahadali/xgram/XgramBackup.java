@@ -35,7 +35,7 @@ public final class XgramBackup {
     "xgram_ghost_local_read", "xgram_history_save_deleted", "xgram_history_save_edits", "xgram_history_save_media", "xgram_history_red_deleted",
     "xgram_hide_sponsored", "xgram_show_peer_ids", "xgram_two_pane", "xgram_icon_theme", "xgram_merge_communities", "xgram_save_last_seen", "xgram_show_seconds", "xgram_tap_time_details",
     "xgram_clean_links", "xgram_fix_link_previews", "xgram_ghost_typing_for_stickers", "xgram_allow_screenshots", "xgram_save_protected", "xgram_proxy_off_vpn", "xgram_proxy_off_wifi", "xgram_proxy_off_mobile", "xgram_hide_phone", "xgram_block_content_capture", "xgram_prefer_ipv6", "xgram_limit_message_width", "xgram_delete_for_everyone", "xgram_hide_blocked", "xgram_forward_without_author", "xgram_ai_tools", "xgram_hide_fab", "xgram_all_chats_label", "xgram_pull_to_next", "xgram_bubble_tail", "xgram_download_boost_on", "xgram_tap_to_record", "xgram_system_emoji", "xgram_tr_always", "xgram_tr_fallback", XgramSettings.KEY_TR_AUTO_ALL,
-    XgramSettings.KEY_INLINE_VIDEO,
+    XgramSettings.KEY_INLINE_VIDEO, XgramSettings.KEY_VIDEO_AUTO_HIDE,
     // Foldables (Appearance > Layout)
     XgramSettings.KEY_FOLD_HINGE_SPLIT, XgramSettings.KEY_FOLD_TABLETOP,
     XgramSettings.KEY_PANE_SPLIT_EVENLY, XgramSettings.KEY_PANE_RESIZABLE, XgramSettings.KEY_NAV_RAIL, XgramSettings.KEY_BOTTOM_NAV,

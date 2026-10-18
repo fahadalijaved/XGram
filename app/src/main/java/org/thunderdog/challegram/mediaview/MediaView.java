@@ -128,6 +128,13 @@ public class MediaView extends FrameLayoutFix {
     }
   }
 
+  /** XGram: a tap outside the picture of a video (Hide controls while playing). */
+  public void onMediaOutsideClick (float x, float y) {
+    if (boundController != null) {
+      boundController.onMediaOutsideClick(this, x, y);
+    }
+  }
+
   public void setCellCallback (MediaCellView.Callback callback) {
     baseCell.setCallback(callback);
     if (previewCell != null) {

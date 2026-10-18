@@ -128,6 +128,15 @@ fun MessagesPage() {
     }
     // What the rows do, or that Telegram X's Autoplay GIFs keeps videos from starting by themselves.
     description(XgramSettingDeps.inlineVideoInfo())
+    group {
+      switch(
+        R.id.btn_xgramVideoAutoHide, s(R.string.XgramVideoAutoHide), s(R.string.XgramVideoAutoHideSub),
+        checked = settings.videoAutoHide()
+      ) {
+        settings.setVideoAutoHide(it)
+      }
+    }
+    description(R.string.XgramVideoAutoHideInfo)
 
     header(R.string.XgramMessageBox)
     group {

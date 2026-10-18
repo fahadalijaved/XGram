@@ -453,6 +453,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           setReason(view, XgramSettingDeps.tapToRecordReason());
         } else if (id == R.id.btn_xgramInlineVideo) {
           view.getToggler().setRadioEnabled(settings.inlineVideo(), isUpdate);
+        } else if (id == R.id.btn_xgramVideoAutoHide) {
+          view.getToggler().setRadioEnabled(settings.videoAutoHide(), isUpdate);
         } else if (id == R.id.btn_xgramInlineVideoStart) {
           view.setData(settings.inlineVideoStart() == XgramSettings.INLINE_VIDEO_START_TAP ? R.string.XgramInlineVideoStartTap : R.string.XgramInlineVideoStartAuto);
           view.setEnabled(XgramSettingDeps.inlineVideoStartEnabled());
@@ -775,6 +777,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     );
     // What the rows do, or that Telegram X's Autoplay GIFs keeps videos from starting by themselves (updated with them).
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, R.id.btn_xgramInlineVideoInfo, 0, XgramSettingDeps.inlineVideoInfo()));
+    addRows(items, toggle(R.id.btn_xgramVideoAutoHide, R.string.XgramVideoAutoHide, R.string.XgramVideoAutoHideSub));
+    items.add(description(R.string.XgramVideoAutoHideInfo));
 
     items.add(header(R.string.XgramMessageBox));
     addRows(items,
@@ -1558,6 +1562,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       com.fahadali.xgram.chats.XgramInlineVideo.postSettingChanged();
       adapter.updateValuedSettingById(R.id.btn_xgramInlineVideoStart);
       updateDescription(R.id.btn_xgramInlineVideoInfo, XgramSettingDeps.inlineVideoInfo());
+      return;
+    } else if (id == R.id.btn_xgramVideoAutoHide) {
+      settings.setVideoAutoHide(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramInlineVideoStart) {
       if (!XgramSettingDeps.inlineVideoStartEnabled()) {

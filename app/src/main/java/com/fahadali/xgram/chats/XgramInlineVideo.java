@@ -35,6 +35,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.accessibility.AccessibilityManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -47,8 +48,12 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fahadali.xgram.XgramSettings;
+import com.fahadali.xgram.appearance.XgramAppMotion;
+import com.fahadali.xgram.appearance.XgramAutoHide;
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramLoadingIndicator;
+import com.fahadali.xgram.appearance.XgramM3MediaChrome;
+import com.fahadali.xgram.appearance.XgramMotion;
 import com.fahadali.xgram.appearance.XgramWavyLinear;
 import com.fahadali.xgram.layout.XgramTwoPane;
 
@@ -82,6 +87,7 @@ import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.unsorted.Settings;
 
@@ -90,6 +96,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import me.vkryl.android.AnimatorUtils;
+import me.vkryl.android.animator.BoolAnimator;
+import me.vkryl.android.animator.FactorAnimator;
 import tgx.td.ChatId;
 import tgx.td.MessageId;
 import tgx.td.Td;
@@ -601,6 +610,9 @@ public final class XgramInlineVideo {
     boolean engaged;
     boolean muted, inCall, ended, buffering, released, screenFlag;
     private int ticks;
+    /** Hide controls while playing: the last touch, and how long after it the controls fade (XgramAutoHide). */
+    private long chromeTouchMs, chromeDelayMs = XgramAutoHide.DELAY_MS;
+    private @Nullable AccessibilityManager accessibility;
 
     Session (MediaWrapper wrapper, MessageViewGroup group, boolean byUser) {
       TdApi.Video video = wrapper.getVideo();
@@ -623,6 +635,11 @@ public final class XgramInlineVideo {
       this.group = null;
       attachTo(group);
       inCall = TdlibManager.instance().calls().hasActiveCall();
+      try {
+        accessibility = (AccessibilityManager) context.getSystemService(Context.ACCESSIBILITY_SERVICE);
+      } catch (Throwable ignored) { }
+      chromeDelayMs = XgramAutoHide.delayMs(accessibility);
+      chromeTouchMs = SystemClock.uptimeMillis();
 
       ExoPlayer player = U.newExoPlayer(context, Config.PREFER_RENDER_EXTENSIONS);
       this.player = player;
@@ -720,12 +737,38 @@ public final class XgramInlineVideo {
           stop();
           return;
         }
+        checkChrome();
         if (isPlaying() || buffering || layer.dragging) {
           layer.invalidate();
         }
         handler.postDelayed(this, TICK_MS);
       }
     };
+
+    // Hide controls while playing: the controls fade a few seconds after the last touch while the video plays, and
+    // stay while it's paused, loading or being scrubbed, a finger is on them, a menu is open or TalkBack is on
+
+    /** A touch or a change worth seeing: the controls are shown, and fade a full delay from now. */
+    void touchChrome () {
+      chromeTouchMs = SystemClock.uptimeMillis();
+      layer.setChromeShown(true, false);
+    }
+
+    private void checkChrome () {
+      final long now = SystemClock.uptimeMillis();
+      if (!XgramSettings.instance().videoAutoHide() || !isPlaying() || XgramAutoHide.touchExploration(accessibility)) {
+        chromeTouchMs = now;
+        layer.setChromeShown(true, false); // nothing to hide: paused, over, the switch off or TalkBack
+        return;
+      }
+      if (buffering || layer.dragging || layer.touchTarget != PlayerLayer.TARGET_NONE || context.getCurrentPopupWindow() != null) {
+        chromeTouchMs = now; // held: a full delay once it ends
+        return;
+      }
+      if (layer.chromeShown() && now - chromeTouchMs >= chromeDelayMs) {
+        layer.setChromeShown(false, true);
+      }
+    }
 
     /** The message is still there and still has this video (an album item can be deleted). */
     private boolean isStillShown () {
@@ -802,6 +845,7 @@ public final class XgramInlineVideo {
       if (released || this.muted == muted) {
         return;
       }
+      touchChrome();
       this.muted = muted;
       if (!muted) {
         engage();
@@ -812,9 +856,17 @@ public final class XgramInlineVideo {
       layer.invalidate();
     }
 
-    /** A tap on the picture: sound on or off, or play again when it's paused or over. */
+    /**
+     * A tap on the picture: sound on or off, or play again when it's paused or over. With the controls hidden while the
+     * user's video plays, it only brings them back (a muted autoplay still gets its sound at once).
+     */
     void onVideoTap () {
       if (released) {
+        return;
+      }
+      final boolean wasHidden = !layer.chromeShown();
+      touchChrome();
+      if (wasHidden && engaged && isPlaying()) {
         return;
       }
       if (!isPlaying()) {
@@ -829,6 +881,7 @@ public final class XgramInlineVideo {
       if (released || player == null) {
         return;
       }
+      touchChrome();
       engage();
       if (ended) {
         ended = false;
@@ -843,6 +896,7 @@ public final class XgramInlineVideo {
       if (released || player == null) {
         return;
       }
+      touchChrome();
       engage();
       player.setPlayWhenReady(false);
       updateScreenFlag();
@@ -865,6 +919,7 @@ public final class XgramInlineVideo {
       if (duration <= 0) {
         return;
       }
+      touchChrome();
       engage();
       ended = false;
       player.seekTo((long) (duration * Math.max(0f, Math.min(1f, fraction))));
@@ -898,6 +953,7 @@ public final class XgramInlineVideo {
         ended = true;
         player.setPlayWhenReady(false);
         updateScreenFlag();
+        touchChrome(); // over: the controls are back
       }
       layer.invalidate();
     }
@@ -987,7 +1043,7 @@ public final class XgramInlineVideo {
   // The picture and the controls, over the media cell
 
   @SuppressLint("ViewConstructor")
-  private static final class PlayerLayer extends ViewGroup {
+  private static final class PlayerLayer extends ViewGroup implements FactorAnimator.Target {
     private static final int TARGET_NONE = 0, TARGET_PLAY = 1, TARGET_SOUND = 2, TARGET_EXPAND = 3, TARGET_TRACK = 4;
 
     final Session session;
@@ -1039,6 +1095,17 @@ public final class XgramInlineVideo {
     /** The classic controls' seek track: this far from the cell's sides and bottom. */
     private static final float CLASSIC_TRACK_INSET_DP = 10f;
 
+    /**
+     * Hide controls while playing: the chip, the expand button, the seek track and the bottom gradient fade (and, with
+     * Expressive design, slide 4dp out) together; a muted video keeps a small sound off hint where the chip was. The
+     * paused disk and the loading indicator are not part of it. Each group fades as one layer, never through the
+     * icons' own alpha (their VectorDrawables would blink); the hint's icon is a second instance of the sound off one.
+     */
+    private final BoolAnimator chrome = new BoolAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, true);
+    private final Drawable soundOffHintIcon;
+    private final RectF hintRect = new RectF();
+    private static final float HINT_DP = 32f, CLASSIC_HINT_DP = 26f;
+
     PlayerLayer (Context context, Session session) {
       super(context);
       this.session = session;
@@ -1064,6 +1131,92 @@ public final class XgramInlineVideo {
       soundOffIcon = Drawables.get(R.drawable.baseline_volume_off_24_white);
       expandIcon = Drawables.get(R.drawable.baseline_zoom_out_map_24);
       replayIcon = Drawables.get(R.drawable.baseline_replay_24);
+      soundOffHintIcon = Drawables.get(R.drawable.baseline_volume_off_24_white); // its own instance (see chrome)
+    }
+
+    // Hide controls while playing
+
+    @Override
+    public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+      invalidate();
+    }
+
+    boolean chromeShown () {
+      return chrome.getValue();
+    }
+
+    /** Shown or hidden: EFFECTS_DEFAULT, or the calmer EFFECTS_SLOW when the timer hides them (180 / 300ms classic). */
+    void setChromeShown (boolean shown, boolean byTimer) {
+      if (chrome.getValue() == shown) {
+        return;
+      }
+      if (XgramExpressive.isEnabled()) {
+        XgramAppMotion.use(chrome, shown || !byTimer ? XgramExpressive.EFFECTS_DEFAULT : XgramExpressive.EFFECTS_SLOW, true);
+      } else {
+        chrome.setDuration(!shown && byTimer ? 300L : 180L);
+      }
+      chrome.setValue(shown, true);
+    }
+
+    private float chromeFactor () {
+      return Math.max(0f, Math.min(1f, chrome.getFloatValue()));
+    }
+
+    /** How far the groups are slid out at {@code factor}: 4dp at 0, with Expressive design and Reduce motion off. */
+    private static float chromeSlide (float factor) {
+      return factor < 1f && XgramExpressive.isEnabled() && !XgramMotion.reduce() ? Screen.dp(XgramM3MediaChrome.INLINE_CHROME_SLIDE_DP) * (1f - factor) : 0f;
+    }
+
+    /** Starts a group of the controls: as it is when fully shown, otherwise in a layer at {@code factor}, moved by dy. */
+    private static int beginChromeGroup (Canvas c, float left, float top, float right, float bottom, float factor, float dy) {
+      if (factor >= 1f) {
+        return -1;
+      }
+      final int saveCount = Views.saveLayerAlpha(c, left, top, right, bottom, Math.round(255f * factor), Canvas.ALL_SAVE_FLAG);
+      if (dy != 0f) {
+        c.translate(0f, dy);
+      }
+      return saveCount;
+    }
+
+    private static void endChromeGroup (Canvas c, int saveCount) {
+      if (saveCount != -1) {
+        c.restoreToCount(saveCount);
+      }
+    }
+
+    /** Hidden: no control takes a tap (but the sound hint). */
+    private void clearChromeTargets () {
+      playRect.setEmpty();
+      soundRect.setEmpty();
+      expandRect.setEmpty();
+    }
+
+    private void layoutHint (float size) {
+      final float left = cell.left + Screen.dp(8f), top = cell.top + Screen.dp(8f);
+      hintRect.set(left, top, left + size, top + size);
+    }
+
+    private float hintSize () {
+      return Screen.dp(XgramExpressive.isEnabled() ? HINT_DP : CLASSIC_HINT_DP);
+    }
+
+    /** Where the chip was, a sound off circle (a tap there gives sound), fading in as the controls fade out. */
+    private void drawSoundHint (Canvas c, float factor, float iconSize, int color) {
+      if (factor >= 1f || !session.isSilent()) {
+        return;
+      }
+      final float size = hintSize();
+      layoutHint(size);
+      final float alpha = 1f - factor;
+      final int edge = Screen.dp(1f);
+      final int saveCount = alpha < 1f ? Views.saveLayerAlpha(c, hintRect.left - edge, hintRect.top - edge, hintRect.right + edge, hintRect.bottom + edge, Math.round(255f * alpha), Canvas.ALL_SAVE_FLAG) : -1;
+      fill.setColor(color);
+      c.drawCircle(hintRect.centerX(), hintRect.centerY(), size / 2f, fill);
+      drawIcon(c, soundOffHintIcon, hintRect.centerX(), hintRect.centerY(), iconSize);
+      if (saveCount != -1) {
+        c.restoreToCount(saveCount);
+      }
     }
 
     // Layout: the picture fills the cell like the thumbnail (center crop)
@@ -1170,6 +1323,8 @@ public final class XgramInlineVideo {
       final long position = dragging && duration > 0 ? (long) (duration * dragFraction) : s.position();
       final float progress = duration > 0 ? Math.max(0f, Math.min(1f, (float) position / (float) duration)) : 0f;
       final boolean playing = s.isPlaying();
+      final float chromeFactor = chromeFactor(); // Hide controls while playing (no slide in the classic look)
+      final float slide = chromeSlide(chromeFactor);
 
       final int pad = Screen.dp(8f);
       final int pillHeight = Screen.dp(26f);
@@ -1177,41 +1332,48 @@ public final class XgramInlineVideo {
       final float expandRadius = Screen.dp(14f);
 
       // Top left: play or pause, the time, sound on or off
-      String time = duration > 0 ? Strings.buildDuration(position / 1000) + " / " + Strings.buildDuration(duration / 1000) : Strings.buildDuration(position / 1000);
-      float timeWidth = text.measureText(time);
-      float playPart = Screen.dp(6f) + iconSize + Screen.dp(4f);
-      float soundPart = Screen.dp(4f) + iconSize + Screen.dp(6f);
-      float room = cell.width() - pad * 3 - expandRadius * 2;
-      boolean showPlay = playPart + soundPart <= room;
-      boolean showTime = showPlay && playPart + timeWidth + soundPart <= room;
-      float pillWidth = (showPlay ? playPart : Screen.dp(2f)) + (showTime ? timeWidth : 0) + soundPart;
-      pillRect.set(left + pad, top + pad, left + pad + pillWidth, top + pad + pillHeight);
-      fill.setColor(0x66000000);
-      c.drawRoundRect(pillRect, pillHeight / 2f, pillHeight / 2f, fill);
-      if (showPlay) {
-        playRect.set(pillRect.left, pillRect.top, pillRect.right - soundPart, pillRect.bottom);
-        drawIcon(c, playing ? pauseIcon : playIcon, pillRect.left + Screen.dp(6f) + iconSize / 2f, pillRect.centerY(), iconSize);
-      } else {
-        playRect.setEmpty();
-      }
-      if (showTime) {
-        c.drawText(time, pillRect.left + playPart, pillRect.centerY() + Screen.dp(4.25f), text);
-      }
-      soundRect.set(pillRect.right - soundPart, pillRect.top, pillRect.right, pillRect.bottom);
-      drawIcon(c, s.isSilent() ? soundOffIcon : soundOnIcon, soundRect.left + Screen.dp(4f) + iconSize / 2f, pillRect.centerY(), iconSize);
+      if (chromeFactor > 0f) {
+        final int topGroup = beginChromeGroup(c, left, top, right, Math.min(bottom, top + pad * 2 + pillHeight), chromeFactor, -slide);
+        String time = duration > 0 ? Strings.buildDuration(position / 1000) + " / " + Strings.buildDuration(duration / 1000) : Strings.buildDuration(position / 1000);
+        float timeWidth = text.measureText(time);
+        float playPart = Screen.dp(6f) + iconSize + Screen.dp(4f);
+        float soundPart = Screen.dp(4f) + iconSize + Screen.dp(6f);
+        float room = cell.width() - pad * 3 - expandRadius * 2;
+        boolean showPlay = playPart + soundPart <= room;
+        boolean showTime = showPlay && playPart + timeWidth + soundPart <= room;
+        float pillWidth = (showPlay ? playPart : Screen.dp(2f)) + (showTime ? timeWidth : 0) + soundPart;
+        pillRect.set(left + pad, top + pad, left + pad + pillWidth, top + pad + pillHeight);
+        fill.setColor(0x66000000);
+        c.drawRoundRect(pillRect, pillHeight / 2f, pillHeight / 2f, fill);
+        if (showPlay) {
+          playRect.set(pillRect.left, pillRect.top, pillRect.right - soundPart, pillRect.bottom);
+          drawIcon(c, playing ? pauseIcon : playIcon, pillRect.left + Screen.dp(6f) + iconSize / 2f, pillRect.centerY(), iconSize);
+        } else {
+          playRect.setEmpty();
+        }
+        if (showTime) {
+          c.drawText(time, pillRect.left + playPart, pillRect.centerY() + Screen.dp(4.25f), text);
+        }
+        soundRect.set(pillRect.right - soundPart, pillRect.top, pillRect.right, pillRect.bottom);
+        drawIcon(c, s.isSilent() ? soundOffIcon : soundOnIcon, soundRect.left + Screen.dp(4f) + iconSize / 2f, pillRect.centerY(), iconSize);
 
-      // Top right: the full screen viewer
-      float expandX = right - pad - expandRadius, expandY = pillRect.centerY();
-      if (expandX - expandRadius >= pillRect.right + Screen.dp(4f)) {
-        expandRect.set(expandX - expandRadius, expandY - expandRadius, expandX + expandRadius, expandY + expandRadius);
-        c.drawCircle(expandX, expandY, expandRadius, fill);
-        drawIcon(c, expandIcon, expandX, expandY, iconSize);
+        // Top right: the full screen viewer
+        float expandX = right - pad - expandRadius, expandY = pillRect.centerY();
+        if (expandX - expandRadius >= pillRect.right + Screen.dp(4f)) {
+          expandRect.set(expandX - expandRadius, expandY - expandRadius, expandX + expandRadius, expandY + expandRadius);
+          c.drawCircle(expandX, expandY, expandRadius, fill);
+          drawIcon(c, expandIcon, expandX, expandY, iconSize);
+        } else {
+          expandRect.setEmpty();
+        }
+        endChromeGroup(c, topGroup);
       } else {
-        expandRect.setEmpty();
+        clearChromeTargets();
       }
 
       // Middle: paused, over, or loading
       float cx = cell.exactCenterX(), cy = cell.exactCenterY();
+      fill.setColor(0x66000000); // the chip's, also while the chip is hidden
       if (!playing && !dragging) {
         float radius = Screen.dp(24f);
         c.drawCircle(cx, cy, radius, fill);
@@ -1229,7 +1391,8 @@ public final class XgramInlineVideo {
       layoutTrack();
       final float trackLeft = seekLeft, trackRight = seekRight;
       final float trackY = seekY;
-      if (trackRight > trackLeft) {
+      if (trackRight > trackLeft && chromeFactor > 0f) {
+        final int trackGroup = beginChromeGroup(c, left, Math.max(top, trackY - Screen.dp(16f)), right, bottom, chromeFactor, slide);
         float x = trackLeft + (trackRight - trackLeft) * progress;
         rect.set(trackLeft - Screen.dp(1f), trackY - trackHeight / 2f - Screen.dp(1f), trackRight + Screen.dp(1f), trackY + trackHeight / 2f + Screen.dp(1f));
         fill.setColor(0x33000000);
@@ -1245,7 +1408,10 @@ public final class XgramInlineVideo {
         if (dragging || s.engaged) {
           c.drawCircle(x, trackY, dragging ? Screen.dp(7f) : Screen.dp(5f), fill);
         }
+        endChromeGroup(c, trackGroup);
       }
+
+      drawSoundHint(c, chromeFactor, Screen.dp(18f), 0x66000000);
     }
 
     // Material 3 Expressive controls: a full-corner chip on a 50 % black scrim (play or pause, the time in
@@ -1377,14 +1543,18 @@ public final class XgramInlineVideo {
       updateM3State(!playing && !dragging, playing && !dragging);
       boolean animating = false;
       layoutTrack();
+      // Hide controls while playing: the gradient, the top controls and the track fade, and the groups slide 4dp out
+      final float chromeFactor = chromeFactor();
+      final float slide = chromeSlide(chromeFactor);
 
       // Bottom: a gradient for the seek track to stand out on (taller when the track rises above the time chip)
       final int scrimHeight = Math.min(Math.max(Screen.dp(M3_SCRIM_DP), (int) (bottom - seekY) + Screen.dp(24f)), cell.height());
-      if (scrimHeight > 0) {
+      if (scrimHeight > 0 && chromeFactor > 0f) {
         if (m3ScrimHeight != scrimHeight) {
           m3ScrimHeight = scrimHeight;
           m3Scrim.setShader(new LinearGradient(0f, 0f, 0f, scrimHeight, 0x00000000, 0x66000000, Shader.TileMode.CLAMP));
         }
+        m3Scrim.setAlpha(Math.round(255f * chromeFactor));
         int saveCount = c.save();
         c.translate(0f, bottom - scrimHeight);
         c.drawRect(left, 0f, right, scrimHeight, m3Scrim);
@@ -1398,39 +1568,45 @@ public final class XgramInlineVideo {
       final float expandRadius = Screen.dp(16f);
 
       // Top start: play or pause, the time, sound on or off
-      updateM3Time(position, duration);
-      final float playPart = inner + iconSize + spacing;
-      final float soundPart = spacing + iconSize + inner;
-      final float room = cell.width() - pad * 3 - expandRadius * 2;
-      final boolean showPlay = playPart + soundPart <= room;
-      final boolean showTime = showPlay && playPart + m3TimeWidth + soundPart <= room;
-      final float chipWidth = showPlay ? playPart + (showTime ? m3TimeWidth : 0f) + soundPart : chipHeight;
-      pillRect.set(left + pad, top + pad, left + pad + chipWidth, top + pad + chipHeight);
-      fill.setColor(0x80000000);
-      c.drawRoundRect(pillRect, chipHeight / 2f, chipHeight / 2f, fill);
-      final Drawable soundIcon = s.isSilent() ? soundOffIcon : soundOnIcon;
-      if (showPlay) {
-        playRect.set(pillRect.left, pillRect.top, pillRect.right - soundPart, pillRect.bottom);
-        drawIcon(c, playing ? pauseIcon : playIcon, pillRect.left + inner + iconSize / 2f, pillRect.centerY(), iconSize);
-        soundRect.set(pillRect.right - soundPart, pillRect.top, pillRect.right, pillRect.bottom);
-        drawIcon(c, soundIcon, soundRect.left + spacing + iconSize / 2f, pillRect.centerY(), iconSize);
-      } else {
-        playRect.setEmpty();
-        soundRect.set(pillRect);
-        drawIcon(c, soundIcon, pillRect.centerX(), pillRect.centerY(), iconSize);
-      }
-      if (showTime) {
-        c.drawText(m3Time, pillRect.left + playPart, pillRect.centerY() + m3TextBaseline, m3TextPaint());
-      }
+      if (chromeFactor > 0f) {
+        final int topGroup = beginChromeGroup(c, left, top, right, Math.min(bottom, top + pad * 2 + chipHeight), chromeFactor, -slide);
+        updateM3Time(position, duration);
+        final float playPart = inner + iconSize + spacing;
+        final float soundPart = spacing + iconSize + inner;
+        final float room = cell.width() - pad * 3 - expandRadius * 2;
+        final boolean showPlay = playPart + soundPart <= room;
+        final boolean showTime = showPlay && playPart + m3TimeWidth + soundPart <= room;
+        final float chipWidth = showPlay ? playPart + (showTime ? m3TimeWidth : 0f) + soundPart : chipHeight;
+        pillRect.set(left + pad, top + pad, left + pad + chipWidth, top + pad + chipHeight);
+        fill.setColor(0x80000000);
+        c.drawRoundRect(pillRect, chipHeight / 2f, chipHeight / 2f, fill);
+        final Drawable soundIcon = s.isSilent() ? soundOffIcon : soundOnIcon;
+        if (showPlay) {
+          playRect.set(pillRect.left, pillRect.top, pillRect.right - soundPart, pillRect.bottom);
+          drawIcon(c, playing ? pauseIcon : playIcon, pillRect.left + inner + iconSize / 2f, pillRect.centerY(), iconSize);
+          soundRect.set(pillRect.right - soundPart, pillRect.top, pillRect.right, pillRect.bottom);
+          drawIcon(c, soundIcon, soundRect.left + spacing + iconSize / 2f, pillRect.centerY(), iconSize);
+        } else {
+          playRect.setEmpty();
+          soundRect.set(pillRect);
+          drawIcon(c, soundIcon, pillRect.centerX(), pillRect.centerY(), iconSize);
+        }
+        if (showTime) {
+          c.drawText(m3Time, pillRect.left + playPart, pillRect.centerY() + m3TextBaseline, m3TextPaint());
+        }
 
-      // Top end: the full screen viewer
-      final float expandX = right - pad - expandRadius, expandY = pillRect.centerY();
-      if (expandX - expandRadius >= pillRect.right + Screen.dp(4f)) {
-        expandRect.set(expandX - expandRadius, expandY - expandRadius, expandX + expandRadius, expandY + expandRadius);
-        c.drawCircle(expandX, expandY, expandRadius, fill);
-        drawIcon(c, expandIcon, expandX, expandY, iconSize);
+        // Top end: the full screen viewer
+        final float expandX = right - pad - expandRadius, expandY = pillRect.centerY();
+        if (expandX - expandRadius >= pillRect.right + Screen.dp(4f)) {
+          expandRect.set(expandX - expandRadius, expandY - expandRadius, expandX + expandRadius, expandY + expandRadius);
+          c.drawCircle(expandX, expandY, expandRadius, fill);
+          drawIcon(c, expandIcon, expandX, expandY, iconSize);
+        } else {
+          expandRect.setEmpty();
+        }
+        endChromeGroup(c, topGroup);
       } else {
-        expandRect.setEmpty();
+        clearChromeTargets();
       }
 
       // Middle: paused or over (the disk morphs away as it plays), or loading. In a short cell (an album tile) the disk
@@ -1468,8 +1644,9 @@ public final class XgramInlineVideo {
 
       // Bottom: the seek track, clear of the bubble time chip
       final float trackLeft = seekLeft, trackRight = seekRight;
-      if (trackRight > trackLeft) {
+      if (trackRight > trackLeft && chromeFactor > 0f) {
         final float trackY = seekY;
+        final int trackGroup = beginChromeGroup(c, left, Math.max(top, trackY - Screen.dp(16f)), right, bottom, chromeFactor, slide);
         final float amplitude = Screen.dp(3f) * Math.max(0f, Math.min(1f, m3Wave.getValue()));
         final boolean handle = dragging || s.engaged;
         XgramWavyLinear.draw(c, trackLeft, trackRight, trackY, progress, 0xffffffff, 0x4dffffff,
@@ -1478,7 +1655,10 @@ public final class XgramInlineVideo {
         if (playing && XgramWavyLinear.isWaveMoving(progress, amplitude)) {
           animating = true;
         }
+        endChromeGroup(c, trackGroup);
       }
+
+      drawSoundHint(c, chromeFactor, Screen.dp(20f), 0x80000000);
 
       if (animating) {
         postInvalidateOnAnimation(); // every frame while the wave or the indicator moves: the 50ms tick judders them
@@ -1492,6 +1672,17 @@ public final class XgramInlineVideo {
         return TARGET_NONE;
       }
       float slop = Screen.dp(6f);
+      if (!chrome.getValue()) {
+        // Hide controls while playing: hidden, only the sound hint takes a tap. One anywhere else goes to the message,
+        // which brings the controls back (Session.onVideoTap).
+        if (session.isSilent()) {
+          layoutHint(hintSize());
+          if (x >= hintRect.left - slop && x <= hintRect.right + slop && y >= hintRect.top - slop && y <= hintRect.bottom + slop) {
+            return TARGET_SOUND;
+          }
+        }
+        return TARGET_NONE;
+      }
       if (!expandRect.isEmpty() && x >= expandRect.left - slop && x <= expandRect.right + slop && y >= expandRect.top - slop && y <= expandRect.bottom + slop) {
         return TARGET_EXPAND;
       }
@@ -1529,6 +1720,7 @@ public final class XgramInlineVideo {
           if (touchTarget == TARGET_NONE) {
             return false;
           }
+          session.touchChrome(); // a finger on the controls (or the sound hint): they stay, and show
           touchX = x;
           touchY = y;
           ViewParent parent = getParent();

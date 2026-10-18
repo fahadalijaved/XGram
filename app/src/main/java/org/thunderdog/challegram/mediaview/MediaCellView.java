@@ -1398,6 +1398,9 @@ public class MediaCellView extends ViewGroup implements
       if (canTouch(false)) {
         ((MediaView) getParent()).onMediaClick(x, y);
       }
+    } else if (media != null && media.isVideo() && !media.isGifType() && canTouch(false)) {
+      // XGram: Hide controls while playing: around a video (its black letterbox) a tap toggles the controls too
+      ((MediaView) getParent()).onMediaOutsideClick(x, y);
     }
   }
 
@@ -1917,6 +1920,8 @@ public class MediaCellView extends ViewGroup implements
     void onPlayPause (MediaItem item, boolean isPlaying);
     void onPlayStarted (MediaItem item, boolean isPlaying);
     void onSeekSecondaryProgress (MediaItem item, float offset, float progress);
+    /** XGram: the video started or stopped waiting for data (Hide controls while playing waits for it). */
+    default void onBufferingStateChanged (MediaItem item, boolean isBuffering) { }
   }
 
   private Callback callback;
@@ -1990,6 +1995,7 @@ public class MediaCellView extends ViewGroup implements
     videoReady = false;
     timeNow = -1;
     timeTotal = -1;
+    setBuffering(false); // XGram
     // TODO other
   }
 
@@ -2144,11 +2150,30 @@ public class MediaCellView extends ViewGroup implements
   @Override
   public void onBufferingStateChanged (boolean isBuffering) {
     bufferingProgressView.setProgressVisible(isBuffering, media != null && media.getFileProgress().isDownloaded());
+    setBuffering(isBuffering); // XGram
   }
 
   @Override
   public void onPlayError () {
     bufferingProgressView.setProgressVisible(false, false);
+    setBuffering(false); // XGram
+  }
+
+  // XGram: Hide controls while playing keeps the viewer's controls up while the video waits for data
+
+  private boolean isBuffering;
+
+  public boolean isBuffering () {
+    return isBuffering;
+  }
+
+  private void setBuffering (boolean isBuffering) {
+    if (this.isBuffering != isBuffering) {
+      this.isBuffering = isBuffering;
+      if (callback != null && media != null) {
+        callback.onBufferingStateChanged(media, isBuffering);
+      }
+    }
   }
 
   @Override

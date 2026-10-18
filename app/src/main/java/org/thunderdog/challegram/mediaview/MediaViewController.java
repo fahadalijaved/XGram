@@ -1019,6 +1019,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       location = getCurrentTargetLocation();
     }
 
+    if (xgramAutoHide != null) {
+      // XGram: Hide controls while playing: closing stops the timers and gives the navigation bar back first, so the
+      // visibility set below is the last one, as before
+      xgramReleaseAutoHide();
+      context().removeHideNavigationView(this);
+    }
     if (mode != MODE_SECRET || forceAnimationType == -1) {
       setLowProfile(false);
     }
@@ -1322,6 +1328,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
             setFullScreen(true);
           }
           mediaView.autoplayIfNeeded(false);
+          if (xgramAutoHide != null) {
+            xgramAutoHide.attach(); // XGram: Hide controls while playing
+            xgramAutoHide.restart();
+          }
           final MediaItem openedItem = stack.getCurrent();
           UI.post(() -> openedItem.viewContent(false), 20);
           if (canSendAsFile() != SEND_MODE_NONE && Settings.instance().needTutorial(Settings.TUTORIAL_SEND_AS_FILE)) {
@@ -1351,6 +1361,12 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       case ANIMATOR_CAPTION: {
         if (finalFactor == 0f) {
           setCaption("", null);
+        }
+        break;
+      }
+      case ANIMATOR_HEADER: {
+        if (finalFactor == 0f && !headerVisible.getValue()) {
+          xgramSetChromeAccessible(false); // XGram: faded out, so out of TalkBack too
         }
         break;
       }
@@ -1577,6 +1593,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         onMediaStackChanged(itemCountChanged);
 
         loadMoreIfNeeded();
+        xgramOnMediaChanged(currentItem); // XGram: Hide controls while playing
 
         break;
       }
@@ -1985,12 +2002,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   private boolean toggleHeaderVisibility () {
     if (headerView != null && needHeader()) {
-      boolean isVisible = headerVisible.toggleValue(true);
-      if (isVisible) {
-        context().removeHideNavigationView(this);
-      } else {
-        context().addHideNavigationView(this);
-      }
+      xgramSetChromeVisible(!headerVisible.getValue(), XGRAM_CHROME_TAP);
       return true;
     }
     return false;
@@ -1998,6 +2010,271 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
   private static final int ANIMATOR_HEADER = 7;
   private final BoolAnimator headerVisible = new BoolAnimator(ANIMATOR_HEADER, this, AnimatorUtils.DECELERATE_INTERPOLATOR, BOTTOM_ANIMATION_DURATION, true);
+
+  // XGram: Hide controls while playing (Messages > Videos). While a video plays in the messages viewer, the title bar,
+  // the caption, the controls, the album strip, the navigation bar strip and the system bars hide after 3 seconds
+  // without interaction (com.fahadali.xgram.appearance.XgramAutoHide), and any tap brings them back. headerVisible
+  // stays the one flag for all of them; with Expressive design the title bar and the caption with the controls also
+  // slide 8dp out (xgramChromeSlide). Photos and GIFs keep Telegram X's tap to toggle only.
+
+  private static final int XGRAM_CHROME_TAP = 0, XGRAM_CHROME_TIMER = 1, XGRAM_CHROME_SYSTEM = 2;
+  private @Nullable com.fahadali.xgram.appearance.XgramAutoHide xgramAutoHide, xgramPipAutoHide;
+  /** The chrome was hidden by the timer (not by a tap): a new item, tabletop or a hover brings it back. */
+  private boolean xgramHiddenByTimer;
+  private boolean xgramScrubbing;
+  private int xgramFoldOffset;
+  /** 0 in place, 1 slid out (Expressive design, a video, Reduce motion off). */
+  private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramChromeSlide;
+  /** The title bar's own translation (the reveal, the slide to dismiss), before the auto-hide slide. */
+  private float xgramHeaderBaseY;
+  private @Nullable MediaItem xgramChromeItem;
+
+  private boolean xgramAutoHideOn () {
+    return (mode == MODE_MESSAGES || mode == MODE_SIMPLE) && com.fahadali.xgram.XgramSettings.instance().videoAutoHide();
+  }
+
+  /** A real video: GIFs (MP4 ones too) keep the chrome. */
+  private static boolean xgramAutoHideVideo (@Nullable MediaItem item) {
+    return item != null && item.isVideo() && !item.isGifType();
+  }
+
+  private @Nullable MediaCellView xgramCell (@Nullable MediaItem item) {
+    return mediaView != null && item != null ? mediaView.findCellForItem(item) : null;
+  }
+
+  private boolean xgramSlideActive () {
+    return com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && !com.fahadali.xgram.appearance.XgramMotion.reduce() && xgramAutoHideOn() && stack != null && xgramAutoHideVideo(stack.getCurrent());
+  }
+
+  private float xgramChromeSlideY () {
+    final com.fahadali.xgram.appearance.XgramExpressive.Spring slide = xgramChromeSlide;
+    if (slide == null) {
+      return 0f;
+    }
+    final float value = slide.getValue();
+    return value != 0f && xgramSlideActive() ? Screen.dp(com.fahadali.xgram.appearance.XgramM3MediaChrome.CHROME_SLIDE_DP) * value : 0f;
+  }
+
+  private void xgramApplyHeaderY () {
+    if (headerView != null) {
+      headerView.setTranslationY(xgramHeaderBaseY - xgramChromeSlideY());
+    }
+  }
+
+  private void setHeaderBaseY (float y) {
+    xgramHeaderBaseY = y;
+    xgramApplyHeaderY();
+  }
+
+  private void xgramOnChromeSlide (com.fahadali.xgram.appearance.XgramExpressive.Spring spring, float value) {
+    xgramApplyHeaderY();
+    checkBottomWrapY();
+  }
+
+  /** Slides the chrome out (or back) with the fade; in place, at once, for photos, GIFs and Reduce motion. */
+  private void xgramSetChromeSlide (boolean out) {
+    final com.fahadali.xgram.appearance.XgramExpressive.Spring slide = xgramChromeSlide;
+    if (slide == null) {
+      return;
+    }
+    if (xgramSlideActive()) {
+      slide.setToken(out ? com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT : com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT).animateTo(out ? 1f : 0f);
+    } else if (slide.getValue() != 0f || slide.isRunning()) {
+      slide.setValue(0f);
+      xgramApplyHeaderY();
+      checkBottomWrapY();
+    }
+  }
+
+  /** Hidden chrome is left out of TalkBack and keyboard navigation (with the auto-hide on); shown, it is back. */
+  private void xgramSetChromeAccessible (boolean accessible) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT) {
+      return;
+    }
+    if (!accessible && !xgramAutoHideOn()) {
+      return;
+    }
+    final int importance = accessible ? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS;
+    if (headerView != null && headerView.getImportantForAccessibility() != importance) {
+      headerView.setImportantForAccessibility(importance);
+    }
+    if (bottomWrap != null && bottomWrap.getImportantForAccessibility() != importance) {
+      bottomWrap.setImportantForAccessibility(importance);
+    }
+    if (thumbsRecyclerView != null && thumbsRecyclerView.getImportantForAccessibility() != importance) {
+      thumbsRecyclerView.setImportantForAccessibility(importance);
+    }
+  }
+
+  /**
+   * The one writer of headerVisible: the title bar, caption, controls, album strip and navigation bar strip fade
+   * together and the navigation bar follows. A tap fades on EFFECTS_DEFAULT (150ms with Expressive design off), the
+   * timer on the calmer EFFECTS_SLOW (300ms), and the slide springs with them.
+   */
+  private boolean xgramSetChromeVisible (boolean visible, int cause) {
+    if (headerView == null || !needHeader()) {
+      return false;
+    }
+    if (headerVisible.getValue() == visible) {
+      return true;
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      com.fahadali.xgram.appearance.XgramAppMotion.use(headerVisible, visible || cause != XGRAM_CHROME_TIMER ? com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_SLOW, true);
+    } else {
+      headerVisible.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+      headerVisible.setDuration(!visible && cause == XGRAM_CHROME_TIMER ? 300L : BOTTOM_ANIMATION_DURATION);
+    }
+    if (visible) {
+      xgramSetChromeAccessible(true);
+    }
+    headerVisible.setValue(visible, true);
+    if (visible) {
+      context().removeHideNavigationView(this);
+    } else {
+      context().addHideNavigationView(this);
+    }
+    xgramHiddenByTimer = !visible && cause == XGRAM_CHROME_TIMER;
+    xgramSetChromeSlide(!visible);
+    if (xgramAutoHide != null) {
+      if (visible) {
+        xgramAutoHide.restart();
+      } else {
+        xgramAutoHide.cancel();
+      }
+    }
+    return true;
+  }
+
+  private void xgramRestartAutoHide () {
+    if (pipFactor == 1f) {
+      if (xgramPipAutoHide != null) {
+        xgramPipAutoHide.restart();
+      }
+    } else if (xgramAutoHide != null) {
+      xgramAutoHide.restart();
+    }
+  }
+
+  private void xgramCancelAutoHide () {
+    if (xgramAutoHide != null) {
+      xgramAutoHide.cancel();
+    }
+    if (xgramPipAutoHide != null) {
+      xgramPipAutoHide.cancel();
+    }
+  }
+
+  private static boolean xgramHasKeyboardFocus (@Nullable View view) {
+    return view != null && !view.isInTouchMode() && view.hasFocus();
+  }
+
+  /** Made in onCreateView, after the title bar (messages viewer only, with the setting on). */
+  private void xgramInitAutoHide () {
+    if (!xgramAutoHideOn()) {
+      return;
+    }
+    xgramChromeItem = stack.getCurrent();
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      xgramChromeSlide = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 0f, this::xgramOnChromeSlide);
+    }
+    xgramAutoHide = new com.fahadali.xgram.appearance.XgramAutoHide(context, new com.fahadali.xgram.appearance.XgramAutoHide.Host() {
+      @Override
+      public boolean canAutoHide () {
+        if (!xgramAutoHideOn() || headerView == null || isDestroyed() || !headerVisible.getValue() || !isFullyShown() ||
+          pipFactor != 0f || inPictureInPicture || inSlideMode || inForceEditMode()) {
+          return false;
+        }
+        final MediaItem item = stack.getCurrent();
+        final MediaCellView cell = xgramCell(item);
+        return xgramAutoHideVideo(item) && cell != null && cell.isPlaying();
+      }
+
+      @Override
+      public boolean isAutoHideHeld () {
+        if (xgramScrubbing || xgramFoldOffset > 0) {
+          return true; // seeking, or the controls sit below the fold in tabletop posture
+        }
+        final MediaCellView cell = xgramCell(stack.getCurrent());
+        if (cell != null && cell.isBuffering()) {
+          return true;
+        }
+        if (captionWrapView != null && captionWrapView.getScrollY() > 0) {
+          return true; // a long caption scrolled down to read
+        }
+        if (context().getCurrentPopupWindow() != popupView) {
+          return true; // More, share, a link's menu: a window over the viewer
+        }
+        return xgramHasKeyboardFocus(headerView) || xgramHasKeyboardFocus(bottomWrap);
+      }
+
+      @Override
+      public void onAutoHide () {
+        xgramSetChromeVisible(false, XGRAM_CHROME_TIMER);
+      }
+
+      @Override
+      public void onTouchExplorationEnabled () {
+        xgramSetChromeVisible(true, XGRAM_CHROME_SYSTEM);
+      }
+    });
+    xgramPipAutoHide = new com.fahadali.xgram.appearance.XgramAutoHide(context, new com.fahadali.xgram.appearance.XgramAutoHide.Host() {
+      @Override
+      public boolean canAutoHide () {
+        if (!xgramAutoHideOn() || isDestroyed() || pipFactor != 1f || !pipControlsVisible || !xgramAutoHideVideo(pipItem)) {
+          return false;
+        }
+        final MediaCellView cell = xgramCell(pipItem);
+        return cell != null && cell.isPlaying();
+      }
+
+      @Override
+      public boolean isAutoHideHeld () {
+        return isPipUp || listenCatchPip || pipHidden || (pipPositionAnimator != null && pipPositionAnimator.isAnimating());
+      }
+
+      @Override
+      public void onAutoHide () {
+        setPipControlsVisible(false, true, true);
+      }
+
+      @Override
+      public void onTouchExplorationEnabled () {
+        setPipControlsVisible(true, true);
+      }
+    });
+  }
+
+  /** Destroy and the start of the close: no more timers, and the navigation bar is back. */
+  private void xgramReleaseAutoHide () {
+    if (xgramAutoHide != null) {
+      xgramAutoHide.detach();
+    }
+    if (xgramPipAutoHide != null) {
+      xgramPipAutoHide.detach();
+    }
+  }
+
+  /** The current item changed: a video's chrome hidden by the timer comes back (the next one isn't playing yet). */
+  private void xgramOnMediaChanged (@Nullable MediaItem currentItem) {
+    if (xgramAutoHide == null || currentItem == xgramChromeItem) {
+      return; // more items loaded around the same one
+    }
+    xgramChromeItem = currentItem;
+    if (xgramHiddenByTimer) {
+      xgramSetChromeVisible(true, XGRAM_CHROME_SYSTEM);
+    }
+    if (!xgramSlideActive()) {
+      xgramSetChromeSlide(false); // a photo or a GIF: in place
+    }
+    xgramAutoHide.restart();
+  }
+
+  /** A tap on the black around a video (its letterbox): toggles the chrome, as a tap on the picture. */
+  public void onMediaOutsideClick (MediaView mediaView, float x, float y) {
+    if (!inPictureInPicture && pipFactor == 0f && xgramAutoHideOn() && toggleHeaderVisibility()) {
+      ViewUtils.onClick(mediaView);
+    }
+  }
 
   private void updateCaptionAlpha () {
     if (captionWrapView != null) {
@@ -2118,7 +2395,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private void initHeaderStyle () {
     if (headerView != null) {
       if (revealAnimationType == ANIMATION_TYPE_REVEAL) {
-        headerView.setTranslationY(-headerView.getSize());
+        setHeaderBaseY(-headerView.getSize());
       } else {
         headerView.setAlpha(0f);
       }
@@ -2131,7 +2408,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     switch (revealAnimationType) {
       case ANIMATION_TYPE_REVEAL: {
         if (headerView != null) {
-          headerView.setTranslationY(-headerView.getSize() * Math.max(1f - alpha, getForceEditModeVisibility()));
+          setHeaderBaseY(-headerView.getSize() * Math.max(1f - alpha, getForceEditModeVisibility()));
         }
         break;
       }
@@ -2636,6 +2913,14 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       pipItem = stack.getCurrent();
 
       if (in) {
+        if (xgramAutoHide != null) {
+          // XGram: Hide controls while playing: the window has its own timer. Hidden chrome (and the hidden
+          // navigation bar) would come back hidden from it.
+          if (!headerVisible.getValue()) {
+            xgramSetChromeVisible(true, XGRAM_CHROME_SYSTEM);
+          }
+          xgramAutoHide.cancel();
+        }
         // remember in onFactorChangeFinished
         context().pretendYouDontKnowThisWindow(popupView);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !Config.DISABLE_VIEWER_ELEVATION) {
@@ -2846,10 +3131,27 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       setFullScreen(true);
       setLowProfile(true);
       pipItem = null;
+      if (xgramPipAutoHide != null) {
+        // XGram: Hide controls while playing: back in the viewer, the window's buttons are shown for the next time
+        // and the viewer's timer goes on
+        xgramPipAutoHide.detach();
+        pipControlsVisible = true;
+        forcePipControlsFactor(1f);
+      }
+      if (xgramAutoHide != null) {
+        if (xgramHiddenByTimer) {
+          xgramSetChromeVisible(true, XGRAM_CHROME_SYSTEM);
+        }
+        xgramAutoHide.restart();
+      }
     } else if (pipFactor == 1f) {
       setFullScreen(false);
       setLowProfile(false);
       setDifferentStuffVisible(false);
+      if (xgramPipAutoHide != null) {
+        xgramPipAutoHide.attach(); // XGram: the window's buttons hide while it plays
+        xgramPipAutoHide.restart();
+      }
     }
   }
 
@@ -2865,6 +3167,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         preparePipMovement();
       } else {
         normalizePipPosition(velocityX, velocityY, true);
+        if (xgramPipAutoHide != null) {
+          xgramPipAutoHide.onTouchEnd(); // XGram: dropped: the buttons hide a full delay after it settles
+        }
       }
       animatePipUpFactor(isUp);
     }
@@ -3075,14 +3380,26 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       normalizePipPosition(0f, 0f, false);
     } else {
       setPipControlsVisible(!pipControlsVisible, true);
+      if (xgramPipAutoHide != null) {
+        // XGram: Hide controls while playing: shown by a tap, they hide again a full delay later
+        if (pipControlsVisible) {
+          xgramPipAutoHide.restart();
+        } else {
+          xgramPipAutoHide.cancel();
+        }
+      }
     }
   }
 
   private void setPipControlsVisible (boolean visible, boolean animated) {
+    setPipControlsVisible(visible, animated, false);
+  }
+
+  private void setPipControlsVisible (boolean visible, boolean animated, boolean byTimer) {
     if (this.pipControlsVisible != visible) {
       this.pipControlsVisible = visible;
       if (animated) {
-        animatePipControlsFactor(visible ? 1f : 0f);
+        animatePipControlsFactor(visible ? 1f : 0f, byTimer);
       } else {
         forcePipControlsFactor(visible ? 1f : 0f);
       }
@@ -3092,10 +3409,15 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   private static final int ANIMATOR_PIP_CONTROLS = 10;
   private FactorAnimator pipControlsAnimator;
 
-  private void animatePipControlsFactor (float toFactor) {
+  /** A tap fades the window's buttons on EFFECTS_FAST (180ms), the auto-hide on the calmer EFFECTS_DEFAULT (300ms). */
+  private void animatePipControlsFactor (float toFactor, boolean byTimer) {
     if (pipControlsAnimator == null) {
       pipControlsAnimator = new FactorAnimator(ANIMATOR_PIP_CONTROLS, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180l, pipControlsFactor);
-      com.fahadali.xgram.appearance.XgramAppMotion.use(pipControlsAnimator, com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram
+    }
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      com.fahadali.xgram.appearance.XgramAppMotion.use(pipControlsAnimator, byTimer ? com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT : com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_FAST, true); // XGram
+    } else {
+      pipControlsAnimator.setDuration(byTimer ? 300l : 180l);
     }
     pipControlsAnimator.animateTo(toFactor);
   }
@@ -3483,6 +3805,16 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       updatePipState(isPlaying);
       videoSliderView.setShowPlayPause(true, true);
     }
+    if (isPlaying && stack.getCurrent() == item) {
+      xgramRestartAutoHide(); // XGram: Hide controls while playing
+    }
+  }
+
+  @Override
+  public void onBufferingStateChanged (MediaItem item, boolean isBuffering) {
+    if (!isBuffering && stack.getCurrent() == item) {
+      xgramRestartAutoHide(); // XGram: loaded again: the chrome hides a full delay from now
+    }
   }
 
   private float videoFactor;
@@ -3723,6 +4055,16 @@ public class MediaViewController extends ViewController<MediaViewController.Args
         if (!isPlaying) {
           setPipControlsVisible(true, true);
         }
+        // XGram: Hide controls while playing: playing starts the timer; a pause, the end or an error stops it and
+        // brings the chrome back
+        if (isPlaying) {
+          xgramRestartAutoHide();
+        } else {
+          xgramCancelAutoHide();
+          if (xgramAutoHide != null && xgramAutoHideVideo(item) && !headerVisible.getValue() && pipFactor == 0f && !inPictureInPicture) {
+            xgramSetChromeVisible(true, XGRAM_CHROME_SYSTEM);
+          }
+        }
         break;
       }
     }
@@ -3814,7 +4156,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       setCommonFactor(1f - dismissFactor);
 
       if (headerView != null) {
-        headerView.setTranslationY(-headerView.getSize() * Math.max(dismissFactor, getForceEditModeVisibility()));
+        setHeaderBaseY(-headerView.getSize() * Math.max(dismissFactor, getForceEditModeVisibility()));
       }
 
       if (mode == MODE_GALLERY) {
@@ -3831,7 +4173,14 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     float maxY = 0;
     if (bottomWrap != null) {
       float y = offsetDistance - (thumbsFactor * (float) thumbsDistance) * (1f - dismissFactor);
-      bottomWrap.setTranslationY(y);
+      // XGram: the caption card and the controls slide 8dp down as they auto-hide; their scrim stays put (it fades
+      // in place, as the strips below, which never move with it)
+      final float xgramSlide = xgramChromeSlideY();
+      bottomWrap.setTranslationY(y + xgramSlide);
+      final com.fahadali.xgram.appearance.XgramW2MediaViewer.ControlsScrimDrawable xgramScrim = xgramBottomScrim();
+      if (xgramScrim != null) {
+        xgramScrim.setOffsetY(xgramSlide);
+      }
       maxY = Math.max(0, y);
     }
     if (thumbsRecyclerView != null) {
@@ -5328,6 +5677,33 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       private boolean disallowIntercept;
 
       @Override
+      public boolean dispatchTouchEvent (MotionEvent e) {
+        // XGram: Hide controls while playing: a finger anywhere (the picture, the seek bar, the album strip, the
+        // caption) keeps the chrome up, and lifting it starts a full delay
+        final boolean xgramFeed = xgramAutoHide != null && (pipFactor == 0f || e.getActionMasked() != MotionEvent.ACTION_DOWN);
+        if (xgramFeed) {
+          xgramAutoHide.onTouch(e);
+        }
+        final boolean handled = super.dispatchTouchEvent(e);
+        if (xgramFeed && !handled && e.getActionMasked() == MotionEvent.ACTION_DOWN && xgramAutoHide != null) {
+          xgramAutoHide.onTouchEnd(); // nothing took it: no UP follows
+        }
+        return handled;
+      }
+
+      @Override
+      public boolean dispatchGenericMotionEvent (MotionEvent e) {
+        // XGram: a mouse moving over the viewer (DeX) counts as interaction
+        if (xgramAutoHide != null && pipFactor == 0f && e.getActionMasked() == MotionEvent.ACTION_HOVER_MOVE) {
+          if (xgramHiddenByTimer) {
+            xgramSetChromeVisible(true, XGRAM_CHROME_SYSTEM);
+          }
+          xgramAutoHide.restart();
+        }
+        return super.dispatchGenericMotionEvent(e);
+      }
+
+      @Override
       public void requestDisallowInterceptTouchEvent (boolean disallowIntercept) {
         super.requestDisallowInterceptTouchEvent(disallowIntercept);
         this.disallowIntercept = disallowIntercept;
@@ -5521,6 +5897,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       int rightMargin = measureButtonsPadding();
       Views.setMargins((FrameLayout.LayoutParams) headerCell.getLayoutParams(), Lang.rtl() ? rightMargin : leftMargin, headerView.getEffectiveTopOffset(), Lang.rtl() ? leftMargin : rightMargin, 0);
       contentView.addView(headerView);
+      xgramInitAutoHide(); // XGram: Hide controls while playing (messages viewer only)
     }
 
     switch (mode) {
@@ -5537,12 +5914,18 @@ public class MediaViewController extends ViewController<MediaViewController.Args
 
           @Override
           public boolean onTouchEvent (MotionEvent e) {
+            if (xgramPipAutoHide != null && (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL)) {
+              xgramPipAutoHide.onTouch(e); // XGram: Hide controls while playing: no hiding under a finger (DOWN below)
+            }
             switch (e.getAction()) {
               case MotionEvent.ACTION_DOWN: {
                 if (pipFactor == 1f && (pipPositionAnimator == null || !pipPositionAnimator.isAnimating())) {
                   listenCatchPip = true;
                   startX = e.getX();
                   startY = e.getY();
+                  if (xgramPipAutoHide != null) {
+                    xgramPipAutoHide.onTouch(e);
+                  }
                   return true;
                 }
                 break;
@@ -5916,6 +6299,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       }
     }
     mediaView.setFoldOffset(offset);
+    xgramFoldOffset = offset;
+    if (offset > 0 && xgramHiddenByTimer) {
+      xgramSetChromeVisible(true, XGRAM_CHROME_SYSTEM); // the controls sit below the fold now: they stay
+    }
   }
 
   @Override
@@ -5923,6 +6310,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     super.destroy();
     if (context().xgramWindow() != null) {
       context().xgramWindow().removeListener(xgramWindowListener); // XGram
+    }
+    xgramReleaseAutoHide(); // XGram: Hide controls while playing
+    if (xgramChromeSlide != null) {
+      xgramChromeSlide.cancel();
     }
     MediaItem current = stack.getCurrent();
     if (current != null && current.isViewOnce()) {
@@ -5978,6 +6369,15 @@ public class MediaViewController extends ViewController<MediaViewController.Args
       mediaView.pauseIfPlaying();
     } else {
       mediaView.resumeIfNeeded(view.getValue());
+    }
+    // XGram: Hide controls while playing: held while scrubbing, a full delay once let go
+    xgramScrubbing = isSetting;
+    if (xgramAutoHide != null) {
+      if (isSetting) {
+        xgramAutoHide.cancel();
+      } else {
+        xgramAutoHide.restart();
+      }
     }
   }
 

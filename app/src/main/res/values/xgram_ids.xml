@@ -276,6 +276,7 @@
   <!-- Play videos in chat -->
   <item type="id" name="btn_xgramInlineVideo" />
   <item type="id" name="btn_xgramInlineVideoStart" />
+  <item type="id" name="btn_xgramVideoAutoHide" />
   <!-- XGram M3E part A: Expressive design switch, list decoration and row tags -->
   <item type="id" name="btn_xgramExpressive" />
   <item type="id" name="btn_xgramComposeTgx" />

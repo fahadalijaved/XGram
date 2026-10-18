@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: Hide controls while playing (Messages > Videos, com.fahadali.xgram.appearance.XgramAutoHide) -->
+<resources>
+  <string name="XgramVideoAutoHide">Hide controls while playing</string>
+  <string name="XgramVideoAutoHideSub">After 3 seconds</string>
+  <string name="XgramVideoAutoHideInfo">While a video plays, in the viewer, in chat and in picture in picture, its title, caption and controls fade away with the system bars. Tap the video to bring them back. They stay while it\'s paused, loading or being scrubbed, while a menu is open, and with TalkBack on.</string>
+</resources>
