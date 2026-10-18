@@ -155,6 +155,14 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
     this.xgramCutOutColor = color;
   }
 
+  /** XGram: the online dot's scale (3/4 with the one line chat list's 36dp photo); 1 everywhere else. */
+  private float xgramBadgeScale = 1f;
+
+  /** XGram: set by the host with the bounds, so it never invalidates. */
+  public void xgramSetBadgeScale (float scale) {
+    this.xgramBadgeScale = scale;
+  }
+
   public void clearAvatarRadiusPropertyIds () {
     //noinspection WrongConstant
     setAvatarRadiusPropertyIds(0, 0);
@@ -1220,7 +1228,8 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
       this,
       allowOnline.getFloatValue() * isOnline.getFloatValue(),
       contentCutOutColor,
-      onlineColor
+      onlineColor,
+      xgramBadgeScale
     );
   }
 

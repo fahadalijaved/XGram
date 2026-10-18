@@ -992,6 +992,31 @@ public final class XgramSettings {
     put(KEY_PULL_TO_NEXT, value);
   }
 
+  public static final String KEY_CHAT_LIST_BIG_TEXT = "xgram_chat_list_big_text";
+  private volatile int chatListBigText = -1;
+
+  /**
+   * Chat list view: three lines with bigger photos and text (Telegram X's "Three lines (bigger text)"), kept while
+   * another view is picked. Until first set, whether the chat list uses it now.
+   */
+  public boolean chatListBigText () {
+    if (chatListBigText == -1) {
+      LevelDB pmc = pmc();
+      chatListBigText = pmc.contains(KEY_CHAT_LIST_BIG_TEXT) ?
+        (pmc.getBoolean(KEY_CHAT_LIST_BIG_TEXT, false) ? 1 : 0) :
+        (Settings.instance().getChatListMode() == Settings.CHAT_MODE_3LINE_BIG ? 1 : 0);
+    }
+    return chatListBigText == 1;
+  }
+
+  public void setChatListBigText (boolean value) {
+    if (chatListBigText != -1 && (chatListBigText == 1) == value && pmc().contains(KEY_CHAT_LIST_BIG_TEXT)) {
+      return;
+    }
+    chatListBigText = value ? 1 : 0;
+    put(KEY_CHAT_LIST_BIG_TEXT, value);
+  }
+
   /** "Connecting..." in the status bar on the start side (off: Telegram X's centred position). The only thing that decides it. */
   public boolean connectionStatusAtStart () {
     return connectionStatusAtStart;

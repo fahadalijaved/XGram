@@ -263,7 +263,6 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     @Override
     public void onDraw (@NonNull Canvas c, RecyclerView parent, @NonNull RecyclerView.State state) {
       final int childCount = parent.getChildCount();
-      final int separatorLeft = Screen.dp(72f);
       final int separatorHeight = Math.max(1, Screen.dp(.5f, 3f));
       final int separatorColor = Theme.separatorColor();
       final float maxAlpha = Theme.getShadowDepth();
@@ -343,6 +342,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
             }
           }
           if (needSeparator && !xgramM3) {
+            final int separatorLeft = ((ChatView) view).xgramSeparatorLeft(); // XGram: from the text start in one line
             int separatorTop = view.getBottom() + offsetTop;
             if (Lang.rtl()) {
               c.drawRect(0, separatorTop, right - separatorLeft, separatorTop + separatorHeight, Paints.fillingPaint(separatorColor));
@@ -510,7 +510,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       }
 
       if (context.archiveCollapsed && outRect.top == 0 && current.isArchive()) {
-        outRect.top = -ChatView.getViewHeight(current.getListMode());
+        outRect.top = -ChatView.xgramCurrentHeight(current); // XGram: the row's height springs while the chat list view changes
         if (context.liveLocationHelper != null && context.liveLocationHelper.isVisible()) {
           outRect.top -= Screen.dp(1f);
         } else {
@@ -897,6 +897,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     tdlib.cache().subscribeForGlobalUpdates(this);
 
     Settings.instance().addChatListModeListener(this);
+    if (com.fahadali.xgram.chats.XgramChatListMode.isAnimating() && !xgramModeListening) {
+      // XGram: made while the chat list view springs: its rows follow the spring to the end too
+      xgramModeListening = true;
+      com.fahadali.xgram.chats.XgramChatListMode.addFrameListener(xgramModeListener);
+    }
     TGLegacyManager.instance().addEmojiListener(this);
     tdlib.context().dateManager().addListener(this);
     tdlib.listeners().addChatFolderListener(chatFolderId(), this);
@@ -1159,7 +1164,134 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   @Override
   public void onChatListModeChanged (int newChatListMode) {
     if (adapter != null) {
+      xgramCaptureModeAnchor(); // XGram: before the rows change, the first one on screen keeps its place
       adapter.checkChatListMode();
+      if (chatsView != null) {
+        chatsView.xgramUpdateLoadCounts();
+      }
+      if (com.fahadali.xgram.chats.XgramChatListMode.isAnimating()) {
+        if (!xgramModeListening) {
+          xgramModeListening = true;
+          com.fahadali.xgram.chats.XgramChatListMode.addFrameListener(xgramModeListener);
+        }
+      } else {
+        xgramModeAnchor = RecyclerView.NO_POSITION;
+        xgramRelayoutRows();
+      }
+    }
+  }
+
+  // XGram: the rows spring to the new chat list view (XgramChatListMode). Each frame they are measured again, the
+  // first chat on screen stays where it was (in proportion to its height) and the collapsed archive's offset follows.
+  // A list off screen (another page in front, a folder not shown) does nothing per frame and takes the final height.
+
+  private boolean xgramModeListening;
+  private int xgramModeAnchor = RecyclerView.NO_POSITION;
+  private long xgramModeAnchorChatId;
+  private float xgramModeAnchorRatio;
+
+  private final com.fahadali.xgram.chats.XgramChatListMode.Listener xgramModeListener = new com.fahadali.xgram.chats.XgramChatListMode.Listener() {
+    @Override
+    public void onChatListModeFrame () {
+      xgramOnModeFrame();
+    }
+
+    @Override
+    public void onChatListModeEnd () {
+      xgramOnModeEnd();
+    }
+  };
+
+  private boolean xgramListOnScreen () {
+    return chatsView != null && chatsView.getParent() != null && chatsView.getWindowToken() != null;
+  }
+
+  private void xgramCaptureModeAnchor () {
+    xgramModeAnchor = RecyclerView.NO_POSITION;
+    if (!com.fahadali.xgram.chats.XgramChatListMode.isAnimating() || !xgramListOnScreen() ||
+      chatsView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE || (animatorFlags & ANIMATOR_FLAG_DRAGGING) != 0 ||
+      !(chatsView.getLayoutManager() instanceof LinearLayoutManager)) {
+      return;
+    }
+    LinearLayoutManager manager = (LinearLayoutManager) chatsView.getLayoutManager();
+    for (int i = 0; i < chatsView.getChildCount(); i++) {
+      View view = chatsView.getChildAt(i);
+      if (!(view instanceof ChatView) || view.getMeasuredHeight() <= 0) {
+        continue;
+      }
+      TGChat chat = ((ChatView) view).getChat();
+      int position = chatsView.getChildAdapterPosition(view);
+      if (chat == null || position == RecyclerView.NO_POSITION || (chat.isArchive() && archiveCollapsed)) {
+        continue; // the collapsed archive sits above the screen
+      }
+      // scrollToPositionWithOffset counts from the list's top padding
+      int top = manager.getDecoratedTop(view) - chatsView.getPaddingTop();
+      if (manager.getDecoratedBottom(view) <= chatsView.getPaddingTop()) {
+        continue;
+      }
+      if (xgramModeAnchor == RecyclerView.NO_POSITION || position < xgramModeAnchor) {
+        xgramModeAnchor = position;
+        xgramModeAnchorChatId = chat.getChatId();
+        xgramModeAnchorRatio = (float) top / (float) view.getMeasuredHeight();
+      }
+    }
+  }
+
+  private void xgramRelayoutRows () {
+    if (chatsView == null) {
+      return;
+    }
+    for (int i = 0; i < chatsView.getChildCount(); i++) {
+      View view = chatsView.getChildAt(i);
+      if (view instanceof ChatView) {
+        // RecyclerView skips measuring a child whose specs did not change, this one's height did
+        view.requestLayout();
+        view.invalidate();
+      }
+    }
+    if (hideArchive || archiveCollapsed) {
+      chatsView.invalidateItemDecorations(); // the collapsed archive's offset and the bottom padding follow the height
+    }
+  }
+
+  private void xgramOnModeFrame () {
+    if (!xgramListOnScreen()) {
+      return;
+    }
+    if (xgramModeAnchor != RecyclerView.NO_POSITION) {
+      TGChat anchorChat = adapter != null ? adapter.getChatByItemPosition(xgramModeAnchor) : null;
+      if (anchorChat == null || anchorChat.getChatId() != xgramModeAnchorChatId || chatsView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE ||
+        (animatorFlags & ANIMATOR_FLAG_DRAGGING) != 0) {
+        xgramModeAnchor = RecyclerView.NO_POSITION; // the list changed or the finger took over
+      } else {
+        LinearLayoutManager manager = (LinearLayoutManager) chatsView.getLayoutManager();
+        manager.scrollToPositionWithOffset(xgramModeAnchor, Math.round(xgramModeAnchorRatio * com.fahadali.xgram.chats.XgramChatListMode.rowHeightPx()));
+      }
+    }
+    xgramRelayoutRows();
+  }
+
+  private void xgramOnModeEnd () {
+    xgramModeListening = false;
+    com.fahadali.xgram.chats.XgramChatListMode.removeFrameListener(xgramModeListener);
+    xgramModeAnchor = RecyclerView.NO_POSITION;
+    if (adapter != null) {
+      adapter.xgramEndModeTransition();
+    }
+    if (chatsView != null) {
+      chatsView.xgramUpdateLoadCounts();
+      xgramRelayoutRows();
+      // Shorter rows may have left the screen without chats to fill it
+      chatsView.post(() -> {
+        if (isDestroyed() || chatsView == null || adapter == null || !ableToLoadMore()) {
+          return;
+        }
+        LinearLayoutManager manager = (LinearLayoutManager) chatsView.getLayoutManager();
+        int lastVisiblePosition = manager != null ? manager.findLastVisibleItemPosition() : RecyclerView.NO_POSITION;
+        if (lastVisiblePosition != RecyclerView.NO_POSITION && lastVisiblePosition + 15 >= adapter.getItemCount()) {
+          requestLoadMore();
+        }
+      });
     }
   }
 
@@ -3146,6 +3278,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       }
     }
     Settings.instance().removeChatListModeListener(this);
+    com.fahadali.xgram.chats.XgramChatListMode.removeFrameListener(xgramModeListener); // XGram
     tdlib.settings().removeUserPreferenceChangeListener(this);
     tdlib.listeners().unsubscribeFromGlobalUpdates(this);
     tdlib.cache().unsubscribeFromGlobalUpdates(this);

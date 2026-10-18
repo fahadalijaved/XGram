@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Chat list view: One line, Two lines (ChatListStyle1), Three lines (ChatListStyle2), Bigger text -->
+  <string name="XgramChatListView">Chat list view</string>
+  <string name="XgramChatListOneLine">One line</string>
+  <string name="XgramChatListBigText">Bigger text</string>
+  <string name="XgramChatListBigTextSub">Larger photos and text with three lines</string>
+  <string name="XgramChatListBigTextOff">Only with three lines</string>
+  <string name="XgramChatListViewInfo">One line fits the most chats on screen. Two and three lines also show the last message.</string>
+</resources>

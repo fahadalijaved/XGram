@@ -274,10 +274,16 @@ public class DrawAlgorithms {
   }
 
   public static void drawIcon (Canvas c, Receiver receiver, float degrees, float factor, int contentReplaceColor, Drawable drawable, Paint drawablePaint) {
+    drawIcon(c, receiver, degrees, factor, contentReplaceColor, drawable, drawablePaint, 1f);
+  }
+
+  /** XGram: {@code scale} sizes the badge with a smaller photo (the one line chat list's). */
+  public static void drawIcon (Canvas c, Receiver receiver, float degrees, float factor, int contentReplaceColor, Drawable drawable, Paint drawablePaint, float scale) {
     if (factor == 0f) {
       return;
     }
-    
+    factor *= scale;
+
     float innerRadius = Screen.dp(4.5f);
     float outerRadius = innerRadius + Screen.dp(2f);
     double radians = Math.toRadians(degrees);
@@ -298,9 +304,14 @@ public class DrawAlgorithms {
   }
 
   public static void drawOnline (Canvas c, Receiver receiver, float onlineFactor, int contentCutOutColor, int onlineColor) {
+    drawOnline(c, receiver, onlineFactor, contentCutOutColor, onlineColor, 1f);
+  }
+
+  /** XGram: {@code scale} sizes the dot with a smaller photo (the one line chat list's: 3.4dp in a 4.9dp ring). */
+  public static void drawOnline (Canvas c, Receiver receiver, float onlineFactor, int contentCutOutColor, int onlineColor, float scale) {
     if (onlineFactor > 0f) {
-      float innerRadius = Screen.dp(4.5f);
-      float outerRadius = innerRadius + Screen.dp(2f);
+      float innerRadius = Screen.dp(4.5f) * scale;
+      float outerRadius = innerRadius + Screen.dp(2f) * scale;
       double radians = Math.toRadians(45f);
       float x, y;
       if (receiver instanceof AvatarReceiver) {
@@ -398,6 +409,11 @@ public class DrawAlgorithms {
   }
 
   public static void drawSimplestCheckBox (Canvas c, Receiver receiver, float checkFactor, int contentReplaceColor) {
+    drawSimplestCheckBox(c, receiver, checkFactor, contentReplaceColor, 1f);
+  }
+
+  /** XGram: {@code scale} sizes the check (and its ring) with a smaller photo, around its own centre. */
+  public static void drawSimplestCheckBox (Canvas c, Receiver receiver, float checkFactor, int contentReplaceColor, float scale) {
     if (checkFactor > 0f) {
       boolean rtl = Lang.rtl();
       final double radians = Math.toRadians(rtl ? 315f : 45f);
@@ -412,11 +428,22 @@ public class DrawAlgorithms {
         x = receiver.centerX() + (int) ((float) receiver.getWidth() / 2 * Math.sin(radians));
         y = receiver.centerY() + (int) ((float) receiver.getHeight() / 2 * Math.cos(radians));
       }
+      final boolean scaled = scale != 1f;
+      final int saveCount;
+      if (scaled) {
+        saveCount = Views.save(c);
+        c.scale(scale, scale, (int) x, (int) y);
+      } else {
+        saveCount = -1;
+      }
       SimplestCheckBox.draw(c, (int) x, (int) y, checkFactor, null);
       RectF rectF = Paints.getRectF();
       int radius = Screen.dp(11f);
       rectF.set(x - radius, y - radius, x + radius, y + radius);
       c.drawArc(rectF, rtl ? 225f + 170f * (1f - checkFactor) : 135f, 170f * checkFactor, false, Paints.getOuterCheckPaint(contentReplaceColor));
+      if (scaled) {
+        Views.restore(c, saveCount);
+      }
     }
   }
 

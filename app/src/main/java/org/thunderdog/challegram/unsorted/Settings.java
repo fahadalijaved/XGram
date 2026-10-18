@@ -1262,6 +1262,8 @@ public class Settings {
   public static final int CHAT_MODE_2LINE = 1;
   public static final int CHAT_MODE_3LINE = 2;
   public static final int CHAT_MODE_3LINE_BIG = 3;
+  /** XGram: one row per chat, no message preview (official Telegram's and iMe's "One line"). Not 0: 0 means "not forced" on rows. */
+  public static final int CHAT_MODE_1LINE = 4;
 
   public interface ChatListModeChangeListener {
     void onChatListModeChanged (int newChatListMode);
@@ -1291,8 +1293,10 @@ public class Settings {
   }
 
   public void setChatListMode (int mode) {
-    if (getChatListMode() != mode) {
+    final int oldMode = getChatListMode();
+    if (oldMode != mode) {
       pmc.putInt(KEY_CHAT_LIST_MODE, _chatListMode = mode);
+      com.fahadali.xgram.chats.XgramChatListMode.onModeChanged(oldMode, mode); // XGram: the rows spring to the new height
       if (chatListModeListeners != null) {
         for (ChatListModeChangeListener listener : chatListModeListeners) {
           listener.onChatListModeChanged(mode);

@@ -68,6 +68,13 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
     }
   }
 
+  /** XGram: the chat list view finished changing (XgramChatListMode): the rows let go of their old lines. */
+  public void xgramEndModeTransition () {
+    for (TGChat chat : chats) {
+      chat.xgramEndModeTransition();
+    }
+  }
+
   public ArrayList<TGChat> getChats () {
     return chats;
   }

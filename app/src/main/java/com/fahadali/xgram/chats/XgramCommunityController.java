@@ -855,7 +855,8 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
 
   private static int rowMode () {
     int mode = Settings.instance().getChatListMode();
-    return mode == Settings.CHAT_MODE_2LINE ? Settings.CHAT_MODE_3LINE : mode;
+    // One line too: the topics and "sender: message" need the two lines under the title
+    return mode == Settings.CHAT_MODE_2LINE || mode == Settings.CHAT_MODE_1LINE ? Settings.CHAT_MODE_3LINE : mode;
   }
 
   /** "@username, 1,234 subscribers" (members, or monthly users for a bot): rows for chats you are not in, and the settings page. */

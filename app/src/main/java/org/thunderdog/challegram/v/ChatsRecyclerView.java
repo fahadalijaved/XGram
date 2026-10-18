@@ -65,9 +65,15 @@ public class ChatsRecyclerView extends CustomRecyclerView implements ClickHelper
     void requestLoadMore ();
   }
 
+  /** XGram: as many chats as rows of the chat list's view fill the screen (48dp in one line, not Telegram X's 72dp). */
+  public void xgramUpdateLoadCounts () {
+    final int rowHeight = org.thunderdog.challegram.component.dialogs.ChatView.getViewHeight(org.thunderdog.challegram.unsorted.Settings.instance().getChatListMode());
+    initialLoadCount = Screen.calculateLoadingItems(rowHeight, 5) + 5;
+    loadCount = Screen.calculateLoadingItems(rowHeight, 25);
+  }
+
   private void init (Context context) {
-    initialLoadCount = Screen.calculateLoadingItems(Screen.dp(72f), 5) + 5;
-    loadCount = Screen.calculateLoadingItems(Screen.dp(72f), 25);
+    xgramUpdateLoadCounts();
 
     // setItemAnimator(null);
 
