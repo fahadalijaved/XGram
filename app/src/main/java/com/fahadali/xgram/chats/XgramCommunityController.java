@@ -54,6 +54,7 @@ import org.thunderdog.challegram.util.text.TextEntityCustom;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.BaseView;
 import org.thunderdog.challegram.widget.ForceTouchView;
+import org.thunderdog.challegram.widget.SeparatorView;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -314,6 +315,11 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       }
 
       @Override
+      protected void setSeparatorOptions (ListItem item, int position, SeparatorView separatorView) {
+        separatorView.setOffsets(separatorLeft(), 0); // the rows' text start, as the chat list's
+      }
+
+      @Override
       protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
         if (customViewType == TYPE_CHAT_ROW) {
           ((XgramCommunityChatView) view).setChat(rows.get(item.getLongId()));
@@ -346,6 +352,10 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
       }
     };
     recyclerView.setAdapter(adapter);
+    Settings.instance().addChatListModeListener(chatListModeListener);
+    if (XgramChatListMode.isAnimating()) {
+      listenToModeFrames(); // opened while the chat list view springs: the rows follow it to the end
+    }
     tdlib.cache().subscribeToCommunityUpdates(communityId(), this);
     XgramCommunities.addListener(this);
     requestFullInfo();
@@ -507,6 +517,8 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     super.destroy();
     tdlib.cache().unsubscribeFromCommunityUpdates(communityId(), this);
     XgramCommunities.removeListener(this);
+    Settings.instance().removeChatListModeListener(chatListModeListener);
+    stopModeFrames();
     tdlib.ui().removeCallbacks(rebuild);
     if (topics != null) {
       topics.destroy();
@@ -842,8 +854,9 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
     }
     String forcedText = XgramCommunityData.isMember(tdlib, chat) ? null : subtitleFor(tdlib, chat);
     row = new TGChat(this, listFor(chat), chat, false);
-    // Before the first layout: the row keeps three lines (topics, then "sender: message") whatever the chat list's mode.
-    row.xgramSetCommunityRow(rowMode(), topicsLine, topicsEntities.toArray(new TextEntity[0]), forcedText);
+    // Before the first layout. The row follows the chat list view as the chat list's rows do (mode 0): with three lines
+    // the topics take the second line and "sender: message" the third, two lines and one line are the chat list's rows.
+    row.xgramSetCommunityRow(0, topicsLine, topicsEntities.toArray(new TextEntity[0]), forcedText);
     rows.put(chat.id, row);
     return row;
   }
@@ -853,10 +866,93 @@ public final class XgramCommunityController extends RecyclerViewController<Long>
   private static final String TOPICS_PLACEHOLDER = "—————————";
   private static final TextColorSet INVISIBLE_TEXT = () -> 0;
 
-  private static int rowMode () {
-    int mode = Settings.instance().getChatListMode();
-    // One line too: the topics and "sender: message" need the two lines under the title
-    return mode == Settings.CHAT_MODE_2LINE || mode == Settings.CHAT_MODE_1LINE ? Settings.CHAT_MODE_3LINE : mode;
+  // The chat list view (One line, Two lines, Three lines): the rows change with it as the chat list's do, springing to
+  // the new height on XgramChatListMode's frames (at once with Reduce motion), the old lines fading out meanwhile.
+
+  private final Settings.ChatListModeChangeListener chatListModeListener = newMode -> onChatListModeChanged();
+  private boolean modeListening;
+  private final XgramChatListMode.Listener modeFrameListener = new XgramChatListMode.Listener() {
+    @Override
+    public void onChatListModeFrame () {
+      CustomRecyclerView recyclerView = getRecyclerView();
+      if (recyclerView != null && recyclerView.getWindowToken() != null) { // off screen: the rows take the final height
+        relayoutRows();
+      }
+    }
+
+    @Override
+    public void onChatListModeEnd () {
+      onModeEnd();
+    }
+  };
+
+  private void onChatListModeChanged () {
+    if (!UI.inUiThread()) {
+      runOnUiThreadOptional(this::onChatListModeChanged);
+      return;
+    }
+    if (isDestroyed()) {
+      return;
+    }
+    for (TGChat row : rows.values()) {
+      row.checkChatListMode(); // keeps the old lines to fade out while the rows spring
+    }
+    if (XgramChatListMode.isAnimating()) {
+      listenToModeFrames();
+    } else {
+      relayoutRows();
+    }
+  }
+
+  private void listenToModeFrames () {
+    if (!modeListening) {
+      modeListening = true;
+      XgramChatListMode.addFrameListener(modeFrameListener);
+    }
+  }
+
+  private void stopModeFrames () {
+    if (modeListening) {
+      modeListening = false;
+      XgramChatListMode.removeFrameListener(modeFrameListener);
+    }
+  }
+
+  private void onModeEnd () {
+    stopModeFrames();
+    for (TGChat row : rows.values()) {
+      row.xgramEndModeTransition();
+    }
+    relayoutRows();
+  }
+
+  /**
+   * The rows on screen measure again (RecyclerView skips a child whose specs did not change, its height did), the
+   * separators between them follow the text start.
+   */
+  private void relayoutRows () {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return;
+    }
+    final int separatorLeft = separatorLeft();
+    for (int i = 0; i < recyclerView.getChildCount(); i++) {
+      View view = recyclerView.getChildAt(i);
+      if (view instanceof ChatView) {
+        view.requestLayout();
+        view.invalidate();
+      } else if (view instanceof SeparatorView) {
+        ((SeparatorView) view).setOffsets(separatorLeft, 0);
+        view.invalidate();
+      }
+    }
+  }
+
+  /** Where the line between two rows starts (Telegram X's design): 72dp, the text start in one line (as ChatView's). */
+  private static int separatorLeft () {
+    final float oneLine = Math.max(0f, Math.min(1f, XgramChatListMode.metrics(Settings.instance().getChatListMode()).oneLine));
+    final int multi = Screen.dp(72f), single = ChatView.getLeftPadding(Settings.CHAT_MODE_1LINE);
+    return Math.round(multi + (single - multi) * oneLine);
   }
 
   /** "@username, 1,234 subscribers" (members, or monthly users for a bot): rows for chats you are not in, and the settings page. */

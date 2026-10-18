@@ -22,6 +22,7 @@ import com.fahadali.xgram.appearance.XgramM3Profile;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
+import org.thunderdog.challegram.component.dialogs.ChatView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.ContentPreview;
 import org.thunderdog.challegram.loader.ComplexReceiver;
@@ -31,6 +32,7 @@ import org.thunderdog.challegram.telegram.TdlibStatusManager;
 import org.thunderdog.challegram.tool.Icons;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.text.Counter;
 import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.util.text.TextColorSet;
@@ -46,7 +48,8 @@ import me.vkryl.core.collection.IntList;
 import tgx.td.Td;
 
 /**
- * Layout of one row in the forum topic list, modeled on {@link org.thunderdog.challegram.data.TGChat}.
+ * Layout of one row in the forum topic list, modeled on {@link org.thunderdog.challegram.data.TGChat}: in the chat list
+ * view's mode (One line, Two lines, Three lines, Three lines with bigger text) with the chat list's places and styles.
  */
 public final class TGForumTopic implements Counter.Callback, ContentPreview.RefreshCallback, TdlibStatusManager.HelperTarget {
   private final ViewController<?> context;
@@ -65,6 +68,8 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
   private boolean iconIsGeneral;
 
   private int currentWidth;
+  /** The chat list view this row is laid out for (Settings.CHAT_MODE_*). */
+  private int listMode;
   private Text title;
   private String time = "";
   private int timeWidth, timeLeft, checksRight, muteLeft, lockLeft;
@@ -82,6 +87,7 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
     this.tdlib = context.tdlib();
     this.chatId = chatId;
     this.topic = topic;
+    this.listMode = Settings.instance().getChatListMode();
     this.counter = new Counter.Builder().callback(this).build();
     this.mentionCounter = new Counter.Builder()
       .drawable(R.drawable.baseline_at_16, 16f, 0f, Gravity.CENTER)
@@ -197,13 +203,18 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
 
   @Override
   public void layoutChatAction () {
+    if (listMode == Settings.CHAT_MODE_1LINE) {
+      // One line draws only the action's icon, in the time's place (ForumTopicView); drawingState works without a text
+      statusHelper.setDrawingText(null);
+      return;
+    }
     String chatActionText = statusHelper.fullText();
     Text trimmed = null;
     if (!StringUtils.isEmpty(chatActionText)) {
-      int avail = currentWidth - ForumTopicView.getTextLeft() - ForumTopicView.getRightPaddingPx() - getCounterAddWidth();
+      int avail = currentWidth - ChatView.getLeftPadding(listMode) - ForumTopicView.getRightPaddingPx() - getCounterAddWidth();
       int iconWidth = statusHelper.actionIconWidth();
       if (avail > 0) {
-        Text.Builder b = new Text.Builder(chatActionText, avail, textStyleProvider(), TextColorSets.Regular.LIGHT).singleLine();
+        Text.Builder b = new Text.Builder(chatActionText, avail, textStyleProvider(listMode), TextColorSets.Regular.LIGHT).maxLineCount(listMode == Settings.CHAT_MODE_2LINE ? 1 : 2);
         if (iconWidth > 0) {
           b.lineMarginProvider((lineIndex, y, defaultMaxWidth, lineHeight) -> lineIndex == 0 ? iconWidth : 0);
         }
@@ -231,7 +242,13 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
   @Override
   public void onCounterAppearanceChanged (Counter counter, boolean sizeChanged) {
     if (sizeChanged && currentWidth > 0) {
-      layoutText();
+      // As TGChat.layoutContent: with three lines the sender's line ends at the badges too (setPrefix lays the text
+      // out after it); in one line layoutText lays the title out again when the badges' room changed
+      if (listMode == Settings.CHAT_MODE_2LINE || listMode == Settings.CHAT_MODE_1LINE) {
+        layoutText();
+      } else {
+        setPrefix();
+      }
     }
     currentViews.invalidate();
   }
@@ -316,6 +333,100 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
     return false;
   }
 
+  public int getListMode () {
+    return listMode;
+  }
+
+  /**
+   * Follows the chat list view (Settings.setChatListMode). The next measure lays the row out again; while the view
+   * springs (XgramChatListMode) a row on screen keeps its old lines to fade them out. True when the mode changed.
+   */
+  public boolean checkListMode () {
+    final int mode = Settings.instance().getChatListMode();
+    if (listMode == mode) {
+      return false;
+    }
+    if (currentWidth > 0 && isViewAttached && com.fahadali.xgram.chats.XgramChatListMode.isAnimating()) {
+      stashLines();
+    } else {
+      dropStash();
+    }
+    listMode = mode;
+    currentWidth = 0;
+    currentViews.requestLayout();
+    currentViews.invalidate();
+    return true;
+  }
+
+  // The old mode's lines, fading out while the chat list view changes (as TGChat's)
+
+  private int fadeMode;
+  @Nullable private Text fadePrefix, fadeText;
+  private int fadeTextLeft;
+  @Nullable private IntList fadeIcons;
+
+  private void stashLines () {
+    fadeMode = listMode;
+    fadePrefix = prefix;
+    fadeText = text;
+    fadeTextLeft = textLeft;
+    if (textIconIds != null && textIconIds.size() > 0) {
+      if (fadeIcons == null) {
+        fadeIcons = new IntList(textIconIds.size());
+      } else {
+        fadeIcons.clear();
+      }
+      for (int i = 0; i < textIconIds.size(); i++) {
+        fadeIcons.append(textIconIds.get(i));
+      }
+    } else if (fadeIcons != null) {
+      fadeIcons.clear();
+    }
+    if (fadePrefix == null && fadeText == null) {
+      dropStash(); // one line: nothing under the title to fade out
+    }
+  }
+
+  private void dropStash () {
+    fadeMode = 0;
+    fadePrefix = fadeText = null;
+    if (fadeIcons != null) {
+      fadeIcons.clear();
+    }
+  }
+
+  /** The view change ended: the old lines go (the views ask for the new text's media again, ForumTopicsController). */
+  public void endModeTransition () {
+    if (fadeMode != 0) {
+      dropStash();
+      currentViews.invalidate();
+    }
+  }
+
+  /** The mode whose lines fade out while the view changes, or 0. */
+  public int getFadeMode () {
+    return fadeMode;
+  }
+
+  @Nullable
+  public Text getFadePrefix () {
+    return fadeMode != 0 ? fadePrefix : null;
+  }
+
+  @Nullable
+  public Text getFadeText () {
+    return fadeMode != 0 ? fadeText : null;
+  }
+
+  public int getFadeTextLeft () {
+    return fadeTextLeft;
+  }
+
+  @Nullable
+  public IntList getFadeIcons () {
+    return fadeMode != 0 && fadeIcons != null && fadeIcons.size() > 0 ? fadeIcons : null;
+  }
+
   /** Has unread messages: with Expressive design the title, time and preview are emphasized then (as chats). */
   public boolean hasUnread () {
     return topic.unreadCount > 0;
@@ -326,11 +437,18 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
       // XGram M3E: the chat list's title style, Google Sans Flex titleMedium, weight 700 while unread
       return XgramM3Profile.flexProvider(XgramExpressive.TS_TITLE_M, hasUnread(), 16f);
     }
-    return Paints.robotoStyleProvider(16);
+    // The chat list's (TGChat.getTitleStyleProvider): 16 with three lines and in one line, 17 otherwise
+    return Paints.robotoStyleProvider(listMode == Settings.CHAT_MODE_3LINE || listMode == Settings.CHAT_MODE_1LINE ? 16 : 17);
   }
 
-  private static TextStyleProvider textStyleProvider () {
-    return Paints.robotoStyleProvider(15);
+  /** The chat list's (TGChat.getTextStyleProvider): 15 with three lines, 16 otherwise. */
+  private static TextStyleProvider textStyleProvider (int listMode) {
+    return Paints.robotoStyleProvider(listMode == Settings.CHAT_MODE_3LINE ? 15 : 16);
+  }
+
+  /** What the time keeps at the end: in one line at least 24dp, where the typing icon takes its place, so nothing reflows. */
+  private int timeReserve () {
+    return listMode == Settings.CHAT_MODE_1LINE ? Math.max(timeWidth, Screen.dp(24f)) : timeWidth;
   }
 
   private void setTime () {
@@ -338,12 +456,34 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
     time = date != 0 ? Lang.timeOrDateShort(date, TimeUnit.SECONDS) : "";
     timeWidth = (int) U.measureText(time, ForumTopicView.getTimePaint());
     timeLeft = currentWidth - ForumTopicView.getRightPaddingPx() - timeWidth;
-    checksRight = timeLeft - Screen.dp(7f);
-    lockLeft = timeLeft - Screen.dp(4f) - Screen.dp(16f);
+    final int trailingStart = currentWidth - ForumTopicView.getRightPaddingPx() - timeReserve();
+    checksRight = trailingStart - Screen.dp(7f);
+    lockLeft = trailingStart - Screen.dp(4f) - Screen.dp(16f);
+  }
+
+  // One line: the title leaves room at its end for the badges at their target width (so an animating badge never
+  // builds the title again per frame), or for the pin of a pinned topic when there is no badge.
+
+  private int oneLineReserve = -1;
+
+  private int computeOneLineReserve () {
+    final int gap = Screen.dp(7f);
+    final float badges = counter.getScaledOrTargetWidth(gap, true) + mentionCounter.getScaledOrTargetWidth(gap, true) + reactionsCounter.getScaledOrTargetWidth(gap, true);
+    if (badges > 0f) {
+      return Math.round(badges) + Screen.dp(8f);
+    }
+    return isPinned() ? Screen.dp(16f) + Screen.dp(8f) : 0;
+  }
+
+  private void checkOneLineReserve () {
+    if (listMode == Settings.CHAT_MODE_1LINE && currentWidth > 0 && computeOneLineReserve() != oneLineReserve) {
+      layoutTitle();
+    }
   }
 
   private void layoutTitle () {
-    int avail = currentWidth - ForumTopicView.getTextLeft() - timeWidth - ForumTopicView.getRightPaddingPx() - Screen.dp(7f);
+    final int left = ChatView.getLeftPadding(listMode);
+    int avail = currentWidth - left - timeReserve() - ForumTopicView.getRightPaddingPx() - Screen.dp(7f);
     if (isClosed()) {
       avail -= Screen.dp(20f);
     }
@@ -352,6 +492,10 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
     }
     if (isMuted()) {
       avail -= Screen.dp(1f) + Icons.getChatMuteDrawableWidth();
+    }
+    if (listMode == Settings.CHAT_MODE_1LINE) {
+      oneLineReserve = computeOneLineReserve();
+      avail -= oneLineReserve;
     }
     String name = StringUtils.isEmpty(topic.info.name) && topic.info.isGeneral ? Lang.getString(R.string.XgramGeneralTopic) : topic.info.name;
     if (avail > 0 && !StringUtils.isEmpty(name)) {
@@ -363,7 +507,7 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
     } else {
       title = null;
     }
-    muteLeft = ForumTopicView.getTextLeft() + (title != null ? title.getWidth() : 0) + Screen.dp(1f);
+    muteLeft = left + (title != null ? title.getWidth() : 0) + Screen.dp(1f);
   }
 
   private void setText () {
@@ -436,19 +580,24 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
 
   private void setPrefix () {
     String prefixValue = null;
-    if (hasPrefix) {
+    final boolean twoLines = listMode == Settings.CHAT_MODE_2LINE;
+    if (hasPrefix && listMode != Settings.CHAT_MODE_1LINE) { // one line shows no sender
       if (isDraft) {
         prefixValue = Lang.getString(R.string.Draft);
       } else if (topic.lastMessage != null) {
-        prefixValue = topic.lastMessage.isOutgoing ? Lang.getString(R.string.FromYou) : tdlib.senderName(topic.lastMessage, false, true);
+        // As the chat list: the short name in front of the text with two lines, the full name on its own line with three
+        prefixValue = topic.lastMessage.isOutgoing ? Lang.getString(R.string.FromYou) : tdlib.senderName(topic.lastMessage, false, twoLines);
       }
     }
-    if (!StringUtils.isEmpty(prefixValue)) {
-      prefix = new Text.Builder(prefixValue, Screen.dp(120f), textStyleProvider(), isDraft ? TextColorSets.Regular.NEGATIVE : TextColorSets.Regular.NORMAL)
+    final int avail = twoLines ? Screen.dp(120f) : currentWidth - ChatView.getLeftPadding(listMode) - ForumTopicView.getRightPaddingPx() - getCounterAddWidth();
+    if (!StringUtils.isEmpty(prefixValue) && avail > 0) {
+      Text.Builder b = new Text.Builder(prefixValue, avail, textStyleProvider(listMode), isDraft ? TextColorSets.Regular.NEGATIVE : TextColorSets.Regular.NORMAL)
         .singleLine()
-        .textFlags(Text.FLAG_ELLIPSIZE_NO_FILL)
-        .suffix(": ")
-        .build();
+        .textFlags(Text.FLAG_ELLIPSIZE_NO_FILL);
+      if (twoLines) {
+        b.suffix(": ");
+      }
+      prefix = b.build();
     } else {
       prefix = null;
     }
@@ -465,18 +614,31 @@ public final class TGForumTopic implements Counter.Callback, ContentPreview.Refr
   }
 
   private void layoutText () {
-    int avail = currentWidth - ForumTopicView.getTextLeft() - ForumTopicView.getRightPaddingPx() - getCounterAddWidth();
-    textLeft = ForumTopicView.getTextLeft();
-    if (prefix != null) {
+    textLeft = ChatView.getLeftPadding(listMode);
+    if (listMode == Settings.CHAT_MODE_1LINE) {
+      // One line shows no preview: setText still keeps the preview (its refresher), only no Text is built
+      textIconsPadding = 0;
+      text = null;
+      layoutChatAction();
+      checkOneLineReserve();
+      return;
+    }
+    int avail = currentWidth - textLeft - ForumTopicView.getRightPaddingPx() - getCounterAddWidth();
+    if (prefix != null && listMode == Settings.CHAT_MODE_2LINE) {
+      // Two lines: "Sender: text" on one line; three lines: the sender on its own line over the text
       avail -= prefix.getWidth();
       textLeft += prefix.getWidth();
     }
+    // One line of text under the sender, up to two without one (three lines), as the chat list's
+    final boolean singleLine = listMode == Settings.CHAT_MODE_2LINE || prefix != null;
     textIconsPadding = textIconIds != null && textIconIds.size() > 0 ? Screen.dp(2f) + Screen.dp(18f) * textIconIds.size() : 0;
     if (avail > 0 && !StringUtils.isEmpty(textValue)) {
       boolean xgramUnread = XgramExpressive.isEnabled() && hasUnread(); // XGram M3E: unread previews in onSurface
-      text = new Text.Builder(textValue, avail, textStyleProvider(), xgramUnread ? TextColorSets.Regular.NORMAL : TextColorSets.Regular.LIGHT)
-        .singleLine()
-        .ignoreNewLines()
+      text = new Text.Builder(textValue, avail, textStyleProvider(listMode), xgramUnread ? TextColorSets.Regular.NORMAL : TextColorSets.Regular.LIGHT)
+        .maxLineCount(singleLine ? 1 : 2)
+        .textFlags(Text.FLAG_ELLIPSIZE_NEWLINE)
+        .ignoreContinuousNewLines()
+        .ignoreNewLines(singleLine)
         .lineMarginProvider((lineIndex, y, defaultMaxWidth, lineHeight) -> lineIndex == 0 ? textIconsPadding : 0)
         .viewProvider(currentViews)
         .entities(textEntities, (text, specificMedia) -> {

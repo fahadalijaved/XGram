@@ -66,16 +66,27 @@ public final class XgramCommunityChatView extends ChatView implements AttachDele
     }
     TGChat chat = getChat();
     Text line = chat != null ? chat.getPrefix() : null;
-    if (line == null) {
+    // The topics line is the second line only with three lines (TGChat.xgramSetTopicsPrefix): in two lines the prefix
+    // is the sender, one line has none
+    if (line == null || !XgramChatListMode.isThreeLines(chat.getListMode())) {
       return;
     }
     int mode = chat.getListMode();
-    int left = ChatView.getLeftPadding(mode);
+    // Where ChatView draws the line now: shifted with the title row while the chat list view springs, fading in over
+    // the second half as the new mode's lines do
+    final ChatView.Metrics own = ChatView.metricsOf(mode);
+    final ChatView.Metrics now = chat.followsGlobalMode() ? XgramChatListMode.metrics(mode) : own;
+    final boolean modeTransition = chat.followsGlobalMode() && XgramChatListMode.isAnimating() && mode == XgramChatListMode.targetMode();
+    final float alpha = modeTransition ? Math.max(0f, Math.min(1f, XgramChatListMode.fraction() * 2f - 1f)) : 1f;
+    if (alpha <= 0f) {
+      return;
+    }
+    int left = ChatView.getLeftPadding(mode) + Math.round(now.textLeft - own.textLeft);
     int width = Math.min(line.getWidth(), Math.max(0, getMeasuredWidth() - left - ChatView.getRightPadding()));
     if (width <= 0) {
       return;
     }
-    float centerY = ChatView.getTextTop(mode) + line.getLineHeight() / 2f;
+    float centerY = ChatView.getTextTop(mode) + Math.round(now.titleTop - own.titleTop) + line.getLineHeight() / 2f;
     float halfHeight = Screen.dp(6f);
     if (Lang.rtl()) {
       placeholderRect.set(getMeasuredWidth() - left - width, centerY - halfHeight, getMeasuredWidth() - left, centerY + halfHeight);
@@ -86,7 +97,7 @@ public final class XgramCommunityChatView extends ChatView implements AttachDele
     final boolean still = com.fahadali.xgram.appearance.XgramMotion.reduce();
     long t = AnimationUtils.currentAnimationTimeMillis() % PULSE_MS;
     float pulse = still ? .5f : .5f + .5f * (float) Math.cos(2.0 * Math.PI * t / PULSE_MS);
-    placeholderPaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST), .55f + .45f * pulse));
+    placeholderPaint.setColor(XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST), (.55f + .45f * pulse) * alpha));
     c.drawRoundRect(placeholderRect, halfHeight, halfHeight, placeholderPaint);
     if (!still && getWindowToken() != null) {
       postInvalidateOnAnimation();
