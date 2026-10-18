@@ -1016,7 +1016,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && isFullscreen) {
       int uiVisibility = View.SYSTEM_UI_FLAG_LOW_PROFILE;
       if (hideNavigation) {
-        uiVisibility |= View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION;
+        // XGram: immersive (sticky): an edge swipe shows the bars for a moment and they hide again, and taps reach the
+        // app (the media viewer, the only one hiding them, brings its controls back with one)
+        uiVisibility |= View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
       }
       return uiVisibility;
     }

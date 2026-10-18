@@ -121,6 +121,7 @@ public final class XgramSettings {
     saveLastSeen = pmc.getBoolean(KEY_SAVE_LAST_SEEN, true);
     showSeconds = pmc.getBoolean(KEY_SHOW_SECONDS, false);
     tapTimeForDetails = pmc.getBoolean(KEY_TAP_TIME_DETAILS, false); // off by default (as NagramX): the time pill sits over media corners
+    videoAutoHide = pmc.getBoolean(KEY_VIDEO_AUTO_HIDE, true);
     cleanLinks = pmc.getBoolean(KEY_CLEAN_LINKS, true);
     fixLinkPreviews = pmc.getBoolean(KEY_FIX_LINK_PREVIEWS, true);
     allowScreenshots = pmc.getBoolean(KEY_ALLOW_SCREENSHOTS, false);
@@ -1212,6 +1213,26 @@ public final class XgramSettings {
     loadInlineVideo();
     inlineVideoStart = value == INLINE_VIDEO_START_TAP ? INLINE_VIDEO_START_TAP : INLINE_VIDEO_START_AUTO;
     putInt(KEY_INLINE_VIDEO_START, inlineVideoStart);
+  }
+
+  // Hide controls while playing (Messages > Videos, see com.fahadali.xgram.appearance.XgramAutoHide). Read in the
+  // constructor: asked while drawing the in-chat player.
+
+  public static final String KEY_VIDEO_AUTO_HIDE = "xgram_video_auto_hide";
+
+  private volatile boolean videoAutoHide;
+
+  /**
+   * While a video plays (the media viewer, in chat, the viewer's picture in picture), its title, caption and controls
+   * hide after a few seconds without interaction, with the system bars. On by default.
+   */
+  public boolean videoAutoHide () {
+    return videoAutoHide;
+  }
+
+  public void setVideoAutoHide (boolean value) {
+    videoAutoHide = value;
+    put(KEY_VIDEO_AUTO_HIDE, value);
   }
 
   // Foldables (Appearance > Layout, see com.fahadali.xgram.layout.XgramWindow). Read on first use: asked while

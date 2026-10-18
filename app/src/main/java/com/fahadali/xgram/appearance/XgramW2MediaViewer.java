@@ -194,10 +194,24 @@ public final class XgramW2MediaViewer {
     private float factor;
     private int shaderHeight = -1, shaderBand = Integer.MIN_VALUE;
     private int alpha = 255;
+    private float offsetY;
 
     /** The video controls' scrim at {@code factor} (their alpha times their inner alpha). */
     public void setControls (float factor) {
       set(CONTROLS, factor);
+    }
+
+    /**
+     * Draws the controls' scrim {@code px} higher: the view it is the background of slides down by that much (Hide
+     * controls while playing), so the scrim fades where it is, over the strips below. Edit sections ignore it.
+     */
+    public void setOffsetY (float px) {
+      if (this.offsetY != px) {
+        this.offsetY = px;
+        if (band == CONTROLS && factor > 0f) {
+          invalidateSelf();
+        }
+      }
     }
 
     /** An edit section's scrim: {@code bandHeightPx} tall, its fade inside its top, at {@code factor}. */
@@ -236,7 +250,7 @@ public final class XgramW2MediaViewer {
       }
       paint.setAlpha(Math.round(alpha * factor));
       c.save();
-      c.translate(bounds.left, bounds.bottom - height);
+      c.translate(bounds.left, bounds.bottom - height - (band == CONTROLS ? offsetY : 0f));
       c.drawRect(0, 0, bounds.width(), height, paint);
       c.restore();
     }
