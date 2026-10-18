@@ -15,7 +15,9 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import com.fahadali.xgram.XgramComposeBridge
+import com.fahadali.xgram.XgramLogs
 import com.fahadali.xgram.XgramSettings
+import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
 import com.fahadali.xgram.compose.XgramPage
@@ -91,6 +93,9 @@ fun MainPage() {
       value(R.id.btn_xgramAboutVersion, s(R.string.XgramAboutVersion), Lang.getAppBuildAndVersion(host.tdlib), icon = R.drawable.baseline_info_24) {
         mainPageAction(host, R.id.btn_xgramAboutVersion)
       }
+      value(R.id.btn_xgramLogsShare, s(R.string.XgramLogsShare), s(R.string.XgramLogsShareInfo), icon = R.drawable.baseline_share_24) {
+        mainPageAction(host, R.id.btn_xgramLogsShare)
+      }
       value(R.id.btn_xgramAboutBasedOn, s(R.string.XgramAboutBasedOn), s(R.string.XgramAboutBasedOnInfo), icon = R.drawable.baseline_code_24) {
         mainPageAction(host, R.id.btn_xgramAboutBasedOn)
       }
@@ -125,6 +130,12 @@ internal fun mainPageAction(host: XgramComposeHost, id: Int) {
     R.id.btn_xgramSectionUpdates -> host.openPage(XgramPage.UPDATES)
     R.id.btn_xgramSectionBackup -> host.openPage(XgramPage.BACKUP)
     R.id.btn_xgramAboutVersion -> UI.copyText(Lang.getAppBuildAndVersion(host.tdlib), R.string.CopiedText)
+    // The privacy note as this page's dialog, then the file and the share sheet (nothing is uploaded by itself)
+    R.id.btn_xgramLogsShare -> host.confirm(
+      ConfirmSpec(title = s(R.string.XgramLogsShareConfirmTitle), text = s(R.string.XgramLogsShareConfirmText), confirm = s(R.string.XgramLogsShareAction)) {
+        XgramLogs.share(host.controller)
+      }
+    )
     R.id.btn_xgramAboutBasedOn -> host.tdlib.ui().openUrl(host.controller, URL_BASED_ON, TdlibUi.UrlOpenParameters().disableInstantView())
     R.id.btn_xgramAboutSupport -> host.tdlib.ui().openUrl(host.controller, URL_SUPPORT, TdlibUi.UrlOpenParameters().disableInstantView())
     else -> Unit

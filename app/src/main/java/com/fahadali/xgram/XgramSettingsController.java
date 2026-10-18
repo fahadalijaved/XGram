@@ -301,6 +301,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(notificationIconName(settings.notificationIcon()));
         } else if (id == R.id.btn_xgramAboutVersion) {
           view.setData(Lang.getAppBuildAndVersion(tdlib));
+        } else if (id == R.id.btn_xgramLogsShare) {
+          view.setData(R.string.XgramLogsShareInfo);
         } else if (id == R.id.btn_xgramAboutBasedOn) {
           view.setData(R.string.XgramAboutBasedOnInfo);
         } else if (id == R.id.btn_xgramAboutSupport) {
@@ -629,6 +631,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(header(R.string.XgramAbout));
     addRows(items,
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutVersion, R.drawable.baseline_info_24, R.string.XgramAboutVersion),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramLogsShare, R.drawable.baseline_share_24, R.string.XgramLogsShare),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutBasedOn, R.drawable.baseline_code_24, R.string.XgramAboutBasedOn),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutSupport, R.drawable.baseline_favorite_24, R.string.XgramAboutSupport)
     );
@@ -1717,6 +1720,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramAboutVersion) {
       org.thunderdog.challegram.tool.UI.copyText(Lang.getAppBuildAndVersion(tdlib), R.string.CopiedText);
+      return;
+    } else if (id == R.id.btn_xgramLogsShare) {
+      XgramLogs.confirmAndShare(this);
       return;
     } else if (id == R.id.btn_xgramResetSettings) {
       showOptions(Lang.getString(R.string.XgramResetSettingsConfirm), new int[] {R.id.btn_xgramResetSettings, R.id.btn_cancel},

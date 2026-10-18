@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram logs (com.fahadali.xgram.XgramLogs) -->
+  <item type="id" name="btn_xgramLogsShare" />
+  <item type="id" name="btn_xgramLogsDetailed" />
+</resources>

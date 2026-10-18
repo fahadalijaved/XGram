@@ -6564,6 +6564,19 @@ public class Settings {
     return null;
   }
 
+  /** XGram (Share logs, XgramLogs): the newest stored crashes (TDLib errors, launch failures), newest first. */
+  public List<Crash> xgramRecentCrashes (int max) {
+    final long lastCrashId = getLastCrashId();
+    List<Crash> crashes = new ArrayList<>(Math.max(0, max));
+    for (long crashId = lastCrashId; crashId >= 0 && crashId > lastCrashId - 20 && crashes.size() < max; crashId--) {
+      Crash crash = getCrash(crashId, false);
+      if (crash != null) {
+        crashes.add(crash);
+      }
+    }
+    return crashes;
+  }
+
   // Sync
 
   public long getPeriodicSyncFrequencySeconds () {

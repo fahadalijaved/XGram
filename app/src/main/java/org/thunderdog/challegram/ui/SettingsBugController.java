@@ -90,7 +90,8 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
   View.OnLongClickListener,
   Log.OutputListener,
   Settings.PushStatsListener,
-  GlobalTokenStateListener {
+  GlobalTokenStateListener,
+  com.fahadali.xgram.XgramLogs.Listener {
 
   @Retention(RetentionPolicy.SOURCE)
   @IntDef({
@@ -481,6 +482,11 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
             view.setEnabled(!isCapturing);
           }
           view.setData(getLogVerbosity(isCapturing ? Log.LEVEL_VERBOSE : Log.getLogLevel()));
+        } else if (itemId == R.id.btn_xgramLogsShare) {
+          view.setData(R.string.XgramLogsShareInfo);
+        } else if (itemId == R.id.btn_xgramLogsDetailed) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramLogs.isDetailedOn(), isUpdate);
+          view.setData(com.fahadali.xgram.XgramLogs.detailedSubtitle());
         } else if (itemId == R.id.btn_secret_replacePhoneNumber) {
           view.getToggler().setRadioEnabled(Settings.instance().needHidePhoneNumber(), isUpdate);
         } else if (itemId == R.id.btn_secret_disableQrProcess) {
@@ -663,6 +669,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_shareError, R.drawable.baseline_share_24, R.string.LaunchAppShareError)/*.setTextColorId(ColorId.textNegative)*/);
         }
       }
+      // XGram: the logs and crash reports in one file, right where the crash is shown
+      items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramLogsShare, R.drawable.baseline_bug_report_24, R.string.XgramLogsShare));
       switch (crash.getType()) {
         case Crash.Type.TDLIB_INITIALIZATION_FAILURE:
         case Crash.Type.TDLIB_DATABASE_BROKEN:
@@ -690,6 +699,13 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
       case Section.MAIN: {
         if (items.isEmpty())
           items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+        // XGram: what everyone can do first: send their logs, record more for a while (XgramLogs)
+        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramLogsShare, R.drawable.baseline_share_24, R.string.XgramLogsShare, false));
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+        items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramLogsDetailed, R.drawable.baseline_bug_report_24, R.string.XgramLogsDetailed, false));
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramLogsInfo));
         items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.AppLogs, false));
         items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
         items.add(new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_log_verbosity, 0, R.string.DebugVerbosity, false));
@@ -709,6 +725,10 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
           if (tdlib != null) {
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
             items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_pushService, 0, R.string.PushServices, false));
+            // XGram: Testing Utilities for everyone; members of the XGram group get more (XgramLogs.testerLevel)
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+            items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_testingUtils, 0, R.string.TestMode, false));
+            testerLevel = Math.max(testerLevel, Tdlib.TesterLevel.READER);
           }
           items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
         }
@@ -999,32 +1019,24 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
           Log.addOutputListener(this);
 
           if (crash == null) {
-            tdlib.getTesterLevel(level -> {
-              this.testerLevel = level;
-              tdlib.uiExecute(() -> {
-                if (!isDestroyed()) {
-                  int i = adapter.indexOfViewById(R.id.btn_pushService);
-                  if (i == -1) {
-                    i = adapter.indexOfViewById(R.id.btn_tdlib);
-                  }
-                  if (i == -1)
-                    return;
-                  if (level > Tdlib.TesterLevel.NONE) {
-                    adapter.getItems().add(i + 1, new ListItem(ListItem.TYPE_SEPARATOR_FULL));
-                    adapter.getItems().add(i + 2, new ListItem(ListItem.TYPE_SETTING, R.id.btn_testingUtils, 0, R.string.TestMode, false));
-                    adapter.notifyItemRangeInserted(i + 1, 2);
-                    i += 2;
-                    if (level <= Tdlib.TesterLevel.READER) {
-                      adapter.addItem(i + 2, new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Strings.buildMarkdown(this, "To unlock more Testing Utilities you have to be a member of @tgandroidtests.", null), false));
-                    }
-                  } else {
-                    adapter.addItem(i + 2, new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Strings.buildMarkdown(this, "To unlock Testing Utilities you have to be subscribed to @tgx_android or be a member of @tgandroidtests.", null), false));
-                  }
+            // XGram: XGram's gate instead of Telegram X's channel and testers group. The row is already there (READER);
+            // members of the XGram group get more, everyone else a line on how.
+            com.fahadali.xgram.XgramLogs.testerLevel(tdlib, level -> tdlib.uiExecute(() -> {
+              if (isDestroyed()) {
+                return;
+              }
+              this.testerLevel = Math.max(level, Tdlib.TesterLevel.READER);
+              if (level < Tdlib.TesterLevel.TESTER) {
+                int i = adapter.indexOfViewById(R.id.btn_testingUtils);
+                ListItem next = i != -1 ? adapter.getItem(i + 1) : null;
+                if (next != null && next.getViewType() == ListItem.TYPE_SHADOW_BOTTOM) {
+                  adapter.addItem(i + 2, new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Strings.buildMarkdown(this, Lang.getString(R.string.XgramLogsTestingJoin), null), false));
                 }
-              });
-            });
+              }
+            }));
           }
         }
+        com.fahadali.xgram.XgramLogs.addListener(this); // detailed logs switching themselves off
         break;
       }
       case Section.PUSH: {
@@ -1055,9 +1067,18 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
   }
 
   @Override
+  public void onDetailedLogsChanged () {
+    if (adapter != null && !isDestroyed()) {
+      adapter.updateValuedSettingById(R.id.btn_xgramLogsDetailed);
+      adapter.updateValuedSettingById(R.id.btn_log_verbosity);
+    }
+  }
+
+  @Override
   public void destroy () {
     super.destroy();
     Log.removeOutputListener(this);
+    com.fahadali.xgram.XgramLogs.removeListener(this);
     if (section == Section.PUSH) {
       tdlib.context().global().removeTokenStateListener(this);
       Settings.instance().removePushStatsListener(this);
@@ -1121,6 +1142,11 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
       Intents.openSelfGooglePlay();
     } else if (viewId == R.id.btn_shareError) {
       Intents.shareText(U.getUsefulMetadata(null) + "\n" + crash.message);
+    } else if (viewId == R.id.btn_xgramLogsShare) {
+      com.fahadali.xgram.XgramLogs.confirmAndShare(this);
+    } else if (viewId == R.id.btn_xgramLogsDetailed) {
+      // The state is the setting's, so the switch follows it (listener: onDetailedLogsChanged)
+      com.fahadali.xgram.XgramLogs.setDetailed(!com.fahadali.xgram.XgramLogs.isDetailedOn());
     } else if (viewId == R.id.btn_eraseDatabase) {
       if (isErasingData)
         return;
