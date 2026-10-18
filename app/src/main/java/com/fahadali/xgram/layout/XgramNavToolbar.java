@@ -543,9 +543,23 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
   }
 
+  /** The photo is on the toolbar (beside it or as a tab): its long press switches accounts. */
+  public boolean hasProfile () {
+    return buttonMode || hasTab(DEST_PROFILE);
+  }
+
   /**
-   * From the window's end edge to the end of the group (the profile button, or the pill), in px: the compose button
-   * stands above the button, end-aligned with it. The final layout, also while a re-fit animates.
+   * The accounts and Add account, as the photo's long press shows them: the chat list's overflow menu offers them while
+   * the side menu is hidden and there is no photo on the toolbar.
+   */
+  public boolean showAccountMenu () {
+    return !destroyed && !preview && shown && showAccounts();
+  }
+
+  /**
+   * From the window's end edge to the end of the group (the profile button, or the pill), in px: with the compose
+   * button set to go with the bar, it stands above the button, end-aligned with it. The final layout, also while a
+   * re-fit animates.
    */
   public int groupEndInsetPx () {
     if (fitWidth <= 0) {
