@@ -892,7 +892,7 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
         setImpl(in);
         int ms = (int) (SystemClock.elapsedRealtime() - elapsed);
         if (ms >= 150) {
-          Log.w(Log.TAG_SPEED_TEXT, "Text.set took %dms for %d chars, maxWidth: %d, text:\n%s", ms, in.length(), maxWidth, in);
+          Log.w(Log.TAG_SPEED_TEXT, "Text.set took %dms for %d chars, maxWidth: %d", ms, in.length(), maxWidth); // XGram: never the text itself
         } else {
           Log.v(Log.TAG_SPEED_TEXT, "Text.set took %dms for %d chars, maxWidth: %d", ms, in.length(), maxWidth);
         }
@@ -900,7 +900,7 @@ public class Text implements Runnable, Emoji.CountLimiter, CounterTextPart, List
         setImpl(in);
       }
     } catch (Throwable cause) {
-      Log.w(Log.TAG_SPEED_TEXT, "Couldn't parse %d chars for max width: %d, fontSize: %f, text:\n%s", cause, in.length(), maxWidth, Settings.instance().getChatFontSize(), in);
+      Log.w(Log.TAG_SPEED_TEXT, "Couldn't parse %d chars for max width: %d, fontSize: %f", cause, in.length(), maxWidth, Settings.instance().getChatFontSize()); // XGram: never the text itself
       throw cause;
     }
   }

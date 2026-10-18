@@ -3297,7 +3297,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       }
       if (isMember() && testerLevel == Tdlib.TesterLevel.UNKNOWN) {
         testerLevel = Tdlib.TesterLevel.NONE;
-        tdlib.getTesterLevel(newTesterLevel -> runOnUiThreadOptional(() -> {
+        com.fahadali.xgram.XgramLogs.testerLevel(tdlib, newTesterLevel -> runOnUiThreadOptional(() -> {
           testerLevel = newTesterLevel;
           checkEasterEggs();
         }));

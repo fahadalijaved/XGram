@@ -136,6 +136,7 @@ public abstract class BaseForegroundService extends Service {
       return true;
     } catch (Throwable t) {
       TDLib.Tag.notifications(pushId, accountId, "failed %s.handleStart() Title: %s  ChannelId: %s  Text: %s Error:\n%s", getClass().getSimpleName(), title, channelId, text, Log.toString(t));
+      Log.w(Log.TAG_FCM, "%s.handleStart() failed", t, getClass().getSimpleName()); // XGram: reaches the safety log
       tasks.remove(info);
       if (tasks.isEmpty()) {
         TDLib.Tag.notifications(pushId, accountId, "%s: Ending foreground service because of failure.", getClass().getSimpleName());
@@ -197,6 +198,7 @@ public abstract class BaseForegroundService extends Service {
       success = true;
     } catch (Throwable t) {
       TDLib.Tag.notifications(pushId, accountId, "%s: Failed to update foreground notification:\n%s", getClass().getSimpleName(), Log.toString(t));
+      Log.w(Log.TAG_FCM, "%s: cannot update the foreground notification", t, getClass().getSimpleName()); // XGram: reaches the safety log
     }
 
     if (tasks.isEmpty()) {
@@ -285,10 +287,12 @@ public abstract class BaseForegroundService extends Service {
         // caution: do not import to avoid crashes on pre-S
         if (t instanceof android.app.ForegroundServiceStartNotAllowedException) {
           TDLib.Tag.notifications(pushId, accountId, "%s.startForegroundService(%s) failed due to system settings restrictions (SDK %d):\n%s", Intents.getIntentClassName(intent), intent.getAction(), Build.VERSION.SDK_INT, Log.toString(t));
+          Log.w(Log.TAG_FCM, "startForegroundService(%s) not allowed by the system (SDK %d)", t, intent.getAction(), Build.VERSION.SDK_INT); // XGram: reaches the safety log
           return false;
         }
       }
       TDLib.Tag.notifications(pushId, accountId, "%s.startForegroundService(%s) failed due to error (SDK %d):\n%s", Intents.getIntentClassName(intent), intent.getAction(), Build.VERSION.SDK_INT, Log.toString(t));
+      Log.w(Log.TAG_FCM, "startForegroundService(%s) failed (SDK %d)", t, intent.getAction(), Build.VERSION.SDK_INT); // XGram: reaches the safety log
       return false;
     }
   }

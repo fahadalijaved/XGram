@@ -5,16 +5,22 @@
   <string name="XgramLogsShareInfo">Logs, crash reports and device details in one file</string>
   <string name="XgramLogsShareConfirmTitle">Share logs?</string>
   <string name="XgramLogsShareConfirmText">Logs can contain chat IDs and names. Send them privately, and only to XGram admins.</string>
+  <string name="XgramLogsShareConfirmTdlib">This file also has XGram\'s TDLib log, which contains the text of your messages and people\'s names and phone numbers.</string>
   <string name="XgramLogsShareAction">Share</string>
   <string name="XgramLogsPreparing">Preparing logs…</string>
   <string name="XgramLogsShareFailed">Couldn\'t make the log file</string>
   <string name="XgramLogsShareSubject">XGram %1$s logs</string>
   <string name="XgramLogsDetailed">Record detailed logs</string>
-  <string name="XgramLogsDetailedOff">For 24 hours. May slow XGram down</string>
+  <string name="XgramLogsDetailedOff">For 24 hours. Also records the text of messages and people\'s names. May slow XGram down</string>
   <string name="XgramLogsDetailedUntil">On until %1$s</string>
   <string name="XgramLogsDetailedUntilTomorrow">On until tomorrow, %1$s</string>
   <string name="XgramLogsInfo">Nothing is sent by itself: Share logs only opens the share sheet. Detailed logs switch off by themselves after 24 hours.</string>
   <string name="XgramLogsTestingJoin">Members of @XGramTD get more testing utilities.</string>
   <!-- A message XGram could not draw (TGMessage.valueOfError), in place of Telegram X's FailureMessageText -->
-  <string name="XgramFailureMessageText">This message couldn\'t be shown because of an error. Copy the details below and send them to Support in @XGramTD. Thank you!</string>
+  <string name="XgramFailureMessageText">This message couldn\'t be shown because of an error. Copy the details below and send them privately to an XGram admin. Ask in Support in @XGramTD who to send them to. Thank you!</string>
+  <!-- The Notifications page after an unknown system error (SettingsNotificationController), in place of Telegram X's NotificationsGuideError* and NotificationsGuideCategoryLimit*, which send people to Telegram X's own testers group. New keys: Telegram X's cloud language pack overrides its own -->
+  <string name="XgramNotificationsGuideError">**XGram** was unable to display some notifications for this account due to an unknown system error.\n\nPlease make sure:\n• All system updates are installed\n• XGram is up to date\n• There are no notification restrictions in system settings.\n\nIf this keeps happening, open Settings, tap the version, tap Share logs and send the file privately to an XGram admin (ask in Support in @XGramTD who to send it to).</string>
+  <string name="XgramNotificationsGuideErrorChat">**XGram** was unable to display some notifications from %1$s due to an unknown system error.\n\nPlease make sure:\n• All system updates are installed\n• XGram is up to date\n• There are no notification restrictions in system settings.\n\nIf this keeps happening, open Settings, tap the version, tap Share logs and send the file privately to an XGram admin (ask in Support in @XGramTD who to send it to).</string>
+  <string name="XgramNotificationsGuideCategoryLimit">**XGram** was unable to display some notifications for this account due to notification categories system limit.\n\nPlease make sure:\n• All system updates are installed\n• XGram is up to date\n• There are no notification restrictions in system settings.\n\nIf this keeps happening, open Settings, tap the version, tap Share logs and send the file privately to an XGram admin (ask in Support in @XGramTD who to send it to).</string>
+  <string name="XgramNotificationsGuideCategoryLimitErrorChat">**XGram** was unable to display some notifications from %1$s due to notification categories system limit.\n\nPlease make sure:\n• All system updates are installed\n• XGram is up to date\n• There are no notification restrictions in system settings.\n\nIf this keeps happening, open Settings, tap the version, tap Share logs and send the file privately to an XGram admin (ask in Support in @XGramTD who to send it to).</string>
 </resources>

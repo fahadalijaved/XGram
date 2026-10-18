@@ -456,9 +456,10 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
       case TdlibNotificationManager.Status.PUSH_SERVICE_ERROR:
         return Lang.getMarkdownString(this, R.string.NotificationsGuideFirebaseError, Lang.boldCreator(), tdlib.context().getTokenError());
       case TdlibNotificationManager.Status.INTERNAL_ERROR: {
+        // XGram: its own texts, which send the logs to an XGram admin rather than to Telegram X's testers group
         @StringRes int
-          specificChatRes = R.string.NotificationsGuideErrorChat,
-          commonRes = R.string.NotificationsGuideError;
+          specificChatRes = R.string.XgramNotificationsGuideErrorChat,
+          commonRes = R.string.XgramNotificationsGuideError;
 
         TdlibSettingsManager.NotificationProblems problems = tdlib.settings().notificationProblems();
         if (problems != null && !problems.isEmpty()) {
@@ -466,8 +467,8 @@ public class SettingsNotificationController extends RecyclerViewController<Setti
           if (messages.size() == 1) {
             String message = messages.iterator().next();
             if (message.toLowerCase(Locale.ROOT).contains("Limit exceed; cannot create more channels".toLowerCase(Locale.ROOT))) {
-              specificChatRes = R.string.NotificationsGuideCategoryLimitErrorChat;
-              commonRes = R.string.NotificationsGuideCategoryLimit;
+              specificChatRes = R.string.XgramNotificationsGuideCategoryLimitErrorChat;
+              commonRes = R.string.XgramNotificationsGuideCategoryLimit;
             } else {
               // TODO: add more detailed guides, as they're going to be found.
             }

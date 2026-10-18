@@ -3692,6 +3692,7 @@ public class Settings {
   public void disableAllLogs () {
     tdlibLogSettings.disable();
     Log.setLogLevel(Log.LEVEL_ASSERT);
+    com.fahadali.xgram.XgramLogs.setDetailed(false); // XGram: detailed logs end too, rather than still showing as on
   }
 
   public void deleteAllLogs (boolean withTdlibLogs, Runnable after) {

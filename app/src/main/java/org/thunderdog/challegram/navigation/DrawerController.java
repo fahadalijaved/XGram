@@ -1086,7 +1086,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     final int itemId = item.getId();
     if (itemId != R.id.account) {
       if (itemId == R.id.btn_addAccount) {
-        context.currentTdlib().getTesterLevel(level -> {
+        com.fahadali.xgram.XgramLogs.testerLevel(context.currentTdlib(), level -> {
           if (Config.ALLOW_DEBUG_DC || level >= Tdlib.TesterLevel.MIN_LEVEL_FOR_DEBUG_DC) {
             context.currentTdlib().ui().addAccount(context, true, true);
           }

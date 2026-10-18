@@ -1546,6 +1546,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
       .setIntDelegate((id, result) -> {
       int verbosity = result.get(R.id.btn_tdlib_verbosity, 1) - 1;
       settings.setVerbosity(module, verbosity);
+      if (StringUtils.isEmpty(module) && verbosity < com.fahadali.xgram.XgramLogs.DETAILED_TDLIB_LEVEL) {
+        com.fahadali.xgram.XgramLogs.setDetailed(false); // XGram: a lower TDLib level picked by hand ends detailed logs
+      }
       if (StringUtils.isEmpty(module)) {
         adapter.updateAllValuedSettingsById(R.id.btn_tdlib_verbosity);
       } else {
@@ -1567,6 +1570,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
           if (module != null && verbosity < 1)
             return false;
           settings.setVerbosity(module, verbosity);
+          if (StringUtils.isEmpty(module) && verbosity < com.fahadali.xgram.XgramLogs.DETAILED_TDLIB_LEVEL) {
+            com.fahadali.xgram.XgramLogs.setDetailed(false); // XGram: as above
+          }
           if (StringUtils.isEmpty(module)) {
             adapter.updateValuedSettingById(R.id.btn_tdlib_verbosity);
           } else {
@@ -1665,6 +1671,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
     if (id == R.id.btn_log_verbosity) {
       int level = result.get(R.id.btn_log_verbosity, Log.LEVEL_ERROR) - 1;
       Log.setLogLevel(level);
+      if (level < com.fahadali.xgram.XgramLogs.DETAILED_APP_LEVEL) {
+        com.fahadali.xgram.XgramLogs.setDetailed(false); // XGram: a lower level picked by hand ends detailed logs
+      }
       adapter.updateValuedSettingById(R.id.btn_log_verbosity);
     } else if (id == R.id.btn_log_tags) {
       long tags = 0;

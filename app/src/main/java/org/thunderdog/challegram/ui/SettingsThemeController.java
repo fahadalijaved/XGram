@@ -694,7 +694,7 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
       items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_audioCompression, 0, R.string.CompressAudio));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
 
-      tdlib.getTesterLevel(testerLevel -> runOnUiThreadOptional(() -> {
+      com.fahadali.xgram.XgramLogs.testerLevel(tdlib, testerLevel -> runOnUiThreadOptional(() -> {
         boolean needBatman = testerLevel >= Tdlib.TesterLevel.MIN_LEVEL_FOR_BATMAN_EFFECT || Settings.instance().getNewSetting(Settings.SETTING_FLAG_BATMAN_POLL_TRANSITIONS);
         int index = adapter.indexOfViewById(R.id.btn_secret_batmanTransitions);
         boolean hasBatman = index != -1;

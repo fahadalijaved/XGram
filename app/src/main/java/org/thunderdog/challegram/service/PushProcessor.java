@@ -25,6 +25,7 @@ import androidx.annotation.IntDef;
 
 import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.TDLib;
 import org.thunderdog.challegram.U;
@@ -72,6 +73,7 @@ public class PushProcessor {
       return accountId;
     } catch (Client.ExecutionException error) {
       TDLib.Tag.notifications(pushId, TdlibAccount.NO_ID, "Couldn't fetch receiverId: %s, payload: %s. Sending to all instances.", TD.toErrorString(error.error), payload);
+      Log.w(Log.TAG_FCM, "Couldn't fetch receiverId: %s", TD.toErrorString(error.error)); // XGram: reaches the safety log, without the payload
       return TdlibAccount.NO_ID;
     }
   }
@@ -346,6 +348,7 @@ public class PushProcessor {
       return ShowStatus.MAYBE;
     } else {
       TDLib.Tag.notifications(pushId, accountId, "startForegroundTask() failed");
+      Log.w(Log.TAG_FCM, "startForegroundTask() failed"); // XGram: reaches the safety log
     }
     return ShowStatus.NOT_SHOWN;
   }

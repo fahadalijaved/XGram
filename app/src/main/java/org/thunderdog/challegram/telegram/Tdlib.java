@@ -699,10 +699,12 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
           int seconds = Math.max(5, TD.getFloodErrorSeconds(error.code, error.message, 5));
           if (seconds > 60 && isDebugInstance()) {
             TDLib.Tag.notifications("Unable to register device token, flood is %d seconds, ignoring: %s, accountId:%d", seconds, TD.toErrorString(error), accountId);
+            Log.w(Log.TAG_FCM, "Unable to register device token (flood %ds, ignored): %s", seconds, TD.toErrorString(error)); // XGram: reaches the safety log
             context.setDeviceRegistered(accountId, true);
             U.run(onDone);
           } else {
             TDLib.Tag.notifications("Unable to register device token, retrying in %d seconds: %s, accountId:%d", seconds, TD.toErrorString(error), accountId);
+            Log.w(Log.TAG_FCM, "Unable to register device token (retry in %ds): %s", seconds, TD.toErrorString(error)); // XGram: reaches the safety log
             client().send(new TdApi.SetAlarm(seconds), ignored -> checkDeviceTokenImpl(onDone));
           }
         }
@@ -6750,6 +6752,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
           }, true);
         } else {
           TDLib.Tag.notifications(pushId, accountId, "Failed to process push: %s, performing full sync.", TD.toErrorString(error));
+          Log.w(Log.TAG_FCM, "Failed to process push: %s", TD.toErrorString(error)); // XGram: reaches the safety log
           setHasUnprocessedPushes(true);
           sync(pushId, () -> {
             setHasUnprocessedPushes(false);

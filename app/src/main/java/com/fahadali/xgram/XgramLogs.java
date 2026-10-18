@@ -94,8 +94,10 @@ import me.vkryl.leveldb.LevelDB;
  *   <li>Share logs: one .zip with that log, Telegram X's app logs, crash reports, the TDLib log, Android's exit reasons
  *   and a device and build summary, handed to the Android share sheet after a privacy note. Nothing is uploaded by
  *   itself.</li>
- *   <li>Record detailed logs: the app's log level at VERBOSE and TDLib's at 3 for 24 hours, then back to what they
- *   were (on the next start at the latest).</li>
+ *   <li>Record detailed logs: the app's log level at VERBOSE and TDLib's at 3 (its td_requests dumps muted) for 24
+ *   hours, then back to what they were (on the next start at the latest). TDLib's log still holds message text and
+ *   names then: the row and the privacy note say so, and Share logs adds that log only while TDLib logging is on or
+ *   when it was written in the last 24 hours.</li>
  *   <li>The Testing Utilities gate: members of the XGram group (t.me/XGramTD) get more of them, its admins all.</li>
  * </ul>
  */
@@ -111,7 +113,9 @@ public final class XgramLogs {
   /** At most this many lines per window; the rest is counted and written as one "left out" line. */
   private static final long WINDOW_MS = 10_000;
   private static final int WINDOW_LINES = 40;
-  private static final long FLUSH_DELAY_MS = 2000;
+  private static final long FLUSH_DELAY_MS = 2000, ERROR_FLUSH_DELAY_MS = 250;
+  /** At most this much of a line is searched for what people wrote; it is cut to far less afterwards. */
+  private static final int MAX_REDACT_CHARS = 64 * 1024;
 
   private static final class Line {
     final long time;
@@ -128,7 +132,7 @@ public final class XgramLogs {
   private static final Object pendingLock = new Object(), fileLock = new Object();
   private static final ArrayList<Line> pending = new ArrayList<>(); // pendingLock
   private static int pendingChars, windowLines, skippedLines; // pendingLock
-  private static long windowStart; // pendingLock
+  private static long windowStart, flushAt; // pendingLock
   private static boolean flushScheduled, wroteSessionHeader; // pendingLock
   private static @Nullable Handler writer; // pendingLock
   private static @Nullable SimpleDateFormat lineDateFormat; // fileLock
@@ -148,7 +152,8 @@ public final class XgramLogs {
         windowStart = now;
         windowLines = 0;
       }
-      if (windowLines >= WINDOW_LINES || pendingChars >= MAX_PENDING_CHARS) {
+      // A crash line (sync) is always kept: the process dies right after it
+      if (!sync && (windowLines >= WINDOW_LINES || pendingChars >= MAX_PENDING_CHARS)) {
         skippedLines++;
         return;
       }
@@ -167,11 +172,16 @@ public final class XgramLogs {
       }
       pending.add(new Line(time, level, text));
       pendingChars += text.length();
-      if (!sync && !flushScheduled) {
+      if (!sync) {
+        // Errors are written sooner; a flush already due earlier is never put off by a later line
+        long delay = level <= Log.LEVEL_ERROR ? ERROR_FLUSH_DELAY_MS : FLUSH_DELAY_MS;
+        long at = SystemClock.uptimeMillis() + delay;
         Handler handler = writer();
-        if (handler != null) {
+        if (handler != null && (!flushScheduled || at < flushAt)) {
+          handler.removeCallbacks(FLUSH);
+          handler.postAtTime(FLUSH, at);
           flushScheduled = true;
-          handler.postDelayed(FLUSH, FLUSH_DELAY_MS);
+          flushAt = at;
         }
       }
     }
@@ -207,7 +217,8 @@ public final class XgramLogs {
         b.append('[').append(name).append("] ");
       }
     }
-    appendCapped(b, message, MAX_MESSAGE_CHARS);
+    // What people wrote goes before the cut, so that a cut never leaves a string open
+    appendCapped(b, redact(head(message, MAX_REDACT_CHARS)), MAX_MESSAGE_CHARS);
     if (t != null) {
       String trace = android.util.Log.getStackTraceString(t);
       if (StringUtils.isEmpty(trace)) { // Android leaves out UnknownHostException
@@ -216,7 +227,7 @@ public final class XgramLogs {
       if (b.length() > 0) {
         b.append('\n');
       }
-      appendCapped(b, trace.trim(), MAX_TRACE_CHARS);
+      appendCapped(b, redact(head(trace.trim(), MAX_REDACT_CHARS)), MAX_TRACE_CHARS);
     }
     return b.toString();
   }
@@ -239,6 +250,10 @@ public final class XgramLogs {
       }
     }
     return out != null ? out : args;
+  }
+
+  private static String head (String s, int max) {
+    return s.length() > max ? s.substring(0, max) : s;
   }
 
   private static void appendCapped (StringBuilder b, String s, int max) {
@@ -276,10 +291,32 @@ public final class XgramLogs {
     }
   }
 
-  // Text people wrote, as TDLib prints it in an object dump (text = "...", first_name = "...")
+  // Text people wrote, as TDLib prints it in an object dump (text = "...", first_name = "..."). TDLib escapes neither
+  // quotes nor line breaks in a string, so one ends at the quote that the next field or a "}" follows. A string with no
+  // such end (a dump cut short, or on one line) is left out up to the end.
   private static final Pattern USER_TEXT = Pattern.compile(
-    "\\b(text|caption|question|explanation|first_name|last_name|phone_number|bio|description|address|vcard|query|title) = \"(?:[^\"\\\\]|\\\\.)*\""
+    "\\b(text|caption|question|explanation|first_name|last_name|phone_number|bio|description|address|vcard|query|title|name|username|editable_username|url|email_address|file_name|path) = \"(?:.*?\"(?=\\n\\s*(?:[a-z0-9_]+ = |\\})|$)|.*)",
+    Pattern.DOTALL
   );
+  // Usernames, which TDLib prints as a vector of bare strings
+  private static final Pattern USER_VECTORS = Pattern.compile(
+    "\\b(active_usernames|disabled_usernames) = vector\\[\\d+\\] \\{.*?\\n\\s*\\}",
+    Pattern.DOTALL
+  );
+
+  /** s without what people wrote in the TDLib dumps in it (messages, names, usernames, phone numbers, links). */
+  private static String redact (String s) {
+    if (s.indexOf(" = ") == -1) {
+      return s;
+    }
+    if (s.contains(" = vector[")) {
+      s = USER_VECTORS.matcher(s).replaceAll("$1 = vector { … }");
+    }
+    if (s.contains(" = \"")) {
+      s = USER_TEXT.matcher(s).replaceAll("$1 = \"…\"");
+    }
+    return s;
+  }
 
   private static void writeLines (List<Line> lines, boolean header) throws IOException { // fileLock
     File dir = Log.getLogDir();
@@ -307,7 +344,7 @@ public final class XgramLogs {
     for (Line line : lines) {
       date.setTime(line.time);
       b.append(lineDateFormat.format(date)).append(' ').append(levelLetter(line.level)).append(' ');
-      appendPrivate(b, line.text);
+      appendIndented(b, line.text);
       b.append('\n');
     }
     try (FileOutputStream out = new FileOutputStream(file, true)) {
@@ -315,8 +352,8 @@ public final class XgramLogs {
     }
   }
 
-  private static void appendPrivate (StringBuilder b, String text) {
-    String s = text.contains(" = \"") ? USER_TEXT.matcher(text).replaceAll("$1 = \"…\"") : text;
+  /** text, which {@link #format} already made private. */
+  private static void appendIndented (StringBuilder b, String s) {
     // Lines after the first (stack traces) are indented under their line
     int start = 0, end;
     while ((end = s.indexOf('\n', start)) != -1) {
@@ -359,6 +396,9 @@ public final class XgramLogs {
   private static final String KEY_DETAILED_PREV_TDLIB = "xgram_logs_detailed_prev_tdlib";
   /** Settings' key for TDLib's verbosity (Settings.KEY_TDLIB_VERBOSITY, private): read before Settings exists. */
   private static final String KEY_TDLIB_VERBOSITY = "settings_tdlib_verbosity";
+  private static final String TDLIB_REQUESTS_TAG = "td_requests";
+  /** TDLib's VERBOSITY_NAME(NEVER), the highest level a tag can have. */
+  private static final int TDLIB_TAG_NEVER = 1024;
 
   /** Pages that show the detailed logs row (the version page). Main thread. */
   public interface Listener {
@@ -421,6 +461,7 @@ public final class XgramLogs {
       if (tdlibLogs.getVerbosity(null) < DETAILED_TDLIB_LEVEL) {
         tdlibLogs.setVerbosity(null, DETAILED_TDLIB_LEVEL);
       }
+      muteTdlibRequests(tdlibLogs, true);
       scheduleExpiryCheck(DETAILED_DURATION_MS);
     } else {
       stopDetailed();
@@ -446,6 +487,27 @@ public final class XgramLogs {
     Settings.TdlibLogSettings tdlibLogs = Settings.instance().getTdlibLogSettings();
     if (tdlibLogs.getVerbosity(null) == DETAILED_TDLIB_LEVEL && prevTdlib < DETAILED_TDLIB_LEVEL) {
       tdlibLogs.setVerbosity(null, prevTdlib);
+    }
+    muteTdlibRequests(tdlibLogs, false);
+  }
+
+  /**
+   * TDLib's td_requests tag writes every request, update and result in full (messages, names, phone numbers): detailed
+   * logs keep it at NEVER, a level TDLib's own levels never reach. Settings stores it (settings_tdlib_verbosity_td_requests),
+   * so it stays muted after a restart; it goes back to TDLib's default only when it is still muted.
+   */
+  private static void muteTdlibRequests (@NonNull Settings.TdlibLogSettings tdlibLogs, boolean mute) {
+    try {
+      int verbosity = tdlibLogs.getVerbosity(TDLIB_REQUESTS_TAG);
+      if (mute) {
+        if (verbosity < TDLIB_TAG_NEVER) {
+          tdlibLogs.setVerbosity(TDLIB_REQUESTS_TAG, TDLIB_TAG_NEVER);
+        }
+      } else if (verbosity == TDLIB_TAG_NEVER) {
+        tdlibLogs.setVerbosity(TDLIB_REQUESTS_TAG, tdlibLogs.getDefaultVerbosity(TDLIB_REQUESTS_TAG));
+      }
+    } catch (Throwable t) {
+      android.util.Log.w(Log.LOG_TAG, "XGram: cannot change TDLib's td_requests log", t);
     }
   }
 
@@ -493,6 +555,10 @@ public final class XgramLogs {
       editor.remove(KEY_DETAILED_UNTIL);
       editor.remove(KEY_DETAILED_PREV_LEVEL);
       editor.remove(KEY_DETAILED_PREV_TDLIB);
+      String requestsKey = KEY_TDLIB_VERBOSITY + "_" + TDLIB_REQUESTS_TAG;
+      if (prefs.getInt(requestsKey, 0) == TDLIB_TAG_NEVER) {
+        editor.remove(requestsKey); // TDLib's default, before Settings applies it
+      }
       if (restoreLevel) {
         editor.putInt(Settings.KEY_LOG_LEVEL, prevLevel);
       }
@@ -536,7 +602,7 @@ public final class XgramLogs {
    * may run on a TDLib thread.
    */
   public static void testerLevel (@NonNull Tdlib tdlib, @NonNull RunnableInt callback) {
-    if (tdlib.inRecoveryMode()) {
+    if (tdlib.inRecoveryMode() || tdlib.account().isDebug()) { // a test DC account: the XGram group is not there
       callback.runWithInt(Tdlib.TesterLevel.TESTER);
       return;
     }
@@ -563,13 +629,24 @@ public final class XgramLogs {
   private static final long MAX_CRASH_FILE = 256 * 1024, MAX_TDLIB_FILE = 8L * 1024 * 1024;
   private static final int MAX_TRACE_BYTES = 512 * 1024;
   private static final int MAX_CRASH_FILES = 5, MAX_STORED_CRASHES = 3, MAX_EXITS = 10;
+  private static final int MAX_SHARE_TEXT_CHARS = 100_000;
 
   private static final AtomicBoolean sharing = new AtomicBoolean();
 
   /** The privacy note, then {@link #share}. Main thread. */
   public static void confirmAndShare (@NonNull ViewController<?> c) {
+    String text = Lang.getString(R.string.XgramLogsShareConfirmText);
+    boolean withTdlibLog;
+    try {
+      withTdlibLog = willAddTdlibLog();
+    } catch (Throwable t) {
+      withTdlibLog = true; // say so rather than not
+    }
+    if (withTdlibLog) {
+      text = text + "\n\n" + Lang.getString(R.string.XgramLogsShareConfirmTdlib);
+    }
     c.xgramShowConfirm(
-      Lang.getString(R.string.XgramLogsShareConfirmText),
+      text,
       Lang.getString(R.string.XgramLogsShareConfirmTitle),
       null,
       new int[] {R.id.btn_xgramLogsShare, R.id.btn_cancel},
@@ -603,16 +680,26 @@ public final class XgramLogs {
     UI.showToast(R.string.XgramLogsPreparing, Toast.LENGTH_SHORT);
     Thread thread = new Thread(() -> {
       File file = null;
+      String fallback = null;
       try {
         flush();
         file = buildZip(summary);
       } catch (Throwable t) {
         android.util.Log.e(Log.LOG_TAG, "XGram: cannot make the log file", t);
+        fallback = textFallback(summary, t);
       }
       final File result = file;
+      final String text = fallback;
       UI.post(() -> {
         sharing.set(false);
-        if (result == null || !openShareSheet(result)) {
+        if (result != null) {
+          if (!openShareSheet(result)) {
+            UI.showToast(R.string.XgramLogsShareFailed, Toast.LENGTH_SHORT);
+          }
+        } else if (text != null) {
+          // No file (the storage is full, most of the time): the summary and the crashes as text
+          org.thunderdog.challegram.tool.Intents.shareText(text);
+        } else {
           UI.showToast(R.string.XgramLogsShareFailed, Toast.LENGTH_SHORT);
         }
       });
@@ -623,6 +710,25 @@ public final class XgramLogs {
     } catch (Throwable t) {
       sharing.set(false);
       UI.showToast(R.string.XgramLogsShareFailed, Toast.LENGTH_SHORT);
+    }
+  }
+
+  /** What Share logs sends when the .zip cannot be made. Short enough for an Intent (no TransactionTooLargeException). */
+  private static @Nullable String textFallback (@NonNull String summary, @NonNull Throwable error) {
+    try {
+      StringBuilder b = new StringBuilder(summary);
+      b.append("\n[Files]\nThe log file couldn't be made (").append(error.getClass().getSimpleName()).append("): only this text.\n");
+      String stored = storedCrashes();
+      if (stored != null) {
+        b.append("\n[Crashes]\n").append(redact(stored));
+      }
+      if (b.length() > MAX_SHARE_TEXT_CHARS) {
+        b.setLength(MAX_SHARE_TEXT_CHARS);
+        b.append("…");
+      }
+      return b.toString();
+    } catch (Throwable t) {
+      return null;
     }
   }
 
@@ -864,8 +970,12 @@ public final class XgramLogs {
         String name = file.getName();
         if (name.startsWith(Log.CRASH_PREFIX)) {
           if (crashes < MAX_CRASH_FILES) {
-            crashes++;
-            parts.add(Part.ofFile("crashes/" + name, file, MAX_CRASH_FILE));
+            String text = readTail(file, MAX_CRASH_FILE);
+            if (text != null) {
+              crashes++;
+              // A crash's message can be a TDLib dump of the message being shown
+              parts.add(Part.ofText("crashes/" + name, redact(text)));
+            }
           }
         } else if (appLeft > 0) {
           long max = Math.min(MAX_APP_FILE, appLeft);
@@ -874,21 +984,18 @@ public final class XgramLogs {
         }
       }
     }
-    // TDLib's log; the previous one too when the current one is short (it just started over)
-    File tdlibLog = TdlibManager.getLogFile(false);
-    long tdlibSize = tdlibLog != null && tdlibLog.isFile() ? tdlibLog.length() : 0;
-    if (tdlibSize > 0) {
-      parts.add(Part.ofFile("tdlib/" + tdlibLog.getName(), tdlibLog, MAX_TDLIB_FILE));
+    // TDLib's log, while TDLib logging is on or when it was written lately (never an old dump again and again); the
+    // previous one too when the current one is short (it just started over)
+    final TdlibLogChoice tdlibLogs = chooseTdlibLogs();
+    if (tdlibLogs.current != null) {
+      parts.add(Part.ofFile("tdlib/" + tdlibLogs.current.getName(), tdlibLogs.current, MAX_TDLIB_FILE));
     }
-    if (tdlibSize < MAX_TDLIB_FILE / 4) {
-      File oldLog = TdlibManager.getLogFile(true);
-      if (oldLog != null && oldLog.isFile() && oldLog.length() > 0) {
-        parts.add(Part.ofFile("tdlib/" + oldLog.getName(), oldLog, MAX_TDLIB_FILE / 2));
-      }
+    if (tdlibLogs.old != null) {
+      parts.add(Part.ofFile("tdlib/" + tdlibLogs.old.getName(), tdlibLogs.old, MAX_TDLIB_FILE / 2));
     }
     String stored = storedCrashes();
     if (stored != null) {
-      parts.add(Part.ofText("crashes/stored.txt", stored));
+      parts.add(Part.ofText("crashes/stored.txt", redact(stored)));
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
       addExitReasons(context, parts);
@@ -906,21 +1013,72 @@ public final class XgramLogs {
       }
       b.append('\n');
     }
+    if (tdlibLogs.leftOutModified != 0) {
+      b.append("TDLib log: not added (TDLib logging is off; last written ").append(dateTime(tdlibLogs.leftOutModified)).append(")\n");
+    }
 
     String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
     File out = new File(dir, "xgram-logs-" + stamp + ".zip");
     byte[] buffer = new byte[64 * 1024];
-    try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(out), 64 * 1024))) {
-      putBytes(zip, "summary.txt", b.toString().getBytes(StandardCharsets.UTF_8));
-      for (Part part : parts) {
-        if (part.data != null) {
-          putBytes(zip, part.name, part.data);
-        } else if (part.file != null) {
-          putTail(zip, part.name, part.file, part.maxBytes, buffer);
+    boolean ok = false;
+    try {
+      try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(out), 64 * 1024))) {
+        putBytes(zip, "summary.txt", b.toString().getBytes(StandardCharsets.UTF_8));
+        for (Part part : parts) {
+          if (part.data != null) {
+            putBytes(zip, part.name, part.data);
+          } else if (part.file != null) {
+            putTail(zip, part.name, part.file, part.maxBytes, buffer);
+          }
         }
+      }
+      ok = true;
+    } finally {
+      if (!ok) {
+        // A part-written file (the storage is full) would only hold on to the last free space
+        //noinspection ResultOfMethodCallIgnored
+        out.delete();
       }
     }
     return out;
+  }
+
+  /** Which of TDLib's two log files go into the .zip, and when a file left out was last written (0: none left out). */
+  private static final class TdlibLogChoice {
+    @Nullable File current, old;
+    long leftOutModified;
+  }
+
+  private static TdlibLogChoice chooseTdlibLogs () {
+    TdlibLogChoice choice = new TdlibLogChoice();
+    boolean tdlibOn = Settings.instance().getTdlibLogSettings().isEnabled() || isDetailedOn();
+    long recent = System.currentTimeMillis() - TimeUnit.HOURS.toMillis(24);
+    File current = TdlibManager.getLogFile(false);
+    long currentSize = current != null && current.isFile() ? current.length() : 0;
+    if (currentSize > 0) {
+      if (tdlibOn || current.lastModified() >= recent) {
+        choice.current = current;
+      } else {
+        choice.leftOutModified = current.lastModified();
+      }
+    }
+    if (currentSize < MAX_TDLIB_FILE / 4) {
+      File old = TdlibManager.getLogFile(true);
+      if (old != null && old.isFile() && old.length() > 0) {
+        if (tdlibOn || old.lastModified() >= recent) {
+          choice.old = old;
+        } else {
+          choice.leftOutModified = Math.max(choice.leftOutModified, old.lastModified());
+        }
+      }
+    }
+    return choice;
+  }
+
+  /** Whether Share logs adds TDLib's log, which holds what people wrote: the privacy note says so then. */
+  public static boolean willAddTdlibLog () {
+    TdlibLogChoice choice = chooseTdlibLogs();
+    return choice.current != null || choice.old != null;
   }
 
   private static void putBytes (ZipOutputStream zip, String name, byte[] data) throws IOException {
@@ -959,6 +1117,21 @@ public final class XgramLogs {
       zip.closeEntry();
     } finally {
       in.close();
+    }
+  }
+
+  /** The last maxBytes of a text file, or null when it cannot be read. */
+  private static @Nullable String readTail (File file, long maxBytes) {
+    try (RandomAccessFile in = new RandomAccessFile(file, "r")) {
+      long length = in.length();
+      long skip = Math.max(0, length - maxBytes);
+      byte[] data = new byte[(int) (length - skip)];
+      in.seek(skip);
+      in.readFully(data);
+      String text = new String(data, StandardCharsets.UTF_8);
+      return skip > 0 ? "[" + skip + " older bytes left out]\n" + text : text;
+    } catch (Throwable t) {
+      return null;
     }
   }
 

@@ -1509,7 +1509,7 @@ public class TdlibContactManager implements CleanupStartupDelegate {
       }
 
       if (StringUtils.isEmpty(firstName) && StringUtils.isEmpty(lastName)) {
-        Log.e(Log.TAG_CONTACT, "Contact name not found for %s", TextUtils.join(", ", rawPhoneNumbers));
+        Log.e(Log.TAG_CONTACT, "Contact name not found for %d phone numbers", rawPhoneNumbers.size()); // XGram: never the numbers themselves
       } else if (StringUtils.isEmpty(firstName)) {
         for (String phoneNumber : rawPhoneNumbers) {
           out.add(new TdApi.ImportedContact(phoneNumber, lastName, null, null));
