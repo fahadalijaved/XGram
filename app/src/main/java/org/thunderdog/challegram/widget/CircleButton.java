@@ -335,7 +335,8 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   // messages, the reactions) primary / onPrimary, which stands off the secondaryContainer FAB and the chat under it in
   // light, dark and Pure black (surfaceContainerHighest was a dark pill on the dark FAB). It sits on the container's
   // top end corner, 4dp outside it: the room the 56dp view leaves around the 48dp container, so the view never clips
-  // it. It scales in from that corner on the spatial fast spring. Drawn over the button, no allocation per frame.
+  // it. It scales in from the view's top end corner on the spatial fast spring, so the overshoot grows inward. Drawn
+  // over the button, no allocation per frame.
 
   private static final float XGRAM_BADGE_HEIGHT = 20f, XGRAM_BADGE_PADDING = 6f, XGRAM_BADGE_OUTSET = 4f;
   private static final int XGRAM_BADGE_STYLE = XgramExpressive.TS_LABEL_M;
@@ -412,8 +413,8 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     final boolean scaled = scale != 1f;
     final int saveCount = scaled ? Views.save(c) : -1;
     if (scaled) {
-      final float pivotX = rtl ? xgramBadgeRect.left + badgeHeight / 2f : xgramBadgeRect.right - badgeHeight / 2f;
-      c.scale(scale, scale, pivotX, xgramBadgeRect.centerY());
+      // The outer top end corner: the spring's overshoot grows down and inward, never past the view's top or end edge
+      c.scale(scale, scale, rtl ? xgramBadgeRect.left : xgramBadgeRect.right, xgramBadgeRect.top);
     }
     final int fill = XgramExpressive.color(xgramBadgeMuted ? XgramExpressive.PRIMARY : XgramExpressive.ERROR);
     XGRAM_BADGE_FILL.setColor(XgramExpressive.withAlpha(fill, alpha));
