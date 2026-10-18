@@ -1836,6 +1836,18 @@ public class TdlibUi extends Handler {
       return this;
     }
 
+    // XGram: opened from a notification or its conversation shortcut (MainActivity, Intents.ACTION_OPEN_CHAT): the chat
+    // list goes under it whatever is on screen (a tab screen of the navigation toolbar too), and a forum shown by topics
+    // opens the topic of the notification's messages (0: none, or several) instead of its topic list.
+    public boolean xgramFromNotification;
+    public int xgramNotificationTopicId;
+
+    public ChatOpenParameters xgramFromNotification (int forumTopicId) {
+      this.xgramFromNotification = true;
+      this.xgramNotificationTopicId = forumTopicId;
+      return this;
+    }
+
     private void onDone () {
       if (onDone != null) {
         onDone.run();
@@ -2235,6 +2247,12 @@ public class TdlibUi extends Handler {
       shareItem == null && voiceChatInvitation == null && forceDraft == null &&
       (params == null || (!params.xgramSkipForumRouting && StringUtils.isEmpty(params.searchQuery) &&
         (!params.highlightSet || com.fahadali.xgram.topics.XgramForums.isResumePosition(params.highlightMode))))) {
+      if (params != null && params.xgramNotificationTopicId != 0 && (com.fahadali.xgram.topics.XgramForums.hasForumTabs(tdlib, chat) || com.fahadali.xgram.topics.XgramForums.shouldOpenTopicList(tdlib, chat))) {
+        // XGram: a notification of one topic opens that topic with its messages, not the topic list (or the last tab)
+        com.fahadali.xgram.topics.XgramForums.prepareNotificationTopicOpen(tdlib, chat, params.xgramNotificationTopicId, params);
+        openChat(context, chat, params);
+        return;
+      }
       if (com.fahadali.xgram.topics.XgramForums.hasForumTabs(tdlib, chat)) {
         ChatOpenParameters tabParams = params != null ? params : new ChatOpenParameters();
         com.fahadali.xgram.topics.XgramForums.prepareTabsOpen(tdlib, chat, tabParams);
@@ -2242,7 +2260,8 @@ public class TdlibUi extends Handler {
         return;
       }
       if (com.fahadali.xgram.topics.XgramForums.shouldOpenTopicList(tdlib, chat)) {
-        com.fahadali.xgram.topics.XgramForums.openTopicList(context, chat);
+        // XGram: placed as a chat is below (nothing on screen yet: with the chat list under it)
+        com.fahadali.xgram.topics.XgramForums.openRoutedTopicList(context, chat, params != null && params.xgramFromNotification);
         if (after != null) {
           after.runWithLong(chat.id);
         }
@@ -2378,7 +2397,9 @@ public class TdlibUi extends Handler {
     );
 
     View view = controller.getValue();
-    if (controller.context().isNavigationBusy()) {
+    // XGram: nothing on screen yet (a notification on a cold start): nothing to wait for, as the chat is set without a
+    // transition. Telegram X gave up here while a popup animated and left the screen empty.
+    if (!navigation.isEmpty() && controller.context().isNavigationBusy()) {
       if (params != null) {
         params.onDone();
       }
@@ -2389,15 +2410,17 @@ public class TdlibUi extends Handler {
       ((ViewGroup) view.getParent()).removeView(controller.getValue());
     }
 
+    final boolean xgramFromNotification = params != null && params.xgramFromNotification;
     if (navigation.isEmpty()) {
       navigation.initController(controller);
       MainController c = new MainController(context.context(), context.tdlib());
       c.getValue();
       navigation.getStack().insert(c, 0);
-    } else if (navigation.getStackSize() > 1 && !(current != null && current.xgramIsBarTab()) && ((options & CHAT_OPTION_KEEP_STACK) == 0 ||
+    } else if (navigation.getStackSize() > 1 && !(current != null && current.xgramIsBarTab() && !xgramFromNotification) && ((options & CHAT_OPTION_KEEP_STACK) == 0 ||
       (context instanceof ViewController<?> && com.fahadali.xgram.layout.XgramTwoPane.replacesRightPane((ViewController<?>) context)))) {
       // XGram: in two panes, a chat or topic opened from the left pane replaces the right pane (nothing to go back to).
-      // XGram M3E: a chat opened over a tab screen of the navigation toolbar is pushed, so Back returns to that tab.
+      // XGram M3E: a chat opened over a tab screen of the navigation toolbar is pushed, so Back returns to that tab;
+      // one from a notification is not: the chat list goes under it, as over any other screen.
       navigation.setControllerAnimated(controller, true, true);
     } else {
       navigation.navigateTo(controller);
