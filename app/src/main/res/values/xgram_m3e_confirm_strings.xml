@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram M3E: headlines and supporting text of the confirm sheets Telegram X shows with no text (Expressive design only) -->
+<resources>
+  <!-- Delete messages -->
+  <string name="XgramConfirmDeleteMessage">Delete message?</string>
+  <string name="XgramConfirmDeleteScheduled">Delete scheduled message?</string>
+  <string name="XgramConfirmDeleteXScheduled">Delete %1$s scheduled messages?</string>
+  <string name="XgramConfirmDeleteReminder">Delete reminder?</string>
+  <string name="XgramConfirmDeleteXReminders">Delete %1$s reminders?</string>
+  <string name="XgramConfirmDeleteForEveryoneOne">It will be deleted for everyone in this chat.</string>
+  <string name="XgramConfirmDeleteForEveryoneMany">They will be deleted for everyone in this chat.</string>
+  <string name="XgramConfirmDeleteForMeAndXOne">It will be deleted for you and %1$s.</string>
+  <string name="XgramConfirmDeleteForMeAndXMany">They will be deleted for you and %1$s.</string>
+  <string name="XgramConfirmDeleteForMeOne">It will be deleted only for you.</string>
+  <string name="XgramConfirmDeleteForMeMany">They will be deleted only for you.</string>
+  <string name="XgramConfirmDeleteScheduledOne">It will not be sent.</string>
+  <string name="XgramConfirmDeleteScheduledMany">They will not be sent.</string>
+  <string name="XgramConfirmDeleteReminderText">You will not be reminded.</string>
+
+  <!-- Other confirmations -->
+  <string name="XgramConfirmLeaveGroup">Leave group?</string>
+  <string name="XgramConfirmLeaveChannel">Leave channel?</string>
+  <string name="XgramConfirmUnpinMessage">Unpin message?</string>
+  <string name="XgramConfirmUnpinMessageText">It will be removed from the pinned messages.</string>
+  <string name="XgramConfirmResendMessage">Resend message?</string>
+  <string name="XgramConfirmResendXMessages">Resend %1$s messages?</string>
+  <string name="XgramConfirmResendOne">It will be sent again.</string>
+  <string name="XgramConfirmResendMany">They will be sent again.</string>
+  <string name="XgramConfirmClearDrawing">Clear drawing?</string>
+  <string name="XgramConfirmClearDrawingText">Everything you drew will be removed.</string>
+  <string name="XgramConfirmRemoveMember">Remove %1$s?</string>
+  <string name="XgramConfirmRemoveMemberText">They will not be added to the new group.</string>
+  <string name="XgramConfirmDismissAdmin">Dismiss %1$s as admin?</string>
+  <string name="XgramConfirmDismissAdminText">They will lose all their admin rights in this chat.</string>
+  <string name="XgramConfirmTerminateSession">Terminate this session?</string>
+  <string name="XgramConfirmTerminateSessionText">That device will be logged out of your account.</string>
+  <string name="XgramConfirmTerminateLoginAttempt">Terminate this login attempt?</string>
+  <string name="XgramConfirmTerminateLoginAttemptText">That device will not be able to log in.</string>
+  <string name="XgramConfirmClearRecentReactions">Clear recent reactions?</string>
+  <string name="XgramConfirmClearRecentStickers">Clear recent stickers?</string>
+  <string name="XgramConfirmClearRecentStatuses">Clear recent statuses?</string>
+  <string name="XgramConfirmClearRecentEmoji">Clear recent emoji?</string>
+  <string name="XgramConfirmClearRecentText">They will be removed from the Recent section.</string>
+</resources>

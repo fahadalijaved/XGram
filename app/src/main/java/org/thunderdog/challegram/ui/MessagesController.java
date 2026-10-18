@@ -4273,7 +4273,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
           }
         }
         if (count > 0) {
-          showOptions(new int[] {R.id.btn_messageResend, R.id.btn_cancel}, new String[] {Lang.plural(R.string.ResendXMessages, count), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.BLUE, OptionColor.NORMAL}, (v, optionId) -> {
+          // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+          xgramShowConfirm(null,
+            count == 1 ? Lang.getString(R.string.XgramConfirmResendMessage) : Lang.getString(R.string.XgramConfirmResendXMessages, count),
+            Lang.getString(count == 1 ? R.string.XgramConfirmResendOne : R.string.XgramConfirmResendMany),
+            new int[] {R.id.btn_messageResend, R.id.btn_cancel}, new String[] {Lang.plural(R.string.ResendXMessages, count), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.BLUE, OptionColor.NORMAL}, null, (v, optionId) -> {
             if (optionId == R.id.btn_messageResend) {
               resendSelectedMessages();
               finishSelectMode(-1);
@@ -9087,8 +9091,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (pinnedCount == ListManager.COUNT_UNKNOWN) {
       return;
     }
+    // XGram M3E: one pin in Saved Messages is the confirm sheet ([Cancel] [Unpin message]): a headline and supporting
+    // text for it (Telegram X shows the tile alone); Expressive design off is unchanged
+    final boolean xgramConfirm = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && pinnedCount == 1 && isSelfChat();
     showOptions(new Options.Builder()
-      .info(pinnedCount > 1 ? Lang.pluralBold(R.string.UnpinXMessages, pinnedCount) : null)
+      .title(xgramConfirm ? Lang.getString(R.string.XgramConfirmUnpinMessage) : null)
+      .info(pinnedCount > 1 ? Lang.pluralBold(R.string.UnpinXMessages, pinnedCount) : xgramConfirm ? Lang.getString(R.string.XgramConfirmUnpinMessageText) : null)
       .item(canPinAnyMessage(false) ? new OptionItem.Builder()
         .id(R.id.btn_unpinMessage)
         .name(Lang.getString(pinnedCount == 1 ? R.string.UnpinMessage : R.string.UnpinMessagesConfirm))

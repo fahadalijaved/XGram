@@ -7107,7 +7107,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
           undoButton.setOnClickListener(this);
           undoButton.setOnLongClickListener(v -> {
             if (paintView != null && !paintView.getContentWrap().isBusy()) {
-              showOptions(null, new int[]{R.id.paint_clear, R.id.btn_cancel}, new String[]{Lang.getString(R.string.ClearDrawing), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+              // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+              xgramShowConfirm(null, Lang.getString(R.string.XgramConfirmClearDrawing), Lang.getString(R.string.XgramConfirmClearDrawingText), new int[]{R.id.paint_clear, R.id.btn_cancel}, new String[]{Lang.getString(R.string.ClearDrawing), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
                 if (id == R.id.paint_clear) {
                   undoAllPaintActions();
                 }

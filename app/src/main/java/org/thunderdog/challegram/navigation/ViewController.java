@@ -2148,9 +2148,29 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     final ArrayList<ListItem> items = new ArrayList<>(b.rawItems.length * 2 + 1 + (b.headerItems != null && !b.headerItems.isEmpty() ? b.headerItems.size() + 1 : 0));
     boolean first = true;
 
+    // XGram M3E: a confirm sheet's headline (headlineSmall, SettingsWrapBuilder.xgramSetHeadline) and the supporting
+    // text under it (the leading TYPE_INFO header items, bodyMedium: SettingHolder) go above the SHADOW_TOP that opens
+    // the rows' group: outside it (XgramExpressive.isInGroup) they get no tile inset, so their text keeps the sheet's
+    // 16dp margin, as the headline and text of the option confirm sheets (OptionsLayout)
+    final boolean xgramHeadline = b.xgramHeadline != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    int xgramLeadingInfo = 0;
+    if (xgramHeadline) {
+      items.add(b.xgramHeadline);
+      if (b.headerItems != null) {
+        while (xgramLeadingInfo < b.headerItems.size() && b.headerItems.get(xgramLeadingInfo).getViewType() == ListItem.TYPE_INFO) {
+          items.add(b.headerItems.get(xgramLeadingInfo));
+          xgramLeadingInfo++;
+        }
+      }
+    }
+    final boolean xgramHeadlineTextFollows = xgramLeadingInfo > 0;
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    if (b.headerItems != null && !b.headerItems.isEmpty()) {
-      items.addAll(b.headerItems);
+    if (b.headerItems != null && b.headerItems.size() > xgramLeadingInfo) {
+      if (xgramLeadingInfo == 0) {
+        items.addAll(b.headerItems);
+      } else {
+        items.addAll(b.headerItems.subList(xgramLeadingInfo, b.headerItems.size()));
+      }
       if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) { // XGram M3E r6: tiles keep their own 2dp gap, no divider under the header (live location)
         items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       }
@@ -2325,6 +2345,25 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
       protected void setDrawerItem (ListItem item, DrawerItemView view, TimerView timerView, boolean isUpdate) {
         if (b.drawerProcessor != null) {
           b.drawerProcessor.setDrawerItem(item, view, timerView, isUpdate);
+        }
+      }
+
+      // XGram M3E: the headline row (SettingsWrapBuilder.xgramSetHeadline)
+
+      @Override
+      protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == com.fahadali.xgram.appearance.XgramConfirmSheets.HEADLINE_ROW) {
+          return new SettingHolder(com.fahadali.xgram.appearance.XgramConfirmSheets.newSheetHeadline(parent.getContext(), ViewController.this.tdlib(), ViewController.this));
+        }
+        return super.initCustom(parent, customViewType);
+      }
+
+      @Override
+      protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+        if (customViewType == com.fahadali.xgram.appearance.XgramConfirmSheets.HEADLINE_ROW) {
+          com.fahadali.xgram.appearance.XgramConfirmSheets.bindSheetHeadline(view, item.getString(), xgramHeadlineTextFollows);
+        } else {
+          super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
         }
       }
     };
@@ -2576,6 +2615,25 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return showOptions(info, ids, titles, colors, icons, delegate, null);
   }
 
+  /**
+   * XGram M3E: {@link #showOptions(CharSequence, int[], String[], int[], int[], OptionDelegate)} for a confirmation
+   * Telegram X shows with little or no text (an action tile and a Cancel tile): while Expressive design is on, the M3E
+   * confirm sheet gets {@code headline} (headlineSmall) and {@code supporting} (bodyMedium, or {@code info} when that is
+   * empty) above [Cancel] [action]. Expressive design off shows Telegram X's sheet with {@code info}, unchanged.
+   */
+  public final PopupLayout xgramShowConfirm (@Nullable CharSequence info, @Nullable CharSequence headline, @Nullable CharSequence supporting, int[] ids, String[] titles, int[] colors, int[] icons, final OptionDelegate delegate) {
+    return xgramShowConfirm(info, headline, supporting, ids, titles, colors, icons, delegate, null);
+  }
+
+  /** {@link #xgramShowConfirm(CharSequence, CharSequence, CharSequence, int[], String[], int[], int[], OptionDelegate)} in {@code forcedTheme}. */
+  public final PopupLayout xgramShowConfirm (@Nullable CharSequence info, @Nullable CharSequence headline, @Nullable CharSequence supporting, int[] ids, String[] titles, int[] colors, int[] icons, final OptionDelegate delegate, final @Nullable ThemeDelegate forcedTheme) {
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return showOptions(info, ids, titles, colors, icons, delegate, forcedTheme);
+    }
+    Options options = getOptions(StringUtils.isEmpty(supporting) ? info : supporting, ids, titles, colors, icons, Text.LINE_COUNT_UNLIMITED);
+    return showOptions(new Options(options.info, headline, null, options.items, options.maxLineCount), delegate, forcedTheme);
+  }
+
   public final PopupLayout showWarning (CharSequence info, RunnableBool callback) {
     return showOptions(info, new int[] {R.id.btn_done, R.id.btn_cancel}, new String[] {Lang.getString(R.string.TdlibLogsWarningConfirm), Lang.getString(R.string.Cancel)}, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_warning_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
       callback.runWithBool(id == R.id.btn_done);
@@ -2817,11 +2875,16 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     int totalHeight = shadowView.getLayoutParams().height + optionsWrap.getTextHeight() + extraBottomInsetWithoutIme;
     int index = 0;
 
-    // XGram M3E r5: an action with a Cancel tile is the M3E confirm sheet (title, info, then [Cancel] [action] at the end)
-    final int xgramConfirmIndex = xgramExpressive ? com.fahadali.xgram.appearance.XgramR5Sheets.confirmActionIndex(options.items) : -1;
+    // XGram M3E r5: an action with a Cancel tile is the M3E confirm sheet (title, info, then [Cancel] [action] at the end).
+    // Only with a title or info to show: a Telegram X sheet with neither (its action tile was the whole message) would be
+    // two buttons under an empty band, so it stays a list sheet of that tile (xgramShowConfirm gives such sheets a
+    // headline and supporting text)
+    final boolean xgramHasText = !StringUtils.isEmpty(options.title) || !StringUtils.isEmpty(options.info);
+    final int xgramConfirmIndex = xgramExpressive && xgramHasText ? com.fahadali.xgram.appearance.XgramR5Sheets.confirmActionIndex(options.items) : -1;
     if (xgramConfirmIndex != -1) {
       if (!StringUtils.isEmpty(options.title)) {
         optionsWrap.xgramSetHeaderStyle(com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S);
+        totalHeight += optionsWrap.xgramHeaderHeight(); // the headline too, so the reveal starts the sheet fully below
       }
       totalHeight += xgramAddConfirmActions(optionsWrap, options.items, xgramConfirmIndex, delegate, onClickListener, popupLayout, forcedTheme);
       if (xgramExpressive) {
@@ -2925,6 +2988,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     // Window
 
     if (xgramExpressive) {
+      totalHeight += optionsWrap.xgramHeaderHeight(); // XGram: the title too (Telegram X counted only the info)
       // XGram: the sheet never covers the status bar (OptionsLayout.onMeasure), so it never slides in from further down
       totalHeight = Math.min(totalHeight, Math.max(0, Screen.currentHeight() - HeaderView.getTopOffset()));
     }

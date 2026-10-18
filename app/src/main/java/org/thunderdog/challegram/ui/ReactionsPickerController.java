@@ -882,7 +882,8 @@ public class ReactionsPickerController extends ViewController<MessageOptionsPage
     } else if (viewId == R.id.btn_section) {
       EmojiSection section = ((EmojiSectionView) v).getSection();
       if (section.index == 1) {
-        showOptions(null, new int[] {R.id.btn_done, R.id.btn_cancel}, new String[] {
+        // XGram M3E: a headline and supporting text for the confirm sheet (Expressive design only)
+        xgramShowConfirm(null, Lang.getString(R.string.XgramConfirmClearRecentReactions), Lang.getString(R.string.XgramConfirmClearRecentText), new int[] {R.id.btn_done, R.id.btn_cancel}, new String[] {
           Lang.getString(R.string.ClearRecentReactionsAction),
           Lang.getString(R.string.Cancel)
         }, new int[] {OptionColor.RED, OptionColor.NORMAL}, new int[] {R.drawable.baseline_auto_delete_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {

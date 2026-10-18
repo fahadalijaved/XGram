@@ -618,7 +618,12 @@ public class BaseView extends SparseDrawableView implements ClickHelper.Delegate
           @Override
           public void onForceTouchAction (ForceTouchView.ForceTouchContext context, int actionId, Object arg) {
             if (actionId == R.id.btn_messageUnpin) {
-              ancestor.showOptions(new ViewController.Options.Builder().item(new ViewController.OptionItem(R.id.btn_messageUnpin, Lang.getString(R.string.UnpinMessage), ViewController.OptionColor.RED, R.drawable.deproko_baseline_pin_undo_24)).cancelItem().build(), (optionItemView, id) -> {
+              // XGram M3E: a headline and supporting text for the confirm sheet (Telegram X shows the tile alone)
+              final boolean xgramConfirm = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+              ancestor.showOptions(new ViewController.Options.Builder()
+                .title(xgramConfirm ? Lang.getString(R.string.XgramConfirmUnpinMessage) : null)
+                .info(xgramConfirm ? Lang.getString(R.string.XgramConfirmUnpinMessageText) : null)
+                .item(new ViewController.OptionItem(R.id.btn_messageUnpin, Lang.getString(R.string.UnpinMessage), ViewController.OptionColor.RED, R.drawable.deproko_baseline_pin_undo_24)).cancelItem().build(), (optionItemView, id) -> {
                 if (id == R.id.btn_messageUnpin) {
                   tdlib.send(new TdApi.UnpinChatMessage(messageId.getChatId(), messageId.getMessageId()), tdlib.typedOkHandler());
                 }

@@ -373,6 +373,21 @@ public class OptionsLayout extends LinearLayout implements Animated, RootFrameLa
     }
   }
 
+  /**
+   * XGram: the height of the title set with {@link #setHeader} (0 without one), for the sheet's height before its
+   * layout (the reveal starts it fully below the window). Call after {@link #xgramSetHeaderStyle}.
+   */
+  public int xgramHeaderHeight () {
+    if (headerView.getVisibility() != View.VISIBLE) {
+      return 0;
+    }
+    int width = UI.getContext(getContext()).getControllerWidth(headerView);
+    if (XgramExpressive.isEnabled()) {
+      width = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(width); // the sheet is at most 640dp wide
+    }
+    return headerView.getCurrentHeight(width);
+  }
+
   private int xgramTitleTs = XgramExpressive.TS_TITLE_L;
 
   /**
