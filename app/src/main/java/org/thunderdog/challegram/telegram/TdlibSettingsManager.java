@@ -82,6 +82,9 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   @SuppressWarnings("DeprecatedIsStillUsed")
   public static final String __DEVICE_TDLIB_VERSION_KEY = "registered_device_tdlib";
   public static final String DEVICE_TDLIB_VERSION2_KEY = "registered_device_td";
+  /** XGram: when the device token was last registered; Telegram asks to repeat registerDevice at least every 24 hours. */
+  public static final String DEVICE_TIME_KEY = "registered_device_time";
+  private static final long XGRAM_REREGISTER_AFTER_MS = 24L * 60 * 60 * 1000;
 
   public static final String NOTIFICATION_ERROR_KEY = "notification_error";
   public static final String NOTIFICATION_VERSION_KEY = "notification_version";
@@ -638,6 +641,7 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
     );
     pmc.putLong(key(DEVICE_UID_KEY, accountId), userId);
     pmc.putString(key(DEVICE_TDLIB_VERSION2_KEY, accountId), BuildConfig.TDLIB_VERSION);
+    pmc.putLong(key(DEVICE_TIME_KEY, accountId), System.currentTimeMillis()); // XGram
     if (otherUserIds != null && otherUserIds.length > 0) {
       pmc.putLongArray(key(DEVICE_OTHER_UID_KEY, accountId), otherUserIds);
     } else {
@@ -647,6 +651,13 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
   }
 
   public static boolean checkRegisteredDeviceToken (int accountId, long userId, TdApi.DeviceToken token, long[] otherUserIds, boolean skipOtherUserIdsCheck) {
+    // XGram: a registration older than 24 hours counts as stale (Telegram: "repeat this query at least once every 24
+    // hours"), so a token registered before the app's push credentials existed on Telegram's side fixes itself
+    long registeredAt = Settings.instance().getLong(key(DEVICE_TIME_KEY, accountId), 0);
+    long sinceRegistered = System.currentTimeMillis() - registeredAt;
+    if (registeredAt == 0 || sinceRegistered < 0 || sinceRegistered > XGRAM_REREGISTER_AFTER_MS) {
+      return false;
+    }
     return
       BuildConfig.TDLIB_VERSION.equals(getRegisteredDeviceTdlibVersion2(accountId)) &&
       getRegisteredDeviceUserId(accountId) == userId &&
@@ -661,6 +672,7 @@ public class TdlibSettingsManager implements CleanupStartupDelegate {
       .remove(key(DEVICE_UID_KEY, accountId))
       .remove(key(DEVICE_OTHER_UID_KEY, accountId))
       .remove(key(DEVICE_TDLIB_VERSION2_KEY, accountId))
+      .remove(key(DEVICE_TIME_KEY, accountId)) // XGram
       .apply();
   }
 
