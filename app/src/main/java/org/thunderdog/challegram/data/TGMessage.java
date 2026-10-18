@@ -1822,9 +1822,13 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (paint.getAlpha() == 0) {
       return;
     }
-    if (xgramTail && padding == 0) {
+    if (padding == 0 && (xgramTail || !stroke)) {
+      // XGram: the fill is the bubble's one path (the tail is part of the path only). Corner wedges and rects that
+      // share an edge, each anti-aliased on its own, leave a hairline of the background along every shared edge once
+      // the bubble lands between pixels: swipe to reply (a fractional translation), the swipe back card (scaled and
+      // moved), predictive back, the two-pane drag, item animations.
       synchronized (bubblePath) {
-        c.drawPath(bubblePath, paint); // XGram: the tail is part of the path only
+        c.drawPath(bubblePath, paint);
       }
       return;
     }
@@ -3997,11 +4001,6 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       this.lastMergeRadius = bubbleMergeRadius;
       this.lastDefaultRadius = bubbleDefaultRadius;
 
-      if (needBubble) {
-        bubblePath.reset();
-        bubbleClipPath.reset();
-      }
-
       if (alignBubbleRight()) {
         int translateBy = width - rightContentEdge - leftContentEdge;
         leftContentEdge += translateBy;
@@ -4023,6 +4022,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         final boolean mergeBottom = (flags & MESSAGE_FLAG_IS_BOTTOM) == 0 || (msg.content.getConstructor() == TdApi.MessageGame.CONSTRUCTOR);
 
         synchronized (bubblePath) {
+          // XGram: reset under the lock too: every bubble fill draws this path, so a frame drawn while a background
+          // layout rebuilds it never sees it empty
+          bubblePath.reset();
+          bubbleClipPath.reset();
+
           final boolean alignContentRight = alignBubbleRight();
 
           if (circleBubble) {
