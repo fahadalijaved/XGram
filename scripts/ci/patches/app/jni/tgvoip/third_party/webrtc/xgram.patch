@@ -1,0 +1,449 @@
+diff --git a/modules/video_coding/codecs/h264/h264.cc b/modules/video_coding/codecs/h264/h264.cc
+index c1e63ec..82a7d97 100644
+--- a/modules/video_coding/codecs/h264/h264.cc
++++ b/modules/video_coding/codecs/h264/h264.cc
+@@ -106,6 +106,7 @@ std::vector<SdpVideoFormat> SupportedH264Codecs(bool add_scalability_modes) {
+ 
+ std::vector<SdpVideoFormat> SupportedH264DecoderCodecs() {
+   TRACE_EVENT0("webrtc", __func__);
++#if defined(WEBRTC_USE_H264_DECODER)
+   if (!IsH264CodecSupported())
+     return std::vector<SdpVideoFormat>();
+ 
+@@ -119,6 +120,14 @@ std::vector<SdpVideoFormat> SupportedH264DecoderCodecs() {
+       H264Profile::kProfilePredictiveHigh444, H264Level::kLevel3_1, "0"));
+ 
+   return supportedCodecs;
++#else
++  // XGram: H264DecoderImpl is only built with WEBRTC_USE_H264_DECODER, which
++  // this build does not define: it has the OpenH264 encoder but no software
++  // H.264 decoder. Listing decoder formats here made the software decoder
++  // factory claim H.264 and then create nothing, which crashed calls on the
++  // first H.264 frame. Android decodes H.264 with MediaCodec instead.
++  return std::vector<SdpVideoFormat>();
++#endif
+ }
+ 
+ std::unique_ptr<H264Encoder> H264Encoder::Create() {
+@@ -158,13 +167,21 @@ std::unique_ptr<H264Decoder> H264Decoder::Create() {
+   RTC_LOG(LS_INFO) << "Creating H264DecoderImpl.";
+   return std::make_unique<H264DecoderImpl>();
+ #else
++  // XGram: NDEBUG is forced for this build, so the DCHECK below is compiled
++  // out; log instead of failing silently.
++  RTC_LOG(LS_ERROR) << "H264Decoder::Create: this build has no software "
++                       "H.264 decoder (WEBRTC_USE_H264_DECODER is not set).";
+   RTC_DCHECK_NOTREACHED();
+   return nullptr;
+ #endif
+ }
+ 
+ bool H264Decoder::IsSupported() {
++#if defined(WEBRTC_USE_H264_DECODER)
+   return IsH264CodecSupported();
++#else
++  return false;  // XGram: see SupportedH264DecoderCodecs().
++#endif
+ }
+ 
+ }  // namespace webrtc
+diff --git a/sdk/android/api/org/webrtc/Dav1dDecoder.java b/sdk/android/api/org/webrtc/Dav1dDecoder.java
+index 2a79988..2050f53 100644
+--- a/sdk/android/api/org/webrtc/Dav1dDecoder.java
++++ b/sdk/android/api/org/webrtc/Dav1dDecoder.java
+@@ -13,7 +13,15 @@ package org.webrtc;
+ public class Dav1dDecoder extends WrappedNativeVideoDecoder {
+   @Override
+   public long createNative(long webrtcEnvRef) {
+-    return nativeCreateDecoder();
++    // XGram: dav1d_codec.cc is not built (see app/jni/tgvoip/CMakeLists.txt), so the native method
++    // may be missing. This runs from native code, where a thrown error aborts the process; 0 makes
++    // the caller treat the decoder as unavailable instead.
++    try {
++      return nativeCreateDecoder();
++    } catch (UnsatisfiedLinkError e) {
++      Logging.e("Dav1dDecoder", "dav1d is not included in this build", e);
++      return 0;
++    }
+   }
+ 
+   static native long nativeCreateDecoder();
+diff --git a/sdk/android/api/org/webrtc/DefaultVideoDecoderFactory.java b/sdk/android/api/org/webrtc/DefaultVideoDecoderFactory.java
+index d7a8694..0903153 100644
+--- a/sdk/android/api/org/webrtc/DefaultVideoDecoderFactory.java
++++ b/sdk/android/api/org/webrtc/DefaultVideoDecoderFactory.java
+@@ -18,6 +18,8 @@ import java.util.LinkedHashSet;
+  * Helper class that combines HW and SW decoders.
+  */
+ public class DefaultVideoDecoderFactory implements VideoDecoderFactory {
++  private static final String TAG = "DefaultVideoDecoderFactory";
++
+   private final VideoDecoderFactory hardwareVideoDecoderFactory;
+   private final VideoDecoderFactory softwareVideoDecoderFactory = new SoftwareVideoDecoderFactory();
+   private final @Nullable VideoDecoderFactory platformSoftwareVideoDecoderFactory;
+@@ -40,10 +42,10 @@ public class DefaultVideoDecoderFactory implements VideoDecoderFactory {
+ 
+   @Override
+   public @Nullable VideoDecoder createDecoder(VideoCodecInfo codecType) {
+-    VideoDecoder softwareDecoder = softwareVideoDecoderFactory.createDecoder(codecType);
+-    final VideoDecoder hardwareDecoder = hardwareVideoDecoderFactory.createDecoder(codecType);
++    VideoDecoder softwareDecoder = createDecoder(softwareVideoDecoderFactory, codecType);
++    final VideoDecoder hardwareDecoder = createDecoder(hardwareVideoDecoderFactory, codecType);
+     if (softwareDecoder == null && platformSoftwareVideoDecoderFactory != null) {
+-      softwareDecoder = platformSoftwareVideoDecoderFactory.createDecoder(codecType);
++      softwareDecoder = createDecoder(platformSoftwareVideoDecoderFactory, codecType);
+     }
+     if (hardwareDecoder != null && softwareDecoder != null) {
+       // Both hardware and software supported, wrap it in a software fallback
+@@ -57,13 +59,34 @@ public class DefaultVideoDecoderFactory implements VideoDecoderFactory {
+   public VideoCodecInfo[] getSupportedCodecs() {
+     LinkedHashSet<VideoCodecInfo> supportedCodecInfos = new LinkedHashSet<VideoCodecInfo>();
+ 
+-    supportedCodecInfos.addAll(Arrays.asList(softwareVideoDecoderFactory.getSupportedCodecs()));
+-    supportedCodecInfos.addAll(Arrays.asList(hardwareVideoDecoderFactory.getSupportedCodecs()));
++    supportedCodecInfos.addAll(Arrays.asList(getSupportedCodecs(softwareVideoDecoderFactory)));
++    supportedCodecInfos.addAll(Arrays.asList(getSupportedCodecs(hardwareVideoDecoderFactory)));
+     if (platformSoftwareVideoDecoderFactory != null) {
+       supportedCodecInfos.addAll(
+-          Arrays.asList(platformSoftwareVideoDecoderFactory.getSupportedCodecs()));
++          Arrays.asList(getSupportedCodecs(platformSoftwareVideoDecoderFactory)));
+     }
+ 
+     return supportedCodecInfos.toArray(new VideoCodecInfo[supportedCodecInfos.size()]);
+   }
++
++  // XGram: both methods above are called from native code, where any Java exception aborts the
++  // process (CHECK_EXCEPTION). A factory that throws counts as having no decoder for the codec.
++  private static @Nullable VideoDecoder createDecoder(
++      VideoDecoderFactory factory, VideoCodecInfo codecType) {
++    try {
++      return factory.createDecoder(codecType);
++    } catch (RuntimeException e) {
++      Logging.e(TAG, "createDecoder failed for " + codecType, e);
++      return null;
++    }
++  }
++
++  private static VideoCodecInfo[] getSupportedCodecs(VideoDecoderFactory factory) {
++    try {
++      return factory.getSupportedCodecs();
++    } catch (RuntimeException e) {
++      Logging.e(TAG, "getSupportedCodecs failed", e);
++      return new VideoCodecInfo[0];
++    }
++  }
+ }
+diff --git a/sdk/android/api/org/webrtc/DefaultVideoEncoderFactory.java b/sdk/android/api/org/webrtc/DefaultVideoEncoderFactory.java
+index 76896b6..4d91716 100644
+--- a/sdk/android/api/org/webrtc/DefaultVideoEncoderFactory.java
++++ b/sdk/android/api/org/webrtc/DefaultVideoEncoderFactory.java
+@@ -16,6 +16,8 @@ import java.util.LinkedHashSet;
+ 
+ /** Helper class that combines HW and SW encoders. */
+ public class DefaultVideoEncoderFactory implements VideoEncoderFactory {
++  private static final String TAG = "DefaultVideoEncoderFactory";
++
+   private final VideoEncoderFactory hardwareVideoEncoderFactory;
+   private final VideoEncoderFactory softwareVideoEncoderFactory = new SoftwareVideoEncoderFactory();
+ 
+@@ -34,8 +36,8 @@ public class DefaultVideoEncoderFactory implements VideoEncoderFactory {
+   @Nullable
+   @Override
+   public VideoEncoder createEncoder(VideoCodecInfo info) {
+-    final VideoEncoder softwareEncoder = softwareVideoEncoderFactory.createEncoder(info);
+-    final VideoEncoder hardwareEncoder = hardwareVideoEncoderFactory.createEncoder(info);
++    final VideoEncoder softwareEncoder = createEncoder(softwareVideoEncoderFactory, info);
++    final VideoEncoder hardwareEncoder = createEncoder(hardwareVideoEncoderFactory, info);
+     if (hardwareEncoder != null && softwareEncoder != null) {
+       // Both hardware and software supported, wrap it in a software fallback
+       return new VideoEncoderFallback(
+@@ -48,9 +50,30 @@ public class DefaultVideoEncoderFactory implements VideoEncoderFactory {
+   public VideoCodecInfo[] getSupportedCodecs() {
+     LinkedHashSet<VideoCodecInfo> supportedCodecInfos = new LinkedHashSet<VideoCodecInfo>();
+ 
+-    supportedCodecInfos.addAll(Arrays.asList(softwareVideoEncoderFactory.getSupportedCodecs()));
+-    supportedCodecInfos.addAll(Arrays.asList(hardwareVideoEncoderFactory.getSupportedCodecs()));
++    supportedCodecInfos.addAll(Arrays.asList(getSupportedCodecs(softwareVideoEncoderFactory)));
++    supportedCodecInfos.addAll(Arrays.asList(getSupportedCodecs(hardwareVideoEncoderFactory)));
+ 
+     return supportedCodecInfos.toArray(new VideoCodecInfo[supportedCodecInfos.size()]);
+   }
++
++  // XGram: both methods above are called from native code, where any Java exception aborts the
++  // process (CHECK_EXCEPTION). A factory that throws counts as having no encoder for the codec.
++  private static @Nullable VideoEncoder createEncoder(
++      VideoEncoderFactory factory, VideoCodecInfo info) {
++    try {
++      return factory.createEncoder(info);
++    } catch (RuntimeException e) {
++      Logging.e(TAG, "createEncoder failed for " + info, e);
++      return null;
++    }
++  }
++
++  private static VideoCodecInfo[] getSupportedCodecs(VideoEncoderFactory factory) {
++    try {
++      return factory.getSupportedCodecs();
++    } catch (RuntimeException e) {
++      Logging.e(TAG, "getSupportedCodecs failed", e);
++      return new VideoCodecInfo[0];
++    }
++  }
+ }
+diff --git a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java b/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
+index d43fc27..38d7dba 100644
+--- a/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
++++ b/sdk/android/api/org/webrtc/HardwareVideoEncoderFactory.java
+@@ -94,7 +94,15 @@ public class HardwareVideoEncoderFactory implements VideoEncoderFactory {
+   @Nullable
+   @Override
+   public VideoEncoder createEncoder(VideoCodecInfo input) {
+-    VideoCodecMimeType type = VideoCodecMimeType.valueOf(input.getName());
++    // XGram: valueOf throws for a name outside VideoCodecMimeType. This runs from native code,
++    // where a thrown exception aborts the process, so an unknown codec means "no encoder".
++    VideoCodecMimeType type;
++    try {
++      type = VideoCodecMimeType.valueOf(input.getName());
++    } catch (IllegalArgumentException e) {
++      Logging.w(TAG, "No MediaCodec encoder for codec " + input.getName());
++      return null;
++    }
+     MediaCodecInfo info = findCodecForType(type);
+ 
+     if (info == null) {
+diff --git a/sdk/android/api/org/webrtc/LibaomAv1Encoder.java b/sdk/android/api/org/webrtc/LibaomAv1Encoder.java
+index 569a719..f42da87 100644
+--- a/sdk/android/api/org/webrtc/LibaomAv1Encoder.java
++++ b/sdk/android/api/org/webrtc/LibaomAv1Encoder.java
+@@ -13,7 +13,15 @@ package org.webrtc;
+ public class LibaomAv1Encoder extends WrappedNativeVideoEncoder {
+   @Override
+   public long createNativeVideoEncoder() {
+-    return nativeCreateEncoder();
++    // XGram: libaom_av1_encoder.cc is not built (see app/jni/tgvoip/CMakeLists.txt), so the native
++    // method may be missing. This runs from native code, where a thrown error aborts the process;
++    // 0 makes the caller treat the encoder as unavailable instead.
++    try {
++      return nativeCreateEncoder();
++    } catch (UnsatisfiedLinkError e) {
++      Logging.e("LibaomAv1Encoder", "libaom is not included in this build", e);
++      return 0;
++    }
+   }
+ 
+   static native long nativeCreateEncoder();
+diff --git a/sdk/android/api/org/webrtc/WrappedNativeVideoDecoder.java b/sdk/android/api/org/webrtc/WrappedNativeVideoDecoder.java
+index d762e75..0b056d2 100644
+--- a/sdk/android/api/org/webrtc/WrappedNativeVideoDecoder.java
++++ b/sdk/android/api/org/webrtc/WrappedNativeVideoDecoder.java
+@@ -12,27 +12,34 @@ package org.webrtc;
+ 
+ /**
+  * Wraps a native webrtc::VideoDecoder.
++ *
++ * XGram: the methods below only run when createNative() returned 0, i.e. the native decoder could
++ * not be created. They are called from native code, where any Java exception aborts the whole
++ * process (CHECK_EXCEPTION), so they report errors instead of throwing.
+  */
+ public abstract class WrappedNativeVideoDecoder implements VideoDecoder {
++  private static final String TAG = "WrappedNativeVideoDecoder";
++
+   @Override public abstract long createNative(long webrtcEnvRef);
+ 
+   @Override
+   public final VideoCodecStatus initDecode(Settings settings, Callback decodeCallback) {
+-    throw new UnsupportedOperationException("Not implemented.");
++    Logging.e(TAG, "initDecode: the native decoder is unavailable");
++    return VideoCodecStatus.ERROR;
+   }
+ 
+   @Override
+   public final VideoCodecStatus release() {
+-    throw new UnsupportedOperationException("Not implemented.");
++    return VideoCodecStatus.OK;
+   }
+ 
+   @Override
+   public final VideoCodecStatus decode(EncodedImage frame, DecodeInfo info) {
+-    throw new UnsupportedOperationException("Not implemented.");
++    return VideoCodecStatus.ERROR;
+   }
+ 
+   @Override
+   public final String getImplementationName() {
+-    throw new UnsupportedOperationException("Not implemented.");
++    return "WrappedNativeVideoDecoder (unavailable)";
+   }
+ }
+diff --git a/sdk/android/api/org/webrtc/WrappedNativeVideoEncoder.java b/sdk/android/api/org/webrtc/WrappedNativeVideoEncoder.java
+index 7d0908a..9e96c13 100644
+--- a/sdk/android/api/org/webrtc/WrappedNativeVideoEncoder.java
++++ b/sdk/android/api/org/webrtc/WrappedNativeVideoEncoder.java
+@@ -12,38 +12,45 @@ package org.webrtc;
+ 
+ /**
+  * Wraps a native webrtc::VideoEncoder.
++ *
++ * XGram: the methods below only run when createNativeVideoEncoder() returned 0, i.e. the native
++ * encoder could not be created. They are called from native code, where any Java exception aborts
++ * the whole process (CHECK_EXCEPTION), so they report errors instead of throwing.
+  */
+ public abstract class WrappedNativeVideoEncoder implements VideoEncoder {
++  private static final String TAG = "WrappedNativeVideoEncoder";
++
+   @Override public abstract long createNativeVideoEncoder();
+   @Override public abstract boolean isHardwareEncoder();
+ 
+   @Override
+   public final VideoCodecStatus initEncode(Settings settings, Callback encodeCallback) {
+-    throw new UnsupportedOperationException("Not implemented.");
++    Logging.e(TAG, "initEncode: the native encoder is unavailable");
++    return VideoCodecStatus.ERROR;
+   }
+ 
+   @Override
+   public final VideoCodecStatus release() {
+-    throw new UnsupportedOperationException("Not implemented.");
++    return VideoCodecStatus.OK;
+   }
+ 
+   @Override
+   public final VideoCodecStatus encode(VideoFrame frame, EncodeInfo info) {
+-    throw new UnsupportedOperationException("Not implemented.");
++    return VideoCodecStatus.ERROR;
+   }
+ 
+   @Override
+   public final VideoCodecStatus setRateAllocation(BitrateAllocation allocation, int framerate) {
+-    throw new UnsupportedOperationException("Not implemented.");
++    return VideoCodecStatus.OK;
+   }
+ 
+   @Override
+   public final ScalingSettings getScalingSettings() {
+-    throw new UnsupportedOperationException("Not implemented.");
++    return ScalingSettings.OFF;
+   }
+ 
+   @Override
+   public final String getImplementationName() {
+-    throw new UnsupportedOperationException("Not implemented.");
++    return "WrappedNativeVideoEncoder (unavailable)";
+   }
+ }
+diff --git a/sdk/android/src/java/org/webrtc/MediaCodecVideoDecoderFactory.java b/sdk/android/src/java/org/webrtc/MediaCodecVideoDecoderFactory.java
+index 9a73bc4..38a6dbe 100644
+--- a/sdk/android/src/java/org/webrtc/MediaCodecVideoDecoderFactory.java
++++ b/sdk/android/src/java/org/webrtc/MediaCodecVideoDecoderFactory.java
+@@ -46,7 +46,15 @@ class MediaCodecVideoDecoderFactory implements VideoDecoderFactory {
+   @Nullable
+   @Override
+   public VideoDecoder createDecoder(VideoCodecInfo codecType) {
+-    VideoCodecMimeType type = VideoCodecMimeType.valueOf(codecType.getName());
++    // XGram: valueOf throws for a name outside VideoCodecMimeType. This runs from native code,
++    // where a thrown exception aborts the process, so an unknown codec means "no decoder".
++    VideoCodecMimeType type;
++    try {
++      type = VideoCodecMimeType.valueOf(codecType.getName());
++    } catch (IllegalArgumentException e) {
++      Logging.w(TAG, "No MediaCodec decoder for codec " + codecType.getName());
++      return null;
++    }
+     MediaCodecInfo info = findCodecForType(type);
+ 
+     if (info == null) {
+diff --git a/sdk/android/src/jni/video_decoder_fallback.cc b/sdk/android/src/jni/video_decoder_fallback.cc
+index 86d643d..1331400 100644
+--- a/sdk/android/src/jni/video_decoder_fallback.cc
++++ b/sdk/android/src/jni/video_decoder_fallback.cc
+@@ -29,6 +29,14 @@ static jlong JNI_VideoDecoderFallback_Create(
+   std::unique_ptr<VideoDecoder> primary_decoder =
+       JavaToNativeVideoDecoder(jni, j_primary_decoder, j_webrtc_env_ref);
+ 
++  // XGram: JavaToNativeVideoDecoder returns nullptr for a native decoder that
++  // could not be created, and the fallback wrapper dereferences both sides.
++  // Use the one that exists; 0 (neither) tells the caller there is no decoder.
++  if (!fallback_decoder || !primary_decoder) {
++    return NativeToJavaPointer(primary_decoder ? primary_decoder.release()
++                                               : fallback_decoder.release());
++  }
++
+   VideoDecoder* native_wrapper =
+       CreateVideoDecoderSoftwareFallbackWrapper(
+           *reinterpret_cast<const Environment*>(j_webrtc_env_ref),
+diff --git a/sdk/android/src/jni/video_decoder_wrapper.cc b/sdk/android/src/jni/video_decoder_wrapper.cc
+index eaeeb2d..5e3aeed 100644
+--- a/sdk/android/src/jni/video_decoder_wrapper.cc
++++ b/sdk/android/src/jni/video_decoder_wrapper.cc
+@@ -23,6 +23,7 @@
+ #include "rtc_base/time_utils.h"
+ #include "sdk/android/generated_video_jni/VideoDecoderWrapper_jni.h"
+ #include "sdk/android/generated_video_jni/VideoDecoder_jni.h"
++#include "sdk/android/native_api/jni/class_loader.h"
+ #include "sdk/android/native_api/jni/java_types.h"
+ #include "sdk/android/src/jni/encoded_image.h"
+ #include "sdk/android/src/jni/video_codec_status.h"
+@@ -277,9 +278,20 @@ std::unique_ptr<VideoDecoder> JavaToNativeVideoDecoder(
+           Java_VideoDecoder_createNative(jni, j_decoder, webrtcEnvRef);
+       native_decoder != 0) {
+     return absl::WrapUnique(reinterpret_cast<VideoDecoder*>(native_decoder));
+-  } else {
+-    return std::make_unique<VideoDecoderWrapper>(jni, j_decoder);
+   }
++  // XGram: 0 means "this is a Java decoder" only for a real Java decoder. A
++  // WrappedNativeVideoDecoder (software codecs, VideoDecoderFallback) that
++  // returns 0 could not create its native decoder, e.g. for a codec this build
++  // does not include. Its Java methods are stubs, so wrapping it would only
++  // fail later; report "no decoder" and let the caller fall back.
++  if (jni->IsInstanceOf(
++          j_decoder.obj(),
++          GetClass(jni, "org/webrtc/WrappedNativeVideoDecoder").obj())) {
++    RTC_LOG(LS_ERROR) << "JavaToNativeVideoDecoder: the native decoder could "
++                         "not be created";
++    return nullptr;
++  }
++  return std::make_unique<VideoDecoderWrapper>(jni, j_decoder);
+ }
+ 
+ }  // namespace jni
+diff --git a/sdk/android/src/jni/video_encoder_fallback.cc b/sdk/android/src/jni/video_encoder_fallback.cc
+index d581572..b30405d 100644
+--- a/sdk/android/src/jni/video_encoder_fallback.cc
++++ b/sdk/android/src/jni/video_encoder_fallback.cc
+@@ -27,6 +27,14 @@ static jlong JNI_VideoEncoderFallback_CreateEncoder(
+   std::unique_ptr<VideoEncoder> primary_encoder =
+       JavaToNativeVideoEncoder(jni, j_primary_encoder);
+ 
++  // XGram: JavaToNativeVideoEncoder returns nullptr for a native encoder that
++  // could not be created, and the fallback wrapper dereferences both sides.
++  // Use the one that exists; 0 (neither) tells the caller there is no encoder.
++  if (!fallback_encoder || !primary_encoder) {
++    return jlongFromPointer(primary_encoder ? primary_encoder.release()
++                                            : fallback_encoder.release());
++  }
++
+   VideoEncoder* nativeWrapper =
+       CreateVideoEncoderSoftwareFallbackWrapper(std::move(fallback_encoder),
+                                                 std::move(primary_encoder))
+diff --git a/sdk/android/src/jni/video_encoder_wrapper.cc b/sdk/android/src/jni/video_encoder_wrapper.cc
+index 8458ba6..3fbffb4 100644
+--- a/sdk/android/src/jni/video_encoder_wrapper.cc
++++ b/sdk/android/src/jni/video_encoder_wrapper.cc
+@@ -464,6 +464,17 @@ std::unique_ptr<VideoEncoder> JavaToNativeVideoEncoder(
+       Java_VideoEncoder_createNativeVideoEncoder(jni, j_encoder);
+   VideoEncoder* encoder;
+   if (native_encoder == 0) {
++    // XGram: 0 means "this is a Java encoder" only for a real Java encoder. A
++    // WrappedNativeVideoEncoder (software codecs, VideoEncoderFallback) that
++    // returns 0 could not create its native encoder. Its Java methods are
++    // stubs, so report "no encoder" and let the caller switch codecs.
++    if (jni->IsInstanceOf(
++            j_encoder.obj(),
++            GetClass(jni, "org/webrtc/WrappedNativeVideoEncoder").obj())) {
++      RTC_LOG(LS_ERROR) << "JavaToNativeVideoEncoder: the native encoder "
++                           "could not be created";
++      return nullptr;
++    }
+     encoder = new VideoEncoderWrapper(jni, j_encoder);
+   } else {
+     encoder = reinterpret_cast<VideoEncoder*>(native_encoder);
