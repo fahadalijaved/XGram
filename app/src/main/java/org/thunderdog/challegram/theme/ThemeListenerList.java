@@ -42,12 +42,27 @@ public class ThemeListenerList {
     return themeListeners;
   }
 
+  // XGram: the entries hold their views weakly and went only on a theme change, so a long-lived screen collected one
+  // per header button made again on every visit (HeaderView builds a screen's menu anew each time it is shown): those
+  // whose view is gone are dropped every PRUNE_EVERY additions too (never while the list is being applied)
+  private static final int PRUNE_EVERY = 64;
+  private int addsSincePrune;
+  private boolean applying;
+
   public void add (ThemeListenerEntry item) {
     themeListeners.add(item);
+    if (++addsSincePrune >= PRUNE_EVERY && !applying) {
+      addsSincePrune = 0;
+      for (int i = themeListeners.size() - 1; i >= 0; i--) {
+        if (themeListeners.get(i).isEmpty()) {
+          themeListeners.remove(i);
+        }
+      }
+    }
   }
 
   private void addThemeListener (ThemeListenerEntry listenerEntry) {
-    themeListeners.add(listenerEntry);
+    add(listenerEntry);
   }
 
   public final ThemeListenerEntry addThemeListener (Object target, @ColorId int colorId, @ThemeListenerEntry.EntryMode int mode) {
@@ -144,11 +159,17 @@ public class ThemeListenerList {
   }
 
   public final void onThemeColorsChanged (boolean areTemp) {
-    final int size = themeListeners.size();
-    for (int i = size - 1; i >= 0; i--) {
-      ThemeListenerEntry entry = themeListeners.get(i);
-      if (!entry.apply(areTemp))
-        themeListeners.remove(i);
+    final boolean wasApplying = applying;
+    applying = true;
+    try {
+      final int size = themeListeners.size();
+      for (int i = size - 1; i >= 0; i--) {
+        ThemeListenerEntry entry = themeListeners.get(i);
+        if (!entry.apply(areTemp))
+          themeListeners.remove(i);
+      }
+    } finally {
+      applying = wasApplying;
     }
   }
 }

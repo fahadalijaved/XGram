@@ -101,7 +101,8 @@ import tgx.td.ChatId;
  *   <li>A 56dp profile button (the account's photo) 8dp after the pill: a circle at rest, a squircle while the own
  *   profile is on screen. Long press: switch account.</li>
  *   <li>Contacts, Settings, the profile (and Calls with folders) are tab screens: opened by the toolbar right above the
- *   chat list (a fade), no back arrow, Back fades to the chat list. The toolbar lives above the navigation (in the
+ *   chat list (a short fade-through), no back arrow, Back fades to the chat list. One live instance of each is kept
+ *   warm and shown again as it was (no rebuild, its scroll position). The toolbar lives above the navigation (in the
  *   activity's content layout, like the rail), stays on screen for a tab change, leaves with its tab screen when a
  *   screen is pushed (shared axis) and sits under a predictive back card like the live app bar.</li>
  *   <li>A page-colour band behind it fades the rows out under the bar; it takes the touches of its solid part.</li>
@@ -221,6 +222,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   private final Runnable settleRunnable = this::settle;
   private final Runnable layoutNotify = this::notifyRootLayout;
+
+  // Warm tab screens (by destination): one live instance each of Calls, Contacts, Settings and the profile, kept when it
+  // leaves the screen (another tab, Back to the chat list) and shown again as it was: no rebuild, no wait for its data
+  // (its own listeners keep it current meanwhile), its scroll position. The stack skips their destroy()
+  // (ViewController#xgramKeepsWarm); the toolbar lets go of them (destroying those off the stack) on an account or
+  // chat list change, when their tab goes, when the window changes size and when it hides or goes itself.
+  private final ViewController<?>[] warm = new ViewController<?>[TAB_KEYS.length];
+  private final Runnable dropDetachedRunnable = this::dropDetachedWarm;
 
   private final ThemeChangeListener themeListener = new ThemeChangeListener() {
     @Override
@@ -559,6 +568,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         badges.stop();
       }
       detachHost();
+      dropWarm(); // ordinary screens now: the one on screen goes with the stack, the others go
     }
     onTabScreensChanged();
     if (shown) {
@@ -579,6 +589,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (tabsChanged || wasButton != buttonMode || wasVibrant != vibrant || iconPack != XgramIconPack.current()) {
       rebuildTabs(dests);
       dropStaleTabScreens();
+      dropStaleWarm();
       requestFit(true);
       if (tabsChanged && root != null && isRootOf(root)) {
         root.xgramOnToolbarChanged(); // the Chats / Calls header tabs follow the Calls tab
@@ -710,6 +721,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     UI.cancel(layoutNotify);
     endTransition();
     attachScrollSource(null);
+    dropWarm();
     hideSpring.cancel();
     widthSpring.cancel();
     leftSpring.cancel();
@@ -833,7 +845,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     holeOffsetY = navigationView.getTop() - host.getTop();
     if (tabL && tabR) {
       // Between two tab roots (back to the chat list, or a tab screen open() is fading in): the pill morphs with the
-      // fade, which starts only once the incoming screen is ready (its asynchronous wait)
+      // fade-through, both from this frame (a tab screen does not wait for its data: NavigationController)
       setTarget(computeSelected(forward ? right : left), true);
     } else if (tabL && !tabR && !forward) {
       // Back to a tab root from an ordinary screen: the stack below may have changed since the toolbar last settled
@@ -1032,6 +1044,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (tabRoot && top != root) {
       if (topChanged) {
         transformSearching = top.inSearchMode();
+        adoptWarm(top);
       }
       transform = transformSearching || top.inSelectMode();
     } else {
@@ -1137,6 +1150,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (this.root == root) {
       return;
     }
+    dropWarm(); // another chat list (an account switch, a sign-in): its tab screens are made again
     this.root = root;
     Tdlib tdlib = root != null ? root.tdlib() : null;
     if (tdlib != this.tdlib) {
@@ -1414,6 +1428,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return;
     }
     boolean sameWidth = width == fitWidth;
+    if (!sameWidth && fitWidth > 0) {
+      // The window changed size (rotation, a fold): the warm tab screens off the stack missed the configuration change.
+      // Let go of them after this layout pass; the one on screen stays (it hears it)
+      UI.cancel(dropDetachedRunnable);
+      UI.post(dropDetachedRunnable);
+    }
     boolean animated = fitAnimate && sameWidth && fitW > 0f && isVisibleNow();
     fitAnimate = false;
     fitDirty = false;
@@ -1614,6 +1634,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       case DEST_CALLS: {
         final boolean calls = dest == DEST_CALLS;
         if (!calls || root.xgramHasCallsPage()) {
+          if (calls) {
+            forgetWarm(DEST_CALLS); // Calls is the chat list's page again (no folders): no call list screen to keep
+          }
           if (atRoot) {
             ignorePagerScroll = true; // the pager's own scroll follows a tap: the springs run instead
             setTarget(dest, true);
@@ -1626,7 +1649,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
           return;
         }
         // Folders: the chat list's pages are the folders, so Calls is a tab screen
-        open(DEST_CALLS, new CallListController(context, tdlib), drawer);
+        ViewController<?> callList = warmScreen(DEST_CALLS);
+        open(DEST_CALLS, callList != null ? callList : new CallListController(context, tdlib), drawer);
         if (badges != null) {
           badges.markCallsSeen();
         }
@@ -1635,15 +1659,20 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       case DEST_CONTACTS: {
         tdlib.contacts().startSyncIfNeeded(context, true, () -> {
           if (tdlib == this.tdlib && canNavigate(drawer)) {
-            PeopleController c = new PeopleController(context, tdlib);
-            c.setNeedSearch();
+            ViewController<?> c = warmScreen(DEST_CONTACTS);
+            if (c == null) {
+              PeopleController people = new PeopleController(context, tdlib);
+              people.setNeedSearch();
+              c = people;
+            }
             open(DEST_CONTACTS, c, drawer);
           }
         });
         return;
       }
       case DEST_SETTINGS: {
-        open(DEST_SETTINGS, new SettingsController(context, tdlib), drawer);
+        ViewController<?> settings = warmScreen(DEST_SETTINGS);
+        open(DEST_SETTINGS, settings != null ? settings : new SettingsController(context, tdlib), drawer);
         return;
       }
       case DEST_PROFILE: {
@@ -1662,8 +1691,92 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return;
     }
     c.xgramSetBarTab(dest); // before its view is made: no back arrow, its margins and room as a tab screen
-    // The selection moves when the fade begins (onXgramTransitionBegin), after the screen's asynchronous wait
+    keepWarm(dest, c); // kept when another tab or the chat list replaces it, shown again next time
+    // The fade starts at once (NavigationController skips a tab screen's wait for its data) and the selection moves
+    // with it, in this frame (onXgramTransitionBegin)
     navigation.setControllerAnimated(c, false, true);
+  }
+
+  // Warm tab screens
+
+  /** The live screen of {@code dest} to show again; null when there is none (or it can no longer be shown). */
+  @Nullable
+  private ViewController<?> warmScreen (int dest) {
+    ViewController<?> c = warm[dest];
+    if (c == null) {
+      return null;
+    }
+    if (c.isDestroyed() || c.tdlib() != tdlib || c.xgramBarTabRaw() != dest || navigation == null || navigation.getStack().indexOf(c) != -1) {
+      forgetWarm(dest); // gone, another account, or (never expected) on the stack already: a new one
+      return null;
+    }
+    View view = c.getWrapUnchecked();
+    if (view != null && view.getParent() instanceof ViewGroup) {
+      ((ViewGroup) view.getParent()).removeView(view); // never expected: the navigation removes a screen it hides
+    }
+    return c;
+  }
+
+  private void keepWarm (int dest, ViewController<?> c) {
+    if (warm[dest] != c) {
+      forgetWarm(dest);
+      warm[dest] = c;
+    }
+    c.xgramSetKeepWarm(true);
+  }
+
+  /** Lets go of the screen of {@code dest}: destroyed when it is off the stack; on it, the stack destroys it as usual. */
+  private void forgetWarm (int dest) {
+    ViewController<?> c = warm[dest];
+    if (c == null) {
+      return;
+    }
+    warm[dest] = null;
+    c.xgramSetKeepWarm(false);
+    if (!c.isDestroyed() && navigation != null) {
+      navigation.xgramDestroyDetached(c);
+    }
+  }
+
+  private void dropWarm () {
+    UI.cancel(dropDetachedRunnable);
+    for (int dest = 0; dest < warm.length; dest++) {
+      forgetWarm(dest);
+    }
+  }
+
+  /** The window changed size: the warm screens off the stack go (made again for the new size when asked for). */
+  private void dropDetachedWarm () {
+    if (navigation == null) {
+      return;
+    }
+    for (int dest = 0; dest < warm.length; dest++) {
+      ViewController<?> c = warm[dest];
+      if (c != null && (c.isDestroyed() || navigation.getStack().indexOf(c) == -1)) {
+        forgetWarm(dest);
+      }
+    }
+  }
+
+  /**
+   * A tab screen on top that is not the kept one of its destination (it was on screen while the toolbar was hidden,
+   * on a fold): kept from now on, so the next switch away does not destroy it.
+   */
+  private void adoptWarm (ViewController<?> c) {
+    int dest = c.xgramBarTabRaw();
+    if (dest < 0 || dest >= warm.length || warm[dest] == c || c.isDestroyed() || c.tdlib() != tdlib || (!hasTab(dest) && !(dest == DEST_PROFILE && buttonMode))) {
+      return;
+    }
+    keepWarm(dest, c);
+  }
+
+  /** The tabs changed: a kept screen whose destination is no longer a tab (nor the profile button's) goes. */
+  private void dropStaleWarm () {
+    for (int dest = 0; dest < warm.length; dest++) {
+      if (warm[dest] != null && !hasTab(dest) && !(dest == DEST_PROFILE && buttonMode)) {
+        forgetWarm(dest);
+      }
+    }
   }
 
   private void openProfile (boolean drawer) {
@@ -1699,8 +1812,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (!canNavigate(drawer)) {
       return;
     }
-    ProfileController c = new ProfileController(context, tdlib);
-    c.setArguments(new ProfileController.Args(chat, null, false));
+    ViewController<?> c = warmScreen(DEST_PROFILE);
+    if (c == null || c.getChatId() != chat.id) {
+      ProfileController profile = new ProfileController(context, tdlib);
+      profile.setArguments(new ProfileController.Args(chat, null, false));
+      c = profile;
+    }
     open(DEST_PROFILE, c, drawer);
   }
 

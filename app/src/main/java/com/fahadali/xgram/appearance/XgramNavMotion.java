@@ -228,6 +228,22 @@ public final class XgramNavMotion {
   }
 
   /**
+   * The colour behind the screens during a fade-through that NavigationController runs itself (a tab switch of the
+   * floating navigation toolbar): the incoming page's colour, so only the content fades; 0 when it ends. Left alone
+   * while a shared axis or a card owns the backdrop.
+   */
+  public void setFadeBackdrop (int color) {
+    if (active) {
+      return;
+    }
+    if (color == 0) {
+      backdrop.setColor(0);
+    } else {
+      backdrop.setColor(Color.alpha(color) == 255 ? color : XgramExpressive.color(XgramExpressive.SURFACE) | 0xff000000);
+    }
+  }
+
+  /**
    * XGram M3E: hears where the predictive back card is, so a view above the screens (the floating navigation toolbar,
    * com.fahadali.xgram.layout.XgramNavToolbar) cuts it out of itself as the app bar does.
    */
