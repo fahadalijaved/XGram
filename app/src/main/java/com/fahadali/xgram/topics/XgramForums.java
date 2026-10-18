@@ -25,6 +25,7 @@ import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibDelegate;
 import org.thunderdog.challegram.telegram.TdlibForumTopicManager;
+import org.thunderdog.challegram.telegram.TdlibNotification;
 import org.thunderdog.challegram.telegram.TdlibUi;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.MessagesController;
@@ -95,6 +96,72 @@ public final class XgramForums {
       destroyWhenCovered((ViewController<?>) context, c);
     }
     return true;
+  }
+
+  /**
+   * The topic list in place of a forum's merged history (TdlibUi.openChat's routing), placed as a chat would be there.
+   * Nothing on screen yet (a notification on a cold start): the topic list with the chat list under it; navigateTo
+   * refuses an empty stack, which left the bare navigation (an empty header and nothing under it). From a notification
+   * over other screens: the chat list under it, as for a chat. Otherwise as {@link #openTopicList(TdlibDelegate, TdApi.Chat)}.
+   */
+  public static void openRoutedTopicList (TdlibDelegate context, TdApi.Chat chat, boolean fromNotification) {
+    NavigationController navigation = context.context().navigation();
+    if (navigation == null || navigation.isDestroyed() || !(navigation.isEmpty() || (fromNotification && navigation.getStackSize() > 1))) {
+      openTopicList(context, chat, false);
+      return;
+    }
+    if (!navigation.isEmpty() && context.context().isNavigationBusy()) {
+      return; // as TdlibUi.openChat: the tap is dropped, what is on screen stays
+    }
+    ForumTopicsController c = new ForumTopicsController(context.context(), context.tdlib());
+    c.setArguments(new ForumTopicsController.Arguments(chat));
+    if (navigation.isEmpty()) {
+      navigation.initController(c);
+      org.thunderdog.challegram.ui.MainController main = new org.thunderdog.challegram.ui.MainController(context.context(), context.tdlib());
+      main.getValue();
+      navigation.getStack().insert(main, 0);
+    } else {
+      navigation.setControllerAnimated(c, true, true);
+    }
+  }
+
+  /** Intent extra of a message notification: the forum topic of its messages (see {@link #notificationTopicId}). */
+  public static final String EXTRA_NOTIFICATION_TOPIC_ID = "xgram_forum_topic_id";
+
+  /**
+   * The forum topic all of a notification's messages are in, so tapping it opens that topic: 0 outside forums, when
+   * they are in several topics or one isn't known yet (a push): the forum then opens as it does from the chat list.
+   * Notification thread.
+   */
+  public static int notificationTopicId (Tdlib tdlib, long chatId, @Nullable Iterable<TdlibNotification> notifications) {
+    if (notifications == null || chatId == 0 || !tdlib.isForum(chatId)) {
+      return 0;
+    }
+    int forumTopicId = 0;
+    for (TdlibNotification notification : notifications) {
+      TdApi.Message message = notification.getChatId() == chatId ? notification.findMessage() : null;
+      if (message == null || !(message.topicId instanceof TdApi.MessageTopicForum)) {
+        return 0;
+      }
+      int id = ((TdApi.MessageTopicForum) message.topicId).forumTopicId;
+      if (forumTopicId != 0 && id != forumTopicId) {
+        return 0;
+      }
+      forumTopicId = id;
+    }
+    return forumTopicId;
+  }
+
+  /**
+   * A notification of one topic of a forum shown by topics: it opens that topic, at its first unread message when the
+   * topic is known here (the notification asked for it), else where it was left or at the bottom. Nothing is waited
+   * for, so a cold start never sits on an empty screen. UI thread.
+   */
+  public static void prepareNotificationTopicOpen (Tdlib tdlib, TdApi.Chat chat, int forumTopicId, TdlibUi.ChatOpenParameters params) {
+    params.xgramSkipForumRouting();
+    params.messageTopicId = new TdApi.MessageTopicForum(forumTopicId);
+    TopicResume resume = topicResume(tdlib, chat.id, forumTopicId, knownTopic(tdlib, chat.id, forumTopicId));
+    params.highlightMessage(resume.highlightMode, resume.anchor);
   }
 
   /**

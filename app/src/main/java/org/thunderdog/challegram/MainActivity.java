@@ -539,11 +539,20 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
 
   private @androidx.annotation.Nullable View xgramStartupLoading;
 
+  // A page set some other way while the state was still unknown (a notification tapped again during the startup, a
+  // chat opened as soon as its own account was ready) takes the loading indicator away too: it never stays over it.
+  private final NavigationStack.ChangeListener xgramStartupLoadingListener = stack -> {
+    if (!stack.isEmpty()) {
+      xgramSetStartupLoading(false);
+    }
+  };
+
   private void xgramSetStartupLoading (boolean visible) {
     if (visible) {
-      if (xgramStartupLoading != null || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || rootView == null) {
+      if (xgramStartupLoading != null || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || rootView == null || !navigation.isEmpty()) {
         return;
       }
+      navigation.getStack().addChangeListener(xgramStartupLoadingListener);
       com.fahadali.xgram.appearance.XgramListStateView view = new com.fahadali.xgram.appearance.XgramListStateView(this);
       view.setLoading(true, com.fahadali.xgram.appearance.XgramM3MediaChrome.LOADING_ACTIVE_DP);
       com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable surface = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, Float.NaN);
@@ -554,6 +563,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       rootView.addView(view, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
       xgramStartupLoading = view;
     } else if (xgramStartupLoading != null) {
+      navigation.getStack().removeChangeListener(xgramStartupLoadingListener);
       final View view = xgramStartupLoading;
       xgramStartupLoading = null;
       view.setClickable(false);
@@ -846,14 +856,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         }
         Log.w("Received unknown accountId: %s", action);
       }
-      Tdlib tdlib = TdlibManager.instanceForAccountId(accountId).account(accountId).tdlib();
-      tdlib.awaitInitialization(() -> {
-        tdlib.incrementUiReferenceCount();
-        handler.post(() -> {
-          openMainController(tdlib.id());
-          tdlib.decrementUiReferenceCount();
-        });
-      });
+      xgramOpenMainWhenReady(accountId);
       return true;
     }
 
@@ -868,7 +871,12 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       }
       long messageId = intent.getLongExtra("message_id", 0);
       if (accountId != TdlibAccount.NO_ID && chatId != 0) {
-        openMessagesController(accountId, chatId, messageId);
+        openMessagesController(accountId, chatId, messageId, intent.getIntExtra(com.fahadali.xgram.topics.XgramForums.EXTRA_NOTIFICATION_TOPIC_ID, 0));
+        return true;
+      } else if (accountId != TdlibAccount.NO_ID && TdlibManager.instance().hasAccount(accountId)) {
+        // XGram: the summary of several chats has no chat (TdlibNotificationStyle asks a local id for chat 0, which maps
+        // back to 0): it opens that account's chat list, as Intents.valueOfMain does, instead of doing nothing
+        xgramOpenMainWhenReady(accountId);
         return true;
       } else {
         Log.e("Cannot open chat, no information found: %s", intent);
@@ -1480,15 +1488,63 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     }
   }
 
-  private void openMessagesController (int accountId, long chatId, long specificMessageId) {
+  private void xgramOpenMainWhenReady (int accountId) {
+    Tdlib tdlib = TdlibManager.instanceForAccountId(accountId).account(accountId).tdlib();
+    tdlib.awaitInitialization(() -> {
+      tdlib.incrementUiReferenceCount();
+      handler.post(() -> {
+        openMainController(tdlib.id());
+        tdlib.decrementUiReferenceCount();
+      });
+    });
+    xgramShowChatsWhileWaiting(tdlib);
+  }
+
+  /**
+   * XGram: a notification handled before anything is on screen while its account's TDLib is still starting (a cold
+   * start from another account's notification): the current account's chat list shows meanwhile, with its own
+   * loading state, and the chat opens over it once that account is ready. Telegram X left the screen empty.
+   */
+  private void xgramShowChatsWhileWaiting (Tdlib target) {
+    if (navigation.isEmpty() && !navigation.isDestroyed() && target.authorizationStatus() == Tdlib.Status.UNKNOWN && account.tdlib().authorizationStatus() == Tdlib.Status.READY) {
+      initMainController(null, null, null);
+    }
+  }
+
+  /**
+   * XGram: a notification's chat did not open (no access, the chat is gone, an error) and nothing else is on screen
+   * (a cold start): the chat list, never the empty navigation (a bare header and nothing under it).
+   */
+  private void xgramEnsureNotBlank (Tdlib tdlib) {
+    if (!navigation.isEmpty() || navigation.isDestroyed() || isFinishing()) {
+      return;
+    }
+    if (tdlib.authorizationStatus() == Tdlib.Status.READY) {
+      initDefault(tdlib.id(), false);
+    } else if (account.tdlib().authorizationStatus() == Tdlib.Status.READY) {
+      initDefault(account.id, false);
+    }
+  }
+
+  private void openMessagesController (int accountId, long chatId, long specificMessageId, int xgramTopicId) {
     final Tdlib tdlib = TdlibManager.instanceForAccountId(accountId).account(accountId).tdlib();
     tdlib.awaitInitialization(() -> {
       tdlib.incrementUiReferenceCount();
       handler.post(() -> {
         final TdlibContext context = new TdlibContext(this, tdlib);
-        final TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().onDone(tdlib::decrementUiReferenceCount);
+        final TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().onDone(() -> {
+          tdlib.decrementUiReferenceCount();
+          handler.post(() -> xgramEnsureNotBlank(tdlib)); // XGram: once the open is done, whichever way it went
+        }).xgramFromNotification(xgramTopicId);
         if (specificMessageId != 0)
           params.highlightMessage(new MessageId(chatId, specificMessageId));
+        if (specificMessageId != 0 && xgramTopicId != 0) {
+          // XGram: a mention in a forum topic, known from the notification: the topic, scrolled to the mention (also on a
+          // cold start, when the forum isn't loaded yet and isForum below can't tell)
+          params.messageTopicId = new TdApi.MessageTopicForum(xgramTopicId);
+          tdlib.ui().openChat(context, chatId, params);
+          return;
+        }
         if (specificMessageId != 0 && tdlib.isForum(chatId)) {
           // XGram: a forum notification opens the topic of its message.
           tdlib.send(new TdApi.GetMessage(chatId, specificMessageId), (message, error) -> handler.post(() -> {
@@ -1502,6 +1558,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         tdlib.ui().openChat(context, chatId, params);
       });
     });
+    xgramShowChatsWhileWaiting(tdlib);
   }
 
   private void openPlayerController (int accountId) {
