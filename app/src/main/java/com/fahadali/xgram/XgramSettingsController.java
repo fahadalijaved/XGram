@@ -307,6 +307,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(R.string.XgramAboutSupportInfo);
         } else if (id == R.id.btn_xgramAvatarCorners) {
           view.setData(avatarCornersName(settings.avatarCorners()));
+        } else if (id == R.id.btn_xgramChatFabsAvatarShape) {
+          view.getToggler().setRadioEnabled(settings.chatFabsAvatarShape(), isUpdate);
         } else if (id == R.id.btn_xgramChatListView) {
           view.setData(com.fahadali.xgram.chats.XgramChatListMode.name(org.thunderdog.challegram.unsorted.Settings.instance().getChatListMode()));
         } else if (id == R.id.btn_xgramChatLongPress) {
@@ -674,12 +676,16 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     }
 
     items.add(header(R.string.XgramChats));
-    addRows(items,
-      link(R.id.btn_xgramChatLook, 0, R.string.XgramChatLookRow, R.string.XgramChatLookSub),
-      link(R.id.btn_xgramAvatarCorners, R.string.XgramAvatarCorners),
-      toggle(R.id.btn_xgramShowSeconds, R.string.XgramShowSeconds, R.string.XgramShowSecondsSub),
-      toggle(R.id.btn_xgramShowPeerIds, R.string.XgramShowPeerIds, R.string.XgramShowPeerIdsSub)
-    );
+    List<ListItem> chats = new ArrayList<>();
+    chats.add(link(R.id.btn_xgramChatLook, 0, R.string.XgramChatLookRow, R.string.XgramChatLookSub));
+    chats.add(link(R.id.btn_xgramAvatarCorners, R.string.XgramAvatarCorners));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the chat's floating buttons in the avatars' shape (only Expressive design draws them as M3 FABs)
+      chats.add(toggle(R.id.btn_xgramChatFabsAvatarShape, R.string.XgramChatFabsAvatarShape, R.string.XgramChatFabsAvatarShapeSub));
+    }
+    chats.add(toggle(R.id.btn_xgramShowSeconds, R.string.XgramShowSeconds, R.string.XgramShowSecondsSub));
+    chats.add(toggle(R.id.btn_xgramShowPeerIds, R.string.XgramShowPeerIds, R.string.XgramShowPeerIdsSub));
+    addRows(items, chats.toArray(new ListItem[0]));
 
     items.add(header(R.string.XgramLayout));
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
@@ -1456,6 +1462,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramShowSeconds) {
       settings.setShowSeconds(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramChatFabsAvatarShape) {
+      settings.setChatFabsAvatarShape(adapter.toggleView(v));
+      // Open chats (the other pane) redraw now; their buttons take the shape before they draw (CircleButton.draw)
+      com.fahadali.xgram.XgramUi.invalidateAll(context);
       return;
     } else if (id == R.id.btn_xgramTapTimeDetails) {
       settings.setTapTimeForDetails(adapter.toggleView(v));

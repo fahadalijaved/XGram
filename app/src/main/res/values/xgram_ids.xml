@@ -175,6 +175,7 @@
   <item type="id" name="btn_xgramUnblockAll" />
   <item type="id" name="btn_xgramUnblockDeleted" />
   <item type="id" name="btn_xgramAvatarCorners" />
+  <item type="id" name="btn_xgramChatFabsAvatarShape" />
   <item type="id" name="btn_xgramHideBlocked" />
   <item type="id" name="btn_xgramRecentActions" />
   <item type="id" name="menu_xgramTopics" />

@@ -41,6 +41,8 @@ public final class XgramBackup {
     XgramSettings.KEY_PANE_SPLIT_EVENLY, XgramSettings.KEY_PANE_RESIZABLE, XgramSettings.KEY_NAV_RAIL, XgramSettings.KEY_BOTTOM_NAV,
     // Pure black night mode (Appearance, with Expressive design)
     XgramSettings.KEY_PURE_BLACK,
+    // Chat buttons match avatar shape (Appearance, with Expressive design)
+    XgramSettings.KEY_CHAT_FABS_AVATAR_SHAPE,
     XgramSettings.KEY_DRAG_DROP, XgramSettings.KEY_OPEN_BESIDE,
     // Reactions in channels (Messages)
     XgramSettings.KEY_CHANNEL_REACTIONS,

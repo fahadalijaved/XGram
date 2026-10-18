@@ -81,6 +81,20 @@ public class CircleCounterBadgeView extends FrameLayout implements FactorAnimato
     circleButton.setInProgress(inProgress);
   }
 
+  /**
+   * XGram M3E: this view's right and bottom margins (before {@link #xgramMakeShadowRoom()}) that put its chat FAB's
+   * container 16dp from the edges, the M3 FAB margins: the button is laid out at 56dp (Telegram X's 48dp circle and
+   * its 4dp padding) and the container (CircleButton.XGRAM_CHAT_FAB_DP) is centred in it, so 12dp for the 48dp FAB.
+   * Telegram X's 12dp with Expressive design off.
+   */
+  public static int xgramFabMargin () {
+    final int button = Screen.dp(24f) * 2 + PADDING * 2;
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      return Screen.dp(16f) - PADDING;
+    }
+    return Math.max(0, Screen.dp(16f) - Math.max(0, (button - Screen.dp(CircleButton.XGRAM_CHAT_FAB_DP)) / 2));
+  }
+
   /** XGram M3E: room for the FAB's shadow inside this view (see CircleButton.xgramMakeShadowRoom), after its final layout params. */
   public void xgramMakeShadowRoom () {
     circleButton.xgramMakeShadowRoom();

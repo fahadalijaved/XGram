@@ -46,6 +46,7 @@ import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.telegram.ReactionLoadListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
+import org.thunderdog.challegram.theme.PropertyId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.DrawAlgorithms;
 import org.thunderdog.challegram.tool.Drawables;
@@ -237,25 +238,77 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     return true;
   }
 
-  // XGram M3E: the chat's floating buttons (Telegram X's 48dp circles) are M3 secondary FABs: a 56dp container with
-  // 16dp corners (shape.corner.large), secondaryContainer with a 24dp onSecondaryContainer icon, elevation level 3
-  // (6dp), the onSecondaryContainer state layer at 10% (ripple only: M3 FABs keep their shape when pressed). The
-  // container is centred in the view, so a view laid out larger (64dp) leaves room for the badge on its corner.
+  // XGram M3E: the chat's floating buttons (Telegram X's 48dp circles) are M3 secondary FABs: a 48dp container (between
+  // the small FAB's 40dp and the FAB's 56dp, Telegram X's own size, so they sit lighter over the messages) with 14dp
+  // corners (about .29 of the side, as the small FAB's 12dp and the FAB's 16dp), or the avatars' shape with "Chat
+  // buttons match avatar shape" on (xgramChatFabCornerDp), secondaryContainer with a 24dp onSecondaryContainer icon at
+  // its own size (crisp), elevation level 3 (6dp), the onSecondaryContainer state layer at 10% (ripple only: M3 FABs
+  // keep their shape when pressed, so there is no pressed shape to follow). The container is centred in the view, so a
+  // view laid out larger (56dp, still the 48dp touch target and more) leaves room for the badge on its corner.
 
-  public static final float XGRAM_CHAT_FAB_DP = 56f;
+  public static final float XGRAM_CHAT_FAB_DP = 48f;
+
+  /** The chat FABs' corner (dp) with "Chat buttons match avatar shape" off: the M3E rounded square. */
+  public static final float XGRAM_CHAT_FAB_CORNER = 14f;
+
+  /**
+   * The resting corner of the chat FABs in dp ({@link XgramExpressive#CORNER_FULL} for a circle): the M3E rounded
+   * square, or with "Chat buttons match avatar shape" on (XgramSettings.chatFabsAvatarShape) the avatars' shape, as
+   * AvatarReceiver.getDisplayRadius rounds an avatar: half the side times the avatar shape setting's factor, or the
+   * theme's avatar radius while that setting follows the theme. Cached values and a theme property only: read while
+   * the buttons draw (CircleButton and the bar that collapses into one, ChatBottomBarView), nothing allocated.
+   */
+  public static float xgramChatFabCornerDp () {
+    final com.fahadali.xgram.XgramSettings settings = com.fahadali.xgram.XgramSettings.instance();
+    if (!settings.chatFabsAvatarShape()) {
+      return XGRAM_CHAT_FAB_CORNER;
+    }
+    float factor = settings.avatarRadiusFactor();
+    if (factor < 0f) {
+      factor = Theme.getProperty(PropertyId.AVATAR_RADIUS);
+    }
+    factor = MathUtils.clamp(factor);
+    return factor >= 1f ? XgramExpressive.CORNER_FULL : XGRAM_CHAT_FAB_DP / 2f * factor;
+  }
 
   private boolean xgramChatFab;
+  private float xgramChatFabCorner = Float.NaN;
 
   /** True for a chat floating button drawn as an M3 FAB (Expressive design). */
   public boolean xgramIsChatFab () {
     return xgramChatFab;
   }
 
+  /**
+   * A chat FAB takes the chat FAB shape of now, when the option, the avatar shape or the theme's avatar radius changed
+   * since it last drew: the container, the ripple's mask and the outline (its shadow) together. Called before the
+   * background draws; nothing when the shape is the same (the usual frame).
+   */
+  private void xgramSyncChatFabShape () {
+    final float corner = xgramChatFabCornerDp();
+    if (corner == xgramChatFabCorner || xgramMorph == null || xgramMask == null) {
+      return;
+    }
+    xgramChatFabCorner = corner;
+    xgramMorph.setCorners(corner, corner, corner, corner);
+    xgramMask.setCorners(corner, corner, corner, corner);
+    invalidateOutline();
+  }
+
+  @Override
+  public void draw (@NonNull Canvas c) {
+    if (xgramChatFab) {
+      xgramSyncChatFabShape(); // XGram: Settings → XGram → Appearance changes open chats' buttons on their next frame
+    }
+    super.draw(c);
+  }
+
   private boolean xgramInitChatFab (boolean needShadow) {
     this.xgramChatFab = true;
     this.xgramFab = false; // not the main FAB: no toggle, extended or size morphs
     this.xgramSizeDp = XGRAM_CHAT_FAB_DP;
-    final float corner = XgramExpressive.CORNER_L;
+    final float corner = xgramChatFabCornerDp();
+    this.xgramChatFabCorner = corner;
     xgramMorph = new XgramExpressive.MorphDrawable(0, corner, Float.NaN);
     xgramMask = new XgramExpressive.MorphDrawable(0xff000000, corner, Float.NaN);
     xgramMorph.setSize(XGRAM_CHAT_FAB_DP, XGRAM_CHAT_FAB_DP, Gravity.CENTER);
@@ -276,12 +329,16 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     return true;
   }
 
-  // M3 large badge on a chat FAB (Compose BadgeTokens): 16dp high, at least 16dp wide, full corners, 4dp horizontal
-  // padding, labelSmall (11sp, 500, .5sp tracking), error / onError (a muted count: surfaceContainerHighest /
-  // onSurfaceVariant), up to 4 characters ("999+"). It sits on the container's top end corner, 4dp outside it, and
-  // scales in from that corner on the spatial fast spring. Drawn over the button, no allocation per frame.
+  // M3 large badge on a chat FAB (Compose BadgeTokens), a size up so the count reads at a glance on the 48dp FAB: 20dp
+  // high, at least 20dp wide (one digit is a circle), full corners, 6dp horizontal padding, labelMedium emphasized
+  // (12sp, 700, .5sp tracking), up to 4 characters ("999+"). error / onError; a muted count (a muted chat's unread
+  // messages, the reactions) primary / onPrimary, which stands off the secondaryContainer FAB and the chat under it in
+  // light, dark and Pure black (surfaceContainerHighest was a dark pill on the dark FAB). It sits on the container's
+  // top end corner, 4dp outside it: the room the 56dp view leaves around the 48dp container, so the view never clips
+  // it. It scales in from that corner on the spatial fast spring. Drawn over the button, no allocation per frame.
 
-  private static final float XGRAM_BADGE_HEIGHT = 16f, XGRAM_BADGE_PADDING = 4f, XGRAM_BADGE_OUTSET = 4f;
+  private static final float XGRAM_BADGE_HEIGHT = 20f, XGRAM_BADGE_PADDING = 6f, XGRAM_BADGE_OUTSET = 4f;
+  private static final int XGRAM_BADGE_STYLE = XgramExpressive.TS_LABEL_M;
   private static final Paint XGRAM_BADGE_FILL = new Paint(Paint.ANTI_ALIAS_FLAG);
   private static @Nullable android.text.TextPaint xgramBadgePaint;
 
@@ -295,10 +352,10 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
   private static android.text.TextPaint xgramBadgePaint () {
     if (xgramBadgePaint == null) {
       xgramBadgePaint = new android.text.TextPaint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
-      xgramBadgePaint.setTypeface(XgramExpressive.typeface(XgramExpressive.TS_LABEL_S, false));
-      xgramBadgePaint.setLetterSpacing(XgramExpressive.trackingSp(XgramExpressive.TS_LABEL_S) / XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_S));
+      xgramBadgePaint.setTypeface(XgramExpressive.typeface(XGRAM_BADGE_STYLE, true));
+      xgramBadgePaint.setLetterSpacing(XgramExpressive.trackingSp(XGRAM_BADGE_STYLE) / XgramExpressive.textSizeSp(XGRAM_BADGE_STYLE));
     }
-    xgramBadgePaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XgramExpressive.TS_LABEL_S)));
+    xgramBadgePaint.setTextSize(Screen.dp(XgramExpressive.textSizeSp(XGRAM_BADGE_STYLE)));
     return xgramBadgePaint;
   }
 
@@ -358,11 +415,11 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
       final float pivotX = rtl ? xgramBadgeRect.left + badgeHeight / 2f : xgramBadgeRect.right - badgeHeight / 2f;
       c.scale(scale, scale, pivotX, xgramBadgeRect.centerY());
     }
-    final int fill = XgramExpressive.color(xgramBadgeMuted ? XgramExpressive.SURFACE_CONTAINER_HIGHEST : XgramExpressive.ERROR);
+    final int fill = XgramExpressive.color(xgramBadgeMuted ? XgramExpressive.PRIMARY : XgramExpressive.ERROR);
     XGRAM_BADGE_FILL.setColor(XgramExpressive.withAlpha(fill, alpha));
     c.drawRoundRect(xgramBadgeRect, badgeHeight / 2f, badgeHeight / 2f, XGRAM_BADGE_FILL);
     final android.text.TextPaint paint = xgramBadgePaint();
-    final int text = XgramExpressive.color(xgramBadgeMuted ? XgramExpressive.ON_SURFACE_VARIANT : XgramExpressive.ON_ERROR);
+    final int text = XgramExpressive.color(xgramBadgeMuted ? XgramExpressive.ON_PRIMARY : XgramExpressive.ON_ERROR);
     paint.setColor(XgramExpressive.withAlpha(text, alpha));
     c.drawText(xgramBadgeText, xgramBadgeRect.centerX() - xgramBadgeTextWidth / 2f, xgramBadgeRect.centerY() - (paint.ascent() + paint.descent()) / 2f, paint);
     if (scaled) {
@@ -379,9 +436,10 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
    * <p>
    * A view's shadow is drawn in its parent's canvas, under the parent's clip, and each wrap is clipped to its own
    * bounds by the layout holding it (that layout clips its children). The FAB sat in its wrap's right bottom corner
-   * with 4dp (the search arrows: none) past the container, so its shadow ended in hard edges there: a translucent
-   * rectangle around the button, cut off on its right and bottom. A wrap that stops clipping its own children does
-   * not help (that only stops clipping the button's own drawing, not the shadow drawn around it).
+   * with 4dp past the container (the search arrows: none, with the 56dp container of before), so its shadow ended in
+   * hard edges there: a translucent rectangle around the button, cut off on its right and bottom. A wrap that stops
+   * clipping its own children does not help (that only stops clipping the button's own drawing, not the shadow drawn
+   * around it).
    * <p>
    * So the wrap's right and bottom margins move inside it: the wrap grows by the same amount and keeps its left and
    * top, the button and its right or bottom anchored siblings take the amount as extra margins, and nothing moves on
@@ -402,7 +460,7 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     if (!xgramAnchoredRight(params) || !xgramAnchoredBottom(params)) {
       return;
     }
-    // The container is centred in the view: a 64dp view already leaves 4dp around it
+    // The container is centred in the view: a 56dp view already leaves 4dp around the 48dp container
     final int inset = Math.max(0, (Math.min(params.width, params.height) - Screen.dp(XGRAM_CHAT_FAB_DP)) / 2);
     final int room = Screen.dp(XGRAM_SHADOW_ROOM);
     final int dx = Math.max(0, Math.min(room - inset - params.rightMargin, wrapParams.rightMargin));
@@ -996,8 +1054,9 @@ public class CircleButton extends View implements FactorAnimator.Target, Reactio
     }
 
     if (sticker != null && imageReceiver != null && gifReceiver != null) {
-      // XGram: on a chat FAB the reaction takes a 32dp box in the 56dp container (Telegram X: two thirds of the view)
-      final int halfW = xgramChatFab ? Screen.dp(16f) : width / 3, halfH = xgramChatFab ? Screen.dp(16f) : height / 3;
+      // XGram: on a chat FAB the reaction takes a 28dp box in the 48dp container, inside a circle too (Telegram X: two
+      // thirds of the view)
+      final int halfW = xgramChatFab ? Screen.dp(14f) : width / 3, halfH = xgramChatFab ? Screen.dp(14f) : height / 3;
       imageReceiver.setBounds(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
       gifReceiver.setBounds(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
 
