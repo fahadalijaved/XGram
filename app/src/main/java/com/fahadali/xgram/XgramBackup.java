@@ -44,6 +44,8 @@ public final class XgramBackup {
     XgramSettings.KEY_DRAG_DROP, XgramSettings.KEY_OPEN_BESIDE,
     // Reactions in channels (Messages)
     XgramSettings.KEY_CHANNEL_REACTIONS,
+    // Bigger text, kept for three lines (Chat list view)
+    XgramSettings.KEY_CHAT_LIST_BIG_TEXT,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
