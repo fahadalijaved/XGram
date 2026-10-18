@@ -97,6 +97,7 @@ import org.thunderdog.challegram.util.Crash;
 import org.thunderdog.challegram.widget.GearView;
 import org.thunderdog.challegram.widget.NoScrollTextView;
 import org.thunderdog.challegram.widget.PopupLayout;
+import org.thunderdog.challegram.widget.ProgressComponentView;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -538,43 +539,95 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   // loading indicator in the middle of the surface; it fades out once the first page is set.
 
   private @androidx.annotation.Nullable View xgramStartupLoading;
+  private @androidx.annotation.Nullable ProgressComponentView xgramStartupSpinner;
+
+  // A chat or chat list opened from a notification (handleIntent) while nothing is on screen yet: the loading
+  // indicator stays until that page is set, instead of fading at READY over the bare header and the empty body.
+  private boolean xgramNotificationOpenPending;
 
   // A page set some other way while the state was still unknown (a notification tapped again during the startup, a
   // chat opened as soon as its own account was ready) takes the loading indicator away too: it never stays over it.
   private final NavigationStack.ChangeListener xgramStartupLoadingListener = stack -> {
     if (!stack.isEmpty()) {
-      xgramSetStartupLoading(false);
+      xgramSetStartupLoading(false, false);
     }
   };
 
-  private void xgramSetStartupLoading (boolean visible) {
+  /**
+   * XGram: the launch opens a chat or a chat list from a notification (or a conversation shortcut). Checked before
+   * handleIntent, which clears the action.
+   */
+  private static boolean xgramIsNotificationOpen (@Nullable Intent intent) {
+    String action = intent != null ? Intents.getCleanAction(intent.getAction()) : null;
+    return !StringUtils.isEmpty(action) && (action.startsWith(Intents.ACTION_OPEN_CHAT) || action.startsWith(Intents.ACTION_OPEN_MAIN));
+  }
+
+  /**
+   * @param forNotification the indicator is for a notification's chat (or chat list): it shows with Expressive design
+   *                        off too (Telegram X's spinner on the filling color), where a launcher start stays as in
+   *                        Telegram X.
+   */
+  private void xgramSetStartupLoading (boolean visible, boolean forNotification) {
     if (visible) {
-      if (xgramStartupLoading != null || !com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || rootView == null || !navigation.isEmpty()) {
+      final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+      if (xgramStartupLoading != null || rootView == null || !navigation.isEmpty() || (!expressive && !forNotification)) {
         return;
       }
       navigation.getStack().addChangeListener(xgramStartupLoadingListener);
-      com.fahadali.xgram.appearance.XgramListStateView view = new com.fahadali.xgram.appearance.XgramListStateView(this);
-      view.setLoading(true, com.fahadali.xgram.appearance.XgramM3MediaChrome.LOADING_ACTIVE_DP);
-      com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable surface = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, Float.NaN);
-      surface.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE);
-      view.setBackground(surface);
+      final View view;
+      if (expressive) {
+        com.fahadali.xgram.appearance.XgramListStateView stateView = new com.fahadali.xgram.appearance.XgramListStateView(this);
+        stateView.setLoading(true, com.fahadali.xgram.appearance.XgramM3MediaChrome.LOADING_ACTIVE_DP);
+        com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable surface = new com.fahadali.xgram.appearance.XgramExpressive.MorphDrawable(0, com.fahadali.xgram.appearance.XgramExpressive.CORNER_NONE, Float.NaN);
+        surface.setColorRole(com.fahadali.xgram.appearance.XgramExpressive.SURFACE);
+        stateView.setBackground(surface);
+        view = stateView;
+      } else {
+        FrameLayout classic = new FrameLayout(this);
+        ViewSupport.setThemedBackground(classic, ColorId.filling);
+        ProgressComponentView spinner = new ProgressComponentView(this);
+        spinner.initLarge(1f);
+        classic.addView(spinner, new FrameLayout.LayoutParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER));
+        xgramStartupSpinner = spinner;
+        view = classic;
+      }
       view.setClickable(true);
       view.setContentDescription(Lang.getString(R.string.LoadingInformation));
-      rootView.addView(view, new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      view.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      // Below the passcode and the connection status bar, so the passcode keypad and the "Optimizing" screen (placed
+      // at the status bar) stay over it.
+      addToRoot(view, false);
       xgramStartupLoading = view;
     } else if (xgramStartupLoading != null) {
       navigation.getStack().removeChangeListener(xgramStartupLoadingListener);
       final View view = xgramStartupLoading;
+      final ProgressComponentView spinner = xgramStartupSpinner;
       xgramStartupLoading = null;
+      xgramStartupSpinner = null;
       view.setClickable(false);
       view.animate().alpha(0f)
         .setDuration(com.fahadali.xgram.appearance.XgramAppMotion.springDuration(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT))
         .setInterpolator(com.fahadali.xgram.appearance.XgramAppMotion.springClamped(com.fahadali.xgram.appearance.XgramExpressive.EFFECTS_DEFAULT))
         .withEndAction(() -> {
+          if (spinner != null) {
+            spinner.performDestroy();
+          }
           if (view.getParent() instanceof ViewGroup) {
             ((ViewGroup) view.getParent()).removeView(view);
           }
         });
+    }
+  }
+
+  /**
+   * XGram: the open handleIntent started from a notification is done (the chat, its topic list, the chat list, or
+   * nothing could open): when nothing is on screen and the account's state is known, the indicator goes, as it did at
+   * READY before.
+   */
+  private void xgramNotificationOpenDone () {
+    xgramNotificationOpenPending = false;
+    if (navigation.isEmpty() && account.tdlib().authorizationStatus() != Tdlib.Status.UNKNOWN) {
+      xgramSetStartupLoading(false, false);
     }
   }
 
@@ -608,13 +661,11 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   }
 
   private void initController (Tdlib tdlib, @Tdlib.Status int status) {
-    if (status != Tdlib.Status.UNKNOWN) {
-      xgramSetStartupLoading(false);
-    }
     switch (status) {
       case Tdlib.Status.UNKNOWN:
         // setBlankViewVisible(true, false);
-        xgramSetStartupLoading(true);
+        // XGram: the intent still has its action here (handleIntent clears it, and only runs at READY)
+        xgramSetStartupLoading(true, xgramIsNotificationOpen(getIntent()));
         break;
       case Tdlib.Status.UNAUTHORIZED:
         int nextAccountId = tdlib.context().findNextAccountId(tdlib.id());
@@ -627,6 +678,10 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       case Tdlib.Status.READY:
         initAuthorizedController();
         break;
+    }
+    if (status != Tdlib.Status.UNKNOWN && !xgramNotificationOpenPending) {
+      // XGram: a chat or chat list a notification is still opening keeps the indicator until its page is set
+      xgramSetStartupLoading(false, false);
     }
     showExperimentalAlert();
   }
@@ -895,6 +950,11 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     }
 
     if (Intents.ACTION_LOCATION_RESOLVE.equals(action)) {
+      if (navigation.isEmpty()) {
+        // XGram: the live location notification tapped on a cold start: the chat list under the resolution, as
+        // openLiveLocation and openCallController do (Telegram X left the empty navigation)
+        initDefault(account.id, false);
+      }
       resolveLiveLocationError(true);
       return true;
     }
@@ -1489,15 +1549,24 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   }
 
   private void xgramOpenMainWhenReady (int accountId) {
+    if (navigation.isEmpty()) {
+      xgramNotificationOpenPending = true;
+    }
     Tdlib tdlib = TdlibManager.instanceForAccountId(accountId).account(accountId).tdlib();
     tdlib.awaitInitialization(() -> {
       tdlib.incrementUiReferenceCount();
       handler.post(() -> {
         openMainController(tdlib.id());
         tdlib.decrementUiReferenceCount();
+        xgramNotificationOpenDone();
       });
     });
     xgramShowChatsWhileWaiting(tdlib);
+    if (navigation.isEmpty()) {
+      // XGram: the open is posted: the loading indicator until its page is set, not the bare header (the intent's
+      // action is cleared by now, so it is shown as a notification's with Expressive design off too)
+      xgramSetStartupLoading(true, true);
+    }
   }
 
   /**
@@ -1527,6 +1596,9 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   }
 
   private void openMessagesController (int accountId, long chatId, long specificMessageId, int xgramTopicId) {
+    if (navigation.isEmpty()) {
+      xgramNotificationOpenPending = true;
+    }
     final Tdlib tdlib = TdlibManager.instanceForAccountId(accountId).account(accountId).tdlib();
     tdlib.awaitInitialization(() -> {
       tdlib.incrementUiReferenceCount();
@@ -1534,7 +1606,10 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
         final TdlibContext context = new TdlibContext(this, tdlib);
         final TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters().onDone(() -> {
           tdlib.decrementUiReferenceCount();
-          handler.post(() -> xgramEnsureNotBlank(tdlib)); // XGram: once the open is done, whichever way it went
+          handler.post(() -> { // XGram: once the open is done, whichever way it went
+            xgramEnsureNotBlank(tdlib);
+            xgramNotificationOpenDone();
+          });
         }).xgramFromNotification(xgramTopicId);
         if (specificMessageId != 0)
           params.highlightMessage(new MessageId(chatId, specificMessageId));
@@ -1559,6 +1634,11 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
       });
     });
     xgramShowChatsWhileWaiting(tdlib);
+    if (navigation.isEmpty()) {
+      // XGram: the chat opens in a post (and on a fresh TDLib after GetChat, or GetMessage for a forum): the loading
+      // indicator until it is set, not the bare header (the intent's action is cleared by now, see above)
+      xgramSetStartupLoading(true, true);
+    }
   }
 
   private void openPlayerController (int accountId) {
