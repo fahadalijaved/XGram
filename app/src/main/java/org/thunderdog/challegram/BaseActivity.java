@@ -1016,9 +1016,11 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && isFullscreen) {
       int uiVisibility = View.SYSTEM_UI_FLAG_LOW_PROFILE;
       if (hideNavigation) {
-        // XGram: immersive (sticky): an edge swipe shows the bars for a moment and they hide again, and taps reach the
-        // app (the media viewer, the only one hiding them, brings its controls back with one)
-        uiVisibility |= View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+        // XGram: with Hide controls while playing, immersive (sticky): an edge swipe shows the bars for a moment and they
+        // hide again, and taps reach the app (the media viewer, the only one hiding them, brings its controls back with
+        // one). With it off, Telegram X's: the first tap or swipe brings the bars back.
+        uiVisibility |= View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+          (com.fahadali.xgram.XgramSettings.instance().videoAutoHide() ? View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY : 0);
       }
       return uiVisibility;
     }

@@ -1202,8 +1202,13 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     }
   };
 
+  private final Rect xgramTmpRect = new Rect();
+
   private boolean xgramListOnScreen () {
-    return chatsView != null && chatsView.getParent() != null && chatsView.getWindowToken() != null;
+    // The folder pages next to the one shown are attached as well (the pager keeps one on each side): only a list with
+    // some of it in the window counts
+    return chatsView != null && chatsView.getParent() != null && chatsView.getWindowToken() != null &&
+      chatsView.isShown() && chatsView.getGlobalVisibleRect(xgramTmpRect);
   }
 
   private void xgramCaptureModeAnchor () {

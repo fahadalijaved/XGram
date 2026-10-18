@@ -307,7 +307,16 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     if (listMode != newMode) {
       // XGram: while the chat list view springs to the new mode, a row on screen keeps its old lines to fade them out
       if (xgramForcedMode == 0 && currentWidth > 0 && (flags & FLAG_ATTACHED) != 0 && com.fahadali.xgram.chats.XgramChatListMode.isAnimating()) {
-        xgramStashLines();
+        // A change interrupting another: the lines still fading out keep fading from where they are; otherwise the
+        // lines on screen now (the interrupted target's, at the alpha they had reached; all of them for a fresh change)
+        final float f = com.fahadali.xgram.chats.XgramChatListMode.interruptedFraction();
+        final float oldStashAlpha = xgramFadeMode != 0 ? xgramFadeStartAlpha * Math.max(0f, Math.min(1f, 1f - 2f * f)) : 0f;
+        if (oldStashAlpha > 0f) {
+          xgramFadeStartAlpha = oldStashAlpha;
+        } else {
+          xgramStashLines();
+          xgramFadeStartAlpha = Math.max(0f, Math.min(1f, 2f * f - 1f));
+        }
       } else {
         xgramDropStash();
       }
@@ -338,6 +347,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
   private int xgramFadeTextLeft;
   @Nullable private IntList xgramFadeIcons;
   private @PorterDuffColorId int xgramFadeIconColorId;
+  private float xgramFadeStartAlpha = 1f;
 
   private void xgramStashLines () {
     xgramFadeMode = listMode;
@@ -393,6 +403,11 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
 
   public @PorterDuffColorId int xgramFadeIconColorId () {
     return xgramFadeIconColorId;
+  }
+
+  /** The stashed lines' alpha when the change began: below 1 after an interrupted one. */
+  public float xgramFadeStartAlpha () {
+    return xgramFadeStartAlpha;
   }
 
   /** The view change ended: the old lines go, and the views ask for the new text's media (custom emoji) again. */

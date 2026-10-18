@@ -2244,7 +2244,10 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     });
   }
 
-  /** Destroy and the start of the close: no more timers, and the navigation bar is back. */
+  /**
+   * Destroy and the start of the close: no more timers. Both go for good, so nothing during the close (the player
+   * released by the closing cell pauses the video, a touch, buffering) brings hidden chrome back or posts a timer.
+   */
   private void xgramReleaseAutoHide () {
     if (xgramAutoHide != null) {
       xgramAutoHide.detach();
@@ -2252,6 +2255,8 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     if (xgramPipAutoHide != null) {
       xgramPipAutoHide.detach();
     }
+    xgramAutoHide = null;
+    xgramPipAutoHide = null;
   }
 
   /** The current item changed: a video's chrome hidden by the timer comes back (the next one isn't playing yet). */
@@ -3446,6 +3451,9 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     pipOpenButton.setEnabled(alpha == 1f);
     pipCloseButton.setEnabled(alpha == 1f);
     pipPlayPauseButton.setEnabled(alpha == 1f);
+    // XGram: hidden, it lets the touch through to the window (drag it, a tap brings the buttons back), as the edit
+    // buttons do: a disabled but clickable view still takes the DOWN
+    pipPlayPauseButton.setClickable(alpha == 1f);
   }
 
   // View-related stuff

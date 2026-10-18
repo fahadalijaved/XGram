@@ -1309,7 +1309,8 @@ public class AvatarReceiver implements Receiver, ChatListener, TdlibCache.UserDa
     if (drawable == null) {
       return;
     }
-    float scale = radiusPx < currentRadiusPx ? radiusPx / currentRadiusPx : 1f;
+    // XGram: the glyph (the archive's, a saved messages' or replies' one) follows the one line photo as its badges do
+    float scale = (radiusPx < currentRadiusPx ? radiusPx / currentRadiusPx : 1f) * xgramBadgeScale;
     float size = Math.max(drawable.getMinimumWidth(), drawable.getMinimumHeight()) * scale;
     float maxSize = (float) Math.sqrt(2.0) * (currentRadiusPx - Screen.dp(1f));
     if (size > maxSize) {

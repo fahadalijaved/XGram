@@ -169,6 +169,8 @@ public final class XgramChatListMode {
   private static final ChatView.Metrics current = new ChatView.Metrics();
   private static int targetMode;
   private static float fraction = 1f;
+  /** Where the change that the current one interrupted had got to (1 when it interrupted none). */
+  private static float interruptedFraction = 1f;
   private static boolean animating;
   private static @Nullable ValueAnimator animator;
 
@@ -192,6 +194,14 @@ public final class XgramChatListMode {
   /** 0 to 1 (a little past 1 at the spring's overshoot). 1 when not animating. */
   public static float fraction () {
     return animating ? fraction : 1f;
+  }
+
+  /**
+   * For the rows told of a change (TGChat.checkChatListMode, right after {@link #onModeChanged}): the fraction the
+   * change it interrupted had reached, 0 to 1, or 1 for a change from rest. {@link #fraction} is 0 by then.
+   */
+  public static float interruptedFraction () {
+    return interruptedFraction;
   }
 
   /** The geometry of a row in {@code mode} now: the spring's while it goes to that mode, the mode's own otherwise. */
@@ -241,6 +251,7 @@ public final class XgramChatListMode {
       old.cancel(); // its end is ignored: animator no longer points at it
     }
     targetMode = newMode;
+    interruptedFraction = animating ? Math.max(0f, Math.min(1f, fraction)) : 1f;
     fraction = 0f;
     current.set(from);
     animating = true;
