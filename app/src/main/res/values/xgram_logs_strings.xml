@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram logs (com.fahadali.xgram.XgramLogs): Share logs, Record detailed logs and the Testing Utilities note, on the version page (Settings, tap the version), in its menu and in Settings > XGram > About -->
+  <string name="XgramLogsShare">Share logs</string>
+  <string name="XgramLogsShareInfo">Logs, crash reports and device details in one file</string>
+  <string name="XgramLogsShareConfirmTitle">Share logs?</string>
+  <string name="XgramLogsShareConfirmText">Logs can contain chat IDs and names. Send them privately, and only to XGram admins.</string>
+  <string name="XgramLogsShareAction">Share</string>
+  <string name="XgramLogsPreparing">Preparing logs…</string>
+  <string name="XgramLogsShareFailed">Couldn\'t make the log file</string>
+  <string name="XgramLogsShareSubject">XGram %1$s logs</string>
+  <string name="XgramLogsDetailed">Record detailed logs</string>
+  <string name="XgramLogsDetailedOff">For 24 hours. May slow XGram down</string>
+  <string name="XgramLogsDetailedUntil">On until %1$s</string>
+  <string name="XgramLogsDetailedUntilTomorrow">On until tomorrow, %1$s</string>
+  <string name="XgramLogsInfo">Nothing is sent by itself: Share logs only opens the share sheet. Detailed logs switch off by themselves after 24 hours.</string>
+  <string name="XgramLogsTestingJoin">Members of @XGramTD get more testing utilities.</string>
+  <!-- A message XGram could not draw (TGMessage.valueOfError), in place of Telegram X's FailureMessageText -->
+  <string name="XgramFailureMessageText">This message couldn\'t be shown because of an error. Copy the details below and send them to Support in @XGramTD. Thank you!</string>
+</resources>

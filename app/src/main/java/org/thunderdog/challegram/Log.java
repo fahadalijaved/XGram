@@ -445,6 +445,8 @@ public class Log {
         if (Config.DEBUG_GALAXY_TAB_2) {
           defaultLogTags |= Log.TAG_INTRO;
         }
+        // XGram: "Record detailed logs" that ran out while the app was closed goes back to the user's levels first
+        com.fahadali.xgram.XgramLogs.expireOnLoad(prefs, defaultLogLevel);
         settings = prefs.getInt(Settings.KEY_LOG_SETTINGS, defaultLogSettings);
         level = prefs.getInt(Settings.KEY_LOG_LEVEL, defaultLogLevel);
         tags = prefs.getLong(Settings.KEY_LOG_TAGS, defaultLogTags);
@@ -506,7 +508,7 @@ public class Log {
   public static void setSetting (int setting, boolean enabled) {
     if (enabled != checkSetting(setting)) {
       settings = BitwiseUtils.setFlag(settings, setting, enabled);
-      Settings.instance().putInt(Settings.KEY_LOG_SETTINGS, setting);
+      Settings.instance().putInt(Settings.KEY_LOG_SETTINGS, settings); // XGram: all the flags, not the one changed (Use Logcat came back on)
     }
   }
 
@@ -716,6 +718,10 @@ public class Log {
     }
     boolean force = Config.USE_CRASHLYTICS && level <= LEVEL_ERROR;
     boolean hasPermission = checkPermission(tag, level);
+    if (level <= LEVEL_WARNING && (settings & SETTING_DISABLE_FULLY) == 0) {
+      // XGram: asserts, errors and warnings always reach the small rolling log Share logs sends, whatever the level
+      com.fahadali.xgram.XgramLogs.record(tag, level, fmt, t, args, (runtimeFlags & RUNTIME_NOT_ASYNC) != 0);
+    }
     if (hasPermission || force) {
       final String sourceMessage = args.length != 0 ? String.format(Locale.US, fmt, args) : fmt;
       if ((settings & SETTING_ANDROID_LOG) != 0 || force) {

@@ -1233,7 +1233,8 @@ public class SettingsController extends ViewController<Void> implements
       if (Settings.instance().hasLogsEnabled()) {
         showBuildOptions(true);
       } else {
-        tdlib.getTesterLevel(testerLevel -> runOnUiThreadOptional(() ->
+        // XGram: XGram's gate (members of the XGram group) instead of Telegram X's channel and testers group
+        com.fahadali.xgram.XgramLogs.testerLevel(tdlib, testerLevel -> runOnUiThreadOptional(() ->
           showBuildOptions(testerLevel >= Tdlib.TesterLevel.TESTER)
         ));
       }
@@ -1383,7 +1384,7 @@ public class SettingsController extends ViewController<Void> implements
   }
 
   private void showBuildOptions (boolean allowDebug) {
-    final int size = allowDebug ? 3 : 2;
+    final int size = allowDebug ? 7 : 5;
     IntList ids = new IntList(size);
     IntList icons = new IntList(size);
     IntList colors = new IntList(size);
@@ -1401,6 +1402,12 @@ public class SettingsController extends ViewController<Void> implements
       colors.append(OptionColor.NORMAL);
     }
 
+    // XGram: Share logs for everyone, here where the group's #bugs note sends people (tap the version)
+    ids.append(R.id.btn_xgramLogsShare);
+    strings.append(R.string.XgramLogsShare);
+    icons.append(R.drawable.baseline_share_24);
+    colors.append(OptionColor.NORMAL);
+
     boolean notificationError = tdlib.context().getTokenState() == TdlibManager.TokenState.ERROR;
     if (allowDebug || notificationError) {
       ids.append(R.id.btn_pushService);
@@ -1414,12 +1421,15 @@ public class SettingsController extends ViewController<Void> implements
       strings.append(R.string.TdlibLogs);
       icons.append(R.drawable.baseline_build_24);
       colors.append(OptionColor.NORMAL);
+    }
 
-      ids.append(R.id.btn_build);
-      strings.append(R.string.AppLogs);
-      icons.append(R.drawable.baseline_build_24);
-      colors.append(OptionColor.NORMAL);
-      
+    // XGram: the version page (Share logs, Record detailed logs, Testing Utilities) for everyone
+    ids.append(R.id.btn_build);
+    strings.append(R.string.AppLogs);
+    icons.append(R.drawable.baseline_build_24);
+    colors.append(OptionColor.NORMAL);
+
+    if (allowDebug) {
       ids.append(R.id.btn_experiment);
       strings.append(R.string.ExperimentalSettings);
       icons.append(R.drawable.templarian_baseline_flask_24);
@@ -1434,6 +1444,8 @@ public class SettingsController extends ViewController<Void> implements
         UI.copyText(Lang.getAppBuildAndVersion(tdlib), R.string.CopiedText);
       } else if (id == R.id.btn_copyDebug) {
         UI.copyText(U.getUsefulMetadata(tdlib), R.string.CopiedText);
+      } else if (id == R.id.btn_xgramLogsShare) {
+        com.fahadali.xgram.XgramLogs.confirmAndShare(this);
       } else if (id == R.id.btn_pushService) {
         SettingsBugController c = new SettingsBugController(context, tdlib);
         c.setArguments(new SettingsBugController.Args(SettingsBugController.Section.PUSH));
@@ -1442,7 +1454,7 @@ public class SettingsController extends ViewController<Void> implements
         navigateTo(new SettingsBugController(context, tdlib));
       } else if (id == R.id.btn_tdlib || id == R.id.btn_experiment) {
         boolean isTdlib = id == R.id.btn_tdlib;
-        tdlib.getTesterLevel(level -> runOnUiThreadOptional(() -> {
+        com.fahadali.xgram.XgramLogs.testerLevel(tdlib, level -> runOnUiThreadOptional(() -> {
           if (isTdlib) {
             openTdlibLogs(level, null);
           } else {

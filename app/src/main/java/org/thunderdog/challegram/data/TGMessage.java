@@ -8857,7 +8857,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public static TGMessage valueOfError (MessagesManager context, TdApi.Message msg, Throwable error) {
-    String text = Lang.getString(R.string.FailureMessageText);
+    String text = Lang.getString(R.string.XgramFailureMessageText); // XGram: XGram's Support, not Telegram X's testers group
 
     TdApi.TextEntity[] entities = null;
     try {

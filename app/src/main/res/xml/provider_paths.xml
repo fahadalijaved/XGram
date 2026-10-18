@@ -12,5 +12,7 @@
   <files-path name="xgram_exports" path="xgram_exports/" />
   <!-- XGram: QR login code, shared from the QR login screen -->
   <files-path name="xgram_qr" path="xgram_qr/" />
+  <!-- XGram: the log file made by Share logs (XgramLogs), handed to the share sheet -->
+  <files-path name="xgram_logs_share" path="xgram_logs_share/" />
 
 </paths>
