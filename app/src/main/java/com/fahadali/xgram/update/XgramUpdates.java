@@ -12,6 +12,7 @@
 package com.fahadali.xgram.update;
 
 import android.app.AlertDialog;
+import android.os.Build;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -438,7 +439,10 @@ public final class XgramUpdates {
     }
   }
 
-  /** "XGram-0.29.1.1818.5-arm64-v8a.apk" (arm64) or "XGram-0.29.1.1818.5.apk" (universal). */
+  /**
+   * "XGram-0.29.1.1818.5-arm64-v8a.apk" (arm64), "XGram-0.29.1.1818.5-armeabi-v7a.apk" (arm32) or
+   * "XGram-0.29.1.1818.5.apk" (universal, no longer built by CI).
+   */
   static final class ApkName {
     final String versionName, abi;
     final int versionCode;
@@ -472,8 +476,24 @@ public final class XgramUpdates {
       if (BuildConfig.ARM64_FLAVOR) {
         return "arm64-v8a".equals(abi);
       }
-      // Universal builds (and anything else) take the universal APK.
-      return abi.isEmpty() || "universal".equals(abi);
+      if (BuildConfig.ARM32_FLAVOR) {
+        return "armeabi-v7a".equals(abi);
+      }
+      // Universal builds (and anything else) take a universal APK or, since CI builds arm64 and arm32 instead, the APK
+      // for this phone's ABI. Either installs over a universal build: versionCode N*1000 + 502 / 501 against + 500.
+      return abi.isEmpty() || "universal".equals(abi) || abi.equals(preferredAbi());
+    }
+
+    /** arm64-v8a when the phone runs 64-bit ARM code, else armeabi-v7a: the two ABIs CI posts. Null for neither. */
+    private static @Nullable String preferredAbi () {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        for (String supported : Build.SUPPORTED_ABIS) {
+          if ("arm64-v8a".equals(supported) || "armeabi-v7a".equals(supported)) {
+            return supported;
+          }
+        }
+      }
+      return null;
     }
   }
 
