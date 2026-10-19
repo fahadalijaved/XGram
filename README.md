@@ -72,7 +72,7 @@ XGram needs Android 7.0 or newer. Every build post lists the SHA-256 of its APK,
 
 1. Clone with submodules:
    ```sh
-   git clone --recursive https://github.com/fahadalijaved/XGram.git
+   git clone --recursive https://github.com/fahadalijaved23/XGram.git
    ```
 2. Apply XGram's change to the TDLib submodule:
    ```sh
@@ -101,7 +101,7 @@ compiles TDLib, FFmpeg and WebRTC from source, so give it time. For push notific
   [Pixelarticons](https://pixelarticons.com) by Gerrit Halfmann (MIT). Details in
   [tools/xgram/icon_packs/CREDITS.md](tools/xgram/icon_packs/CREDITS.md).
 
-Made by [Fahad Ali Javed](https://github.com/fahadalijaved).
+Made by [Fahad Ali Javed](https://github.com/fahadalijaved23).
 
 ## Support
 
