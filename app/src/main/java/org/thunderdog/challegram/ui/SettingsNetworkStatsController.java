@@ -71,6 +71,9 @@ public class SettingsNetworkStatsController extends RecyclerViewController<Setti
       case TGNetworkStats.TYPE_WIFI: {
         return Lang.getString(R.string.WiFiUsage);
       }
+      case TGNetworkStats.TYPE_OTHER: { // XGram
+        return Lang.getString(R.string.XgramNetstatsOtherUsage);
+      }
       case TGNetworkStats.TYPE_MOBILE:
       default: {
         return Lang.getString(R.string.MobileUsage);
