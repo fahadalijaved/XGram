@@ -1,6 +1,6 @@
 # XGram release: manual workflow for stable releases.
 #
-# Builds the release APKs (arm64 and universal by default, in parallel), writes SHA256SUMS.txt and
+# Builds the release APKs (arm64 by default; both = arm64 and arm32 in parallel), writes SHA256SUMS.txt and
 # build-info.json, uploads everything as workflow artifacts, and posts the APKs as a Stable release in the Updates
 # topic of the XGram group (never the CI channel, which is for CI builds). Optionally drafts a GitHub
 # Release with the same files (GPLv3: whoever gets the APK must be able to get the source of that build).
@@ -18,12 +18,12 @@ on:
         required: false
         default: ''
       flavor:
-        description: Which APK(s) to build
+        description: 'Which APK(s) to build: both = arm64 + arm32, arm64 (most phones), arm32 (older 32-bit phones)'
         type: choice
         options:
           - both
           - arm64
-          - universal
+          - arm32
         default: arm64
       publish:
         description: Post the APKs as a Stable release in the Updates topic of the XGram group (main or a tag only)

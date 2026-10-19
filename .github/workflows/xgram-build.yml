@@ -1,7 +1,8 @@
 # XGram APK build, shared by xgram-nightly.yml and xgram-release.yml (it can't be started on its own).
 #
-# One job per ABI flavor (arm64 / universal), in parallel, each on its own GitHub-hosted Ubuntu runner, so
-# a cold build stays inside the 6 h job limit. Each job uploads an artifact named
+# One job per ABI flavor (arm64 / arm32), in parallel, each on its own GitHub-hosted Ubuntu runner, so
+# a cold build stays inside the 6 h job limit. arm64 is the Gradle flavor latestArm64 (arm64-v8a, most phones),
+# arm32 is latestArm32 (armeabi-v7a, older 32-bit phones). Each job uploads an artifact named
 #   xgram-apk-<flavor>-<build_type>       the APK(s), build-info.json, SHA256SUMS.txt
 #   xgram-symbols-<flavor>-release        R8 mapping and native debug symbols (release builds only)
 #
@@ -12,7 +13,7 @@ on:
   workflow_call:
     inputs:
       flavors:
-        description: 'JSON array of ABI flavors: ["arm64"], ["universal"] or ["arm64","universal"]'
+        description: 'JSON array of ABI flavors: ["arm64"], ["arm32"] or ["arm64","arm32"]'
         type: string
         required: true
       build_type:
@@ -20,7 +21,7 @@ on:
         type: string
         required: true
       app_version:
-        description: 'Base version number N (app.version). versionCode = N*1000 + 302 (arm64) or + 300 (universal)'
+        description: 'Base version number N (app.version). versionCode = N*1000 + 502 (arm64) or + 501 (arm32)'
         type: string
         required: true
       artifact_retention_days:

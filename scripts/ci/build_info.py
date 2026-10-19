@@ -3,7 +3,8 @@
 
   build_info.py make  --apk-dir DIR --flavor F --build-type T --out-dir OUT
       Reads DIR/output-metadata.json (written by the Android Gradle Plugin), copies the APKs into OUT and
-      writes OUT/build-info.json: versionCode, versionName, size and SHA-256 of each APK, plus commit and run.
+      writes OUT/build-info.json: ABI, versionCode, versionName, size and SHA-256 of each APK, plus commit and
+      run. F is arm64 (arm64-v8a) or arm32 (armeabi-v7a); each APK's file name must carry that ABI.
 
   build_info.py merge --in-dir ARTIFACTS --out-dir OUT [--github-output FILE]
       Merges ARTIFACTS/*/build-info.json (one per downloaded artifact) into OUT/build-info.json, copies the
@@ -17,6 +18,11 @@ import json
 import os
 import shutil
 import sys
+
+# CI flavor -> ABI (Gradle flavors latestArm64 / latestArm32). FLAVORS is the album order: arm64 for most
+# phones first, then arm32 for older 32-bit phones.
+ABIS = {"arm64": "arm64-v8a", "arm32": "armeabi-v7a"}
+FLAVORS = ["arm64", "arm32"]
 
 
 def sha256(path):
@@ -32,8 +38,13 @@ def fail(message):
 
 
 def base_version(version_name):
-    # 0.29.1.1817.9-arm64-v8a-debug -> 0.29.1.1817.9 ; 0.29.1.1817.9 (universal release) -> 0.29.1.1817.9
+    # 0.29.1.1817.9-arm64-v8a-debug -> 0.29.1.1817.9 ; 0.29.1.1817.9-armeabi-v7a -> 0.29.1.1817.9
     return version_name.split("-", 1)[0]
+
+
+def flavor_rank(apk):
+    flavor = apk.get("flavor")
+    return FLAVORS.index(flavor) if flavor in FLAVORS else len(FLAVORS)
 
 
 def run_info():
@@ -55,17 +66,22 @@ def cmd_make(args):
     with open(meta_path, encoding="utf-8") as f:
         meta = json.load(f)
     os.makedirs(args.out_dir, exist_ok=True)
+    abi = ABIS[args.flavor]
     apks = []
     for element in meta.get("elements", []):
         name = element.get("outputFile", "")
         src = os.path.join(args.apk_dir, name)
         if not name.endswith(".apk") or not os.path.isfile(src):
             fail("APK listed in output-metadata.json is missing: %s" % src)
+        # XGram-0.29.1.1817.9-armeabi-v7a.apk: the ABI Gradle put in the name must be the flavor's.
+        if "-" + abi not in name:
+            fail("%s is not an %s APK (flavor %s)" % (name, abi, args.flavor))
         dst = os.path.join(args.out_dir, name)
         shutil.copy2(src, dst)
         apks.append({
             "file": name,
             "flavor": args.flavor,
+            "abi": abi,
             "build_type": args.build_type,
             "versionCode": element.get("versionCode"),
             "versionName": element.get("versionName", ""),
@@ -110,7 +126,7 @@ def cmd_merge(args):
                 fail("two artifacts contain %s" % apk["file"])
             shutil.copy2(src, dst)
             apks.append(apk)
-    apks.sort(key=lambda a: (a.get("flavor") != "arm64", a["file"]))
+    apks.sort(key=lambda a: (flavor_rank(a), a["file"]))
     versions = sorted({base_version(a.get("versionName", "")) for a in apks})
     if len(versions) != 1:
         fail("APKs have different versions: %s" % ", ".join(versions))
@@ -133,7 +149,7 @@ def main():
     sub = parser.add_subparsers(dest="command")
     make = sub.add_parser("make")
     make.add_argument("--apk-dir", required=True)
-    make.add_argument("--flavor", required=True, choices=["arm64", "universal"])
+    make.add_argument("--flavor", required=True, choices=FLAVORS)
     make.add_argument("--build-type", required=True, choices=["debug", "release"])
     make.add_argument("--out-dir", required=True)
     merge = sub.add_parser("merge")

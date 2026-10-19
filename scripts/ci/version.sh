@@ -7,7 +7,8 @@
 # last changed it, counted along the first parent, so merging a new Telegram X version starts again at 0.
 # app/build.gradle.kts computes the same N for local builds and shows it as 0.29.1.1817.9 (Telegram X 1817, build 9).
 #
-# versionCode = N*1000 + 302 for arm64 and N*1000 + 300 for universal (app/build.gradle.kts), so:
+# versionCode = N*1000 + 502 for arm64 and N*1000 + 501 for arm32 (app/build.gradle.kts adds SDK flavor * 100 + ABI
+# flavor, buildSrc Config.kt: Sdk.LATEST = 5, Abi.ARM64_V8A = 2, Abi.ARMEABI_V7A = 1), so:
 #  - every new commit on main gives a higher versionCode, in the nightly and in the release workflow alike, and a
 #    local build of the same commit gets the same one (either installs over the other);
 #  - re-running a build of the same commit gives the same number;
@@ -52,5 +53,5 @@ build=$(git rev-list --count --first-parent "$bump..HEAD")
 n=$((app * 1000 + build))
 ((n <= max)) || die "N=$n is above Android's limit ($max)."
 
-log "Version: N=$n (Telegram X $app, XGram build $build since ${bump:0:8}) -> versionCode arm64 ${n}302, universal ${n}300"
+log "Version: N=$n (Telegram X $app, XGram build $build since ${bump:0:8}) -> versionCode arm64 ${n}502, arm32 ${n}501"
 printf '%s\n' "$n"

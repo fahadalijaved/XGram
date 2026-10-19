@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Runs the Gradle build for one APK:  :app:assembleLatest<Arm64|Universal><Debug|Release>
+# Runs the Gradle build for one APK:  :app:assembleLatest<Arm64|Arm32><Debug|Release>
 #
-# Env: XGRAM_FLAVOR (arm64|universal), XGRAM_BUILD_TYPE (debug|release)
+# Env: XGRAM_FLAVOR (arm64 = arm64-v8a | arm32 = armeabi-v7a), XGRAM_BUILD_TYPE (debug|release)
 #      XGRAM_GRADLE_ARGS (optional extra arguments, split on spaces)
 # The native part (WebRTC, tgcalls, ffmpeg, libvpx, ...) is built by Gradle itself; expect 35-80 min for the
 # CMake part on a cold cache (see docs/xgram/telegram/CI.md). Release builds also download translations
@@ -13,8 +13,8 @@ set -euo pipefail
 require_env XGRAM_FLAVOR XGRAM_BUILD_TYPE
 case "$XGRAM_FLAVOR" in
   arm64) flavor=Arm64 ;;
-  universal) flavor=Universal ;;
-  *) die "XGRAM_FLAVOR must be arm64 or universal, got: $XGRAM_FLAVOR" ;;
+  arm32) flavor=Arm32 ;;
+  *) die "XGRAM_FLAVOR must be arm64 or arm32, got: $XGRAM_FLAVOR" ;;
 esac
 case "$XGRAM_BUILD_TYPE" in
   debug) build_type=Debug ;;

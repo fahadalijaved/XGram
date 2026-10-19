@@ -9,6 +9,8 @@
 #   XGRAM_NIGHTLY_FLAVOR (arm64), XGRAM_NIGHTLY_BUILD_TYPE (release), XGRAM_NIGHTLY_PUBLISH (true),
 #   XGRAM_NIGHTLY_ANNOUNCE (false), XGRAM_NIGHTLY_FORCE (false)                              (scheduled runs)
 #   XGRAM_DEFAULT_BRANCH (fallback when the API is unavailable)
+# Flavor (IN_FLAVOR, XGRAM_NIGHTLY_FLAVOR): arm64 (arm64-v8a, most phones), arm32 (armeabi-v7a, older 32-bit
+# phones) or both.
 #
 # Outputs: skip, flavor, flavors (JSON array), build_type, publish, announce, since, app_version, head, short,
 #          default_branch, link_base (commit link prefix, only for public repos)
@@ -73,11 +75,14 @@ fi
 # Never an extra announcement: CI builds stay in the CI channel, stable releases are posted in Updates itself.
 announce=false
 
+# arm64 = Gradle flavor latestArm64 (arm64-v8a), arm32 = latestArm32 (armeabi-v7a); both = the two of them.
 case "$flavor" in
   arm64) flavors='["arm64"]' ;;
-  universal) flavors='["universal"]' ;;
-  both) flavors='["arm64","universal"]' ;;
-  *) die "flavor must be arm64, universal or both, got: '$flavor'" ;;
+  arm32) flavors='["arm32"]' ;;
+  both) flavors='["arm64","arm32"]' ;;
+  # A repository variable left over from when CI built a universal APK.
+  universal) die "There is no universal APK any more: use arm32 (older 32-bit phones) or both. Check XGRAM_NIGHTLY_FLAVOR." ;;
+  *) die "flavor must be arm64, arm32 or both, got: '$flavor'" ;;
 esac
 case "$build_type" in
   debug | release) ;;
@@ -171,7 +176,7 @@ summary "### XGram $mode plan" \
   "|---|---|" \
   "| Commit | \`$short\` ($ref_type \`$ref_name\`) |" \
   "| Build | $build_text |" \
-  "| app.version (N) | $app_version (arm64 versionCode ${app_version}302, universal ${app_version}300) |" \
+  "| app.version (N) | $app_version (arm64 versionCode ${app_version}502, arm32 ${app_version}501) |" \
   "| Publish to Telegram | $publish (announce in Updates: $announce) |" \
   "| Changelog since | $since_text |" \
   ""
