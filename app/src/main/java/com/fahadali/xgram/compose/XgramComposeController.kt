@@ -36,7 +36,7 @@ import org.thunderdog.challegram.tool.UI
  * see-through, empty and lets touches through ([xgramDrawsOwnAppBar]); the page draws its own top app bar under it.
  */
 class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<XgramComposeController.Args>(context, tdlib) {
-  class Args(val page: XgramPage, val highlightId: Int = 0, val highlightKey: String? = null)
+  class Args(val page: XgramPage, val highlightId: Int = 0, val highlightKey: String? = null, val origin: Int = 0)
 
   companion object {
     @JvmStatic
@@ -44,6 +44,14 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
     fun create(context: Context, tdlib: Tdlib, page: XgramPage, highlightId: Int = 0, highlightKey: String? = null): XgramComposeController {
       val c = XgramComposeController(context, tdlib)
       c.setArguments(Args(page, highlightId, highlightKey))
+      return c
+    }
+
+    /** The universal settings search page ([XgramPage.SEARCH]), opened from [origin] (SettingsSearch.ORIGIN_*). */
+    @JvmStatic
+    fun search(context: Context, tdlib: Tdlib, origin: Int): XgramComposeController {
+      val c = XgramComposeController(context, tdlib)
+      c.setArguments(Args(XgramPage.SEARCH, origin = origin))
       return c
     }
   }
@@ -244,6 +252,9 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
 
     override val bottomInset: Int
       get() = bottomInsetState.intValue
+
+    override val origin: Int
+      get() = this@XgramComposeController.getArgumentsStrict().origin
 
     override val highlightId: Int
       get() = if (highlightConsumed) 0 else this@XgramComposeController.getArgumentsStrict().highlightId

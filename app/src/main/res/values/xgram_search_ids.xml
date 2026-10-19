@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the universal settings search (com.fahadali.xgram.search) -->
+  <item type="id" name="controller_xgramUniversalSearch" />
+  <!-- The search pill at the top of the main Settings list (Expressive design) -->
+  <item type="id" name="btn_xgramSettingsSearch" />
+  <!-- Rows of the classic search lists: a result or a recent search, a page to go to, Clear -->
+  <item type="id" name="btn_xgramSearchResult" />
+  <item type="id" name="btn_xgramSearchPage" />
+  <item type="id" name="btn_xgramSearchClearRecents" />
+</resources>

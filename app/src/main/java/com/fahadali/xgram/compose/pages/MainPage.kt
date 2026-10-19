@@ -13,7 +13,10 @@ package com.fahadali.xgram.compose.pages
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.XgramComposeBridge
 import com.fahadali.xgram.XgramLogs
 import com.fahadali.xgram.XgramSettings
@@ -21,14 +24,14 @@ import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
 import com.fahadali.xgram.compose.XgramPage
+import com.fahadali.xgram.compose.XgramSettingsPages
 import com.fahadali.xgram.compose.ui.GroupScope
 import com.fahadali.xgram.compose.ui.IconStyle
 import com.fahadali.xgram.compose.ui.SettingsPage
-import com.fahadali.xgram.compose.ui.SettingsSearchBar
-import com.fahadali.xgram.compose.ui.SettingsSearchOverlay
-import com.fahadali.xgram.compose.ui.rememberSettingsSearchState
+import com.fahadali.xgram.compose.ui.SettingsSearchPill
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
+import com.fahadali.xgram.search.SettingsSearch
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
 import org.thunderdog.challegram.telegram.TdlibUi
@@ -41,19 +44,18 @@ private const val URL_SUPPORT = "https://paypal.me/fahadalijaved23"
 @Composable
 fun MainPage() {
   val host = LocalXgramHost.current
-  val search = rememberSettingsSearchState()
-  SettingsPage(
-    title = str(R.string.XgramSettings),
-    // The full-screen search stays out of the list: only the bar scrolls with the page.
-    overlay = { SettingsSearchOverlay(search, onMainHit = { id -> mainPageAction(host, id) }) }
-  ) {
+  SettingsPage(title = str(R.string.XgramSettings)) {
     val settings = XgramSettings.instance()
     // Values from Telegram X, worked out once per build of the page, not while rows are drawn.
     val hidden = XgramComposeBridge.drawerHiddenCount()
     val ghost = settings.isAnyGhostEnabled()
 
+    // Every setting, Telegram X's too: the universal search page, XGram's results first
     item("search") {
-      SettingsSearchBar(search)
+      SettingsSearchPill(
+        onClick = { host.open(XgramSettingsPages.search(host.activity, host.tdlib, SettingsSearch.ORIGIN_XGRAM)) },
+        modifier = Modifier.padding(bottom = 8.dp)
+      )
     }
 
     group {

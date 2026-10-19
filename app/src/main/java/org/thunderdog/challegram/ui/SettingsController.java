@@ -192,6 +192,7 @@ public class SettingsController extends ViewController<Void> implements
   @Override
   public void fillMenuItems (int id, HeaderView header, LinearLayout menu) {
     if (id == R.id.menu_more_settings) {
+      header.addSearchButton(menu, this); // XGram: the settings search, every Telegram X and XGram setting
       header.addMoreButton(menu, this);
     }
   }
@@ -200,7 +201,35 @@ public class SettingsController extends ViewController<Void> implements
   public void onMenuItemPressed (int id, View view) {
     if (id == R.id.menu_btn_more) {
       showMore(new int[] {R.id.more_btn_logout}, new String[] {Lang.getString(R.string.LogOut)}, 0);
+    } else if (id == R.id.menu_btn_search) {
+      openXgramSearch();
     }
+  }
+
+  // XGram: the universal settings search (com.fahadali.xgram.search), from the header's search button and, with
+  // Expressive design, the search pill above the profile rows
+
+  /** The search pill's row: outside any group, so the M3E list draws no tile behind it. */
+  private static final int XGRAM_TYPE_SEARCH_PILL = 1;
+
+  private void openXgramSearch () {
+    navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.search(context, tdlib, com.fahadali.xgram.search.SettingsSearch.ORIGIN_SETTINGS));
+  }
+
+  @Override
+  public @Nullable RecyclerView xgramSearchList () {
+    return contentView;
+  }
+
+  /** The rows scroll under the collapsing header: a result's row lands below its collapsed height. */
+  @Override
+  public int xgramSearchTopOffset () {
+    return Size.getHeaderPortraitSize() + Screen.dp(16f);
+  }
+
+  @Override
+  public int xgramSearchMinTop () {
+    return contentView != null ? getHeaderHeight() : 0;
   }
 
   @Override
@@ -417,7 +446,7 @@ public class SettingsController extends ViewController<Void> implements
   @Override
   public void xgramOnBarTabChanged () {
     if (headerCell != null) {
-      headerCell.setInnerMargins(Screen.dp(xgramIsBarTab() ? 16f : 56f), Screen.dp(49f)); // the back arrow came or went
+      headerCell.setInnerMargins(Screen.dp(xgramIsBarTab() ? 16f : 56f), Screen.dp(98f)); // the back arrow came or went; XGram: search and more
     }
   }
 
@@ -427,7 +456,7 @@ public class SettingsController extends ViewController<Void> implements
     this.headerCell.setAvatarExpandListener((headerView1, expandFactor, byCollapse, allowanceFactor, collapseFactor) -> updateButtonsColor());
     this.headerCell.setAllowEmptyClick();
     this.headerCell.initWithController(this, true);
-    this.headerCell.setInnerMargins(Screen.dp(xgramIsBarTab() ? 16f : 56f), Screen.dp(49f)); // XGram M3E: no back arrow on a tab screen
+    this.headerCell.setInnerMargins(Screen.dp(xgramIsBarTab() ? 16f : 56f), Screen.dp(98f)); // XGram M3E: no back arrow on a tab screen; two buttons (search, more)
     this.headerCell.setPhotoOpenCallback(this);
     this.headerCell.setOnEmojiStatusClickListener(v -> {
       EmojiStatusSelectorEmojiPage.Wrapper c = new EmojiStatusSelectorEmojiPage.Wrapper(context, tdlib, SettingsController.this, new EmojiStatusSelectorEmojiPage.AnimationsEmojiStatusSetDelegate() {
@@ -612,6 +641,28 @@ public class SettingsController extends ViewController<Void> implements
           view.setText(obtainWrapper(text, TdApi.SetBio.CONSTRUCTOR));
         }
       }
+
+      @Override
+      protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
+        if (customViewType == XGRAM_TYPE_SEARCH_PILL) {
+          com.fahadali.xgram.appearance.XgramSearchPillView pill = new com.fahadali.xgram.appearance.XgramSearchPillView(parent.getContext());
+          pill.setId(R.id.btn_xgramSettingsSearch);
+          pill.setOnClickListener(v -> openXgramSearch());
+          pill.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+          SettingsController.this.addThemeInvalidateListener(pill);
+          return new SettingHolder(pill);
+        }
+        return super.initCustom(parent, customViewType);
+      }
+
+      @Override
+      protected void modifyCustom (SettingHolder holder, int position, ListItem item, int customViewType, View view, boolean isUpdate) {
+        if (customViewType == XGRAM_TYPE_SEARCH_PILL && view instanceof com.fahadali.xgram.appearance.XgramSearchPillView) {
+          ((com.fahadali.xgram.appearance.XgramSearchPillView) view).updateText(); // the language may have changed
+        } else {
+          super.modifyCustom(holder, position, item, customViewType, view, isUpdate);
+        }
+      }
     };
     this.adapter.setOnLongClickListener(this);
 
@@ -619,6 +670,11 @@ public class SettingsController extends ViewController<Void> implements
     ArrayUtils.ensureCapacity(items, 27);
 
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET));
+    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // XGram M3E: the settings search pill; the SHADOW_TOP opens the profile group below it (8dp of page)
+      items.add(new ListItem(ListItem.TYPE_CUSTOM - XGRAM_TYPE_SEARCH_PILL, R.id.btn_xgramSettingsSearch));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    }
     if (Settings.instance().showPeerIds()) {
       // XGram M3E: with the Telegram X icons, a Material "badge" glyph in place of the custom "ID" letters
       final int xgramPeerIdIcon = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && com.fahadali.xgram.appearance.XgramIconPack.current() == com.fahadali.xgram.appearance.XgramIconPack.PACK_TELEGRAM_X ? R.drawable.xgram_m3e_s4_badge_24 : R.drawable.baseline_identifier_24;

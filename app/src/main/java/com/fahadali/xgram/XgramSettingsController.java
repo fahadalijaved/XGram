@@ -70,9 +70,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
   private SettingsAdapter adapter;
 
-  // Settings search
+  // Settings search (the universal one: XGram's rows first, then Telegram X's)
   private @IdRes int highlightId; // row to scroll to and flash once shown
-  private List<XgramSettingsSearch.Entry> searchIndex;
+  private com.fahadali.xgram.search.SearchIndex searchIndex;
   private boolean showingResults;
   private View lastTouchView; // where a result row was last touched (switch vs. row)
   private float lastTouchX;
@@ -211,6 +211,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   }
 
   private RecyclerViewController<?> openSubPage (int subPage) {
+    return subPage(context, tdlib, subPage);
+  }
+
+  /** A page further in (SUB_*), as its row opens it; the settings search opens it the same way. */
+  public static RecyclerViewController<?> subPage (Context context, Tdlib tdlib, int subPage) {
     switch (subPage) {
       case SUB_CHAT_ACTIONS: return new com.fahadali.xgram.chats.XgramChatActionsController(context, tdlib);
       case SUB_MESSAGE_MENU: return new com.fahadali.xgram.chats.XgramMessageMenuController(context, tdlib);
@@ -220,6 +225,32 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       case SUB_SIDE_MENU:
       default: return new XgramDrawerItemsController(context, tdlib);
     }
+  }
+
+  /** The section a category row of the main page opens; SECTION_MAIN for its other rows. */
+  static int sectionOfMainRow (@IdRes int id) {
+    if (id == R.id.btn_xgramSectionAppearance) {
+      return SECTION_APPEARANCE;
+    } else if (id == R.id.btn_xgramSectionChatList) {
+      return SECTION_CHAT_LIST;
+    } else if (id == R.id.btn_xgramSectionChats) {
+      return SECTION_MESSAGES;
+    } else if (id == R.id.btn_xgramSectionTranslation) {
+      return SECTION_TRANSLATION;
+    } else if (id == R.id.btn_xgramSectionPrivacy) {
+      return SECTION_PRIVACY;
+    } else if (id == R.id.btn_xgramSectionFilters) {
+      return SECTION_FILTERS;
+    } else if (id == R.id.btn_xgramSectionHistory) {
+      return SECTION_HISTORY;
+    } else if (id == R.id.btn_xgramSectionNetwork) {
+      return SECTION_NETWORK;
+    } else if (id == R.id.btn_xgramSectionUpdates) {
+      return SECTION_UPDATES;
+    } else if (id == R.id.btn_xgramSectionBackup) {
+      return SECTION_BACKUP;
+    }
+    return SECTION_MAIN;
   }
 
   @Override
@@ -1308,7 +1339,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   @Override
   protected void onEnterSearchMode () {
     super.onEnterSearchMode();
-    searchIndex = XgramSettingsSearch.buildIndex(this);
+    searchIndex = buildSearchIndex();
+  }
+
+  /** Every setting, Telegram X's too; XGram's rows read from this controller's own page lists. */
+  private com.fahadali.xgram.search.SearchIndex buildSearchIndex () {
+    return com.fahadali.xgram.search.SettingsSearchEngine.build(this, com.fahadali.xgram.search.SettingsSearch.ORIGIN_XGRAM, XgramComposeBridge.searchHits(this));
   }
 
   @Override
@@ -1322,10 +1358,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     }
     if (searchIndex == null) {
-      searchIndex = XgramSettingsSearch.buildIndex(this);
+      searchIndex = buildSearchIndex();
     }
     showingResults = true;
-    adapter.setItems(XgramSettingsSearch.buildResults(searchIndex, query), false);
+    adapter.setItems(XgramSettingsSearch.buildHitResults(com.fahadali.xgram.search.SettingsSearchEngine.search(searchIndex, query)), false);
     scrollToTop();
   }
 
@@ -1354,6 +1390,19 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return false;
     }
     ListItem item = (ListItem) v.getTag();
+    if (item.getData() instanceof com.fahadali.xgram.search.SearchEntry) {
+      // A Telegram X setting: its page opens in this stack and points at the row (Night mode's switch flips here)
+      com.fahadali.xgram.search.SearchEntry result = (com.fahadali.xgram.search.SearchEntry) item.getData();
+      com.fahadali.xgram.search.InlineToggle toggle = result.getToggle();
+      if (toggle != null && isSwitchTouch(v)) {
+        adapter.toggleView(v);
+        toggle.getToggle().invoke();
+        return true;
+      }
+      preventLeavingSearchMode();
+      com.fahadali.xgram.search.SettingsSearchOpen.open(this, result, true);
+      return true;
+    }
     if (!(item.getData() instanceof XgramSettingsSearch.Entry)) {
       return false;
     }
@@ -1361,6 +1410,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     if (entry.isToggle && !item.getBoolValue() && isSwitchTouch(v)) {
       return false; // flip it right here (getBoolValue = locked by another switch)
     }
+    XgramSettings.instance().addSearchRecent(XgramSettingsSearch.recentKey(entry));
     if (entry.subPage != 0) {
       // A row of a page further in (Side Menu, Message menu, ...): open that page and point at the row.
       preventLeavingSearchMode();

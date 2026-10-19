@@ -49,6 +49,10 @@ interface XgramComposeHost {
   /** Navigation bar or keyboard height in px. */
   val bottomInset: Int
 
+  /** The settings search page: where it was opened from (com.fahadali.xgram.search.SettingsSearch.ORIGIN_*). */
+  val origin: Int
+    get() = 0
+
   /** A row to scroll to and pulse once shown (settings search, Telegram X shortcuts); 0 when none. */
   val highlightId: Int
   /** Tells apart rows that share [highlightId]. */
