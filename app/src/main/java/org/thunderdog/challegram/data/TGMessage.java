@@ -3768,6 +3768,39 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   }
 
+  // XGram: the reply's text changed width while this message had no view (or was being laid out on another thread):
+  // its bubble fits the reply once a view shows it (xgramBeforeBind)
+  private volatile boolean xgramReplyRefit;
+
+  /**
+   * XGram, main thread: the reply was laid out again after this message (the replied message loaded, a translation,
+   * the width caught up). The bubble takes its width from the reply too (computeBubbleWidth), so it fits it again: now
+   * when the message is on screen, else as soon as a view shows it.
+   */
+  public final void xgramOnReplyLayoutChanged () {
+    if (isDestroyed()) {
+      return;
+    }
+    if (!isLayoutBuilt() || !hasAnyTargetToInvalidate()) {
+      xgramReplyRefit = true;
+      return;
+    }
+    xgramReplyRefit = false;
+    if (rebuildContentDimensions()) {
+      requestLayout();
+    } else {
+      invalidate();
+    }
+  }
+
+  /** XGram, main thread: a view is about to show this message (MessageView#setMessage), before it measures it. */
+  public final void xgramBeforeBind () {
+    if (xgramReplyRefit && isLayoutBuilt() && !isDestroyed()) {
+      xgramReplyRefit = false;
+      rebuildContentDimensions();
+    }
+  }
+
   @MessageChangeType
   private int performContentfulUpdate (FutureBool act) {
     int height = getHeight();

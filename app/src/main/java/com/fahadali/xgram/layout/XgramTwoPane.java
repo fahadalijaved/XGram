@@ -787,6 +787,20 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
    * the gutter the drag handle sits in. Equal values: none (a line).
    */
   private int spacerStart, spacerEnd;
+  /**
+   * The chat pane's width from the last split while two panes or the rail are shown, else 0. Read off the main thread
+   * (MessagesController#makeGuessAboutWidth: a chat's history is laid out on the loader's thread).
+   */
+  private volatile int chatPaneWidth;
+
+  /**
+   * The width a chat gets on the right while two panes or the navigation rail are shown (the window less the rail, the
+   * list and the spacer, and the side insets), else 0: then the chat takes the window. Any thread.
+   */
+  public static int chatPaneWidth (@Nullable BaseActivity context) {
+    XgramTwoPane twoPane = context != null ? context.xgramTwoPane() : null;
+    return twoPane != null ? twoPane.chatPaneWidth : 0;
+  }
 
   /**
    * The spacer's own width. Expressive design: the 24dp spacer less the 16dp the list pane keeps clear on that side.
@@ -966,10 +980,12 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     boolean panes = isActive && leftNavigation != null;
     XgramNavRail rail = railShown ? this.rail : null;
     if (!panes && rail == null) {
+      chatPaneWidth = 0; // the chat takes the window
       return;
     }
     int width = parent.getMeasuredWidth(), height = parent.getMeasuredHeight();
     computeSplit(parent, width);
+    chatPaneWidth = Math.max(0, chatEnd - chatStart);
     int heightSpec = View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY);
     int chatSpec = View.MeasureSpec.makeMeasureSpec(Math.max(0, chatEnd - chatStart), View.MeasureSpec.EXACTLY);
     navigation.getValue().measure(chatSpec, heightSpec);
@@ -1010,6 +1026,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     int width = parent.getMeasuredWidth(), height = parent.getMeasuredHeight();
     if (splitWidth != width) {
       computeSplit(parent, width);
+      chatPaneWidth = Math.max(0, chatEnd - chatStart);
     }
     navigation.getValue().layout(chatStart, 0, chatEnd, height);
     if (rail != null) {
@@ -1253,6 +1270,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
       removeLeft();
     }
     isActive = false;
+    chatPaneWidth = 0; // until the next split (with the rail), the chat takes the window
     container.requestLayout();
   }
 
@@ -1540,6 +1558,7 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     railShown = false;
     removeLeft();
     isActive = false;
+    chatPaneWidth = 0;
   }
 
   /** The left chat list's screens hear about split screen too (the activity only tells the right pane's). */

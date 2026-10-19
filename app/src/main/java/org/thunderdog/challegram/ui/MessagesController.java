@@ -9690,7 +9690,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (isInForceTouchMode()) {
       return Screen.currentWidth() - ForceTouchView.getMatchParentHorizontalMargin() * 2;
     } else {
-      return Screen.currentWidth();
+      // XGram: the chat pane in two panes or beside the navigation rail, not the whole window, less the room the list
+      // leaves at its sides (topic tabs along the side). The history is laid out for this width before the chat is on
+      // screen, and so are messages that arrive while it isn't focused. Any thread.
+      int width = com.fahadali.xgram.layout.XgramTwoPane.chatPaneWidth(context);
+      if (width <= 0) {
+        width = Screen.currentWidth();
+      }
+      MessagesRecyclerView messagesView = this.messagesView;
+      ViewGroup.LayoutParams params = messagesView != null ? messagesView.getLayoutParams() : null;
+      if (params instanceof ViewGroup.MarginLayoutParams) {
+        ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
+        width -= Math.max(0, margins.leftMargin) + Math.max(0, margins.rightMargin);
+      }
+      return Math.max(1, width);
     }
   }
 
