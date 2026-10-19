@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the topic icon picker of New topic / Edit topic. Next to Telegram's default topic icons it lists the
+       recently used custom emoji and every installed custom emoji pack, as the official apps do. Sentence case. -->
+
+  <!-- Section title and tab label of the recently used custom emoji -->
+  <string name="XgramTopicIconsRecent">Recently used</string>
+  <!-- Tooltip when an account without Telegram Premium taps a custom emoji from a pack -->
+  <string name="XgramTopicIconsPremium">Custom emoji topic icons need Telegram Premium</string>
+</resources>

@@ -19,44 +19,76 @@ import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
+import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.collection.LongSparseArray;
 import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
+import com.fahadali.xgram.appearance.XgramIconPack;
+import com.fahadali.xgram.appearance.XgramMotion;
+import com.fahadali.xgram.appearance.XgramPillStateLayer;
 import com.fahadali.xgram.appearance.XgramShapes;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
-import org.thunderdog.challegram.component.emoji.AnimatedEmojiDrawable;
 import org.thunderdog.challegram.component.sticker.TGStickerObj;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.data.TGStickerSetInfo;
+import org.thunderdog.challegram.emoji.Emoji;
+import org.thunderdog.challegram.emoji.RecentEmoji;
+import org.thunderdog.challegram.loader.ImageReceiver;
+import org.thunderdog.challegram.loader.gif.GifFile;
+import org.thunderdog.challegram.loader.gif.GifReceiver;
 import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
-import org.thunderdog.challegram.tool.Paints;
+import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Keyboard;
+import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.RecyclerViewController;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.MaterialEditTextGroup;
+import org.thunderdog.challegram.widget.emoji.section.StickerSectionView;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+import me.vkryl.android.AnimatorUtils;
+import me.vkryl.android.animator.FactorAnimator;
+import me.vkryl.android.widget.FrameLayoutFix;
+import me.vkryl.core.ColorUtils;
+import me.vkryl.core.lambda.Destroyable;
+
 /**
- * Create or edit a forum topic: name, color (new topics only, as in the official app) and icon from
- * Telegram's free default topic icon set.
+ * Create or edit a forum topic: name, color (new topics only, as in the official app) and icon.
+ *
+ * <p>The icon comes from Telegram's free default topic icons and, as in the official apps, from every custom emoji the
+ * account can use: the recently used custom emoji and each installed custom emoji pack in the user's order, a section
+ * (title and grid) each in the same list. A pack's emoji are asked for (GetStickerSet, at most two at a time, the newest
+ * on screen first) only when its section scrolls into view; until then its first stickers (the set's covers) show. A
+ * strip of tabs (the default icons, recent, each pack's cover) sits under the name and stays pinned at the top once it
+ * scrolls there; a tap jumps to that section. Telegram lets only Premium accounts use a custom emoji that is not a
+ * default icon: without Premium the packs show with a lock and a tap explains why.
  */
 public final class ForumTopicEditController extends RecyclerViewController<ForumTopicEditController.Args> {
   public static final class Args {
@@ -70,26 +102,90 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
   }
 
-  private static final int SPAN_COUNT = 6;
-  private static final int VIEW_TYPE_HEADER = 0, VIEW_TYPE_TITLE = 1, VIEW_TYPE_ICON = 2;
-  /** Adapter position of the first icon ("no icon"), after the header and the title. */
-  private static final int FIRST_ICON_POSITION = 2;
+  private static final int VIEW_TYPE_HEADER = 0, VIEW_TYPE_TITLE = 1, VIEW_TYPE_ICON = 2, VIEW_TYPE_TABS = 3;
+  /** Adapter position of the tab strip's slot, while the list has more than the default icons. */
+  private static final int STRIP_POSITION = 1;
   /** M3E: space under the list for the Done button (56dp, 16dp from the bottom) plus a 16dp gap. */
   private static final float DONE_CLEARANCE = 88f;
   /** M3E: space above the first and below the last row of icons inside their container. */
   private static final float GRID_PADDING = 8f;
+  /**
+   * Icon cells are at least this wide, so the span count follows the list's width (7 on most phones, 8 on wide ones,
+   * 16 on an unfolded Fold); rows are as tall as a cell is wide, 44 to 56dp.
+   */
+  private static final float MIN_CELL = 44f, MAX_ROW = 56f;
+  private static final int MIN_SPAN = 6;
+  /** The tab strip: 48dp tall with 44dp tabs; with Expressive design an 8dp gap above and below its container. */
+  private static final float STRIP_HEIGHT = 48f, STRIP_GAP = 8f, TAB_WIDTH = 44f;
+  /** Packs whose contents are being asked for at once. */
+  private static final int MAX_PACK_REQUESTS = 2;
+  /** At most this many custom emoji go to GetCustomEmojiStickers. */
+  private static final int MAX_RECENT = 200;
+
+  private static final int SECTION_DEFAULT = 0, SECTION_RECENT = 1, SECTION_PACK = 2;
+  private static final int LOAD_NONE = 0, LOAD_QUEUED = 1, LOAD_LOADING = 2, LOAD_DONE = 3;
+  private static final int TAB_GLYPH = 0, TAB_COVER = 1;
+  /** Tab payload: only its selection changed (animated). */
+  private static final Object TAB_SELECTION = new Object();
+  /** Tag of a cell whose emoji isn't known yet (a pack still loading). */
+  private static final Object PLACEHOLDER = new Object();
+
+  /** A run of icons under one title: the default icons ("no icon" first), the recently used custom emoji or a pack. */
+  private static final class Section {
+    final int kind;
+    @Nullable final TdApi.StickerSetInfo info;
+    @Nullable final TGStickerSetInfo cover;
+    /** Recent and packs: the emoji, a pack's filled from its covers until it loads. */
+    @Nullable TGStickerObj[] items;
+    int titlePosition, firstCell, cellCount;
+    int loadState = LOAD_NONE;
+
+    Section (int kind, @Nullable TdApi.StickerSetInfo info, @Nullable TGStickerSetInfo cover) {
+      this.kind = kind;
+      this.info = info;
+      this.cover = cover;
+    }
+  }
 
   /** Expressive design when the page was built (it keeps that look until it is closed). */
   private boolean expressive;
+  /** Telegram Premium when the page was built: the packs are usable (a tap checks again). */
+  private boolean premium;
   private int color;
-  private long customEmojiId;
+  private long customEmojiId, initialCustomEmojiId;
   private String name = "";
   private final List<TdApi.Sticker> icons = new ArrayList<>();
+  private TGStickerObj[] defaultItems = new TGStickerObj[0];
+  private final ArrayList<Section> sections = new ArrayList<>();
+  @Nullable private Section defaultSection;
+  private int itemCount = 1;
   private IconView preview;
   @Nullable private ColorRow colorRow; // M3E round 6: a new topic's color swatches
   private MaterialEditTextGroup nameInput;
   private Adapter adapter;
+  private GridLayoutManager gridManager;
   private boolean isSaving;
+
+  // Recent and packs: they arrive together, after the default icons, so the list grows once
+
+  private int pendingExtras;
+  @Nullable private TdApi.StickerSetInfo[] loadedPacks;
+  @Nullable private TdApi.Sticker[] loadedRecents;
+  private final ArrayDeque<Section> packQueue = new ArrayDeque<>();
+  private int packRequests;
+
+  // Tab strip
+
+  @Nullable private StripLayout strip;
+  @Nullable private RecyclerView tabsView;
+  @Nullable private LinearLayoutManager tabsManager;
+  @Nullable private TabsAdapter tabsAdapter;
+  private int selectedTab;
+  /** The tab tapped last: it stays selected until the list is dragged (a short last pack never reaches the top). */
+  private int pinnedTab = -1;
+
+  /** Every emoji view built for this page (the visible ones, the recycled pool and the tabs), destroyed with it. */
+  private final ArrayList<Destroyable> destroyables = new ArrayList<>();
 
   public ForumTopicEditController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -115,32 +211,95 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   }
 
   @Override
+  protected View onCreateView (Context context) {
+    View view = super.onCreateView(context);
+    if (view instanceof FrameLayout && !isGeneral()) {
+      createStrip(context, (FrameLayout) view);
+    }
+    return view;
+  }
+
+  @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
     expressive = XgramExpressive.isEnabled();
+    premium = tdlib.hasPremium();
     TdApi.ForumTopic topic = getArgumentsStrict().topic;
     if (topic != null) {
       name = topic.info.name;
       color = topic.info.icon != null ? topic.info.icon.color : ForumTopicIconDrawable.serverColors()[0];
       customEmojiId = topic.info.icon != null ? topic.info.icon.customEmojiId : 0;
+      initialCustomEmojiId = customEmojiId;
     } else {
       int[] colors = ForumTopicIconDrawable.serverColors();
       color = colors[(int) (Math.random() * colors.length)];
     }
+    if (!isGeneral()) {
+      Section section = defaultSection = new Section(SECTION_DEFAULT, null, null);
+      section.cellCount = 1; // "no icon" until the default icons arrive
+      section.loadState = LOAD_DONE;
+      sections.add(section);
+    }
+    layoutSections();
 
     adapter = new Adapter();
-    GridLayoutManager manager = new GridLayoutManager(context, SPAN_COUNT);
+    final GridLayoutManager manager = gridManager = new GridLayoutManager(context, MIN_SPAN) {
+      @Override
+      public void onLayoutChildren (RecyclerView.Recycler recycler, RecyclerView.State state) {
+        // The span count follows the list's width: rotation, two panes, the Fold opening
+        int available = getWidth() - getPaddingLeft() - getPaddingRight();
+        if (available > 0) {
+          int span = Math.max(MIN_SPAN, available / Screen.dp(MIN_CELL));
+          if (span != getSpanCount()) {
+            setSpanCount(span);
+          }
+        }
+        super.onLayoutChildren(recycler, state);
+      }
+    };
     manager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
       @Override
       public int getSpanSize (int position) {
-        return adapter.getItemViewType(position) == VIEW_TYPE_ICON ? 1 : SPAN_COUNT;
+        return adapter.getItemViewType(position) == VIEW_TYPE_ICON ? 1 : manager.getSpanCount();
+      }
+
+      // Both from the sections in O(1) / O(sections): the defaults walk every position before this one, and a list
+      // of installed packs has thousands.
+
+      @Override
+      public int getSpanIndex (int position, int spanCount) {
+        if (adapter.getItemViewType(position) != VIEW_TYPE_ICON) {
+          return 0;
+        }
+        Section section = sectionAt(position);
+        return section != null ? (position - section.firstCell) % spanCount : 0;
+      }
+
+      @Override
+      public int getSpanGroupIndex (int adapterPosition, int spanCount) {
+        return rowOf(adapterPosition, spanCount);
       }
     });
     recyclerView.setLayoutManager(manager);
     recyclerView.setItemAnimator(null);
+    recyclerView.getRecycledViewPool().setMaxRecycledViews(VIEW_TYPE_ICON, 192); // a screen of 8 x 20 cells and some
     recyclerView.setAdapter(adapter);
+    recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+      @Override
+      public void onScrollStateChanged (@NonNull RecyclerView view, int newState) {
+        if (newState == RecyclerView.SCROLL_STATE_DRAGGING) {
+          pinnedTab = -1;
+        }
+      }
+
+      @Override
+      public void onScrolled (@NonNull RecyclerView view, int dx, int dy) {
+        syncStrip();
+      }
+    });
+    recyclerView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> syncStrip());
     if (expressive) {
-      // M3E (until the page is drawn in Compose): the name in a surfaceBright card and the icons in a surfaceBright
-      // container, both 16dp from the edges; the list ends clear of the Done button.
+      // M3E (until the page is drawn in Compose): the name in a surfaceBright card and each section's icons in a
+      // surfaceBright container, all 16dp from the edges; the list ends clear of the Done button.
       recyclerView.addItemDecoration(new ExpressiveDecoration());
       addThemeInvalidateListener(recyclerView);
       applyExpressivePadding(recyclerView);
@@ -151,16 +310,28 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     if (!isGeneral()) {
       tdlib.send(new TdApi.GetForumTopicDefaultIcons(), (stickers, error) -> runOnUiThreadOptional(() -> {
         if (stickers != null) {
+          ArrayList<TGStickerObj> items = new ArrayList<>(stickers.stickers.length);
           for (TdApi.Sticker sticker : stickers.stickers) {
             if (sticker.fullType instanceof TdApi.StickerFullTypeCustomEmoji) {
               icons.add(sticker);
+              items.add(newGridSticker(sticker));
             }
           }
-          adapter.notifyDataSetChanged();
+          defaultItems = items.toArray(new TGStickerObj[0]);
+          Section section = defaultSection;
+          if (section != null && defaultItems.length > 0) {
+            section.cellCount = 1 + defaultItems.length;
+            layoutSections();
+            // Inserted after "no icon" (which is no longer the last row), not a full reload: the name field keeps its
+            // focus and the keyboard
+            adapter.notifyItemChanged(section.firstCell);
+            adapter.notifyItemRangeInserted(section.firstCell + 1, defaultItems.length);
+          }
           if (preview != null) {
-            preview.bind(this);
+            preview.bindPreview(this, null);
           }
         }
+        loadExtras();
       }));
     }
   }
@@ -193,10 +364,11 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     recyclerView.setClipToPadding(false);
   }
 
-  private static long emojiIdOf (TdApi.Sticker sticker) {
-    return ((TdApi.StickerFullTypeCustomEmoji) sticker.fullType).customEmojiId;
+  private static long emojiIdOf (@Nullable TdApi.Sticker sticker) {
+    return sticker != null && sticker.fullType instanceof TdApi.StickerFullTypeCustomEmoji ? ((TdApi.StickerFullTypeCustomEmoji) sticker.fullType).customEmojiId : 0;
   }
 
+  /** One of Telegram's default topic icons (the ones every account may use), or null. */
   @Nullable
   private TdApi.Sticker findIcon (long customEmojiId) {
     for (TdApi.Sticker sticker : icons) {
@@ -207,12 +379,318 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     return null;
   }
 
-  private void onIconSelected (long customEmojiId) {
+  private TGStickerObj newGridSticker (TdApi.Sticker sticker) {
+    TGStickerObj obj = new TGStickerObj(tdlib, sticker, null, sticker.fullType);
+    obj.setPreviewOptimizationMode(GifFile.OptimizationMode.EMOJI_PREVIEW); // decoded at the emoji keyboard's size
+    return obj;
+  }
+
+  // Sections
+
+  private boolean hasStrip () {
+    return sections.size() > 1;
+  }
+
+  /** Adapter positions of every section after a change in their number or size. */
+  private void layoutSections () {
+    int position = hasStrip() ? STRIP_POSITION + 1 : 1;
+    for (int i = 0; i < sections.size(); i++) {
+      Section section = sections.get(i);
+      section.titlePosition = position;
+      section.firstCell = position + 1;
+      position += 1 + section.cellCount;
+    }
+    itemCount = position;
+  }
+
+  /** Index of the section whose title or cells are at {@code position}; -1 above the first. */
+  private int sectionIndexAt (int position) {
+    int low = 0, high = sections.size() - 1, found = -1;
+    while (low <= high) {
+      int mid = (low + high) >>> 1;
+      if (sections.get(mid).titlePosition <= position) {
+        found = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return found;
+  }
+
+  @Nullable
+  private Section sectionAt (int position) {
+    int index = sectionIndexAt(position);
+    return index >= 0 ? sections.get(index) : null;
+  }
+
+  /** The grid row of {@code position} (GridLayoutManager's span group): the header, the strip, then each section. */
+  private int rowOf (int position, int spanCount) {
+    if (position <= 0) {
+      return 0;
+    }
+    int row = 1;
+    if (hasStrip()) {
+      if (position == STRIP_POSITION) {
+        return row;
+      }
+      row++;
+    }
+    for (int i = 0; i < sections.size(); i++) {
+      Section section = sections.get(i);
+      if (position == section.titlePosition) {
+        return row;
+      }
+      row++;
+      if (position < section.firstCell + section.cellCount) {
+        return row + (position - section.firstCell) / spanCount;
+      }
+      row += (section.cellCount + spanCount - 1) / spanCount;
+    }
+    return row;
+  }
+
+  private void notifyNoIconChanged () {
+    if (adapter != null && defaultSection != null) {
+      adapter.notifyItemChanged(defaultSection.firstCell); // the "no icon" bubble shows the color and the name
+    }
+  }
+
+  @Nullable
+  private TGStickerObj stickerAt (Section section, int index) {
+    if (section.kind == SECTION_DEFAULT) {
+      int iconIndex = index - 1; // after "no icon"
+      return iconIndex >= 0 && iconIndex < defaultItems.length ? defaultItems[iconIndex] : null;
+    }
+    TGStickerObj[] items = section.items;
+    if (items == null || index < 0 || index >= items.length) {
+      return null;
+    }
+    TGStickerObj sticker = items[index];
+    TdApi.StickerSetInfo info = section.info;
+    if (sticker == null && info != null && info.covers != null && index < info.covers.length && info.covers[index] != null) {
+      sticker = items[index] = newGridSticker(info.covers[index]);
+    }
+    return sticker;
+  }
+
+  // Recent and packs
+
+  private void loadExtras () {
+    final long[] recentIds = premium ? recentCustomEmojiIds() : new long[0];
+    pendingExtras = recentIds.length > 0 ? 2 : 1;
+    tdlib.send(new TdApi.GetInstalledStickerSets(new TdApi.StickerTypeCustomEmoji()), (sets, error) -> runOnUiThreadOptional(() -> {
+      loadedPacks = sets != null ? sets.sets : null;
+      onExtrasLoaded();
+    }));
+    if (recentIds.length > 0) {
+      tdlib.send(new TdApi.GetCustomEmojiStickers(recentIds), (stickers, error) -> runOnUiThreadOptional(() -> {
+        loadedRecents = stickers != null ? inOrder(recentIds, stickers.stickers) : null;
+        onExtrasLoaded();
+      }));
+    }
+  }
+
+  /** The topic's own custom emoji (unless it is a default icon), then the custom emoji used last in messages. */
+  private long[] recentCustomEmojiIds () {
+    ArrayList<RecentEmoji> recents = Emoji.instance().getRecents();
+    long[] ids = new long[Math.min(MAX_RECENT, recents.size() + 1)];
+    int count = 0;
+    if (initialCustomEmojiId != 0 && findIcon(initialCustomEmojiId) == null) {
+      ids[count++] = initialCustomEmojiId;
+    }
+    for (int i = 0; i < recents.size() && count < ids.length; i++) {
+      RecentEmoji recent = recents.get(i);
+      if (!recent.isCustomEmoji() || recent.customEmojiId == 0 || indexOf(ids, count, recent.customEmojiId) != -1) {
+        continue;
+      }
+      ids[count++] = recent.customEmojiId;
+    }
+    return count == ids.length ? ids : Arrays.copyOf(ids, count);
+  }
+
+  private static int indexOf (long[] ids, int count, long id) {
+    for (int i = 0; i < count; i++) {
+      if (ids[i] == id) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /** GetCustomEmojiStickers answers in any order: back in the order of {@code ids}, unknown ones left out. */
+  private static TdApi.Sticker[] inOrder (long[] ids, TdApi.Sticker[] stickers) {
+    LongSparseArray<TdApi.Sticker> byId = new LongSparseArray<>(stickers.length);
+    for (TdApi.Sticker sticker : stickers) {
+      long id = emojiIdOf(sticker);
+      if (id != 0) {
+        byId.put(id, sticker);
+      }
+    }
+    ArrayList<TdApi.Sticker> result = new ArrayList<>(ids.length);
+    for (long id : ids) {
+      TdApi.Sticker sticker = byId.get(id);
+      if (sticker != null) {
+        result.add(sticker);
+      }
+    }
+    return result.toArray(new TdApi.Sticker[0]);
+  }
+
+  private void onExtrasLoaded () {
+    if (--pendingExtras > 0) {
+      return;
+    }
+    TdApi.Sticker[] recents = loadedRecents;
+    TdApi.StickerSetInfo[] packs = loadedPacks;
+    loadedRecents = null;
+    loadedPacks = null;
+    if (recents != null && recents.length > 0) {
+      Section section = new Section(SECTION_RECENT, null, null);
+      TGStickerObj[] items = new TGStickerObj[recents.length];
+      for (int i = 0; i < recents.length; i++) {
+        items[i] = newGridSticker(recents[i]);
+      }
+      section.items = items;
+      section.cellCount = items.length;
+      section.loadState = LOAD_DONE;
+      sections.add(section);
+    }
+    if (packs != null) {
+      for (TdApi.StickerSetInfo info : packs) {
+        if (info.size <= 0) {
+          continue;
+        }
+        Section section = new Section(SECTION_PACK, info, new TGStickerSetInfo(tdlib, info));
+        section.items = new TGStickerObj[info.size]; // filled from the covers on bind, all of it once the pack loads
+        section.cellCount = info.size;
+        sections.add(section);
+      }
+    }
+    if (!hasStrip()) {
+      return;
+    }
+    final int oldCount = itemCount;
+    layoutSections();
+    // The strip's slot under the name, then the new sections after the default icons (no full reload, so the name
+    // field keeps its focus and the keyboard)
+    adapter.notifyItemInserted(STRIP_POSITION);
+    adapter.notifyItemRangeInserted(oldCount + 1, itemCount - oldCount - 1);
+    if (tabsAdapter != null) {
+      tabsAdapter.notifyDataSetChanged();
+    }
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView != null) {
+      recyclerView.post(this::syncStrip);
+    }
+  }
+
+  /** A pack's section is on screen: its emoji are asked for, the newest on screen first, a few at a time. */
+  private void requestPack (Section section) {
+    if (section.kind != SECTION_PACK || section.loadState != LOAD_NONE || section.info == null) {
+      return;
+    }
+    section.loadState = LOAD_QUEUED;
+    packQueue.addFirst(section);
+    pumpPacks();
+  }
+
+  private void pumpPacks () {
+    while (packRequests < MAX_PACK_REQUESTS && !packQueue.isEmpty()) {
+      final Section section = packQueue.pollFirst();
+      if (section == null || section.loadState != LOAD_QUEUED || section.info == null) {
+        continue;
+      }
+      if (!isNearViewport(section)) {
+        section.loadState = LOAD_NONE; // flung past: asked for again when it shows
+        continue;
+      }
+      section.loadState = LOAD_LOADING;
+      packRequests++;
+      final long setId = section.info.id;
+      tdlib.send(new TdApi.GetStickerSet(setId), (set, error) -> runOnUiThreadOptional(() -> {
+        packRequests--;
+        onPackLoaded(section, set);
+        pumpPacks();
+      }));
+    }
+  }
+
+  private boolean isNearViewport (Section section) {
+    if (gridManager == null) {
+      return true;
+    }
+    int first = gridManager.findFirstVisibleItemPosition(), last = gridManager.findLastVisibleItemPosition();
+    if (first == RecyclerView.NO_POSITION || last == RecyclerView.NO_POSITION) {
+      return true;
+    }
+    int margin = gridManager.getSpanCount() * 16; // about a screen of rows either way
+    return section.firstCell + section.cellCount > first - margin && section.titlePosition < last + margin;
+  }
+
+  private void onPackLoaded (Section section, @Nullable TdApi.StickerSet set) {
+    if (section.loadState != LOAD_LOADING) {
+      return;
+    }
+    section.loadState = LOAD_DONE; // an error keeps the covers
+    if (set == null) {
+      return;
+    }
+    TGStickerObj[] items = new TGStickerObj[set.stickers.length];
+    for (int i = 0; i < items.length; i++) {
+      items[i] = newGridSticker(set.stickers[i]);
+    }
+    final int oldCount = section.cellCount, newCount = items.length, firstCell = section.firstCell;
+    section.items = items;
+    section.cellCount = newCount;
+    if (newCount != oldCount) {
+      layoutSections(); // the pack changed since it was listed: the sections after it move
+    }
+    if (Math.min(oldCount, newCount) > 0) {
+      adapter.notifyItemRangeChanged(firstCell, Math.min(oldCount, newCount));
+    }
+    if (newCount > oldCount) {
+      adapter.notifyItemRangeInserted(firstCell + oldCount, newCount - oldCount);
+    } else if (newCount < oldCount) {
+      adapter.notifyItemRangeRemoved(firstCell + newCount, oldCount - newCount);
+    }
+  }
+
+  // Selection
+
+  private void onCellClicked (View view) {
+    Object tag = view.getTag();
+    if (tag == null) {
+      onIconSelected(0, null); // "no icon"
+      return;
+    }
+    if (!(tag instanceof TGStickerObj)) {
+      return; // its pack is still loading
+    }
+    TdApi.Sticker sticker = ((TGStickerObj) tag).getSticker();
+    long emojiId = emojiIdOf(sticker);
+    if (emojiId == 0) {
+      return;
+    }
+    if (findIcon(emojiId) == null && !tdlib.hasPremium()) {
+      showPremiumHint(view);
+      return;
+    }
+    onIconSelected(emojiId, sticker);
+  }
+
+  private void showPremiumHint (View anchor) {
+    context().tooltipManager().builder(anchor).controller(this).icon(R.drawable.baseline_warning_24).show(tdlib, R.string.XgramTopicIconsPremium).hideDelayed();
+  }
+
+  private void onIconSelected (long customEmojiId, @Nullable TdApi.Sticker sticker) {
     this.customEmojiId = customEmojiId;
     if (preview != null) {
-      preview.bind(this);
+      preview.bindPreview(this, sticker);
     }
-    adapter.notifyItemRangeChanged(2, adapter.getItemCount() - 2);
+    if (itemCount > 1) {
+      adapter.notifyItemRangeChanged(1, itemCount - 1); // the emoji may show in more than one section
+    }
   }
 
   private void onPreviewClicked () {
@@ -229,8 +707,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       }
     }
     color = colors[(index + 1) % colors.length];
-    preview.bind(this);
-    adapter.notifyItemRangeChanged(2, 1);
+    preview.bindPreview(this, null);
+    notifyNoIconChanged();
     if (colorRow != null) {
       colorRow.onColorChanged(index); // M3E round 6: the ring moves to the new swatch
     }
@@ -248,6 +726,12 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
     TdApi.Chat chat = getArgumentsStrict().chat;
     TdApi.ForumTopic topic = getArgumentsStrict().topic;
+    boolean iconChanged = topic == null || (!isGeneral() && (topic.info.icon == null || topic.info.icon.customEmojiId != customEmojiId));
+    // Only Premium accounts may set a custom emoji that is not one of the default topic icons
+    if (iconChanged && customEmojiId != 0 && findIcon(customEmojiId) == null && !tdlib.hasPremium()) {
+      showPremiumHint(getDoneButton());
+      return;
+    }
     isSaving = true;
     setDoneProgress(true);
     if (topic == null) {
@@ -262,7 +746,6 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         }
       }));
     } else {
-      boolean iconChanged = !isGeneral() && (topic.info.icon == null || topic.info.icon.customEmojiId != customEmojiId);
       tdlib.send(new TdApi.EditForumTopic(chat.id, topic.info.forumTopicId, trimmed, iconChanged, customEmojiId), (ok, error) -> runOnUiThreadOptional(() -> {
         isSaving = false;
         setDoneProgress(false);
@@ -281,54 +764,254 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     if (preview != null) {
       preview.performDestroy();
     }
+    for (int i = 0; i < destroyables.size(); i++) {
+      destroyables.get(i).performDestroy();
+    }
+    destroyables.clear();
+    packQueue.clear();
+  }
+
+  // Tab strip
+
+  private int stripSlotHeight () {
+    return Screen.dp(expressive ? STRIP_HEIGHT + STRIP_GAP * 2f : STRIP_HEIGHT);
+  }
+
+  /**
+   * The strip floats over the page above the list: on its slot (an empty row under the name) while that is on screen,
+   * pinned at the list's top once the slot scrolls past it. Built once, shown once the list has more than the default
+   * icons.
+   */
+  private void createStrip (Context context, FrameLayout wrap) {
+    StripLayout strip = this.strip = new StripLayout(context);
+    strip.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, stripSlotHeight(), Gravity.TOP));
+    strip.setVisibility(View.INVISIBLE);
+
+    TabsAdapter tabsAdapter = this.tabsAdapter = new TabsAdapter();
+    LinearLayoutManager tabsManager = this.tabsManager = new LinearLayoutManager(context, RecyclerView.HORIZONTAL, Lang.rtl());
+    RecyclerView tabsView = this.tabsView = new RecyclerView(context);
+    tabsView.setLayoutManager(tabsManager);
+    tabsView.setItemAnimator(null);
+    tabsView.setHasFixedSize(true);
+    tabsView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    tabsView.setPadding(Screen.dp(6f), 0, Screen.dp(6f), 0);
+    tabsView.setClipToPadding(false);
+    tabsView.setAdapter(tabsAdapter);
+    FrameLayout.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(STRIP_HEIGHT), Gravity.TOP);
+    if (expressive) {
+      // M3E: the tabs in a surfaceBright container with list corners, 16dp from the edges as the cards
+      params.leftMargin = params.rightMargin = Screen.dp(XgramExpressive.LIST_INSET);
+      params.topMargin = Screen.dp(STRIP_GAP);
+      XgramExpressive.MorphDrawable container = new XgramExpressive.MorphDrawable(0, XgramExpressive.LIST_OUTER_CORNER, Float.NaN);
+      container.setColorRole(XgramExpressive.SURFACE_BRIGHT);
+      tabsView.setBackground(container);
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        tabsView.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+        tabsView.setClipToOutline(true);
+      }
+    }
+    strip.addView(tabsView, params);
+    addThemeInvalidateListener(strip);
+    addThemeInvalidateListener(tabsView);
+    wrap.addView(strip);
+  }
+
+  /** Moves the strip onto its slot or pins it at the top, and selects the tab of the section under it. */
+  private void syncStrip () {
+    final StripLayout strip = this.strip;
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (strip == null || recyclerView == null || gridManager == null) {
+      return;
+    }
+    if (!hasStrip()) {
+      if (strip.getVisibility() != View.INVISIBLE) {
+        strip.setVisibility(View.INVISIBLE);
+      }
+      return;
+    }
+    final int minTop = recyclerView.getPaddingTop();
+    final RecyclerView.ViewHolder slot = recyclerView.findViewHolderForAdapterPosition(STRIP_POSITION);
+    final float top;
+    final boolean stuck;
+    if (slot != null) {
+      float slotTop = slot.itemView.getTop() + slot.itemView.getTranslationY();
+      stuck = slotTop < minTop;
+      top = Math.max(minTop, slotTop);
+    } else {
+      int first = gridManager.findFirstVisibleItemPosition();
+      if (first == RecyclerView.NO_POSITION || first < STRIP_POSITION) {
+        // Not laid out yet, or the slot is below the screen
+        if (strip.getVisibility() != View.INVISIBLE) {
+          strip.setVisibility(View.INVISIBLE);
+        }
+        return;
+      }
+      stuck = true;
+      top = minTop;
+    }
+    strip.setTranslationY(recyclerView.getTop() + recyclerView.getTranslationY() + top);
+    strip.setStuck(stuck);
+    if (strip.getVisibility() != View.VISIBLE) {
+      strip.setVisibility(View.VISIBLE);
+    }
+    updateTabFromScroll(recyclerView, top + stripSlotHeight());
+  }
+
+  private void updateTabFromScroll (RecyclerView recyclerView, float y) {
+    if (pinnedTab >= 0) {
+      setSelectedTab(pinnedTab);
+      return;
+    }
+    View child = recyclerView.findChildViewUnder(recyclerView.getWidth() / 2f, y + 1f);
+    if (child == null) {
+      return; // between two sections: the last one stays
+    }
+    int position = recyclerView.getChildAdapterPosition(child);
+    if (position != RecyclerView.NO_POSITION) {
+      setSelectedTab(Math.max(0, sectionIndexAt(position)));
+    }
+  }
+
+  private void setSelectedTab (int index) {
+    if (index == selectedTab || index < 0 || index >= sections.size()) {
+      return;
+    }
+    int previous = selectedTab;
+    selectedTab = index;
+    if (tabsAdapter == null || tabsView == null || tabsManager == null) {
+      return;
+    }
+    int count = tabsAdapter.getItemCount();
+    if (previous >= 0 && previous < count) {
+      tabsAdapter.notifyItemChanged(previous, TAB_SELECTION);
+    }
+    if (index < count) {
+      tabsAdapter.notifyItemChanged(index, TAB_SELECTION);
+      if (tabsView.getWidth() > 0) {
+        int first = tabsManager.findFirstCompletelyVisibleItemPosition(), last = tabsManager.findLastCompletelyVisibleItemPosition();
+        if (first == RecyclerView.NO_POSITION || index < first || index > last) {
+          tabsView.smoothScrollToPosition(index);
+        }
+      }
+    }
+  }
+
+  /** A tab: its section's title right under the pinned strip (a short way on the list's spring, a long way at once). */
+  private void scrollToSection (int index) {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null || gridManager == null || index < 0 || index >= sections.size()) {
+      return;
+    }
+    pinnedTab = index;
+    setSelectedTab(index);
+    if (index == 0 && strip != null && !strip.stuck) {
+      return; // the default icons already show under the strip, with the name above them
+    }
+    final int target = sections.get(index).titlePosition;
+    recyclerView.stopScroll();
+    View view = gridManager.findViewByPosition(target);
+    if (view != null) {
+      int dy = gridManager.getDecoratedTop(view) - recyclerView.getPaddingTop() - stripSlotHeight();
+      if (dy != 0) {
+        XgramMotion.smoothScrollByOr(recyclerView, 0, dy);
+      }
+    } else {
+      gridManager.scrollToPositionWithOffset(target, stripSlotHeight());
+    }
   }
 
   // Views
 
-  /** Topic icon: the colored letter bubble or a custom emoji. */
-  private static final class IconView extends View {
+  /**
+   * Topic icon: the colored letter bubble or a custom emoji. The cell keeps one image and one animation receiver for
+   * its whole life; the emoji only animates while the cell is attached, and a recycled cell lets go of it.
+   */
+  private static final class IconView extends View implements Destroyable {
     private final Tdlib tdlib;
-    private ForumTopicIconDrawable bubble;
-    private AnimatedEmojiDrawable emoji;
-    private long emojiId;
-    private boolean isSelected, isAttached;
+    private final boolean expressive, squareCell;
+    private final float iconFraction;
+    private final ImageReceiver image;
+    private final GifReceiver gif;
+    /** M3E: the round state layer, sized to the cell (at most 48dp). */
+    @Nullable XgramExpressive.MorphDrawable pressMorph;
+    @Nullable private ForumTopicIconDrawable bubble;
+    private int bubbleColor;
+    @Nullable private String bubbleName;
+    @Nullable private TGStickerObj sticker;
+    private boolean needsTint;
+    /** The preview: the emoji asked for (it may still be loading). */
+    private long previewEmojiId;
+    private boolean isSelected;
+    private int iconLeft, iconTop, iconSize;
     private Path selectedShape;
     private Matrix selectedMatrix;
     private float selectedShapeSize, selectedShapeX, selectedShapeY;
 
-    IconView (Context context, Tdlib tdlib) {
+    IconView (Context context, Tdlib tdlib, boolean expressive, float iconFraction, boolean squareCell) {
       super(context);
       this.tdlib = tdlib;
+      this.expressive = expressive;
+      this.iconFraction = iconFraction;
+      this.squareCell = squareCell;
+      this.image = new ImageReceiver(this, 0);
+      this.gif = new GifReceiver(this);
     }
 
     void setBubble (int color, String name) {
+      if (bubble != null && bubbleColor == color && TextUtils.equals(bubbleName, name)) {
+        return;
+      }
+      bubbleColor = color;
+      bubbleName = name;
       bubble = new ForumTopicIconDrawable(false, color, name);
       invalidate();
     }
 
-    void setEmoji (long emojiId, @Nullable TdApi.Sticker sticker) {
-      if (this.emojiId == emojiId) {
-        return;
-      }
-      this.emojiId = emojiId;
-      if (emoji != null) {
-        emoji.detach();
-        emoji.performDestroy();
-        emoji = null;
-      }
-      if (emojiId == 0) {
+    void clearBubble () {
+      if (bubble != null) {
+        bubble = null;
+        bubbleName = null;
         invalidate();
+      }
+    }
+
+    /** null: no emoji (the bubble, if any, shows instead). */
+    void setSticker (@Nullable TGStickerObj sticker) {
+      if (this.sticker == sticker) {
         return;
       }
-      if (sticker != null) {
-        setEmojiSticker(sticker);
+      this.sticker = sticker;
+      final boolean empty = sticker == null || sticker.isEmpty();
+      image.requestFile(empty ? null : sticker.getImage());
+      gif.requestFile(empty ? null : sticker.getPreviewAnimation());
+      needsTint = !empty && sticker.needThemedColorFilter();
+      TdApi.Sticker raw = empty ? null : sticker.getSticker();
+      setContentDescription(raw != null ? raw.emoji : null);
+      invalidate();
+    }
+
+    /** The page's icon: the bubble in the page's color and name, or its custom emoji ({@code known} when at hand). */
+    void bindPreview (ForumTopicEditController c, @Nullable TdApi.Sticker known) {
+      setBubble(c.color, c.name);
+      final long emojiId = c.customEmojiId;
+      if (emojiId == previewEmojiId && (emojiId == 0 || sticker != null)) {
         return;
       }
-      // Not one of the default icons (Premium users can pick any custom emoji).
+      previewEmojiId = emojiId;
+      if (emojiId == 0) {
+        setSticker(null);
+        return;
+      }
+      TdApi.Sticker found = known != null ? known : c.findIcon(emojiId);
+      if (found != null) {
+        setSticker(new TGStickerObj(tdlib, found, null, found.fullType));
+        return;
+      }
+      setSticker(null); // the bubble until the emoji is known
       tdlib.emoji().findOrRequest(emojiId, (entry, inPlace) -> {
         Runnable act = () -> {
-          if (this.emojiId == emojiId && emoji == null && entry.value != null) {
-            setEmojiSticker(entry.value);
+          if (previewEmojiId == emojiId && sticker == null && entry.value != null) {
+            setSticker(new TGStickerObj(tdlib, entry.value, null, entry.value.fullType));
           }
         };
         if (inPlace) {
@@ -337,21 +1020,6 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           tdlib.ui().post(act);
         }
       });
-      invalidate();
-    }
-
-    private void setEmojiSticker (TdApi.Sticker sticker) {
-      emoji = new AnimatedEmojiDrawable(this);
-      emoji.setSticker(new TGStickerObj(tdlib, sticker, null, sticker.fullType), false);
-      if (isAttached) {
-        emoji.attach();
-      }
-      invalidate();
-    }
-
-    void bind (ForumTopicEditController c) {
-      setBubble(c.color, c.name);
-      setEmoji(c.customEmojiId, c.customEmojiId != 0 ? c.findIcon(c.customEmojiId) : null);
     }
 
     void setSelectedIcon (boolean isSelected) {
@@ -362,38 +1030,57 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
 
     @Override
+    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      if (!squareCell || MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        return;
+      }
+      int width = MeasureSpec.getSize(widthMeasureSpec);
+      setMeasuredDimension(width, Math.max(Screen.dp(MIN_CELL), Math.min(Screen.dp(MAX_ROW), width)));
+    }
+
+    @Override
+    protected void onSizeChanged (int w, int h, int oldw, int oldh) {
+      super.onSizeChanged(w, h, oldw, oldh);
+      int size = Math.min(w, h);
+      iconSize = Math.round(size * iconFraction);
+      iconLeft = (w - iconSize) / 2;
+      iconTop = (h - iconSize) / 2;
+      image.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize);
+      gif.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize);
+      if (pressMorph != null) {
+        float box = Math.min(48f, Screen.px(size));
+        pressMorph.setSize(box, box, Gravity.CENTER);
+      }
+    }
+
+    @Override
     protected void onAttachedToWindow () {
       super.onAttachedToWindow();
-      isAttached = true;
-      if (emoji != null) {
-        emoji.attach();
-      }
+      image.attach();
+      gif.attach();
     }
 
     @Override
     protected void onDetachedFromWindow () {
       super.onDetachedFromWindow();
-      isAttached = false;
-      if (emoji != null) {
-        emoji.detach();
-      }
+      image.detach();
+      gif.detach();
     }
 
-    void performDestroy () {
-      if (emoji != null) {
-        emoji.performDestroy();
-        emoji = null;
-      }
+    @Override
+    public void performDestroy () {
+      image.destroy();
+      gif.destroy();
     }
 
     @Override
     protected void onDraw (Canvas c) {
-      int size = Math.min(getMeasuredWidth(), getMeasuredHeight());
-      int iconSize = (int) (size * .62f);
-      int left = (getMeasuredWidth() - iconSize) / 2, top = (getMeasuredHeight() - iconSize) / 2;
-      if (isSelected && XgramExpressive.isEnabled()) {
+      final int width = getWidth(), height = getHeight();
+      final int size = Math.min(width, height);
+      if (isSelected && expressive) {
         // M3E: the selected icon sits on a tonal cookie in secondary container instead of a ring
-        float shapeSize = size - Screen.dp(8f), x = getMeasuredWidth() / 2f, y = getMeasuredHeight() / 2f;
+        float shapeSize = size - Screen.dp(6f), x = width / 2f, y = height / 2f;
         if (selectedShape == null) {
           selectedShape = new Path();
           selectedMatrix = new Matrix();
@@ -408,12 +1095,287 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         c.drawPath(selectedShape, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER)));
       } else if (isSelected) {
         Paint paint = Paints.getProgressPaint(Theme.getColor(ColorId.iconActive), Screen.dp(2f));
-        c.drawCircle(getMeasuredWidth() / 2f, getMeasuredHeight() / 2f, size / 2f - Screen.dp(4f), paint);
+        c.drawCircle(width / 2f, height / 2f, size / 2f - Screen.dp(2.5f), paint);
       }
-      Drawable d = emoji != null ? emoji : bubble;
-      if (d != null) {
-        d.setBounds(left, top, left + iconSize, top + iconSize);
-        d.draw(c);
+      if (sticker != null) {
+        if (needsTint) {
+          // An emoji drawn in the text color (as in messages), so a white glyph stays visible on light themes
+          int tint = expressive ? XgramExpressive.color(XgramExpressive.ON_SURFACE) : Theme.getColor(ColorId.text);
+          image.setPorterDuffColorFilter(tint);
+          gif.setPorterDuffColorFilter(tint);
+        } else {
+          image.disablePorterDuffColorFilter();
+          gif.disablePorterDuffColorFilter();
+        }
+        if (gif.needPlaceholder()) {
+          image.draw(c);
+        }
+        gif.draw(c);
+      } else if (bubble != null) {
+        bubble.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize);
+        bubble.draw(c);
+      }
+    }
+  }
+
+  /** A section title; a pack's carries a lock without Telegram Premium. */
+  private static final class TitleView extends TextView {
+    @Nullable private Drawable lock;
+    private boolean locked;
+    private int lockColor;
+
+    TitleView (Context context) {
+      super(context);
+    }
+
+    void setLocked (boolean locked) {
+      if (locked && lock == null) {
+        lock = Drawables.get(getResources(), XgramIconPack.map(R.drawable.baseline_lock_16));
+      }
+      if (locked && lock != null) {
+        int color = getCurrentTextColor();
+        if (lockColor != color) {
+          lockColor = color;
+          lock.setColorFilter(Paints.createColorFilter(color));
+        }
+      }
+      if (this.locked != locked) {
+        this.locked = locked;
+        Drawable start = locked ? lock : null;
+        if (Lang.rtl()) {
+          setCompoundDrawablesWithIntrinsicBounds(null, null, start, null);
+        } else {
+          setCompoundDrawablesWithIntrinsicBounds(start, null, null, null);
+        }
+        setCompoundDrawablePadding(locked ? Screen.dp(6f) : 0);
+      }
+    }
+  }
+
+  /**
+   * The tab of the default icons or the recent ones: a glyph on the selected tab's circle, as the emoji keyboard's
+   * pack tabs (StickerSectionView) beside it.
+   */
+  private static final class GlyphTab extends View implements FactorAnimator.Target {
+    private final boolean expressive;
+    @Nullable private Drawable icon;
+    private int iconRes;
+    private float factor;
+    @Nullable private FactorAnimator animator;
+    @Nullable private Paint restPaint, activePaint;
+    private int restColor, activeColor;
+
+    GlyphTab (Context context, boolean expressive) {
+      super(context);
+      this.expressive = expressive;
+      if (expressive) {
+        // M3E: presses in the 36dp circle the selected tab sits on
+        XgramPillStateLayer.attach(this, new XgramPillStateLayer.Shape() {
+          @Override
+          public float getStateLayerShape (@NonNull View view, @NonNull RectF outRect) {
+            final float cx = getWidth() / 2f, cy = getHeight() / 2f;
+            final float radius = Math.min(Screen.dp(18f), Math.min(getWidth(), getHeight()) / 2f);
+            outRect.set(cx - radius, cy - radius, cx + radius, cy + radius);
+            return XgramPillStateLayer.CORNER_FULL;
+          }
+
+          @Override
+          public boolean isStateLayerOnIndicator (@NonNull View view) {
+            return factor >= .5f;
+          }
+        });
+      }
+    }
+
+    void setIcon (@DrawableRes int res) {
+      int mapped = XgramIconPack.map(res);
+      if (iconRes != mapped) {
+        iconRes = mapped;
+        icon = Drawables.get(getResources(), mapped);
+        invalidate();
+      }
+    }
+
+    void setSelectionFactor (float factor, boolean animated) {
+      if (animated && this.factor != factor) {
+        if (animator == null) {
+          animator = new FactorAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 180L, this.factor);
+        }
+        animator.animateTo(factor);
+      } else {
+        if (animator != null) {
+          animator.forceFactor(factor);
+        }
+        setFactor(factor);
+      }
+    }
+
+    private void setFactor (float factor) {
+      if (this.factor != factor) {
+        this.factor = factor;
+        invalidate();
+      }
+    }
+
+    @Override
+    public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
+      setFactor(factor);
+    }
+
+    @Override
+    public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) { }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      if (icon == null) {
+        return;
+      }
+      final float cx = getWidth() / 2f, cy = getHeight() / 2f;
+      if (factor > 0f) {
+        final int fill = expressive ?
+          XgramExpressive.withAlpha(XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER), factor) :
+          ColorUtils.alphaColor(factor, Theme.chatSelectionColor());
+        c.drawCircle(cx, cy, Screen.dp(18f) - Screen.dp(4f) * (1f - factor), Paints.fillingPaint(fill));
+      }
+      final int rest = expressive ? XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT) : Theme.getColor(ColorId.icon);
+      final int active = expressive ? XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER) : Theme.getColor(ColorId.iconActive);
+      if (restPaint == null || restColor != rest) {
+        restPaint = Paints.createPorterDuffPaint(restPaint, restColor = rest);
+      }
+      if (activePaint == null || activeColor != active) {
+        activePaint = Paints.createPorterDuffPaint(activePaint, activeColor = active);
+      }
+      // The rest color fades into the active one (two passes, no color per frame)
+      if (factor < 1f) {
+        restPaint.setAlpha(Math.round((rest >>> 24) * (1f - factor)));
+        Drawables.drawCentered(c, icon, cx, cy, restPaint);
+      }
+      if (factor > 0f) {
+        activePaint.setAlpha(Math.round((active >>> 24) * factor));
+        Drawables.drawCentered(c, icon, cx, cy, activePaint);
+      }
+    }
+  }
+
+  /**
+   * Holds the tab strip. Classic look: a filling bar with a separator, as the emoji keyboard's. Expressive: the page's
+   * background only while pinned, so the rows scrolling under the strip disappear behind it.
+   */
+  private final class StripLayout extends FrameLayout {
+    private boolean stuck;
+
+    StripLayout (Context context) {
+      super(context);
+    }
+
+    void setStuck (boolean stuck) {
+      if (this.stuck != stuck) {
+        this.stuck = stuck;
+        invalidate();
+      }
+    }
+
+    @Override
+    public boolean onTouchEvent (android.view.MotionEvent e) {
+      // Pinned, the strip covers rows of the list: a touch on its gaps must not reach an emoji hidden under it
+      return stuck || super.onTouchEvent(e);
+    }
+
+    @Override
+    protected void dispatchDraw (Canvas c) {
+      if (!expressive) {
+        c.drawColor(Theme.getColor(ColorId.filling));
+        int separator = Screen.separatorSize();
+        c.drawRect(0, getHeight() - separator, getWidth(), getHeight(), Paints.fillingPaint(Theme.getColor(ColorId.separator)));
+      } else if (stuck) {
+        c.drawColor(Theme.getColor(ColorId.background));
+      }
+      super.dispatchDraw(c);
+    }
+  }
+
+  private final class TabsAdapter extends RecyclerView.Adapter<Holder> {
+    @Override
+    public int getItemCount () {
+      return hasStrip() ? sections.size() : 0;
+    }
+
+    @Override
+    public int getItemViewType (int position) {
+      return sections.get(position).kind == SECTION_PACK ? TAB_COVER : TAB_GLYPH;
+    }
+
+    @NonNull
+    @Override
+    public Holder onCreateViewHolder (@NonNull ViewGroup parent, int viewType) {
+      final View view;
+      if (viewType == TAB_COVER) {
+        // Telegram X's emoji keyboard tab: the pack's cover, M3E secondaryContainer when selected
+        StickerSectionView cover = new StickerSectionView(parent.getContext());
+        destroyables.add(cover);
+        view = cover;
+      } else {
+        view = new GlyphTab(parent.getContext(), expressive);
+      }
+      if (!expressive) {
+        RippleSupport.setTransparentSelector(view);
+      }
+      view.setLayoutParams(new RecyclerView.LayoutParams(Screen.dp(TAB_WIDTH), ViewGroup.LayoutParams.MATCH_PARENT));
+      final Holder holder = new Holder(view);
+      view.setOnClickListener(v -> {
+        int position = holder.getBindingAdapterPosition();
+        if (position != RecyclerView.NO_POSITION) {
+          scrollToSection(position);
+        }
+      });
+      return holder;
+    }
+
+    @Override
+    public void onBindViewHolder (@NonNull Holder holder, int position) {
+      Section section = sections.get(position);
+      float factor = position == selectedTab ? 1f : 0f;
+      if (holder.itemView instanceof StickerSectionView) {
+        StickerSectionView view = (StickerSectionView) holder.itemView;
+        if (section.cover != null) {
+          view.setStickerSet(section.cover);
+        }
+        view.setSelectionFactor(factor, false);
+        view.setContentDescription(section.info != null ? section.info.title : null);
+      } else if (holder.itemView instanceof GlyphTab) {
+        GlyphTab view = (GlyphTab) holder.itemView;
+        boolean recent = section.kind == SECTION_RECENT;
+        view.setIcon(recent ? R.drawable.baseline_access_time_24 : R.drawable.baseline_forum_24);
+        view.setSelectionFactor(factor, false);
+        view.setContentDescription(Lang.getString(recent ? R.string.XgramTopicIconsRecent : R.string.XgramTopicIcon));
+      }
+    }
+
+    @Override
+    public void onBindViewHolder (@NonNull Holder holder, int position, @NonNull List<Object> payloads) {
+      if (!payloads.contains(TAB_SELECTION)) {
+        onBindViewHolder(holder, position);
+        return;
+      }
+      float factor = position == selectedTab ? 1f : 0f;
+      if (holder.itemView instanceof StickerSectionView) {
+        ((StickerSectionView) holder.itemView).setSelectionFactor(factor, true);
+      } else if (holder.itemView instanceof GlyphTab) {
+        ((GlyphTab) holder.itemView).setSelectionFactor(factor, true);
+      }
+    }
+
+    @Override
+    public void onViewAttachedToWindow (@NonNull Holder holder) {
+      if (holder.itemView instanceof StickerSectionView) {
+        ((StickerSectionView) holder.itemView).attach();
+      }
+    }
+
+    @Override
+    public void onViewDetachedFromWindow (@NonNull Holder holder) {
+      if (holder.itemView instanceof StickerSectionView) {
+        ((StickerSectionView) holder.itemView).detach();
       }
     }
   }
@@ -485,9 +1447,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
             select.animateTo(1f);
             performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
             if (preview != null) {
-              preview.bind(ForumTopicEditController.this);
+              preview.bindPreview(ForumTopicEditController.this, null);
             }
-            adapter.notifyItemRangeChanged(2, 1); // the "no icon" bubble takes the color too
+            notifyNoIconChanged(); // the "no icon" bubble takes the color too
           }
           return true;
         }
@@ -533,17 +1495,21 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   }
 
   /**
-   * M3E: 8dp above the name card, and a surfaceBright container (list corners) behind the icon grid with 8dp above
-   * its first and below its last row. The list's 16dp side padding insets the card, the title and the grid alike.
+   * M3E: 8dp above the name card, and a surfaceBright container (list corners) behind each section's icons with 8dp
+   * above its first and below its last row. The list's 16dp side padding insets the card, the titles and the grids alike.
    */
   private final class ExpressiveDecoration extends RecyclerView.ItemDecoration {
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     private final RectF rect = new RectF();
     private final float[] radii = new float[8];
+    // The visible part of each section's container in this frame (a few at a time; grown, never per frame)
+    private int[] boxSections = new int[16];
+    private float[] boxTops = new float[16], boxBottoms = new float[16];
+    private boolean[] boxFirstRows = new boolean[16], boxLastRows = new boolean[16];
 
-    private int lastRow () {
-      return (adapter.getItemCount() - 1 - FIRST_ICON_POSITION) / SPAN_COUNT;
+    private int spanCount () {
+      return gridManager != null ? gridManager.getSpanCount() : MIN_SPAN;
     }
 
     @Override
@@ -557,51 +1523,90 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       if (viewType == VIEW_TYPE_HEADER) {
         outRect.top = Screen.dp(8f);
       } else if (viewType == VIEW_TYPE_ICON) {
-        int row = (position - FIRST_ICON_POSITION) / SPAN_COUNT;
+        Section section = sectionAt(position);
+        if (section == null) {
+          return;
+        }
+        int span = spanCount();
+        int row = (position - section.firstCell) / span;
         if (row == 0) {
           outRect.top = Screen.dp(GRID_PADDING);
         }
-        if (row == lastRow()) {
+        if (row == (section.cellCount - 1) / span) {
           outRect.bottom = Screen.dp(GRID_PADDING);
         }
       }
     }
 
+    private void ensureCapacity (int size) {
+      if (size <= boxSections.length) {
+        return;
+      }
+      int capacity = Math.max(size, boxSections.length * 2);
+      boxSections = Arrays.copyOf(boxSections, capacity);
+      boxTops = Arrays.copyOf(boxTops, capacity);
+      boxBottoms = Arrays.copyOf(boxBottoms, capacity);
+      boxFirstRows = Arrays.copyOf(boxFirstRows, capacity);
+      boxLastRows = Arrays.copyOf(boxLastRows, capacity);
+    }
+
     @Override
     public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
       RecyclerView.LayoutManager manager = parent.getLayoutManager();
-      int itemCount = adapter.getItemCount();
-      if (manager == null || itemCount <= FIRST_ICON_POSITION) {
+      final int itemCount = adapter.getItemCount();
+      if (manager == null || sections.isEmpty()) {
         return;
       }
-      final int lastRow = lastRow();
-      float top = Float.MAX_VALUE, bottom = -Float.MAX_VALUE;
-      boolean hasFirstRow = false, hasLastRow = false;
+      final int span = spanCount();
+      int boxCount = 0;
       for (int i = 0; i < parent.getChildCount(); i++) {
         View child = parent.getChildAt(i);
         int position = parent.getChildAdapterPosition(child);
-        if (position < FIRST_ICON_POSITION || position >= itemCount) {
+        if (position == RecyclerView.NO_POSITION || position >= itemCount || adapter.getItemViewType(position) != VIEW_TYPE_ICON) {
           continue;
         }
-        int row = (position - FIRST_ICON_POSITION) / SPAN_COUNT;
-        hasFirstRow |= row == 0;
-        hasLastRow |= row == lastRow;
-        top = Math.min(top, manager.getDecoratedTop(child) + child.getTranslationY());
-        bottom = Math.max(bottom, manager.getDecoratedBottom(child) + child.getTranslationY());
+        int sectionIndex = sectionIndexAt(position);
+        if (sectionIndex < 0) {
+          continue;
+        }
+        Section section = sections.get(sectionIndex);
+        int box = -1;
+        for (int j = boxCount - 1; j >= 0; j--) {
+          if (boxSections[j] == sectionIndex) {
+            box = j;
+            break;
+          }
+        }
+        if (box == -1) {
+          ensureCapacity(boxCount + 1);
+          box = boxCount++;
+          boxSections[box] = sectionIndex;
+          boxTops[box] = Float.MAX_VALUE;
+          boxBottoms[box] = -Float.MAX_VALUE;
+          boxFirstRows[box] = false;
+          boxLastRows[box] = false;
+        }
+        int row = (position - section.firstCell) / span;
+        boxFirstRows[box] |= row == 0;
+        boxLastRows[box] |= row == (section.cellCount - 1) / span;
+        boxTops[box] = Math.min(boxTops[box], manager.getDecoratedTop(child) + child.getTranslationY());
+        boxBottoms[box] = Math.max(boxBottoms[box], manager.getDecoratedBottom(child) + child.getTranslationY());
       }
-      if (top >= bottom) {
-        return;
-      }
-      // Rows scrolled away keep their side of the container square, so it runs on past the screen edge.
-      float outer = Screen.dpf(XgramExpressive.LIST_OUTER_CORNER);
-      float topRadius = hasFirstRow ? outer : 0f, bottomRadius = hasLastRow ? outer : 0f;
-      radii[0] = radii[1] = radii[2] = radii[3] = topRadius;
-      radii[4] = radii[5] = radii[6] = radii[7] = bottomRadius;
-      rect.set(parent.getPaddingLeft(), top, parent.getWidth() - parent.getPaddingRight(), bottom);
-      path.rewind();
-      path.addRoundRect(rect, radii, Path.Direction.CW);
+      // Rows scrolled away keep their side of a container square, so it runs on past the screen edge.
+      final float outer = Screen.dpf(XgramExpressive.LIST_OUTER_CORNER);
       paint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_BRIGHT));
-      c.drawPath(path, paint);
+      for (int box = 0; box < boxCount; box++) {
+        if (boxTops[box] >= boxBottoms[box]) {
+          continue;
+        }
+        float topRadius = boxFirstRows[box] ? outer : 0f, bottomRadius = boxLastRows[box] ? outer : 0f;
+        radii[0] = radii[1] = radii[2] = radii[3] = topRadius;
+        radii[4] = radii[5] = radii[6] = radii[7] = bottomRadius;
+        rect.set(parent.getPaddingLeft(), boxTops[box], parent.getWidth() - parent.getPaddingRight(), boxBottoms[box]);
+        path.rewind();
+        path.addRoundRect(rect, radii, Path.Direction.CW);
+        c.drawPath(path, paint);
+      }
     }
   }
 
@@ -614,13 +1619,21 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private final class Adapter extends RecyclerView.Adapter<Holder> {
     @Override
     public int getItemCount () {
-      // Header, then (unless General) the icon title, "no icon" and the default icons.
-      return isGeneral() ? 1 : 3 + icons.size();
+      // Header, then (unless General) the tab strip's slot when there is more than the default icons, then each
+      // section's title and icons: "no icon" and the default icons, the recent custom emoji, every installed pack.
+      return itemCount;
     }
 
     @Override
     public int getItemViewType (int position) {
-      return position == 0 ? VIEW_TYPE_HEADER : position == 1 ? VIEW_TYPE_TITLE : VIEW_TYPE_ICON;
+      if (position == 0) {
+        return VIEW_TYPE_HEADER;
+      }
+      if (position == STRIP_POSITION && hasStrip()) {
+        return VIEW_TYPE_TABS;
+      }
+      Section section = sectionAt(position);
+      return section != null && section.titlePosition == position ? VIEW_TYPE_TITLE : VIEW_TYPE_ICON;
     }
 
     @NonNull
@@ -644,7 +1657,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
             RippleSupport.setSimpleWhiteBackground(layout);
           }
 
-          preview = new IconView(context, tdlib);
+          preview = new IconView(context, tdlib, expressive, .62f, false);
           preview.setOnClickListener(v -> onPreviewClicked());
           layout.addView(preview, new LinearLayout.LayoutParams(Screen.dp(64f), Screen.dp(64f)));
 
@@ -654,14 +1667,14 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           input.setText(name);
           input.setTextListener((v, text) -> {
             name = text.toString();
-            preview.bind(ForumTopicEditController.this);
-            adapter.notifyItemRangeChanged(2, 1);
+            preview.bindPreview(ForumTopicEditController.this, null);
+            notifyNoIconChanged();
           });
           LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
           params.leftMargin = Screen.dp(8f);
           layout.addView(input, params);
           addThemeInvalidateListener(layout);
-          preview.bind(ForumTopicEditController.this);
+          preview.bindPreview(ForumTopicEditController.this, null);
           if (expressive && isCreating()) {
             // M3E round 6: a new topic picks its color from a row of swatches under the name, in the same card
             LinearLayout card = new LinearLayout(context);
@@ -682,7 +1695,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           return new Holder(layout);
         }
         case VIEW_TYPE_TITLE: {
-          TextView title = new TextView(context);
+          TitleView title = new TitleView(context);
           title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14f);
           title.setTextColor(Theme.getColor(ColorId.textNeutral));
           addThemeTextColorListener(title, ColorId.textNeutral);
@@ -692,24 +1705,31 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
             XgramExpressive.applyText(title, XgramExpressive.TS_TITLE_S, false);
             title.setPadding(Screen.dp(16f), Screen.dp(20f), Screen.dp(16f), Screen.dp(8f));
           }
-          title.setText(Lang.getString(isCreating() ? R.string.XgramTopicIconCreateHint : R.string.XgramTopicIcon));
+          title.setMaxLines(3);
+          title.setEllipsize(TextUtils.TruncateAt.END);
           title.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
           return new Holder(title);
         }
+        case VIEW_TYPE_TABS: {
+          // The tab strip's slot: the strip itself floats over the list (see syncStrip)
+          View slot = new View(context);
+          slot.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, stripSlotHeight()));
+          return new Holder(slot);
+        }
         case VIEW_TYPE_ICON:
         default: {
-          IconView view = new IconView(context, tdlib);
-          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(56f)));
+          IconView view = new IconView(context, tdlib, expressive, .68f, true);
+          view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
           if (expressive) {
-            // M3E: a round 48dp state layer instead of a full-cell rectangle
-            XgramExpressive.attachPressMorph(view, 0, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_FULL).setSize(48f, 48f, Gravity.CENTER);
+            // M3E: a round state layer (48dp, or the cell's size) instead of a full-cell rectangle
+            XgramExpressive.MorphDrawable morph = XgramExpressive.attachPressMorph(view, 0, XgramExpressive.CORNER_FULL, XgramExpressive.CORNER_FULL);
+            morph.setSize(48f, 48f, Gravity.CENTER);
+            view.pressMorph = morph;
           } else {
             RippleSupport.setTransparentSelector(view);
           }
-          view.setOnClickListener(v -> {
-            Object tag = v.getTag();
-            onIconSelected(tag instanceof Long ? (Long) tag : 0L);
-          });
+          view.setOnClickListener(v -> onCellClicked(v));
+          destroyables.add(view);
           return new Holder(view);
         }
       }
@@ -717,24 +1737,71 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
 
     @Override
     public void onBindViewHolder (@NonNull Holder holder, int position) {
-      if (getItemViewType(position) != VIEW_TYPE_ICON) {
+      int viewType = getItemViewType(position);
+      if (viewType == VIEW_TYPE_TITLE) {
+        bindTitle((TitleView) holder.itemView, position);
+      } else if (viewType == VIEW_TYPE_ICON) {
+        bindIcon((IconView) holder.itemView, position);
+      }
+    }
+
+    @Override
+    public void onViewRecycled (@NonNull Holder holder) {
+      if (holder.itemView instanceof IconView && holder.itemView != preview) {
+        ((IconView) holder.itemView).setSticker(null); // a pooled cell holds no emoji
+      }
+    }
+
+    private void bindTitle (TitleView title, int position) {
+      Section section = sectionAt(position);
+      if (section == null) {
         return;
       }
-      IconView view = (IconView) holder.itemView;
-      int iconIndex = position - 3;
-      if (iconIndex < 0) {
-        // "No icon": the colored letter bubble.
-        view.setTag(0L);
-        view.setBubble(color, name);
-        view.setEmoji(0, null);
-        view.setSelectedIcon(customEmojiId == 0);
-      } else {
-        TdApi.Sticker sticker = icons.get(iconIndex);
-        long emojiId = emojiIdOf(sticker);
-        view.setTag(emojiId);
-        view.setEmoji(emojiId, sticker);
-        view.setSelectedIcon(customEmojiId == emojiId);
+      switch (section.kind) {
+        case SECTION_DEFAULT:
+          title.setText(Lang.getString(isCreating() ? R.string.XgramTopicIconCreateHint : R.string.XgramTopicIcon));
+          title.setLocked(false);
+          break;
+        case SECTION_RECENT:
+          title.setText(Lang.getString(R.string.XgramTopicIconsRecent));
+          title.setLocked(false);
+          break;
+        case SECTION_PACK:
+        default:
+          title.setText(section.info != null ? section.info.title : "");
+          title.setLocked(!premium);
+          requestPack(section); // its title shows: the pack's emoji are next
+          break;
       }
+    }
+
+    private void bindIcon (IconView view, int position) {
+      Section section = sectionAt(position);
+      if (section == null) {
+        view.clearBubble();
+        view.setSticker(null);
+        view.setTag(PLACEHOLDER);
+        view.setSelectedIcon(false);
+        return;
+      }
+      int index = position - section.firstCell;
+      if (section.kind == SECTION_DEFAULT && index == 0) {
+        // "No icon": the colored letter bubble.
+        view.setTag(null);
+        view.setBubble(color, name);
+        view.setSticker(null);
+        view.setSelectedIcon(customEmojiId == 0);
+        return;
+      }
+      if (section.kind == SECTION_PACK && section.loadState == LOAD_NONE) {
+        requestPack(section);
+      }
+      TGStickerObj sticker = stickerAt(section, index);
+      view.clearBubble();
+      view.setSticker(sticker);
+      view.setTag(sticker != null ? sticker : PLACEHOLDER);
+      long emojiId = sticker != null ? emojiIdOf(sticker.getSticker()) : 0;
+      view.setSelectedIcon(emojiId != 0 && emojiId == customEmojiId);
     }
   }
 }
