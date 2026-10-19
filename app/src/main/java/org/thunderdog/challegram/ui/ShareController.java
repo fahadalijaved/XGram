@@ -3799,6 +3799,9 @@ public class ShareController extends TelegramViewController<ShareController.Args
       }
     }
 
+    for (TdApi.Function<?> function : functions) {
+      com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, function); // XGram: Undo send, what waits in these chats goes first
+    }
     if (functions.size() == 1) {
       tdlib.client().send(functions.get(0), tdlib.messageHandler());
     } else {

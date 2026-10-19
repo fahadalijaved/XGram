@@ -404,11 +404,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (BuildConfig.DEBUG) {
       items.add(new HapticMenuHelper.MenuItem(R.id.btn_sendToast, "Show toast", R.drawable.baseline_warning_24));
       items.add(new HapticMenuHelper.MenuItem(R.id.btn_debugLtrEmoji, "Send LTR emoji", R.drawable.baseline_warning_24));
+      if (com.fahadali.xgram.XgramSettings.instance().undoSendSeconds() > 0) { // XGram: Undo send journal tests
+        items.add(new HapticMenuHelper.MenuItem(R.id.btn_xgramUndoSendDebugCrashHold, "Crash after hold", R.drawable.baseline_warning_24));
+        items.add(new HapticMenuHelper.MenuItem(R.id.btn_xgramUndoSendDebugCrashSend, "Crash after send", R.drawable.baseline_warning_24));
+        items.add(new HapticMenuHelper.MenuItem(R.id.btn_xgramUndoSendDebugFailRestore, "Fail draft restore", R.drawable.baseline_warning_24));
+      }
     }
     if (canSelectSender()) {
       items.add(0, createHapticSenderItem(R.id.btn_openSendersMenu, chat.messageSenderId, false, false));
     }
     com.fahadali.xgram.chats.XgramAiTools.addSendMenuItem(this, items); // XGram: Telegram's AI editor
+    if (com.fahadali.xgram.chats.XgramUndoSend.wouldHold(this)) {
+      // XGram: Undo send: what waits goes first, then this message, without waiting
+      items.add(new HapticMenuHelper.MenuItem(R.id.btn_xgramUndoSendNow, Lang.getString(R.string.XgramUndoSendNow), R.drawable.baseline_send_24));
+    }
     hideCursorsForInputView();
     return items;
   }
@@ -461,6 +470,25 @@ public class MessagesController extends ViewController<MessagesController.Argume
       pickDateOrProceed(Td.newSendOptions(), (sendOptions, disableMarkdown) -> send(new TdApi.InputMessageText(new TdApi.FormattedText(Text.bidiGenerateTestMessage(), new TdApi.TextEntity[0]), null, false), false, sendOptions, null));
     } else if (viewId == R.id.btn_xgramAiEditor) { // XGram: Telegram's AI editor
       com.fahadali.xgram.chats.XgramAiTools.openEditor(this);
+    } else if (viewId == R.id.btn_xgramUndoSendNow) { // XGram: Undo send
+      pickDateOrProceed(Td.newSendOptions(), (sendOptions, disableMarkdown) -> {
+        com.fahadali.xgram.chats.XgramUndoSend.sendNow(this);
+        xgramUndoBypass = true;
+        try {
+          send(sendOptions, true);
+        } finally {
+          xgramUndoBypass = false;
+        }
+      });
+    } else if (viewId == R.id.btn_xgramUndoSendDebugCrashHold) {
+      com.fahadali.xgram.chats.XgramUndoSend.debugCrashAfterHold();
+      UI.showToast("The next message that waits crashes the app", Toast.LENGTH_SHORT);
+    } else if (viewId == R.id.btn_xgramUndoSendDebugCrashSend) {
+      com.fahadali.xgram.chats.XgramUndoSend.debugCrashAfterSend();
+      UI.showToast("The app crashes once the next waiting message is sent", Toast.LENGTH_SHORT);
+    } else if (viewId == R.id.btn_xgramUndoSendDebugFailRestore) {
+      com.fahadali.xgram.chats.XgramUndoSend.debugFailDraftRestore();
+      UI.showToast("The next draft restore after a crash fails", Toast.LENGTH_SHORT);
     }
     return true;
   }
@@ -2535,6 +2563,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
         manager.destroy(this);
         setArguments(new Arguments(openedFromChatList, chat, messageThread, messageTopicId, null, MessagesManager.HIGHLIGHT_MODE_NONE, null));
       }
+    } else if (id == R.id.btn_xgramUndoSendExclude) {
+      // XGram: Undo send, per chat. Sending right away also sends what waits here now.
+      com.fahadali.xgram.chats.XgramUndoSend.setExcluded(this, !com.fahadali.xgram.chats.XgramUndoSend.isExcluded(this));
     } else if (id == R.id.btn_sendScreenshotNotification) {
       UI.showToast("Sent screenshot notification", Toast.LENGTH_SHORT);
       tdlib.onScreenshotTaken((int) (System.currentTimeMillis() / 1000l));
@@ -2950,6 +2981,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private long linkedChatId;
 
   public void setArguments (Arguments args) {
+    com.fahadali.xgram.chats.XgramUndoSend.onOwnerDestroyed(this); // XGram: what waits goes before this screen shows another chat
+    if (xgramUndoBar != null) {
+      xgramUndoBar.reset();
+    }
     super.setArguments(args);
 
     this.chat = args.chat;
@@ -4397,6 +4432,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onFocus () {
     super.onFocus();
     xgramCheckAutoTranslate(); // XGram: e.g. a chat preview opened in full
+    com.fahadali.xgram.chats.XgramUndoSend.onComposerShown(this); // XGram: a message an earlier launch couldn't send
     if (promptDraftPrefillOnFocus) {
       promptDraftPrefillOnFocus = false;
       fillDraft(this.fillDraft, true);
@@ -4670,6 +4706,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   @Override
   public void destroy () {
+    // XGram: Undo send. First, while the chat and the message box are still this screen's: what waits goes now.
+    com.fahadali.xgram.chats.XgramUndoSend.onOwnerDestroyed(this);
+    if (xgramUndoBar != null) {
+      xgramUndoBar.reset();
+    }
     com.fahadali.xgram.chats.XgramAutoTranslate.removeListener(xgramTranslateListener); // XGram
     if (xgramTopicIcon != null) {
       xgramTopicIcon.performDestroy(); // XGram
@@ -4947,6 +4988,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
       // XGram: per-chat ghost mode exclusion.
       ids.append(R.id.btn_xgramGhostExclude);
       strings.append(com.fahadali.xgram.ghost.XgramGhost.isExcluded(tdlib, chat.id) ? R.string.XgramGhostIncludeChat : R.string.XgramGhostExcludeChat);
+    }
+
+    if (com.fahadali.xgram.chats.XgramUndoSend.canOfferExclude(this)) {
+      // XGram: Undo send, per chat
+      ids.append(R.id.btn_xgramUndoSendExclude);
+      strings.append(com.fahadali.xgram.chats.XgramUndoSend.isExcluded(this) ? R.string.XgramUndoSendInclude : R.string.XgramUndoSendExclude);
     }
 
     if (tdlib.canReportChatSpam(chat.id)) {
@@ -6517,7 +6564,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private final BoolAnimator bottomBarVisible = new BoolAnimator(ANIMATOR_BOTTOM_BUTTON, this, com.fahadali.xgram.appearance.XgramAppMotion.interpClamped(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, AnimatorUtils.DECELERATE_INTERPOLATOR), com.fahadali.xgram.appearance.XgramAppMotion.duration(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 180l)); // XGram: SPATIAL_DEFAULT with Expressive design
 
   public int getBottomOffset () {
-    return (int) (getReplyOffset() + getAttachedFilesOffset());
+    return (int) (getReplyOffset() + getAttachedFilesOffset() + xgramUndoBarOffset()); // XGram: + the Undo send bar
   }
 
   private static final int ACTION_DELETE_CHAT = 1;
@@ -7658,7 +7705,149 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private float getButtonsOffset () {
-    return getReplyOffset() + getAttachedFilesOffset() + getSearchControlsOffset() + getKeyboardOffset() + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme);
+    return getReplyOffset() + getAttachedFilesOffset() + xgramUndoBarOffset() /* XGram: the Undo send bar */ + getSearchControlsOffset() + getKeyboardOffset() + (bottomWrap.getVisibility() == View.VISIBLE ? 0 : extraBottomInsetWithoutIme);
+  }
+
+  // XGram: Undo send. The bar of waiting messages sits right above the reply bar (and below the files to send and the
+  // inline results, which take their place from getInputOffset); the message list and the buttons over it move up with
+  // it, as they do for the reply bar.
+
+  private @Nullable com.fahadali.xgram.chats.XgramUndoSendBar xgramUndoBar;
+  /** "Send now" from the long-press menu of Send: this one send skips the wait. */
+  private boolean xgramUndoBypass;
+
+  private float xgramUndoBarOffset () {
+    return xgramUndoBar != null ? xgramUndoBar.visibleHeight() * (1f - getSearchTransformFactor()) : 0f;
+  }
+
+  /** The bar moved (it animates in or out): everything placed above the message box follows. */
+  public void xgramOnUndoBarMoved () {
+    if (messagesView != null && bottomShadowView != null) {
+      updateReplyView();
+    }
+  }
+
+  /** Rebinds the bar to what waits in this message box; {@code handoff}: the message was just sent and its bubble came in. */
+  @UiThread
+  public void xgramOnUndoSendChanged (boolean handoff) {
+    if (isDestroyed() || contentView == null || replyBarView == null || messagesView == null) {
+      return;
+    }
+    if (xgramUndoBar == null) {
+      if (!com.fahadali.xgram.chats.XgramUndoSend.hasShownItems(this)) {
+        return;
+      }
+      xgramUndoBar = new com.fahadali.xgram.chats.XgramUndoSendBar(context(), this);
+      RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, xgramUndoBar.barHeight());
+      params.addRule(RelativeLayout.ALIGN_TOP, R.id.msg_bottom);
+      xgramUndoBar.setLayoutParams(params);
+      // Under the reply bar (and the message box and the list): while it slides, the reply bar covers its lower part.
+      int index = contentView.indexOfChild(replyBarView);
+      contentView.addView(xgramUndoBar, Math.max(0, index));
+      updateReplyView();
+    }
+    xgramUndoBar.update(handoff, isFocused());
+  }
+
+  /** What can wait: a chat's own message box, not a preview, the Recent actions log or the Scheduled messages. */
+  public boolean xgramUndoSendEligible () {
+    return chat != null && inputView != null && !inPreviewMode && !isInForceTouchMode() && !isEventLog() && !areScheduled && !isDestroyed();
+  }
+
+  /** The message box holds text that Send would make wait (no files to send, no edit, no dice). */
+  public boolean xgramComposerWouldWait () {
+    if (inputView == null || isEditingMessage() || hasAttachedFiles() || inputView.getText().length() == 0) {
+      return false;
+    }
+    TdApi.FormattedText text = inputView.getOutputText(true);
+    return !Td.isEmpty(text) && !tdlib.shouldSendAsDice(text);
+  }
+
+  /** A waiting message goes out: the draft is cleared, as after a send, unless the message box holds something new. */
+  public boolean xgramComposerEmptyFor (long chatId, long draftChatId, @Nullable TdApi.MessageTopic topic) {
+    return !isDestroyed() && inputView != null && !isEditingMessage() && getChatId() == chatId && getMessageThreadChatId() == draftChatId &&
+      Td.equalsTo(getMessageTopicId(), topic) && inputView.getText().length() == 0;
+  }
+
+  /**
+   * Undo, or a send that failed: {@code text} goes back into this message box before what it holds (a new line between),
+   * with the reply when the message box has none. False (nothing changed) unless this is the message box of that chat
+   * and topic and it can take it now.
+   */
+  @UiThread
+  public boolean xgramRestoreUnsent (long chatId, long draftChatId, @Nullable TdApi.MessageTopic draftTopic, @Nullable TdApi.FormattedText text,
+                                     @Nullable ReplyInfo replyInfo, @Nullable TdApi.InputMessageReplyTo replyTo, boolean showKeyboard) {
+    if (isDestroyed() || inputView == null || chat == null || inPreviewMode || isInForceTouchMode() || areScheduled || isEditingMessage() || !canWriteMessages()) {
+      return false;
+    }
+    if (getChatId() != chatId || getMessageThreadChatId() != draftChatId || !Td.equalsTo(getMessageTopicId(), draftTopic)) {
+      return false;
+    }
+    if (!Td.isEmpty(text)) {
+      TdApi.FormattedText current = inputView.getOutputText(false);
+      TdApi.FormattedText merged = Td.isEmpty(current) ? text : Td.concat(text, new TdApi.FormattedText("\n", new TdApi.TextEntity[0]), current);
+      if (merged == null) {
+        merged = text;
+      }
+      inputView.setInput(TD.toCharSequence(merged), true, true);
+    }
+    if (getCurrentReplyId() == null) {
+      if (replyInfo != null) {
+        showReply(replyInfo.message, replyInfo.quote, replyInfo.checklistTaskId, replyInfo.pollOptionId, false, false);
+      } else if (replyTo != null) {
+        xgramRestoreReplyTo(replyTo);
+      }
+    }
+    if (showKeyboard) {
+      inputView.requestFocus();
+      Keyboard.show(inputView);
+    }
+    return true;
+  }
+
+  /** The reply of a message that comes back after a restart: only its id is known. */
+  private void xgramRestoreReplyTo (TdApi.InputMessageReplyTo replyTo) {
+    final long currentChatId = getChatId();
+    final long replyChatId, replyMessageId;
+    final TdApi.InputTextQuote quote;
+    final int checklistTaskId;
+    final String pollOptionId;
+    if (replyTo instanceof TdApi.InputMessageReplyToMessage) {
+      TdApi.InputMessageReplyToMessage r = (TdApi.InputMessageReplyToMessage) replyTo;
+      replyChatId = currentChatId;
+      replyMessageId = r.messageId;
+      quote = r.quote;
+      checklistTaskId = r.checklistTaskId;
+      pollOptionId = r.pollOptionId;
+    } else if (replyTo instanceof TdApi.InputMessageReplyToExternalMessage) {
+      TdApi.InputMessageReplyToExternalMessage r = (TdApi.InputMessageReplyToExternalMessage) replyTo;
+      replyChatId = r.chatId;
+      replyMessageId = r.messageId;
+      quote = r.quote;
+      checklistTaskId = r.checklistTaskId;
+      pollOptionId = r.pollOptionId;
+    } else {
+      return;
+    }
+    tdlib.send(new TdApi.GetMessage(replyChatId, replyMessageId), (message, error) -> {
+      if (message == null) {
+        return;
+      }
+      tdlib.getMessageProperties(message, properties -> runOnUiThreadOptional(() -> {
+        if (properties != null && getChatId() == currentChatId && getCurrentReplyId() == null && !isEditingMessage()) {
+          showReply(new MessageWithProperties(message, properties), quote, checklistTaskId, pollOptionId, false, false);
+        }
+      }));
+    });
+  }
+
+  /** A hint at the Send button while this chat is in front; false when it isn't (the caller shows a toast instead). */
+  public boolean xgramShowUndoSendHint (CharSequence text, boolean isError) {
+    if (isDestroyed() || !isFocused() || sendButton == null) {
+      return false;
+    }
+    showBottomHint(text, isError);
+    return true;
   }
 
   private float getMentionButtonY () {
@@ -7718,10 +7907,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
     float y = -getReplyOffset();
     float offset = -getAttachedFilesOffset();
     final float keyboardOffset = -getKeyboardOffset();
-    messagesView.setTranslationY(y + offset + keyboardOffset);
-    bottomShadowView.setTranslationY(y + offset + keyboardOffset);
+    final float xgramUndoOffset = -xgramUndoBarOffset(); // XGram: the Undo send bar
+    messagesView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
+    bottomShadowView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
     if (replyBarView != null) {
       replyBarView.setTranslationY(y + keyboardOffset);
+    }
+    if (xgramUndoBar != null) {
+      xgramUndoBar.applyPosition(y + keyboardOffset + xgramUndoOffset, 1f - getSearchTransformFactor());
     }
     if (inputView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       inputView.invalidate(); // XGram: the field's top corners follow the reply block
@@ -10124,6 +10317,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     float bottom = bottomWrap.getMeasuredHeight();
     if (!excludeTranslation) {
       bottom += getReplyOffset();
+      bottom += xgramUndoBarOffset(); // XGram: inline results and the files to send sit above the Undo send bar
     }
     bottom += getKeyboardOffset();
     bottom -= extraBottomInset;
@@ -10741,7 +10935,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public void sendText (boolean applyMarkdown, TdApi.MessageSendOptions sendOptions) {
     if (inputView != null) {
-      sendText(inputView.getOutputText(applyMarkdown), true, applyMarkdown, true, true, sendOptions);
+      // XGram: only text from the message box (Send, Enter to send) may wait (Undo send); "Send now" skips it.
+      sendText(inputView.getOutputText(applyMarkdown), true, applyMarkdown, true, true, sendOptions, !xgramUndoBypass);
     }
   }
 
@@ -10783,8 +10978,12 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   }
 
-  @SuppressWarnings("unchecked")
   private void sendText (TdApi.FormattedText msg, boolean clearInput, boolean allowDice, boolean allowReply, boolean allowLinkPreview, TdApi.MessageSendOptions initialSendOptions) {
+    sendText(msg, clearInput, allowDice, allowReply, allowLinkPreview, initialSendOptions, false);
+  }
+
+  @SuppressWarnings("unchecked")
+  private void sendText (TdApi.FormattedText msg, boolean clearInput, boolean allowDice, boolean allowReply, boolean allowLinkPreview, TdApi.MessageSendOptions initialSendOptions, boolean xgramMayHold) {
     if ((Td.isEmpty(msg) && !(clearInput && inputView != null && inputView.getText().length() > 0)) || (isSendingText && clearInput)) {
       return;
     }
@@ -10839,6 +11038,18 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
 
     if (clearInput) {
+      if (xgramMayHold) {
+        // XGram: Undo send. The message waits on this device; the message box clears as after a send.
+        int held = com.fahadali.xgram.chats.XgramUndoSend.tryHold(this, functions, msg, replyInfo, finalSendOptions, getMessageThreadChatId(), getMessageTopicId());
+        if (held == com.fahadali.xgram.chats.XgramUndoSend.HELD) {
+          clearInputAfterSend(true, allowReply, replyInfo, allowLinkPreview);
+          return;
+        }
+        if (held == com.fahadali.xgram.chats.XgramUndoSend.BLOCKED_SLOW_MODE) {
+          showBottomHint(Lang.getString(R.string.XgramUndoSendSlowMode), true);
+          return;
+        }
+      }
       final List<TdApi.Message> sentMessages = new ArrayList<>(functions.size());
       setIsSendingText(true);
       manager.setSentMessages(sentMessages);
@@ -10846,6 +11057,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         clearInputAfterSend(success, allowReply, replyInfo, allowLinkPreview);
       });
     } else {
+      com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, chatId); // XGram: what waits in this chat goes first
       for (TdApi.Function<?> function : functions) {
         tdlib.client().send(function, tdlib.messageHandler());
       }
@@ -10873,6 +11085,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private void executeSendMessageFunctions (List<TdApi.Function<?>> functions, List<TdApi.Message> sentMessages, final boolean isSchedule, RunnableBool onDone) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, functions.isEmpty() ? null : functions.get(0)); // XGram: what waits in this chat goes first
     final int expectedCount = functions.size();
     final int[] sentFunctionsCount = new int[1];
 
@@ -11074,6 +11287,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (functions == null) {
       return;
     }
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, functions.isEmpty() ? null : functions.get(0)); // XGram: what waits goes first
     for (TdApi.Function<?> function : functions) {
       tdlib.client().send(function, tdlib.messageHandler());
     }
@@ -11301,6 +11515,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (functions == null) {
         return;
       }
+      com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, functions.isEmpty() ? null : functions.get(0)); // XGram: what waits goes first
       for (TdApi.Function<?> function : functions) {
         tdlib.client().send(function, tdlib.messageHandler());
       }
@@ -11491,6 +11706,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         i++;
       }
       List<TdApi.Function<?>> functions = TD.toFunctions(chatId, topicId, replyTo, finalSendOptions, inputContent, needGroupMedia);
+      com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, chatId); // XGram: what waits goes first
       for (TdApi.Function<?> function : functions) {
         tdlib.client().send(function, tdlib.messageHandler());
       }
@@ -13566,14 +13782,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public static void setNewMessageSender (Tdlib tdlib, long chatId, TdApi.ChatMessageSender sender, @Nullable Runnable after) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, chatId); // XGram: waiting messages keep the sender they were written as
     tdlib.send(new TdApi.SetChatMessageSender(chatId, sender.sender), tdlib.typedOkHandler(after));
   }
 
   private void setNewMessageSender (TdApi.ChatMessageSender sender) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, getChatId()); // XGram: waiting messages keep the sender they were written as
     tdlib.send(new TdApi.SetChatMessageSender(getChatId(), sender.sender), tdlib.typedOkHandler());
   }
 
   private void setNewMessageSender (TdApi.MessageSender sender) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, getChatId()); // XGram: waiting messages keep the sender they were written as
     tdlib.send(new TdApi.SetChatMessageSender(getChatId(), sender), tdlib.typedOkHandler());
   }
 

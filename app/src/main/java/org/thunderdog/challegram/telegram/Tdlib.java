@@ -547,6 +547,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     long ms = needMeasure ? SystemClock.uptimeMillis() : 0;
     this.listeners = new TdlibListeners(this);
     com.fahadali.xgram.ghost.XgramGhost.attach(this); // XGram
+    com.fahadali.xgram.chats.XgramUndoSend.attach(this); // XGram: Undo send, messages a crash kept from being sent
     if (needMeasure) {
       Log.v("INITIALIZATION: Tdlib.listeners -> %dms", SystemClock.uptimeMillis() - ms);
       ms = SystemClock.uptimeMillis();
@@ -4841,6 +4842,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void sendMessage (long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions options, TdApi.InputMessageContent inputMessageContent, @Nullable RunnableData<TdApi.Message> after) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendMessage(chatId, topicId, replyTo, options, null, inputMessageContent), after != null ? result -> {
       messageHandler.onResult(result);
       after.runWithData(result instanceof TdApi.Message ? (TdApi.Message) result : null);
@@ -4848,6 +4850,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void resendMessages (long chatId, long[] messageIds) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.ResendMessages(chatId, messageIds, null, 0), messageHandler());
   }
 
@@ -5154,10 +5157,12 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void forwardMessage (long chatId, @Nullable TdApi.MessageTopic topicId, long fromChatId, long messageId, TdApi.MessageSendOptions options) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.ForwardMessages(chatId, topicId, fromChatId, new long[] {messageId}, options, false, false), messageHandler());
   }
 
   public void sendInlineQueryResult (long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions options, long queryId, String resultId) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendInlineQueryResultMessage(chatId, topicId, replyTo, options, queryId, resultId, false), messageHandler());
   }
 

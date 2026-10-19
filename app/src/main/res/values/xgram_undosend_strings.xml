@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Undo send (Messages > Message box), see com.fahadali.xgram.chats.XgramUndoSend -->
+  <string name="XgramUndoSend">Undo send</string>
+  <string name="XgramUndoSendChoiceInfo">How long a message waits after you tap Send, so you can take it back.</string>
+  <string name="XgramUndoSendInfo">Text messages wait a moment on this device before they go to Telegram, so you can take them back. Stickers, GIFs, photos, files, voice and video messages, polls and scheduled messages are sent right away. Waiting messages are sent at once when you leave the chat or the app.</string>
+
+  <!-- The bar above the message box -->
+  <string name="XgramUndoSendIn">Sending in %1$s</string>
+  <string name="XgramUndoSendSending">Sending…</string>
+  <string name="XgramUndoSendReplyTo">Reply to %1$s</string>
+  <string name="XgramUndoSendSilent">Silent</string>
+  <string name="XgramUndoSendParts">%1$d parts</string>
+  <string name="XgramUndoSendMoreWaiting">%1$d more waiting</string>
+  <string name="XgramUndoSendUndo">Undo</string>
+  <string name="XgramUndoSendNow">Send now</string>
+  <string name="XgramUndoSendA11y">Message waiting. Sending in %1$s</string>
+  <string name="XgramUndoSendA11yUndo">Undo send</string>
+
+  <!-- Failures and recovery -->
+  <string name="XgramUndoSendSlowMode">Slow mode: wait until your message is sent</string>
+  <string name="XgramUndoSendFailedDraft">Couldn\'t send to %1$s. Saved as a draft.</string>
+  <string name="XgramUndoSendRestoredDraft">%1$d unsent message was saved as a draft</string>
+  <string name="XgramUndoSendRestoredDrafts">%1$d unsent messages were saved as drafts</string>
+  <string name="XgramUndoSendRestoredHint">A message you were sending wasn\'t sent. It\'s back in the message box.</string>
+
+  <!-- Settings search -->
+  <string name="XgramSearchKwUnsend">unsend, recall, take back, undo</string>
+  <string name="XgramSearchKwDelaySend">delay, cancel sending, gmail, imessage</string>
+
+  <!-- Per chat (the chat menu) -->
+  <string name="XgramUndoSendExclude">Send right away in this chat</string>
+  <string name="XgramUndoSendInclude">Delay sending in this chat</string>
+
+  <!-- Voice and video messages -->
+  <string name="XgramUndoSendVoice">Delay voice and video messages</string>
+  <string name="XgramUndoSendVoiceSub">They can be discarded until they are sent</string>
+  <string name="XgramUndoSendOffReason">Turn on Undo send first</string>
+  <string name="XgramUndoSendDiscardVoice">Discard this voice message?</string>
+  <string name="XgramUndoSendDiscardVideo">Discard this video message?</string>
+  <string name="XgramUndoSendVoicePreview">Voice message, %1$s</string>
+  <string name="XgramUndoSendVideoPreview">Video message, %1$s</string>
+  <string name="XgramUndoSendNoteLost">A voice or video message you were sending wasn\'t sent</string>
+</resources>

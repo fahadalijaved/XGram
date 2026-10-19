@@ -54,6 +54,7 @@ internal object XgramSearchIndex {
     R.id.btn_xgramEmojiSet -> intArrayOf(R.string.XgramSearchKwEmoji, R.string.XgramSearchKwEmojiSet)
     R.id.btn_xgramHideFolders -> intArrayOf(R.string.XgramSearchKwFolders)
     R.id.btn_xgramShowPeerIds -> intArrayOf(R.string.XgramSearchKwProfile)
+    R.id.btn_xgramUndoSend, R.id.btn_xgramUndoSendVoice -> intArrayOf(R.string.XgramSearchKwUnsend, R.string.XgramSearchKwDelaySend)
     else -> NONE
   }
 

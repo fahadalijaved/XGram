@@ -837,6 +837,67 @@ public final class XgramSettings {
     putInt(KEY_ENTER_TO_SEND, value);
   }
 
+  // Undo send (Messages > Message box, see com.fahadali.xgram.chats.XgramUndoSend)
+
+  public static final String KEY_UNDO_SEND = "xgram_undo_send";
+  /**
+   * Not "xgram_undo_send_voice": {@link #KEY_UNDO_SEND} is an int that backups find by prefix, which would also take
+   * this boolean as an int.
+   */
+  public static final String KEY_UNDO_SEND_VOICE = "xgram_undosend_voice";
+  /** Prefix of the chats where messages are sent right away, followed by the account id, "_" and the chat id. */
+  public static final String KEY_UNDO_SEND_EXCLUDE = "xgram_usx_";
+  /** The delays offered, in seconds; 0 is Off. */
+  public static final int[] UNDO_SEND_SECONDS = {0, 3, 5, 10, 20};
+
+  /** Seconds a message from the message box waits before it is sent (0: Off). Any other stored value reads as Off. */
+  public int undoSendSeconds () {
+    int value = pmc().getInt(KEY_UNDO_SEND, 0);
+    for (int allowed : UNDO_SEND_SECONDS) {
+      if (allowed == value) {
+        return value;
+      }
+    }
+    return 0;
+  }
+
+  public void setUndoSendSeconds (int seconds) {
+    int value = 0;
+    for (int allowed : UNDO_SEND_SECONDS) {
+      if (allowed == seconds) {
+        value = seconds;
+        break;
+      }
+    }
+    putInt(KEY_UNDO_SEND, value);
+  }
+
+  /** Voice and video messages wait too (only while Undo send is on). */
+  public boolean undoSendVoice () {
+    return pmc().getBoolean(KEY_UNDO_SEND_VOICE, false);
+  }
+
+  public void setUndoSendVoice (boolean value) {
+    put(KEY_UNDO_SEND_VOICE, value);
+  }
+
+  public static String undoSendExcludeKey (int accountId, long chatId) {
+    return KEY_UNDO_SEND_EXCLUDE + accountId + "_" + chatId;
+  }
+
+  /** "Send right away in this chat": messages of this chat never wait. */
+  public boolean isUndoSendExcluded (int accountId, long chatId) {
+    return pmc().getBoolean(undoSendExcludeKey(accountId, chatId), false);
+  }
+
+  public void setUndoSendExcluded (int accountId, long chatId, boolean excluded) {
+    if (excluded) {
+      pmc().putBoolean(undoSendExcludeKey(accountId, chatId), true);
+    } else {
+      pmc().remove(undoSendExcludeKey(accountId, chatId));
+    }
+  }
+
   // Reaction bar of the message menu (Messages > Message menu, see com.fahadali.xgram.chats.XgramReactionBar)
 
   public static final String KEY_REACTION_BAR = "xgram_reaction_bar";

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Undo send (Messages > Message box), see com.fahadali.xgram.chats.XgramUndoSend -->
+  <item type="id" name="btn_xgramUndoSend" />
+  <item type="id" name="btn_xgramUndoSendNow" />
+  <item type="id" name="btn_xgramUndoSendExclude" />
+  <item type="id" name="btn_xgramUndoSendVoice" />
+  <item type="id" name="btn_xgramUndoSendDiscard" />
+  <!-- Debug builds only: the long-press menu of Send -->
+  <item type="id" name="btn_xgramUndoSendDebugCrashHold" />
+  <item type="id" name="btn_xgramUndoSendDebugCrashSend" />
+  <item type="id" name="btn_xgramUndoSendDebugFailRestore" />
+</resources>
