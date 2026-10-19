@@ -24,9 +24,6 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
-import android.text.Editable;
-import android.text.InputType;
-import android.text.TextWatcher;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -59,7 +56,8 @@ import me.vkryl.core.MathUtils;
 /**
  * Material 3 Expressive pieces of the location screens (the map viewer, the attach sheet's location page, live
  * location), the attach sheet's caption field and the map markers. Everything here is only used while Expressive
- * design is on; colours are read when drawn, so day, night and Pure black all hold.
+ * design is on, except the caption field, which also has Telegram X's look; colours are read when drawn, so day, night
+ * and Pure black all hold.
  */
 public final class XgramR6B7Places {
   private XgramR6B7Places () { }
@@ -473,108 +471,153 @@ public final class XgramR6B7Places {
   // Attach sheet: the caption field that rises above the navigation bar while photos are selected
 
   /**
-   * An M3E inline caption field: a pill in surfaceContainerHighest (24dp corners, level 2 elevation) holding a 48dp
-   * emoji button and the bodyLarge input (up to 4 lines), and at the row's end the send button the owner adds with
-   * {@link #setSendButton}. Colours are synced when drawn.
+   * The attach sheet's caption field, in either design (the one piece here also used with Expressive design off).
+   * Expressive: a pill in surfaceContainerHighest (24dp corners, level 2 elevation) holding a 48dp M3E icon button for
+   * emoji and the bodyLarge input (up to 4 lines), with the send button the owner adds ({@link #setSendButton}) 48dp at
+   * the row's end. Telegram X: the chat composer's flat bar in the filling colour under its top shadow, with its 55 x 49dp
+   * emoji and send buttons and its 18sp input. The owner gives the input (an InputView: custom emoji and formatting) and
+   * opens the emoji panel from {@link #setEmojiButtonListener}; the button shows what a tap does ({@link #setEmojiState}).
+   * The button lies over the input, whose padding leaves it room (under the input, the input took its taps). Colours are
+   * synced when drawn.
    */
   public static final class CaptionPill extends FrameLayoutFix {
     public static final float ROW_MIN_HEIGHT = 56f, PILL_MIN_HEIGHT = 48f, PILL_CORNER = 24f, SEND_SIZE = 48f;
+    /** Telegram X's composer: the bar's height, its buttons' width and the view of the top shadow over the bar. */
+    public static final float FLAT_BAR_HEIGHT = 49f, FLAT_BUTTON_WIDTH = 55f, FLAT_SHADOW_HEIGHT = 6f;
 
-    public interface Callback {
-      void onCaptionChanged (@NonNull String text);
-    }
+    /** What a tap on the emoji button does, as the composer's: open the emoji panel, swap it for the keyboard, close it. */
+    public static final int EMOJI_STATE_EMOJI = 0, EMOJI_STATE_KEYBOARD = 1, EMOJI_STATE_HIDE = 2;
 
+    private final boolean expressive;
     private final FrameLayoutFix pill;
     private final ImageView emojiButton;
     private final EditText input;
-    private final XgramExpressive.MorphDrawable pillBackground;
+    private final @Nullable XgramExpressive.MorphDrawable pillBackground;
+    private final @Nullable android.graphics.drawable.ColorDrawable flatBackground;
+    private final @Nullable View shadowView;
     private @Nullable View sendButton;
-    private @Nullable Callback callback;
-    private boolean ignoreChanges;
-    private int textColor, hintColor, iconColor;
+    private int emojiState = -1;
+    private int textColor, hintColor, iconColor, fillColor;
 
-    public CaptionPill (@NonNull Context context) {
+    public CaptionPill (@NonNull Context context, @NonNull EditText input) {
       super(context);
+      this.expressive = XgramExpressive.isEnabled();
+      this.input = input;
       final boolean rtl = Lang.rtl();
+
+      if (expressive) {
+        shadowView = null;
+      } else {
+        org.thunderdog.challegram.widget.ShadowView shadow = new org.thunderdog.challegram.widget.ShadowView(context);
+        shadow.setSimpleTopShadow(true);
+        shadow.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(FLAT_SHADOW_HEIGHT), Gravity.TOP));
+        addView(shadow);
+        shadowView = shadow;
+      }
 
       pill = new FrameLayoutFix(context);
       FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
-      params.topMargin = params.bottomMargin = Screen.dp(4f);
-      params.leftMargin = Screen.dp(rtl ? 8f + SEND_SIZE + 4f : 12f);
-      params.rightMargin = Screen.dp(rtl ? 12f : 8f + SEND_SIZE + 4f);
+      if (expressive) {
+        params.topMargin = params.bottomMargin = Screen.dp(4f);
+        params.leftMargin = Screen.dp(rtl ? 8f + SEND_SIZE + 4f : 12f);
+        params.rightMargin = Screen.dp(rtl ? 12f : 8f + SEND_SIZE + 4f);
+      } else {
+        params.topMargin = Screen.dp(FLAT_SHADOW_HEIGHT);
+      }
       pill.setLayoutParams(params);
-      pill.setMinimumHeight(Screen.dp(PILL_MIN_HEIGHT));
-      pillBackground = new XgramExpressive.MorphDrawable(0, PILL_CORNER, Float.NaN);
-      pillBackground.setColorRole(XgramExpressive.SURFACE_CONTAINER_HIGHEST);
-      pillBackground.setHost(pill);
-      pill.setBackground(pillBackground);
-      pill.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
-      pill.setElevation(Screen.dp(XgramExpressive.ELEVATION_2));
+      pill.setMinimumHeight(Screen.dp(expressive ? PILL_MIN_HEIGHT : FLAT_BAR_HEIGHT));
+      if (expressive) {
+        pillBackground = new XgramExpressive.MorphDrawable(0, PILL_CORNER, Float.NaN);
+        pillBackground.setColorRole(XgramExpressive.SURFACE_CONTAINER_HIGHEST);
+        pillBackground.setHost(pill);
+        pill.setBackground(pillBackground);
+        pill.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+        pill.setElevation(Screen.dp(XgramExpressive.ELEVATION_2));
+        flatBackground = null;
+      } else {
+        pillBackground = null;
+        flatBackground = new android.graphics.drawable.ColorDrawable(Theme.fillingColor());
+        pill.setBackground(flatBackground);
+      }
       addView(pill);
 
-      emojiButton = new ImageView(context);
-      emojiButton.setScaleType(ImageView.ScaleType.CENTER);
-      emojiButton.setImageResource(XgramIconPack.map(R.drawable.baseline_emoticon_outline_24));
-      emojiButton.setContentDescription(Lang.getString(R.string.XgramR6B7Emoji));
-      emojiButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), (rtl ? Gravity.RIGHT : Gravity.LEFT) | Gravity.BOTTOM));
-      XgramAppMotion.iconButton(emojiButton);
-      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-        emojiButton.setTooltipText(emojiButton.getContentDescription());
-      }
-      pill.addView(emojiButton);
-
-      input = new EditText(context);
       input.setBackground(null);
       input.setSingleLine(false);
       input.setMaxLines(4);
-      input.setMinHeight(Screen.dp(PILL_MIN_HEIGHT));
-      input.setGravity((rtl ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
-      input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
       input.setHint(Lang.getString(R.string.AddCaption));
-      XgramExpressive.applyText(input, XgramExpressive.TS_BODY_L, false);
-      input.setPadding(Screen.dp(rtl ? 16f : 48f), Screen.dp(12f), Screen.dp(rtl ? 48f : 16f), Screen.dp(12f));
+      if (expressive) {
+        input.setMinHeight(Screen.dp(PILL_MIN_HEIGHT));
+        XgramExpressive.applyText(input, XgramExpressive.TS_BODY_L, false);
+        input.setPadding(Screen.dp(rtl ? 16f : 48f), Screen.dp(12f), Screen.dp(rtl ? 48f : 16f), Screen.dp(12f));
+      } else {
+        // The composer's input as it is (18sp), with room for both buttons
+        input.setMinHeight(Screen.dp(FLAT_BAR_HEIGHT));
+        input.setPadding(Screen.dp(FLAT_BUTTON_WIDTH), Screen.dp(12f), Screen.dp(FLAT_BUTTON_WIDTH), Screen.dp(12f));
+      }
       input.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM));
-      input.addTextChangedListener(new TextWatcher() {
-        @Override
-        public void beforeTextChanged (CharSequence s, int start, int count, int after) { }
-
-        @Override
-        public void onTextChanged (CharSequence s, int start, int before, int count) { }
-
-        @Override
-        public void afterTextChanged (Editable s) {
-          if (!ignoreChanges && callback != null) {
-            callback.onCaptionChanged(s.toString());
-          }
-        }
-      });
       pill.addView(input);
-      final EditText field = input;
-      emojiButton.setOnClickListener(v -> {
-        // The keyboard's own emoji row: focus the field and open it
-        field.requestFocus();
-        org.thunderdog.challegram.tool.Keyboard.show(field);
-      });
+
+      emojiButton = new ImageView(context);
+      emojiButton.setScaleType(ImageView.ScaleType.CENTER);
+      emojiButton.setLayoutParams(FrameLayoutFix.newParams(Screen.dp(expressive ? 48f : FLAT_BUTTON_WIDTH), Screen.dp(expressive ? 48f : FLAT_BAR_HEIGHT), (rtl ? Gravity.RIGHT : Gravity.LEFT) | Gravity.BOTTOM));
+      XgramAppMotion.iconButton(emojiButton); // the M3E standard icon button; none with Expressive design off, as the composer's
+      setEmojiState(EMOJI_STATE_EMOJI);
+      pill.addView(emojiButton); // over the input
 
       syncColors();
-      setMinimumHeight(Screen.dp(ROW_MIN_HEIGHT));
+      setMinimumHeight(getMinRowHeight());
       setClipChildren(false);
       setClipToPadding(false);
     }
 
-    public void setCallback (@Nullable Callback callback) {
-      this.callback = callback;
+    /** The row's height with one line of text. */
+    public int getMinRowHeight () {
+      return expressive ? Screen.dp(ROW_MIN_HEIGHT) : Screen.dp(FLAT_SHADOW_HEIGHT) + Screen.dp(FLAT_BAR_HEIGHT);
     }
 
-    /** The row's send button: {@link #SEND_SIZE} square at the end, centred on the pill when it has one line. */
+    public void setEmojiButtonListener (@Nullable View.OnClickListener listener) {
+      emojiButton.setOnClickListener(listener);
+    }
+
+    /** Shows what a tap on the emoji button does now: one of the {@code EMOJI_STATE_} values. */
+    public void setEmojiState (int state) {
+      if (this.emojiState == state) {
+        return;
+      }
+      this.emojiState = state;
+      final int icon, description;
+      if (state == EMOJI_STATE_KEYBOARD) {
+        icon = R.drawable.baseline_keyboard_24;
+        description = R.string.XgramCaptionKeyboard;
+      } else if (state == EMOJI_STATE_HIDE) {
+        icon = R.drawable.baseline_direction_arrow_down_24;
+        description = R.string.XgramCaptionHideEmoji;
+      } else {
+        icon = expressive ? R.drawable.baseline_emoticon_outline_24 : R.drawable.deproko_baseline_insert_emoticon_26;
+        description = R.string.XgramR6B7Emoji;
+      }
+      emojiButton.setImageResource(XgramIconPack.map(icon));
+      emojiButton.setContentDescription(Lang.getString(description));
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        emojiButton.setTooltipText(emojiButton.getContentDescription());
+      }
+    }
+
+    /** The row's send button at its end: {@link #SEND_SIZE} square on the pill's line, or the composer's 55 x 49dp one. */
     public void setSendButton (@NonNull View button) {
       if (sendButton != null) {
         removeView(sendButton);
       }
       this.sendButton = button;
-      FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(Screen.dp(SEND_SIZE), Screen.dp(SEND_SIZE), (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.BOTTOM);
-      params.leftMargin = params.rightMargin = Screen.dp(8f);
-      params.bottomMargin = Screen.dp(4f);
+      final int gravity = (Lang.rtl() ? Gravity.LEFT : Gravity.RIGHT) | Gravity.BOTTOM;
+      final FrameLayoutFix.LayoutParams params;
+      if (expressive) {
+        params = FrameLayoutFix.newParams(Screen.dp(SEND_SIZE), Screen.dp(SEND_SIZE), gravity);
+        params.leftMargin = params.rightMargin = Screen.dp(8f);
+        params.bottomMargin = Screen.dp(4f);
+      } else {
+        params = FrameLayoutFix.newParams(Screen.dp(FLAT_BUTTON_WIDTH), Screen.dp(FLAT_BAR_HEIGHT), gravity);
+      }
       button.setLayoutParams(params);
       addView(button);
     }
@@ -583,25 +626,24 @@ public final class XgramR6B7Places {
       return input;
     }
 
-    /** Shows {@code text} without reporting it back as an edit. */
-    public void setCaption (@Nullable CharSequence text) {
-      final String value = text != null ? text.toString() : "";
-      if (value.equals(input.getText().toString())) {
-        return;
-      }
-      ignoreChanges = true;
-      input.setText(value);
-      input.setSelection(input.getText().length());
-      ignoreChanges = false;
-    }
-
-    public String getCaption () {
-      return input.getText().toString().trim();
-    }
-
     private void syncColors () {
-      final int text = XgramExpressive.color(XgramExpressive.ON_SURFACE);
-      final int hint = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+      final int text, hint, icon;
+      if (expressive) {
+        text = XgramExpressive.color(XgramExpressive.ON_SURFACE);
+        hint = icon = XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT);
+      } else {
+        text = Theme.textAccentColor();
+        hint = Theme.textPlaceholderColor();
+        icon = Theme.iconColor();
+        final int fill = Theme.fillingColor();
+        if (fillColor != fill && flatBackground != null) {
+          fillColor = fill;
+          flatBackground.setColor(fill);
+          if (shadowView != null) {
+            shadowView.invalidate(); // the shadow's depth follows the theme too
+          }
+        }
+      }
       if (textColor != text) {
         textColor = text;
         input.setTextColor(text);
@@ -610,9 +652,9 @@ public final class XgramR6B7Places {
         hintColor = hint;
         input.setHintTextColor(hint);
       }
-      if (iconColor != hint) {
-        iconColor = hint;
-        emojiButton.setColorFilter(hint);
+      if (iconColor != icon) {
+        iconColor = icon;
+        emojiButton.setColorFilter(icon);
       }
     }
 

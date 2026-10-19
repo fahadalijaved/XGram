@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- XGram: the attach sheet's caption field (its emoji button) -->
+<resources>
+  <string name="XgramCaptionKeyboard">Keyboard</string>
+  <string name="XgramCaptionHideEmoji">Hide emoji</string>
+</resources>

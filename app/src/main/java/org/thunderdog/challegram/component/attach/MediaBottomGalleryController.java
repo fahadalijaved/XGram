@@ -76,7 +76,7 @@ import me.vkryl.core.lambda.CancellableRunnable;
 import tgx.td.ChatId;
 import tgx.td.Td;
 
-public class MediaBottomGalleryController extends MediaBottomBaseController<MediaBottomGalleryController.Arguments> implements Media.GalleryCallback, MediaGalleryAdapter.Callback, Menu, View.OnClickListener, MediaBottomGalleryBucketAdapter.Callback, MediaViewDelegate, MediaSelectDelegate, MediaSendDelegate {
+public class MediaBottomGalleryController extends MediaBottomBaseController<MediaBottomGalleryController.Arguments> implements Media.GalleryCallback, MediaGalleryAdapter.Callback, Menu, View.OnClickListener, MediaBottomGalleryBucketAdapter.Callback, MediaViewDelegate, MediaSelectDelegate, MediaSendDelegate, org.thunderdog.challegram.component.chat.EmojiToneHelper.Delegate {
   public static class Arguments {
     public boolean allowVideos;
 
@@ -821,6 +821,24 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
       return true;
     }
     return super.performOnBackPressed(fromTop, commit);
+  }
+
+  // XGram: the caption field's emoji panel (MediaLayout) has this page as its controller; its skin tone picker shows on
+  // the sheet
+
+  @Override
+  public int[] displayBaseViewWithAnchor (org.thunderdog.challegram.component.chat.EmojiToneHelper context, View anchorView, View viewToDisplay, int viewWidth, int viewHeight, int horizontalMargin, int horizontalOffset, int verticalOffset) {
+    return mediaLayout.xgramShowToneView(anchorView, viewToDisplay, viewWidth, viewHeight, horizontalMargin, horizontalOffset, verticalOffset);
+  }
+
+  @Override
+  public void removeView (org.thunderdog.challegram.component.chat.EmojiToneHelper context, View displayedView) {
+    mediaLayout.xgramRemoveToneView(displayedView);
+  }
+
+  @Override
+  public long getCurrentChatId () {
+    return mediaLayout.getTargetChatId();
   }
 
   @Override
