@@ -1541,7 +1541,7 @@ public final class XgramSettings {
   // Not a setting: left out of backups.
 
   private static final String KEY_SEARCH_RECENT = "xgram_search_recent";
-  private static final int SEARCH_RECENT_MAX = 6;
+  private static final int SEARCH_RECENT_MAX = 8;
 
   public java.util.List<String> searchRecents () {
     String value = pmc().getString(KEY_SEARCH_RECENT, "");

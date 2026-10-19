@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  XGram: the universal settings search (com.fahadali.xgram.search).
+  Each XgramSearchKw* string lists extra words a setting is found by, one phrase between each '|'. Translate every
+  phrase and keep the '|' separators; English queries keep working in any language.
+-->
+<resources>
+  <!-- The switch on the Night mode result, read by screen readers -->
+  <string name="XgramSearchNightModeToggle">Night mode on or off</string>
+
+  <string name="XgramSearchKwDark">dark|night|black|dim|theme|amoled|oled|dark mode</string>
+  <string name="XgramSearchKwStorage">storage|cache|space|clear|clean|memory|disk|free up|files</string>
+  <string name="XgramSearchKwLastSeen">last seen|online|offline|status|seen|read receipt|ghost</string>
+  <string name="XgramSearchKwPhone">phone|number|mobile|sim</string>
+  <string name="XgramSearchKwLanguage">language|locale|interface language|app language</string>
+  <string name="XgramSearchKwTranslate">translate|translation|translator</string>
+  <string name="XgramSearchKwNotify">notifications|alerts|sound|ringtone|vibration|vibrate|mute|silent|badge|led|light</string>
+  <string name="XgramSearchKwDownload">download|auto-download|autodownload|auto download|mobile data|wifi|wi-fi|roaming</string>
+  <string name="XgramSearchKwDataUsage">data|traffic|usage|statistics|data saver</string>
+  <string name="XgramSearchKwProxy">proxy|socks|mtproto|vpn|censorship|connection</string>
+  <string name="XgramSearchKwSecurity">security|lock|pin|password|fingerprint|biometric|face unlock</string>
+  <string name="XgramSearchKwPasscode">passcode|pin|app lock|lock code|fingerprint|biometrics|screenshot|screen capture</string>
+  <string name="XgramSearchKw2fa">2fa|two-step|two step|two factor|cloud password|password|recovery email</string>
+  <string name="XgramSearchKwSessions">sessions|devices|logged in|active|terminate|log out other|qr|desktop|web</string>
+  <string name="XgramSearchKwBlocked">blocked|block|ban|blacklist</string>
+  <string name="XgramSearchKwAccount">account|delete account|log out|logout|sign out|add account</string>
+  <string name="XgramSearchKwAccounts">accounts|multiple accounts|switch account</string>
+  <string name="XgramSearchKwStickers">stickers|sticker packs|gif|animated</string>
+  <string name="XgramSearchKwEmoji">emoji|emoji packs|emoji set|custom emoji</string>
+  <string name="XgramSearchKwReactions">reactions|quick reaction|heart|like</string>
+  <string name="XgramSearchKwChat">chat|chats|bubbles|messages|appearance</string>
+  <string name="XgramSearchKwWallpaper">wallpaper|background</string>
+  <string name="XgramSearchKwFont">font|text size|font size|bigger text|typeface</string>
+  <string name="XgramSearchKwFolders">folders|tabs|filters|chat list</string>
+  <string name="XgramSearchKwArchive">archive|archived</string>
+  <string name="XgramSearchKwCalls">calls|call|voip|voice call|video call|p2p|peer-to-peer|ringtone</string>
+  <string name="XgramSearchKwPower">power saving|battery|energy|performance|animations|low power|smooth</string>
+  <string name="XgramSearchKwUsername">username|@|handle|link|t.me</string>
+  <string name="XgramSearchKwBio">bio|about|description</string>
+  <string name="XgramSearchKwBirthday">birthday|birthdate|date of birth|cake</string>
+  <string name="XgramSearchKwContacts">contacts|sync|address book|people</string>
+  <string name="XgramSearchKwSecret">secret chats|encrypted|end-to-end|e2e</string>
+  <string name="XgramSearchKwKeyboard">keyboard|enter|send|incognito|typing</string>
+  <string name="XgramSearchKwCamera">camera|round video|video message|selfie|mirror</string>
+  <string name="XgramSearchKwMedia">media|photo|video|gif|autoplay|music|voice</string>
+  <string name="XgramSearchKwVersion">version|build|about|update|changelog</string>
+  <string name="XgramSearchKwDebug">logs|debug|developer|experimental|tdlib|testing</string>
+  <string name="XgramSearchKwInterface">interface|tweaks|ui|options|behaviour|behavior</string>
+  <string name="XgramSearchKwPrivacyRule">privacy|who can|exceptions|always allow|never allow|always share|never share|everybody|nobody|my contacts</string>
+  <string name="XgramSearchKwProfile">profile|name|first name|last name|photo|avatar</string>
+
+  <string name="XgramSearchKwXgram">xgram|mod|extra|features</string>
+  <string name="XgramSearchKwSupport">support|help|contact</string>
+  <string name="XgramSearchKwFaq">help|faq|questions</string>
+  <string name="XgramSearchKwSource">github|open source|code|source</string>
+  <string name="XgramSearchKwBadge">badge|counter|unread</string>
+  <string name="XgramSearchKwSystem">android|channels|system</string>
+  <string name="XgramSearchKwMute">mute|unmute|on|off</string>
+  <string name="XgramSearchKwImportance">priority|importance|popup|heads-up</string>
+  <string name="XgramSearchKwKeepMedia">auto delete|days|forever</string>
+  <string name="XgramSearchKwDatabase">database</string>
+  <string name="XgramSearchKwSizeLimit">size limit|limit|large files</string>
+  <string name="XgramSearchKwNewChats">messages|who can message|unpaid|stars</string>
+  <string name="XgramSearchKwPayments">payments|cards|shipping|bots</string>
+  <string name="XgramSearchKwMaps">maps|location|google|osm</string>
+  <string name="XgramSearchKwDrafts">drafts</string>
+  <string name="XgramSearchKwSelfDestruct">self-destruct|inactive</string>
+  <string name="XgramSearchKwAutoLock">timeout|lock after</string>
+  <string name="XgramSearchKwScreenshot">screenshot|screen recording|screen capture|protected content|save restricted</string>
+  <string name="XgramSearchKwBubbles">bubble|chat style|classic</string>
+  <string name="XgramSearchKwIcons">icons|icon pack</string>
+  <string name="XgramSearchKwChatListView">one line|two lines|three lines|compact|density</string>
+  <string name="XgramSearchKwCustomTheme">custom theme</string>
+  <string name="XgramSearchKwAutoNight">schedule|sunset|system|light sensor</string>
+  <string name="XgramSearchKwBrowser">links|browser|custom tabs</string>
+  <string name="XgramSearchKwPeek">peek|long press</string>
+  <string name="XgramSearchKwHaptic">haptic|vibration</string>
+  <string name="XgramSearchKwAccessibility">accessibility|motion|animations</string>
+  <string name="XgramSearchKwRtl">rtl|direction|arabic|hebrew</string>
+  <string name="XgramSearchKwSensitive">nsfw|18+|sensitive</string>
+  <string name="XgramSearchKwSwipes">swipe|reply|share|gestures</string>
+  <string name="XgramSearchKwGallery">gallery|save photos</string>
+  <string name="XgramSearchKwInstantView">instant view|articles</string>
+  <string name="XgramSearchKwEmbeds">youtube|embed</string>
+  <string name="XgramSearchKwSizeUnit">mb|mib|bytes</string>
+  <string name="XgramSearchKwAlbum">album|group media</string>
+  <string name="XgramSearchKwSharedMedia">shared media</string>
+  <string name="XgramSearchKwMarkdown">formatting|bold|markdown</string>
+  <string name="XgramSearchKwEarpiece">proximity|raise to listen</string>
+  <string name="XgramSearchKwCodec">codec|video playback</string>
+  <string name="XgramSearchKwEmojiSet">apple|google|samsung|system emoji</string>
+  <string name="XgramSearchKwTranslateStyle">translation style|inline|pop-up</string>
+  <string name="XgramSearchKwTranslateProvider">google|deepl|yandex|provider|service</string>
+  <string name="XgramSearchKwFolderStyle">folder style|icons|labels|top|bottom</string>
+  <string name="XgramSearchKwNewFolder">new folder|add folder</string>
+  <string name="XgramSearchKwPush">fcm|firebase|push</string>
+  <string name="XgramSearchKwWebsites">websites|bots|login</string>
+  <string name="XgramSearchKwMaterialYou">colors|dynamic color|monet|wallpaper colors</string>
+  <string name="XgramSearchKwAppIcon">launcher icon|app icon</string>
+  <string name="XgramSearchKwTwoPane">tablet|foldable|fold|split|two panes|dual pane|rail</string>
+  <string name="XgramSearchKwNavBar">tabs|bottom bar|navigation bar|toolbar|navigation</string>
+  <string name="XgramSearchKwSpeed">speed|faster</string>
+  <string name="XgramSearchKwDeleted">deleted messages|anti-recall|edited|history</string>
+  <string name="XgramSearchKwAds">ads|sponsored|advertising</string>
+  <string name="XgramSearchKwBackup">backup|export|import|restore</string>
+  <string name="XgramSearchKwUpdateChannel">beta|nightly|ci|channel</string>
+  <string name="XgramSearchKwExpressive">material 3|m3|expressive|new design|look</string>
+</resources>

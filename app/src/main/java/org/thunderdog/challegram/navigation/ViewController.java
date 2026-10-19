@@ -1079,6 +1079,33 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return null;
   }
 
+  // XGram: the universal settings search points at a row of this page (com.fahadali.xgram.search.XgramSearchHighlight)
+
+  /** The SettingsAdapter list a settings search result points into; null: none (the row is found by its view id). */
+  public @Nullable RecyclerView xgramSearchList () {
+    return null;
+  }
+
+  /** The Compose renderer drawing this page's list (compose/tgx), or null for the classic list. */
+  public @Nullable com.fahadali.xgram.compose.tgx.TgxSettingsRenderer xgramSearchRenderer () {
+    return null;
+  }
+
+  /** Shows the part of the page that holds {@code id} (Data and storage: Advanced); true when it did. */
+  public boolean xgramSearchReveal (@IdRes int id) {
+    return false;
+  }
+
+  /** Where a row the search points at is scrolled to, in px below the list's top. */
+  public int xgramSearchTopOffset () {
+    return Screen.dp(72f);
+  }
+
+  /** Rows above this many px from the list's top are under the header, not in view. */
+  public int xgramSearchMinTop () {
+    return 0;
+  }
+
   /** The page colour the band behind the toolbar takes on this screen. */
   public int xgramBarBandColor () {
     return Theme.getColor(ColorId.background);
@@ -4118,6 +4145,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     onFocusStateChanged();
     notifyFocusChanged(true);
     context.addKeyEventListener(this);
+    com.fahadali.xgram.search.XgramSearchHighlight.onFocus(this); // XGram: a settings search result opened this page
   }
 
   protected final void trackUserActivity () {

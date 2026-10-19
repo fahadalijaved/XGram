@@ -44,4 +44,18 @@ object XgramSettingsPages {
   /** Ghost mode settings: Privacy, whose first part is Ghost mode. */
   @JvmStatic
   fun ghost(context: BaseActivity, tdlib: Tdlib): ViewController<*> = open(context, tdlib, XgramSettingsController.SECTION_PRIVACY)
+
+  /**
+   * The universal settings search (every Telegram X and XGram setting), opened from [origin]
+   * (com.fahadali.xgram.search.SettingsSearch.ORIGIN_*): a Compose page with Expressive design, Telegram X's look
+   * otherwise.
+   */
+  @JvmStatic
+  fun search(context: BaseActivity, tdlib: Tdlib, origin: Int): ViewController<*> {
+    return if (XgramExpressive.isEnabled()) {
+      XgramComposeController.search(context, tdlib, origin)
+    } else {
+      com.fahadali.xgram.search.XgramUniversalSearchController.create(context, tdlib, origin)
+    }
+  }
 }

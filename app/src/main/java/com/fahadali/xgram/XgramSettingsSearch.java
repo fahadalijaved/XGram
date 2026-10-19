@@ -33,11 +33,14 @@ import org.thunderdog.challegram.ui.RecyclerViewController;
 import org.thunderdog.challegram.ui.SettingsAdapter;
 import org.thunderdog.challegram.util.CustomTypefaceSpan;
 
+import com.fahadali.xgram.search.SearchEntry;
+import com.fahadali.xgram.search.SearchHit;
+import com.fahadali.xgram.search.XgramUniversalSearchController;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.StringTokenizer;
 
 import me.vkryl.core.ObjectUtils;
 
@@ -144,10 +147,15 @@ final class XgramSettingsSearch {
 
   /** Position of the row a result stands for, or -1. */
   static int indexOf (SettingsAdapter adapter, Entry e) {
+    return indexOf(adapter, e.id, e.key);
+  }
+
+  /** Position of the row with [id] and [key] (not a search result itself), or -1. */
+  static int indexOf (SettingsAdapter adapter, @IdRes int id, @Nullable String key) {
     List<ListItem> items = adapter.getItems();
     for (int i = 0; i < items.size(); i++) {
       ListItem item = items.get(i);
-      if (item.getId() == e.id && !(item.getData() instanceof Entry) && ObjectUtils.equals(keyOf(item), e.key)) {
+      if (item.getId() == id && !(item.getData() instanceof Entry) && ObjectUtils.equals(keyOf(item), key)) {
         return i;
       }
     }
@@ -156,10 +164,15 @@ final class XgramSettingsSearch {
 
   /** A result opened a page further in: flash its row once that page shows. */
   static void flashWhenShown (RecyclerViewController<?> c, Entry e) {
+    flashWhenShown(c, e.id, e.key);
+  }
+
+  /** The universal search opened a page further in: flash the row with [id] and [key] once that page shows. */
+  static void flashWhenShown (RecyclerViewController<?> c, @IdRes int id, @Nullable String key) {
     c.addOneShotFocusListener(() -> {
       RecyclerView recyclerView = c.getRecyclerView();
       if (!c.isDestroyed() && recyclerView != null && recyclerView.getAdapter() instanceof SettingsAdapter) {
-        flash(recyclerView, indexOf((SettingsAdapter) recyclerView.getAdapter(), e));
+        flash(recyclerView, indexOf((SettingsAdapter) recyclerView.getAdapter(), id, key));
       }
     });
   }
@@ -175,77 +188,59 @@ final class XgramSettingsSearch {
     return false;
   }
 
-  /** Titles that contain every word (any case); titles starting with the first word come first. */
-  static List<ListItem> buildResults (List<Entry> index, String query) {
-    List<String> words = words(query);
-    List<Entry> found = new ArrayList<>(), more = new ArrayList<>();
-    if (!words.isEmpty()) {
-      for (Entry e : index) {
-        if (containsAll(e.titleLower, words)) {
-          (startsWithWord(e.titleLower, words.get(0)) ? found : more).add(e);
-        }
-      }
-    }
-    found.addAll(more);
-    List<ListItem> items = new ArrayList<>(found.size() * 2 + 3);
-    if (found.isEmpty()) {
+  /**
+   * The universal search's results on this classic page, best first (com.fahadali.xgram.search.SettingsSearchEngine):
+   * XGram's own rows as they always were (their switches flip in place), Telegram X's with the path to them.
+   */
+  static List<ListItem> buildHitResults (List<SearchHit> hits) {
+    List<ListItem> items = new ArrayList<>(hits.size() * 2 + 3);
+    if (hits.isEmpty()) {
       items.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.NothingFound));
       return items;
     }
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    for (int i = 0; i < found.size(); i++) {
+    for (int i = 0; i < hits.size(); i++) {
       if (i > 0) {
         items.add(new ListItem(ListItem.TYPE_SEPARATOR));
       }
-      items.add(resultItem(found.get(i), words));
+      SearchHit hit = hits.get(i);
+      Object entry = hit.getEntry().getXgramEntry();
+      if (entry instanceof Entry) {
+        items.add(resultItem((Entry) entry, hit.getRanges()));
+      } else {
+        items.add(XgramUniversalSearchController.resultItem(hit.getEntry(), hit.getRanges(), R.id.btn_xgramSearchResult, 0));
+      }
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     return items;
   }
 
-  // StringTokenizer instead of a regex split: no backslashes to lose when editing through the shell.
-  private static List<String> words (String query) {
-    List<String> words = new ArrayList<>();
-    StringTokenizer tokenizer = new StringTokenizer(query.toLowerCase());
-    while (tokenizer.hasMoreTokens()) {
-      words.add(tokenizer.nextToken());
-    }
-    return words;
+  /** The key a result of this page is remembered by in the recent searches (XgramComposeBridge.hitKey). */
+  static String recentKey (Entry e) {
+    return e.section + "/" + e.subPage + "/" + e.id + ":" + (e.key != null ? e.key : "");
   }
 
-  private static boolean containsAll (String title, List<String> words) {
-    for (String word : words) {
-      if (!title.contains(word)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private static boolean startsWithWord (String title, String word) {
-    return title.startsWith(word) || title.contains(" " + word);
-  }
-
-  private static ListItem resultItem (Entry e, List<String> words) {
+  private static ListItem resultItem (Entry e, @Nullable int[] ranges) {
     int viewType = e.isToggle ? ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER : ListItem.TYPE_VALUED_SETTING_COMPACT;
-    ListItem item = new ListItem(viewType, e.id, e.iconRes, highlight(e, words)).setData(e);
+    ListItem item = new ListItem(viewType, e.id, e.iconRes, highlight(e.title, ranges)).setData(e);
     if (e.textColorId != ColorId.NONE) {
       item.setTextColorId(e.textColorId);
     }
     return item;
   }
 
-  private static CharSequence highlight (Entry e, List<String> words) {
-    if (e.titleLower.length() != e.title.length()) {
-      return e.title; // lower-casing changed the length: don't mark
+  /** [title] with the matched parts ([start, end) pairs of [ranges]) in the link color, medium. */
+  private static CharSequence highlight (String title, @Nullable int[] ranges) {
+    if (ranges == null || ranges.length < 2) {
+      return title;
     }
-    SpannableStringBuilder b = new SpannableStringBuilder(e.title);
-    for (String word : words) {
-      int from = 0, index;
-      while ((index = e.titleLower.indexOf(word, from)) != -1) {
-        b.setSpan(new CustomTypefaceSpan(Fonts.getRobotoMedium(), ColorId.textLink), index, index + word.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        from = index + word.length();
+    SpannableStringBuilder b = new SpannableStringBuilder(title);
+    for (int i = 0; i + 1 < ranges.length; i += 2) {
+      int start = Math.max(0, Math.min(ranges[i], title.length()));
+      int end = Math.max(start, Math.min(ranges[i + 1], title.length()));
+      if (end > start) {
+        b.setSpan(new CustomTypefaceSpan(Fonts.getRobotoMedium(), ColorId.textLink), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
       }
     }
     return b;
@@ -256,6 +251,10 @@ final class XgramSettingsSearch {
    * A row locked by another switch stays tappable (it opens its page) with a greyed switch.
    */
   static void bindResult (ListItem item, SettingView view, boolean isUpdate) {
+    if (item.getData() instanceof SearchEntry) {
+      XgramUniversalSearchController.bindResult(item, view, isUpdate); // a Telegram X result
+      return;
+    }
     if (!(item.getData() instanceof Entry)) {
       return;
     }

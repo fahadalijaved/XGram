@@ -82,6 +82,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -119,6 +120,7 @@ import com.fahadali.xgram.compose.ui.tgxIcon
 import com.fahadali.xgram.compose.ui.xgramNoSwipeBack
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -159,6 +161,34 @@ internal fun TgxSettingsScreen(r: TgxSettingsRenderer) {
           if (r.listState.firstVisibleItemIndex == 0) r.listState.firstVisibleItemScrollOffset else Int.MAX_VALUE
         }.collect { offset ->
           r.onListScrolled(offset)
+        }
+      }
+      val pulse = r.pulseRequest.intValue
+      if (pulse > 0) {
+        // A settings search result: once the list is at the row, it pulses twice (held once with Reduce motion)
+        val pulseSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+        LaunchedEffect(pulse) {
+          r.applyPendingScroll()
+          val row = r.pulseRow.value
+          val view = row?.holder?.itemView
+          if (row != null && row.kind == TgxRowKind.FALLBACK && view != null) {
+            view.isPressed = true
+            delay(650)
+            view.isPressed = false
+          } else if (row != null) {
+            val progress = r.pulseProgress
+            if (XgramMotion.reduce()) {
+              progress.snapTo(1f)
+              delay(1200)
+              progress.snapTo(0f)
+            } else {
+              repeat(2) {
+                progress.animateTo(1f, pulseSpec)
+                progress.animateTo(0f, pulseSpec)
+              }
+            }
+          }
+          r.pulseRow.value = null
         }
       }
       if (r.largeTitle) {
@@ -442,7 +472,7 @@ private fun TgxListItem(
   if (interactive) {
     val onClick = remember(r, row) { { r.click(row) } }
     val onLongClick = remember(r, row) { { r.longClick(row) } }
-    val colors = tgxRowColors(dimmed = s.dimmed)
+    val colors = tgxRowColors(r, row, dimmed = s.dimmed)
     if (radio) {
       SegmentedListItem(
         selected = s.checked,
@@ -477,28 +507,43 @@ private fun TgxListItem(
       leadingContent = leadingContent,
       trailingContent = trailingContent,
       supportingContent = supporting,
-      colors = settingsRowColors(),
+      colors = settingsRowColors(container = pulseContainer(r, row)),
       content = content
     )
   }
 }
 
+/**
+ * The tile color of [row]: surfaceBright, toward secondaryContainer while a settings search result pulses it (only
+ * the pulsed row reads the progress, so only it recomposes per frame).
+ */
+@Composable
+private fun pulseContainer(r: TgxSettingsRenderer, row: TgxRow): Color {
+  val base = MaterialTheme.colorScheme.surfaceBright
+  if (r.pulseRow.value !== row) {
+    return base
+  }
+  val p = r.pulseProgress.value
+  return if (p > 0f) lerp(base, MaterialTheme.colorScheme.secondaryContainer, p) else base
+}
+
 /** The row colors; [dimmed]: a row that looks disabled but still takes taps keeps its tile, its content is dimmed. */
 @Composable
-private fun tgxRowColors(dimmed: Boolean): ListItemColors {
+private fun tgxRowColors(r: TgxSettingsRenderer, row: TgxRow, dimmed: Boolean): ListItemColors {
+  val container = pulseContainer(r, row)
   if (!dimmed) {
-    return settingsRowColors()
+    return settingsRowColors(container = container)
   }
   val cs = MaterialTheme.colorScheme
   val off = cs.onSurface.copy(alpha = DisabledContentAlpha)
   return ListItemDefaults.segmentedColors(
-    containerColor = cs.surfaceBright,
+    containerColor = container,
     contentColor = off,
     leadingContentColor = off,
     trailingContentColor = off,
     overlineContentColor = off,
     supportingContentColor = off,
-    disabledContainerColor = cs.surfaceBright
+    disabledContainerColor = container
   )
 }
 
@@ -836,7 +881,7 @@ private fun TgxSliderRow(r: TgxSettingsRenderer, row: TgxRow, s: TgxRowSnap, sha
         TgxSlider(r, row, labels.size, pageIndex, s.enabled, drag, sliderModifier)
       }
     },
-    colors = settingsRowColors(),
+    colors = settingsRowColors(container = pulseContainer(r, row)),
     content = {
       if (hasTitle) {
         TgxText(title)

@@ -72,6 +72,18 @@ public abstract class RecyclerViewController<T> extends TelegramViewController<T
     return composeRenderer;
   }
 
+  // XGram: the universal settings search points at rows of this list
+
+  @Override
+  public @androidx.annotation.Nullable RecyclerView xgramSearchList () {
+    return recyclerView;
+  }
+
+  @Override
+  public @androidx.annotation.Nullable com.fahadali.xgram.compose.tgx.TgxSettingsRenderer xgramSearchRenderer () {
+    return composeRenderer;
+  }
+
   protected @ColorId
   int getRecyclerBackground () {
     return ColorId.background;

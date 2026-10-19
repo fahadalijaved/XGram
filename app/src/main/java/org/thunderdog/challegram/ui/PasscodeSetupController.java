@@ -835,6 +835,18 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
     }
   }
 
+  // XGram: the universal settings search points at rows of the M3E list (the classic page: by view id)
+
+  @Override
+  public @Nullable RecyclerView xgramSearchList () {
+    return xgramList;
+  }
+
+  @Override
+  public @Nullable com.fahadali.xgram.compose.tgx.TgxSettingsRenderer xgramSearchRenderer () {
+    return xgramCompose;
+  }
+
   // Settings
 
   private int getPasscodeMode () {

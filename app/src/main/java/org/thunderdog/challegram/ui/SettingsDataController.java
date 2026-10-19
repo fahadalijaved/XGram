@@ -74,6 +74,39 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
     super(context, tdlib);
   }
 
+  // XGram: the universal settings search (com.fahadali.xgram.search)
+
+  /** Network usage on its own: without statistics the page asks TDLib for them when it opens. */
+  public static SettingsDataController xgramNetworkUsage (Context context, Tdlib tdlib) {
+    SettingsDataController c = new SettingsDataController(context, tdlib);
+    c.setArguments(new Args(MODE_STATISTICS));
+    return c;
+  }
+
+  /** A result for one of the Advanced rows: Advanced opens first, as a tap on it does. */
+  @Override
+  public boolean xgramSearchReveal (int id) {
+    if (id != R.id.btn_showAdvanced || adapter == null || mode != MODE_NONE) {
+      return false;
+    }
+    final int index = adapter.indexOfViewById(R.id.btn_showAdvanced);
+    if (index == -1) {
+      return false;
+    }
+    List<ListItem> items = adapter.getItems();
+    items.remove(index);
+    items.remove(index);
+    ListItem[] advancedItems = newAdvancedItems();
+    ArrayUtils.ensureCapacity(items, items.size() + advancedItems.length);
+    int i = index;
+    for (ListItem item : advancedItems) {
+      items.add(i++, item);
+    }
+    adapter.notifyItemRangeRemoved(index, 2);
+    adapter.notifyItemRangeInserted(index, advancedItems.length);
+    return true;
+  }
+
   @Override
   public void setArguments (Args args) {
     super.setArguments(args);

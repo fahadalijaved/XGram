@@ -32,6 +32,7 @@ import com.fahadali.xgram.compose.pages.PrivacyPage
 import com.fahadali.xgram.compose.pages.SideMenuPage
 import com.fahadali.xgram.compose.pages.TranslateTargetPage
 import com.fahadali.xgram.compose.pages.TranslationPage
+import com.fahadali.xgram.compose.pages.UniversalSearchPage
 import com.fahadali.xgram.compose.pages.UpdatesPage
 import com.fahadali.xgram.compose.pages.WhatsNewPage
 import com.fahadali.xgram.compose.pages.WordFiltersPage
@@ -45,7 +46,7 @@ import org.thunderdog.challegram.navigation.ViewController
 enum class XgramPage {
   MAIN, APPEARANCE, CHAT_LIST, MESSAGES, TRANSLATION, SIDE_MENU, PRIVACY, FILTERS, HISTORY, NETWORK, UPDATES, BACKUP,
   MESSAGE_MENU, CHAT_ACTIONS, INPUT_BUTTONS, TRANSLATE_TARGET, WORD_FILTERS, HIDDEN_PEOPLE, WHATS_NEW,
-  NAV_BAR;
+  NAV_BAR, SEARCH;
 
   companion object {
     /** The page of an XgramSettingsController.SECTION_* (Ghost mode is the top of Privacy). */
@@ -90,6 +91,7 @@ internal fun XgramPageContent(page: XgramPage) {
     XgramPage.HIDDEN_PEOPLE -> HiddenPeoplePage()
     XgramPage.WHATS_NEW -> WhatsNewPage()
     XgramPage.NAV_BAR -> NavBarPage()
+    XgramPage.SEARCH -> UniversalSearchPage()
   }
 }
 

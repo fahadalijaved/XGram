@@ -16,6 +16,7 @@ import android.graphics.Rect
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
@@ -44,6 +45,7 @@ import org.thunderdog.challegram.theme.Theme
 import org.thunderdog.challegram.theme.ThemeChangeListener
 import org.thunderdog.challegram.theme.ThemeDelegate
 import org.thunderdog.challegram.theme.ThemeManager
+import org.thunderdog.challegram.tool.Screen
 import org.thunderdog.challegram.ui.EditBaseController
 import org.thunderdog.challegram.ui.ListItem
 import org.thunderdog.challegram.ui.SettingsAdapter
@@ -127,6 +129,11 @@ class TgxSettingsRenderer private constructor(
   internal val isDark = mutableStateOf(Theme.isDark())
   internal val bottomInset = mutableIntStateOf(bottomInset)
   internal val scrollRequest = mutableIntStateOf(0)
+
+  // Settings search: the row a result points at pulses to secondaryContainer twice, as on XGram's own pages
+  internal val pulseRow = mutableStateOf<TgxRow?>(null)
+  internal val pulseProgress = Animatable(0f)
+  internal val pulseRequest = mutableIntStateOf(0)
 
   private var root: XgramComposeRoot? = null
   private var destroyed = false
@@ -721,6 +728,23 @@ class TgxSettingsRenderer private constructor(
     val row = rows.getOrNull(position) ?: return
     pendingScroll = PendingScroll(row, offset, smooth)
     scrollRequest.intValue++
+  }
+
+  /**
+   * A settings search result points at the item at [position]: the list scrolls it 72dp below its top and the row
+   * pulses (TgxSettingsScreen runs it; a row drawn by its real view is pressed instead).
+   */
+  fun pulse(position: Int) {
+    if (destroyed) {
+      return
+    }
+    if (structureDirty) {
+      syncStructure()
+    }
+    val row = rows.getOrNull(position) ?: return
+    scrollTo(position, Screen.dp(72f), !XgramMotion.reduce()) // a jump with Reduce motion
+    pulseRow.value = row
+    pulseRequest.intValue++
   }
 
   fun scrollToTop() {

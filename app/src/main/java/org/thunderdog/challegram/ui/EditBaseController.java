@@ -402,6 +402,18 @@ public abstract class EditBaseController<T> extends ViewController<T> implements
     }
   }
 
+  // XGram: the universal settings search points at rows of this list
+
+  @Override
+  public @Nullable RecyclerView xgramSearchList () {
+    return recyclerView;
+  }
+
+  @Override
+  public @Nullable com.fahadali.xgram.compose.tgx.TgxSettingsRenderer xgramSearchRenderer () {
+    return composeRenderer;
+  }
+
   @Override
   public void onFocus () {
     super.onFocus();
