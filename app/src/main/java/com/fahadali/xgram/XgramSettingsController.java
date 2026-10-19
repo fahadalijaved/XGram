@@ -457,6 +457,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramActivityHeader) {
           view.getToggler().setRadioEnabled(settings.activityHeader(), isUpdate);
           setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityBar) {
+          view.setData(settings.activityBar() == XgramSettings.ACTIVITY_BAR_CALLS ? R.string.XgramActivityBarCalls : R.string.XgramActivityBarOff);
+          setReason(view, XgramSettingDeps.activityOptionsReason());
         } else if (id == R.id.btn_xgramActivityHidden) {
           int hidden = com.fahadali.xgram.activity.XgramActivityStore.instance().summary(tdlib.id()).hiddenCount();
           view.setData(hidden == 0 ? Lang.getString(R.string.XgramNone) : hidden == 1 ? Lang.getString(R.string.XgramActivityHiddenCountOne) : Lang.getString(R.string.XgramActivityHiddenCountMany, hidden));
@@ -810,6 +813,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramActivityBadge, R.string.XgramActivityBadge, R.string.XgramActivityBadgeInfo),
       toggle(R.id.btn_xgramActivityHeader, R.string.XgramActivityHeader, R.string.XgramActivityHeaderInfo)
     );
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // The classic bottom bar (Expressive design has the floating toolbar, whose Activity tab is on its own page)
+      addRows(items, link(R.id.btn_xgramActivityBar, R.string.XgramActivityBar));
+    }
     addRows(items,
       link(R.id.btn_xgramActivityHidden, R.string.XgramActivityHiddenChats),
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramActivityClearAll, 0, R.string.XgramActivityClearAll)
@@ -1064,6 +1071,24 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     adapter.updateValuedSettingById(R.id.btn_xgramActivityLookBack);
     adapter.updateValuedSettingById(R.id.btn_xgramActivityBadge);
     adapter.updateValuedSettingById(R.id.btn_xgramActivityHeader);
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityBar);
+  }
+
+  /** Activity on the classic bottom bar: not there, or in Calls' place (the bar follows at once). */
+  private void showActivityBarOptions () {
+    int mode = XgramSettings.instance().activityBar();
+    showSettings(new SettingsWrapBuilder(R.id.btn_xgramActivityBar)
+      .setRawItems(new ListItem[] {
+        new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_xgramActivityBarOff, 0, R.string.XgramActivityBarOff, R.id.btn_xgramActivityBar, mode != XgramSettings.ACTIVITY_BAR_CALLS),
+        new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_xgramActivityBarCalls, 0, R.string.XgramActivityBarCalls, R.id.btn_xgramActivityBar, mode == XgramSettings.ACTIVITY_BAR_CALLS)
+      })
+      .setIntDelegate((settingsId, result) -> {
+        int picked = result.get(R.id.btn_xgramActivityBar);
+        XgramSettings.instance().setActivityBar(picked == R.id.btn_xgramActivityBarCalls ? XgramSettings.ACTIVITY_BAR_CALLS : XgramSettings.ACTIVITY_BAR_OFF);
+        if (adapter != null && !isDestroyed()) {
+          adapter.updateValuedSettingById(R.id.btn_xgramActivityBar);
+        }
+      }));
   }
 
   /** Two-pane layout and Split evenly lock the pane rows below them. */
@@ -1777,6 +1802,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramActivityShow) {
       settings.setActivityOn(adapter.toggleView(v));
       updateActivityRows();
+      return;
+    } else if (id == R.id.btn_xgramActivityBar) {
+      if (XgramSettingDeps.activityOptionsEnabled()) {
+        showActivityBarOptions(); // off: the reason is under the title
+      }
       return;
     } else if (id == R.id.btn_xgramActivityHidden) {
       navigateTo(new com.fahadali.xgram.activity.XgramActivityHiddenController(context, tdlib));

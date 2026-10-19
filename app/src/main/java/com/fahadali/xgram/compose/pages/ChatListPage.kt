@@ -39,6 +39,7 @@ import com.fahadali.xgram.compose.ui.LocalXgramHighlight
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
+import com.fahadali.xgram.layout.XgramNavToolbar
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.unsorted.Settings
 
@@ -147,7 +148,14 @@ fun ChatListPage() {
         checked = settings.activityHeader(), enabled = activityEnabled) {
         settings.setActivityHeader(it)
       }
+      // The floating toolbar's Activity tab is chosen with the other tabs, on the Navigation bar page
+      val activityTab = (settings.navTabs() and (1 shl XgramNavToolbar.DEST_ACTIVITY)) != 0
+      value(R.id.btn_xgramActivityNavBar, s(R.string.XgramActivityNavBar),
+        s(if (activityTab) R.string.XgramActivityNavBarTab else R.string.XgramActivityBarOff), enabled = activityEnabled) {
+        host.openPage(XgramPage.NAV_BAR)
+      }
     }
+    description(R.string.XgramActivityNavBarInfo)
     group {
       val hidden = com.fahadali.xgram.activity.XgramActivityStore.instance().summary(accountId).hiddenCount()
       value(

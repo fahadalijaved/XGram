@@ -77,6 +77,16 @@ public final class XgramActivity {
     return XgramSettings.instance().activityHeader();
   }
 
+  /** Activity on the classic bottom bar: XgramSettings.ACTIVITY_BAR_OFF, or ACTIVITY_BAR_CALLS (in Calls' place). */
+  public static int barMode () {
+    return XgramSettings.instance().activityBar();
+  }
+
+  /** The classic bottom bar (XgramNavBar) has Activity, in Calls' place, wherever it shows. */
+  public static boolean barHasActivity () {
+    return isOn() && barMode() == XgramSettings.ACTIVITY_BAR_CALLS;
+  }
+
   // Accounts
 
   /**
@@ -138,15 +148,29 @@ public final class XgramActivity {
 
   // Where Activity is in the navigation
 
-  /** Whether a navigation on screen (the rail, the toolbar, the bottom bar) has Activity: the header's bell goes then. */
+  /**
+   * Whether the window's navigation on screen has Activity: the rail (a destination unless it is hidden in the side
+   * menu) or the floating toolbar (a tab, if one was chosen). The header's bell goes then. The classic bottom bar
+   * belongs to its chat list, which checks {@link #barHasActivity()} itself.
+   */
   @UiThread
   public static boolean navigationHasActivity (@Nullable BaseActivity context) {
-    return false;
+    if (context == null || !isOn()) {
+      return false;
+    }
+    XgramTwoPane twoPane = context.xgramTwoPane();
+    if (twoPane == null) {
+      return false;
+    }
+    if (twoPane.isRailShown()) {
+      return com.fahadali.xgram.layout.XgramNavRail.hasActivityDestination();
+    }
+    return toolbarHasActivity(twoPane.toolbar());
   }
 
-  /** Whether the floating navigation toolbar has an Activity tab. */
+  /** Whether the floating navigation toolbar is on screen with an Activity tab. */
   public static boolean toolbarHasActivity (@Nullable com.fahadali.xgram.layout.XgramNavToolbar toolbar) {
-    return false;
+    return toolbar != null && toolbar.isShown() && toolbar.hasTab(com.fahadali.xgram.layout.XgramNavToolbar.DEST_ACTIVITY);
   }
 
   // Opening
@@ -171,6 +195,12 @@ public final class XgramActivity {
       return;
     }
     if (leftTop != null && XgramTwoPane.showOnLeft(from, new XgramActivityController(context, tdlib))) {
+      return;
+    }
+    // A tab of the floating toolbar: its tab screen (the selection moves, it fades in over the chat list), as the side
+    // menu opens the other tabs. Not from a screen above the tabs: those open it over themselves below.
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = com.fahadali.xgram.layout.XgramNavToolbar.of(context);
+    if (toolbarHasActivity(toolbar) && toolbar.openFromDrawer(com.fahadali.xgram.layout.XgramNavToolbar.DEST_ACTIVITY)) {
       return;
     }
     NavigationController navigation = from.navigationController();

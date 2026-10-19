@@ -1429,7 +1429,10 @@ public final class XgramSettings {
   public static final int NAV_PROFILE_BUTTON = 0, NAV_PROFILE_TAB = 1, NAV_PROFILE_OFF = 2;
   /** The bar's colours: Standard (surface container, default) or Vibrant (primary container). */
   public static final int NAV_STYLE_STANDARD = 0, NAV_STYLE_VIBRANT = 1;
-  /** Tabs by bit of XgramNavToolbar.DEST_* (Chats 0, Calls 1, Contacts 2, Saved 3, Settings 4): Telegram's set. */
+  /**
+   * Tabs by bit of XgramNavToolbar.DEST_* (Chats 0, Calls 1, Contacts 2, Saved 3, Settings 4, Activity 6; the profile
+   * has its own setting): Telegram's set. Activity's bit counts only while Activity is on.
+   */
   public static final int NAV_TABS_DEFAULT = (1 << 0) | (1 << 2) | (1 << 4);
 
   private volatile Integer navTabs, navProfile, navStyle;
@@ -1444,8 +1447,8 @@ public final class XgramSettings {
   }
 
   public void setNavTabOn (int dest, boolean on) {
-    if (dest <= 0 || dest > 4) {
-      return; // Chats is always a tab; the profile has its own setting
+    if (dest <= 0 || dest == 5 || dest > 6) {
+      return; // Chats is always a tab; the profile (5) has its own setting; 6 is Activity
     }
     int value = on ? navTabs() | (1 << dest) : navTabs() & ~(1 << dest);
     navTabs = value;
@@ -1543,7 +1546,9 @@ public final class XgramSettings {
   public static final String KEY_ACTIVITY_ON = "xgram_activity_on", KEY_ACTIVITY_REACTIONS = "xgram_activity_reactions",
     KEY_ACTIVITY_MUTED = "xgram_activity_muted", KEY_ACTIVITY_DISCUSSION = "xgram_activity_discussion",
     KEY_ACTIVITY_LOOKBACK = "xgram_activity_lookback", KEY_ACTIVITY_BADGE = "xgram_activity_badge",
-    KEY_ACTIVITY_HEADER = "xgram_activity_header";
+    KEY_ACTIVITY_HEADER = "xgram_activity_header", KEY_ACTIVITY_BAR = "xgram_activity_bar";
+  /** The classic bottom bar (XgramNavBar): no Activity (default), or Activity in Calls' place. */
+  public static final int ACTIVITY_BAR_OFF = 0, ACTIVITY_BAR_CALLS = 1;
   /** Prefix of every Activity setting (listeners follow them all). */
   public static final String KEY_ACTIVITY_PREFIX = "xgram_activity_";
 
@@ -1649,6 +1654,23 @@ public final class XgramSettings {
   public void setActivityHeader (boolean value) {
     activityHeader = value;
     put(KEY_ACTIVITY_HEADER, value);
+  }
+
+  private volatile Integer activityBar;
+
+  /** Activity on the classic bottom bar: ACTIVITY_BAR_OFF (default) or ACTIVITY_BAR_CALLS (in Calls' place). */
+  public int activityBar () {
+    Integer value = activityBar;
+    if (value == null) {
+      activityBar = value = pmc().getInt(KEY_ACTIVITY_BAR, ACTIVITY_BAR_OFF) == ACTIVITY_BAR_CALLS ? ACTIVITY_BAR_CALLS : ACTIVITY_BAR_OFF;
+    }
+    return value;
+  }
+
+  public void setActivityBar (int mode) {
+    int value = mode == ACTIVITY_BAR_CALLS ? ACTIVITY_BAR_CALLS : ACTIVITY_BAR_OFF;
+    activityBar = value;
+    putInt(KEY_ACTIVITY_BAR, value);
   }
 
   // Settings search: the results opened last (search hit keys, newest first), shown before anything is typed.

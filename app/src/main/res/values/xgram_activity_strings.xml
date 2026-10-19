@@ -19,6 +19,13 @@
   <string name="XgramActivityBadgeInfo">A count on Activity in the navigation, the side menu and the header</string>
   <string name="XgramActivityHeader">In the chat list header</string>
   <string name="XgramActivityHeaderInfo">A bell above the chat list when the navigation doesn\'t have Activity</string>
+  <!-- Where it is in the navigation: the classic bottom bar, or a tab of the floating toolbar (Expressive design) -->
+  <string name="XgramActivityBar">In the bottom bar</string>
+  <string name="XgramActivityBarOff">Off</string>
+  <string name="XgramActivityBarCalls">Instead of Calls</string>
+  <string name="XgramActivityNavBar">In the navigation bar</string>
+  <string name="XgramActivityNavBarTab">A tab</string>
+  <string name="XgramActivityNavBarInfo">Turn its tab on with the others on the Navigation bar page. The navigation rail has Activity while the side menu does.</string>
   <string name="XgramActivityLocalNote">Activity is kept on this device only and isn\'t part of backups.</string>
   <string name="XgramActivityNeedsOn">Turn on Activity first</string>
   <string name="XgramSearchKwActivity">activity|inbox|mentions|mention|replies|reply|reactions|reaction|notifications|@</string>
@@ -151,4 +158,8 @@
   <item name="btn_xgramActivityLookBack" type="id"/>
   <item name="btn_xgramActivityBadge" type="id"/>
   <item name="btn_xgramActivityHeader" type="id"/>
+  <item name="btn_xgramActivityBar" type="id"/>
+  <item name="btn_xgramActivityBarOff" type="id"/>
+  <item name="btn_xgramActivityBarCalls" type="id"/>
+  <item name="btn_xgramActivityNavBar" type="id"/>
 </resources>

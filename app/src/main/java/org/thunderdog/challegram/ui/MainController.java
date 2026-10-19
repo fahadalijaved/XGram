@@ -2118,6 +2118,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramUpdatePaneInset();
     checkHeaderMargins();
     xgramFitToggleHeader();
+    xgramUpdateActivityButton(); // the rail may hold Activity: the bell goes, or comes back
   }
 
   /** XGram M3E: the header again (folder tabs came or went), for the navigation rail's (or bar's) title or tabs. */
@@ -2223,6 +2224,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       xgramNavBar.setForceHidden(xgramNavBarForceHidden(), false);
       xgramNavBar.sync();
     }
+    xgramUpdateActivityButton(); // the bar, the rail or the toolbar may hold Activity (or no longer)
   }
 
   /** Search, chat selection and the bottom folder tabs' menu take the bottom of the list: the bar steps aside. */
@@ -2297,6 +2299,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramCloseHiddenDrawer();
     xgramShowFabIfStays(); // a FAB hidden by a scroll, now set to stay at the side
     xgramUpdateMoreBadge(false); // the ☰'s badge on the ⋮ (no photo on the toolbar), or not
+    xgramUpdateActivityButton(); // an Activity tab: the bell goes, or comes back
   }
 
   /** XGram M3E: the chat list's reasons for the floating toolbar to step aside (XgramNavToolbar.FORCE_*). */
@@ -3076,10 +3079,14 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   /** XGram: Activity's bell (the one made last; a menu the header kept has its own). */
   @Nullable private HeaderButton xgramActivityButton;
 
-  /** XGram: the bell shows while Activity is on, In the chat list header is on and the navigation has no Activity. */
+  /**
+   * XGram: the bell shows while Activity is on, In the chat list header is on and the navigation has no Activity (the
+   * rail, the floating toolbar, or this chat list's bottom bar with Activity in Calls' place).
+   */
   private boolean xgramActivityButtonShown () {
     return com.fahadali.xgram.activity.XgramActivity.isOn() && com.fahadali.xgram.activity.XgramActivity.inHeader() &&
-      !com.fahadali.xgram.activity.XgramActivity.navigationHasActivity(context);
+      !com.fahadali.xgram.activity.XgramActivity.navigationHasActivity(context) &&
+      !(xgramNavBar != null && com.fahadali.xgram.activity.XgramActivity.barHasActivity());
   }
 
   /** XGram: the bell's visibility, its dot and description, on every copy of the menu the header keeps. */
@@ -3152,6 +3159,16 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private final com.fahadali.xgram.XgramSettings.Listener xgramSettingsListener = key -> {
     if (key.startsWith("xgram_ghost_")) {
       UI.post(this::xgramUpdateGhostButton);
+    } else if (com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_ON.equals(key) || com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_BAR.equals(key)) {
+      // XGram: Activity came or went, or its place on the bottom bar changed: the rail's destinations, the toolbar's
+      // tabs and the bar's items follow at once (XgramTwoPane#update syncs all three), then the bell
+      UI.post(() -> {
+        com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+        if (twoPane != null && !isDestroyed()) {
+          twoPane.update();
+        }
+        xgramUpdateActivityButton();
+      });
     } else if (key.startsWith(com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_PREFIX) || key.startsWith("xgram_nav_")) {
       UI.post(this::xgramUpdateActivityButton); // XGram: Activity's bell (its settings, or the navigation that may hold it)
     } else if (com.fahadali.xgram.XgramSettings.KEY_HIDE_FAB.equals(key)) {

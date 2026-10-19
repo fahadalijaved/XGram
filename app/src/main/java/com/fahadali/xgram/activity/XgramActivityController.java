@@ -695,6 +695,12 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
   }
 
+  /** Its tab tapped again in the navigation bar or the toolbar: the same jump as the rail and the bell. */
+  @Override
+  public void onScrollToTopRequested () {
+    scrollToTopOrReload();
+  }
+
   // Chips
 
   @Override
