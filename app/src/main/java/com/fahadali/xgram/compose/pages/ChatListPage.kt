@@ -75,7 +75,16 @@ fun ChatListPage() {
     }
     description(R.string.XgramChatListFoldersInfo)
     group {
-      // The first folder tab's label: none while the tabs are hidden or show icons only.
+      // All chats leaves the tabs only while another folder has one (the first tab opens instead, with the archive row).
+      val hideAllChatsReason = XgramSettingDeps.hideAllChatsReason(host.tdlib)
+      switch(
+        R.id.btn_xgramHideAllChats, s(R.string.XgramHideAllChats),
+        s(if (hideAllChatsReason != 0) hideAllChatsReason else R.string.XgramHideAllChatsSub),
+        checked = settings.hideAllChats(accountId), enabled = hideAllChatsReason == 0
+      ) {
+        settings.setHideAllChats(accountId, it)
+      }
+      // The first folder tab's label: none while the tabs or All chats are hidden, or the tabs show icons only.
       val labelReason = XgramSettingDeps.allChatsLabelReason(host.tdlib)
       switch(
         R.id.btn_xgramAllChatsLabel, s(R.string.XgramAllChatsLabel),

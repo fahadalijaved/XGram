@@ -637,6 +637,8 @@ internal object TgxSearchIndex {
     row(f, "folders/badge", R.string.BadgeCounter, RowRef(R.id.btn_appBadge), group = R.string.ChatFoldersSettings, kw = kw(R.string.XgramSearchKwBadge))
     row(f, "folders/archiveAsFolder", R.string.ArchiveAsFolder, RowRef(R.id.btn_archiveAsFolder), group = R.string.ChatFoldersSettings,
       kw = kw(R.string.XgramSearchKwArchive))
+    row(f, "folders/hideAllChats", R.string.XgramHideAllChats, RowRef(R.id.btn_xgramHideAllChats), group = R.string.ChatFoldersSettings,
+      kw = kw(R.string.XgramSearchKwFolders))
     row(f, "folders/hideTabs", R.string.XgramHideFolders, RowRef(R.id.btn_xgramHideFolders), group = R.string.ChatFoldersSettings,
       kw = kw(R.string.XgramSearchKwFolders))
     row(f, "folders/create", R.string.CreateNewFolder, RowRef(R.id.btn_createNewFolder), R.drawable.baseline_add_24, group = R.string.ChatFolders,

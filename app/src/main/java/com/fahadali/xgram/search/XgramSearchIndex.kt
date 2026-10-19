@@ -52,7 +52,7 @@ internal object XgramSearchIndex {
     R.id.btn_xgramAllowScreenshots, R.id.btn_xgramSaveProtected, R.id.btn_xgramBlockContentCapture -> intArrayOf(R.string.XgramSearchKwScreenshot)
     R.id.btn_xgramChatListView -> intArrayOf(R.string.XgramSearchKwChatListView)
     R.id.btn_xgramEmojiSet -> intArrayOf(R.string.XgramSearchKwEmoji, R.string.XgramSearchKwEmojiSet)
-    R.id.btn_xgramHideFolders -> intArrayOf(R.string.XgramSearchKwFolders)
+    R.id.btn_xgramHideFolders, R.id.btn_xgramHideAllChats -> intArrayOf(R.string.XgramSearchKwFolders)
     R.id.btn_xgramShowPeerIds -> intArrayOf(R.string.XgramSearchKwProfile)
     else -> NONE
   }

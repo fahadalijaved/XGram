@@ -13,10 +13,12 @@ package com.fahadali.xgram;
 
 import android.os.Build;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
 
+import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.telegram.ChatFolderStyle;
 import org.thunderdog.challegram.telegram.Tdlib;
@@ -90,8 +92,8 @@ public final class XgramSettingDeps {
   // Chat list
 
   /**
-   * The "All chats" label is the first folder tab's (MainController): no tabs while folders are hidden here, and
-   * Telegram X's icons-only folder style shows no label on any tab.
+   * The "All chats" label is the first folder tab's (MainController): no tabs while folders are hidden here, no All
+   * chats tab while Hide All chats leaves it out, and Telegram X's icons-only folder style shows no label on any tab.
    */
   public static boolean allChatsLabelEnabled (Tdlib tdlib) {
     return allChatsLabelReason(tdlib) == 0;
@@ -101,7 +103,46 @@ public final class XgramSettingDeps {
     if (s().hideFolders(tdlib.accountId())) {
       return R.string.XgramAllChatsLabelNoTabs;
     }
+    if (allChatsHidden(tdlib)) {
+      return R.string.XgramAllChatsLabelHidden;
+    }
     return tdlib.settings().chatFolderStyle() == ChatFolderStyle.ICON_ONLY ? R.string.XgramAllChatsLabelIcons : 0;
+  }
+
+  /**
+   * Hide All chats leaves "All chats" out of the folder tabs (MainController.updatePagerSections) only while another
+   * folder has a tab: without one All chats stays, as the only list.
+   */
+  public static boolean hideAllChatsEnabled (Tdlib tdlib) {
+    return hideAllChatsReason(tdlib) == 0;
+  }
+
+  public static @StringRes int hideAllChatsReason (Tdlib tdlib) {
+    if (s().hideFolders(tdlib.accountId())) {
+      return R.string.XgramAllChatsLabelNoTabs;
+    }
+    return hasFolderTab(tdlib, tdlib.chatFolders()) ? 0 : R.string.XgramHideAllChatsNoFolder;
+  }
+
+  /** "All chats" has no tab now: Hide All chats is on and another folder has a tab. */
+  public static boolean allChatsHidden (Tdlib tdlib) {
+    return s().hideAllChats(tdlib.accountId()) && hideAllChatsEnabled(tdlib);
+  }
+
+  /**
+   * One of these folders has a tab here: its eye in Chat folders isn't off (TdlibSettingsManager.isChatFolderEnabled).
+   * Hide folder tabs is checked by the callers (MainController passes no folders then).
+   */
+  public static boolean hasFolderTab (Tdlib tdlib, @Nullable TdApi.ChatFolderInfo[] chatFolders) {
+    if (chatFolders == null || !Settings.instance().chatFoldersEnabled()) {
+      return false;
+    }
+    for (TdApi.ChatFolderInfo chatFolder : chatFolders) {
+      if (tdlib.settings().isChatFolderEnabled(chatFolder.id)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

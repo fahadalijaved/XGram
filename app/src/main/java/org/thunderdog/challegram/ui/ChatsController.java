@@ -237,12 +237,22 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       this.pickerDelegate = null;
       this.chatList = ChatPosition.CHAT_LIST_MAIN;
       this.needMessagesSearch = false;
+      this.xgramArchiveRow = false;
     } else {
       this.filter = args.filter;
       this.pickerDelegate = args.pickerDelegate;
       this.chatList = args.chatList != null ? args.chatList : ChatPosition.CHAT_LIST_MAIN;
       this.needMessagesSearch = args.needMessagesSearch;
+      this.xgramArchiveRow = args.xgramArchiveRow && args.filter == null && args.pickerDelegate == null && TD.isChatListFolder(this.chatList);
     }
+  }
+
+  /** XGram: a folder that shows the archive row at its top, as All chats does (see Arguments#xgramSetArchiveRow). */
+  private boolean xgramArchiveRow;
+
+  /** XGram: this list was made with the archive row of All chats (MainController, while All chats has no tab). */
+  public boolean xgramHasArchiveRow () {
+    return xgramArchiveRow;
   }
 
   private static class ChatPinSeparatorDecoration extends RecyclerView.ItemDecoration {
@@ -926,7 +936,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
     if (isBaseController()) {
       tdlib.contacts().addListener(this);
-      if (filter == null && chatList().getConstructor() == TdApi.ChatListMain.CONSTRUCTOR) {
+      if (filter == null && (chatList().getConstructor() == TdApi.ChatListMain.CONSTRUCTOR || xgramArchiveRow)) { // XGram: or the first tab while All chats has none
         chatsView.addOnScrollListener(new RecyclerView.OnScrollListener() {
           @Override
           public void onScrollStateChanged (@NonNull RecyclerView recyclerView, int newState) {
@@ -3040,6 +3050,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       items.add(new ListItem(ListItem.TYPE_ICONIZED_EMPTY, R.id.changePhoneText, R.drawable.baseline_folder_open_96, Lang.getMarkdownString(this, R.string.FolderNoChatsToDisplay)));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       items.add(new ListItem(ListItem.TYPE_BUTTON, R.id.btn_editFolder, 0, R.string.EditFolder));
+      if (xgramArchiveRow && archiveList != null && archiveList.totalCount() > 0) {
+        // XGram: the archive row shows only above chats; an empty first tab (All chats hidden) still opens the archive
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+        items.add(new ListItem(ListItem.TYPE_BUTTON, R.id.btn_archive, 0, R.string.OpenArchive));
+      }
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     } else if (archiveList != null && archiveList.totalCount() > 0) {
       items.add(new ListItem(ListItem.TYPE_ICONIZED_EMPTY, R.id.changePhoneText, R.drawable.baseline_archive_96, Lang.getMarkdownString(this, R.string.OpenArchiveHint), false));
@@ -3713,6 +3728,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
     public Arguments setTag (@Nullable Object tag) {
       this.tag = tag;
+      return this;
+    }
+
+    /** XGram: Hide All chats: the archive row lives at the top of All chats; the first folder tab keeps it then. */
+    public boolean xgramArchiveRow;
+
+    public Arguments xgramSetArchiveRow (boolean archiveRow) {
+      this.xgramArchiveRow = archiveRow;
       return this;
     }
   }
