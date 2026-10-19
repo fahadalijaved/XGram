@@ -767,6 +767,42 @@ public class MediaViewController extends ViewController<MediaViewController.Args
     closeEmojiKeyboard(false);
   }
 
+  /**
+   * XGram: closes the caption's emoji keyboard and forgets it, so the next one is made for the caption row on screen.
+   * The photo editor (force edit mode) builds its own bottom row and caption and later puts the viewer's back, but the
+   * keyboard, made once, stayed bound to the row it was first opened on: from then on the emoji button of the other row
+   * (the editor opened again, or the viewer's own after the editor) added the panel to a row no longer on screen and
+   * nothing opened. Its pre-draw listener, which holds frames while the keyboard swaps, goes with it.
+   */
+  private void xgramDropEmojiKeyboard () {
+    if (emojiShown) {
+      forceCloseEmojiKeyboard();
+    }
+    final KeyboardFrameLayout keyboard = keyboardFrameLayout;
+    if (keyboard == null) {
+      return;
+    }
+    keyboardFrameLayout = null;
+    if (keyboard.getParent() instanceof ViewGroup) {
+      ((ViewGroup) keyboard.getParent()).removeView(keyboard);
+    }
+    if (keyboard.contentView.getParent() instanceof ViewGroup && keyboard.contentView.getParent() != keyboard) {
+      ((ViewGroup) keyboard.contentView.getParent()).removeView(keyboard.contentView); // moved out while it grew
+    }
+    if (popupView != null) {
+      final android.view.ViewTreeObserver observer = popupView.getViewTreeObserver();
+      if (observer.isAlive()) {
+        observer.removeOnPreDrawListener(keyboard);
+      }
+    }
+    if (emojiLayout != null) {
+      emojiLayout.destroy();
+      emojiLayout = null;
+    }
+    textFormattingLayout = null;
+    textFormattingVisible = false;
+  }
+
   private void closeEmojiKeyboard (boolean byKeyboardOpen) {
     if (emojiShown) {
       if (keyboardFrameLayout != null) {
@@ -9649,6 +9685,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   private void openForceEditModeImpl (MediaStack mediaStack) {
+    xgramDropEmojiKeyboard(); // XGram: the editor's caption row gets its own
     forceEditModeOld_arguments = getArgumentsStrict();
     forceEditModeOld_bottomWrap = bottomWrap;
     forceEditModeOld_captionView = captionView;
@@ -9765,6 +9802,7 @@ public class MediaViewController extends ViewController<MediaViewController.Args
   }
 
   private void closeForceEditMode () {
+    xgramDropEmojiKeyboard(); // XGram: closes the editor's emoji panel (the Back arrow skipped that) and forgets it
     for (View v : forceEditMode_views) {
       contentView.removeView(v);
     }

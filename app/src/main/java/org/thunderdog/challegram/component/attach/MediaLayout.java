@@ -148,6 +148,7 @@ public class MediaLayout extends FrameLayoutFix implements
 
   private void setExtraBottomInset (int extraBottomInset, int extraBottomInsetWithoutIme) {
     if (this.extraBottomInset != extraBottomInset || this.extraBottomInsetWithoutIme != extraBottomInsetWithoutIme) {
+      final boolean xgramImeWasVisible = xgramImeVisible();
       this.extraBottomInset = extraBottomInset;
       this.extraBottomInsetWithoutIme = extraBottomInsetWithoutIme;
       if (bottomBar != null) {
@@ -158,6 +159,7 @@ public class MediaLayout extends FrameLayoutFix implements
           controller.setBottomInset(extraBottomInset, extraBottomInsetWithoutIme);
         }
       }
+      xgramOnInsetsChanged(xgramImeWasVisible); // XGram: the caption field's emoji panel gives way to the keyboard
       xgramLayoutPill(); // XGram: the caption row stays above the bar and the keyboard
     }
   }
@@ -522,6 +524,13 @@ public class MediaLayout extends FrameLayoutFix implements
 
   @Override
   public boolean onBackPressed (boolean fromTop, boolean commit) {
+    if (xgramEmojiShown) {
+      // XGram: Back closes the caption field's emoji panel first, as the keyboard
+      if (commit) {
+        xgramCloseEmoji(false);
+      }
+      return true;
+    }
     MediaBottomBaseController<?> c = getCurrentController();
     if (c.isAnimating()) {
       return true;
@@ -685,6 +694,7 @@ public class MediaLayout extends FrameLayoutFix implements
 
   @Override
   public boolean launchHideAnimation (PopupLayout popup, FactorAnimator ignored) {
+    xgramCloseEmoji(false); // XGram: the caption field's emoji panel goes as the sheet starts to (a tap on the scrim too)
     pendingPopup = popup;
     Animator animator = createCustomHideAnimator();
     if (animator != null) {
@@ -701,6 +711,7 @@ public class MediaLayout extends FrameLayoutFix implements
 
   public void setForceHidden () {
     xgramPendingSection = -1; // XGram M3E: no deferred tab switch on the way out
+    xgramCloseEmoji(false); // XGram: the caption field's emoji panel closes with the sheet
     if (!hidden) {
       hidden = true;
       onCurrentColorChanged();
@@ -713,6 +724,7 @@ public class MediaLayout extends FrameLayoutFix implements
 
   public void forceHide () {
     xgramPendingSection = -1;
+    xgramCloseEmoji(false); // XGram: the caption field's emoji panel closes with the sheet
     if (!hidden) {
       hidden = true;
       popupLayout.hideWindow(false);
@@ -1574,6 +1586,13 @@ public class MediaLayout extends FrameLayoutFix implements
   public void performDestroy () {
     setContentVisible(true);
     isDestroyed = true;
+    xgramCloseEmoji(false); // XGram: the caption field's emoji panel and input
+    if (xgramEmojiLayout != null) {
+      xgramEmojiLayout.destroy();
+    }
+    if (xgramPillInput != null) {
+      xgramPillInput.performDestroy();
+    }
     xgramBarTracker.recycle(); // XGram M3E
     xgramBarDragging = xgramBarTracking = false;
     onCurrentColorChanged();
@@ -1589,6 +1608,9 @@ public class MediaLayout extends FrameLayoutFix implements
     }
     if (sendButton != null) {
       sendButton.destroySlowModeCounterController();
+    }
+    if (xgramPillSend != null) {
+      xgramPillSend.destroySlowModeCounterController(); // XGram: the caption row's send button has one too
     }
     ThemeManager.instance().removeThemeListener(this);
     Lang.removeLanguageListener(this);
@@ -1867,6 +1889,9 @@ public class MediaLayout extends FrameLayoutFix implements
   public void onClick (View v) {
     int viewId = v.getId();
     if (viewId == R.id.btn_send) {
+      if (xgramCaptionNeedsPremium(v)) {
+        return;
+      }
       pickDateOrProceed((sendOptions, disableMarkdown) ->
         getCurrentController().onMultiSendPress(v, sendOptions, false)
       );
@@ -1886,8 +1911,6 @@ public class MediaLayout extends FrameLayoutFix implements
       }
     } else if (viewId == R.id.btn_mosaic) {
       setNeedGroupMedia(!needGroupMedia, true);
-    } else if (viewId == R.id.btn_xgramMediaCaption) {
-      xgramEditCaption();
     } else if (viewId == R.id.btn_close) {
       if (!getCurrentController().showExitWarning(true, true)) {
         cancelMultiSelection();
@@ -1908,10 +1931,9 @@ public class MediaLayout extends FrameLayoutFix implements
   private BackHeaderButton closeButton;
   private TextView counterHintView;
   private ImageView groupMediaView, hotMediaView;
-  private ImageView xgramCaptionView;
 
-  // XGram: Telegram X types a caption only in the media viewer (tap a selected photo). The bar of selected items
-  // gets a caption button too: the text goes on the first selected item, which Telegram shows under the album.
+  // XGram: Telegram X types a caption only in the media viewer (tap a selected photo). The attach sheet gets a caption
+  // field too (xgramPill): the text goes on the first selected item, which Telegram shows under the album.
 
   private @Nullable ImageGalleryFile xgramCaptionTarget () {
     MediaBottomBaseController<?> c = getCurrentController();
@@ -1928,19 +1950,15 @@ public class MediaLayout extends FrameLayoutFix implements
     return target != null && getCurrentController() instanceof MediaBottomGalleryController;
   }
 
-  private int xgramCaptionMargin () {
-    return Screen.dp(55f) + Screen.dp(48f) + (allowSpoiler ? Screen.dp(48f) : 0);
-  }
-
   /**
-   * XGram: the selection count and its hint ("as one message") end before the caption button, so a long hint
-   * ellipsizes instead of running under it (Telegram X's 56dp end margin let it reach the send button's slot). The
-   * caption button shows only on the gallery tab; elsewhere the old margin stays.
+   * XGram: with the caption field up (the gallery tab), the selection count and its hint ("as one message") end before
+   * the album and spoiler toggles, so a long hint ellipsizes instead of running under them; elsewhere Telegram X's
+   * margin stays.
    */
   private void xgramUpdateCounterMargins () {
-    int rightMargin = xgramCaptionView != null && xgramAllowCaption() ? xgramCaptionMargin() + Screen.dp(48f) : Screen.dp(56f);
+    int rightMargin = Screen.dp(56f);
     if (xgramPill != null && xgramAllowCaption()) {
-      // XGram M3E: with the caption field the send button sits in its row; the album and spoiler toggles take its slot
+      // XGram: with the caption field the send button sits in its row; the album and spoiler toggles take its slot
       rightMargin = Screen.dp(55f) + (allowSpoiler ? Screen.dp(48f) : 0) + Screen.dp(8f);
     }
     if (counterView != null) {
@@ -1951,36 +1969,28 @@ public class MediaLayout extends FrameLayoutFix implements
     }
   }
 
-  private void xgramUpdateCaptionButton () {
-    if (xgramCaptionView == null) {
-      return;
-    }
-    xgramCaptionView.setAlpha(xgramAllowCaption() ? counterFactor : 0f);
-    ImageGalleryFile file = xgramCaptionTarget();
-    int colorId = file != null && file.hasCaption() ? ColorId.iconActive : ColorId.icon;
-    xgramCaptionView.setColorFilter(Theme.getColor(colorId));
-    themeListeners.removeThemeListenerByTarget(xgramCaptionView);
-    themeListeners.addThemeFilterListener(xgramCaptionView, colorId);
-  }
-
-  // XGram M3E: the inline caption field. While photos are selected on the gallery tab, a pill (bodyLarge on
-  // surfaceContainerHighest, full corners, an emoji button inside) rises above the 64dp bar on the spatial default
-  // spring with the filled send button at its end; the bar's own send button steps aside and the album and spoiler
-  // toggles take its slot. It edits the first selected item's caption (Telegram shows it under the album), follows the
-  // first item when the selection changes, and lifts above the keyboard.
+  // XGram: the inline caption field, in both designs. While photos are selected on the gallery tab, a field rises above
+  // the bar with a send button at its end (Expressive design: a pill, bodyLarge on surfaceContainerHighest, full corners,
+  // on the spatial default spring; Telegram X: the chat composer's flat bar under its top shadow, on the standard
+  // spring); the bar's own send button steps aside and the album and spoiler toggles take its slot. It edits the first
+  // selected item's caption (Telegram shows it under the album) as formatted text, follows the first item when the
+  // selection changes, and lifts above the keyboard and the emoji panel. It replaced the caption button with its dialog,
+  // which had no way to add emoji.
 
   private @Nullable com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill xgramPill;
+  private @Nullable org.thunderdog.challegram.component.chat.InputView xgramPillInput;
   private @Nullable SendButton xgramPillSend;
   private @Nullable com.fahadali.xgram.appearance.XgramExpressive.Spring xgramPillSpring;
   private float xgramPillFactor;
   private @Nullable ImageGalleryFile xgramPillTarget;
+  private boolean xgramIgnoreCaption;
 
-  /** XGram M3E: the height the caption field takes above the bar now (0 while it is hidden), for the lists' bottom padding. */
+  /** XGram: the height the caption field takes above the bar now (0 while it is hidden), for the lists' bottom padding. */
   public int xgramCaptionPillHeight () {
     if (xgramPill == null || xgramPillFactor <= 0f) {
       return 0;
     }
-    final int height = xgramPill.getHeight() > 0 ? xgramPill.getHeight() : Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.ROW_MIN_HEIGHT);
+    final int height = xgramPill.getHeight() > 0 ? xgramPill.getHeight() : xgramPill.getMinRowHeight();
     return Math.round(height * me.vkryl.core.MathUtils.clamp(xgramPillFactor));
   }
 
@@ -1988,12 +1998,42 @@ public class MediaLayout extends FrameLayoutFix implements
     if (xgramPill != null || bottomBar == null || mode != MODE_DEFAULT) {
       return;
     }
-    xgramPill = new com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill(getContext());
+    final boolean expressive = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+
+    // Telegram X's own input, as the media viewer's caption: custom emoji, and formatting from the selection menu
+    final org.thunderdog.challegram.component.chat.InputView input = new org.thunderdog.challegram.component.chat.InputView(getContext(), tdlib(), parent);
+    input.setIgnoreCustomStuff(true); // Back hides the keyboard first, then reaches the sheet (onBackPressed)
+    final TdApi.Chat chat = getTargetChat();
+    if (chat != null) {
+      input.setNoPersonalizedLearning(Settings.instance().needsIncognitoMode(chat));
+    }
+    input.setMaxCodePointCount(tdlib().maxCaptionLength());
+    input.getInlineSearchContext().setIsCaption(true);
+    if (expressive) {
+      com.fahadali.xgram.appearance.XgramM3Composer.tintInput(input, com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.PRIMARY));
+    }
+    input.addTextChangedListener(new android.text.TextWatcher() {
+      @Override
+      public void beforeTextChanged (CharSequence s, int start, int count, int after) { }
+
+      @Override
+      public void onTextChanged (CharSequence s, int start, int before, int count) { }
+
+      @Override
+      public void afterTextChanged (android.text.Editable s) {
+        xgramOnCaptionEdited();
+      }
+    });
+    input.setSpanChangeListener(v -> xgramOnCaptionEdited()); // formatting changes no text
+    xgramPillInput = input;
+
+    xgramPill = new com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill(getContext(), input);
     FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
     params.bottomMargin = getBottomBarHeight();
     xgramPill.setLayoutParams(params);
     xgramPill.setAlpha(0f);
     xgramPill.setVisibility(View.INVISIBLE);
+    xgramPill.setEmojiButtonListener(v -> xgramToggleEmoji());
 
     xgramPillSend = new SendButton(getContext(), com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_send_24)) {
       @Override
@@ -2002,7 +2042,11 @@ public class MediaLayout extends FrameLayoutFix implements
       }
     };
     xgramPillSend.setId(R.id.btn_send);
-    xgramPillSend.setXgramFilled(true);
+    if (expressive) {
+      xgramPillSend.setXgramFilled(true);
+    } else {
+      themeListeners.addThemeFilterListener(xgramPillSend, ColorId.chatSendButton); // the composer's send button
+    }
     xgramPillSend.getSlowModeCounterController(tdlib()).setCurrentChat(getTargetChatId());
     xgramPillSend.setContentDescription(Lang.getString(R.string.XgramR6B7Send));
     Views.setClickable(xgramPillSend);
@@ -2010,14 +2054,9 @@ public class MediaLayout extends FrameLayoutFix implements
     xgramAttachSendMenu(xgramPillSend);
     xgramPill.setSendButton(xgramPillSend);
 
-    xgramPill.setCallback(text -> {
-      ImageGalleryFile file = xgramCaptionTarget();
-      if (file != null) {
-        file.setCaption(new TdApi.FormattedText(text.trim(), new TdApi.TextEntity[0]));
-      }
-    });
+    themeListeners.addThemeInvalidateListener(xgramPill); // it syncs its colours when drawn
     addView(xgramPill, indexOfChild(bottomBar)); // under the bar: it rises from behind it
-    xgramPillSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> {
+    xgramPillSpring = new com.fahadali.xgram.appearance.XgramExpressive.Spring(expressive ? com.fahadali.xgram.appearance.XgramExpressive.SPATIAL_DEFAULT : com.fahadali.xgram.appearance.XgramExpressive.STD_SPATIAL_DEFAULT, 0f, (s, value) -> {
       xgramPillFactor = value;
       xgramLayoutPill();
     });
@@ -2029,6 +2068,51 @@ public class MediaLayout extends FrameLayoutFix implements
       }
       xgramLayoutPill();
     });
+  }
+
+  /** The field's text with its entities (custom emoji, formatting), trimmed; empty when nothing is typed. */
+  private TdApi.FormattedText xgramTypedCaption () {
+    final TdApi.FormattedText text = xgramPillInput != null ? Td.trim(xgramPillInput.getOutputText(false)) : null;
+    return text != null ? text : new TdApi.FormattedText("", new TdApi.TextEntity[0]);
+  }
+
+  private void xgramOnCaptionEdited () {
+    if (xgramIgnoreCaption || xgramPillInput == null) {
+      return;
+    }
+    final ImageGalleryFile file = xgramCaptionTarget();
+    if (file != null) {
+      file.setCaption(xgramTypedCaption());
+    }
+    if (xgramEmojiLayout != null) {
+      xgramEmojiLayout.onTextChanged(xgramPillInput.getText()); // its backspace button
+    }
+  }
+
+  /** Shows {@code caption} in the field without taking it as an edit. */
+  private void xgramSetPillCaption (@Nullable TdApi.FormattedText caption) {
+    if (xgramPillInput == null) {
+      return;
+    }
+    xgramIgnoreCaption = true;
+    xgramPillInput.setInput(Td.isEmpty(caption) ? "" : org.thunderdog.challegram.data.TD.toCharSequence(caption), true, false);
+    xgramIgnoreCaption = false;
+    if (xgramEmojiLayout != null) {
+      xgramEmojiLayout.onTextChanged(xgramPillInput.getText());
+    }
+  }
+
+  /** XGram: as the media viewer, a caption with custom emoji needs Telegram Premium (or Saved Messages) to be sent. */
+  private boolean xgramCaptionNeedsPremium (View v) {
+    if (xgramPillInput == null || !xgramPillWanted()) {
+      return false;
+    }
+    final long chatId = getTargetChatId();
+    if (tdlib().isSelfChat(chatId) || tdlib().hasPremium() || !xgramPillInput.hasOnlyPremiumFeatures()) {
+      return false;
+    }
+    UI.getContext(getContext()).tooltipManager().builder(v).show(tdlib(), org.thunderdog.challegram.tool.Strings.buildMarkdown(parent, Lang.getString(R.string.MessageContainsPremiumFeatures), null)).hideDelayed();
+    return true;
   }
 
   /** The haptic send menu of the bar's send button, for the caption row's one (same items and actions). */
@@ -2079,7 +2163,7 @@ public class MediaLayout extends FrameLayoutFix implements
 
   /** Shows or hides the caption field (on its spring) and binds it to the first selected item. */
   private void xgramUpdatePill () {
-    if (xgramPill == null || xgramPillSpring == null) {
+    if (xgramPill == null || xgramPillSpring == null || xgramPillInput == null) {
       return;
     }
     final boolean wanted = xgramPillWanted();
@@ -2088,19 +2172,21 @@ public class MediaLayout extends FrameLayoutFix implements
       if (file != xgramPillTarget) {
         // The first item changed: a caption typed for the old one moves along, unless the new one has its own
         final ImageGalleryFile old = xgramPillTarget;
-        final String typed = xgramPill.getCaption();
+        final TdApi.FormattedText typed = xgramTypedCaption();
         xgramPillTarget = file;
-        if (file != null && old != null && !typed.isEmpty() && !file.hasCaption()) {
-          file.setCaption(new TdApi.FormattedText(typed, new TdApi.TextEntity[0]));
+        if (file != null && old != null && !Td.isEmpty(typed) && !file.hasCaption()) {
+          file.setCaption(typed);
           old.setCaption(new TdApi.FormattedText("", new TdApi.TextEntity[0]));
         }
-        TdApi.FormattedText caption = file != null ? file.getCaption(false, false) : null;
-        xgramPill.setCaption(caption != null ? caption.text : null);
+        xgramSetPillCaption(file != null ? file.getCaption(false, false) : null);
       }
       xgramPill.setVisibility(View.VISIBLE);
-    } else if (xgramPill.getInput().hasFocus()) {
-      xgramPill.getInput().clearFocus();
-      org.thunderdog.challegram.tool.Keyboard.hide(xgramPill.getInput());
+    } else {
+      xgramCloseEmoji(false); // the emoji panel goes with the field
+      if (xgramPillInput.hasFocus()) {
+        xgramPillInput.clearFocus();
+        org.thunderdog.challegram.tool.Keyboard.hide(xgramPillInput);
+      }
     }
     if (!wanted && xgramPillFactor <= 0f && !xgramPillSpring.isRunning()) {
       xgramPillTarget = null;
@@ -2109,7 +2195,10 @@ public class MediaLayout extends FrameLayoutFix implements
     xgramUpdateCounterMargins();
   }
 
-  /** Places the caption row above the bar (following it) and above the keyboard, and the bar's send and toggles. */
+  /**
+   * Places the caption row above the bar (following it) and above the keyboard or the emoji panel, and the bar's send
+   * button and toggles. With Telegram X's look the bar's shadow gives way to the row's own.
+   */
   private void xgramLayoutPill () {
     if (xgramPill == null) {
       return;
@@ -2121,8 +2210,8 @@ public class MediaLayout extends FrameLayoutFix implements
       Views.setBottomMargin(xgramPill, barHeight);
     }
     final float barY = bottomBar != null ? bottomBar.getTranslationY() : 0f;
-    final int imeShift = Math.max(0, extraBottomInset - barHeight);
-    final int rowHeight = xgramPill.getHeight() > 0 ? xgramPill.getHeight() : Screen.dp(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.ROW_MIN_HEIGHT);
+    final int imeShift = Math.max(0, xgramKeyboardHeight() - barHeight);
+    final int rowHeight = xgramPill.getHeight() > 0 ? xgramPill.getHeight() : xgramPill.getMinRowHeight();
     xgramPill.setTranslationY(barY - imeShift * p + rowHeight * .6f * (1f - f));
     xgramPill.setAlpha(me.vkryl.core.MathUtils.clamp(f * 1.5f));
     if (f <= 0f && xgramPillSpring != null && !xgramPillSpring.isRunning() && !xgramPillWanted()) {
@@ -2142,23 +2231,219 @@ public class MediaLayout extends FrameLayoutFix implements
     if (hotMediaView != null) {
       hotMediaView.setTranslationX(shift);
     }
+    if (shadowView != null) {
+      shadowView.setAlpha(1f - p); // gone with Expressive design
+    }
   }
 
-  private void xgramEditCaption () {
-    ImageGalleryFile file = xgramCaptionTarget();
-    if (file == null || target == null) {
+  // XGram: the caption field's emoji panel, as the media viewer's caption has: emoji only, custom emoji with Telegram
+  // Premium or in Saved Messages. It opens where the keyboard was (its last height), over the bar, and the field lifts
+  // above it. The emoji button swaps it with the keyboard as the chat composer's does (keyboard icon when it replaced the
+  // keyboard, arrow down otherwise); a tap on the field brings the keyboard back over it. Back, the field going away
+  // and the sheet closing close it. The gallery page lends it a controller and shows its skin tone picker on this sheet.
+
+  private @Nullable org.thunderdog.challegram.widget.EmojiLayout xgramEmojiLayout;
+  private boolean xgramEmojiShown, xgramEmojiFromKeyboard, xgramEmojiPanelVisible;
+  private int xgramEmojiPanelHeight;
+  private @Nullable Runnable xgramEmojiHidePanel;
+
+  /** XGram: how long the emoji panel holds the field up while the keyboard it gave way to comes (if it never does). */
+  private static final long XGRAM_KEYBOARD_WAIT = 500L;
+
+  private final org.thunderdog.challegram.widget.EmojiLayout.Listener xgramEmojiListener = new org.thunderdog.challegram.widget.EmojiLayout.Listener() {
+    @Override
+    public void onEnterEmoji (String emoji) {
+      if (xgramPillInput != null) {
+        xgramPillInput.onEmojiSelected(emoji);
+      }
+    }
+
+    @Override
+    public void onEnterCustomEmoji (org.thunderdog.challegram.component.sticker.TGStickerObj sticker) {
+      if (xgramPillInput != null) {
+        xgramPillInput.onCustomEmojiSelected(sticker);
+      }
+    }
+
+    @Override
+    public boolean isEmojiInputEmpty () {
+      return xgramPillInput == null || xgramPillInput.getText().length() == 0;
+    }
+
+    @Override
+    public void onDeleteEmoji () {
+      if (xgramPillInput != null && xgramPillInput.getText().length() > 0) {
+        xgramPillInput.dispatchKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DEL));
+      }
+    }
+
+    @Override
+    public long getOutputChatId () {
+      return getTargetChatId();
+    }
+  };
+
+  private boolean xgramImeVisible () {
+    return extraBottomInset > extraBottomInsetWithoutIme;
+  }
+
+  /** How far up from the sheet's bottom the keyboard or the emoji panel reaches now. */
+  private int xgramKeyboardHeight () {
+    return xgramEmojiPanelVisible ? Math.max(extraBottomInset, xgramEmojiPanelHeight) : extraBottomInset;
+  }
+
+  private void xgramOnInsetsChanged (boolean imeWasVisible) {
+    if (xgramEmojiLayout != null) {
+      xgramUpdateEmojiPanelHeight(); // the navigation bar, a rotation
+    }
+    if (xgramImeVisible() && !imeWasVisible) {
+      // The keyboard came (a tap on the field, or the emoji button): it takes the panel's place
+      if (xgramEmojiShown) {
+        xgramEmojiShown = false;
+        if (xgramPill != null) {
+          xgramPill.setEmojiState(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_EMOJI);
+        }
+      }
+      xgramSetEmojiPanelVisible(false);
+    }
+  }
+
+  private void xgramUpdateEmojiPanelHeight () {
+    xgramEmojiPanelHeight = org.thunderdog.challegram.tool.Keyboard.getSize() + extraBottomInsetWithoutIme;
+    if (xgramEmojiLayout != null) {
+      xgramEmojiLayout.setExtraBottomInset(extraBottomInsetWithoutIme, extraBottomInsetWithoutIme);
+      Views.setLayoutHeight(xgramEmojiLayout, xgramEmojiPanelHeight);
+    }
+  }
+
+  /** The panel, made the first time it opens (on the gallery page, which it needs as its controller). */
+  private @Nullable org.thunderdog.challegram.widget.EmojiLayout xgramEmojiPanel () {
+    if (xgramEmojiLayout != null) {
+      return xgramEmojiLayout;
+    }
+    final MediaBottomBaseController<?> c = getCurrentController();
+    if (isDestroyed || !(c instanceof MediaBottomGalleryController)) {
+      return null;
+    }
+    final org.thunderdog.challegram.widget.EmojiLayout panel = new org.thunderdog.challegram.widget.EmojiLayout(getContext()) {
+      @Override
+      public boolean onTouchEvent (MotionEvent e) {
+        super.onTouchEvent(e);
+        return true; // no touch goes through it to the sheet or the scrim (which closes the sheet)
+      }
+    };
+    panel.initWithMediasEnabled(c, false, xgramEmojiListener, c, false);
+    panel.setAllowPremiumFeatures(tdlib().isSelfChat(getTargetChatId()));
+    xgramEmojiLayout = panel;
+    xgramEmojiPanelHeight = org.thunderdog.challegram.tool.Keyboard.getSize() + extraBottomInsetWithoutIme;
+    panel.setExtraBottomInset(extraBottomInsetWithoutIme, extraBottomInsetWithoutIme);
+    panel.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, xgramEmojiPanelHeight, Gravity.BOTTOM));
+    panel.setVisibility(View.GONE);
+    if (xgramPillInput != null) {
+      panel.onTextChanged(xgramPillInput.getText());
+    }
+    addView(panel); // over the bar and the page, where the keyboard would be
+    return panel;
+  }
+
+  private void xgramSetEmojiPanelVisible (boolean visible) {
+    if (xgramEmojiHidePanel != null) {
+      removeCallbacks(xgramEmojiHidePanel);
+    }
+    if (xgramEmojiPanelVisible != visible) {
+      xgramEmojiPanelVisible = visible;
+      if (xgramEmojiLayout != null) {
+        xgramEmojiLayout.setVisibility(visible ? View.VISIBLE : View.GONE);
+      }
+    }
+  }
+
+  private void xgramToggleEmoji () {
+    if (xgramEmojiShown) {
+      xgramCloseEmoji(xgramEmojiFromKeyboard);
+    } else {
+      xgramOpenEmoji();
+    }
+  }
+
+  private void xgramOpenEmoji () {
+    if (xgramEmojiShown || xgramPill == null || xgramPillInput == null || hidden || !xgramPillWanted()) {
       return;
     }
-    TdApi.FormattedText current = file.getCaption(false, false);
-    org.thunderdog.challegram.widget.MaterialEditTextGroup inputView = target.openInputAlert(Lang.getString(R.string.XgramMediaCaption), Lang.getString(R.string.AddCaption), R.string.Done, R.string.Cancel, current != null ? current.text : null, (org.thunderdog.challegram.navigation.ViewController.InputAlertCallback) (input, result) -> {
-      file.setCaption(new TdApi.FormattedText(result.trim(), new TdApi.TextEntity[0]));
-      xgramUpdateCaptionButton();
-      return true;
-    }, false);
-    if (inputView != null) {
-      inputView.getEditText().setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-      inputView.getEditText().setMaxLines(6);
+    final org.thunderdog.challegram.widget.EmojiLayout panel = xgramEmojiPanel();
+    if (panel == null) {
+      return;
     }
+    xgramEmojiShown = true;
+    xgramEmojiFromKeyboard = xgramImeVisible();
+    xgramUpdateEmojiPanelHeight();
+    xgramSetEmojiPanelVisible(true);
+    if (xgramEmojiFromKeyboard) {
+      org.thunderdog.challegram.tool.Keyboard.hide(xgramPillInput); // the field keeps its focus and cursor
+    }
+    xgramPill.setEmojiState(xgramEmojiFromKeyboard ? com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_KEYBOARD : com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_HIDE);
+    xgramLayoutPill();
+  }
+
+  /**
+   * Closes the emoji panel. With {@code showKeyboard} the keyboard takes its place: the panel holds the field up until
+   * the keyboard is there (xgramOnInsetsChanged), so the field does not drop and jump back.
+   */
+  private void xgramCloseEmoji (boolean showKeyboard) {
+    final boolean wasShown = xgramEmojiShown;
+    xgramEmojiShown = false;
+    if (wasShown && xgramPill != null) {
+      xgramPill.setEmojiState(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_EMOJI);
+    }
+    if (wasShown && showKeyboard && xgramPillInput != null && !hidden && !xgramImeVisible()) {
+      org.thunderdog.challegram.tool.Keyboard.show(xgramPillInput);
+      if (xgramEmojiHidePanel == null) {
+        xgramEmojiHidePanel = () -> {
+          if (!xgramEmojiShown) {
+            xgramSetEmojiPanelVisible(false);
+            xgramLayoutPill();
+          }
+        };
+      }
+      removeCallbacks(xgramEmojiHidePanel);
+      postDelayed(xgramEmojiHidePanel, XGRAM_KEYBOARD_WAIT);
+    } else {
+      xgramSetEmojiPanelVisible(false);
+    }
+    xgramLayoutPill();
+  }
+
+  /**
+   * XGram: shows the emoji panel's skin tone picker (or its "Apply to all" button) on this sheet, above the pressed
+   * emoji, for the gallery page (EmojiToneHelper.Delegate). The anchor's place is summed up its parents. Returns where
+   * the view went, from the anchor.
+   */
+  int[] xgramShowToneView (View anchorView, View viewToDisplay, int viewWidth, int viewHeight, int horizontalMargin, int horizontalOffset, int verticalOffset) {
+    int x = 0, y = 0;
+    View v = anchorView;
+    while (v != null && v != this) {
+      x += v.getLeft() + Math.round(v.getTranslationX());
+      y += v.getTop() + Math.round(v.getTranslationY());
+      if (!(v.getParent() instanceof View)) {
+        break;
+      }
+      final View parentView = (View) v.getParent();
+      x -= parentView.getScrollX();
+      y -= parentView.getScrollY();
+      v = parentView;
+    }
+    final int left = Math.max(horizontalMargin, Math.min(getMeasuredWidth() - Math.max(0, viewWidth) - horizontalMargin, x + horizontalOffset));
+    final int top = y - viewHeight + verticalOffset;
+    FrameLayoutFix.LayoutParams params = FrameLayoutFix.newParams(viewWidth, viewHeight, Gravity.LEFT | Gravity.TOP);
+    params.leftMargin = left;
+    params.topMargin = top;
+    viewToDisplay.setLayoutParams(params);
+    addView(viewToDisplay);
+    return new int[] {left - x, top - y};
+  }
+
+  void xgramRemoveToneView (View view) {
+    removeView(view);
   }
 
   private float groupMediaFactor;
@@ -2326,25 +2611,6 @@ public class MediaLayout extends FrameLayoutFix implements
       com.fahadali.xgram.appearance.XgramAppMotion.iconButton(groupMediaView); // XGram
       bottomBar.addView(groupMediaView);
 
-      params = FrameLayoutFix.newParams(Screen.dp(48f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.RIGHT);
-      params.rightMargin = xgramCaptionMargin();
-      xgramCaptionView = new ImageView(getContext()) {
-        @Override
-        public boolean onTouchEvent (MotionEvent e) {
-          return isEnabled() && Views.isValid(this) && super.onTouchEvent(e);
-        }
-      };
-      xgramCaptionView.setOnClickListener(this);
-      xgramCaptionView.setId(R.id.btn_xgramMediaCaption);
-      xgramCaptionView.setScaleType(ImageView.ScaleType.CENTER);
-      xgramCaptionView.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.baseline_file_caption_24));
-      xgramCaptionView.setColorFilter(Theme.getColor(ColorId.icon));
-      themeListeners.addThemeFilterListener(xgramCaptionView, ColorId.icon);
-      xgramCaptionView.setLayoutParams(params);
-      xgramCaptionView.setAlpha(0f);
-      com.fahadali.xgram.appearance.XgramAppMotion.iconButton(xgramCaptionView); // XGram
-      bottomBar.addView(xgramCaptionView);
-
       closeButton = new BackHeaderButton(getContext()) {
         @Override
         public boolean onTouchEvent (MotionEvent e) {
@@ -2370,16 +2636,12 @@ public class MediaLayout extends FrameLayoutFix implements
 
       setCounterEnabled(false);
 
-      if (xgramM3) {
-        xgramCaptionView.setVisibility(View.GONE); // XGram M3E: the inline caption field replaces the button and its dialog
-        xgramCreatePill();
-      }
+      xgramCreatePill(); // XGram: the caption field, in both designs
     }
     // No need to reset, right?
     // setNeedSpoiler(false);
     setAllowSpoiler(getCurrentController().allowSpoiler());
     hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
-    xgramUpdateCaptionButton();
     xgramUpdateCounterMargins();
     if (counterView != null) {
       counterView.setTranslationY(0f);
@@ -2409,9 +2671,6 @@ public class MediaLayout extends FrameLayoutFix implements
       }
       if (groupMediaView != null) {
         Views.setRightMargin(groupMediaView, allowSpoiler ? Screen.dp(55f) + Screen.dp(48f) : Screen.dp(55f));
-      }
-      if (xgramCaptionView != null) {
-        Views.setRightMargin(xgramCaptionView, xgramCaptionMargin());
       }
       xgramUpdateCounterMargins();
     }
@@ -2547,16 +2806,10 @@ public class MediaLayout extends FrameLayoutFix implements
         translateFactor = 0f;
       }
       hotMediaView.setAlpha(counterFactor * (allowSpoiler ? 1f : 0f));
-      xgramUpdateCaptionButton();
       float alpha = counterFactor * translateFactor;
       groupMediaView.setAlpha(alpha);
       counterHintView.setAlpha(alpha);
       counterView.setTranslationY(-Screen.dp(9f) * translateFactor);
-      if (xgramCaptionView != null) {
-        // XGram: the caption button slides into the album button's slot while that one is hidden (one item, or a tab
-        // without grouping), so no empty 48dp gap opens between them. Absolute: the bar is not mirrored.
-        xgramCaptionView.setTranslationX(Screen.dp(48f) * (1f - translateFactor));
-      }
     }
   }
 
@@ -2585,9 +2838,6 @@ public class MediaLayout extends FrameLayoutFix implements
     if (this.counterFactor != factor) {
       this.counterFactor = factor;
       hotMediaView.setAlpha(factor * (allowSpoiler ? 1f : 0f));
-      if (xgramCaptionView != null) {
-        xgramCaptionView.setAlpha(xgramAllowCaption() ? factor : 0f);
-      }
       setAddExtraSpacing(factor == 1f);
     }
   }
