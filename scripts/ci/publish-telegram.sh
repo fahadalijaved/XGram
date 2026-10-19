@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
-# Posts the APKs to the XGram CI channel through XGram Build Bot (tools/xgram/telegram/xgram_bot.py) and,
-# with --announce, announces the build in the Updates topic of the XGram group.
+# Posts the APKs through XGram Build Bot (tools/xgram/telegram/xgram_bot.py): CI builds to the XGram CI channel
+# (--to channel, the default), Stable releases to the Updates topic of the XGram group (--kind stable --to updates).
 #
-#   publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--announce] [--send]
+#   publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--to channel|updates]
+#                       [--announce] [--send]
 #
-# Runs:  xgram_bot.py publish --apk A [--apk B] --version V --commit SHA --notes FILE --to channel
+# Runs:  xgram_bot.py publish --apk A [--apk B] --version V --commit SHA --notes FILE --to channel|updates
 #                             [--kind ci|stable] [--announce updates] [--send]
-# The APKs go out as one album: arm64 (arm64-v8a) first, then arm32 (armeabi-v7a).
+# The APKs go out as one album: arm64 (arm64-v8a) first, then arm32 (armeabi-v7a). The bot sends it with Telethon
+# when that is set up (always the case when an APK is over the cutoff), else with the Bot API's sendMediaGroup.
 # --kind labels the posts "CI build" or "Stable" (the bot's default in the channel is ci).
 # Without --send nothing is sent: the bot prints what it would send (its default dry run).
 #
 # Env (secrets / variables):
-#   XGRAM_BOT_TOKEN, XGRAM_CHANNEL_ID     required; if either is empty, publishing is skipped with a warning
-#   XGRAM_GROUP_ID, XGRAM_TOPIC_UPDATES   needed for --announce (otherwise the announcement is dropped)
+#   XGRAM_BOT_TOKEN                       required for every target
+#   XGRAM_CHANNEL_ID                      required for --to channel (CI builds)
+#   XGRAM_GROUP_ID, XGRAM_TOPIC_UPDATES   required for --to updates (Stable releases); for --announce they are
+#                                         optional (without them the announcement is dropped)
+#                                         If a required one is empty, publishing is skipped with a warning, except
+#                                         for a Stable release with --send: that run fails, so it can't pass unposted.
 #   TELEGRAM_API_ID, TELEGRAM_API_HASH    needed for APKs over 49 MB (49,000,000 bytes): the cloud Bot API takes
 #                                         at most "50 MB", so the bot uploads bigger files with Telethon (logged
 #                                         in as the bot), which this script installs (pinned) into a virtualenv.
@@ -50,7 +56,7 @@ while (($# > 0)); do
   esac
 done
 [[ -n "$dir" && -n "$version" && -n "$commit" && -n "$notes" ]] ||
-  die "usage: publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--announce] [--send]"
+  die "usage: publish-telegram.sh --dir DIR --version V --commit SHA --notes FILE [--kind ci|stable] [--to channel|updates] [--announce] [--send]"
 [[ -z "$kind" || "$kind" == ci || "$kind" == stable ]] || die "--kind must be ci or stable, got: $kind"
 [[ "$to" == channel || "$to" == updates ]] || die "--to must be channel or updates, got: $to"
 # CI builds go to the XGram CI channel only; the Updates topic is for stable releases.
@@ -60,8 +66,21 @@ fi
 [[ -d "$dir" ]] || die "Not a folder: $dir"
 [[ -f "$notes" ]] || die "Notes file not found: $notes"
 
-if [[ -z "${XGRAM_BOT_TOKEN:-}" || -z "${XGRAM_CHANNEL_ID:-}" ]]; then
-  warn "Telegram publishing skipped: add the XGRAM_BOT_TOKEN secret and the XGRAM_CHANNEL_ID variable (docs/xgram/telegram/CI.md)."
+# Only what this target needs: the channel id for the CI channel, the group and topic ids for the Updates topic.
+missing=""
+if [[ -z "${XGRAM_BOT_TOKEN:-}" ]]; then
+  missing="the XGRAM_BOT_TOKEN secret"
+elif [[ "$to" == channel && -z "${XGRAM_CHANNEL_ID:-}" ]]; then
+  missing="the XGRAM_CHANNEL_ID variable"
+elif [[ "$to" == updates && (-z "${XGRAM_GROUP_ID:-}" || -z "${XGRAM_TOPIC_UPDATES:-}") ]]; then
+  missing="the XGRAM_GROUP_ID and XGRAM_TOPIC_UPDATES variables"
+fi
+if [[ -n "$missing" ]]; then
+  # A Stable release that posts nothing must not end green.
+  if [[ "$send" == true && "$kind" == stable ]]; then
+    die "Stable release not posted: add $missing (docs/xgram/telegram/CI.md)."
+  fi
+  warn "Telegram publishing skipped: add $missing (docs/xgram/telegram/CI.md)."
   exit 0
 fi
 mask "$XGRAM_BOT_TOKEN"
@@ -80,7 +99,7 @@ shopt -u nullglob
 ((${#found[@]} > 0)) || die "No APKs in $dir"
 
 # Album order (one caption per file, labelled with its ABI by the bot): arm64-v8a for most phones first, then
-# armeabi-v7a (arm32) for older 32-bit phones, then anything else.
+# armeabi-v7a (arm32) for 32-bit ARM phones (Android 13+), then anything else.
 apks=()
 for rank in arm64-v8a armeabi-v7a other; do
   for apk in "${found[@]}"; do
@@ -178,4 +197,12 @@ fi
 log "Publishing ${#apks[@]} APK(s), version $version, commit ${commit:0:7}, announce=$announce, send=$send"
 "$py" "$bot" ${before[@]+"${before[@]}"} "${args[@]}" ${after[@]+"${after[@]}"}
 
-summary "Telegram: posted ${#apks[@]} APK(s) to the CI channel (announce in Updates: $announce, sent: $send)."
+case "$to" in
+  channel) where="the CI channel" ;;
+  *) where="the Updates topic" ;;
+esac
+verb=posted
+if [[ "$send" != true ]]; then
+  verb="dry run, would post"
+fi
+summary "Telegram: $verb ${#apks[@]} APK(s) to $where (kind ${kind:-default}, announce in Updates: $announce)."

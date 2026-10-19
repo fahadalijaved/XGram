@@ -21,7 +21,8 @@ XGram is not affiliated with Telegram or with the Telegram X team.
 XGram can update itself: pick Stable or CI builds in Settings → XGram → Updates. The group is also the place for
 questions, bug reports and ideas.
 
-XGram needs Android 7.0 or newer. Every build post lists the SHA-256 of its APK, so you can check what you install.
+XGram needs Android 13 or newer: take the arm64-v8a APK for most phones, armeabi-v7a for 32-bit ARM phones. Every
+build post lists the SHA-256 of its APK, so you can check what you install.
 
 ## What's inside
 

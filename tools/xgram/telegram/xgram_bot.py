@@ -750,9 +750,18 @@ def cmd_publish(args, cfg, api):
             caption, notes_in_caption = caption + "\n\n" + notes, True
         check_html(caption, CAPTION_LIMIT, info["name"] + " caption", telethon=big)
         plan.append((info, caption, big))
-    if len(plan) > 1 and api.send and not telethon_problem(cfg):
+    if len(plan) > 1 and api.send:
         # Several APKs (arm64, armeabi-v7a, ...) go out as one album: one post in the chat, a caption per file.
-        ids = upload_telethon_album(cfg, api, target, [p[0]["path"] for p in plan], [p[1] for p in plan], args.silent)
+        if not telethon_problem(cfg):
+            ids = upload_telethon_album(cfg, api, target, [p[0]["path"] for p in plan], [p[1] for p in plan],
+                                        args.silent)
+        else:   # no Telethon: then no file is big here, or the check above would have stopped the run
+            media = [{"type": "document", "media": "attach://f%d" % i, "caption": c, "parse_mode": "HTML",
+                      "disable_content_type_detection": True} for i, (_, c, _) in enumerate(plan)]
+            msgs = api.call("sendMediaGroup", {**target.kw(), "media": media,
+                                               "disable_notification": args.silent or None},
+                            files={"f%d" % i: p[0]["path"] for i, p in enumerate(plan)}, timeout=1200)
+            ids = [m["message_id"] for m in msgs]
         for (info, caption, big), message_id in zip(plan, ids):
             sent.append(dict(info, message_id=message_id, link=message_link(target, message_id)))
         plan = []
@@ -959,6 +968,18 @@ def selftest(args=None, cfg=None, api=None):
                                 pin=False, silent=False, state_file=os.path.join(d, "state.json"))
         ok(raises(cmd_publish, ns, {"XGRAM_CHANNEL_ID": "@xgram_ci"}, api) and not calls
            and not os.path.exists(ns.state_file), "no Telethon route: nothing is sent")
+        # small files and no Telethon: still one album, through the Bot API's sendMediaGroup
+        import contextlib, io
+        album = [{"message_id": 5}, {"message_id": 6}]
+        api.upload_limit, api.call = 1000, lambda *a, **k: calls.append((a, k)) or album
+        with contextlib.redirect_stdout(io.StringIO()):   # its "published ..." line is not part of the test output
+            cmd_publish(ns, {"XGRAM_CHANNEL_ID": "@xgram_ci"}, api)
+        (method, params), kw = calls[0] if calls else ((None, {"media": []}), {})
+        ok(len(calls) == 1 and method == "sendMediaGroup"
+           and [m["media"] for m in params["media"]] == ["attach://f0", "attach://f1"]
+           and sorted(kw.get("files", {})) == ["f0", "f1"]
+           and [f["message_id"] for f in load_state(ns.state_file)["latest"]["files"]] == [5, 6],
+           "two small APKs and no Telethon: one album via sendMediaGroup")
     ok(parse_command("/latest@XGramBuildBot now", "xgrambuildbot") == ("latest", True), "addressed command")
     ok(parse_command("/help@MissRose_bot", "XGramBuildBot") is None, "command for another bot is ignored")
     print("selftest: %d checks passed" % len(checks))

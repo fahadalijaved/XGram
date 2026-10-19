@@ -20,7 +20,7 @@ import shutil
 import sys
 
 # CI flavor -> ABI (Gradle flavors latestArm64 / latestArm32). FLAVORS is the album order: arm64 for most
-# phones first, then arm32 for older 32-bit phones.
+# phones first, then arm32 for 32-bit ARM phones (Android 13+).
 ABIS = {"arm64": "arm64-v8a", "arm32": "armeabi-v7a"}
 FLAVORS = ["arm64", "arm32"]
 

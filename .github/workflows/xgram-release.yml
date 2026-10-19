@@ -1,9 +1,9 @@
 # XGram release: manual workflow for stable releases.
 #
-# Builds the release APKs (arm64 by default; both = arm64 and arm32 in parallel), writes SHA256SUMS.txt and
-# build-info.json, uploads everything as workflow artifacts, and posts the APKs as a Stable release in the Updates
-# topic of the XGram group (never the CI channel, which is for CI builds). Optionally drafts a GitHub
-# Release with the same files (GPLv3: whoever gets the APK must be able to get the source of that build).
+# Builds the release APKs (arm64 + arm32 in parallel by default; arm64 or arm32 alone on request), writes
+# SHA256SUMS.txt and build-info.json, uploads everything as workflow artifacts, and posts the APKs as a Stable
+# release in the Updates topic of the XGram group (never the CI channel, which is for CI builds). Optionally drafts
+# a GitHub Release with the same files (GPLv3: whoever gets the APK must be able to get the source of that build).
 #
 # Start it: Actions -> XGram release -> Run workflow (from main, or from a tag such as v1.0.0).
 # Setup, secrets and limits: docs/xgram/telegram/CI.md
@@ -18,13 +18,13 @@ on:
         required: false
         default: ''
       flavor:
-        description: 'Which APK(s) to build: both = arm64 + arm32, arm64 (most phones), arm32 (older 32-bit phones)'
+        description: 'Which APK(s) to build: both = arm64 + arm32, arm64 (most phones), arm32 (32-bit ARM phones, Android 13+)'
         type: choice
         options:
           - both
           - arm64
           - arm32
-        default: arm64
+        default: both
       publish:
         description: Post the APKs as a Stable release in the Updates topic of the XGram group (main or a tag only)
         type: boolean

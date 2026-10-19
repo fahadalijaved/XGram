@@ -6,11 +6,11 @@
 #   XGRAM_MODE                 nightly | release
 #   GITHUB_EVENT_NAME, GITHUB_REF_NAME, GITHUB_REF_TYPE, GITHUB_REPOSITORY, GITHUB_WORKFLOW_REF, GH_TOKEN
 #   IN_FLAVOR, IN_BUILD_TYPE, IN_PUBLISH, IN_ANNOUNCE, IN_CHANGELOG_SINCE, IN_APP_VERSION   (workflow_dispatch inputs)
-#   XGRAM_NIGHTLY_FLAVOR (arm64), XGRAM_NIGHTLY_BUILD_TYPE (release), XGRAM_NIGHTLY_PUBLISH (true),
+#   XGRAM_NIGHTLY_FLAVOR (both), XGRAM_NIGHTLY_BUILD_TYPE (release), XGRAM_NIGHTLY_PUBLISH (true),
 #   XGRAM_NIGHTLY_ANNOUNCE (false), XGRAM_NIGHTLY_FORCE (false)                              (scheduled runs)
 #   XGRAM_DEFAULT_BRANCH (fallback when the API is unavailable)
-# Flavor (IN_FLAVOR, XGRAM_NIGHTLY_FLAVOR): arm64 (arm64-v8a, most phones), arm32 (armeabi-v7a, older 32-bit
-# phones) or both.
+# Flavor (IN_FLAVOR, XGRAM_NIGHTLY_FLAVOR): arm64 (arm64-v8a, most phones), arm32 (armeabi-v7a, 32-bit ARM phones,
+# Android 13+) or both. both is the default: an arm32 install only updates from posts that carry an armeabi-v7a APK.
 #
 # Outputs: skip, flavor, flavors (JSON array), build_type, publish, announce, since, app_version, head, short,
 #          default_branch, link_base (commit link prefix, only for public repos)
@@ -60,15 +60,15 @@ fi
 
 # What to build.
 if [[ "$mode" == nightly && "$event" == schedule ]]; then
-  flavor=${XGRAM_NIGHTLY_FLAVOR:-arm64}
+  flavor=${XGRAM_NIGHTLY_FLAVOR:-both}
   build_type=${XGRAM_NIGHTLY_BUILD_TYPE:-release}
   publish=${XGRAM_NIGHTLY_PUBLISH:-true}
 elif [[ "$mode" == nightly ]]; then
-  flavor=${IN_FLAVOR:-arm64}
+  flavor=${IN_FLAVOR:-both}
   build_type=${IN_BUILD_TYPE:-release}
   publish=${IN_PUBLISH:-false}
 else
-  flavor=${IN_FLAVOR:-arm64}
+  flavor=${IN_FLAVOR:-both}
   build_type=release
   publish=${IN_PUBLISH:-true}
 fi
@@ -81,7 +81,7 @@ case "$flavor" in
   arm32) flavors='["arm32"]' ;;
   both) flavors='["arm64","arm32"]' ;;
   # A repository variable left over from when CI built a universal APK.
-  universal) die "There is no universal APK any more: use arm32 (older 32-bit phones) or both. Check XGRAM_NIGHTLY_FLAVOR." ;;
+  universal) die "There is no universal APK any more: use arm32 (32-bit ARM phones, Android 13+) or both. Check XGRAM_NIGHTLY_FLAVOR." ;;
   *) die "flavor must be arm64, arm32 or both, got: '$flavor'" ;;
 esac
 case "$build_type" in

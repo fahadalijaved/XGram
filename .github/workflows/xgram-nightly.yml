@@ -17,13 +17,13 @@ on:
   workflow_dispatch:
     inputs:
       flavor:
-        description: 'Which APK(s) to build: arm64 (most phones), arm32 (older 32-bit phones), both = arm64 + arm32'
+        description: 'Which APK(s) to build: both = arm64 + arm32, arm64 (most phones), arm32 (32-bit ARM phones, Android 13+)'
         type: choice
         options:
+          - both
           - arm64
           - arm32
-          - both
-        default: arm64
+        default: both
       build_type:
         description: Build type (release = R8-minified, signed with the release key; debug is never posted to Telegram, only kept as an artifact)
         type: choice
