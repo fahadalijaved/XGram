@@ -2435,6 +2435,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
         return;
       }
 
+      if (!xgramUndoBypass && xgramHoldFiles(selectedItems, musicEntries, files, caption, sendOptions)) {
+        return; // XGram: Undo send, the documents and music wait
+      }
+
       final List<TdApi.Message> sentMessages = new ArrayList<>(selectedItems.size());
       final ReplyInfo replyTo = getCurrentReplyId();
       final ArrayList<TdApi.Function<?>> functions = new ArrayList<>();
@@ -7749,14 +7753,76 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramUndoBar.update(handoff, isFocused());
   }
 
+  /**
+   * Undo send for the documents and music of the tray (send's files branch): true when they wait, or when slow mode lets
+   * nothing go now (a hint says why, the tray stays). The requests are made as always; the message box and the tray
+   * clear as after a send.
+   */
+  private boolean xgramHoldFiles (ArrayList<InlineResult<?>> selectedItems, ArrayList<MediaBottomFilesController.MusicEntry> musicEntries,
+                                  ArrayList<String> files, @Nullable TdApi.FormattedText caption, TdApi.MessageSendOptions sendOptions) {
+    if (com.fahadali.xgram.XgramSettings.instance().undoSendSeconds() <= 0 || !xgramUndoSendEligible() || (sendOptions != null && sendOptions.schedulingState != null)) {
+      return false;
+    }
+    if (com.fahadali.xgram.chats.XgramUndoSend.blockedBySlowMode(this)) {
+      showBottomHint(Lang.getString(R.string.XgramUndoSendSlowMode), true);
+      return true;
+    }
+    if (showSlowModeRestriction(sendButton != null ? sendButton : inputView, sendOptions)) {
+      return true;
+    }
+    // In the order the requests carry them: the documents (sendFiles), then the music (getSendMusicFunctions).
+    final ArrayList<InlineResult<?>> ordered = new ArrayList<>(selectedItems.size());
+    final ArrayList<String> names = new ArrayList<>(selectedItems.size());
+    for (InlineResult<?> result : selectedItems) {
+      if (result.getType() == InlineResult.TYPE_DOCUMENT) {
+        ordered.add(result);
+        names.add(new java.io.File(StringUtils.isEmpty(result.getId()) ? "" : result.getId()).getName());
+      }
+    }
+    for (InlineResult<?> result : selectedItems) {
+      if (result.getType() == InlineResult.TYPE_AUDIO) {
+        ordered.add(result);
+        MediaBottomFilesController.MusicEntry entry = (MediaBottomFilesController.MusicEntry) ((InlineResultCommon) result).getTag();
+        names.add(entry != null && !StringUtils.isEmpty(entry.getPath()) ? new java.io.File(entry.getPath()).getName() : "");
+      }
+    }
+    final ReplyInfo replyTo = getCurrentReplyId();
+    final Object hold = com.fahadali.xgram.chats.XgramUndoSend.beginFiles(this, sendOptions, caption, replyTo, ordered, names.toArray(new String[0]));
+    if (hold == null) {
+      return false;
+    }
+    final List<TdApi.Function<?>> musicFunctions = getSendMusicFunctions(sendButton, musicEntries, true, !musicEntries.isEmpty(), caption, sendOptions);
+    final boolean musicRefused = musicFunctions == null && !musicEntries.isEmpty();
+    sendFiles(sendButton, files, true, true, !musicEntries.isEmpty() && !files.isEmpty() ? null : caption, sendOptions, filesFunctions -> {
+      ArrayList<TdApi.Function<?>> ready = new ArrayList<>();
+      if (filesFunctions != null) {
+        ready.addAll(filesFunctions);
+      }
+      if (musicFunctions != null) {
+        ready.addAll(musicFunctions);
+      }
+      // A restriction Telegram X showed refused some of them: all go back to the tray (nothing is half sent).
+      boolean refused = musicRefused || (filesFunctions == null && !files.isEmpty());
+      com.fahadali.xgram.chats.XgramUndoSend.filesReady(hold, refused ? null : ready);
+    });
+    clearInputAfterSend(true, true, replyTo, true);
+    return true;
+  }
+
   /** What can wait: a chat's own message box, not a preview, the Recent actions log or the Scheduled messages. */
   public boolean xgramUndoSendEligible () {
     return chat != null && inputView != null && !inPreviewMode && !isInForceTouchMode() && !isEventLog() && !areScheduled && !isDestroyed();
   }
 
-  /** The message box holds text that Send would make wait (no files to send, no edit, no dice). */
+  /** The message box holds what Send would make wait: documents or music to send, or text (no edit, no dice). */
   public boolean xgramComposerWouldWait () {
-    if (inputView == null || isEditingMessage() || hasAttachedFiles() || inputView.getText().length() == 0) {
+    if (inputView == null || isEditingMessage()) {
+      return false;
+    }
+    if (hasAttachedFiles()) {
+      return true;
+    }
+    if (inputView.getText().length() == 0) {
       return false;
     }
     TdApi.FormattedText text = inputView.getOutputText(true);
@@ -7771,17 +7837,36 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   /**
    * Undo, or a send that failed: {@code text} goes back into this message box before what it holds (a new line between),
-   * with the reply when the message box has none. False (nothing changed) unless this is the message box of that chat
-   * and topic and it can take it now.
+   * {@code files} before the files to send it has, with the reply when the message box has none. False (nothing changed)
+   * unless this is the message box of that chat and topic and it can take it now.
    */
   @UiThread
   public boolean xgramRestoreUnsent (long chatId, long draftChatId, @Nullable TdApi.MessageTopic draftTopic, @Nullable TdApi.FormattedText text,
-                                     @Nullable ReplyInfo replyInfo, @Nullable TdApi.InputMessageReplyTo replyTo, boolean showKeyboard) {
+                                     @Nullable ReplyInfo replyInfo, @Nullable TdApi.InputMessageReplyTo replyTo, boolean showKeyboard,
+                                     @Nullable List<InlineResult<?>> files) {
     if (isDestroyed() || inputView == null || chat == null || inPreviewMode || isInForceTouchMode() || areScheduled || isEditingMessage() || !canWriteMessages()) {
       return false;
     }
     if (getChatId() != chatId || getMessageThreadChatId() != draftChatId || !Td.equalsTo(getMessageTopicId(), draftTopic)) {
       return false;
+    }
+    if (files != null && !files.isEmpty() && (!isFocused() || inSearchMode())) {
+      return false; // the tray floats over the window: only while this chat is in front
+    }
+    if (files != null && !files.isEmpty()) {
+      // The files to send come back into the tray, before the ones it holds; the text becomes their caption.
+      ArrayList<InlineResult<?>> merged = new ArrayList<>(files);
+      if (hasAttachedFiles()) {
+        ArrayList<InlineResult<?>> current = attachedFiles.getCurrentItems();
+        if (current != null) {
+          for (InlineResult<?> result : current) {
+            if (!merged.contains(result)) {
+              merged.add(result);
+            }
+          }
+        }
+      }
+      setFilesToAttach(merged, false);
     }
     if (!Td.isEmpty(text)) {
       TdApi.FormattedText current = inputView.getOutputText(false);

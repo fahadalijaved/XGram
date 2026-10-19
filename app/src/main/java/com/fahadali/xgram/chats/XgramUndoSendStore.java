@@ -22,6 +22,7 @@ import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.unsorted.Settings;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -45,9 +46,9 @@ final class XgramUndoSendStore {
   static final String DEBUG_FAIL_RESTORE = "xgram_usdbg_fail_restore";
 
   private static final String VERSION = "v1";
-  private static final int FIELDS = 15;
+  private static final int FIELDS = 16;
 
-  /** A record read back from the journal. */
+  /** A record read back from the journal (or what is left of an item to give back). */
   static final class Record {
     final String key;
     final int accountId;
@@ -58,10 +59,13 @@ final class XgramUndoSendStore {
     @Nullable final TdApi.MessageTopic topic;
     @Nullable final TdApi.InputMessageReplyTo replyTo;
     final boolean silent;
+    /** Files: their names (they can't be sent after a restart, only listed). */
+    @Nullable final String[] fileNames;
     final TdApi.FormattedText text;
 
     Record (String key, int accountId, long bootId, boolean flushing, int kind, long chatId, long draftChatId, long createdWall,
-            @Nullable TdApi.MessageTopic topic, @Nullable TdApi.InputMessageReplyTo replyTo, boolean silent, TdApi.FormattedText text) {
+            @Nullable TdApi.MessageTopic topic, @Nullable TdApi.InputMessageReplyTo replyTo, boolean silent,
+            @Nullable String[] fileNames, TdApi.FormattedText text) {
       this.key = key;
       this.accountId = accountId;
       this.bootId = bootId;
@@ -73,6 +77,7 @@ final class XgramUndoSendStore {
       this.topic = topic;
       this.replyTo = replyTo;
       this.silent = silent;
+      this.fileNames = fileNames;
       this.text = text;
     }
   }
@@ -122,6 +127,19 @@ final class XgramUndoSendStore {
   static void markFlushing (XgramUndoSendItem item, long bootId) {
     try {
       pmc().putString(key(item), encode(item, bootId, true));
+    } catch (Throwable t) {
+      android.util.Log.e("XGram", "Undo send: cannot update the journal", t);
+    }
+  }
+
+  /**
+   * Rewrites a record as what is left to give back (a send TDLib refused): after a crash it becomes a draft as it is,
+   * without the check for a message that was sent.
+   */
+  static void rewrite (Record record) {
+    try {
+      pmc().putString(record.key, encode(record.bootId, record.flushing, record.kind, record.chatId, record.draftChatId,
+        record.createdWall, record.topic, record.replyTo, record.silent, record.fileNames, record.text));
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Undo send: cannot update the journal", t);
     }
@@ -217,38 +235,53 @@ final class XgramUndoSendStore {
   // Format: lines, the text last (it may have line breaks of its own)
 
   private static String encode (XgramUndoSendItem item, long bootId, boolean flushing) {
-    return encode(bootId, flushing, item.kind, item.chatId, item.draftChatId, item.createdWall, item.draftTopic, item.replyTo, item.silent, item.typed);
+    return encode(bootId, flushing, item.kind, item.chatId, item.draftChatId, item.createdWall, item.draftTopic, item.replyTo,
+      item.silent, item.fileNames, item.typed);
   }
 
   private static String encode (long bootId, boolean flushing, int kind, long chatId, long draftChatId, long createdWall,
                                 @Nullable TdApi.MessageTopic topic, @Nullable TdApi.InputMessageReplyTo replyTo, boolean silent,
-                                @Nullable TdApi.FormattedText typed) {
+                                @Nullable String[] fileNames, @Nullable TdApi.FormattedText typed) {
     StringBuilder b = new StringBuilder();
     b.append(VERSION).append('\n');
     b.append(bootId).append('\n');
     b.append(flushing ? 'F' : 'H').append('\n');
-    b.append(kind == XgramUndoSendItem.KIND_VOICE ? 'V' : kind == XgramUndoSendItem.KIND_VIDEO ? 'R' : 'T').append('\n');
+    b.append(kindCode(kind)).append('\n');
     b.append(chatId).append('\n');
     b.append(draftChatId).append('\n');
     b.append(createdWall).append('\n');
     b.append(encodeTopic(topic)).append('\n');
     appendReply(b, replyTo);
     b.append(silent ? '1' : '0').append('\n');
+    if (fileNames != null) {
+      for (int i = 0; i < fileNames.length; i++) {
+        if (i > 0) {
+          b.append(',');
+        }
+        b.append(Uri.encode(fileNames[i] != null ? fileNames[i] : ""));
+      }
+    }
+    b.append('\n');
     b.append(XgramMedia.encodeEntities(typed != null ? typed.entities : null)).append('\n');
     b.append(typed != null && typed.text != null ? typed.text : "");
     return b.toString();
   }
 
-  /**
-   * Rewrites a record as what is left to give back (a send TDLib refused): after a crash it becomes a draft as it is,
-   * without the check for a message that was sent.
-   */
-  static void rewrite (Record record) {
-    try {
-      pmc().putString(record.key, encode(record.bootId, record.flushing, record.kind, record.chatId, record.draftChatId,
-        record.createdWall, record.topic, record.replyTo, record.silent, record.text));
-    } catch (Throwable t) {
-      android.util.Log.e("XGram", "Undo send: cannot update the journal", t);
+  private static char kindCode (int kind) {
+    switch (kind) {
+      case XgramUndoSendItem.KIND_VOICE: return 'V';
+      case XgramUndoSendItem.KIND_VIDEO: return 'R';
+      case XgramUndoSendItem.KIND_FILES: return 'D';
+      default: return 'T';
+    }
+  }
+
+  private static int kindOf (String code) {
+    switch (code) {
+      case "V": return XgramUndoSendItem.KIND_VOICE;
+      case "R": return XgramUndoSendItem.KIND_VIDEO;
+      case "D": return XgramUndoSendItem.KIND_FILES;
+      default: return XgramUndoSendItem.KIND_TEXT;
     }
   }
 
@@ -338,6 +371,18 @@ final class XgramUndoSendStore {
   }
 
   @Nullable
+  private static String[] decodeFileNames (String value) {
+    if (value.isEmpty()) {
+      return null;
+    }
+    String[] names = value.split(",", -1);
+    for (int i = 0; i < names.length; i++) {
+      names[i] = Uri.decode(names[i]);
+    }
+    return names;
+  }
+
+  @Nullable
   static Record decode (String key, int accountId, @Nullable String value) {
     if (value == null) {
       return null;
@@ -349,16 +394,17 @@ final class XgramUndoSendStore {
     try {
       long bootId = Long.parseLong(f[1]);
       boolean flushing = "F".equals(f[2]);
-      int kind = "V".equals(f[3]) ? XgramUndoSendItem.KIND_VOICE : "R".equals(f[3]) ? XgramUndoSendItem.KIND_VIDEO : XgramUndoSendItem.KIND_TEXT;
+      int kind = kindOf(f[3]);
       long chatId = Long.parseLong(f[4]);
       long draftChatId = Long.parseLong(f[5]);
       long createdWall = Long.parseLong(f[6]);
       TdApi.MessageTopic topic = decodeTopic(f[7]);
       TdApi.InputMessageReplyTo replyTo = decodeReply(f[8], f[9], f[10], f[11]);
       boolean silent = "1".equals(f[12]);
-      String text = f[14];
-      TdApi.TextEntity[] entities = XgramMedia.decodeEntities(f[13], text.length());
-      return new Record(key, accountId, bootId, flushing, kind, chatId, draftChatId, createdWall, topic, replyTo, silent, new TdApi.FormattedText(text, entities));
+      String[] fileNames = decodeFileNames(f[13]);
+      String text = f[15];
+      TdApi.TextEntity[] entities = XgramMedia.decodeEntities(f[14], text.length());
+      return new Record(key, accountId, bootId, flushing, kind, chatId, draftChatId, createdWall, topic, replyTo, silent, fileNames, new TdApi.FormattedText(text, entities));
     } catch (RuntimeException e) {
       return null;
     }
@@ -372,10 +418,12 @@ final class XgramUndoSendStore {
     boolean ok = record != null
       && record.chatId == item.chatId
       && record.draftChatId == item.draftChatId
+      && record.kind == item.kind
       && typedText.equals(record.text.text)
       && XgramMedia.encodeEntities(typed != null ? typed.entities : null).equals(XgramMedia.encodeEntities(record.text.entities))
       && Td.equalsTo(record.topic, item.draftTopic)
-      && Td.equalsTo(record.replyTo, item.replyTo);
+      && Td.equalsTo(record.replyTo, item.replyTo)
+      && Arrays.equals(record.fileNames, item.fileNames);
     if (!ok) {
       android.util.Log.e("XGram", "xgram_usq round-trip mismatch: " + key);
     }

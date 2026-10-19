@@ -380,7 +380,9 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     if (s.silent) {
       b.append(SEPARATOR).append(Lang.getString(R.string.XgramUndoSendSilent));
     }
-    if (s.parts > 1) {
+    if (s.files > 0) {
+      b.append(SEPARATOR).append(XgramUndoSend.filesName(s.files));
+    } else if (s.parts > 1) {
       b.append(SEPARATOR).append(Lang.getString(R.string.XgramUndoSendParts, s.parts));
     }
     if (moreCount > 0) {
@@ -424,7 +426,7 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     if (s == null || !undoEnabled()) {
       return;
     }
-    if (s.kind != XgramUndoSendItem.KIND_TEXT) {
+    if (s.kind == XgramUndoSendItem.KIND_VOICE || s.kind == XgramUndoSendItem.KIND_VIDEO) {
       // A recording can't go back into the message box: discarding it is asked first.
       final long order = s.order;
       owner.showOptions(Lang.getString(s.kind == XgramUndoSendItem.KIND_VIDEO ? R.string.XgramUndoSendDiscardVideo : R.string.XgramUndoSendDiscardVoice),

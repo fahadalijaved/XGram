@@ -14,21 +14,24 @@ package com.fahadali.xgram.chats;
 import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.data.InlineResult;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.ui.MessagesController;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * One send that waits (see {@link XgramUndoSend}): the exact SendMessage requests Telegram X built, in order (a long
- * text split into parts is one item), and what Undo puts back. The state and the result fields are guarded by
- * XgramUndoSend's lock; {@link #settled} and the owner are only touched on the main thread.
+ * One send that waits (see {@link XgramUndoSend}): the exact requests Telegram X built, in order (a long text split
+ * into parts, or files sent together, is one item), and what Undo puts back. The state and the result fields are
+ * guarded by XgramUndoSend's lock; {@link #settled} and the owner are only touched on the main thread.
  */
 final class XgramUndoSendItem {
   static final int HELD = 0, FLUSHING = 1, DONE = 2, UNDONE = 3, FAILED = 4;
-  static final int KIND_TEXT = 0, KIND_VOICE = 1, KIND_VIDEO = 2;
+  static final int KIND_TEXT = 0, KIND_VOICE = 1, KIND_VIDEO = 2, KIND_FILES = 3;
 
   private static final AtomicLong SEQUENCE = new AtomicLong();
 
@@ -44,8 +47,12 @@ final class XgramUndoSendItem {
   /** Where the composer saves its draft: the thread's chat and the composer's topic. */
   final long draftChatId;
   @Nullable final TdApi.MessageTopic draftTopic;
-  final List<TdApi.SendMessage> parts;
-  /** What the message box held, before the split and the link preview fix (empty for voice and video messages). */
+  /**
+   * The requests, in the order they are sent: SendMessage, or SendMessageAlbum for files. Files are made on Telegram X's
+   * media thread: empty while {@link #preparing}, set once (under the lock) when they are ready.
+   */
+  List<TdApi.Function<?>> parts;
+  /** What the message box held (the caption of files), before the split and the link preview fix; empty for recordings. */
   final TdApi.FormattedText typed;
   /** Memory only: the message the reply bar showed. */
   @Nullable final MessagesController.ReplyInfo reply;
@@ -54,11 +61,18 @@ final class XgramUndoSendItem {
   final boolean silent;
   /** Voice and video messages: their length, for the bar. */
   final int durationSeconds;
+  /** Files: the tray's items (memory only) and their names (persisted), in the order the requests carry them. */
+  @Nullable final ArrayList<InlineResult<?>> files;
+  @Nullable final String[] fileNames;
   final long createdWall;
   final long dueUptime;
   final long totalMs;
 
   int state = HELD;
+  /** Files whose requests aren't made yet. */
+  boolean preparing;
+  /** While preparing: sending was asked for up to this order (0: not yet), done once the requests are ready. */
+  long flushUpToOrder;
   /** Main thread: parts with a result. */
   int settled;
   /** Parts TDLib refused, by index; null while none. */
@@ -76,9 +90,10 @@ final class XgramUndoSendItem {
   boolean previewReady;
 
   XgramUndoSendItem (Tdlib tdlib, int kind, long chatId, long draftChatId, @Nullable TdApi.MessageTopic draftTopic,
-                     List<TdApi.SendMessage> parts, TdApi.FormattedText typed,
+                     List<TdApi.Function<?>> parts, TdApi.FormattedText typed,
                      @Nullable MessagesController.ReplyInfo reply, @Nullable TdApi.InputMessageReplyTo replyTo,
-                     boolean silent, int durationSeconds, long totalMs, MessagesController owner) {
+                     boolean silent, int durationSeconds, @Nullable ArrayList<InlineResult<?>> files, @Nullable String[] fileNames,
+                     long totalMs, MessagesController owner) {
     this.order = SEQUENCE.incrementAndGet();
     this.createdWall = System.currentTimeMillis();
     this.id = (createdWall << 8) | (order & 0xff);
@@ -88,12 +103,14 @@ final class XgramUndoSendItem {
     this.chatId = chatId;
     this.draftChatId = draftChatId;
     this.draftTopic = draftTopic;
-    this.parts = parts;
+    this.parts = parts != null ? parts : Collections.emptyList();
     this.typed = typed;
     this.reply = reply;
     this.replyTo = replyTo;
     this.silent = silent;
     this.durationSeconds = durationSeconds;
+    this.files = files;
+    this.fileNames = fileNames;
     this.totalMs = totalMs;
     this.dueUptime = android.os.SystemClock.uptimeMillis() + totalMs;
     this.owner = new WeakReference<>(owner);
@@ -109,7 +126,25 @@ final class XgramUndoSendItem {
     return controller != null && owner() == controller;
   }
 
+  /** A voice or video message: it can't go back into the message box. */
   boolean isNote () {
-    return kind != KIND_TEXT;
+    return kind == KIND_VOICE || kind == KIND_VIDEO;
+  }
+
+  boolean isFiles () {
+    return kind == KIND_FILES;
+  }
+
+  int fileCount () {
+    return fileNames != null ? fileNames.length : 0;
+  }
+
+  /** How many files (or contents) part {@code index} carries. */
+  static int contentCount (TdApi.Function<?> part) {
+    if (part instanceof TdApi.SendMessageAlbum) {
+      TdApi.InputMessageContent[] contents = ((TdApi.SendMessageAlbum) part).inputMessageContents;
+      return contents != null ? contents.length : 0;
+    }
+    return 1;
   }
 }
