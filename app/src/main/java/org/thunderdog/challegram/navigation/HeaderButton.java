@@ -210,6 +210,49 @@ public class HeaderButton extends View {
     }
   }
 
+  // XGram M3E: a dot on the button, as BackHeaderButton draws the ☰'s badge (a 3dp dot in a 4.5dp cutout of the app
+  // bar's colour) at the icon's top end corner: the chat list's ⋮ while the side menu is hidden and the accounts are in it
+
+  private @ColorId int xgramDotColorId = ColorId.NONE;
+  private BoolAnimator xgramDotAnimator;
+
+  /** {@link ColorId#NONE} hides the dot (it fades out in the colour it had). */
+  public void xgramSetDot (@ColorId int colorId, boolean animated) {
+    final boolean show = colorId != ColorId.NONE;
+    if (show && xgramDotColorId != colorId) {
+      xgramDotColorId = colorId;
+      invalidate();
+    }
+    if (xgramDotAnimator == null) {
+      if (!show) {
+        return;
+      }
+      xgramDotAnimator = new BoolAnimator(0, (id, factor, fraction, callee) -> invalidate(), AnimatorUtils.DECELERATE_INTERPOLATOR, 180L);
+    }
+    xgramDotAnimator.setValue(show, animated && isShown());
+  }
+
+  @Override
+  public void draw (Canvas c) {
+    super.draw(c);
+    final float visibility = xgramDotAnimator != null ? xgramDotAnimator.getFloatValue() : 0f;
+    if (visibility <= 0f || xgramDotColorId == ColorId.NONE || drawable == null) {
+      return;
+    }
+    final boolean rtl = org.thunderdog.challegram.core.Lang.rtl();
+    final float cx = getMeasuredWidth() / 2f + (rtl ? -Screen.dp(6f) : Screen.dp(6f));
+    final float cy = getMeasuredHeight() / 2f - Screen.dp(8f);
+    android.view.ViewParent parent = getParent();
+    while (parent != null && !(parent instanceof HeaderView)) {
+      parent = parent.getParent();
+    }
+    HeaderFilling filling = parent != null ? ((HeaderView) parent).getFilling() : null;
+    if (filling != null) {
+      c.drawCircle(cx, cy, Screen.dp(4.5f) * visibility, Paints.fillingPaint(filling.getColor()));
+    }
+    c.drawCircle(cx, cy, Screen.dp(3f) * visibility, Paints.fillingPaint(ColorUtils.alphaColor(me.vkryl.core.MathUtils.clamp(visibility), Theme.getColor(xgramDotColorId))));
+  }
+
   // Progress
 
   private BoolAnimator progressAnimator;

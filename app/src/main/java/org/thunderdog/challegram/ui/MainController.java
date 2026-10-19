@@ -245,6 +245,14 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     UI.setSoftInputMode(UI.getContext(context), Config.DEFAULT_WINDOW_PARAMS);
 
     composeWrap = new OverlayButtonWrap(context);
+    // XGram M3E: a resize (unfolding, a pop-up window) measured it to the other FAB size, also while a tab screen was on
+    // top (not measured then): the paddings and the pages' room follow, after the measure pass (no loop: the next
+    // measure keeps the size)
+    composeWrap.xgramOnFabSizeChanged = () -> UI.post(() -> {
+      if (!isDestroyed()) {
+        checkComposeWrapPaddings();
+      }
+    });
     checkComposeWrapPaddings();
     composeWrap.initWithList(this,
       ColorId.circleButtonActive,
@@ -2283,6 +2291,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramUpdateNavBarHidden();
     xgramCloseHiddenDrawer();
     xgramShowFabIfStays(); // a FAB hidden by a scroll, now set to stay at the side
+    xgramUpdateMoreBadge(false); // the ☰'s badge on the ⋮ (no photo on the toolbar), or not
   }
 
   /** XGram M3E: the chat list's reasons for the floating toolbar to step aside (XgramNavToolbar.FORCE_*). */
@@ -2342,7 +2351,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   /** XGram M3E: New chat button or Hide the side menu changed on the Navigation bar page. */
   private void xgramOnToolbarOptionsChanged () {
-    if (!isDestroyed() && xgramToolbar() != null) {
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+    if (!isDestroyed() && toolbar != null) {
+      toolbar.refreshMenuBadge(); // the ☰'s badge on the photo while the side menu is hidden
       xgramOnToolbarChanged();
     }
   }
@@ -3041,7 +3052,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       xgramUpdateGhostButton();
       header.addSearchButton(menu, this);
       if (id == R.id.menu_xgramMainNoDrawer) {
-        header.addMoreButton(menu, this); // XGram M3E: the side menu's items while it is hidden
+        xgramMoreButton = header.addMoreButton(menu, this); // XGram M3E: the side menu's items while it is hidden
+        xgramUpdateMoreBadge(false);
+      } else {
+        xgramMoreButton = null;
       }
     } else if (id == R.id.menu_clear) {
       header.addClearButton(menu, getSearchHeaderIconColorId(), getSearchBackButtonResource());
@@ -3051,6 +3065,40 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   private HeaderButton xgramGhostButton;
+  /** XGram M3E: the app bar's ⋮ while the side menu is hidden (the one made last). */
+  @Nullable private HeaderButton xgramMoreButton;
+
+  /**
+   * XGram M3E: the ☰'s badge (MainActivity#updateCounter: another account's unread chats, or a problem to resolve) on
+   * the ⋮ while the side menu is hidden and the floating toolbar has no photo (Your profile: Off): the accounts are in
+   * the ⋮ then. With a photo, the photo shows it (XgramNavToolbar#setMenuBadge). From the toolbar when the badge or
+   * its settings change, and when the ⋮ is made.
+   */
+  public void xgramUpdateMoreBadge (boolean animated) {
+    if (isDestroyed()) {
+      return;
+    }
+    final com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+    final int colorId = toolbar != null && !toolbar.hasProfile() && xgramHidesDrawer() && context instanceof MainActivity ?
+      ((MainActivity) context).getXgramMenuBadgeColorId() : ColorId.NONE;
+    final HeaderButton more = xgramMoreButton;
+    if (more != null) {
+      more.xgramSetDot(colorId, animated);
+    }
+    if (headerView != null) {
+      // A menu the header kept (reused on the way back) has its own ⋮
+      for (int i = 0; i < headerView.getChildCount(); i++) {
+        View child = headerView.getChildAt(i);
+        if (child instanceof ViewGroup && child.getId() == R.id.menu_xgramMainNoDrawer) {
+          View button = child.findViewById(R.id.menu_btn_more);
+          if (button instanceof HeaderButton && button != more) {
+            ((HeaderButton) button).xgramSetDot(colorId, animated);
+          }
+        }
+      }
+    }
+  }
+
   private final com.fahadali.xgram.XgramSettings.Listener xgramSettingsListener = key -> {
     if (key.startsWith("xgram_ghost_")) {
       UI.post(this::xgramUpdateGhostButton);
@@ -3156,6 +3204,12 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       ids.append(R.id.btn_xgramNavSwitchAccount);
       titles.append(R.string.XgramNavSwitchAccount);
       kinds.append(XGRAM_MENU_ROW);
+      if (TdlibManager.instance().getActiveAccounts().size() >= 2) {
+        // The side menu's drag to reorder and its preview's Log out
+        ids.append(R.id.btn_xgramNavManageAccounts);
+        titles.append(R.string.XgramNavAccountsManage);
+        kinds.append(XGRAM_MENU_ROW);
+      }
     }
     for (String key : com.fahadali.xgram.XgramReorder.ordered(com.fahadali.xgram.XgramReorder.DRAWER, com.fahadali.xgram.XgramDrawerItemsController.KEYS)) {
       if (!com.fahadali.xgram.XgramDrawerItemsController.KEY_SETTINGS.equals(key) && xgram.drawerItemHidden(key)) {
@@ -3276,10 +3330,14 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       titles.append("Send TDLib log");
       kinds.append(XGRAM_MENU_ROW);
     }
-    final int count = ids.size();
-    if (count == 0) {
-      return;
+    if (ids.size() == 0) {
+      // Everything else is hidden or a tab: Settings, which the side menu never hides (a tab: the tab's screen). The ⋮
+      // is always there while the side menu is hidden, so a tap on it always opens something.
+      ids.append(R.id.btn_settings);
+      titles.append(R.string.Settings);
+      kinds.append(XGRAM_MENU_ROW);
     }
+    final int count = ids.size();
 
     final MenuMoreWrap menu = new MenuMoreWrap(context, /* scrollable */ true);
     menu.init(null); // made for this one showing: colours of the theme now, no listeners left behind
@@ -3343,6 +3401,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (toolbar != null) {
         toolbar.showAccountMenu();
       }
+    } else if (id == R.id.btn_xgramNavManageAccounts) {
+      com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+      if (toolbar != null) {
+        toolbar.showManageAccountsMenu();
+      }
     } else if (id == R.id.btn_contacts) {
       tdlib.contacts().startSyncIfNeeded(context, true, () -> {
         if (!isDestroyed()) {
@@ -3362,7 +3425,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     } else if (id == R.id.btn_xgramSavedByChat) {
       navigateTo(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib));
     } else if (id == R.id.btn_settings) {
-      navigateTo(new SettingsController(context, tdlib));
+      // A tab (the menu's last resort): the tab's screen, as the side menu opens it, not a second Settings on top
+      com.fahadali.xgram.layout.XgramNavToolbar toolbar = xgramToolbar();
+      if (toolbar == null || !toolbar.openFromDrawer(com.fahadali.xgram.layout.XgramNavToolbar.DEST_SETTINGS)) {
+        navigateTo(new SettingsController(context, tdlib));
+      }
     } else if (id == R.id.btn_invite) {
       tdlib.cache().getInviteText(text -> {
         if (text != null) {

@@ -137,7 +137,8 @@ fun NavBarPage() {
         updateToolbar(host)
       }
     }
-    description(R.string.XgramNavBarHideDrawerInfo)
+    // With Your profile off there is no photo to long press: the accounts are in the overflow menu too
+    description(if (profileMode == XgramSettings.NAV_PROFILE_OFF) R.string.XgramNavBarHideDrawerInfoNoPhoto else R.string.XgramNavBarHideDrawerInfo)
 
     group {
       action(R.id.btn_xgramNavBarReset, s(R.string.XgramNavBarReset), icon = R.drawable.baseline_replay_24) {

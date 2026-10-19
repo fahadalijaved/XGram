@@ -5,6 +5,8 @@
   <string name="XgramNavProfileLabel">Profile</string>
   <string name="XgramNavProfileA11y">Profile, %1$s</string>
   <string name="XgramNavSwitchAccount">Switch account</string>
+  <!-- The accounts' sheet: the side menu's drag to reorder and its Log out, for when the side menu is hidden -->
+  <string name="XgramNavAccountsManage">Manage accounts</string>
 
   <!-- Appearance > Layout > Navigation bar -->
   <string name="XgramNavBarSub">At the bottom on phones and the cover screen. Wide windows keep the navigation rail.</string>
@@ -32,6 +34,8 @@
   <string name="XgramNavBarHideDrawer">Hide the side menu</string>
   <string name="XgramNavBarHideDrawerSub">No menu button or edge swipe while the navigation bar is shown</string>
   <string name="XgramNavBarHideDrawerInfo">What the side menu had is in the ⋮ menu at the top of the chat list, unless it is a tab. Long press your photo to switch accounts.</string>
+  <!-- The same, with Your profile off: no photo, the accounts are in the ⋮ menu -->
+  <string name="XgramNavBarHideDrawerInfoNoPhoto">What the side menu had is in the ⋮ menu at the top of the chat list, unless it is a tab. Switch account is there too.</string>
   <string name="XgramNavBarReset">Reset to Telegram\'s layout</string>
   <!-- Appearance's row: the setting off, or the tabs and "+ your photo" -->
   <string name="XgramNavBarOff">Off</string>
@@ -46,4 +50,8 @@
   <!-- The chat list's ⋮ menu while the side menu is hidden: its own menu id and the Switch account entry -->
   <item type="id" name="menu_xgramMainNoDrawer" />
   <item type="id" name="btn_xgramNavSwitchAccount" />
+  <!-- Manage accounts: its entry, and an account's Move up and Move down -->
+  <item type="id" name="btn_xgramNavManageAccounts" />
+  <item type="id" name="btn_xgramNavAccountUp" />
+  <item type="id" name="btn_xgramNavAccountDown" />
 </resources>

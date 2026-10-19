@@ -211,6 +211,12 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   @Nullable private RecyclerView scrollSource;
   private boolean ignorePagerScroll, fromDrawer;
 
+  // The side menu button's badge (MainActivity#updateCounter): another account's unread chats, or a problem to
+  // resolve. While the side menu is hidden there is no menu button: the photo shows it (in the colour it had while it
+  // fades out).
+  @ColorId private int menuBadgeColorId = ColorId.NONE, menuBadgeDrawColorId = ColorId.NONE;
+  private final XgramExpressive.Spring menuBadgeSpring;
+
   // Following a screen transition (9)
   private boolean transitionActive, tabL, tabR, tForward;
   private int tKind;
@@ -312,6 +318,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     this.leftSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> layoutGroup()).setThreshold(.5f);
     this.hideSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_DEFAULT, 0f, (s, value) -> applyHide()).setThreshold(.002f);
     this.hideSpring.setEndListener(this::applyHide);
+    this.menuBadgeSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_DEFAULT, 0f, (s, value) -> invalidateMenuBadge()).setThreshold(.002f);
     this.badges = preview ? null : new XgramNavBadges(badgeCallback);
     if (preview) {
       this.tdlib = context.currentTdlib();
@@ -583,6 +590,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         badges.start();
       }
       lastSettledTop = null;
+      readMenuBadge(); // set while it was hidden (or before it was made)
     } else {
       UI.cancel(settleRunnable);
       endTransition();
@@ -621,7 +629,80 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (badges != null) {
       badges.refresh();
     }
+    // The menu button's badge: on the photo, or on the chat list's overflow button once there is no photo (Your
+    // profile: Off), or back
+    readMenuBadge();
+    if (root != null && !root.isDestroyed()) {
+      root.xgramUpdateMoreBadge(false);
+    }
     settle();
+  }
+
+  /**
+   * The side menu button's badge (MainActivity#updateCounter): another account's unread chats, or a problem to resolve
+   * (notifications, the password, the phone number, the birthdate). While the side menu is hidden there is no menu
+   * button: the photo (beside the bar or as a tab) shows it as a dot, or the chat list's overflow button while there is
+   * no photo.
+   */
+  public void setMenuBadge (@ColorId int colorId, boolean animated) {
+    if (destroyed || preview) {
+      return;
+    }
+    menuBadgeColorId = colorId;
+    updateMenuBadge(animated);
+    if (root != null && !root.isDestroyed()) {
+      root.xgramUpdateMoreBadge(animated);
+    }
+  }
+
+  /** Hide the side menu changed: the photo's dot comes or goes (there is a menu button to show it again, or none). */
+  public void refreshMenuBadge () {
+    if (!destroyed && !preview) {
+      readMenuBadge();
+    }
+  }
+
+  private void readMenuBadge () {
+    if (context instanceof org.thunderdog.challegram.MainActivity) {
+      menuBadgeColorId = ((org.thunderdog.challegram.MainActivity) context).getXgramMenuBadgeColorId();
+    }
+    updateMenuBadge(false);
+  }
+
+  private void updateMenuBadge (boolean animated) {
+    final boolean show = menuBadgeColorId != ColorId.NONE && XgramSettings.instance().navHideDrawer();
+    if (show) {
+      menuBadgeDrawColorId = menuBadgeColorId;
+    }
+    final float target = show ? 1f : 0f;
+    if (menuBadgeSpring.getTarget() != target) {
+      if (animated && isVisibleNow()) {
+        menuBadgeSpring.animateTo(target);
+      } else {
+        menuBadgeSpring.setValue(target);
+      }
+    }
+    invalidateMenuBadge(); // also a new colour
+  }
+
+  private void invalidateMenuBadge () {
+    profile.invalidate();
+    pill.invalidate();
+  }
+
+  /**
+   * The menu button's badge as BackHeaderButton draws it: a 3dp dot in a 4.5dp cutout of the colour under it, at the
+   * top end corner of a photo of this radius.
+   */
+  private void drawMenuBadge (Canvas c, float cx, float cy, float radius, int cutoutColor) {
+    final float presence = MathUtils.clamp(menuBadgeSpring.getValue());
+    if (presence <= 0f || menuBadgeDrawColorId == ColorId.NONE || preview) {
+      return;
+    }
+    final float d = radius * .7071f;
+    final float x = Lang.rtl() ? cx - d : cx + d, y = cy - d;
+    c.drawCircle(x, y, Screen.dp(4.5f) * presence, Paints.fillingPaint(cutoutColor));
+    c.drawCircle(x, y, Screen.dp(3f) * presence, Paints.fillingPaint(ColorUtils.alphaColor(presence, Theme.getColor(menuBadgeDrawColorId))));
   }
 
   /** The chat list's page changed (a swipe, its tabs, the toolbar): the selection follows it. */
@@ -748,6 +829,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     hideSpring.cancel();
     widthSpring.cancel();
     leftSpring.cancel();
+    menuBadgeSpring.cancel();
     for (Tab tab : tabs) {
       tab.destroy();
     }
@@ -1911,7 +1993,10 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     return false; // the tooltip
   }
 
-  /** Long press on the photo: the accounts (the current one highlighted) and Add account. */
+  /**
+   * Long press on the photo: the accounts (the current one highlighted, the others with their unread count, as on the
+   * rail), Manage accounts (two or more) and Add account.
+   */
   private boolean showAccounts () {
     if (preview || destroyed || navigation == null || navigation.isAnimating()) {
       return false;
@@ -1921,26 +2006,47 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (top == null || tdlib == null) {
       return false;
     }
-    final ArrayList<TdlibAccount> accounts = TdlibManager.instance().getActiveAccounts();
+    final ArrayList<TdlibAccount> accounts = new ArrayList<>(TdlibManager.instance().getActiveAccounts());
     final int count = accounts.size();
-    int[] ids = new int[count + 1];
-    String[] titles = new String[count + 1];
-    int[] colors = new int[count + 1];
-    int[] icons = new int[count + 1];
+    final boolean manage = count >= 2;
+    final int size = count + (manage ? 2 : 1);
+    int[] ids = new int[size];
+    String[] titles = new String[size];
+    int[] colors = new int[size];
+    int[] icons = new int[size];
     for (int i = 0; i < count; i++) {
       TdlibAccount account = accounts.get(i);
+      boolean current = account.id == account.context().preferredAccountId();
       ids[i] = ACCOUNT_OPTION_ID + i;
       titles[i] = Lang.getDebugString(account.getName(), account.isDebug());
-      colors[i] = account.id == account.context().preferredAccountId() ? ViewController.OptionColor.BLUE : ViewController.OptionColor.NORMAL;
+      if (!current) {
+        org.thunderdog.challegram.telegram.TdlibBadgeCounter badge = account.getUnreadBadge();
+        int unread = badge != null ? badge.getCount() : 0;
+        if (unread > 0) {
+          titles[i] += "  " + org.thunderdog.challegram.tool.Strings.buildCounter(unread);
+        }
+      }
+      colors[i] = current ? ViewController.OptionColor.BLUE : ViewController.OptionColor.NORMAL;
       icons[i] = R.drawable.baseline_account_circle_24;
     }
-    ids[count] = R.id.btn_addAccount;
-    titles[count] = Lang.getString(R.string.XgramNavRailAddAccount);
-    colors[count] = ViewController.OptionColor.NORMAL;
-    icons[count] = R.drawable.baseline_add_24;
+    int row = count;
+    if (manage) {
+      // The side menu's drag to reorder and its preview's Log out, while the side menu is hidden
+      ids[row] = R.id.btn_xgramNavManageAccounts;
+      titles[row] = Lang.getString(R.string.XgramNavAccountsManage);
+      colors[row] = ViewController.OptionColor.NORMAL;
+      icons[row] = R.drawable.baseline_settings_24;
+      row++;
+    }
+    ids[row] = R.id.btn_addAccount;
+    titles[row] = Lang.getString(R.string.XgramNavRailAddAccount);
+    colors[row] = ViewController.OptionColor.NORMAL;
+    icons[row] = R.drawable.baseline_add_24;
     top.showOptions(null, ids, titles, colors, icons, (itemView, id) -> {
       if (id == R.id.btn_addAccount) {
         tdlib.ui().addAccount(context, true, false);
+      } else if (id == R.id.btn_xgramNavManageAccounts) {
+        showManageAccounts(top);
       } else {
         int index = id - ACCOUNT_OPTION_ID;
         if (index >= 0 && index < accounts.size()) {
@@ -1953,6 +2059,104 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       return true;
     });
     return true;
+  }
+
+  /** Manage accounts from the chat list's overflow button (no photo on the toolbar to long press). */
+  public boolean showManageAccountsMenu () {
+    if (destroyed || preview || !shown || navigation == null || navigation.isAnimating()) {
+      return false;
+    }
+    ViewController<?> top = navigation.getCurrentStackItem();
+    return top != null && showManageAccounts(top);
+  }
+
+  /**
+   * Manage accounts: what the hidden side menu did with its account rows (drag to reorder, the preview's Log out). An
+   * account, then Move up, Move down or Log out.
+   */
+  private boolean showManageAccounts (final ViewController<?> top) {
+    if (destroyed || preview || top.isDestroyed()) {
+      return false;
+    }
+    final ArrayList<TdlibAccount> accounts = new ArrayList<>(TdlibManager.instance().getActiveAccounts());
+    final int count = accounts.size();
+    if (count == 0) {
+      return false;
+    }
+    int[] ids = new int[count];
+    String[] titles = new String[count];
+    int[] colors = new int[count];
+    int[] icons = new int[count];
+    for (int i = 0; i < count; i++) {
+      TdlibAccount account = accounts.get(i);
+      ids[i] = ACCOUNT_OPTION_ID + i;
+      titles[i] = Lang.getDebugString(account.getName(), account.isDebug());
+      colors[i] = account.id == account.context().preferredAccountId() ? ViewController.OptionColor.BLUE : ViewController.OptionColor.NORMAL;
+      icons[i] = R.drawable.baseline_account_circle_24;
+    }
+    top.showOptions(Lang.getString(R.string.XgramNavAccountsManage), ids, titles, colors, icons, (itemView, id) -> {
+      int index = id - ACCOUNT_OPTION_ID;
+      if (index >= 0 && index < accounts.size()) {
+        showAccountActions(top, accounts.get(index));
+      }
+      return true;
+    });
+    return true;
+  }
+
+  /** One account of Manage accounts: Move up, Move down (saved at once, as the side menu's drag does) and Log out. */
+  private void showAccountActions (final ViewController<?> top, final TdlibAccount account) {
+    if (destroyed || top.isDestroyed()) {
+      return;
+    }
+    final ArrayList<TdlibAccount> active = TdlibManager.instance().getActiveAccounts();
+    final int index = active.indexOf(account);
+    if (index == -1) {
+      return;
+    }
+    final int count = active.size();
+    final int size = (index > 0 ? 1 : 0) + (index < count - 1 ? 1 : 0) + 1;
+    int[] ids = new int[size];
+    String[] titles = new String[size];
+    int[] colors = new int[size];
+    int[] icons = new int[size];
+    int row = 0;
+    if (index > 0) {
+      ids[row] = R.id.btn_xgramNavAccountUp;
+      titles[row] = Lang.getString(R.string.XgramComposeMoveUp);
+      colors[row] = ViewController.OptionColor.NORMAL;
+      icons[row] = R.drawable.baseline_arrow_upward_24;
+      row++;
+    }
+    if (index < count - 1) {
+      ids[row] = R.id.btn_xgramNavAccountDown;
+      titles[row] = Lang.getString(R.string.XgramComposeMoveDown);
+      colors[row] = ViewController.OptionColor.NORMAL;
+      icons[row] = R.drawable.baseline_arrow_downward_24;
+      row++;
+    }
+    ids[row] = R.id.btn_removeAccount;
+    titles[row] = Lang.getString(R.string.LogOut);
+    colors[row] = ViewController.OptionColor.RED;
+    icons[row] = R.drawable.baseline_logout_24;
+    top.showOptions(Lang.getDebugString(account.getName(), account.isDebug()), ids, titles, colors, icons, (itemView, id) -> {
+      if (top.isDestroyed()) {
+        return true;
+      }
+      if (id == R.id.btn_xgramNavAccountUp || id == R.id.btn_xgramNavAccountDown) {
+        TdlibManager manager = TdlibManager.instance();
+        int from = manager.getActiveAccounts().indexOf(account);
+        int to = from + (id == R.id.btn_xgramNavAccountUp ? -1 : 1);
+        if (from != -1 && to >= 0 && to < manager.getActiveAccounts().size()) {
+          manager.moveAccount(from, to);
+          manager.saveAccountOrders(); // as the side menu does when a drag ends: the order is kept
+          showManageAccounts(top); // the new order, ready for the next move
+        }
+      } else if (id == R.id.btn_removeAccount) {
+        TdlibUi.removeAccount(top, account); // asks first
+      }
+      return true;
+    });
   }
 
   private void onProfileClick (View view) {
@@ -2711,6 +2915,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
           tab.avatar.drawPlaceholder(c);
         }
         tab.avatar.draw(c);
+        // The menu button's badge while the side menu is hidden: cut out of the pill, or of the inner pill as the tab is selected
+        float selected = innerVisible ? MathUtils.clamp(tab.e.getValue()) * MathUtils.clamp(innerAlpha) : 0f;
+        drawMenuBadge(c, left + sizePx / 2f, top + sizePx / 2f, sizePx / 2f, ColorUtils.fromToArgb(containerColor(), indicatorColor(), selected));
         return;
       }
       Drawable ref = tab.rest != null ? tab.rest : tab.active;
@@ -2979,7 +3186,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       }
       int rest = vibrant ? color(XgramExpressive.TERTIARY_CONTAINER) : containerColor();
       int selected = color(vibrant ? XgramExpressive.TERTIARY : XgramExpressive.SECONDARY_CONTAINER);
-      paint.setColor(ColorUtils.fromToArgb(rest, selected, MathUtils.clamp(select.getValue())));
+      final int fill = ColorUtils.fromToArgb(rest, selected, MathUtils.clamp(select.getValue()));
+      paint.setColor(fill);
       float radius = corner();
       float slop = Screen.dpf(BUTTON_HIT_SLOP);
       rect.set(slop, slop, width - slop, height - slop);
@@ -2994,6 +3202,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         avatar.drawPlaceholder(c);
       }
       avatar.draw(c);
+      // The menu button's badge while the side menu is hidden, cut out of the button's colour
+      drawMenuBadge(c, left + size / 2f, top + size / 2f, size / 2f, fill);
     }
 
     @Override

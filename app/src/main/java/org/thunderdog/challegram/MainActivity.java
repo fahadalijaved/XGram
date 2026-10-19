@@ -249,13 +249,23 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
 
   private CancellableRunnable lastAccountSwitchTask;
 
+  /**
+   * XGram M3E: the ☰'s badge as last set (ColorId.NONE: none). While the side menu is hidden there is no ☰: the
+   * floating navigation toolbar's photo shows it, or the chat list's ⋮ when there is no photo (they read it here).
+   */
+  @ColorId private int xgramMenuBadgeColorId = ColorId.NONE;
+
+  public @ColorId int getXgramMenuBadgeColorId () {
+    return xgramMenuBadgeColorId;
+  }
+
   private void updateCounter () {
     Tdlib tdlib = currentTdlib();
     boolean animated = getActivityState() == UI.State.RESUMED;
     @Tdlib.ResolvableProblem int problemType = tdlib.findResolvableProblem();
     BackHeaderButton backButton = navigation.getHeaderView().getBackButton();
+    @ColorId int colorId;
     if (problemType != Tdlib.ResolvableProblem.NONE) {
-      @ColorId int colorId;
       if (problemType == Tdlib.ResolvableProblem.SET_BIRTHDATE) {
         colorId = ColorId.headerBadge;
       } else {
@@ -265,13 +275,17 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
     } else {
       TdlibBadgeCounter counter = TdlibManager.instance().getTotalUnreadBadgeCounter(tdlib.accountId());
       if (counter.getCount() > 0) {
-        backButton.setMenuBadge(
-          counter.isMuted() ? ColorId.headerBadgeMuted : ColorId.headerBadge,
-          animated
-        );
+        colorId = counter.isMuted() ? ColorId.headerBadgeMuted : ColorId.headerBadge;
+        backButton.setMenuBadge(colorId, animated);
       } else {
+        colorId = ColorId.NONE;
         backButton.hideMenuBadge(animated);
       }
+    }
+    xgramMenuBadgeColorId = colorId;
+    com.fahadali.xgram.layout.XgramNavToolbar toolbar = com.fahadali.xgram.layout.XgramNavToolbar.of(this);
+    if (toolbar != null) {
+      toolbar.setMenuBadge(colorId, animated);
     }
   }
 

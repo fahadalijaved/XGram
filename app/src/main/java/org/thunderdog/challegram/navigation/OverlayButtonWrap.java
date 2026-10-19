@@ -303,6 +303,12 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
   /** XGram: runs whenever the menu opens or closes. */
   public Runnable xgramOnToggle;
 
+  /**
+   * XGram M3E: runs when a measure switches the FAB between 56dp and the Medium FAB (80dp): the owner's paddings and
+   * the room it keeps for the FAB depend on its size (inside the measure pass: post anything that lays out again).
+   */
+  public Runnable xgramOnFabSizeChanged;
+
   public boolean xgramIsOpen () {
     return isOpen;
   }
@@ -574,6 +580,9 @@ public class OverlayButtonWrap extends FrameLayoutFix implements View.OnClickLis
         xgramFabSize = size;
         xgramFabMargin = size == 80f ? 24f : 16f;
         xgramApplyFabSize();
+        if (xgramOnFabSizeChanged != null) {
+          xgramOnFabSizeChanged.run();
+        }
       }
       // The menu column goes beside the FAB when it would not fit above it (a low window: landscape)
       final boolean beside = height > 0 && xgramColumnHeight() > height - getPaddingBottom();
