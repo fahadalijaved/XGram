@@ -60,6 +60,7 @@ public final class XgramAccountData {
       com.fahadali.xgram.chats.XgramAiTools.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramCommunities.forgetAccount(accountId);
       XgramHistory.instance().clearAccount(accountId);
+      com.fahadali.xgram.activity.XgramActivity.forgetAccount(accountId); // its own store, not prefixed settings
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Cannot erase account data", t);
     }

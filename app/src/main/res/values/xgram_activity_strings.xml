@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram Activity (com.fahadali.xgram.activity): every mention, reply and reaction in one place. -->
+  <!-- Plain strings only: Telegram X makes plurals from strings.xml alone (GenerateLangFunctions), so counts use One / Many pairs. -->
+
+  <!-- Settings: Chat list > Activity -->
+  <string name="XgramActivity">Activity</string>
+  <string name="XgramActivityShow">Activity</string>
+  <string name="XgramActivityShowInfo">Mentions, replies and reactions to your messages, from all your chats, in one place</string>
+  <string name="XgramActivityIncludeReactions">Reactions</string>
+  <string name="XgramActivityIncludeReactionsInfo">Reactions to your messages, also in private chats</string>
+  <string name="XgramActivityIncludeMuted">Muted chats</string>
+  <string name="XgramActivityIncludeMutedInfo">Also from chats you muted. Mentions that still notify you always show.</string>
+  <string name="XgramActivityIncludeDiscussion">Channel comments</string>
+  <string name="XgramActivityIncludeDiscussionInfo">Replies to your comments under channel posts, and the Replies chat</string>
+  <string name="XgramActivityLookBack">Find earlier mentions</string>
+  <string name="XgramActivityLookBackInfo">Once, looks for the last month\'s mentions in your 30 most active groups, a few chats a minute</string>
+  <string name="XgramActivityBadge">Unread badge</string>
+  <string name="XgramActivityBadgeInfo">A count on Activity in the navigation, the side menu and the header</string>
+  <string name="XgramActivityHeader">In the chat list header</string>
+  <string name="XgramActivityHeaderInfo">A bell above the chat list when the navigation doesn\'t have Activity</string>
+  <string name="XgramActivityLocalNote">Activity is kept on this device only and isn\'t part of backups.</string>
+  <string name="XgramActivityNeedsOn">Turn on Activity first</string>
+  <string name="XgramSearchKwActivity">activity|inbox|mentions|mention|replies|reply|reactions|reaction|notifications|@</string>
+
+  <!-- Ids -->
+  <item name="btn_xgramActivityShow" type="id"/>
+  <item name="btn_xgramActivityReactions" type="id"/>
+  <item name="btn_xgramActivityMuted" type="id"/>
+  <item name="btn_xgramActivityDiscussion" type="id"/>
+  <item name="btn_xgramActivityLookBack" type="id"/>
+  <item name="btn_xgramActivityBadge" type="id"/>
+  <item name="btn_xgramActivityHeader" type="id"/>
+</resources>

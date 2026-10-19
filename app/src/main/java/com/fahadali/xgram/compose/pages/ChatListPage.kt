@@ -111,6 +111,44 @@ fun ChatListPage() {
       }
     }
 
+    // Activity: every mention, reply and reaction in one place (com.fahadali.xgram.activity)
+    header(R.string.XgramActivity)
+    group {
+      switch(R.id.btn_xgramActivityShow, s(R.string.XgramActivityShow), s(R.string.XgramActivityShowInfo), checked = settings.activityOn()) {
+        settings.setActivityOn(it)
+      }
+    }
+    group {
+      val activityReason = XgramSettingDeps.activityOptionsReason()
+      val activityEnabled = activityReason == 0
+      fun sub(info: Int): String = s(if (activityEnabled) info else activityReason)
+      switch(R.id.btn_xgramActivityReactions, s(R.string.XgramActivityIncludeReactions), sub(R.string.XgramActivityIncludeReactionsInfo),
+        checked = settings.activityReactions(), enabled = activityEnabled) {
+        settings.setActivityReactions(it)
+      }
+      switch(R.id.btn_xgramActivityMuted, s(R.string.XgramActivityIncludeMuted), sub(R.string.XgramActivityIncludeMutedInfo),
+        checked = settings.activityMuted(), enabled = activityEnabled) {
+        settings.setActivityMuted(it)
+      }
+      switch(R.id.btn_xgramActivityDiscussion, s(R.string.XgramActivityIncludeDiscussion), sub(R.string.XgramActivityIncludeDiscussionInfo),
+        checked = settings.activityDiscussion(), enabled = activityEnabled) {
+        settings.setActivityDiscussion(it)
+      }
+      switch(R.id.btn_xgramActivityLookBack, s(R.string.XgramActivityLookBack), sub(R.string.XgramActivityLookBackInfo),
+        checked = settings.activityLookBack(), enabled = activityEnabled) {
+        settings.setActivityLookBack(it)
+      }
+      switch(R.id.btn_xgramActivityBadge, s(R.string.XgramActivityBadge), sub(R.string.XgramActivityBadgeInfo),
+        checked = settings.activityBadge(), enabled = activityEnabled) {
+        settings.setActivityBadge(it)
+      }
+      switch(R.id.btn_xgramActivityHeader, s(R.string.XgramActivityHeader), sub(R.string.XgramActivityHeaderInfo),
+        checked = settings.activityHeader(), enabled = activityEnabled) {
+        settings.setActivityHeader(it)
+      }
+    }
+    description(R.string.XgramActivityLocalNote)
+
     header(R.string.XgramHeaderScreen)
     group {
       switch(R.id.btn_xgramHideFab, s(R.string.XgramHideFab), s(R.string.XgramHideFabSub), checked = settings.hideFab()) {

@@ -116,6 +116,15 @@ public final class XgramSettingDeps {
     return connectionStatusPositionEnabled() ? 0 : R.string.XgramConnectionStatusExpressive;
   }
 
+  /** Activity's other rows only do something while Activity is on (com.fahadali.xgram.activity.XgramActivity.isOn). */
+  public static boolean activityOptionsEnabled () {
+    return s().activityOn();
+  }
+
+  public static @StringRes int activityOptionsReason () {
+    return activityOptionsEnabled() ? 0 : R.string.XgramActivityNeedsOn;
+  }
+
   // Messages
 
   /** Start playing is only read for videos played in the message (XgramInlineVideo). */

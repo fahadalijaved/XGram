@@ -547,6 +547,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     long ms = needMeasure ? SystemClock.uptimeMillis() : 0;
     this.listeners = new TdlibListeners(this);
     com.fahadali.xgram.ghost.XgramGhost.attach(this); // XGram
+    com.fahadali.xgram.activity.XgramActivity.attach(this); // XGram
     if (needMeasure) {
       Log.v("INITIALIZATION: Tdlib.listeners -> %dms", SystemClock.uptimeMillis() - ms);
       ms = SystemClock.uptimeMillis();
@@ -2732,6 +2733,58 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       chat = chats.get(chatId);
     }
     return chat;
+  }
+
+  // XGram: Activity's paced searches (com.fahadali.xgram.activity.XgramActivitySync) start from the chats TDLib already
+  // has, never LoadChats. Chat types and counters only: the caller filters out channels and the like.
+
+  public static final int XGRAM_ACTIVITY_UNREAD = 0, XGRAM_ACTIVITY_LOOKBACK = 1;
+
+  /**
+   * {@link #XGRAM_ACTIVITY_UNREAD}: groups with unread mentions or reactions, private chats with unread reactions.
+   * {@link #XGRAM_ACTIVITY_LOOKBACK}: up to {@code limit} groups with a message since {@code sinceDate}, in the main
+   * chat list's order.
+   */
+  public long[] xgramActivityChats (int mode, int sinceDate, int limit) {
+    final ArrayList<long[]> found = new ArrayList<>(); // {chat id, main list order}
+    synchronized (dataLock) {
+      for (TdApi.Chat chat : chats.values()) {
+        if (chat == null || chat.type == null) {
+          continue;
+        }
+        final int type = chat.type.getConstructor();
+        final boolean group = type == TdApi.ChatTypeBasicGroup.CONSTRUCTOR ||
+          (type == TdApi.ChatTypeSupergroup.CONSTRUCTOR && !((TdApi.ChatTypeSupergroup) chat.type).isChannel);
+        if (mode == XGRAM_ACTIVITY_UNREAD) {
+          if ((group && (chat.unreadMentionCount > 0 || chat.unreadReactionCount > 0)) ||
+            (type == TdApi.ChatTypePrivate.CONSTRUCTOR && chat.unreadReactionCount > 0)) {
+            found.add(new long[] {chat.id, 0});
+          }
+        } else if (group && chat.lastMessage != null && chat.lastMessage.date >= sinceDate) {
+          long order = 0;
+          if (chat.positions != null) {
+            for (TdApi.ChatPosition position : chat.positions) {
+              if (position != null && position.list instanceof TdApi.ChatListMain) {
+                order = position.order;
+                break;
+              }
+            }
+          }
+          if (order != 0) {
+            found.add(new long[] {chat.id, order});
+          }
+        }
+      }
+    }
+    if (mode == XGRAM_ACTIVITY_LOOKBACK) {
+      Collections.sort(found, (a, b) -> Long.compare(b[1], a[1]));
+    }
+    int count = limit > 0 ? Math.min(limit, found.size()) : found.size();
+    long[] result = new long[count];
+    for (int i = 0; i < count; i++) {
+      result[i] = found.get(i)[0];
+    }
+    return result;
   }
 
   public @NonNull TdApi.Chat chatStrict (long chatId) {

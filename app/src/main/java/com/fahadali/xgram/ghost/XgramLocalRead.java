@@ -238,6 +238,8 @@ public final class XgramLocalRead {
   /** An incoming message was on screen in ghost mode. */
   @UiThread
   public static void onMessageViewed (Tdlib tdlib, TdApi.Message message) {
+    // Activity reads its items about the message on this device, ghost mode's Local read on or off
+    com.fahadali.xgram.activity.XgramActivity.onViewedLocally(tdlib, message);
     if (message.isOutgoing || !isActive()) {
       return;
     }
@@ -403,6 +405,72 @@ public final class XgramLocalRead {
       return serverCount;
     }
     return Math.max(0, serverCount - entry.mentions.size());
+  }
+
+  /**
+   * Whether a mention was viewed here in ghost mode (Activity's search results for unread mentions come back Read).
+   * The mentions set survives the read position passing them, unlike the viewed messages.
+   */
+  @AnyThread
+  public static boolean isMentionViewed (Tdlib tdlib, long chatId, long messageId) {
+    if (!isActive()) {
+      return false;
+    }
+    synchronized (lock) {
+      ensureLoaded();
+      for (Entry entry : entries.values()) {
+        if (entry.accountId == tdlib.id() && entry.chatId == chatId && entry.mentions.contains(messageId)) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Activity's Mark all as read in a ghosted chat: its mentions count as viewed here (the chat list's @ badge drops),
+   * nothing is sent. Only the mentions set changes: the viewed messages, and so the read position shown, stay.
+   */
+  @UiThread
+  public static void markMentionsViewed (Tdlib tdlib, long chatId, int forumTopicId, long[] messageIds) {
+    if (!isActive() || messageIds == null || messageIds.length == 0) {
+      return;
+    }
+    boolean chatChanged = false, topicChanged = false;
+    synchronized (lock) {
+      ensureLoaded();
+      chatChanged = addMentions(tdlib.id(), chatId, 0, messageIds);
+      if (forumTopicId != 0) {
+        topicChanged = addMentions(tdlib.id(), chatId, forumTopicId, messageIds);
+      }
+    }
+    if (chatChanged) {
+      scheduleChatRefresh(tdlib, chatId);
+    }
+    if (topicChanged) {
+      scheduleTopicRefresh(tdlib, chatId, forumTopicId);
+    }
+  }
+
+  /** Caller holds {@link #lock}. */
+  private static boolean addMentions (int accountId, long chatId, int forumTopicId, long[] messageIds) {
+    String key = keyOf(accountId, chatId, forumTopicId);
+    Entry entry = entries.get(key);
+    if (entry == null) {
+      entry = new Entry(accountId, chatId, forumTopicId);
+      entries.put(key, entry);
+    }
+    boolean changed = false;
+    for (long messageId : messageIds) {
+      if (entry.mentions.add(messageId)) {
+        changed = true;
+      }
+    }
+    while (entry.mentions.size() > MAX_VIEWED) {
+      entry.mentions.pollFirst();
+    }
+    save(entry);
+    return changed;
   }
 
   /** TDLib thread: the server marked a mention read, so it no longer needs hiding. */

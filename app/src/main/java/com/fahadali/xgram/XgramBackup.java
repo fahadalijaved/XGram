@@ -24,7 +24,8 @@ import me.vkryl.leveldb.LevelDB;
 
 /**
  * Export, import and reset of XGram's settings (NagramX / exteraGram backup). Settings are stored untyped, so every
- * key prefix is listed here with its type. Local data (message history, local reads, last seen) is not included.
+ * key prefix is listed here with its type. Local data (message history, local reads, last seen, Activity's items) is
+ * not included.
  */
 public final class XgramBackup {
   private XgramBackup () { }
@@ -48,6 +49,9 @@ public final class XgramBackup {
     XgramSettings.KEY_CHANNEL_REACTIONS,
     // Bigger text, kept for three lines (Chat list view)
     XgramSettings.KEY_CHAT_LIST_BIG_TEXT,
+    // Activity (Chat list), one by one: no prefix may match the per-viewer filter "xgram_actview_filter" (not a setting)
+    XgramSettings.KEY_ACTIVITY_ON, XgramSettings.KEY_ACTIVITY_REACTIONS, XgramSettings.KEY_ACTIVITY_MUTED, XgramSettings.KEY_ACTIVITY_DISCUSSION,
+    XgramSettings.KEY_ACTIVITY_LOOKBACK, XgramSettings.KEY_ACTIVITY_BADGE, XgramSettings.KEY_ACTIVITY_HEADER,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
