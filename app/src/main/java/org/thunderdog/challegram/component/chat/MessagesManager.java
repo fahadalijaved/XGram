@@ -855,7 +855,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     final int width = getRecyclerWidth();
     int height = getTargetHeight();
 
-    scrollMessage.buildLayout(width);
+    xgramLayoutForScroll(scrollMessage, width);
     int fullHeight = scrollMessage.getHeight();
 
     /*if (fullHeight > height - offset) {
@@ -991,7 +991,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       boolean needScrollBy = false;
       if (adapter.getMessage(0) != null) {
         TGMessage msg = adapter.getMessage(0);
-        msg.buildLayout(getRecyclerWidth());
+        xgramLayoutForScroll(msg, getRecyclerWidth());
         needScrollBy = msg.getHeight() > getRecyclerHeight(); // FIXME this is needed, because smoothScrollToPosition does not take to the bottom of the last message.
       }
       if (needScrollBy) {
@@ -3125,6 +3125,18 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     return controller.makeGuessAboutWidth();
   }
 
+  /**
+   * XGram: lays a message out for a scroll calculation. {@code width} is the list's own while the chat is focused, and
+   * only a guess before (the chat opening, a screen over it): a message laid out already keeps its width then. Laying
+   * it out again for the guess left a message on screen in that width (a list doesn't measure an unchanged view again),
+   * wider than the pane in two panes.
+   */
+  private void xgramLayoutForScroll (TGMessage message, int width) {
+    if (message.getWidth() == 0 || (manager.getWidth() != 0 && controller.isFocused())) {
+      message.buildLayout(width);
+    }
+  }
+
   private void stopScroll () {
     RecyclerView recyclerView = controller.getMessagesView();
     if (recyclerView != null) {
@@ -3256,7 +3268,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     final int width = getRecyclerWidth();
     int height = getTargetHeight();
 
-    scrollMessage.buildLayout(width);
+    xgramLayoutForScroll(scrollMessage, width);
     int fullHeight = scrollMessage.getHeight();
 
     final boolean isPlayingRoundMessage = scrollMessage.getId() == TdlibManager.instance().player().getMessageId();
@@ -3465,7 +3477,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     final int width = getRecyclerWidth();
     final int height = getTargetHeight();
 
-    message.buildLayout(width);
+    xgramLayoutForScroll(message, width);
     final int fullHeight = message.getVideoMessageTargetHeight(true);
     final int offset = height / 2 - fullHeight / 2 + message.findTopEdge();
     final int scrollBy = calculateScrollBy(index, offset, true);

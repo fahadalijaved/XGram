@@ -78,7 +78,8 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
   private String senderName;
   private TdlibAccentColor accentColor;
 
-  private int maxWidth;
+  // XGram: set by the message's own layout (on its thread), read by the loads that finish on the background thread
+  private volatile int maxWidth;
   private int flags;
 
   private String title;
@@ -122,7 +123,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
   public void layout (int maxWidth) {
     if (this.maxWidth != maxWidth && maxWidth > 0) {
       this.maxWidth = maxWidth;
-      buildLayout();
+      buildLayout(maxWidth, false);
     }
   }
 
@@ -157,17 +158,63 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
     return parent != null && parent.isPsa();
   }
 
+  /** The content changed (a load, an edit, a translation, an error): laid out again for the width set now. */
   private void buildLayout () {
-    if (maxWidth > 0) {
-      buildTitle();
-      buildContent();
+    buildLayout(maxWidth, true);
+  }
+
+  /**
+   * XGram: lays the title and the text out for {@code maxWidth}. The message's own layout ({@link #layout(int)}) uses
+   * them at once, on its own thread, for its bubble. A load that finishes off the main thread hands them to the main
+   * thread, where they are only used while the width is still the one they were made for: the message may have been
+   * laid out for another width in between (a chat opened again in the narrower pane of two, a pane resized, a fold),
+   * and a layout made before that must not replace the newer one. It did: the reply kept the width of the whole
+   * window in the chat pane, and the bubble fitted to it later ran past the pane's start edge.
+   */
+  private void buildLayout (int maxWidth, boolean fromLoad) {
+    if (maxWidth <= 0) {
+      return;
+    }
+    Text title = newTitle(maxWidth);
+    Text content = newContent(maxWidth);
+    if (!fromLoad) {
+      this.trimmedTitle = title;
+      this.trimmedContent = content;
+    } else if (Looper.myLooper() == Looper.getMainLooper()) {
+      publishLayout(maxWidth, title, content);
+    } else {
+      UI.post(() -> publishLayout(maxWidth, title, content));
+    }
+    if (content.hasMedia()) {
+      invalidate(true);
+    }
+  }
+
+  /**
+   * XGram, main thread: puts a layout made for a load on screen, or makes it again when the width changed since. When
+   * that changes the reply's width, the message's bubble fits it again (TGMessage#xgramOnReplyLayoutChanged).
+   */
+  private void publishLayout (int builtWidth, Text title, Text content) {
+    if (isDestroyed) {
+      return;
+    }
+    final int maxWidth = this.maxWidth;
+    if (maxWidth != builtWidth) {
+      buildLayout(maxWidth, true); // here, on the main thread: published at once
+      return;
+    }
+    final int oldWidth = width();
+    this.trimmedTitle = title;
+    this.trimmedContent = content;
+    if (width() != oldWidth) {
+      parent.xgramOnReplyLayoutChanged();
     }
   }
 
   private static final float CORNER_PADDING = 1f;
 
-  private int getContentWidth (boolean isTitle) {
-    int maxWidth = this.maxWidth - paddingLeft - lineWidth - paddingLeft;
+  private int getContentWidth (int maxWidth, boolean isTitle) {
+    maxWidth = maxWidth - paddingLeft - lineWidth - paddingLeft;
     if (hasPreview()) {
       maxWidth -= lineWidth + (isMessageComponent() ? mHeight : height);
     }
@@ -208,10 +255,10 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
     return Paints.robotoStyleProvider(13);
   }
 
-  private void buildTitle () {
-    int width = getContentWidth(true);
+  private Text newTitle (int maxWidth) {
+    int width = getContentWidth(maxWidth, true);
     String titleText = computeTitleText(Lang.getString(isChannel() ? R.string.LoadingChannel : R.string.LoadingUser));
-    trimmedTitle = new Text.Builder(titleText, width, getTitleStyleProvider(isMessageComponent()), getTitleColorSet())
+    return new Text.Builder(titleText, width, getTitleStyleProvider(isMessageComponent()), getTitleColorSet())
       .singleLine()
       .clipTextArea()
       .allBold(sender != null || StringUtils.isEmpty(senderName))
@@ -220,11 +267,11 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
       .build();
   }
 
-  private void buildContent () {
-    int width = getContentWidth(false);
+  private Text newContent (int maxWidth) {
+    int width = getContentWidth(maxWidth, false);
 
     //noinspection UnsafeOptInUsageError
-    Text trimmedContent = new Text.Builder(content != null ? content.buildText(true) : Lang.getString(R.string.LoadingMessage), width, isMessageComponent() ? TGMessage.getTextStyleProvider() : getTextStyleProvider(), getContentColorSet())
+    return new Text.Builder(content != null ? content.buildText(true) : Lang.getString(R.string.LoadingMessage), width, isMessageComponent() ? TGMessage.getTextStyleProvider() : getTextStyleProvider(), getContentColorSet())
       .singleLine()
       .textFlags(Text.FLAG_CUSTOM_LONG_PRESS)
       .ignoreNewLines().ignoreContinuousNewLines()
@@ -249,18 +296,6 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
       )
       .viewProvider(viewProvider)
       .build();
-
-    if (Looper.myLooper() == Looper.getMainLooper()) {
-      this.trimmedContent = trimmedContent;
-    } else {
-      final Text __trimmedContent = trimmedContent;
-      UI.post(() -> {
-        ReplyComponent.this.trimmedContent = __trimmedContent;
-      });
-    }
-    if (trimmedContent.hasMedia()) {
-      invalidate(true);
-    }
   }
 
   public void requestTextContent (ComplexReceiver textMediaReceiver) {
@@ -765,7 +800,7 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
   public void setChannelTitle (final String title) {
     Background.instance().post(() -> {
       setTitleImpl(title);
-      buildTitle();
+      buildLayout(); // XGram: the title with the text, for the width set now
       invalidate(false);
     });
   }

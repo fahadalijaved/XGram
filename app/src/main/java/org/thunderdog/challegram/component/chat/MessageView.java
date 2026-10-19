@@ -288,6 +288,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
   }
 
   public void setMessage (TGMessage message) {
+    message.xgramBeforeBind(); // XGram: its bubble fits a reply that loaded while it had no view
     int desiredHeight = message.getHeight();
     int currentHeight = getCurrentHeight();
 
@@ -295,7 +296,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       this.msg.onDetachedFromView(this);
     }
 
-    if (this.msg == null || getMeasuredHeight() != desiredHeight || currentHeight != desiredHeight) {
+    if (this.msg == null || getMeasuredHeight() != desiredHeight || currentHeight != desiredHeight || xgramNeedsWidth(message)) {
       this.msg = message;
       if ((flags & FLAG_DISABLE_MEASURE) == 0) {
         requestLayout();
@@ -398,6 +399,22 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       setMeasuredDimension(widthMeasureSpec, MeasureSpec.makeMeasureSpec(getCurrentHeight(), MeasureSpec.EXACTLY));
     }
     checkLegacyComponents(this);
+  }
+
+  /**
+   * XGram: whether {@code message} is laid out for another width than this view measures it at (see onMeasure). The
+   * list doesn't measure a reused view of the same height again, so such a message kept its width: a chat's history is
+   * laid out before the chat is on screen (for a guessed width), and messages without a view miss a pane resize or a
+   * fold. A view inside a MessageViewGroup leaves this to the group, which measures the message.
+   */
+  private boolean xgramNeedsWidth (TGMessage message) {
+    if ((flags & FLAG_DISABLE_MEASURE) != 0 || getMeasuredWidth() == 0) {
+      return false;
+    }
+    int width = BitwiseUtils.hasFlag(flags, FLAG_IGNORE_PARENT_ON_MEASURE) || !(getParent() instanceof View) ?
+      getMeasuredWidth() :
+      ((View) getParent()).getMeasuredWidth();
+    return width != 0 && message.getWidth() != width;
   }
 
   public final @Nullable MessagesRecyclerView findParentRecyclerView () {

@@ -280,7 +280,8 @@ public class MessageViewGroup extends ViewGroup implements Destroyable, AttachDe
     videoPlayerView.setVisibility(TD.isSelfDestructTypeImmediately(message.getMessage()) ? GONE:  VISIBLE);
     requestVideo(message);
 
-    if (getMeasuredHeight() != messageView.getCurrentHeight()) {
+    // XGram: also when the message was laid out for another width than this group measures it at (MessageView#xgramNeedsWidth)
+    if (getMeasuredHeight() != messageView.getCurrentHeight() || (getMeasuredWidth() != 0 && message.getWidth() != getMeasuredWidth())) {
       requestLayout();
     }
   }
