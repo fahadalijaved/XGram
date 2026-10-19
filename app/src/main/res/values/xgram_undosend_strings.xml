@@ -3,7 +3,7 @@
   <!-- XGram: Undo send (Messages > Message box), see com.fahadali.xgram.chats.XgramUndoSend -->
   <string name="XgramUndoSend">Undo send</string>
   <string name="XgramUndoSendChoiceInfo">How long a message waits after you tap Send, so you can take it back.</string>
-  <string name="XgramUndoSendInfo">Text messages wait a moment on this device before they go to Telegram, so you can take them back. Stickers, GIFs, photos, files, voice and video messages, polls and scheduled messages are sent right away. Waiting messages are sent at once when you leave the chat or the app.</string>
+  <string name="XgramUndoSendInfo">Text messages wait a moment on this device before they go to Telegram, so you can take them back. Stickers, GIFs, photos, files, polls and scheduled messages are sent right away, and so are voice and video messages unless you turn on the switch above. Waiting messages are sent at once when you leave the chat or the app.</string>
 
   <!-- The bar above the message box -->
   <string name="XgramUndoSendIn">Sending in %1$s</string>

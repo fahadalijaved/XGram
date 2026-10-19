@@ -243,10 +243,29 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     return barHeight * visible.getFloatValue();
   }
 
+  private boolean searchHidden;
+
   /** Set by the chat on every move of the reply bar, the keyboard and in-chat search. */
   public void applyPosition (float translationY, float searchVisibility) {
     setTranslationY(translationY);
     setAlpha(MathUtils.clamp(searchVisibility));
+    boolean hidden = searchVisibility <= 0f;
+    if (searchHidden != hidden) {
+      searchHidden = hidden; // in-chat search: out of sight and out of reach, the timers go on
+      updateVisibility();
+    }
+  }
+
+  /** Visible while it shows or animates, and not under in-chat search: an invisible bar takes no taps. */
+  private void updateVisibility () {
+    boolean show = !searchHidden && (visible.getValue() || visible.getFloatValue() > 0f);
+    int visibility = show ? View.VISIBLE : View.INVISIBLE;
+    if (getVisibility() != visibility) {
+      setVisibility(visibility);
+      if (show) {
+        ring.invalidate();
+      }
+    }
   }
 
   /** Hidden at once, without telling anyone (the chat closes or shows another chat). */
@@ -254,7 +273,7 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     removeCallbacks(tick);
     visible.setValue(false, false);
     shown = null;
-    setVisibility(View.INVISIBLE);
+    updateVisibility();
   }
 
   /** What waits in the owner's message box changed. */
@@ -298,7 +317,6 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     ring.invalidate();
     scheduleTick();
     if (!visible.getValue()) {
-      setVisibility(View.VISIBLE);
       boolean reduce = XgramMotion.reduce();
       if (m3) {
         setMotion(XgramAppMotion.springClamped(XgramExpressive.SPATIAL_DEFAULT), XgramAppMotion.springDuration(XgramExpressive.SPATIAL_DEFAULT));
@@ -306,6 +324,7 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
         setMotion(AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
       }
       visible.setValue(true, animated && !reduce);
+      updateVisibility();
       if (reduce && animated) {
         // Reduce motion: no movement, a fade.
         content.setAlpha(0f);
@@ -329,10 +348,10 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
 
   @Override
   public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) {
-    if (finalFactor == 0f) {
+    if (finalFactor == 0f && !visible.getValue()) {
       removeCallbacks(tick);
       shown = null;
-      setVisibility(View.INVISIBLE);
+      updateVisibility();
     }
   }
 
@@ -627,6 +646,6 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
   @Override
   public boolean onTouchEvent (@NonNull android.view.MotionEvent event) {
     // The bar body has no action, but taps on it must not reach the messages under it.
-    return visible.getFloatValue() > 0f || super.onTouchEvent(event);
+    return (visible.getFloatValue() > 0f && getAlpha() > 0f) || super.onTouchEvent(event);
   }
 }
