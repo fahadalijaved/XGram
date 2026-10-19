@@ -20,10 +20,14 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.os.SystemClock;
 import android.text.TextUtils;
+import android.util.SparseIntArray;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
@@ -33,6 +37,7 @@ import android.widget.TextView;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
 import androidx.collection.LongSparseArray;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -88,7 +93,8 @@ import me.vkryl.core.lambda.Destroyable;
  * on screen first) only when its section scrolls into view; until then its first stickers (the set's covers) show. A
  * strip of tabs (the default icons, recent, each pack's cover) sits under the name and stays pinned at the top once it
  * scrolls there; a tap jumps to that section. Telegram lets only Premium accounts use a custom emoji that is not a
- * default icon: without Premium the packs show with a lock and a tap explains why.
+ * default icon: without Premium the packs show with a lock and a tap explains why. A topic's own custom emoji shows
+ * (selected) for every account, so it can be kept.
  */
 public final class ForumTopicEditController extends RecyclerViewController<ForumTopicEditController.Args> {
   public static final class Args {
@@ -119,6 +125,15 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private static final float STRIP_HEIGHT = 48f, STRIP_GAP = 8f, TAB_WIDTH = 44f;
   /** Packs whose contents are being asked for at once. */
   private static final int MAX_PACK_REQUESTS = 2;
+  /** A pack whose contents failed to load is asked for again this many times, 2s, 4s, 6s later (or as told). */
+  private static final int MAX_PACK_RETRIES = 3;
+  private static final long PACK_RETRY_DELAY = 2000L;
+  /** Title rows kept for reuse (the default is 5: many small packs on a wide grid build new ones on every jump). */
+  private static final int TITLE_POOL = 24;
+  /** RecyclerView's own default for a view type it was not told about. */
+  private static final int DEFAULT_POOL = 5;
+  /** Without Premium, a pack's emoji are drawn at this opacity, with a lock in their corner. */
+  private static final float LOCKED_ALPHA = .5f;
   /** At most this many custom emoji go to GetCustomEmojiStickers. */
   private static final int MAX_RECENT = 200;
 
@@ -130,7 +145,10 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   /** Tag of a cell whose emoji isn't known yet (a pack still loading). */
   private static final Object PLACEHOLDER = new Object();
 
-  /** A run of icons under one title: the default icons ("no icon" first), the recently used custom emoji or a pack. */
+  /**
+   * A run of icons under one title: the default icons ("no icon" first), the recently used custom emoji (the topic's
+   * own first; without Premium only that one) or a pack.
+   */
   private static final class Section {
     final int kind;
     @Nullable final TdApi.StickerSetInfo info;
@@ -139,6 +157,11 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     @Nullable TGStickerObj[] items;
     int titlePosition, firstCell, cellCount;
     int loadState = LOAD_NONE;
+    /** Recent: only the topic's own emoji ("Current icon": without Premium, or no recently used ones). */
+    boolean currentOnly;
+    /** A pack: failed loads so far, and the time before which it isn't asked for again. */
+    int failures;
+    long retryAt;
 
     Section (int kind, @Nullable TdApi.StickerSetInfo info, @Nullable TGStickerSetInfo cover) {
       this.kind = kind;
@@ -166,13 +189,27 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private GridLayoutManager gridManager;
   private boolean isSaving;
 
-  // Recent and packs: they arrive together, after the default icons, so the list grows once
+  // Loading. The default icons and the installed packs are asked for together and go in at once with the strip's slot
+  // (the list grows once, nothing drawn moves); the recent custom emoji may need the server, so they follow on their
+  // own, below the default icons.
 
-  private int pendingExtras;
+  /** Answers the first insert still waits for (the default icons, the installed packs). */
+  private int pendingFirst;
+  private boolean firstLoaded;
+  /** GetCustomEmojiStickers (the topic's own emoji, the recent ones) has not answered yet. */
+  private boolean recentsPending;
+  /** Ids asked for that came from the recently used emoji, not the topic's own. */
+  private int recentOnlyCount;
   @Nullable private TdApi.StickerSetInfo[] loadedPacks;
+  /** The recent emoji when they answer before the first insert (they go in with it). */
   @Nullable private TdApi.Sticker[] loadedRecents;
+  /** The tab strip's slot is in the list: more than the default icons, or the recent ones on their way. */
+  private boolean withStrip;
   private final ArrayDeque<Section> packQueue = new ArrayDeque<>();
   private int packRequests;
+  /** The grid's span and height the cell pool was sized for. */
+  private int poolSpan, poolHeight;
+  @Nullable private CellPool cellPool;
 
   // Tab strip
 
@@ -233,15 +270,10 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       int[] colors = ForumTopicIconDrawable.serverColors();
       color = colors[(int) (Math.random() * colors.length)];
     }
-    if (!isGeneral()) {
-      Section section = defaultSection = new Section(SECTION_DEFAULT, null, null);
-      section.cellCount = 1; // "no icon" until the default icons arrive
-      section.loadState = LOAD_DONE;
-      sections.add(section);
-    }
-    layoutSections();
+    layoutSections(); // the header alone until the icons and packs are known (see onFirstLoaded)
 
     adapter = new Adapter();
+    final CellPool pool = cellPool = new CellPool();
     final GridLayoutManager manager = gridManager = new GridLayoutManager(context, MIN_SPAN) {
       @Override
       public void onLayoutChildren (RecyclerView.Recycler recycler, RecyclerView.State state) {
@@ -249,8 +281,21 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         int available = getWidth() - getPaddingLeft() - getPaddingRight();
         if (available > 0) {
           int span = Math.max(MIN_SPAN, available / Screen.dp(MIN_CELL));
-          if (span != getSpanCount()) {
+          boolean spanChanged = span != getSpanCount();
+          if (spanChanged) {
             setSpanCount(span);
+          }
+          sizePool(span, getHeight()); // before cells go back to it
+          if (spanChanged && expressive) {
+            // The decoration's insets (8dp above a section's first row and below its last) follow the span count, but
+            // RecyclerView keeps a cell's insets until it is bound again: the cells go back to the pool and are laid
+            // out anew. Only the cells: the header keeps the name field's focus and the keyboard.
+            for (int i = getChildCount() - 1; i >= 0; i--) {
+              View child = getChildAt(i);
+              if (child != null && getItemViewType(child) == VIEW_TYPE_ICON) {
+                removeAndRecycleView(child, recycler);
+              }
+            }
           }
         }
         super.onLayoutChildren(recycler, state);
@@ -281,7 +326,10 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     });
     recyclerView.setLayoutManager(manager);
     recyclerView.setItemAnimator(null);
-    recyclerView.getRecycledViewPool().setMaxRecycledViews(VIEW_TYPE_ICON, 192); // a screen of 8 x 20 cells and some
+    // Cells: sized from the grid once it is laid out (sizePool); titles: enough for a screen of small packs
+    pool.setMaxRecycledViews(VIEW_TYPE_ICON, 192);
+    pool.setMaxRecycledViews(VIEW_TYPE_TITLE, TITLE_POOL);
+    recyclerView.setRecycledViewPool(pool);
     recyclerView.setAdapter(adapter);
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
       @Override
@@ -308,31 +356,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
 
     if (!isGeneral()) {
-      tdlib.send(new TdApi.GetForumTopicDefaultIcons(), (stickers, error) -> runOnUiThreadOptional(() -> {
-        if (stickers != null) {
-          ArrayList<TGStickerObj> items = new ArrayList<>(stickers.stickers.length);
-          for (TdApi.Sticker sticker : stickers.stickers) {
-            if (sticker.fullType instanceof TdApi.StickerFullTypeCustomEmoji) {
-              icons.add(sticker);
-              items.add(newGridSticker(sticker));
-            }
-          }
-          defaultItems = items.toArray(new TGStickerObj[0]);
-          Section section = defaultSection;
-          if (section != null && defaultItems.length > 0) {
-            section.cellCount = 1 + defaultItems.length;
-            layoutSections();
-            // Inserted after "no icon" (which is no longer the last row), not a full reload: the name field keeps its
-            // focus and the keyboard
-            adapter.notifyItemChanged(section.firstCell);
-            adapter.notifyItemRangeInserted(section.firstCell + 1, defaultItems.length);
-          }
-          if (preview != null) {
-            preview.bindPreview(this, null);
-          }
-        }
-        loadExtras();
-      }));
+      loadIcons();
     }
   }
 
@@ -364,6 +388,24 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     recyclerView.setClipToPadding(false);
   }
 
+  /**
+   * The cell pool holds a screen of cells for the grid's span and height (rows at their smallest, the ones laid out
+   * into the padding under the list and a few more): a far tab jump lays out a new screen from it while the old one is
+   * still attached. It only grows, so the keyboard or turning the phone back doesn't churn it.
+   */
+  private void sizePool (int span, int height) {
+    final CellPool pool = cellPool;
+    if (pool == null || height <= 0 || (span == poolSpan && height == poolHeight)) {
+      return;
+    }
+    poolSpan = span;
+    poolHeight = height;
+    final int cells = span * (height / Screen.dp(MIN_CELL) + 4);
+    if (cells > pool.limit(VIEW_TYPE_ICON)) {
+      pool.setMaxRecycledViews(VIEW_TYPE_ICON, cells);
+    }
+  }
+
   private static long emojiIdOf (@Nullable TdApi.Sticker sticker) {
     return sticker != null && sticker.fullType instanceof TdApi.StickerFullTypeCustomEmoji ? ((TdApi.StickerFullTypeCustomEmoji) sticker.fullType).customEmojiId : 0;
   }
@@ -388,7 +430,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   // Sections
 
   private boolean hasStrip () {
-    return sections.size() > 1;
+    return withStrip;
   }
 
   /** Adapter positions of every section after a change in their number or size. */
@@ -474,39 +516,89 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     return sticker;
   }
 
-  // Recent and packs
+  // Loading
 
-  private void loadExtras () {
-    final long[] recentIds = premium ? recentCustomEmojiIds() : new long[0];
-    pendingExtras = recentIds.length > 0 ? 2 : 1;
+  /** Asks for the default icons, the installed packs and the recent custom emoji at once (see onFirstLoaded). */
+  private void loadIcons () {
+    final long[] extraIds = extraCustomEmojiIds();
+    recentsPending = extraIds.length > 0;
+    pendingFirst = 2;
+    tdlib.send(new TdApi.GetForumTopicDefaultIcons(), (stickers, error) -> runOnUiThreadOptional(() -> {
+      if (stickers != null) {
+        ArrayList<TGStickerObj> items = new ArrayList<>(stickers.stickers.length);
+        for (TdApi.Sticker sticker : stickers.stickers) {
+          if (sticker.fullType instanceof TdApi.StickerFullTypeCustomEmoji) {
+            icons.add(sticker);
+            items.add(newGridSticker(sticker));
+          }
+        }
+        defaultItems = items.toArray(new TGStickerObj[0]);
+        if (preview != null) {
+          preview.bindPreview(this, null);
+        }
+      }
+      onFirstLoaded();
+    }));
     tdlib.send(new TdApi.GetInstalledStickerSets(new TdApi.StickerTypeCustomEmoji()), (sets, error) -> runOnUiThreadOptional(() -> {
       loadedPacks = sets != null ? sets.sets : null;
-      onExtrasLoaded();
+      onFirstLoaded();
     }));
-    if (recentIds.length > 0) {
-      tdlib.send(new TdApi.GetCustomEmojiStickers(recentIds), (stickers, error) -> runOnUiThreadOptional(() -> {
-        loadedRecents = stickers != null ? inOrder(recentIds, stickers.stickers) : null;
-        onExtrasLoaded();
-      }));
+    if (extraIds.length > 0) {
+      tdlib.send(new TdApi.GetCustomEmojiStickers(extraIds), (stickers, error) -> runOnUiThreadOptional(() ->
+        onRecentsLoaded(stickers != null ? inOrder(extraIds, stickers.stickers) : new TdApi.Sticker[0])
+      ));
     }
   }
 
-  /** The topic's own custom emoji (unless it is a default icon), then the custom emoji used last in messages. */
-  private long[] recentCustomEmojiIds () {
-    ArrayList<RecentEmoji> recents = Emoji.instance().getRecents();
-    long[] ids = new long[Math.min(MAX_RECENT, recents.size() + 1)];
+  /**
+   * The topic's own custom emoji, for every account (it may always be kept; left out later if it is a default icon),
+   * then, with Premium, the custom emoji used last in messages.
+   */
+  private long[] extraCustomEmojiIds () {
+    final List<RecentEmoji> recents = premium ? Emoji.instance().getRecents() : null;
+    final int recentCount = recents != null ? recents.size() : 0;
+    long[] ids = new long[Math.min(MAX_RECENT, recentCount + 1)];
     int count = 0;
-    if (initialCustomEmojiId != 0 && findIcon(initialCustomEmojiId) == null) {
+    if (initialCustomEmojiId != 0) {
       ids[count++] = initialCustomEmojiId;
     }
-    for (int i = 0; i < recents.size() && count < ids.length; i++) {
+    for (int i = 0; i < recentCount && count < ids.length; i++) {
       RecentEmoji recent = recents.get(i);
       if (!recent.isCustomEmoji() || recent.customEmojiId == 0 || indexOf(ids, count, recent.customEmojiId) != -1) {
         continue;
       }
       ids[count++] = recent.customEmojiId;
     }
+    recentOnlyCount = initialCustomEmojiId != 0 ? count - 1 : count;
     return count == ids.length ? ids : Arrays.copyOf(ids, count);
+  }
+
+  /** The recent section will most likely show: recently used emoji were asked for, or the topic's own non-default one. */
+  private boolean expectsRecents () {
+    return recentsPending && (recentOnlyCount > 0 || (initialCustomEmojiId != 0 && findIcon(initialCustomEmojiId) == null));
+  }
+
+  /** The recent section, or null when empty; the topic's own emoji is left out when it is one of the default icons. */
+  @Nullable
+  private Section newRecentSection (TdApi.Sticker[] stickers) {
+    final boolean ownIsDefault = initialCustomEmojiId != 0 && findIcon(initialCustomEmojiId) != null;
+    ArrayList<TGStickerObj> list = new ArrayList<>(stickers.length);
+    for (TdApi.Sticker sticker : stickers) {
+      if (ownIsDefault && emojiIdOf(sticker) == initialCustomEmojiId) {
+        continue; // it shows among the default icons
+      }
+      list.add(newGridSticker(sticker));
+    }
+    if (list.isEmpty()) {
+      return null;
+    }
+    TGStickerObj[] items = list.toArray(new TGStickerObj[0]);
+    Section section = new Section(SECTION_RECENT, null, null);
+    section.items = items;
+    section.cellCount = items.length;
+    section.loadState = LOAD_DONE;
+    section.currentOnly = recentOnlyCount == 0;
+    return section;
   }
 
   private static int indexOf (long[] ids, int count, long id) {
@@ -537,48 +629,96 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     return result.toArray(new TdApi.Sticker[0]);
   }
 
-  private void onExtrasLoaded () {
-    if (--pendingExtras > 0) {
+  /** The default icons and the installed packs are known: they go in under the header at once, the strip's slot too. */
+  private void onFirstLoaded () {
+    if (--pendingFirst > 0) {
       return;
     }
-    TdApi.Sticker[] recents = loadedRecents;
-    TdApi.StickerSetInfo[] packs = loadedPacks;
-    loadedRecents = null;
+    firstLoaded = true;
+    final TdApi.StickerSetInfo[] packs = loadedPacks;
+    final TdApi.Sticker[] recents = loadedRecents;
     loadedPacks = null;
-    if (recents != null && recents.length > 0) {
-      Section section = new Section(SECTION_RECENT, null, null);
-      TGStickerObj[] items = new TGStickerObj[recents.length];
-      for (int i = 0; i < recents.length; i++) {
-        items[i] = newGridSticker(recents[i]);
+    loadedRecents = null;
+    Section section = defaultSection = new Section(SECTION_DEFAULT, null, null);
+    section.cellCount = 1 + defaultItems.length; // "no icon", then the default icons
+    section.loadState = LOAD_DONE;
+    sections.add(section);
+    if (recents != null) {
+      Section recent = newRecentSection(recents); // they answered first
+      if (recent != null) {
+        sections.add(recent);
       }
-      section.items = items;
-      section.cellCount = items.length;
-      section.loadState = LOAD_DONE;
-      sections.add(section);
     }
     if (packs != null) {
       for (TdApi.StickerSetInfo info : packs) {
         if (info.size <= 0) {
           continue;
         }
-        Section section = new Section(SECTION_PACK, info, new TGStickerSetInfo(tdlib, info));
-        section.items = new TGStickerObj[info.size]; // filled from the covers on bind, all of it once the pack loads
-        section.cellCount = info.size;
-        sections.add(section);
+        Section pack = new Section(SECTION_PACK, info, new TGStickerSetInfo(tdlib, info));
+        pack.items = new TGStickerObj[info.size]; // filled from the covers on bind, all of it once the pack loads
+        pack.cellCount = info.size;
+        sections.add(pack);
       }
     }
-    if (!hasStrip()) {
-      return;
-    }
-    final int oldCount = itemCount;
+    // The slot is kept for recent emoji still on their way, so they won't move the default icons when they come
+    withStrip = sections.size() > 1 || expectsRecents();
     layoutSections();
-    // The strip's slot under the name, then the new sections after the default icons (no full reload, so the name
-    // field keeps its focus and the keyboard)
-    adapter.notifyItemInserted(STRIP_POSITION);
-    adapter.notifyItemRangeInserted(oldCount + 1, itemCount - oldCount - 1);
+    // One insert under the header, not a full reload: the name field keeps its focus and the keyboard
+    adapter.notifyItemRangeInserted(1, itemCount - 1);
     if (tabsAdapter != null) {
       tabsAdapter.notifyDataSetChanged();
     }
+    postSyncStrip();
+  }
+
+  /** The topic's own emoji and the recent ones (in that order, unknown ones left out). */
+  private void onRecentsLoaded (TdApi.Sticker[] stickers) {
+    recentsPending = false;
+    if (!firstLoaded) {
+      loadedRecents = stickers; // they go in with the default icons
+      return;
+    }
+    final Section recent = newRecentSection(stickers);
+    final boolean hadStrip = withStrip;
+    if (recent == null) {
+      if (hadStrip && sections.size() <= 1) {
+        // The slot was kept for them and none came
+        withStrip = false;
+        layoutSections();
+        adapter.notifyItemRemoved(STRIP_POSITION);
+        if (tabsAdapter != null) {
+          tabsAdapter.notifyDataSetChanged();
+        }
+        postSyncStrip();
+      }
+      return;
+    }
+    // Right after the default icons: below the rows on screen, which stay where they are
+    sections.add(1, recent);
+    withStrip = true;
+    layoutSections();
+    if (!hadStrip) {
+      adapter.notifyItemInserted(STRIP_POSITION);
+    }
+    adapter.notifyItemRangeInserted(recent.titlePosition, 1 + recent.cellCount);
+    // The packs' tabs move one along, the selected one with them
+    if (selectedTab >= 1) {
+      selectedTab++;
+    }
+    if (pinnedTab >= 1) {
+      pinnedTab++;
+    }
+    if (tabsAdapter != null) {
+      if (hadStrip) {
+        tabsAdapter.notifyItemInserted(1);
+      } else {
+        tabsAdapter.notifyDataSetChanged();
+      }
+    }
+    postSyncStrip();
+  }
+
+  private void postSyncStrip () {
     CustomRecyclerView recyclerView = getRecyclerView();
     if (recyclerView != null) {
       recyclerView.post(this::syncStrip);
@@ -589,6 +729,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private void requestPack (Section section) {
     if (section.kind != SECTION_PACK || section.loadState != LOAD_NONE || section.info == null) {
       return;
+    }
+    if (section.retryAt != 0 && SystemClock.uptimeMillis() < section.retryAt) {
+      return; // it failed a moment ago: asked for again once the wait is over (see onPackLoaded)
     }
     section.loadState = LOAD_QUEUED;
     packQueue.addFirst(section);
@@ -610,7 +753,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       final long setId = section.info.id;
       tdlib.send(new TdApi.GetStickerSet(setId), (set, error) -> runOnUiThreadOptional(() -> {
         packRequests--;
-        onPackLoaded(section, set);
+        onPackLoaded(section, set, error);
         pumpPacks();
       }));
     }
@@ -628,14 +771,29 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     return section.firstCell + section.cellCount > first - margin && section.titlePosition < last + margin;
   }
 
-  private void onPackLoaded (Section section, @Nullable TdApi.StickerSet set) {
+  private void onPackLoaded (final Section section, @Nullable TdApi.StickerSet set, @Nullable TdApi.Error error) {
     if (section.loadState != LOAD_LOADING) {
       return;
     }
-    section.loadState = LOAD_DONE; // an error keeps the covers
     if (set == null) {
+      // A flood wait or a lost connection: asked for again a little later, by the next bind or by itself while it is
+      // still near the screen. A pack that is gone (400), or one that keeps failing, keeps its covers.
+      if ((error == null || error.code != 400) && ++section.failures <= MAX_PACK_RETRIES) {
+        final long fallback = PACK_RETRY_DELAY * section.failures;
+        final long delay = error != null ? XgramForums.retryAfterMs(error, fallback) : fallback;
+        section.loadState = LOAD_NONE;
+        section.retryAt = SystemClock.uptimeMillis() + delay;
+        runOnUiThreadOptional(() -> {
+          if (section.loadState == LOAD_NONE && isNearViewport(section)) {
+            requestPack(section);
+          }
+        }, null, delay);
+      } else {
+        section.loadState = LOAD_DONE;
+      }
       return;
     }
+    section.loadState = LOAD_DONE;
     TGStickerObj[] items = new TGStickerObj[set.stickers.length];
     for (int i = 0; i < items.length; i++) {
       items[i] = newGridSticker(set.stickers[i]);
@@ -672,7 +830,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     if (emojiId == 0) {
       return;
     }
-    if (findIcon(emojiId) == null && !tdlib.hasPremium()) {
+    // The topic's own emoji can always be picked again: keeping it sends no icon (see onDoneClick)
+    if (emojiId != initialCustomEmojiId && findIcon(emojiId) == null && !tdlib.hasPremium()) {
       showPremiumHint(view);
       return;
     }
@@ -942,6 +1101,11 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     /** The preview: the emoji asked for (it may still be loading). */
     private long previewEmojiId;
     private boolean isSelected;
+    /** A pack's emoji without Premium: dimmed, with a lock in its corner. */
+    private boolean locked;
+    @Nullable private Drawable lock;
+    @Nullable private Paint lockPaint;
+    private int lockColor;
     private int iconLeft, iconTop, iconSize;
     private Path selectedShape;
     private Matrix selectedMatrix;
@@ -1029,6 +1193,36 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       }
     }
 
+    void setLocked (boolean locked) {
+      if (this.locked != locked) {
+        this.locked = locked;
+        if (locked && lock == null) {
+          lock = Drawables.get(getResources(), XgramIconPack.map(R.drawable.baseline_lock_16));
+        }
+        invalidate();
+      }
+    }
+
+    /** The lock: on a disc of the color behind the cell, at the emoji's bottom end corner. */
+    private void drawLock (Canvas c) {
+      if (lock == null) {
+        return;
+      }
+      final float radius = Screen.dp(8f), inset = Screen.dp(4f);
+      final float cx = Lang.rtl() ? iconLeft + inset : iconLeft + iconSize - inset;
+      final float cy = iconTop + iconSize - inset;
+      final int behind = expressive ? XgramExpressive.color(XgramExpressive.SURFACE_BRIGHT) : Theme.getColor(ColorId.background);
+      c.drawCircle(cx, cy, radius, Paints.fillingPaint(behind));
+      final int color = expressive ? XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT) : Theme.getColor(ColorId.icon);
+      if (lockPaint == null || lockColor != color) {
+        lockPaint = Paints.createPorterDuffPaint(lockPaint, lockColor = color);
+      }
+      final int save = c.save();
+      c.scale(.75f, .75f, cx, cy); // 12dp in a 16dp disc
+      Drawables.drawCentered(c, lock, cx, cy, lockPaint);
+      c.restoreToCount(save);
+    }
+
     @Override
     protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
       if (!squareCell || MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) {
@@ -1107,10 +1301,19 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           image.disablePorterDuffColorFilter();
           gif.disablePorterDuffColorFilter();
         }
+        if (locked) {
+          image.setPaintAlpha(LOCKED_ALPHA);
+          gif.setPaintAlpha(LOCKED_ALPHA);
+        }
         if (gif.needPlaceholder()) {
           image.draw(c);
         }
         gif.draw(c);
+        if (locked) {
+          image.restorePaintAlpha();
+          gif.restorePaintAlpha();
+          drawLock(c);
+        }
       } else if (bubble != null) {
         bubble.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize);
         bubble.draw(c);
@@ -1260,12 +1463,25 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   /**
    * Holds the tab strip. Classic look: a filling bar with a separator, as the emoji keyboard's. Expressive: the page's
    * background only while pinned, so the rows scrolling under the strip disappear behind it.
+   *
+   * <p>On its slot the strip is a row of the page: a vertical drag that starts on it scrolls the list (the tabs keep
+   * taps and horizontal drags). Pinned, it stays put under a drag, as a pinned header.
    */
   private final class StripLayout extends FrameLayout {
+    private final int touchSlop;
     private boolean stuck;
+    /** A gesture that started on the unpinned strip, not yet known to be a tap, a horizontal or a vertical drag. */
+    private boolean tracking;
+    /** The gesture goes to the list (a vertical drag that started on the unpinned strip). */
+    private boolean forwarding;
+    private int trackedPointerId;
+    private long downTime;
+    /** Where the finger went down, in the page's coordinates (the strip moves as the list scrolls). */
+    private float downX, downY;
 
     StripLayout (Context context) {
       super(context);
+      touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
     }
 
     void setStuck (boolean stuck) {
@@ -1275,8 +1491,109 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       }
     }
 
+    /** From this view's coordinates to the page's (its parent's, which also holds the list). */
+    private float pageX (float x) {
+      return x + getLeft() + getTranslationX();
+    }
+
+    private float pageY (float y) {
+      return y + getTop() + getTranslationY();
+    }
+
+    @Nullable
+    private CustomRecyclerView forwardTarget () {
+      CustomRecyclerView list = getRecyclerView();
+      return list != null && list.getParent() == getParent() ? list : null;
+    }
+
     @Override
-    public boolean onTouchEvent (android.view.MotionEvent e) {
+    public boolean onInterceptTouchEvent (MotionEvent e) {
+      switch (e.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN: {
+          forwarding = false;
+          tracking = !stuck;
+          trackedPointerId = e.getPointerId(0);
+          downTime = e.getDownTime();
+          downX = pageX(e.getX());
+          downY = pageY(e.getY());
+          CustomRecyclerView list = tracking ? forwardTarget() : null;
+          if (list != null && list.getScrollState() == RecyclerView.SCROLL_STATE_SETTLING) {
+            list.stopScroll(); // a touch on a row of a flung list stops it
+          }
+          break;
+        }
+        case MotionEvent.ACTION_MOVE: {
+          if (!tracking) {
+            break;
+          }
+          int index = e.findPointerIndex(trackedPointerId);
+          if (index < 0) {
+            tracking = false;
+            break;
+          }
+          float dx = pageX(e.getX(index)) - downX, dy = pageY(e.getY(index)) - downY;
+          if (Math.abs(dy) > touchSlop && Math.abs(dy) > Math.abs(dx)) {
+            tracking = false;
+            if (startForwarding(e, index)) {
+              return true; // the tab under the finger gets a cancel
+            }
+          }
+          break;
+        }
+        case MotionEvent.ACTION_UP:
+        case MotionEvent.ACTION_CANCEL:
+          tracking = false;
+          break;
+      }
+      return false;
+    }
+
+    /** The list never saw the finger go down: it gets a down where it did, then this move, and drags from there. */
+    private boolean startForwarding (MotionEvent e, int index) {
+      final CustomRecyclerView list = forwardTarget();
+      if (list == null) {
+        return false;
+      }
+      MotionEvent.PointerProperties[] properties = {new MotionEvent.PointerProperties()};
+      properties[0].id = trackedPointerId;
+      properties[0].toolType = e.getToolType(index);
+      MotionEvent.PointerCoords[] coords = {new MotionEvent.PointerCoords()};
+      coords[0].x = downX - list.getLeft() - list.getTranslationX();
+      coords[0].y = downY - list.getTop() - list.getTranslationY();
+      coords[0].pressure = 1f;
+      coords[0].size = 1f;
+      MotionEvent down = MotionEvent.obtain(downTime, e.getEventTime(), MotionEvent.ACTION_DOWN, 1, properties, coords,
+        e.getMetaState(), e.getButtonState(), 1f, 1f, e.getDeviceId(), 0, e.getSource(), e.getFlags());
+      list.dispatchTouchEvent(down);
+      down.recycle();
+      forwarding = true;
+      forward(list, e);
+      if (getParent() != null) {
+        getParent().requestDisallowInterceptTouchEvent(true); // the page's parents leave this drag alone
+      }
+      return true;
+    }
+
+    private void forward (CustomRecyclerView list, MotionEvent e) {
+      MotionEvent copy = MotionEvent.obtain(e);
+      copy.offsetLocation(pageX(0f) - list.getLeft() - list.getTranslationX(), pageY(0f) - list.getTop() - list.getTranslationY());
+      list.dispatchTouchEvent(copy);
+      copy.recycle();
+    }
+
+    @Override
+    public boolean onTouchEvent (MotionEvent e) {
+      if (forwarding) {
+        CustomRecyclerView list = forwardTarget();
+        if (list != null) {
+          forward(list, e);
+        }
+        int action = e.getActionMasked();
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+          forwarding = false;
+        }
+        return true;
+      }
       // Pinned, the strip covers rows of the list: a touch on its gaps must not reach an emoji hidden under it
       return stuck || super.onTouchEvent(e);
     }
@@ -1344,10 +1661,21 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         view.setContentDescription(section.info != null ? section.info.title : null);
       } else if (holder.itemView instanceof GlyphTab) {
         GlyphTab view = (GlyphTab) holder.itemView;
-        boolean recent = section.kind == SECTION_RECENT;
-        view.setIcon(recent ? R.drawable.baseline_access_time_24 : R.drawable.baseline_forum_24);
+        @DrawableRes final int icon;
+        @StringRes final int label;
+        if (section.kind != SECTION_RECENT) {
+          icon = R.drawable.baseline_forum_24;
+          label = R.string.XgramTopicIcon;
+        } else if (section.currentOnly) {
+          icon = R.drawable.baseline_check_circle_24;
+          label = R.string.XgramTopicIconCurrent;
+        } else {
+          icon = R.drawable.baseline_access_time_24;
+          label = R.string.XgramTopicIconsRecent;
+        }
+        view.setIcon(icon);
         view.setSelectionFactor(factor, false);
-        view.setContentDescription(Lang.getString(recent ? R.string.XgramTopicIconsRecent : R.string.XgramTopicIcon));
+        view.setContentDescription(Lang.getString(label));
       }
     }
 
@@ -1616,11 +1944,57 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
   }
 
+  /**
+   * The list's view pool. A view it has no room for is let go of at once (a cell's emoji receivers destroyed, a
+   * title's theme listener removed) instead of being kept until the page closes.
+   */
+  private final class CellPool extends RecyclerView.RecycledViewPool {
+    private final SparseIntArray limits = new SparseIntArray();
+
+    int limit (int viewType) {
+      return limits.get(viewType, DEFAULT_POOL);
+    }
+
+    @Override
+    public void setMaxRecycledViews (int viewType, int max) {
+      limits.put(viewType, max);
+      while (getRecycledViewCount(viewType) > max) {
+        RecyclerView.ViewHolder holder = getRecycledView(viewType);
+        if (holder == null) {
+          break;
+        }
+        release(holder);
+      }
+      super.setMaxRecycledViews(viewType, max);
+    }
+
+    @Override
+    public void putRecycledView (RecyclerView.ViewHolder scrap) {
+      final int viewType = scrap.getItemViewType();
+      if (getRecycledViewCount(viewType) >= limit(viewType)) {
+        release(scrap); // full: RecyclerView drops it
+      }
+      super.putRecycledView(scrap);
+    }
+
+    private void release (RecyclerView.ViewHolder holder) {
+      final View view = holder.itemView;
+      if (view instanceof Destroyable) {
+        ((Destroyable) view).performDestroy();
+        destroyables.remove(view);
+      }
+      if (view instanceof TitleView) {
+        removeThemeListenerByTarget(view);
+      }
+    }
+  }
+
   private final class Adapter extends RecyclerView.Adapter<Holder> {
     @Override
     public int getItemCount () {
-      // Header, then (unless General) the tab strip's slot when there is more than the default icons, then each
-      // section's title and icons: "no icon" and the default icons, the recent custom emoji, every installed pack.
+      // Header, then (unless General, once the icons are known) the tab strip's slot when there is more than the
+      // default icons, then each section's title and icons: "no icon" and the default icons, the recent custom emoji
+      // (or the topic's own), every installed pack.
       return itemCount;
     }
 
@@ -1763,7 +2137,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           title.setLocked(false);
           break;
         case SECTION_RECENT:
-          title.setText(Lang.getString(R.string.XgramTopicIconsRecent));
+          title.setText(Lang.getString(section.currentOnly ? R.string.XgramTopicIconCurrent : R.string.XgramTopicIconsRecent));
           title.setLocked(false);
           break;
         case SECTION_PACK:
@@ -1782,6 +2156,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         view.setSticker(null);
         view.setTag(PLACEHOLDER);
         view.setSelectedIcon(false);
+        view.setLocked(false);
         return;
       }
       int index = position - section.firstCell;
@@ -1791,6 +2166,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         view.setBubble(color, name);
         view.setSticker(null);
         view.setSelectedIcon(customEmojiId == 0);
+        view.setLocked(false);
         return;
       }
       if (section.kind == SECTION_PACK && section.loadState == LOAD_NONE) {
@@ -1802,6 +2178,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       view.setTag(sticker != null ? sticker : PLACEHOLDER);
       long emojiId = sticker != null ? emojiIdOf(sticker.getSticker()) : 0;
       view.setSelectedIcon(emojiId != 0 && emojiId == customEmojiId);
+      // Without Premium a pack's emoji can't be picked (a tap explains why), unless it is the topic's own or a default
+      view.setLocked(!premium && section.kind == SECTION_PACK && emojiId != 0 && emojiId != initialCustomEmojiId && findIcon(emojiId) == null);
     }
   }
 }
