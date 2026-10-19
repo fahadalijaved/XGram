@@ -312,6 +312,21 @@ public final class XgramThemePack {
     }
   }
 
+  /** True when {@code themeId} is one of XGram's own installed pack or icon themes (made to work with Expressive design). */
+  public static boolean isPackTheme (int themeId) {
+    if (themeId == ThemeId.NONE) {
+      return false;
+    }
+    for (String[] keys : new String[][] {PACK_KEYS, ICON_KEYS}) {
+      for (String key : keys) {
+        if (Settings.instance().getInt(KEY_ID + key, ThemeId.NONE) == themeId) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /** Called by Telegram X when a custom theme is removed: the picture copied for a style icon theme goes too. */
   public static void onThemeRemoved (int themeId) {
     for (String key : ART_KEYS) {

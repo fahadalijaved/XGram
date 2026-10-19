@@ -1343,7 +1343,14 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
         else if (theme.isCustom())
           showThemeOptions(item);
       } else {
-        ThemeManager.instance().changeGlobalTheme(tdlib, getTheme(item), false, null);
+        final ThemeDelegate target = getTheme(item);
+        Runnable apply = () -> ThemeManager.instance().changeGlobalTheme(tdlib, target, false, null);
+        if (ThemeManager.isCustomTheme(themeId) && !com.fahadali.xgram.appearance.XgramThemePack.isPackTheme(themeId)) {
+          // XGram: a Telegram X custom theme with Expressive design on: offer to turn Expressive design off first
+          com.fahadali.xgram.appearance.XgramThemeGate.confirm(this, apply);
+        } else {
+          apply.run();
+        }
       }
     } else if (viewId == R.id.btn_themeCreate) {
       createNewTheme(currentTheme);

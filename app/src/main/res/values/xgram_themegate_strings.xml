@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <item type="id" name="btn_xgramThemeGateTurnOff" />
+  <item type="id" name="btn_xgramThemeGateApply" />
+  <string name="XgramThemeGateTitle">This theme is made for the classic design</string>
+  <string name="XgramThemeGateText">With Expressive design on, XGram uses its own colours in most places, so this theme would only show here and there. Turn Expressive design off to see it everywhere. XGram restarts.</string>
+  <string name="XgramThemeGateTurnOff">Turn off Expressive and apply</string>
+  <string name="XgramThemeGateApply">Apply anyway</string>
+</resources>

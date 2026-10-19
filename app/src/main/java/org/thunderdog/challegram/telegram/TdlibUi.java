@@ -6944,9 +6944,12 @@ public class TdlibUi extends Handler {
 
             context.showOptions(info, ids.get(), strings.get(), colors.get(), icons.get(), (itemView, id) -> {
               if (id == R.id.btn_done) {
-                tdlib.wallpaper().loadWallpaper(theme.wallpaper, 1000, () -> {
-                  context.tdlib().ui().installTheme(context, theme);
-                });
+                // XGram: with Expressive design on, offer to turn it off first (the theme is made for the classic design)
+                com.fahadali.xgram.appearance.XgramThemeGate.confirm(context, () ->
+                  tdlib.wallpaper().loadWallpaper(theme.wallpaper, 1000, () -> {
+                    context.tdlib().ui().installTheme(context, theme);
+                  })
+                );
               } else if (id == R.id.btn_open) {
                 U.run(onError);
               }
