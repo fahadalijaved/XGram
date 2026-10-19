@@ -393,14 +393,41 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
   }
 
-  /** The notes above the list: ghost mode, then the sync's status. */
+  /** The notes above the list: the sync's status (one at most), then ghost mode. */
   @NonNull
   private List<Status> statuses () {
     List<Status> result = new ArrayList<>();
+    XgramActivityStore.SyncStatus sync = XgramActivityStore.instance().summary(tdlib.id()).sync;
+    if (sync.isPaused()) {
+      long seconds = Math.max(1, (sync.pausedUntil - System.currentTimeMillis() + 999) / 1000L);
+      String wait = seconds < 60 ? Lang.plural(R.string.xSeconds, seconds) : seconds < 3600 ? Lang.plural(R.string.xMinutes, (seconds + 59) / 60) : Lang.plural(R.string.xHours, (seconds + 3599) / 3600);
+      result.add(new Status(0, Lang.getString(R.string.XgramActivityPaused, wait), -1f));
+      scheduleStatusRefresh();
+    } else if (sync.running && sync.offline) {
+      result.add(new Status(0, Lang.getString(R.string.XgramActivityOffline), -1f));
+    } else if (sync.running && sync.total >= 2) {
+      result.add(new Status(0, Lang.getString(R.string.XgramActivityCatchingUp, Math.min(sync.done, sync.total), sync.total), (float) Math.min(sync.done, sync.total) / sync.total));
+    }
     if (XgramGhost.dontReadMessages()) {
       result.add(new Status(R.drawable.baseline_ghost_24, Lang.getString(R.string.XgramActivityGhostNote), -1f));
     }
     return result;
+  }
+
+  // The paused tile counts down
+  private boolean statusRefreshPosted;
+  private final Runnable statusRefresh = () -> {
+    statusRefreshPosted = false;
+    if (!isDestroyed() && adapter != null && loaded) {
+      applyRows(false);
+    }
+  };
+
+  private void scheduleStatusRefresh () {
+    if (!statusRefreshPosted) {
+      statusRefreshPosted = true;
+      UI.post(statusRefresh, 30_000L);
+    }
   }
 
   private void buildCells () {
@@ -820,12 +847,14 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     if (getRecyclerView() != null) {
       getRecyclerView().invalidate();
     }
+    XgramActivitySync.setVisible(tdlib.id(), true); // faster spacing while here, and a look for what is missing
   }
 
   @Override
   public void onBlur () {
     super.onBlur();
     saveScroll();
+    XgramActivitySync.setVisible(tdlib.id(), false);
   }
 
   private void saveScroll () {
@@ -851,6 +880,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   @Override
   public void destroy () {
     saveScroll();
+    UI.cancel(statusRefresh);
+    XgramActivitySync.setVisible(tdlib.id(), false);
     super.destroy();
     XgramActivityStore.instance().removeListener(this);
     XgramActivityBadge.instance().removeListener(this);

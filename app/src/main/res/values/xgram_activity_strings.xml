@@ -66,6 +66,12 @@
   <string name="XgramActivityOff">Activity is off</string>
   <string name="XgramActivityTurnOn">Turn on</string>
 
+  <!-- Sync status -->
+  <string name="XgramActivityCatchingUp">Catching up · %1$d of %2$d chats</string>
+  <string name="XgramActivityPaused">Telegram asked to wait. Continues in %1$s.</string>
+  <string name="XgramActivityOffline">Waiting for network</string>
+  <string name="XgramActivityDebugFlood">Simulate Telegram wait (2 min)</string>
+
   <!-- Menus -->
   <string name="XgramActivitySettings">Activity settings</string>
 
@@ -81,6 +87,7 @@
   <item name="btn_xgramActivityUnreadOnly" type="id"/>
   <item name="btn_xgramActivitySettings" type="id"/>
   <item name="btn_xgramActivityTurnOn" type="id"/>
+  <item name="btn_xgramActivityDebugFlood" type="id"/>
   <item name="btn_xgramActivityShow" type="id"/>
   <item name="btn_xgramActivityReactions" type="id"/>
   <item name="btn_xgramActivityMuted" type="id"/>

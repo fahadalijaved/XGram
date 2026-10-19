@@ -90,14 +90,38 @@ public final class XgramActivity {
   public static void attach (Tdlib tdlib) {
     try {
       XgramActivityCollector collector = new XgramActivityCollector(tdlib);
+      boolean first;
       synchronized (collectors) {
+        first = collectors.isEmpty();
         collectors.add(collector);
       }
       tdlib.listeners().subscribeForGlobalUpdates(collector);
+      if (first) {
+        XgramSettings.instance().addListener(settingsListener);
+        XgramActivitySync.start();
+      }
     } catch (Throwable t) {
       Log.e(TAG, "Cannot attach", t);
     }
   }
+
+  /** Activity or Reactions came on: a seed covers the gap; Find earlier mentions came on: the look back again. */
+  private static final XgramSettings.Listener settingsListener = key -> {
+    if (key == null) {
+      return;
+    }
+    try {
+      XgramSettings settings = XgramSettings.instance();
+      if ((XgramSettings.KEY_ACTIVITY_ON.equals(key) && settings.activityOn()) ||
+        (XgramSettings.KEY_ACTIVITY_REACTIONS.equals(key) && settings.activityReactions() && settings.activityOn())) {
+        XgramActivitySync.onSettingsChanged(false);
+      } else if (XgramSettings.KEY_ACTIVITY_LOOKBACK.equals(key) && settings.activityLookBack() && settings.activityOn()) {
+        XgramActivitySync.onSettingsChanged(true);
+      }
+    } catch (Throwable t) {
+      Log.e(TAG, "Settings listener", t);
+    }
+  };
 
   /** TDLib thread: the account in this slot logged out (XgramAccountData.eraseAccount). */
   @AnyThread
@@ -106,8 +130,9 @@ public final class XgramActivity {
     onAccountForgotten(accountId);
   }
 
-  /** The screen's remembered scroll and opened row go too. */
+  /** Its queue, the screen's remembered scroll and opened row go too. */
   private static void onAccountForgotten (int accountId) {
+    XgramActivitySync.forget(accountId);
     XgramActivityController.forgetAccount(accountId);
   }
 
@@ -200,7 +225,12 @@ public final class XgramActivity {
    */
   @AnyThread
   static void onCountMismatch (Tdlib tdlib, long chatId, int kindMask, int serverCount) {
-    // The paced sync comes later.
+    XgramActivitySync.trigger(tdlib, chatId, kindMask, serverCount);
+  }
+
+  /** Debug builds: the sync acts as if Telegram asked to wait two minutes (Chat list > Activity). */
+  public static void debugInjectFlood () {
+    XgramActivitySync.injectFlood();
   }
 
   // What is shown changed without the store changing (mute, settings): badges and the screen filter again

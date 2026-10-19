@@ -224,7 +224,7 @@ final class XgramActivitySelfTest {
       db.execSQL("UPDATE items SET updated = ? WHERE msg = 3", new Object[] {sentAt - 1000});
       XgramActivityStore.upsert(db, snapshot(5, M, XgramActivityItem.STATE_NEW, now));
       db.execSQL("UPDATE items SET updated = ? WHERE msg = 5", new Object[] {sentAt + 1000});
-      XgramActivityStore.reconcile(db, ACCOUNT, CHAT, XgramActivityItem.MASK_MENTION_GROUP, new long[0], sentAt, true, 0);
+      XgramActivityStore.reconcile(db, ACCOUNT, CHAT, XgramActivityItem.MASK_MENTION_GROUP, new long[0], sentAt, true, 0, 0);
       check(state(db, 3, M) == XgramActivityItem.STATE_READ, "reconcile reads missing");
       check(state(db, 5, M) == XgramActivityItem.STATE_NEW, "reconcile skips newer");
 

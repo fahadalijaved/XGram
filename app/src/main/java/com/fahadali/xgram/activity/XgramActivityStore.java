@@ -769,12 +769,15 @@ public final class XgramActivityStore {
 
   /**
    * After a search: New items of the chat in {@code kindMask} stored before the request went out ({@code sentAtMs})
-   * that the results don't have are read elsewhere. With an incomplete search only items at or after the oldest
-   * result ({@code minMessageId}) can be judged.
+   * that the results don't have are read elsewhere. A page covers the messages below {@code fromMessageId} (0: from the
+   * newest); with an incomplete search only items at or after the oldest result ({@code minMessageId}) can be judged.
    */
-  static void reconcile (SQLiteDatabase db, int accountId, long chatId, int kindMask, long[] resultIds, long sentAtMs, boolean complete, long minMessageId) {
+  static void reconcile (SQLiteDatabase db, int accountId, long chatId, int kindMask, long[] resultIds, long sentAtMs, boolean complete, long minMessageId, long fromMessageId) {
     StringBuilder sql = new StringBuilder("UPDATE items SET state = 1, updated = ? WHERE account = ? AND chat = ? AND state = 0 AND updated < ? AND ")
       .append(kindsSql(kindMask));
+    if (fromMessageId > 0) {
+      sql.append(" AND msg < ").append(fromMessageId);
+    }
     if (resultIds.length > 0) {
       sql.append(" AND msg NOT IN (");
       for (int i = 0; i < resultIds.length; i++) {

@@ -43,10 +43,22 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
 
   // Which chats count
 
-  private static final int CHAT_NONE = 0, CHAT_GROUP = 1, CHAT_REPLIES = 2, CHAT_PRIVATE = 3;
+  static final int CHAT_NONE = 0, CHAT_GROUP = 1, CHAT_REPLIES = 2, CHAT_PRIVATE = 3;
+
+  private int chatKind (@Nullable TdApi.Chat chat) {
+    return chatKind(tdlib, chat);
+  }
+
+  private int baseFlags (TdApi.Chat chat) {
+    return baseFlags(tdlib, chat);
+  }
+
+  private XgramActivityStore.Snapshot snapshot (TdApi.Message m, TdApi.Chat chat, int kind, int flags, int state, int source) {
+    return snapshot(tdlib, m, chat, kind, flags, state, source);
+  }
 
   /** Groups and supergroups (not channels, not channel direct messages), the Replies chat, other private chats. */
-  private int chatKind (@Nullable TdApi.Chat chat) {
+  static int chatKind (Tdlib tdlib, @Nullable TdApi.Chat chat) {
     if (chat == null || chat.type == null) {
       return CHAT_NONE;
     }
@@ -75,7 +87,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   }
 
   /** A discussion group (a group linked to a channel) or a private chat, as item flags. */
-  int baseFlags (TdApi.Chat chat) {
+  static int baseFlags (Tdlib tdlib, TdApi.Chat chat) {
     if (chat.type instanceof TdApi.ChatTypePrivate) {
       return XgramActivityItem.FLAG_PRIVATE;
     }
@@ -193,7 +205,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   }
 
   /** A row for {@code m}, as it is now. */
-  XgramActivityStore.Snapshot snapshot (TdApi.Message m, TdApi.Chat chat, int kind, int flags, int state, int source) {
+  static XgramActivityStore.Snapshot snapshot (Tdlib tdlib, TdApi.Message m, TdApi.Chat chat, int kind, int flags, int state, int source) {
     XgramActivityStore.Snapshot s = new XgramActivityStore.Snapshot();
     s.accountId = tdlib.id();
     s.chatId = m.chatId;

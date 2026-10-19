@@ -148,6 +148,14 @@ fun ChatListPage() {
       }
     }
     description(R.string.XgramActivityLocalNote)
+    if (org.thunderdog.challegram.BuildConfig.DEBUG) {
+      // Debug builds: the sync's flood wait, without asking Telegram for one
+      group {
+        action(R.id.btn_xgramActivityDebugFlood, s(R.string.XgramActivityDebugFlood)) {
+          com.fahadali.xgram.activity.XgramActivity.debugInjectFlood()
+        }
+      }
+    }
 
     header(R.string.XgramHeaderScreen)
     group {
