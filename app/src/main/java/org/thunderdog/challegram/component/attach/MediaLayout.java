@@ -2102,6 +2102,23 @@ public class MediaLayout extends FrameLayoutFix implements
     }
   }
 
+  /**
+   * XGram: the media viewer opened from this sheet edits the same items' captions. When it gives a cell back (it
+   * closed, or moved to another item), the field shows the first item's caption as it is now, so an edit made there is
+   * neither hidden from the field nor overwritten by its old text on the next keystroke.
+   */
+  void xgramSyncPillCaption () {
+    if (xgramPillInput == null || xgramPillTarget == null) {
+      return;
+    }
+    final TdApi.FormattedText caption = xgramPillTarget.getCaption(false, false);
+    final TdApi.FormattedText current = Td.isEmpty(caption) ? null : Td.trim(caption);
+    final TdApi.FormattedText typed = xgramTypedCaption();
+    if (Td.isEmpty(current) ? !Td.isEmpty(typed) : !Td.equalsTo(current, typed)) {
+      xgramSetPillCaption(caption);
+    }
+  }
+
   /** XGram: as the media viewer, a caption with custom emoji needs Telegram Premium (or Saved Messages) to be sent. */
   private boolean xgramCaptionNeedsPremium (View v) {
     if (xgramPillInput == null || !xgramPillWanted()) {
@@ -2170,9 +2187,10 @@ public class MediaLayout extends FrameLayoutFix implements
     if (wanted) {
       ImageGalleryFile file = xgramCaptionTarget();
       if (file != xgramPillTarget) {
-        // The first item changed: a caption typed for the old one moves along, unless the new one has its own
+        // The first item changed: a caption typed for the old one moves along, unless the new one has its own. The old
+        // item's own caption is current whether the field or the media viewer (which edits it too) wrote it last.
         final ImageGalleryFile old = xgramPillTarget;
-        final TdApi.FormattedText typed = xgramTypedCaption();
+        final TdApi.FormattedText typed = old != null ? old.getCaption(false, false) : null;
         xgramPillTarget = file;
         if (file != null && old != null && !Td.isEmpty(typed) && !file.hasCaption()) {
           file.setCaption(typed);
@@ -2244,6 +2262,8 @@ public class MediaLayout extends FrameLayoutFix implements
 
   private @Nullable org.thunderdog.challegram.widget.EmojiLayout xgramEmojiLayout;
   private boolean xgramEmojiShown, xgramEmojiFromKeyboard, xgramEmojiPanelVisible;
+  // The panel gave way to the keyboard, which has not come yet; the emoji button was tapped in the meantime
+  private boolean xgramKeyboardRequested, xgramEmojiAfterKeyboard;
   private int xgramEmojiPanelHeight;
   private @Nullable Runnable xgramEmojiHidePanel;
 
@@ -2305,6 +2325,15 @@ public class MediaLayout extends FrameLayoutFix implements
         }
       }
       xgramSetEmojiPanelVisible(false);
+      xgramKeyboardRequested = false;
+      if (xgramEmojiAfterKeyboard) {
+        // The emoji button was tapped while this keyboard was on its way: now it swaps with the panel as usual
+        xgramEmojiAfterKeyboard = false;
+        xgramOpenEmoji();
+        if (!xgramEmojiShown && xgramPill != null) {
+          xgramPill.setEmojiState(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_EMOJI);
+        }
+      }
     }
   }
 
@@ -2359,6 +2388,15 @@ public class MediaLayout extends FrameLayoutFix implements
   }
 
   private void xgramToggleEmoji () {
+    if (!xgramEmojiShown && xgramKeyboardRequested) {
+      // The keyboard asked for by the last tap is not there yet: the panel opens once it is (xgramOnInsetsChanged), as
+      // racing it here could leave neither. Another tap takes this back.
+      xgramEmojiAfterKeyboard = !xgramEmojiAfterKeyboard;
+      if (xgramPill != null) {
+        xgramPill.setEmojiState(xgramEmojiAfterKeyboard ? com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_KEYBOARD : com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_EMOJI);
+      }
+      return;
+    }
     if (xgramEmojiShown) {
       xgramCloseEmoji(xgramEmojiFromKeyboard);
     } else {
@@ -2397,8 +2435,18 @@ public class MediaLayout extends FrameLayoutFix implements
     }
     if (wasShown && showKeyboard && xgramPillInput != null && !hidden && !xgramImeVisible()) {
       org.thunderdog.challegram.tool.Keyboard.show(xgramPillInput);
+      xgramKeyboardRequested = true;
       if (xgramEmojiHidePanel == null) {
         xgramEmojiHidePanel = () -> {
+          xgramKeyboardRequested = false;
+          if (xgramEmojiAfterKeyboard) {
+            // The keyboard never came, and the emoji button was tapped meanwhile: the panel, still up, stays
+            xgramEmojiAfterKeyboard = false;
+            xgramOpenEmoji();
+            if (!xgramEmojiShown && xgramPill != null) {
+              xgramPill.setEmojiState(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_EMOJI);
+            }
+          }
           if (!xgramEmojiShown) {
             xgramSetEmojiPanelVisible(false);
             xgramLayoutPill();
@@ -2409,6 +2457,13 @@ public class MediaLayout extends FrameLayoutFix implements
       postDelayed(xgramEmojiHidePanel, XGRAM_KEYBOARD_WAIT);
     } else {
       xgramSetEmojiPanelVisible(false);
+      xgramKeyboardRequested = false;
+      if (xgramEmojiAfterKeyboard) {
+        xgramEmojiAfterKeyboard = false;
+        if (xgramPill != null) {
+          xgramPill.setEmojiState(com.fahadali.xgram.appearance.XgramR6B7Places.CaptionPill.EMOJI_STATE_EMOJI);
+        }
+      }
     }
     xgramLayoutPill();
   }

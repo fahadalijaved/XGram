@@ -686,6 +686,9 @@ public class MediaBottomGalleryController extends MediaBottomBaseController<Medi
   public void setMediaItemVisible (int index, MediaItem item, boolean isVisible) {
     if (MediaItem.isGalleryType(item.getType())) {
       adapter.setImageVisible(item.getSourceGalleryFile(), isVisible, getLayoutManager());
+      if (isVisible) {
+        mediaLayout.xgramSyncPillCaption(); // XGram: the viewer may have edited the caption the sheet's field shows
+      }
     }
   }
 

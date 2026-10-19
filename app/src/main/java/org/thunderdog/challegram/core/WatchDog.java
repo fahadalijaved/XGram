@@ -212,7 +212,8 @@ public class WatchDog {
       }
       int type = typeOf(manager, network, capabilities);
       if (type == CONNECTION_TYPE_NONE && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-        type = best(manager);
+        // NONE: nothing under the VPN, so no internet.
+        return best(manager);
       }
       return type != CONNECTION_TYPE_NONE ? type : CONNECTION_TYPE_OTHER;
     }
@@ -234,12 +235,13 @@ public class WatchDog {
         if (capabilities == null || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
           continue;
         }
-        final int type = typeOf(manager, network, capabilities);
+        int type = typeOf(manager, network, capabilities);
         if (type == CONNECTION_TYPE_NONE) {
-          continue;
+          // An internet network of a kind not listed in typeOf: it still carries traffic, so it counts, last.
+          type = CONNECTION_TYPE_OTHER;
         }
         // As Android picks: a working network first, then Wi-Fi before mobile data.
-        final int rank = (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? 2 : 0) + (type == CONNECTION_TYPE_WIFI ? 1 : 0);
+        final int rank = (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? 3 : 0) + (type == CONNECTION_TYPE_WIFI ? 2 : type == CONNECTION_TYPE_OTHER ? 0 : 1);
         if (rank > bestRank) {
           bestRank = rank;
           bestType = type;
@@ -450,6 +452,17 @@ public class WatchDog {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         android.net.Network[] networks = manager.getAllNetworks();
         for (android.net.Network network : networks) {
+          // XGram: only a network that carries internet traffic counts; IMS (VoLTE/Wi-Fi calling) and MMS networks are
+          // connected cellular networks without INTERNET.
+          NetworkCapabilities capabilities;
+          try {
+            capabilities = manager.getNetworkCapabilities(network);
+          } catch (Throwable t) {
+            capabilities = null; // https://issuetracker.google.com/issues/175055271
+          }
+          if (capabilities != null && !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+            continue;
+          }
           NetworkInfo info = manager.getNetworkInfo(network);
           if (info != null) {
             if (filter(info)) {
@@ -495,11 +508,15 @@ public class WatchDog {
       connectionType = CONNECTION_TYPE_NONE;
     } else if (chosenNetworkInfo == null && activeNetworkInfo != null && activeNetworkInfo.getType() == ConnectivityManager.TYPE_VPN && activeNetworkInfo.isConnected()) {
       // XGram: a VPN that blocks every other network ("Block connections without VPN"): the other networks read as
-      // blocked here, but the VPN itself is connected. Its type is the network under it (below).
-      isOnline = true;
-      chosenNetworkInfo = activeNetworkInfo;
-      chosenNetwork = activeNetwork;
-      connectionType = CONNECTION_TYPE_OTHER;
+      // blocked here, but the VPN itself is connected. Its type is the network under it; with nothing under it
+      // (Wi-Fi lost and mobile data off while the VPN keeps its tunnel) there is no internet, so waiting for network.
+      final int vpnType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? NetworkTypes.detect(manager, activeNetwork) : CONNECTION_TYPE_OTHER;
+      if (vpnType != CONNECTION_TYPE_NONE) {
+        isOnline = true;
+        chosenNetworkInfo = activeNetworkInfo;
+        chosenNetwork = activeNetwork;
+        connectionType = vpnType;
+      }
     } else if (chosenNetworkInfo == null && availableNetworkInfo != null) {
       isOnline = true;
       chosenNetworkInfo = availableNetworkInfo;

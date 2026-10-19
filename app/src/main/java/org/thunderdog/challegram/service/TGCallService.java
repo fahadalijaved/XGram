@@ -34,6 +34,7 @@ import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
@@ -56,6 +57,7 @@ import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.core.WatchDog;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.player.TGPlayerController;
 import org.thunderdog.challegram.receiver.VoIPMediaButtonReceiver;
@@ -1408,7 +1410,33 @@ public class TGCallService extends Service implements
     NetworkInfo info = cm.getActiveNetworkInfo();
     lastNetInfo = info;
     @CallNetworkType int type = lastNetworkType;
-    if (info != null) {
+    if (info != null && info.getType() == ConnectivityManager.TYPE_VPN) {
+      // XGram: under a VPN the active NetworkInfo is TYPE_VPN; the VPN's capabilities list the transports under it.
+      // Without this the call kept UNKNOWN, which tgcalls counts as mobile data.
+      NetworkCapabilities nc = null;
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        try {
+          nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        } catch (Throwable t) {
+          nc = null; // https://issuetracker.google.com/issues/175055271
+        }
+      }
+      if (nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+        type = CallNetworkType.WIFI;
+      } else if (nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+        type = CallNetworkType.ETHERNET;
+      } else if (nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+        type = CallNetworkType.OTHER_MOBILE;
+      } else {
+        // The VPN lists no transport (Android 8.1 and older, or a VPN that declares none): the type WatchDog found.
+        final int connectionType = TdlibManager.instance().watchDog().getConnectionType();
+        if (connectionType == WatchDog.CONNECTION_TYPE_WIFI) {
+          type = CallNetworkType.WIFI;
+        } else if (connectionType == WatchDog.CONNECTION_TYPE_MOBILE || connectionType == WatchDog.CONNECTION_TYPE_ROAMING) {
+          type = CallNetworkType.OTHER_MOBILE;
+        }
+      }
+    } else if (info != null) {
       switch (info.getType()) {
         case ConnectivityManager.TYPE_MOBILE:
           switch (info.getSubtype()) {
@@ -1483,7 +1511,9 @@ public class TGCallService extends Service implements
     }
 
     if (mobileSentDiff > 0 || mobileReceivedDiff > 0 || durationDiff > 0) {
-      TdApi.NetworkType type = lastNetInfo != null && lastNetInfo.isRoaming() ? new TdApi.NetworkTypeMobileRoaming() : new TdApi.NetworkTypeMobile();
+      // XGram: WatchDog knows roaming under a VPN too (the VPN's NetworkInfo never reads as roaming).
+      final boolean roaming = TdlibManager.instance().watchDog().isRoaming() || (lastNetInfo != null && lastNetInfo.isRoaming());
+      TdApi.NetworkType type = roaming ? new TdApi.NetworkTypeMobileRoaming() : new TdApi.NetworkTypeMobile();
       tdlib.send(new TdApi.AddNetworkStatistics(new TdApi.NetworkStatisticsEntryCall(type, mobileSentDiff, mobileReceivedDiff, durationDiff)), tdlib.typedOkHandler());
     }
   }
