@@ -435,6 +435,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           setReason(view, XgramSettingDeps.allChatsLabelReason(tdlib));
         } else if (id == R.id.btn_xgramHideFolders) {
           view.getToggler().setRadioEnabled(settings.hideFolders(tdlib.accountId()), isUpdate);
+        } else if (id == R.id.btn_xgramHideAllChats) {
+          view.getToggler().setRadioEnabled(settings.hideAllChats(tdlib.accountId()), isUpdate);
+          setReason(view, XgramSettingDeps.hideAllChatsReason(tdlib));
         } else if (id == R.id.btn_xgramPullToNext) {
           view.getToggler().setRadioEnabled(settings.pullToNext(), isUpdate);
         } else if (id == R.id.btn_xgramR7ChannelReactions) {
@@ -767,7 +770,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(header(R.string.XgramHeaderFolders));
     addRows(items, toggle(R.id.btn_xgramHideFolders, R.string.XgramHideFolders, R.string.XgramHideFoldersSub));
     items.add(description(R.string.XgramChatListFoldersInfo));
-    addRows(items, toggle(R.id.btn_xgramAllChatsLabel, R.string.XgramAllChatsLabel, R.string.XgramAllChatsLabelSub));
+    addRows(items,
+      toggle(R.id.btn_xgramHideAllChats, R.string.XgramHideAllChats, R.string.XgramHideAllChatsSub),
+      toggle(R.id.btn_xgramAllChatsLabel, R.string.XgramAllChatsLabel, R.string.XgramAllChatsLabelSub)
+    );
 
     items.add(header(R.string.XgramChats));
     addRows(items,
@@ -1705,6 +1711,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramHideFolders) {
       settings.setHideFolders(tdlib.accountId(), adapter.toggleView(v));
       adapter.updateValuedSettingById(R.id.btn_xgramAllChatsLabel);
+      adapter.updateValuedSettingById(R.id.btn_xgramHideAllChats);
+      return;
+    } else if (id == R.id.btn_xgramHideAllChats) {
+      if (XgramSettingDeps.hideAllChatsEnabled(tdlib)) {
+        settings.setHideAllChats(tdlib.accountId(), adapter.toggleView(v));
+        adapter.updateValuedSettingById(R.id.btn_xgramAllChatsLabel);
+      }
       return;
     } else if (id == R.id.btn_xgramChatLook) {
       org.thunderdog.challegram.ui.MessagesController c = new org.thunderdog.challegram.ui.MessagesController(context, tdlib);

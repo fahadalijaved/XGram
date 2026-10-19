@@ -51,12 +51,12 @@ public final class XgramBackup {
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_",
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
-    XgramSettings.KEY_HIDE_FOLDERS, com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX
+    XgramSettings.KEY_HIDE_FOLDERS, XgramSettings.KEY_HIDE_ALL_CHATS, com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX
   };
 
   /** Kept per account slot, so exported by Telegram user in "accounts" instead of as they are. */
   private static boolean isPerAccountKey (String key) {
-    return key.startsWith(XgramSettings.KEY_HIDE_FOLDERS) || key.startsWith(com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX);
+    return key.startsWith(XgramSettings.KEY_HIDE_FOLDERS) || key.startsWith(XgramSettings.KEY_HIDE_ALL_CHATS) || key.startsWith(com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX);
   }
   /** Telegram X's own per account list of folders hidden on this device ("Hide in XGram" in Chat folders). */
   private static final String HIDDEN_FOLDERS_KEY = "disabled_chat_filter_ids";
@@ -84,6 +84,7 @@ public final class XgramBackup {
       }
       JSONObject values = new JSONObject();
       values.put("hideFolders", XgramSettings.instance().hideFolders(account.id));
+      values.put("hideAllChats", XgramSettings.instance().hideAllChats(account.id));
       values.put("hiddenFolders", hiddenFolders);
       values.put("autoTranslate", com.fahadali.xgram.chats.XgramAutoTranslate.exportAccount(account.id)); // chats set in their menu
       accounts.put(user, values);
@@ -104,6 +105,11 @@ public final class XgramBackup {
         pmc().putBoolean(XgramSettings.hideFoldersKey(account.id), true);
       } else {
         pmc().remove(XgramSettings.hideFoldersKey(account.id));
+      }
+      if (values.optBoolean("hideAllChats", false)) {
+        pmc().putBoolean(XgramSettings.hideAllChatsKey(account.id), true);
+      } else {
+        pmc().remove(XgramSettings.hideAllChatsKey(account.id));
       }
       JSONArray hiddenFolders = values.optJSONArray("hiddenFolders");
       String key = TdlibSettingsManager.key(HIDDEN_FOLDERS_KEY, account.id);

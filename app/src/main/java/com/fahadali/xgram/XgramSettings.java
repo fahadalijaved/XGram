@@ -64,6 +64,8 @@ public final class XgramSettings {
   public static final String KEY_ALL_CHATS_LABEL = "xgram_all_chats_label";
   /** Prefix: followed by the account id (see {@link #hideFolders}). */
   public static final String KEY_HIDE_FOLDERS = "xgram_hide_folders_";
+  /** Prefix: followed by the account id (see {@link #hideAllChats}). */
+  public static final String KEY_HIDE_ALL_CHATS = "xgram_hide_all_chats_";
   public static final String KEY_PULL_TO_NEXT = "xgram_pull_to_next";
   public static final String KEY_DOWNLOAD_BOOST = "xgram_download_boost_on";
   public static final String KEY_DOWNLOAD_BOOST_LEVEL = "xgram_download_boost_level";
@@ -1080,6 +1082,23 @@ public final class XgramSettings {
 
   public void setHideFolders (int accountId, boolean value) {
     put(hideFoldersKey(accountId), value);
+  }
+
+  /** Key of {@link #hideAllChats} for one account. */
+  public static String hideAllChatsKey (int accountId) {
+    return KEY_HIDE_ALL_CHATS + accountId;
+  }
+
+  /**
+   * No "All chats" tab in XGram for this account while another folder has a tab (XgramSettingDeps.allChatsHidden): the
+   * first tab opens instead and keeps the archive row. Nothing changes on the server.
+   */
+  public boolean hideAllChats (int accountId) {
+    return pmc().getBoolean(hideAllChatsKey(accountId), false);
+  }
+
+  public void setHideAllChats (int accountId, boolean value) {
+    put(hideAllChatsKey(accountId), value);
   }
 
   public void setTwoPaneLayout (boolean value) {

@@ -47,6 +47,7 @@ public final class XgramAccountData {
         pmc.removeByPrefix(prefix + suffix);
       }
       pmc.remove(XgramSettings.hideFoldersKey(accountId));
+      pmc.remove(XgramSettings.hideAllChatsKey(accountId));
       XgramLocalNames.forgetAccount(accountId);
       XgramLastSeen.forgetAccount(accountId);
       XgramGhost.forgetAccount(accountId);

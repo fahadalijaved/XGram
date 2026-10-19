@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Hide All chats (Chat folders, Settings > XGram > Chat list, the All chats tab's menu) -->
+  <string name="XgramHideAllChats">Hide All chats</string>
+  <string name="XgramShowAllChats">Show All chats</string>
+  <string name="XgramHideAllChatsSub">The first folder opens instead</string>
+  <string name="XgramHideAllChatsNoFolder">Needs another folder tab</string>
+  <string name="XgramHideAllChatsNeedFolder">Show another folder tab first</string>
+  <string name="XgramHideAllChatsInfo">To show All chats again, hold a folder tab</string>
+  <string name="XgramAllChatsLabelHidden">All chats is hidden</string>
+</resources>

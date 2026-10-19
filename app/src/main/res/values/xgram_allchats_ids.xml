@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Hide All chats -->
+  <item type="id" name="btn_xgramHideAllChats" />
+  <item type="id" name="btn_xgramShowAllChats" />
+</resources>

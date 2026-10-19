@@ -2556,6 +2556,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           if (c != null && c.isPullingArchive()) {
             return false;
           }
+        } else if (controller instanceof ChatsController && ((ChatsController) controller).xgramHasArchiveRow() && ((ChatsController) controller).isPullingArchive()) {
+          return false; // XGram: the first tab's archive row while All chats has no tab
         }
         if (!xgramFabStaysOnScroll()) {
           composeWrap.hide(); // XGram M3E: a FAB at the side stays where it is while the floating toolbar slides away
@@ -2718,7 +2720,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (chatFilter != null) {
       chats.setArguments(new ChatsController.Arguments(chatFilter).setTag(filter).setChatList(chatList).setIsBase(true));
     } else if (chatList != null) {
-      chats.setArguments(new ChatsController.Arguments(chatList).setTag(filter).setIsBase(true));
+      chats.setArguments(new ChatsController.Arguments(chatList).setTag(filter).setIsBase(true).xgramSetArchiveRow(xgramArchiveRowFor(chatList))); // XGram
     }
     return chats;
   }
@@ -3130,12 +3132,68 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           updatePagerSections(false);
         }
       });
+    } else if (com.fahadali.xgram.XgramSettings.hideAllChatsKey(tdlib.accountId()).equals(key)) {
+      UI.post(() -> {
+        if (!isDestroyed() && Settings.instance().chatFoldersEnabled()) {
+          updatePagerSections(false); // XGram: All chats leaves the tabs or comes back
+        }
+      });
     }
   };
 
   /** XGram: the archive gets a tab only while folders aren't hidden in XGram (Chat folders, Hide folders in XGram). */
   private boolean xgramArchiveTabEnabled () {
     return tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_ARCHIVE) && !com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId());
+  }
+
+  /**
+   * XGram: the archive row lives at the top of All chats. While All chats has no tab (Hide All chats) and the archive
+   * has none of its own, the first tab shows it instead, so the archive stays one pull away.
+   */
+  private boolean xgramArchiveRowFor (@Nullable TdApi.ChatList chatList) {
+    if (chatList == null || !TD.isChatListFolder(chatList) || !hasFolders() || !Td.equalsTo(pagerChatLists.get(0), chatList)) {
+      return false;
+    }
+    return indexOfChatList(ChatPosition.CHAT_LIST_MAIN) == -1 && indexOfChatList(ChatPosition.CHAT_LIST_ARCHIVE) == -1;
+  }
+
+  /**
+   * XGram: a folder page made before the tabs changed is made again when the archive row has to come or go
+   * (xgramArchiveRowFor): the page shown swaps once the new one is ready, as for a filter, the others at once.
+   */
+  private void xgramCheckArchiveRows () {
+    if (getViewPager() == null || !hasFolders()) {
+      return;
+    }
+    final int currentPosition = getCurrentPagerItemPosition();
+    boolean replaced = false;
+    for (int position = 0; position < pagerChatLists.size(); position++) {
+      TdApi.ChatList chatList = pagerChatLists.get(position);
+      if (!TD.isChatListFolder(chatList)) {
+        continue;
+      }
+      long itemId = getPagerItemId(chatList);
+      ViewController<?> cachedController = getCachedControllerForItemId(itemId);
+      if (!(cachedController instanceof ChatsController)) {
+        continue;
+      }
+      @Filter int filter = getSelectedFilter(itemId);
+      boolean needArchiveRow = filter == FILTER_NONE && xgramArchiveRowFor(chatList);
+      if (((ChatsController) cachedController).xgramHasArchiveRow() == needArchiveRow) {
+        continue;
+      }
+      if (position == currentPosition) {
+        postApplyFilter(itemId, chatList, filter);
+      } else {
+        ViewController<?> controller = newChatsController(chatList, filter);
+        modifyNewPagerItemController(controller);
+        replaceController(itemId, controller, /* notifyAdapter */ false);
+        replaced = true;
+      }
+    }
+    if (replaced) {
+      notifyPagerItemsChanged();
+    }
   }
 
   private void xgramUpdateComposeVisibility () {
@@ -4023,9 +4081,16 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     if (isMain) {
       if (!Config.RESTRICT_HIDING_MAIN_LIST) {
         options.item(new OptionItem(R.id.btn_hideFolder, Lang.getString(R.string.HideAllChats), OptionColor.NORMAL, R.drawable.baseline_eye_off_24));
+      } else if (com.fahadali.xgram.XgramSettingDeps.hideAllChatsEnabled(tdlib)) {
+        // XGram: All chats hides like a folder while another folder has a tab (Chat folders, Hide All chats)
+        options.item(new OptionItem(R.id.btn_xgramHideAllChats, Lang.getString(R.string.XgramHideAllChats), OptionColor.NORMAL, R.drawable.baseline_eye_off_24));
       }
     } else if (isFolder || isArchive) {
       options.item(new OptionItem(R.id.btn_hideFolder, Lang.getString(R.string.HideFolder), OptionColor.NORMAL, R.drawable.baseline_eye_off_24));
+    }
+    if (!isMain && com.fahadali.xgram.XgramSettingDeps.allChatsHidden(tdlib)) {
+      // XGram: while All chats has no tab, any tab's menu brings it back
+      options.item(new OptionItem(R.id.btn_xgramShowAllChats, Lang.getString(R.string.XgramShowAllChats), OptionColor.NORMAL, R.drawable.baseline_forum_24));
     }
     if (isFolder) {
       options.item(new OptionItem(R.id.btn_removeFolder, Lang.getString(R.string.RemoveFolder), OptionColor.RED, R.drawable.baseline_delete_24));
@@ -4059,6 +4124,20 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
             .show(tdlib, text)
             .hideDelayed(3500, TimeUnit.MILLISECONDS);
         }
+      } else if (id == R.id.btn_xgramHideAllChats) {
+        // XGram: the tabs follow from the settings listener (xgramSettingsListener); the first tab opens instead
+        com.fahadali.xgram.XgramSettings.instance().setHideAllChats(tdlib.accountId(), true);
+        if (headerCell != null) {
+          context()
+            .tooltipManager()
+            .builder(headerCell.getTopView())
+            .locate((targetView, outRect) -> outRect.left = outRect.right = Screen.dp(56f) - (int) targetView.getX())
+            .controller(this)
+            .show(tdlib, Lang.getString(R.string.XgramHideAllChatsInfo))
+            .hideDelayed(3500, TimeUnit.MILLISECONDS);
+        }
+      } else if (id == R.id.btn_xgramShowAllChats) {
+        com.fahadali.xgram.XgramSettings.instance().setHideAllChats(tdlib.accountId(), false); // XGram
       } else if (id == R.id.btn_folderIncludeChats) {
         tdlib.send(new TdApi.GetChatFolder(chatFolderId), (chatFolder, error) -> runOnUiThreadOptional(() -> {
           if (error != null) {
@@ -4485,9 +4564,12 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       chatFolders = new TdApi.ChatFolderInfo[0]; // XGram: folder tabs hidden here only, the folders stay on the account
     }
     boolean xgramArchiveTab = xgramArchiveTabEnabled();
+    // XGram: Hide All chats leaves All chats out while another folder has a tab (none while folder tabs are hidden:
+    // chatFolders is empty then); the first tab opens instead and gets the archive row (xgramArchiveRowFor)
+    boolean xgramMainTab = !(com.fahadali.xgram.XgramSettings.instance().hideAllChats(tdlib.accountId()) && com.fahadali.xgram.XgramSettingDeps.hasFolderTab(tdlib, chatFolders));
     if (chatFolders.length > 0 || xgramArchiveTab) {
       int chatListCount = chatFolders.length;
-      if (tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_MAIN)) {
+      if (xgramMainTab && tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_MAIN)) {
         mainChatListPosition = MathUtils.clamp(mainChatListPosition, 0, chatListCount);
         chatListCount++;
       } else {
@@ -4547,6 +4629,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       }
     }
     notifyPagerItemPositionsChanged();
+    xgramCheckArchiveRows(); // XGram: the archive row follows the first tab while All chats has none
     ViewPager pager = getViewPager();
     if (pager != null) {
       onPageSelected(pager.getCurrentItem());
@@ -4937,6 +5020,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           return false;
       }
       ChatsController c = (ChatsController) controller;
-      return Td.equalsTo(c.chatList(), chatList) && ObjectUtils.equals(filter, c.getArgumentsStrict().tag);
+      return Td.equalsTo(c.chatList(), chatList) && ObjectUtils.equals(filter, c.getArgumentsStrict().tag) &&
+        c.xgramHasArchiveRow() == (filter == FILTER_NONE && xgramArchiveRowFor(chatList)); // XGram: and the archive row
   }
 }
