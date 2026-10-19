@@ -7787,7 +7787,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
     }
     final ReplyInfo replyTo = getCurrentReplyId();
-    final Object hold = com.fahadali.xgram.chats.XgramUndoSend.beginFiles(this, sendOptions, caption, replyTo, ordered, names.toArray(new String[0]));
+    // The options as sendFiles completes them (the chat's silent mode), for the bar; the requests get their own.
+    final TdApi.MessageSendOptions shownOptions = Td.newSendOptions(sendOptions, null, obtainSilentMode());
+    final Object hold = com.fahadali.xgram.chats.XgramUndoSend.beginFiles(this, shownOptions, caption, replyTo, ordered, names.toArray(new String[0]));
     if (hold == null) {
       return false;
     }
