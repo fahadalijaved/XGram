@@ -2,7 +2,7 @@
 # Writes local.properties for a CI build (the file is gitignored; nothing tracked changes).
 #
 # Required env:
-#   XGRAM_APP_VERSION          base version number N (see version.sh); versionCode = N*1000 + 302 (arm64) / 300 (universal)
+#   XGRAM_APP_VERSION          base version number N (see version.sh); versionCode = N*1000 + 502 (arm64) / 501 (arm32)
 #   XGRAM_KEYSTORE_PROPERTIES  path written by write-keystore.sh
 #   ANDROID_HOME               Android SDK (no spaces)
 # Optional env:

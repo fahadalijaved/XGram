@@ -17,11 +17,11 @@ on:
   workflow_dispatch:
     inputs:
       flavor:
-        description: Which APK(s) to build
+        description: 'Which APK(s) to build: arm64 (most phones), arm32 (older 32-bit phones), both = arm64 + arm32'
         type: choice
         options:
           - arm64
-          - universal
+          - arm32
           - both
         default: arm64
       build_type:

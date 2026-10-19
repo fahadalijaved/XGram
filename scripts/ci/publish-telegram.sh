@@ -6,6 +6,7 @@
 #
 # Runs:  xgram_bot.py publish --apk A [--apk B] --version V --commit SHA --notes FILE --to channel
 #                             [--kind ci|stable] [--announce updates] [--send]
+# The APKs go out as one album: arm64 (arm64-v8a) first, then arm32 (armeabi-v7a).
 # --kind labels the posts "CI build" or "Stable" (the bot's default in the channel is ci).
 # Without --send nothing is sent: the bot prints what it would send (its default dry run).
 #
@@ -74,9 +75,25 @@ bot=${XGRAM_BOT_SCRIPT:-$XGRAM_ROOT/tools/xgram/telegram/xgram_bot.py}
 [[ -f "$bot" ]] || die "Bot script not found: $bot (commit tools/xgram/telegram/ first)."
 
 shopt -s nullglob
-apks=("$dir"/*.apk)
+found=("$dir"/*.apk)
 shopt -u nullglob
-((${#apks[@]} > 0)) || die "No APKs in $dir"
+((${#found[@]} > 0)) || die "No APKs in $dir"
+
+# Album order (one caption per file, labelled with its ABI by the bot): arm64-v8a for most phones first, then
+# armeabi-v7a (arm32) for older 32-bit phones, then anything else.
+apks=()
+for rank in arm64-v8a armeabi-v7a other; do
+  for apk in "${found[@]}"; do
+    case "${apk##*/}" in
+      *-arm64-v8a*) abi=arm64-v8a ;;
+      *-armeabi-v7a*) abi=armeabi-v7a ;;
+      *) abi=other ;;
+    esac
+    if [[ "$abi" == "$rank" ]]; then
+      apks+=("$apk")
+    fi
+  done
+done
 
 py=$(python_cmd)
 

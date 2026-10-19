@@ -8,8 +8,8 @@
 #                                             (ARTIFACTS/<artifact name>/...) into DIR; outputs version_name
 #
 # APK locations (app/build.gradle.kts):
-#   arm64:     app/build/outputs/apk/latestArm64/<type>/XGram-<versionName>-arm64-v8a[-debug].apk
-#   universal: app/build/outputs/apk/latestUniversal/<type>/XGram-<versionName>[-debug].apk
+#   arm64: app/build/outputs/apk/latestArm64/<type>/XGram-<versionName>-arm64-v8a[-debug].apk
+#   arm32: app/build/outputs/apk/latestArm32/<type>/XGram-<versionName>-armeabi-v7a[-debug].apk
 set -euo pipefail
 # shellcheck source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -35,8 +35,8 @@ else
   require_env XGRAM_FLAVOR XGRAM_BUILD_TYPE
   case "$XGRAM_FLAVOR" in
     arm64) variant=latestArm64 ;;
-    universal) variant=latestUniversal ;;
-    *) die "XGRAM_FLAVOR must be arm64 or universal, got: $XGRAM_FLAVOR" ;;
+    arm32) variant=latestArm32 ;;
+    *) die "XGRAM_FLAVOR must be arm64 or arm32, got: $XGRAM_FLAVOR" ;;
   esac
   case "$XGRAM_BUILD_TYPE" in
     debug | release) ;;

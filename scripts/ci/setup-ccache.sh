@@ -8,7 +8,7 @@
 # build cache does).
 #
 # Env (optional): XGRAM_CCACHE_MAXSIZE (default 2G per flavor/build type), XGRAM_FLAVOR, XGRAM_BUILD_TYPE.
-# Outputs: dir=<CCACHE_DIR>, key_prefix=ccache-<os>-ndk<version>-<flavor>-<build type>-
+# Outputs: dir=<CCACHE_DIR>, key_prefix=ccache-<os>-ndk<version>-<flavor (arm64|arm32)>-<build type>-
 set -euo pipefail
 # shellcheck source=lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
