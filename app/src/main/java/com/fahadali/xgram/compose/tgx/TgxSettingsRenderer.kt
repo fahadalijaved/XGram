@@ -158,6 +158,8 @@ class TgxSettingsRenderer private constructor(
 
   private val noSwipeAreas = HashMap<Any, () -> Rect?>()
   private var pendingScroll: PendingScroll? = null
+  /** A settings search result's scroll: only the pulse effect applies it, and the row pulses once the list is there. */
+  private var pendingPulseScroll: PendingScroll? = null
 
   private class PendingScroll(val row: TgxRow?, val offset: Int, val smooth: Boolean)
 
@@ -742,7 +744,8 @@ class TgxSettingsRenderer private constructor(
       syncStructure()
     }
     val row = rows.getOrNull(position) ?: return
-    scrollTo(position, Screen.dp(72f), !XgramMotion.reduce()) // a jump with Reduce motion
+    // Not through scrollRequest: the scroll effect would take it and the row would pulse while the list still moves
+    pendingPulseScroll = PendingScroll(row, Screen.dp(72f), !XgramMotion.reduce()) // a jump with Reduce motion
     pulseRow.value = row
     pulseRequest.intValue++
   }
@@ -758,6 +761,17 @@ class TgxSettingsRenderer private constructor(
   internal suspend fun applyPendingScroll() {
     val request = pendingScroll ?: return
     pendingScroll = null
+    runScroll(request)
+  }
+
+  /** The pulse's scroll (TgxSettingsList's pulse effect): returns once the list is at the row. */
+  internal suspend fun applyPulseScroll() {
+    val request = pendingPulseScroll ?: return
+    pendingPulseScroll = null
+    runScroll(request)
+  }
+
+  private suspend fun runScroll(request: PendingScroll) {
     var index = if (request.row == null) 0 else blockIndexOf(request.row)
     if (index < 0) {
       return

@@ -63,7 +63,8 @@ internal object XgramSearchIndex {
   /** The Navigation bar page (Appearance > Navigation bar), titles in the app language. */
   fun navBar(): List<Item> {
     val section = XgramSettingsController.SECTION_APPEARANCE
-    val path = Lang.getString(R.string.XgramSettingsSearchPath, Lang.getString(R.string.XgramAppearance), Lang.getString(R.string.XgramBottomNavOption))
+    val pathParts = listOf(Lang.getString(R.string.XgramAppearance), Lang.getString(R.string.XgramBottomNavOption))
+    val path = Lang.getString(R.string.XgramSettingsSearchPath, pathParts[0], pathParts[1])
     val kw = intArrayOf(R.string.XgramSearchKwNavBar)
     val icon = R.drawable.baseline_palette_24
     val firstTab = try {
@@ -73,7 +74,7 @@ internal object XgramSearchIndex {
     }
     fun item(name: String, id: Int, title: Int, key: String?): Item {
       val text = Lang.getString(title)
-      return Item("x:navbar/$name", XgramSearchHit(XgramPage.NAV_BAR, section, 0, id, key, false, icon, text, text.lowercase(), path), kw)
+      return Item("x:navbar/$name", XgramSearchHit(XgramPage.NAV_BAR, section, 0, id, key, false, icon, text, text.lowercase(), path, pathParts = pathParts), kw)
     }
     return listOf(
       item("switch", R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption, null),

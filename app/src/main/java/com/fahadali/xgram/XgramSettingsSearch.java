@@ -38,6 +38,8 @@ import com.fahadali.xgram.search.SearchHit;
 import com.fahadali.xgram.search.XgramUniversalSearchController;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -63,8 +65,10 @@ final class XgramSettingsSearch {
     final boolean isToggle;
     final int iconRes, textColorId;
     final String title, titleLower, path;
+    /** The crumbs of {@link #path} one by one (the universal search sets each in the app's direction). */
+    final List<String> pathParts;
 
-    Entry (int section, int subPage, @IdRes int id, @Nullable String key, boolean isToggle, int iconRes, int textColorId, String title, String path) {
+    Entry (int section, int subPage, @IdRes int id, @Nullable String key, boolean isToggle, int iconRes, int textColorId, String title, String path, List<String> pathParts) {
       this.section = section;
       this.subPage = subPage;
       this.id = id;
@@ -75,6 +79,7 @@ final class XgramSettingsSearch {
       this.title = title;
       this.titleLower = title.toLowerCase();
       this.path = path;
+      this.pathParts = pathParts;
     }
   }
 
@@ -84,20 +89,22 @@ final class XgramSettingsSearch {
     Set<String> seen = new HashSet<>();
     for (int section : XgramSettingsController.SEARCH_SECTIONS) {
       String sectionName = Lang.getString(XgramSettingsController.sectionTitleRes(section));
-      addEntries(entries, seen, controller.buildSectionItems(section), section, 0, sectionName, XgramSettingsController.sectionIcon(section), true);
+      addEntries(entries, seen, controller.buildSectionItems(section), section, 0, sectionName, Collections.singletonList(sectionName), XgramSettingsController.sectionIcon(section), true);
     }
     for (int subPage : XgramSettingsController.SEARCH_SUB_PAGES) {
       int parent = XgramSettingsController.subPageParent(subPage);
       String pageName = Lang.getString(XgramSettingsController.subPageTitleRes(subPage));
       boolean topLevel = parent == XgramSettingsController.SECTION_MAIN;
-      String base = topLevel ? pageName : Lang.getString(R.string.XgramSettingsSearchPath, Lang.getString(XgramSettingsController.sectionTitleRes(parent)), pageName);
+      String parentName = topLevel ? null : Lang.getString(XgramSettingsController.sectionTitleRes(parent));
+      String base = topLevel ? pageName : Lang.getString(R.string.XgramSettingsSearchPath, parentName, pageName);
+      List<String> baseParts = topLevel ? Collections.singletonList(pageName) : Arrays.asList(parentName, pageName);
       // A page opened from a section is two levels deep already: its own headers would make the path too long.
-      addEntries(entries, seen, controller.buildSubPageItems(subPage), parent, subPage, base, XgramSettingsController.subPageIcon(subPage), topLevel);
+      addEntries(entries, seen, controller.buildSubPageItems(subPage), parent, subPage, base, baseParts, XgramSettingsController.subPageIcon(subPage), topLevel);
     }
     return entries;
   }
 
-  private static void addEntries (List<Entry> entries, Set<String> seen, List<ListItem> items, int section, int subPage, String base, int defaultIcon, boolean withGroups) {
+  private static void addEntries (List<Entry> entries, Set<String> seen, List<ListItem> items, int section, int subPage, String base, List<String> baseParts, int defaultIcon, boolean withGroups) {
     String group = null;
     for (ListItem item : items) {
       int viewType = item.getViewType();
@@ -124,11 +131,18 @@ final class XgramSettingsSearch {
       if (!isNew) {
         continue;
       }
-      String path = withGroups && group != null ? Lang.getString(R.string.XgramSettingsSearchPath, base, group) : base;
+      boolean grouped = withGroups && group != null;
+      String path = grouped ? Lang.getString(R.string.XgramSettingsSearchPath, base, group) : base;
+      List<String> pathParts = baseParts;
+      if (grouped) {
+        pathParts = new ArrayList<>(baseParts.size() + 1);
+        pathParts.addAll(baseParts);
+        pathParts.add(group);
+      }
       // Switches of the pages further in belong to those pages: their results open the page instead.
       boolean isToggle = subPage == 0 && (viewType == ListItem.TYPE_RADIO_SETTING || viewType == ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER);
       int icon = item.getIconResource() != 0 ? item.getIconResource() : defaultIcon;
-      entries.add(new Entry(section, subPage, item.getId(), key, isToggle, icon, item.getTextColorId(ColorId.NONE), title.toString(), path));
+      entries.add(new Entry(section, subPage, item.getId(), key, isToggle, icon, item.getTextColorId(ColorId.NONE), title.toString(), path, pathParts));
     }
   }
 

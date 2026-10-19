@@ -168,7 +168,7 @@ internal fun TgxSettingsScreen(r: TgxSettingsRenderer) {
         // A settings search result: once the list is at the row, it pulses twice (held once with Reduce motion)
         val pulseSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
         LaunchedEffect(pulse) {
-          r.applyPendingScroll()
+          r.applyPulseScroll()
           val row = r.pulseRow.value
           val view = row?.holder?.itemView
           if (row != null && row.kind == TgxRowKind.FALLBACK && view != null) {
@@ -527,12 +527,27 @@ private fun pulseContainer(r: TgxSettingsRenderer, row: TgxRow): Color {
   return if (p > 0f) lerp(base, MaterialTheme.colorScheme.secondaryContainer, p) else base
 }
 
+/**
+ * The tile color of a selected radio [row]: M3's secondaryContainer, toward tertiaryContainer while a settings search
+ * result pulses it (its tile is secondaryContainer already, so the usual pulse would not show).
+ */
+@Composable
+private fun pulseSelectedContainer(r: TgxSettingsRenderer, row: TgxRow): Color {
+  val cs = MaterialTheme.colorScheme
+  if (r.pulseRow.value !== row) {
+    return cs.secondaryContainer
+  }
+  val p = r.pulseProgress.value
+  return if (p > 0f) lerp(cs.secondaryContainer, cs.tertiaryContainer, p) else cs.secondaryContainer
+}
+
 /** The row colors; [dimmed]: a row that looks disabled but still takes taps keeps its tile, its content is dimmed. */
 @Composable
 private fun tgxRowColors(r: TgxSettingsRenderer, row: TgxRow, dimmed: Boolean): ListItemColors {
   val container = pulseContainer(r, row)
+  val selected = pulseSelectedContainer(r, row)
   if (!dimmed) {
-    return settingsRowColors(container = container)
+    return settingsRowColors(container = container).copy(selectedContainerColor = selected)
   }
   val cs = MaterialTheme.colorScheme
   val off = cs.onSurface.copy(alpha = DisabledContentAlpha)
@@ -543,7 +558,8 @@ private fun tgxRowColors(r: TgxSettingsRenderer, row: TgxRow, dimmed: Boolean): 
     trailingContentColor = off,
     overlineContentColor = off,
     supportingContentColor = off,
-    disabledContainerColor = container
+    disabledContainerColor = container,
+    selectedContainerColor = selected
   )
 }
 

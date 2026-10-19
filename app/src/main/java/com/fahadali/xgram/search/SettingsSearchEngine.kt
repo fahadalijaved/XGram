@@ -216,13 +216,21 @@ object SettingsSearchEngine {
     }
     val lower = Character.toLowerCase(ch)
     val decomposed = java.text.Normalizer.normalize(lower.toString(), java.text.Normalizer.Form.NFD)
-    for (k in decomposed.indices) {
-      val d = decomposed[k]
-      if (Character.getType(d) != Character.NON_SPACING_MARK.toInt()) {
-        return d
+    if (decomposed.length == 1) {
+      return decomposed[0]
+    }
+    val base = decomposed[0]
+    if (Character.getType(base) == Character.NON_SPACING_MARK.toInt()) {
+      return lower
+    }
+    // The base letter only when the rest are marks (é: e + acute); a Hangul syllable gives jamo letters, kept whole
+    for (k in 1 until decomposed.length) {
+      val t = Character.getType(decomposed[k])
+      if (t != Character.NON_SPACING_MARK.toInt() && t != Character.COMBINING_SPACING_MARK.toInt() && t != Character.ENCLOSING_MARK.toInt()) {
+        return lower
       }
     }
-    return lower
+    return base
   }
 
   /** The words of a phrase list ("dark|night mode|amoled"), normalized; English and app-language strings. */
@@ -522,13 +530,16 @@ object SettingsSearchEngine {
       }
     }
 
-    /** XGram's own path; from Settings it starts with XGram (a row of XGram's main page already names it). */
+    /**
+     * XGram's own path; from Settings it starts with XGram (a row of XGram's main page already names it). Crumb by crumb,
+     * as Telegram X's paths, so in RTL each reads in the app's direction.
+     */
     private fun xgramPath(hit: XgramSearchHit): String {
-      val own = hit.path
+      val parts = hit.pathParts.filter { it.isNotEmpty() }
       if (origin != SettingsSearch.ORIGIN_SETTINGS || (hit.section == XgramSettingsController.SECTION_MAIN && hit.subPage == 0)) {
-        return if (rtl && own.isNotEmpty()) isolate(own) else own
+        return join(parts)
       }
-      return join(listOf(label(R.string.XgramSettings), own))
+      return join(listOf(label(R.string.XgramSettings)) + parts)
     }
 
     fun xgramEntry(key: String, hit: XgramSearchHit, title: String, path: String, isPage: Boolean, kw: IntArray, order: Int): SearchEntry =

@@ -79,8 +79,14 @@ object XgramSearchHighlight {
       // A page without a settings list (the classic passcode page): the row's own view
       val id = p.row.id
       val view = if (id != 0) c.getValue().findViewById<View>(id) else null
-      if (view != null) {
-        press(view)
+      if (view != null && view.isShown) {
+        // The classic passcode page is a ScrollView: bring the row into view (a jump), then press it there
+        view.requestRectangleOnScreen(android.graphics.Rect(0, 0, view.width, view.height), true)
+        view.post {
+          if (!c.isDestroyed) {
+            press(view)
+          }
+        }
       } else {
         giveUp(c, p)
       }

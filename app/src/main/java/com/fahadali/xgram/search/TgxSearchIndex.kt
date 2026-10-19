@@ -44,9 +44,9 @@ internal object TgxSearchIndex {
 
   /**
    * Rows of the indexed pages left out on purpose: per-chat or per-user lists, radio options of dialogs, rows that need
-   * the storage statistics, debug-only, crash screen and source code rows, suggestions, edit fields, rows whose result
-   * opens their page directly (XGram, XGram privacy, Push services). Ids starting with btn_secret_, btn_test_,
-   * btn_tdlib_ (debug sections) and btn_customChat_ (one chat's notifications) are left out as a whole.
+   * the storage or the network statistics, debug-only, crash screen and source code rows, suggestions, edit fields, rows
+   * whose result opens their page directly (XGram, XGram privacy, Push services). Ids starting with btn_secret_,
+   * btn_test_, btn_tdlib_ (debug sections) and btn_customChat_ (one chat's notifications) are left out as a whole.
    */
   @JvmField
   val IGNORED: IntArray = intArrayOf(
@@ -56,7 +56,7 @@ internal object TgxSearchIndex {
     R.id.btn_xgramPushRegisterAgain, R.id.btn_alwaysAllow, R.id.btn_neverAllow, R.id.btn_chatDoNotTranslateAppLang,
     R.id.btn_chatDoNotTranslateSelected, R.id.btn_appLogs, R.id.language, R.id.btn_xgramSettings, R.id.btn_xgramTgxPrivacy,
     R.id.btn_pushService, R.id.btn_experiment, R.id.btn_launchApp, R.id.btn_update, R.id.btn_showError, R.id.btn_shareError,
-    R.id.btn_eraseDatabase, R.id.btn_changePhoneNumber, R.id.btn_logout, R.id.btn_checkUpdates,
+    R.id.btn_eraseDatabase, R.id.btn_changePhoneNumber, R.id.btn_logout, R.id.btn_checkUpdates, R.id.btn_dataUsageOther,
     R.id.btn_autoNightModeScheduled_timeOn, R.id.btn_autoNightModeScheduled_timeOff, R.id.btn_autoNightModeScheduled_location
   )
 
@@ -483,7 +483,12 @@ internal object TgxSearchIndex {
     row(photo, "rule/photo/public", R.string.PublicPhoto, RowRef(R.id.btn_togglePermission, stringRes = R.string.PublicPhoto),
       kw = kw(R.string.XgramSearchKwProfile), soft = true)
 
-    row(blocked, "blocked/add", R.string.BlockUser, RowRef(R.id.btn_blockSender), R.drawable.baseline_block_24, kw = kw(R.string.XgramSearchKwBlocked))
+    // Expressive design: the "Block user" row above the list, added once the blocked list loads
+    row(blocked, "blocked/add", R.string.BlockUser, RowRef(R.id.btn_blockSender), R.drawable.baseline_block_24,
+      kw = kw(R.string.XgramSearchKwBlocked), visible = { it.expressive }, soft = true)
+    // Telegram X's look: blocking starts from the header's add button; the result opens Blocked users
+    row(blocked, "blocked/add", R.string.BlockUser, null, R.drawable.baseline_block_24,
+      kw = kw(R.string.XgramSearchKwBlocked), visible = { !it.expressive })
   }
 
   private fun passcodeRows() {
@@ -642,8 +647,6 @@ internal object TgxSearchIndex {
   private fun accountRows() {
     val l = logout
     row(l, "logout/addAccount", R.string.SignOutAltAddAccount, RowRef(R.id.btn_addAccount), R.drawable.baseline_person_add_24, kw = kw(R.string.XgramSearchKwAccounts))
-    // Destructive: pointed at, never run
-    row(l, "logout/deleteAccount", R.string.DeleteAccountBtn, RowRef(R.id.btn_deleteAccount), R.drawable.baseline_delete_alert_24, kw = kw(R.string.XgramSearchKwAccount))
 
     val g = appLogs
     row(g, "logs/share", R.string.XgramLogsShare, RowRef(R.id.btn_xgramLogsShare), R.drawable.baseline_share_24)

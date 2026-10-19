@@ -19,6 +19,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.text.TextPaint;
 import android.text.TextUtils;
+import android.view.MotionEvent;
 import android.view.View;
 
 import androidx.annotation.NonNull;
@@ -98,6 +99,14 @@ public final class XgramSearchPillView extends View implements XgramPillStateLay
     super.onSizeChanged(w, h, oldw, oldh);
     pill.set(Screen.dp(SIDE), Screen.dp(TOP), w - Screen.dp(SIDE), Screen.dp(TOP + HEIGHT));
     layoutHint(w);
+  }
+
+  @Override
+  public boolean onTouchEvent (MotionEvent e) {
+    if (e.getActionMasked() == MotionEvent.ACTION_DOWN && !pill.contains(e.getX(), e.getY())) {
+      return false; // only the pill is the button (not the band kept clear for the floating button, nor the sides); the list takes the rest
+    }
+    return super.onTouchEvent(e);
   }
 
   @Override

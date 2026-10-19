@@ -20,7 +20,8 @@ import org.thunderdog.challegram.telegram.Tdlib
 
 /**
  * A settings search result: the page that holds the row (null: a row of the main page itself) and the row. [entry]: the
- * classic search's own row data (XgramSettingsSearch.Entry), for the classic XGram page's results.
+ * classic search's own row data (XgramSettingsSearch.Entry), for the classic XGram page's results. [pathParts]: the
+ * crumbs of [path] one by one, so the universal search can set each in the app's direction.
  */
 class XgramSearchHit(
   val page: XgramPage?,
@@ -33,7 +34,8 @@ class XgramSearchHit(
   val title: String,
   val titleLower: String,
   val path: String,
-  val entry: Any? = null
+  val entry: Any? = null,
+  val pathParts: List<String> = listOf(path)
 )
 
 /**
@@ -87,7 +89,7 @@ object XgramComposeBridge {
         XgramSettingsController.SUB_HIDDEN_PEOPLE -> XgramPage.HIDDEN_PEOPLE
         else -> XgramPage.fromSection(e.section)
       }
-      XgramSearchHit(page, e.section, e.subPage, e.id, e.key, e.isToggle, e.iconRes, e.title, e.titleLower, e.path, e)
+      XgramSearchHit(page, e.section, e.subPage, e.id, e.key, e.isToggle, e.iconRes, e.title, e.titleLower, e.path, e, e.pathParts)
     }
 
   /** The key a result is remembered by in the recent searches (the same since the first settings search). */
