@@ -217,21 +217,39 @@ final class XgramUndoSendStore {
   // Format: lines, the text last (it may have line breaks of its own)
 
   private static String encode (XgramUndoSendItem item, long bootId, boolean flushing) {
+    return encode(bootId, flushing, item.kind, item.chatId, item.draftChatId, item.createdWall, item.draftTopic, item.replyTo, item.silent, item.typed);
+  }
+
+  private static String encode (long bootId, boolean flushing, int kind, long chatId, long draftChatId, long createdWall,
+                                @Nullable TdApi.MessageTopic topic, @Nullable TdApi.InputMessageReplyTo replyTo, boolean silent,
+                                @Nullable TdApi.FormattedText typed) {
     StringBuilder b = new StringBuilder();
     b.append(VERSION).append('\n');
     b.append(bootId).append('\n');
     b.append(flushing ? 'F' : 'H').append('\n');
-    b.append(item.kind == XgramUndoSendItem.KIND_VOICE ? 'V' : item.kind == XgramUndoSendItem.KIND_VIDEO ? 'R' : 'T').append('\n');
-    b.append(item.chatId).append('\n');
-    b.append(item.draftChatId).append('\n');
-    b.append(item.createdWall).append('\n');
-    b.append(encodeTopic(item.draftTopic)).append('\n');
-    appendReply(b, item.replyTo);
-    b.append(item.silent ? '1' : '0').append('\n');
-    TdApi.FormattedText typed = item.typed;
+    b.append(kind == XgramUndoSendItem.KIND_VOICE ? 'V' : kind == XgramUndoSendItem.KIND_VIDEO ? 'R' : 'T').append('\n');
+    b.append(chatId).append('\n');
+    b.append(draftChatId).append('\n');
+    b.append(createdWall).append('\n');
+    b.append(encodeTopic(topic)).append('\n');
+    appendReply(b, replyTo);
+    b.append(silent ? '1' : '0').append('\n');
     b.append(XgramMedia.encodeEntities(typed != null ? typed.entities : null)).append('\n');
     b.append(typed != null && typed.text != null ? typed.text : "");
     return b.toString();
+  }
+
+  /**
+   * Rewrites a record as what is left to give back (a send TDLib refused): after a crash it becomes a draft as it is,
+   * without the check for a message that was sent.
+   */
+  static void rewrite (Record record) {
+    try {
+      pmc().putString(record.key, encode(record.bootId, record.flushing, record.kind, record.chatId, record.draftChatId,
+        record.createdWall, record.topic, record.replyTo, record.silent, record.text));
+    } catch (Throwable t) {
+      android.util.Log.e("XGram", "Undo send: cannot update the journal", t);
+    }
   }
 
   /** Four lines: the message, the quote, the checklist task, the poll option. */

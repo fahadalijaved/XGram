@@ -221,6 +221,9 @@ public final class XgramUndoSend {
       if (options == null || options.schedulingState != null || functions == null || functions.isEmpty() || Td.isEmpty(typed)) {
         return NOT_HELD;
       }
+      if (tdlib.shouldSendAsDice(typed)) {
+        return NOT_HELD; // a dice emoji, also when "Send as emoji" sends it as text
+      }
       parts = new ArrayList<>(functions.size());
       for (TdApi.Function<?> function : functions) {
         if (!(function instanceof TdApi.SendMessage)) {
@@ -702,6 +705,10 @@ public final class XgramUndoSend {
     final boolean firstFailed = failed[0];
     final MessagesController.ReplyInfo reply = firstFailed ? item.reply : null;
     final TdApi.InputMessageReplyTo replyTo = firstFailed ? item.replyTo : null;
+    final XgramUndoSendStore.Record left = new XgramUndoSendStore.Record(XgramUndoSendStore.key(item), item.accountId, BOOT_ID, false, item.kind,
+      item.chatId, item.draftChatId, item.createdWall, item.draftTopic, replyTo, item.silent, text);
+    // Until it is back somewhere, the journal holds what TDLib refused (and no longer the parts that were sent).
+    XgramUndoSendStore.rewrite(left);
     if (owner != null && owner.xgramRestoreUnsent(item.chatId, item.draftChatId, item.draftTopic, text, reply, replyTo, true)) {
       XgramUndoSendStore.remove(item);
       if (!owner.xgramShowUndoSendHint(TD.toErrorString(error), true)) {
@@ -716,8 +723,7 @@ public final class XgramUndoSend {
         UI.showToast(Lang.getString(R.string.XgramUndoSendFailedDraft, tdlib.chatTitle(item.chatId)), Toast.LENGTH_LONG);
       } else {
         // Kept: the message box of that chat takes it back when it opens (or the next launch makes it a draft).
-        keepPending(new XgramUndoSendStore.Record(XgramUndoSendStore.key(item), item.accountId, BOOT_ID, true, item.kind,
-          item.chatId, item.draftChatId, item.createdWall, item.draftTopic, replyTo, item.silent, text));
+        keepPending(left);
         if (error != null) {
           UI.showError(error);
         }
