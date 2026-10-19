@@ -16,10 +16,13 @@ package org.thunderdog.challegram.core;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.SystemClock;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
 import org.drinkless.tdlib.TdApi;
@@ -190,12 +193,112 @@ public class WatchDog {
     }
   }
 
+  /**
+   * XGram: the connection type from a network's capabilities (Android 6+), which TDLib's network statistics follow.
+   * A VPN lists the transports of the networks under it (Android 9+); when it lists none, the network Android would
+   * use without the VPN is taken. Wi-Fi, Ethernet and USB: Wi-Fi; mobile data: mobile or roaming.
+   */
+  @RequiresApi(Build.VERSION_CODES.M)
+  private static final class NetworkTypes {
+    // NetworkCapabilities.TRANSPORT_USB (Android 12) and TRANSPORT_SATELLITE (Android 15), by value.
+    private static final int TRANSPORT_USB = 8;
+    private static final int TRANSPORT_SATELLITE = 10;
+
+    static int detect (ConnectivityManager manager, Object rawNetwork) {
+      final Network network = (Network) rawNetwork;
+      final NetworkCapabilities capabilities = capabilitiesOf(manager, network);
+      if (capabilities == null) {
+        return CONNECTION_TYPE_NONE;
+      }
+      int type = typeOf(manager, network, capabilities);
+      if (type == CONNECTION_TYPE_NONE && capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+        type = best(manager);
+      }
+      return type != CONNECTION_TYPE_NONE ? type : CONNECTION_TYPE_OTHER;
+    }
+
+    static int best (ConnectivityManager manager) {
+      final Network[] networks;
+      try {
+        networks = manager.getAllNetworks();
+      } catch (Throwable t) {
+        return CONNECTION_TYPE_NONE;
+      }
+      if (networks == null) {
+        return CONNECTION_TYPE_NONE;
+      }
+      int bestType = CONNECTION_TYPE_NONE;
+      int bestRank = -1;
+      for (Network network : networks) {
+        final NetworkCapabilities capabilities = capabilitiesOf(manager, network);
+        if (capabilities == null || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+          continue;
+        }
+        final int type = typeOf(manager, network, capabilities);
+        if (type == CONNECTION_TYPE_NONE) {
+          continue;
+        }
+        // As Android picks: a working network first, then Wi-Fi before mobile data.
+        final int rank = (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) ? 2 : 0) + (type == CONNECTION_TYPE_WIFI ? 1 : 0);
+        if (rank > bestRank) {
+          bestRank = rank;
+          bestType = type;
+        }
+      }
+      return bestType;
+    }
+
+    private static int typeOf (ConnectivityManager manager, Network network, NetworkCapabilities capabilities) {
+      if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) || capabilities.hasTransport(TRANSPORT_USB)) {
+        return CONNECTION_TYPE_WIFI;
+      }
+      if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+        return isRoaming(manager, network, capabilities) ? CONNECTION_TYPE_ROAMING : CONNECTION_TYPE_MOBILE;
+      }
+      if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) || capabilities.hasTransport(TRANSPORT_SATELLITE)) {
+        // Bluetooth tethering shares a phone's mobile data.
+        return CONNECTION_TYPE_MOBILE;
+      }
+      return CONNECTION_TYPE_NONE;
+    }
+
+    private static boolean isRoaming (ConnectivityManager manager, Network network, NetworkCapabilities capabilities) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        // A VPN is roaming when a network under it is.
+        return !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING);
+      }
+      try {
+        final NetworkInfo info = manager.getNetworkInfo(network);
+        return info != null && info.isRoaming();
+      } catch (Throwable t) {
+        return false;
+      }
+    }
+
+    private static @Nullable NetworkCapabilities capabilitiesOf (ConnectivityManager manager, Network network) {
+      try {
+        return manager.getNetworkCapabilities(network);
+      } catch (Throwable t) {
+        // https://issuetracker.google.com/issues/175055271
+        return null;
+      }
+    }
+  }
+
   private CancellableRunnable backgroundStateChecker;
   private boolean inBackground = true;
 
+  // XGram: TDLib's connection state updates call this off the main thread; the check runs on the main thread like the
+  // others (the connectivity broadcast and the default network callback), so they don't race over the fields here.
+  private final Runnable backgroundCheck = () -> letsHelpDoge(false);
+
   public void helpDogeIfInBackground () {
     if (inBackground) {
-      letsHelpDoge(false);
+      if (UI.inUiThread()) {
+        letsHelpDoge(false);
+      } else {
+        UI.post(backgroundCheck);
+      }
     }
   }
 
@@ -352,10 +455,12 @@ public class WatchDog {
             if (filter(info)) {
               isOnline = true;
               int type = getConnectionType(info);
-              chosenNetworkInfo = info;
-              chosenNetwork = network;
-              if (connectionType == CONNECTION_TYPE_NONE || type != CONNECTION_TYPE_WIFI) {
+              // XGram: Wi-Fi wins, as it does in Android. Mobile data stays connected next to Wi-Fi on most phones,
+              // and letting it win here (always the case under a VPN) counted every byte as mobile data.
+              if (connectionType == CONNECTION_TYPE_NONE || type == CONNECTION_TYPE_WIFI) {
                 connectionType = type;
+                chosenNetworkInfo = info;
+                chosenNetwork = network;
               }
             } else if (availableNetworkInfo == null && info.isAvailable() && info.getType() != ConnectivityManager.TYPE_VPN) {
               availableNetworkInfo = info;
@@ -371,9 +476,9 @@ public class WatchDog {
             if (info.isConnectedOrConnecting()) {
               isOnline = true;
               int type = getConnectionType(info);
-              chosenNetworkInfo = info;
-              if (connectionType == CONNECTION_TYPE_NONE || type != CONNECTION_TYPE_WIFI) {
+              if (connectionType == CONNECTION_TYPE_NONE || type == CONNECTION_TYPE_WIFI) { // XGram: Wi-Fi wins
                 connectionType = type;
+                chosenNetworkInfo = info;
               }
             } else if (availableNetworkInfo == null && info.isAvailable()) {
               availableNetworkInfo = info;
@@ -388,6 +493,13 @@ public class WatchDog {
       chosenNetwork = null;
       isOnline = false;
       connectionType = CONNECTION_TYPE_NONE;
+    } else if (chosenNetworkInfo == null && activeNetworkInfo != null && activeNetworkInfo.getType() == ConnectivityManager.TYPE_VPN && activeNetworkInfo.isConnected()) {
+      // XGram: a VPN that blocks every other network ("Block connections without VPN"): the other networks read as
+      // blocked here, but the VPN itself is connected. Its type is the network under it (below).
+      isOnline = true;
+      chosenNetworkInfo = activeNetworkInfo;
+      chosenNetwork = activeNetwork;
+      connectionType = CONNECTION_TYPE_OTHER;
     } else if (chosenNetworkInfo == null && availableNetworkInfo != null) {
       isOnline = true;
       chosenNetworkInfo = availableNetworkInfo;
@@ -398,6 +510,15 @@ public class WatchDog {
     boolean isUnavailable = isUnavailable(chosenNetworkInfo);
     setUnavailable(isUnavailable);
     isOnline = isOnline && !isUnavailable;
+
+    if (isOnline && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      // XGram: TDLib counts traffic under the network type sent to it, so take the type from the network's
+      // capabilities: they see through a VPN (its NetworkInfo only says TYPE_VPN) and know roaming.
+      int detectedConnectionType = activeNetwork != null ? NetworkTypes.detect(manager, activeNetwork) : NetworkTypes.best(manager);
+      if (detectedConnectionType != CONNECTION_TYPE_NONE) {
+        connectionType = detectedConnectionType;
+      }
+    }
 
     if (isOnline) {
       final int previousConnectionType = this.connectionType;

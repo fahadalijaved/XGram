@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram network usage: the row (and its page) for traffic TDLib counted on networks that are neither Wi-Fi nor mobile data, shown only when there is some -->
+  <string name="XgramNetstatsOtherUsage">Other networks</string>
+</resources>

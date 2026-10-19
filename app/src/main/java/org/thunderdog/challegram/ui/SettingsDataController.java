@@ -221,6 +221,8 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
           view.setData(networkStats != null ? networkStats.getRoamingEntry() : Lang.getString(R.string.Calculating));
         } else if (itemId == R.id.btn_dataUsageWiFi) {
           view.setData(networkStats != null ? networkStats.getWiFiEntry() : Lang.getString(R.string.Calculating));
+        } else if (itemId == R.id.btn_dataUsageOther) {
+          view.setData(networkStats != null ? networkStats.getOtherEntry() : Lang.getString(R.string.Calculating));
         } else if (itemId == R.id.btn_resetNetworkStats) {
           view.setData(networkStats != null ? networkStats.getDateEntry() : Lang.getString(R.string.LoadingInformation));
         }
@@ -291,6 +293,7 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
       };
     }
     this.adapter.setItems(rawItems, false);
+    updateOtherUsageRow();
     if (forceOpenAdvanced) {
       List<ListItem> items = adapter.getItems();
       int index = adapter.indexOfViewById(R.id.btn_showAdvanced);
@@ -372,6 +375,7 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
       adapter.updateValuedSettingById(R.id.btn_dataUsageWiFi);
       adapter.updateValuedSettingById(R.id.btn_dataUsageMobile);
       adapter.updateValuedSettingById(R.id.btn_dataUsageRoaming);
+      updateOtherUsageRow();
       adapter.updateValuedSettingById(R.id.btn_resetNetworkStats);
 
       ViewController<?> c = previousStackItem();
@@ -380,6 +384,38 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
       }
     } else {
       adapter.updateValuedSettingById(R.id.btn_dataUsageTotal);
+    }
+  }
+
+  // XGram: traffic TDLib counted on other networks (NetworkTypeOther: a network that is neither Wi-Fi nor mobile data,
+  // or the app in the background with no network found) gets a row of its own while there is some, rather than being
+  // left off the page.
+  private void updateOtherUsageRow () {
+    if (mode != MODE_STATISTICS || adapter == null) {
+      return;
+    }
+    final boolean show = networkStats != null && networkStats.hasOtherUsage();
+    final int index = adapter.indexOfViewById(R.id.btn_dataUsageOther);
+    if (show == (index != -1)) {
+      if (show) {
+        adapter.updateValuedSettingById(R.id.btn_dataUsageOther);
+      }
+      return;
+    }
+    final List<ListItem> items = adapter.getItems();
+    if (show) {
+      final int roamingIndex = adapter.indexOfViewById(R.id.btn_dataUsageRoaming);
+      if (roamingIndex == -1) {
+        return;
+      }
+      items.add(roamingIndex + 1, new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      items.add(roamingIndex + 2, new ListItem(ListItem.TYPE_VALUED_SETTING, R.id.btn_dataUsageOther, R.drawable.baseline_router_24, R.string.XgramNetstatsOtherUsage));
+      adapter.notifyItemRangeInserted(roamingIndex + 1, 2);
+    } else {
+      // The row and the separator above it
+      items.remove(index);
+      items.remove(index - 1);
+      adapter.notifyItemRangeRemoved(index - 1, 2);
     }
   }
 
@@ -498,7 +534,7 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
       SettingsDataController c = new SettingsDataController(context, tdlib);
       c.setArguments(new Args(MODE_STATISTICS).setData(networkStats));
       navigateTo(c);
-    } else if (id == R.id.btn_dataUsageMobile || id == R.id.btn_dataUsageWiFi || id == R.id.btn_dataUsageRoaming) {
+    } else if (id == R.id.btn_dataUsageMobile || id == R.id.btn_dataUsageWiFi || id == R.id.btn_dataUsageRoaming || id == R.id.btn_dataUsageOther) {
       if (networkStats == null) {
         return;
       }
@@ -510,6 +546,8 @@ public class SettingsDataController extends RecyclerViewController<SettingsDataC
         type = TGNetworkStats.TYPE_ROAMING;
       } else if (id == R.id.btn_dataUsageWiFi) {
         type = TGNetworkStats.TYPE_WIFI;
+      } else if (id == R.id.btn_dataUsageOther) {
+        type = TGNetworkStats.TYPE_OTHER;
       } else {
         return;
       }

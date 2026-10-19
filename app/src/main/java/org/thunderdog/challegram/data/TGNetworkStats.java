@@ -28,6 +28,7 @@ public class TGNetworkStats {
   public static final int TYPE_MOBILE = 0;
   public static final int TYPE_WIFI = 1;
   public static final int TYPE_ROAMING = 2;
+  public static final int TYPE_OTHER = 3; // XGram: TDLib's NetworkTypeOther
 
   private static final int ENTRY_TOTAL_MEDIA = 0;
   private static final int ENTRY_TOTAL = 1;
@@ -197,9 +198,19 @@ public class TGNetworkStats {
   }
 
   public String getTotalEntry () {
-    long in = mobileStats[IN][ENTRY_TOTAL] + roamingStats[IN][ENTRY_TOTAL] + wifiStats[IN][ENTRY_TOTAL];
-    long out = mobileStats[OUT][ENTRY_TOTAL] + roamingStats[OUT][ENTRY_TOTAL] + wifiStats[OUT][ENTRY_TOTAL];
+    // XGram: other networks count too (traffic TDLib was told came over NetworkTypeOther)
+    long in = mobileStats[IN][ENTRY_TOTAL] + roamingStats[IN][ENTRY_TOTAL] + wifiStats[IN][ENTRY_TOTAL] + otherStats[IN][ENTRY_TOTAL];
+    long out = mobileStats[OUT][ENTRY_TOTAL] + roamingStats[OUT][ENTRY_TOTAL] + wifiStats[OUT][ENTRY_TOTAL] + otherStats[OUT][ENTRY_TOTAL];
     return buildTotalEntry(in, out);
+  }
+
+  /** XGram: whether TDLib counted any traffic on other networks (the page shows their row only then). */
+  public boolean hasOtherUsage () {
+    return check(otherStats, ENTRY_TOTAL);
+  }
+
+  public String getOtherEntry () {
+    return buildTotalEntry(otherStats);
   }
 
   public String getMobileEntry () {
@@ -301,7 +312,7 @@ public class TGNetworkStats {
     };
 
     Arrays.sort(entries, (o1, o2) -> {
-      long t1 = target[IN][o1] + target[OUT][o2];
+      long t1 = target[IN][o1] + target[OUT][o1]; // XGram: was OUT of o2, which sorted the rows wrongly
       long t2 = target[IN][o2] + target[OUT][o2];
       return t1 < t2 ? 1 : t1 > t2 ? -1 : 0;
     });

@@ -17,10 +17,16 @@ package org.thunderdog.challegram.core;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.Build;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 
 import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.telegram.TdlibManager;
+import org.thunderdog.challegram.tool.UI;
 
 public class WatchDogContext {
   private static final IntentFilter INTENT_FILTER;
@@ -65,6 +71,7 @@ public class WatchDogContext {
       } catch (Throwable t) {
         Log.w("Cannot register intent receiver", t);
       }
+      registerNetworkCallback();
       observer.register();
     }
   }
@@ -77,7 +84,105 @@ public class WatchDogContext {
       } catch (Throwable t) {
         Log.w("Cannot unregister intent receiver", t);
       }
+      unregisterNetworkCallback();
       observer.unregister();
+    }
+  }
+
+  // XGram: the connectivity broadcast doesn't come when only the network under a VPN changes (the VPN stays the
+  // default network), and comes late to a cached app. The default network callback reports every change, so the
+  // network type TDLib counts traffic under follows it.
+
+  private Object networkCallback; // DefaultNetworkCallback, Android 7+
+
+  private void registerNetworkCallback () {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || networkCallback != null) {
+      return;
+    }
+    try {
+      ConnectivityManager manager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+      if (manager != null) {
+        DefaultNetworkCallback callback = new DefaultNetworkCallback(watchDog);
+        manager.registerDefaultNetworkCallback(callback);
+        networkCallback = callback;
+      }
+    } catch (Throwable t) {
+      Log.w("Cannot register network callback", t);
+    }
+  }
+
+  private void unregisterNetworkCallback () {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || networkCallback == null) {
+      return;
+    }
+    try {
+      ConnectivityManager manager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+      if (manager != null) {
+        manager.unregisterNetworkCallback((ConnectivityManager.NetworkCallback) networkCallback);
+      }
+    } catch (Throwable t) {
+      Log.w("Cannot unregister network callback", t);
+    }
+    networkCallback = null;
+  }
+
+  @RequiresApi(Build.VERSION_CODES.N)
+  private static final class DefaultNetworkCallback extends ConnectivityManager.NetworkCallback {
+    private static final long CHECK_DELAY_MS = 100; // one check for the burst a network change brings
+    private static final int MAX_TRANSPORT = 15;
+
+    private final Runnable check;
+    private long lastState = Long.MIN_VALUE; // read and written on the ConnectivityThread only
+
+    DefaultNetworkCallback (WatchDog watchDog) {
+      this.check = () -> watchDog.letsHelpDoge();
+    }
+
+    private void scheduleCheck () {
+      UI.cancel(check);
+      UI.post(check, CHECK_DELAY_MS);
+    }
+
+    @Override
+    public void onAvailable (@NonNull Network network) {
+      lastState = Long.MIN_VALUE;
+      scheduleCheck();
+    }
+
+    @Override
+    public void onCapabilitiesChanged (@NonNull Network network, @NonNull NetworkCapabilities capabilities) {
+      // Signal strength and bandwidth change often on mobile data: only what the network type and the data saver
+      // state read counts.
+      long state = (long) network.hashCode() << 32;
+      for (int transport = 0; transport <= MAX_TRANSPORT; transport++) {
+        if (capabilities.hasTransport(transport)) {
+          state |= 1L << transport;
+        }
+      }
+      if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) {
+        state |= 1L << 16;
+      }
+      if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+        state |= 1L << 17;
+      }
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING)) {
+        state |= 1L << 18;
+      }
+      if (state != lastState) {
+        lastState = state;
+        scheduleCheck();
+      }
+    }
+
+    @Override
+    public void onBlockedStatusChanged (@NonNull Network network, boolean blocked) {
+      scheduleCheck();
+    }
+
+    @Override
+    public void onLost (@NonNull Network network) {
+      lastState = Long.MIN_VALUE;
+      scheduleCheck();
     }
   }
 
