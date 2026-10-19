@@ -117,6 +117,9 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
   /** Always rebinds (a recycled or destroyed view too). */
   void setRow (@NonNull XgramActivityRows.Row row) {
     final boolean sameKey = boundKey != null && boundKey.equals(row.key());
+    if (!sameKey) {
+      resetSwipe();
+    }
     final boolean wasNew = this.row != null && this.row.isNew();
     this.row = row;
     this.boundKey = row.key();
@@ -729,12 +732,14 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
   // Swipe to clear
 
   private RemoveHelper removeHelper;
+  private float swipeDx;
 
   @Override
   public void setRemoveDx (float dx) {
     if (removeHelper == null) {
       removeHelper = new RemoveHelper(this, R.drawable.baseline_delete_24);
     }
+    swipeDx = dx;
     removeHelper.setDx(dx);
   }
 
@@ -743,11 +748,18 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     if (removeHelper == null) {
       removeHelper = new RemoveHelper(this, R.drawable.baseline_delete_24);
     }
+    swipeDx = 0f;
     removeHelper.onSwipe();
   }
 
-  /** A recycled view starts without a swipe in progress. */
+  /** A swipe is under way on this row: the list waits with rebuilding. */
+  boolean isSwiping () {
+    return swipeDx != 0f;
+  }
+
+  /** A row bound again starts without a swipe in progress. */
   void resetSwipe () {
+    swipeDx = 0f;
     if (removeHelper != null) {
       removeHelper.reset();
     }

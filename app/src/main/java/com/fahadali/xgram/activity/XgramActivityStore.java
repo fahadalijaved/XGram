@@ -920,6 +920,23 @@ public final class XgramActivityStore {
     post(accountId, db -> restoreStates(db, copy));
   }
 
+  /**
+   * Clear read items: every Read row in {@code filter} becomes Cleared. {@code callback} gets them (with their old
+   * state) for Undo ({@link #restoreItems}).
+   */
+  public void clearRead (int accountId, int filter, Callback<List<XgramActivityItem>> callback) {
+    post(accountId, db -> {
+      List<XgramActivityItem> read = new ArrayList<>();
+      for (XgramActivityItem item : queryItems(db, accountId, filter, false, true, true, ROW_CAP)) {
+        if (item.state == XgramActivityItem.STATE_READ) {
+          read.add(item);
+        }
+      }
+      setState(db, read, XgramActivityItem.STATE_READ, XgramActivityItem.STATE_CLEARED, false);
+      UI.post(() -> callback.onResult(read));
+    });
+  }
+
   public void setChatHidden (int accountId, long chatId, boolean hidden) {
     post(accountId, db -> setHidden(db, accountId, chatId, hidden));
   }

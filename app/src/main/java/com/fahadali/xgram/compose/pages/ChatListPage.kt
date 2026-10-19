@@ -32,6 +32,7 @@ import com.fahadali.xgram.appearance.XgramChatListViewCard
 import com.fahadali.xgram.chats.XgramChatListMode
 import com.fahadali.xgram.chats.XgramChatLongPress
 import com.fahadali.xgram.chats.XgramCommunities
+import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramPage
 import com.fahadali.xgram.compose.ui.LocalXgramHighlight
@@ -145,6 +146,29 @@ fun ChatListPage() {
       switch(R.id.btn_xgramActivityHeader, s(R.string.XgramActivityHeader), sub(R.string.XgramActivityHeaderInfo),
         checked = settings.activityHeader(), enabled = activityEnabled) {
         settings.setActivityHeader(it)
+      }
+    }
+    group {
+      val hidden = com.fahadali.xgram.activity.XgramActivityStore.instance().summary(accountId).hiddenCount()
+      value(
+        R.id.btn_xgramActivityHidden, s(R.string.XgramActivityHiddenChats),
+        when (hidden) {
+          0 -> s(R.string.XgramNone)
+          1 -> s(R.string.XgramActivityHiddenCountOne)
+          else -> s(R.string.XgramActivityHiddenCountMany, hidden)
+        }
+      ) {
+        host.open(com.fahadali.xgram.activity.XgramActivityHiddenController(host.activity, host.tdlib))
+      }
+      action(R.id.btn_xgramActivityClearAll, s(R.string.XgramActivityClearAll), s(R.string.XgramActivityClearAllInfo), destructive = true) {
+        host.confirm(ConfirmSpec(
+          title = s(R.string.XgramActivityClearAllConfirm),
+          text = s(R.string.XgramActivityClearAllInfo),
+          confirm = s(R.string.XgramActivityClearAllButton),
+          destructive = true
+        ) {
+          com.fahadali.xgram.activity.XgramActivityStore.instance().clearAll(accountId)
+        })
       }
     }
     description(R.string.XgramActivityLocalNote)

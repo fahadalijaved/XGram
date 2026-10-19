@@ -457,6 +457,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramActivityHeader) {
           view.getToggler().setRadioEnabled(settings.activityHeader(), isUpdate);
           setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityHidden) {
+          int hidden = com.fahadali.xgram.activity.XgramActivityStore.instance().summary(tdlib.id()).hiddenCount();
+          view.setData(hidden == 0 ? Lang.getString(R.string.XgramNone) : hidden == 1 ? Lang.getString(R.string.XgramActivityHiddenCountOne) : Lang.getString(R.string.XgramActivityHiddenCountMany, hidden));
         } else if (id == R.id.btn_xgramR7ChannelReactions) {
           view.getToggler().setRadioEnabled(settings.channelReactions(), isUpdate);
         } else if (id == R.id.btn_xgramSaveLastSeen) {
@@ -806,6 +809,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       toggle(R.id.btn_xgramActivityLookBack, R.string.XgramActivityLookBack, R.string.XgramActivityLookBackInfo),
       toggle(R.id.btn_xgramActivityBadge, R.string.XgramActivityBadge, R.string.XgramActivityBadgeInfo),
       toggle(R.id.btn_xgramActivityHeader, R.string.XgramActivityHeader, R.string.XgramActivityHeaderInfo)
+    );
+    addRows(items,
+      link(R.id.btn_xgramActivityHidden, R.string.XgramActivityHiddenChats),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramActivityClearAll, 0, R.string.XgramActivityClearAll)
+        .setStringValue(Lang.getString(R.string.XgramActivityClearAllInfo))
+        .setTextColorId(org.thunderdog.challegram.theme.ColorId.textNegative)
     );
     items.add(description(R.string.XgramActivityLocalNote));
     if (BuildConfig.DEBUG) {
@@ -1768,6 +1777,22 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramActivityShow) {
       settings.setActivityOn(adapter.toggleView(v));
       updateActivityRows();
+      return;
+    } else if (id == R.id.btn_xgramActivityHidden) {
+      navigateTo(new com.fahadali.xgram.activity.XgramActivityHiddenController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramActivityClearAll) {
+      showOptions(Lang.getString(R.string.XgramActivityClearAllConfirm) + "\n\n" + Lang.getString(R.string.XgramActivityClearAllInfo),
+        new int[] {R.id.btn_xgramActivityClearAllConfirm, R.id.btn_cancel},
+        new String[] {Lang.getString(R.string.XgramActivityClearAllButton), Lang.getString(R.string.Cancel)},
+        new int[] {OptionColor.RED, OptionColor.NORMAL},
+        new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, optionId) -> {
+          if (optionId == R.id.btn_xgramActivityClearAllConfirm) {
+            com.fahadali.xgram.activity.XgramActivityStore.instance().clearAll(tdlib.id());
+            org.thunderdog.challegram.tool.UI.showToast(Lang.getString(R.string.XgramActivityAllCleared), android.widget.Toast.LENGTH_SHORT);
+          }
+          return true;
+        });
       return;
     } else if (id == R.id.btn_xgramActivityDebugFlood) {
       com.fahadali.xgram.activity.XgramActivity.debugInjectFlood();

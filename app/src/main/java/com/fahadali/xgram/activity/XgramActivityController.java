@@ -137,6 +137,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       saveFilter();
       limit = PAGE;
       updateHeaderTitle();
+      updateMarkAllButton();
       reload(true);
     }
   }
@@ -246,6 +247,24 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       }
     });
 
+    // Swipe from the end to clear a row (Undo puts it back)
+    org.thunderdog.challegram.component.user.RemoveHelper.attach(recyclerView, new org.thunderdog.challegram.component.user.RemoveHelper.Callback() {
+      @Override
+      public boolean canRemove (RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, int position) {
+        return viewHolder.itemView instanceof XgramActivityRowView && ((XgramActivityRowView) viewHolder.itemView).getRow() != null;
+      }
+
+      @Override
+      public void onRemove (RecyclerView.ViewHolder viewHolder) {
+        if (viewHolder.itemView instanceof XgramActivityRowView) {
+          XgramActivityRows.Row row = ((XgramActivityRowView) viewHolder.itemView).getRow();
+          if (row != null && !isDestroyed()) {
+            clearRow(row);
+          }
+        }
+      }
+    });
+
     XgramActivityStore.instance().addListener(this);
     XgramActivityBadge.instance().addListener(this);
     XgramActivity.addDisplayListener(this);
@@ -254,8 +273,86 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     reload(false);
   }
 
-  /** The list moved (P4: the new items pill). */
-  private void onListScrolled (int dy) { }
+  /** Back at the top: the new items pill has nothing to point at. */
+  private void onListScrolled (int dy) {
+    if (newPillCount > 0 && isAtTop()) {
+      setNewPill(0);
+    }
+  }
+
+  private boolean isAtTop () {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    LinearLayoutManager manager = recyclerView != null ? (LinearLayoutManager) recyclerView.getLayoutManager() : null;
+    return manager == null || manager.findFirstVisibleItemPosition() <= 0;
+  }
+
+  // The new items pill (Expressive design): rows that came in above while the list is scrolled down. Telegram X's look
+  // keeps the position and shows nothing.
+
+  @Nullable private android.widget.TextView newPill;
+  @Nullable private XgramExpressive.Spring newPillSpring;
+  private int newPillCount;
+
+  private void setNewPill (int count) {
+    if (!XgramExpressive.isEnabled()) {
+      return;
+    }
+    newPillCount = count;
+    if (count > 0) {
+      android.widget.TextView pill = ensureNewPill();
+      if (pill == null) {
+        return;
+      }
+      pill.setText(count == 1 ? Lang.getString(R.string.XgramActivityNewPillOne) : Lang.getString(R.string.XgramActivityNewPillMany, count));
+      pill.setTextColor(XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER));
+      pill.setVisibility(View.VISIBLE);
+    }
+    if (newPillSpring != null) {
+      newPillSpring.animateTo(count > 0 ? 1f : 0f);
+    }
+  }
+
+  @Nullable
+  private android.widget.TextView ensureNewPill () {
+    if (newPill != null) {
+      return newPill;
+    }
+    View value = getValue();
+    if (!(value instanceof android.widget.FrameLayout)) {
+      return null;
+    }
+    android.widget.TextView pill = new android.widget.TextView(context);
+    XgramExpressive.applyText(pill, XgramExpressive.TS_LABEL_L, false);
+    pill.setGravity(android.view.Gravity.CENTER);
+    int padding = Screen.dp(16f);
+    pill.setPadding(padding, 0, padding, 0);
+    pill.setSingleLine(true);
+    XgramExpressive.MorphDrawable background = new XgramExpressive.MorphDrawable(0, XgramExpressive.CORNER_FULL, Float.NaN);
+    background.setColorRole(XgramExpressive.SECONDARY_CONTAINER);
+    background.setHost(pill);
+    pill.setBackground(background);
+    pill.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+    pill.setElevation(Screen.dp(XgramExpressive.ELEVATION_2));
+    pill.setOnClickListener(v -> {
+      setNewPill(0);
+      scrollToTopOrReload();
+    });
+    android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Screen.dp(40f), android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL);
+    params.topMargin = Screen.dp(12f);
+    ((android.widget.FrameLayout) value).addView(pill, params);
+    pill.setVisibility(View.GONE);
+    newPill = pill;
+    newPillSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, v) -> {
+      float scale = .6f + .4f * Math.max(0f, v);
+      pill.setScaleX(scale);
+      pill.setScaleY(scale);
+      pill.setAlpha(Math.max(0f, Math.min(1f, v)));
+      if (v <= 0f && newPillCount == 0) {
+        pill.setVisibility(View.GONE);
+      }
+    });
+    return pill;
+  }
 
   @Override
   public boolean needAsynchronousAnimation () {
@@ -310,6 +407,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   }
 
   private boolean rebuildPosted;
+  private final java.util.HashSet<String> shownKeys = new java.util.HashSet<>();
+  private int newestShownDate;
 
   /** Puts the rows in, keeping what is on screen where it is (or going to the top). */
   private void applyRows (boolean scrollToTop) {
@@ -346,7 +445,30 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         anchorKey = null; // at the top: stay at the top, new rows come in above
       }
     }
+    // Rows newer than everything shown so far: the pill counts them while the list is scrolled down
+    int newcomers = 0;
+    if (!shownKeys.isEmpty()) {
+      for (XgramActivityRows.Row row : rows) {
+        if (row.eventDate() < newestShownDate) {
+          break;
+        }
+        if (!shownKeys.contains(row.key())) {
+          newcomers++;
+        }
+      }
+    }
+    shownKeys.clear();
+    newestShownDate = 0;
+    for (XgramActivityRows.Row row : rows) {
+      shownKeys.add(row.key());
+      newestShownDate = Math.max(newestShownDate, row.eventDate());
+    }
     buildCells();
+    if (anchorKey != null && newcomers > 0) {
+      setNewPill(newPillCount + newcomers);
+    } else if (anchorKey == null && newPillCount > 0) {
+      setNewPill(0);
+    }
     if (manager == null) {
       return;
     }
@@ -544,8 +666,19 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     });
   }
 
+  /** A row is being swiped: the list waits with rebuilding until it is let go. */
   private boolean isSwiping () {
-    return false; // P4: a row being swiped away
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return false;
+    }
+    for (int i = 0; i < recyclerView.getChildCount(); i++) {
+      View child = recyclerView.getChildAt(i);
+      if (child instanceof XgramActivityRowView && ((XgramActivityRowView) child).isSwiping()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Back at the top (the rail, the header bell or the side menu again while it is on screen). */
@@ -635,18 +768,51 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     return R.id.menu_xgramActivity;
   }
 
+  @Nullable private org.thunderdog.challegram.navigation.HeaderButton markAllButton;
+
   @Override
   public void fillMenuItems (int id, HeaderView header, LinearLayout menu) {
     if (id == R.id.menu_xgramActivity) {
+      markAllButton = header.addButton(menu, R.id.menu_btn_xgramActivityMarkAll, R.drawable.baseline_done_all_24, getHeaderIconColorId(), this, Screen.dp(49f));
+      updateMarkAllButton();
       header.addMoreButton(menu, this);
     } else {
       super.fillMenuItems(id, header, menu);
     }
   }
 
+  /** Mark all as read says what it reads: the filter's kind. */
+  private void updateMarkAllButton () {
+    if (markAllButton == null) {
+      return;
+    }
+    final int label;
+    switch (filter) {
+      case XgramActivityStore.FILTER_MENTIONS:
+        label = R.string.XgramActivityMarkAllMentions;
+        break;
+      case XgramActivityStore.FILTER_REPLIES:
+        label = R.string.XgramActivityMarkAllReplies;
+        break;
+      case XgramActivityStore.FILTER_REACTIONS:
+        label = R.string.XgramActivityMarkAllReactions;
+        break;
+      default:
+        label = R.string.XgramActivityMarkAllRead;
+        break;
+    }
+    markAllButton.setContentDescription(Lang.getString(label));
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+      markAllButton.setTooltipText(Lang.getString(label));
+    }
+    markAllButton.setVisibility(XgramActivity.isOn() ? View.VISIBLE : View.GONE);
+  }
+
   @Override
   public void onMenuItemPressed (int id, View view) {
-    if (id == org.thunderdog.challegram.R.id.menu_btn_more) {
+    if (id == R.id.menu_btn_xgramActivityMarkAll) {
+      markAll();
+    } else if (id == org.thunderdog.challegram.R.id.menu_btn_more) {
       showMoreMenu();
     } else {
       super.onMenuItemPressed(id, view);
@@ -655,8 +821,11 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
 
   private void showMoreMenu () {
     final boolean expressive = XgramExpressive.isEnabled();
-    int[] ids = {R.id.btn_xgramActivityUnreadOnly, R.id.btn_xgramActivitySettings};
-    String[] titles = {Lang.getString(R.string.XgramActivityUnreadOnly), Lang.getString(R.string.XgramActivitySettings)};
+    int[] ids = {R.id.btn_xgramActivityUnreadOnly, R.id.btn_xgramActivityClearRead, R.id.btn_xgramActivityHidden, R.id.btn_xgramActivitySettings};
+    String[] titles = {
+      Lang.getString(R.string.XgramActivityUnreadOnly), Lang.getString(R.string.XgramActivityClearRead),
+      Lang.getString(R.string.XgramActivityHiddenChats), Lang.getString(R.string.XgramActivitySettings)
+    };
     if (expressive) {
       showMore(ids, titles, 0);
       org.thunderdog.challegram.widget.PopupLayout popup = context().getCurrentPopupWindow();
@@ -664,7 +833,10 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         ((org.thunderdog.challegram.navigation.MenuMoreWrap) popup.getBoundView()).xgramSetCheckable(R.id.btn_xgramActivityUnreadOnly, unreadOnly);
       }
     } else {
-      int[] icons = {unreadOnly ? R.drawable.baseline_check_24 : R.drawable.baseline_check_box_outline_blank_24, R.drawable.baseline_settings_24};
+      int[] icons = {
+        unreadOnly ? R.drawable.baseline_check_24 : R.drawable.baseline_check_box_outline_blank_24, R.drawable.baseline_delete_sweep_24,
+        R.drawable.baseline_eye_off_24, R.drawable.baseline_settings_24
+      };
       showMore(ids, titles, icons, 0);
     }
   }
@@ -676,9 +848,244 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       if (chips != null) {
         chips.setUnread(unreadOnly, true);
       }
+    } else if (id == R.id.btn_xgramActivityClearRead) {
+      clearRead();
+    } else if (id == R.id.btn_xgramActivityHidden) {
+      openScreen(new XgramActivityHiddenController(context, tdlib));
     } else if (id == R.id.btn_xgramActivitySettings) {
       openScreen(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, XgramSettingsController.SECTION_CHAT_LIST, R.id.btn_xgramActivityShow));
     }
+  }
+
+  // Actions (each with Undo, except opening and reading one row)
+
+  /** A snackbar with Undo: Material 3 with Expressive design, Telegram X's SnackBar otherwise. */
+  void showUndo (@NonNull String text, @NonNull Runnable onUndo) {
+    if (XgramExpressive.isEnabled()) {
+      if (!com.fahadali.xgram.appearance.XgramSnackbar.showUndo(text, onUndo)) {
+        UI.showToast(text, Toast.LENGTH_SHORT);
+      }
+      return;
+    }
+    View value = getValue();
+    if (!(value instanceof android.widget.FrameLayout)) {
+      UI.showToast(text, Toast.LENGTH_SHORT);
+      return;
+    }
+    final android.widget.FrameLayout content = (android.widget.FrameLayout) value;
+    if (undoBar != null) {
+      undoBar.removeThemeListeners(this);
+      content.removeView(undoBar);
+      undoBar = null;
+    }
+    org.thunderdog.challegram.widget.SnackBar bar = new org.thunderdog.challegram.widget.SnackBar(context);
+    bar.setCallback(new org.thunderdog.challegram.widget.SnackBar.Callback() {
+      @Override
+      public void onSnackBarTransition (org.thunderdog.challegram.widget.SnackBar v, float factor) { }
+
+      @Override
+      public void onDestroySnackBar (org.thunderdog.challegram.widget.SnackBar v) {
+        v.removeThemeListeners(XgramActivityController.this);
+        content.removeView(v);
+        if (undoBar == v) {
+          undoBar = null;
+        }
+      }
+    });
+    bar.addThemeListeners(this);
+    bar.setText(text);
+    bar.setAction(Lang.getString(R.string.XgramR5SheetsUndo), onUndo, true);
+    bar.setPadding(0, 0, 0, extraBottomInset);
+    content.addView(bar);
+    bar.showSnackBar(true);
+    undoBar = bar;
+    UI.cancel(undoDismiss);
+    UI.post(undoDismiss, 5000L);
+  }
+
+  @Nullable private org.thunderdog.challegram.widget.SnackBar undoBar;
+  private final Runnable undoDismiss = () -> {
+    if (undoBar != null) {
+      undoBar.dismissSnackBar(true);
+    }
+  };
+
+  /** Clear: the rows go (tombstones, so nothing brings them back), Undo puts them back as they were. */
+  private void clearRow (@NonNull XgramActivityRows.Row row) {
+    final List<XgramActivityItem> items = new ArrayList<>(row.items);
+    final XgramActivityStore store = XgramActivityStore.instance();
+    store.clearItems(tdlib.id(), items);
+    removeRowNow(row);
+    showUndo(Lang.getString(R.string.XgramActivityCleared), () -> store.restoreItems(tdlib.id(), items));
+  }
+
+  /** Takes a row off the list at once (the store's change follows). */
+  private void removeRowNow (@NonNull XgramActivityRows.Row row) {
+    List<XgramActivityRows.Row> next = new ArrayList<>(rows);
+    if (next.remove(row)) {
+      rows = next;
+      buildCells();
+    }
+  }
+
+  private void clearRead () {
+    final XgramActivityStore store = XgramActivityStore.instance();
+    store.clearRead(tdlib.id(), filter, cleared -> {
+      if (isDestroyed()) {
+        return;
+      }
+      if (cleared.isEmpty()) {
+        showMessage(Lang.getString(R.string.XgramActivityNothingRead), null, null);
+        return;
+      }
+      String text = cleared.size() == 1 ? Lang.getString(R.string.XgramActivityClearedOne) : Lang.getString(R.string.XgramActivityClearedMany, cleared.size());
+      showUndo(text, () -> store.restoreItems(tdlib.id(), cleared));
+    });
+  }
+
+  private void hideChat (@NonNull XgramActivityItem item) {
+    final long chatId = item.chatId;
+    final String title = chatTitleOf(item);
+    final XgramActivityStore store = XgramActivityStore.instance();
+    store.setChatHidden(tdlib.id(), chatId, true);
+    List<XgramActivityRows.Row> next = new ArrayList<>();
+    for (XgramActivityRows.Row row : rows) {
+      if (row.newest().chatId != chatId) {
+        next.add(row);
+      }
+    }
+    rows = next;
+    buildCells();
+    showUndo(Lang.getString(R.string.XgramActivityChatHidden, title), () -> store.setChatHidden(tdlib.id(), chatId, false));
+  }
+
+  @NonNull
+  private String chatTitleOf (@NonNull XgramActivityItem item) {
+    if (tdlib.chat(item.chatId) != null) {
+      String title = tdlib.chatTitle(item.chatId);
+      if (title != null && !title.isEmpty()) {
+        return title;
+      }
+    }
+    return item.chatTitle != null ? item.chatTitle : "";
+  }
+
+  private void toggleRead (@NonNull XgramActivityRows.Row row) {
+    if (row.isNew()) {
+      XgramActivityRead.markOne(tdlib, row);
+    } else {
+      XgramActivityStore.instance().markItemsUnread(tdlib.id(), row.items);
+    }
+  }
+
+  // Mark all as read
+
+  private void markAll () {
+    if (!XgramActivity.isOn()) {
+      return;
+    }
+    final XgramActivityRead.Plan plan = XgramActivityRead.plan(tdlib, XgramActivityRows.itemsOf(rows), filter);
+    if (plan.unread.isEmpty()) {
+      showMessage(Lang.getString(R.string.XgramActivityCaughtUp), null, null);
+      return;
+    }
+    if (plan.serverChats() == 0) {
+      // Ghost mode applies to every chat: read on this device only, nothing sent, so it can be undone
+      final List<XgramActivityItem> unread = new ArrayList<>(plan.unread);
+      XgramActivityRead.run(tdlib, plan, null);
+      showUndo(Lang.getString(R.string.XgramActivityReadLocally), () -> XgramActivityStore.instance().markItemsUnread(tdlib.id(), unread));
+      return;
+    }
+    final int chats = plan.chats.size();
+    StringBuilder info = new StringBuilder(Lang.getString(R.string.XgramActivityMarkAllConfirm)).append("\n\n");
+    info.append(chats == 1 ? Lang.getString(R.string.XgramActivityMarkAllTextOne) : Lang.getString(R.string.XgramActivityMarkAllTextMany, chats));
+    if (filter == XgramActivityStore.FILTER_MENTIONS || filter == XgramActivityStore.FILTER_REPLIES) {
+      info.append(' ').append(Lang.getString(R.string.XgramActivityMarkAllTogether));
+    }
+    if (plan.ghosted > 0) {
+      info.append(' ').append(plan.ghosted == 1 ? Lang.getString(R.string.XgramActivityMarkAllMixedOne) : Lang.getString(R.string.XgramActivityMarkAllMixedMany, plan.ghosted));
+    }
+    showOptions(info.toString(), new int[] {R.id.btn_xgramActivityMarkAllConfirm, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.XgramActivityMarkAllButton), Lang.getString(R.string.Cancel)},
+      new int[] {OptionColor.BLUE, OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_done_all_24, R.drawable.baseline_cancel_24}, (itemView, id) -> {
+        if (id == R.id.btn_xgramActivityMarkAllConfirm && !isDestroyed()) {
+          runMarkAll(plan);
+        }
+        return true;
+      });
+  }
+
+  private void runMarkAll (@NonNull XgramActivityRead.Plan plan) {
+    final int serverChats = plan.serverChats();
+    if (serverChats >= 30) {
+      showMessage(Lang.getString(R.string.XgramActivityMarking, serverChats), null, null);
+    }
+    XgramActivityRead.run(tdlib, plan, (stoppedChats, flood) -> {
+      if (flood && stoppedChats > 0) {
+        showMessage(stoppedChats == 1 ? Lang.getString(R.string.XgramActivityMarkPartialOne) : Lang.getString(R.string.XgramActivityMarkPartialMany, stoppedChats), null, null);
+      } else {
+        showMessage(Lang.getString(R.string.XgramActivityMarked), null, null);
+      }
+    });
+  }
+
+  // Long press: the row's menu
+
+  private void showRowMenu (@NonNull View anchor, @NonNull XgramActivityRows.Row row) {
+    final XgramActivityItem item = row.newest();
+    final String title = chatTitleOf(item);
+    final boolean isNew = row.isNew();
+    if (XgramExpressive.isEnabled()) {
+      List<com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry> entries = new ArrayList<>();
+      entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(R.id.btn_xgramActivityOpen, Lang.getString(R.string.XgramActivityOpen), R.drawable.baseline_chat_bubble_24, () -> {
+        if (!isDestroyed()) {
+          openRow(row);
+        }
+      }));
+      entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(R.id.btn_xgramActivityToggleRead,
+        Lang.getString(isNew ? R.string.XgramActivityMarkRead : R.string.XgramActivityMarkUnread),
+        isNew ? R.drawable.baseline_done_all_24 : R.drawable.baseline_mark_chat_unread_24, () -> {
+        if (!isDestroyed()) {
+          toggleRead(row);
+        }
+      }));
+      entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(R.id.btn_xgramActivityHideChat, Lang.getString(R.string.XgramActivityHideChat, title), R.drawable.baseline_eye_off_24, () -> {
+        if (!isDestroyed()) {
+          hideChat(item);
+        }
+      }));
+      entries.add(new com.fahadali.xgram.appearance.XgramR5Chat.MenuEntry(R.id.btn_xgramActivityClear, Lang.getString(R.string.XgramActivityClear), R.drawable.baseline_delete_24, () -> {
+        if (!isDestroyed()) {
+          clearRow(row);
+        }
+      }).destructive().dividerAbove());
+      com.fahadali.xgram.appearance.XgramR5Chat.showMenu(anchor, getThemeListeners(), entries);
+      return;
+    }
+    showOptions(null,
+      new int[] {R.id.btn_xgramActivityOpen, R.id.btn_xgramActivityToggleRead, R.id.btn_xgramActivityHideChat, R.id.btn_xgramActivityClear},
+      new String[] {
+        Lang.getString(R.string.XgramActivityOpen), Lang.getString(isNew ? R.string.XgramActivityMarkRead : R.string.XgramActivityMarkUnread),
+        Lang.getString(R.string.XgramActivityHideChat, title), Lang.getString(R.string.XgramActivityClear)
+      },
+      new int[] {OptionColor.NORMAL, OptionColor.NORMAL, OptionColor.NORMAL, OptionColor.RED},
+      new int[] {R.drawable.baseline_chat_bubble_24, isNew ? R.drawable.baseline_done_all_24 : R.drawable.baseline_mark_chat_unread_24, R.drawable.baseline_eye_off_24, R.drawable.baseline_delete_24},
+      (itemView, id) -> {
+        if (isDestroyed()) {
+          return true;
+        }
+        if (id == R.id.btn_xgramActivityOpen) {
+          openRow(row);
+        } else if (id == R.id.btn_xgramActivityToggleRead) {
+          toggleRead(row);
+        } else if (id == R.id.btn_xgramActivityHideChat) {
+          hideChat(item);
+        } else if (id == R.id.btn_xgramActivityClear) {
+          clearRow(row);
+        }
+        return true;
+      });
   }
 
   /** A screen opened from here: on the right with two panes (this list stays on the left), over it otherwise. */
@@ -712,7 +1119,14 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
 
   @Override
   public boolean onLongClick (View v) {
-    return false; // P4: the row's menu
+    if (v instanceof XgramActivityRowView) {
+      XgramActivityRows.Row row = ((XgramActivityRowView) v).getRow();
+      if (row != null) {
+        showRowMenu(v, row);
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
