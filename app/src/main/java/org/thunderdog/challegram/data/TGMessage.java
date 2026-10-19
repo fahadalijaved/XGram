@@ -3786,7 +3786,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       return;
     }
     xgramReplyRefit = false;
-    if (rebuildContentDimensions()) {
+    if (xgramRefitToReply()) {
       requestLayout();
     } else {
       invalidate();
@@ -3797,8 +3797,23 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   public final void xgramBeforeBind () {
     if (xgramReplyRefit && isLayoutBuilt() && !isDestroyed()) {
       xgramReplyRefit = false;
-      rebuildContentDimensions();
+      xgramRefitToReply();
     }
+  }
+
+  /**
+   * XGram: what buildLayout does after the reply is built (reactions, bubble, inline keyboard, height), for a reply
+   * laid out again. The inline keyboard and the reactions are sized from the bubble, which follows the reply's width,
+   * so they are measured again too. Callers check isLayoutBuilt().
+   */
+  private boolean xgramRefitToReply () {
+    final int oldHeight = height;
+    buildReactions(false);
+    updateContentPositions(true);
+    buildBubble(false);
+    buildMarkup();
+    height = computeHeight();
+    return oldHeight != height;
   }
 
   @MessageChangeType

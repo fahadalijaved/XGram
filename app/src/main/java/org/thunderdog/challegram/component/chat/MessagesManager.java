@@ -587,6 +587,11 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     return adapter;
   }
 
+  /** XGram: a message of the page the loader is parsing right now, before the adapter has it (null if none). */
+  public @Nullable TdApi.Message xgramFindParsing (long chatId, long messageId) {
+    return loader.xgramFindParsing(chatId, messageId);
+  }
+
   public LinearLayoutManager getLayoutManager () {
     return manager;
   }

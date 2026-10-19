@@ -654,6 +654,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   private void postApplyFilter (long pagerItemId, TdApi.ChatList chatList, @Filter int filter) {
+    postApplyFilter(pagerItemId, chatList, filter, /* select */ true);
+  }
+
+  /** XGram: {@code select} false swaps the page in where it is, without moving to it (a page made again, not a filter picked). */
+  private void postApplyFilter (long pagerItemId, TdApi.ChatList chatList, @Filter int filter, boolean select) {
     ChatsController chatsController = newChatsController(chatList, filter);
     modifyNewPagerItemController(chatsController);
 
@@ -663,7 +668,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
     chatsController.postOnAnimationExecute(() -> {
       int pagerItemPosition = applyPendingFilter(filter, pagerItemId, chatsController);
-      if (pagerItemPosition != NO_POSITION && (!useGlobalFilter() || filter != globalFilter)) {
+      if (select && pagerItemPosition != NO_POSITION && (!useGlobalFilter() || filter != globalFilter)) {
         setCurrentPagerPosition(pagerItemPosition, /* animated */ true);
       }
     });
@@ -3174,6 +3179,20 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       }
       long itemId = getPagerItemId(chatList);
       ViewController<?> cachedController = getCachedControllerForItemId(itemId);
+      if (pendingPagerItemId == itemId && pendingChatsController != null) {
+        // XGram: a page still loading for this tab (a filter picked, or a swap posted by the last change) replaces the
+        // cached one: it is checked against its own filter, which is kept, and made again if the row changed since
+        @Filter int nextFilter = pendingFilter;
+        boolean nextNeedArchiveRow = nextFilter == FILTER_NONE && xgramArchiveRowFor(chatList);
+        if (pendingChatsController.xgramHasArchiveRow() != nextNeedArchiveRow) {
+          cancelPendingFilter();
+          boolean cachedIsNext = nextFilter == getSelectedFilter(itemId) && cachedController instanceof ChatsController && ((ChatsController) cachedController).xgramHasArchiveRow() == nextNeedArchiveRow;
+          if (!cachedIsNext) {
+            postApplyFilter(itemId, chatList, nextFilter, /* select */ false);
+          }
+        }
+        continue;
+      }
       if (!(cachedController instanceof ChatsController)) {
         continue;
       }
@@ -3182,8 +3201,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (((ChatsController) cachedController).xgramHasArchiveRow() == needArchiveRow) {
         continue;
       }
-      if (position == currentPosition) {
-        postApplyFilter(itemId, chatList, filter);
+      if (position == currentPosition && pendingChatsController == null) {
+        // XGram: the page shown swaps once the new one is ready; while another tab's filter is still loading, it is
+        // swapped at once instead, so that filter is not dropped
+        postApplyFilter(itemId, chatList, filter, /* select */ false);
       } else {
         ViewController<?> controller = newChatsController(chatList, filter);
         modifyNewPagerItemController(controller);
@@ -4558,6 +4579,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
 
   private void updatePagerSections (TdApi.ChatFolderInfo[] chatFolders, int mainChatListPosition, int archiveChatListPosition) {
     boolean oldHasFolders = hasFolders();
+    // XGram: All chats is the current tab before its tab goes (Hide All chats): the first tab opens, not the next one
+    boolean xgramMainWasCurrent = getViewPager() != null && oldHasFolders && getCurrentPagerItemId() == MAIN_PAGER_ITEM_ID;
     List<TdApi.ChatList> chatLists;
     List<ViewPagerTopView.Item> sections;
     if (com.fahadali.xgram.XgramSettings.instance().hideFolders(tdlib.accountId())) {
@@ -4569,6 +4592,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     boolean xgramMainTab = !(com.fahadali.xgram.XgramSettings.instance().hideAllChats(tdlib.accountId()) && com.fahadali.xgram.XgramSettingDeps.hasFolderTab(tdlib, chatFolders));
     if (chatFolders.length > 0 || xgramArchiveTab) {
       int chatListCount = chatFolders.length;
+      // XGram: where All chats sits among the folders (TDLib's position counts the folders only)
+      int xgramMainIndex = MathUtils.clamp(mainChatListPosition, 0, chatFolders.length);
       if (xgramMainTab && tdlib.settings().isChatListEnabled(ChatPosition.CHAT_LIST_MAIN)) {
         mainChatListPosition = MathUtils.clamp(mainChatListPosition, 0, chatListCount);
         chatListCount++;
@@ -4576,6 +4601,19 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         mainChatListPosition = NO_POSITION;
       }
       if (xgramArchiveTab) {
+        // XGram: the archive's position counts the All chats slot when All chats is before it (Chat folders lists it
+        // while it has no tab): without All chats the archive moves up one, so Hide All chats keeps the order of the
+        // other tabs. It stays after the first folder with a tab, which opens first and gets the archive row.
+        if (mainChatListPosition == NO_POSITION && xgramMainIndex < archiveChatListPosition) {
+          int xgramFirstFolderIndex = -1;
+          for (int i = 0; i < chatFolders.length; i++) {
+            if (tdlib.settings().isChatFolderEnabled(chatFolders[i].id)) {
+              xgramFirstFolderIndex = i;
+              break;
+            }
+          }
+          archiveChatListPosition = Math.max(xgramFirstFolderIndex + 1, archiveChatListPosition - 1);
+        }
         archiveChatListPosition = MathUtils.clamp(archiveChatListPosition, 0, chatListCount);
         chatListCount++;
         if (mainChatListPosition >= archiveChatListPosition) {
@@ -4629,6 +4667,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       }
     }
     notifyPagerItemPositionsChanged();
+    if (xgramMainWasCurrent && hasFolders() && indexOfChatList(ChatPosition.CHAT_LIST_MAIN) == -1 && getCurrentPagerItemPosition() != 0) {
+      // XGram: ViewPager keeps the index of the page that went, which is the tab after All chats. Before the archive
+      // rows are checked: the first tab is the current page then and gets the deferred swap, not a reload in place.
+      setCurrentPagerPosition(0, /* animated */ false);
+    }
     xgramCheckArchiveRows(); // XGram: the archive row follows the first tab while All chats has none
     ViewPager pager = getViewPager();
     if (pager != null) {

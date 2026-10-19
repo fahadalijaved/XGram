@@ -749,6 +749,9 @@ public class ReplyComponent implements Client.ResultHandler, Destroyable {
           this.ignoreFailures = true;
         } else if (message.chatId == replyToMessage.chatId) {
           TdApi.Message foundMessage = parent.manager().getAdapter().tryFindMessage(replyToMessage.chatId, replyToMessage.messageId);
+          if (foundMessage == null) {
+            foundMessage = parent.manager().xgramFindParsing(replyToMessage.chatId, replyToMessage.messageId); // XGram: a message of the page being parsed
+          }
           if (foundMessage != null) {
             setMessage(foundMessage, false, true);
             return;

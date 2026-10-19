@@ -982,7 +982,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
             }
           }
         });
-        hideArchive = archiveCollapsed = tdlib.settings().needHideArchive();
+        hideArchive = archiveCollapsed = xgramNeedHideArchive();
         archiveList = tdlib.chatList(ChatPosition.CHAT_LIST_ARCHIVE);
         archiveListListener = new ChatListListener() {
           @Override
@@ -1078,6 +1078,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     chatFolderNewChatsPoller = new Poller<>(tdlib, tdlib::chatFolderUpdatePeriodMillis, () -> new TdApi.GetChatFolderNewChats(chatFolderId), (result, error) -> {
       if (result != null) {
         adapter.setSuggestedChatIds(result.chatIds);
+        if (xgramArchiveRow && archiveList != null) {
+          // XGram: the folder's new chats card came or went above the archive row (xgramNeedHideArchive)
+          boolean hide = xgramNeedHideArchive();
+          if (!hide) {
+            setArchiveCollapsed(false);
+          }
+          setHideArchive(hide);
+        }
       }
     });
     chatFolderNewChatsPoller.start();
@@ -1108,6 +1116,15 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   private boolean hideArchive, archiveCollapsed;
   private TdlibChatList archiveList;
   private ChatListListener archiveListListener;
+
+  /**
+   * XGram: hide archive pulls the archive row up under the top of the list, which assumes it is the first item. On a
+   * folder that has the archive row (Hide All chats) the folder's new chats card can come before it: the archive stays
+   * shown while the card does, and hides again once it goes.
+   */
+  private boolean xgramNeedHideArchive () {
+    return tdlib.settings().needHideArchive() && !(xgramArchiveRow && adapter != null && adapter.hasSuggestedChats());
+  }
 
   private int chatScrollState = RecyclerView.SCROLL_STATE_IDLE;
 
@@ -3518,7 +3535,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   @Override
   public void onPreferenceChanged(Tdlib tdlib, long key, boolean value) {
     if (this.tdlib.id() == tdlib.id() && key == TdlibSettingsManager.PREFERENCE_HIDE_ARCHIVE) {
-      setHideArchive(value);
+      setHideArchive(xgramNeedHideArchive()); // XGram: not while the folder's new chats card is above the archive row
     }
   }
 

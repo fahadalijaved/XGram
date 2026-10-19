@@ -1381,6 +1381,24 @@ public class MessagesLoader implements Client.ResultHandler {
     stepsCount = 0;
   }
 
+  // XGram: the page processMessages is parsing (TDLib thread; Background for the preview). A reply in it can use a
+  // message of the same page before the adapter has it: the adapter was just cleared when a chat is opened again, and
+  // the reply would otherwise be laid out with "Loading message..." and change width when the real text comes.
+  // The array is not written while it is set.
+  private volatile TdApi.Message[] xgramParsingPage;
+
+  public @Nullable TdApi.Message xgramFindParsing (long chatId, long messageId) {
+    final TdApi.Message[] page = xgramParsingPage;
+    if (page != null) {
+      for (TdApi.Message message : page) {
+        if (message != null && message.chatId == chatId && message.id == messageId) {
+          return message;
+        }
+      }
+    }
+    return null;
+  }
+
   private void processMessages (final long currentContextId, TdApi.Message[] messages, int knownTotalMessageCount,
                                 String nextSearchOffset, long nextSearchFromMessageId,
                                 boolean needFindUnread, @Nullable List<List<TdApi.Message>> missingAlbums) {
@@ -1493,6 +1511,8 @@ public class MessagesLoader implements Client.ResultHandler {
     boolean unreadFound = !needFindUnread;
     TGMessage unreadBadged = null;
 
+    xgramParsingPage = messages; // XGram: a reply to a message of this page uses it while it is parsed (xgramFindParsing)
+    try {
     for (int j = maxIndex; j >= minIndex; j--) {
       if (needMeasureSpeed) {
         startMeasureStep();
@@ -1577,6 +1597,9 @@ public class MessagesLoader implements Client.ResultHandler {
       if (needMeasureSpeed) {
         endMeasureStep(cur, cur.getId(), cur.getMessageCount());
       }
+    }
+    } finally {
+      xgramParsingPage = null;
     }
 
     if (needMeasureSpeed) {
