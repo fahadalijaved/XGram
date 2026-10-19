@@ -184,7 +184,8 @@ public final class XgramM3Controls {
    * viewer) takes {@link #styleAlert(Context, AlertDialog, ThemeDelegate)} with that theme instead.
    */
   public static boolean dialogsEnabled (@Nullable ThemeDelegate theme) {
-    return XgramExpressive.isEnabled() && (theme == null || theme.getId() == ThemeManager.instance().currentThemeId());
+    // An imported theme's preview has no id (ImportedTheme.getId() throws): it is never the theme in use
+    return XgramExpressive.isEnabled() && (theme == null || (!(theme instanceof org.thunderdog.challegram.telegram.TdlibUi.ImportedTheme) && theme.getId() == ThemeManager.instance().currentThemeId()));
   }
 
   /**

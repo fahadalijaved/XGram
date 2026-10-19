@@ -388,6 +388,11 @@ public final class XgramM3Colors {
    */
   @ColorInt
   public static int resolve (ThemeDelegate theme, int colorId) {
+    if (theme instanceof org.thunderdog.challegram.telegram.TdlibUi.ImportedTheme) {
+      // The preview of a .tgx-theme file being installed (the Apply theme sheet) shows the file's own colours, and it
+      // has no id: ImportedTheme.getId() throws "Stub!", which crashed the app with Expressive design on
+      return theme.getColor(colorId);
+    }
     int entry = TABLE[colorId];
     if ((entry & 0xf) == K_TRANSPARENT && PURE_BLACK[colorId] == 0) {
       return 0; // a transparent id with a Pure black entry resolves below: transparent in light, the entry in dark
