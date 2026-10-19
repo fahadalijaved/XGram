@@ -304,6 +304,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
           view.setPreviewActionListProvider(DrawerController.this);
         } else if (itemId == R.id.btn_settings && settingsClickBait != null) {
           view.setClickBait(settingsClickBait.isError, settingsClickBait.iconRes, isUpdate);
+        } else if (itemId == R.id.btn_xgramActivity) {
+          view.setClickBait(false, 0, isUpdate);
+          view.setUnreadCount(com.fahadali.xgram.activity.XgramActivityBadge.badgeCount(context.currentTdlib()), false, isUpdate); // XGram
         } else {
           view.setClickBait(false, 0, isUpdate);
         }
@@ -567,6 +570,8 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     TdlibManager.instance().global().addAccountListener(this);
     TdlibManager.instance().global().addCountersListener(this);
     TdlibManager.instance().global().addTokenStateListener(this);
+    com.fahadali.xgram.activity.XgramActivityBadge.instance().addListener(xgramActivityBadgeListener); // XGram
+    com.fahadali.xgram.XgramSettings.instance().addListener(xgramActivitySettingsListener); // XGram
 
     return contentView;
   }
@@ -582,7 +587,27 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     TdlibManager.instance().global().removeAccountListener(this);
     TdlibManager.instance().global().removeCountersListener(this);
     TdlibManager.instance().global().removeTokenStateListener(this);
+    com.fahadali.xgram.activity.XgramActivityBadge.instance().removeListener(xgramActivityBadgeListener); // XGram
+    com.fahadali.xgram.XgramSettings.instance().removeListener(xgramActivitySettingsListener); // XGram
   }
+
+  // XGram: Activity's row follows its count, and comes or goes with the Activity switch
+
+  private final com.fahadali.xgram.activity.XgramActivityBadge.Listener xgramActivityBadgeListener = () -> {
+    if (adapter != null && !isDestroyed()) {
+      adapter.updateValuedSettingById(R.id.btn_xgramActivity);
+    }
+  };
+
+  private final com.fahadali.xgram.XgramSettings.Listener xgramActivitySettingsListener = key -> {
+    if (com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_ON.equals(key)) {
+      UI.post(() -> {
+        if (!isDestroyed()) {
+          xgramUpdateMenuItems();
+        }
+      });
+    }
+  };
 
   @Override
   public void onUnreadCountersChanged (Tdlib tdlib, @NonNull TdApi.ChatList chatList, int count, boolean isMuted) {
@@ -806,6 +831,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     // XGram: side menu items can be hidden and reordered (Settings → XGram → Side menu).
     com.fahadali.xgram.XgramSettings xgram = com.fahadali.xgram.XgramSettings.instance();
     final int xgramMainStart = items.size();
+    if (com.fahadali.xgram.activity.XgramActivity.isOn() && !xgram.drawerItemHidden("activity")) {
+      // XGram: Activity (every mention, reply and reaction), with its count
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramActivity, com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.outline_notifications_24 : R.drawable.baseline_notifications_24, R.string.XgramActivity));
+    }
     if (!xgram.drawerItemHidden("contacts")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_contacts, R.drawable.baseline_perm_contact_calendar_24, R.string.Contacts));
     }
@@ -1120,6 +1149,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
         needAnimationDelay = true;
         account.context().changePreferredAccountId(account.id, TdlibManager.SWITCH_REASON_USER_CLICK);
       }
+    } else if (viewId == R.id.btn_xgramActivity) {
+      // XGram: Activity (in the chat list pane with two panes)
+      com.fahadali.xgram.activity.XgramActivity.open(context.navigation().getCurrentStackItem());
+      close(0f, null);
     } else if (viewId == R.id.btn_contacts) {
       if (xgramOpenFromToolbar(com.fahadali.xgram.layout.XgramNavToolbar.DEST_CONTACTS)) {
         return; // XGram M3E: a tab of the floating navigation toolbar

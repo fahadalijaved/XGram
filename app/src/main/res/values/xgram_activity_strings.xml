@@ -23,7 +23,64 @@
   <string name="XgramActivityNeedsOn">Turn on Activity first</string>
   <string name="XgramSearchKwActivity">activity|inbox|mentions|mention|replies|reply|reactions|reaction|notifications|@</string>
 
+  <!-- Screen and filters -->
+  <string name="XgramActivityNew">Activity, %1$d new</string>
+  <string name="XgramActivityAllTitle">All activity</string>
+  <string name="XgramActivityAll">All</string>
+  <string name="XgramActivityMentions">Mentions</string>
+  <string name="XgramActivityReplies">Replies</string>
+  <string name="XgramActivityReactions">Reactions</string>
+  <string name="XgramActivityUnread">Unread</string>
+  <string name="XgramActivityUnreadOnly">Unread only</string>
+  <string name="XgramActivityChipCount">%1$s %2$d</string>
+  <string name="XgramActivityThisWeek">This week</string>
+  <string name="XgramActivityEarlier">Earlier</string>
+
+  <!-- Rows -->
+  <string name="XgramActivityTwo">%1$s and %2$s</string>
+  <string name="XgramActivityOneAndOther">%1$s and %2$d other</string>
+  <string name="XgramActivityOneAndOthers">%1$s and %2$d others</string>
+  <string name="XgramActivityTwoAndOther">%1$s, %2$s and %3$d other</string>
+  <string name="XgramActivityTwoAndOthers">%1$s, %2$s and %3$d others</string>
+  <string name="XgramActivitySomeone">Someone</string>
+  <string name="XgramActivityInTopic">%1$s › %2$s</string>
+  <string name="XgramActivityMentioned">Mentioned you: %1$s</string>
+  <string name="XgramActivityReplied">Replied: %1$s</string>
+  <string name="XgramActivityReacted">Reacted %1$s to your message</string>
+  <string name="XgramActivityYou">You: %1$s</string>
+  <string name="XgramActivityDeleted">Deleted message</string>
+  <string name="XgramActivityMessageDeleted">This message was deleted</string>
+  <string name="XgramActivityOpenChat">Open chat</string>
+  <string name="XgramActivityChatUnavailable">Chat unavailable</string>
+  <string name="XgramActivityA11yRow">%1$s, %2$s, %3$s</string>
+  <string name="XgramActivityA11yUnread">%1$s, unread</string>
+
+  <!-- Status, empty and off -->
+  <string name="XgramActivityGhostNote">Ghost mode is on. Opening activity from here won\'t send read receipts.</string>
+  <string name="XgramActivityEmpty">No activity yet</string>
+  <string name="XgramActivityEmptyText">Mentions of you, replies to your messages and reactions to them show up here, from all your groups.</string>
+  <string name="XgramActivityEmptyMentions">No mentions</string>
+  <string name="XgramActivityEmptyReplies">No replies</string>
+  <string name="XgramActivityEmptyReactions">No reactions</string>
+  <string name="XgramActivityCaughtUp">You\'re all caught up</string>
+  <string name="XgramActivityOff">Activity is off</string>
+  <string name="XgramActivityTurnOn">Turn on</string>
+
+  <!-- Menus -->
+  <string name="XgramActivitySettings">Activity settings</string>
+
+  <!-- What's New -->
+  <string name="XgramNewActivity">Activity</string>
+  <string name="XgramNewActivityInfo">Every mention, reply and reaction in one place</string>
+
   <!-- Ids -->
+  <item name="controller_xgramActivity" type="id"/>
+  <item name="btn_xgramActivity" type="id"/>
+  <item name="menu_xgramActivity" type="id"/>
+  <item name="menu_btn_xgramActivity" type="id"/>
+  <item name="btn_xgramActivityUnreadOnly" type="id"/>
+  <item name="btn_xgramActivitySettings" type="id"/>
+  <item name="btn_xgramActivityTurnOn" type="id"/>
   <item name="btn_xgramActivityShow" type="id"/>
   <item name="btn_xgramActivityReactions" type="id"/>
   <item name="btn_xgramActivityMuted" type="id"/>

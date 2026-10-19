@@ -14,11 +14,16 @@ package com.fahadali.xgram.activity;
 import android.util.Log;
 
 import androidx.annotation.AnyThread;
+import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 
 import com.fahadali.xgram.XgramSettings;
+import com.fahadali.xgram.layout.XgramTwoPane;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.BaseActivity;
+import org.thunderdog.challegram.navigation.NavigationController;
+import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.UI;
 
@@ -101,9 +106,61 @@ public final class XgramActivity {
     onAccountForgotten(accountId);
   }
 
-  /** The parts that come later (the sync, the screen's state) forget the account too. */
+  /** The screen's remembered scroll and opened row go too. */
   private static void onAccountForgotten (int accountId) {
-    // Nothing else keeps account state yet.
+    XgramActivityController.forgetAccount(accountId);
+  }
+
+  // Where Activity is in the navigation
+
+  /** Whether a navigation on screen (the rail, the toolbar, the bottom bar) has Activity: the header's bell goes then. */
+  @UiThread
+  public static boolean navigationHasActivity (@Nullable BaseActivity context) {
+    return false;
+  }
+
+  /** Whether the floating navigation toolbar has an Activity tab. */
+  public static boolean toolbarHasActivity (@Nullable com.fahadali.xgram.layout.XgramNavToolbar toolbar) {
+    return false;
+  }
+
+  // Opening
+
+  /**
+   * Every way in opens Activity here, and this decides where: with two panes in the chat list pane (over the chat
+   * list, anything else there goes), otherwise over the screen it was opened from. Already on top: back to its top.
+   */
+  @UiThread
+  public static void open (@Nullable ViewController<?> from) {
+    if (from == null || from.isDestroyed()) {
+      return;
+    }
+    final BaseActivity context = from.context();
+    final Tdlib tdlib = from.tdlib();
+    if (context == null || tdlib == null) {
+      return;
+    }
+    ViewController<?> leftTop = XgramTwoPane.leftTop(context);
+    if (leftTop instanceof XgramActivityController && leftTop.tdlib() == tdlib) {
+      ((XgramActivityController) leftTop).scrollToTopOrReload();
+      return;
+    }
+    if (leftTop != null && XgramTwoPane.showOnLeft(from, new XgramActivityController(context, tdlib))) {
+      return;
+    }
+    NavigationController navigation = from.navigationController();
+    if (navigation == null || navigation.isDestroyed()) {
+      navigation = context.navigation();
+    }
+    if (navigation == null || navigation.isAnimating()) {
+      return;
+    }
+    ViewController<?> top = navigation.getCurrentStackItem();
+    if (top instanceof XgramActivityController && top.tdlib() == tdlib) {
+      ((XgramActivityController) top).scrollToTopOrReload();
+      return;
+    }
+    navigation.navigateTo(new XgramActivityController(context, tdlib));
   }
 
   // Hooks

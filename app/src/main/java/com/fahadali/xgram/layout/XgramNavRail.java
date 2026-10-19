@@ -692,7 +692,13 @@ public final class XgramNavRail {
     final Tdlib tdlib = root.tdlib();
     NavigationController navigation = context.navigation();
     ViewController<?> current = navigation != null ? navigation.getCurrentStackItem() : null;
-    if (id == R.id.btn_xgramHub) {
+    if (id == R.id.btn_xgramActivity) {
+      if (canNavigate()) {
+        // In the chat list pane with two panes, over the chat list otherwise
+        MainController list = owner.railChatList();
+        com.fahadali.xgram.activity.XgramActivity.open(list != null ? list : root);
+      }
+    } else if (id == R.id.btn_xgramHub) {
       if (canNavigate()) {
         open(com.fahadali.xgram.compose.XgramSettingsPages.main(context, tdlib));
       }
@@ -1374,6 +1380,10 @@ public final class XgramNavRail {
       // The rest of the side menu, in its order (destinations are above), then its switches
       XgramSettings xgram = XgramSettings.instance();
       ArrayList<Entry> entries = new ArrayList<>();
+      if (com.fahadali.xgram.activity.XgramActivity.isOn() && !xgram.drawerItemHidden("activity")) {
+        // Activity (every mention, reply and reaction), with its count
+        entries.add(new Entry("activity", R.id.btn_xgramActivity, R.drawable.baseline_notifications_24, R.drawable.xgl_notifications, R.string.XgramActivity));
+      }
       if (!xgram.drawerItemHidden("hub")) {
         entries.add(new Entry("hub", R.id.btn_xgramHub, R.drawable.baseline_stars_24, R.drawable.xgl_stars, R.string.XgramHub));
       }
@@ -1412,6 +1422,8 @@ public final class XgramNavRail {
         View row;
         if (entry.id == R.id.btn_proxy) {
           row = switchRow(context, entry, Settings.instance().getEffectiveProxyId() != Settings.PROXY_ID_NONE);
+        } else if (entry.id == R.id.btn_xgramActivity) {
+          row = activityRow(context, entry);
         } else {
           row = actionRow(context, entry);
         }
@@ -1421,6 +1433,24 @@ public final class XgramNavRail {
         boolean checked = entry.id == R.id.btn_night ? Theme.isDark() : entry.id == R.id.btn_xgramExpressive ? XgramExpressive.isEnabled() : xgram.isAnyGhostEnabled();
         list.addView(switchRow(context, entry, checked), params(match, Screen.dp(ROW_HEIGHT), 0, false));
       }
+    }
+
+    /** Activity's entry: its unread count as the trailing text. */
+    private RowView activityRow (Context context, Entry entry) {
+      Resources res = context.getResources();
+      MainController root = owner.railRoot();
+      int count = com.fahadali.xgram.activity.XgramActivityBadge.badgeCount(root != null ? root.tdlib() : null);
+      RowView row = new RowView(context, false, restIcon(res, entry.filled, entry.outlined), null, Lang.getString(entry.label), badgeText(count));
+      if (count > 0) {
+        row.setContentDescription(Lang.getString(R.string.XgramActivityNew, count));
+      }
+      final int id = entry.id;
+      row.setOnClickListener(v -> {
+        markShown();
+        onMenuAction(id);
+        close();
+      });
+      return row;
     }
 
     /** A side menu entry that opens something (and closes the rail). */
