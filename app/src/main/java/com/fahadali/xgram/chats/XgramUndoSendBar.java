@@ -114,7 +114,8 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     }
 
     ring = new Ring(context);
-    int ringSize = Screen.dp(m3 ? 28f : 24f);
+    // Expressive design: 32dp, so two digits clear the 4dp wavy stroke (inside a 28dp ring its troughs reach the digits)
+    int ringSize = Screen.dp(m3 ? 32f : 24f);
     LinearLayout.LayoutParams ringParams = new LinearLayout.LayoutParams(ringSize, ringSize);
     ringParams.setMargins(rtl ? 0 : Screen.dp(16f), 0, rtl ? Screen.dp(16f) : 0, 0);
     ring.setLayoutParams(ringParams);

@@ -410,6 +410,9 @@ public final class XgramUndoSend {
     if (settings.undoSendSeconds() <= 0 || settings.isUndoSendExcluded(owner.tdlib().id(), owner.getChatId())) {
       return false;
     }
+    if (inSlowModeAsMember(owner.tdlib(), owner.getChatId()) && hasItemsIn(owner.tdlib(), owner.getChatId())) {
+      return false; // Send shows the slow mode hint instead: a second message would only be refused
+    }
     return owner.xgramComposerWouldWait();
   }
 
@@ -516,7 +519,7 @@ public final class XgramUndoSend {
     });
   }
 
-  @UiThread
+  /** Main thread only (flushUpTo checks). */
   private static boolean composerEmptyFor (XgramUndoSendItem item) {
     MessagesController owner = item.owner();
     return owner != null && owner.xgramComposerEmptyFor(item.chatId, item.draftChatId, item.draftTopic);
