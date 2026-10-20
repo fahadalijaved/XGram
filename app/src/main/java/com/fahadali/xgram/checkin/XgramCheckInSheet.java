@@ -667,7 +667,11 @@ public final class XgramCheckInSheet {
       if (id == R.id.btn_xgramCheckInSafe) {
         XgramCheckIn.imSafe(acc, ref, CheckInRecord.KIND_SAFE);
       } else if (id == R.id.btn_xgramCheckInAdd15 || id == R.id.btn_xgramCheckInAdd60) {
-        XgramCheckIn.addTime(acc, ref, id == R.id.btn_xgramCheckInAdd15 ? 15 * 60 : 60 * 60, (ok, message) -> XgramCheckIn.feedback(message));
+        XgramCheckIn.addTime(acc, ref, id == R.id.btn_xgramCheckInAdd15 ? 15 * 60 : 60 * 60, (ok, message) -> {
+          if (!TextUtils.isEmpty(message)) {
+            XgramCheckIn.feedback(message);
+          }
+        });
       } else if (id == R.id.btn_xgramCheckInCancel) {
         UI.post(() -> confirmCancel(c, acc, ref, title));
       }

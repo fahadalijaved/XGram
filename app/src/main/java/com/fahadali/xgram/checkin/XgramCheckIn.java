@@ -682,8 +682,16 @@ public final class XgramCheckIn {
     return value != null && value;
   }
 
+  private static boolean uiResumedOnce;
+
   private static void onUiResumed () {
     ensureLoaded();
+    if (!uiResumedOnce) {
+      // The first open of the app after a force stop (alarms and notifications gone): everything is set again.
+      uiResumedOnce = true;
+      resume(-1, false);
+      return;
+    }
     CheckInRecord r = current;
     if (r != null) {
       ensureService(r, false);
@@ -1351,6 +1359,7 @@ public final class XgramCheckIn {
     ensureLoaded();
     CheckInRecord r = current;
     if (r == null || r.acc != acc || !r.ref.equals(ref)) {
+      reply(callback, false, "");
       return;
     }
     Tdlib t = tdlibFor(acc);
@@ -1367,6 +1376,7 @@ public final class XgramCheckIn {
         reply(callback, false, Lang.getString(R.string.XgramCheckInMax24h));
         return;
       case CheckInRules.ADD_NOT_ARMED:
+        reply(callback, false, "");
         return;
       case CheckInRules.ADD_OK:
       default:
@@ -1377,6 +1387,7 @@ public final class XgramCheckIn {
     t.send(new TdApi.EditMessageSchedulingState(r.chat, r.alertId, new TdApi.MessageSchedulingStateSendAtDate((int) newSendAt, 0)), (ok, error) -> post(() -> {
       CheckInRecord cur = current;
       if (cur == null || !cur.ref.equals(ref)) {
+        reply(callback, false, "");
         return;
       }
       if (error != null) {
@@ -1692,6 +1703,7 @@ public final class XgramCheckIn {
   /** An alarm or a notification action (receiver): [done] runs once it was handled. */
   static void onAction (String action, int acc, @Nullable String ref, Runnable done) {
     post(() -> {
+      boolean finishLater = false;
       try {
         ensureLoaded();
         CheckInRecord r = current;
@@ -1724,19 +1736,52 @@ public final class XgramCheckIn {
           case XgramCheckInReceiver.ACTION_ADD15:
             if (matches) {
               ensureService(r, true);
-              XgramCheckInWork.enqueue(acc);
-              addTimeNow(acc, ref, 900, (ok, message) -> {
-                if (UI.isResumed()) {
-                  feedback(message);
-                }
-              });
+              finishLater = addTimeFromNotification(acc, ref, done);
             }
             break;
         }
       } finally {
-        done.run();
+        if (!finishLater) {
+          done.run();
+        }
       }
     });
+  }
+
+  /**
+   * Add 15 min from a notification: the app may have just been started for it, so TDLib is kept awake and the
+   * connection is waited for (a few seconds) before the reschedule. True when [done] runs later.
+   */
+  private static boolean addTimeFromNotification (int acc, String ref, Runnable done) {
+    Tdlib t = tdlibFor(acc);
+    if (t == null) {
+      return false;
+    }
+    t.changeLocationReferenceCount(1);
+    final AtomicBoolean released = new AtomicBoolean();
+    Runnable release = () -> {
+      if (released.compareAndSet(false, true)) {
+        t.changeLocationReferenceCount(-1);
+        done.run();
+      }
+    };
+    final AtomicBoolean started = new AtomicBoolean();
+    Runnable go = () -> post(() -> {
+      if (!started.compareAndSet(false, true)) {
+        return;
+      }
+      addTimeNow(acc, ref, 900, (ok, message) -> {
+        if (UI.isResumed() && !message.isEmpty()) {
+          feedback(message);
+        }
+        release.run();
+      });
+    });
+    t.awaitConnection(go);
+    postDelayed(go, 7_000);
+    // Never held longer than this, whatever TDLib does.
+    postDelayed(release, 30_000);
+    return true;
   }
 
   /** For the worker: whether nothing is left to finish for the account (engine thread). */
@@ -1874,6 +1919,9 @@ public final class XgramCheckIn {
 
   /** A snackbar with Expressive design, else a toast. Main thread. */
   static void feedback (CharSequence text) {
+    if (text == null || text.length() == 0) {
+      return;
+    }
     if (!com.fahadali.xgram.appearance.XgramSnackbar.show(text, Toast.LENGTH_SHORT)) {
       UI.showToast(text, Toast.LENGTH_SHORT);
     }
