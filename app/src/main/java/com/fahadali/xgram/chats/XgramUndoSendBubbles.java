@@ -762,7 +762,7 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
         entries.add(new XgramR5Chat.MenuEntry(R.id.btn_xgramUndoSendBubbleUndo, Lang.getString(R.string.XgramUndoSendUndo), R.drawable.baseline_undo_24, () -> undo(item)));
       }
       entries.add(new XgramR5Chat.MenuEntry(R.id.btn_xgramUndoSendBubbleNow, Lang.getString(R.string.XgramUndoSendNow), R.drawable.baseline_send_24, () -> sendNow(item)));
-      XgramR5Chat.showMenu(slot.view, owner.getThemeListeners(), entries);
+      XgramR5Chat.showMenu(slot.view, menuBounds(slot), owner.getThemeListeners(), entries);
     } else {
       final int[] ids = canUndo ? new int[] {R.id.btn_xgramUndoSendBubbleUndo, R.id.btn_xgramUndoSendBubbleNow} : new int[] {R.id.btn_xgramUndoSendBubbleNow};
       final String[] titles = canUndo ?
@@ -778,6 +778,29 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
         return true;
       });
     }
+  }
+
+  /**
+   * Where a bubble's tap menu opens, in its row's own coordinates: the bubble itself (the whole row without the bubbles
+   * look), not the full width row, cut to the part of it the list shows (a bubble partly scrolled under the app bar or
+   * behind the message box). Null: the whole row.
+   */
+  @Nullable
+  private Rect menuBounds (Slot slot) {
+    // The row is laid out at the layer's start and moved to the list's content start: the message's edges are its own
+    final int width = slot.view.getWidth();
+    int left = 0, right = width;
+    if (slot.msg.useBubbles()) {
+      final int a = slot.msg.getActualLeftContentEdge(), b = slot.msg.getActualRightContentEdge();
+      left = Math.max(0, Math.min(a, b));
+      right = Math.min(width, Math.max(a, b));
+    }
+    final int top = Math.max(0, (int) Math.ceil(clip.top - slot.layerY));
+    final int bottom = Math.min(slot.height, (int) Math.floor(clip.bottom - slot.layerY));
+    if (right <= left || bottom <= top) {
+      return null;
+    }
+    return new Rect(left, top, right, bottom);
   }
 
   /** Undo of that one message: it goes back into the message box (a recording is discarded, after asking). */

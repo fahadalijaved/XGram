@@ -63,6 +63,8 @@ internal object XgramSearchIndex {
     R.id.btn_xgramLaterChannel -> intArrayOf(R.string.XgramSearchKwLater)
     R.id.btn_xgramCheckInTimer, R.id.btn_xgramCheckInGrace, R.id.btn_xgramCheckInRadius, R.id.btn_xgramCheckInLocation,
     R.id.btn_xgramCheckInBattery, R.id.btn_xgramCheckInFollowUp -> intArrayOf(R.string.XgramSearchKwCheckIn)
+    // Developer (debug builds only: the row, so its result, exists only there)
+    R.id.btn_xgramSendMenuTests -> intArrayOf(R.string.XgramSearchKwDebug, R.string.XgramSearchKwSendMenuTests)
     else -> NONE
   }
 

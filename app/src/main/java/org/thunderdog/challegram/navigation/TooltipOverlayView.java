@@ -969,6 +969,7 @@ public class TooltipOverlayView extends ViewGroup {
     private boolean alignBottom;
     private int pivotX, pivotY;
     private final RectF contentRect = new RectF();
+    private final Rect xgramSafeRect = new Rect(); // XGram: the overlay's free area (layout)
     private final Path backgroundPath = new Path();
 
     private void buildPath (Path backgroundPath, RectF contentRect) {
@@ -1197,7 +1198,16 @@ public class TooltipOverlayView extends ViewGroup {
       int triangleHeight = Screen.dp(12f);
       int totalHeight = popupView.getHeight() + innerPaddingVertical * 2 + triangleHeight + xgramSubheadHeight() + xgramActionHeight();
 
-      this.alignBottom = position[1] + innerRect.top - totalHeight < HeaderView.getTopOffset() && position[1] + innerRect.bottom + totalHeight < parentHeight;
+      // XGram: fits within the free area (below the status bar or the cutout; 8dp above the navigation bar or the
+      // keyboard), not the overlay's full height: a tooltip flipped below its anchor ended behind the keyboard. When
+      // neither side fits, the side with more room.
+      com.fahadali.xgram.appearance.XgramPopupBounds.safeRect(parentView, 0, xgramSafeRect);
+      final int xgramTopLimit = Math.max(HeaderView.getTopOffset(), xgramSafeRect.top - Screen.dp(com.fahadali.xgram.appearance.XgramPopupBounds.MARGIN));
+      final int xgramBottomLimit = Math.min(parentHeight, xgramSafeRect.bottom);
+      final int xgramAnchorTop = position[1] + innerRect.top, xgramAnchorBottom = position[1] + innerRect.bottom;
+      final boolean xgramFitsAbove = xgramAnchorTop - totalHeight >= xgramTopLimit;
+      final boolean xgramFitsBelow = xgramAnchorBottom + totalHeight < xgramBottomLimit;
+      this.alignBottom = !xgramFitsAbove && (xgramFitsBelow || xgramBottomLimit - xgramAnchorBottom > xgramAnchorTop - xgramTopLimit);
       this.pivotX = position[0] + innerRect.centerX();
       this.pivotY = alignBottom ? position[1] + innerRect.bottom : position[1] + innerRect.top;
 

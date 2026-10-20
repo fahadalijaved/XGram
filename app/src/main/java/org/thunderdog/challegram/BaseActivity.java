@@ -2032,6 +2032,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
   private boolean isProgressShowing, isProgressAnimating;
   private ProgressPopupListener progressListener;
   private ProgressWrap progressWrap;
+  private com.fahadali.xgram.layout.XgramDialogHost progressHost; // XGram: keeps the card between the status bar and the keyboard
   private ValueAnimator progressAnimator;
 
   private float progressFactor;
@@ -2072,6 +2073,9 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     if (progressWrap == null) {
       progressWrap = new ProgressWrap(this);
       progressWrap.addThemeListeners(themeList);
+      // XGram: centred in the band between the status bar and the keyboard (or the emoji panel), not by gravity
+      progressHost = new com.fahadali.xgram.layout.XgramDialogHost(this);
+      progressHost.addView(progressWrap);
       firstTime = true;
     } else {
       firstTime = false;
@@ -2089,14 +2093,14 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
     overlayView.setTranslationY(0f);
     overlayView.setUnlockable(null);
 
-    if (progressWrap.getParent() != null) {
-      contentView.removeView(progressWrap);
+    if (progressHost.getParent() != null) { // XGram: the host holds the card
+      contentView.removeView(progressHost);
     }
 
     progressWrap.setAlpha(0f);
     progressWrap.setScaleX(MIN_PROGRESS_SCALE);
     progressWrap.setScaleY(MIN_PROGRESS_SCALE);
-    contentView.addView(progressWrap);
+    contentView.addView(progressHost);
 
     // FIXME with implements
     progressAnimator = AnimatorUtils.simpleValueAnimator();
@@ -2160,7 +2164,7 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
       public void onAnimationEnd (Animator animation) {
         isProgressAnimating = false;
         removeOverlayView();
-        contentView.removeView(progressWrap);
+        contentView.removeView(progressHost); // XGram: the card goes with its host
       }
     });
     obj.start();

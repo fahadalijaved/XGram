@@ -351,11 +351,55 @@ public class TextFormattingLayout extends FrameLayout implements TranslationsMan
 
     languagePopupLayout.languageRecyclerWrap.setTranslationX(x);
     languagePopupLayout.languageRecyclerWrap.setTranslationY(y);
+    // XGram: placed again once laid out (xgramPlaceLanguageSelector), in the popup's own coordinates
+    languagePopupLayout.languageRecyclerWrap.addOnLayoutChangeListener((wrap, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> xgramPlaceLanguageSelector(wrap));
     languagePopupLayout.show();
     languagePopupLayout.languageRecyclerWrap.setPivotX(Screen.dp(TranslationControllerV2.LanguageSelectorPopup.WIDTH + TranslationControllerV2.LanguageSelectorPopup.PADDING));
     languagePopupLayout.languageRecyclerWrap.setPivotY(Screen.dp(TranslationControllerV2.LanguageSelectorPopup.HEIGHT + TranslationControllerV2.LanguageSelectorPopup.PADDING));
 
     inputView.hideSelectionCursors();
+  }
+
+  /**
+   * XGram: the language list's bottom end corner on the selector's, as before, but from the popup's own coordinates
+   * (the popup is a window of its own: screen positions are not its coordinates in split screen or pop-up view) and
+   * inside the safe area: the selector sits low in a short window (the cover screen in landscape), where the list's
+   * top went above the window or under the status bar. The pivot stays on the selector.
+   */
+  private void xgramPlaceLanguageSelector (View wrap) {
+    if (!(wrap.getParent() instanceof View) || wrap.getWidth() <= 0 || wrap.getHeight() <= 0) {
+      return;
+    }
+    final View popup = (View) wrap.getParent();
+    final android.graphics.Rect anchor = new android.graphics.Rect();
+    if (!com.fahadali.xgram.appearance.XgramPopupBounds.anchorRectIn(langSelector, null, popup, anchor)) {
+      return;
+    }
+    // The safe area of the activity's window (its insets are always current; the popup's own window may not get them
+    // all), in the popup's coordinates
+    final View root = UI.getContext(getContext()) != null ? UI.getContext(getContext()).getRootView() : null;
+    final android.graphics.Rect safe;
+    if (root != null && root.getWindowToken() != null) {
+      safe = com.fahadali.xgram.appearance.XgramPopupBounds.safeRect(root, 0);
+      final int[] location = new int[2];
+      root.getLocationOnScreen(location);
+      final int rootX = location[0], rootY = location[1];
+      popup.getLocationOnScreen(location);
+      safe.offset(rootX - location[0], rootY - location[1]);
+    } else {
+      safe = com.fahadali.xgram.appearance.XgramPopupBounds.safeRect(popup, 0);
+    }
+    final int width = wrap.getWidth(), height = wrap.getHeight();
+    final int padding = Screen.dp(TranslationControllerV2.LanguageSelectorPopup.PADDING);
+    // The visible card's inset: the sides in both designs, the top and bottom only on the legacy 9-patch (its shadow)
+    final int sx = padding, sy = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 0 : padding;
+    int x = anchor.right - width, y = anchor.bottom - height;
+    x = Math.max(safe.left - sx, Math.min(x, safe.right + sx - width));
+    y = Math.max(safe.top - sy, Math.min(y, safe.bottom + sy - height)); // the top edge wins
+    wrap.setTranslationX(x - wrap.getLeft());
+    wrap.setTranslationY(y - wrap.getTop());
+    wrap.setPivotX(MathUtils.clamp(anchor.right - padding - x, 0, width));
+    wrap.setPivotY(MathUtils.clamp(anchor.bottom - padding - y, 0, height));
   }
 
   private void startTranslate () {

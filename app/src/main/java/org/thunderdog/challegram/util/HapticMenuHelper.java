@@ -15,8 +15,6 @@ package org.thunderdog.challegram.util;
 import android.graphics.drawable.Drawable;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.ViewParent;
 
 import androidx.annotation.Nullable;
 
@@ -26,10 +24,9 @@ import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibCache;
 import org.thunderdog.challegram.theme.ThemeDelegate;
 import org.thunderdog.challegram.theme.ThemeListenerList;
-import org.thunderdog.challegram.tool.Screen;
-import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.widget.PopupLayout;
+import org.thunderdog.challegram.widget.SendButton;
 
 import java.util.List;
 
@@ -292,44 +289,11 @@ public class HapticMenuHelper implements View.OnTouchListener, View.OnLongClickL
       onHapticMenuListener.onHapticMenuOpen();
     }
 
-    moreWrap = new MenuMoreWrap(view.getContext());
-    moreWrap.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-      ViewParent parent = v.getParent();
-      if (parent == null)
-        return;
-
-      int viewWidth = v.getMeasuredWidth();
-      int viewHeight = v.getMeasuredHeight();
-
-      int targetWidth = view.getMeasuredWidth();
-      int targetHeight = view.getMeasuredHeight();
-
-      int parentWidth = ((ViewGroup) parent).getMeasuredWidth();
-      int parentHeight = ((ViewGroup) parent).getMeasuredHeight();
-
-      if (viewWidth <= 0 || viewHeight <= 0 || parentWidth <= 0 || parentHeight <= 0)
-        return;
-
-      int[] out = Views.getLocationInWindow(view);
-      int targetCenterX = out[0] + targetWidth / 2;
-      int targetCenterY = out[1] + targetHeight / 2;
-
-      out = Views.getLocationInWindow(v);
-      out[0] -= v.getTranslationX();
-      out[1] -= v.getTranslationY();
-      int centerX = out[0] + viewWidth / 2;
-      int centerY = out[1] + viewHeight / 2;
-
-      int resultCenterX = Math.max(viewWidth / 2, Math.min(parentWidth - viewWidth / 2, targetCenterX));
-      int resultCenterY = targetCenterY - targetHeight / 2 - (anchorMode == MenuMoreWrap.ANCHOR_MODE_CENTER ? Screen.dp(12) : viewHeight / 2);
-
-      v.setTranslationX(resultCenterX - centerX + (anchorMode == MenuMoreWrap.ANCHOR_MODE_CENTER ? Screen.dp(8) : 0));
-      v.setTranslationY(resultCenterY - centerY);
-
-      if (anchorMode == MenuMoreWrap.ANCHOR_MODE_CENTER) {
-        moreWrap.setBubbleTailX(targetCenterX - (out[0] + resultCenterX - centerX));
-      }
-    });
+    // XGram: scrollable, so the rows that don't fit between the status bar and the button scroll. The menu places itself
+    // at the button (xgramSetPopupAnchor below): the old layout listener read the menu's place while it was still scaled
+    // for its opening (Expressive: 0.8), which put it ~90dp too high (under the status bar) and ~45dp too far left, and
+    // its Send as fudges (-12dp / +8dp) only fit the 0.56 scale of the legacy design.
+    moreWrap = new MenuMoreWrap(view.getContext(), /* scrollable */ true);
     moreWrap.init(themeListeners, forcedTheme);
     for (MenuItem item : items) {
       item.boundView = moreWrap.addItem(item.tdlib, item, itemView -> onMenuItemClick(item, itemView, view));
@@ -341,6 +305,17 @@ public class HapticMenuHelper implements View.OnTouchListener, View.OnLongClickL
     moreWrap.setAnchorMode(anchorMode);
     moreWrap.setShouldPivotBottom(true);
     moreWrap.setRightNumber(0);
+    // XGram: its card 8dp above the button (below it only when not even two rows fit above and below has more room),
+    // never above the status bar or the cutout + 8dp nor under the keyboard or the navigation bar; it follows the button
+    // while the keyboard or the emoji panel moves it. Send as (ANCHOR_MODE_CENTER): centred, the legacy tail under the
+    // button's centre.
+    // The input bar's Send with Expressive design: at its 40dp filled circle, not the 55x49dp view around it
+    final android.graphics.Rect xgramVisible = view instanceof SendButton ? ((SendButton) view).xgramVisibleBounds() : null;
+    if (xgramVisible != null) {
+      moreWrap.xgramSetPopupAnchor(view, xgramVisible, MenuMoreWrap.XGRAM_PLACE_PREFER_ABOVE);
+    } else {
+      moreWrap.xgramSetPopupAnchor(view);
+    }
 
     hapticMenu = new PopupLayout(view.getContext());
     hapticMenu.init(false);

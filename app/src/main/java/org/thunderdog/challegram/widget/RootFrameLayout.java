@@ -592,6 +592,14 @@ public class RootFrameLayout extends FrameLayoutFix {
     return displayCutoutTopInset;
   }
 
+  /**
+   * XGram: whether window insets reached this layout yet: {@link #getSystemInsets()} all zero means "none delivered
+   * yet" when false, and an immersive window when true.
+   */
+  public boolean hasWindowInsets () {
+    return hasInsets;
+  }
+
   private int previousHeight;
   private int previousWidth;
 

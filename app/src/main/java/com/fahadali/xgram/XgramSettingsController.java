@@ -427,6 +427,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.getToggler().setRadioEnabled(settings.bottomNav(), isUpdate);
         } else if (id == R.id.btn_xgramHideFab) {
           view.getToggler().setRadioEnabled(settings.hideFab(), isUpdate);
+        } else if (id == R.id.btn_xgramSendMenuTests) {
+          view.getToggler().setRadioEnabled(settings.sendMenuTests(), isUpdate);
         } else if (id == R.id.btn_xgramConnectionStatusStart) {
           view.getToggler().setRadioEnabled(settings.connectionStatusAtStart(), isUpdate);
           setReason(view, XgramSettingDeps.connectionStatusPositionReason());
@@ -731,6 +733,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAboutSupport, R.drawable.baseline_favorite_24, R.string.XgramAboutSupport)
     );
     items.add(description(R.string.XgramAboutCredits));
+    if (BuildConfig.DEBUG) {
+      // Debug builds: test tools, off by default (Telegram X's developer mode is always on in debug builds)
+      items.add(header(R.string.XgramDeveloper));
+      addRows(items, toggle(R.id.btn_xgramSendMenuTests, R.drawable.baseline_bug_report_24, R.string.XgramSendMenuTests, R.string.XgramSendMenuTestsSub));
+    }
   }
 
   /** Expressive design (Android 13+): its own card with its note right under it. */
@@ -1937,6 +1944,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramHideFab) {
       settings.setHideFab(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramSendMenuTests) {
+      settings.setSendMenuTests(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramConnectionStatusStart) {
       if (XgramSettingDeps.connectionStatusPositionEnabled()) {

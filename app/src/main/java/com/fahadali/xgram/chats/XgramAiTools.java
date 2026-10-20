@@ -440,13 +440,17 @@ public final class XgramAiTools {
         }
       }
       int totalHeight = 0;
+      // XGram: the option rows under the text keep their room, and so does the status bar: on a short window (the
+      // cover screen in landscape) the classic sheet would move every child up by the overflow, the title under it
+      final int rowsBelow = Screen.dp(54f) * items.length;
       if (content.getChildCount() > 0) {
         ScrollView scrollView = new ScrollView(context) {
           @Override
           protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
             int maxHeight = maxScrollHeight;
             if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
-              maxHeight = Math.min(maxHeight, MeasureSpec.getSize(heightMeasureSpec));
+              final int available = MeasureSpec.getSize(heightMeasureSpec);
+              maxHeight = Math.min(maxHeight, Math.max(Math.min(Screen.dp(96f), available), available - rowsBelow - HeaderView.getTopOffset()));
             }
             super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST));
           }
@@ -521,13 +525,17 @@ public final class XgramAiTools {
         }
       }
       int totalHeight = 0;
+      // XGram: the actions row under the text keeps its room on a short window (set once it is built, read on measure;
+      // the sheet itself already stops under the status bar)
+      final int[] rowsBelow = new int[1];
       if (content.getChildCount() > 0) {
         ScrollView scrollView = new ScrollView(context) {
           @Override
           protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
             int maxHeight = maxScrollHeight;
             if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
-              maxHeight = Math.min(maxHeight, MeasureSpec.getSize(heightMeasureSpec));
+              final int available = MeasureSpec.getSize(heightMeasureSpec);
+              maxHeight = Math.min(maxHeight, Math.max(Math.min(Screen.dp(96f), available), available - rowsBelow[0]));
             }
             super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST));
           }
@@ -566,10 +574,13 @@ public final class XgramAiTools {
         end.add(apply);
         LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(context, null, end.toArray(new View[0]));
         optionsLayout.addView(actions);
-        totalHeight += ((LinearLayout.LayoutParams) actions.getLayoutParams()).height + ((LinearLayout.LayoutParams) actions.getLayoutParams()).bottomMargin;
+        LinearLayout.LayoutParams actionsParams = (LinearLayout.LayoutParams) actions.getLayoutParams();
+        rowsBelow[0] = Math.max(0, actionsParams.height) + actionsParams.topMargin + actionsParams.bottomMargin;
+        totalHeight += actionsParams.height + actionsParams.bottomMargin;
       } else {
         View spacer = new View(context);
         optionsLayout.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(8f)));
+        rowsBelow[0] = Screen.dp(8f);
         totalHeight += Screen.dp(8f);
       }
       return totalHeight;

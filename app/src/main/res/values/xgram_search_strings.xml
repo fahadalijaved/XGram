@@ -105,4 +105,5 @@
   <string name="XgramSearchKwBackup">backup|export|import|restore</string>
   <string name="XgramSearchKwUpdateChannel">beta|nightly|ci|channel</string>
   <string name="XgramSearchKwExpressive">material 3|m3|expressive|new design|look</string>
+  <string name="XgramSearchKwSendMenuTests">send button|long press|toast|crash|ltr emoji|draft restore|test</string>
 </resources>

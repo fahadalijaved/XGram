@@ -316,6 +316,7 @@ public class TranslationControllerV2 extends BottomSheetViewController.BottomShe
 
     LanguageSelectorPopup languagePopupLayout = new LanguageSelectorPopup(context, parent, mTranslationsManager::requestTranslation, mTranslationsManager.getCurrentTranslatedLanguage(), messageOriginalLanguage);
     languagePopupLayout.languageRecyclerWrap.setTranslationY(y);
+    languagePopupLayout.languageRecyclerWrap.xgramSetAnchorView(headerView, 0); // XGram: at the sheet's header, not the window's edge (the sheet is centred at most 640dp wide)
     languagePopupLayout.show();
     languagePopupLayout.languageRecyclerWrap.setPivotY(pivotY);
     if (xgramM3()) {

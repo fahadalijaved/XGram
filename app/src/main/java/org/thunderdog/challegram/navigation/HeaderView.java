@@ -984,12 +984,15 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
 
   private void showToggleOptions (String[] options) {
     if (moreWrap == null) {
-      moreWrap = new MenuMoreWrap(getContext());
+      moreWrap = xgramNewMoreWrap();
       moreWrap.init(null, null);
     }
     if (onToggleItemClick == null) {
       onToggleItemClick = v -> {
-        ((PopupLayout) v.getParent().getParent()).hideWindow(true);
+        PopupLayout popup = PopupLayout.parentOf(v); // XGram: the rows sit in a scroll view now
+        if (popup != null) {
+          popup.hideWindow(true);
+        }
         ViewController<?> c = stack.getCurrent();
         if (c instanceof ToggleDelegate) {
           ((ToggleDelegate) c).onToggle(v.getId());
@@ -1118,12 +1121,15 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     }
     ThemeListenerList themeListenerList = navigation != null ? navigation.getThemeListeners() : themeProvider != null ? themeProvider.getThemeListeners() : null;
     if (moreWrap == null) {
-      moreWrap = new MenuMoreWrap(getContext());
+      moreWrap = xgramNewMoreWrap();
       moreWrap.init(themeListenerList, null);
     }
     if (onMoreItemClick == null) {
       onMoreItemClick = v -> {
-        ((PopupLayout) v.getParent().getParent()).hideWindow(true);
+        PopupLayout popup = PopupLayout.parentOf(v); // XGram: the rows sit in a scroll view now
+        if (popup != null) {
+          popup.hideWindow(true);
+        }
         ViewController<?> c = stack.getCurrent();
         if (c instanceof MoreDelegate) {
           ((MoreDelegate) c).onMoreItemPressed(v.getId());
@@ -1137,21 +1143,31 @@ public class HeaderView extends FrameLayoutFix implements View.OnClickListener, 
     showMore(ids, titles, icons, onMoreItemClick, isLayered, themeListenerList);
   }
 
+  /**
+   * XGram: the app bar's ⋮ menu: scrollable and bound to the safe area, so every row of a long menu (the chat's ⋮ has up
+   * to 20) can be reached: it ends 8dp above the navigation bar or the keyboard and scrolls the rest. Its place stays
+   * the same (at the header's end or start, under the status bar).
+   */
+  private MenuMoreWrap xgramNewMoreWrap () {
+    MenuMoreWrap wrap = new MenuMoreWrap(getContext(), /* scrollable */ true);
+    wrap.xgramSetBoundToSafeArea(true);
+    return wrap;
+  }
+
   private void showMore (int[] ids, String[] titles, int[] icons, View.OnClickListener onItemClick, boolean isLayered, @Nullable ThemeListenerList themeListeners) {
     int size = ids == null ? titles.length : ids.length;
     int i, j;
-    int childCount = moreWrap.getChildCount();
+    int childCount = moreWrap.getItemCount(); // XGram: the rows (in the menu's scroll view)
     for (i = 0, j = 0; j < childCount; j++) {
       if (i < size) {
         moreWrap.updateItem(i, ids == null ? i : ids[i], titles[i], icons != null ? icons[i] : 0, onItemClick, themeListeners);
         i++;
       } else {
-        for (j = childCount - 1; j >= size; j--)
-          moreWrap.removeViewAt(j);
+        moreWrap.removeItemsFrom(size);
         break;
       }
     }
-    if (size > moreWrap.getChildCount()) {
+    if (size > moreWrap.getItemCount()) {
       for (; i < size; i++) {
         moreWrap.addItem(ids == null ? i : ids[i], titles[i], icons != null ? icons[i] : 0, null, onItemClick);
       }

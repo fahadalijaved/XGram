@@ -1970,16 +1970,40 @@ public class HeaderFilling extends Drawable implements TGLegacyAudioManager.Play
         playbackSpeedPopup.hideWindow(true);
       }
     }, TdlibManager.instance().player().getSpeed());
-    playbackSpeedLayout.setTranslationY((playerTop + playerBottom) / 2f - Screen.dp(24 + 8));
+    // XGram: the menu's edge and top in the header's coordinates; they become a translation from where the menu is laid
+    // out (its gravity's edge of the window-wide popup) once it is, below: the header is not always at the window's
+    // edge (two panes: the chat list's app bar ends at the divider; the navigation rail; side insets)
+    final boolean alignRight; // the menu's right edge goes to edgeX, else its left edge
+    final float edgeX, topY = (playerTop + playerBottom) / 2f - Screen.dp(24 + 8);
     if (xgram) { // XGram M3E: over the speed chip
       xgramBox(true, playerTop, playerBottom, width);
-      // LTR: the menu's right edge 32dp past the chip centre; RTL (a LEFT-gravity menu, the chip mirrored): its left
-      // edge 32dp before the mirrored centre
+      // LTR: the menu's right edge 32dp past the chip centre; RTL (the chip mirrored): its left edge 32dp before the
+      // mirrored centre
       final float center = xgramSpeedChipRight() - xgramSpeedChipWidth() / 2f;
-      playbackSpeedLayout.setTranslationX(Lang.rtl() ? xgramMx(center) - Screen.dp(24 + 8) : center - width + Screen.dp(24 + 8));
+      alignRight = !Lang.rtl();
+      edgeX = Lang.rtl() ? xgramMx(center) - Screen.dp(24 + 8) : center + Screen.dp(24 + 8);
     } else {
-      playbackSpeedLayout.setTranslationX(getRightButtonCenter(0, 2) + Screen.dp( 24 + 8));
+      // The buttons stay on the right in RTL too (the menu's LEFT gravity put it past the window's left edge)
+      alignRight = true;
+      edgeX = getRightButtonCenter(width, 2) + Screen.dp(24 + 8);
     }
+    playbackSpeedLayout.setTranslationY(topY);
+    playbackSpeedLayout.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+      if (!(v.getParent() instanceof View) || headerView == null || headerView.getWindowToken() == null) {
+        return;
+      }
+      final android.graphics.Rect header = com.fahadali.xgram.appearance.XgramPopupBounds.boundsOnScreen(headerView, new android.graphics.Rect());
+      final int[] parent = new int[2];
+      ((View) v.getParent()).getLocationOnScreen(parent);
+      v.setTranslationX(header.left + edgeX - (parent[0] + (alignRight ? right : left)));
+      v.setTranslationY(header.top + topY - (parent[1] + top));
+      // The reveal (Expressive design off) and the scale grow from the aligned side, at the speed button: showMoreView
+      // put the pivot on the other side for the right-aligned menu in RTL
+      final int menuWidth = right - left;
+      if (menuWidth > 0 && (v.getPivotX() >= menuWidth / 2f) != alignRight) {
+        v.setPivotX(alignRight ? menuWidth - Screen.dp(17f) : Screen.dp(17f));
+      }
+    });
     playbackSpeedLayout.processTouchEvent(MotionEvent.ACTION_DOWN, touchX, touchY, playbackOffsetY, true);
 
     playbackSpeedPopup.init(true);

@@ -204,6 +204,18 @@ public final class XgramR5Chat {
    * the menu, then runs its action. Main thread.
    */
   public static void showMenu (@NonNull View anchor, @Nullable org.thunderdog.challegram.theme.ThemeListenerList themeListeners, @NonNull java.util.List<MenuEntry> entries) {
+    showMenu(anchor, null, themeListeners, entries);
+  }
+
+  /**
+   * {@link #showMenu(View, org.thunderdog.challegram.theme.ThemeListenerList, java.util.List)} at a part of
+   * {@code anchor}: {@code boundsInAnchor}, in the anchor's own coordinates (e.g. one bubble in a full width row), or
+   * the whole anchor when null. The menu's card sits 8dp above that part when the whole menu fits there, else 8dp below
+   * it when it fits there, else on the side with more room, its rows scrolling; never above the status bar or the
+   * display cutout + 8dp, nor under the navigation bar or the keyboard + 8dp. Horizontally it is centred on the part,
+   * inside the anchor's own span when it fits there (its pane with two panes open) and 8dp inside the window's sides.
+   */
+  public static void showMenu (@NonNull View anchor, @Nullable android.graphics.Rect boundsInAnchor, @Nullable org.thunderdog.challegram.theme.ThemeListenerList themeListeners, @NonNull java.util.List<MenuEntry> entries) {
     if (entries.isEmpty() || anchor.getWindowToken() == null) {
       return;
     }
@@ -220,7 +232,8 @@ public final class XgramR5Chat {
     if (activity == null) {
       return;
     }
-    final org.thunderdog.challegram.navigation.MenuMoreWrap moreWrap = new org.thunderdog.challegram.navigation.MenuMoreWrap(context);
+    // Scrollable: a menu taller than the room on its side (a row near the top, many links over the composer) scrolls
+    final org.thunderdog.challegram.navigation.MenuMoreWrap moreWrap = new org.thunderdog.challegram.navigation.MenuMoreWrap(context, /* scrollable */ true);
     moreWrap.init(themeListeners, null);
     final org.thunderdog.challegram.widget.PopupLayout popup = new org.thunderdog.challegram.widget.PopupLayout(activity);
     for (MenuEntry entry : entries) {
@@ -251,39 +264,15 @@ public final class XgramR5Chat {
     }
     // M3 menus stay narrow: at most 320dp and never wider than the row they belong to (a pane on the unfolded Fold)
     moreWrap.xgramSetMaxItemsWidth(Math.min(Screen.dp(320f), Math.max(Screen.dp(200f), anchor.getMeasuredWidth())));
-    moreWrap.setAnchorMode(org.thunderdog.challegram.navigation.MenuMoreWrap.ANCHOR_MODE_RIGHT);
+    // Placed by the menu itself (MenuMoreWrap#xgramSetPopupAnchor), from its laid out place (the opening scale doesn't
+    // move it): centred on the anchor and inside the anchor's own span when it fits there (its pane with two panes
+    // open); its card 8dp above the anchor when the whole menu fits there, else below it (a row near the top: the
+    // Snoozed row, the first Activity rows) when it fits there, else on the side with more room, scrolling. Never under
+    // the status bar or the cutout, the navigation bar or the keyboard (+ 8dp); it follows the anchor while it moves.
+    moreWrap.setAnchorMode(org.thunderdog.challegram.navigation.MenuMoreWrap.ANCHOR_MODE_CENTER);
     moreWrap.setShouldPivotBottom(true);
     moreWrap.setRightNumber(0);
-    moreWrap.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-      final android.view.ViewParent parent = v.getParent();
-      if (!(parent instanceof ViewGroup) || anchor.getWindowToken() == null) {
-        return;
-      }
-      final int width = v.getMeasuredWidth(), height = v.getMeasuredHeight();
-      final int parentWidth = ((ViewGroup) parent).getMeasuredWidth();
-      if (width <= 0 || height <= 0 || parentWidth <= 0) {
-        return;
-      }
-      // Views.getLocationInWindow shares one array: copy the values at once
-      int[] location = org.thunderdog.challegram.tool.Views.getLocationInWindow(anchor);
-      final int anchorLeft = location[0], anchorRight = location[0] + anchor.getMeasuredWidth();
-      final int anchorCenterX = location[0] + anchor.getMeasuredWidth() / 2, anchorTop = location[1];
-      // The menu's place without its own transform: getLocationInWindow(v) counts the opening scale (pivoted at the
-      // right), which put the menu too far left; its parent's place plus its left and top doesn't
-      location = org.thunderdog.challegram.tool.Views.getLocationInWindow((View) parent);
-      final int menuLeft = location[0] + v.getLeft(), menuTop = location[1] + v.getTop();
-      final int edge = Screen.dp(8f);
-      // Inside the window, and inside the anchor's own span when it fits there (its pane with two panes open)
-      int minLeft = edge, maxLeft = parentWidth - edge - width;
-      if (width <= anchorRight - anchorLeft) {
-        minLeft = Math.max(minLeft, anchorLeft);
-        maxLeft = Math.min(maxLeft, anchorRight - width);
-      }
-      final int targetLeft = Math.max(minLeft, Math.min(maxLeft, anchorCenterX - width / 2));
-      final int targetTop = Math.max(edge, anchorTop - edge - height);
-      v.setTranslationX(targetLeft - menuLeft);
-      v.setTranslationY(targetTop - menuTop);
-    });
+    moreWrap.xgramSetPopupAnchor(anchor, boundsInAnchor, org.thunderdog.challegram.navigation.MenuMoreWrap.XGRAM_PLACE_FIT);
     popup.init(false);
     popup.setNeedRootInsets();
     popup.setOverlayStatusBar(true);

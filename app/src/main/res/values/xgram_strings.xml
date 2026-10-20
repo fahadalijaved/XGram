@@ -596,6 +596,9 @@
   <string name="XgramAllChatsLabelSub">Instead of the icon</string>
   <string name="XgramMergeCommunitiesSub">Like the official apps</string>
   <string name="XgramHideFabSub">New chats from the side menu</string>
+  <string name="XgramDeveloper">Developer</string>
+  <string name="XgramSendMenuTests">Test items in the send menu</string>
+  <string name="XgramSendMenuTestsSub">Show toast, LTR emoji and Undo send crash tests</string>
   <string name="XgramConnectionStatusStartSub">\"Connecting…\" at the start</string>
   <string name="XgramTapTimeDetailsSub">Dates and message ID</string>
   <string name="XgramPullToNextSub">At the end of a channel</string>

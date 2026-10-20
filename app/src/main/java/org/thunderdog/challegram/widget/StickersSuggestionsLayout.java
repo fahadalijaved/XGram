@@ -122,13 +122,16 @@ public class StickersSuggestionsLayout extends AnimatedFrameLayout implements Fa
     return Screen.dp(isEmoji ? 40f : 64f) + Screen.dp(XGRAM_LIST_PADDING) * 2;
   }
 
-  /** XGram M3E: keeps the strip within the chat pane, 8dp in from its edges; true when the margins changed. */
+  /**
+   * XGram: keeps the strip within the chat pane (M3E: 8dp in from its edges); true when the margins changed. With
+   * Expressive design off too: the list then starts at the pane's start, where the pane's cursor X (setArrowX) counts from.
+   */
   private boolean xgramUpdateMargins () {
-    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !(stickerSuggestionsView.getLayoutParams() instanceof FrameLayoutFix.LayoutParams)) {
+    if (!(stickerSuggestionsView.getLayoutParams() instanceof FrameLayoutFix.LayoutParams)) {
       return false;
     }
     com.fahadali.xgram.appearance.XgramR5Composer.paneInsets(this, xgramPane);
-    final int margin = Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.MENU_MARGIN);
+    final int margin = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? Screen.dp(com.fahadali.xgram.appearance.XgramR5Composer.MENU_MARGIN) : 0;
     final FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) stickerSuggestionsView.getLayoutParams();
     final int left = xgramPane[0] + margin, right = xgramPane[1] + margin;
     if (params.leftMargin != left || params.rightMargin != right) {
@@ -238,8 +241,11 @@ public class StickersSuggestionsLayout extends AnimatedFrameLayout implements Fa
     int width = stickerSuggestionsView.getMeasuredWidth();
     int paddingLeft = Math.max(arrowX - Screen.dp(24), Screen.dp(48));
     stickerSuggestionsView.setPadding(paddingLeft, 0, Screen.dp(48), 0);
-    stickerSuggestionArrowView.setTranslationX(arrowX - Screen.dp(27) / 2f);
-    setPivotX(arrowX);
+    // XGram: arrowX is in the chat pane, where the list starts (xgramUpdateMargins); the arrow and the pivot are in
+    // this window-wide strip
+    final int paneLeft = xgramPane[0];
+    stickerSuggestionArrowView.setTranslationX(paneLeft + arrowX - Screen.dp(27) / 2f);
+    setPivotX(paneLeft + arrowX);
   }
 
   public void setChoosingDelegate (Delegate delegate) {
@@ -353,6 +359,9 @@ public class StickersSuggestionsLayout extends AnimatedFrameLayout implements Fa
       int stickersListTotalHeight = stickersListTopHeight + Screen.dp(6.5f);
       int stickerArrowHeight = Screen.dp(12f);
 
+      if (getParent() != null && xgramUpdateMargins()) { // XGram: the pane's start, before setArrowX reads it
+        requestLayout();
+      }
       int[] cords = ((MessagesController) c).getInputCursorOffset();
       setArrowX(cords[0]);
       setTranslationY(cords[1] - (stickersListTopHeight / 2f + stickerArrowHeight));

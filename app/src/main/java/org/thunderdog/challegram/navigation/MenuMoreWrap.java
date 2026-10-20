@@ -19,6 +19,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -29,6 +30,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.animation.Interpolator;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -39,6 +41,8 @@ import androidx.annotation.Nullable;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramM3Controls;
+import com.fahadali.xgram.appearance.XgramPopupBounds;
+import com.fahadali.xgram.appearance.XgramR5Composer;
 
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
@@ -57,8 +61,11 @@ import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.PorterDuffPaint;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
+import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.util.HapticMenuHelper;
 import org.thunderdog.challegram.widget.NoScrollTextView;
+import org.thunderdog.challegram.widget.PopupLayout;
+import org.thunderdog.challegram.widget.RootFrameLayout;
 import org.thunderdog.challegram.widget.SimplestCheckBox;
 
 import me.vkryl.android.AnimatorUtils;
@@ -93,6 +100,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
   private final ComplexReceiver complexAvatarReceiver;
 
   private final LinearLayout itemsLayout;
+  private final @Nullable ScrollView scrollView; // XGram: the scrollable mode's scroll view (itemsLayout is its column)
 
   public MenuMoreWrap (Context context) {
     this(context, false);
@@ -105,14 +113,25 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     factorAnimator.forceFactor(-1);
     com.fahadali.xgram.appearance.XgramAppMotion.use(factorAnimator, XgramExpressive.SPATIAL_FAST, false); // XGram: the drag highlight slides on a spring
     if (scrollable) {
-      itemsLayout = new LinearLayout(context);
+      itemsLayout = new LinearLayout(context) {
+        @Override
+        protected void dispatchDraw (Canvas canvas) {
+          // XGram: the drag highlight is drawn in the scrolling column, under its rows: it scrolls and clips with them
+          xgramDrawSelection(canvas, 0, 0, getWidth());
+          super.dispatchDraw(canvas);
+        }
+      };
       itemsLayout.setOrientation(LinearLayout.VERTICAL);
-      ScrollView scrollView = new ScrollView(context);
+      scrollView = new ScrollView(context);
       scrollView.addView(itemsLayout, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
       scrollView.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+      // XGram: rows cut off at a capped menu's edge fade out, so it shows that it scrolls
+      scrollView.setVerticalFadingEdgeEnabled(true);
+      scrollView.setFadingEdgeLength(Screen.dp(16f));
       addView(scrollView);
     } else {
       itemsLayout = this;
+      scrollView = null;
     }
   }
 
@@ -130,6 +149,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     this.forcedTheme = forcedTheme;
 
     setMinimumWidth(Screen.dp(196f));
+    xgramFlushCard = XgramExpressive.isEnabled();
     if (XgramExpressive.isEnabled()) {
       // XGram: Material 3 Expressive menu container: surfaceContainer (the chip step with Pure black, as every
       // floating container), large (16dp) corners, elevation level 2, 8dp vertical padding inside the container. The
@@ -203,7 +223,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
   }
 
   public void updateItem (int index, int id, CharSequence title, int icon, OnClickListener listener, @Nullable ThemeListenerList themeProvider) {
-    TextView menuItem = (TextView) getChildAt(index);
+    TextView menuItem = (TextView) itemsLayout.getChildAt(index); // XGram: the scroll view's column when scrollable
     menuItem.setId(id);
     menuItem.setOnClickListener(listener);
     menuItem.setText(title);
@@ -557,16 +577,29 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
 
   @Override
   protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-    super.onMeasure(MeasureSpec.makeMeasureSpec(getItemsWidth(), MeasureSpec.EXACTLY), heightMeasureSpec);
+    int width = getItemsWidth();
+    if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED && MeasureSpec.getSize(widthMeasureSpec) > 0) {
+      width = Math.min(width, MeasureSpec.getSize(widthMeasureSpec)); // XGram: never wider than its popup (long labels end with an ellipsis)
+    }
+    // XGram: the height cap (anchored, bound to the safe area or set by the owner): the rows that don't fit scroll
+    final int maxHeight = xgramMeasureCap();
+    if (xgramWidthCap != Integer.MAX_VALUE) {
+      width = Math.min(width, Math.max(getMinimumWidth(), xgramWidthCap));
+    }
+    if (maxHeight != Integer.MAX_VALUE) {
+      final int size = MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED ? maxHeight : Math.min(maxHeight, MeasureSpec.getSize(heightMeasureSpec));
+      heightMeasureSpec = MeasureSpec.makeMeasureSpec(size, MeasureSpec.AT_MOST);
+    }
+    super.onMeasure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), heightMeasureSpec);
   }
 
   @Override
   public int getItemsWidth () {
     int padding = Screen.dp(PADDING);
-    int childCount = getChildCount();
+    int childCount = itemsLayout.getChildCount(); // XGram: the rows (in the scroll view's column when scrollable)
     int maxWidth = 0;
     for (int i = 0; i < childCount; i++) {
-      View v = getChildAt(i);
+      View v = itemsLayout.getChildAt(i);
       if (v != null && v.getVisibility() != View.GONE && v.getTag() instanceof Integer) {
         maxWidth = Math.max(maxWidth, (Integer) v.getTag());
       }
@@ -590,22 +623,44 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
 
   @Override
   public boolean shouldPivotBottom () {
-    return shouldPivotBottom;
+    return xgramPopupAnchor != null ? xgramOpensUp : shouldPivotBottom; // XGram: anchored, the side facing the anchor
   }
 
+  /** XGram: the height of all the rows and the padding; the menu itself may be shorter (capped: the rest scrolls). */
   @Override
   public int getItemsHeight () {
     int itemHeight = Screen.dp(ITEM_HEIGHT);
     int padding = Screen.dp(PADDING);
     int total = 0;
-    int childCount = getChildCount();
+    int childCount = itemsLayout.getChildCount(); // XGram: the rows (in the scroll view's column when scrollable)
     for (int i = 0; i < childCount; i++) {
-      View v = getChildAt(i);
+      View v = itemsLayout.getChildAt(i);
       if (v != null && v.getVisibility() != View.GONE) {
         total += itemHeight;
       }
     }
     return total + padding + padding;
+  }
+
+  @Override
+  public float getRevealRadius () {
+    // XGram: the menu as measured (its height may be capped, the rest scrolls)
+    final int width = getMeasuredWidth() > 0 ? getMeasuredWidth() : getItemsWidth();
+    final int height = getMeasuredHeight() > 0 ? getMeasuredHeight() : getItemsHeight();
+    return (float) Math.hypot(width, height);
+  }
+
+  /** XGram: the rows added to this menu, hidden ones included (in the scroll view's column when scrollable). */
+  public int getItemCount () {
+    return itemsLayout.getChildCount();
+  }
+
+  /** XGram: removes the rows from {@code index} on (a reused menu with fewer rows this time). */
+  public void removeItemsFrom (int index) {
+    for (int i = itemsLayout.getChildCount() - 1; i >= Math.max(0, index); i--) {
+      xgramCheckable.remove(itemsLayout.getChildAt(i));
+      itemsLayout.removeViewAt(i);
+    }
   }
 
   private @Nullable Runnable pendingAction;
@@ -619,26 +674,61 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
   protected void onLayout (boolean changed, int l, int t, int r, int b) {
     super.onLayout(changed, l, t, r, b);
     xgramApplyAnchor(); // XGram: before the first frame (the reveal starts below)
+    xgramPlaceAtPopupAnchor(); // XGram: likewise; it wins over xgramApplyAnchor
     if (pendingAction != null) {
       pendingAction.run();
       pendingAction = null;
     }
   }
 
-  private final FactorAnimator factorAnimator = new FactorAnimator(0, (a, b, c, d) -> invalidate(), AnimatorUtils.DECELERATE_INTERPOLATOR, 250L);
+  private final FactorAnimator factorAnimator = new FactorAnimator(0, (a, b, c, d) -> xgramInvalidateSelection(), AnimatorUtils.DECELERATE_INTERPOLATOR, 250L);
   private int lastSelectedIndex = -1;
 
   public void processMoveEvent (View v, float x, float y, float startX, float startY) {
     int[] location = Views.getLocationOnScreen(v);
-    int sourceX = location[0] + (int) x;
-    int sourceY = location[1] + (int) y;
-    location = Views.getLocationOnScreen(this);
-    int innerX = sourceX - location[0];
-    int innerY = sourceY - location[1];
+    final int sourceX = location[0] + (int) x;
+    final int sourceY = location[1] + (int) y;
+
+    // XGram: the finger in the menu's own coordinates, from its laid out place (its parent's, plus its left, top and
+    // translation) with the opening scale around its pivot undone: getLocationOnScreen(this) counted the running scale,
+    // so the highlight sat rows above the finger while the menu sprang open (and a release there sent another item)
+    final float localX, localY;
+    if (getParent() instanceof View) {
+      location = Views.getLocationOnScreen((View) getParent());
+      final float parentX = location[0], parentY = location[1];
+      final float scaleX = getScaleX() > 0f ? getScaleX() : 1f, scaleY = getScaleY() > 0f ? getScaleY() : 1f;
+      final float pivotX = getPivotX(), pivotY = getPivotY();
+      localX = pivotX + (sourceX - (parentX + getLeft() + getTranslationX() + pivotX)) / scaleX;
+      localY = pivotY + (sourceY - (parentY + getTop() + getTranslationY() + pivotY)) / scaleY;
+    } else {
+      location = Views.getLocationOnScreen(this);
+      localX = sourceX - location[0];
+      localY = sourceY - location[1];
+    }
 
     // XGram: the slot under the finger among the visible rows. Hidden rows (e.g. Send when online) take no room in the
     // menu (getItemsHeight), so counting them put the highlight one row off and released on the hidden item.
-    int index = Math.floorDiv(innerY - Screen.dp(PADDING), Screen.dp(ITEM_HEIGHT));
+    int index;
+    if (scrollView != null) {
+      // Scrollable: the rows under the scroll view's viewport; held on its top or bottom 16dp, it scrolls on (not while
+      // the finger is still outside the menu, e.g. on the button under it)
+      final float viewportY = localY - scrollView.getTop();
+      final int viewportHeight = scrollView.getHeight();
+      final int edge = Screen.dp(16f);
+      final boolean inside = localX >= 0f && localX < getWidth() && viewportY >= 0f && viewportY < viewportHeight;
+      if (inside && viewportY < edge && scrollView.canScrollVertically(-1)) {
+        scrollView.scrollBy(0, -Screen.dp(8f));
+      } else if (inside && viewportY > viewportHeight - edge && scrollView.canScrollVertically(1)) {
+        scrollView.scrollBy(0, Screen.dp(8f));
+      }
+      if (viewportY < 0f || viewportY >= viewportHeight) {
+        index = -1;
+      } else {
+        index = Math.floorDiv((int) Math.floor(viewportY + scrollView.getScrollY() - itemsLayout.getTop()), Screen.dp(ITEM_HEIGHT));
+      }
+    } else {
+      index = Math.floorDiv((int) Math.floor(localY - Screen.dp(PADDING)), Screen.dp(ITEM_HEIGHT));
+    }
     setSelectedIndex(index >= 0 && index < getVisibleItemCount() ? index : -1);
 
     // Log.i("HAPTIC INNER", String.format("INDEX %d", index));
@@ -647,9 +737,9 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
   /** XGram: the rows that take room in the menu. */
   private int getVisibleItemCount () {
     int count = 0;
-    final int childCount = getChildCount();
+    final int childCount = itemsLayout.getChildCount();
     for (int i = 0; i < childCount; i++) {
-      View v = getChildAt(i);
+      View v = itemsLayout.getChildAt(i);
       if (v != null && v.getVisibility() != View.GONE) {
         count++;
       }
@@ -661,9 +751,9 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     if (lastSelectedIndex != -1) {
       // XGram: lastSelectedIndex is a slot among the visible rows
       int slot = 0;
-      final int childCount = getChildCount();
+      final int childCount = itemsLayout.getChildCount();
       for (int i = 0; i < childCount; i++) {
-        View v = getChildAt(i);
+        View v = itemsLayout.getChildAt(i);
         if (v == null || v.getVisibility() == View.GONE) {
           continue;
         }
@@ -715,6 +805,390 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     }
   }
 
+  // XGram: anchored placement. A menu opened from a view (HapticMenuHelper: Send and the other send buttons, Send as;
+  // XgramR5Chat.showMenu: list rows, the reply bar) measures and places itself: its visible card 8dp above the anchor
+  // (or below it, see the placements), never above the status bar or the display cutout + 8dp, never under the
+  // navigation bar, the keyboard or a chat's in-app emoji panel + 8dp, inside the window's sides (and the chat pane's)
+  // + 8dp; the rows that don't fit scroll (a scrollable menu). The height is capped while measuring and checked again
+  // before every frame (a measure in the pass that moves the anchor still sees its old place); the place is set in
+  // onLayout from the menu's laid out (untransformed) place, before the reveal starts, so the opening scale can't move
+  // it, and again on every frame its anchor moves (the composer while the keyboard or the emoji panel opens or closes).
+
+  /** {@link #xgramSetPopupAnchor(View, Rect, int)}: above the anchor unless not even two rows fit there and below has more room. */
+  public static final int XGRAM_PLACE_PREFER_ABOVE = XgramPopupBounds.PLACE_PREFER_ABOVE;
+  /** {@link #xgramSetPopupAnchor(View, Rect, int)}: above the anchor when the whole menu fits there, else below when it does there, else the side with more room. */
+  public static final int XGRAM_PLACE_FIT = XgramPopupBounds.PLACE_FIT;
+
+  private @Nullable View xgramPopupAnchor;
+  private @Nullable Rect xgramPopupAnchorBounds;
+  private int xgramPlacement = XGRAM_PLACE_PREFER_ABOVE;
+  private boolean xgramOpensUp = true, xgramDirectionLatched;
+  private int xgramLatchedWidth, xgramLatchedHeight;
+  private boolean xgramBoundToSafeArea;
+  private int xgramMaxHeight;
+  private int xgramMeasuredCap = Integer.MAX_VALUE, xgramWidthCap = Integer.MAX_VALUE;
+  private float xgramMeasuredTranslationY;
+  /** The visible card is flush with the view's top and bottom (Expressive design); the legacy 9-patch has ~8dp of shadow there. */
+  private boolean xgramFlushCard = XgramExpressive.isEnabled();
+  private final Rect xgramAnchorRect = new Rect(), xgramSafeRect = new Rect();
+  private final Rect xgramPlacedAnchorRect = new Rect(), xgramPlacedSafeRect = new Rect();
+  private final int[] xgramPane = new int[2], xgramLocation = new int[2];
+  /** The chat the anchor is in (its in-app emoji panel is no room for the menu), looked up once the anchor is measured. */
+  private @Nullable MessagesController xgramAnchorChat;
+  private boolean xgramAnchorChatResolved, xgramAnchorLost;
+
+  /**
+   * XGram: {@link #xgramSetPopupAnchor(View, Rect, int)} at the whole {@code anchor} with
+   * {@link #XGRAM_PLACE_PREFER_ABOVE}: for buttons at the bottom of the screen (Send and the other send buttons).
+   */
+  public void xgramSetPopupAnchor (@Nullable View anchor) {
+    xgramSetPopupAnchor(anchor, null, XGRAM_PLACE_PREFER_ABOVE);
+  }
+
+  /**
+   * XGram: the menu measures and places itself at {@code anchor} (null: back to its gravity and translation). Use it
+   * with a scrollable menu ({@code new MenuMoreWrap(context, true)}): the rows that don't fit scroll. Call before
+   * {@code PopupLayout.showMoreView}; the menu's translation and pivots are its own from then on (PopupLayout keeps
+   * them).
+   * <p>
+   * Vertically: the visible card's bottom {@link XgramPopupBounds#MARGIN} dp above the anchor's top, or its top that
+   * far below the anchor's bottom, by {@code placement} ({@link #XGRAM_PLACE_PREFER_ABOVE} or {@link #XGRAM_PLACE_FIT});
+   * never above the status bar or the display cutout + 8dp, nor under the navigation bar, the keyboard or (an anchor in
+   * a chat) the in-app emoji panel + 8dp (the height is capped to the room on its side, at least one row). The
+   * direction stays while the menu is open (chosen again when its popup's size changes: folding, rotation).
+   * <p>
+   * Horizontally by the anchor mode: ANCHOR_MODE_RIGHT puts the card's end edge on the anchor's end edge,
+   * ANCHOR_MODE_HEADER the start edges, ANCHOR_MODE_CENTER centres it on the anchor (inside the anchor's span when the
+   * menu is narrower than it, e.g. a row in its pane; with Expressive design off, a menu wider than its anchor shows
+   * its tail under the anchor's centre when it opens above). Always inside the window's sides + 8dp, and inside the
+   * chat pane's (two panes, the navigation rail) + 8dp when the anchor is in it and the menu fits there.
+   * <p>
+   * The pivots face the anchor. The menu follows the anchor while it moves (the composer while the keyboard or the
+   * in-app emoji panel opens or closes); its popup hides when the anchor goes away while it shows (the chat list's
+   * pane removed on folding).
+   *
+   * @param boundsInAnchor the part of the anchor to open at, in the anchor's own coordinates (e.g. one bubble in a full
+   *                       width row), or null for the whole anchor
+   */
+  public void xgramSetPopupAnchor (@Nullable View anchor, @Nullable Rect boundsInAnchor, int placement) {
+    this.xgramPopupAnchor = anchor;
+    this.xgramPopupAnchorBounds = boundsInAnchor != null ? new Rect(boundsInAnchor) : null;
+    this.xgramPlacement = placement;
+    this.xgramDirectionLatched = false;
+    this.xgramAnchorChat = null;
+    this.xgramAnchorChatResolved = false;
+    this.xgramAnchorLost = false;
+    requestLayout();
+  }
+
+  /** XGram: whether the menu places itself at a popup anchor ({@link #xgramSetPopupAnchor(View, Rect, int)}). */
+  public boolean xgramHasPopupAnchor () {
+    return xgramPopupAnchor != null;
+  }
+
+  /** XGram: whether the anchored menu opens above its anchor (as last measured). */
+  public boolean xgramOpensAbove () {
+    return xgramOpensUp;
+  }
+
+  /** XGram: the tallest the menu may get, in px (0: no cap of its own); the rows that don't fit scroll (scrollable menus). */
+  public void xgramSetMaxHeight (int maxHeight) {
+    if (this.xgramMaxHeight != maxHeight) {
+      this.xgramMaxHeight = maxHeight;
+      requestLayout();
+    }
+  }
+
+  /**
+   * XGram: for a menu placed by its gravity and translation (the app bar's ⋮ menus): its height is capped so its visible
+   * card ends 8dp above the navigation bar or the keyboard (and its width to the window less the side insets); the rows
+   * that don't fit scroll (scrollable menus). Its translationY counts, also when it changes later.
+   */
+  public void xgramSetBoundToSafeArea (boolean bound) {
+    if (this.xgramBoundToSafeArea != bound) {
+      this.xgramBoundToSafeArea = bound;
+      requestLayout();
+    }
+  }
+
+  /** The visible card's inset from the view's sides: the Expressive container's InsetDrawable, the 9-patch's shadow. */
+  private int xgramCardInsetX () {
+    return Screen.dp(PADDING);
+  }
+
+  /** The visible card's inset from the view's top and bottom. */
+  private int xgramCardInsetY () {
+    return xgramFlushCard ? 0 : Screen.dp(PADDING);
+  }
+
+  private static int xgramMinHeight () {
+    return Screen.dp(ITEM_HEIGHT + PADDING * 2);
+  }
+
+  /** The anchor's and the safe area's rects in the parent's (popup's) coordinates; false when there is nothing to anchor to. */
+  private boolean xgramMeasurePopupAnchor () {
+    final View anchor = xgramPopupAnchor;
+    if (anchor == null || !(getParent() instanceof View)) {
+      return false;
+    }
+    final View parent = (View) getParent();
+    if (!XgramPopupBounds.anchorRectIn(anchor, xgramPopupAnchorBounds, parent, xgramAnchorRect)) {
+      return false;
+    }
+    XgramPopupBounds.safeRect(parent, 0, xgramSafeRect);
+    xgramExcludeInAppPanel(anchor, parent);
+    return true;
+  }
+
+  /**
+   * An anchor in a chat: the safe area ends 8dp above Telegram X's in-app emoji / sticker / formatting panel, a view of
+   * the chat and not an inset, so the panel is no room for the menu (it opens above Send, as with the system keyboard).
+   */
+  private void xgramExcludeInAppPanel (View anchor, View parent) {
+    if (!xgramAnchorChatResolved) {
+      final ViewController<?> c = ViewController.findAncestor(anchor);
+      xgramAnchorChat = c instanceof MessagesController ? (MessagesController) c : null;
+      xgramAnchorChatResolved = true;
+    }
+    final int panelTop = xgramAnchorChat != null ? xgramAnchorChat.xgramInAppKeyboardTop() : -1; // in the chat's window
+    if (panelTop <= 0) {
+      return;
+    }
+    // Into the popup's coordinates through the screen (the popup may be a window of its own)
+    anchor.getLocationOnScreen(xgramLocation);
+    final int anchorScreenY = xgramLocation[1];
+    anchor.getLocationInWindow(xgramLocation);
+    final int windowScreenY = anchorScreenY - xgramLocation[1];
+    parent.getLocationOnScreen(xgramLocation);
+    final int bottom = windowScreenY + panelTop - xgramLocation[1] - Screen.dp(XgramPopupBounds.MARGIN);
+    xgramSafeRect.bottom = Math.max(xgramSafeRect.top, Math.min(xgramSafeRect.bottom, bottom));
+  }
+
+  /** The view height that fits above the anchor (its card 8dp above it, the card's top at the safe top). */
+  private int xgramRoomAbove () {
+    final int sy = xgramCardInsetY();
+    return (xgramAnchorRect.top - Screen.dp(XgramPopupBounds.MARGIN) + sy) - (xgramSafeRect.top - sy);
+  }
+
+  /** The view height that fits below the anchor. */
+  private int xgramRoomBelow () {
+    final int sy = xgramCardInsetY();
+    return (xgramSafeRect.bottom + sy) - (xgramAnchorRect.bottom + Screen.dp(XgramPopupBounds.MARGIN) - sy);
+  }
+
+  /** The height cap of this measure (Integer.MAX_VALUE: none); also sets the width cap and, anchored, the direction. */
+  private int xgramMeasureCap () {
+    int cap = xgramMaxHeight > 0 ? xgramMaxHeight : Integer.MAX_VALUE;
+    xgramWidthCap = Integer.MAX_VALUE;
+    if (xgramMeasurePopupAnchor()) {
+      // Folded, unfolded or rotated: the direction is chosen again in xgramPlaceAtPopupAnchor (here the popup and the
+      // anchor still have their old size and place), and xgramTrack measures again for the new side's room
+      final int roomAbove = xgramRoomAbove(), roomBelow = xgramRoomBelow();
+      if (!xgramDirectionLatched) {
+        xgramOpensUp = XgramPopupBounds.opensAbove(roomAbove, roomBelow, getItemsHeight(), xgramPlacement);
+      }
+      cap = Math.min(cap, Math.max(xgramMinHeight(), xgramOpensUp ? roomAbove : roomBelow));
+      xgramWidthCap = xgramSafeRect.width() + 2 * xgramCardInsetX();
+    } else if (xgramBoundToSafeArea && getParent() instanceof View) {
+      final View parent = (View) getParent();
+      XgramPopupBounds.safeRect(parent, 0, xgramSafeRect);
+      // Gravity TOP: the menu's laid out top is its top margin; its translation moves it down from there
+      final int layoutTop = parent.getPaddingTop() + (getLayoutParams() instanceof MarginLayoutParams ? ((MarginLayoutParams) getLayoutParams()).topMargin : 0);
+      xgramMeasuredTranslationY = getTranslationY();
+      cap = Math.min(cap, Math.max(xgramMinHeight(), xgramSafeRect.bottom + xgramCardInsetY() - layoutTop - Math.round(getTranslationY())));
+      xgramWidthCap = xgramSafeRect.width() + 2 * xgramCardInsetX();
+    }
+    xgramMeasuredCap = cap;
+    return cap;
+  }
+
+  /** Places the laid out menu at its popup anchor (translation from its laid out place: no scale error, safe to repeat). */
+  private void xgramPlaceAtPopupAnchor () {
+    if (!xgramMeasurePopupAnchor()) {
+      if (xgramDirectionLatched) {
+        xgramDismissForLostAnchor(); // placed before: the anchor went away while the menu shows
+      }
+      return;
+    }
+    final View parent = (View) getParent();
+    if (xgramDirectionLatched && (parent.getWidth() != xgramLatchedWidth || parent.getHeight() != xgramLatchedHeight)) {
+      // Folded, unfolded or rotated: the direction is chosen again from the new layout (the popup's and the anchor's);
+      // xgramTrack then measures again for the room on that side
+      xgramOpensUp = XgramPopupBounds.opensAbove(xgramRoomAbove(), xgramRoomBelow(), getItemsHeight(), xgramPlacement);
+    }
+    xgramDirectionLatched = true;
+    xgramLatchedWidth = parent.getWidth();
+    xgramLatchedHeight = parent.getHeight();
+    xgramPlacedAnchorRect.set(xgramAnchorRect);
+    xgramPlacedSafeRect.set(xgramSafeRect);
+    final int width = getMeasuredWidth(), height = getMeasuredHeight();
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    final int sx = xgramCardInsetX(), sy = xgramCardInsetY();
+    final int gap = Screen.dp(XgramPopupBounds.MARGIN);
+    final boolean rtl = Lang.rtl();
+
+    int top = xgramOpensUp ? xgramAnchorRect.top - gap + sy - height : xgramAnchorRect.bottom + gap - sy;
+    top = Math.max(xgramSafeRect.top - sy, Math.min(top, xgramSafeRect.bottom + sy - height)); // the top edge wins
+
+    int minLeft = xgramSafeRect.left - sx, maxLeft = xgramSafeRect.right + sx - width;
+    if (xgramChatPaneRange(parent, width, sx) && Math.max(minLeft, xgramPane[0]) <= Math.min(maxLeft, xgramPane[1])) {
+      // An anchor in the chat pane (two panes, the navigation rail): the card stays in that pane too (Send as)
+      minLeft = Math.max(minLeft, xgramPane[0]);
+      maxLeft = Math.min(maxLeft, xgramPane[1]);
+    }
+    int left;
+    switch (anchorMode) {
+      case ANCHOR_MODE_CENTER: {
+        left = xgramAnchorRect.centerX() - width / 2;
+        if (width <= xgramAnchorRect.width()) {
+          // Inside the anchor's own span (a row in its pane with two panes open)
+          minLeft = Math.max(minLeft, xgramAnchorRect.left);
+          maxLeft = Math.min(maxLeft, xgramAnchorRect.right - width);
+        }
+        break;
+      }
+      case ANCHOR_MODE_HEADER: {
+        left = rtl ? xgramAnchorRect.right + sx - width : xgramAnchorRect.left - sx; // the start edges
+        break;
+      }
+      case ANCHOR_MODE_RIGHT:
+      default: {
+        left = rtl ? xgramAnchorRect.left - sx : xgramAnchorRect.right + sx - width; // the end edges
+        break;
+      }
+    }
+    left = Math.max(minLeft, Math.min(left, maxLeft));
+
+    setTranslationX(left - getLeft());
+    setTranslationY(top - getTop());
+    setPivotX(Math.max(sx, Math.min(width - sx, xgramAnchorRect.centerX() - left)));
+    setPivotY(xgramOpensUp ? height - sy : sy);
+
+    int tailX = -1;
+    if (anchorMode == ANCHOR_MODE_CENTER && xgramOpensUp && !xgramFlushCard && xgramAnchorRect.width() < width) {
+      tailX = Math.max(sx + Screen.dp(16f), Math.min(width - sx - Screen.dp(16f), xgramAnchorRect.centerX() - left));
+    }
+    if (bubbleTailX != tailX) {
+      bubbleTailX = tailX;
+      invalidate();
+    }
+  }
+
+  /**
+   * The menu's left edges ({@link #xgramPane}: [0] the least, [1] the most, in the popup's coordinates) that keep its
+   * card ({@code width} wide, {@code sx} inside its sides) 8dp inside the chat pane; false when the anchor is not in
+   * the chat pane, there is no pane (one pane, no navigation rail) or the menu is wider than the pane.
+   */
+  private boolean xgramChatPaneRange (View parent, int width, int sx) {
+    final View anchor = xgramPopupAnchor;
+    if (anchor == null) {
+      return false;
+    }
+    XgramR5Composer.paneInsets(anchor, xgramPane);
+    if (xgramPane[0] <= 0 && xgramPane[1] <= 0) {
+      return false;
+    }
+    final RootFrameLayout root = Views.findAncestor(anchor, RootFrameLayout.class, true);
+    if (root == null) {
+      return false;
+    }
+    // paneInsets is from the root's sides: into the popup's coordinates through the screen
+    final int insetLeft = xgramPane[0], insetRight = xgramPane[1];
+    root.getLocationOnScreen(xgramLocation);
+    final int rootX = xgramLocation[0];
+    parent.getLocationOnScreen(xgramLocation);
+    final int paneLeft = rootX + insetLeft - xgramLocation[0];
+    final int paneRight = rootX + root.getMeasuredWidth() - insetRight - xgramLocation[0];
+    final int anchorX = xgramAnchorRect.centerX();
+    if (anchorX < paneLeft || anchorX > paneRight) {
+      return false; // the anchor is in the other pane (the chat list)
+    }
+    final int margin = Screen.dp(XgramPopupBounds.MARGIN);
+    xgramPane[0] = paneLeft + margin - sx;
+    xgramPane[1] = paneRight - margin + sx - width;
+    return xgramPane[0] <= xgramPane[1];
+  }
+
+  /** The anchor went away while the menu shows (the chat list's pane removed on folding): its popup hides, once. */
+  private void xgramDismissForLostAnchor () {
+    if (xgramPopupAnchor == null || xgramAnchorLost) {
+      return;
+    }
+    final PopupLayout popup = PopupLayout.parentOf(this);
+    if (popup != null) {
+      xgramAnchorLost = true;
+      post(() -> popup.hideWindow(true)); // not from inside a layout or a pre-draw pass
+    }
+  }
+
+  private final ViewTreeObserver.OnPreDrawListener xgramTracker = () -> {
+    xgramTrack();
+    return true;
+  };
+
+  /** Before each frame: follows a moving anchor, measuring again when the room on the menu's side changes its height. */
+  private void xgramTrack () {
+    if (xgramPopupAnchor != null) {
+      if (!xgramDirectionLatched || isLayoutRequested()) {
+        return;
+      }
+      if (!xgramMeasurePopupAnchor()) {
+        xgramDismissForLostAnchor();
+        return;
+      }
+      if (!xgramAnchorRect.equals(xgramPlacedAnchorRect) || !xgramSafeRect.equals(xgramPlacedSafeRect)) {
+        xgramPlaceAtPopupAnchor(); // now, at the current height (a new measure places it again)
+      }
+      // The cap from the current layout, also when the anchor is where the last layout put the menu: the measure in
+      // the pass that moved it (the keyboard hiding, a fold or a rotation) still saw its old place and the old size
+      final int cap = Math.min(xgramMaxHeight > 0 ? xgramMaxHeight : Integer.MAX_VALUE, Math.max(xgramMinHeight(), xgramOpensUp ? xgramRoomAbove() : xgramRoomBelow()));
+      if (cap != xgramMeasuredCap && Math.min(cap, getItemsHeight()) != getMeasuredHeight()) {
+        requestLayout();
+      }
+    } else if (xgramBoundToSafeArea && getTranslationY() != xgramMeasuredTranslationY && !isLayoutRequested()) {
+      requestLayout();
+    }
+  }
+
+  private void xgramInvalidateSelection () {
+    invalidate();
+    if (itemsLayout != null && itemsLayout != this) {
+      itemsLayout.invalidate(); // the wrap is a hardware layer: the scroll view's column redraws its own highlight
+    }
+  }
+
+  /** XGram: the drag-to-select highlight on the visible rows' slots: the first at ({@code x}, {@code y}), each {@code width} wide. */
+  private void xgramDrawSelection (Canvas canvas, int x, int y, int width) {
+    if (lastSelectedIndex == -1) {
+      return;
+    }
+    final int itemHeight = Screen.dp(ITEM_HEIGHT);
+    final int count = getVisibleItemCount(); // slots of the visible rows (see processMoveEvent)
+    final float factor = factorAnimator.getFactor();
+    if (XgramExpressive.isEnabled()) {
+      // The same rounded state layer as a press
+      final int baseColor = xgramRole(XgramExpressive.ON_SURFACE); // M3E r6: the forced theme's scheme over media
+      for (int i = 0; i < count; i++) {
+        final float alpha = MathUtils.clamp(1f - Math.abs(factor - i));
+        if (alpha > 0f) {
+          canvas.save();
+          canvas.translate(x, y + itemHeight * i);
+          xgramDrawItemPill(canvas, width, itemHeight, XgramExpressive.withAlpha(baseColor, alpha * XgramExpressive.STATE_PRESSED));
+          canvas.restore();
+        }
+      }
+    } else {
+      for (int i = 0; i < count; i++) {
+        final float alpha = MathUtils.clamp(1f - Math.abs(factor - i));
+        if (alpha > 0f) {
+          canvas.drawRect(x, y + itemHeight * i, x + width, y + itemHeight * (i + 1), Paints.fillingPaint(ColorUtils.alphaColor(alpha * 0.05f, Theme.getColor(ColorId.text))));
+        }
+      }
+    }
+  }
+
   private void setSelectedIndex (int index) {
     if (index == lastSelectedIndex) return;
     if (index != -1 && XgramExpressive.isEnabled()) {
@@ -726,7 +1200,7 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       factorAnimator.animateTo(index);
     }
     lastSelectedIndex = index;
-    invalidate();
+    xgramInvalidateSelection(); // XGram: the scroll view's column too
   }
 
   // XGram: Material 3 Expressive menu item shapes: a 4dp inset with medium (12dp) corners,
@@ -843,28 +1317,9 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
       canvas.restore();
     }
 
-    if (lastSelectedIndex != -1 && itemsLayout == this && XgramExpressive.isEnabled()) {
-      // XGram: the drag-to-select highlight is the same rounded state layer as a press.
-      final int baseColor = xgramRole(XgramExpressive.ON_SURFACE); // XGram M3E r6: the forced theme's scheme over media
-      final int itemWidth = getMeasuredWidth() - Screen.dp(PADDING) * 2;
-      int childCount = getVisibleItemCount(); // XGram: slots of the visible rows (see processMoveEvent)
-      for (int i = 0; i < childCount; i++) {
-        final float alpha = MathUtils.clamp(1f - Math.abs(factorAnimator.getFactor() - i));
-        if (alpha > 0f) {
-          canvas.save();
-          canvas.translate(Screen.dp(PADDING), Screen.dp(PADDING + ITEM_HEIGHT * i));
-          xgramDrawItemPill(canvas, itemWidth, Screen.dp(ITEM_HEIGHT), XgramExpressive.withAlpha(baseColor, alpha * XgramExpressive.STATE_PRESSED));
-          canvas.restore();
-        }
-      }
-    } else if (lastSelectedIndex != -1 && itemsLayout == this) {
-      int childCount = getVisibleItemCount(); // XGram: slots of the visible rows (see processMoveEvent)
-      for (int i = 0; i < childCount; i++) {
-        final float alpha = MathUtils.clamp(1f - Math.abs(factorAnimator.getFactor() - i));
-        if (alpha > 0f) {
-          canvas.drawRect(Screen.dp(PADDING), Screen.dp(PADDING + ITEM_HEIGHT * i), getMeasuredWidth() - Screen.dp(PADDING), Screen.dp(PADDING + ITEM_HEIGHT * (i + 1)), Paints.fillingPaint(ColorUtils.alphaColor(alpha * 0.05f, Theme.getColor(ColorId.text))));
-        }
-      }
+    if (itemsLayout == this) {
+      // XGram: the drag-to-select highlight (a scrollable menu draws it in its scroll view's column)
+      xgramDrawSelection(canvas, Screen.dp(PADDING), Screen.dp(PADDING), getMeasuredWidth() - Screen.dp(PADDING) * 2);
     }
 
 
@@ -875,10 +1330,15 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
   protected void onAttachedToWindow () {
     super.onAttachedToWindow();
     complexAvatarReceiver.attach();
+    getViewTreeObserver().addOnPreDrawListener(xgramTracker); // XGram: follows a moving anchor
+    if (scrollView != null) {
+      scrollView.scrollTo(0, 0); // XGram: a reused menu shows its first rows again
+    }
   }
 
   @Override
   protected void onDetachedFromWindow () {
+    getViewTreeObserver().removeOnPreDrawListener(xgramTracker); // XGram: still the window's observer here
     super.onDetachedFromWindow();
     complexAvatarReceiver.detach();
   }

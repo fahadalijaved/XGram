@@ -401,7 +401,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         items.add(new HapticMenuHelper.MenuItem(R.id.btn_sendNoMarkdown, Lang.getString(R.string.SendDiceAsEmoji), Drawables.emojiDrawable(currentText.text)));
       }
     }
-    if (BuildConfig.DEBUG) {
+    if (BuildConfig.DEBUG && com.fahadali.xgram.XgramSettings.instance().sendMenuTests()) { // XGram: only with Settings > XGram > Developer > Test items in the send menu
       items.add(new HapticMenuHelper.MenuItem(R.id.btn_sendToast, "Show toast", R.drawable.baseline_warning_24));
       items.add(new HapticMenuHelper.MenuItem(R.id.btn_debugLtrEmoji, "Send LTR emoji", R.drawable.baseline_warning_24));
       if (com.fahadali.xgram.XgramSettings.instance().undoSendSeconds() > 0) { // XGram: Undo send journal tests
@@ -6095,6 +6095,30 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   public @Nullable InputView xgramInputView () { // XGram: the AI editor reads and replaces the typed text
     return inputView;
+  }
+
+  /**
+   * XGram: the window y of the top of Telegram X's own emoji, sticker or text formatting panel while it is open, or
+   * -1. It is a view of the chat, not an inset, so dialogs in the content view (XgramDialogHost) stay above it this way.
+   */
+  public int xgramInAppKeyboardTop () {
+    final KeyboardFrameLayout panel = emojiKeyboardFrameLayout;
+    if (!emojiShown || panel == null) {
+      return -1;
+    }
+    final int[] location = new int[2];
+    int top = -1;
+    if (panel.getWindowToken() != null && panel.getVisibility() == View.VISIBLE && panel.getHeight() > 0) { // attached (API 16+)
+      panel.getLocationInWindow(location);
+      top = location[1];
+    }
+    final View content = panel.contentView;
+    if (content.getParent() != panel && content.getWindowToken() != null && content.getVisibility() == View.VISIBLE && content.getHeight() > 0) {
+      // a taller panel (KeyboardFrameLayout.requestAdditionalHeight) moves its content into the chat's view
+      content.getLocationInWindow(location);
+      top = top == -1 ? location[1] : Math.min(top, location[1]);
+    }
+    return top;
   }
 
   public boolean inPreviewSearchMode () {

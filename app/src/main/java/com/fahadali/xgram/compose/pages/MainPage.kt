@@ -32,6 +32,7 @@ import com.fahadali.xgram.compose.ui.SettingsSearchPill
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.search.SettingsSearch
+import org.thunderdog.challegram.BuildConfig
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
 import org.thunderdog.challegram.telegram.TdlibUi
@@ -106,6 +107,20 @@ fun MainPage() {
       }
     }
     description(R.string.XgramAboutCredits)
+
+    // Debug builds: test tools, off by default (Telegram X's developer mode is always on in debug builds). The same
+    // id as the classic row, so a search result points at it.
+    if (BuildConfig.DEBUG) {
+      header(R.string.XgramDeveloper)
+      group {
+        switch(
+          R.id.btn_xgramSendMenuTests, s(R.string.XgramSendMenuTests), s(R.string.XgramSendMenuTestsSub),
+          icon = R.drawable.baseline_bug_report_24, checked = settings.sendMenuTests()
+        ) {
+          settings.setSendMenuTests(it)
+        }
+      }
+    }
   }
 }
 

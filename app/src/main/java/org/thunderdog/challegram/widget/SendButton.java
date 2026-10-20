@@ -143,6 +143,21 @@ public class SendButton extends View implements FactorAnimator.Target, TooltipOv
     return xgramFilled && XgramExpressive.isEnabled();
   }
 
+  /**
+   * XGram: the filled container the user sees (Expressive design, input bar), in this view's own coordinates: a
+   * {@link XgramExpressiveC#ICON_BUTTON_BOX} dp circle centred in the view; null when the whole view is the button.
+   * For popups placed at the button (the Send menu).
+   */
+  @Nullable
+  public Rect xgramVisibleBounds () {
+    if (!xgramUseFilled() || getMeasuredWidth() <= 0 || getMeasuredHeight() <= 0) {
+      return null;
+    }
+    final int size = Math.min(Screen.dp(XgramExpressiveC.ICON_BUTTON_BOX), getMeasuredHeight());
+    final int cx = getMeasuredWidth() / 2, cy = getMeasuredHeight() / 2;
+    return new Rect(cx - size / 2, cy - size / 2, cx - size / 2 + size, cy - size / 2 + size);
+  }
+
   @Override
   protected void drawableStateChanged () {
     super.drawableStateChanged();

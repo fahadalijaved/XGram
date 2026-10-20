@@ -10083,9 +10083,53 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     FrameLayoutFix.LayoutParams params = (FrameLayoutFix.LayoutParams) languagePopupLayout.languageRecyclerWrap.getLayoutParams();
     params.gravity = Gravity.TOP | Gravity.LEFT;
 
+    // XGram: placed again once laid out (xgramPlaceLanguageSelector), in the popup's own coordinates
+    final View overlay = context().tooltipManager();
+    final boolean bubbles = useBubbles();
+    languagePopupLayout.languageRecyclerWrap.addOnLayoutChangeListener((wrap, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> xgramPlaceLanguageSelector(wrap, overlay, bubbles));
     languagePopupLayout.show();
     languagePopupLayout.languageRecyclerWrap.setPivotX(Screen.dp(178 + 8));
     languagePopupLayout.languageRecyclerWrap.setPivotY(pivotY);
+  }
+
+  /**
+   * XGram: the inline language list placed as above (bubbles: up to the tooltip's bottom; else down from its top) from
+   * the popup's own coordinates, inside the safe area: 8dp in from the window's sides, under the status bar, and above
+   * the composer, the keyboard or the in-app emoji panel and the navigation bar (the bottom was kept above
+   * Screen.currentHeight() alone, so with the keyboard up the list went behind it). The pivot stays at the tooltip.
+   */
+  private void xgramPlaceLanguageSelector (View wrap, View overlay, boolean bubbles) {
+    final TooltipOverlayView.TooltipInfo tooltip = languageSelectorTooltip;
+    if (tooltip == null || !(wrap.getParent() instanceof View) || wrap.getWidth() <= 0 || wrap.getHeight() <= 0 || overlay.getWindowToken() == null) {
+      return;
+    }
+    final View popup = (View) wrap.getParent();
+    // The tooltip's coordinates (the overlay's) in the popup's
+    final int[] location = new int[2];
+    overlay.getLocationOnScreen(location);
+    final int overlayX = location[0], overlayY = location[1];
+    popup.getLocationOnScreen(location);
+    final int dx = overlayX - location[0], dy = overlayY - location[1];
+
+    // The safe area of the chat's window (the overlay covers it; its insets hold the keyboard, which the popup's own
+    // window may not get), in the popup's coordinates
+    final MessagesController c = messagesController();
+    final Rect safe = com.fahadali.xgram.appearance.XgramPopupBounds.safeRect(overlay, c != null ? c.getInputOffset(false) : 0);
+    safe.offset(dx, dy);
+    final int width = wrap.getWidth(), height = wrap.getHeight();
+    final int padding = Screen.dp(8f);
+    // The visible card's inset: the sides in both designs, the top and bottom only on the legacy 9-patch (its shadow)
+    final int sx = padding, sy = com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? 0 : padding;
+    final int contentRight = Math.round(tooltip.getContentRight() + dx);
+    final int contentEdgeY = Math.round((bubbles ? tooltip.getContentBottom() : tooltip.getContentTop()) + dy);
+    int x = contentRight - width;
+    int y = bubbles ? contentEdgeY - height : contentEdgeY;
+    x = Math.max(safe.left - sx, Math.min(x, safe.right + sx - width));
+    y = Math.max(safe.top - sy, Math.min(y, safe.bottom + sy - height)); // the top edge wins
+    wrap.setTranslationX(x - wrap.getLeft());
+    wrap.setTranslationY(y - wrap.getTop());
+    wrap.setPivotX(MathUtils.clamp(contentRight - padding - x, 0, width));
+    wrap.setPivotY(MathUtils.clamp(bubbles ? contentEdgeY - padding - y : contentEdgeY + padding - y, 0, height));
   }
 
   private void onLanguageChanged (String language) {

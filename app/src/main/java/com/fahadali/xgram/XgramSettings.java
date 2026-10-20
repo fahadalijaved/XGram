@@ -60,6 +60,8 @@ public final class XgramSettings {
   public static final String KEY_BLOCK_CONTENT_CAPTURE = "xgram_block_content_capture";
   public static final String KEY_AI_TOOLS = "xgram_ai_tools";
   public static final String KEY_HIDE_FAB = "xgram_hide_fab";
+  /** Debug builds: the Send button's test items (Developer). No other key starts with it (backup and reset match by prefix). */
+  public static final String KEY_SEND_MENU_TESTS = "xgram_send_menu_tests";
   public static final String KEY_CONNECTION_STATUS_START = "xgram_connection_status_start";
   public static final String KEY_ALL_CHATS_LABEL = "xgram_all_chats_label";
   /** Prefix: followed by the account id (see {@link #hideFolders}). */
@@ -96,7 +98,7 @@ public final class XgramSettings {
   private volatile boolean ghostDontRead, ghostDontType, ghostOffline, ghostReadOnSend, ghostLocalRead, ghostTypingForStickers, ghostScheduleSend, ghostSilent;
   private volatile boolean historySaveDeleted, historySaveEdits, historySaveMedia, historyRedDeleted;
   private volatile boolean hideSponsored, showPeerIds, twoPaneLayout, saveLastSeen, showSeconds, cleanLinks, fixLinkPreviews, allowScreenshots, saveProtected, proxyOffOnVpn, proxyOffOnWifi, proxyOffOnMobile, hidePhone, blockContentCapture, iconTheme, mergeCommunities;
-  private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel, connectionStatusAtStart;
+  private volatile boolean aiTools, hideFab, pullToNext, allChatsLabel, connectionStatusAtStart, sendMenuTests;
   private volatile boolean tapTimeForDetails;
   private volatile boolean tapToRecord;
   private volatile boolean systemEmoji;
@@ -137,6 +139,7 @@ public final class XgramSettings {
     ghostSilent = pmc.getBoolean(KEY_GHOST_SILENT, false);
     aiTools = pmc.getBoolean(KEY_AI_TOOLS, true);
     hideFab = pmc.getBoolean(KEY_HIDE_FAB, false);
+    sendMenuTests = pmc.getBoolean(KEY_SEND_MENU_TESTS, false);
     connectionStatusAtStart = pmc.getBoolean(KEY_CONNECTION_STATUS_START, false);
     allChatsLabel = pmc.getBoolean(KEY_ALL_CHATS_LABEL, false);
     pullToNext = pmc.getBoolean(KEY_PULL_TO_NEXT, true);
@@ -1229,6 +1232,20 @@ public final class XgramSettings {
   public void setHideFab (boolean value) {
     hideFab = value;
     put(KEY_HIDE_FAB, value);
+  }
+
+  /**
+   * Debug builds only (Settings &gt; XGram &gt; Developer): the Send button's long-press menu shows its test items (Show
+   * toast, Send LTR emoji, and with Undo send the crash and draft restore tests). Off by default; release builds never
+   * show them, whatever is stored.
+   */
+  public boolean sendMenuTests () {
+    return sendMenuTests;
+  }
+
+  public void setSendMenuTests (boolean value) {
+    sendMenuTests = value;
+    put(KEY_SEND_MENU_TESTS, value);
   }
 
   /** The "All chats" tab shows its label like the other folders (off: Telegram X's bare icon when it's first). */

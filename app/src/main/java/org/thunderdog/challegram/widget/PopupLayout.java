@@ -1264,8 +1264,11 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
             return;
           }
 
+          // XGram: a menu placed at its popup anchor set its pivots facing the anchor (MenuMoreWrap#xgramSetPopupAnchor)
+          final boolean xgramAnchored = xgramHasPopupAnchor(menuWrap);
+
           if (animationType == ANIMATION_TYPE_MORE_SCALE) {
-            if (menuWrap.getAnchorMode() == MenuMoreWrap.ANCHOR_MODE_CENTER) {
+            if (menuWrap.getAnchorMode() == MenuMoreWrap.ANCHOR_MODE_CENTER && !xgramAnchored) {
               final int itemsWidth = menuWrap.getItemsWidth();
               menuWrap.setPivotX(itemsWidth / 2f);
             }
@@ -1276,15 +1279,29 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
           final boolean anchorRight = menuWrap.getAnchorMode() == MenuMoreWrap.ANCHOR_MODE_RIGHT;
           final int padding = Screen.dp(8f);
           final int itemsWidth = menuWrap.getItemsWidth();
+          // XGram: the measured height (a capped menu scrolls the rest); the same as the rows' height otherwise
+          final int xgramMenuHeight = menuWrap.getMeasuredHeight() > 0 ? menuWrap.getMeasuredHeight() : menuWrap.getItemsHeight();
           int cx = anchorRight != Lang.rtl() ? itemsWidth - padding : Screen.dp(17f);
-          int cy = menuWrap.shouldPivotBottom() ? menuWrap.getItemsHeight() - padding : padding;
+          int cy = menuWrap.shouldPivotBottom() ? xgramMenuHeight - padding : padding;
+          if (xgramAnchored) {
+            cx = (int) menuWrap.getPivotX();
+            cy = (int) menuWrap.getPivotY();
+          }
 
           if (animationType == ANIMATION_TYPE_MORE_REVEAL && Config.REVEAL_ANIMATION_AVAILABLE) {
             try {
-              int newCx = Lang.rtl() ? (int) ((float) Screen.dp(49f) * .5f) : itemsWidth - (int) ((float) Screen.dp(49f) * .5f);
+              // XGram: on the side of the menu's pivot (showMoreView's: the RTL side unless the menu moved it, e.g. the
+              // playback speed menu, right-aligned in RTL too), not always on the RTL side
+              final float xgramWidth = menuWrap.getMeasuredWidth() > 0 ? menuWrap.getMeasuredWidth() : itemsWidth;
+              int newCx = menuWrap.getPivotX() < xgramWidth / 2f ? (int) ((float) Screen.dp(49f) * .5f) : itemsWidth - (int) ((float) Screen.dp(49f) * .5f);
               int newCy = Size.getHeaderPortraitSize() / 2;
               if (menuWrap.shouldPivotBottom()) {
-                newCy = menuWrap.getItemsHeight() - newCy;
+                newCy = xgramMenuHeight - newCy;
+              }
+              if (xgramAnchored) {
+                // XGram: the circular reveal starts at the anchored pivot (the anchor's side of the card)
+                newCx = cx;
+                newCy = cy;
               }
               Animator animator = android.view.ViewAnimationUtils.createCircularReveal(menuWrap, newCx, newCy, 0, menuWrap.getRevealRadius());
               animator.addListener(listener);
@@ -1487,8 +1504,13 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     return xgramMoreAlphaSpring;
   }
 
+  /** XGram: whether the menu placed itself at its popup anchor, with its pivots facing the anchor (keep them). */
+  private static boolean xgramHasPopupAnchor (MenuMoreWrapAbstract menuWrap) {
+    return menuWrap instanceof MenuMoreWrap && ((MenuMoreWrap) menuWrap).xgramHasPopupAnchor();
+  }
+
   private void xgramShowMore (MenuMoreWrapAbstract menuWrap) {
-    if (menuWrap.getAnchorMode() == MenuMoreWrap.ANCHOR_MODE_CENTER) {
+    if (menuWrap.getAnchorMode() == MenuMoreWrap.ANCHOR_MODE_CENTER && !xgramHasPopupAnchor(menuWrap)) {
       menuWrap.setPivotX(menuWrap.getItemsWidth() / 2f);
     }
     if (xgramMoreScaleSpring == null) {

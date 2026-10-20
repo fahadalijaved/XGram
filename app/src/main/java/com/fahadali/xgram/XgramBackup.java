@@ -58,6 +58,8 @@ public final class XgramBackup {
     com.fahadali.xgram.later.XgramLater.KEY_ROW, com.fahadali.xgram.later.XgramLater.KEY_RAISE,
     // Check In defaults (Messages); the live Check Ins ("xgram_ci_") are not settings and never listed here
     XgramSettings.KEY_CHECKIN_LOCATION, XgramSettings.KEY_CHECKIN_BATTERY, XgramSettings.KEY_CHECKIN_FOLLOW,
+    // Developer (debug builds): test items in the send menu; a release build never shows them, whatever is imported
+    XgramSettings.KEY_SEND_MENU_TESTS,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)

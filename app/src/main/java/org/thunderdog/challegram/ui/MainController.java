@@ -3535,15 +3535,15 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     final int padding = Screen.dp(MenuMoreWrap.PADDING);
     final int maxWidth = Math.max(Screen.dp(196f), headerView.getMeasuredWidth() - 2 * padding);
     menu.setMinimumWidth(Math.min(maxWidth, Math.max(Screen.dp(196f), widest + 2 * padding)));
+    menu.xgramSetMaxItemsWidth(maxWidth); // the menu counts its rows in the scroll view itself too: still at most the app bar's width
     menu.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_RIGHT);
     menu.setRightNumber(0);
     menu.xgramSetAnchorView(headerView, 0); // under the ⋮, at the app bar's end
     final float top = headerView.getTranslationY() + headerView.getCurrentHeaderOffset();
     menu.setTranslationY(top);
-    if (menu.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
-      // Moved down by the status bar: it ends that much (and 8dp) above the window's bottom, and scrolls the rest
-      ((ViewGroup.MarginLayoutParams) menu.getLayoutParams()).bottomMargin = Math.max(0, Math.round(top)) + Screen.dp(8f);
-    }
+    // Moved down by the status bar: it ends 8dp above the navigation bar or the keyboard, and scrolls the rest (a bottom
+    // margin set here was reset by the popup's insets on every measure)
+    menu.xgramSetBoundToSafeArea(true);
     PopupLayout popupLayout = new PopupLayout(context);
     popupLayout.init(true);
     popupLayout.setNeedRootInsets();
@@ -5073,7 +5073,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       itemView.setTag(R.id.btn_filter, globalFilter);
     }
     menu.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_HEADER);
+    menu.xgramSetAnchorView(headerView, 0); // XGram: under the title at this app bar's start (navigation rail, two panes), not at the window's
     menu.setTranslationY(headerView.getTranslationY() + headerView.getCurrentHeaderOffset());
+    menu.xgramSetBoundToSafeArea(true); // XGram: ends 8dp above the navigation bar or the keyboard, the rest scrolls
     globalFilterLayout = new PopupLayout(context);
     globalFilterLayout.init(true);
     globalFilterLayout.setNeedRootInsets();

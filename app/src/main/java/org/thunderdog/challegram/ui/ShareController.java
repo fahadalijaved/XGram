@@ -3998,6 +3998,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
       itemView.setTag(chatFolderInfo);
     }
     menu.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_HEADER);
+    menu.xgramSetAnchorView(headerView, 0); // XGram: at the sheet's header, not the window's edge (the sheet is centred at most 640dp wide)
     menu.setTranslationY(headerView.getTranslationY());
     folderSelectorLayout = new PopupLayout(context);
     folderSelectorLayout.init(!Settings.instance().useEdgeToEdge());
