@@ -127,7 +127,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
   }
 
-  private static final int VIEW_TYPE_HEADER = 0, VIEW_TYPE_TITLE = 1, VIEW_TYPE_ICON = 2, VIEW_TYPE_TABS = 3, VIEW_TYPE_STATE = 4;
+  private static final int VIEW_TYPE_HEADER = 0, VIEW_TYPE_TITLE = 1, VIEW_TYPE_ICON = 2, VIEW_TYPE_TABS = 3, VIEW_TYPE_STATE = 4, VIEW_TYPE_FILLER = 5;
   /** Adapter position of the strip's slot (the search, and the tabs while there is more than the default icons). */
   private static final int STRIP_POSITION = 1;
   /** M3E: space under the list for the Done button (56dp, 16dp from the bottom) plus a 16dp gap. */
@@ -267,6 +267,11 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private boolean searching;
   /** No answer shown yet for the search: its row shows the loading indicator ("No emoji found" once answered). */
   private boolean searchLoading;
+  /**
+   * The strip was pinned when the results went in: they start right under it, and the list's last row (the filler, or
+   * the loading / empty row) fills what they leave of the screen, so the list never shifts down and the strip stays put.
+   */
+  private boolean searchPinned;
   /** Bumped by every change of the query: a delayed search or an answer for an older one is dropped. */
   private int searchGeneration;
   /** The query generation whose requests went out (the keyboard's search key sends them at once). */
@@ -434,6 +439,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     if (expressive && getRecyclerView() != null) {
       applyExpressivePadding(getRecyclerView()); // the base class has just set the bottom padding to the inset alone
     }
+    if (searchPinned && adapter != null && searchRowPosition() != RecyclerView.NO_POSITION) {
+      adapter.notifyItemChanged(searchRowPosition()); // the keyboard came or went: the last row fills the new room
+    }
   }
 
   private void applyExpressivePadding (RecyclerView recyclerView) {
@@ -497,6 +505,11 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     return searching && shown.isEmpty();
   }
 
+  /** While searching the list ends with one more row: the loading / empty row, or a filler under the results. */
+  private int searchRowPosition () {
+    return searching ? itemCount - 1 : RecyclerView.NO_POSITION;
+  }
+
   /** The section is in the list on screen (not the sections hidden by a search, nor an older search's results). */
   private boolean isShown (Section section) {
     return section.owner == shown;
@@ -511,8 +524,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       section.firstCell = position + 1;
       position += 1 + section.cellCount;
     }
-    if (showsState()) {
-      position++;
+    if (searching) {
+      position++; // the loading / empty row, or the filler under the results
     }
     itemCount = position;
   }
@@ -895,6 +908,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       adapter.notifyItemRangeInserted(firstCell + oldCount, newCount - oldCount);
     } else if (newCount < oldCount) {
       adapter.notifyItemRangeRemoved(firstCell + newCount, oldCount - newCount);
+    }
+    if (newCount != oldCount && searchPinned) {
+      adapter.notifyItemChanged(searchRowPosition()); // a found pack changed size: the filler under the results too
     }
   }
 
@@ -1281,12 +1297,13 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     final int oldCount = itemCount;
     searching = true;
     searchLoading = true;
+    searchPinned = stuck || isSlotAtTop();
     pinnedTab = -1;
     shown = new ArrayList<>();
     layoutSections();
     replaceRows(oldCount);
     applyStripHeight();
-    if (stuck) {
+    if (searchPinned) {
       gridManager.scrollToPositionWithOffset(STRIP_POSITION, 0);
     }
     postSyncStrip();
@@ -1300,6 +1317,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     final int oldCount = itemCount;
     searching = false;
     searchLoading = false;
+    searchPinned = false;
     shown = sections;
     layoutSections();
     replaceRows(oldCount);
@@ -1320,12 +1338,55 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     final int oldCount = itemCount;
     shown = results;
     searchLoading = false;
+    searchPinned = stuck || (searchPinned && isSlotAtTop());
     layoutSections();
     replaceRows(oldCount);
-    if (stuck && gridManager != null) {
+    if (searchPinned && gridManager != null) {
       gridManager.scrollToPositionWithOffset(STRIP_POSITION, 0); // the new results start under the pinned strip
     }
     postSyncStrip();
+  }
+
+  /** The slot is at the list's top: where a pinned strip was put when its search started. */
+  private boolean isSlotAtTop () {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return false;
+    }
+    final RecyclerView.ViewHolder slot = recyclerView.findViewHolderForAdapterPosition(STRIP_POSITION);
+    return slot != null && slot.itemView.getTop() + slot.itemView.getTranslationY() <= recyclerView.getPaddingTop();
+  }
+
+  /** The room under the strip, above the keyboard and the Done button: what a pinned search's last row fills. */
+  private int searchViewport (RecyclerView recyclerView) {
+    return recyclerView.getHeight() - recyclerView.getPaddingTop() - recyclerView.getPaddingBottom() - stripSlotHeight();
+  }
+
+  /**
+   * The filler under a pinned search's results: what they leave of the room under the strip. The rows are counted at
+   * their smallest (cells at the grid's width, titles at one line), so there is a little more room than needed, never
+   * less (less would shift the list down, the strip with it).
+   */
+  private int searchFillerHeight () {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (!searchPinned || recyclerView == null || gridManager == null) {
+      return 0;
+    }
+    final int room = searchViewport(recyclerView);
+    final int span = Math.max(1, gridManager.getSpanCount());
+    final int available = recyclerView.getWidth() - recyclerView.getPaddingLeft() - recyclerView.getPaddingRight();
+    final int cell = Math.max(Screen.dp(MIN_CELL), Math.min(Screen.dp(MAX_ROW), available / span));
+    final int title = Screen.dp(expressive ? 44f : 40f);
+    final int gridPadding = expressive ? Screen.dp(GRID_PADDING) * 2 : 0;
+    int content = 0;
+    for (int i = 0; i < shown.size() && content < room; i++) {
+      final Section section = shown.get(i);
+      content += title;
+      if (section.cellCount > 0) {
+        content += (section.cellCount + span - 1) / span * cell + gridPadding;
+      }
+    }
+    return Math.max(0, room - content);
   }
 
   /** Everything under the strip's slot goes and the shown list's rows come in (the header and the slot stay bound). */
@@ -1978,6 +2039,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     @Nullable private final XgramListStateView state;
     @Nullable private final TextView text;
     @Nullable private final ProgressComponentView progress;
+    /** Under a pinned strip the row is at least the room under it (its content centred there); else its own height. */
+    private int fillHeight;
 
     StateRow (Context context) {
       super(context);
@@ -1986,7 +2049,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         XgramListStateView view = state = new XgramListStateView(context);
         view.setWrapContent(true);
         view.setPadding(0, Screen.dp(16f), 0, Screen.dp(16f));
-        addView(view, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        addView(view, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         text = null;
         progress = null;
       } else {
@@ -1997,14 +2060,18 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         view.setTextColor(Theme.getColor(ColorId.textLight));
         view.setPadding(Screen.dp(16f), Screen.dp(40f), Screen.dp(16f), Screen.dp(40f));
         view.setText(Lang.getString(R.string.XgramTopicSearchNothing));
-        addView(view, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        addView(view, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         ProgressComponentView spinner = progress = new ProgressComponentView(context);
         spinner.initBig(1f);
         addView(spinner, FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER));
       }
     }
 
-    void bind (boolean loading) {
+    void bind (boolean loading, int fillHeight) {
+      if (this.fillHeight != fillHeight) {
+        this.fillHeight = fillHeight;
+        requestLayout();
+      }
       if (state != null) {
         if (loading) {
           state.setLoading(false, 38f);
@@ -2017,6 +2084,14 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         // The text keeps its room while loading, so the row does not change height when the answer comes
         text.setVisibility(loading ? View.INVISIBLE : View.VISIBLE);
         progress.setVisibility(loading ? View.VISIBLE : View.GONE);
+      }
+    }
+
+    @Override
+    protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
+      super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+      if (getMeasuredHeight() < fillHeight && MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.EXACTLY) {
+        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(fillHeight, MeasureSpec.EXACTLY));
       }
     }
 
@@ -2709,8 +2784,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       if (position == STRIP_POSITION && hasStrip()) {
         return VIEW_TYPE_TABS;
       }
-      if (position == STRIP_POSITION + 1 && showsState()) {
-        return VIEW_TYPE_STATE;
+      if (position == searchRowPosition()) {
+        return shown.isEmpty() ? VIEW_TYPE_STATE : VIEW_TYPE_FILLER;
       }
       Section section = sectionAt(position);
       return section != null && section.titlePosition == position ? VIEW_TYPE_TITLE : VIEW_TYPE_ICON;
@@ -2802,6 +2877,12 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           addThemeInvalidateListener(row);
           return new Holder(row);
         }
+        case VIEW_TYPE_FILLER: {
+          // Blank room under a pinned search's short results (see searchFillerHeight)
+          View filler = new View(context);
+          filler.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0));
+          return new Holder(filler);
+        }
         case VIEW_TYPE_ICON:
         default: {
           IconView view = new IconView(context, tdlib, expressive, .68f, true);
@@ -2836,7 +2917,13 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           params.height = height;
         }
       } else if (viewType == VIEW_TYPE_STATE) {
-        ((StateRow) holder.itemView).bind(searchLoading);
+        final CustomRecyclerView recyclerView = getRecyclerView();
+        ((StateRow) holder.itemView).bind(searchLoading, searchPinned && recyclerView != null ? searchViewport(recyclerView) : 0);
+      } else if (viewType == VIEW_TYPE_FILLER) {
+        ViewGroup.LayoutParams params = holder.itemView.getLayoutParams();
+        if (params != null) {
+          params.height = searchFillerHeight();
+        }
       }
     }
 
