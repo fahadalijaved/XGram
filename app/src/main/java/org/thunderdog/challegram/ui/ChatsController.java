@@ -373,6 +373,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           final int rowPosition = parent.getChildAdapterPosition(view);
           final int gapTop = view.getBottom() + offsetTop;
           final int gap = context.liveLocationHelper != null && context.liveLocationHelper.isVisible() && rowPosition == context.getLiveLocationPosition() - 1 ? Screen.dp(1f) : Screen.dp(12f);
+          if (rowPosition > 0 && shadowFactor != 0f && context.adapter.getItemViewType(rowPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
+            // Under the folder's new chats card: the top shadow a chat there has
+            topShadowPaint.setAlpha((int) (255f * maxAlpha * shadowFactor));
+            c.save();
+            c.translate(0, view.getTop() + offsetTop - ShadowView.simpleTopShadowHeight());
+            c.drawRect(0, 0, right, ShadowView.simpleTopShadowHeight(), topShadowPaint);
+            c.restore();
+          }
           if (rowPosition != RecyclerView.NO_POSITION && rowPosition + 1 < context.adapter.getItemCount()) {
             c.drawRect(0, gapTop, right, gapTop + gap, Paints.fillingPaint(xgramM3 ? Theme.getColor(ColorId.headerBackground) : Theme.backgroundColor()));
             if (shadowFactor != 0f) {

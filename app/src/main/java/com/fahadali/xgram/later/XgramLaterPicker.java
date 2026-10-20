@@ -210,7 +210,10 @@ public final class XgramLaterPicker {
       if (existing.isDue()) {
         b.item(item(R.id.btn_xgramLaterPMarkDone, Lang.getString(R.string.XgramLaterMarkDone), R.drawable.baseline_check_circle_24, false));
       }
-      b.item(item(R.id.btn_xgramLaterPCancel, Lang.getString(existing.isSnooze() ? R.string.XgramLaterUnsnooze : R.string.XgramLaterCancelReminder), existing.isSnooze() ? R.drawable.baseline_notifications_24 : R.drawable.baseline_delete_24, true));
+      if (!existing.isSnooze() || existing.isPending()) {
+        // A woken chat is back already: Mark as done covers it
+        b.item(item(R.id.btn_xgramLaterPCancel, Lang.getString(existing.isSnooze() ? R.string.XgramLaterUnsnooze : R.string.XgramLaterCancelReminder), existing.isSnooze() ? R.drawable.baseline_notifications_24 : R.drawable.baseline_delete_24, true));
+      }
     }
     b.cancelItem();
 

@@ -127,12 +127,24 @@ final class XgramLaterEngine {
    * listeners, then the alarm. Notifications of records that are no longer due are cancelled. Returns the changes.
    */
   static List<Change> commit (int accountId, @Nullable List<XgramLaterRecord> puts, @Nullable List<String> removes) {
+    return commit(accountId, puts, removes, null);
+  }
+
+  /**
+   * {@link #commit} where each put only applies while its key still holds {@code expected} (same index; the record a
+   * change was computed from), so a change made meanwhile is never overwritten.
+   */
+  static List<Change> commit (int accountId, @Nullable List<XgramLaterRecord> puts, @Nullable List<String> removes, @Nullable List<XgramLaterRecord> expected) {
     XgramLaterStore.ensureLoaded();
     List<Change> changes = new ArrayList<>();
     synchronized (XgramLaterStore.LOCK) {
       if (puts != null) {
-        for (XgramLaterRecord r : puts) {
+        for (int i = 0; i < puts.size(); i++) {
+          XgramLaterRecord r = puts.get(i);
           XgramLaterRecord before = XgramLaterStore.getLocked(r.key);
+          if (expected != null && before != expected.get(i)) {
+            continue;
+          }
           if (r.sameAs(before)) {
             continue;
           }
@@ -429,7 +441,9 @@ final class XgramLaterEngine {
     }
     List<XgramLaterRecord> puts = new ArrayList<>(1);
     puts.add(b.build());
-    commit(accountId, puts, null);
+    List<XgramLaterRecord> expected = new ArrayList<>(1);
+    expected.add(cur);
+    commit(accountId, puts, null, expected);
   }
 
   /**
@@ -475,18 +489,13 @@ final class XgramLaterEngine {
         }
         puts.add(next);
       }
-      // Only those still unchanged since they were read
-      List<XgramLaterRecord> fresh = new ArrayList<>(puts.size());
-      synchronized (XgramLaterStore.LOCK) {
-        for (int i = 0; i < puts.size(); i++) {
-          if (XgramLaterStore.getLocked(candidates.get(i).key) == candidates.get(i)) {
-            fresh.add(puts.get(i));
-          }
-        }
+      // Only those still unchanged since they were read (a change made meanwhile wins)
+      List<XgramLaterRecord> applied = new ArrayList<>(puts.size());
+      for (Change change : commit(accountId, puts, null, candidates)) {
+        applied.add(change.after);
       }
-      notify.retainAll(fresh);
-      inChat.retainAll(fresh);
-      commit(accountId, fresh, null);
+      notify.retainAll(applied);
+      inChat.retainAll(applied);
       if (notify.size() >= 4) {
         XgramLaterNotifications.postSummary(ctx, accountId, notify.size());
       } else {
