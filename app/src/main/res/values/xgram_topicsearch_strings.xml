@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: the emoji search of the topic icon picker (New topic / Edit topic). It sits at the top of the pinned strip
+       and swaps the icon sections for its results. Sentence case. -->
+
+  <!-- Hint of the search field -->
+  <string name="XgramTopicSearchHint">Search emoji</string>
+  <!-- Empty state when a search finds nothing -->
+  <string name="XgramTopicSearchNothing">No emoji found</string>
+  <!-- Result section title: Telegram's default topic icons that match the search (usable without Telegram Premium) -->
+  <string name="XgramTopicSearchIcons">Topic icons</string>
+  <!-- Result section title: the custom emoji that match the search -->
+  <string name="XgramTopicSearchEmoji">Emoji</string>
+</resources>
