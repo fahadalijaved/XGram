@@ -70,18 +70,26 @@ import me.vkryl.core.MathUtils;
  *
  * <p>Expressive design: a floating surfaceContainerHigh card of the chat's card group (XgramM3Chat.CardDrawable) with
  * the composer field's side margins, a wavy primary ring, bodyMedium / bodySmall text, an Undo text button and a tonal
- * Send now icon button. It rises and leaves on SPATIAL_DEFAULT (the reply block's curve, which may come back in the same
- * frame), and leaves with the bubble that replaces it on the move spring of the list's one-shot item animator
+ * Send now icon button. It rises on SPATIAL_DEFAULT with its own EFFECTS_DEFAULT fade, leaves on SPATIAL_FAST after
+ * Undo (on SPATIAL_DEFAULT, the reply block's curve, when the reply comes back in the same frame, and for the other
+ * exits), and leaves with the bubble that replaces it on the move spring of the list's one-shot item animator
  * (XgramMotion.ItemSprings: SPATIAL_DEFAULT, STD_SPATIAL_FAST with reduce motion), so the older messages move only by
- * the height difference, monotonically. Otherwise Telegram X's look: a full-width 48dp bar on the filling color like
- * the reply bar, a progress arc, UNDO and the send icon, 200 ms DECELERATE, and an instant hand-off (the list has no
- * item animator). With reduce motion it fades in and out instead of moving. The look is picked when the bar is made:
- * switching Expressive design restarts the app.
+ * the height difference, monotonically. Otherwise Telegram X's look: a full-width bar on the filling color like the
+ * reply bar, a progress arc, UNDO and the send icon, 200 ms DECELERATE, and an instant hand-off (the list has no item
+ * animator). With reduce motion the bar only fades: in, out, and at the hand-off it fades where it is while the list
+ * takes its place. Its height comes from its two lines of text: at least 56dp for the card, 48dp for the bar. The look
+ * is picked when the bar is made: switching Expressive design restarts the app.
  */
 public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnimator.Target {
-  private static final float M3_CARD_DP = 58f; // CardDrawable insets 1dp at the top and the bottom: a 56dp card
-  private static final float M3_BAR_DP = 63f; // the card and a 6dp gap above the message box
-  private static final float CLASSIC_BAR_DP = 48f;
+  /** The shortest card (Expressive design) and bar (Telegram X): taller when the two lines of text need more. */
+  private static final float M3_CARD_MIN_DP = 56f, CLASSIC_BAR_MIN_DP = 48f;
+  /** At least this much above and below the two lines of text. */
+  private static final float M3_TEXT_PADDING_DP = 8f, CLASSIC_TEXT_PADDING_DP = 4f;
+  /** XgramM3Chat.CardDrawable insets the card 1dp at the top and the bottom. */
+  private static final float M3_CARD_INSETS_DP = 2f;
+  /** Below the card's view: with its 1dp inset, a 6dp gap above the message box. */
+  private static final float M3_GAP_DP = 5f;
+  private static final int ANIMATOR_VISIBLE = 0, ANIMATOR_FADE = 1;
   private static final String SEPARATOR = " · ";
   /** Most sends are answered within a few frames: the ring spins only for one that takes longer than this. */
   private static final long SPINNER_DELAY_MS = 300L;

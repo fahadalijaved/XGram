@@ -5170,6 +5170,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void sendBotStartMessage (long botUserId, long chatId, String parameter) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendBotStartMessage(botUserId, chatId, parameter), messageHandler());
   }
 

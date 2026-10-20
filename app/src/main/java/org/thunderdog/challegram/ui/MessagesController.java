@@ -7768,6 +7768,18 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   }
 
+  /** The reply bar is on its way in or out: an Undo of a reply brings it back in the frame the Undo send bar leaves. */
+  public boolean xgramReplyBarMoving () {
+    return replyBarVisible.isAnimating();
+  }
+
+  /** An edit started or ended: Undo is dimmed while the message box edits another message. */
+  private void xgramRefreshUndoBar () {
+    if (xgramUndoBar != null) {
+      xgramUndoBar.refresh();
+    }
+  }
+
   /** Rebinds the bar to what waits in this message box; {@code handoff}: the message was just sent and its bubble came in. */
   @UiThread
   public void xgramOnUndoSendChanged (boolean handoff) {
@@ -8477,6 +8489,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     checkAttachedFiles(true);
     sendButton.setIsActive(!StringUtils.isEmpty(text.text) || isEditingCaption());
     updateReplyBarVisibility(true);
+    xgramRefreshUndoBar(); // XGram: Undo send, no Undo during the edit
     if (inputView != null) {
       TdApi.FormattedText pendingText = tdlib.getPendingFormattedText(msg.chatId, msg.id);
       if (pendingText != null) {
@@ -8508,6 +8521,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     // For the exact match, !isSaved could be passed here instead.
     updateReplyBarVisibility(true);
     com.fahadali.xgram.chats.XgramUndoSend.retryPending(this); // XGram: Undo send, what couldn't go back during the edit
+    xgramRefreshUndoBar(); // XGram: Undo send, Undo is back
   }
 
   private void saveMessage (boolean applyMarkdown) {
