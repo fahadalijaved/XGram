@@ -32,11 +32,24 @@ abstract class ValidateApiTokensTask : DefaultTask() {
   @get:PathSensitive(PathSensitivity.RELATIVE)
   abstract val googleServicesJson: RegularFileProperty
 
+  /** XGram: release builds refuse the placeholder file committed to the public repository (push would not work). */
+  @get:Input
+  abstract val requireRealFirebaseProject: Property<Boolean>
+
   @TaskAction
   fun validateGoogleServicesJsonFile () {
     val appId = applicationId.get()
     val json = googleServicesJson.get().asFile.readText()
     val googleServices = Json.parseToJsonElement(json)
+    val projectId = googleServices.jsonObject["project_info"]?.jsonObject?.get("project_id")?.jsonPrimitive?.content
+    if (projectId == PLACEHOLDER_PROJECT_ID) {
+      val message = "app/google-services.json is the placeholder ($PLACEHOLDER_PROJECT_ID): push notifications (FCM) " +
+        "won't work in this build. Put XGram's real file from the Firebase console there (keep it out of git)."
+      if (requireRealFirebaseProject.get()) {
+        error(message)
+      }
+      logger.warn("warning: $message")
+    }
     var foundPackageName: String? = null
     googleServices.jsonObject["client"]!!.jsonArray.filter {
       // client_info.android_client_info.package_name
@@ -51,5 +64,9 @@ abstract class ValidateApiTokensTask : DefaultTask() {
         "Notifications in the app won't work without properly updating it."
       )
     }
+  }
+
+  private companion object {
+    const val PLACEHOLDER_PROJECT_ID = "xgram-placeholder"
   }
 }

@@ -135,6 +135,10 @@ val validateApiTokens = tasks.register<ValidateApiTokensTask>("validateApiTokens
   googleServicesJson.set(layout.projectDirectory.file(
     "google-services.json"
   ))
+  // XGram: a release build (CI or Stable) with the placeholder Firebase file fails; debug and qa builds only warn.
+  requireRealFirebaseProject.set(
+    gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }
+  )
 }
 val fetchLocalizedStrings = tasks.register<FetchLocalizedStringsTask>("fetchLocalizedStrings") {
   group = "Setup"
