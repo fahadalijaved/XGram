@@ -19,6 +19,7 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.os.Build;
 import android.text.TextUtils;
+import android.view.View;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationManagerCompat;
@@ -44,6 +45,7 @@ import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.ui.SettingsAdapter;
+import org.thunderdog.challegram.util.OptionDelegate;
 import org.thunderdog.challegram.widget.PopupLayout;
 
 import java.util.ArrayList;
@@ -440,8 +442,10 @@ public final class XgramCheckInSheet {
       request.run();
       return;
     }
-    String text = Lang.getString(R.string.LocationAlertLocation) + "\n\n" + Lang.getString(R.string.LocationAlertLocationDisclaimer);
-    // The start sheet is gone already: closing the rationale (back, a tap outside) goes on without location, as Not now.
+    // ModernOptions.showLocationAlert's text: the request, then the disclaimer in italics.
+    Lang.SpanCreator italicDisclaimer = (target, argStart, argEnd, argIndex, needFakeBold) -> argIndex == 1 ? Lang.newItalicSpan(needFakeBold) : null;
+    CharSequence text = Lang.getString(R.string.format_doubleLines, italicDisclaimer, Lang.getString(R.string.LocationAlertLocation), Lang.getString(R.string.LocationAlertLocationDisclaimer));
+    // The start sheet is gone already: closing the rationale with back goes on without location, as Not now.
     if (XgramExpressive.isEnabled()) {
       PopupLayout hero = new ModernOptions.XgramHero(R.drawable.baseline_location_on_48, Lang.getString(R.string.XgramR5SheetsLocationTitle), text)
         .cancel(Lang.getString(R.string.XgramCheckInNotNow), after)
@@ -452,20 +456,30 @@ public final class XgramCheckInSheet {
         after.run();
       }
     } else {
+      // Telegram X's location alert: the big colored header, Continue, and a cancel that counts as not granted. As there,
+      // a tap outside doesn't close it.
       final boolean[] handled = {false};
-      PopupLayout popup = c.showOptions(text, new int[] {R.id.btn_done, R.id.btn_cancel},
+      PopupLayout popup = ModernOptions.xgramAddBigColoredHeader(c.showOptions(text, new int[] {R.id.btn_done, R.id.btn_cancel},
         new String[] {Lang.getString(R.string.Continue), Lang.getString(R.string.XgramCheckInNotNow)},
         new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL},
-        new int[] {R.drawable.baseline_location_on_24, R.drawable.baseline_cancel_24}, (v, id) -> {
-          if (id == R.id.btn_done) {
-            handled[0] = true;
-            request.run();
-          } else if (id == R.id.btn_cancel) {
-            handled[0] = true;
-            after.run();
+        new int[] {R.drawable.baseline_check_circle_24, R.drawable.baseline_cancel_24}, new OptionDelegate() {
+          @Override
+          public boolean disableCancelOnTouchdown () {
+            return true;
           }
-          return true;
-        });
+
+          @Override
+          public boolean onOptionItemPressed (View optionItemView, int id) {
+            if (id == R.id.btn_done) {
+              handled[0] = true;
+              request.run();
+            } else if (id == R.id.btn_cancel) {
+              handled[0] = true;
+              after.run();
+            }
+            return true;
+          }
+        }), R.drawable.baseline_location_on_48);
       if (popup == null) {
         after.run();
       } else {

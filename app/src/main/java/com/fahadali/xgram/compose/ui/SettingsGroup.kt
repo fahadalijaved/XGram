@@ -159,7 +159,10 @@ class GroupScope internal constructor() {
     ClickRow(id, key, title, subtitle, icon, IconStyle.PLAIN, enabled, destructive, trailing, below, shapes, onClick)
   }
 
-  /** 2 to 4 short options as a connected button group under the title. Longer lists: [value] and host.choose. */
+  /**
+   * 2 to 4 short options as a connected button group under the title (and [subtitle], when given). Longer lists:
+   * [value] and host.choose.
+   */
   fun <T> buttons(
     id: Int,
     title: String,
@@ -167,9 +170,10 @@ class GroupScope internal constructor() {
     selected: T,
     enabled: Boolean = true,
     key: String? = null,
+    subtitle: String? = null,
     onSelect: (T) -> Unit
   ) = add(id, key, PageBlock.TYPE_BUTTONS) { shapes ->
-    ButtonsRow(id, key, title, options, selected, enabled, shapes, onSelect)
+    ButtonsRow(id, key, title, subtitle, options, selected, enabled, shapes, onSelect)
   }
 
   /** A stepped slider; the value line shows labels[index]. The new index is saved when the drag ends. */
@@ -355,7 +359,7 @@ private fun ClickRow(
 
 @Composable
 private fun <T> ButtonsRow(
-  id: Int, key: String?, title: String, options: List<Pair<String, T>>, selected: T, enabled: Boolean,
+  id: Int, key: String?, title: String, subtitle: String?, options: List<Pair<String, T>>, selected: T, enabled: Boolean,
   shapes: ListItemShapes, onSelect: (T) -> Unit
 ) {
   val host = LocalXgramHost.current
@@ -363,30 +367,35 @@ private fun <T> ButtonsRow(
     shapes = shapes,
     enabled = enabled,
     supportingContent = {
-      Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
-      ) {
-        val last = options.size - 1
-        options.forEachIndexed { index, option ->
-          val isSelected = option.second == selected
-          ToggleButton(
-            checked = isSelected,
-            onCheckedChange = {
-              if (!isSelected) {
-                onSelect(option.second)
-                host.changed()
+      Column {
+        if (subtitle != null) {
+          Text(subtitle)
+        }
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+          horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+        ) {
+          val last = options.size - 1
+          options.forEachIndexed { index, option ->
+            val isSelected = option.second == selected
+            ToggleButton(
+              checked = isSelected,
+              onCheckedChange = {
+                if (!isSelected) {
+                  onSelect(option.second)
+                  host.changed()
+                }
+              },
+              modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
+              enabled = enabled,
+              shapes = when (index) {
+                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                last -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
               }
-            },
-            modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
-            enabled = enabled,
-            shapes = when (index) {
-              0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-              last -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-              else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+            ) {
+              Text(option.first, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-          ) {
-            Text(option.first, maxLines = 1, overflow = TextOverflow.Ellipsis)
           }
         }
       }

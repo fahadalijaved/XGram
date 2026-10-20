@@ -204,7 +204,8 @@ fun MessagesPage() {
         R.id.btn_xgramCheckInGrace, s(R.string.XgramCheckInGrace),
         // Short labels: four full plurals don't fit the connected row on the folded screen.
         XgramSettings.CHECK_IN_GRACES.map { s(R.string.XgramCheckInMinShort, it) to it },
-        selected = settings.checkInGrace()
+        selected = settings.checkInGrace(),
+        subtitle = s(R.string.XgramCheckInGraceSub)
       ) {
         settings.setCheckInGrace(it)
       }

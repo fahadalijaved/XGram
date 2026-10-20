@@ -214,7 +214,8 @@ final class CheckInText {
     }
     if (r.bat && r.lastBat >= 0) {
       b.line();
-      b.format(s(r.lastCharging ? R.string.XgramCheckInAlertBatteryCharging : R.string.XgramCheckInAlertBattery), r.lastBat + "%");
+      // The percent sign and the digits come from the string and the app language, as the meters above.
+      b.plain(Lang.getString(r.lastCharging ? R.string.XgramCheckInAlertBatteryCharging : R.string.XgramCheckInAlertBattery, r.lastBat));
     }
     if (r.offAt != 0) {
       b.line();

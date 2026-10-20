@@ -1803,7 +1803,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         optionIds[i] = i + 1;
         titles[i] = com.fahadali.xgram.checkin.XgramCheckInSheet.durationName(choices[i]);
       }
-      showOptions(null, optionIds, titles, null, null, (itemView, optionId) -> {
+      // The row's line shows the value, so the alert delay's subtitle heads its choices.
+      showOptions(timer ? null : Lang.getString(R.string.XgramCheckInGraceSub), optionIds, titles, null, null, (itemView, optionId) -> {
         if (timer) {
           settings.setCheckInTimer(choices[optionId - 1]);
         } else {

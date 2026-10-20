@@ -39,15 +39,13 @@ public final class XgramCheckInReceiver extends BroadcastReceiver {
     if (action == null) {
       return;
     }
-    if (Intent.ACTION_BOOT_COMPLETED.equals(action) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
-      XgramCheckIn.onBoot();
-      return;
-    }
+    final boolean boot = Intent.ACTION_BOOT_COMPLETED.equals(action) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action);
     int acc = intent.getIntExtra(EXTRA_ACC, -1);
     String ref = intent.getStringExtra(EXTRA_REF);
-    if (acc < 0 || ref == null) {
+    if (!boot && (acc < 0 || ref == null)) {
       return;
     }
+    // The process may have been started just for this broadcast: it is kept until the engine thread is done with it.
     final PendingResult pending = goAsync();
     final AtomicBoolean finished = new AtomicBoolean();
     Runnable finish = () -> {
@@ -58,6 +56,10 @@ public final class XgramCheckInReceiver extends BroadcastReceiver {
       }
     };
     new Handler(Looper.getMainLooper()).postDelayed(finish, 8_000);
-    XgramCheckIn.onAction(action, acc, ref, finish);
+    if (boot) {
+      XgramCheckIn.onBoot(finish);
+    } else {
+      XgramCheckIn.onAction(action, acc, ref, finish);
+    }
   }
 }

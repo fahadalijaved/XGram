@@ -109,7 +109,7 @@ final class XgramCheckInAlarms {
           cancel(context, XgramCheckInReceiver.ACTION_PROMPT, RC_PROMPT);
         }
         long lastCall = r.sendAt - CheckInRules.LAST_CALL_LEAD;
-        if (!r.lastCall && lastCall > now) {
+        if (!r.lastCall && CheckInRules.hasLastCall(r) && lastCall > now) {
           set(context, XgramCheckInReceiver.ACTION_LAST_CALL, RC_LAST_CALL, r, lastCall, true);
         } else {
           cancel(context, XgramCheckInReceiver.ACTION_LAST_CALL, RC_LAST_CALL);

@@ -90,8 +90,8 @@
   <string name="XgramCheckInAlertLocation">Last known location (%1$s, accurate to %2$s): %3$s</string>
   <string name="XgramCheckInAlertLocationCoarse">Last known location (%1$s, approximate area): %2$s</string>
   <string name="XgramCheckInAlertNoLocation">Location: not available</string>
-  <string name="XgramCheckInAlertBattery">Battery: %1$s</string>
-  <string name="XgramCheckInAlertBatteryCharging">Battery: %1$s (charging)</string>
+  <string name="XgramCheckInAlertBattery">Battery: %1$d%%</string>
+  <string name="XgramCheckInAlertBatteryCharging">Battery: %1$d%% (charging)</string>
   <string name="XgramCheckInAlertOff">Phone switched off at %1$s</string>
   <string name="XgramCheckInAlertUpdated">Updated %1$s</string>
   <string name="XgramCheckInAlertLabel">Automatic Check In alert</string>
@@ -155,12 +155,13 @@
   <string name="XgramCheckInHeader">Check In</string>
   <string name="XgramCheckInTimer">Default timer</string>
   <string name="XgramCheckInGrace">Alert delay</string>
+  <string name="XgramCheckInGraceSub">How long after the back-by time the alert is sent</string>
   <string name="XgramCheckInRadius">Arrival radius</string>
   <string name="XgramCheckInMinShort">%1$d min</string>
   <string name="XgramCheckInLocationSub">Your last known location goes in the alert</string>
   <string name="XgramCheckInFollowUp">Keep the sent alert updated</string>
   <string name="XgramCheckInFollowUpSub">For an hour after it\'s sent, your location in it keeps updating</string>
   <string name="XgramCheckInFollowUpNeeds">Needs Include my location</string>
-  <string name="XgramCheckInInfo">Start Check In from a chat\'s ⋮ menu. Alert delay is how long after the back-by time the alert is sent. It\'s best effort and isn\'t an emergency service: the alert is a scheduled Telegram message, and your contact\'s notification settings decide whether they hear it.</string>
+  <string name="XgramCheckInInfo">Start Check In from a chat\'s ⋮ menu. It\'s best effort and isn\'t an emergency service: the alert is a scheduled Telegram message, and your contact\'s notification settings decide whether they hear it.</string>
   <string name="XgramSearchKwCheckIn">check in|checkin|safety|safe|arrive|arrival|home|timer|alert|location|battery</string>
 </resources>

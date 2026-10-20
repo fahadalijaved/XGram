@@ -235,8 +235,16 @@ final class CheckInRules {
     return r.state == CheckInRecord.ARMED && !r.prompted && now >= r.eta && now < r.sendAt - PROMPT_SKIP;
   }
 
+  /**
+   * Whether this Check In has a last call at all: only when it comes after the back-by time (an alert delay longer than
+   * 2 minutes), so "Are you OK?" is always the first prompt. The 1 minute debug delay has none.
+   */
+  static boolean hasLastCall (CheckInRecord r) {
+    return r.sendAt - LAST_CALL_LEAD > r.eta;
+  }
+
   static boolean lastCallDue (CheckInRecord r, long now) {
-    return r.state == CheckInRecord.ARMED && !r.lastCall && now >= r.sendAt - LAST_CALL_LEAD && now < r.sendAt - PROMPT_SKIP;
+    return r.state == CheckInRecord.ARMED && !r.lastCall && hasLastCall(r) && now >= r.sendAt - LAST_CALL_LEAD && now < r.sendAt - PROMPT_SKIP;
   }
 
   static final int ADD_OK = 0, ADD_OFFLINE = 1, ADD_TOO_LATE = 2, ADD_TOO_LONG = 3, ADD_NOT_ARMED = 4;

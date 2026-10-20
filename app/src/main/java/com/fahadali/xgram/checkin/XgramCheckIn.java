@@ -785,16 +785,21 @@ public final class XgramCheckIn {
     }
   }
 
-  static void onBoot () {
+  /** Boot or an app update (receiver): [done] runs once everything is re-armed and the worker is enqueued. */
+  static void onBoot (Runnable done) {
     post(() -> {
-      ensureLoaded();
-      resume(-1, false);
-      CheckInRecord r = current;
-      if (r != null) {
-        XgramCheckInWork.enqueue(r.acc);
-      }
-      for (CheckInRecord w : watches.values()) {
-        XgramCheckInWork.enqueue(w.acc);
+      try {
+        ensureLoaded();
+        resume(-1, false);
+        CheckInRecord r = current;
+        if (r != null) {
+          XgramCheckInWork.enqueue(r.acc);
+        }
+        for (CheckInRecord w : watches.values()) {
+          XgramCheckInWork.enqueue(w.acc);
+        }
+      } finally {
+        done.run();
       }
     });
   }
@@ -1275,12 +1280,9 @@ public final class XgramCheckIn {
     if (r.closeKind == CheckInRecord.KIND_ARRIVED) {
       XgramCheckInNotifier.notice(r, Lang.getString(R.string.XgramCheckInArrivedTitle, CheckInText.placeLabel(r)), Lang.getString(R.string.XgramCheckInArrivedText, r.title));
     } else {
+      // Also when it was ended from the notification shade: the snackbar in the app, else a toast.
       final String text = Lang.getString(R.string.XgramCheckInEnded);
-      UI.post(() -> {
-        if (UI.isResumed()) {
-          feedback(text);
-        }
-      });
+      UI.post(() -> feedback(text));
     }
   }
 
@@ -1788,6 +1790,8 @@ public final class XgramCheckIn {
 
   private static void checkPrompts (CheckInRecord r) {
     long now = now(r);
+    // The last call always comes after the back-by time (CheckInRules.hasLastCall), so "Are you OK?" posts first. Both
+    // are due at once only after a late wake-up: then the last call (same title, the closer time) stands for both.
     if (CheckInRules.lastCallDue(r, now)) {
       r.lastCall = true;
       r.prompted = true;

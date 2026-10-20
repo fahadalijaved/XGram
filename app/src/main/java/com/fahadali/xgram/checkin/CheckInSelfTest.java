@@ -194,6 +194,15 @@ final class CheckInSelfTest {
     check("add time too late", CheckInRules.canAddTime(add, add.sendAt - 30, 900, true) == CheckInRules.ADD_TOO_LATE);
     check("add time past 24 h", CheckInRules.canAddTime(add, now, 90_000, true) == CheckInRules.ADD_TOO_LONG);
 
+    // Prompts: "Are you OK?" at the back-by time, then the last call 2 minutes before the alert, never before the prompt
+    CheckInRecord p = armed(now);
+    check("prompt at the back-by time", !CheckInRules.promptDue(p, p.eta - 1) && CheckInRules.promptDue(p, p.eta) && !CheckInRules.lastCallDue(p, p.eta));
+    check("last call 2 min before the alert", !CheckInRules.lastCallDue(p, p.sendAt - 121) && CheckInRules.lastCallDue(p, p.sendAt - 120));
+    CheckInRecord shortDelay = armed(now);
+    shortDelay.grace = 60;
+    shortDelay.sendAt = shortDelay.eta + shortDelay.grace;
+    check("no last call with a 1 min delay", !CheckInRules.hasLastCall(shortDelay) && !CheckInRules.lastCallDue(shortDelay, shortDelay.eta - 60) && CheckInRules.promptDue(shortDelay, shortDelay.eta));
+
     // Refs
     SecureRandom random = new SecureRandom();
     boolean alphabet = true;

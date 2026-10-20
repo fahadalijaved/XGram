@@ -313,6 +313,18 @@ public class ModernOptions {
     return popup;
   }
 
+  /**
+   * XGram: Telegram X's location alert look for an options sheet built elsewhere (Expressive off): the big colored
+   * header with [icon] over its options. Returns [layout] (null when the sheet wasn't shown).
+   */
+  @Nullable
+  public static PopupLayout xgramAddBigColoredHeader (@Nullable PopupLayout layout, @DrawableRes int icon) {
+    if (layout != null) {
+      addBigColoredHeader(layout, icon);
+    }
+    return layout;
+  }
+
   private static void addBigColoredHeader (PopupLayout layout, @DrawableRes int icon) {
     if (!(layout.getChildAt(1) instanceof OptionsLayout)) {
       return;
