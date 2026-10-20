@@ -61,6 +61,8 @@ internal object XgramSearchIndex {
     R.id.btn_xgramActivityBar, R.id.btn_xgramActivityNavBar -> intArrayOf(R.string.XgramSearchKwActivity, R.string.XgramSearchKwNavBar)
     R.id.btn_xgramLaterRow, R.id.btn_xgramLaterRaise, R.id.btn_xgramLaterWakeEarly, R.id.btn_xgramLaterExact,
     R.id.btn_xgramLaterChannel -> intArrayOf(R.string.XgramSearchKwLater)
+    R.id.btn_xgramCheckInTimer, R.id.btn_xgramCheckInGrace, R.id.btn_xgramCheckInRadius, R.id.btn_xgramCheckInLocation,
+    R.id.btn_xgramCheckInBattery, R.id.btn_xgramCheckInFollowUp -> intArrayOf(R.string.XgramSearchKwCheckIn)
     else -> NONE
   }
 

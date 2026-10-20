@@ -92,6 +92,9 @@ public final class XgramGhostSend implements Client.QueryInterceptor {
       default:
         return;
     }
+    if (com.fahadali.xgram.checkin.XgramCheckIn.isOwnSend(options)) {
+      return; // XGram Check In: its messages are never silenced, delayed or read-on-send
+    }
     if (options != null && options.onlyPreview) {
       return;
     }

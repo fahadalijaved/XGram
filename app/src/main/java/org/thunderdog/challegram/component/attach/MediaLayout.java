@@ -139,6 +139,10 @@ public class MediaLayout extends FrameLayoutFix implements
 
   private final ViewController<?> parent;
 
+  /** XGram Check In: set to pick a destination; a picked place goes here and nothing is sent. */
+  public @Nullable com.fahadali.xgram.checkin.XgramCheckInSheet.PickListener xgramPickListener;
+  private boolean xgramPicked;
+
   public MediaLayout (ViewController<?> context) {
     super(context.context());
     this.parent = context;
@@ -1572,6 +1576,10 @@ public class MediaLayout extends FrameLayoutFix implements
 
   @Override
   public void onPopupDismiss (PopupLayout popup) {
+    if (xgramPickListener != null && !xgramPicked) {
+      xgramPickListener.onCancel(); // XGram Check In: closed without a place
+    }
+    xgramPickListener = null;
     if (cameraOpenOptions != null) {
       if (parent != null && (parent instanceof MessagesController || mode == MODE_AVATAR_PICKER) && !parent.isDestroyed()) {
         parent.openInAppCamera(cameraOpenOptions);
@@ -1847,6 +1855,14 @@ public class MediaLayout extends FrameLayoutFix implements
   }
 
   public void sendVenue (MediaLocationData place) {
+    if (xgramPickListener != null) {
+      // XGram Check In: the destination, not a message
+      xgramPicked = true;
+      TdApi.Venue venue = place.convertToInputMessage().venue;
+      xgramPickListener.onPick(venue.location, venue.title);
+      hide(false);
+      return;
+    }
     pickDateOrProceed((sendOptions, disableMarkdown) -> {
       if (target != null) {
         target.send(place.convertToInputMessage(), true, sendOptions, null);
@@ -1857,6 +1873,13 @@ public class MediaLayout extends FrameLayoutFix implements
   }
 
   public void sendLocation (double latitude, double longitude, double accuracy, int heading, int livePeriod) {
+    if (xgramPickListener != null) {
+      // XGram Check In: the destination, not a message
+      xgramPicked = true;
+      xgramPickListener.onPick(new TdApi.Location(latitude, longitude, accuracy), null);
+      hide(false);
+      return;
+    }
     pickDateOrProceed((sendOptions, disableMarkdown) -> {
       if (target != null) {
         TdApi.Location location = new TdApi.Location(latitude, longitude, accuracy);

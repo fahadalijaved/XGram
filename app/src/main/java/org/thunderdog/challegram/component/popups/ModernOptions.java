@@ -16,8 +16,10 @@ import android.content.Context;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.annotation.DrawableRes;
@@ -267,12 +269,23 @@ public class ModernOptions {
       actionsParams.topMargin = Screen.dp(16f);
       actions.setLayoutParams(actionsParams);
 
-      optionsLayout.addView(hero);
-      optionsLayout.addView(titleView);
-      optionsLayout.addView(textView);
+      // The hero, title and text scroll when the sheet is taller than the window (the folded screen in landscape): the
+      // weight lets OptionsLayout's height cap shrink only this part, so the actions always stay on screen.
+      LinearLayout body = new LinearLayout(ctx);
+      body.setOrientation(LinearLayout.VERTICAL);
+      body.addView(hero);
+      body.addView(titleView);
+      body.addView(textView);
+      ScrollView bodyScroll = new ScrollView(ctx);
+      bodyScroll.setVerticalScrollBarEnabled(false);
+      bodyScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+      bodyScroll.addView(body, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      bodyScroll.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+      optionsLayout.addView(bodyScroll);
       optionsLayout.addView(actions);
 
-      // the height the sheet slides in by: every part measured at the sheet's width
+      // the height the sheet slides in by: every part measured at the sheet's width, at most the window's
       int height = 0;
       final int widthSpec = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY);
       final int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
@@ -282,7 +295,8 @@ public class ModernOptions {
         height += part.getMeasuredHeight() + ((LinearLayout.LayoutParams) part.getLayoutParams()).topMargin;
       }
       height += actionsParams.height + actionsParams.topMargin + actionsParams.bottomMargin;
-      return height;
+      final int available = Screen.currentHeight() - org.thunderdog.challegram.navigation.HeaderView.getTopOffset();
+      return available > 0 ? Math.min(height, available) : height;
     }, null, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S);
     if (popup != null) {
       popup.setDisableCancelOnTouchDown(true);
@@ -297,6 +311,18 @@ public class ModernOptions {
       }
     }
     return popup;
+  }
+
+  /**
+   * XGram: Telegram X's location alert look for an options sheet built elsewhere (Expressive off): the big colored
+   * header with [icon] over its options. Returns [layout] (null when the sheet wasn't shown).
+   */
+  @Nullable
+  public static PopupLayout xgramAddBigColoredHeader (@Nullable PopupLayout layout, @DrawableRes int icon) {
+    if (layout != null) {
+      addBigColoredHeader(layout, icon);
+    }
+    return layout;
   }
 
   private static void addBigColoredHeader (PopupLayout layout, @DrawableRes int icon) {

@@ -38,7 +38,8 @@ public final class XgramAccountData {
     "xgram_cm_", "xgram_cmode_", com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX,
     // Undo send: waiting messages (journal), "your message is back" hints, chats where messages don't wait
     "xgram_usq_", "xgram_usqh_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
-    com.fahadali.xgram.later.XgramLaterRecord.PREFIX // Later
+    com.fahadali.xgram.later.XgramLaterRecord.PREFIX, // Later
+    "xgram_ci_" // Check In's live state (com.fahadali.xgram.checkin)
   };
 
   /** TDLib thread: the account in this slot logged out. */
@@ -46,6 +47,8 @@ public final class XgramAccountData {
     try {
       // Undo send first: from here on it writes nothing of this account, so its erased journal stays erased.
       com.fahadali.xgram.chats.XgramUndoSend.forgetAccount(accountId);
+      // Before the keys go: Check In reads its record to stop tracking and say the alert is still scheduled.
+      com.fahadali.xgram.checkin.XgramCheckIn.forgetAccount(accountId);
       String suffix = accountId + "_";
       LevelDB pmc = Settings.instance().pmc();
       for (String prefix : PREFIXES) {

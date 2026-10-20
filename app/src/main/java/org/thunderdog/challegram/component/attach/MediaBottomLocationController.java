@@ -81,7 +81,15 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
 
   @Override
   protected int getMenuId () {
-    return mediaLayout.inSpecificMode() ? 0 : R.id.menu_search;
+    return xgramPinOnly() ? 0 : R.id.menu_search;
+  }
+
+  /**
+   * Telegram X's pin-only picker (a specific mode: a big map, no places). XGram Check In's destination picker is a
+   * specific mode too, but lists nearby and found places under the normal map, so the destination gets a name.
+   */
+  private boolean xgramPinOnly () {
+    return mediaLayout.inSpecificMode() && mediaLayout.xgramPickListener == null;
   }
 
   @Override
@@ -145,7 +153,7 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
 
   @Override
   protected View onCreateView (Context context) {
-    final int mapHeight = MediaLocationMapView.getMapHeight(mediaLayout.inSpecificMode());
+    final int mapHeight = MediaLocationMapView.getMapHeight(xgramPinOnly());
     final int barHeight = SettingHolder.measureHeightForType(ListItem.TYPE_ATTACH_LOCATION);
     final boolean xgram = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     final int marginOffset = Screen.dp(xgram ? 8f : 4f); // XGram M3E: 8dp between the map card and the send tile
@@ -241,7 +249,7 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
     // Map
 
     mapView = new MediaLocationMapView(context);
-    mapView.init(this, locationView, mediaLayout.inSpecificMode());
+    mapView.init(this, locationView, xgramPinOnly());
     mapView.setCallback(this);
     mapWrap.addView(mapView);
 
@@ -367,6 +375,9 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
 
   /** XGram M3E: Telegram X's title case place headers, in sentence case while the English strings are in use. */
   private @androidx.annotation.StringRes int xgramHeaderRes (@androidx.annotation.StringRes int res) {
+    if (mediaLayout.xgramPickListener != null && res == R.string.SendCurrentLocation) {
+      return R.string.XgramCheckInUseLocation; // XGram Check In: picking a destination
+    }
     if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       return res;
     }
@@ -418,7 +429,7 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
 
   @Override
   protected boolean canExpandHeight () {
-    return !mediaLayout.inSpecificMode(); // FIXME?
+    return !xgramPinOnly(); // FIXME?
   }
 
   private boolean sendingLiveLocation;
@@ -534,7 +545,7 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
       setLocationData(location.getAccuracy() > 0 ? Lang.plural(R.string.AccurateToMeters, (int) location.getAccuracy()) : null);
     }
     currentLocation = location;
-    if (mediaLayout.inSpecificMode()) {
+    if (xgramPinOnly()) {
       lastLocation = currentLocation;
     } else if (allowLocationRequests) {
       if (!preventRequests && (lastLocation == null || lastLocation.distanceTo(location) >= 200) || !hasPlaces()) {
@@ -885,7 +896,7 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
   private FactorAnimator mapAnimator;
 
   private int getMapWrapHeight () {
-    int mapHeight = MediaLocationMapView.getMapHeight(mediaLayout.inSpecificMode());
+    int mapHeight = MediaLocationMapView.getMapHeight(xgramPinOnly());
     int barHeight = SettingHolder.measureHeightForType(ListItem.TYPE_ATTACH_LOCATION);
     return mapHeight + barHeight;
   }

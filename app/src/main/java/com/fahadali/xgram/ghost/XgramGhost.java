@@ -198,6 +198,9 @@ public final class XgramGhost {
     public void onMessageSendSucceeded (TdApi.Message message, long oldMessageId) {
       // Undo send: a message that waited while its chat was out of sight reads only up to what was on screen
       final long capId = takeMessageReadCap(tdlib, message.chatId, oldMessageId);
+      if (com.fahadali.xgram.checkin.XgramCheckIn.takeOwnSend(tdlib, message.chatId, oldMessageId)) {
+        return; // XGram Check In: its messages never read the chat
+      }
       XgramSettings settings = XgramSettings.instance();
       if (!dontReadMessages(tdlib, message.chatId) || !settings.ghostReadOnSend()) {
         return;
@@ -211,6 +214,7 @@ public final class XgramGhost {
     @Override
     public void onMessageSendFailed (TdApi.Message message, long oldMessageId, TdApi.Error error) {
       takeMessageReadCap(tdlib, message.chatId, oldMessageId); // nothing to read: the cap goes
+      com.fahadali.xgram.checkin.XgramCheckIn.takeOwnSend(tdlib, message.chatId, oldMessageId);
     }
   }
 }

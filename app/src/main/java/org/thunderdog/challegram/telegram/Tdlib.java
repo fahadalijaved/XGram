@@ -549,6 +549,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     com.fahadali.xgram.ghost.XgramGhost.attach(this); // XGram
     com.fahadali.xgram.activity.XgramActivity.attach(this); // XGram
     com.fahadali.xgram.later.XgramLater.attach(this); // XGram: Later
+    com.fahadali.xgram.checkin.XgramCheckIn.attach(this); // XGram
     if (needMeasure) {
       Log.v("INITIALIZATION: Tdlib.listeners -> %dms", SystemClock.uptimeMillis() - ms);
       ms = SystemClock.uptimeMillis();
