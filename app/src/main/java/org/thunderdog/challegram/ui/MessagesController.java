@@ -2438,6 +2438,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (!xgramUndoBypass && xgramHoldFiles(selectedItems, musicEntries, files, caption, sendOptions)) {
         return; // XGram: Undo send, the documents and music wait
       }
+      if (showSlowModeRestriction(sendButton != null ? sendButton : inputView, sendOptions)) {
+        // XGram: slow mode refuses them all (the hint says until when), before the message box is locked for a send
+        // that wouldn't happen: the files and their caption stay.
+        return;
+      }
 
       final List<TdApi.Message> sentMessages = new ArrayList<>(selectedItems.size());
       final ReplyInfo replyTo = getCurrentReplyId();
@@ -2464,6 +2469,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
         }
         if (musicFunctions != null) {
           functions.addAll(musicFunctions);
+        }
+        if (functions.isEmpty()) {
+          // XGram: a restriction refused every file (it showed why): nothing to send, the message box unlocks as it was
+          UI.cancel(clearInputRunnable);
+          if (!isTimeout[0] && getChatId() == chatId) {
+            clearInputAfterSend(false, true, replyTo, true);
+          }
+          return;
         }
         executeSendMessageFunctions(functions, sentMessages, sendOptions != null && sendOptions.schedulingState != null, success -> UI.post(() -> {
           if (!isTimeout[0] && getChatId() == chatId) {
@@ -11274,6 +11287,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private void executeSendMessageFunctions (List<TdApi.Function<?>> functions, List<TdApi.Message> sentMessages, final boolean isSchedule, RunnableBool onDone) {
+    if (functions.isEmpty()) {
+      tdlib.ui().post(() -> onDone.runWithBool(false)); // XGram: nothing to send (functions.get(0) below would throw)
+      return;
+    }
     com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, functions.isEmpty() ? null : functions.get(0)); // XGram: what waits in this chat goes first
     final int expectedCount = functions.size();
     final int[] sentFunctionsCount = new int[1];
