@@ -487,7 +487,9 @@ public final class XgramConnectionPill extends View {
   @Override
   protected void onDraw (@NonNull Canvas c) {
     final float w = width.getValue();
-    if (w <= 0f || getAlpha() <= 0f) {
+    // Not skipped at alpha 0: the fade-in only changes the view's alpha (no redraw), so a frame recorded empty while it
+    // was 0 left just the elevation shadow fading in, a grey blob, until something else redrew the pill
+    if (w <= 0f) {
       return;
     }
     final float cx = getWidth() / 2f, cy = height / 2f;
