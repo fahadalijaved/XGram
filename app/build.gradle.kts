@@ -976,6 +976,11 @@ if (generateBaselineProfile) {
   }
 }
 
+// XGram: at most one native (CMake/ninja) build at a time, see NativeBuildLimiter in buildSrc.
+val nativeBuildLimiter = gradle.sharedServices.registerIfAbsent("tgxNativeBuildLimiter", NativeBuildLimiter::class.java) {
+  maxParallelUsages.set(1)
+}
+
 afterEvaluate {
   tasks.withType<ExternalNativeBuildTask>().configureEach {
     val variantName = variantName.replace(Regex("(Benchmark)?(NonMinified)?(Release|Debug|Qa)$", RegexOption.IGNORE_CASE), "")
@@ -984,6 +989,11 @@ afterEvaluate {
       "Could not find buildNativeTask for $variantName (${this.variantName})"
     }
     dependsOn(validateGitSetupTask, buildNativeTask)
+    // XGram: only the tasks that run ninja (buildCMake<Config>[abi]); externalNativeBuild<Variant> only copies the .so
+    // files and must not wait for the other ABI's build.
+    if (name.startsWith("buildCMake") || name.startsWith("buildNdkBuild")) {
+      usesService(nativeBuildLimiter)
+    }
   }
   tasks.named("preBuild") {
     dependsOn(validateGitSetupTask)

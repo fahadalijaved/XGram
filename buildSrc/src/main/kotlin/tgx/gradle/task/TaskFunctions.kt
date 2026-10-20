@@ -114,6 +114,52 @@ fun moveFile(fromFile: File, toFile: File, vararg copyOption: CopyOption = array
 fun areFileContentsIdentical(a: File, b: File): Boolean =
   a.length() == b.length() && Files.mismatch(a.toPath(), b.toPath()) == -1L
 
+// XGram: makes `into` an exact copy of `from`, but only writes files whose content differs, so unchanged files keep
+// their modification time. Files and folders in `into` that are not in `from` are deleted.
+// Native dependency tasks re-run whenever buildSrc changes (Gradle sees a new task class path) and produce
+// byte-identical output; without this every header and .a got a new time and ninja recompiled and relinked
+// libtgcallsjni.so / libtgxjni.so (10-17 min per ABI) for nothing.
+fun syncContentOnly(from: File, into: File) {
+  if (!from.isDirectory) {
+    fatal("Not a directory: ${from.absolutePath}")
+  }
+  if (into.exists() && !into.isDirectory) {
+    fatal("Exists and not a directory: ${into.absolutePath}")
+  }
+  if (!into.isDirectory && !into.mkdirs()) {
+    fatal("Unable to create directory: ${into.absolutePath}")
+  }
+  val expected = hashSetOf<String>()
+  from.walkTopDown().forEach { src ->
+    if (src == from) return@forEach
+    val relativePath = src.relativeTo(from).path
+    expected += relativePath
+    val dst = into.resolve(relativePath)
+    if (src.isDirectory) {
+      if (dst.exists() && !dst.isDirectory && !dst.delete()) {
+        fatal("Unable to delete: ${dst.absolutePath}")
+      }
+      if (!dst.isDirectory && !dst.mkdirs()) {
+        fatal("Unable to create directory: ${dst.absolutePath}")
+      }
+    } else {
+      if (dst.isDirectory && !dst.deleteRecursively()) {
+        fatal("Unable to delete: ${dst.absolutePath}")
+      }
+      if (!dst.isFile || !areFileContentsIdentical(src, dst)) {
+        // No COPY_ATTRIBUTES: a changed file gets the current time, so it is newer than anything built from it.
+        Files.copy(src.toPath(), dst.toPath(), StandardCopyOption.REPLACE_EXISTING)
+      }
+    }
+  }
+  // Bottom-up, so a stale folder is already empty when it is reached.
+  into.walkBottomUp().forEach { dst ->
+    if (dst != into && !expected.contains(dst.relativeTo(into).path) && dst.exists() && !dst.delete()) {
+      fatal("Unable to delete stale file: ${dst.absolutePath}")
+    }
+  }
+}
+
 fun String.camelCaseToUpperCase(): String {
   val upperCase = StringBuilder()
   var i = 0

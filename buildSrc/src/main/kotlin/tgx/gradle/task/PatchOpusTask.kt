@@ -12,7 +12,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.inject.Inject
 
-@CacheableTask
+// XGram: not @CacheableTask. A cache restore deletes the output and unpacks it with new file times, which re-runs
+// CMake and makes ninja rebuild opus and relink (same reason as syncContentOnly).
 abstract class PatchOpusTask : DefaultTask() {
   @get:Internal
   abstract val msys2Dir: DirectoryProperty
@@ -36,7 +37,10 @@ abstract class PatchOpusTask : DefaultTask() {
   @TaskAction
   fun patchOpus() {
     val input = requireDir(inputDir.get().asFile)
-    val output = validateDir(outputDir.get().asFile)
+    // XGram: the patched copy is made in the task's temporary folder and then synced into outputDir, so unchanged
+    // files keep their file times (deleting and re-copying all of them re-ran CMake and rebuilt opus and its users).
+    val finalOutput = validateDir(outputDir.get().asFile)
+    val output = temporaryDir.resolve("opus")
 
     val converter = input.resolve("celt/arm/arm2gnu.pl")
     require(converter.isFile)
@@ -81,6 +85,12 @@ abstract class PatchOpusTask : DefaultTask() {
     require(temp.delete()) {
       "Unable to delete ${temp.absolutePath}"
     }
+
+    // XGram
+    syncContentOnly(output, finalOutput)
+    fs.delete( {
+      delete(output)
+    })
   }
 
   private fun convert(converter: File, input: File, output: File) {

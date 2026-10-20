@@ -8,7 +8,8 @@ import java.io.File
 
 private const val TAG = "FFmpeg"
 
-@CacheableTask
+// XGram: not @CacheableTask. A cache restore deletes the output and unpacks it with new file times, which makes
+// ninja recompile and relink everything that uses FFmpeg (same reason as syncContentOnly).
 abstract class BuildFfmpegTask : BuildNativeLibraryTask() {
   @get:InputDirectory
   @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -208,12 +209,16 @@ abstract class BuildFfmpegTask : BuildNativeLibraryTask() {
       ).toPosixPath(),
     )
 
-    val output = createEmptyDir(fs,
+    // XGram: outputDir is no longer wiped. `make install DESTDIR=stage` installs into stage/<prefix> and only changed
+    // files are synced into outputDir, so unchanged headers and archives keep their file times. --prefix stays
+    // outputDir, so the .pc files and the configuration string built into libavutil are unchanged.
+    val output = validateDir(
       outputDir.get().asFile
     )
     val build = createEmptyDir(fs,
       buildDir.get().asFile
     )
+    val stage = build.resolve("install-stage")
 
     // ffmpeg
 
@@ -316,7 +321,8 @@ abstract class BuildFfmpegTask : BuildNativeLibraryTask() {
       "install" to arrayOf(
         resolveBinary("make", msys2Dir),
         "-j${Runtime.getRuntime().availableProcessors()}",
-        "install"
+        "install",
+        "DESTDIR=${stage.toPosixPath()}" // XGram
       )
     )
 
@@ -329,5 +335,14 @@ abstract class BuildFfmpegTask : BuildNativeLibraryTask() {
       logFile,
       commands
     )
+
+    // XGram: ffmpeg's config.mak installs to $(DESTDIR)<prefix>; on MSYS2 the prefix is /c/..., so stage/c/...
+    syncContentOnly(
+      requireDir(stage.resolve(output.toPosixPath().removePrefix("/"))),
+      output
+    )
+    fs.delete {
+      delete(stage)
+    }
   }
 }

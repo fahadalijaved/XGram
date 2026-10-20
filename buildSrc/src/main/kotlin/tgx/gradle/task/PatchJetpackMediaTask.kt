@@ -8,7 +8,8 @@ import tgx.gradle.fatal
 import tgx.gradle.validateDir
 import java.io.File
 
-@CacheableTask
+// XGram: not @CacheableTask. A cache restore deletes the output and unpacks it with new file times, which makes
+// ninja recompile everything that includes these headers (same reason as syncContentOnly).
 abstract class PatchJetpackMediaTask : DefaultTask() {
   @get:InputFiles
   @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -34,9 +35,13 @@ abstract class PatchJetpackMediaTask : DefaultTask() {
         val outputFile = output.resolve(inputFile.relativeTo(input))
         if (!outputFile.parentFile.isDirectory && !outputFile.parentFile.mkdirs())
           fatal("mkdirs failed: ${outputFile.parentFile.absolutePath}")
-        inputFile.copyTo(outputFile,
-          overwrite = true
-        )
+        // XGram: copy only when the content differs, so an unchanged header keeps its file time (the .cc files below
+        // already do this through writeToFile); otherwise every re-run made ninja recompile its users and relink.
+        if (!outputFile.isFile || !areFileContentsIdentical(inputFile, outputFile)) {
+          inputFile.copyTo(outputFile,
+            overwrite = true
+          )
+        }
         copiedFiles += inputFile.relativeTo(input).path
       }
 

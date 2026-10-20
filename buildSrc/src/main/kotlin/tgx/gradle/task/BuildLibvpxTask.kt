@@ -1,17 +1,18 @@
 package tgx.gradle.task
 
 import Sdk
-import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.TaskAction
 import tgx.gradle.createEmptyDir
 import tgx.gradle.fatal
 import tgx.gradle.requireDir
 import tgx.gradle.requireFile
+import tgx.gradle.validateDir
 import java.io.File
 
 private const val TAG = "libvpx"
 
-@CacheableTask
+// XGram: not @CacheableTask. A cache restore deletes the output and unpacks it with new file times, which makes
+// ninja relink everything that uses libvpx (same reason as syncContentOnly).
 abstract class BuildLibvpxTask : BuildNativeLibraryTask() {
   @TaskAction
   fun buildLibvpx() {
@@ -147,12 +148,16 @@ abstract class BuildLibvpxTask : BuildNativeLibraryTask() {
 
     // Output
 
-    val output = createEmptyDir(fs,
+    // XGram: outputDir is no longer wiped. `make install DESTDIR=stage` installs into stage/<prefix> and only changed
+    // files are synced into outputDir, so an unchanged libvpx.a keeps its file time. --prefix stays outputDir, so
+    // vpx.pc and vpx_config.c are unchanged.
+    val output = validateDir(
       outputDir.get().asFile
     )
     val build = createEmptyDir(fs,
       buildDir.get().asFile
     )
+    val stage = build.resolve("install-stage")
 
     // libvpx
 
@@ -246,9 +251,19 @@ abstract class BuildLibvpxTask : BuildNativeLibraryTask() {
         "make" to arrayOf(
           resolveBinary("make", msys2Dir),
           "-j${Runtime.getRuntime().availableProcessors()}",
-          "install"
+          "install",
+          "DESTDIR=${stage.toPosixPath()}" // XGram
         )
       )
     )
+
+    // XGram: libvpx's config.mk installs to DIST_DIR=$(DESTDIR)<prefix>; on MSYS2 the prefix is /c/..., so stage/c/...
+    syncContentOnly(
+      requireDir(stage.resolve(output.toPosixPath().removePrefix("/"))),
+      output
+    )
+    fs.delete {
+      delete(stage)
+    }
   }
 }
