@@ -2223,6 +2223,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       case TGMessage.REMOVE_COMPLETELY: {
         TGMessage replace = TGMessage.valueOf(this, message, msg.getChat(), msg.messagesController().getMessageThread(), chatAdmins);
         adapter.replaceItem(index, replace);
+        controller.xgramUndoBubblesAfterNewMessage(); // XGram: Undo send, the faded bubbles merge under the new instance in this pass
         break;
       }
       case TGMessage.REMOVE_COMBINATION: {
@@ -2488,6 +2489,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         rebuildFirstItem(false, false);
         controller.showActionBotButton();
       }
+      controller.xgramUndoBubblesAfterNewMessage(); // XGram: Undo send, the faded bubbles merge under the new newest message in this pass
     }
     if (messageThread != null) {
       if (areScheduled()) {

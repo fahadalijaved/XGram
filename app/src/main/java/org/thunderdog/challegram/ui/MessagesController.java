@@ -7869,11 +7869,6 @@ public class MessagesController extends ViewController<MessagesController.Argume
     xgramUndoBubbles.sync();
   }
 
-  /** The list holds still on screen while a faded bubble comes or goes, then settles (updateReplyView). */
-  private float xgramUndoBubblesShift () {
-    return xgramUndoBubbles != null ? xgramUndoBubbles.listShift() : 0f;
-  }
-
   /** MessagesManager: a live message is about to join the bottom of the list (it may take a faded bubble's place). */
   public void xgramUndoBubblesBeforeNewMessage (TGMessage message) {
     if (xgramUndoBubbles != null) {
@@ -7881,7 +7876,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   }
 
-  /** MessagesManager: a live message joined the bottom of the list. */
+  /** MessagesManager: a live message joined the bottom of the list, or the list's newest messages were deleted or replaced. */
   public void xgramUndoBubblesAfterNewMessage () {
     if (xgramUndoBubbles != null) {
       xgramUndoBubbles.afterNewMessage();
@@ -8141,7 +8136,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     float offset = -getAttachedFilesOffset();
     final float keyboardOffset = -getKeyboardOffset();
     final float xgramUndoOffset = -xgramUndoBarOffset(); // XGram: the Undo send bar
-    messagesView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset + xgramUndoBubblesShift() /* XGram: faded bubbles */);
+    messagesView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
     bottomShadowView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
     if (replyBarView != null) {
       replyBarView.setTranslationY(y + keyboardOffset);

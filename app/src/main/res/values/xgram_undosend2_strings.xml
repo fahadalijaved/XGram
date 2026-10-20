@@ -8,7 +8,7 @@
   <item type="id" name="btn_xgramUndoSendBubbleNow" />
 
   <string name="XgramUndoSendBubbles">Show waiting messages in the chat</string>
-  <string name="XgramUndoSendBubblesSub">Faded until sent. Tap one to undo it or send it now</string>
+  <string name="XgramUndoSendBubblesSub">Faded until sent, except video messages. Tap one to undo it or send it now</string>
   <string name="XgramUndoSendNewest">Only the newest waits</string>
   <string name="XgramUndoSendNewestSub">A new message sends the one before it right away</string>
 </resources>

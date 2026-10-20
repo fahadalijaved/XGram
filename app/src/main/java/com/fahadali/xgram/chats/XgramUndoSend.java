@@ -1378,7 +1378,9 @@ public final class XgramUndoSend {
     if (failed == null) {
       XgramUndoSendStore.remove(item);
       if (owner != null) {
-        notifyOwner(owner, true);
+        // The instant hand-off expects the new message to add its height in this frame; one that took its faded
+        // bubble's place adds nothing, so the bar takes its own animated exit instead
+        notifyOwner(owner, !item.bubbleTookPlace);
         if (ghostScheduled) {
           owner.xgramShowUndoSendHint(Lang.getString(R.string.XgramGhostScheduledHint), false);
         }

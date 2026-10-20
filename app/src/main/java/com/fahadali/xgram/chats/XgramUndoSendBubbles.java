@@ -74,11 +74,15 @@ import me.vkryl.core.MathUtils;
  * <p>The first bubble is merged under the list's newest message as a sent message would be (that message loses its
  * tail and its bottom padding while bubbles show). When a waiting message is sent, the real (sending) message is added
  * to the list where its bubble was, in the same frame the bubble goes ({@link #beforeNewMessage}): it has the same
- * height, so nothing moves, nothing is shown twice, and the list adds it without its add animation. When a bubble comes
- * or goes otherwise (it starts waiting, Undo, a refused send), the list and the other bubbles first keep their place
- * on screen, then settle: on the move spring with Expressive design, 200 ms DECELERATE otherwise, as the Undo send bar
- * moves; a new bubble rises from behind the message box and fades in, one that leaves fades where it was. With reduce
- * motion only the fades are left.
+ * height, so nothing moves, nothing is shown twice, and the list adds it without its add animation. An album comes in
+ * one message at a time: its bubble keeps the room its messages don't take yet until all of them are in. When a bubble
+ * comes or goes otherwise (it starts waiting, Undo, a refused send), the room first keeps the list and the other
+ * bubbles where they were on screen, then grows or shrinks to the bubbles' heights: the list lays out again on every
+ * frame (it never moves out of its own bounds), on the move spring with Expressive design, 200 ms DECELERATE otherwise,
+ * as the Undo send bar moves; a new bubble rises from behind the message box and fades in, one that leaves fades where
+ * it was. With reduce motion only the fades are left.
+ *
+ * <p>A round video message has no bubble (Telegram X plays it in a view group of the list): only the bar shows it.
  */
 public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration implements FactorAnimator.Target, RecyclerView.OnItemTouchListener {
   private static final float BUBBLE_ALPHA = .5f;
@@ -97,16 +101,26 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
   private final HashSet<Long> handled = new HashSet<>();
   /** The list and the bubbles that stay keep their place on screen, then settle: 1 to 0. */
   private final FactorAnimator settle;
-  /** How far the list is moved down (px, at the settle factor 1) to keep its place. */
+  /**
+   * How much less room than {@link #total} the list gets (px, at the settle factor 1, negative for more), so that it
+   * keeps its place on screen. The list is never moved: the room itself settles. A message that takes a bubble's place
+   * leaves it as it is, so the content above stays where it was then too.
+   */
   private float shiftStart;
-  /** The room kept under the list's newest message: the bubbles' heights. */
+  /** The bubbles' heights: the room under the list's newest message once settled. */
   private int total;
   private int builtWidth;
   /** The list's newest message the first bubble is merged under (it isn't the list's bottom message meanwhile). */
   @Nullable private TGMessage mergedTop;
-  /** What the layer clips to, in its coordinates: the list's bounds without the shift. */
+  /** What the layer clips to, in its coordinates: the list's bounds (inside its padding when it clips to it). */
   private final RectF clip = new RectF();
   private final int slack = Screen.dp(8f);
+  /** A sync waits for the list's pending adapter changes to be laid out first ({@link #sync}). */
+  private boolean syncPosted;
+  private final Runnable syncLater = () -> {
+    syncPosted = false;
+    syncNow();
+  };
 
   public XgramUndoSendBubbles (Context context, MessagesController owner, MessagesManager manager, MessagesRecyclerView list) {
     this.owner = owner;
@@ -122,11 +136,6 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
   /** The layer that draws the bubbles: under the list, over the wallpaper, as big as the chat's content view. */
   public View getLayer () {
     return layer;
-  }
-
-  /** How far the list is moved down right now to keep its place while the bubbles change (MessagesController.updateReplyView). */
-  public float listShift () {
-    return shiftStart * settle.getFactor();
   }
 
   private static long keyOf (XgramUndoSendItem item, int part) {
@@ -148,6 +157,20 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
   /** What waits in the owner's message box changed: bubbles come for new waiting messages, leave for the others. */
   @UiThread
   public void sync () {
+    if (list.hasPendingAdapterUpdates() && list.getWindowToken() != null) {
+      // Never in the layout pass of an adapter change (a sent message joining the list, which may arm the list's
+      // one-shot animator): that change is laid out and animated first, then the bubbles change from there. Once only:
+      // the posted sync runs whatever the list has pending by then.
+      if (!syncPosted) {
+        syncPosted = true;
+        list.post(syncLater);
+      }
+      return;
+    }
+    syncNow();
+  }
+
+  private void syncNow () {
     final List<XgramUndoSend.BubblePart> parts = XgramUndoSend.bubblePartsOf(owner);
     if (parts.isEmpty() && slots.isEmpty()) {
       return;
@@ -227,7 +250,9 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
       final int firstIndex = first;
       first += Math.max(1, msg.getCombinedMessageCount());
       if (msg.needViewGroup()) {
-        msg.onDestroy(); // a video message plays in a view group of the list: the bar shows it
+        // A round video message: Telegram X draws its background, time and overlay from a view group of the list,
+        // a plain message view would show it without them. It has no bubble: the bar shows it (as the settings say).
+        msg.onDestroy();
         continue;
       }
       try {
@@ -250,7 +275,10 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
     slots.remove(slot);
     slot.fade.cancel();
     if (fadeOut && slot.placed && slot.view.getVisibility() == View.VISIBLE && canFade()) {
-      ghosts.add(new Ghost(slot));
+      // In the list before its fade starts: with animations off (system setting) the fade ends inside start()
+      final Ghost ghost = new Ghost(slot);
+      ghosts.add(ghost);
+      ghost.start();
     } else {
       destroyView(slot.view);
     }
@@ -266,6 +294,10 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
   /** The chat closes or shows another chat: everything goes at once (the list is cleared too). */
   @UiThread
   public void reset () {
+    if (syncPosted) {
+      syncPosted = false;
+      list.removeCallbacks(syncLater);
+    }
     settle.forceFactor(0f);
     shiftStart = 0f;
     for (Slot slot : slots) {
@@ -303,35 +335,66 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
     for (Slot slot : slots) {
       if (!slot.handedOff && XgramUndoSend.sentIdAt(slot.item, slot.part, slot.firstIndex) == id) {
         slot.handedOff = true;
+        slot.item.bubbleTookPlace = true; // the bar leaves on its own exit: the list doesn't grow for this message
         message.xgramFromWaiting = true; // the list adds it without the add animation: it is already there
+        if (slot.msg.getCombinedMessageCount() > 1) {
+          // An album: its messages come one by one (the others combine into this one). Its bubble keeps the room
+          // they don't take yet, so nothing above moves while they come.
+          slot.taker = message;
+          slot.fullHeight = slot.height;
+        }
         return;
       }
     }
   }
 
   /**
-   * MessagesManager, after a live message joined the bottom of the list: the bubbles it took the place of leave, the
-   * others go under it. Nothing is compensated: the message is where its bubble was.
+   * MessagesManager, after a live message joined the bottom of the list (or combined into it), or the list's newest
+   * messages were deleted or replaced: the bubbles a message took the place of leave (an album's once all of it is
+   * in), the others go under the newest message. Nothing is compensated: a message is where its bubble was.
    */
   @UiThread
   public void afterNewMessage () {
     if (slots.isEmpty()) {
       return;
     }
+    final TGMessage top = activeTop();
     change(() -> {
       for (int i = slots.size() - 1; i >= 0; i--) {
         Slot slot = slots.get(i);
-        if (slot.handedOff) {
+        if (slot.handedOff && !slot.waitsForRest(top)) {
           removeSlot(slot, false); // its message is in the list now
         }
       }
     }, false);
   }
 
+  /** Some bubble is drawn (merged under the list's newest message), not only an album's room. */
+  private boolean drawsBubbles () {
+    for (Slot slot : slots) {
+      if (slot.taker == null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * The room a bubble keeps: its message's height. An album its first message took the place of keeps what that message
+   * doesn't take yet (none once that message isn't the list's newest any more).
+   */
+  private static int heightOf (Slot slot, @Nullable TGMessage top) {
+    if (slot.taker != null) {
+      return slot.taker == top ? Math.max(0, slot.fullHeight - top.getHeight()) : 0;
+    }
+    return slot.msg.getHeight();
+  }
+
   /**
    * One change of the bubbles. {@code compensate}: the list and the bubbles that stay keep their place on screen (the
-   * room under the newest message and the newest message's own height change in this frame), then settle. Without it
-   * (a message took a bubble's place, the newest message changed, a new width) the list lays out as it is.
+   * room under the newest message and the newest message's own height change in this frame, so the room starts at
+   * what keeps the list's content as tall as it was), then the room settles to the bubbles' heights. Without it (a
+   * message took a bubble's place, the newest message changed, a new width) the list lays out as it is.
    */
   private void change (@Nullable Runnable mutation, boolean compensate) {
     final TGMessage top = activeTop();
@@ -387,9 +450,8 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
           slot.fadeIn(canFade() && topView != null);
         }
       }
-      owner.xgramOnUndoBarMoved(); // the list's shift
     }
-    invalidateDecorations();
+    invalidateDecorations(); // the room: the list lays out again in this frame
     layer.invalidate();
   }
 
@@ -420,19 +482,36 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
       return;
     }
     final int width = list.getMeasuredWidth() > 0 ? list.getMeasuredWidth() : manager.getRecyclerWidth();
+    // An album coming in isn't drawn (only its room counts) and isn't merged: its first message, the list's newest,
+    // stands for it (the bottom one with its tail when nothing is drawn under it)
+    int lastDrawn = -1;
+    for (int i = 0; i < slots.size(); i++) {
+      if (slots.get(i).taker == null) {
+        lastDrawn = i;
+      }
+    }
+    TGMessage above = top;
     for (int i = 0; i < slots.size(); i++) {
       Slot slot = slots.get(i);
-      slot.msg.mergeWith(i == 0 ? top : slots.get(i - 1).msg, i == slots.size() - 1);
+      if (slot.taker == null) {
+        slot.msg.mergeWith(above, i == lastDrawn);
+        above = slot.msg;
+      }
     }
     for (Slot slot : slots) {
-      if (width > 0 && slot.msg.getWidth() != width) {
-        slot.msg.buildLayout(width);
-      } else {
-        slot.msg.rebuildLayout();
+      if (slot.taker == null) {
+        if (width > 0 && slot.msg.getWidth() != width) {
+          slot.msg.buildLayout(width);
+        } else {
+          slot.msg.rebuildLayout();
+        }
       }
-      if (slot.height != slot.msg.getHeight()) {
-        slot.height = slot.msg.getHeight();
-        slot.view.requestLayout();
+      final int height = heightOf(slot, top); // (an album coming in: after its first message's merge above)
+      if (slot.height != height) {
+        slot.height = height;
+        if (slot.taker == null) {
+          slot.view.requestLayout();
+        }
       }
       total += slot.height;
     }
@@ -456,7 +535,7 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
   /**
    * The newest message's height or bubble changed (merged or not): its view measures it again, as for any change of
    * a message's height. Not an adapter change: the list's item animator (armed right after a live message) mustn't
-   * move what the shift already keeps in place.
+   * move what the room already keeps in place.
    */
   private void notifyTopChanged (TGMessage top) {
     top.requestLayout();
@@ -482,27 +561,38 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
   @Override
   public void getItemOffsets (@NonNull Rect outRect, @NonNull View view, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
     outRect.setEmpty();
-    if (slots.isEmpty() || parent.getChildLayoutPosition(view) != 0 || activeTop() == null) {
+    // (with no bubbles left, the room of the last one still settles to nothing)
+    if ((slots.isEmpty() && shiftStart == 0f) || parent.getChildLayoutPosition(view) != 0) {
+      return;
+    }
+    final TGMessage top = activeTop();
+    if (top == null) {
       return;
     }
     final int width = parent.getMeasuredWidth();
-    if (width > 0 && width != builtWidth) {
+    if (width > 0 && width != builtWidth && !slots.isEmpty()) {
       // A new width (a fold, a pane resized): the bubbles are laid out for it in this pass
       builtWidth = width;
       total = 0;
       for (Slot slot : slots) {
-        slot.msg.buildLayout(width);
-        slot.height = slot.msg.getHeight();
+        if (slot.taker == null) {
+          slot.msg.buildLayout(width);
+        }
+        slot.height = heightOf(slot, top);
         total += slot.height;
       }
       layer.post(layer::requestLayout);
     }
-    outRect.bottom = total;
+    // The room settles instead of the list moving: the list's layout manager keeps the lower edge of the newest
+    // message's room where it is, so the content above moves (and is filled in again at the top) inside the list.
+    // It is below zero only when a message took the place of a bubble that was still rising: that message then rises
+    // the rest of the way from behind the message box, as its bubble would have (never more than its own height).
+    outRect.bottom = Math.max(-top.getHeight(), total - Math.round(shiftStart * settle.getFactor()));
   }
 
   @Override
   public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
-    owner.xgramOnUndoBarMoved(); // the list's shift; the bubbles follow on the next draw
+    invalidateDecorations(); // the room: the list lays out again; the bubbles follow it on that draw
   }
 
   @Override
@@ -526,11 +616,12 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
     }
     final TGMessage top = activeTop();
     if (!slots.isEmpty() && top != null) {
-      boolean remerge = top != mergedTop || top.getExtraPadding() != 0; // a message came or went, or the list merged it again
+      // A message came or went, or the list merged it again (it has bottom padding while a bubble is drawn under it)
+      boolean remerge = top != mergedTop || (top.getExtraPadding() != 0 && drawsBubbles());
       if (!remerge) {
         for (Slot slot : slots) {
-          if (slot.msg.getHeight() != slot.height) {
-            remerge = true; // e.g. its reply loaded
+          if (heightOf(slot, top) != slot.height) {
+            remerge = true; // e.g. its reply loaded, or an album's newest message grew
             break;
           }
         }
@@ -541,13 +632,12 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
     }
     final View topView = top != null ? manager.getLayoutManager().findViewByPosition(0) : null;
     final float factor = settle.getFactor();
-    final float shift = shiftStart * factor;
     final float listY = list.getTranslationY();
     final boolean clipToPadding = list.getClipToPadding();
     final float left = list.getLeft() + list.getTranslationX() - layer.getLeft();
-    // The list's place without the shift: a bubble never draws over the bar or the message box
+    // The list's place: a bubble never draws over the bar or the message box
     final float clipTop = list.getTop() + listY - layer.getTop() + (clipToPadding ? list.getPaddingTop() : 0);
-    final float clipBottom = list.getBottom() + listY - shift - layer.getTop() - (clipToPadding ? list.getPaddingBottom() : 0);
+    final float clipBottom = list.getBottom() + listY - layer.getTop() - (clipToPadding ? list.getPaddingBottom() : 0);
     final float clipRight = left + list.getWidth();
     boolean invalidate = false;
     if (clipTop != lastClipTop || clipBottom != lastClipBottom || left != lastClipLeft || clipRight != lastClipRight) {
@@ -565,7 +655,8 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
     for (Slot slot : slots) {
       final float slotTop = y + slot.carryStart * factor;
       final float layerY = baseY + slotTop;
-      final boolean visible = show && layerY < clip.bottom && layerY + slot.height > clip.top;
+      // (one a message took the place of isn't drawn: an album coming in keeps only its room)
+      final boolean visible = show && !slot.handedOff && layerY < clip.bottom && layerY + slot.height > clip.top;
       if (slot.msg.hasDate() && (visible != slot.placed || layerY != slot.layerY)) {
         invalidate = true; // the layer draws its date
       }
@@ -738,6 +829,9 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
     float carryStart;
     /** A sent message took its place. */
     boolean handedOff;
+    /** An album only: the first of its messages, which took its place (the others combine into it), and its height then. */
+    @Nullable TGMessage taker;
+    int fullHeight;
     // For one change: its distance from the end before it, its carry then, and whether it came in this change
     int sBefore;
     float carryNow;
@@ -768,6 +862,15 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
       view.onAttachedToRecyclerView();
       this.height = msg.getHeight();
       this.fresh = true;
+    }
+
+    /**
+     * An album whose first message took its place and is still the list's newest message, while the rest of it isn't
+     * combined into that message yet: its room stays. When the rest doesn't come there (another message came first, it
+     * was deleted), it goes; its part's result removes it anyway ({@link #sync}).
+     */
+    boolean waitsForRest (@Nullable TGMessage top) {
+      return taker != null && taker == top && taker.getCombinedMessageCount() < msg.getCombinedMessageCount();
     }
 
     void fadeIn (boolean animated) {
@@ -819,6 +922,10 @@ public final class XgramUndoSendBubbles extends RecyclerView.ItemDecoration impl
       this.from = MathUtils.clamp(slot.fade.getFactor());
       slot.countdown.setSending(true);
       this.fade = new FactorAnimator(0, this, AnimatorUtils.LINEAR_INTERPOLATOR, FADE_MS, 1f);
+    }
+
+    /** Once it is in {@link #ghosts}: with animations off the fade ends (and the view goes) right in here. */
+    void start () {
       fade.animateTo(0f);
     }
 

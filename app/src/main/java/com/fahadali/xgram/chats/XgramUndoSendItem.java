@@ -110,6 +110,11 @@ final class XgramUndoSendItem {
   @Nullable long[][] sentIds;
   /** Main thread: parts with a result. Their faded bubbles leave, if no message took their place. */
   @Nullable boolean[] partDone;
+  /**
+   * Main thread: a sent message of it took the place of its faded bubble, so the list's content didn't grow for it and
+   * the bar leaves on its own animated exit, not the instant hand-off.
+   */
+  boolean bubbleTookPlace;
 
   XgramUndoSendItem (Tdlib tdlib, int kind, long chatId, long draftChatId, @Nullable TdApi.MessageTopic draftTopic,
                      List<TdApi.Function<?>> parts, TdApi.FormattedText typed,
