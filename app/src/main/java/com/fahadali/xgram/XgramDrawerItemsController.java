@@ -32,8 +32,9 @@ import java.util.List;
 public final class XgramDrawerItemsController extends RecyclerViewController<Void> implements View.OnClickListener {
   // Telegram X's order. Settings can't be hidden, only moved; Night mode, Expressive design and Ghost mode sit below the line.
   // XGram: public for the Compose Side menu page (xgram-m3e)
-  public static final String[] KEYS = {"contacts", "hub", "calls", "saved", "bookmarks", "saved_by_chat", "settings", "invite", "proxy", "help"};
-  public static final int[] NAMES = {R.string.Contacts, R.string.XgramHub, R.string.Calls, R.string.SavedMessages, R.string.XgramBookmarks, R.string.XgramSavedByChat, R.string.Settings, R.string.InviteFriends, R.string.Proxy, R.string.Help};
+  // XGram: Activity first (com.fahadali.xgram.activity); an order saved before it existed keeps it there (no rank)
+  public static final String[] KEYS = {"activity", "contacts", "hub", "calls", "saved", "bookmarks", "saved_by_chat", "settings", "invite", "proxy", "help"};
+  public static final int[] NAMES = {R.string.XgramActivity, R.string.Contacts, R.string.XgramHub, R.string.Calls, R.string.SavedMessages, R.string.XgramBookmarks, R.string.XgramSavedByChat, R.string.Settings, R.string.InviteFriends, R.string.Proxy, R.string.Help};
   public static final String[] TOGGLE_KEYS = {"night", "expressive", "ghost"};
   public static final int[] TOGGLE_NAMES = {R.string.NightMode, R.string.XgramExpressive, R.string.XgramGhostMode};
   public static final String KEY_SETTINGS = "settings";
@@ -61,6 +62,8 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
     int id = item.getId();
     if (id == R.id.btn_xgramDrawerItem) {
       return item.getData() instanceof String ? (String) item.getData() : null;
+    } else if (id == R.id.btn_xgramActivity) {
+      return "activity";
     } else if (id == R.id.btn_contacts) {
       return "contacts";
     } else if (id == R.id.btn_xgramHub) {

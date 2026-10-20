@@ -72,6 +72,7 @@ private fun openEntry(host: XgramComposeHost, action: Int) {
   val activity = host.activity
   val tdlib = host.tdlib
   when (action) {
+    XgramWhatsNewController.OPEN_ACTIVITY -> com.fahadali.xgram.activity.XgramActivity.open(host.controller)
     XgramWhatsNewController.OPEN_SETTINGS -> host.openPage(XgramPage.MAIN)
     XgramWhatsNewController.OPEN_THEMES -> host.open(XgramThemesController(activity, tdlib))
     XgramWhatsNewController.OPEN_GHOST, XgramWhatsNewController.OPEN_PRIVACY -> host.openPage(XgramPage.PRIVACY) // Ghost mode first

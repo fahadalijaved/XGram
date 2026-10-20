@@ -24,7 +24,8 @@ import me.vkryl.leveldb.LevelDB;
 
 /**
  * Export, import and reset of XGram's settings (NagramX / exteraGram backup). Settings are stored untyped, so every
- * key prefix is listed here with its type. Local data (message history, local reads, last seen) is not included.
+ * key prefix is listed here with its type. Local data (message history, local reads, last seen, Activity's items) is
+ * not included.
  */
 public final class XgramBackup {
   private XgramBackup () { }
@@ -50,6 +51,9 @@ public final class XgramBackup {
     XgramSettings.KEY_CHAT_LIST_BIG_TEXT,
     // Undo send: voice and video messages wait too (Messages > Message box)
     XgramSettings.KEY_UNDO_SEND_VOICE,
+    // Activity (Chat list), one by one: no prefix may match the per-viewer filter "xgram_actview_filter" (not a setting)
+    XgramSettings.KEY_ACTIVITY_ON, XgramSettings.KEY_ACTIVITY_REACTIONS, XgramSettings.KEY_ACTIVITY_MUTED, XgramSettings.KEY_ACTIVITY_DISCUSSION,
+    XgramSettings.KEY_ACTIVITY_LOOKBACK, XgramSettings.KEY_ACTIVITY_BADGE, XgramSettings.KEY_ACTIVITY_HEADER,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
@@ -132,7 +136,7 @@ public final class XgramBackup {
     return count;
   }
   private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
-  private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START, XgramSettings.KEY_ENTER_TO_SEND, XgramSettings.KEY_PANE_LIST_WIDTH, XgramSettings.KEY_NOTIFICATION_ICON, XgramSettings.KEY_REACTION_BAR, XgramSettings.KEY_NAV_TABS, XgramSettings.KEY_NAV_PROFILE, XgramSettings.KEY_NAV_STYLE, XgramSettings.KEY_NAV_FAB, XgramSettings.KEY_UNDO_SEND};
+  private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START, XgramSettings.KEY_ENTER_TO_SEND, XgramSettings.KEY_PANE_LIST_WIDTH, XgramSettings.KEY_NOTIFICATION_ICON, XgramSettings.KEY_REACTION_BAR, XgramSettings.KEY_NAV_TABS, XgramSettings.KEY_NAV_PROFILE, XgramSettings.KEY_NAV_STYLE, XgramSettings.KEY_NAV_FAB, XgramSettings.KEY_UNDO_SEND, XgramSettings.KEY_ACTIVITY_BAR};
   /** Data rather than settings: exported and imported, but kept by {@link #reset}. */
   private static final String[] LONG_PREFIXES = {"xgram_bm_"};
 
@@ -238,7 +242,7 @@ public final class XgramBackup {
       if (ints != null) {
         for (Iterator<String> it = ints.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.startsWith("xgram_tab_") || key.startsWith("xgram_cmode_") || key.equals("xgram_history_retention") || key.equals("xgram_avatar_corners") || key.equals("xgram_chat_long_press") || key.equals("xgram_download_boost_level") || key.equals("xgram_swipe_left") || key.equals("xgram_swipe_right") || key.equals("xgram_tr_provider") || key.equals(XgramSettings.KEY_INLINE_VIDEO_START) || key.equals(XgramSettings.KEY_ENTER_TO_SEND) || key.equals(XgramSettings.KEY_PANE_LIST_WIDTH) || key.equals(XgramSettings.KEY_NOTIFICATION_ICON) || key.equals(XgramSettings.KEY_REACTION_BAR) || key.equals(XgramSettings.KEY_NAV_TABS) || key.equals(XgramSettings.KEY_NAV_PROFILE) || key.equals(XgramSettings.KEY_NAV_STYLE) || key.equals(XgramSettings.KEY_NAV_FAB) || key.equals(XgramSettings.KEY_UNDO_SEND)) {
+          if (key.startsWith("xgram_tab_") || key.startsWith("xgram_cmode_") || key.equals("xgram_history_retention") || key.equals("xgram_avatar_corners") || key.equals("xgram_chat_long_press") || key.equals("xgram_download_boost_level") || key.equals("xgram_swipe_left") || key.equals("xgram_swipe_right") || key.equals("xgram_tr_provider") || key.equals(XgramSettings.KEY_INLINE_VIDEO_START) || key.equals(XgramSettings.KEY_ENTER_TO_SEND) || key.equals(XgramSettings.KEY_PANE_LIST_WIDTH) || key.equals(XgramSettings.KEY_NOTIFICATION_ICON) || key.equals(XgramSettings.KEY_REACTION_BAR) || key.equals(XgramSettings.KEY_NAV_TABS) || key.equals(XgramSettings.KEY_NAV_PROFILE) || key.equals(XgramSettings.KEY_NAV_STYLE) || key.equals(XgramSettings.KEY_NAV_FAB) || key.equals(XgramSettings.KEY_UNDO_SEND) || key.equals(XgramSettings.KEY_ACTIVITY_BAR)) {
             pmc().putInt(key, ints.getInt(key));
             count++;
           }

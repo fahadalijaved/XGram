@@ -677,8 +677,11 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     }
   }
 
+  /** A list row (not a ChatView) that draws the chat open on the right as selected: repainted when that changes. */
+  public interface HighlightAware { }
+
   private static void invalidateChatViews (@Nullable View view) {
-    if (view instanceof org.thunderdog.challegram.component.dialogs.ChatView) {
+    if (view instanceof org.thunderdog.challegram.component.dialogs.ChatView || view instanceof HighlightAware) {
       view.invalidate();
     } else if (view instanceof android.view.ViewGroup) {
       android.view.ViewGroup group = (android.view.ViewGroup) view;
@@ -1515,6 +1518,44 @@ public final class XgramTwoPane implements NavigationStack.ChangeListener {
     ViewController<?> owner = context.getParentOrSelf();
     NavigationController own = owner.navigationController();
     return twoPane.isLeftNavigation(own) || twoPane.isHiddenRoot(owner);
+  }
+
+  /**
+   * Puts {@code c} in the chat list pane, over its chat list: anything else above the chat list there (the archive,
+   * a screen opened from the rail) goes first. False when two panes are not shown (or the pane is busy): the caller
+   * opens it as usual.
+   */
+  public static boolean showOnLeft (ViewController<?> context, ViewController<?> c) {
+    XgramTwoPane twoPane = context.context().xgramTwoPane();
+    if (twoPane == null || !twoPane.isActive) {
+      return false;
+    }
+    NavigationController left = twoPane.leftNavigation;
+    if (left == null || left.isDestroyed() || left.isAnimating() || left.getStackSize() == 0) {
+      return false;
+    }
+    if (left.getStackSize() > 1) {
+      left.setControllerAnimated(c, true, true); // keeps the chat list at the root
+    } else {
+      left.navigateTo(c);
+    }
+    return true;
+  }
+
+  /** The screen on top of the chat list pane while two panes are shown, else null. */
+  @Nullable
+  public static ViewController<?> leftTop (@Nullable BaseActivity context) {
+    XgramTwoPane twoPane = context != null ? context.xgramTwoPane() : null;
+    if (twoPane == null || !twoPane.isActive || twoPane.leftNavigation == null || twoPane.leftNavigation.isDestroyed()) {
+      return null;
+    }
+    return twoPane.leftNavigation.getCurrentStackItem();
+  }
+
+  /** Whether the chat list pane (two panes shown) has a {@code type} screen on top. */
+  public static boolean isOnLeftTop (@Nullable BaseActivity context, Class<?> type) {
+    ViewController<?> top = leftTop(context);
+    return top != null && type.isInstance(top);
   }
 
   /** Puts {@code c} on the right pane, replacing anything above the chat list there. */

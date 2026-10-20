@@ -159,21 +159,39 @@ public final class XgramNavRail {
 
   // Destinations
 
-  static final int DEST_CHATS = 0, DEST_CALLS = 1, DEST_CONTACTS = 2, DEST_SAVED = 3, DEST_SETTINGS = 4;
+  /**
+   * Destinations, also the floating navigation toolbar's tab indices. 5 is the toolbar's profile
+   * (XgramNavToolbar.DEST_PROFILE): a placeholder in the arrays below, never a rail destination. 6 is Activity.
+   */
+  static final int DEST_CHATS = 0, DEST_CALLS = 1, DEST_CONTACTS = 2, DEST_SAVED = 3, DEST_SETTINGS = 4, DEST_PROFILE_SLOT = 5, DEST_ACTIVITY = 6;
+  /** Every array indexed by destination has this many entries. */
+  static final int DEST_COUNT = 7;
 
   /** Filled (the active destination) Material icons; with another icon pack, that pack's drawing of them. */
   static final int[] DEST_FILLED = {
     R.drawable.baseline_chat_bubble_24, R.drawable.baseline_call_24, R.drawable.baseline_perm_contact_calendar_24,
-    R.drawable.baseline_bookmark_24, R.drawable.baseline_settings_24
+    R.drawable.baseline_bookmark_24, R.drawable.baseline_settings_24, R.drawable.baseline_account_circle_24,
+    R.drawable.baseline_notifications_24
   };
   /** Outlined (every other destination): the XGram Line family, as the rest of Material 3 Expressive with the Classic pack. */
   static final int[] DEST_OUTLINED = {
     R.drawable.xgl_chat_bubble, R.drawable.xgl_phone, R.drawable.xgl_contacts,
-    R.drawable.xgl_bookmark, R.drawable.xgl_settings
+    R.drawable.xgl_bookmark, R.drawable.xgl_settings, R.drawable.baseline_account_circle_24,
+    R.drawable.xgl_notifications
   };
-  private static final int[] DEST_LABEL = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramNavRailSavedMessages, R.string.Settings};
+  private static final int[] DEST_LABEL = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramNavRailSavedMessages, R.string.Settings, R.string.XgramNavProfileLabel, R.string.XgramActivity};
   /** Side menu keys (XgramDrawerItemsController): hidden there, hidden here, and in the same order. */
-  private static final String[] DEST_KEY = {null, "calls", "contacts", "saved", "settings"};
+  private static final String[] DEST_KEY = {null, "calls", "contacts", "saved", "settings", "profile", "activity"};
+
+  /** The label of a destination (0 outside the arrays). */
+  static int labelOf (int dest) {
+    return dest >= 0 && dest < DEST_LABEL.length ? DEST_LABEL[dest] : 0;
+  }
+
+  @Nullable
+  static String keyOf (int dest) {
+    return dest >= 0 && dest < DEST_KEY.length ? DEST_KEY[dest] : null;
+  }
 
   /** Missed calls are looked up again at most this often while screens change (a missed call looks them up at once). */
   static final long MISSED_CHECK_INTERVAL_MS = 30_000L;
@@ -276,6 +294,7 @@ public final class XgramNavRail {
     ThemeManager.instance().addThemeListener(themeListener);
     TdlibManager.instance().global().addCallListener(callListener);
     TdlibManager.instance().global().addCountersListener(badgeSettingsListener);
+    com.fahadali.xgram.activity.XgramActivityBadge.instance().addListener(activityBadgeListener);
   }
 
   // API for XgramTwoPane and the settings pages
@@ -300,18 +319,32 @@ public final class XgramNavRail {
 
   /**
    * The destinations, in this order: Chats and Calls (the chat list's pages; with folders Calls is a screen, as in the
-   * side menu, and the side menu settings can hide it then), then Contacts, Saved messages and Settings as the side
-   * menu has them (hidden there, hidden here; in its order).
+   * side menu, and the side menu settings can hide it then), then Activity (while it is on), Contacts, Saved messages
+   * and Settings as the side menu has them (hidden there, hidden here; in its order).
    */
   static int[] destinations (@Nullable MainController list) {
+    return destinations(list, false);
+  }
+
+  /**
+   * {@code forBar}: the classic bottom bar's (XgramNavBar), which shares these. Activity is a screen of the rail, in
+   * the side menu's order (first by default); on the bar it can only take Calls' place (In the bottom bar), so the bar
+   * never gets a sixth item.
+   */
+  static int[] destinations (@Nullable MainController list, boolean forBar) {
     XgramSettings xgram = XgramSettings.instance();
     ArrayList<Integer> result = new ArrayList<>();
     result.add(DEST_CHATS);
     boolean callsPage = list == null || list.xgramHasCallsPage();
-    if (callsPage || !xgram.drawerItemHidden("calls")) {
+    if (forBar && com.fahadali.xgram.activity.XgramActivity.barHasActivity()) {
+      result.add(DEST_ACTIVITY); // instead of Calls (Calls stays a page of the chat list, or in the side menu)
+    } else if (callsPage || !xgram.drawerItemHidden("calls")) {
       result.add(DEST_CALLS);
     }
     ArrayList<Integer> screens = new ArrayList<>();
+    if (!forBar && hasActivityDestination()) {
+      screens.add(DEST_ACTIVITY);
+    }
     if (!xgram.drawerItemHidden("contacts")) {
       screens.add(DEST_CONTACTS);
     }
@@ -326,6 +359,11 @@ public final class XgramNavRail {
       array[i] = result.get(i);
     }
     return array;
+  }
+
+  /** Activity is one of the rail's destinations: while it is on, unless it is hidden in the side menu (Side menu items). */
+  public static boolean hasActivityDestination () {
+    return com.fahadali.xgram.activity.XgramActivity.isOn() && !XgramSettings.instance().drawerItemHidden("activity");
   }
 
   /** Whether the menu button and {@code count} destinations fit a window {@code heightDp} tall above its bottom inset. */
@@ -346,6 +384,7 @@ public final class XgramNavRail {
     MainController root = owner.railRoot();
     setBadgeTdlib(root != null ? root.tdlib() : null);
     updateUnreadBadge(); // cheap, repaints only on a change (badge settings changed on a screen that just closed)
+    updateActivityBadge();
     setSelected(computeSelected(), rail.isLaidOut());
     refreshMissedCalls(false);
   }
@@ -372,6 +411,7 @@ public final class XgramNavRail {
     ThemeManager.instance().removeThemeListener(themeListener);
     TdlibManager.instance().global().removeCallListener(callListener);
     TdlibManager.instance().global().removeCountersListener(badgeSettingsListener);
+    com.fahadali.xgram.activity.XgramActivityBadge.instance().removeListener(activityBadgeListener);
   }
 
   private void invalidateAll () {
@@ -404,9 +444,37 @@ public final class XgramNavRail {
   }
 
   private int computeSelected () {
+    if (indexOf(destinations, DEST_ACTIVITY) != -1 && isActivityOnScreen()) {
+      return DEST_ACTIVITY;
+    }
     MainController list = owner.railChatList();
     int dest = list != null && list.xgramOnCallsPage() ? DEST_CALLS : DEST_CHATS;
     return indexOf(destinations, dest) != -1 ? dest : DEST_CHATS;
+  }
+
+  /** Activity is the top of the chat list pane (two panes), or the screen on top (one pane). */
+  private boolean isActivityOnScreen () {
+    if (owner.isActive()) {
+      return XgramTwoPane.isOnLeftTop(context, com.fahadali.xgram.activity.XgramActivityController.class);
+    }
+    NavigationController navigation = context.navigation();
+    return navigation != null && navigation.getCurrentStackItem() instanceof com.fahadali.xgram.activity.XgramActivityController;
+  }
+
+  // Activity's badge (its count of new items, while Unread badge is on)
+  private final com.fahadali.xgram.activity.XgramActivityBadge.Listener activityBadgeListener = this::updateActivityBadge;
+  private int activityCount;
+
+  private void updateActivityBadge () {
+    if (destroyed) {
+      return;
+    }
+    MainController root = owner.railRoot();
+    int count = com.fahadali.xgram.activity.XgramActivityBadge.badgeCount(root != null ? root.tdlib() : null);
+    if (count != activityCount) {
+      activityCount = count;
+      rail.setBadge(DEST_ACTIVITY, count, false);
+    }
   }
 
   private static int indexOf (int[] array, int value) {
@@ -650,6 +718,23 @@ public final class XgramNavRail {
         open(new SettingsController(context, tdlib));
         break;
       }
+      case DEST_ACTIVITY: {
+        if (owner.isActive()) {
+          // Two panes: in the chat list pane (again: back to its top)
+          MainController list = owner.railChatList();
+          com.fahadali.xgram.activity.XgramActivity.open(list != null ? list : root);
+        } else {
+          // One pane: it replaces what is above the chat list, as the other screens do (again: back to its top)
+          ViewController<?> top = navigation.getCurrentStackItem();
+          if (top instanceof com.fahadali.xgram.activity.XgramActivityController && top.tdlib() == tdlib) {
+            ((com.fahadali.xgram.activity.XgramActivityController) top).scrollToTopOrReload();
+          } else {
+            open(new com.fahadali.xgram.activity.XgramActivityController(context, tdlib));
+          }
+        }
+        setSelected(computeSelected(), true);
+        break;
+      }
     }
   }
 
@@ -876,7 +961,10 @@ public final class XgramNavRail {
 
   /** "Chats, 5 unread" / "Calls, 2 missed" for screen readers. */
   static String describe (int dest, int count, boolean dot) {
-    String label = Lang.getString(DEST_LABEL[dest]);
+    String label = Lang.getString(labelOf(dest));
+    if (dest == DEST_ACTIVITY) {
+      return count > 0 ? Lang.getString(R.string.XgramActivityNew, count) : label;
+    }
     if (count > 0) {
       return Lang.getString(dest == DEST_CALLS ? R.string.XgramNavRailMissed : R.string.XgramNavRailUnread, label, Strings.buildCounter(count));
     }
@@ -1007,6 +1095,8 @@ public final class XgramNavRail {
           item.setBadge(unreadCount, unreadDot);
         } else if (dest == DEST_CALLS) {
           item.setBadge(missedCount, false);
+        } else if (dest == DEST_ACTIVITY) {
+          item.setBadge(activityCount, false);
         }
         items.add(item);
         addView(item);
@@ -1339,9 +1429,10 @@ public final class XgramNavRail {
       // Destinations: each row exactly over its collapsed one
       for (int i = 0; i < destinations.length; i++) {
         final int dest = destinations[i];
-        String badge = dest == DEST_CHATS ? badgeText(unreadCount) : dest == DEST_CALLS ? badgeText(missedCount) : null;
+        int count = dest == DEST_CHATS ? unreadCount : dest == DEST_CALLS ? missedCount : dest == DEST_ACTIVITY ? activityCount : 0;
+        String badge = count > 0 ? badgeText(count) : null;
         RowView row = new RowView(context, true, restIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]), activeIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]), Lang.getString(DEST_LABEL[dest]), badge);
-        row.setContentDescription(describe(dest, dest == DEST_CHATS ? unreadCount : dest == DEST_CALLS ? missedCount : 0, dest == DEST_CHATS && unreadDot));
+        row.setContentDescription(describe(dest, count, dest == DEST_CHATS && unreadDot));
         row.setActive(dest == selected);
         row.setOnClickListener(v -> {
           markShown();
@@ -1374,6 +1465,7 @@ public final class XgramNavRail {
       // The rest of the side menu, in its order (destinations are above), then its switches
       XgramSettings xgram = XgramSettings.instance();
       ArrayList<Entry> entries = new ArrayList<>();
+      // (Activity is a destination: among the rows above)
       if (!xgram.drawerItemHidden("hub")) {
         entries.add(new Entry("hub", R.id.btn_xgramHub, R.drawable.baseline_stars_24, R.drawable.xgl_stars, R.string.XgramHub));
       }

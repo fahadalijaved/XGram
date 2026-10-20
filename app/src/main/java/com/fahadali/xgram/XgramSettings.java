@@ -1509,7 +1509,10 @@ public final class XgramSettings {
   public static final int NAV_PROFILE_BUTTON = 0, NAV_PROFILE_TAB = 1, NAV_PROFILE_OFF = 2;
   /** The bar's colours: Standard (surface container, default) or Vibrant (primary container). */
   public static final int NAV_STYLE_STANDARD = 0, NAV_STYLE_VIBRANT = 1;
-  /** Tabs by bit of XgramNavToolbar.DEST_* (Chats 0, Calls 1, Contacts 2, Saved 3, Settings 4): Telegram's set. */
+  /**
+   * Tabs by bit of XgramNavToolbar.DEST_* (Chats 0, Calls 1, Contacts 2, Saved 3, Settings 4, Activity 6; the profile
+   * has its own setting): Telegram's set. Activity's bit counts only while Activity is on.
+   */
   public static final int NAV_TABS_DEFAULT = (1 << 0) | (1 << 2) | (1 << 4);
 
   private volatile Integer navTabs, navProfile, navStyle;
@@ -1524,8 +1527,8 @@ public final class XgramSettings {
   }
 
   public void setNavTabOn (int dest, boolean on) {
-    if (dest <= 0 || dest > 4) {
-      return; // Chats is always a tab; the profile has its own setting
+    if (dest <= 0 || dest == 5 || dest > 6) {
+      return; // Chats is always a tab; the profile (5) has its own setting; 6 is Activity
     }
     int value = on ? navTabs() | (1 << dest) : navTabs() & ~(1 << dest);
     navTabs = value;
@@ -1615,6 +1618,139 @@ public final class XgramSettings {
     putInt(KEY_NAV_STYLE, NAV_STYLE_STANDARD);
     putInt(KEY_NAV_FAB, NAV_FAB_SIDE);
     put(KEY_NAV_HIDE_DRAWER, false);
+  }
+
+  // Activity (Chat list > Activity, com.fahadali.xgram.activity): every mention, reply and reaction in one place.
+  // Read by the TDLib thread for every new message, so cached. The items themselves are in the activity's own store.
+
+  public static final String KEY_ACTIVITY_ON = "xgram_activity_on", KEY_ACTIVITY_REACTIONS = "xgram_activity_reactions",
+    KEY_ACTIVITY_MUTED = "xgram_activity_muted", KEY_ACTIVITY_DISCUSSION = "xgram_activity_discussion",
+    KEY_ACTIVITY_LOOKBACK = "xgram_activity_lookback", KEY_ACTIVITY_BADGE = "xgram_activity_badge",
+    KEY_ACTIVITY_HEADER = "xgram_activity_header", KEY_ACTIVITY_BAR = "xgram_activity_bar";
+  /** The classic bottom bar (XgramNavBar): no Activity (default), or Activity in Calls' place. */
+  public static final int ACTIVITY_BAR_OFF = 0, ACTIVITY_BAR_CALLS = 1;
+  /** Prefix of every Activity setting (listeners follow them all). */
+  public static final String KEY_ACTIVITY_PREFIX = "xgram_activity_";
+
+  private volatile Boolean activityOn, activityReactions, activityMuted, activityDiscussion, activityLookBack, activityBadge, activityHeader;
+
+  private Boolean readBoolean (String key, boolean defaultValue) {
+    return pmc().getBoolean(key, defaultValue);
+  }
+
+  /** Activity is collected, synced and shown. Off: nothing is collected, every way in is hidden, saved items stay. */
+  public boolean activityOn () {
+    Boolean value = activityOn;
+    if (value == null) {
+      activityOn = value = readBoolean(KEY_ACTIVITY_ON, true);
+    }
+    return value;
+  }
+
+  public void setActivityOn (boolean value) {
+    activityOn = value;
+    put(KEY_ACTIVITY_ON, value);
+  }
+
+  /** Reactions to your messages are collected and shown. */
+  public boolean activityReactions () {
+    Boolean value = activityReactions;
+    if (value == null) {
+      activityReactions = value = readBoolean(KEY_ACTIVITY_REACTIONS, true);
+    }
+    return value;
+  }
+
+  public void setActivityReactions (boolean value) {
+    activityReactions = value;
+    put(KEY_ACTIVITY_REACTIONS, value);
+  }
+
+  /** Also from muted chats (mentions that still notify you always show). Applied when shown, not when collected. */
+  public boolean activityMuted () {
+    Boolean value = activityMuted;
+    if (value == null) {
+      activityMuted = value = readBoolean(KEY_ACTIVITY_MUTED, false);
+    }
+    return value;
+  }
+
+  public void setActivityMuted (boolean value) {
+    activityMuted = value;
+    put(KEY_ACTIVITY_MUTED, value);
+  }
+
+  /** Channels' discussion groups and the Replies chat. Applied when shown. */
+  public boolean activityDiscussion () {
+    Boolean value = activityDiscussion;
+    if (value == null) {
+      activityDiscussion = value = readBoolean(KEY_ACTIVITY_DISCUSSION, true);
+    }
+    return value;
+  }
+
+  public void setActivityDiscussion (boolean value) {
+    activityDiscussion = value;
+    put(KEY_ACTIVITY_DISCUSSION, value);
+  }
+
+  /** Once, a bounded search for the last month's mentions in the most active groups. */
+  public boolean activityLookBack () {
+    Boolean value = activityLookBack;
+    if (value == null) {
+      activityLookBack = value = readBoolean(KEY_ACTIVITY_LOOKBACK, true);
+    }
+    return value;
+  }
+
+  public void setActivityLookBack (boolean value) {
+    activityLookBack = value;
+    put(KEY_ACTIVITY_LOOKBACK, value);
+  }
+
+  /** A count of new items on every way into Activity. */
+  public boolean activityBadge () {
+    Boolean value = activityBadge;
+    if (value == null) {
+      activityBadge = value = readBoolean(KEY_ACTIVITY_BADGE, true);
+    }
+    return value;
+  }
+
+  public void setActivityBadge (boolean value) {
+    activityBadge = value;
+    put(KEY_ACTIVITY_BADGE, value);
+  }
+
+  /** A bell in the chat list's header while the navigation has no Activity. */
+  public boolean activityHeader () {
+    Boolean value = activityHeader;
+    if (value == null) {
+      activityHeader = value = readBoolean(KEY_ACTIVITY_HEADER, true);
+    }
+    return value;
+  }
+
+  public void setActivityHeader (boolean value) {
+    activityHeader = value;
+    put(KEY_ACTIVITY_HEADER, value);
+  }
+
+  private volatile Integer activityBar;
+
+  /** Activity on the classic bottom bar: ACTIVITY_BAR_OFF (default) or ACTIVITY_BAR_CALLS (in Calls' place). */
+  public int activityBar () {
+    Integer value = activityBar;
+    if (value == null) {
+      activityBar = value = pmc().getInt(KEY_ACTIVITY_BAR, ACTIVITY_BAR_OFF) == ACTIVITY_BAR_CALLS ? ACTIVITY_BAR_CALLS : ACTIVITY_BAR_OFF;
+    }
+    return value;
+  }
+
+  public void setActivityBar (int mode) {
+    int value = mode == ACTIVITY_BAR_CALLS ? ACTIVITY_BAR_CALLS : ACTIVITY_BAR_OFF;
+    activityBar = value;
+    putInt(KEY_ACTIVITY_BAR, value);
   }
 
   // Settings search: the results opened last (search hit keys, newest first), shown before anything is typed.

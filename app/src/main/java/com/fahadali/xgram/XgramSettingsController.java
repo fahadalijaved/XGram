@@ -440,6 +440,34 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           setReason(view, XgramSettingDeps.hideAllChatsReason(tdlib));
         } else if (id == R.id.btn_xgramPullToNext) {
           view.getToggler().setRadioEnabled(settings.pullToNext(), isUpdate);
+        } else if (id == R.id.btn_xgramActivityShow) {
+          view.getToggler().setRadioEnabled(settings.activityOn(), isUpdate);
+        } else if (id == R.id.btn_xgramActivityReactions) {
+          view.getToggler().setRadioEnabled(settings.activityReactions(), isUpdate);
+          setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityMuted) {
+          view.getToggler().setRadioEnabled(settings.activityMuted(), isUpdate);
+          setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityDiscussion) {
+          view.getToggler().setRadioEnabled(settings.activityDiscussion(), isUpdate);
+          setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityLookBack) {
+          view.getToggler().setRadioEnabled(settings.activityLookBack(), isUpdate);
+          setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityBadge) {
+          view.getToggler().setRadioEnabled(settings.activityBadge(), isUpdate);
+          setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityHeader) {
+          view.getToggler().setRadioEnabled(settings.activityHeader(), isUpdate);
+          setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityDebugThrow) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.activity.XgramActivity.debugCollectorThrows(), isUpdate);
+        } else if (id == R.id.btn_xgramActivityBar) {
+          view.setData(settings.activityBar() == XgramSettings.ACTIVITY_BAR_CALLS ? R.string.XgramActivityBarCalls : R.string.XgramActivityBarOff);
+          setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityHidden) {
+          int hidden = com.fahadali.xgram.activity.XgramActivityStore.instance().summary(tdlib.id()).hiddenCount();
+          view.setData(hidden == 0 ? Lang.getString(R.string.XgramNone) : hidden == 1 ? Lang.getString(R.string.XgramActivityHiddenCountOne) : Lang.getString(R.string.XgramActivityHiddenCountMany, hidden));
         } else if (id == R.id.btn_xgramR7ChannelReactions) {
           view.getToggler().setRadioEnabled(settings.channelReactions(), isUpdate);
         } else if (id == R.id.btn_xgramSaveLastSeen) {
@@ -787,6 +815,36 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       link(R.id.btn_xgramChatActionsOrder, R.string.XgramChatActionsOrder)
     );
 
+    // XGram: Activity (com.fahadali.xgram.activity), every mention, reply and reaction in one place
+    items.add(header(R.string.XgramActivity));
+    addRows(items, toggle(R.id.btn_xgramActivityShow, R.string.XgramActivityShow, R.string.XgramActivityShowInfo));
+    addRows(items,
+      toggle(R.id.btn_xgramActivityReactions, R.string.XgramActivityIncludeReactions, R.string.XgramActivityIncludeReactionsInfo),
+      toggle(R.id.btn_xgramActivityMuted, R.string.XgramActivityIncludeMuted, R.string.XgramActivityIncludeMutedInfo),
+      toggle(R.id.btn_xgramActivityDiscussion, R.string.XgramActivityIncludeDiscussion, R.string.XgramActivityIncludeDiscussionInfo),
+      toggle(R.id.btn_xgramActivityLookBack, R.string.XgramActivityLookBack, R.string.XgramActivityLookBackInfo),
+      toggle(R.id.btn_xgramActivityBadge, R.string.XgramActivityBadge, R.string.XgramActivityBadgeInfo),
+      toggle(R.id.btn_xgramActivityHeader, R.string.XgramActivityHeader, R.string.XgramActivityHeaderInfo)
+    );
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
+      // The classic bottom bar (Expressive design has the floating toolbar, whose Activity tab is on its own page)
+      addRows(items, link(R.id.btn_xgramActivityBar, R.string.XgramActivityBar));
+    }
+    addRows(items,
+      link(R.id.btn_xgramActivityHidden, R.string.XgramActivityHiddenChats),
+      new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramActivityClearAll, 0, R.string.XgramActivityClearAll)
+        .setStringValue(Lang.getString(R.string.XgramActivityClearAllInfo))
+        .setTextColorId(org.thunderdog.challegram.theme.ColorId.textNegative)
+    );
+    items.add(description(R.string.XgramActivityLocalNote));
+    if (BuildConfig.DEBUG) {
+      // Debug builds: a flood wait without asking Telegram for one (the sync, Mark all as read), and collector errors
+      addRows(items,
+        new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityDebugFlood, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugFlood),
+        toggle(R.id.btn_xgramActivityDebugThrow, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugThrow, R.string.XgramActivityDebugThrowInfo)
+      );
+    }
+
     items.add(header(R.string.XgramHeaderScreen));
     addRows(items,
       toggle(R.id.btn_xgramHideFab, R.string.XgramHideFab, R.string.XgramHideFabSub),
@@ -1024,6 +1082,34 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     if (index != -1 && adapter.getItems().get(index).setStringIfChanged(text)) {
       adapter.updateItem(index);
     }
+  }
+
+  /** Activity locks its other rows while it is off. */
+  private void updateActivityRows () {
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityReactions);
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityMuted);
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityDiscussion);
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityLookBack);
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityBadge);
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityHeader);
+    adapter.updateValuedSettingById(R.id.btn_xgramActivityBar);
+  }
+
+  /** Activity on the classic bottom bar: not there, or in Calls' place (the bar follows at once). */
+  private void showActivityBarOptions () {
+    int mode = XgramSettings.instance().activityBar();
+    showSettings(new SettingsWrapBuilder(R.id.btn_xgramActivityBar)
+      .setRawItems(new ListItem[] {
+        new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_xgramActivityBarOff, 0, R.string.XgramActivityBarOff, R.id.btn_xgramActivityBar, mode != XgramSettings.ACTIVITY_BAR_CALLS),
+        new ListItem(ListItem.TYPE_RADIO_OPTION, R.id.btn_xgramActivityBarCalls, 0, R.string.XgramActivityBarCalls, R.id.btn_xgramActivityBar, mode == XgramSettings.ACTIVITY_BAR_CALLS)
+      })
+      .setIntDelegate((settingsId, result) -> {
+        int picked = result.get(R.id.btn_xgramActivityBar);
+        XgramSettings.instance().setActivityBar(picked == R.id.btn_xgramActivityBarCalls ? XgramSettings.ACTIVITY_BAR_CALLS : XgramSettings.ACTIVITY_BAR_OFF);
+        if (adapter != null && !isDestroyed()) {
+          adapter.updateValuedSettingById(R.id.btn_xgramActivityBar);
+        }
+      }));
   }
 
   /** Two-pane layout and Split evenly lock the pane rows below them. */
@@ -1760,6 +1846,58 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramPullToNext) {
       settings.setPullToNext(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramActivityShow) {
+      settings.setActivityOn(adapter.toggleView(v));
+      updateActivityRows();
+      return;
+    } else if (id == R.id.btn_xgramActivityBar) {
+      if (XgramSettingDeps.activityOptionsEnabled()) {
+        showActivityBarOptions(); // off: the reason is under the title
+      }
+      return;
+    } else if (id == R.id.btn_xgramActivityHidden) {
+      navigateTo(new com.fahadali.xgram.activity.XgramActivityHiddenController(context, tdlib));
+      return;
+    } else if (id == R.id.btn_xgramActivityClearAll) {
+      showOptions(Lang.getString(R.string.XgramActivityClearAllConfirm) + "\n\n" + Lang.getString(R.string.XgramActivityClearAllInfo),
+        new int[] {R.id.btn_xgramActivityClearAllConfirm, R.id.btn_cancel},
+        new String[] {Lang.getString(R.string.XgramActivityClearAllButton), Lang.getString(R.string.Cancel)},
+        new int[] {OptionColor.RED, OptionColor.NORMAL},
+        new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24}, (itemView, optionId) -> {
+          if (optionId == R.id.btn_xgramActivityClearAllConfirm) {
+            com.fahadali.xgram.activity.XgramActivityStore.instance().clearAll(tdlib.id());
+            org.thunderdog.challegram.tool.UI.showToast(Lang.getString(R.string.XgramActivityAllCleared), android.widget.Toast.LENGTH_SHORT);
+          }
+          return true;
+        });
+      return;
+    } else if (id == R.id.btn_xgramActivityDebugFlood) {
+      com.fahadali.xgram.activity.XgramActivity.debugInjectFlood();
+      org.thunderdog.challegram.tool.UI.showToast(Lang.getString(R.string.XgramActivityDebugFlood), android.widget.Toast.LENGTH_SHORT);
+      return;
+    } else if (id == R.id.btn_xgramActivityDebugThrow) {
+      com.fahadali.xgram.activity.XgramActivity.setDebugCollectorThrows(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramActivityReactions || id == R.id.btn_xgramActivityMuted || id == R.id.btn_xgramActivityDiscussion ||
+      id == R.id.btn_xgramActivityLookBack || id == R.id.btn_xgramActivityBadge || id == R.id.btn_xgramActivityHeader) {
+      if (!XgramSettingDeps.activityOptionsEnabled()) {
+        return; // the reason is under the title
+      }
+      boolean value = adapter.toggleView(v);
+      if (id == R.id.btn_xgramActivityReactions) {
+        settings.setActivityReactions(value);
+      } else if (id == R.id.btn_xgramActivityMuted) {
+        settings.setActivityMuted(value);
+      } else if (id == R.id.btn_xgramActivityDiscussion) {
+        settings.setActivityDiscussion(value);
+      } else if (id == R.id.btn_xgramActivityLookBack) {
+        settings.setActivityLookBack(value);
+      } else if (id == R.id.btn_xgramActivityBadge) {
+        settings.setActivityBadge(value);
+      } else {
+        settings.setActivityHeader(value);
+      }
       return;
     } else if (id == R.id.btn_xgramR7ChannelReactions) {
       settings.setChannelReactions(adapter.toggleView(v)); // open chats follow (MessagesController listens)
