@@ -187,6 +187,15 @@ public final class XgramSettingDeps {
     return tapToRecordEnabled() ? 0 : R.string.XgramTapToRecordNoButton;
   }
 
+  /** Delay voice and video messages is only read while Undo send is on (XgramUndoSend.mayHoldNotes). */
+  public static boolean undoSendVoiceEnabled () {
+    return s().undoSendSeconds() > 0;
+  }
+
+  public static @StringRes int undoSendVoiceReason () {
+    return undoSendVoiceEnabled() ? 0 : R.string.XgramUndoSendOffReason;
+  }
+
   /**
    * Message menu options that XGram only adds while another setting is on (XgramMessageActions): Summarize needs
    * Telegram AI tools, Edit history needs Save edit history. Their switches change nothing until then.

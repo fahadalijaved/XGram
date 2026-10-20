@@ -899,6 +899,7 @@ public final class XgramDragDrop {
   }
 
   private static void send (Tdlib tdlib, long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions sendOptions, List<TdApi.InputMessageContent> contents) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, chatId); // Undo send: what waits in this chat goes first
     List<TdApi.Function<?>> functions = TD.toFunctions(chatId, topicId, replyTo, sendOptions, contents.toArray(new TdApi.InputMessageContent[0]), true);
     for (TdApi.Function<?> function : functions) {
       tdlib.client().send(function, tdlib.messageHandler());

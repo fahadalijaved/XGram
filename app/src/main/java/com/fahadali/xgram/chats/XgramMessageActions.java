@@ -166,6 +166,7 @@ public final class XgramMessageActions {
     Tdlib tdlib = msg.tdlib();
     long chatId = msg.getChatId();
     if (id == R.id.btn_xgramSaveToSaved) {
+      XgramUndoSend.flushBefore(tdlib, tdlib.selfChatId()); // Undo send: what waits in Saved Messages goes first
       tdlib.send(new TdApi.ForwardMessages(tdlib.selfChatId(), null, chatId, idsOf(msg), new TdApi.MessageSendOptions(), false, false), (result, error) -> tdlib.ui().post(() -> {
         if (error != null) {
           UI.showError(error);
@@ -209,6 +210,7 @@ public final class XgramMessageActions {
     }
     if (id == R.id.btn_xgramRepeat) {
       // "+1": send the same content again as a copy (no "forwarded from" header).
+      XgramUndoSend.flushBefore(tdlib, chatId); // Undo send: what waits in this chat goes first
       tdlib.send(new TdApi.ForwardMessages(chatId, m.getMessageTopicId(), chatId, idsOf(msg), new TdApi.MessageSendOptions(), true, false), (result, error) -> {
         if (error != null) {
           tdlib.ui().post(() -> UI.showError(error));

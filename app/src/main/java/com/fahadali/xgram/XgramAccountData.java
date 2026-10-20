@@ -35,12 +35,16 @@ public final class XgramAccountData {
 
   private static final String[] PREFIXES = {
     "xgram_bm_", "xgram_sb_", "xgram_ln_", "xgram_ghost_ex_", "xgram_ls_", "xgram_lr_", "xgram_tab_", "xgram_tabs_side_",
-    "xgram_cm_", "xgram_cmode_", com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX
+    "xgram_cm_", "xgram_cmode_", com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX,
+    // Undo send: waiting messages (journal), "your message is back" hints, chats where messages don't wait
+    "xgram_usq_", "xgram_usqh_", XgramSettings.KEY_UNDO_SEND_EXCLUDE
   };
 
   /** TDLib thread: the account in this slot logged out. */
   public static void eraseAccount (int accountId) {
     try {
+      // Undo send first: from here on it writes nothing of this account, so its erased journal stays erased.
+      com.fahadali.xgram.chats.XgramUndoSend.forgetAccount(accountId);
       String suffix = accountId + "_";
       LevelDB pmc = Settings.instance().pmc();
       for (String prefix : PREFIXES) {

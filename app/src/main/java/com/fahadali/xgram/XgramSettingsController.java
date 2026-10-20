@@ -500,6 +500,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setEnabled(XgramSettingDeps.inlineVideoStartEnabled());
         } else if (id == R.id.btn_xgramEnterToSend) {
           view.setData(com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(settings.enterToSend()));
+        } else if (id == R.id.btn_xgramUndoSend) {
+          view.setData(com.fahadali.xgram.chats.XgramUndoSend.delayName(settings.undoSendSeconds()));
+        } else if (id == R.id.btn_xgramUndoSendVoice) {
+          view.getToggler().setRadioEnabled(settings.undoSendVoice(), isUpdate);
+          setReason(view, XgramSettingDeps.undoSendVoiceReason());
         } else if (id == R.id.btn_xgramProxyOffVpn) {
           view.getToggler().setRadioEnabled(settings.proxyOffOnVpn(), isUpdate);
           view.setEnabled(XgramSettingDeps.proxyRulesEnabled()); // the note under them says why
@@ -840,6 +845,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(description(R.string.XgramTapToRecordInfo));
     addRows(items, link(R.id.btn_xgramEnterToSend, R.string.XgramEnterToSend));
     items.add(description(R.string.XgramEnterToSendInfo));
+    addRows(items,
+      link(R.id.btn_xgramUndoSend, R.string.XgramUndoSend),
+      toggle(R.id.btn_xgramUndoSendVoice, R.string.XgramUndoSendVoice, R.string.XgramUndoSendVoiceSub)
+    );
+    items.add(description(R.string.XgramUndoSendInfo));
 
     items.add(header(R.string.XgramHeaderTelegramAi));
     addRows(items, toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools, R.string.XgramAiToolsSub));
@@ -1666,6 +1676,26 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         adapter.updateValuedSettingById(R.id.btn_xgramEnterToSend);
         return true;
       });
+      return;
+    } else if (id == R.id.btn_xgramUndoSend) {
+      final int[] delays = XgramSettings.UNDO_SEND_SECONDS;
+      String[] titles = new String[delays.length];
+      int[] ids = new int[delays.length];
+      for (int i = 0; i < delays.length; i++) {
+        titles[i] = com.fahadali.xgram.chats.XgramUndoSend.delayName(delays[i]);
+        ids[i] = i + 1;
+      }
+      showOptions(Lang.getString(R.string.XgramUndoSendChoiceInfo), ids, titles, null, null, (itemView, optionId) -> {
+        settings.setUndoSendSeconds(delays[optionId - 1]);
+        adapter.updateValuedSettingById(R.id.btn_xgramUndoSend);
+        adapter.updateValuedSettingById(R.id.btn_xgramUndoSendVoice); // locked while Undo send is off
+        return true;
+      });
+      return;
+    } else if (id == R.id.btn_xgramUndoSendVoice) {
+      if (XgramSettingDeps.undoSendVoiceEnabled()) {
+        settings.setUndoSendVoice(adapter.toggleView(v));
+      }
       return;
     } else if (id == R.id.btn_xgramInputButtons) {
       navigateTo(new com.fahadali.xgram.chats.XgramInputButtonsController(context, tdlib));

@@ -648,6 +648,10 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       Log.i("INITIALIZATION: Tdlib.newClient() -> %dms", SystemClock.uptimeMillis() - ms);
     }
 
+    // XGram: Undo send, messages a crash kept from being sent. Last: waiting for the user wakes the client, which
+    // must not start before the cache and the managers exist (TDLib's first updates would find them null).
+    com.fahadali.xgram.chats.XgramUndoSend.attach(this);
+
     Settings.instance().addNewSettingsListener(this);
   }
 
@@ -4841,6 +4845,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void sendMessage (long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions options, TdApi.InputMessageContent inputMessageContent, @Nullable RunnableData<TdApi.Message> after) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendMessage(chatId, topicId, replyTo, options, null, inputMessageContent), after != null ? result -> {
       messageHandler.onResult(result);
       after.runWithData(result instanceof TdApi.Message ? (TdApi.Message) result : null);
@@ -4848,6 +4853,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void resendMessages (long chatId, long[] messageIds) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.ResendMessages(chatId, messageIds, null, 0), messageHandler());
   }
 
@@ -5154,14 +5160,17 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void forwardMessage (long chatId, @Nullable TdApi.MessageTopic topicId, long fromChatId, long messageId, TdApi.MessageSendOptions options) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.ForwardMessages(chatId, topicId, fromChatId, new long[] {messageId}, options, false, false), messageHandler());
   }
 
   public void sendInlineQueryResult (long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions options, long queryId, String resultId) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendInlineQueryResultMessage(chatId, topicId, replyTo, options, queryId, resultId, false), messageHandler());
   }
 
   public void sendBotStartMessage (long botUserId, long chatId, String parameter) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendBotStartMessage(botUserId, chatId, parameter), messageHandler());
   }
 
@@ -11614,7 +11623,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
     final int timeToSend = (int) cache().getSlowModeDelayExpiresIn(ChatId.toSupergroupId(chatId), TimeUnit.SECONDS);
     if (timeToSend == 0) {
-      return null;
+      // XGram: Undo send. A message waits here: Telegram's timer only starts once it is sent, but a second one now would
+      // be refused (SLOWMODE_WAIT), so every way of sending refuses with this hint.
+      return com.fahadali.xgram.chats.XgramUndoSend.blocksSlowMode(this, chatId) ? Lang.getString(R.string.XgramUndoSendSlowMode) : null;
     }
 
     final int minutes = timeToSend / 60;
