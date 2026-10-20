@@ -199,6 +199,11 @@ public final class XgramSnoozedRowView extends View {
     if (chevron != null) {
       reserve += Screen.dp(CHEVRON_DP) + Screen.dp(4f);
     }
+    if (m3 && state != null && state.unread) {
+      // The unread dot is centred where the texts would end (8dp before the chip): its outer half (3dp), then the
+      // same 8dp gap before the texts
+      reserve += Screen.dp(3f) + Screen.dp(8f);
+    }
     return reserve;
   }
 

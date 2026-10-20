@@ -136,13 +136,14 @@ fun ChatListPage() {
         host.choose(
           ChoiceSpec(
             title = s(R.string.XgramLaterWakeEarly),
-            info = s(R.string.XgramLaterWakeToMeSub),
             options = listOf(
               s(R.string.XgramLaterWakeToMe) to XgramLaterRecord.WAKE_TO_ME,
               s(R.string.XgramLaterWakeAny) to XgramLaterRecord.WAKE_ANY,
               s(R.string.XgramLaterWakeTimeOnly) to XgramLaterRecord.WAKE_TIME_ONLY
             ),
-            selected = XgramLater.wakeEarlyMode()
+            selected = XgramLater.wakeEarlyMode(),
+            // XGram Later: the sub-line belongs to "On messages to me" only
+            subtitles = listOf(s(R.string.XgramLaterWakeToMeSub), null, null)
           ) { mode ->
             XgramLater.setWakeEarlyMode(mode)
             host.changed()

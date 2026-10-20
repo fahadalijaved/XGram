@@ -53,6 +53,8 @@ public final class XgramLaterRecord {
   public final int topicId;
   public final int flags;
   @NonNull public final String note, title, preview;
+  /** The forum topic's name when the item was set (a message in a forum topic), else empty: "Chat › Topic". */
+  @NonNull public final String topic;
 
   private XgramLaterRecord (Builder b) {
     this.accountId = b.accountId;
@@ -74,6 +76,7 @@ public final class XgramLaterRecord {
     this.note = b.note != null ? b.note : "";
     this.title = b.title != null ? b.title : "";
     this.preview = b.preview != null ? b.preview : "";
+    this.topic = b.topic != null ? b.topic : "";
   }
 
   public static String key (int accountId, long chatId, long messageId) {
@@ -162,6 +165,9 @@ public final class XgramLaterRecord {
       o.put("note", note);
       o.put("title", title);
       o.put("preview", preview);
+      if (!topic.isEmpty()) {
+        o.put("topic", topic);
+      }
       return o.toString();
     } catch (Throwable t) {
       return "{}";
@@ -214,6 +220,7 @@ public final class XgramLaterRecord {
       .note(o.optString("note", ""))
       .title(o.optString("title", ""))
       .preview(o.optString("preview", ""))
+      .topic(o.optString("topic", ""))
       .build();
   }
 
@@ -222,7 +229,8 @@ public final class XgramLaterRecord {
     return other != null && key.equals(other.key) && kind == other.kind && state == other.state && wakeAt == other.wakeAt &&
       createdAt == other.createdAt && dueAt == other.dueAt && doneAt == other.doneAt && doneReason == other.doneReason &&
       wakeMode == other.wakeMode && since == other.since && mentionsAt == other.mentionsAt && topicId == other.topicId &&
-      flags == other.flags && note.equals(other.note) && title.equals(other.title) && preview.equals(other.preview);
+      flags == other.flags && note.equals(other.note) && title.equals(other.title) && preview.equals(other.preview) &&
+      topic.equals(other.topic);
   }
 
   public static final class Builder {
@@ -234,7 +242,7 @@ public final class XgramLaterRecord {
     private int doneReason = DONE_USER, wakeMode = WAKE_TO_ME;
     private long since;
     private int mentionsAt, topicId, flags;
-    private String note = "", title = "", preview = "";
+    private String note = "", title = "", preview = "", topic = "";
 
     public Builder (int accountId, long chatId, long messageId, int kind) {
       this.accountId = accountId;
@@ -262,6 +270,7 @@ public final class XgramLaterRecord {
       this.note = r.note;
       this.title = r.title;
       this.preview = r.preview;
+      this.topic = r.topic;
     }
 
     /** A copy for another account slot (a restored backup). */
@@ -281,6 +290,7 @@ public final class XgramLaterRecord {
       this.note = r.note;
       this.title = r.title;
       this.preview = r.preview;
+      this.topic = r.topic;
     }
 
     public Builder kind (int kind) {
@@ -373,6 +383,11 @@ public final class XgramLaterRecord {
 
     public Builder preview (@Nullable String preview) {
       this.preview = preview != null ? preview : "";
+      return this;
+    }
+
+    public Builder topic (@Nullable String topic) {
+      this.topic = topic != null ? topic : "";
       return this;
     }
 

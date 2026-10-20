@@ -147,7 +147,8 @@ final class XgramLaterNotifications {
     }
     final boolean hidden = contentHidden(r);
     final boolean hideTitle = r.hasFlag(XgramLaterRecord.FLAG_SECRET) || passcodeHides();
-    final String chatTitle = r.title.isEmpty() || hideTitle ? Lang.getString(R.string.XgramLater) : r.title;
+    // A message in a forum topic: "Chat › Topic", as the chat's own notifications
+    final String chatTitle = r.title.isEmpty() || hideTitle ? Lang.getString(R.string.XgramLater) : r.topic.isEmpty() ? r.title : r.title + " › " + r.topic;
     String title, text;
     @Nullable String bigText = null;
     if (r.isSnooze()) {
@@ -203,7 +204,8 @@ final class XgramLaterNotifications {
     if (!canPost(ctx, CHANNEL_REMINDERS)) {
       return;
     }
-    String text = Lang.getString(R.string.XgramLaterNotifSummary, count);
+    // A restored backup posts it for any number due, so one item needs the singular
+    String text = count == 1 ? Lang.getString(R.string.XgramLaterNotifSummaryOne) : Lang.getString(R.string.XgramLaterNotifSummary, count);
     Intent intent = Intents.valueOfMain(accountId);
     NotificationCompat.Builder b = base(ctx, CHANNEL_REMINDERS, System.currentTimeMillis())
       .setContentTitle(Lang.getString(R.string.XgramLater))

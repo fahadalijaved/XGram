@@ -149,11 +149,16 @@ public final class XgramLater {
     }
   }
 
-  /** The classic settings page's choice (Telegram X's radio popup). */
+  /**
+   * The classic settings page's choice (Telegram X's radio popup). Its one-line radio rows have no room for a sub-line,
+   * so what "On messages to me" covers is the sheet's supporting text, naming that option.
+   */
   public static void showWakeEarlyPicker (ViewController<?> c, @Nullable Runnable after) {
     final int mode = wakeEarlyMode();
     final int group = org.thunderdog.challegram.R.id.btn_xgramLaterWakeEarly;
-    c.showSettings(new org.thunderdog.challegram.navigation.SettingsWrapBuilder(group).setRawItems(new org.thunderdog.challegram.ui.ListItem[] {
+    c.showSettings(new org.thunderdog.challegram.navigation.SettingsWrapBuilder(group)
+      .addHeaderItem(org.thunderdog.challegram.core.Lang.getString(org.thunderdog.challegram.R.string.XgramLaterWakeToMeInfo))
+      .setRawItems(new org.thunderdog.challegram.ui.ListItem[] {
       new org.thunderdog.challegram.ui.ListItem(org.thunderdog.challegram.ui.ListItem.TYPE_RADIO_OPTION, org.thunderdog.challegram.R.id.btn_xgramLaterWakeToMe, 0, org.thunderdog.challegram.R.string.XgramLaterWakeToMe, group, mode == XgramLaterRecord.WAKE_TO_ME),
       new org.thunderdog.challegram.ui.ListItem(org.thunderdog.challegram.ui.ListItem.TYPE_RADIO_OPTION, org.thunderdog.challegram.R.id.btn_xgramLaterWakeAny, 0, org.thunderdog.challegram.R.string.XgramLaterWakeAny, group, mode == XgramLaterRecord.WAKE_ANY),
       new org.thunderdog.challegram.ui.ListItem(org.thunderdog.challegram.ui.ListItem.TYPE_RADIO_OPTION, org.thunderdog.challegram.R.id.btn_xgramLaterWakeTimeOnly, 0, org.thunderdog.challegram.R.string.XgramLaterWakeTimeOnly, group, mode == XgramLaterRecord.WAKE_TIME_ONLY)

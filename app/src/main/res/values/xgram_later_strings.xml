@@ -183,6 +183,7 @@
   <string name="XgramLaterNotifGeneric">You have a reminder</string>
   <string name="XgramLaterNotifSecret">Reminder about a message in a secret chat</string>
   <string name="XgramLaterNotifSummary">%1$d reminders are due</string>
+  <string name="XgramLaterNotifSummaryOne">1 reminder is due</string>
   <string name="XgramLaterNotifPromptTitle">Allow notifications for reminders</string>
   <string name="XgramLaterNotifPromptReason">XGram can\'t tell you a reminder is due without notifications. It still shows in Later.</string>
 
@@ -195,6 +196,7 @@
   <string name="XgramLaterWakeEarly">Wake snoozed chats early</string>
   <string name="XgramLaterWakeToMe">On messages to me</string>
   <string name="XgramLaterWakeToMeSub">Private messages, mentions and replies</string>
+  <string name="XgramLaterWakeToMeInfo">On messages to me: private messages, mentions and replies.</string>
   <string name="XgramLaterWakeAny">On any new message</string>
   <string name="XgramLaterWakeTimeOnly">Only at the time set</string>
   <string name="XgramLaterExact">Exact reminder times</string>

@@ -63,7 +63,7 @@ final class XgramLaterSelfTest {
           XgramLaterRecord r = new XgramLaterRecord.Builder(3, -1001234567890L, 77L << 20, kind)
             .state(state).wakeAt(1_700_000_000_000L).createdAt(1_699_000_000_000L).dueAt(state > 0 ? 1_700_000_001_000L : 0)
             .doneAt(state == 2 ? 1_700_000_002_000L : 0).doneReason(XgramLaterRecord.DONE_REPLIED).wakeMode(XgramLaterRecord.WAKE_ANY)
-            .since(55).mentionsAt(2).topicId(9).flags(127).note(note).title("Design team").preview("Hi there").build();
+            .since(55).mentionsAt(2).topicId(9).topic("Releases").flags(127).note(note).title("Design team").preview("Hi there").build();
           XgramLaterRecord back = XgramLaterRecord.fromJson(3, r.chatId, r.messageId, r.toJson());
           check(r.sameAs(back), "JSON round trip kind " + kind + " state " + state);
         }
@@ -75,6 +75,9 @@ final class XgramLaterSelfTest {
       .wakeAt(1_700_000_000_000L).createdAt(1_699_000_000_000L).wakeMode(XgramLaterRecord.WAKE_TIME_ONLY).since(77L << 20)
       .mentionsAt(3).flags(XgramLaterRecord.FLAG_RESYNC | XgramLaterRecord.FLAG_SECRET).note("Weekend 😀").title("Design team").build();
     check(timedSnooze.sameAs(XgramLaterRecord.fromJson(2, timedSnooze.chatId, 0, timedSnooze.toJson())), "JSON round trip timed snooze");
+    XgramLaterRecord noTopic = XgramLaterRecord.fromJson(3, -1001234567890L, 5, "{\"v\":1,\"kind\":1,\"state\":0,\"topicId\":9,\"title\":\"Design team\"}");
+    check(noTopic != null && noTopic.topicId == 9 && noTopic.topic.isEmpty(), "a record stored before topic names reads with none");
+    check(noTopic != null && noTopic.sameAs(XgramLaterRecord.fromJson(3, noTopic.chatId, noTopic.messageId, noTopic.toJson())), "JSON round trip without a topic name");
     check(XgramLaterRecord.fromJson(1, 42, 0, "{\"v\":99,\"kind\":2,\"state\":0}") == null, "a newer version is skipped");
     check(XgramLaterRecord.fromJson(1, 42, 0, "not json") == null, "broken JSON is skipped");
     check(XgramLaterRecord.fromJson(1, 42, 5, snooze.toJson()) == null, "a snooze with a message id is refused");

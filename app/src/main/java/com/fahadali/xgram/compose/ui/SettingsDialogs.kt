@@ -100,7 +100,7 @@ fun ChoiceSheet(spec: ChoiceSpec<*>, onDismiss: () -> Unit) {
         labels.forEachIndexed { index, label ->
           SettingsRadioRow(
             title = label,
-            subtitle = null,
+            subtitle = spec.subtitles.getOrNull(index),
             selected = index == selectedIndex,
             shapes = ListItemDefaults.segmentedShapes(index = index, count = labels.size)
           ) {

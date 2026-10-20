@@ -357,9 +357,54 @@ final class XgramLaterEngine {
       .createdAt(System.currentTimeMillis())
       .since(msg.id)
       .topicId(topicId)
+      .topic(topicId != 0 ? cachedTopicName(tdlib, chatId, topicId) : "")
       .flags(flags)
       .title(tdlib.chatTitle(chatId))
       .preview(preview);
+  }
+
+  /** The forum topic's name when TDLib's topic cache has it, else "". Never waits (the sheet calls it on the UI thread). */
+  static String cachedTopicName (Tdlib tdlib, long chatId, int topicId) {
+    try {
+      org.thunderdog.challegram.telegram.TdlibForumTopicManager.Entry entry = tdlib.topics().find(new org.thunderdog.challegram.telegram.TdlibForumTopicManager.Key(chatId, topicId));
+      return entry != null && entry.value != null ? com.fahadali.xgram.topics.XgramForums.topicTitle(entry.value.info) : "";
+    } catch (Throwable t) {
+      return "";
+    }
+  }
+
+  /**
+   * A forum topic the cache didn't have: its name is asked for once and stored into the record when it comes, unless
+   * the record changed topic or got a name meanwhile. UI thread; the store work runs on the Later thread.
+   */
+  private static void fetchTopicName (Tdlib tdlib, XgramLaterRecord r) {
+    final int accountId = tdlib.id();
+    final String key = r.key;
+    final int topicId = r.topicId;
+    try {
+      tdlib.topics().findOrRequest(new org.thunderdog.challegram.telegram.TdlibForumTopicManager.Key(r.chatId, topicId), (entry, inPlace) -> {
+        if (entry.value == null) {
+          return;
+        }
+        final String name = com.fahadali.xgram.topics.XgramForums.topicTitle(entry.value.info);
+        if (name == null || name.isEmpty()) {
+          return;
+        }
+        post(() -> {
+          XgramLaterRecord cur = XgramLaterStore.get(accountId, key);
+          if (cur == null || cur.topicId != topicId || !cur.topic.isEmpty()) {
+            return;
+          }
+          List<XgramLaterRecord> puts = new ArrayList<>(1);
+          puts.add(cur.buildUpon().topic(name).build());
+          List<XgramLaterRecord> expected = new ArrayList<>(1);
+          expected.add(cur);
+          commit(accountId, puts, null, expected);
+        });
+      });
+    } catch (Throwable t) {
+      Log.w(TAG, "Cannot ask for the topic name", t);
+    }
   }
 
   /** A reminder (or a follow-up) of a message; returns the record it replaced, for Undo. */
@@ -373,9 +418,16 @@ final class XgramLaterEngine {
     } else if (previous != null) {
       b.note(previous.note);
     }
+    XgramLaterRecord r = b.build();
+    if (r.topicId != 0 && r.topic.isEmpty() && previous != null && previous.topicId == r.topicId && !previous.topic.isEmpty()) {
+      r = r.buildUpon().topic(previous.topic).build(); // the topic's name from the record it replaces
+    }
     List<XgramLaterRecord> puts = new ArrayList<>(1);
-    puts.add(b.build());
+    puts.add(r);
     commit(tdlib.id(), puts, null);
+    if (r.topicId != 0 && r.topic.isEmpty()) {
+      fetchTopicName(tdlib, r);
+    }
     return previous;
   }
 

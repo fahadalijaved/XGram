@@ -130,10 +130,10 @@ public final class XgramLaterPicker {
     final XgramLaterRecord existing = t.existing();
     final boolean oneChat = !t.isMessage() && t.chatIds.length == 1;
 
-    // Title and the hint line
+    // Title and the hint line: an item that exists (pending or due) titles the sheet, as its actions below are its own
     CharSequence title;
-    if (existing != null && existing.isPending()) {
-      title = recordTitle(existing);
+    if (existing != null) {
+      title = sheetTitle(existing);
     } else if (t.isMessage()) {
       title = Lang.getString(R.string.XgramLaterSheetMessage);
     } else if (oneChat) {
@@ -398,6 +398,23 @@ public final class XgramLaterPicker {
     }
     String when = XgramLaterTimes.formatWake(r.wakeAt);
     return Lang.getString(r.kind == XgramLaterRecord.KIND_FOLLOWUP ? R.string.XgramLaterFollowUpAt : R.string.XgramLaterReminderAt, when);
+  }
+
+  /**
+   * The sheet's title for an item that exists: {@link #recordTitle}, with "Due · " in front once it came due, as Later's
+   * classic rows. A woken chat says why it is back instead of the snooze it no longer is.
+   */
+  private static String sheetTitle (XgramLaterRecord r) {
+    if (!r.isDue()) {
+      return recordTitle(r);
+    }
+    String what;
+    if (r.isSnooze()) {
+      what = Lang.getString(r.doneReason == XgramLaterRecord.DONE_WOKE ? R.string.XgramLaterDoneWoke : R.string.XgramLaterNotifBack);
+    } else {
+      what = recordTitle(r);
+    }
+    return Lang.getString(R.string.XgramLaterBadgeDue) + " · " + what;
   }
 
   /** "Until they reply", "Until I'm mentioned or replied to" or "Until a new post". */

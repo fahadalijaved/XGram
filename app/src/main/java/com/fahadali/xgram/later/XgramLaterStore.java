@@ -218,6 +218,13 @@ final class XgramLaterStore {
   static void putLocked (XgramLaterRecord r) {
     records.put(r.key, r);
     countTdlibThreadAccess(1, "put");
+    if (org.thunderdog.challegram.BuildConfig.DEBUG) {
+      // What was stored, for `adb logcat -d -s XGramLater` (a secret chat's preview must be empty). Never the
+      // message text, note or titles: only whether a preview was kept.
+      Log.i(TAG, "Stored " + r.key + ": kind " + r.kind + ", state " + r.state + ", flags " + r.flags +
+        (r.hasFlag(XgramLaterRecord.FLAG_SECRET) ? " (secret)" : "") + ", preview " + (r.preview.isEmpty() ? "empty" : "kept") +
+        (r.topicId != 0 ? ", topic " + r.topicId + (r.topic.isEmpty() ? " (no name yet)" : "") : ""));
+    }
     try {
       Settings.instance().putString(r.key, r.toJson());
     } catch (Throwable t) {
