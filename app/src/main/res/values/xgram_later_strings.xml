@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram Later: reminders on messages, follow-ups and snoozed chats (local to this device) -->
+
+  <!-- Ids -->
+  <item name="btn_xgramLaterRemind" type="id" />
+  <item name="btn_xgramLaterSnoozeChat" type="id" />
+  <item name="btn_xgramLaterUnsnooze" type="id" />
+  <item name="more_btn_xgramLaterSnooze" type="id" />
+  <item name="btn_xgramLater" type="id" />
+  <item name="btn_xgramLaterSnoozedRow" type="id" />
+  <item name="btn_xgramLaterItem" type="id" />
+  <item name="btn_xgramLaterDoneLink" type="id" />
+  <item name="btn_xgramLaterSecSnoozed" type="id" />
+  <item name="btn_xgramLaterFixNotifications" type="id" />
+  <item name="btn_xgramLaterFixExact" type="id" />
+  <item name="controller_xgramLater" type="id" />
+  <item name="menu_xgramLater" type="id" />
+  <item name="btn_xgramLaterP20m" type="id" />
+  <item name="btn_xgramLaterP1h" type="id" />
+  <item name="btn_xgramLaterPTonight" type="id" />
+  <item name="btn_xgramLaterPTomorrow" type="id" />
+  <item name="btn_xgramLaterPNextWeek" type="id" />
+  <item name="btn_xgramLaterPCustom" type="id" />
+  <item name="btn_xgramLaterPNote" type="id" />
+  <item name="btn_xgramLaterPUntil" type="id" />
+  <item name="btn_xgramLaterPNoReply1d" type="id" />
+  <item name="btn_xgramLaterPNoReply3d" type="id" />
+  <item name="btn_xgramLaterPNoReply1w" type="id" />
+  <item name="btn_xgramLaterPEditNote" type="id" />
+  <item name="btn_xgramLaterPMarkDone" type="id" />
+  <item name="btn_xgramLaterPCancel" type="id" />
+  <item name="btn_xgramLaterMOpen" type="id" />
+  <item name="btn_xgramLaterMChangeTime" type="id" />
+  <item name="btn_xgramLaterMSnoozeAgain" type="id" />
+  <item name="btn_xgramLaterMEditNote" type="id" />
+  <item name="btn_xgramLaterMMarkDone" type="id" />
+  <item name="btn_xgramLaterMUnsnooze" type="id" />
+  <item name="btn_xgramLaterMRemindAgain" type="id" />
+  <item name="btn_xgramLaterMDelete" type="id" />
+  <item name="btn_xgramLaterMMarkAllDone" type="id" />
+  <item name="btn_xgramLaterMClearDone" type="id" />
+  <item name="btn_xgramLaterMSettings" type="id" />
+  <item name="btn_xgramLaterRowWakeAll" type="id" />
+  <item name="btn_xgramLaterRowHide" type="id" />
+  <item name="btn_xgramLaterRow" type="id" />
+  <item name="btn_xgramLaterRaise" type="id" />
+  <item name="btn_xgramLaterWakeEarly" type="id" />
+  <item name="btn_xgramLaterWakeToMe" type="id" />
+  <item name="btn_xgramLaterWakeAny" type="id" />
+  <item name="btn_xgramLaterWakeTimeOnly" type="id" />
+  <item name="btn_xgramLaterExact" type="id" />
+  <item name="btn_xgramLaterChannel" type="id" />
+
+  <!-- Menu and sheet -->
+  <string name="XgramLater">Later</string>
+  <string name="XgramLaterRemind">Remind me…</string>
+  <string name="XgramLaterReminderAt">Reminder · %1$s</string>
+  <string name="XgramLaterFollowUpAt">Follow-up · %1$s</string>
+  <string name="XgramLaterSheetMessage">Remind me about this message</string>
+  <string name="XgramLaterSheetChat">Snooze %1$s</string>
+  <string name="XgramLaterHintLocal">You\'ll get a notification on this device.</string>
+  <string name="XgramLaterHintHidden">Hidden from your chat list until then.</string>
+  <string name="XgramLaterHintWakeToMe">Messages to you wake it early.</string>
+  <string name="XgramLaterHintWakeAny">Any new message wakes it early.</string>
+  <string name="XgramLaterIn20Min">In 20 minutes</string>
+  <string name="XgramLaterIn1Hour">In 1 hour</string>
+  <string name="XgramLaterTonight">Tonight, %1$s</string>
+  <string name="XgramLaterTomorrow">Tomorrow, %1$s</string>
+  <string name="XgramLaterThisMorning">This morning, %1$s</string>
+  <string name="XgramLaterNextWeek">Next week, %1$s</string>
+  <string name="XgramLaterUntilReply">Until they reply</string>
+  <string name="XgramLaterUntilMention">Until I\'m mentioned or replied to</string>
+  <string name="XgramLaterUntilPost">Until a new post</string>
+  <string name="XgramLaterUntilWrite">Until they write to me</string>
+  <string name="XgramLaterNoReply1d">If no reply in 1 day</string>
+  <string name="XgramLaterNoReply3d">If no reply in 3 days</string>
+  <string name="XgramLaterNoReply1w">If no reply in 1 week</string>
+  <string name="XgramLaterCustom">Pick date &amp; time…</string>
+  <string name="XgramLaterAddNote">Add a note…</string>
+  <string name="XgramLaterNoteTitle">Add note</string>
+  <string name="XgramLaterNoteHint">What\'s it about?</string>
+  <string name="XgramLaterNoteShown">Note: %1$s</string>
+  <string name="XgramLaterEditNote">Edit note…</string>
+  <string name="XgramLaterMarkDone">Mark as done</string>
+  <string name="XgramLaterCancelReminder">Cancel reminder</string>
+  <string name="XgramLaterUnsnooze">Unsnooze</string>
+  <string name="XgramLaterSnooze">Snooze…</string>
+  <string name="XgramLaterSnoozeShort">Snooze</string>
+  <string name="XgramLaterSnoozeChat">Snooze chat…</string>
+  <string name="XgramLaterPastTime">Pick a time in the future</string>
+
+  <!-- Times -->
+  <string name="XgramLaterTodayAt">Today, %1$s</string>
+  <string name="XgramLaterYesterdayAt">Yesterday, %1$s</string>
+  <string name="XgramLaterDayAt">%1$s, %2$s</string>
+  <string name="XgramLaterAgeM">%1$dm</string>
+  <string name="XgramLaterAgeH">%1$dh</string>
+  <string name="XgramLaterAgeD">%1$dd</string>
+  <string name="XgramLaterAgeW">%1$dw</string>
+
+  <!-- Feedback -->
+  <string name="XgramLaterSetFor">Reminder set for %1$s</string>
+  <string name="XgramLaterFollowUpSet">Follow-up set · %1$s if no reply</string>
+  <string name="XgramLaterSnoozedUntil">Snoozed until %1$s</string>
+  <string name="XgramLaterSnoozedUntilReply">Snoozed until they reply</string>
+  <string name="XgramLaterSnoozedUntilMention">Snoozed until you\'re mentioned</string>
+  <string name="XgramLaterSnoozedUntilPost">Snoozed until a new post</string>
+  <string name="XgramLaterXChatsSnoozed">%1$s snoozed until %2$s</string>
+  <string name="XgramLaterXChatsSnoozedUntil">%1$s snoozed until they write to you</string>
+  <string name="XgramLaterFindInLater">" · Find it in Later"</string>
+  <string name="XgramLaterCommunityNo">Chats in a merged community can\'t be snoozed</string>
+  <string name="XgramLaterInChatReminder">Reminder: %1$s</string>
+  <string name="XgramLaterUnsnoozed">Unsnoozed</string>
+  <string name="XgramLaterMarkedDone">Marked as done</string>
+  <string name="XgramLaterDeleted">Reminder deleted</string>
+
+  <!-- Snoozed row -->
+  <string name="XgramLaterRow">Snoozed</string>
+  <string name="XgramLaterRowClassic">Snoozed chats</string>
+  <string name="XgramLaterRowSub">%1$s · next %2$s</string>
+  <string name="XgramLaterRowSubClassic">%1$s · next at %2$s</string>
+  <string name="XgramLaterRowSubUntil">%1$s · %2$s</string>
+  <string name="XgramLaterRowUntilReply">until they reply</string>
+  <string name="XgramLaterRowWakeAll">Wake all now</string>
+  <string name="XgramLaterRowHide">Hide this row</string>
+  <string name="XgramLaterRowHidden">Snoozed row hidden</string>
+  <string name="XgramLaterRowHiddenHint">Turn it back on in Settings › XGram › Chat list</string>
+
+  <!-- Later page -->
+  <string name="XgramLaterSecDue">Due</string>
+  <string name="XgramLaterSecSnoozed">Snoozed chats</string>
+  <string name="XgramLaterSecReminders">Reminders</string>
+  <string name="XgramLaterSecFollowUps">Follow-ups</string>
+  <string name="XgramLaterDoneLink">Done (%1$d)</string>
+  <string name="XgramLaterDoneTitle">Done</string>
+  <string name="XgramLaterBadgeDue">Due</string>
+  <string name="XgramLaterBadgeReplied">Replied</string>
+  <string name="XgramLaterBadgeDeleted">Deleted</string>
+  <string name="XgramLaterBadgeUnavailable">Unavailable</string>
+  <string name="XgramLaterAgo">%1$s ago</string>
+  <string name="XgramLaterIfNoReplyBy">If no reply by %1$s</string>
+  <string name="XgramLaterYou">You: %1$s</string>
+  <string name="XgramLaterRepliedAfter">Replied after %1$s</string>
+  <string name="XgramLaterDoneUser">Done</string>
+  <string name="XgramLaterDoneOpened">Opened</string>
+  <string name="XgramLaterDoneWoke">Woke on a new message</string>
+  <string name="XgramLaterDoneDeleted">Message deleted</string>
+  <string name="XgramLaterOpen">Open</string>
+  <string name="XgramLaterChangeTime">Change time…</string>
+  <string name="XgramLaterSnoozeAgain">Snooze again…</string>
+  <string name="XgramLaterRemindAgain">Remind again…</string>
+  <string name="XgramLaterUnsnoozeNow">Unsnooze now</string>
+  <string name="XgramLaterDelete">Delete</string>
+  <string name="XgramLaterDeleteConfirm">Delete this reminder?</string>
+  <string name="XgramLaterMarkAllDone">Mark all due as done</string>
+  <string name="XgramLaterClearDone">Clear done</string>
+  <string name="XgramLaterClearDoneConfirm">Clear everything in Done?</string>
+  <string name="XgramLaterSettings">Later settings</string>
+  <string name="XgramLaterNotifOffRow">Reminder notifications are off</string>
+  <string name="XgramLaterTurnOn">Turn on</string>
+  <string name="XgramLaterExactOffRow">Exact times not allowed: reminders may be a few minutes late</string>
+  <string name="XgramLaterAllow">Allow</string>
+  <string name="XgramLaterEmpty">Nothing for later</string>
+  <string name="XgramLaterEmptyHint">Long-press a message and choose Remind me, or snooze a chat from its menu. They come back here when it\'s time.</string>
+
+  <!-- Notifications -->
+  <string name="XgramLaterChannelReminders">Reminders</string>
+  <string name="XgramLaterChannelRemindersDesc">Message reminders and follow-ups you set in XGram</string>
+  <string name="XgramLaterChannelSnoozed">Snoozed chats</string>
+  <string name="XgramLaterChannelSnoozedDesc">When a snoozed chat comes back</string>
+  <string name="XgramLaterNotifReminder">Reminder</string>
+  <string name="XgramLaterNotifSnooze1h">Snooze 1 h</string>
+  <string name="XgramLaterNotifDone">Done</string>
+  <string name="XgramLaterNotifBack">Back from snooze</string>
+  <string name="XgramLaterNotifNoReply">No reply from %1$s yet</string>
+  <string name="XgramLaterNotifGeneric">You have a reminder</string>
+  <string name="XgramLaterNotifSecret">Reminder about a message in a secret chat</string>
+  <string name="XgramLaterNotifSummary">%1$d reminders are due</string>
+  <string name="XgramLaterNotifPromptTitle">Allow notifications for reminders</string>
+  <string name="XgramLaterNotifPromptReason">XGram can\'t tell you a reminder is due without notifications. It still shows in Later.</string>
+
+  <!-- Settings -->
+  <string name="XgramLaterHeader">Later</string>
+  <string name="XgramLaterRowSetting">Snoozed chats row</string>
+  <string name="XgramLaterRowSettingSub">Show snoozed chats as a row under the archive</string>
+  <string name="XgramLaterRaise">Woken chats move up</string>
+  <string name="XgramLaterRaiseSub">A chat back from snooze or with a due reminder sits under your pinned chats until you open it</string>
+  <string name="XgramLaterWakeEarly">Wake snoozed chats early</string>
+  <string name="XgramLaterWakeToMe">On messages to me</string>
+  <string name="XgramLaterWakeToMeSub">Private messages, mentions and replies</string>
+  <string name="XgramLaterWakeAny">On any new message</string>
+  <string name="XgramLaterWakeTimeOnly">Only at the time set</string>
+  <string name="XgramLaterExact">Exact reminder times</string>
+  <string name="XgramLaterExactAllowed">Allowed</string>
+  <string name="XgramLaterExactNotAllowed">Not allowed – reminders may be a few minutes late</string>
+  <string name="XgramLaterChannelLink">Reminder notifications</string>
+  <string name="XgramLaterChannelLinkSub">Sound and how reminders show</string>
+  <string name="XgramSearchKwLater">snooze remind reminder later follow up nudge alarm no reply</string>
+</resources>
