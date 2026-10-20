@@ -19,9 +19,13 @@ import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.SystemClock;
+import android.text.Editable;
+import android.text.InputType;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.SparseIntArray;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -30,6 +34,7 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -45,12 +50,14 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramIconPack;
+import com.fahadali.xgram.appearance.XgramListStateView;
 import com.fahadali.xgram.appearance.XgramMotion;
 import com.fahadali.xgram.appearance.XgramPillStateLayer;
 import com.fahadali.xgram.appearance.XgramShapes;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.component.sticker.TGStickerObj;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TGStickerSetInfo;
@@ -63,20 +70,27 @@ import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
+import org.thunderdog.challegram.theme.ThemeInvalidateListener;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Keyboard;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
+import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.RecyclerViewController;
 import org.thunderdog.challegram.v.CustomRecyclerView;
+import org.thunderdog.challegram.v.HeaderEditText;
 import org.thunderdog.challegram.widget.MaterialEditTextGroup;
+import org.thunderdog.challegram.widget.ProgressComponentView;
 import org.thunderdog.challegram.widget.emoji.section.StickerSectionView;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 
 import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.animator.FactorAnimator;
@@ -95,6 +109,11 @@ import me.vkryl.core.lambda.Destroyable;
  * scrolls there; a tap jumps to that section. Telegram lets only Premium accounts use a custom emoji that is not a
  * default icon: without Premium the packs show with a lock and a tap explains why. A topic's own custom emoji shows
  * (selected) for every account, so it can be kept.
+ *
+ * <p>An emoji search sits at the top of the strip (so it stays reachable once the strip is pinned). Typing swaps the
+ * sections for the results, under the same Premium rules: the default icons for the emoji the words stand for, the
+ * custom emoji found (installed ones first, then public ones; SearchEmojis, then GetStickers and SearchStickers) and
+ * the installed packs whose title has the words. Clearing it brings the sections back where they were.
  */
 public final class ForumTopicEditController extends RecyclerViewController<ForumTopicEditController.Args> {
   public static final class Args {
@@ -108,8 +127,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
   }
 
-  private static final int VIEW_TYPE_HEADER = 0, VIEW_TYPE_TITLE = 1, VIEW_TYPE_ICON = 2, VIEW_TYPE_TABS = 3;
-  /** Adapter position of the tab strip's slot, while the list has more than the default icons. */
+  private static final int VIEW_TYPE_HEADER = 0, VIEW_TYPE_TITLE = 1, VIEW_TYPE_ICON = 2, VIEW_TYPE_TABS = 3, VIEW_TYPE_STATE = 4;
+  /** Adapter position of the strip's slot (the search, and the tabs while there is more than the default icons). */
   private static final int STRIP_POSITION = 1;
   /** M3E: space under the list for the Done button (56dp, 16dp from the bottom) plus a 16dp gap. */
   private static final float DONE_CLEARANCE = 88f;
@@ -136,8 +155,14 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private static final float LOCKED_ALPHA = .5f;
   /** At most this many custom emoji go to GetCustomEmojiStickers. */
   private static final int MAX_RECENT = 200;
+  /** The search bar, 48dp; the text starts 56dp in (after the search icon), the clear button takes the last 52dp. */
+  private static final float SEARCH_HEIGHT = 48f, SEARCH_TEXT_START = 56f, SEARCH_CLEAR_SPACE = 52f, SEARCH_ICON_CENTER = 28f;
+  /** Typing settles this long before a search; a search that has not fully answered by the timeout shows what it has. */
+  private static final long SEARCH_DELAY = 300L, SEARCH_TIMEOUT = 2500L;
+  /** Results: at most this many custom emoji (from each request and in all), and packs found by their title. */
+  private static final int SEARCH_LIMIT = 100, MAX_FOUND = 200, MAX_FOUND_PACKS = 30;
 
-  private static final int SECTION_DEFAULT = 0, SECTION_RECENT = 1, SECTION_PACK = 2;
+  private static final int SECTION_DEFAULT = 0, SECTION_RECENT = 1, SECTION_PACK = 2, SECTION_FOUND = 3;
   private static final int LOAD_NONE = 0, LOAD_QUEUED = 1, LOAD_LOADING = 2, LOAD_DONE = 3;
   private static final int TAB_GLYPH = 0, TAB_COVER = 1;
   /** Tab payload: only its selection changed (animated). */
@@ -147,18 +172,24 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
 
   /**
    * A run of icons under one title: the default icons ("no icon" first), the recently used custom emoji (the topic's
-   * own first; without Premium only that one) or a pack.
+   * own first; without Premium only that one) or a pack; while searching, the default icons or the custom emoji found,
+   * or a pack found by its title.
    */
   private static final class Section {
     final int kind;
     @Nullable final TdApi.StickerSetInfo info;
     @Nullable final TGStickerSetInfo cover;
-    /** Recent and packs: the emoji, a pack's filled from its covers until it loads. */
+    /** The list it is in (the sections or one search's results): only the list on screen tells the adapter. */
+    @Nullable Object owner;
+    /** Recent, found and packs: the emoji, a pack's filled from its covers until it loads. */
     @Nullable TGStickerObj[] items;
     int titlePosition, firstCell, cellCount;
     int loadState = LOAD_NONE;
     /** Recent: only the topic's own emoji ("Current icon": without Premium, or no recently used ones). */
     boolean currentOnly;
+    /** Found: its title, and whether it carries the lock without Premium. */
+    @StringRes int titleRes;
+    boolean lockTitle;
     /** A pack: failed loads so far, and the time before which it isn't asked for again. */
     int failures;
     long retryAt;
@@ -180,6 +211,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private final List<TdApi.Sticker> icons = new ArrayList<>();
   private TGStickerObj[] defaultItems = new TGStickerObj[0];
   private final ArrayList<Section> sections = new ArrayList<>();
+  /** The sections, or while searching the results shown (each answer is a new list): what the adapter lists. */
+  private ArrayList<Section> shown = sections;
   @Nullable private Section defaultSection;
   private int itemCount = 1;
   private IconView preview;
@@ -203,8 +236,10 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   @Nullable private TdApi.StickerSetInfo[] loadedPacks;
   /** The recent emoji when they answer before the first insert (they go in with it). */
   @Nullable private TdApi.Sticker[] loadedRecents;
-  /** The tab strip's slot is in the list: more than the default icons, or the recent ones on their way. */
+  /** The strip's slot is in the list (once the icons are known: it holds the search). */
   private boolean withStrip;
+  /** The strip shows its tabs (outside a search): more than the default icons, or the recent ones on their way. */
+  private boolean withTabs;
   private final ArrayDeque<Section> packQueue = new ArrayDeque<>();
   private int packRequests;
   /** The grid's span and height the cell pool was sized for. */
@@ -220,6 +255,25 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private int selectedTab;
   /** The tab tapped last: it stays selected until the list is dragged (a short last pack never reaches the top). */
   private int pinnedTab = -1;
+  /** The strip's height the slot was last told about (-1: not yet). */
+  private int boundStripHeight = -1;
+
+  // Emoji search
+
+  @Nullable private HeaderEditText searchInput;
+  /** The search field's text, trimmed; empty while the sections show. */
+  private String searchQuery = "";
+  /** The list shows search results (or the row saying they are loading or that there are none). */
+  private boolean searching;
+  /** No answer shown yet for the search: its row shows the loading indicator ("No emoji found" once answered). */
+  private boolean searchLoading;
+  /** Bumped by every change of the query: a delayed search or an answer for an older one is dropped. */
+  private int searchGeneration;
+  /** The query generation whose requests went out (the keyboard's search key sends them at once). */
+  private int searchedGeneration;
+  /** Where the sections were when the search started (a section and a row in it, or the header or the slot). */
+  @Nullable private Section anchorSection;
+  private int anchorIndex, anchorPosition, anchorOffset;
 
   /** Every emoji view built for this page (the visible ones, the recycled pool and the tabs), destroyed with it. */
   private final ArrayList<Destroyable> destroyables = new ArrayList<>();
@@ -433,24 +487,42 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     return withStrip;
   }
 
-  /** Adapter positions of every section after a change in their number or size. */
+  /** The strip shows its tabs: there is more than the default icons, and no search is on. */
+  private boolean tabsShown () {
+    return withTabs && !searching;
+  }
+
+  /** A search shows no results yet, or none: one row (loading, then "No emoji found") under the strip. */
+  private boolean showsState () {
+    return searching && shown.isEmpty();
+  }
+
+  /** The section is in the list on screen (not the sections hidden by a search, nor an older search's results). */
+  private boolean isShown (Section section) {
+    return section.owner == shown;
+  }
+
+  /** Adapter positions of every section shown after a change in their number or size. */
   private void layoutSections () {
     int position = hasStrip() ? STRIP_POSITION + 1 : 1;
-    for (int i = 0; i < sections.size(); i++) {
-      Section section = sections.get(i);
+    for (int i = 0; i < shown.size(); i++) {
+      Section section = shown.get(i);
       section.titlePosition = position;
       section.firstCell = position + 1;
       position += 1 + section.cellCount;
     }
+    if (showsState()) {
+      position++;
+    }
     itemCount = position;
   }
 
-  /** Index of the section whose title or cells are at {@code position}; -1 above the first. */
+  /** Index of the shown section whose title or cells are at {@code position}; -1 above the first. */
   private int sectionIndexAt (int position) {
-    int low = 0, high = sections.size() - 1, found = -1;
+    int low = 0, high = shown.size() - 1, found = -1;
     while (low <= high) {
       int mid = (low + high) >>> 1;
-      if (sections.get(mid).titlePosition <= position) {
+      if (shown.get(mid).titlePosition <= position) {
         found = mid;
         low = mid + 1;
       } else {
@@ -463,10 +535,13 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   @Nullable
   private Section sectionAt (int position) {
     int index = sectionIndexAt(position);
-    return index >= 0 ? sections.get(index) : null;
+    return index >= 0 ? shown.get(index) : null;
   }
 
-  /** The grid row of {@code position} (GridLayoutManager's span group): the header, the strip, then each section. */
+  /**
+   * The grid row of {@code position} (GridLayoutManager's span group): the header, the strip, then each section shown
+   * (or a search's single row).
+   */
   private int rowOf (int position, int spanCount) {
     if (position <= 0) {
       return 0;
@@ -478,8 +553,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       }
       row++;
     }
-    for (int i = 0; i < sections.size(); i++) {
-      Section section = sections.get(i);
+    for (int i = 0; i < shown.size(); i++) {
+      Section section = shown.get(i);
       if (position == section.titlePosition) {
         return row;
       }
@@ -493,7 +568,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   }
 
   private void notifyNoIconChanged () {
-    if (adapter != null && defaultSection != null) {
+    if (adapter != null && defaultSection != null && isShown(defaultSection)) {
       adapter.notifyItemChanged(defaultSection.firstCell); // the "no icon" bubble shows the color and the name
     }
   }
@@ -594,6 +669,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
     TGStickerObj[] items = list.toArray(new TGStickerObj[0]);
     Section section = new Section(SECTION_RECENT, null, null);
+    section.owner = sections;
     section.items = items;
     section.cellCount = items.length;
     section.loadState = LOAD_DONE;
@@ -640,6 +716,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     loadedPacks = null;
     loadedRecents = null;
     Section section = defaultSection = new Section(SECTION_DEFAULT, null, null);
+    section.owner = sections;
     section.cellCount = 1 + defaultItems.length; // "no icon", then the default icons
     section.loadState = LOAD_DONE;
     sections.add(section);
@@ -655,16 +732,20 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           continue;
         }
         Section pack = new Section(SECTION_PACK, info, new TGStickerSetInfo(tdlib, info));
+        pack.owner = sections;
         pack.items = new TGStickerObj[info.size]; // filled from the covers on bind, all of it once the pack loads
         pack.cellCount = info.size;
         sections.add(pack);
       }
     }
-    // The slot is kept for recent emoji still on their way, so they won't move the default icons when they come
-    withStrip = sections.size() > 1 || expectsRecents();
+    // The slot holds the search; the tabs' room is kept for recent emoji still on their way, so they won't move the
+    // default icons when they come
+    withStrip = true;
+    withTabs = sections.size() > 1 || expectsRecents();
     layoutSections();
     // One insert under the header, not a full reload: the name field keeps its focus and the keyboard
     adapter.notifyItemRangeInserted(1, itemCount - 1);
+    applyStripHeight();
     if (tabsAdapter != null) {
       tabsAdapter.notifyDataSetChanged();
     }
@@ -679,13 +760,12 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       return;
     }
     final Section recent = newRecentSection(stickers);
-    final boolean hadStrip = withStrip;
+    final boolean hadTabs = withTabs;
     if (recent == null) {
-      if (hadStrip && sections.size() <= 1) {
-        // The slot was kept for them and none came
-        withStrip = false;
-        layoutSections();
-        adapter.notifyItemRemoved(STRIP_POSITION);
+      if (hadTabs && sections.size() <= 1) {
+        // The tabs' room was kept for them and none came
+        withTabs = false;
+        applyStripHeight();
         if (tabsAdapter != null) {
           tabsAdapter.notifyDataSetChanged();
         }
@@ -693,14 +773,15 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       }
       return;
     }
-    // Right after the default icons: below the rows on screen, which stay where they are
+    // Right after the default icons: below the rows on screen, which stay where they are. While a search shows, the
+    // sections change quietly and are laid out again when it is cleared.
     sections.add(1, recent);
-    withStrip = true;
-    layoutSections();
-    if (!hadStrip) {
-      adapter.notifyItemInserted(STRIP_POSITION);
+    withTabs = true;
+    if (isShown(recent)) {
+      layoutSections();
+      adapter.notifyItemRangeInserted(recent.titlePosition, 1 + recent.cellCount);
     }
-    adapter.notifyItemRangeInserted(recent.titlePosition, 1 + recent.cellCount);
+    applyStripHeight();
     // The packs' tabs move one along, the selected one with them
     if (selectedTab >= 1) {
       selectedTab++;
@@ -709,7 +790,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       pinnedTab++;
     }
     if (tabsAdapter != null) {
-      if (hadStrip) {
+      if (hadTabs) {
         tabsAdapter.notifyItemInserted(1);
       } else {
         tabsAdapter.notifyDataSetChanged();
@@ -727,7 +808,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
 
   /** A pack's section is on screen: its emoji are asked for, the newest on screen first, a few at a time. */
   private void requestPack (Section section) {
-    if (section.kind != SECTION_PACK || section.loadState != LOAD_NONE || section.info == null) {
+    if (section.kind != SECTION_PACK || section.loadState != LOAD_NONE || section.info == null || !isShown(section)) {
       return;
     }
     if (section.retryAt != 0 && SystemClock.uptimeMillis() < section.retryAt) {
@@ -744,8 +825,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       if (section == null || section.loadState != LOAD_QUEUED || section.info == null) {
         continue;
       }
-      if (!isNearViewport(section)) {
-        section.loadState = LOAD_NONE; // flung past: asked for again when it shows
+      if (!isShown(section) || !isNearViewport(section)) {
+        section.loadState = LOAD_NONE; // flung past or hidden by a search: asked for again when it shows
         continue;
       }
       section.loadState = LOAD_LOADING;
@@ -801,6 +882,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     final int oldCount = section.cellCount, newCount = items.length, firstCell = section.firstCell;
     section.items = items;
     section.cellCount = newCount;
+    if (!isShown(section)) {
+      return; // hidden by a search (laid out again when it is cleared), or a search's results that are gone
+    }
     if (newCount != oldCount) {
       layoutSections(); // the pack changed since it was listed: the sections after it move
     }
@@ -836,6 +920,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       return;
     }
     onIconSelected(emojiId, sticker);
+    if (searching && searchInput != null && searchInput.hasFocus()) {
+      Keyboard.hide(searchInput); // picked from the results: the page (the preview, Done) shows again
+    }
   }
 
   private void showPremiumHint (View anchor) {
@@ -918,8 +1005,28 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   }
 
   @Override
+  public boolean performOnBackPressed (boolean fromTop, boolean commit) {
+    if (searching && searchInput != null) {
+      if (commit) {
+        searchInput.setText(""); // back clears the search first, bringing the sections back
+      }
+      return true;
+    }
+    return super.performOnBackPressed(fromTop, commit);
+  }
+
+  @Override
+  public void hideSoftwareKeyboard () {
+    super.hideSoftwareKeyboard();
+    if (searchInput != null && searchInput.hasFocus()) {
+      Keyboard.hide(searchInput); // the name field's keyboard is left as it was
+    }
+  }
+
+  @Override
   public void destroy () {
     super.destroy();
+    searchGeneration++; // a delayed search or an answer still on its way is dropped
     if (preview != null) {
       preview.performDestroy();
     }
@@ -932,19 +1039,66 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
 
   // Tab strip
 
+  /**
+   * The strip: the search bar (48dp), then while there is more than the default icons and no search is on, the tabs
+   * (48dp). With Expressive design an 8dp gap above, between and below them.
+   */
   private int stripSlotHeight () {
-    return Screen.dp(expressive ? STRIP_HEIGHT + STRIP_GAP * 2f : STRIP_HEIGHT);
+    float height = SEARCH_HEIGHT;
+    if (tabsShown()) {
+      height += STRIP_HEIGHT;
+    }
+    if (expressive) {
+      height += STRIP_GAP * (tabsShown() ? 3f : 2f);
+    }
+    return Screen.dp(height);
+  }
+
+  /** The strip's height and its tabs follow a change of the sections or the search, its slot in the list too. */
+  private void applyStripHeight () {
+    final int height = stripSlotHeight();
+    if (strip != null) {
+      ViewGroup.LayoutParams params = strip.getLayoutParams();
+      if (params != null && params.height != height) {
+        params.height = height;
+        strip.setLayoutParams(params);
+      }
+    }
+    if (tabsView != null) {
+      final int visibility = tabsShown() ? View.VISIBLE : View.GONE;
+      if (tabsView.getVisibility() != visibility) {
+        tabsView.setVisibility(visibility);
+      }
+    }
+    if (boundStripHeight != height) {
+      boundStripHeight = height;
+      if (hasStrip() && adapter != null) {
+        adapter.notifyItemChanged(STRIP_POSITION); // the slot takes the height on bind
+      }
+    }
   }
 
   /**
    * The strip floats over the page above the list: on its slot (an empty row under the name) while that is on screen,
-   * pinned at the list's top once the slot scrolls past it. Built once, shown once the list has more than the default
-   * icons.
+   * pinned at the list's top once the slot scrolls past it. Built once, shown once the icons are known: the search bar
+   * on top, the tabs under it while the list has more than the default icons.
    */
   private void createStrip (Context context, FrameLayout wrap) {
     StripLayout strip = this.strip = new StripLayout(context);
     strip.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, stripSlotHeight(), Gravity.TOP));
     strip.setVisibility(View.INVISIBLE);
+
+    SearchBar searchBar = new SearchBar(context);
+    FrameLayout.LayoutParams searchParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(SEARCH_HEIGHT), Gravity.TOP);
+    if (expressive) {
+      // M3E: the search bar as wide as the cards, 8dp above it
+      searchParams.leftMargin = searchParams.rightMargin = Screen.dp(XgramExpressive.LIST_INSET);
+      searchParams.topMargin = Screen.dp(STRIP_GAP);
+    }
+    strip.addView(searchBar, searchParams);
+    searchInput = searchBar.input;
+    destroyables.add(searchBar.input);
+    addThemeInvalidateListener(searchBar);
 
     TabsAdapter tabsAdapter = this.tabsAdapter = new TabsAdapter();
     LinearLayoutManager tabsManager = this.tabsManager = new LinearLayoutManager(context, RecyclerView.HORIZONTAL, Lang.rtl());
@@ -957,10 +1111,12 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     tabsView.setClipToPadding(false);
     tabsView.setAdapter(tabsAdapter);
     FrameLayout.LayoutParams params = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(STRIP_HEIGHT), Gravity.TOP);
+    params.topMargin = Screen.dp(SEARCH_HEIGHT); // under the search bar
     if (expressive) {
-      // M3E: the tabs in a surfaceBright container with list corners, 16dp from the edges as the cards
+      // M3E: the tabs in a surfaceBright container with list corners, 16dp from the edges as the cards, 8dp under the
+      // search bar
       params.leftMargin = params.rightMargin = Screen.dp(XgramExpressive.LIST_INSET);
-      params.topMargin = Screen.dp(STRIP_GAP);
+      params.topMargin = Screen.dp(STRIP_GAP + SEARCH_HEIGHT + STRIP_GAP);
       XgramExpressive.MorphDrawable container = new XgramExpressive.MorphDrawable(0, XgramExpressive.LIST_OUTER_CORNER, Float.NaN);
       container.setColorRole(XgramExpressive.SURFACE_BRIGHT);
       tabsView.setBackground(container);
@@ -969,6 +1125,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         tabsView.setClipToOutline(true);
       }
     }
+    tabsView.setVisibility(tabsShown() ? View.VISIBLE : View.GONE);
     strip.addView(tabsView, params);
     addThemeInvalidateListener(strip);
     addThemeInvalidateListener(tabsView);
@@ -1013,7 +1170,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     if (strip.getVisibility() != View.VISIBLE) {
       strip.setVisibility(View.VISIBLE);
     }
-    updateTabFromScroll(recyclerView, top + stripSlotHeight());
+    if (!searching) {
+      updateTabFromScroll(recyclerView, top + stripSlotHeight()); // the tabs are the sections' (hidden while searching)
+    }
   }
 
   private void updateTabFromScroll (RecyclerView recyclerView, float y) {
@@ -1058,7 +1217,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   /** A tab: its section's title right under the pinned strip (a short way on the list's spring, a long way at once). */
   private void scrollToSection (int index) {
     final CustomRecyclerView recyclerView = getRecyclerView();
-    if (recyclerView == null || gridManager == null || index < 0 || index >= sections.size()) {
+    if (recyclerView == null || gridManager == null || searching || index < 0 || index >= sections.size()) {
       return;
     }
     pinnedTab = index;
@@ -1077,6 +1236,326 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     } else {
       gridManager.scrollToPositionWithOffset(target, stripSlotHeight());
     }
+  }
+
+  // Emoji search
+
+  /**
+   * The search field changed: an empty one brings the sections back, a new query swaps them for its results (a
+   * loading row until the first answer) and asks once typing settles; whatever was on its way for an older query is
+   * dropped.
+   */
+  private void onSearchTextChanged (String text) {
+    final String query = text.trim();
+    if (query.equals(searchQuery)) {
+      return; // a space more, or the emoji spans put in by the field
+    }
+    searchQuery = query;
+    final int generation = ++searchGeneration;
+    if (query.isEmpty()) {
+      exitSearch();
+      return;
+    }
+    enterSearch();
+    runOnUiThreadOptional(() -> {
+      if (generation == searchGeneration && searchedGeneration != generation && searching) {
+        runSearch(query, generation);
+      }
+    }, null, SEARCH_DELAY);
+  }
+
+  /** The keyboard's search key: no waiting for the typing to settle. */
+  private void searchNow () {
+    if (searching && searchedGeneration != searchGeneration && !searchQuery.isEmpty()) {
+      runSearch(searchQuery, searchGeneration);
+    }
+  }
+
+  /** The sections make way for a search: their place is kept, the tabs hide and a pinned strip stays where it is. */
+  private void enterSearch () {
+    if (searching || adapter == null || gridManager == null || !hasStrip()) {
+      return;
+    }
+    saveAnchor();
+    final boolean stuck = strip != null && strip.stuck;
+    final int oldCount = itemCount;
+    searching = true;
+    searchLoading = true;
+    pinnedTab = -1;
+    shown = new ArrayList<>();
+    layoutSections();
+    replaceRows(oldCount);
+    applyStripHeight();
+    if (stuck) {
+      gridManager.scrollToPositionWithOffset(STRIP_POSITION, 0);
+    }
+    postSyncStrip();
+  }
+
+  /** The search was cleared: the sections come back (changes made meanwhile included) where they were. */
+  private void exitSearch () {
+    if (!searching) {
+      return;
+    }
+    final int oldCount = itemCount;
+    searching = false;
+    searchLoading = false;
+    shown = sections;
+    layoutSections();
+    replaceRows(oldCount);
+    applyStripHeight();
+    if (tabsAdapter != null) {
+      tabsAdapter.notifyDataSetChanged();
+    }
+    restoreAnchor();
+    postSyncStrip();
+  }
+
+  /** A search's answer (or the timeout's part of it): the results replace what shows under the strip. */
+  private void showResults (ArrayList<Section> results) {
+    if (!searching || adapter == null) {
+      return;
+    }
+    final boolean stuck = strip != null && strip.stuck;
+    final int oldCount = itemCount;
+    shown = results;
+    searchLoading = false;
+    layoutSections();
+    replaceRows(oldCount);
+    if (stuck && gridManager != null) {
+      gridManager.scrollToPositionWithOffset(STRIP_POSITION, 0); // the new results start under the pinned strip
+    }
+    postSyncStrip();
+  }
+
+  /** Everything under the strip's slot goes and the shown list's rows come in (the header and the slot stay bound). */
+  private void replaceRows (int oldCount) {
+    final int start = STRIP_POSITION + 1;
+    if (oldCount > start) {
+      adapter.notifyItemRangeRemoved(start, oldCount - start);
+    }
+    if (itemCount > start) {
+      adapter.notifyItemRangeInserted(start, itemCount - start);
+    }
+  }
+
+  /** Remembers the first row on screen by its section (sections may still come in or grow while the search shows). */
+  private void saveAnchor () {
+    anchorSection = null;
+    anchorIndex = 0;
+    anchorPosition = 0;
+    anchorOffset = 0;
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null || gridManager == null) {
+      return;
+    }
+    final int first = gridManager.findFirstVisibleItemPosition();
+    if (first == RecyclerView.NO_POSITION) {
+      return;
+    }
+    final View view = gridManager.findViewByPosition(first);
+    anchorOffset = view != null ? gridManager.getDecoratedTop(view) - recyclerView.getPaddingTop() : 0;
+    final int index = sectionIndexAt(first);
+    if (index >= 0) {
+      anchorSection = shown.get(index);
+      anchorIndex = first - anchorSection.titlePosition;
+    } else {
+      anchorPosition = first;
+    }
+  }
+
+  private void restoreAnchor () {
+    if (gridManager == null) {
+      return;
+    }
+    final Section section = anchorSection;
+    int position = anchorPosition;
+    if (section != null && isShown(section)) {
+      position = section.titlePosition + Math.min(anchorIndex, section.cellCount);
+    }
+    if (position >= 0 && position < itemCount) {
+      gridManager.scrollToPositionWithOffset(position, anchorOffset);
+    }
+    anchorSection = null;
+  }
+
+  /**
+   * One query's answers: the keywords' emoji, then the installed custom emoji found by the words, the installed ones for
+   * those emoji and the public ones, in that order. Shown once all came, or at the timeout with what there is.
+   */
+  private static final class SearchAnswers {
+    final String query;
+    final boolean queryIsEmoji;
+    @Nullable String[] emojis;
+    final TdApi.Sticker[][] parts = new TdApi.Sticker[3][];
+    int pending;
+    boolean shown;
+
+    SearchAnswers (String query, boolean queryIsEmoji) {
+      this.query = query;
+      this.queryIsEmoji = queryIsEmoji;
+    }
+  }
+
+  private static final int PART_INSTALLED = 0, PART_INSTALLED_EMOJI = 1, PART_PUBLIC = 2;
+
+  /**
+   * The emoji the words stand for (SearchEmojis, as the emoji keyboard's search; a typed emoji stands for itself) and,
+   * meanwhile, the installed custom emoji whose keywords start with them. TDLib answers off the main thread.
+   */
+  private void runSearch (final String query, final int generation) {
+    searchedGeneration = generation;
+    final String[] languages = U.getInputLanguages();
+    final boolean queryIsEmoji = Emoji.instance().isSingleEmoji(query, false);
+    final SearchAnswers answers = new SearchAnswers(query, queryIsEmoji);
+    answers.pending = 2; // the keywords and the first part; the others are counted once the keywords are known
+    sendSearchPart(new TdApi.GetStickers(new TdApi.StickerTypeCustomEmoji(), query, SEARCH_LIMIT, 0), answers, PART_INSTALLED, generation);
+    if (queryIsEmoji) {
+      onSearchKeywords(answers, new String[] {query}, languages, generation);
+    } else {
+      tdlib.send(new TdApi.SearchEmojis(query, languages), (keywords, error) -> runOnUiThreadOptional(() ->
+        onSearchKeywords(answers, keywords != null ? uniqueEmojis(keywords.emojiKeywords) : new String[0], languages, generation)
+      ));
+    }
+    runOnUiThreadOptional(() -> {
+      if (generation == searchGeneration && !answers.shown) {
+        onSearchAnswered(answers); // the network is slow: what is known now, the rest when it comes
+      }
+    }, null, SEARCH_TIMEOUT);
+  }
+
+  private void onSearchKeywords (SearchAnswers answers, String[] emojis, String[] languages, int generation) {
+    answers.emojis = emojis;
+    if (generation == searchGeneration) {
+      final String emojiList = TextUtils.join(" ", emojis);
+      final TdApi.StickerType type = new TdApi.StickerTypeCustomEmoji();
+      if (!emojiList.isEmpty() && !emojiList.equals(answers.query)) {
+        answers.pending++;
+        sendSearchPart(new TdApi.GetStickers(type, emojiList, SEARCH_LIMIT, 0), answers, PART_INSTALLED_EMOJI, generation);
+      }
+      answers.pending++;
+      sendSearchPart(new TdApi.SearchStickers(type, emojiList, answers.queryIsEmoji ? "" : answers.query, languages, 0, SEARCH_LIMIT), answers, PART_PUBLIC, generation);
+    }
+    onSearchPartAnswered(answers, generation);
+  }
+
+  private void sendSearchPart (TdApi.Function<TdApi.Stickers> function, SearchAnswers answers, int part, int generation) {
+    tdlib.send(function, (stickers, error) -> runOnUiThreadOptional(() -> {
+      answers.parts[part] = stickers != null ? stickers.stickers : null;
+      onSearchPartAnswered(answers, generation);
+    }));
+  }
+
+  private void onSearchPartAnswered (SearchAnswers answers, int generation) {
+    if (--answers.pending == 0 && generation == searchGeneration) {
+      onSearchAnswered(answers);
+    }
+  }
+
+  private static String[] uniqueEmojis (@Nullable TdApi.EmojiKeyword[] keywords) {
+    if (keywords == null || keywords.length == 0) {
+      return new String[0];
+    }
+    LinkedHashSet<String> emojis = new LinkedHashSet<>(keywords.length);
+    for (TdApi.EmojiKeyword keyword : keywords) {
+      if (!TextUtils.isEmpty(keyword.emoji)) {
+        emojis.add(keyword.emoji);
+      }
+    }
+    return emojis.toArray(new String[0]);
+  }
+
+  /**
+   * The results: the default topic icons for the emoji the query stands for (any account may use them), the custom
+   * emoji found (each once, installed ones first; locked without Premium, as the packs) and the installed packs whose
+   * title has the query, each a section of its own.
+   */
+  private void onSearchAnswered (SearchAnswers answers) {
+    if (!searching || !answers.query.equals(searchQuery)) {
+      return;
+    }
+    answers.shown = true;
+    final ArrayList<Section> results = new ArrayList<>();
+    final HashSet<Long> foundIds = new HashSet<>();
+    final ArrayList<TdApi.Sticker> found = new ArrayList<>();
+    for (TdApi.Sticker[] part : answers.parts) {
+      if (part == null) {
+        continue;
+      }
+      for (TdApi.Sticker sticker : part) {
+        long id = emojiIdOf(sticker);
+        if (id != 0 && foundIds.add(id)) {
+          found.add(sticker);
+        }
+      }
+    }
+
+    final HashSet<String> emojis = new HashSet<>();
+    if (answers.emojis != null) {
+      for (String emoji : answers.emojis) {
+        emojis.add(Emoji.cleanupEmoji(emoji));
+      }
+    }
+    final ArrayList<TGStickerObj> iconItems = new ArrayList<>();
+    for (int i = 0; i < icons.size() && i < defaultItems.length; i++) {
+      final TdApi.Sticker icon = icons.get(i);
+      if (foundIds.contains(emojiIdOf(icon)) || (!TextUtils.isEmpty(icon.emoji) && emojis.contains(Emoji.cleanupEmoji(icon.emoji)))) {
+        iconItems.add(defaultItems[i]);
+      }
+    }
+    if (!iconItems.isEmpty()) {
+      results.add(newFoundSection(results, iconItems, R.string.XgramTopicSearchIcons, false));
+    }
+
+    final ArrayList<TGStickerObj> emojiItems = new ArrayList<>(Math.min(found.size(), MAX_FOUND));
+    for (int i = 0; i < found.size() && emojiItems.size() < MAX_FOUND; i++) {
+      final TdApi.Sticker sticker = found.get(i);
+      if (findIcon(emojiIdOf(sticker)) == null) { // a default icon shows above
+        emojiItems.add(newGridSticker(sticker));
+      }
+    }
+    if (!emojiItems.isEmpty()) {
+      results.add(newFoundSection(results, emojiItems, R.string.XgramTopicSearchEmoji, true));
+    }
+
+    final Locale locale = Locale.getDefault();
+    final String needle = answers.query.toLowerCase(locale);
+    int packCount = 0;
+    for (int i = 0; i < sections.size() && packCount < MAX_FOUND_PACKS; i++) {
+      final Section pack = sections.get(i);
+      if (pack.kind == SECTION_PACK && pack.info != null && !TextUtils.isEmpty(pack.info.title) && pack.info.title.toLowerCase(locale).contains(needle)) {
+        results.add(newFoundPack(results, pack));
+        packCount++;
+      }
+    }
+    showResults(results);
+  }
+
+  private static Section newFoundSection (ArrayList<Section> owner, ArrayList<TGStickerObj> items, @StringRes int titleRes, boolean lockTitle) {
+    Section section = new Section(SECTION_FOUND, null, null);
+    section.owner = owner;
+    section.items = items.toArray(new TGStickerObj[0]);
+    section.cellCount = section.items.length;
+    section.loadState = LOAD_DONE;
+    section.titleRes = titleRes;
+    section.lockTitle = lockTitle;
+    return section;
+  }
+
+  /** A pack found by its title: its emoji as the sections have them, or asked for when it shows. */
+  private static Section newFoundPack (ArrayList<Section> owner, Section pack) {
+    Section section = new Section(SECTION_PACK, pack.info, pack.cover);
+    section.owner = owner;
+    if (pack.loadState == LOAD_DONE && pack.items != null) {
+      section.items = pack.items;
+      section.cellCount = pack.cellCount;
+      section.loadState = LOAD_DONE;
+    } else {
+      final int size = pack.info != null ? pack.info.size : 0;
+      section.items = new TGStickerObj[size];
+      section.cellCount = size;
+    }
+    return section;
   }
 
   // Views
@@ -1351,6 +1830,229 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           setCompoundDrawablesWithIntrinsicBounds(start, null, null, null);
         }
         setCompoundDrawablePadding(locked ? Screen.dp(6f) : 0);
+      }
+    }
+  }
+
+  /**
+   * The emoji search at the top of the strip. Expressive: the M3 search bar, a full-round surfaceContainerHigh pill with
+   * the search icon and the hint in onSurfaceVariant and bodyLarge text in onSurface. Classic: Telegram X's grey search
+   * field on the strip's filling (the search icon, text in the text color, the hint in the light one). A clear button
+   * shows while there is text. Mirrored in RTL.
+   */
+  private final class SearchBar extends FrameLayout implements ThemeInvalidateListener {
+    final HeaderEditText input;
+    private final GlyphTab clear;
+    @Nullable private final Drawable icon;
+    @Nullable private Paint iconPaint;
+    private int iconColor, cursorColor;
+    private final RectF pill = new RectF();
+
+    SearchBar (Context context) {
+      super(context);
+      setWillNotDraw(false);
+      final boolean rtl = Lang.rtl();
+      icon = Drawables.get(getResources(), XgramIconPack.map(R.drawable.baseline_search_24));
+
+      final HeaderEditText input = this.input = new HeaderEditText(context);
+      input.setInputType(InputType.TYPE_CLASS_TEXT);
+      input.setSingleLine(true);
+      input.setImeOptions(EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+      input.setBackground(null);
+      input.setPadding(0, 0, 0, 0);
+      input.setHint(Lang.getString(R.string.XgramTopicSearchHint));
+      if (expressive) {
+        XgramExpressive.applyText(input, XgramExpressive.TS_BODY_L, false);
+      } else {
+        input.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16f);
+        Views.setCursorDrawable(input, R.drawable.cursor_grey);
+      }
+      input.checkRtl();
+      applyColors();
+      FrameLayout.LayoutParams inputParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+      inputParams.leftMargin = Screen.dp(rtl ? SEARCH_CLEAR_SPACE : SEARCH_TEXT_START);
+      inputParams.rightMargin = Screen.dp(rtl ? SEARCH_TEXT_START : SEARCH_CLEAR_SPACE);
+      addView(input, inputParams);
+
+      final GlyphTab clear = this.clear = new GlyphTab(context, expressive);
+      clear.setIcon(R.drawable.baseline_close_24);
+      clear.setContentDescription(Lang.getString(R.string.Clear));
+      if (!expressive) {
+        RippleSupport.setTransparentSelector(clear);
+      }
+      clear.setVisibility(View.GONE);
+      clear.setOnClickListener(v -> input.setText(""));
+      FrameLayout.LayoutParams clearParams = FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), (rtl ? Gravity.LEFT : Gravity.RIGHT) | Gravity.CENTER_VERTICAL);
+      if (rtl) {
+        clearParams.leftMargin = Screen.dp(4f);
+      } else {
+        clearParams.rightMargin = Screen.dp(4f);
+      }
+      addView(clear, clearParams);
+
+      input.addTextChangedListener(new TextWatcher() {
+        @Override
+        public void beforeTextChanged (CharSequence s, int start, int count, int after) { }
+
+        @Override
+        public void onTextChanged (CharSequence s, int start, int before, int count) { }
+
+        @Override
+        public void afterTextChanged (Editable s) {
+          final int visibility = s.length() > 0 ? View.VISIBLE : View.GONE;
+          if (clear.getVisibility() != visibility) {
+            clear.setVisibility(visibility);
+          }
+          onSearchTextChanged(s.toString());
+        }
+      });
+      input.setOnEditorActionListener((v, actionId, event) -> {
+        if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+          searchNow();
+          Keyboard.hide(input);
+          return true;
+        }
+        return false;
+      });
+      // A tap on the search icon or beside the text goes to the field too
+      setOnClickListener(v -> Keyboard.show(input));
+    }
+
+    /** Text, hint, cursor and selection colors from the theme (again on every theme change). */
+    private void applyColors () {
+      final int textColor = expressive ? XgramExpressive.color(XgramExpressive.ON_SURFACE) : Theme.getColor(ColorId.text);
+      final int hintColor = expressive ? XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT) : Theme.getColor(ColorId.textLight);
+      if (input.getCurrentTextColor() != textColor) {
+        input.setTextColor(textColor);
+      }
+      if (input.getCurrentHintTextColor() != hintColor) {
+        input.setHintTextColor(hintColor);
+      }
+      final int highlight = Theme.fillingTextSelectionColor();
+      if (input.getHighlightColor() != highlight) {
+        input.setHighlightColor(highlight);
+      }
+      if (expressive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        final int cursor = XgramExpressive.color(XgramExpressive.PRIMARY);
+        if (cursor != cursorColor) {
+          cursorColor = cursor;
+          GradientDrawable drawable = new GradientDrawable();
+          drawable.setColor(cursor);
+          drawable.setSize(Screen.dp(2f), Screen.dp(20f));
+          input.setTextCursorDrawable(drawable);
+        }
+      }
+    }
+
+    @Override
+    public void onThemeInvalidate (boolean isTempUpdate) {
+      applyColors();
+      invalidate();
+      clear.invalidate();
+    }
+
+    @Override
+    protected void onDraw (Canvas c) {
+      final int width = getWidth(), height = getHeight();
+      if (expressive) {
+        pill.set(0, 0, width, height);
+        c.drawRoundRect(pill, height / 2f, height / 2f, Paints.fillingPaint(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGH)));
+      }
+      if (icon != null) {
+        final int color = expressive ? XgramExpressive.color(XgramExpressive.ON_SURFACE_VARIANT) : Theme.getColor(ColorId.icon);
+        if (iconPaint == null || iconColor != color) {
+          iconPaint = Paints.createPorterDuffPaint(iconPaint, iconColor = color);
+        }
+        final float cx = Lang.rtl() ? width - Screen.dp(SEARCH_ICON_CENTER) : Screen.dp(SEARCH_ICON_CENTER);
+        Drawables.drawCentered(c, icon, cx, height / 2f, iconPaint);
+      }
+    }
+  }
+
+  /**
+   * A search's single row: the loading indicator until its first answer, then "No emoji found". Expressive: the M3E
+   * list states (the loading indicator; the empty state's burst and headline); classic: Telegram X's progress and a
+   * line of light text.
+   */
+  private final class StateRow extends FrameLayout implements Destroyable, ThemeInvalidateListener {
+    @Nullable private final XgramListStateView state;
+    @Nullable private final TextView text;
+    @Nullable private final ProgressComponentView progress;
+
+    StateRow (Context context) {
+      super(context);
+      setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      if (expressive) {
+        XgramListStateView view = state = new XgramListStateView(context);
+        view.setWrapContent(true);
+        view.setPadding(0, Screen.dp(16f), 0, Screen.dp(16f));
+        addView(view, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        text = null;
+        progress = null;
+      } else {
+        state = null;
+        TextView view = text = new TextView(context);
+        view.setGravity(Gravity.CENTER);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15f);
+        view.setTextColor(Theme.getColor(ColorId.textLight));
+        view.setPadding(Screen.dp(16f), Screen.dp(40f), Screen.dp(16f), Screen.dp(40f));
+        view.setText(Lang.getString(R.string.XgramTopicSearchNothing));
+        addView(view, FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ProgressComponentView spinner = progress = new ProgressComponentView(context);
+        spinner.initBig(1f);
+        addView(spinner, FrameLayoutFix.newParams(Screen.dp(48f), Screen.dp(48f), Gravity.CENTER));
+      }
+    }
+
+    void bind (boolean loading) {
+      if (state != null) {
+        if (loading) {
+          state.setLoading(false, 38f);
+        } else {
+          state.setEmpty(XgramIconPack.map(R.drawable.baseline_emoticon_outline_24), Lang.getString(R.string.XgramTopicSearchNothing), null);
+        }
+        return;
+      }
+      if (text != null && progress != null) {
+        // The text keeps its room while loading, so the row does not change height when the answer comes
+        text.setVisibility(loading ? View.INVISIBLE : View.VISIBLE);
+        progress.setVisibility(loading ? View.VISIBLE : View.GONE);
+      }
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      if (progress != null) {
+        progress.attach();
+      }
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      super.onDetachedFromWindow();
+      if (progress != null) {
+        progress.detach();
+      }
+    }
+
+    @Override
+    public void onThemeInvalidate (boolean isTempUpdate) {
+      if (text != null) {
+        text.setTextColor(Theme.getColor(ColorId.textLight));
+      }
+      if (state != null) {
+        state.invalidate();
+      }
+      if (progress != null) {
+        progress.invalidate();
+      }
+    }
+
+    @Override
+    public void performDestroy () {
+      if (progress != null) {
+        progress.performDestroy();
       }
     }
   }
@@ -1882,7 +2584,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     public void onDraw (@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
       RecyclerView.LayoutManager manager = parent.getLayoutManager();
       final int itemCount = adapter.getItemCount();
-      if (manager == null || sections.isEmpty()) {
+      if (manager == null || shown.isEmpty()) {
         return;
       }
       final int span = spanCount();
@@ -1897,7 +2599,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         if (sectionIndex < 0) {
           continue;
         }
-        Section section = sections.get(sectionIndex);
+        Section section = shown.get(sectionIndex);
         int box = -1;
         for (int j = boxCount - 1; j >= 0; j--) {
           if (boxSections[j] == sectionIndex) {
@@ -1983,7 +2685,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         ((Destroyable) view).performDestroy();
         destroyables.remove(view);
       }
-      if (view instanceof TitleView) {
+      if (view instanceof TitleView || view instanceof StateRow) {
         removeThemeListenerByTarget(view);
       }
     }
@@ -1992,9 +2694,10 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private final class Adapter extends RecyclerView.Adapter<Holder> {
     @Override
     public int getItemCount () {
-      // Header, then (unless General, once the icons are known) the tab strip's slot when there is more than the
-      // default icons, then each section's title and icons: "no icon" and the default icons, the recent custom emoji
-      // (or the topic's own), every installed pack.
+      // Header, then (unless General, once the icons are known) the strip's slot (the search and, when there is more
+      // than the default icons, the tabs), then each section's title and icons: "no icon" and the default icons, the
+      // recent custom emoji (or the topic's own), every installed pack. While searching, the results' sections or a
+      // single row (loading, nothing found) under the slot.
       return itemCount;
     }
 
@@ -2005,6 +2708,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       }
       if (position == STRIP_POSITION && hasStrip()) {
         return VIEW_TYPE_TABS;
+      }
+      if (position == STRIP_POSITION + 1 && showsState()) {
+        return VIEW_TYPE_STATE;
       }
       Section section = sectionAt(position);
       return section != null && section.titlePosition == position ? VIEW_TYPE_TITLE : VIEW_TYPE_ICON;
@@ -2085,10 +2791,16 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           return new Holder(title);
         }
         case VIEW_TYPE_TABS: {
-          // The tab strip's slot: the strip itself floats over the list (see syncStrip)
+          // The strip's slot: the strip itself floats over the list (see syncStrip)
           View slot = new View(context);
           slot.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, stripSlotHeight()));
           return new Holder(slot);
+        }
+        case VIEW_TYPE_STATE: {
+          StateRow row = new StateRow(context);
+          destroyables.add(row);
+          addThemeInvalidateListener(row);
+          return new Holder(row);
         }
         case VIEW_TYPE_ICON:
         default: {
@@ -2116,6 +2828,15 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         bindTitle((TitleView) holder.itemView, position);
       } else if (viewType == VIEW_TYPE_ICON) {
         bindIcon((IconView) holder.itemView, position);
+      } else if (viewType == VIEW_TYPE_TABS) {
+        // The strip's height follows its tabs (hidden while searching); bound during layout, before it is measured
+        ViewGroup.LayoutParams params = holder.itemView.getLayoutParams();
+        int height = stripSlotHeight();
+        if (params != null && params.height != height) {
+          params.height = height;
+        }
+      } else if (viewType == VIEW_TYPE_STATE) {
+        ((StateRow) holder.itemView).bind(searchLoading);
       }
     }
 
@@ -2139,6 +2860,10 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         case SECTION_RECENT:
           title.setText(Lang.getString(section.currentOnly ? R.string.XgramTopicIconCurrent : R.string.XgramTopicIconsRecent));
           title.setLocked(false);
+          break;
+        case SECTION_FOUND:
+          title.setText(Lang.getString(section.titleRes));
+          title.setLocked(!premium && section.lockTitle);
           break;
         case SECTION_PACK:
         default:
@@ -2178,8 +2903,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       view.setTag(sticker != null ? sticker : PLACEHOLDER);
       long emojiId = sticker != null ? emojiIdOf(sticker.getSticker()) : 0;
       view.setSelectedIcon(emojiId != 0 && emojiId == customEmojiId);
-      // Without Premium a pack's emoji can't be picked (a tap explains why), unless it is the topic's own or a default
-      view.setLocked(!premium && section.kind == SECTION_PACK && emojiId != 0 && emojiId != initialCustomEmojiId && findIcon(emojiId) == null);
+      // Without Premium a pack's or a found custom emoji can't be picked (a tap explains why), unless it is the topic's
+      // own or a default icon
+      view.setLocked(!premium && (section.kind == SECTION_PACK || section.kind == SECTION_FOUND) && emojiId != 0 && emojiId != initialCustomEmojiId && findIcon(emojiId) == null);
     }
   }
 }
