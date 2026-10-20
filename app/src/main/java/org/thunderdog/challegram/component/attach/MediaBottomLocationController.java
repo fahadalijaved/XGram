@@ -367,6 +367,9 @@ public class MediaBottomLocationController extends MediaBottomBaseController<Voi
 
   /** XGram M3E: Telegram X's title case place headers, in sentence case while the English strings are in use. */
   private @androidx.annotation.StringRes int xgramHeaderRes (@androidx.annotation.StringRes int res) {
+    if (mediaLayout.xgramPickListener != null && res == R.string.SendCurrentLocation) {
+      return R.string.XgramCheckInUseLocation; // XGram Check In: picking a destination
+    }
     if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       return res;
     }

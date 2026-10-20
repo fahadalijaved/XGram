@@ -298,6 +298,7 @@ public final class XgramCheckInSheet {
     boolean loc = settings.checkInLocation(), bat = settings.checkInBattery();
     items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_xgramCheckInLocOpt, 0, Lang.getString(R.string.XgramCheckInIncludeLocation), loc));
     items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_xgramCheckInBatOpt, 0, Lang.getString(R.string.XgramCheckInIncludeBattery), bat));
+    items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION, R.id.btn_xgramCheckInArriveOpt, 0, Lang.getString(R.string.XgramCheckInArriveOpt), false));
 
     String headline = Lang.getString(R.string.XgramCheckInWith, title);
     SettingsWrapBuilder b = new SettingsWrapBuilder(R.id.btn_xgramCheckIn);
@@ -338,7 +339,7 @@ public final class XgramCheckInSheet {
       }
       s.loc = checked(adapter, R.id.btn_xgramCheckInLocOpt);
       s.bat = checked(adapter, R.id.btn_xgramCheckInBatOpt);
-      s.arrive = false;
+      s.arrive = checked(adapter, R.id.btn_xgramCheckInArriveOpt);
       if (wrap.window != null) {
         wrap.window.hideWindow(true);
       }
@@ -471,7 +472,56 @@ public final class XgramCheckInSheet {
   }
 
   private static void afterPermissions (StartState s) {
-    connectAndStart(s);
+    if (s.arrive) {
+      pickDestination(s);
+    } else {
+      connectAndStart(s);
+    }
+  }
+
+  /** "End when I arrive at a place…": the location picker in the chat pane; picking sends nothing. */
+  private static void pickDestination (StartState s) {
+    MessagesController c = s.c;
+    if (c.isDestroyed()) {
+      return;
+    }
+    org.thunderdog.challegram.component.attach.MediaLayout layout = new org.thunderdog.challegram.component.attach.MediaLayout(c);
+    layout.xgramPickListener = new PickListener() {
+      @Override
+      public void onPick (TdApi.Location location, @Nullable String title) {
+        s.hasDest = true;
+        s.destLat = location.latitude;
+        s.destLng = location.longitude;
+        s.destLabel = title != null ? title.trim() : "";
+        UI.post(() -> connectAndStart(s));
+      }
+
+      @Override
+      public void onCancel () {
+        UI.post(() -> askWithoutDestination(s));
+      }
+    };
+    // Set before init, so the location tab's header reads "Use this location" from the start.
+    layout.init(org.thunderdog.challegram.component.attach.MediaLayout.MODE_LOCATION, c);
+    layout.show();
+  }
+
+  private static void askWithoutDestination (StartState s) {
+    MessagesController c = s.c;
+    if (c.isDestroyed()) {
+      return;
+    }
+    c.showOptions(Lang.getString(R.string.XgramCheckInNoDestination), new int[] {R.id.btn_done, R.id.btn_cancel},
+      new String[] {Lang.getString(R.string.XgramCheckInStart), Lang.getString(R.string.Cancel)},
+      new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL},
+      new int[] {R.drawable.baseline_check_circle_24, R.drawable.baseline_cancel_24}, (v, id) -> {
+        if (id == R.id.btn_done) {
+          s.arrive = false;
+          s.hasDest = false;
+          connectAndStart(s);
+        }
+        return true;
+      });
   }
 
   @Nullable

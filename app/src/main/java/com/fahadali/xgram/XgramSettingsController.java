@@ -502,6 +502,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(com.fahadali.xgram.checkin.XgramCheckInSheet.durationName(settings.checkInTimer()));
         } else if (id == R.id.btn_xgramCheckInGrace) {
           view.setData(com.fahadali.xgram.checkin.XgramCheckInSheet.durationName(settings.checkInGrace()));
+        } else if (id == R.id.btn_xgramCheckInRadius) {
+          view.setData(com.fahadali.xgram.checkin.XgramCheckInSheet.radiusName(settings.checkInRadius()));
         } else if (id == R.id.btn_xgramCheckInLocation) {
           view.getToggler().setRadioEnabled(settings.checkInLocation(), isUpdate);
         } else if (id == R.id.btn_xgramCheckInBattery) {
@@ -857,6 +859,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     addRows(items,
       link(R.id.btn_xgramCheckInTimer, R.string.XgramCheckInTimer),
       link(R.id.btn_xgramCheckInGrace, R.string.XgramCheckInGrace),
+      link(R.id.btn_xgramCheckInRadius, R.string.XgramCheckInRadius),
       toggle(R.id.btn_xgramCheckInLocation, R.string.XgramCheckInIncludeLocation, R.string.XgramCheckInLocationSub),
       toggle(R.id.btn_xgramCheckInBattery, R.string.XgramCheckInIncludeBattery),
       toggle(R.id.btn_xgramCheckInFollowUp, R.string.XgramCheckInFollowUp, R.string.XgramCheckInFollowUpSub)
@@ -1693,6 +1696,20 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           settings.setCheckInGrace(choices[optionId - 1]);
         }
         adapter.updateValuedSettingById(timer ? R.id.btn_xgramCheckInTimer : R.id.btn_xgramCheckInGrace);
+        return true;
+      });
+      return;
+    } else if (id == R.id.btn_xgramCheckInRadius) {
+      final int[] radii = XgramSettings.CHECK_IN_RADII;
+      int[] optionIds = new int[radii.length];
+      String[] titles = new String[radii.length];
+      for (int i = 0; i < radii.length; i++) {
+        optionIds[i] = i + 1;
+        titles[i] = com.fahadali.xgram.checkin.XgramCheckInSheet.radiusName(radii[i]);
+      }
+      showOptions(null, optionIds, titles, null, null, (itemView, optionId) -> {
+        settings.setCheckInRadius(radii[optionId - 1]);
+        adapter.updateValuedSettingById(R.id.btn_xgramCheckInRadius);
         return true;
       });
       return;

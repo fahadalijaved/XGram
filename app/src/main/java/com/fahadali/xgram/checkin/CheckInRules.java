@@ -260,6 +260,10 @@ final class CheckInRules {
       return false;
     }
     float radius = Math.max(r.destRadius, 1);
+    if (fix.coarse) {
+      // Approximate location only: the radius is raised to what it can tell apart.
+      radius = Math.max(radius, fix.accuracy);
+    }
     if (fix.accuracy > Math.max(50f, radius)) {
       return false;
     }

@@ -1433,9 +1433,9 @@ public final class XgramCheckIn {
           }
         } else if (insideSince != 0) {
           setInside(0);
-          XgramCheckInService.refresh();
         }
         XgramCheckInNotifier.showOngoing(r);
+        XgramCheckInService.refresh(); // updates come faster within 1 km (the request only changes when needed)
       }
       checkPrompts(r);
       maybeEdit(false);

@@ -181,6 +181,14 @@ fun MessagesPage() {
       ) {
         settings.setCheckInGrace(it)
       }
+      // How close counts as arrived, for "End when I arrive at a place…".
+      buttons(
+        R.id.btn_xgramCheckInRadius, s(R.string.XgramCheckInRadius),
+        XgramSettings.CHECK_IN_RADII.map { XgramCheckInSheet.radiusName(it) to it },
+        selected = settings.checkInRadius()
+      ) {
+        settings.setCheckInRadius(it)
+      }
       val location = settings.checkInLocation()
       switch(R.id.btn_xgramCheckInLocation, s(R.string.XgramCheckInIncludeLocation), s(R.string.XgramCheckInLocationSub), checked = location) {
         settings.setCheckInLocation(it)
