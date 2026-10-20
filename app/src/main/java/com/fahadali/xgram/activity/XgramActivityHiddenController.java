@@ -92,14 +92,34 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     load();
   }
 
+  private boolean loading, reloadQueued;
+  /** Counts the chats shown (or hidden) again here, each after the store has it posted. */
+  private int changeEpoch;
+
   private void load () {
+    if (loading) {
+      reloadQueued = true;
+      return;
+    }
+    loading = true;
+    final int epoch = changeEpoch;
     XgramActivityStore.instance().hiddenChats(tdlib.id(), result -> {
       if (isDestroyed()) {
         return;
       }
-      chats = result;
-      loaded = true;
-      build();
+      loading = false;
+      // Listed before a chat was shown again here, they would list it again (and keep it): listed again instead, the
+      // store applies every change posted before a read first
+      final boolean stale = epoch != changeEpoch;
+      if (!stale) {
+        chats = result;
+        loaded = true;
+        build();
+      }
+      if (reloadQueued || stale) {
+        reloadQueued = false;
+        load();
+      }
     });
   }
 
@@ -177,6 +197,7 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     }
     final XgramActivityStore store = XgramActivityStore.instance();
     store.setChatHidden(tdlib.id(), chatId, false);
+    changeEpoch++;
     String title = Lang.getString(R.string.XgramActivityChatUnavailable);
     List<XgramActivityStore.HiddenChat> left = new ArrayList<>();
     for (XgramActivityStore.HiddenChat hidden : chats) {
@@ -191,6 +212,7 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     Runnable undo = () -> {
       store.setChatHidden(tdlib.id(), chatId, true);
       if (!isDestroyed()) {
+        changeEpoch++;
         load();
       }
     };

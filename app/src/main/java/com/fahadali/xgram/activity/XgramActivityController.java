@@ -461,7 +461,10 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   // The local copy follows what the page itself changes in the store at once: the store tells of a change only a
   // little later (its notify delay and the query), and a filter change meanwhile builds its rows from this copy
 
-  /** Counts the page's own changes to the copy: a query asked before one of them doesn't replace it (reload). */
+  /**
+   * Counts the page's own changes to the store (each one posted before it is counted): the rows of a query asked
+   * before one of them are not shown, the query is asked again (reload).
+   */
   private int localEpoch;
 
   /** Cleared here: out of the copy, so a change right after doesn't bring them back. */
@@ -816,6 +819,16 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         return;
       }
       loading = false;
+      if (queryLocalEpoch != localEpoch) {
+        // Asked before the page changed the store (a row cleared, a chat hidden, rows read): these rows are from
+        // before that change and would bring back, until the store's next notice, what it took away. Asked again:
+        // the store applies every change posted before a query first, and the rows shown already have this one.
+        final boolean replace = scrollToTop || replaceQueued;
+        reloadQueued = false;
+        replaceQueued = false;
+        reload(replace);
+        return;
+      }
       loaded = true;
       endReached = items.size() < requestedLimit;
       List<XgramActivityItem> visible = new ArrayList<>(items.size());
@@ -824,15 +837,12 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
           visible.add(item);
         }
       }
-      // Kept for a next change that only narrows this one (shown at once from here), unless the page changed the
-      // store after this query was asked: the copy it updated stays until the next query, which follows that change
-      if (queryLocalEpoch == localEpoch) {
-        lastItems = visible;
-        lastFilter = queryFilter;
-        lastUnread = queryUnread;
-        lastChats = queryChats;
-        lastComplete = endReached;
-      }
+      // Kept for a next change that only narrows this one (shown at once from here)
+      lastItems = visible;
+      lastFilter = queryFilter;
+      lastUnread = queryUnread;
+      lastChats = queryChats;
+      lastComplete = endReached;
       rows = XgramActivityRows.group(visible);
       if (awaitingSwapRows) {
         rowsReadyForSwap(); // a change's own rows: in place of the old ones
@@ -840,7 +850,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         applyRows(scrollToTop);
       }
       executeScheduledAnimation();
-      onRefreshRowsLoaded();
+      onRefreshRowsLoaded(request);
       if (!endReached && rows.size() < MIN_PAGE_ROWS && limit < XgramActivityStore.ROW_CAP) {
         // Too few rows to scroll (grouped replies, muted topics), so no scroll would ask for more: the next page now
         limit += PAGE;
@@ -1587,6 +1597,29 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
   }
 
+  /** Takes {@code gone} off the list at once (Clear read items; the store's change follows), and out of the local copy. */
+  private void removeItemsNow (@NonNull List<XgramActivityItem> gone) {
+    dropLocalItems(gone);
+    if (rows.isEmpty() || gone.isEmpty()) {
+      return;
+    }
+    final java.util.HashSet<String> keys = new java.util.HashSet<>(gone.size());
+    for (XgramActivityItem item : gone) {
+      keys.add(item.key);
+    }
+    final List<XgramActivityItem> shown = XgramActivityRows.itemsOf(rows);
+    final List<XgramActivityItem> kept = new ArrayList<>(shown.size());
+    for (XgramActivityItem item : shown) {
+      if (!keys.contains(item.key)) {
+        kept.add(item);
+      }
+    }
+    if (kept.size() != shown.size()) {
+      rows = XgramActivityRows.group(kept); // a group keeps its other replies
+      buildCells();
+    }
+  }
+
   /** Clear read items: the Read rows this filter shows (Reactions, Channel comments and Muted chats as set), with Undo. */
   private void clearRead () {
     final XgramActivityStore store = XgramActivityStore.instance();
@@ -1605,7 +1638,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         return;
       }
       store.clearReadItems(tdlib.id(), cleared);
-      dropLocalItems(cleared);
+      removeItemsNow(cleared);
       String text = cleared.size() == 1 ? Lang.getString(R.string.XgramActivityClearedOne) : Lang.getString(R.string.XgramActivityClearedMany, cleared.size());
       showUndo(text, () -> {
         store.restoreItems(tdlib.id(), cleared);
@@ -1683,8 +1716,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   // Mark all as read
 
   private void markAll () {
-    if (!XgramActivity.isOn()) {
-      return;
+    if (!XgramActivity.isOn() || !loaded || awaitingSwapRows) {
+      return; // the rows of what is shown now are not in yet (the ones on screen are the last choice's, or none)
     }
     final XgramActivityRead.Plan plan = XgramActivityRead.plan(tdlib, XgramActivityRows.itemsOf(rows), filter);
     if (plan.unread.isEmpty()) {
@@ -1731,7 +1764,6 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     if (serverChats >= 30) {
       showMessage(Lang.getString(R.string.XgramActivityMarking, serverChats), null, null);
     }
-    forgetLocalItems(); // what is read (and what Telegram stops) is the store's to say
     XgramActivityRead.run(tdlib, plan, (stoppedChats, flood) -> {
       if (flood && stoppedChats > 0) {
         showMessage(stoppedChats == 1 ? Lang.getString(R.string.XgramActivityMarkPartialOne) : Lang.getString(R.string.XgramActivityMarkPartialMany, stoppedChats), null, null);
@@ -1742,6 +1774,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         showMessage(Lang.getString(R.string.XgramActivityMarked), null, null);
       }
     });
+    forgetLocalItems(); // what is read (and what Telegram stops) is the store's to say; after the reads are posted
   }
 
   // Long press: the row's menu
@@ -1945,6 +1978,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   private long refreshStartedAt;
   /** The refresh waits for: the store's rows read again, and the searches it queued. */
   private boolean refreshRowsPending, refreshSyncPending, refreshQueued;
+  /** The last query asked before the pull: its rows (in flight then) are not the ones read again. */
+  private int refreshRowsAfter;
   @Nullable private String refreshStatus;
   private long refreshHoldMs;
 
@@ -1978,6 +2013,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     if (pullFrame != null) {
       pullFrame.announceForAccessibility(Lang.getString(R.string.XgramActivityUpdating));
     }
+    refreshRowsAfter = requestId;
     if (!loading) {
       reload(false);
     } else {
@@ -2018,9 +2054,12 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     });
   }
 
-  /** The store's rows came (after the pull). */
-  private void onRefreshRowsLoaded () {
-    if (refreshRowsPending) {
+  /**
+   * The store's rows came: the pull's once they are of a query asked after it ({@code request}). A query in flight
+   * when the pull began answers first, with the rows from before it, and would end the refresh with "Updated" early.
+   */
+  private void onRefreshRowsLoaded (int request) {
+    if (refreshRowsPending && request > refreshRowsAfter) {
       refreshRowsPending = false;
       maybeFinishRefresh();
     }
