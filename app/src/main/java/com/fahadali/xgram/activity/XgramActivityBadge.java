@@ -122,14 +122,24 @@ public final class XgramActivityBadge implements XgramActivityStore.ChangeListen
   /** The same for one filter (the chips). */
   @UiThread
   public static int count (@Nullable Tdlib tdlib, int filter) {
+    return count(tdlib, filter, null);
+  }
+
+  /** The same within the chats the page shows ({@code onlyChats}, sorted; null or empty: all chats). */
+  @UiThread
+  static int count (@Nullable Tdlib tdlib, int filter, @Nullable long[] onlyChats) {
     if (tdlib == null || !XgramActivity.isOn()) {
       return 0;
     }
     XgramActivityStore.Summary summary = XgramActivityStore.instance().summary(tdlib.id());
     final boolean reactions = XgramActivity.reactions(), discussion = XgramActivity.discussion();
+    final boolean someChats = onlyChats != null && onlyChats.length > 0;
     int count = 0;
     for (XgramActivityStore.Entry entry : summary.entries) {
       if (summary.isHidden(entry.chatId) || (entry.discussion && !discussion)) {
+        continue;
+      }
+      if (someChats && !XgramActivityChatFilter.contains(onlyChats, entry.chatId)) {
         continue;
       }
       final boolean isReaction = entry.kind == XgramActivityItem.KIND_REACTION;

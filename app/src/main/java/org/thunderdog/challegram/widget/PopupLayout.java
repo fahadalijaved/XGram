@@ -421,10 +421,32 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     dismissWindow();
   }
 
+  /**
+   * XGram: the activity this popup shows through, whatever context made it (a view's context can be a themed wrapper
+   * of it, e.g. a list row's: a cast of getContext() threw there).
+   */
+  @Nullable
+  private BaseActivity xgramActivity () {
+    return UI.getContext(getContext());
+  }
+
+  /** XGram: shows this popup through its activity, if it has one (nothing to show it in otherwise). */
+  private void xgramShowWindow () {
+    final BaseActivity activity = xgramActivity();
+    if (activity != null) {
+      activity.showPopupWindow(this);
+    } else {
+      android.util.Log.w("PopupLayout", "No activity to show the popup in");
+    }
+  }
+
   private void dismissWindow () {
     if (!isDismissed) {
       isDismissed = true;
-      ((BaseActivity) getContext()).removeWindowFromList(this);
+      final BaseActivity activity = xgramActivity();
+      if (activity != null) {
+        activity.removeWindowFromList(this);
+      }
       removeWindow();
 
       if (dismissListener != null) {
@@ -1010,9 +1032,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
 
     animationType = ANIMATION_TYPE_NONE;
     addView(view);
-    if (getContext() instanceof BaseActivity) {
-      ((BaseActivity) getContext()).showPopupWindow(this);
-    }
+    xgramShowWindow();
   }
 
   private View boundView;
@@ -1030,7 +1050,8 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
       throw new IllegalArgumentException();
     }
 
-    if (view instanceof OptionsLayout && UI.getContext(getContext()).hasMoreWindow()) {
+    final BaseActivity activity = xgramActivity();
+    if (view instanceof OptionsLayout && activity != null && activity.hasMoreWindow()) {
       needRevealStartDelay = true;
     }
 
@@ -1041,7 +1062,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     }
     view.setTranslationY(currentHeight = height);
     addView(boundView = view);
-    ((BaseActivity) getContext()).showPopupWindow(this);
+    xgramShowWindow();
   }
 
   public View getBoundView () {
@@ -1086,7 +1107,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     menuWrap.setPivotY(cy);
 
     addView(boundView = menuWrap);
-    ((BaseActivity) getContext()).showPopupWindow(this);
+    xgramShowWindow();
   }
 
   private void hideMoreWrap () {
@@ -1151,7 +1172,7 @@ public class PopupLayout extends RootFrameLayout implements FactorAnimator.Targe
     this.customAnimatorProvider = provider;
     provider.prepareShowAnimation();
     addView(boundView = view);
-    ((BaseActivity) getContext()).showPopupWindow(this);
+    xgramShowWindow();
   }
 
   public boolean shouldDisallowScreenshots () {

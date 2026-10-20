@@ -436,14 +436,21 @@ public class UI {
   }
 
   public static BaseActivity getContext (Context from) {
-    if (from instanceof BaseActivity) {
-      return (BaseActivity) from;
-    }
-    if (from instanceof ContextWrapper) {
-      Context baseContext = ((ContextWrapper) from).getBaseContext();
-      if (baseContext instanceof BaseActivity) {
-        return (BaseActivity) baseContext;
+    // XGram: through every wrapper, not only the first: a view inflated with android:theme (recycler_custom, the
+    // lists' rows) has a ContextThemeWrapper, and a themed view inside it another one
+    Context context = from;
+    for (int depth = 0; context != null && depth < 8; depth++) {
+      if (context instanceof BaseActivity) {
+        return (BaseActivity) context;
       }
+      if (!(context instanceof ContextWrapper)) {
+        break;
+      }
+      final Context baseContext = ((ContextWrapper) context).getBaseContext();
+      if (baseContext == context) {
+        break;
+      }
+      context = baseContext;
     }
     return null;
   }
