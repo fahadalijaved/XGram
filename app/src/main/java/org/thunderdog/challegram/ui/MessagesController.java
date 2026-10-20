@@ -2547,6 +2547,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (chat != null) {
         com.fahadali.xgram.chats.XgramFolderPicker.show(this, chat.id); // XGram
       }
+    } else if (id == R.id.btn_xgramLaterSnoozeChat) {
+      if (chat != null) {
+        com.fahadali.xgram.later.XgramLaterPicker.showForChats(this, tdlib, new long[] {chat.id}, null, null); // XGram Later
+      }
+    } else if (id == R.id.btn_xgramLaterUnsnooze) {
+      if (chat != null) {
+        com.fahadali.xgram.later.XgramLaterPicker.unsnooze(this, tdlib, chat.id); // XGram Later
+      }
     } else if (id == R.id.btn_xgramGoToFirstMessage) {
       if (chat != null) {
         // XGram: loads the history from its oldest message.
@@ -4447,6 +4455,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onFocus () {
     super.onFocus();
     xgramCheckAutoTranslate(); // XGram: e.g. a chat preview opened in full
+    com.fahadali.xgram.later.XgramLater.onChatOpened(this); // XGram: Later (the bell goes, a snoozed chat says so)
     if (promptDraftPrefillOnFocus) {
       promptDraftPrefillOnFocus = false;
       fillDraft(this.fillDraft, true);
@@ -4981,6 +4990,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (!inPreviewMode && com.fahadali.xgram.chats.XgramFolderPicker.canOffer(tdlib, chat)) {
       ids.append(R.id.btn_xgramAddToFolder); // XGram
       strings.append(R.string.AddToFolder);
+    }
+
+    if (!inPreviewMode && !isInForceTouchMode() && com.fahadali.xgram.later.XgramLater.canSnooze(tdlib, chat, null)) {
+      // XGram Later: the chat stays open, only its row leaves the lists
+      final boolean xgramSnoozed = com.fahadali.xgram.later.XgramLater.isSnoozedPending(tdlib, chat.id);
+      ids.append(xgramSnoozed ? R.id.btn_xgramLaterUnsnooze : R.id.btn_xgramLaterSnoozeChat);
+      strings.append(xgramSnoozed ? R.string.XgramLaterUnsnooze : R.string.XgramLaterSnoozeChat);
     }
 
     if (com.fahadali.xgram.chats.XgramLocalNames.canRename(tdlib, chat.id)) {

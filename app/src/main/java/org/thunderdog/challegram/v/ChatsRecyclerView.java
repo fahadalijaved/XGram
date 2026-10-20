@@ -199,6 +199,19 @@ public class ChatsRecyclerView extends CustomRecyclerView implements ClickHelper
     }
   }
 
+  /** XGram Later: a chat's bell came or went. */
+  public void xgramRefreshLaterRow (long chatId) {
+    int updated = adapter.xgramRefreshLaterRow(chatId);
+    if (updated != -1) {
+      invalidateViewAt(updated);
+    }
+  }
+
+  /** XGram Later: the Snoozed row's state (null: none). */
+  public void xgramSetSnoozedRow (@Nullable com.fahadali.xgram.later.XgramLater.RowState state) {
+    adapter.xgramSetSnoozedRow(state);
+  }
+
   public void updateChatReadInbox (long chatId, final long lastReadInboxMessageId, final int unreadCount) {
     int updated = adapter.updateChatReadInbox(chatId, lastReadInboxMessageId, unreadCount);
     if (updated != -1) {

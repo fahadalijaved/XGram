@@ -57,6 +57,8 @@ public class ChatsViewHolder extends RecyclerView.ViewHolder {
         return SettingHolder.measureHeightForType(ListItem.TYPE_LIST_INFO_VIEW);
       case ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS:
         return Screen.dp(SuggestedChatsView.DEFAULT_HEIGHT_DP);
+      case ChatsAdapter.VIEW_TYPE_XGRAM_SNOOZED:
+        return Screen.dp(com.fahadali.xgram.later.XgramSnoozedRowView.ROW_HEIGHT_DP); // XGram Later: in every chat list view
       default:
         throw new IllegalArgumentException("viewType = " + viewType);
     }
@@ -141,6 +143,17 @@ public class ChatsViewHolder extends RecyclerView.ViewHolder {
         view.setId(R.id.btn_chatsSuggestion);
         view.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         view.setOnClickListener(parentController);
+        if (themeProvider != null) {
+          themeProvider.addThemeInvalidateListener(view);
+        }
+        return new ChatsViewHolder(view);
+      }
+      case ChatsAdapter.VIEW_TYPE_XGRAM_SNOOZED: {
+        // XGram Later: the Snoozed row (id btn_xgramLaterSnoozedRow): opens Later, a long press has its menu
+        com.fahadali.xgram.later.XgramSnoozedRowView view = new com.fahadali.xgram.later.XgramSnoozedRowView(context, themeProvider);
+        view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(com.fahadali.xgram.later.XgramSnoozedRowView.ROW_HEIGHT_DP)));
+        view.setOnClickListener(parentController);
+        view.setOnLongClickListener(parentController);
         if (themeProvider != null) {
           themeProvider.addThemeInvalidateListener(view);
         }

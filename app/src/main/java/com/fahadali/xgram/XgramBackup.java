@@ -54,6 +54,8 @@ public final class XgramBackup {
     // Activity (Chat list), one by one: no prefix may match the per-viewer filter "xgram_actview_filter" (not a setting)
     XgramSettings.KEY_ACTIVITY_ON, XgramSettings.KEY_ACTIVITY_REACTIONS, XgramSettings.KEY_ACTIVITY_MUTED, XgramSettings.KEY_ACTIVITY_DISCUSSION,
     XgramSettings.KEY_ACTIVITY_LOOKBACK, XgramSettings.KEY_ACTIVITY_BADGE, XgramSettings.KEY_ACTIVITY_HEADER,
+    // Later (Chat list)
+    com.fahadali.xgram.later.XgramLater.KEY_ROW, com.fahadali.xgram.later.XgramLater.KEY_RAISE,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
@@ -93,6 +95,7 @@ public final class XgramBackup {
       values.put("hideAllChats", XgramSettings.instance().hideAllChats(account.id));
       values.put("hiddenFolders", hiddenFolders);
       values.put("autoTranslate", com.fahadali.xgram.chats.XgramAutoTranslate.exportAccount(account.id)); // chats set in their menu
+      values.put("later", com.fahadali.xgram.later.XgramLater.exportAccount(account.id)); // Later: pending and due items
       accounts.put(user, values);
     }
     return accounts;
@@ -131,12 +134,14 @@ public final class XgramBackup {
       if (values.has("autoTranslate")) {
         com.fahadali.xgram.chats.XgramAutoTranslate.importAccount(account.id, values.optJSONObject("autoTranslate"));
       }
+      com.fahadali.xgram.later.XgramLater.importAccount(account.id, values.optJSONArray("later")); // Later: merged, local items win
       count++;
     }
     return count;
   }
   private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
-  private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START, XgramSettings.KEY_ENTER_TO_SEND, XgramSettings.KEY_PANE_LIST_WIDTH, XgramSettings.KEY_NOTIFICATION_ICON, XgramSettings.KEY_REACTION_BAR, XgramSettings.KEY_NAV_TABS, XgramSettings.KEY_NAV_PROFILE, XgramSettings.KEY_NAV_STYLE, XgramSettings.KEY_NAV_FAB, XgramSettings.KEY_UNDO_SEND, XgramSettings.KEY_ACTIVITY_BAR};
+  private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START, XgramSettings.KEY_ENTER_TO_SEND, XgramSettings.KEY_PANE_LIST_WIDTH, XgramSettings.KEY_NOTIFICATION_ICON, XgramSettings.KEY_REACTION_BAR, XgramSettings.KEY_NAV_TABS, XgramSettings.KEY_NAV_PROFILE, XgramSettings.KEY_NAV_STYLE, XgramSettings.KEY_NAV_FAB, XgramSettings.KEY_UNDO_SEND, XgramSettings.KEY_ACTIVITY_BAR,
+    com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY}; // Later
   /** Data rather than settings: exported and imported, but kept by {@link #reset}. */
   private static final String[] LONG_PREFIXES = {"xgram_bm_"};
 
@@ -242,7 +247,8 @@ public final class XgramBackup {
       if (ints != null) {
         for (Iterator<String> it = ints.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.startsWith("xgram_tab_") || key.startsWith("xgram_cmode_") || key.equals("xgram_history_retention") || key.equals("xgram_avatar_corners") || key.equals("xgram_chat_long_press") || key.equals("xgram_download_boost_level") || key.equals("xgram_swipe_left") || key.equals("xgram_swipe_right") || key.equals("xgram_tr_provider") || key.equals(XgramSettings.KEY_INLINE_VIDEO_START) || key.equals(XgramSettings.KEY_ENTER_TO_SEND) || key.equals(XgramSettings.KEY_PANE_LIST_WIDTH) || key.equals(XgramSettings.KEY_NOTIFICATION_ICON) || key.equals(XgramSettings.KEY_REACTION_BAR) || key.equals(XgramSettings.KEY_NAV_TABS) || key.equals(XgramSettings.KEY_NAV_PROFILE) || key.equals(XgramSettings.KEY_NAV_STYLE) || key.equals(XgramSettings.KEY_NAV_FAB) || key.equals(XgramSettings.KEY_UNDO_SEND) || key.equals(XgramSettings.KEY_ACTIVITY_BAR)) {
+          if (key.startsWith("xgram_tab_") || key.startsWith("xgram_cmode_") || key.equals("xgram_history_retention") || key.equals("xgram_avatar_corners") || key.equals("xgram_chat_long_press") || key.equals("xgram_download_boost_level") || key.equals("xgram_swipe_left") || key.equals("xgram_swipe_right") || key.equals("xgram_tr_provider") || key.equals(XgramSettings.KEY_INLINE_VIDEO_START) || key.equals(XgramSettings.KEY_ENTER_TO_SEND) || key.equals(XgramSettings.KEY_PANE_LIST_WIDTH) || key.equals(XgramSettings.KEY_NOTIFICATION_ICON) || key.equals(XgramSettings.KEY_REACTION_BAR) || key.equals(XgramSettings.KEY_NAV_TABS) || key.equals(XgramSettings.KEY_NAV_PROFILE) || key.equals(XgramSettings.KEY_NAV_STYLE) || key.equals(XgramSettings.KEY_NAV_FAB) || key.equals(XgramSettings.KEY_UNDO_SEND) || key.equals(XgramSettings.KEY_ACTIVITY_BAR) ||
+            key.equals(com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY)) { // Later
             pmc().putInt(key, ints.getInt(key));
             count++;
           }

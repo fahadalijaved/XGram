@@ -110,6 +110,12 @@ public final class XgramMessageActions {
     ids.append(R.id.btn_xgramBookmark);
     strings.append(bookmarked ? R.string.XgramRemoveBookmark : R.string.XgramBookmark);
     icons.append(bookmarked ? R.drawable.baseline_star_24 : R.drawable.baseline_star_border_24);
+    if (!msg.isScheduled()) {
+      // Later: a reminder on this device (or a follow-up on your own message), with its time once set
+      ids.append(R.id.btn_xgramLaterRemind);
+      strings.append(com.fahadali.xgram.later.XgramLater.remindLabel(tdlib, chatId, msg.getMessage().id));
+      icons.append(R.drawable.baseline_watch_later_24);
+    }
     // Repeat sends a copy; ForwardMessages doesn't support reply threads.
     if (msg.xgramCanBeCopied() && m.canWriteMessages() && !(m.getMessageTopicId() instanceof TdApi.MessageTopicThread)) {
       ids.append(R.id.btn_xgramRepeat);
@@ -206,6 +212,10 @@ public final class XgramMessageActions {
       boolean bookmark = !XgramBookmarks.isBookmarked(tdlib, chatId, messageId);
       XgramBookmarks.setBookmarked(tdlib, chatId, messageId, bookmark);
       UI.showToast(bookmark ? R.string.XgramBookmarked : R.string.XgramBookmarkRemoved, Toast.LENGTH_SHORT);
+      return true;
+    }
+    if (id == R.id.btn_xgramLaterRemind) {
+      com.fahadali.xgram.later.XgramLaterPicker.showForMessage(m, msg);
       return true;
     }
     if (id == R.id.btn_xgramRepeat) {

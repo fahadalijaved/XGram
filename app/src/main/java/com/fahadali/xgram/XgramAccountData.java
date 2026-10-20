@@ -37,7 +37,8 @@ public final class XgramAccountData {
     "xgram_bm_", "xgram_sb_", "xgram_ln_", "xgram_ghost_ex_", "xgram_ls_", "xgram_lr_", "xgram_tab_", "xgram_tabs_side_",
     "xgram_cm_", "xgram_cmode_", com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX,
     // Undo send: waiting messages (journal), "your message is back" hints, chats where messages don't wait
-    "xgram_usq_", "xgram_usqh_", XgramSettings.KEY_UNDO_SEND_EXCLUDE
+    "xgram_usq_", "xgram_usqh_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
+    com.fahadali.xgram.later.XgramLaterRecord.PREFIX // Later
   };
 
   /** TDLib thread: the account in this slot logged out. */
@@ -64,6 +65,7 @@ public final class XgramAccountData {
       com.fahadali.xgram.topics.XgramTopicMute.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramAiTools.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramCommunities.forgetAccount(accountId);
+      com.fahadali.xgram.later.XgramLater.forgetAccount(accountId); // Later: its notifications and alarm too
       XgramHistory.instance().clearAccount(accountId);
       com.fahadali.xgram.activity.XgramActivity.forgetAccount(accountId); // its own store, not prefixed settings
     } catch (Throwable t) {

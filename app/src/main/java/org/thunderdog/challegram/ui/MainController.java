@@ -3408,6 +3408,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
           id = R.id.btn_xgramBookmarks;
           title = R.string.XgramBookmarks;
           break;
+        case "later":
+          id = R.id.btn_xgramLater; // XGram Later
+          title = R.string.XgramLater;
+          break;
         case "saved_by_chat":
           id = R.id.btn_xgramSavedByChat;
           title = R.string.XgramSavedByChat;
@@ -3584,6 +3588,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       xgramOpenSavedMessages();
     } else if (id == R.id.btn_xgramBookmarks) {
       navigateTo(new com.fahadali.xgram.chats.XgramBookmarksController(context, tdlib));
+    } else if (id == R.id.btn_xgramLater) {
+      navigateTo(new com.fahadali.xgram.later.XgramLaterController(context, tdlib)); // XGram Later
     } else if (id == R.id.btn_xgramSavedByChat) {
       navigateTo(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib));
     } else if (id == R.id.btn_settings) {

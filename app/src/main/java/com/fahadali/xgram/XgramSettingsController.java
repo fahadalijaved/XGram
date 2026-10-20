@@ -468,6 +468,14 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramActivityHidden) {
           int hidden = com.fahadali.xgram.activity.XgramActivityStore.instance().summary(tdlib.id()).hiddenCount();
           view.setData(hidden == 0 ? Lang.getString(R.string.XgramNone) : hidden == 1 ? Lang.getString(R.string.XgramActivityHiddenCountOne) : Lang.getString(R.string.XgramActivityHiddenCountMany, hidden));
+        } else if (id == R.id.btn_xgramLaterRow) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.later.XgramLater.showRow(), isUpdate);
+        } else if (id == R.id.btn_xgramLaterRaise) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.later.XgramLater.raiseWoken(), isUpdate);
+        } else if (id == R.id.btn_xgramLaterWakeEarly) {
+          view.setData(com.fahadali.xgram.later.XgramLater.wakeEarlyName(com.fahadali.xgram.later.XgramLater.wakeEarlyMode()));
+        } else if (id == R.id.btn_xgramLaterExact) {
+          view.setData(com.fahadali.xgram.later.XgramLater.exactRowValue(context()));
         } else if (id == R.id.btn_xgramR7ChannelReactions) {
           view.getToggler().setRadioEnabled(settings.channelReactions(), isUpdate);
         } else if (id == R.id.btn_xgramSaveLastSeen) {
@@ -844,6 +852,16 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         toggle(R.id.btn_xgramActivityDebugThrow, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugThrow, R.string.XgramActivityDebugThrowInfo)
       );
     }
+
+    // Later: snoozed chats and reminders
+    items.add(header(R.string.XgramLaterHeader));
+    addRows(items,
+      toggle(R.id.btn_xgramLaterRow, R.string.XgramLaterRowSetting, R.string.XgramLaterRowSettingSub),
+      toggle(R.id.btn_xgramLaterRaise, R.string.XgramLaterRaise, R.string.XgramLaterRaiseSub),
+      link(R.id.btn_xgramLaterWakeEarly, R.string.XgramLaterWakeEarly),
+      link(R.id.btn_xgramLaterExact, R.string.XgramLaterExact),
+      link(R.id.btn_xgramLaterChannel, 0, R.string.XgramLaterChannelLink, R.string.XgramLaterChannelLinkSub)
+    );
 
     items.add(header(R.string.XgramHeaderScreen));
     addRows(items,
@@ -1789,6 +1807,21 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramMergeCommunities) {
       settings.setMergeCommunities(adapter.toggleView(v));
       com.fahadali.xgram.chats.XgramCommunities.notifyAllAccounts(); // the setting is shared by every account
+      return;
+    } else if (id == R.id.btn_xgramLaterRow) {
+      com.fahadali.xgram.later.XgramLater.setShowRow(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramLaterRaise) {
+      com.fahadali.xgram.later.XgramLater.setRaiseWoken(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramLaterWakeEarly) {
+      com.fahadali.xgram.later.XgramLater.showWakeEarlyPicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramLaterWakeEarly));
+      return;
+    } else if (id == R.id.btn_xgramLaterExact) {
+      com.fahadali.xgram.later.XgramLater.openExactRow(this);
+      return;
+    } else if (id == R.id.btn_xgramLaterChannel) {
+      com.fahadali.xgram.later.XgramLater.openReminderChannelSettings(context());
       return;
     } else if (id == R.id.btn_xgramHideBlocked) {
       settings.setHideBlocked(adapter.toggleView(v));

@@ -32,6 +32,7 @@ import com.fahadali.xgram.appearance.XgramChatListViewCard
 import com.fahadali.xgram.chats.XgramChatListMode
 import com.fahadali.xgram.chats.XgramChatLongPress
 import com.fahadali.xgram.chats.XgramCommunities
+import com.fahadali.xgram.compose.ChoiceSpec
 import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramPage
@@ -40,6 +41,8 @@ import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.layout.XgramNavToolbar
+import com.fahadali.xgram.later.XgramLater
+import com.fahadali.xgram.later.XgramLaterRecord
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.unsorted.Settings
 
@@ -203,6 +206,44 @@ fun ChatListPage() {
           com.fahadali.xgram.activity.XgramActivity.setDebugCollectorThrows(it)
           host.changed()
         }
+      }
+    }
+
+    // Later: snoozed chats and reminders (the same rows as the classic page)
+    header(R.string.XgramLaterHeader)
+    group {
+      switch(R.id.btn_xgramLaterRow, s(R.string.XgramLaterRowSetting), s(R.string.XgramLaterRowSettingSub), checked = XgramLater.showRow()) {
+        XgramLater.setShowRow(it)
+      }
+      switch(R.id.btn_xgramLaterRaise, s(R.string.XgramLaterRaise), s(R.string.XgramLaterRaiseSub), checked = XgramLater.raiseWoken()) {
+        XgramLater.setRaiseWoken(it)
+      }
+      value(R.id.btn_xgramLaterWakeEarly, s(R.string.XgramLaterWakeEarly), XgramLater.wakeEarlyName(XgramLater.wakeEarlyMode())) {
+        host.choose(
+          ChoiceSpec(
+            title = s(R.string.XgramLaterWakeEarly),
+            options = listOf(
+              s(R.string.XgramLaterWakeToMe) to XgramLaterRecord.WAKE_TO_ME,
+              s(R.string.XgramLaterWakeAny) to XgramLaterRecord.WAKE_ANY,
+              s(R.string.XgramLaterWakeTimeOnly) to XgramLaterRecord.WAKE_TIME_ONLY
+            ),
+            selected = XgramLater.wakeEarlyMode(),
+            // XGram Later: the sub-line belongs to "On messages to me" only
+            subtitles = listOf(s(R.string.XgramLaterWakeToMeSub), null, null)
+          ) { mode ->
+            XgramLater.setWakeEarlyMode(mode)
+            host.changed()
+          }
+        )
+      }
+      value(
+        R.id.btn_xgramLaterExact, s(R.string.XgramLaterExact),
+        XgramLater.exactRowValue(host.activity)
+      ) {
+        XgramLater.openExactRow(host.controller)
+      }
+      link(R.id.btn_xgramLaterChannel, s(R.string.XgramLaterChannelLink), s(R.string.XgramLaterChannelLinkSub)) {
+        XgramLater.openReminderChannelSettings(host.activity)
       }
     }
 
