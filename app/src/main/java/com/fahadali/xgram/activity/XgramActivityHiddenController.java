@@ -16,14 +16,18 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramR5People;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.data.AvatarPlaceholder;
 import org.thunderdog.challegram.data.DoubleTextWrapper;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibAccentColor;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.RecyclerViewController;
@@ -42,9 +46,10 @@ import java.util.Set;
  */
 public final class XgramActivityHiddenController extends RecyclerViewController<Void> implements View.OnClickListener {
   private SettingsAdapter adapter;
-  private long[] chats = new long[0];
+  @NonNull private List<XgramActivityStore.HiddenChat> chats = new ArrayList<>();
   private boolean loaded;
   private final Set<Long> requested = new HashSet<>();
+  private final XgramActivityUndoBar classicUndo = new XgramActivityUndoBar(this);
 
   public XgramActivityHiddenController (Context context, Tdlib tdlib) {
     super(context, tdlib);
@@ -103,36 +108,62 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     List<ListItem> items = new ArrayList<>();
     if (!loaded) {
       items.add(expressive ? new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.LOADING_ROW) : new ListItem(ListItem.TYPE_PROGRESS));
-    } else if (chats.length == 0) {
-      if (expressive) {
-        items.add(new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.STATE_ROW));
-      } else {
-        items.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.XgramActivityHiddenEmpty));
-      }
+    } else if (chats.isEmpty()) {
+      addEmpty(items, expressive);
     } else {
       items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       boolean first = true;
-      for (long chatId : chats) {
+      for (XgramActivityStore.HiddenChat hidden : chats) {
+        final long chatId = hidden.chatId;
         TdApi.Chat chat = tdlib.chat(chatId);
-        if (chat == null) {
-          if (requested.add(chatId)) { // not loaded yet: built again once it is
-            tdlib.send(new TdApi.GetChat(chatId), (result, error) -> runOnUiThreadOptional(this::build));
-          }
-          continue;
+        if (chat == null && requested.add(chatId)) {
+          // Not loaded yet: built again once it is (until then, and if TDLib can't find it, by its saved title)
+          tdlib.send(new TdApi.GetChat(chatId), (result, error) -> runOnUiThreadOptional(this::build));
         }
         if (!first) {
           items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
         }
         first = false;
-        DoubleTextWrapper wrapper = new DoubleTextWrapper(tdlib, chat, true, false);
-        wrapper.setForcedSubtitle(Lang.getString(R.string.XgramActivityUnhide));
+        final DoubleTextWrapper wrapper;
+        if (chat != null) {
+          wrapper = new DoubleTextWrapper(tdlib, chat, true, false);
+          wrapper.setForcedSubtitle(Lang.getString(R.string.XgramActivityUnhide));
+        } else {
+          // A chat this device doesn't have (left, or after a new login): it can still be shown again
+          wrapper = new DoubleTextWrapper(tdlib, titleOf(hidden), Lang.getString(R.string.XgramActivityUnhide),
+            new AvatarPlaceholder.Metadata(tdlib.accentColor(TdlibAccentColor.InternalId.INACTIVE), R.drawable.baseline_eye_off_24));
+        }
         items.add(new ListItem(ListItem.TYPE_CHAT_SMALL, R.id.btn_xgramActivityHiddenChat).setData(wrapper).setLongId(chatId)
           .setStringValue(Lang.getString(R.string.XgramActivityUnhide)));
       }
-      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      if (first) {
+        // No row came out of it: the empty state, not an empty group
+        items.clear();
+        addEmpty(items, expressive);
+      } else {
+        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      }
     }
     adapter.setItems(items, false);
+  }
+
+  private static void addEmpty (List<ListItem> items, boolean expressive) {
+    if (expressive) {
+      items.add(new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.STATE_ROW));
+    } else {
+      items.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.XgramActivityHiddenEmpty));
+    }
+  }
+
+  /** The chat's title now, else the one its items saved, else "Chat unavailable". */
+  @NonNull
+  private String titleOf (@NonNull XgramActivityStore.HiddenChat hidden) {
+    String title = tdlib.chat(hidden.chatId) != null ? tdlib.chatTitle(hidden.chatId) : null;
+    if (title == null || title.isEmpty()) {
+      title = hidden.savedTitle;
+    }
+    return title != null && !title.isEmpty() ? title : Lang.getString(R.string.XgramActivityChatUnavailable);
   }
 
   @Override
@@ -146,26 +177,33 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     }
     final XgramActivityStore store = XgramActivityStore.instance();
     store.setChatHidden(tdlib.id(), chatId, false);
-    List<Long> left = new ArrayList<>();
-    for (long id : chats) {
-      if (id != chatId) {
-        left.add(id);
+    String title = Lang.getString(R.string.XgramActivityChatUnavailable);
+    List<XgramActivityStore.HiddenChat> left = new ArrayList<>();
+    for (XgramActivityStore.HiddenChat hidden : chats) {
+      if (hidden.chatId != chatId) {
+        left.add(hidden);
+      } else {
+        title = titleOf(hidden);
       }
     }
-    chats = new long[left.size()];
-    for (int i = 0; i < chats.length; i++) {
-      chats[i] = left.get(i);
-    }
+    chats = left;
     build();
-    final String title = tdlib.chatTitle(chatId);
     Runnable undo = () -> {
       store.setChatHidden(tdlib.id(), chatId, true);
       if (!isDestroyed()) {
         load();
       }
     };
-    if (!com.fahadali.xgram.appearance.XgramSnackbar.showUndo(Lang.getString(R.string.XgramActivityChatShown, title), undo)) {
-      UI.showToast(Lang.getString(R.string.XgramActivityChatShown, title), Toast.LENGTH_SHORT);
+    // Undo in both looks: Material 3's snackbar, or Telegram X's SnackBar
+    final String text = Lang.getString(R.string.XgramActivityChatShown, title);
+    if (XgramExpressive.isEnabled() ? !com.fahadali.xgram.appearance.XgramSnackbar.showUndo(text, undo) : !classicUndo.show(text, undo, extraBottomInset)) {
+      UI.showToast(text, Toast.LENGTH_SHORT);
     }
+  }
+
+  @Override
+  public void destroy () {
+    classicUndo.destroy();
+    super.destroy();
   }
 }

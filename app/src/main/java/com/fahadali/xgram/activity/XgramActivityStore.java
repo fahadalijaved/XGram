@@ -214,8 +214,12 @@ public final class XgramActivityStore {
             continue; // made before the account's data was erased
           }
           try {
+            // Only an action that changed rows tells the screens and badges (counter checks and repeated reads don't)
+            final long changesBefore = totalChanges(db);
             p.action.run(db);
-            touched.add(p.accountId);
+            if (totalChanges(db) != changesBefore) {
+              touched.add(p.accountId);
+            }
           } catch (Throwable t) {
             Log.e(TAG, "Event failed", t);
           }
@@ -233,6 +237,11 @@ public final class XgramActivityStore {
     if (!touched.isEmpty()) {
       scheduleNotify(touched);
     }
+  }
+
+  /** Rows inserted, updated or deleted on this connection so far (the batch runs in one transaction, on one connection). */
+  private static long totalChanges (SQLiteDatabase db) {
+    return android.database.DatabaseUtils.longForQuery(db, "SELECT total_changes()", null);
   }
 
   // Change notification: debounced, then once on the UI thread
@@ -305,14 +314,17 @@ public final class XgramActivityStore {
     public final boolean discussion;
     /** Of {@link #count}, mentions that are also replies (counted under Replies too). */
     public final int alsoReplyCount;
+    /** Of {@link #count}, the ones the user marked unread (read on the server, so TDLib doesn't count them). */
+    public final int userUnreadCount;
     public final int count;
 
-    Entry (long chatId, int topicId, int kind, boolean discussion, int alsoReplyCount, int count) {
+    Entry (long chatId, int topicId, int kind, boolean discussion, int alsoReplyCount, int userUnreadCount, int count) {
       this.chatId = chatId;
       this.topicId = topicId;
       this.kind = kind;
       this.discussion = discussion;
       this.alsoReplyCount = alsoReplyCount;
+      this.userUnreadCount = userUnreadCount;
       this.count = count;
     }
   }
@@ -388,6 +400,27 @@ public final class XgramActivityStore {
       }
       return count;
     }
+
+    /** {@link #newCount} without the ones the user marked unread: what TDLib's counter of the chat should match. */
+    public int syncCount (long chatId, int kindMask) {
+      int count = 0;
+      for (Entry entry : entries) {
+        if (entry.chatId == chatId && (kindMask & (1 << entry.kind)) != 0) {
+          count += entry.count - entry.userUnreadCount;
+        }
+      }
+      return count;
+    }
+
+    /** The chats with New items, sorted. Shared: not to be changed. */
+    long[] chatsWithNew () {
+      return newChats;
+    }
+
+    /** The chats with items of any state, sorted. Shared: not to be changed. */
+    long[] knownChats () {
+      return knownChats;
+    }
   }
 
   private static final Summary EMPTY = new Summary(-1, new Entry[0], new long[0], new long[0], new long[0], SyncStatus.NONE, false);
@@ -429,10 +462,10 @@ public final class XgramActivityStore {
     String[] args = {String.valueOf(accountId)};
     List<Entry> entries = new ArrayList<>();
     Set<Long> newChats = new HashSet<>();
-    try (Cursor c = db.rawQuery("SELECT chat, topic, kind, (flags & 24) != 0, SUM((flags & 4) != 0), COUNT(*) FROM items " +
+    try (Cursor c = db.rawQuery("SELECT chat, topic, kind, (flags & 24) != 0, SUM((flags & 4) != 0), SUM((flags & 64) != 0), COUNT(*) FROM items " +
       "WHERE account = ? AND state = 0 GROUP BY chat, topic, kind, (flags & 24) != 0", args)) {
       while (c.moveToNext()) {
-        entries.add(new Entry(c.getLong(0), c.getInt(1), c.getInt(2), c.getInt(3) != 0, c.getInt(4), c.getInt(5)));
+        entries.add(new Entry(c.getLong(0), c.getInt(1), c.getInt(2), c.getInt(3) != 0, c.getInt(4), c.getInt(5), c.getInt(6)));
         newChats.add(c.getLong(0));
       }
     }
@@ -594,8 +627,9 @@ public final class XgramActivityStore {
         s.accountId, s.chatId, s.messageId, kind});
   }
 
+  /** The message was read (here or elsewhere): its items are Read, a Mark as unread of them included. */
   static void markRead (SQLiteDatabase db, int accountId, long chatId, long messageId, int kindMask, boolean local) {
-    db.execSQL("UPDATE items SET state = 1, flags = flags | ?, updated = ? WHERE account = ? AND chat = ? AND msg = ? AND state = 0 AND " + kindsSql(kindMask),
+    db.execSQL("UPDATE items SET state = 1, flags = (flags | ?) & ~64, updated = ? WHERE account = ? AND chat = ? AND msg = ? AND state = 0 AND " + kindsSql(kindMask),
       new Object[] {local ? XgramActivityItem.FLAG_READ_LOCAL : 0, System.currentTimeMillis(), accountId, chatId, messageId});
   }
 
@@ -603,34 +637,52 @@ public final class XgramActivityStore {
     if (albumId == 0) {
       return;
     }
-    db.execSQL("UPDATE items SET state = 1, flags = flags | ?, updated = ? WHERE account = ? AND chat = ? AND album = ? AND state = 0 AND " + kindsSql(kindMask),
+    db.execSQL("UPDATE items SET state = 1, flags = (flags | ?) & ~64, updated = ? WHERE account = ? AND chat = ? AND album = ? AND state = 0 AND " + kindsSql(kindMask),
       new Object[] {local ? XgramActivityItem.FLAG_READ_LOCAL : 0, System.currentTimeMillis(), accountId, chatId, albumId});
   }
 
+  /**
+   * A chat's counter went to 0: its New items in {@code kindMask} are read. Not the ones the user marked unread here,
+   * and never Replies chat items (the Replies chat reads by its read position, {@link #markReadUpTo}).
+   */
   static void markReadChat (SQLiteDatabase db, int accountId, long chatId, int kindMask) {
-    db.execSQL("UPDATE items SET state = 1, updated = ? WHERE account = ? AND chat = ? AND state = 0 AND " + kindsSql(kindMask),
-      new Object[] {System.currentTimeMillis(), accountId, chatId});
+    markReadChat(db, accountId, chatId, kindMask, 0);
+  }
+
+  /** The same, only for items stored before {@code beforeMs} (0: any): newer ones may be ahead of their counter update. */
+  static void markReadChat (SQLiteDatabase db, int accountId, long chatId, int kindMask, long beforeMs) {
+    db.execSQL("UPDATE items SET state = 1, updated = ? WHERE account = ? AND chat = ? AND state = 0 AND (flags & 80) = 0 AND updated < ? AND " + kindsSql(kindMask),
+      new Object[] {System.currentTimeMillis(), accountId, chatId, beforeMs > 0 ? beforeMs : Long.MAX_VALUE});
   }
 
   static void markReadUpTo (SQLiteDatabase db, int accountId, long chatId, long upToMessageId, int kindMask) {
-    db.execSQL("UPDATE items SET state = 1, updated = ? WHERE account = ? AND chat = ? AND msg <= ? AND state = 0 AND " + kindsSql(kindMask),
+    db.execSQL("UPDATE items SET state = 1, updated = ? WHERE account = ? AND chat = ? AND msg <= ? AND state = 0 AND (flags & 64) = 0 AND " + kindsSql(kindMask),
       new Object[] {System.currentTimeMillis(), accountId, chatId, upToMessageId});
   }
 
-  /** User actions on rows: {@code toState} for the rows that are in {@code fromState} (-1: any but Cleared). */
+  /**
+   * User actions on rows: {@code toState} for the rows that are in {@code fromState} (-1: any but Cleared). A read or
+   * a clear ends a Mark as unread; {@code local} marks a read on this device only.
+   */
   static void setState (SQLiteDatabase db, List<XgramActivityItem> items, int fromState, int toState, boolean local) {
+    setState(db, items, fromState, toState, local ? XgramActivityItem.FLAG_READ_LOCAL : 0,
+      toState == XgramActivityItem.STATE_NEW ? XgramActivityItem.FLAG_READ_LOCAL : XgramActivityItem.FLAG_USER_UNREAD);
+  }
+
+  static void setState (SQLiteDatabase db, List<XgramActivityItem> items, int fromState, int toState, int addFlags, int clearFlags) {
+    final String where = fromState == -1 ? "state != 2" : "state = " + fromState;
     for (XgramActivityItem item : items) {
-      String where = fromState == -1 ? "state != 2" : "state = " + fromState;
-      db.execSQL("UPDATE items SET state = ?, flags = flags | ?, updated = ? WHERE account = ? AND chat = ? AND msg = ? AND kind = ? AND " + where,
-        new Object[] {toState, local ? XgramActivityItem.FLAG_READ_LOCAL : 0, System.currentTimeMillis(), item.accountId, item.chatId, item.messageId, item.kind});
+      db.execSQL("UPDATE items SET state = ?, flags = (flags & ~?) | ?, updated = ? WHERE account = ? AND chat = ? AND msg = ? AND kind = ? AND " + where,
+        new Object[] {toState, clearFlags, addFlags, System.currentTimeMillis(), item.accountId, item.chatId, item.messageId, item.kind});
     }
   }
 
-  /** Undo of a Clear: every row back to the state it had (the token's). */
+  /** Undo of a Clear: every row back to the state it had (the token's), a Mark as unread included. */
   static void restoreStates (SQLiteDatabase db, List<XgramActivityItem> items) {
     for (XgramActivityItem item : items) {
-      db.execSQL("UPDATE items SET state = ?, updated = ? WHERE account = ? AND chat = ? AND msg = ? AND kind = ? AND state = 2",
-        new Object[] {item.state, System.currentTimeMillis(), item.accountId, item.chatId, item.messageId, item.kind});
+      db.execSQL("UPDATE items SET state = ?, flags = flags | ?, updated = ? WHERE account = ? AND chat = ? AND msg = ? AND kind = ? AND state = 2",
+        new Object[] {item.state, item.state == XgramActivityItem.STATE_NEW ? item.flags & XgramActivityItem.FLAG_USER_UNREAD : 0,
+          System.currentTimeMillis(), item.accountId, item.chatId, item.messageId, item.kind});
     }
   }
 
@@ -675,9 +727,10 @@ public final class XgramActivityStore {
 
   /**
    * Reactors are added; a live update with someone new makes the row New again (even a Read or Cleared one) and moves
-   * it to the top. While the row is still New, a shorter list means reactions were taken back: those go. (A Read
-   * row's reactions are no longer in TDLib's unread list, so a later list only adds.) Search results never change a
-   * row's state, and a row they create starts at the message's date.
+   * it to the top. TDLib's list has the unread reactions only, so each reactor keeps whether it is still unread (a
+   * read of the row ends that, see the reactors_read trigger): a live list without one of the unread ones means it was
+   * taken back, and it goes; read ones stay. Search results never change a row's state, and a row they create starts
+   * at the message's date.
    */
   static void reactions (SQLiteDatabase db, Reactions r) {
     final long now = nowSeconds();
@@ -715,18 +768,14 @@ public final class XgramActivityStore {
       return;
     }
     String[] itemArgs = {String.valueOf(r.accountId), String.valueOf(r.chatId), String.valueOf(r.messageId)};
-    int stored;
-    try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM reactors WHERE account = ? AND chat = ? AND msg = ?", itemArgs)) {
-      stored = c.moveToFirst() ? c.getInt(0) : 0;
-    }
-    if (live && state == XgramActivityItem.STATE_NEW) {
-      // Taken back while unread: what the list no longer has goes
+    if (live) {
+      // Taken back: the unread reactors the list no longer has go (read ones are not in TDLib's list at all)
       Set<String> listed = new HashSet<>();
       for (XgramActivityItem.Reactor reactor : r.reactors) {
         listed.add(reactor.sender + "|" + reactor.reaction);
       }
       List<String[]> gone = new ArrayList<>();
-      try (Cursor c = db.rawQuery("SELECT sender, reaction FROM reactors WHERE account = ? AND chat = ? AND msg = ?", itemArgs)) {
+      try (Cursor c = db.rawQuery("SELECT sender, reaction FROM reactors WHERE account = ? AND chat = ? AND msg = ? AND unread != 0", itemArgs)) {
         while (c.moveToNext()) {
           if (!listed.contains(c.getLong(0) + "|" + c.getString(1))) {
             gone.add(new String[] {itemArgs[0], itemArgs[1], itemArgs[2], String.valueOf(c.getLong(0)), c.getString(1)});
@@ -735,8 +784,16 @@ public final class XgramActivityStore {
       }
       for (String[] args : gone) {
         db.delete("reactors", "account = ? AND chat = ? AND msg = ? AND sender = ? AND reaction = ?", args);
-        stored--;
       }
+    }
+    // Who TDLib lists is unread (again, for one read here only, as in ghost mode)
+    for (XgramActivityItem.Reactor reactor : r.reactors) {
+      db.execSQL("UPDATE reactors SET unread = 1 WHERE account = ? AND chat = ? AND msg = ? AND sender = ? AND reaction = ? AND unread = 0",
+        new Object[] {r.accountId, r.chatId, r.messageId, reactor.sender, reactor.reaction});
+    }
+    int stored;
+    try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM reactors WHERE account = ? AND chat = ? AND msg = ?", itemArgs)) {
+      stored = c.moveToFirst() ? c.getInt(0) : 0;
     }
     int added = 0;
     for (XgramActivityItem.Reactor reactor : r.reactors) {
@@ -762,7 +819,8 @@ public final class XgramActivityStore {
         new Object[] {extra, r.accountId, r.chatId, r.messageId});
     }
     if (live && added > 0) {
-      db.execSQL("UPDATE items SET state = 0, event_date = ?, updated = ? WHERE account = ? AND chat = ? AND msg = ? AND kind = 3",
+      // Unread on the server again: no longer only the user's Mark as unread
+      db.execSQL("UPDATE items SET state = 0, flags = flags & ~64, event_date = ?, updated = ? WHERE account = ? AND chat = ? AND msg = ? AND kind = 3",
         new Object[] {(int) now, System.currentTimeMillis(), r.accountId, r.chatId, r.messageId});
     }
   }
@@ -771,9 +829,10 @@ public final class XgramActivityStore {
    * After a search: New items of the chat in {@code kindMask} stored before the request went out ({@code sentAtMs})
    * that the results don't have are read elsewhere. A page covers the messages below {@code fromMessageId} (0: from the
    * newest); with an incomplete search only items at or after the oldest result ({@code minMessageId}) can be judged.
+   * What the user marked unread here stays New (the server has it read, that is why it is missing).
    */
   static void reconcile (SQLiteDatabase db, int accountId, long chatId, int kindMask, long[] resultIds, long sentAtMs, boolean complete, long minMessageId, long fromMessageId) {
-    StringBuilder sql = new StringBuilder("UPDATE items SET state = 1, updated = ? WHERE account = ? AND chat = ? AND state = 0 AND updated < ? AND ")
+    StringBuilder sql = new StringBuilder("UPDATE items SET state = 1, updated = ? WHERE account = ? AND chat = ? AND state = 0 AND (flags & 64) = 0 AND updated < ? AND ")
       .append(kindsSql(kindMask));
     if (fromMessageId > 0) {
       sql.append(" AND msg < ").append(fromMessageId);
@@ -794,11 +853,14 @@ public final class XgramActivityStore {
     db.execSQL(sql.toString(), new Object[] {System.currentTimeMillis(), accountId, chatId, sentAtMs});
   }
 
-  /** Clear Activity: every row becomes a tombstone without its text, and who reacted is forgotten. */
+  /**
+   * Clear Activity: every row becomes a tombstone without its text. Who reacted stays as ids only (no names, nothing
+   * of the message): a later live update that lists the same people (one of them took theirs back, say) must not
+   * bring the row back as if someone new had reacted.
+   */
   static void clearAllRows (SQLiteDatabase db, int accountId) {
-    db.execSQL("UPDATE items SET state = 2, text = NULL, quote_text = NULL, sender_name = NULL, chat_title = NULL, topic_title = NULL, reactor_extra = 0, updated = ? WHERE account = ?",
+    db.execSQL("UPDATE items SET state = 2, flags = flags & ~64, text = NULL, quote_text = NULL, sender_name = NULL, chat_title = NULL, topic_title = NULL, reactor_extra = 0, updated = ? WHERE account = ?",
       new Object[] {System.currentTimeMillis(), accountId});
-    db.delete("reactors", "account = ?", new String[] {String.valueOf(accountId)});
   }
 
   static void setHidden (SQLiteDatabase db, int accountId, long chatId, boolean hidden) {
@@ -878,6 +940,10 @@ public final class XgramActivityStore {
     post(accountId, db -> markReadChat(db, accountId, chatId, kindMask));
   }
 
+  void markReadChat (int accountId, long chatId, int kindMask, long beforeMs) {
+    post(accountId, db -> markReadChat(db, accountId, chatId, kindMask, beforeMs));
+  }
+
   void markReadUpTo (int accountId, long chatId, long upToMessageId, int kindMask) {
     post(accountId, db -> markReadUpTo(db, accountId, chatId, upToMessageId, kindMask));
   }
@@ -904,9 +970,15 @@ public final class XgramActivityStore {
     post(accountId, db -> setState(db, copy, XgramActivityItem.STATE_NEW, XgramActivityItem.STATE_READ, local));
   }
 
-  public void markItemsUnread (int accountId, List<XgramActivityItem> items) {
+  /**
+   * Read rows New again. {@code byUser}: Mark as unread, of rows read on the server, so counters and searches leave
+   * them New ({@link XgramActivityItem#FLAG_USER_UNREAD}); false for the Undo of a read on this device only (ghost
+   * mode), whose items are still unread on the server.
+   */
+  public void markItemsUnread (int accountId, List<XgramActivityItem> items, boolean byUser) {
     final List<XgramActivityItem> copy = new ArrayList<>(items);
-    post(accountId, db -> setState(db, copy, XgramActivityItem.STATE_READ, XgramActivityItem.STATE_NEW, false));
+    post(accountId, db -> setState(db, copy, XgramActivityItem.STATE_READ, XgramActivityItem.STATE_NEW,
+      byUser ? XgramActivityItem.FLAG_USER_UNREAD : 0, XgramActivityItem.FLAG_READ_LOCAL));
   }
 
   /** The rows go (as tombstones). Undo with {@link #restoreItems} and the same list: the items keep their old state. */
@@ -921,20 +993,25 @@ public final class XgramActivityStore {
   }
 
   /**
-   * Clear read items: every Read row in {@code filter} becomes Cleared. {@code callback} gets them (with their old
-   * state) for Undo ({@link #restoreItems}).
+   * Clear read items, step one: the Read rows of {@code filter} as the screen shows them (Reactions and Channel
+   * comments as set, hidden chats left out; the screen applies the muted rule). In order after what was posted before.
    */
-  public void clearRead (int accountId, int filter, Callback<List<XgramActivityItem>> callback) {
+  public void queryRead (int accountId, int filter, boolean reactions, boolean discussion, Callback<List<XgramActivityItem>> callback) {
     post(accountId, db -> {
       List<XgramActivityItem> read = new ArrayList<>();
-      for (XgramActivityItem item : queryItems(db, accountId, filter, false, true, true, ROW_CAP)) {
+      for (XgramActivityItem item : queryItems(db, accountId, filter, false, reactions, discussion, null, null, ROW_CAP)) {
         if (item.state == XgramActivityItem.STATE_READ) {
           read.add(item);
         }
       }
-      setState(db, read, XgramActivityItem.STATE_READ, XgramActivityItem.STATE_CLEARED, false);
       UI.post(() -> callback.onResult(read));
     });
+  }
+
+  /** Step two: those rows become Cleared if they are still Read. Undo with {@link #restoreItems} and the same list. */
+  public void clearReadItems (int accountId, List<XgramActivityItem> items) {
+    final List<XgramActivityItem> copy = new ArrayList<>(items);
+    post(accountId, db -> setState(db, copy, XgramActivityItem.STATE_READ, XgramActivityItem.STATE_CLEARED, false));
   }
 
   public void setChatHidden (int accountId, long chatId, boolean hidden) {
@@ -989,15 +1066,18 @@ public final class XgramActivityStore {
 
   /**
    * The newest {@code limit} rows to show: not Cleared, in the filter, without hidden chats, without reactions while
-   * they are off and without discussion groups while Channel comments is off.
+   * they are off and without discussion groups while Channel comments is off. The muted rule needs TDLib's state, so
+   * the screen passes the chats it hides: reactions of {@code mutedReactionChats}, mentions and replies of
+   * {@code mutedMentionChats} (null: none). So the limit counts what is shown, and paging never stalls on hidden rows.
    */
-  public void query (int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion, int limit, Callback<List<XgramActivityItem>> callback) {
+  public void query (int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion,
+                     @Nullable long[] mutedReactionChats, @Nullable long[] mutedMentionChats, int limit, Callback<List<XgramActivityItem>> callback) {
     executor.execute(() -> {
       List<XgramActivityItem> result = new ArrayList<>();
       SQLiteDatabase db = db();
       if (db != null) {
         try {
-          result = queryItems(db, accountId, filter, unreadOnly, reactions, discussion, limit);
+          result = queryItems(db, accountId, filter, unreadOnly, reactions, discussion, mutedReactionChats, mutedMentionChats, limit);
         } catch (Throwable t) {
           Log.e(TAG, "Query failed", t);
         }
@@ -1008,6 +1088,22 @@ public final class XgramActivityStore {
   }
 
   static List<XgramActivityItem> queryItems (SQLiteDatabase db, int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion, int limit) {
+    return queryItems(db, accountId, filter, unreadOnly, reactions, discussion, null, null, limit);
+  }
+
+  private static void appendChatList (StringBuilder sql, long[] chatIds) {
+    sql.append('(');
+    for (int i = 0; i < chatIds.length; i++) {
+      if (i > 0) {
+        sql.append(',');
+      }
+      sql.append(chatIds[i]);
+    }
+    sql.append(')');
+  }
+
+  static List<XgramActivityItem> queryItems (SQLiteDatabase db, int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion,
+                                             @Nullable long[] mutedReactionChats, @Nullable long[] mutedMentionChats, int limit) {
     StringBuilder sql = new StringBuilder("SELECT ").append(ITEM_COLUMNS).append(" FROM items WHERE account = ? AND state != 2");
     if (unreadOnly) {
       sql.append(" AND state = 0");
@@ -1029,6 +1125,16 @@ public final class XgramActivityStore {
     if (!discussion) {
       sql.append(" AND (flags & 24) = 0");
     }
+    if (mutedReactionChats != null && mutedReactionChats.length > 0) {
+      sql.append(" AND NOT (kind = 3 AND chat IN ");
+      appendChatList(sql, mutedReactionChats);
+      sql.append(')');
+    }
+    if (mutedMentionChats != null && mutedMentionChats.length > 0) {
+      sql.append(" AND NOT (kind IN (1,2) AND chat IN ");
+      appendChatList(sql, mutedMentionChats);
+      sql.append(')');
+    }
     sql.append(" AND chat NOT IN (SELECT chat FROM hidden WHERE account = ?) ORDER BY event_date DESC, msg DESC LIMIT ").append(Math.max(1, limit));
     String account = String.valueOf(accountId);
     List<Object[]> rows = new ArrayList<>();
@@ -1037,18 +1143,30 @@ public final class XgramActivityStore {
         rows.add(readRow(c));
       }
     }
-    List<XgramActivityItem> result = new ArrayList<>(rows.size());
+    // Who reacted, for every reaction row at once (message ids repeat across chats: matched by chat too)
+    Map<String, List<XgramActivityItem.Reactor>> reactorsByItem = new HashMap<>();
+    StringBuilder ids = null;
     for (Object[] row : rows) {
-      List<XgramActivityItem.Reactor> reactors = null;
       if ((Integer) row[3] == XgramActivityItem.KIND_REACTION) {
-        reactors = new ArrayList<>();
-        try (Cursor c = db.rawQuery("SELECT sender, reaction, is_big, seen FROM reactors WHERE account = ? AND chat = ? AND msg = ? ORDER BY seen DESC, rowid DESC LIMIT " + MAX_REACTORS,
-          new String[] {account, String.valueOf(row[1]), String.valueOf(row[2])})) {
-          while (c.moveToNext()) {
-            reactors.add(new XgramActivityItem.Reactor(c.getLong(0), c.getString(1), c.getInt(2) != 0, c.getInt(3)));
+        reactorsByItem.put(row[1] + "_" + row[2], new ArrayList<>());
+        ids = ids == null ? new StringBuilder() : ids.append(',');
+        ids.append((long) (Long) row[2]);
+      }
+    }
+    if (ids != null) {
+      try (Cursor c = db.rawQuery("SELECT chat, msg, sender, reaction, is_big, seen FROM reactors WHERE account = ? AND msg IN (" + ids + ") ORDER BY seen DESC, rowid DESC",
+        new String[] {account})) {
+        while (c.moveToNext()) {
+          List<XgramActivityItem.Reactor> list = reactorsByItem.get(c.getLong(0) + "_" + c.getLong(1));
+          if (list != null && list.size() < MAX_REACTORS) {
+            list.add(new XgramActivityItem.Reactor(c.getLong(2), c.getString(3), c.getInt(4) != 0, c.getInt(5)));
           }
         }
       }
+    }
+    List<XgramActivityItem> result = new ArrayList<>(rows.size());
+    for (Object[] row : rows) {
+      List<XgramActivityItem.Reactor> reactors = (Integer) row[3] == XgramActivityItem.KIND_REACTION ? reactorsByItem.get(row[1] + "_" + row[2]) : null;
       result.add(toItem(row, reactors));
     }
     return result;
@@ -1069,25 +1187,33 @@ public final class XgramActivityStore {
       (Integer) r[15], (Integer) r[16], (Long) r[17], (Long) r[18], (String) r[19], (Integer) r[20], reactors, (Integer) r[21]);
   }
 
+  /** A chat hidden from Activity, with the title its items saved (null when none has one, after Clear Activity). */
+  public static final class HiddenChat {
+    public final long chatId;
+    @Nullable public final String savedTitle;
+
+    HiddenChat (long chatId, @Nullable String savedTitle) {
+      this.chatId = chatId;
+      this.savedTitle = savedTitle;
+    }
+  }
+
   /** The chats hidden from Activity, newest first. */
-  public void hiddenChats (int accountId, Callback<long[]> callback) {
+  public void hiddenChats (int accountId, Callback<List<HiddenChat>> callback) {
     executor.execute(() -> {
-      List<Long> chats = new ArrayList<>();
+      List<HiddenChat> chats = new ArrayList<>();
       SQLiteDatabase db = db();
       if (db != null) {
-        try (Cursor c = db.rawQuery("SELECT chat FROM hidden WHERE account = ? ORDER BY rowid DESC", new String[] {String.valueOf(accountId)})) {
+        try (Cursor c = db.rawQuery("SELECT h.chat, (SELECT i.chat_title FROM items i WHERE i.account = h.account AND i.chat = h.chat AND i.chat_title IS NOT NULL " +
+          "ORDER BY i.event_date DESC LIMIT 1) FROM hidden h WHERE h.account = ? ORDER BY h.rowid DESC", new String[] {String.valueOf(accountId)})) {
           while (c.moveToNext()) {
-            chats.add(c.getLong(0));
+            chats.add(new HiddenChat(c.getLong(0), c.isNull(1) ? null : c.getString(1)));
           }
         } catch (Throwable t) {
           Log.e(TAG, "Cannot read hidden chats", t);
         }
       }
-      long[] result = new long[chats.size()];
-      for (int i = 0; i < result.length; i++) {
-        result[i] = chats.get(i);
-      }
-      UI.post(() -> callback.onResult(result));
+      UI.post(() -> callback.onResult(chats));
     });
   }
 
@@ -1103,7 +1229,9 @@ public final class XgramActivityStore {
     db.execSQL("CREATE INDEX IF NOT EXISTS items_feed ON items (account, state, event_date DESC)");
     db.execSQL("CREATE INDEX IF NOT EXISTS items_chat ON items (account, chat, kind, state)");
     db.execSQL("CREATE TABLE IF NOT EXISTS reactors (account INTEGER NOT NULL, chat INTEGER NOT NULL, msg INTEGER NOT NULL, sender INTEGER NOT NULL, " +
-      "reaction TEXT NOT NULL, is_big INTEGER NOT NULL DEFAULT 0, seen INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (account, chat, msg, sender, reaction))");
+      "reaction TEXT NOT NULL, is_big INTEGER NOT NULL DEFAULT 0, seen INTEGER NOT NULL DEFAULT 0, unread INTEGER NOT NULL DEFAULT 1, " +
+      "PRIMARY KEY (account, chat, msg, sender, reaction))");
+    createReactorsReadTrigger(db);
     db.execSQL("CREATE TABLE IF NOT EXISTS sync (account INTEGER NOT NULL, chat INTEGER NOT NULL, job INTEGER NOT NULL, next_from INTEGER NOT NULL DEFAULT 0, " +
       "done INTEGER NOT NULL DEFAULT 0, last_run INTEGER NOT NULL DEFAULT 0, last_count INTEGER NOT NULL DEFAULT -1, error TEXT, retry_at INTEGER NOT NULL DEFAULT 0, " +
       "PRIMARY KEY (account, chat, job))");
@@ -1112,9 +1240,28 @@ public final class XgramActivityStore {
     db.execSQL("CREATE TABLE IF NOT EXISTS hidden (account INTEGER NOT NULL, chat INTEGER NOT NULL, PRIMARY KEY (account, chat))");
   }
 
+  /** A reaction row read (or cleared) ends its reactors' unread state: only unread ones can be taken back later. */
+  private static void createReactorsReadTrigger (SQLiteDatabase db) {
+    db.execSQL("CREATE TRIGGER IF NOT EXISTS reactors_read AFTER UPDATE OF state ON items " +
+      "WHEN NEW.kind = 3 AND OLD.state = 0 AND NEW.state != 0 BEGIN " +
+      "UPDATE reactors SET unread = 0 WHERE account = NEW.account AND chat = NEW.chat AND msg = NEW.msg AND unread != 0; END");
+  }
+
+  private static boolean hasColumn (SQLiteDatabase db, String table, String column) {
+    try (Cursor c = db.rawQuery("PRAGMA table_info(" + table + ")", null)) {
+      int name = c.getColumnIndex("name");
+      while (c.moveToNext()) {
+        if (name >= 0 && column.equals(c.getString(name))) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   private static final class Helper extends SQLiteOpenHelper {
     Helper (Context context) {
-      super(context, "xgram_activity.db", null, 1);
+      super(context, "xgram_activity.db", null, 2);
       setWriteAheadLoggingEnabled(true);
     }
 
@@ -1125,6 +1272,12 @@ public final class XgramActivityStore {
 
     @Override
     public void onUpgrade (SQLiteDatabase db, int oldVersion, int newVersion) {
+      // 2: whether each reactor is still unread (the reactors of rows read already count as read)
+      if (oldVersion < 2 && !hasColumn(db, "reactors", "unread")) {
+        db.execSQL("ALTER TABLE reactors ADD COLUMN unread INTEGER NOT NULL DEFAULT 1");
+        db.execSQL("UPDATE reactors SET unread = 0 WHERE EXISTS (SELECT 1 FROM items i WHERE i.account = reactors.account AND i.chat = reactors.chat " +
+          "AND i.msg = reactors.msg AND i.kind = 3 AND i.state != 0)");
+      }
       createSchema(db);
     }
   }

@@ -95,7 +95,8 @@ final class XgramActivitySync {
     int total, done;
     int lookBackPending;
     long firstForegroundAt, lastSeedAt;
-    final Map<Long, Long> lastTriggerAt = new HashMap<>();
+    /** Per chat and job (Job.key): a mention mismatch never holds back a reaction one of the same chat. */
+    final Map<String, Long> lastTriggerAt = new HashMap<>();
 
     Queue (int accountId) {
       this.accountId = accountId;
@@ -179,9 +180,13 @@ final class XgramActivitySync {
       return;
     }
     store().executor.execute(() -> {
+      if (store().summary(accountId).isHidden(chatId)) {
+        return; // hidden chats are not searched (their live items are still kept)
+      }
       Queue queue = queue(accountId);
       long now = System.currentTimeMillis();
-      Long last = queue.lastTriggerAt.get(chatId);
+      final String triggerKey = new Job(chatId, type).key();
+      Long last = queue.lastTriggerAt.get(triggerKey);
       if (last != null && now - last < TRIGGER_MIN_INTERVAL_MS) {
         return;
       }
@@ -190,10 +195,13 @@ final class XgramActivitySync {
         return;
       }
       SyncRow row = readSync(db, accountId, chatId, type);
+      if (row != null && row.retryAt > now) {
+        return; // its last search failed: it waits a day
+      }
       if (row != null && row.lastCount == serverCount && row.done && now - row.lastRun < CHAT_RECHECK_MS) {
         return; // this count was searched already
       }
-      queue.lastTriggerAt.put(chatId, now);
+      queue.lastTriggerAt.put(triggerKey, now);
       store().executor.schedule(() -> {
         Job job = new Job(chatId, type);
         queue.addFront(job);
@@ -243,7 +251,7 @@ final class XgramActivitySync {
     store().executor.execute(() -> {
       SQLiteDatabase db = store().db();
       if (db != null) {
-        onFlood(db, queue(accountId), 120L);
+        onFlood(db, queue(accountId), 100L); // 1.2 times that: the 2 minutes the switch says
       }
     });
   }
@@ -307,6 +315,7 @@ final class XgramActivitySync {
     final int accountId = queue.accountId;
     final XgramActivityStore.Summary summary = store().summary(accountId);
     final boolean reactions = XgramActivity.reactions();
+    readZeroCounters(tdlib, accountId, summary, reactions, now);
     int added = 0;
     for (long chatId : tdlib.xgramActivityChats(Tdlib.XGRAM_ACTIVITY_UNREAD, 0, 0)) {
       if (summary.isHidden(chatId)) {
@@ -317,12 +326,14 @@ final class XgramActivitySync {
       if (chat == null || kind == XgramActivityCollector.CHAT_NONE || kind == XgramActivityCollector.CHAT_REPLIES) {
         continue;
       }
-      if (kind == XgramActivityCollector.CHAT_GROUP && chat.unreadMentionCount > 0 && needsRun(db, accountId, chatId, JOB_MENTIONS, chat.unreadMentionCount, now, force)) {
+      if (kind == XgramActivityCollector.CHAT_GROUP && chat.unreadMentionCount > 0 &&
+        needsRun(db, accountId, chatId, JOB_MENTIONS, chat.unreadMentionCount, summary.syncCount(chatId, XgramActivityItem.MASK_MENTION_GROUP), now, force)) {
         if (queue.addBack(new Job(chatId, JOB_MENTIONS))) {
           added++;
         }
       }
-      if (reactions && chat.unreadReactionCount > 0 && needsRun(db, accountId, chatId, JOB_REACTIONS, chat.unreadReactionCount, now, force)) {
+      if (reactions && chat.unreadReactionCount > 0 &&
+        needsRun(db, accountId, chatId, JOB_REACTIONS, chat.unreadReactionCount, summary.syncCount(chatId, XgramActivityItem.MASK_REACTION), now, force)) {
         if (queue.addBack(new Job(chatId, JOB_REACTIONS))) {
           added++;
         }
@@ -357,9 +368,12 @@ final class XgramActivitySync {
     }
   }
 
-  /** A chat is searched again unless it was, within 6 hours, for the same count (or it failed within a day). */
+  /**
+   * A chat is searched again unless it failed within a day, or (not forced) a finished search left Activity with as
+   * many New items as TDLib counts, or it was searched within 6 hours for the same count. Never searched: it is.
+   */
   @WorkerThread
-  private static boolean needsRun (SQLiteDatabase db, int accountId, long chatId, int type, int serverCount, long now, boolean force) {
+  private static boolean needsRun (SQLiteDatabase db, int accountId, long chatId, int type, int serverCount, int storedCount, long now, boolean force) {
     SyncRow row = readSync(db, accountId, chatId, type);
     if (row == null) {
       return true;
@@ -370,7 +384,48 @@ final class XgramActivitySync {
     if (force) {
       return true;
     }
+    if (row.done && storedCount == serverCount) {
+      return false; // nothing to find: the budget is for real differences
+    }
     return !(row.done && row.lastCount == serverCount && now - row.lastRun < CHAT_RECHECK_MS);
+  }
+
+  /** Items stored this recently may be ahead of the counter update that follows them: left for the next look. */
+  private static final long ZERO_COUNT_GRACE_MS = 30_000L;
+
+  /**
+   * No request: chats Activity still has New items in while TDLib counts none any more (read elsewhere while Activity
+   * or Reactions was off, or in an update the app missed) are read here. In ghost mode the chat's mention count is
+   * lowered by what was viewed here, so TDLib's own count decides (GetChat, from its cache).
+   */
+  @WorkerThread
+  private static void readZeroCounters (Tdlib tdlib, int accountId, XgramActivityStore.Summary summary, boolean reactions, long now) {
+    final long before = now - ZERO_COUNT_GRACE_MS;
+    final XgramActivityStore store = store();
+    for (long chatId : summary.chatsWithNew()) {
+      final TdApi.Chat chat = tdlib.chat(chatId);
+      if (chat == null) {
+        continue;
+      }
+      if (tdlib.isRepliesChat(chatId)) {
+        store.markReadUpTo(accountId, chatId, chat.lastReadInboxMessageId, XgramActivityItem.MASK_REPLY);
+        continue;
+      }
+      if (reactions && chat.unreadReactionCount == 0 && summary.syncCount(chatId, XgramActivityItem.MASK_REACTION) > 0) {
+        store.markReadChat(accountId, chatId, XgramActivityItem.MASK_REACTION, before);
+      }
+      if (chat.unreadMentionCount == 0 && summary.syncCount(chatId, XgramActivityItem.MASK_MENTION_GROUP) > 0) {
+        if (!com.fahadali.xgram.ghost.XgramLocalRead.isActive()) {
+          store.markReadChat(accountId, chatId, XgramActivityItem.MASK_MENTION_GROUP, before);
+        } else {
+          tdlib.send(new TdApi.GetChat(chatId), (raw, error) -> {
+            if (raw != null && raw.unreadMentionCount == 0) {
+              store.markReadChat(accountId, chatId, XgramActivityItem.MASK_MENTION_GROUP, before);
+            }
+          });
+        }
+      }
+    }
   }
 
   // Sending
@@ -462,6 +517,12 @@ final class XgramActivitySync {
       return;
     }
     SyncRow row = readSync(db, queue.accountId, job.chatId, job.type);
+    if (store().summary(queue.accountId).isHidden(job.chatId) || (job.pages == 0 && row != null && row.retryAt > now)) {
+      // Hidden since it was queued, or its last search failed (it waits a day): dropped, nothing sent
+      jobDone(queue, job);
+      store().executor.execute(() -> pump(queue.accountId));
+      return;
+    }
     // A run continues an unfinished one from its cursor; a finished (or old) one starts again from the newest
     long fromMessageId = 0;
     if (job.pages > 0 || (row != null && !row.done && row.nextFrom != 0 && now - row.lastRun < CHAT_RECHECK_MS)) {
@@ -611,12 +672,14 @@ final class XgramActivitySync {
       int kind = XgramActivityClassifier.kindOf(classified);
       int flags = XgramActivityClassifier.flagsOf(classified) | base;
       int state = XgramActivityItem.STATE_NEW;
+      boolean viewedHere = false;
       if (jobType == JOB_LOOK_BACK) {
         state = m.containsUnreadMention ? XgramActivityItem.STATE_NEW : XgramActivityItem.STATE_READ;
       } else if (com.fahadali.xgram.ghost.XgramLocalRead.isMentionViewed(tdlib, chat.id, m.id)) {
         // Seen here in ghost mode already
         state = XgramActivityItem.STATE_READ;
         flags |= XgramActivityItem.FLAG_READ_LOCAL;
+        viewedHere = true;
       }
       XgramActivityStore.Snapshot s = XgramActivityCollector.snapshot(tdlib, m, chat, kind, flags, state, source);
       TdApi.MessageReplyToMessage replyTo = XgramActivityClassifier.replyToOf(m);
@@ -626,7 +689,11 @@ final class XgramActivitySync {
         s.replyMessageId = replyTo.messageId;
         s.quoteText = XgramActivityCollector.quoteOf(tdlib, replyTo, null);
       }
-      store().upsert(s);
+      XgramActivityCollector.upsert(tdlib, s);
+      if (viewedHere) {
+        // An item already stored as New (its view in ghost mode came before it was in the store) is read too
+        store().markRead(tdlib.id(), chat.id, m.id, XgramActivityItem.MASK_MENTION_GROUP, true);
+      }
       if (asReply && replyTo != null && XgramActivityClassifier.isSameChatReply(m) && lookups < TARGET_LOOKUPS_PER_PAGE) {
         lookups++;
         final int accountId = tdlib.id();
@@ -673,6 +740,7 @@ final class XgramActivitySync {
           XgramActivityClassifier.reactionKey(reaction.type), reaction.isBig, m.date));
       }
       store().reactions(r);
+      XgramActivityCollector.resolveTopicTitle(tdlib, accountId, r.chatId, r.messageId, r.topicId, null);
     }
   }
 
@@ -755,8 +823,9 @@ final class XgramActivitySync {
     SQLiteDatabase db = store().db();
     long floodUntil = db != null ? readMeta(db, queue.accountId, "flood_until") : 0;
     boolean pending = !queue.jobs.isEmpty() || queue.inFlight;
+    // A wait Telegram asked for shows for as long as it lasts, whether anything is queued or not
     XgramActivityStore.SyncStatus status = new XgramActivityStore.SyncStatus(queue.done, queue.total,
-      pending && floodUntil > System.currentTimeMillis() ? floodUntil : 0, pending && offline, pending);
+      floodUntil > System.currentTimeMillis() ? floodUntil : 0, pending && offline, pending);
     store().setSyncStatus(queue.accountId, status);
   }
 

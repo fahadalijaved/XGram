@@ -306,7 +306,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
           view.setClickBait(settingsClickBait.isError, settingsClickBait.iconRes, isUpdate);
         } else if (itemId == R.id.btn_xgramActivity) {
           view.setClickBait(false, 0, isUpdate);
-          view.setUnreadCount(com.fahadali.xgram.activity.XgramActivityBadge.badgeCount(context.currentTdlib()), false, isUpdate); // XGram
+          view.setUnreadCount(com.fahadali.xgram.activity.XgramActivityBadge.badgeCount(DrawerController.this.context().currentTdlib()), false, isUpdate); // XGram
         } else {
           view.setClickBait(false, 0, isUpdate);
         }

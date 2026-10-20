@@ -28,6 +28,11 @@ public final class XgramActivityItem {
   public static final int STATE_NEW = 0, STATE_READ = 1, STATE_CLEARED = 2;
   public static final int FLAG_DELETED = 1, FLAG_READ_LOCAL = 2, FLAG_ALSO_REPLY = 4, FLAG_DISCUSSION = 8,
     FLAG_REPLIES_CHAT = 16, FLAG_PRIVATE = 32;
+  /**
+   * The user marked it unread here (Mark as unread) while it is read on the server: counters, searches and the
+   * Replies chat's read position leave it New, and it is not compared with TDLib's counts. A read or a clear drops it.
+   */
+  public static final int FLAG_USER_UNREAD = 64;
   public static final int SOURCE_LIVE = 1, SOURCE_UNREAD_SYNC = 2, SOURCE_LOOK_BACK = 3, SOURCE_CATCH_UP = 4;
 
   /** Kind masks (a bit per kind) for queries and read events. */
@@ -116,6 +121,11 @@ public final class XgramActivityItem {
 
   public boolean isDeleted () {
     return hasFlag(FLAG_DELETED);
+  }
+
+  /** Marked unread by the user, read on the server (see {@link #FLAG_USER_UNREAD}). */
+  public boolean isUserUnread () {
+    return hasFlag(FLAG_USER_UNREAD);
   }
 
   /** Under the Mentions filter. */

@@ -114,6 +114,8 @@
   <string name="XgramActivityMarked">Marked as read</string>
   <string name="XgramActivityMarkPartialOne">Telegram asked to wait. 1 chat is still unread there.</string>
   <string name="XgramActivityMarkPartialMany">Telegram asked to wait. %1$d chats are still unread there.</string>
+  <string name="XgramActivityMarkLeftOne">1 more chat is still unread. Tap again to mark it.</string>
+  <string name="XgramActivityMarkLeftMany">%1$d more chats are still unread. Tap again to mark them.</string>
 
   <!-- Hidden chats and Clear Activity (settings) -->
   <string name="XgramActivityHiddenCountOne">1 chat</string>

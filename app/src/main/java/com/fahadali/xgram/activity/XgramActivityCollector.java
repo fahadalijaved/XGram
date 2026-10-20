@@ -21,6 +21,7 @@ import org.thunderdog.challegram.telegram.ChatListener;
 import org.thunderdog.challegram.telegram.MessageListener;
 import org.thunderdog.challegram.telegram.NotificationSettingsListener;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.tool.UI;
 
 /**
  * Collects an account's Activity from TDLib's updates, on the TDLib thread: it classifies and posts events to the
@@ -117,9 +118,13 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
     return 0;
   }
 
+  /**
+   * The topic's name as Telegram X has it loaded, on the UI thread only: ForumTopicList is the UI thread's (its cache
+   * reorders itself on every read). Elsewhere null: {@link #resolveTopicTitle} looks it up there.
+   */
   @Nullable
   static String topicTitle (Tdlib tdlib, long chatId, int topicId) {
-    if (topicId == 0) {
+    if (topicId == 0 || !UI.inUiThread()) {
       return null;
     }
     try {
@@ -128,6 +133,29 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
     } catch (Throwable t) {
       return null;
     }
+  }
+
+  /**
+   * Any thread, after the item was posted to the store: a forum topic's name is looked up on the UI thread and saved
+   * for the item if it has none yet (the store applies it after the item, in order).
+   */
+  static void resolveTopicTitle (Tdlib tdlib, int accountId, long chatId, long messageId, int topicId, @Nullable String known) {
+    if (topicId == 0 || known != null) {
+      return;
+    }
+    UI.post(() -> {
+      final String title = topicTitle(tdlib, chatId, topicId);
+      if (title != null) {
+        store().post(accountId, db -> db.execSQL("UPDATE items SET topic_title = ? WHERE account = ? AND chat = ? AND msg = ? AND topic_title IS NULL AND state != 2",
+          new Object[] {title, accountId, chatId, messageId}));
+      }
+    });
+  }
+
+  /** Saves {@code s} (any thread), its topic's name looked up afterwards where that is allowed. */
+  static void upsert (Tdlib tdlib, XgramActivityStore.Snapshot s) {
+    store().upsert(s);
+    resolveTopicTitle(tdlib, s.accountId, s.chatId, s.messageId, s.topicId, s.topicTitle);
   }
 
   /** Who wrote it: in the Replies chat, the person who replied (the message is a forwarded copy). */
@@ -307,7 +335,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
         s.replyMessageId = replyTo.messageId;
         s.quoteText = quoteOf(tdlib, replyTo, null);
       }
-      store.upsert(s); // now, in order with the counter update that follows
+      upsert(tdlib, s); // now, in order with the counter update that follows
       if (asReply && sameChatReply && replyTo != null) {
         // Is it really your message? Only what TDLib has locally (no network)
         final long chatId = m.chatId, messageId = m.id, targetId = replyTo.messageId;
@@ -336,7 +364,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
             s.replyChatId = message.chatId;
             s.replyMessageId = target.id;
             s.quoteText = quoteOf(tdlib, replyTo, target);
-            store.upsert(s);
+            upsert(tdlib, s);
           }
         } catch (Throwable t) {
           Log.e(TAG, "catch-up", t);
@@ -443,8 +471,8 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
               final String quote = contentText(tdlib, message);
               final int date = message.date;
               final int topicId = topicOf(tdlib, message);
-              final String topicTitle = topicTitle(tdlib, chatId, topicId);
-              store.post(accountId, db -> fillReaction(db, accountId, chatId, messageId, date, quote, topicId, topicTitle));
+              store.post(accountId, db -> fillReaction(db, accountId, chatId, messageId, date, quote, topicId, null));
+              resolveTopicTitle(tdlib, accountId, chatId, messageId, topicId, null); // TDLib thread: the name on the UI thread
             }
           } catch (Throwable t) {
             Log.e(TAG, "reaction message", t);
@@ -497,7 +525,9 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
    */
   private void onCount (long chatId, int kindMask, int count) {
     try {
-      if (!XgramActivity.isOn()) {
+      if (!XgramActivity.isOn() || tdlib.isRepliesChat(chatId)) {
+        // The Replies chat has no mention counter (it is always 0, and ghost mode's refresh repeats it): its items
+        // are read by its read position alone (onChatReadInbox)
         return;
       }
       final int accountId = tdlib.id();
@@ -531,8 +561,9 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
     }
   }
 
+  /** New items TDLib's counter should match: not the ones the user marked unread here (read on the server). */
   static int newCount (android.database.sqlite.SQLiteDatabase db, int accountId, long chatId, int kindMask) {
-    try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM items WHERE account = ? AND chat = ? AND state = 0 AND " + XgramActivityStore.kindsSql(kindMask),
+    try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM items WHERE account = ? AND chat = ? AND state = 0 AND (flags & 64) = 0 AND " + XgramActivityStore.kindsSql(kindMask),
       new String[] {String.valueOf(accountId), String.valueOf(chatId)})) {
       return c.moveToFirst() ? c.getInt(0) : 0;
     }

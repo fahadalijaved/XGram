@@ -52,6 +52,32 @@ final class XgramActivityRows {
     }
   }
 
+  /**
+   * The chats of {@code chatIds} whose rows Muted chats (off) hides, for the query to leave out: {reactions, mentions
+   * and replies}. Forum topics muted here are left to {@link #visible}. Null while Muted chats is on.
+   */
+  @UiThread
+  @Nullable
+  static long[][] mutedChats (Tdlib tdlib, long[] chatIds) {
+    if (XgramActivity.muted() || chatIds.length == 0) {
+      return null;
+    }
+    long[] reactions = new long[chatIds.length], mentions = new long[chatIds.length];
+    int reactionCount = 0, mentionCount = 0;
+    for (long chatId : chatIds) {
+      try {
+        if (tdlib.chat(chatId) == null || tdlib.chatNotificationsEnabled(chatId)) {
+          continue;
+        }
+        reactions[reactionCount++] = chatId;
+        if (tdlib.notifications().areMentionsDisabled(chatId)) {
+          mentions[mentionCount++] = chatId;
+        }
+      } catch (Throwable ignored) { }
+    }
+    return new long[][] {java.util.Arrays.copyOf(reactions, reactionCount), java.util.Arrays.copyOf(mentions, mentionCount)};
+  }
+
   @UiThread
   static boolean visible (Tdlib tdlib, XgramActivityItem item) {
     if (item.isReaction() && !XgramActivity.reactions()) {
@@ -76,6 +102,15 @@ final class XgramActivityRows {
     @NonNull
     String key () {
       return newest().key;
+    }
+
+    /**
+     * The row's identity across rebuilds: its oldest item (a newer reply joining a group changes {@link #key}, not
+     * this), so the list updates the row in place.
+     */
+    @NonNull
+    String stableKey () {
+      return items.get(items.size() - 1).key;
     }
 
     int eventDate () {
@@ -134,16 +169,33 @@ final class XgramActivityRows {
       return false;
     }
 
-    /** For change detection: the items and their states. */
+    @Nullable private String signature;
+
+    /**
+     * For change detection (what the row shows from the store): the items, their states, texts, names and who
+     * reacted. Rows don't change once grouped, so it is made once.
+     */
     @NonNull
     String signature () {
-      StringBuilder b = new StringBuilder();
-      for (XgramActivityItem item : items) {
-        b.append(item.key).append(':').append(item.state).append(':').append(item.flags).append(':').append(item.eventDate)
-          .append(':').append(item.reactors.size()).append(':').append(item.text != null ? item.text.hashCode() : 0)
-          .append(':').append(item.quoteText != null ? item.quoteText.hashCode() : 0).append(';');
+      if (signature == null) {
+        StringBuilder b = new StringBuilder();
+        for (XgramActivityItem item : items) {
+          b.append(item.key).append(':').append(item.state).append(':').append(item.flags).append(':').append(item.eventDate)
+            .append(':').append(hash(item.text)).append(':').append(hash(item.quoteText)).append(':').append(hash(item.senderName))
+            .append(':').append(hash(item.chatTitle)).append(':').append(hash(item.topicTitle)).append(':').append(item.topicId)
+            .append(':').append(item.mentionFrom).append(':').append(item.mentionLength).append(':').append(item.reactorExtra);
+          for (XgramActivityItem.Reactor reactor : item.reactors) {
+            b.append(',').append(reactor.sender).append('|').append(reactor.reaction);
+          }
+          b.append(';');
+        }
+        signature = b.toString();
       }
-      return b.toString();
+      return signature;
+    }
+
+    private static int hash (@Nullable String value) {
+      return value != null ? value.hashCode() : 0;
     }
   }
 

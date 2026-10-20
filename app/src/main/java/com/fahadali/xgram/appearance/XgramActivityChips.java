@@ -54,7 +54,6 @@ public final class XgramActivityChips extends HorizontalScrollView {
   private final int[] counts = new int[LABELS.length];
   private int selected = FILTER_ALL;
   private boolean unreadOn;
-  private boolean bound;
   @Nullable private Listener listener;
 
   public XgramActivityChips (Context context) {
@@ -66,7 +65,7 @@ public final class XgramActivityChips extends HorizontalScrollView {
     row = new LinearLayout(context);
     row.setOrientation(LinearLayout.HORIZONTAL);
     row.setGravity(Gravity.CENTER_VERTICAL);
-    row.setLayoutDirection(Lang.rtl() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+    applyDirection();
     int side = Screen.dp(SIDE);
     row.setPadding(side, Screen.dp(VERTICAL), side, Screen.dp(VERTICAL));
     for (int i = 0; i < LABELS.length; i++) {
@@ -79,6 +78,20 @@ public final class XgramActivityChips extends HorizontalScrollView {
     wrap(context, unread, v -> setUnread(!unreadOn, true, true), true);
     addView(row, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
     applyStates(false);
+  }
+
+  /**
+   * The scroll view itself follows the language too (the window's root is left to right): in RTL the row sits at the
+   * right and opens scrolled to its start, All first.
+   */
+  private void applyDirection () {
+    final int direction = Lang.rtl() ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR;
+    if (getLayoutDirection() != direction) {
+      setLayoutDirection(direction);
+    }
+    if (row.getLayoutDirection() != direction) {
+      row.setLayoutDirection(direction);
+    }
   }
 
   /** The chip in a 48dp tall wrap that takes its taps and passes its pressed state to it (its state layer shows). */
@@ -133,21 +146,30 @@ public final class XgramActivityChips extends HorizontalScrollView {
     setUnread(unread, animated, false);
   }
 
-  /** New counts per filter (FILTER_*); a chip shows its count only when it is above 0. */
+  /**
+   * New counts per filter (FILTER_*); a chip shows its count only when it is above 0. Every bind checks the labels
+   * against the current language too (a language change rebinds the row without making it again).
+   */
   public void setCounts (@NonNull int[] newCounts) {
-    boolean changed = false;
     for (int i = 0; i < counts.length && i < newCounts.length; i++) {
-      if (counts[i] != newCounts[i]) {
-        counts[i] = newCounts[i];
-        changed = true;
-      }
+      counts[i] = newCounts[i];
     }
-    if (changed || !bound) {
-      bound = true;
-      for (int i = 0; i < filters.length; i++) {
-        String label = Lang.getString(LABELS[i]);
-        filters[i].setText(i != FILTER_ALL && counts[i] > 0 ? Lang.getString(R.string.XgramActivityChipCount, label, counts[i]) : label);
-      }
+    relabel();
+  }
+
+  /** Every chip's label (with its count) in the current language; only the ones that differ are set. */
+  public void relabel () {
+    applyDirection();
+    for (int i = 0; i < filters.length; i++) {
+      String label = Lang.getString(LABELS[i]);
+      setLabel(filters[i], i != FILTER_ALL && counts[i] > 0 ? Lang.getString(R.string.XgramActivityChipCount, label, counts[i]) : label);
+    }
+    setLabel(unread, Lang.getString(R.string.XgramActivityUnread));
+  }
+
+  private static void setLabel (XgramM3Sessions.ChipView chip, String label) {
+    if (!label.contentEquals(chip.getText())) {
+      chip.setText(label);
     }
   }
 

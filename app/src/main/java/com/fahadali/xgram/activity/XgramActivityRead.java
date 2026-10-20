@@ -41,7 +41,8 @@ final class XgramActivityRead {
 
   private static final String TAG = XgramActivityStore.TAG;
   private static final long SPACING_MS = 300L;
-  private static final int MAX_CHATS = 100;
+  /** Chats one Mark all as read reads on the server; the rest stay unread (here too) for the next tap. */
+  static final int MAX_CHATS = 100;
 
   // One row
 
@@ -71,18 +72,18 @@ final class XgramActivityRead {
       viewMentionsLocally(tdlib, unread);
       return;
     }
-    if (unread.size() != 1 || item.hasFlag(XgramActivityItem.FLAG_REPLIES_CHAT)) {
-      return;
+    if (unread.size() != 1 || item.hasFlag(XgramActivityItem.FLAG_REPLIES_CHAT) || item.isUserUnread()) {
+      return; // a Mark as unread is read on the server already: the one unread there is another message
     }
     TdApi.Chat chat = tdlib.chat(chatId);
     if (chat == null) {
       return;
     }
     if (item.isReaction()) {
-      if (chat.unreadReactionCount == 1 && summary.newCount(chatId, XgramActivityItem.MASK_REACTION) == 1) {
+      if (chat.unreadReactionCount == 1 && summary.syncCount(chatId, XgramActivityItem.MASK_REACTION) == 1) {
         tdlib.send(new TdApi.ReadAllChatReactions(chatId), tdlib.typedOkHandler());
       }
-    } else if (chat.unreadMentionCount == 1 && summary.newCount(chatId, XgramActivityItem.MASK_MENTION_GROUP) == 1) {
+    } else if (chat.unreadMentionCount == 1 && summary.syncCount(chatId, XgramActivityItem.MASK_MENTION_GROUP) == 1) {
       tdlib.send(new TdApi.ReadAllChatMentions(chatId), tdlib.typedOkHandler());
     }
   }
@@ -153,58 +154,79 @@ final class XgramActivityRead {
   }
 
   interface Progress {
+    /**
+     * @param stoppedChats chats still unread on the server: after a flood wait ({@code flood}), or beyond the 100 one
+     * tap reads (a second tap reads them)
+     */
     @UiThread
     void onDone (int stoppedChats, boolean flood);
   }
 
   /**
    * Reads the plan: here at once, then chat by chat on the server (at most 100 chats, 300 ms apart), stopping at the
-   * first flood wait. Ghosted chats are read on this device only.
+   * first flood wait. Ghosted chats are read on this device only. Chats beyond the 100 stay New here as they are on
+   * the server. Returns what the read put into ghost mode's local mentions, for an Undo.
    */
   @UiThread
-  static void run (@NonNull Tdlib tdlib, @NonNull Plan plan, @Nullable Progress progress) {
+  @NonNull
+  static LocalMarks run (@NonNull Tdlib tdlib, @NonNull Plan plan, @Nullable Progress progress) {
     final int accountId = tdlib.id();
     final XgramActivityStore store = XgramActivityStore.instance();
+    // The chats read on the server this time, in the order shown
+    final List<ChatPlan> steps = new ArrayList<>();
+    final java.util.Set<Long> queued = new java.util.HashSet<>();
+    int left = 0;
+    for (ChatPlan chat : plan.chats.values()) {
+      if (chat.ghosted) {
+        continue;
+      }
+      if (steps.size() < MAX_CHATS) {
+        steps.add(chat);
+        queued.add(chat.chatId);
+      } else {
+        left++;
+      }
+    }
     // Here first (read locally where ghost mode applies)
     List<XgramActivityItem> local = new ArrayList<>(), server = new ArrayList<>();
     for (XgramActivityItem item : plan.unread) {
       ChatPlan chat = plan.chats.get(item.chatId);
-      (chat != null && chat.ghosted ? local : server).add(item);
+      if (chat != null && chat.ghosted) {
+        local.add(item);
+      } else if (queued.contains(item.chatId)) {
+        server.add(item);
+      }
     }
+    LocalMarks marks = new LocalMarks(tdlib);
     if (!local.isEmpty()) {
       store.markItemsRead(accountId, local, true);
-      viewMentionsLocally(tdlib, local);
+      marks = viewMentionsLocally(tdlib, local);
     }
     if (!server.isEmpty()) {
       store.markItemsRead(accountId, server, false);
-    }
-    List<ChatPlan> steps = new ArrayList<>();
-    for (ChatPlan chat : plan.chats.values()) {
-      if (!chat.ghosted) {
-        steps.add(chat);
-      }
     }
     if (steps.isEmpty()) {
       if (progress != null) {
         progress.onDone(0, false);
       }
-      return;
+      return marks;
     }
-    final List<ChatPlan> queue = steps.size() > MAX_CHATS ? new ArrayList<>(steps.subList(0, MAX_CHATS)) : steps;
-    store.executor.execute(() -> step(tdlib, queue, 0, progress));
+    final int notQueued = left;
+    store.executor.execute(() -> step(tdlib, steps, 0, notQueued, progress));
+    return marks;
   }
 
   /** Store thread: one chat's calls, then the next one 300 ms later, unless Telegram asked to wait. */
-  private static void step (Tdlib tdlib, List<ChatPlan> queue, int index, @Nullable Progress progress) {
+  private static void step (Tdlib tdlib, List<ChatPlan> queue, int index, int left, @Nullable Progress progress) {
     if (index >= queue.size()) {
-      finish(progress, 0, false);
+      finish(progress, left, false);
       return;
     }
     final ChatPlan chat = queue.get(index);
     try {
       // Decided again now: ghost mode may have come on meanwhile
       if (XgramGhost.dontReadMessages(tdlib, chat.chatId)) {
-        next(tdlib, queue, index, progress);
+        next(tdlib, queue, index, left, progress);
         return;
       }
       if (!chat.repliesChatIds.isEmpty() && tdlib.isRepliesChat(chat.chatId)) {
@@ -220,39 +242,39 @@ final class XgramActivityRead {
       if (mentions) {
         tdlib.send(new TdApi.ReadAllChatMentions(chat.chatId), (ok, error) -> {
           if (isFlood(error)) {
-            finish(progress, queue.size() - index, true);
+            finish(progress, queue.size() - index + left, true);
             return;
           }
           if (reactions) {
-            XgramActivityStore.instance().executor.schedule(() -> readReactions(tdlib, queue, index, progress), SPACING_MS, TimeUnit.MILLISECONDS);
+            XgramActivityStore.instance().executor.schedule(() -> readReactions(tdlib, queue, index, left, progress), SPACING_MS, TimeUnit.MILLISECONDS);
           } else {
-            next(tdlib, queue, index, progress);
+            next(tdlib, queue, index, left, progress);
           }
         });
       } else if (reactions) {
-        readReactions(tdlib, queue, index, progress);
+        readReactions(tdlib, queue, index, left, progress);
       } else {
-        next(tdlib, queue, index, progress);
+        next(tdlib, queue, index, left, progress);
       }
     } catch (Throwable t) {
       Log.e(TAG, "Mark all as read", t);
-      next(tdlib, queue, index, progress);
+      next(tdlib, queue, index, left, progress);
     }
   }
 
-  private static void readReactions (Tdlib tdlib, List<ChatPlan> queue, int index, @Nullable Progress progress) {
+  private static void readReactions (Tdlib tdlib, List<ChatPlan> queue, int index, int left, @Nullable Progress progress) {
     final ChatPlan chat = queue.get(index);
     tdlib.send(new TdApi.ReadAllChatReactions(chat.chatId), (ok, error) -> {
       if (isFlood(error)) {
-        finish(progress, queue.size() - index, true);
+        finish(progress, queue.size() - index + left, true);
       } else {
-        next(tdlib, queue, index, progress);
+        next(tdlib, queue, index, left, progress);
       }
     });
   }
 
-  private static void next (Tdlib tdlib, List<ChatPlan> queue, int index, @Nullable Progress progress) {
-    XgramActivityStore.instance().executor.schedule(() -> step(tdlib, queue, index + 1, progress), SPACING_MS, TimeUnit.MILLISECONDS);
+  private static void next (Tdlib tdlib, List<ChatPlan> queue, int index, int left, @Nullable Progress progress) {
+    XgramActivityStore.instance().executor.schedule(() -> step(tdlib, queue, index + 1, left, progress), SPACING_MS, TimeUnit.MILLISECONDS);
   }
 
   private static boolean isFlood (@Nullable TdApi.Error error) {
@@ -265,16 +287,55 @@ final class XgramActivityRead {
     }
   }
 
-  /** Ghost mode's local read: the mentions count as viewed here, so the chat list's @ badge drops (nothing is sent). */
+  /** What a local read put into ghost mode's mentions set, so that an Undo takes exactly that out again. */
+  static final class LocalMarks {
+    private final Tdlib tdlib;
+    private final List<Mark> applied = new ArrayList<>();
+    private boolean undone;
+
+    LocalMarks (@NonNull Tdlib tdlib) {
+      this.tdlib = tdlib;
+    }
+
+    /** UI thread: the mentions count as unread here again, and checks still running put nothing in. */
+    @UiThread
+    void undo () {
+      undone = true;
+      for (Mark mark : applied) {
+        XgramLocalRead.unmarkMentionsViewed(tdlib, mark.chatId, mark.topicId, mark.ids);
+      }
+      applied.clear();
+    }
+  }
+
+  private static final class Mark {
+    final long chatId;
+    final int topicId;
+    final long[] ids;
+
+    Mark (long chatId, int topicId, long[] ids) {
+      this.chatId = chatId;
+      this.topicId = topicId;
+      this.ids = ids;
+    }
+  }
+
+  /**
+   * Ghost mode's local read: the mentions count as viewed here, so the chat list's @ badge drops (nothing is sent).
+   * Only messages TDLib still has as an unread mention (GetMessageLocally, no network): one read elsewhere, or marked
+   * unread here only, would keep a new mention off the badge for good.
+   */
   @UiThread
-  static void viewMentionsLocally (@NonNull Tdlib tdlib, @NonNull List<XgramActivityItem> items) {
+  @NonNull
+  static LocalMarks viewMentionsLocally (@NonNull Tdlib tdlib, @NonNull List<XgramActivityItem> items) {
+    final LocalMarks marks = new LocalMarks(tdlib);
     if (!XgramLocalRead.isActive()) {
-      return;
+      return marks;
     }
     Map<String, List<Long>> byTopic = new HashMap<>();
     Map<String, long[]> keys = new HashMap<>();
     for (XgramActivityItem item : items) {
-      if (item.isReaction() || item.hasFlag(XgramActivityItem.FLAG_REPLIES_CHAT)) {
+      if (item.isReaction() || item.hasFlag(XgramActivityItem.FLAG_REPLIES_CHAT) || item.isUserUnread()) {
         continue;
       }
       String key = item.chatId + "_" + item.topicId;
@@ -294,8 +355,29 @@ final class XgramActivityRead {
         ids[i] = list.get(i);
       }
       if (key != null) {
-        XgramLocalRead.markMentionsViewed(tdlib, key[0], (int) key[1], ids);
+        markIfStillUnread(tdlib, key[0], (int) key[1], ids, marks);
       }
+    }
+    return marks;
+  }
+
+  /** Asks TDLib (locally) which of {@code ids} are still unread mentions, then marks those viewed in one go. */
+  @UiThread
+  private static void markIfStillUnread (@NonNull Tdlib tdlib, long chatId, int topicId, @NonNull long[] ids, @NonNull LocalMarks marks) {
+    final long[] unread = new long[ids.length];
+    final int[] counts = {ids.length, 0}; // answers pending, unread found (UI thread only)
+    for (long id : ids) {
+      tdlib.send(new TdApi.GetMessageLocally(chatId, id), (message, error) -> UI.post(() -> {
+        if (message != null && message.containsUnreadMention) {
+          unread[counts[1]++] = id;
+        }
+        if (--counts[0] == 0 && counts[1] > 0 && !marks.undone) {
+          long[] added = XgramLocalRead.markMentionsViewed(tdlib, chatId, topicId, java.util.Arrays.copyOf(unread, counts[1]));
+          if (added != null && added.length > 0) {
+            marks.applied.add(new Mark(chatId, topicId, added));
+          }
+        }
+      }));
     }
   }
 }

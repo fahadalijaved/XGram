@@ -20,6 +20,7 @@ import android.graphics.drawable.Drawable;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.UiThread;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramM3Profile;
@@ -28,6 +29,7 @@ import com.fahadali.xgram.layout.XgramTwoPane;
 
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.component.dialogs.ChatView;
 import org.thunderdog.challegram.component.user.RemoveHelper;
 import org.thunderdog.challegram.config.Config;
@@ -40,9 +42,10 @@ import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
-import org.thunderdog.challegram.tool.U;
 import org.thunderdog.challegram.util.text.Text;
 import org.thunderdog.challegram.util.text.TextColorSet;
+import org.thunderdog.challegram.util.text.TextEntity;
+import org.thunderdog.challegram.util.text.TextEntityCustom;
 import org.thunderdog.challegram.util.text.TextStyleProvider;
 import org.thunderdog.challegram.widget.AttachDelegate;
 import org.thunderdog.challegram.widget.SparseDrawableView;
@@ -74,9 +77,18 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
   @Nullable private XgramActivityRows.Row row;
   private boolean twoAvatars;
   private boolean expressive;
-  @Nullable private String boundKey;
+  @Nullable private String boundKey, boundSignature;
+  private int boundEpoch = -1;
 
-  @Nullable private Text titleText, contextText, prefixText, bodyText, quoteText, badgeText;
+  /** Bumped when every row must lay out again although its data did not change (language, date format, a new day). */
+  private static int layoutEpoch;
+
+  @UiThread
+  static void invalidateLayouts () {
+    layoutEpoch++;
+  }
+
+  @Nullable private Text titleText, contextText, bodyText, quoteText, badgeText;
   @Nullable private String time;
   private float timeWidth;
   private int layoutWidth = -1;
@@ -87,9 +99,12 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
   private final RectF rect = new RectF();
   private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-  /** The selected row is the one whose chat is open on the right (XgramTwoPane) and that was opened last. */
-  public interface SelectionProvider {
-    boolean isRowSelected (@NonNull String key, long chatId);
+  /**
+   * The selected row is the one whose chat is open on the right (XgramTwoPane) and that has the item opened last (a
+   * newer reply joining its group keeps it selected).
+   */
+  interface SelectionProvider {
+    boolean isRowSelected (@NonNull XgramActivityRows.Row row);
   }
 
   @Nullable private SelectionProvider selection;
@@ -103,7 +118,7 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     this.dot = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> invalidate());
   }
 
-  public void setSelectionProvider (@Nullable SelectionProvider selection) {
+  void setSelectionProvider (@Nullable SelectionProvider selection) {
     this.selection = selection;
   }
 
@@ -114,23 +129,37 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
 
   // Binding
 
-  /** Always rebinds (a recycled or destroyed view too). */
+  /**
+   * Binds a row (a recycled or destroyed view too). The same row with nothing changed keeps its layout and its loaded
+   * emoji and avatars: only what is drawn from state (the dot, the selection) follows.
+   */
   void setRow (@NonNull XgramActivityRows.Row row) {
-    final boolean sameKey = boundKey != null && boundKey.equals(row.key());
+    final String key = row.stableKey();
+    final boolean sameKey = boundKey != null && boundKey.equals(key);
     if (!sameKey) {
       resetSwipe();
     }
     final boolean wasNew = this.row != null && this.row.isNew();
+    final boolean expressive = XgramExpressive.isEnabled();
+    final String signature = row.signature();
+    final boolean unchanged = sameKey && expressive == this.expressive && signature.equals(boundSignature) &&
+      boundEpoch == layoutEpoch && layoutWidth != -1;
     this.row = row;
-    this.boundKey = row.key();
-    this.expressive = XgramExpressive.isEnabled();
+    this.boundKey = key;
+    this.boundSignature = signature;
+    this.boundEpoch = layoutEpoch;
+    this.expressive = expressive;
     final boolean isNew = row.isNew();
     if (sameKey && wasNew && !isNew && getWindowToken() != null) {
       dot.animateTo(0f); // read now: the dot scales away
     } else if (sameKey && !wasNew && isNew && getWindowToken() != null) {
       dot.animateTo(1f);
-    } else {
-      dot.setValue(isNew ? 1f : 0f);
+    } else if (!sameKey || wasNew != isNew || getWindowToken() == null) {
+      dot.setValue(isNew ? 1f : 0f); // the same row in the same state on screen: its spring is left alone
+    }
+    if (unchanged) {
+      invalidate();
+      return;
     }
     requestAvatars();
     layoutWidth = -1; // laid out again for this row
@@ -192,6 +221,7 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     textMedia.performDestroy();
     // Bound again from scratch if the view comes back (setRow)
     boundKey = null;
+    boundSignature = null;
   }
 
   // Text
@@ -297,8 +327,16 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     if (chat == null || chat.isEmpty()) {
       chat = item.chatTitle != null ? item.chatTitle : "";
     }
-    if (item.topicTitle != null && !item.topicTitle.isEmpty() && !item.hasFlag(XgramActivityItem.FLAG_PRIVATE)) {
-      return Lang.getString(R.string.XgramActivityInTopic, chat, item.topicTitle);
+    if (item.hasFlag(XgramActivityItem.FLAG_PRIVATE)) {
+      return chat;
+    }
+    // The topic's name as loaded now (UI thread), else the one saved
+    String topic = XgramActivityCollector.topicTitle(tdlib, item.chatId, item.topicId);
+    if (topic == null || topic.isEmpty()) {
+      topic = item.topicTitle;
+    }
+    if (topic != null && !topic.isEmpty()) {
+      return Lang.getString(R.string.XgramActivityInTopic, chat, topic);
     }
     return chat;
   }
@@ -335,10 +373,13 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     return new TdApi.FormattedText(b.toString(), null);
   }
 
+  /** Room kept at the end of the body's first line for the New dot under the time (the same in both looks). */
+  private static final float DOT_ROOM = 16f;
+
   /** Lays every text out for {@code width}. */
   private void layoutTexts (int width) {
     XgramActivityRows.Row row = this.row;
-    titleText = contextText = prefixText = bodyText = quoteText = badgeText = null;
+    titleText = contextText = bodyText = quoteText = badgeText = null;
     textMedia.clear();
     if (row == null || width <= 0) {
       return;
@@ -375,58 +416,59 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
       titleText = b.build();
     }
 
-    // Body: a prefix in onSurface ("Mentioned you: "), the rest in onSurfaceVariant
+    // Body: one text, so that both directions lay it out as one paragraph: a prefix in onSurface ("Mentioned you: "),
+    // the rest in onSurfaceVariant
     final TextColorSet bodyColors = expressive ? M3_BODY : CLASSIC_BODY;
     final TextColorSet prefixColors = expressive ? XgramM3Profile.TEXT_ON_SURFACE : CLASSIC_TITLE;
-    String prefix;
-    TdApi.FormattedText body;
+    final String value;
+    int prefixLength = 0;
     List<TdApi.TextEntity> entities = new ArrayList<>();
     if (item.isDeleted()) {
       String saved = item.text != null ? item.text : "";
       String deleted = Lang.getString(R.string.XgramActivityDeleted);
-      String value = saved.isEmpty() ? deleted : deleted + " · " + saved;
-      prefix = null;
-      body = new TdApi.FormattedText(value, new TdApi.TextEntity[] {new TdApi.TextEntity(0, value.length(), new TdApi.TextEntityTypeItalic())});
+      value = saved.isEmpty() ? deleted : deleted + " · " + saved;
+      entities.add(new TdApi.TextEntity(0, value.length(), new TdApi.TextEntityTypeItalic()));
     } else if (item.isReaction()) {
-      prefix = null;
-      body = reactionBody(item, entities);
-      body.entities = entities.toArray(new TdApi.TextEntity[0]);
+      value = reactionBody(item, entities).text;
     } else {
       String text = item.text != null ? item.text : "";
       String format = Lang.getString(item.isMention() ? R.string.XgramActivityMentioned : R.string.XgramActivityReplied, MARKER);
       int at = format.indexOf(MARKER);
-      prefix = at > 0 ? format.substring(0, at) : null;
+      String prefix = at > 0 ? format.substring(0, at) : "";
       String after = at >= 0 ? format.substring(at + MARKER.length()) : "";
-      String value = text + after;
+      prefixLength = prefix.length();
+      value = prefix + text + after;
       if (item.isMention() && item.mentionFrom >= 0 && item.mentionLength > 0 && item.mentionFrom + item.mentionLength <= text.length()) {
         // Your @ in primary, Medium
-        entities.add(new TdApi.TextEntity(item.mentionFrom, item.mentionLength, new TdApi.TextEntityTypeMentionName(tdlib.myUserId())));
-        entities.add(new TdApi.TextEntity(item.mentionFrom, item.mentionLength, new TdApi.TextEntityTypeBold()));
-      }
-      body = new TdApi.FormattedText(value, entities.toArray(new TdApi.TextEntity[0]));
-    }
-    int prefixWidth = 0;
-    if (prefix != null && !prefix.isEmpty()) {
-      prefixText = new Text.Builder(prefix, available, bodyProvider(expressive), prefixColors).singleLine().noClickable().build();
-      prefixWidth = prefixText.getWidth();
-      if (prefixWidth >= available - Screen.dp(24f)) {
-        prefixText = null;
-        prefixWidth = 0;
+        entities.add(new TdApi.TextEntity(prefixLength + item.mentionFrom, item.mentionLength, new TdApi.TextEntityTypeMentionName(tdlib.myUserId())));
+        entities.add(new TdApi.TextEntity(prefixLength + item.mentionFrom, item.mentionLength, new TdApi.TextEntityTypeBold()));
       }
     }
-    final int firstLineMargin = prefixWidth;
+    TextEntity[] bodyEntities = TextEntity.valueOf(tdlib, value, entities.toArray(new TdApi.TextEntity[0]), null);
+    if (prefixLength > 0) {
+      TextEntity prefixEntity = new TextEntityCustom(null, tdlib, value, 0, prefixLength, 0, null).setCustomColorSet(prefixColors);
+      TextEntity[] withPrefix = new TextEntity[(bodyEntities != null ? bodyEntities.length : 0) + 1];
+      withPrefix[0] = prefixEntity;
+      if (bodyEntities != null) {
+        System.arraycopy(bodyEntities, 0, withPrefix, 1, bodyEntities.length);
+      }
+      bodyEntities = withPrefix;
+    }
     final boolean prefixIsBody = item.isReaction(); // "Reacted ❤️ to your message" reads as one phrase in onSurface
-    bodyText = new Text.Builder(tdlib, body, null, available, bodyProvider(expressive), prefixIsBody ? prefixColors : bodyColors, (text, specificMedia) -> {
-      if (bodyText == text && text != null) {
-        if (!text.invalidateMediaContent(textMedia, specificMedia)) {
-          text.requestMedia(textMedia, 0, 64);
+    final int dotRoom = Screen.dp(DOT_ROOM);
+    bodyText = new Text.Builder(value, available, bodyProvider(expressive), prefixIsBody ? prefixColors : bodyColors)
+      .entities(bodyEntities, (text, specificMedia) -> {
+        if (bodyText == text && text != null) {
+          if (!text.invalidateMediaContent(textMedia, specificMedia)) {
+            text.requestMedia(textMedia, 0, 64);
+          }
         }
-      }
-    })
+      })
       .maxLineCount(2)
       .ignoreNewLines()
       .ignoreContinuousNewLines()
-      .lineMarginProvider(firstLineMargin > 0 ? (lineIndex, y, defaultMaxWidth, lineHeight) -> lineIndex == 0 ? firstLineMargin : 0 : null)
+      // The first line ends before the New dot (at its end side, in either direction)
+      .lineWidthProvider((lineIndex, y, defaultMaxWidth, lineHeight) -> lineIndex == 0 ? Math.max(0, defaultMaxWidth - dotRoom) : defaultMaxWidth)
       .build();
     bodyText.requestMedia(textMedia, 0, 64);
 
@@ -446,10 +488,10 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
       String emoji = XgramActivityClassifier.reactionEmoji(newest);
       long customEmojiId = XgramActivityClassifier.reactionCustomEmojiId(newest);
       if (expressive && (emoji != null || customEmojiId != 0 || "p".equals(newest))) {
-        TdApi.FormattedText value = customEmojiId != 0 ?
+        TdApi.FormattedText badgeValue = customEmojiId != 0 ?
           new TdApi.FormattedText("⭐", new TdApi.TextEntity[] {new TdApi.TextEntity(0, 1, new TdApi.TextEntityTypeCustomEmoji(customEmojiId))}) :
           new TdApi.FormattedText(emoji != null ? emoji : "⭐", null);
-        badgeText = new Text.Builder(tdlib, value, null, Screen.dp(20f), Paints.robotoStyleProvider(11f), XgramM3Profile.TEXT_ON_SURFACE, (text, specificMedia) -> {
+        badgeText = new Text.Builder(tdlib, badgeValue, null, Screen.dp(20f), Paints.robotoStyleProvider(11f), XgramM3Profile.TEXT_ON_SURFACE, (text, specificMedia) -> {
           if (badgeText == text && text != null) {
             if (!text.invalidateMediaContent(textMedia, specificMedia)) {
               text.requestMedia(textMedia, 64, 4);
@@ -529,7 +571,13 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     }
   }
 
-  private int tileColor () {
+  /** What is under the rings cut around the front avatar and the badge: the tile, or the selection drawn over it. */
+  private int tileColor (boolean selected) {
+    if (selected) {
+      // Expressive: drawSelectionTile at full strength (opaque); classic: fillingPressed at .6 over the filling
+      return expressive ? XgramExpressive.color(XgramExpressive.SECONDARY_CONTAINER) :
+        me.vkryl.core.ColorUtils.compositeColor(Theme.fillingColor(), me.vkryl.core.ColorUtils.alphaColor(.6f, Theme.getColor(ColorId.fillingPressed)));
+    }
     return expressive ? XgramR5People.rowColor(this) : Theme.fillingColor();
   }
 
@@ -547,7 +595,8 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     final XgramActivityItem item = row.newest();
 
     // Selected: the row whose chat is open on the right
-    if (selection != null && selection.isRowSelected(row.key(), item.chatId) && XgramTwoPane.isHighlighted(tdlib, item.chatId)) {
+    final boolean selected = selection != null && selection.isRowSelected(row) && XgramTwoPane.isHighlighted(tdlib, item.chatId);
+    if (selected) {
       if (expressive) {
         XgramM3Profile.drawSelectionTile(c, width, getMeasuredHeight(), 1f);
       } else {
@@ -561,15 +610,15 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
         avatarBack.drawPlaceholder(c);
       }
       avatarBack.draw(c);
-      // The front one is cut out of the back one by a ring in the tile's colour
-      paint.setColor(tileColor());
+      // The front one is cut out of the back one by a ring in the colour under it
+      paint.setColor(tileColor(selected));
       c.drawCircle(avatar.centerX(), avatar.centerY(), avatar.getWidth() / 2f + Screen.dp(2f), paint);
     }
     if (avatar.needPlaceholder()) {
       avatar.drawPlaceholder(c);
     }
     avatar.draw(c);
-    drawKindBadge(c, width, rtl);
+    drawKindBadge(c, width, rtl, selected);
 
     final int textStart = Screen.dp(72f);
     // Title line
@@ -609,14 +658,12 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
         c.drawCircle(cx, cy, radius, paint);
       }
     }
-    // Body
+    // Body, between the text start and the end padding: right-to-left paragraphs end at the right bound
     if (bodyText != null) {
-      final int bodyX = rtl ? width - textStart - bodyText.getWidth() : textStart;
-      if (prefixText != null) {
-        final int prefixX = rtl ? width - textStart - prefixText.getWidth() : textStart;
-        prefixText.draw(c, prefixX, bodyTop);
-      }
-      bodyText.draw(c, rtl ? Math.min(bodyX, width - textStart - bodyText.getWidth()) : bodyX, bodyTop, null, 1f, textMedia);
+      final int end = expressive ? Screen.dp(XgramR5People.PADDING) : ChatView.getTimePaddingRight();
+      final int bodyLeft = rtl ? end : textStart;
+      final int bodyRight = rtl ? width - textStart : width - end;
+      bodyText.draw(c, bodyLeft, bodyRight, 0, bodyTop, null, 1f, textMedia);
     }
     // Quote
     if (quoteText != null) {
@@ -643,13 +690,13 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
       final float radius = Screen.dp(12f);
       paint.setColor(XgramExpressive.color(XgramExpressive.SURFACE_CONTAINER_HIGHEST));
       c.drawRoundRect(rect, radius, radius, paint);
+      // The bar is the strip's own rounded shape cut to its first 3dp: it follows the strip's corners
       paint.setColor(XgramExpressive.color(XgramExpressive.PRIMARY));
       final float barLeft = rtl ? right - Screen.dp(3f) : left;
-      c.save();
-      c.clipRect(rect.left, rect.top, rect.right, rect.bottom);
-      rect.set(barLeft, quoteTop, barLeft + Screen.dp(3f), quoteTop + Screen.dp(28f));
-      c.drawRect(rect, paint);
-      c.restore();
+      final int save = c.save();
+      c.clipRect(barLeft, quoteTop, barLeft + Screen.dp(3f), quoteTop + Screen.dp(28f));
+      c.drawRoundRect(rect, radius, radius, paint);
+      c.restoreToCount(save);
       final int textTop = quoteTop + (Screen.dp(28f) - quote.getHeight()) / 2;
       final int textX = rtl ? (int) right - Screen.dp(3f + 8f) - quote.getWidth() : (int) left + Screen.dp(3f + 8f);
       quote.draw(c, textX, textTop);
@@ -663,8 +710,8 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     }
   }
 
-  /** The kind badge at the avatar's bottom end, in a ring of the tile's colour. */
-  private void drawKindBadge (Canvas c, int width, boolean rtl) {
+  /** The kind badge at the avatar's bottom end, in a ring of the colour under it (the tile, or the selection). */
+  private void drawKindBadge (Canvas c, int width, boolean rtl, boolean selected) {
     final int size = Screen.dp(expressive ? XgramR5People.AVATAR : 52f);
     final int left = expressive ? Screen.dp(XgramR5People.PADDING) : Screen.dp(11f);
     final int top = expressive ? Screen.dp(12f) : Screen.dp(10f);
@@ -673,7 +720,7 @@ public final class XgramActivityRowView extends SparseDrawableView implements At
     final float inset = Screen.dp(expressive ? 4f : 6f);
     final float cx = rtl ? width - left - size + inset : left + size - inset;
     final float cy = top + size - inset;
-    paint.setColor(tileColor());
+    paint.setColor(tileColor(selected));
     c.drawCircle(cx, cy, badgeRadius + ring, paint);
     final XgramActivityRows.Row row = this.row;
     final XgramActivityItem item = row != null ? row.newest() : null;

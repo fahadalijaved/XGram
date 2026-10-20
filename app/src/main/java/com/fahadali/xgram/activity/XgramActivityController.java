@@ -20,6 +20,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -75,12 +76,16 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   private static final int PAGE = 100;
   private static final String KEY_FILTER = "xgram_actview_filter"; // per viewer, not a setting: never backed up
 
-  // Per account, across rebuilds (fold, Expressive design, language): where the list was and the row opened last
+  // Per account, across rebuilds (the activity made again: Expressive design, a language direction): where the list
+  // was, and the item opened last
 
   static final class UiState {
-    int position = RecyclerView.NO_POSITION, offset;
+    int offset;
     @Nullable String anchorKey;
+    /** The item opened last (its row is selected while its chat is on the right). */
     @Nullable String lastOpenedKey;
+    /** The last screen went with its activity (a rebuild): the next one comes back where it was. Otherwise it opens at the top. */
+    boolean restorePending;
   }
 
   private static final SparseArray<UiState> uiStates = new SparseArray<>();
@@ -159,11 +164,17 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   private boolean loaded, loading, reloadQueued, endReached;
   private int limit = PAGE;
   private int requestId;
-  private boolean restoreScroll = true;
+  private boolean restoreScroll;
+  /** Rows a page should show at least: fewer (grouping, muted topics) and there are more, the next page comes at once. */
+  private static final int MIN_PAGE_ROWS = 20;
+  private final XgramActivityUndoBar classicUndo = new XgramActivityUndoBar(this);
 
   @Override
   protected void onCreateView (Context context, CustomRecyclerView recyclerView) {
     loadFilter();
+    UiState state = uiState(tdlib.id());
+    restoreScroll = state.restorePending;
+    state.restorePending = false;
     adapter = new SettingsAdapter(this) {
       @Override
       protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
@@ -208,6 +219,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
             break;
           }
           case CHIPS: {
+            chips = (XgramActivityChips) view;
             bindChips((XgramActivityChips) view);
             break;
           }
@@ -371,19 +383,23 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
     if (loading) {
       reloadQueued = true;
+      replaceQueued |= scrollToTop;
       return;
     }
     if (!XgramActivity.isOn()) {
       loaded = true;
       rows = Collections.emptyList();
-      buildCells();
+      buildCells(scrollToTop);
       executeScheduledAnimation();
       return;
     }
     loading = true;
     final int request = ++requestId;
     final int requestedLimit = limit;
-    XgramActivityStore.instance().query(tdlib.id(), filter, unreadOnly, XgramActivity.reactions(), XgramActivity.discussion(), requestedLimit, items -> {
+    // Muted chats (off) is left out by the query itself, so the limit counts rows that are shown
+    final long[][] muted = XgramActivityRows.mutedChats(tdlib, XgramActivityStore.instance().summary(tdlib.id()).knownChats());
+    XgramActivityStore.instance().query(tdlib.id(), filter, unreadOnly, XgramActivity.reactions(), XgramActivity.discussion(),
+      muted != null ? muted[0] : null, muted != null ? muted[1] : null, requestedLimit, items -> {
       if (isDestroyed() || request != requestId) {
         return;
       }
@@ -399,18 +415,30 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       rows = XgramActivityRows.group(visible);
       applyRows(scrollToTop);
       executeScheduledAnimation();
+      if (!endReached && rows.size() < MIN_PAGE_ROWS && limit < XgramActivityStore.ROW_CAP) {
+        // Too few rows to scroll (grouped replies, muted topics), so no scroll would ask for more: the next page now
+        limit += PAGE;
+        reloadQueued = true;
+      }
       if (reloadQueued) {
+        final boolean replace = replaceQueued;
         reloadQueued = false;
-        reload(false);
+        replaceQueued = false;
+        reload(replace);
       }
     });
   }
+
+  private boolean replaceQueued;
 
   private boolean rebuildPosted;
   private final java.util.HashSet<String> shownKeys = new java.util.HashSet<>();
   private int newestShownDate;
 
-  /** Puts the rows in, keeping what is on screen where it is (or going to the top). */
+  /**
+   * Puts the rows in. Only what changed is told to the list (new rows animate in, the rest stays where it is on
+   * screen); a filter change, the first rows and a language change replace everything and go to the top.
+   */
   private void applyRows (boolean scrollToTop) {
     CustomRecyclerView recyclerView = getRecyclerView();
     if (recyclerView != null && !scrollToTop && (recyclerView.isComputingLayout() || isSwiping())) {
@@ -426,25 +454,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       }
       return;
     }
-    // The first row on screen and its offset, to find it again in the new list
-    String anchorKey = null;
-    int anchorOffset = 0;
     LinearLayoutManager manager = recyclerView != null ? (LinearLayoutManager) recyclerView.getLayoutManager() : null;
-    if (manager != null && !scrollToTop) {
-      int first = manager.findFirstVisibleItemPosition();
-      List<ListItem> items = adapter.getItems();
-      for (int i = Math.max(0, first); i < items.size() && i <= manager.findLastVisibleItemPosition(); i++) {
-        if (items.get(i).getData() instanceof XgramActivityRows.Row) {
-          View view = manager.findViewByPosition(i);
-          anchorKey = ((XgramActivityRows.Row) items.get(i).getData()).key();
-          anchorOffset = view != null ? view.getTop() : 0;
-          break;
-        }
-      }
-      if (first == 0) {
-        anchorKey = null; // at the top: stay at the top, new rows come in above
-      }
-    }
+    final boolean atTop = scrollToTop || manager == null || manager.findFirstVisibleItemPosition() <= 0;
     // Rows newer than everything shown so far: the pill counts them while the list is scrolled down
     int newcomers = 0;
     if (!shownKeys.isEmpty()) {
@@ -463,16 +474,19 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       shownKeys.add(row.key());
       newestShownDate = Math.max(newestShownDate, row.eventDate());
     }
-    buildCells();
-    if (anchorKey != null && newcomers > 0) {
+    final boolean firstRows = !rowsShown;
+    rowsShown = true;
+    buildCells(scrollToTop || firstRows);
+    if (!atTop && newcomers > 0) {
       setNewPill(newPillCount + newcomers);
-    } else if (anchorKey == null && newPillCount > 0) {
+    } else if (atTop && newPillCount > 0) {
       setNewPill(0);
     }
     if (manager == null) {
       return;
     }
-    if (restoreScroll) {
+    if (restoreScroll && firstRows) {
+      // A rebuild of the screen (the activity was made again): back where the last one was
       restoreScroll = false;
       UiState state = uiState(tdlib.id());
       int index = state.anchorKey != null ? indexOfRow(state.anchorKey) : -1;
@@ -483,13 +497,11 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
     if (scrollToTop) {
       manager.scrollToPositionWithOffset(0, 0);
-    } else if (anchorKey != null) {
-      int index = indexOfRow(anchorKey);
-      if (index != -1) {
-        manager.scrollToPositionWithOffset(index, anchorOffset);
-      }
     }
   }
+
+  /** The rows of the store were put in once (before that, the list shows its loading row). */
+  private boolean rowsShown;
 
   private int indexOfRow (String key) {
     List<ListItem> items = adapter.getItems();
@@ -504,14 +516,21 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
 
   /** A status tile (Expressive design) or note (Telegram X's look). */
   static final class Status {
+    /** Its place above the list ("sync" or "ghost"): the same tile is updated in place. */
+    final String key;
     final int icon;
     final CharSequence text;
     final float progress;
 
-    Status (int icon, CharSequence text, float progress) {
+    Status (String key, int icon, CharSequence text, float progress) {
+      this.key = key;
       this.icon = icon;
       this.text = text;
       this.progress = progress;
+    }
+
+    String signature () {
+      return icon + ":" + text + ":" + Math.round(progress * 1000f);
     }
   }
 
@@ -523,15 +542,15 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     if (sync.isPaused()) {
       long seconds = Math.max(1, (sync.pausedUntil - System.currentTimeMillis() + 999) / 1000L);
       String wait = seconds < 60 ? Lang.plural(R.string.xSeconds, seconds) : seconds < 3600 ? Lang.plural(R.string.xMinutes, (seconds + 59) / 60) : Lang.plural(R.string.xHours, (seconds + 3599) / 3600);
-      result.add(new Status(0, Lang.getString(R.string.XgramActivityPaused, wait), -1f));
+      result.add(new Status("sync", 0, Lang.getString(R.string.XgramActivityPaused, wait), -1f));
       scheduleStatusRefresh();
     } else if (sync.running && sync.offline) {
-      result.add(new Status(0, Lang.getString(R.string.XgramActivityOffline), -1f));
+      result.add(new Status("sync", 0, Lang.getString(R.string.XgramActivityOffline), -1f));
     } else if (sync.running && sync.total >= 2) {
-      result.add(new Status(0, Lang.getString(R.string.XgramActivityCatchingUp, Math.min(sync.done, sync.total), sync.total), (float) Math.min(sync.done, sync.total) / sync.total));
+      result.add(new Status("sync", 0, Lang.getString(R.string.XgramActivityCatchingUp, Math.min(sync.done, sync.total), sync.total), (float) Math.min(sync.done, sync.total) / sync.total));
     }
     if (XgramGhost.dontReadMessages()) {
-      result.add(new Status(R.drawable.baseline_ghost_24, Lang.getString(R.string.XgramActivityGhostNote), -1f));
+      result.add(new Status("ghost", R.drawable.baseline_ghost_24, Lang.getString(R.string.XgramActivityGhostNote), -1f));
     }
     return result;
   }
@@ -552,41 +571,67 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
   }
 
+  /** The list's items with, for each, who it is across rebuilds (its key) and what it shows (its signature). */
+  private static final class Cells {
+    final List<ListItem> items = new ArrayList<>();
+    final List<String> keys = new ArrayList<>(), signatures = new ArrayList<>();
+
+    void add (ListItem item, String key, String signature) {
+      items.add(item);
+      keys.add(key);
+      signatures.add(signature);
+    }
+  }
+
+  /** The keys and signatures of what the adapter holds now, in its order. */
+  private final List<String> cellKeys = new ArrayList<>(), cellSignatures = new ArrayList<>();
+  private boolean cellsBuilt;
+  /** A changed item is bound again in its own holder: rows keep their layout and springs, the chips their scroll. */
+  private static final Object PAYLOAD_REBIND = new Object();
+
   private void buildCells () {
+    buildCells(false);
+  }
+
+  /** {@code replace}: everything is new (the first rows, a filter, a language), otherwise only what changed is told. */
+  private void buildCells (boolean replace) {
     final boolean expressive = XgramExpressive.isEnabled();
-    List<ListItem> items = new ArrayList<>();
+    final Cells cells = new Cells();
     if (!XgramActivity.isOn()) {
       if (expressive) {
-        items.add(new ListItem(ListItem.TYPE_CUSTOM - OFF_ROW));
+        cells.add(new ListItem(ListItem.TYPE_CUSTOM - OFF_ROW), "off", "");
       } else {
-        items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramActivityOff));
-        items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-        items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityTurnOn, R.drawable.baseline_notifications_24, R.string.XgramActivityTurnOn));
-        items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+        cells.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL), "off:offset", "");
+        cells.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramActivityOff), "off:text", Lang.getString(R.string.XgramActivityOff));
+        cells.add(new ListItem(ListItem.TYPE_SHADOW_TOP), "off:top", "");
+        cells.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityTurnOn, R.drawable.baseline_notifications_24, R.string.XgramActivityTurnOn), "off:button", Lang.getString(R.string.XgramActivityTurnOn));
+        cells.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM), "off:bottom", "");
       }
-      adapter.setItems(items, false);
+      applyCells(cells, replace);
       return;
     }
     if (expressive) {
-      items.add(new ListItem(ListItem.TYPE_CUSTOM - CHIPS));
+      cells.add(new ListItem(ListItem.TYPE_CUSTOM - CHIPS), "chips", filter + ":" + unreadOnly + ":" + XgramActivity.reactions());
     } else {
-      items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+      cells.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL), "offset", "");
     }
     for (Status status : statuses()) {
       if (expressive) {
-        items.add(new ListItem(ListItem.TYPE_CUSTOM - STATUS).setData(status));
+        cells.add(new ListItem(ListItem.TYPE_CUSTOM - STATUS).setData(status), "status:" + status.key, status.signature());
       } else {
-        items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, status.text, false));
+        cells.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, status.text, false), "status:" + status.key, status.text.toString());
       }
     }
-    if (!loaded) {
-      items.add(expressive ? new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.LOADING_ROW) : new ListItem(ListItem.TYPE_PROGRESS));
+    final XgramActivityStore.Summary summary = XgramActivityStore.instance().summary(tdlib.id());
+    if (!loaded || (rows.isEmpty() && summary.sync.running && !summary.hasAny)) {
+      // Loading, or the first catch-up still running with nothing stored yet
+      cells.add(expressive ? new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.LOADING_ROW) : new ListItem(ListItem.TYPE_PROGRESS), "loading", "");
     } else if (rows.isEmpty()) {
+      final String text = emptyText();
       if (expressive) {
-        items.add(new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.STATE_ROW));
+        cells.add(new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.STATE_ROW), "empty", emptyTitle() + ":" + text);
       } else {
-        items.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, emptyTitle(), false));
+        cells.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, emptyTitle(), false), "empty", emptyTitle());
       }
     } else {
       final long now = XgramActivityStore.nowSeconds();
@@ -596,26 +641,97 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         int rowSection = XgramActivityClassifier.sectionOf(row.eventDate(), now);
         if (rowSection != section) {
           if (section != -1) {
-            items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+            cells.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM), "bottom:" + section, "");
           }
           section = rowSection;
-          items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, sectionName(rowSection), false));
-          items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+          final String name = sectionName(rowSection);
+          cells.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, name, false), "header:" + rowSection, name);
+          cells.add(new ListItem(ListItem.TYPE_SHADOW_TOP), "top:" + rowSection, "");
           first = true;
         }
+        final String rowKey = row.stableKey();
         if (!first) {
-          items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+          cells.add(new ListItem(ListItem.TYPE_SEPARATOR), "separator:" + rowKey, "");
         }
         first = false;
-        items.add(new ListItem(ListItem.TYPE_CUSTOM - ROW).setData(row));
+        cells.add(new ListItem(ListItem.TYPE_CUSTOM - ROW).setData(row), "row:" + rowKey, row.signature());
       }
-      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM)); // every page closes its groups
+      cells.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM), "bottom:" + section, ""); // every page closes its groups
     }
-    adapter.setItems(items, false);
-    if (getRecyclerView() != null) {
-      getRecyclerView().invalidateItemDecorations();
+    applyCells(cells, replace);
+  }
+
+  /**
+   * Gives the adapter the new items: everything at once when {@code replace} (or nothing to compare with), otherwise
+   * only the differences (DiffUtil): rows in and out with their own animation, changed ones bound again in place.
+   */
+  private void applyCells (@NonNull Cells cells, boolean replace) {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView != null && recyclerView.isComputingLayout()) {
+      // Not during a layout pass: right after it
+      replacePending |= replace;
+      if (!applyPosted) {
+        applyPosted = true;
+        recyclerView.post(() -> {
+          applyPosted = false;
+          final boolean pending = replacePending;
+          replacePending = false;
+          if (!isDestroyed() && adapter != null) {
+            buildCells(pending);
+          }
+        });
+      }
+      return;
+    }
+    final List<ListItem> current = adapter.getItems();
+    if (replace || !cellsBuilt || recyclerView == null || current.isEmpty() || cells.items.isEmpty() || current.size() != cellKeys.size()) {
+      adapter.setItems(cells.items, false);
+    } else {
+      final List<String> oldKeys = new ArrayList<>(cellKeys), oldSignatures = new ArrayList<>(cellSignatures);
+      final List<ListItem> oldItems = new ArrayList<>(current);
+      final DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+        @Override
+        public int getOldListSize () {
+          return oldKeys.size();
+        }
+
+        @Override
+        public int getNewListSize () {
+          return cells.keys.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame (int oldItemPosition, int newItemPosition) {
+          return oldKeys.get(oldItemPosition).equals(cells.keys.get(newItemPosition)) &&
+            oldItems.get(oldItemPosition).getViewType() == cells.items.get(newItemPosition).getViewType();
+        }
+
+        @Override
+        public boolean areContentsTheSame (int oldItemPosition, int newItemPosition) {
+          return oldSignatures.get(oldItemPosition).equals(cells.signatures.get(newItemPosition));
+        }
+
+        @Nullable
+        @Override
+        public Object getChangePayload (int oldItemPosition, int newItemPosition) {
+          return PAYLOAD_REBIND;
+        }
+      }, true);
+      current.clear();
+      current.addAll(cells.items);
+      diff.dispatchUpdatesTo(adapter);
+    }
+    cellKeys.clear();
+    cellKeys.addAll(cells.keys);
+    cellSignatures.clear();
+    cellSignatures.addAll(cells.signatures);
+    cellsBuilt = true;
+    if (recyclerView != null) {
+      recyclerView.invalidateItemDecorations();
     }
   }
+
+  private boolean applyPosted, replacePending;
 
   @NonNull
   private static String sectionName (int section) {
@@ -873,48 +989,10 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       }
       return;
     }
-    View value = getValue();
-    if (!(value instanceof android.widget.FrameLayout)) {
+    if (!classicUndo.show(text, onUndo, extraBottomInset)) {
       UI.showToast(text, Toast.LENGTH_SHORT);
-      return;
     }
-    final android.widget.FrameLayout content = (android.widget.FrameLayout) value;
-    if (undoBar != null) {
-      undoBar.removeThemeListeners(this);
-      content.removeView(undoBar);
-      undoBar = null;
-    }
-    org.thunderdog.challegram.widget.SnackBar bar = new org.thunderdog.challegram.widget.SnackBar(context);
-    bar.setCallback(new org.thunderdog.challegram.widget.SnackBar.Callback() {
-      @Override
-      public void onSnackBarTransition (org.thunderdog.challegram.widget.SnackBar v, float factor) { }
-
-      @Override
-      public void onDestroySnackBar (org.thunderdog.challegram.widget.SnackBar v) {
-        v.removeThemeListeners(XgramActivityController.this);
-        content.removeView(v);
-        if (undoBar == v) {
-          undoBar = null;
-        }
-      }
-    });
-    bar.addThemeListeners(this);
-    bar.setText(text);
-    bar.setAction(Lang.getString(R.string.XgramR5SheetsUndo), onUndo, true);
-    bar.setPadding(0, 0, 0, extraBottomInset);
-    content.addView(bar);
-    bar.showSnackBar(true);
-    undoBar = bar;
-    UI.cancel(undoDismiss);
-    UI.post(undoDismiss, 5000L);
   }
-
-  @Nullable private org.thunderdog.challegram.widget.SnackBar undoBar;
-  private final Runnable undoDismiss = () -> {
-    if (undoBar != null) {
-      undoBar.dismissSnackBar(true);
-    }
-  };
 
   /** Clear: the rows go (tombstones, so nothing brings them back), Undo puts them back as they were. */
   private void clearRow (@NonNull XgramActivityRows.Row row) {
@@ -934,16 +1012,24 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
   }
 
+  /** Clear read items: the Read rows this filter shows (Reactions, Channel comments and Muted chats as set), with Undo. */
   private void clearRead () {
     final XgramActivityStore store = XgramActivityStore.instance();
-    store.clearRead(tdlib.id(), filter, cleared -> {
+    store.queryRead(tdlib.id(), filter, XgramActivity.reactions(), XgramActivity.discussion(), read -> {
       if (isDestroyed()) {
         return;
+      }
+      final List<XgramActivityItem> cleared = new ArrayList<>(read.size());
+      for (XgramActivityItem item : read) {
+        if (XgramActivityRows.visible(tdlib, item)) {
+          cleared.add(item);
+        }
       }
       if (cleared.isEmpty()) {
         showMessage(Lang.getString(R.string.XgramActivityNothingRead), null, null);
         return;
       }
+      store.clearReadItems(tdlib.id(), cleared);
       String text = cleared.size() == 1 ? Lang.getString(R.string.XgramActivityClearedOne) : Lang.getString(R.string.XgramActivityClearedMany, cleared.size());
       showUndo(text, () -> store.restoreItems(tdlib.id(), cleared));
     });
@@ -980,7 +1066,18 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     if (row.isNew()) {
       XgramActivityRead.markOne(tdlib, row);
     } else {
-      XgramActivityStore.instance().markItemsUnread(tdlib.id(), row.items);
+      // Read on the server: New here only, and kept so (counters and searches leave it alone). Items read on this
+      // device only (ghost mode) are still unread there: plainly New again.
+      List<XgramActivityItem> readHere = new ArrayList<>(), readThere = new ArrayList<>();
+      for (XgramActivityItem item : row.items) {
+        (item.hasFlag(XgramActivityItem.FLAG_READ_LOCAL) ? readHere : readThere).add(item);
+      }
+      if (!readHere.isEmpty()) {
+        XgramActivityStore.instance().markItemsUnread(tdlib.id(), readHere, false);
+      }
+      if (!readThere.isEmpty()) {
+        XgramActivityStore.instance().markItemsUnread(tdlib.id(), readThere, true);
+      }
     }
   }
 
@@ -996,10 +1093,14 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       return;
     }
     if (plan.serverChats() == 0) {
-      // Ghost mode applies to every chat: read on this device only, nothing sent, so it can be undone
+      // Ghost mode applies to every chat: read on this device only, nothing sent, so it can be undone (the rows, and
+      // the chat list's @ badges ghost mode lowered for them)
       final List<XgramActivityItem> unread = new ArrayList<>(plan.unread);
-      XgramActivityRead.run(tdlib, plan, null);
-      showUndo(Lang.getString(R.string.XgramActivityReadLocally), () -> XgramActivityStore.instance().markItemsUnread(tdlib.id(), unread));
+      final XgramActivityRead.LocalMarks marks = XgramActivityRead.run(tdlib, plan, null);
+      showUndo(Lang.getString(R.string.XgramActivityReadLocally), () -> {
+        marks.undo();
+        XgramActivityStore.instance().markItemsUnread(tdlib.id(), unread, false); // still unread on the server
+      });
       return;
     }
     final int chats = plan.chats.size();
@@ -1023,13 +1124,16 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   }
 
   private void runMarkAll (@NonNull XgramActivityRead.Plan plan) {
-    final int serverChats = plan.serverChats();
+    final int serverChats = Math.min(plan.serverChats(), XgramActivityRead.MAX_CHATS);
     if (serverChats >= 30) {
       showMessage(Lang.getString(R.string.XgramActivityMarking, serverChats), null, null);
     }
     XgramActivityRead.run(tdlib, plan, (stoppedChats, flood) -> {
       if (flood && stoppedChats > 0) {
         showMessage(stoppedChats == 1 ? Lang.getString(R.string.XgramActivityMarkPartialOne) : Lang.getString(R.string.XgramActivityMarkPartialMany, stoppedChats), null, null);
+      } else if (stoppedChats > 0) {
+        // More chats than one tap reads: those stay unread, here too, for the next tap
+        showMessage(stoppedChats == 1 ? Lang.getString(R.string.XgramActivityMarkLeftOne) : Lang.getString(R.string.XgramActivityMarkLeftMany, stoppedChats), null, null);
       } else {
         showMessage(Lang.getString(R.string.XgramActivityMarked), null, null);
       }
@@ -1136,15 +1240,33 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   }
 
   @Override
-  public boolean isRowSelected (@NonNull String key, long chatId) {
+  public boolean isRowSelected (@NonNull XgramActivityRows.Row row) {
     UiState state = uiStates.get(tdlib.id());
-    return state != null && state.lastOpenedKey != null && state.lastOpenedKey.equals(key);
+    return state != null && state.lastOpenedKey != null && row.contains(state.lastOpenedKey);
+  }
+
+  /**
+   * The rows draw their selection themselves: each is repainted (invalidating the list alone keeps the rows' last
+   * drawing), e.g. when another row of the chat already on the right is opened.
+   */
+  private void invalidateRows () {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return;
+    }
+    for (int i = 0; i < recyclerView.getChildCount(); i++) {
+      View child = recyclerView.getChildAt(i);
+      if (child instanceof XgramActivityRowView) {
+        child.invalidate();
+      }
+    }
   }
 
   /** Reads the row here at once, then opens its chat at the message (the oldest New reply of a group). */
   private void openRow (@NonNull XgramActivityRows.Row row) {
     final XgramActivityItem target = row.target();
-    uiState(tdlib.id()).lastOpenedKey = row.key();
+    uiState(tdlib.id()).lastOpenedKey = target.key; // the item: its row stays selected when newer replies join it
+    invalidateRows();
     List<XgramActivityItem> unread = new ArrayList<>();
     for (XgramActivityItem item : row.items) {
       if (item.isNew()) {
@@ -1181,9 +1303,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       params.messageTopicId = new TdApi.MessageTopicForum(target.topicId);
     }
     tdlib.ui().openChat(this, target.chatId, params);
-    if (getRecyclerView() != null) {
-      getRecyclerView().invalidate(); // the selection follows on the next frames (XgramTwoPane repaints the rows too)
-    }
+    invalidateRows(); // the selection follows the chat now on the right (XgramTwoPane repaints the rows too)
   }
 
   private void showDeleted (@NonNull XgramActivityItem target) {
@@ -1214,14 +1334,33 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   @Override
   public void onActivityDisplayChanged (int accountId) {
     if ((accountId == -1 || accountId == tdlib.id()) && !isDestroyed()) {
+      updateMarkAllButton();
       reload(false);
+    }
+  }
+
+  /** The chips on screen (the list may hold another one in its pool): counts and labels again. */
+  private void forEachChips (@NonNull me.vkryl.core.lambda.RunnableData<XgramActivityChips> act) {
+    CustomRecyclerView recyclerView = getRecyclerView();
+    boolean storedSeen = false;
+    if (recyclerView != null) {
+      for (int i = 0; i < recyclerView.getChildCount(); i++) {
+        View child = recyclerView.getChildAt(i);
+        if (child instanceof XgramActivityChips) {
+          act.runWithData((XgramActivityChips) child);
+          storedSeen |= child == chips;
+        }
+      }
+    }
+    if (chips != null && !storedSeen) {
+      act.runWithData(chips);
     }
   }
 
   @Override
   public void onActivityBadgeChanged () {
-    if (chips != null && !isDestroyed()) {
-      bindChips(chips);
+    if (!isDestroyed()) {
+      forEachChips(this::bindChips);
     }
   }
 
@@ -1237,6 +1376,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
             filter = XgramActivityStore.FILTER_ALL;
             updateHeaderTitle();
           }
+          updateMarkAllButton(); // shown only while Activity is on
           reload(false);
         }
       });
@@ -1246,7 +1386,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   @Override
   public void onDateChanged () {
     if (adapter != null && loaded) {
-      buildCells(); // Today becomes Yesterday
+      XgramActivityRowView.invalidateLayouts(); // the times read as dates now
+      buildCells(true); // Today becomes Yesterday
     }
   }
 
@@ -1255,7 +1396,24 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     super.handleLanguagePackEvent(event, arg1);
     if (adapter != null && loaded && !isDestroyed()) {
       updateHeaderTitle();
-      buildCells();
+      updateMarkAllButton();
+      forEachChips(XgramActivityChips::relabel);
+      XgramActivityRowView.invalidateLayouts(); // prefixes, times and names in the new language or format
+      buildCells(true);
+    }
+  }
+
+  @Override
+  public void onThemeColorsChanged (boolean areTemp, org.thunderdog.challegram.theme.ColorState state) {
+    super.onThemeColorsChanged(areTemp, state);
+    // The chips and the pill read their colours when drawn: repainted, as the rows are (theme invalidate listeners)
+    forEachChips(XgramActivityChips::invalidateChips);
+    if (newPill != null) {
+      newPill.setTextColor(XgramExpressive.color(XgramExpressive.ON_SECONDARY_CONTAINER));
+      newPill.invalidate();
+      if (newPill.getBackground() != null) {
+        newPill.getBackground().invalidateSelf();
+      }
     }
   }
 
@@ -1264,9 +1422,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   @Override
   public void onFocus () {
     super.onFocus();
-    if (getRecyclerView() != null) {
-      getRecyclerView().invalidate();
-    }
+    invalidateRows();
     XgramActivitySync.setVisible(tdlib.id(), true); // faster spacing while here, and a look for what is missing
   }
 
@@ -1286,8 +1442,11 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     UiState state = uiState(tdlib.id());
     state.anchorKey = null;
     int first = manager.findFirstVisibleItemPosition();
+    if (first <= 0) {
+      return; // at the top (or nothing laid out): a rebuild opens at the top, where new rows come in
+    }
     List<ListItem> items = adapter.getItems();
-    for (int i = Math.max(0, first); i < items.size() && first != RecyclerView.NO_POSITION; i++) {
+    for (int i = first; i < items.size(); i++) {
       if (items.get(i).getData() instanceof XgramActivityRows.Row) {
         View view = manager.findViewByPosition(i);
         state.anchorKey = ((XgramActivityRows.Row) items.get(i).getData()).key();
@@ -1300,6 +1459,11 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   @Override
   public void destroy () {
     saveScroll();
+    // Gone with its activity (being made again, or stopped): the next screen comes back here. Closed by the user
+    // (Back, another destination) while the app is in front: the next one opens at the top.
+    uiState(tdlib.id()).restorePending = context.getActivityState() != UI.State.RESUMED ||
+      (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1 && context.isDestroyed());
+    classicUndo.destroy();
     UI.cancel(statusRefresh);
     XgramActivitySync.setVisible(tdlib.id(), false);
     super.destroy();

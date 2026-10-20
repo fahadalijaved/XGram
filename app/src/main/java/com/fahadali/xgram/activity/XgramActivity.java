@@ -223,6 +223,8 @@ public final class XgramActivity {
   /**
    * A message was on screen while ghost mode keeps it unread on the server (XgramLocalRead.onMessageViewed, before it
    * checks anything): the items about it are read here, on this device only. Cheap when the chat has nothing new.
+   * A message that is itself unread for you (a mention, or your message with unread reactions) is read even before the
+   * summary lists its chat: its item may still be on its way to the store (posted earlier, so applied first).
    */
   @UiThread
   public static void onViewedLocally (Tdlib tdlib, TdApi.Message message) {
@@ -232,7 +234,10 @@ public final class XgramActivity {
       }
       final int accountId = tdlib.id();
       XgramActivityStore store = XgramActivityStore.instance();
-      if (!store.summary(accountId).chatHasNew(message.chatId)) {
+      final boolean unreadForYou = message.isOutgoing ?
+        message.unreadReactions != null && message.unreadReactions.length > 0 :
+        message.containsUnreadMention;
+      if (!unreadForYou && !store.summary(accountId).chatHasNew(message.chatId)) {
         return;
       }
       if (message.isOutgoing) {

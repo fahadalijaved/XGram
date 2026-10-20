@@ -430,18 +430,47 @@ public final class XgramLocalRead {
   /**
    * Activity's Mark all as read in a ghosted chat: its mentions count as viewed here (the chat list's @ badge drops),
    * nothing is sent. Only the mentions set changes: the viewed messages, and so the read position shown, stay.
+   * Returns the ids that were not viewed yet (what {@link #unmarkMentionsViewed} takes back for an Undo).
    */
   @UiThread
-  public static void markMentionsViewed (Tdlib tdlib, long chatId, int forumTopicId, long[] messageIds) {
+  @Nullable
+  public static long[] markMentionsViewed (Tdlib tdlib, long chatId, int forumTopicId, long[] messageIds) {
     if (!isActive() || messageIds == null || messageIds.length == 0) {
-      return;
+      return null;
     }
-    boolean chatChanged = false, topicChanged = false;
+    // A new entry starts at the read position Telegram X shows (no local read of the chat yet, so it is the server's)
+    TdApi.Chat chat = tdlib.chat(chatId);
+    TdApi.ForumTopic topic = forumTopicId != 0 ? com.fahadali.xgram.topics.ForumTopicList.peekTopic(tdlib, chatId, forumTopicId) : null;
+    long[] added;
+    boolean topicChanged = false;
     synchronized (lock) {
       ensureLoaded();
-      chatChanged = addMentions(tdlib.id(), chatId, 0, messageIds);
+      added = addMentions(tdlib.id(), chatId, 0, chat != null ? chat.lastReadInboxMessageId : 0, messageIds);
       if (forumTopicId != 0) {
-        topicChanged = addMentions(tdlib.id(), chatId, forumTopicId, messageIds);
+        topicChanged = addMentions(tdlib.id(), chatId, forumTopicId, topic != null ? topic.lastReadInboxMessageId : 0, messageIds).length > 0;
+      }
+    }
+    if (added.length > 0) {
+      scheduleChatRefresh(tdlib, chatId);
+    }
+    if (topicChanged) {
+      scheduleTopicRefresh(tdlib, chatId, forumTopicId);
+    }
+    return added;
+  }
+
+  /** Undo of {@link #markMentionsViewed}: those mentions count as unread here again (the @ badge comes back). */
+  @UiThread
+  public static void unmarkMentionsViewed (Tdlib tdlib, long chatId, int forumTopicId, @Nullable long[] messageIds) {
+    if (messageIds == null || messageIds.length == 0) {
+      return;
+    }
+    boolean chatChanged, topicChanged = false;
+    synchronized (lock) {
+      ensureLoaded();
+      chatChanged = removeMentions(tdlib.id(), chatId, 0, messageIds);
+      if (forumTopicId != 0) {
+        topicChanged = removeMentions(tdlib.id(), chatId, forumTopicId, messageIds);
       }
     }
     if (chatChanged) {
@@ -452,24 +481,44 @@ public final class XgramLocalRead {
     }
   }
 
-  /** Caller holds {@link #lock}. */
-  private static boolean addMentions (int accountId, long chatId, int forumTopicId, long[] messageIds) {
+  /** Caller holds {@link #lock}. Returns the ids that were new to the set. */
+  private static long[] addMentions (int accountId, long chatId, int forumTopicId, long serverReadIdIfNew, long[] messageIds) {
     String key = keyOf(accountId, chatId, forumTopicId);
     Entry entry = entries.get(key);
     if (entry == null) {
       entry = new Entry(accountId, chatId, forumTopicId);
+      entry.serverReadId = serverReadIdIfNew;
       entries.put(key, entry);
     }
-    boolean changed = false;
+    long[] added = new long[messageIds.length];
+    int count = 0;
     for (long messageId : messageIds) {
       if (entry.mentions.add(messageId)) {
-        changed = true;
+        added[count++] = messageId;
       }
     }
     while (entry.mentions.size() > MAX_VIEWED) {
       entry.mentions.pollFirst();
     }
     save(entry);
+    return count == added.length ? added : java.util.Arrays.copyOf(added, count);
+  }
+
+  /** Caller holds {@link #lock}. */
+  private static boolean removeMentions (int accountId, long chatId, int forumTopicId, long[] messageIds) {
+    Entry entry = entries.get(keyOf(accountId, chatId, forumTopicId));
+    if (entry == null) {
+      return false;
+    }
+    boolean changed = false;
+    for (long messageId : messageIds) {
+      if (entry.mentions.remove(messageId)) {
+        changed = true;
+      }
+    }
+    if (changed) {
+      save(entry);
+    }
     return changed;
   }
 

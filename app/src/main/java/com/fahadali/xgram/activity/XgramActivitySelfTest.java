@@ -57,7 +57,7 @@ final class XgramActivitySelfTest {
 
   // Classifier
 
-  private static final long ME = 1000L, OTHER = 2000L, CHAT = -100123L;
+  private static final long ME = 1000L, OTHER = 2000L, CHAT = -100123L, CHAT_2 = -100124L;
 
   private static TdApi.Message message (long id, String text, TdApi.TextEntity[] entities, boolean flagged, TdApi.MessageReplyTo replyTo, boolean outgoing) {
     TdApi.Message m = new TdApi.Message();
@@ -228,6 +228,14 @@ final class XgramActivitySelfTest {
       check(state(db, 3, M) == XgramActivityItem.STATE_READ, "reconcile reads missing");
       check(state(db, 5, M) == XgramActivityItem.STATE_NEW, "reconcile skips newer");
 
+      // A Read row's reactors are read: a later live list without them (only the new unread ones) keeps them
+      XgramActivityStore.reactions(db, reactions(11, XgramActivityItem.SOURCE_LIVE, 100));
+      XgramActivityStore.markRead(db, ACCOUNT, CHAT, 11, XgramActivityItem.MASK_REACTION, false);
+      XgramActivityStore.reactions(db, reactions(11, XgramActivityItem.SOURCE_LIVE, 101));
+      check(state(db, 11, REACTION) == XgramActivityItem.STATE_NEW, "new reactor after read revives");
+      XgramActivityStore.reactions(db, reactions(11, XgramActivityItem.SOURCE_LIVE, 101, 102));
+      check(XgramActivityStore.count(db, "SELECT COUNT(*) FROM reactors WHERE msg = 11") == 3, "read reactors stay");
+
       // Clear Activity: tombstones without text, nothing comes back from a search
       XgramActivityStore.clearAllRows(db, ACCOUNT);
       check(XgramActivityStore.count(db, "SELECT COUNT(*) FROM items WHERE state != 2") == 0, "clear all");
@@ -235,13 +243,34 @@ final class XgramActivitySelfTest {
       XgramActivityStore.upsert(db, snapshot(5, M, XgramActivityItem.STATE_NEW, now));
       check(state(db, 5, M) == XgramActivityItem.STATE_CLEARED, "cleared stays");
       check(XgramActivityStore.count(db, "SELECT COUNT(*) FROM items WHERE msg = 5 AND text IS NOT NULL") == 0, "cleared stays empty");
+      // ... nor from a live list of the same people (one took theirs back): only someone new revives
+      XgramActivityStore.reactions(db, reactions(11, XgramActivityItem.SOURCE_LIVE, 101));
+      check(state(db, 11, REACTION) == XgramActivityItem.STATE_CLEARED, "clear all keeps who reacted");
 
       // Summary
       XgramActivityStore.upsert(db, snapshot(20, M, XgramActivityItem.STATE_NEW, now));
       XgramActivityStore.Summary summary = XgramActivityStore.buildSummary(db, ACCOUNT);
       check(summary.chatHasNew(CHAT) && summary.knows(CHAT) && summary.newCount(CHAT, XgramActivityItem.MASK_MENTION_GROUP) == 1, "summary");
-      List<Long> none = new ArrayList<>();
-      check(none.isEmpty(), "noop");
+
+      // Mark as unread (read on the server): counters, searches and the read position leave it New
+      XgramActivityStore.Snapshot unread = snapshot(30, M, XgramActivityItem.STATE_READ, now);
+      unread.chatId = CHAT_2;
+      XgramActivityStore.upsert(db, unread);
+      List<XgramActivityItem> marked = new ArrayList<>();
+      for (XgramActivityItem item : XgramActivityStore.queryItems(db, ACCOUNT, XgramActivityStore.FILTER_ALL, false, true, true, 100)) {
+        if (item.chatId == CHAT_2) {
+          marked.add(item);
+        }
+      }
+      XgramActivityStore.setState(db, marked, XgramActivityItem.STATE_READ, XgramActivityItem.STATE_NEW, XgramActivityItem.FLAG_USER_UNREAD, XgramActivityItem.FLAG_READ_LOCAL);
+      XgramActivityStore.reconcile(db, ACCOUNT, CHAT_2, XgramActivityItem.MASK_MENTION_GROUP, new long[0], System.currentTimeMillis() + 60_000L, true, 0, 0);
+      XgramActivityStore.markReadChat(db, ACCOUNT, CHAT_2, XgramActivityItem.MASK_MENTION_GROUP);
+      XgramActivityStore.markReadUpTo(db, ACCOUNT, CHAT_2, 30, XgramActivityItem.MASK_MENTION_GROUP);
+      check(XgramActivityStore.stateOf(db, ACCOUNT, CHAT_2, 30, M) == XgramActivityItem.STATE_NEW, "user unread stays");
+      check(XgramActivityCollector.newCount(db, ACCOUNT, CHAT_2, XgramActivityItem.MASK_MENTION_GROUP) == 0, "user unread not counted");
+      check(XgramActivityStore.buildSummary(db, ACCOUNT).syncCount(CHAT_2, XgramActivityItem.MASK_MENTION_GROUP) == 0, "user unread sync count");
+      XgramActivityStore.markRead(db, ACCOUNT, CHAT_2, 30, XgramActivityItem.MASK_MENTION_GROUP, false);
+      check(XgramActivityStore.count(db, "SELECT COUNT(*) FROM items WHERE msg = 30 AND state = 1 AND (flags & 64) = 0") == 1, "read ends user unread");
     } catch (Throwable t) {
       failures++;
       Log.e(TAG, "Self test crashed", t);
