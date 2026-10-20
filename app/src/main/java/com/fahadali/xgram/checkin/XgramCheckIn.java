@@ -209,6 +209,10 @@ public final class XgramCheckIn {
   private static boolean charging;
   private static long insideSince;
   private static boolean heldEdit;
+  /** The held edit carries new times (Add time): it goes out even when nothing moved. */
+  private static boolean forcedEdit;
+  /** Rescheduled by Add time: the alert's id (0: none) changed, edits wait for the scheduled list to give the new one. */
+  private static long staleAlertId, staleSince;
   private static long editInFlightSince;
   private static @Nullable StartCallback startCallback;
   private static @Nullable String startCallbackRef;
@@ -469,6 +473,8 @@ public final class XgramCheckIn {
     }
     setInside(0);
     heldEdit = false;
+    forcedEdit = false;
+    staleAlertId = 0;
     current = r;
     startCallback = callback;
     startCallbackRef = r.ref;
@@ -514,17 +520,30 @@ public final class XgramCheckIn {
       }
     } else if (result instanceof TdApi.Error) {
       TdApi.Error e = (TdApi.Error) result;
-      String message = e.message != null ? e.message.toUpperCase(Locale.US) : "";
       log("alert error ref=%s %d %s", ref, e.code, e.message);
-      if (!r.entitiesOff && (message.contains("ENTIT") || message.contains("DATE"))) {
-        // A SendMessage that returned an error created nothing: one retry without the DateTime entities.
-        r.entitiesOff = true;
-        save(r);
-        sendAlert(t, r);
+      if (retryWithoutEntities(t, r, e)) {
         return;
       }
       failStart(t, r, startError(e), false);
     }
+  }
+
+  /**
+   * The alert was refused and nothing exists on the server (an error result, or a send that failed): when the refusal
+   * may be about the DateTime entities, it is sent once more as plain text. True when it was.
+   */
+  private static boolean retryWithoutEntities (Tdlib t, CheckInRecord r, @Nullable TdApi.Error e) {
+    String message = e != null && e.message != null ? e.message.toUpperCase(Locale.US) : "";
+    if (r.entitiesOff || message.contains("SCHEDULE_DATE") || !(message.contains("ENTIT") || message.contains("DATE"))) {
+      return false;
+    }
+    log("alert again without DateTime entities ref=%s", r.ref);
+    r.entitiesOff = true;
+    r.alertId = 0;
+    r.alertReal = false;
+    save(r);
+    sendAlert(t, r);
+    return true;
   }
 
   private static String startError (TdApi.Error e) {
@@ -625,6 +644,10 @@ public final class XgramCheckIn {
     if ((r.alertId != 0 && oldId == r.alertId) || CheckInRules.isAlertText(CheckInText.textOf(m), r.ref)) {
       // The local failed message: removed for this device only.
       t.send(new TdApi.DeleteMessages(r.chat, new long[] {m.id}, false), (ok, e) -> { });
+      log("alert send failed ref=%s %s", r.ref, error != null ? error.message : "");
+      if (retryWithoutEntities(t, r, error)) {
+        return;
+      }
       r.alertId = 0;
       failStart(t, r, error != null ? startError(error) : Lang.getString(R.string.XgramCheckInDidntStartText), false);
     }
@@ -696,6 +719,7 @@ public final class XgramCheckIn {
     if (r != null) {
       ensureService(r, false);
       checkPrompts(r);
+      maybeEdit(false);
     }
   }
 
@@ -908,6 +932,15 @@ public final class XgramCheckIn {
       }
       case CheckInRecord.ARMED: {
         if (found != null) {
+          if (staleAlertId != 0 && found.id == staleAlertId && SystemClock.elapsedRealtime() - staleSince < 60_000 &&
+            found.schedulingState instanceof TdApi.MessageSchedulingStateSendAtDate &&
+            ((TdApi.MessageSchedulingStateSendAtDate) found.schedulingState).sendDate != r.sendAt) {
+            // Still listed as it was before Add time: the list hasn't caught up, it is asked again shortly.
+            scheduleReconcile(r.acc, 5_000);
+            next.run();
+            return;
+          }
+          staleAlertId = 0;
           r.alertId = found.id;
           if (found.schedulingState instanceof TdApi.MessageSchedulingStateSendAtDate) {
             int sendDate = ((TdApi.MessageSchedulingStateSendAtDate) found.schedulingState).sendDate;
@@ -923,6 +956,8 @@ public final class XgramCheckIn {
                 r.lastCall = false;
               }
               XgramCheckInNotifier.cancelPrompt();
+              forcedEdit = true; // the alert's own text says the new back-by time too
+              heldEdit = true;
             }
           }
           r.missingAt = 0;
@@ -931,9 +966,7 @@ public final class XgramCheckIn {
           armAlarms(r);
           checkPrompts(r);
           ensureService(r, false);
-          if (heldEdit) {
-            maybeEdit(false);
-          }
+          maybeEdit(false); // a held edit, or a battery-only refresh without the service
           next.run();
           return;
         }
@@ -966,6 +999,12 @@ public final class XgramCheckIn {
         return;
       }
       case CheckInRecord.CLOSING: {
+        if (found != null && (found.id != r.alertId || r.alertReal != (found.sendingState == null))) {
+          // Found by its ref (ended before the start was confirmed, or after the app died): this is the one to delete.
+          r.alertId = found.id;
+          r.alertReal = found.sendingState == null;
+          save(r);
+        }
         handleClosing(t, r, found != null, next);
         return;
       }
@@ -1232,6 +1271,8 @@ public final class XgramCheckIn {
     lastFix = null;
     setInside(0);
     heldEdit = false;
+    forcedEdit = false;
+    staleAlertId = 0;
     distanceToDest = -1;
     locationPaused = false;
     publish();
@@ -1404,7 +1445,13 @@ public final class XgramCheckIn {
       XgramCheckInNotifier.cancelPrompt();
       XgramCheckInNotifier.showOngoing(cur);
       armAlarms(cur);
-      editAlert(t, cur, true, false);
+      // A scheduled message's id carries its send date, so the alert has a new id now: the new times go into it once
+      // the scheduled list gave that id (also asked for by the deletion of the old id).
+      staleAlertId = cur.alertId;
+      staleSince = SystemClock.elapsedRealtime();
+      forcedEdit = true;
+      heldEdit = true;
+      scheduleReconcile(cur.acc, 2_000);
       if (cur.startReal && cur.startMsgId != 0) {
         // The start message says the new times; edited quietly, nothing new is sent.
         log("EditMessageText start ref=%s", ref);
@@ -1472,7 +1519,10 @@ public final class XgramCheckIn {
         return;
       }
       Tdlib t = attachedTdlib(r.acc);
-      if (t != null && t.isConnected()) {
+      if (t != null && t.isConnected() && CheckInRules.shouldEdit(r, t.currentTime(TimeUnit.SECONDS), null, -1, false, true)) {
+        // Saved first: the app rarely sees the result, and after the next start the first edit drops the line again.
+        r.offAt = t.currentTime(TimeUnit.SECONDS);
+        save(r);
         editAlert(t, r, true, true);
       }
     });
@@ -1520,17 +1570,25 @@ public final class XgramCheckIn {
     if (r == null) {
       return;
     }
+    if (r.bat && !XgramCheckInService.isRunning()) {
+      // No service (location off or not allowed from here): the battery is read whenever the engine wakes up anyway.
+      int[] state = XgramCheckInService.readBattery(AppContext.get());
+      if (state != null) {
+        battery = state[0];
+        charging = state[1] != 0;
+      }
+    }
     Tdlib t = attachedTdlib(r.acc);
     if (r.state == CheckInRecord.ARMED) {
       long now = now(r);
-      if (!CheckInRules.shouldEdit(r, now, r.loc ? lastFix : null, r.bat ? battery : -1, charging, shutdown)) {
+      if (!forcedEdit && !CheckInRules.shouldEdit(r, now, r.loc ? lastFix : null, r.bat ? battery : -1, charging, shutdown)) {
         return;
       }
       if (t == null || !t.isConnected()) {
         heldEdit = true; // sent on reconnect, never left hanging
         return;
       }
-      editAlert(t, r, false, shutdown);
+      editAlert(t, r, forcedEdit, shutdown);
     } else if (r.state == CheckInRecord.FIRED) {
       long now = now(r);
       if (!CheckInRules.shouldFollowEdit(r, now, lastFix, r.bat ? battery : -1, charging)) {
@@ -1547,16 +1605,22 @@ public final class XgramCheckIn {
     return editInFlightSince != 0 && SystemClock.elapsedRealtime() - editInFlightSince < 60_000;
   }
 
-  /** The scheduled alert gets the newest location and battery. [force]: Add time (the gap is skipped, not the cutoff). */
+  /**
+   * The scheduled alert gets the newest location and battery. [force]: its times changed (Add time), so it is sent even
+   * when nothing moved, after the edit in flight or the flood wait if there is one (never past the cutoff).
+   */
   private static void editAlert (Tdlib t, CheckInRecord r, boolean force, boolean shutdown) {
     long now = t.currentTime(TimeUnit.SECONDS);
-    if (r.state != CheckInRecord.ARMED || !r.alertReal || now >= r.sendAt - CheckInRules.CUTOFF || now < r.editPausedUntil) {
+    if (r.state != CheckInRecord.ARMED || !r.alertReal || now >= r.sendAt - CheckInRules.CUTOFF) {
+      forcedEdit = false;
       return;
     }
-    if (editInFlight()) {
+    if (editInFlight() || now < r.editPausedUntil || staleAlertId != 0) {
       heldEdit = true;
+      forcedEdit |= force;
       return;
     }
+    forcedEdit = false;
     CheckInRecord next = r.copy();
     CheckInRules.Fix fix = lastFix;
     if (r.loc && fix != null && fix.time >= r.lastFixAt) {
@@ -1570,14 +1634,18 @@ public final class XgramCheckIn {
       next.lastBat = battery;
       next.lastCharging = charging;
     }
-    if (shutdown) {
-      next.offAt = now;
-    }
+    // "Phone switched off" only while it is: the first edit after it came back on drops the line.
+    next.offAt = shutdown ? now : 0;
     heldEdit = false;
     editInFlightSince = SystemClock.elapsedRealtime();
     final String ref = r.ref;
     log("EditMessageText alert ref=%s force=%b shutdown=%b", ref, force, shutdown);
-    t.send(new TdApi.EditMessageText(r.chat, r.alertId, null, CheckInText.input(CheckInText.alert(next, now))), (m, error) -> post(() -> onEditResult(t, ref, next, now, error, false)));
+    t.send(new TdApi.EditMessageText(r.chat, r.alertId, null, CheckInText.input(CheckInText.alert(next, now))), (m, error) -> post(() -> {
+      if (force && error != null && (error.message == null || !error.message.contains("MESSAGE_NOT_MODIFIED")) && current != null && current.ref.equals(ref)) {
+        forcedEdit = true; // the new times still have to reach the alert: tried again after the pause
+      }
+      onEditResult(t, ref, next, now, error, false);
+    }));
   }
 
   /** The alert that went out gets the newest location (Keep the sent alert updated). */
@@ -1600,6 +1668,7 @@ public final class XgramCheckIn {
       next.lastCharging = charging;
     }
     next.updatedAt = now;
+    next.offAt = 0;
     editInFlightSince = SystemClock.elapsedRealtime();
     final String ref = r.ref;
     log("EditMessageText fired ref=%s", ref);
@@ -1662,12 +1731,21 @@ public final class XgramCheckIn {
       log("edit error ref=%s %d %s", ref, error.code, error.message);
       if (wait > 0) {
         r.editPausedUntil = now + wait + 5 + random.nextInt(11);
-        save(r);
-      } else if (!follow) {
+      } else if (follow) {
+        // The alert that went out can't be edited (deleted, or too old): a failed try counts, and a gone message ends it.
+        String m = error.message != null ? error.message.toUpperCase(Locale.US) : "";
+        r.followEdits = m.contains("MESSAGE_ID_INVALID") || m.contains("NOT FOUND") || m.contains("NOT_FOUND") ? CheckInRules.FOLLOW_MAX : r.followEdits + 1;
+        r.editPausedUntil = now + CheckInRules.FOLLOW_GAP;
+      } else {
+        // Never the same refused edit at every fix: the server says what happened, and edits wait a little.
+        r.editPausedUntil = now + CheckInRules.MIN_GAP;
         reconcile(r.acc, null);
       }
+      save(r);
     }
-    if (heldEdit && !follow) {
+    if (follow) {
+      ensureService(r, false); // the service stops once nothing is left to follow
+    } else if (heldEdit) {
       maybeEdit(false);
     }
   }
@@ -1771,9 +1849,8 @@ public final class XgramCheckIn {
         return;
       }
       addTimeNow(acc, ref, 900, (ok, message) -> {
-        if (UI.isResumed() && !message.isEmpty()) {
-          feedback(message);
-        }
+        // Tapped on a notification, so likely from outside the app: the snackbar, else a toast says what happened.
+        feedback(message);
         release.run();
       });
     });
@@ -1821,7 +1898,8 @@ public final class XgramCheckIn {
       case CheckInRecord.ARMED:
         return true;
       case CheckInRecord.FIRED:
-        return r.follow && r.loc && now < r.sendAt + CheckInRules.FOLLOW_WINDOW && r.followEdits < CheckInRules.FOLLOW_MAX;
+        // For an hour after the alert went out: Keep the sent alert updated, and arriving still ends it ("I've arrived").
+        return now < r.sendAt + CheckInRules.FOLLOW_WINDOW && ((r.follow && r.loc && r.followEdits < CheckInRules.FOLLOW_MAX) || r.hasDest);
       default:
         return false;
     }

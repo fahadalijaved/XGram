@@ -103,6 +103,9 @@ final class CheckInSelfTest {
     check("no edit 60 s before the alert", !CheckInRules.shouldEdit(e, e.sendAt - 59, moved, 50, false, false));
     check("shutdown skips the gap", CheckInRules.shouldEdit(e, now, still, 50, false, true));
     check("shutdown keeps the cutoff", !CheckInRules.shouldEdit(e, e.sendAt - 30, still, 50, false, true));
+    e.offAt = now - 1000;
+    check("on again after switching off", CheckInRules.shouldEdit(e, now, still, 50, false, false));
+    e.offAt = 0;
     e.editPausedUntil = now + 100;
     check("no edit while flood waiting", !CheckInRules.shouldEdit(e, now, moved, 50, false, false));
     e.editPausedUntil = 0;

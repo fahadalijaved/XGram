@@ -120,6 +120,9 @@ final class CheckInRules {
   }
 
   private static boolean changed (CheckInRecord r, @Nullable Fix fix, int battery, boolean charging) {
+    if (r.offAt != 0) {
+      return true; // the phone is on again: the alert must stop saying it switched off
+    }
     if (r.loc && fix != null) {
       if (r.lastFixAt == 0 || fix.coarse != r.coarse) {
         return true;
