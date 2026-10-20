@@ -110,6 +110,12 @@ public final class XgramMessageActions {
     ids.append(R.id.btn_xgramBookmark);
     strings.append(bookmarked ? R.string.XgramRemoveBookmark : R.string.XgramBookmark);
     icons.append(bookmarked ? R.drawable.baseline_star_24 : R.drawable.baseline_star_border_24);
+    if (!msg.isScheduled()) {
+      // Later: a reminder on this device (or a follow-up on your own message), with its time once set
+      ids.append(R.id.btn_xgramLaterRemind);
+      strings.append(com.fahadali.xgram.later.XgramLater.remindLabel(tdlib, chatId, msg.getMessage().id));
+      icons.append(R.drawable.baseline_watch_later_24);
+    }
     // Repeat sends a copy; ForwardMessages doesn't support reply threads.
     if (msg.xgramCanBeCopied() && m.canWriteMessages() && !(m.getMessageTopicId() instanceof TdApi.MessageTopicThread)) {
       ids.append(R.id.btn_xgramRepeat);
@@ -166,6 +172,7 @@ public final class XgramMessageActions {
     Tdlib tdlib = msg.tdlib();
     long chatId = msg.getChatId();
     if (id == R.id.btn_xgramSaveToSaved) {
+      XgramUndoSend.flushBefore(tdlib, tdlib.selfChatId()); // Undo send: what waits in Saved Messages goes first
       tdlib.send(new TdApi.ForwardMessages(tdlib.selfChatId(), null, chatId, idsOf(msg), new TdApi.MessageSendOptions(), false, false), (result, error) -> tdlib.ui().post(() -> {
         if (error != null) {
           UI.showError(error);
@@ -207,8 +214,13 @@ public final class XgramMessageActions {
       UI.showToast(bookmark ? R.string.XgramBookmarked : R.string.XgramBookmarkRemoved, Toast.LENGTH_SHORT);
       return true;
     }
+    if (id == R.id.btn_xgramLaterRemind) {
+      com.fahadali.xgram.later.XgramLaterPicker.showForMessage(m, msg);
+      return true;
+    }
     if (id == R.id.btn_xgramRepeat) {
       // "+1": send the same content again as a copy (no "forwarded from" header).
+      XgramUndoSend.flushBefore(tdlib, chatId); // Undo send: what waits in this chat goes first
       tdlib.send(new TdApi.ForwardMessages(chatId, m.getMessageTopicId(), chatId, idsOf(msg), new TdApi.MessageSendOptions(), true, false), (result, error) -> {
         if (error != null) {
           tdlib.ui().post(() -> UI.showError(error));

@@ -112,7 +112,8 @@ public final class XgramNavBar {
   private static final float HIDE_EXTRA = 12f;
 
   /** The labels under the icons: short ones (Saved, not Saved messages; the full name stays the description). */
-  private static final int[] DEST_BAR_LABEL = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramBottomNavSaved, R.string.Settings};
+  private static final int[] DEST_BAR_LABEL = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramBottomNavSaved, R.string.Settings,
+    R.string.XgramNavProfileLabel /* the toolbar's profile: never on this bar */, R.string.XgramActivity};
 
   private final BaseActivity context;
   private final MainController list;
@@ -220,6 +221,22 @@ public final class XgramNavBar {
     TdlibManager.instance().global().addCallListener(callListener);
     TdlibManager.instance().global().addCountersListener(badgeSettingsListener);
     badgeTdlib.listeners().addTotalChatCounterListener(counterListener);
+    com.fahadali.xgram.activity.XgramActivityBadge.instance().addListener(activityBadgeListener);
+  }
+
+  // Activity's badge, while it takes Calls' place (In the bottom bar)
+  private final com.fahadali.xgram.activity.XgramActivityBadge.Listener activityBadgeListener = this::updateActivityBadge;
+  private int activityCount;
+
+  private void updateActivityBadge () {
+    if (destroyed) {
+      return;
+    }
+    int count = com.fahadali.xgram.activity.XgramActivityBadge.badgeCount(badgeTdlib);
+    if (count != activityCount) {
+      activityCount = count;
+      bar.setBadge(XgramNavRail.DEST_ACTIVITY, count, false);
+    }
   }
 
   // API for MainController
@@ -261,7 +278,7 @@ public final class XgramNavBar {
     if (destroyed) {
       return;
     }
-    int[] destinations = XgramNavRail.destinations(list);
+    int[] destinations = XgramNavRail.destinations(list, true);
     if (!Arrays.equals(this.destinations, destinations)) {
       this.destinations = destinations;
       bar.setDestinations(destinations);
@@ -269,6 +286,7 @@ public final class XgramNavBar {
       bar.updateLabels();
     }
     updateUnreadBadge(); // cheap, repaints only on a change
+    updateActivityBadge();
     setSelected(computeSelected(), isLaidOut());
     refreshMissedCalls(false);
   }
@@ -318,6 +336,7 @@ public final class XgramNavBar {
     ThemeManager.instance().removeThemeListener(themeListener);
     TdlibManager.instance().global().removeCallListener(callListener);
     TdlibManager.instance().global().removeCountersListener(badgeSettingsListener);
+    com.fahadali.xgram.activity.XgramActivityBadge.instance().removeListener(activityBadgeListener);
   }
 
   private boolean isLaidOut () {
@@ -545,6 +564,10 @@ public final class XgramNavBar {
         list.navigateTo(new SettingsController(context, tdlib));
         break;
       }
+      case XgramNavRail.DEST_ACTIVITY: {
+        com.fahadali.xgram.activity.XgramActivity.open(list);
+        break;
+      }
     }
   }
 
@@ -672,6 +695,8 @@ public final class XgramNavBar {
           item.setBadge(unreadCount, unreadDot);
         } else if (dest == XgramNavRail.DEST_CALLS) {
           item.setBadge(missedCount, false);
+        } else if (dest == XgramNavRail.DEST_ACTIVITY) {
+          item.setBadge(activityCount, false);
         }
         items.add(item);
         addView(item);

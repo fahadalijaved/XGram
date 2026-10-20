@@ -140,9 +140,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   public static final int DEST_CHATS = XgramNavRail.DEST_CHATS, DEST_CALLS = XgramNavRail.DEST_CALLS,
     DEST_CONTACTS = XgramNavRail.DEST_CONTACTS, DEST_SAVED = XgramNavRail.DEST_SAVED, DEST_SETTINGS = XgramNavRail.DEST_SETTINGS,
-    DEST_PROFILE = 5;
-  /** Keys by destination, as stored in the tab order (XgramReorder.NAV_BAR). */
-  public static final String[] TAB_KEYS = {"chats", "calls", "contacts", "saved", "settings", "profile"};
+    DEST_PROFILE = 5, DEST_ACTIVITY = XgramNavRail.DEST_ACTIVITY;
+  /** Keys by destination, as stored in the tab order (XgramReorder.NAV_BAR). Activity (6) is a tab only while it is on. */
+  public static final String[] TAB_KEYS = {"chats", "calls", "contacts", "saved", "settings", "profile", "activity"};
   static final int MIN_TABS = 2, MAX_TABS = 4;
 
   /** Why the toolbar steps aside (a bit each); scrolling down hides it too. */
@@ -151,9 +151,14 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
   private static final int FORCE_OWN = FORCE_IME | FORCE_TRANSFORM;
 
   /** Labels: short ones ("Saved"); the full name stays the description. */
-  private static final int[] DEST_TAB_LABEL = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramBottomNavSaved, R.string.Settings, R.string.XgramNavProfileLabel};
+  private static final int[] DEST_TAB_LABEL = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramBottomNavSaved, R.string.Settings, R.string.XgramNavProfileLabel, R.string.XgramActivity};
   /** Row titles of the settings page. */
-  private static final int[] DEST_TITLE = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramNavRailSavedMessages, R.string.Settings, R.string.XgramNavProfileLabel};
+  private static final int[] DEST_TITLE = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramNavRailSavedMessages, R.string.Settings, R.string.XgramNavProfileLabel, R.string.XgramActivity};
+
+  /** A destination that can be a tab now: Activity only while it is on (its switch, Chat list > Activity). */
+  private static boolean isAvailable (int dest) {
+    return dest != DEST_ACTIVITY || com.fahadali.xgram.activity.XgramActivity.isOn();
+  }
 
   /** Option ids of the account menu: this plus the account's index. */
   private static final int ACCOUNT_OPTION_ID = 7000;
@@ -285,6 +290,19 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     }
   };
 
+  // Activity's tab: its count of new items (XgramActivityBadge: 0 while Unread badge is off)
+  private final com.fahadali.xgram.activity.XgramActivityBadge.Listener activityBadgeListener = this::updateActivityBadge;
+
+  private void updateActivityBadge () {
+    if (destroyed || preview) {
+      return;
+    }
+    Tab tab = tabOf(DEST_ACTIVITY);
+    if (tab != null) {
+      tab.setBadge(com.fahadali.xgram.activity.XgramActivityBadge.badgeCount(tdlib), false);
+    }
+  }
+
   /** Any spring of a tab: the pill lays its tabs out again before the next frame is drawn (once per frame). */
   private final XgramExpressive.Spring.Listener frameListener = new XgramExpressive.Spring.Listener() {
     @Override
@@ -327,6 +345,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       this.away = true;
       ThemeManager.instance().addThemeListener(themeListener);
       XgramSettings.instance().addListener(contentSettingsListener);
+      com.fahadali.xgram.activity.XgramActivityBadge.instance().addListener(activityBadgeListener);
       navigation.xgramSetBarListener(this);
       this.inset = Math.max(0, navigation.xgramBottomInsetWithoutIme());
     }
@@ -422,6 +441,9 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         count++;
       }
     }
+    if ((bits & (1 << DEST_ACTIVITY)) != 0 && isAvailable(DEST_ACTIVITY)) {
+      count++;
+    }
     if (settings.navProfile() == XgramSettings.NAV_PROFILE_TAB) {
       count++;
     }
@@ -458,7 +480,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       } else if (dest == DEST_PROFILE) {
         keep = profileTab;
       } else {
-        keep = (bits & (1 << dest)) != 0;
+        keep = (bits & (1 << dest)) != 0 && isAvailable(dest);
       }
       if (!keep) {
         continue;
@@ -629,6 +651,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (badges != null) {
       badges.refresh();
     }
+    updateActivityBadge(); // a new Activity tab, or another account
     // The menu button's badge: on the photo, or on the chat list's overflow button once there is no photo (Your
     // profile: Off), or back
     readMenuBadge();
@@ -840,6 +863,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (!preview) {
       ThemeManager.instance().removeThemeListener(themeListener);
       XgramSettings.instance().removeListener(contentSettingsListener);
+      com.fahadali.xgram.activity.XgramActivityBadge.instance().removeListener(activityBadgeListener);
       UI.cancel(staleWarmRunnable);
       if (navigation != null) {
         navigation.xgramSetBarListener(null);
@@ -1784,6 +1808,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
       }
       case DEST_PROFILE: {
         openProfile(drawer);
+        return;
+      }
+      case DEST_ACTIVITY: {
+        ViewController<?> activity = warmScreen(DEST_ACTIVITY);
+        open(DEST_ACTIVITY, activity != null ? activity : new com.fahadali.xgram.activity.XgramActivityController(context, tdlib), drawer);
         return;
       }
     }

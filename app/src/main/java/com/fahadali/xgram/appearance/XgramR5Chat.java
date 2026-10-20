@@ -208,9 +208,21 @@ public final class XgramR5Chat {
       return;
     }
     final Context context = anchor.getContext();
+    // The anchor may sit in a themed wrapper (e.g. the Activity page's rows): the popup must be made with the activity
+    // itself, since PopupLayout shows itself through BaseActivity.
+    org.thunderdog.challegram.BaseActivity activity = null;
+    for (Context c = context; c != null; c = c instanceof android.content.ContextWrapper ? ((android.content.ContextWrapper) c).getBaseContext() : null) {
+      if (c instanceof org.thunderdog.challegram.BaseActivity) {
+        activity = (org.thunderdog.challegram.BaseActivity) c;
+        break;
+      }
+    }
+    if (activity == null) {
+      return;
+    }
     final org.thunderdog.challegram.navigation.MenuMoreWrap moreWrap = new org.thunderdog.challegram.navigation.MenuMoreWrap(context);
     moreWrap.init(themeListeners, null);
-    final org.thunderdog.challegram.widget.PopupLayout popup = new org.thunderdog.challegram.widget.PopupLayout(context);
+    final org.thunderdog.challegram.widget.PopupLayout popup = new org.thunderdog.challegram.widget.PopupLayout(activity);
     for (MenuEntry entry : entries) {
       final View.OnClickListener listener = v -> {
         popup.hideWindow(true);

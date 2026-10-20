@@ -210,6 +210,7 @@ object TgxComposePages {
       putAll(TgxPagesBatch1.pages)
       putAll(TgxPagesBatch2.pages)
       putAll(TgxPagesBatch3.pages)
+      putAll(TgxPagesLater.pages) // XGram Later
     }
   }
 

@@ -38,7 +38,7 @@ import java.util.List;
 /** What XGram adds to Telegram X, each row opening the feature. Shown once after an update that adds features. */
 public final class XgramWhatsNewController extends RecyclerViewController<Void> implements View.OnClickListener {
   /** Raise when the list below gets new entries, so it shows once more after the update. */
-  private static final int FEATURES_VERSION = 2;
+  private static final int FEATURES_VERSION = 3; // 3: Activity
   private static final String KEY_SEEN = "xgram_whatsnew_seen";
 
   public static final class Entry { // XGram: public, for the Compose What's new page
@@ -70,9 +70,10 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
   }
 
   public static final int OPEN_NONE = 0, OPEN_SETTINGS = 1, OPEN_HISTORY = 2, OPEN_BOOKMARKS = 3, OPEN_SAVED_BY_CHAT = 4,
-    OPEN_ICONS = 5, OPEN_FILTERS = 6, OPEN_GHOST = 8, OPEN_APPEARANCE = 9, OPEN_PRIVACY = 10, OPEN_THEMES = 11;
+    OPEN_ICONS = 5, OPEN_FILTERS = 6, OPEN_GHOST = 8, OPEN_APPEARANCE = 9, OPEN_PRIVACY = 10, OPEN_THEMES = 11, OPEN_ACTIVITY = 12;
 
   public static final Entry[] ENTRIES = {
+    new Entry(R.drawable.baseline_notifications_24, R.string.XgramNewActivity, R.string.XgramNewActivityInfo, OPEN_ACTIVITY, R.drawable.outline_notifications_24),
     new Entry(R.drawable.baseline_palette_24, R.string.XgramNewThemes, R.string.XgramNewThemesInfo, OPEN_THEMES),
     new Entry(R.drawable.baseline_apps_24, R.string.XgramNewIconStyles, R.string.XgramNewIconStylesInfo, OPEN_ICONS),
     new Entry(R.drawable.baseline_settings_24, R.string.XgramNewSettings, R.string.XgramNewSettingsInfo, OPEN_SETTINGS),
@@ -159,6 +160,9 @@ public final class XgramWhatsNewController extends RecyclerViewController<Void> 
       return;
     }
     switch (((Entry) ((ListItem) tag).getData()).action) {
+      case OPEN_ACTIVITY:
+        com.fahadali.xgram.activity.XgramActivity.open(this);
+        break;
       case OPEN_SETTINGS:
         navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.main(context, tdlib));
         break;

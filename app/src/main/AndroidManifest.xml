@@ -82,6 +82,9 @@
     tools:ignore="RequestInstallPackagesPolicy" />
   <!--<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />-->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+  <!-- XGram Later: reminders on time (SCHEDULE_EXACT_ALARM asks on Android 12, USE_EXACT_ALARM covers 13+) -->
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+  <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
   <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
@@ -263,6 +266,19 @@
     <receiver
       android:name=".receiver.TGRemoveAllReceiver"
       android:exported="false" />
+    <!-- XGram Later: its alarm, its notifications' actions (explicit intents) and the events after which the alarm is
+         set again. Not exported: the system's broadcasts still arrive, as with WorkManager's receivers. -->
+    <receiver
+      android:name="com.fahadali.xgram.later.XgramLaterReceiver"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+        <action android:name="android.intent.action.TIME_SET" />
+        <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+        <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+      </intent-filter>
+    </receiver>
 
     <activity
       android:name=".voip.gui.VoIPFeedbackActivity"

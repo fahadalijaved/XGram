@@ -547,6 +547,8 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     long ms = needMeasure ? SystemClock.uptimeMillis() : 0;
     this.listeners = new TdlibListeners(this);
     com.fahadali.xgram.ghost.XgramGhost.attach(this); // XGram
+    com.fahadali.xgram.activity.XgramActivity.attach(this); // XGram
+    com.fahadali.xgram.later.XgramLater.attach(this); // XGram: Later
     com.fahadali.xgram.checkin.XgramCheckIn.attach(this); // XGram
     if (needMeasure) {
       Log.v("INITIALIZATION: Tdlib.listeners -> %dms", SystemClock.uptimeMillis() - ms);
@@ -648,6 +650,10 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     if (needMeasure) {
       Log.i("INITIALIZATION: Tdlib.newClient() -> %dms", SystemClock.uptimeMillis() - ms);
     }
+
+    // XGram: Undo send, messages a crash kept from being sent. Last: waiting for the user wakes the client, which
+    // must not start before the cache and the managers exist (TDLib's first updates would find them null).
+    com.fahadali.xgram.chats.XgramUndoSend.attach(this);
 
     Settings.instance().addNewSettingsListener(this);
   }
@@ -2733,6 +2739,58 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
       chat = chats.get(chatId);
     }
     return chat;
+  }
+
+  // XGram: Activity's paced searches (com.fahadali.xgram.activity.XgramActivitySync) start from the chats TDLib already
+  // has, never LoadChats. Chat types and counters only: the caller filters out channels and the like.
+
+  public static final int XGRAM_ACTIVITY_UNREAD = 0, XGRAM_ACTIVITY_LOOKBACK = 1;
+
+  /**
+   * {@link #XGRAM_ACTIVITY_UNREAD}: groups with unread mentions or reactions, private chats with unread reactions.
+   * {@link #XGRAM_ACTIVITY_LOOKBACK}: up to {@code limit} groups with a message since {@code sinceDate}, in the main
+   * chat list's order.
+   */
+  public long[] xgramActivityChats (int mode, int sinceDate, int limit) {
+    final ArrayList<long[]> found = new ArrayList<>(); // {chat id, main list order}
+    synchronized (dataLock) {
+      for (TdApi.Chat chat : chats.values()) {
+        if (chat == null || chat.type == null) {
+          continue;
+        }
+        final int type = chat.type.getConstructor();
+        final boolean group = type == TdApi.ChatTypeBasicGroup.CONSTRUCTOR ||
+          (type == TdApi.ChatTypeSupergroup.CONSTRUCTOR && !((TdApi.ChatTypeSupergroup) chat.type).isChannel);
+        if (mode == XGRAM_ACTIVITY_UNREAD) {
+          if ((group && (chat.unreadMentionCount > 0 || chat.unreadReactionCount > 0)) ||
+            (type == TdApi.ChatTypePrivate.CONSTRUCTOR && chat.unreadReactionCount > 0)) {
+            found.add(new long[] {chat.id, 0});
+          }
+        } else if (group && chat.lastMessage != null && chat.lastMessage.date >= sinceDate) {
+          long order = 0;
+          if (chat.positions != null) {
+            for (TdApi.ChatPosition position : chat.positions) {
+              if (position != null && position.list instanceof TdApi.ChatListMain) {
+                order = position.order;
+                break;
+              }
+            }
+          }
+          if (order != 0) {
+            found.add(new long[] {chat.id, order});
+          }
+        }
+      }
+    }
+    if (mode == XGRAM_ACTIVITY_LOOKBACK) {
+      Collections.sort(found, (a, b) -> Long.compare(b[1], a[1]));
+    }
+    int count = limit > 0 ? Math.min(limit, found.size()) : found.size();
+    long[] result = new long[count];
+    for (int i = 0; i < count; i++) {
+      result[i] = found.get(i)[0];
+    }
+    return result;
   }
 
   public @NonNull TdApi.Chat chatStrict (long chatId) {
@@ -4842,6 +4900,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void sendMessage (long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions options, TdApi.InputMessageContent inputMessageContent, @Nullable RunnableData<TdApi.Message> after) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendMessage(chatId, topicId, replyTo, options, null, inputMessageContent), after != null ? result -> {
       messageHandler.onResult(result);
       after.runWithData(result instanceof TdApi.Message ? (TdApi.Message) result : null);
@@ -4849,6 +4908,7 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void resendMessages (long chatId, long[] messageIds) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.ResendMessages(chatId, messageIds, null, 0), messageHandler());
   }
 
@@ -5155,14 +5215,17 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
   }
 
   public void forwardMessage (long chatId, @Nullable TdApi.MessageTopic topicId, long fromChatId, long messageId, TdApi.MessageSendOptions options) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.ForwardMessages(chatId, topicId, fromChatId, new long[] {messageId}, options, false, false), messageHandler());
   }
 
   public void sendInlineQueryResult (long chatId, @Nullable TdApi.MessageTopic topicId, @Nullable TdApi.InputMessageReplyTo replyTo, TdApi.MessageSendOptions options, long queryId, String resultId) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendInlineQueryResultMessage(chatId, topicId, replyTo, options, queryId, resultId, false), messageHandler());
   }
 
   public void sendBotStartMessage (long botUserId, long chatId, String parameter) {
+    com.fahadali.xgram.chats.XgramUndoSend.flushBefore(this, chatId); // XGram: Undo send, what waits in this chat goes first
     client().send(new TdApi.SendBotStartMessage(botUserId, chatId, parameter), messageHandler());
   }
 
@@ -11615,7 +11678,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
     final int timeToSend = (int) cache().getSlowModeDelayExpiresIn(ChatId.toSupergroupId(chatId), TimeUnit.SECONDS);
     if (timeToSend == 0) {
-      return null;
+      // XGram: Undo send. A message waits here: Telegram's timer only starts once it is sent, but a second one now would
+      // be refused (SLOWMODE_WAIT), so every way of sending refuses with this hint.
+      return com.fahadali.xgram.chats.XgramUndoSend.blocksSlowMode(this, chatId) ? Lang.getString(R.string.XgramUndoSendSlowMode) : null;
     }
 
     final int minutes = timeToSend / 60;

@@ -36,12 +36,17 @@ public final class XgramAccountData {
   private static final String[] PREFIXES = {
     "xgram_bm_", "xgram_sb_", "xgram_ln_", "xgram_ghost_ex_", "xgram_ls_", "xgram_lr_", "xgram_tab_", "xgram_tabs_side_",
     "xgram_cm_", "xgram_cmode_", com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX,
+    // Undo send: waiting messages (journal), "your message is back" hints, chats where messages don't wait
+    "xgram_usq_", "xgram_usqh_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
+    com.fahadali.xgram.later.XgramLaterRecord.PREFIX, // Later
     "xgram_ci_" // Check In's live state (com.fahadali.xgram.checkin)
   };
 
   /** TDLib thread: the account in this slot logged out. */
   public static void eraseAccount (int accountId) {
     try {
+      // Undo send first: from here on it writes nothing of this account, so its erased journal stays erased.
+      com.fahadali.xgram.chats.XgramUndoSend.forgetAccount(accountId);
       // Before the keys go: Check In reads its record to stop tracking and say the alert is still scheduled.
       com.fahadali.xgram.checkin.XgramCheckIn.forgetAccount(accountId);
       String suffix = accountId + "_";
@@ -63,7 +68,9 @@ public final class XgramAccountData {
       com.fahadali.xgram.topics.XgramTopicMute.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramAiTools.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramCommunities.forgetAccount(accountId);
+      com.fahadali.xgram.later.XgramLater.forgetAccount(accountId); // Later: its notifications and alarm too
       XgramHistory.instance().clearAccount(accountId);
+      com.fahadali.xgram.activity.XgramActivity.forgetAccount(accountId); // its own store, not prefixed settings
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Cannot erase account data", t);
     }

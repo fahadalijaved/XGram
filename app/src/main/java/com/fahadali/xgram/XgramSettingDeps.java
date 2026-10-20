@@ -157,6 +157,15 @@ public final class XgramSettingDeps {
     return connectionStatusPositionEnabled() ? 0 : R.string.XgramConnectionStatusExpressive;
   }
 
+  /** Activity's other rows only do something while Activity is on (com.fahadali.xgram.activity.XgramActivity.isOn). */
+  public static boolean activityOptionsEnabled () {
+    return s().activityOn();
+  }
+
+  public static @StringRes int activityOptionsReason () {
+    return activityOptionsEnabled() ? 0 : R.string.XgramActivityNeedsOn;
+  }
+
   // Messages
 
   /** Start playing is only read for videos played in the message (XgramInlineVideo). */
@@ -185,6 +194,15 @@ public final class XgramSettingDeps {
 
   public static @StringRes int tapToRecordReason () {
     return tapToRecordEnabled() ? 0 : R.string.XgramTapToRecordNoButton;
+  }
+
+  /** Delay voice and video messages is only read while Undo send is on (XgramUndoSend.mayHoldNotes). */
+  public static boolean undoSendVoiceEnabled () {
+    return s().undoSendSeconds() > 0;
+  }
+
+  public static @StringRes int undoSendVoiceReason () {
+    return undoSendVoiceEnabled() ? 0 : R.string.XgramUndoSendOffReason;
   }
 
   /**

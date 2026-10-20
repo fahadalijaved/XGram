@@ -20,6 +20,7 @@ import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.chats.XgramInlineVideo
 import com.fahadali.xgram.chats.XgramInputButtonsController
 import com.fahadali.xgram.chats.XgramSwipeActions
+import com.fahadali.xgram.chats.XgramUndoSend
 import com.fahadali.xgram.checkin.XgramCheckInSheet
 import com.fahadali.xgram.compose.ChoiceSpec
 import com.fahadali.xgram.compose.LocalXgramHost
@@ -159,6 +160,31 @@ fun MessagesPage() {
       }
     }
     description(R.string.XgramTapToRecordInfo)
+    group {
+      // Undo send: how long a message waits; voice and video messages only wait while it is on.
+      val delay = settings.undoSendSeconds()
+      value(R.id.btn_xgramUndoSend, s(R.string.XgramUndoSend), XgramUndoSend.delayName(delay)) {
+        host.choose(
+          ChoiceSpec(
+            title = s(R.string.XgramUndoSend),
+            info = s(R.string.XgramUndoSendChoiceInfo),
+            options = XgramSettings.UNDO_SEND_SECONDS.map { XgramUndoSend.delayName(it) to it },
+            selected = delay
+          ) { picked ->
+            settings.setUndoSendSeconds(picked)
+          }
+        )
+      }
+      val voiceReason = XgramSettingDeps.undoSendVoiceReason()
+      switch(
+        R.id.btn_xgramUndoSendVoice, s(R.string.XgramUndoSendVoice),
+        s(if (voiceReason != 0) voiceReason else R.string.XgramUndoSendVoiceSub),
+        checked = settings.undoSendVoice(), enabled = voiceReason == 0
+      ) {
+        settings.setUndoSendVoice(it)
+      }
+    }
+    description(R.string.XgramUndoSendInfo)
 
     header(R.string.XgramCheckInHeader)
     group {

@@ -32,12 +32,17 @@ import com.fahadali.xgram.appearance.XgramChatListViewCard
 import com.fahadali.xgram.chats.XgramChatListMode
 import com.fahadali.xgram.chats.XgramChatLongPress
 import com.fahadali.xgram.chats.XgramCommunities
+import com.fahadali.xgram.compose.ChoiceSpec
+import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramPage
 import com.fahadali.xgram.compose.ui.LocalXgramHighlight
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
+import com.fahadali.xgram.layout.XgramNavToolbar
+import com.fahadali.xgram.later.XgramLater
+import com.fahadali.xgram.later.XgramLaterRecord
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.unsorted.Settings
 
@@ -117,6 +122,128 @@ fun ChatListPage() {
         s(if (XgramReorder.hasOrder(XgramReorder.CHAT_ACTIONS)) R.string.XgramOrderCustom else R.string.XgramOrderDefault)
       ) {
         host.openPage(XgramPage.CHAT_ACTIONS)
+      }
+    }
+
+    // Activity: every mention, reply and reaction in one place (com.fahadali.xgram.activity)
+    header(R.string.XgramActivity)
+    group {
+      switch(R.id.btn_xgramActivityShow, s(R.string.XgramActivityShow), s(R.string.XgramActivityShowInfo), checked = settings.activityOn()) {
+        settings.setActivityOn(it)
+      }
+    }
+    group {
+      val activityReason = XgramSettingDeps.activityOptionsReason()
+      val activityEnabled = activityReason == 0
+      fun sub(info: Int): String = s(if (activityEnabled) info else activityReason)
+      switch(R.id.btn_xgramActivityReactions, s(R.string.XgramActivityIncludeReactions), sub(R.string.XgramActivityIncludeReactionsInfo),
+        checked = settings.activityReactions(), enabled = activityEnabled) {
+        settings.setActivityReactions(it)
+      }
+      switch(R.id.btn_xgramActivityMuted, s(R.string.XgramActivityIncludeMuted), sub(R.string.XgramActivityIncludeMutedInfo),
+        checked = settings.activityMuted(), enabled = activityEnabled) {
+        settings.setActivityMuted(it)
+      }
+      switch(R.id.btn_xgramActivityDiscussion, s(R.string.XgramActivityIncludeDiscussion), sub(R.string.XgramActivityIncludeDiscussionInfo),
+        checked = settings.activityDiscussion(), enabled = activityEnabled) {
+        settings.setActivityDiscussion(it)
+      }
+      switch(R.id.btn_xgramActivityLookBack, s(R.string.XgramActivityLookBack), sub(R.string.XgramActivityLookBackInfo),
+        checked = settings.activityLookBack(), enabled = activityEnabled) {
+        settings.setActivityLookBack(it)
+      }
+      switch(R.id.btn_xgramActivityBadge, s(R.string.XgramActivityBadge), sub(R.string.XgramActivityBadgeInfo),
+        checked = settings.activityBadge(), enabled = activityEnabled) {
+        settings.setActivityBadge(it)
+      }
+      switch(R.id.btn_xgramActivityHeader, s(R.string.XgramActivityHeader), sub(R.string.XgramActivityHeaderInfo),
+        checked = settings.activityHeader(), enabled = activityEnabled) {
+        settings.setActivityHeader(it)
+      }
+      // The floating toolbar's Activity tab is chosen with the other tabs, on the Navigation bar page
+      val activityTab = (settings.navTabs() and (1 shl XgramNavToolbar.DEST_ACTIVITY)) != 0
+      value(R.id.btn_xgramActivityNavBar, s(R.string.XgramActivityNavBar),
+        s(if (activityTab) R.string.XgramActivityNavBarTab else R.string.XgramActivityBarOff), enabled = activityEnabled) {
+        host.openPage(XgramPage.NAV_BAR)
+      }
+    }
+    description(R.string.XgramActivityNavBarInfo)
+    group {
+      val hidden = com.fahadali.xgram.activity.XgramActivityStore.instance().summary(accountId).hiddenCount()
+      value(
+        R.id.btn_xgramActivityHidden, s(R.string.XgramActivityHiddenChats),
+        when (hidden) {
+          0 -> s(R.string.XgramNone)
+          1 -> s(R.string.XgramActivityHiddenCountOne)
+          else -> s(R.string.XgramActivityHiddenCountMany, hidden)
+        }
+      ) {
+        host.open(com.fahadali.xgram.activity.XgramActivityHiddenController(host.activity, host.tdlib))
+      }
+      action(R.id.btn_xgramActivityClearAll, s(R.string.XgramActivityClearAll), s(R.string.XgramActivityClearAllInfo), destructive = true) {
+        host.confirm(ConfirmSpec(
+          title = s(R.string.XgramActivityClearAllConfirm),
+          text = s(R.string.XgramActivityClearAllInfo),
+          confirm = s(R.string.XgramActivityClearAllButton),
+          destructive = true
+        ) {
+          com.fahadali.xgram.activity.XgramActivityStore.instance().clearAll(accountId)
+        })
+      }
+    }
+    description(R.string.XgramActivityLocalNote)
+    if (org.thunderdog.challegram.BuildConfig.DEBUG) {
+      // Debug builds: a flood wait without asking Telegram for one (the sync, Mark all as read), and collector errors
+      group {
+        action(R.id.btn_xgramActivityDebugFlood, s(R.string.XgramActivityDebugFlood)) {
+          com.fahadali.xgram.activity.XgramActivity.debugInjectFlood()
+        }
+        // Not a setting: a switch of this run only, so the page is told to build again
+        switch(
+          R.id.btn_xgramActivityDebugThrow, s(R.string.XgramActivityDebugThrow), s(R.string.XgramActivityDebugThrowInfo),
+          checked = com.fahadali.xgram.activity.XgramActivity.debugCollectorThrows()
+        ) {
+          com.fahadali.xgram.activity.XgramActivity.setDebugCollectorThrows(it)
+          host.changed()
+        }
+      }
+    }
+
+    // Later: snoozed chats and reminders (the same rows as the classic page)
+    header(R.string.XgramLaterHeader)
+    group {
+      switch(R.id.btn_xgramLaterRow, s(R.string.XgramLaterRowSetting), s(R.string.XgramLaterRowSettingSub), checked = XgramLater.showRow()) {
+        XgramLater.setShowRow(it)
+      }
+      switch(R.id.btn_xgramLaterRaise, s(R.string.XgramLaterRaise), s(R.string.XgramLaterRaiseSub), checked = XgramLater.raiseWoken()) {
+        XgramLater.setRaiseWoken(it)
+      }
+      value(R.id.btn_xgramLaterWakeEarly, s(R.string.XgramLaterWakeEarly), XgramLater.wakeEarlyName(XgramLater.wakeEarlyMode())) {
+        host.choose(
+          ChoiceSpec(
+            title = s(R.string.XgramLaterWakeEarly),
+            options = listOf(
+              s(R.string.XgramLaterWakeToMe) to XgramLaterRecord.WAKE_TO_ME,
+              s(R.string.XgramLaterWakeAny) to XgramLaterRecord.WAKE_ANY,
+              s(R.string.XgramLaterWakeTimeOnly) to XgramLaterRecord.WAKE_TIME_ONLY
+            ),
+            selected = XgramLater.wakeEarlyMode(),
+            // XGram Later: the sub-line belongs to "On messages to me" only
+            subtitles = listOf(s(R.string.XgramLaterWakeToMeSub), null, null)
+          ) { mode ->
+            XgramLater.setWakeEarlyMode(mode)
+            host.changed()
+          }
+        )
+      }
+      value(
+        R.id.btn_xgramLaterExact, s(R.string.XgramLaterExact),
+        XgramLater.exactRowValue(host.activity)
+      ) {
+        XgramLater.openExactRow(host.controller)
+      }
+      link(R.id.btn_xgramLaterChannel, s(R.string.XgramLaterChannelLink), s(R.string.XgramLaterChannelLinkSub)) {
+        XgramLater.openReminderChannelSettings(host.activity)
       }
     }
 

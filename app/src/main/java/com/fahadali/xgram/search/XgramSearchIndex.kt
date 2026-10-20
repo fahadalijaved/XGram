@@ -54,6 +54,13 @@ internal object XgramSearchIndex {
     R.id.btn_xgramEmojiSet -> intArrayOf(R.string.XgramSearchKwEmoji, R.string.XgramSearchKwEmojiSet)
     R.id.btn_xgramHideFolders, R.id.btn_xgramHideAllChats -> intArrayOf(R.string.XgramSearchKwFolders)
     R.id.btn_xgramShowPeerIds -> intArrayOf(R.string.XgramSearchKwProfile)
+    R.id.btn_xgramUndoSend, R.id.btn_xgramUndoSendVoice -> intArrayOf(R.string.XgramSearchKwUnsend, R.string.XgramSearchKwDelaySend)
+    R.id.btn_xgramActivityShow, R.id.btn_xgramActivityReactions, R.id.btn_xgramActivityMuted, R.id.btn_xgramActivityDiscussion,
+    R.id.btn_xgramActivityLookBack, R.id.btn_xgramActivityBadge, R.id.btn_xgramActivityHeader,
+    R.id.btn_xgramActivityHidden, R.id.btn_xgramActivityClearAll -> intArrayOf(R.string.XgramSearchKwActivity)
+    R.id.btn_xgramActivityBar, R.id.btn_xgramActivityNavBar -> intArrayOf(R.string.XgramSearchKwActivity, R.string.XgramSearchKwNavBar)
+    R.id.btn_xgramLaterRow, R.id.btn_xgramLaterRaise, R.id.btn_xgramLaterWakeEarly, R.id.btn_xgramLaterExact,
+    R.id.btn_xgramLaterChannel -> intArrayOf(R.string.XgramSearchKwLater)
     R.id.btn_xgramCheckInTimer, R.id.btn_xgramCheckInGrace, R.id.btn_xgramCheckInRadius, R.id.btn_xgramCheckInLocation,
     R.id.btn_xgramCheckInBattery, R.id.btn_xgramCheckInFollowUp -> intArrayOf(R.string.XgramSearchKwCheckIn)
     else -> NONE
@@ -74,9 +81,15 @@ internal object XgramSearchIndex {
     } catch (t: Throwable) {
       null
     }
-    fun item(name: String, id: Int, title: Int, key: String?): Item {
+    fun item(name: String, id: Int, title: Int, key: String?, words: IntArray = kw): Item {
       val text = Lang.getString(title)
-      return Item("x:navbar/$name", XgramSearchHit(XgramPage.NAV_BAR, section, 0, id, key, false, icon, text, text.lowercase(), path, pathParts = pathParts), kw)
+      return Item("x:navbar/$name", XgramSearchHit(XgramPage.NAV_BAR, section, 0, id, key, false, icon, text, text.lowercase(), path, pathParts = pathParts), words)
+    }
+    // Activity's tab row, while it is on (the page shows it only then)
+    val activity = if (com.fahadali.xgram.activity.XgramActivity.isOn()) {
+      listOf(item("activity", R.id.btn_xgramNavBarTab, R.string.XgramActivity, "activity", intArrayOf(R.string.XgramSearchKwNavBar, R.string.XgramSearchKwActivity)))
+    } else {
+      emptyList()
     }
     return listOf(
       item("switch", R.id.btn_xgramBottomNav, R.string.XgramBottomNavOption, null),
@@ -86,6 +99,6 @@ internal object XgramSearchIndex {
       item("fab", R.id.btn_xgramNavBarFab, R.string.XgramNavBarFab, "side"),
       item("hideDrawer", R.id.btn_xgramNavBarHideDrawer, R.string.XgramNavBarHideDrawer, null),
       item("reset", R.id.btn_xgramNavBarReset, R.string.XgramNavBarReset, null)
-    )
+    ) + activity
   }
 }

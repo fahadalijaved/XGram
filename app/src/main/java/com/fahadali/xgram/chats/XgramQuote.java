@@ -565,6 +565,7 @@ public final class XgramQuote {
         quote = new TdApi.InputTextQuote(new TdApi.FormattedText("", new TdApi.TextEntity[0]), 0);
         UI.showToast(R.string.XgramQuoteDropped, Toast.LENGTH_SHORT);
       }
+      XgramUndoSend.flushBefore(tdlib, message.chatId); // Undo send: what waits in this chat goes first
       tdlib.client().send(new TdApi.ResendMessages(message.chatId, new long[] {message.id}, quote, 0), tdlib.messageHandler());
     });
   }

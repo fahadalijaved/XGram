@@ -217,6 +217,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   @Override
   protected void onCreateView (Context context, FrameLayoutFix contentView, ViewPager pager) {
     com.fahadali.xgram.XgramSettings.instance().addListener(xgramSettingsListener); // XGram
+    com.fahadali.xgram.activity.XgramActivityBadge.instance().addListener(xgramActivityBadgeListener); // XGram: the bell's dot
     if (BuildConfig.DEBUG) {
       Test.execute();
     }
@@ -1417,6 +1418,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (xgramGhostButton != null && xgramGhostButton.getVisibility() == View.VISIBLE) {
         menuWidth += Screen.dp(49f); // XGram: the ghost mode button, or the last folder tab slides under it
       }
+      if (xgramActivityButton != null && xgramActivityButton.getVisibility() == View.VISIBLE) {
+        menuWidth += Screen.dp(49f); // XGram: Activity's bell
+      }
       if (xgramHidesDrawer()) {
         menuWidth += Screen.dp(49f); // XGram M3E: the ⋮ that has the side menu's items
       }
@@ -1825,6 +1829,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     super.destroy();
     com.fahadali.xgram.appearance.XgramMotion.removeLiftListener(xgramFabLift); // XGram: extended FAB
     com.fahadali.xgram.XgramSettings.instance().removeListener(xgramSettingsListener); // XGram
+    com.fahadali.xgram.activity.XgramActivityBadge.instance().removeListener(xgramActivityBadgeListener); // XGram
     xgramConnDestroy(); // XGram
     if (xgramNavBar != null) {
       xgramNavBar.destroy(); // XGram: its badge and theme listeners go
@@ -2118,6 +2123,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramUpdatePaneInset();
     checkHeaderMargins();
     xgramFitToggleHeader();
+    xgramUpdateActivityButton(); // the rail may hold Activity: the bell goes, or comes back
   }
 
   /** XGram M3E: the header again (folder tabs came or went), for the navigation rail's (or bar's) title or tabs. */
@@ -2223,6 +2229,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       xgramNavBar.setForceHidden(xgramNavBarForceHidden(), false);
       xgramNavBar.sync();
     }
+    xgramUpdateActivityButton(); // the bar, the rail or the toolbar may hold Activity (or no longer)
   }
 
   /** Search, chat selection and the bottom folder tabs' menu take the bottom of the list: the bar steps aside. */
@@ -2297,6 +2304,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     xgramCloseHiddenDrawer();
     xgramShowFabIfStays(); // a FAB hidden by a scroll, now set to stay at the side
     xgramUpdateMoreBadge(false); // the ☰'s badge on the ⋮ (no photo on the toolbar), or not
+    xgramUpdateActivityButton(); // an Activity tab: the bell goes, or comes back
   }
 
   /** XGram M3E: the chat list's reasons for the floating toolbar to step aside (XgramNavToolbar.FORCE_*). */
@@ -3057,6 +3065,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       // XGram: ghost mode indicator, tap for its settings.
       xgramGhostButton = header.addButton(menu, R.id.menu_btn_xgramGhost, R.drawable.baseline_ghost_24, getHeaderIconColorId(), this, Screen.dp(49f));
       xgramUpdateGhostButton();
+      // XGram: Activity (every mention, reply and reaction), with a dot while it has new items
+      xgramActivityButton = header.addButton(menu, R.id.menu_btn_xgramActivity, R.drawable.baseline_notifications_24, getHeaderIconColorId(), this, Screen.dp(49f));
+      xgramUpdateActivityButton();
       header.addSearchButton(menu, this);
       if (id == R.id.menu_xgramMainNoDrawer) {
         xgramMoreButton = header.addMoreButton(menu, this); // XGram M3E: the side menu's items while it is hidden
@@ -3072,6 +3083,52 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   private HeaderButton xgramGhostButton;
+  /** XGram: Activity's bell (the one made last; a menu the header kept has its own). */
+  @Nullable private HeaderButton xgramActivityButton;
+
+  /**
+   * XGram: the bell shows while Activity is on, In the chat list header is on and the navigation has no Activity (the
+   * rail, the floating toolbar, or this chat list's bottom bar with Activity in Calls' place).
+   */
+  private boolean xgramActivityButtonShown () {
+    return com.fahadali.xgram.activity.XgramActivity.isOn() && com.fahadali.xgram.activity.XgramActivity.inHeader() &&
+      !com.fahadali.xgram.activity.XgramActivity.navigationHasActivity(context) &&
+      !(xgramNavBar != null && com.fahadali.xgram.activity.XgramActivity.barHasActivity());
+  }
+
+  /** XGram: the bell's visibility, its dot and description, on every copy of the menu the header keeps. */
+  public void xgramUpdateActivityButton () {
+    if (isDestroyed()) {
+      return;
+    }
+    final boolean shown = xgramActivityButtonShown();
+    final int count = shown ? com.fahadali.xgram.activity.XgramActivityBadge.badgeCount(tdlib) : 0;
+    xgramApplyActivityButton(xgramActivityButton, shown, count);
+    if (headerView != null) {
+      for (int i = 0; i < headerView.getChildCount(); i++) {
+        View child = headerView.getChildAt(i);
+        if (child instanceof ViewGroup && (child.getId() == R.id.menu_main || child.getId() == R.id.menu_xgramMainNoDrawer)) {
+          View button = child.findViewById(R.id.menu_btn_xgramActivity);
+          if (button instanceof HeaderButton && button != xgramActivityButton) {
+            xgramApplyActivityButton((HeaderButton) button, shown, count);
+          }
+        }
+      }
+    }
+    checkHeaderMargins(); // the folder tabs make room for the bell, or take it back
+  }
+
+  private static void xgramApplyActivityButton (@Nullable HeaderButton button, boolean shown, int count) {
+    if (button == null) {
+      return;
+    }
+    button.setVisibility(shown ? View.VISIBLE : View.GONE);
+    button.xgramSetDot(count > 0 ? ColorId.badge : ColorId.NONE, button.isAttachedToWindow());
+    button.setContentDescription(count > 0 ? Lang.getString(R.string.XgramActivityNew, count) : Lang.getString(R.string.XgramActivity));
+  }
+
+  private final com.fahadali.xgram.activity.XgramActivityBadge.Listener xgramActivityBadgeListener = this::xgramUpdateActivityButton;
+
   /** XGram M3E: the app bar's ⋮ while the side menu is hidden (the one made last). */
   @Nullable private HeaderButton xgramMoreButton;
 
@@ -3109,6 +3166,18 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private final com.fahadali.xgram.XgramSettings.Listener xgramSettingsListener = key -> {
     if (key.startsWith("xgram_ghost_")) {
       UI.post(this::xgramUpdateGhostButton);
+    } else if (com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_ON.equals(key) || com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_BAR.equals(key)) {
+      // XGram: Activity came or went, or its place on the bottom bar changed: the rail's destinations, the toolbar's
+      // tabs and the bar's items follow at once (XgramTwoPane#update syncs all three), then the bell
+      UI.post(() -> {
+        com.fahadali.xgram.layout.XgramTwoPane twoPane = context.xgramTwoPane();
+        if (twoPane != null && !isDestroyed()) {
+          twoPane.update();
+        }
+        xgramUpdateActivityButton();
+      });
+    } else if (key.startsWith(com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_PREFIX) || key.startsWith("xgram_nav_")) {
+      UI.post(this::xgramUpdateActivityButton); // XGram: Activity's bell (its settings, or the navigation that may hold it)
     } else if (com.fahadali.xgram.XgramSettings.KEY_HIDE_FAB.equals(key)) {
       UI.post(this::xgramUpdateComposeVisibility);
     } else if (com.fahadali.xgram.XgramSettings.KEY_ALL_CHATS_LABEL.equals(key)) {
@@ -3239,6 +3308,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.ghost(context, tdlib)); // XGram: Privacy, Ghost mode first
       return;
     }
+    if (id == R.id.menu_btn_xgramActivity) {
+      com.fahadali.xgram.activity.XgramActivity.open(this); // XGram: Activity (the chat list pane with two panes)
+      return;
+    }
     if (id == R.id.menu_btn_search) {
       tdlib.checkDeadlocks(() -> runOnUiThreadOptional(() -> {
         if (isFocused()) {
@@ -3297,6 +3370,14 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       final int id, title;
       int kind = XGRAM_MENU_ROW;
       switch (key) {
+        case "activity":
+          // XGram: Activity, unless it is off or a tab of the toolbar
+          if (!com.fahadali.xgram.activity.XgramActivity.isOn() || com.fahadali.xgram.activity.XgramActivity.toolbarHasActivity(toolbar)) {
+            continue;
+          }
+          id = R.id.btn_xgramActivity;
+          title = R.string.XgramActivity;
+          break;
         case "contacts":
           if (xgramToolbarHasTab(toolbar, com.fahadali.xgram.layout.XgramNavToolbar.DEST_CONTACTS)) {
             continue;
@@ -3326,6 +3407,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
         case "bookmarks":
           id = R.id.btn_xgramBookmarks;
           title = R.string.XgramBookmarks;
+          break;
+        case "later":
+          id = R.id.btn_xgramLater; // XGram Later
+          title = R.string.XgramLater;
           break;
         case "saved_by_chat":
           id = R.id.btn_xgramSavedByChat;
@@ -3485,6 +3570,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       if (toolbar != null) {
         toolbar.showManageAccountsMenu();
       }
+    } else if (id == R.id.btn_xgramActivity) {
+      com.fahadali.xgram.activity.XgramActivity.open(this);
     } else if (id == R.id.btn_contacts) {
       tdlib.contacts().startSyncIfNeeded(context, true, () -> {
         if (!isDestroyed()) {
@@ -3501,6 +3588,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       xgramOpenSavedMessages();
     } else if (id == R.id.btn_xgramBookmarks) {
       navigateTo(new com.fahadali.xgram.chats.XgramBookmarksController(context, tdlib));
+    } else if (id == R.id.btn_xgramLater) {
+      navigateTo(new com.fahadali.xgram.later.XgramLaterController(context, tdlib)); // XGram Later
     } else if (id == R.id.btn_xgramSavedByChat) {
       navigateTo(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib));
     } else if (id == R.id.btn_settings) {

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.fahadali.xgram.XgramReorder
 import com.fahadali.xgram.XgramSettings
+import com.fahadali.xgram.activity.XgramActivity
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
 import com.fahadali.xgram.compose.ui.ReorderRow
@@ -75,7 +76,9 @@ fun NavBarPage() {
     header(R.string.XgramNavBarTabs)
     val profileMode = settings.navProfile()
     val allKeys = XgramNavToolbar.orderedKeys()
-    val shownKeys = allKeys.filter { it != PROFILE || profileMode == XgramSettings.NAV_PROFILE_TAB }
+    // Activity's row only while Activity is on (Chat list > Activity)
+    val activityOn = XgramActivity.isOn()
+    val shownKeys = allKeys.filter { (it != PROFILE || profileMode == XgramSettings.NAV_PROFILE_TAB) && (it != ACTIVITY || activityOn) }
     val count = XgramNavToolbar.enabledTabCount()
     reorderGroup(
       key = "navTabs",
@@ -83,11 +86,14 @@ fun NavBarPage() {
       rows = shownKeys.map { key -> tabRow(settings, key, count) },
       onToggle = { key, on -> setTabOn(host, settings, key, on) }
     ) { keys ->
-      // The profile's place is kept while its row is not shown (photo beside the bar, or off)
+      // The profile's and Activity's places are kept while their rows are not shown (photo beside the bar, or off;
+      // Activity off), in the order they had
       val order = keys.toMutableList()
-      if (!order.contains(PROFILE)) {
-        val index = allKeys.indexOf(PROFILE).coerceIn(0, order.size)
-        order.add(index, PROFILE)
+      for (hidden in allKeys.filter { it == PROFILE || it == ACTIVITY }) {
+        if (!order.contains(hidden)) {
+          val index = allKeys.indexOf(hidden).coerceIn(0, order.size)
+          order.add(index, hidden)
+        }
       }
       XgramReorder.save(XgramReorder.NAV_BAR, order)
       updateToolbar(host)
@@ -151,6 +157,7 @@ fun NavBarPage() {
 
 private const val CHATS = "chats"
 private const val PROFILE = "profile"
+private const val ACTIVITY = "activity"
 
 /**
  * One tab's row. Chats and the profile (shown only as a tab) have no switch: they only move. With 4 tabs on, the off
@@ -196,7 +203,8 @@ private fun setProfileMode(host: XgramComposeHost, settings: XgramSettings, mode
   if (mode == XgramSettings.NAV_PROFILE_TAB && XgramNavToolbar.enabledTabCount() >= 4) {
     val last = XgramNavToolbar.orderedKeys().lastOrNull { key ->
       val dest = XgramNavToolbar.destOf(key)
-      key != CHATS && key != PROFILE && dest >= 0 && (settings.navTabs() and (1 shl dest)) != 0
+      key != CHATS && key != PROFILE && dest >= 0 && (settings.navTabs() and (1 shl dest)) != 0 &&
+        (key != ACTIVITY || XgramActivity.isOn()) // a tab only while Activity is on
     }
     if (last != null) {
       settings.setNavTabOn(XgramNavToolbar.destOf(last), false)

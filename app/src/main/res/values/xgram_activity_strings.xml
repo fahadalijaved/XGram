@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram Activity (com.fahadali.xgram.activity): every mention, reply and reaction in one place. -->
+  <!-- Plain strings only: Telegram X makes plurals from strings.xml alone (GenerateLangFunctions), so counts use One / Many pairs. -->
+
+  <!-- Settings: Chat list > Activity -->
+  <string name="XgramActivity">Activity</string>
+  <string name="XgramActivityShow">Activity</string>
+  <string name="XgramActivityShowInfo">Mentions, replies and reactions to your messages, from all your chats, in one place</string>
+  <string name="XgramActivityIncludeReactions">Reactions</string>
+  <string name="XgramActivityIncludeReactionsInfo">Reactions to your messages, also in private chats</string>
+  <string name="XgramActivityIncludeMuted">Muted chats</string>
+  <string name="XgramActivityIncludeMutedInfo">Also from chats you muted. Mentions that still notify you always show.</string>
+  <string name="XgramActivityIncludeDiscussion">Channel comments</string>
+  <string name="XgramActivityIncludeDiscussionInfo">Replies to your comments under channel posts, and the Replies chat</string>
+  <string name="XgramActivityLookBack">Find earlier mentions</string>
+  <string name="XgramActivityLookBackInfo">Once, looks for the last month\'s mentions in your 30 most active groups, a few chats a minute</string>
+  <string name="XgramActivityBadge">Unread badge</string>
+  <string name="XgramActivityBadgeInfo">A count on Activity in the navigation, the side menu and the header</string>
+  <string name="XgramActivityHeader">In the chat list header</string>
+  <string name="XgramActivityHeaderInfo">A bell above the chat list when the navigation doesn\'t have Activity</string>
+  <!-- Where it is in the navigation: the classic bottom bar, or a tab of the floating toolbar (Expressive design) -->
+  <string name="XgramActivityBar">In the bottom bar</string>
+  <string name="XgramActivityBarOff">Off</string>
+  <string name="XgramActivityBarCalls">Instead of Calls</string>
+  <string name="XgramActivityNavBar">In the navigation bar</string>
+  <string name="XgramActivityNavBarTab">A tab</string>
+  <string name="XgramActivityNavBarInfo">Turn its tab on with the others on the Navigation bar page. The navigation rail has Activity while the side menu does.</string>
+  <string name="XgramActivityLocalNote">Activity is kept on this device only and isn\'t part of backups.</string>
+  <string name="XgramActivityNeedsOn">Turn on Activity first</string>
+  <string name="XgramSearchKwActivity">activity|inbox|mentions|mention|replies|reply|reactions|reaction|notifications|@</string>
+
+  <!-- Screen and filters -->
+  <string name="XgramActivityNew">Activity, %1$d new</string>
+  <string name="XgramActivityAllTitle">All activity</string>
+  <string name="XgramActivityAll">All</string>
+  <string name="XgramActivityMentions">Mentions</string>
+  <string name="XgramActivityReplies">Replies</string>
+  <string name="XgramActivityReactions">Reactions</string>
+  <string name="XgramActivityUnread">Unread</string>
+  <string name="XgramActivityUnreadOnly">Unread only</string>
+  <string name="XgramActivityChipCount">%1$s %2$d</string>
+  <string name="XgramActivityThisWeek">This week</string>
+  <string name="XgramActivityEarlier">Earlier</string>
+
+  <!-- Rows -->
+  <string name="XgramActivityTwo">%1$s and %2$s</string>
+  <string name="XgramActivityOneAndOther">%1$s and %2$d other</string>
+  <string name="XgramActivityOneAndOthers">%1$s and %2$d others</string>
+  <string name="XgramActivityTwoAndOther">%1$s, %2$s and %3$d other</string>
+  <string name="XgramActivityTwoAndOthers">%1$s, %2$s and %3$d others</string>
+  <string name="XgramActivitySomeone">Someone</string>
+  <string name="XgramActivityInTopic">%1$s › %2$s</string>
+  <string name="XgramActivityMentioned">Mentioned you: %1$s</string>
+  <string name="XgramActivityReplied">Replied: %1$s</string>
+  <string name="XgramActivityReacted">Reacted %1$s to your message</string>
+  <string name="XgramActivityYou">You: %1$s</string>
+  <string name="XgramActivityDeleted">Deleted message</string>
+  <string name="XgramActivityMessageDeleted">This message was deleted</string>
+  <string name="XgramActivityOpenChat">Open chat</string>
+  <string name="XgramActivityChatUnavailable">Chat unavailable</string>
+  <string name="XgramActivityA11yRow">%1$s, %2$s, %3$s</string>
+  <string name="XgramActivityA11yUnread">%1$s, unread</string>
+
+  <!-- Status, empty and off -->
+  <string name="XgramActivityGhostNote">Ghost mode is on. Opening activity from here won\'t send read receipts.</string>
+  <string name="XgramActivityEmpty">No activity yet</string>
+  <string name="XgramActivityEmptyText">Mentions of you, replies to your messages and reactions to them show up here, from all your groups.</string>
+  <string name="XgramActivityEmptyMentions">No mentions</string>
+  <string name="XgramActivityEmptyReplies">No replies</string>
+  <string name="XgramActivityEmptyReactions">No reactions</string>
+  <string name="XgramActivityCaughtUp">You\'re all caught up</string>
+  <string name="XgramActivityOff">Activity is off</string>
+  <string name="XgramActivityTurnOn">Turn on</string>
+
+  <!-- Sync status -->
+  <string name="XgramActivityCatchingUp">Catching up · %1$d of %2$d chats</string>
+  <string name="XgramActivityPaused">Telegram asked to wait. Continues in %1$s.</string>
+  <string name="XgramActivityOffline">Waiting for network</string>
+  <string name="XgramActivityDebugFlood">Simulate Telegram wait (2 min)</string>
+  <string name="XgramActivityDebugThrow">Simulate collector errors</string>
+  <string name="XgramActivityDebugThrowInfo">Activity fails on every update. Chats should still update.</string>
+
+  <!-- Menus -->
+  <string name="XgramActivitySettings">Activity settings</string>
+  <string name="XgramActivityMarkAllRead">Mark all as read</string>
+  <string name="XgramActivityMarkAllMentions">Mark all mentions as read</string>
+  <string name="XgramActivityMarkAllReplies">Mark all replies as read</string>
+  <string name="XgramActivityMarkAllReactions">Mark all reactions as read</string>
+  <string name="XgramActivityClearRead">Clear read items</string>
+  <string name="XgramActivityHiddenChats">Hidden chats</string>
+  <string name="XgramActivityOpen">Open in chat</string>
+  <string name="XgramActivityMarkRead">Mark as read</string>
+  <string name="XgramActivityMarkUnread">Mark as unread</string>
+  <string name="XgramActivityHideChat">Hide activity from %1$s</string>
+  <string name="XgramActivityChatHidden">Activity from %1$s hidden</string>
+  <string name="XgramActivityChatShown">Activity from %1$s shows again</string>
+  <string name="XgramActivityClear">Clear</string>
+  <string name="XgramActivityCleared">Cleared</string>
+  <string name="XgramActivityClearedOne">1 cleared</string>
+  <string name="XgramActivityClearedMany">%1$d cleared</string>
+  <string name="XgramActivityNothingRead">No read items</string>
+  <string name="XgramActivityNewPillOne">↑ 1 new</string>
+  <string name="XgramActivityNewPillMany">↑ %1$d new</string>
+
+  <!-- Mark all as read -->
+  <string name="XgramActivityMarkAllConfirm">Mark all as read?</string>
+  <string name="XgramActivityMarkAllTextOne">Mentions, replies and reactions in 1 chat will be marked as read on all your devices.</string>
+  <string name="XgramActivityMarkAllTextMany">Mentions, replies and reactions in %1$d chats will be marked as read on all your devices.</string>
+  <string name="XgramActivityMarkAllTogether">Telegram marks mentions and replies as read together.</string>
+  <string name="XgramActivityMarkAllMixedOne">1 of them is in ghost mode and is marked read on this device only.</string>
+  <string name="XgramActivityMarkAllMixedMany">%1$d of them are in ghost mode and are marked read on this device only.</string>
+  <string name="XgramActivityMarkAllButton">Mark as read</string>
+  <string name="XgramActivityReadLocally">Read on this device only (ghost mode)</string>
+  <string name="XgramActivityMarking">Marking %1$d chats…</string>
+  <string name="XgramActivityMarked">Marked as read</string>
+  <string name="XgramActivityMarkPartialOne">Telegram asked to wait. 1 chat is still unread there.</string>
+  <string name="XgramActivityMarkPartialMany">Telegram asked to wait. %1$d chats are still unread there.</string>
+  <string name="XgramActivityMarkLeftOne">1 more chat is still unread. Tap again to mark it.</string>
+  <string name="XgramActivityMarkLeftMany">%1$d more chats are still unread. Tap again to mark them.</string>
+
+  <!-- Hidden chats and Clear Activity (settings) -->
+  <string name="XgramActivityHiddenCountOne">1 chat</string>
+  <string name="XgramActivityHiddenCountMany">%1$d chats</string>
+  <string name="XgramActivityHiddenEmpty">No hidden chats</string>
+  <string name="XgramActivityUnhide">Show activity again</string>
+  <string name="XgramActivityClearAll">Clear Activity</string>
+  <string name="XgramActivityClearAllInfo">Removes the list saved on this device. Messages stay in their chats.</string>
+  <string name="XgramActivityClearAllConfirm">Clear Activity?</string>
+  <string name="XgramActivityClearAllButton">Clear</string>
+  <string name="XgramActivityAllCleared">Activity cleared</string>
+
+  <!-- What's New -->
+  <string name="XgramNewActivity">Activity</string>
+  <string name="XgramNewActivityInfo">Every mention, reply and reaction in one place</string>
+
+  <!-- Ids -->
+  <item name="controller_xgramActivity" type="id"/>
+  <item name="btn_xgramActivity" type="id"/>
+  <item name="menu_xgramActivity" type="id"/>
+  <item name="menu_btn_xgramActivity" type="id"/>
+  <item name="btn_xgramActivityUnreadOnly" type="id"/>
+  <item name="btn_xgramActivitySettings" type="id"/>
+  <item name="btn_xgramActivityTurnOn" type="id"/>
+  <item name="btn_xgramActivityDebugFlood" type="id"/>
+  <item name="btn_xgramActivityDebugThrow" type="id"/>
+  <item name="menu_btn_xgramActivityMarkAll" type="id"/>
+  <item name="btn_xgramActivityMarkAllConfirm" type="id"/>
+  <item name="btn_xgramActivityClearRead" type="id"/>
+  <item name="btn_xgramActivityHidden" type="id"/>
+  <item name="btn_xgramActivityOpen" type="id"/>
+  <item name="btn_xgramActivityToggleRead" type="id"/>
+  <item name="btn_xgramActivityHideChat" type="id"/>
+  <item name="btn_xgramActivityClear" type="id"/>
+  <item name="btn_xgramActivityClearAll" type="id"/>
+  <item name="btn_xgramActivityClearAllConfirm" type="id"/>
+  <item name="btn_xgramActivityHiddenChat" type="id"/>
+  <item name="controller_xgramActivityHidden" type="id"/>
+  <item name="btn_xgramActivityShow" type="id"/>
+  <item name="btn_xgramActivityReactions" type="id"/>
+  <item name="btn_xgramActivityMuted" type="id"/>
+  <item name="btn_xgramActivityDiscussion" type="id"/>
+  <item name="btn_xgramActivityLookBack" type="id"/>
+  <item name="btn_xgramActivityBadge" type="id"/>
+  <item name="btn_xgramActivityHeader" type="id"/>
+  <item name="btn_xgramActivityBar" type="id"/>
+  <item name="btn_xgramActivityBarOff" type="id"/>
+  <item name="btn_xgramActivityBarCalls" type="id"/>
+  <item name="btn_xgramActivityNavBar" type="id"/>
+</resources>

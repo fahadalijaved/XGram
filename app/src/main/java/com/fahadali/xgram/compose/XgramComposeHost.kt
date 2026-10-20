@@ -97,12 +97,16 @@ interface XgramComposeHost {
 
 val LocalXgramHost = staticCompositionLocalOf<XgramComposeHost> { error("XgramComposeHost is not provided") }
 
-/** One choice in a bottom sheet: tapping an option closes the sheet, then calls [onSelect]. */
+/**
+ * One choice in a bottom sheet: tapping an option closes the sheet, then calls [onSelect]. [subtitles] are the options'
+ * own sub-lines by index (null or missing: none); [info] is about the whole choice.
+ */
 class ChoiceSpec<T>(
   val title: String,
   val info: String? = null,
   val options: List<Pair<String, T>>,
   val selected: T,
+  val subtitles: List<String?> = emptyList(),
   val onSelect: (T) -> Unit
 ) {
   val labels: List<String>
