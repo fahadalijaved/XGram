@@ -35,12 +35,15 @@ public final class XgramAccountData {
 
   private static final String[] PREFIXES = {
     "xgram_bm_", "xgram_sb_", "xgram_ln_", "xgram_ghost_ex_", "xgram_ls_", "xgram_lr_", "xgram_tab_", "xgram_tabs_side_",
-    "xgram_cm_", "xgram_cmode_", com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX
+    "xgram_cm_", "xgram_cmode_", com.fahadali.xgram.chats.XgramAutoTranslate.KEY_PREFIX,
+    "xgram_ci_" // Check In's live state (com.fahadali.xgram.checkin)
   };
 
   /** TDLib thread: the account in this slot logged out. */
   public static void eraseAccount (int accountId) {
     try {
+      // Before the keys go: Check In reads its record to stop tracking and say the alert is still scheduled.
+      com.fahadali.xgram.checkin.XgramCheckIn.forgetAccount(accountId);
       String suffix = accountId + "_";
       LevelDB pmc = Settings.instance().pmc();
       for (String prefix : PREFIXES) {

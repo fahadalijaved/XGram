@@ -498,6 +498,18 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramInlineVideoStart) {
           view.setData(settings.inlineVideoStart() == XgramSettings.INLINE_VIDEO_START_TAP ? R.string.XgramInlineVideoStartTap : R.string.XgramInlineVideoStartAuto);
           view.setEnabled(XgramSettingDeps.inlineVideoStartEnabled());
+        } else if (id == R.id.btn_xgramCheckInTimer) {
+          view.setData(com.fahadali.xgram.checkin.XgramCheckInSheet.durationName(settings.checkInTimer()));
+        } else if (id == R.id.btn_xgramCheckInGrace) {
+          view.setData(com.fahadali.xgram.checkin.XgramCheckInSheet.durationName(settings.checkInGrace()));
+        } else if (id == R.id.btn_xgramCheckInLocation) {
+          view.getToggler().setRadioEnabled(settings.checkInLocation(), isUpdate);
+        } else if (id == R.id.btn_xgramCheckInBattery) {
+          view.getToggler().setRadioEnabled(settings.checkInBattery(), isUpdate);
+        } else if (id == R.id.btn_xgramCheckInFollowUp) {
+          view.getToggler().setRadioEnabled(settings.checkInFollowUp(), isUpdate);
+          // Only applies while the alert carries a location.
+          setReason(view, settings.checkInLocation() ? 0 : R.string.XgramCheckInFollowUpNeeds);
         } else if (id == R.id.btn_xgramEnterToSend) {
           view.setData(com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(settings.enterToSend()));
         } else if (id == R.id.btn_xgramProxyOffVpn) {
@@ -840,6 +852,16 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(description(R.string.XgramTapToRecordInfo));
     addRows(items, link(R.id.btn_xgramEnterToSend, R.string.XgramEnterToSend));
     items.add(description(R.string.XgramEnterToSendInfo));
+
+    items.add(header(R.string.XgramCheckInHeader));
+    addRows(items,
+      link(R.id.btn_xgramCheckInTimer, R.string.XgramCheckInTimer),
+      link(R.id.btn_xgramCheckInGrace, R.string.XgramCheckInGrace),
+      toggle(R.id.btn_xgramCheckInLocation, R.string.XgramCheckInIncludeLocation, R.string.XgramCheckInLocationSub),
+      toggle(R.id.btn_xgramCheckInBattery, R.string.XgramCheckInIncludeBattery),
+      toggle(R.id.btn_xgramCheckInFollowUp, R.string.XgramCheckInFollowUp, R.string.XgramCheckInFollowUpSub)
+    );
+    items.add(description(R.string.XgramCheckInInfo));
 
     items.add(header(R.string.XgramHeaderTelegramAi));
     addRows(items, toggle(R.id.btn_xgramAiTools, R.string.XgramAiTools, R.string.XgramAiToolsSub));
@@ -1654,6 +1676,37 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         updateDescription(R.id.btn_xgramInlineVideoInfo, XgramSettingDeps.inlineVideoInfo());
         return true;
       });
+      return;
+    } else if (id == R.id.btn_xgramCheckInTimer || id == R.id.btn_xgramCheckInGrace) {
+      final boolean timer = id == R.id.btn_xgramCheckInTimer;
+      final int[] choices = timer ? XgramSettings.CHECK_IN_TIMERS : XgramSettings.CHECK_IN_GRACES;
+      int[] optionIds = new int[choices.length];
+      String[] titles = new String[choices.length];
+      for (int i = 0; i < choices.length; i++) {
+        optionIds[i] = i + 1;
+        titles[i] = com.fahadali.xgram.checkin.XgramCheckInSheet.durationName(choices[i]);
+      }
+      showOptions(null, optionIds, titles, null, null, (itemView, optionId) -> {
+        if (timer) {
+          settings.setCheckInTimer(choices[optionId - 1]);
+        } else {
+          settings.setCheckInGrace(choices[optionId - 1]);
+        }
+        adapter.updateValuedSettingById(timer ? R.id.btn_xgramCheckInTimer : R.id.btn_xgramCheckInGrace);
+        return true;
+      });
+      return;
+    } else if (id == R.id.btn_xgramCheckInLocation) {
+      settings.setCheckInLocation(adapter.toggleView(v));
+      adapter.updateValuedSettingById(R.id.btn_xgramCheckInFollowUp); // follows the switch
+      return;
+    } else if (id == R.id.btn_xgramCheckInBattery) {
+      settings.setCheckInBattery(adapter.toggleView(v));
+      return;
+    } else if (id == R.id.btn_xgramCheckInFollowUp) {
+      if (settings.checkInLocation()) {
+        settings.setCheckInFollowUp(adapter.toggleView(v));
+      }
       return;
     } else if (id == R.id.btn_xgramEnterToSend) {
       int[] modes = {XgramSettings.ENTER_TO_SEND_AUTO, XgramSettings.ENTER_TO_SEND_ON, XgramSettings.ENTER_TO_SEND_OFF};

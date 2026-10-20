@@ -355,6 +355,22 @@
       </intent-filter>
     </receiver>
 
+    <!-- XGram Check In: the location service of a running Check In, and its alarms, notification actions and re-arming after boot or an update -->
+    <service
+      android:name="com.fahadali.xgram.checkin.XgramCheckInService"
+      android:exported="false"
+      android:foregroundServiceType="location"
+      android:stopWithTask="false" />
+
+    <receiver
+      android:name="com.fahadali.xgram.checkin.XgramCheckInReceiver"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
+
 
     <activity
       android:name=".ManageSpaceActivity"

@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram Check In: a scheduled Telegram message that goes to a chat unless you end the Check In in time -->
+
+  <!-- Ids -->
+  <item type="id" name="btn_xgramCheckIn" />
+  <item type="id" name="btn_xgramCheckInInfo" />
+  <item type="id" name="btn_xgramCheckInCustom" />
+  <item type="id" name="btn_xgramCheckInDebug2m" />
+  <item type="id" name="btn_xgramCheckIn15m" />
+  <item type="id" name="btn_xgramCheckIn30m" />
+  <item type="id" name="btn_xgramCheckIn1h" />
+  <item type="id" name="btn_xgramCheckIn2h" />
+  <item type="id" name="btn_xgramCheckIn4h" />
+  <item type="id" name="btn_xgramCheckIn8h" />
+  <item type="id" name="btn_xgramCheckInLocOpt" />
+  <item type="id" name="btn_xgramCheckInBatOpt" />
+  <item type="id" name="btn_xgramCheckInArriveOpt" />
+  <item type="id" name="btn_xgramCheckInSafe" />
+  <item type="id" name="btn_xgramCheckInAdd15" />
+  <item type="id" name="btn_xgramCheckInAdd60" />
+  <item type="id" name="btn_xgramCheckInCancel" />
+  <item type="id" name="btn_xgramCheckInKeep" />
+  <item type="id" name="btn_xgramCheckInClose" />
+  <item type="id" name="btn_xgramCheckInOpenChat" />
+  <item type="id" name="btn_xgramCheckInTimer" />
+  <item type="id" name="btn_xgramCheckInGrace" />
+  <item type="id" name="btn_xgramCheckInRadius" />
+  <item type="id" name="btn_xgramCheckInLocation" />
+  <item type="id" name="btn_xgramCheckInBattery" />
+  <item type="id" name="btn_xgramCheckInFollowUp" />
+
+  <!-- Chat menu -->
+  <string name="XgramCheckIn">Check In</string>
+  <string name="XgramCheckInManage">Manage Check In</string>
+
+  <!-- Before starting -->
+  <string name="XgramCheckInConflict">You already have a Check In with %1$s. End it before starting a new one.</string>
+  <string name="XgramCheckInOpenChat">Open chat</string>
+  <string name="XgramCheckInCantStart">Can\'t start Check In</string>
+  <string name="XgramCheckInPaid">Messages to %1$s cost Stars, so Check In can\'t schedule an alert.</string>
+  <string name="XgramCheckInRestricted">%1$s only accepts messages from contacts or Premium users.</string>
+  <string name="XgramCheckInDeletedAccount">This account was deleted.</string>
+  <string name="XgramCheckInExplainer">Let %1$s know you got where you were going. If you don\'t end Check In in time, Telegram sends them a message you schedule now, with your last known location and battery level, even if your phone is off or lost.\n\nYour location is kept in that scheduled message on Telegram\'s servers and refreshed about every 5 minutes; %1$s only sees it if the alert is sent. Your other devices show it under Scheduled messages. Whether %1$s hears it depends on their notification settings.\n\nCheck In is best effort and isn\'t an emergency service. If you\'re in danger, call your local emergency number.</string>
+  <string name="XgramCheckInNotNow">Not now</string>
+
+  <!-- Start sheet -->
+  <string name="XgramCheckInWith">Check In with %1$s</string>
+  <string name="XgramCheckInHeaderInfo">If you don\'t tap I\'m safe by then, %1$s gets an automatic message %2$s later with %3$s.</string>
+  <string name="XgramCheckInContentsBoth">your last known location and battery level</string>
+  <string name="XgramCheckInContentsLocation">your last known location</string>
+  <string name="XgramCheckInContentsBattery">your battery level</string>
+  <string name="XgramCheckInContentsNone">a note that you haven\'t checked in</string>
+  <string name="XgramCheckInGhostNote">Ghost mode: updating your alert may show you online.</string>
+  <string name="XgramCheckInNoNotifications">Notifications are off, so you won\'t be asked if you\'re OK.</string>
+  <string name="XgramCheckInBackByTime">Back by a time…</string>
+  <string name="XgramCheckInBackBy">Back by %1$s</string>
+  <string name="XgramCheckInDebug2m">2 minutes (debug)</string>
+  <string name="XgramCheckInIncludeLocation">Include my location</string>
+  <string name="XgramCheckInIncludeBattery">Include battery level</string>
+  <string name="XgramCheckInArriveOpt">End when I arrive at a place…</string>
+  <string name="XgramCheckInStart">Start</string>
+  <string name="XgramCheckInPickerTitle">Back by</string>
+  <string name="XgramCheckInMin15">Check In needs at least 15 minutes</string>
+
+  <!-- Starting -->
+  <string name="XgramCheckInLocationOff">Location is off for this Check In</string>
+  <string name="XgramCheckInArrivalNeedsLocation">Arrival needs location access</string>
+  <string name="XgramCheckInNoDestination">Start Check In without a destination?</string>
+  <string name="XgramCheckInPinnedPlace">the pinned place</string>
+  <string name="XgramCheckInUseLocation">Use this location</string>
+  <string name="XgramCheckInNeedsConnection">Check In needs a connection to schedule the alert.</string>
+  <string name="XgramCheckInSettingUp">Setting up Check In…</string>
+  <string name="XgramCheckInStarted">Check In started · back by %1$s</string>
+  <string name="XgramCheckInDidntStart">Check In didn\'t start: %1$s</string>
+  <string name="XgramCheckInTooMany">This chat has too many scheduled messages.</string>
+  <string name="XgramCheckInUnavailable">Check In isn\'t available in this chat.</string>
+
+  <!-- Messages the chat gets: written in your app language -->
+  <string name="XgramCheckInMsgStart">Check In: I\'m on my way and expect to be back by %1$s. If I don\'t check in by %2$s, you\'ll automatically get a message %3$s.</string>
+  <string name="XgramCheckInMsgStartDest">Check In: I\'m heading to %1$s and expect to get there by %2$s. If I don\'t arrive or check in by %3$s, you\'ll automatically get a message %4$s.</string>
+  <string name="XgramCheckInTailBoth">with my last known location and battery level</string>
+  <string name="XgramCheckInTailLocation">with my last known location</string>
+  <string name="XgramCheckInTailBattery">with my battery level</string>
+  <string name="XgramCheckInTailNone">saying I haven\'t checked in</string>
+  <string name="XgramCheckInAlertTitle">%1$s hasn\'t checked in.</string>
+  <string name="XgramCheckInAlertTitleMe">I haven\'t checked in.</string>
+  <string name="XgramCheckInAlertTimer">They expected to be back by %1$s and haven\'t confirmed they\'re safe.</string>
+  <string name="XgramCheckInAlertDest">They were heading to %1$s, expected by %2$s, and haven\'t arrived or checked in.</string>
+  <string name="XgramCheckInAlertLocation">Last known location (%1$s, accurate to %2$s): %3$s</string>
+  <string name="XgramCheckInAlertLocationCoarse">Last known location (%1$s, approximate area): %2$s</string>
+  <string name="XgramCheckInAlertNoLocation">Location: not available</string>
+  <string name="XgramCheckInAlertBattery">Battery: %1$s</string>
+  <string name="XgramCheckInAlertBatteryCharging">Battery: %1$s (charging)</string>
+  <string name="XgramCheckInAlertOff">Phone switched off at %1$s</string>
+  <string name="XgramCheckInAlertUpdated">Updated %1$s</string>
+  <string name="XgramCheckInAlertLabel">Automatic Check In alert</string>
+  <string name="XgramCheckInMeters">%1$d m</string>
+  <string name="XgramCheckInMsgSafe">I\'m safe. Check In ended.</string>
+  <string name="XgramCheckInMsgArrived">I\'ve arrived at %1$s. Check In ended.</string>
+  <string name="XgramCheckInMsgCancelled">Check In cancelled.</string>
+  <string name="XgramCheckInMsgFalseAlarm">I\'m safe. The Check In alert was a false alarm.</string>
+  <string name="XgramCheckInMsgArrivedAfter">I\'ve arrived at %1$s. I\'m safe now.</string>
+  <string name="XgramCheckInMsgCorrection">I\'m safe. The Check In alert above was sent by mistake.</string>
+
+  <!-- Notifications -->
+  <string name="XgramCheckInChannelStatus">Check In status</string>
+  <string name="XgramCheckInChannelReminders">Check In reminders</string>
+  <string name="XgramCheckInOngoingText">Back by %1$s · alert at %2$s</string>
+  <string name="XgramCheckInOngoingDest">Heading to %1$s · %2$s · alert at %3$s</string>
+  <string name="XgramCheckInOngoingDestNoDistance">Heading to %1$s · alert at %2$s</string>
+  <string name="XgramCheckInPaused">Location updates paused. Open XGram to resume.</string>
+  <string name="XgramCheckInLocationServicesOff">Location is off on this phone.</string>
+  <string name="XgramCheckInOffline">You\'re offline. Your alert is still scheduled on Telegram.</string>
+  <string name="XgramCheckInImSafe">I\'m safe</string>
+  <string name="XgramCheckInAdd15Short">Add 15 min</string>
+  <string name="XgramCheckInActive">Check In active</string>
+  <string name="XgramCheckInAreYouOk">Are you OK?</string>
+  <string name="XgramCheckInPromptText">Your Check In with %1$s sends an alert at %2$s.</string>
+  <string name="XgramCheckInPromptDest">You haven\'t arrived at %1$s. Your Check In with %2$s sends an alert at %3$s.</string>
+  <string name="XgramCheckInLastCall">Alert in 2 minutes. Tap I\'m safe if you\'re OK.</string>
+  <string name="XgramCheckInAlertSentTitle">Check In alert sent</string>
+  <string name="XgramCheckInAlertSentText">%1$s got your Check In alert. Tap I\'m safe to tell them you\'re OK.</string>
+  <string name="XgramCheckInArrivedTitle">You\'ve arrived at %1$s</string>
+  <string name="XgramCheckInArrivedText">%1$s was told you\'re safe.</string>
+  <string name="XgramCheckInEnded">Check In ended</string>
+  <string name="XgramCheckInEndedDeleted">Its alert was deleted from Scheduled messages.</string>
+  <string name="XgramCheckInEndedNoAccess">You can no longer send messages in %1$s.</string>
+  <string name="XgramCheckInDidntStartTitle">Check In didn\'t start</string>
+  <string name="XgramCheckInDidntStartText">The alert couldn\'t be scheduled.</string>
+  <string name="XgramCheckInLogoutText">Your Check In alert to %1$s is still scheduled on Telegram. If you\'re safe, delete it from Scheduled messages on another device.</string>
+  <string name="XgramCheckInEnding">Ending Check In…</string>
+  <string name="XgramCheckInClosingText">It finishes when you\'re online. If XGram can\'t reach Telegram before %1$s, %2$s still gets the alert.</string>
+
+  <!-- Manage sheet -->
+  <string name="XgramCheckInManageArmed">Back by %1$s. If you don\'t end Check In, %2$s gets an alert at %3$s with %4$s.</string>
+  <string name="XgramCheckInManageDest">Heading to %1$s, %2$s.</string>
+  <string name="XgramCheckInManageDestNoDistance">Heading to %1$s.</string>
+  <string name="XgramCheckInManagePaused">Location updates are paused.</string>
+  <string name="XgramCheckInManageStarting">Setting up Check In… It starts once Telegram confirms the alert.</string>
+  <string name="XgramCheckInAdd15">Add 15 minutes</string>
+  <string name="XgramCheckInAdd60">Add 1 hour</string>
+  <string name="XgramCheckInCancel">Cancel Check In</string>
+  <string name="XgramCheckInClose">Close</string>
+  <string name="XgramCheckInCancelTitle">Cancel Check In?</string>
+  <string name="XgramCheckInCancelText">%1$s won\'t get an alert, and they\'ll see \"Check In cancelled.\"</string>
+  <string name="XgramCheckInKeep">Keep</string>
+  <string name="XgramCheckInFiredInfo">Your alert was sent at %1$s.</string>
+  <string name="XgramCheckInClosingInfo">Ending Check In… It finishes when you\'re online. If XGram can\'t reach Telegram before %1$s, %2$s still gets the alert.</string>
+  <string name="XgramCheckInAddNeedsConnection">Adding time needs a connection.</string>
+  <string name="XgramCheckInTooLate">Too late to add time: the alert is being sent.</string>
+  <string name="XgramCheckInMax24h">Check In can\'t run longer than 24 hours.</string>
+
+  <!-- Settings (Messages) -->
+  <string name="XgramCheckInHeader">Check In</string>
+  <string name="XgramCheckInTimer">Default timer</string>
+  <string name="XgramCheckInGrace">Alert delay</string>
+  <string name="XgramCheckInRadius">Arrival radius</string>
+  <string name="XgramCheckInLocationSub">Your last known location goes in the alert</string>
+  <string name="XgramCheckInFollowUp">Keep the sent alert updated</string>
+  <string name="XgramCheckInFollowUpSub">For an hour after it\'s sent, your location in it keeps updating</string>
+  <string name="XgramCheckInFollowUpNeeds">Needs Include my location</string>
+  <string name="XgramCheckInInfo">Start Check In from a chat\'s ⋮ menu. Alert delay is how long after the back-by time the alert is sent. It\'s best effort and isn\'t an emergency service: the alert is a scheduled Telegram message, and your contact\'s notification settings decide whether they hear it.</string>
+  <string name="XgramSearchKwCheckIn">check in|checkin|safety|safe|arrive|arrival|home|timer|alert|location|battery</string>
+</resources>

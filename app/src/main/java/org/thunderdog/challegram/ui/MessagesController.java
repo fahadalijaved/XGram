@@ -2535,6 +2535,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
         manager.destroy(this);
         setArguments(new Arguments(openedFromChatList, chat, messageThread, messageTopicId, null, MessagesManager.HIGHLIGHT_MODE_NONE, null));
       }
+    } else if (id == R.id.btn_xgramCheckIn) {
+      if (chat != null) {
+        com.fahadali.xgram.checkin.XgramCheckInSheet.open(this, chat.id, messageTopicId); // XGram: Check In
+      }
     } else if (id == R.id.btn_sendScreenshotNotification) {
       UI.showToast("Sent screenshot notification", Toast.LENGTH_SHORT);
       tdlib.onScreenshotTaken((int) (System.currentTimeMillis() / 1000l));
@@ -4947,6 +4951,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
       // XGram: per-chat ghost mode exclusion.
       ids.append(R.id.btn_xgramGhostExclude);
       strings.append(com.fahadali.xgram.ghost.XgramGhost.isExcluded(tdlib, chat.id) ? R.string.XgramGhostIncludeChat : R.string.XgramGhostExcludeChat);
+    }
+
+    if (!inPreviewMode && !areScheduled && messageThread == null && com.fahadali.xgram.checkin.XgramCheckIn.canStart(tdlib, chat)) {
+      ids.append(R.id.btn_xgramCheckIn); // XGram: Check In (start, or manage the one of this chat)
+      strings.append(com.fahadali.xgram.checkin.XgramCheckIn.isActiveIn(tdlib, chat.id) ? R.string.XgramCheckInManage : R.string.XgramCheckIn);
     }
 
     if (tdlib.canReportChatSpam(chat.id)) {

@@ -20,6 +20,7 @@ import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.chats.XgramInlineVideo
 import com.fahadali.xgram.chats.XgramInputButtonsController
 import com.fahadali.xgram.chats.XgramSwipeActions
+import com.fahadali.xgram.checkin.XgramCheckInSheet
 import com.fahadali.xgram.compose.ChoiceSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
@@ -158,6 +159,45 @@ fun MessagesPage() {
       }
     }
     description(R.string.XgramTapToRecordInfo)
+
+    header(R.string.XgramCheckInHeader)
+    group {
+      val timer = settings.checkInTimer()
+      value(R.id.btn_xgramCheckInTimer, s(R.string.XgramCheckInTimer), XgramCheckInSheet.durationName(timer)) {
+        host.choose(
+          ChoiceSpec(
+            title = s(R.string.XgramCheckInTimer),
+            options = XgramSettings.CHECK_IN_TIMERS.map { XgramCheckInSheet.durationName(it) to it },
+            selected = timer
+          ) { minutes ->
+            settings.setCheckInTimer(minutes)
+          }
+        )
+      }
+      buttons(
+        R.id.btn_xgramCheckInGrace, s(R.string.XgramCheckInGrace),
+        XgramSettings.CHECK_IN_GRACES.map { XgramCheckInSheet.durationName(it) to it },
+        selected = settings.checkInGrace()
+      ) {
+        settings.setCheckInGrace(it)
+      }
+      val location = settings.checkInLocation()
+      switch(R.id.btn_xgramCheckInLocation, s(R.string.XgramCheckInIncludeLocation), s(R.string.XgramCheckInLocationSub), checked = location) {
+        settings.setCheckInLocation(it)
+      }
+      switch(R.id.btn_xgramCheckInBattery, s(R.string.XgramCheckInIncludeBattery), checked = settings.checkInBattery()) {
+        settings.setCheckInBattery(it)
+      }
+      // Only applies while the alert carries a location.
+      switch(
+        R.id.btn_xgramCheckInFollowUp, s(R.string.XgramCheckInFollowUp),
+        s(if (location) R.string.XgramCheckInFollowUpSub else R.string.XgramCheckInFollowUpNeeds),
+        checked = settings.checkInFollowUp(), enabled = location
+      ) {
+        settings.setCheckInFollowUp(it)
+      }
+    }
+    description(R.string.XgramCheckInInfo)
 
     header(R.string.XgramHeaderTelegramAi)
     group {

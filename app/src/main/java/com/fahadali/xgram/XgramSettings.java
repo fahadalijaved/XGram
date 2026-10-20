@@ -927,6 +927,94 @@ public final class XgramSettings {
     return instance().notificationIcon() == NOTIFICATION_ICON_TELEGRAM_X ? R.mipmap.app_notification : R.drawable.xgram_notification;
   }
 
+  // Check In (Messages): the defaults of the start sheet. Read when used, not cached. Live Check Ins are not
+  // settings: they are kept under "xgram_ci_" (com.fahadali.xgram.checkin), which no backup list matches.
+
+  public static final String KEY_CHECKIN_TIMER = "xgram_checkin_timer";
+  public static final String KEY_CHECKIN_GRACE = "xgram_checkin_grace";
+  public static final String KEY_CHECKIN_RADIUS = "xgram_checkin_radius";
+  public static final String KEY_CHECKIN_LOCATION = "xgram_checkin_location";
+  public static final String KEY_CHECKIN_BATTERY = "xgram_checkin_battery";
+  public static final String KEY_CHECKIN_FOLLOW = "xgram_checkin_follow";
+  /** The one-time explainer was shown; not a setting, left out of backups. */
+  private static final String KEY_CHECKIN_EXPLAINED = "xgram_checkin_explained";
+
+  /** Default timer choices, minutes. */
+  public static final int[] CHECK_IN_TIMERS = {15, 30, 60, 120, 240, 480};
+  /** Alert delay choices, minutes. */
+  public static final int[] CHECK_IN_GRACES = {5, 10, 15, 30};
+  /** Arrival radius choices, meters. */
+  public static final int[] CHECK_IN_RADII = {100, 200, 500};
+
+  private static int checkInChoice (int value, int[] choices, int fallback) {
+    for (int choice : choices) {
+      if (choice == value) {
+        return value;
+      }
+    }
+    return fallback;
+  }
+
+  /** The start sheet's preselected timer, minutes. */
+  public int checkInTimer () {
+    return checkInChoice(pmc().getInt(KEY_CHECKIN_TIMER, 60), CHECK_IN_TIMERS, 60);
+  }
+
+  public void setCheckInTimer (int minutes) {
+    putInt(KEY_CHECKIN_TIMER, checkInChoice(minutes, CHECK_IN_TIMERS, 60));
+  }
+
+  /** Alert delay: how long after the back-by time the alert is sent, minutes. */
+  public int checkInGrace () {
+    return checkInChoice(pmc().getInt(KEY_CHECKIN_GRACE, 15), CHECK_IN_GRACES, 15);
+  }
+
+  public void setCheckInGrace (int minutes) {
+    putInt(KEY_CHECKIN_GRACE, checkInChoice(minutes, CHECK_IN_GRACES, 15));
+  }
+
+  /** How close to the destination counts as arrived, meters. */
+  public int checkInRadius () {
+    return checkInChoice(pmc().getInt(KEY_CHECKIN_RADIUS, 200), CHECK_IN_RADII, 200);
+  }
+
+  public void setCheckInRadius (int meters) {
+    putInt(KEY_CHECKIN_RADIUS, checkInChoice(meters, CHECK_IN_RADII, 200));
+  }
+
+  public boolean checkInLocation () {
+    return pmc().getBoolean(KEY_CHECKIN_LOCATION, true);
+  }
+
+  public void setCheckInLocation (boolean value) {
+    put(KEY_CHECKIN_LOCATION, value);
+  }
+
+  public boolean checkInBattery () {
+    return pmc().getBoolean(KEY_CHECKIN_BATTERY, true);
+  }
+
+  public void setCheckInBattery (boolean value) {
+    put(KEY_CHECKIN_BATTERY, value);
+  }
+
+  /** Keep the sent alert updated: only applies while Include my location is on. */
+  public boolean checkInFollowUp () {
+    return pmc().getBoolean(KEY_CHECKIN_FOLLOW, true);
+  }
+
+  public void setCheckInFollowUp (boolean value) {
+    put(KEY_CHECKIN_FOLLOW, value);
+  }
+
+  public boolean checkInExplained () {
+    return pmc().getBoolean(KEY_CHECKIN_EXPLAINED, false);
+  }
+
+  public void setCheckInExplained () {
+    pmc().putBoolean(KEY_CHECKIN_EXPLAINED, true);
+  }
+
   // Side menu
 
   /** Side menu items that can be hidden (XgramDrawerItemsController.KEYS and TOGGLE_KEYS, all but settings), shown by default. */
