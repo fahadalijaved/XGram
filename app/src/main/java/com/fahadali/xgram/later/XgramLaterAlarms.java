@@ -70,6 +70,28 @@ final class XgramLaterAlarms {
     }
   }
 
+  /**
+   * The app's own settings page, where Battery → Unrestricted turns battery optimization off (Samsung and stock
+   * Android 12+); the system's battery optimization list when that page can't open.
+   */
+  static void openBatterySettings (Context ctx) {
+    Intent[] intents = {
+      new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.getPackageName(), null)),
+      new Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    };
+    for (Intent intent : intents) {
+      try {
+        if (!(ctx instanceof android.app.Activity)) {
+          intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        ctx.startActivity(intent);
+        return;
+      } catch (Throwable t) {
+        Log.w(XgramLaterStore.TAG, "Cannot open the battery settings", t);
+      }
+    }
+  }
+
   /** Arms (or cancels) the alarm for the next pending time. Any thread; the work runs on the Later thread. */
   static void arm (Context ctx) {
     if (!XgramLaterEngine.onExecutor()) {

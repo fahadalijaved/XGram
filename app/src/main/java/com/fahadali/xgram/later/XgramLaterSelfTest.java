@@ -45,12 +45,13 @@ final class XgramLaterSelfTest {
       keys();
       presets();
       transitions();
+      importAndPrune();
       positions();
     } catch (Throwable t) {
       failed++;
       Log.e(XgramLaterStore.TAG, "Self-test crashed", t);
     }
-    Log.i(XgramLaterStore.TAG, "Self-test: " + passed + " passed, " + failed + " failed");
+    Log.i(XgramLaterStore.TAG, "Self-test: " + passed + " passed, " + failed + " failed; LevelDB on the TDLib thread so far: " + XgramLaterStore.tdlibThreadAccess());
   }
 
   private static void json () {
@@ -70,6 +71,10 @@ final class XgramLaterSelfTest {
     }
     XgramLaterRecord snooze = new XgramLaterRecord.Builder(1, 42, 0, XgramLaterRecord.KIND_SNOOZE_UNTIL).build();
     check(snooze.sameAs(XgramLaterRecord.fromJson(1, 42, 0, snooze.toJson())), "JSON round trip snooze");
+    XgramLaterRecord timedSnooze = new XgramLaterRecord.Builder(2, -1001234567890L, 0, XgramLaterRecord.KIND_SNOOZE)
+      .wakeAt(1_700_000_000_000L).createdAt(1_699_000_000_000L).wakeMode(XgramLaterRecord.WAKE_TIME_ONLY).since(77L << 20)
+      .mentionsAt(3).flags(XgramLaterRecord.FLAG_RESYNC | XgramLaterRecord.FLAG_SECRET).note("Weekend 😀").title("Design team").build();
+    check(timedSnooze.sameAs(XgramLaterRecord.fromJson(2, timedSnooze.chatId, 0, timedSnooze.toJson())), "JSON round trip timed snooze");
     check(XgramLaterRecord.fromJson(1, 42, 0, "{\"v\":99,\"kind\":2,\"state\":0}") == null, "a newer version is skipped");
     check(XgramLaterRecord.fromJson(1, 42, 0, "not json") == null, "broken JSON is skipped");
     check(XgramLaterRecord.fromJson(1, 42, 5, snooze.toJson()) == null, "a snooze with a message id is refused");
@@ -167,10 +172,62 @@ final class XgramLaterSelfTest {
     XgramLaterRecord timeOnly = toMe.buildUpon().wakeMode(XgramLaterRecord.WAKE_TIME_ONLY).build();
     check(!XgramLaterEngine.qualifies(timeOnly, message), "only at the time set never wakes on messages");
 
-    // Import: overdue becomes due and silent
+    // Pushes (no message object): the mentions group stands for the mention
+    check(!XgramLaterEngine.qualifies(toMe, false, 11, false), "a group push doesn't wake a messages-to-me snooze");
+    check(XgramLaterEngine.qualifies(toMe, false, 11, true), "a mention push does");
+    check(!XgramLaterEngine.qualifies(toMe, false, 10, true), "a push older than the snooze doesn't");
+    check(!XgramLaterEngine.qualifies(toMe, true, 12, true), "your own push doesn't");
+    XgramLaterRecord privateSnooze = new XgramLaterRecord.Builder(1, 5, 0, XgramLaterRecord.KIND_SNOOZE_UNTIL).since(100).wakeMode(XgramLaterRecord.WAKE_TO_ME).build();
+    check(XgramLaterEngine.qualifies(privateSnooze, false, 101, false), "any private push wakes a messages-to-me snooze");
+
+    // A snooze started again without its chat: no wake by the chat's state until it is taken
+    XgramLaterRecord restarted = XgramLaterEngine.restartSnooze(privateSnooze.buildUpon().wakeMode(XgramLaterRecord.WAKE_TIME_ONLY).build(), null);
+    check(restarted.hasFlag(XgramLaterRecord.FLAG_RESYNC) && restarted.wakeMode == XgramLaterRecord.WAKE_TO_ME, "an until-snooze started again never keeps 'only at the time set'");
+    TdApi.Chat chat = new TdApi.Chat();
+    chat.id = 5;
+    chat.lastMessage = new TdApi.Message();
+    chat.lastMessage.chatId = 5;
+    chat.lastMessage.id = 150;
+    check(XgramLaterEngine.wokenByState(privateSnooze, chat), "an answer in the chat wakes it");
+    check(!XgramLaterEngine.wokenByState(restarted, chat), "not before the chat's state is taken");
+
+    // Summary: one notification from 4 due items in a pass
+    check(!XgramLaterEngine.needsSummary(3) && XgramLaterEngine.needsSummary(4), "summary at 4 or more");
+  }
+
+  private static void importAndPrune () {
+    long now = 1_700_000_000_000L;
+    // Import: overdue becomes due and silent, local records win, only pending and due ones come
     XgramLaterRecord overdue = new XgramLaterRecord.Builder(1, 5, 300, XgramLaterRecord.KIND_REMIND).wakeAt(now - 1000).build();
-    XgramLaterRecord imported = overdue.buildUpon().state(XgramLaterRecord.STATE_DUE).dueAt(now).addFlags(XgramLaterRecord.FLAG_SILENT).build();
-    check(imported.isDue() && imported.hasFlag(XgramLaterRecord.FLAG_SILENT), "an overdue import is due and silent");
+    XgramLaterRecord imported = XgramLaterStore.importConversion(overdue, false, now);
+    check(imported != null && imported.isDue() && imported.hasFlag(XgramLaterRecord.FLAG_SILENT) && imported.dueAt == now, "an overdue import is due and silent");
+    XgramLaterRecord ahead = overdue.buildUpon().wakeAt(now + 60_000L).build();
+    check(XgramLaterStore.importConversion(ahead, false, now) == ahead, "a future import stays pending");
+    check(XgramLaterStore.importConversion(overdue, true, now) == null, "a local record wins");
+    check(XgramLaterStore.importConversion(XgramLaterEngine.toDone(overdue, XgramLaterRecord.DONE_USER, now), false, now) == null, "a done record isn't imported");
+    check(XgramLaterStore.importConversion(null, false, now) == null, "an unreadable record isn't imported");
+
+    // Prune: never pending or due; done ones past 30 days or beyond the newest 200 go
+    java.util.List<XgramLaterRecord> list = new java.util.ArrayList<>();
+    long day = XgramLaterTimes.DAY;
+    for (int i = 0; i < 250; i++) {
+      XgramLaterRecord r = new XgramLaterRecord.Builder(1, 5, 1000 + i, XgramLaterRecord.KIND_REMIND).createdAt(now - 40 * day).build();
+      list.add(XgramLaterEngine.toDone(r, XgramLaterRecord.DONE_USER, now - i * 60_000L)); // all within a day
+    }
+    for (int i = 0; i < 5; i++) {
+      list.add(new XgramLaterRecord.Builder(1, 6, 2000 + i, XgramLaterRecord.KIND_FOLLOWUP).wakeAt(now - 40 * day).createdAt(now - 50 * day).build());
+      list.add(XgramLaterEngine.toDue(new XgramLaterRecord.Builder(1, 7, 3000 + i, XgramLaterRecord.KIND_REMIND).createdAt(now - 50 * day).build(), now - 45 * day));
+    }
+    XgramLaterRecord old = XgramLaterEngine.toDone(new XgramLaterRecord.Builder(1, 8, 4000, XgramLaterRecord.KIND_REMIND).build(), XgramLaterRecord.DONE_USER, now - 31 * day);
+    list.add(old);
+    java.util.List<XgramLaterRecord> selected = XgramLaterStore.pruneSelection(list, now);
+    boolean anyKept = false;
+    for (XgramLaterRecord r : selected) {
+      anyKept |= r.isPending() || r.isDue();
+    }
+    check(!anyKept, "prune never takes pending or due records");
+    check(selected.contains(old), "prune takes a record done over 30 days ago");
+    check(selected.size() == 51, "prune keeps the newest 200 done records (" + selected.size() + ")");
   }
 
   /** The Snoozed row between the archive and the chats, every combination of card, archive, row and chats. */
@@ -197,6 +254,17 @@ final class XgramLaterSelfTest {
             if (chats > 0) {
               int info = XgramLaterUi.positionOfChatIndex(chats, s, a, r);
               check(info == count - 1, "the info row is last s" + s + " a" + a + " r" + r);
+            }
+            // Every position has a view type: the card, the row, a chat or the info row (ChatsAdapter.getItemViewType)
+            for (int p = 0; p < count; p++) {
+              boolean typed;
+              if (p < s || p == rowPosition) {
+                typed = true;
+              } else {
+                int ci = XgramLaterUi.chatIndexOfPosition(p, s, a, r);
+                typed = ci >= 0 && ci <= chats;
+              }
+              check(typed, "position " + p + " has a view type s" + s + " a" + a + " r" + r + " n" + n);
             }
           }
         }

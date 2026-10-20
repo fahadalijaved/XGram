@@ -447,7 +447,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramLaterWakeEarly) {
           view.setData(com.fahadali.xgram.later.XgramLater.wakeEarlyName(com.fahadali.xgram.later.XgramLater.wakeEarlyMode()));
         } else if (id == R.id.btn_xgramLaterExact) {
-          view.setData(com.fahadali.xgram.later.XgramLater.exactAllowed(context()) ? R.string.XgramLaterExactAllowed : R.string.XgramLaterExactNotAllowed);
+          view.setData(com.fahadali.xgram.later.XgramLater.exactRowValue(context()));
         } else if (id == R.id.btn_xgramR7ChannelReactions) {
           view.getToggler().setRadioEnabled(settings.channelReactions(), isUpdate);
         } else if (id == R.id.btn_xgramSaveLastSeen) {
@@ -1702,7 +1702,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       com.fahadali.xgram.later.XgramLater.showWakeEarlyPicker(this, () -> adapter.updateValuedSettingById(R.id.btn_xgramLaterWakeEarly));
       return;
     } else if (id == R.id.btn_xgramLaterExact) {
-      com.fahadali.xgram.later.XgramLater.openExactSettings(this);
+      com.fahadali.xgram.later.XgramLater.openExactRow(this);
       return;
     } else if (id == R.id.btn_xgramLaterChannel) {
       com.fahadali.xgram.later.XgramLater.openReminderChannelSettings(context());

@@ -373,13 +373,18 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           final int rowPosition = parent.getChildAdapterPosition(view);
           final int gapTop = view.getBottom() + offsetTop;
           final int gap = context.liveLocationHelper != null && context.liveLocationHelper.isVisible() && rowPosition == context.getLiveLocationPosition() - 1 ? Screen.dp(1f) : Screen.dp(12f);
-          if (rowPosition > 0 && shadowFactor != 0f && context.adapter.getItemViewType(rowPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
-            // Under the folder's new chats card: the top shadow a chat there has
-            topShadowPaint.setAlpha((int) (255f * maxAlpha * shadowFactor));
-            c.save();
-            c.translate(0, view.getTop() + offsetTop - ShadowView.simpleTopShadowHeight());
-            c.drawRect(0, 0, right, ShadowView.simpleTopShadowHeight(), topShadowPaint);
-            c.restore();
+          if (rowPosition > 0 && context.adapter.getItemViewType(rowPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
+            // Under the folder's new chats card: the top shadow a chat there has, or its line with a separator theme
+            if (shadowFactor != 0f) {
+              topShadowPaint.setAlpha((int) (255f * maxAlpha * shadowFactor));
+              c.save();
+              c.translate(0, view.getTop() + offsetTop - ShadowView.simpleTopShadowHeight());
+              c.drawRect(0, 0, right, ShadowView.simpleTopShadowHeight(), topShadowPaint);
+              c.restore();
+            }
+            if (lineFactor != 0f) {
+              c.drawRect(0, view.getTop() + offsetTop - separatorHeight, right, view.getTop() + offsetTop, Paints.fillingPaint(ColorUtils.alphaColor(lineFactor, Theme.separatorColor())));
+            }
           }
           if (rowPosition != RecyclerView.NO_POSITION && rowPosition + 1 < context.adapter.getItemCount()) {
             c.drawRect(0, gapTop, right, gapTop + gap, Paints.fillingPaint(xgramM3 ? Theme.getColor(ColorId.headerBackground) : Theme.backgroundColor()));
@@ -483,7 +488,12 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
             xgramCorners.draw(c, 0, view.getTop() + rowOffset, view.getWidth());
           }
           if (rowPosition + 1 < context.adapter.getItemCount()) {
-            xgramCorners.drawBottom(c, 0, view.getBottom() + rowOffset, view.getWidth());
+            final int splitTop = view.getBottom() + rowOffset;
+            final View nextView = parent.getLayoutManager().findViewByPosition(rowPosition + 1);
+            final int splitBottom = (nextView != null ? nextView.getTop() : parent.getLayoutManager().getDecoratedBottom(view)) + rowOffset;
+            if (!(dragBottom > dragTop && splitTop - cornerReach < dragBottom && splitBottom + cornerReach > dragTop)) {
+              xgramCorners.drawBottom(c, 0, splitTop, view.getWidth()); // not over a pinned chat dragged across the split
+            }
           }
           continue;
         }
@@ -498,8 +508,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         final int offsetTop = ((ChatView) view).isDragging() || dragging ? 0 : (int) view.getTranslationY();
         final int right = view.getMeasuredWidth();
         if (adapterPosition > 0 && (context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS || context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_XGRAM_SNOOZED)) {
-          // The chats' container opens below the suggested chats of a shared folder (or the Snoozed row), as at every other split
-          xgramCorners.draw(c, 0, view.getTop() + offsetTop, right);
+          // The chats' container opens below the suggested chats of a shared folder (or the Snoozed row), as at every other
+          // split, and as there not over a pinned chat dragged across it (XGram Later)
+          final int splitBottom = view.getTop() + offsetTop;
+          final View prevView = parent.getLayoutManager().findViewByPosition(adapterPosition - 1);
+          final int splitTop = prevView != null ? prevView.getBottom() + offsetTop : parent.getLayoutManager().getDecoratedTop(view) + offsetTop;
+          if (!(dragBottom > dragTop && splitTop - cornerReach < dragBottom && splitBottom + cornerReach > dragTop)) {
+            xgramCorners.draw(c, 0, splitBottom, right);
+          }
         }
         TGChat nextChat = context.adapter.getChatByItemPosition(adapterPosition + 1);
         if (nextChat == null || (chat.isArchive() == nextChat.isArchive() && chat.isPinnedOrSpecial() == nextChat.isPinnedOrSpecial())) {
@@ -635,6 +651,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     if (!xgramMerge || adapter == null || chatsView == null || !initialLoadFinished || isInForceTouchMode() || isDestroyed()) {
       return;
     }
+    com.fahadali.xgram.later.XgramLater.reconcileOnce(tdlib); // the chats are cached now: follow-ups answered while closed
     chatsView.xgramSetSnoozedRow(com.fahadali.xgram.later.XgramLater.snoozedIn(tdlib, chatList()));
     checkDisplayNoChats();
   }
@@ -1207,6 +1224,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   private TdlibChatList archiveList;
   private ChatListListener archiveListListener;
 
+  /** XGram Later: the archive row is pulled up out of sight (Hide archive). */
+  public boolean xgramArchiveCollapsed () {
+    return archiveCollapsed;
+  }
+
   /**
    * XGram: hide archive pulls the archive row up under the top of the list, which assumes it is the first item. On a
    * folder that has the archive row (Hide All chats) the folder's new chats card can come before it: the archive stays
@@ -1237,6 +1259,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
             if (archivePosition != -1) {
               chatsView.saveScrollPosition();
               adapter.notifyItemChanged(archivePosition);
+              adapter.xgramRebindSnoozedRow(); // XGram Later: its divider shows only under an archive in sight
               chatsView.restoreScrollPosition();
             }
           }
@@ -1602,9 +1625,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         separatorItemCount--;
       }
 
+      // XGram Later: with the Snoozed row between the archive and the pinned chats, the archive's group gap is below the
+      // row (only above the first visible item once the row is), and the pinned chats start one position later
+      final boolean xgramRowAfterArchive = adapter.hasArchive() && adapter.xgramShowsSnoozedRow();
       if (adapter.hasArchive() && chatsCount > 1 && firstVisiblePosition > 0) {
-        separatorItemCount--;
-        totalScrollBy += (liveLocationHelper != null && liveLocationHelper.isVisible() ? LiveLocationHelper.height() + Screen.dp(1f) : Screen.dp(12f));
+        if (!xgramRowAfterArchive || firstVisiblePosition > adapter.xgramSnoozedRowPosition()) {
+          separatorItemCount--;
+          totalScrollBy += (liveLocationHelper != null && liveLocationHelper.isVisible() ? LiveLocationHelper.height() + Screen.dp(1f) : Screen.dp(12f));
+        }
         pinnedItemCount--;
         chatsCount--;
       }
@@ -1613,7 +1641,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         totalScrollBy += LiveLocationHelper.height();
       }
 
-      if (pinnedItemCount != 0 && chatsCount > pinnedItemCount && firstVisiblePosition > pinnedItemCount) {
+      if (pinnedItemCount != 0 && chatsCount > pinnedItemCount && firstVisiblePosition > pinnedItemCount + (xgramRowAfterArchive ? 1 : 0)) {
         separatorItemCount--;
         totalScrollBy += Screen.dp(12f);
       }
@@ -3687,6 +3715,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   public void onDateChanged () {
     if (!isDestroyed() && chatsView != null) {
       chatsView.updateRelativeDate();
+      xgramUpdateSnoozedRow(); // XGram Later: "Tomorrow, 9:00" reads "Today, 9:00" after midnight
     }
   }
 

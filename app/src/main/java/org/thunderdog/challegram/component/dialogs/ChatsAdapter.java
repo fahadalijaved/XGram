@@ -130,12 +130,14 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
       if (hasArchive) {
         chats.add(ARCHIVE_INDEX, newArchive());
         notifyChatAppeared(-1, getItemPositionByChatIndex(ARCHIVE_INDEX));
+        xgramRebindSnoozedRow(); // XGram Later: its divider under the archive
       } else {
         chats.remove(ARCHIVE_INDEX);
         if (xgramSnoozed != null && chats.isEmpty()) {
           notifyDataSetChanged(); // XGram Later: the info row went too, the Snoozed row stays
         } else {
           notifyItemRemoved(hasSuggestedChats() ? 1 : 0); // XGram Later: where the archive was (the Snoozed row may follow it)
+          xgramRebindSnoozedRow(); // XGram Later: no divider without the archive above it
         }
       }
       invalidateAttachedItemDecorations();
@@ -233,7 +235,7 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
         break;
       }
       case VIEW_TYPE_XGRAM_SNOOZED: {
-        ((com.fahadali.xgram.later.XgramSnoozedRowView) holder.itemView).setDividerAbove(hasArchive); // XGram Later: in the archive's group
+        ((com.fahadali.xgram.later.XgramSnoozedRowView) holder.itemView).setDividerAbove(hasArchive && !context.xgramArchiveCollapsed()); // XGram Later: in the archive's group, unless it is pulled up out of sight
         ((com.fahadali.xgram.later.XgramSnoozedRowView) holder.itemView).setState(xgramSnoozed, true);
         break;
       }
@@ -394,13 +396,26 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
     final int position = (hasSuggestedChats() ? 1 : 0) + (hasArchive ? 1 : 0);
     xgramSnoozed = state;
     if (!had) {
-      notifyItemInserted(position);
+      if (layoutManager.findFirstVisibleItemPosition() == position) {
+        // The list rests at the row's place (no archive above it): the layout would keep the old first item at the top
+        // and put the row above the screen, so the row takes the first slot instead
+        notifyChatAppeared(-1, position);
+      } else {
+        notifyItemInserted(position);
+      }
     } else if (!has) {
       notifyItemRemoved(position);
     } else {
       notifyItemChanged(position);
     }
     invalidateAttachedItemDecorations();
+  }
+
+  /** XGram Later: the Snoozed row bound again (its divider follows the archive above it). */
+  public void xgramRebindSnoozedRow () {
+    if (xgramSnoozed != null) {
+      notifyItemChanged(xgramSnoozedRowPosition());
+    }
   }
 
   /** The bell of a chat's row came or went. Returns its position or -1. */
@@ -863,6 +878,7 @@ public class ChatsAdapter extends RecyclerView.Adapter<ChatsViewHolder> {
     for (TGChat chat : chats) {
       chat.updateLocale(forceText);
     }
+    xgramRebindSnoozedRow(); // XGram Later: its texts in the new language
   }
 
   public TGChat getLastChat () {

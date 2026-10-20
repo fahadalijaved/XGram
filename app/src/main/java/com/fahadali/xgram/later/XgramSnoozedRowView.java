@@ -135,15 +135,13 @@ public final class XgramSnoozedRowView extends View {
     }
   }
 
-  /** Main thread. A count or text change crossfades with Expressive design. */
+  /**
+   * Main thread. A count or text change crossfades with Expressive design. The texts are built on every bind (not on a
+   * draw), so a bind after a language change or a new day takes the new texts even when the state is the same.
+   */
   public void setState (@Nullable XgramLater.RowState state, boolean animated) {
     if (state == null) {
       this.state = null;
-      return;
-    }
-    boolean changed = this.state == null || !this.state.equals(state);
-    this.state = state;
-    if (!changed) {
       return;
     }
     String newTitle = Lang.getString(m3 ? R.string.XgramLaterRow : R.string.XgramLaterRowClassic);
@@ -154,6 +152,11 @@ public final class XgramSnoozedRowView extends View {
     } else {
       String chats = Lang.plural(R.string.xChats, state.count);
       newSubtitle = when != null ? Lang.getString(R.string.XgramLaterRowSubClassic, chats, when) : Lang.getString(R.string.XgramLaterRowSubUntil, chats, Lang.getString(R.string.XgramLaterRowUntilReply));
+    }
+    boolean changed = this.state == null || !this.state.equals(state) || !newTitle.equals(title) || !newSubtitle.equals(subtitle);
+    this.state = state;
+    if (!changed) {
+      return;
     }
     boolean fadeTexts = animated && m3 && getParent() != null && laidOutWidth > 0 && (!newTitle.equals(title) || !newSubtitle.equals(subtitle));
     if (fadeTexts) {

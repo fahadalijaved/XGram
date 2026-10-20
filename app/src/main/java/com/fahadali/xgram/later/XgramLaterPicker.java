@@ -185,6 +185,10 @@ public final class XgramLaterPicker {
         conditions.add(item(R.id.btn_xgramLaterPUntil, Lang.getString(untilRes), R.drawable.baseline_reply_24, false));
       }
     } else if (canFollowUp(tdlib, t.message)) {
+      if (org.thunderdog.challegram.BuildConfig.DEBUG) {
+        // Debug builds: the follow-up's device test without waiting a day or changing the clock
+        conditions.add(item(R.id.btn_xgramLaterPNoReply2m, Lang.getString(R.string.XgramLaterNoReply2m), R.drawable.baseline_reply_24, false));
+      }
       conditions.add(item(R.id.btn_xgramLaterPNoReply1d, Lang.getString(R.string.XgramLaterNoReply1d), R.drawable.baseline_reply_24, false));
       conditions.add(item(R.id.btn_xgramLaterPNoReply3d, Lang.getString(R.string.XgramLaterNoReply3d), R.drawable.baseline_reply_24, false));
       conditions.add(item(R.id.btn_xgramLaterPNoReply1w, Lang.getString(R.string.XgramLaterNoReply1w), R.drawable.baseline_reply_24, false));
@@ -244,6 +248,8 @@ public final class XgramLaterPicker {
       apply(c, t, nextWeek, XgramLaterRecord.KIND_REMIND);
     } else if (id == R.id.btn_xgramLaterPUntil) {
       apply(c, t, 0, XgramLaterRecord.KIND_SNOOZE_UNTIL);
+    } else if (id == R.id.btn_xgramLaterPNoReply2m) {
+      apply(c, t, XgramLaterTimes.ceilToMinute(now + 2 * XgramLaterTimes.MINUTE), XgramLaterRecord.KIND_FOLLOWUP);
     } else if (id == R.id.btn_xgramLaterPNoReply1d) {
       apply(c, t, XgramLaterTimes.ceilToMinute(now + XgramLaterTimes.DAY), XgramLaterRecord.KIND_FOLLOWUP);
     } else if (id == R.id.btn_xgramLaterPNoReply3d) {
@@ -283,16 +289,19 @@ public final class XgramLaterPicker {
       feedbackUndo(c, text, single(key), single(previous), accountId, true);
     } else {
       List<Long> allowed = new ArrayList<>(t.chatIds.length);
-      int skipped = 0;
+      int skipped = 0, skippedSelf = 0;
       for (long chatId : t.chatIds) {
-        if (XgramLater.canSnooze(tdlib, tdlib.chat(chatId), t.chatList)) {
-          allowed.add(chatId);
-        } else {
+        if (!XgramLater.canSnooze(tdlib, tdlib.chat(chatId), t.chatList)) {
           skipped++;
+        } else if (kind == XgramLaterRecord.KIND_SNOOZE_UNTIL && tdlib.isSelfChat(chatId)) {
+          // "Until they write to me" never comes in Saved Messages: it would stay hidden
+          skippedSelf++;
+        } else {
+          allowed.add(chatId);
         }
       }
       if (allowed.isEmpty()) {
-        UI.showToast(R.string.XgramLaterCommunityNo, Toast.LENGTH_SHORT);
+        UI.showToast(skipped == 0 && skippedSelf > 0 ? R.string.XgramLaterSelfNo : R.string.XgramLaterCommunityNo, Toast.LENGTH_SHORT);
         return;
       }
       long[] chatIds = new long[allowed.size()];
@@ -310,8 +319,16 @@ public final class XgramLaterPicker {
       } else {
         text = Lang.getString(R.string.XgramLaterXChatsSnoozed, Lang.plural(R.string.xChats, chatIds.length), XgramLaterTimes.formatWake(wakeAt));
       }
-      if (skipped > 0) {
-        UI.showToast(R.string.XgramLaterCommunityNo, Toast.LENGTH_SHORT);
+      String skipNote = skipped > 0 ? Lang.getString(R.string.XgramLaterCommunityNo) : null;
+      if (skippedSelf > 0) {
+        skipNote = skipNote != null ? skipNote + " · " + Lang.getString(R.string.XgramLaterSelfNo) : Lang.getString(R.string.XgramLaterSelfNo);
+      }
+      if (skipNote != null) {
+        if (XgramExpressive.isEnabled()) {
+          text = text + " · " + skipNote; // one snackbar: a second one would replace this one and drop its Undo
+        } else {
+          UI.showToast(skipNote, Toast.LENGTH_SHORT); // system toasts queue
+        }
       }
       feedbackUndo(c, text, keys, previous, accountId, true);
       if (t.after != null) {
@@ -468,9 +485,11 @@ public final class XgramLaterPicker {
     }
     b.item(item(R.id.btn_xgramLaterPTomorrow, Lang.getString(XgramLaterTimes.isEarlyMorning(now, tz, locale) ? R.string.XgramLaterThisMorning : R.string.XgramLaterTomorrow, XgramLaterTimes.time(morning)), R.drawable.baseline_access_time_24, false));
     b.item(item(R.id.btn_xgramLaterPNextWeek, Lang.getString(R.string.XgramLaterNextWeek, XgramLaterTimes.weekday(nextWeek) + " " + XgramLaterTimes.time(nextWeek)), R.drawable.baseline_schedule_24, false));
-    if (r.isSnooze() && !tdlib.isSelfChat(r.chatId)) {
+    // The until wording of the chat's kind (the stored wake rule may be a timed snooze's)
+    final int untilRes = r.isSnooze() ? untilLabel(tdlib, new long[] {r.chatId}) : 0;
+    if (untilRes != 0) {
       b.item(ViewController.OptionItem.SEPARATOR);
-      b.item(item(R.id.btn_xgramLaterPUntil, untilText(r), R.drawable.baseline_reply_24, false));
+      b.item(item(R.id.btn_xgramLaterPUntil, Lang.getString(untilRes), R.drawable.baseline_reply_24, false));
     }
     b.item(ViewController.OptionItem.SEPARATOR);
     b.item(item(R.id.btn_xgramLaterPCustom, Lang.getString(R.string.XgramLaterCustom), R.drawable.baseline_date_range_24, false));

@@ -233,7 +233,11 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
     List<ListItem> items = new ArrayList<>();
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     if (!done) {
-      addStatusRows(items);
+      boolean anyTimed = !reminders.isEmpty() || !followUps.isEmpty();
+      for (XgramLaterRecord r : snoozed) {
+        anyTimed |= r.isTimed();
+      }
+      addStatusRows(items, anyTimed);
     }
     boolean any;
     if (done) {
@@ -264,11 +268,13 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
     adapter.setItems(items, false);
   }
 
-  private void addStatusRows (List<ListItem> items) {
+  private void addStatusRows (List<ListItem> items, boolean anyTimed) {
     Context ctx = context();
     boolean notificationsOff = XgramLaterNotifications.remindersBlocked(ctx);
     boolean exactOff = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && Build.VERSION.SDK_INT <= 32 && !XgramLaterAlarms.canExact(ctx);
-    if (!notificationsOff && !exactOff) {
+    // Battery optimization (Samsung's sleeping apps) can hold the alarm back: said while something waits for a time
+    boolean batteryOn = anyTimed && !exactOff && XgramLater.batteryRestricted(ctx);
+    if (!notificationsOff && !exactOff && !batteryOn) {
       return;
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
@@ -280,6 +286,12 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
         items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
       }
       items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramLaterFixExact, R.drawable.baseline_watch_later_24, R.string.XgramLaterExactOffRow).setStringValue(Lang.getString(R.string.XgramLaterAllow)));
+    }
+    if (batteryOn) {
+      if (notificationsOff) {
+        items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+      }
+      items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramLaterFixBattery, R.drawable.baseline_watch_later_24, R.string.XgramLaterBatteryRow).setStringValue(Lang.getString(R.string.XgramLaterBatteryFix)));
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
   }
@@ -334,13 +346,69 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
       return;
     }
     final String key = r.key;
-    // Local first: only a message this device doesn't have asks the server
+    // Local first: only a message this device doesn't have asks the server, through the paced queue below
     tdlib.send(new TdApi.GetMessageLocally(r.chatId, r.messageId), (local, localError) -> {
       if (local != null) {
         onMessageLoaded(r, key, local);
       } else {
-        tdlib.send(new TdApi.GetMessage(r.chatId, r.messageId), (message, error) -> onMessageLoaded(r, key, message));
+        runOnUiThreadOptional(() -> queueServerFetch(r));
       }
+    });
+  }
+
+  // Messages this device doesn't have: one GetMessage at a time, 300 ms apart, at most 10 per page. The first error
+  // other than "not found" stops it; the rest show their snapshot. A message not found is marked deleted, so it isn't
+  // asked for again (a backup restored on a new device has none of its messages here).
+
+  private static final int SERVER_FETCH_MAX = 10;
+  private static final long SERVER_FETCH_GAP_MS = 300L;
+  private final java.util.ArrayDeque<XgramLaterRecord> serverQueue = new java.util.ArrayDeque<>();
+  private int serverFetches;
+  private boolean serverBusy, serverStopped;
+
+  private void queueServerFetch (XgramLaterRecord r) {
+    if (serverStopped || serverFetches + serverQueue.size() >= SERVER_FETCH_MAX) {
+      onMessageLoaded(r, r.key, null);
+      return;
+    }
+    serverQueue.add(r);
+    nextServerFetch();
+  }
+
+  private void nextServerFetch () {
+    if (serverBusy || isDestroyed()) {
+      return;
+    }
+    final XgramLaterRecord r = serverQueue.poll();
+    if (r == null) {
+      return;
+    }
+    serverBusy = true;
+    serverFetches++;
+    tdlib.send(new TdApi.GetMessage(r.chatId, r.messageId), (message, error) -> {
+      final boolean notFound = error != null && error.code == 404;
+      if (notFound) {
+        XgramLaterEngine.post(() -> XgramLaterEngine.onDeleted(tdlib, r.chatId, new long[] {r.messageId}));
+      }
+      onMessageLoaded(r, r.key, message);
+      runOnUiThreadOptional(() -> {
+        serverBusy = false;
+        if (error != null && !notFound) {
+          serverStopped = true;
+          XgramLaterRecord rest;
+          while ((rest = serverQueue.poll()) != null) {
+            onMessageLoaded(rest, rest.key, null);
+          }
+          return;
+        }
+        if (!serverQueue.isEmpty()) {
+          UI.post(() -> {
+            if (!isDestroyed()) {
+              nextServerFetch();
+            }
+          }, SERVER_FETCH_GAP_MS);
+        }
+      });
     });
   }
 
@@ -388,7 +456,10 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
     return chat != null ? tdlib.chatTitle(chat.id) : row.record.title;
   }
 
-  /** Null while the message's text loads (a shimmer); a snooze has no message to load. */
+  /**
+   * The note, else the message's live text, else the snapshot taken when it was set (also while the live text loads,
+   * which offline can take until the connection is back). Null only while there is nothing to show yet (a shimmer).
+   */
   @Nullable
   private String aboutOf (XgramLaterRecord r) {
     if (!r.note.isEmpty()) {
@@ -399,13 +470,15 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
     }
     String live = previews.get(r.key);
     if (live == null) {
-      return null;
+      return r.preview.isEmpty() ? null : r.preview;
     }
     return !live.isEmpty() ? live : r.preview;
   }
 
+  /** Nothing to show but a shimmer: no note, no snapshot and the live text still loading. */
   public boolean xgramIsLoading (Row row) {
-    return !row.record.isChatSnooze() && row.record.note.isEmpty() && !previews.containsKey(row.record.key);
+    XgramLaterRecord r = row.record;
+    return !r.isChatSnooze() && r.note.isEmpty() && r.preview.isEmpty() && !previews.containsKey(r.key);
   }
 
   /** The supporting text: up to two lines in Compose. */
@@ -560,6 +633,10 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
       XgramLaterAlarms.openExactSettings(this);
       return;
     }
+    if (id == R.id.btn_xgramLaterFixBattery) {
+      XgramLaterAlarms.openBatterySettings(context());
+      return;
+    }
     if (id == R.id.btn_xgramLaterDoneLink) {
       XgramLaterController c = new XgramLaterController(context, tdlib);
       c.setArguments(new Args(MODE_DONE, SECTION_NONE));
@@ -598,10 +675,19 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
       return;
     }
     TdApi.Message message = messages.get(r.key);
+    TdApi.Chat chat = tdlib.chat(r.chatId);
     if (r.hasFlag(XgramLaterRecord.FLAG_MSG_GONE)) {
       tdlib.ui().openChat(this, r.chatId, new TdlibUi.ChatOpenParameters().keepStack());
     } else if (message != null && message.topicId instanceof TdApi.MessageTopicForum) {
       com.fahadali.xgram.topics.XgramForums.openTopicLink(this, r.chatId, (TdApi.MessageTopicForum) message.topicId, message, null);
+    } else if (r.topicId != 0 && chat != null) {
+      // The message isn't loaded (yet, or offline): its topic from the record, at the message
+      TdlibUi.ChatOpenParameters params = new TdlibUi.ChatOpenParameters()
+        .keepStack()
+        .highlightMessage(new MessageId(r.chatId, r.messageId))
+        .ensureHighlightAvailable();
+      params.messageTopicId = new TdApi.MessageTopicForum(r.topicId);
+      tdlib.ui().openChat(this, chat, params);
     } else {
       tdlib.ui().openChat(this, r.chatId, new TdlibUi.ChatOpenParameters()
         .highlightMessage(new MessageId(r.chatId, r.messageId))
@@ -774,7 +860,9 @@ public final class XgramLaterController extends RecyclerViewController<XgramLate
         for (XgramLaterRecord r : before) {
           keys.add(r.key);
         }
-        XgramSnackbar.showUndo(Lang.getString(R.string.XgramLaterMarkedDone), () -> XgramLaterEngine.restore(tdlib.id(), keys, before));
+        if (!XgramSnackbar.showUndo(Lang.getString(R.string.XgramLaterMarkedDone), () -> XgramLaterEngine.restore(tdlib.id(), keys, before))) {
+          UI.showToast(R.string.XgramLaterMarkedDone, android.widget.Toast.LENGTH_SHORT); // classic: no Undo, a toast as every other Later action
+        }
       }
     } else if (id == R.id.btn_xgramLaterMClearDone) {
       showOptions(Lang.getString(R.string.XgramLaterClearDoneConfirm), new int[] {R.id.btn_delete, R.id.btn_cancel},

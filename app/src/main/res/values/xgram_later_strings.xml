@@ -51,6 +51,8 @@
   <item name="btn_xgramLaterWakeTimeOnly" type="id" />
   <item name="btn_xgramLaterExact" type="id" />
   <item name="btn_xgramLaterChannel" type="id" />
+  <item name="btn_xgramLaterPNoReply2m" type="id" />
+  <item name="btn_xgramLaterFixBattery" type="id" />
 
   <!-- Menu and sheet -->
   <string name="XgramLater">Later</string>
@@ -76,6 +78,7 @@
   <string name="XgramLaterNoReply1d">If no reply in 1 day</string>
   <string name="XgramLaterNoReply3d">If no reply in 3 days</string>
   <string name="XgramLaterNoReply1w">If no reply in 1 week</string>
+  <string name="XgramLaterNoReply2m">If no reply in 2 minutes (debug)</string>
   <string name="XgramLaterCustom">Pick date &amp; time…</string>
   <string name="XgramLaterAddNote">Add a note…</string>
   <string name="XgramLaterNoteTitle">Add note</string>
@@ -110,6 +113,7 @@
   <string name="XgramLaterXChatsSnoozedUntil">%1$s snoozed until they write to you</string>
   <string name="XgramLaterFindInLater">" · Find it in Later"</string>
   <string name="XgramLaterCommunityNo">Chats in a merged community can\'t be snoozed</string>
+  <string name="XgramLaterSelfNo">Saved Messages can\'t wait for a reply</string>
   <string name="XgramLaterInChatReminder">Reminder: %1$s</string>
   <string name="XgramLaterUnsnoozed">Unsnoozed</string>
   <string name="XgramLaterMarkedDone">Marked as done</string>
@@ -161,6 +165,8 @@
   <string name="XgramLaterTurnOn">Turn on</string>
   <string name="XgramLaterExactOffRow">Exact times not allowed: reminders may be a few minutes late</string>
   <string name="XgramLaterAllow">Allow</string>
+  <string name="XgramLaterBatteryRow">Battery optimization can delay reminders: set XGram to Unrestricted</string>
+  <string name="XgramLaterBatteryFix">Open</string>
   <string name="XgramLaterEmpty">Nothing for later</string>
   <string name="XgramLaterEmptyHint">Long-press a message and choose Remind me, or snooze a chat from its menu. They come back here when it\'s time.</string>
 
@@ -194,6 +200,7 @@
   <string name="XgramLaterExact">Exact reminder times</string>
   <string name="XgramLaterExactAllowed">Allowed</string>
   <string name="XgramLaterExactNotAllowed">Not allowed – reminders may be a few minutes late</string>
+  <string name="XgramLaterExactBattery">Allowed · set XGram to Unrestricted in battery settings</string>
   <string name="XgramLaterChannelLink">Reminder notifications</string>
   <string name="XgramLaterChannelLinkSub">Sound and how reminders show</string>
   <string name="XgramSearchKwLater">snooze remind reminder later follow up nudge alarm no reply</string>

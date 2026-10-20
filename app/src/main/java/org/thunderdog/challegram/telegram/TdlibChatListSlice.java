@@ -76,15 +76,22 @@ public final class TdlibChatListSlice implements Destroyable {
       if (this.broughtToTopTime != otherTime) {
         return Long.compare(otherTime, this.broughtToTopTime);
       }
-      // XGram Later: pinned first, then the woken chats (newest first), then the natural order
-      if (this.effectivePosition.isPinned != other.effectivePosition.isPinned) {
-        return this.effectivePosition.isPinned ? -1 : 1;
+      // XGram Later: pinned and special (sponsored proxy, PSA) chats first, in TDLib's order, then the woken chats (newest
+      // first), then the natural order. The tier depends on the entry alone, so the order stays transitive.
+      final boolean top = xgramTop(this), otherTop = xgramTop(other);
+      if (top != otherTop) {
+        return top ? -1 : 1;
       }
       long otherRaised = other instanceof Entry ? ((Entry) other).xgramRaised : 0;
       if (this.xgramRaised != otherRaised) {
         return Long.compare(otherRaised, this.xgramRaised);
       }
       return super.compareTo(other);
+    }
+
+    /** XGram Later: above the woken chats (and never moved up itself): pinned, or special as TGChat.isPinnedOrSpecial. */
+    static boolean xgramTop (TdlibChatList.Entry entry) {
+      return entry.effectivePosition.isPinned || entry.effectivePosition.source != null;
     }
   }
 
@@ -148,7 +155,7 @@ public final class TdlibChatListSlice implements Destroyable {
 
   @TdlibThread
   protected int findInsertIndex (Entry entry) {
-    entry.xgramRaised = xgramMerge && !entry.effectivePosition.isPinned ? com.fahadali.xgram.later.XgramLater.raisedAt(tdlib, entry.chat.id) : 0; // XGram Later
+    entry.xgramRaised = xgramMerge && !Entry.xgramTop(entry) ? com.fahadali.xgram.later.XgramLater.raisedAt(tdlib, entry.chat.id) : 0; // XGram Later
     final int atIndex = Collections.binarySearch(filteredList, entry);
     if (atIndex >= 0)
       throw new IllegalStateException();
@@ -498,6 +505,7 @@ public final class TdlibChatListSlice implements Destroyable {
       }
       chatIds = ids;
     }
+    boolean removed = false;
     for (long chatId : chatIds) {
       xgramRefreshFor(chatId);
       TdApi.Chat chat = tdlib.chat(chatId);
@@ -505,20 +513,37 @@ public final class TdlibChatListSlice implements Destroyable {
         continue;
       }
       if (xgramHidden(chat)) {
-        xgramRemoveIfHidden(chatId);
+        removed |= xgramRemoveIfHidden(chatId);
       } else if (indexOfChat(chatId) == -1) {
         xgramShowIfVisible(chatId);
       } else if ((events & com.fahadali.xgram.later.XgramLater.EVENT_RAISE) != 0) {
         xgramReposition(chatId);
       }
     }
+    if (removed) {
+      xgramTopUp();
+    }
   }
 
-  /** XGram Later: a chat that is hidden now leaves the list (the removal loop of xgramRefresh). */
+  /**
+   * XGram Later: snoozed chats left the list. When what is left of the loaded chats can't fill it, more are loaded:
+   * a list shorter than the screen can't be scrolled to ask for them. One LoadChats at a time (the source list's own).
+   */
   @TdlibThread
-  private void xgramRemoveIfHidden (long chatId) {
-    if (!xgramMerge || !xgramReady || subListener == null || isDestroyed()) {
+  private void xgramTopUp () {
+    if (isSuspended() || subListener == null) {
       return;
+    }
+    if (displayCount < maxSize && filteredList.size() < maxSize && sourceList.canLoad()) {
+      sourceList.loadMore(maxSize - filteredList.size(), () -> dispatchChats(0));
+    }
+  }
+
+  /** XGram Later: a chat that is hidden now leaves the list (the removal loop of xgramRefresh). Returns whether it left. */
+  @TdlibThread
+  private boolean xgramRemoveIfHidden (long chatId) {
+    if (!xgramMerge || !xgramReady || subListener == null || isDestroyed()) {
+      return false;
     }
     boolean removed = false;
     synchronized (filteredList) {
@@ -537,6 +562,7 @@ public final class TdlibChatListSlice implements Destroyable {
     if (removed) {
       dispatchChats(0);
     }
+    return removed;
   }
 
   /** XGram Later: the chat's bell came or went: out and back in at its sorted place (onChatMoved's dispatch). */
@@ -551,7 +577,7 @@ public final class TdlibChatListSlice implements Destroyable {
         return;
       }
       Entry entry = filteredList.get(fromIndex);
-      long raised = !entry.effectivePosition.isPinned ? com.fahadali.xgram.later.XgramLater.raisedAt(tdlib, chatId) : 0;
+      long raised = !Entry.xgramTop(entry) ? com.fahadali.xgram.later.XgramLater.raisedAt(tdlib, chatId) : 0;
       if (entry.keepPosition || entry.xgramRaised == raised) {
         return;
       }

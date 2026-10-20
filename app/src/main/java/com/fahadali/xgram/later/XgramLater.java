@@ -177,6 +177,42 @@ public final class XgramLater {
     XgramLaterAlarms.openExactSettings(c);
   }
 
+  /**
+   * Battery optimization is on for XGram: Samsung's sleeping apps and similar can hold the alarm back until the app is
+   * opened again. "Unrestricted" in the app's battery settings turns it off.
+   */
+  public static boolean batteryRestricted (android.content.Context ctx) {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) {
+      return false;
+    }
+    try {
+      android.os.PowerManager power = (android.os.PowerManager) ctx.getSystemService(android.content.Context.POWER_SERVICE);
+      return power != null && !power.isIgnoringBatteryOptimizations(ctx.getPackageName());
+    } catch (Throwable t) {
+      return false;
+    }
+  }
+
+  /** The value of the "Exact reminder times" row: allowed, allowed with the battery hint, or not allowed. */
+  public static String exactRowValue (android.content.Context ctx) {
+    if (!exactAllowed(ctx)) {
+      return org.thunderdog.challegram.core.Lang.getString(org.thunderdog.challegram.R.string.XgramLaterExactNotAllowed);
+    }
+    if (batteryRestricted(ctx)) {
+      return org.thunderdog.challegram.core.Lang.getString(org.thunderdog.challegram.R.string.XgramLaterExactBattery);
+    }
+    return org.thunderdog.challegram.core.Lang.getString(org.thunderdog.challegram.R.string.XgramLaterExactAllowed);
+  }
+
+  /** A tap on that row: the exact alarm page when they aren't allowed, else the app's page for its battery setting. */
+  public static void openExactRow (ViewController<?> c) {
+    if (!exactAllowed(c.context()) || !batteryRestricted(c.context())) {
+      XgramLaterAlarms.openExactSettings(c);
+    } else {
+      XgramLaterAlarms.openBatterySettings(c.context());
+    }
+  }
+
   /** The system settings of the Reminders channel. */
   public static void openReminderChannelSettings (android.content.Context ctx) {
     XgramLaterNotifications.openChannelSettings(ctx);
@@ -249,8 +285,24 @@ public final class XgramLater {
         return;
       }
       XgramLaterRecord snooze = XgramLaterStore.snapshot(tdlib.id()).chatSnooze.get(chatId);
-      if (snooze != null && snooze.mentionsAt > unreadMentionCount) {
+      if (snooze == null) {
+        return;
+      }
+      if (snooze.mentionsAt > unreadMentionCount) {
         XgramLaterEngine.post(() -> XgramLaterEngine.onMentionCount(tdlib, chatId, unreadMentionCount));
+      } else if (unreadMentionCount > snooze.mentionsAt && snooze.wakeMode != XgramLaterRecord.WAKE_TIME_ONLY && !snooze.hasFlag(XgramLaterRecord.FLAG_RESYNC)) {
+        // A new mention or reply to you, also one that came without updateNewMessage (a gap after a long time offline)
+        XgramLaterEngine.wakeAsync(tdlib.id(), snooze, true);
+      }
+    }
+
+    @Override
+    public void onChatTopMessageChanged (long chatId, @Nullable TdApi.Message topMessage) {
+      if (topMessage == null || topMessage.isOutgoing || !XgramLaterStore.isLoaded()) {
+        return;
+      }
+      if (XgramLaterStore.snapshot(tdlib.id()).watchers.contains(chatId)) {
+        XgramLaterEngine.post(() -> XgramLaterEngine.onTopMessage(tdlib, chatId));
       }
     }
 
@@ -298,6 +350,10 @@ public final class XgramLater {
       XgramLaterEngine.wakeAsync(tdlib.id(), r, false);
       return false;
     }
+    if (r.hasFlag(XgramLaterRecord.FLAG_RESYNC)) {
+      XgramLaterEngine.resyncAsync(tdlib, r); // started again while TDLib wasn't running: take the chat's state now
+      return true;
+    }
     if (XgramLaterEngine.wokenByState(r, chat)) {
       XgramLaterEngine.wakeAsync(tdlib.id(), r, true);
       return false;
@@ -339,6 +395,35 @@ public final class XgramLater {
       return false;
     }
     return !XgramLaterEngine.qualifies(r, message);
+  }
+
+  /**
+   * {@link #shouldDropNotification} for a notification TDLib built from a push while XGram wasn't running: there is no
+   * message, only its id and whether it is outgoing. {@code mentionsGroup}: it is in the mentions and replies group.
+   */
+  public static boolean shouldDropPush (Tdlib tdlib, long chatId, TdApi.NotificationTypeNewPushMessage push, boolean mentionsGroup) {
+    if (!XgramLaterStore.isLoaded()) {
+      return false;
+    }
+    XgramLaterRecord r = XgramLaterStore.snapshot(tdlib.id()).chatSnooze.get(chatId);
+    if (r == null || (r.isTimed() && System.currentTimeMillis() >= r.wakeAt)) {
+      return false;
+    }
+    return !XgramLaterEngine.qualifies(r, push.isOutgoing, push.messageId, mentionsGroup);
+  }
+
+  // The chat lists' first load
+
+  private static final java.util.Set<Integer> reconciled = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /**
+   * Once per account and process, after a chat list has loaded (its chats are cached now): private follow-ups whose
+   * reply came while XGram was closed are done, and a false "No reply" notification of the catch-up goes.
+   */
+  public static void reconcileOnce (Tdlib tdlib) {
+    if (reconciled.add(tdlib.id())) {
+      XgramLaterEngine.reconcile(tdlib);
+    }
   }
 
   // Snooze availability

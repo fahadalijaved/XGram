@@ -169,11 +169,27 @@ final class XgramLaterStore {
         rebuildLocked(accountId);
       }
       loaded = true;
+      countTdlibThreadAccess(keys.size() + 1, "load");
     }
   }
 
   static boolean isLoaded () {
     return loaded;
+  }
+
+  // Debug builds: LevelDB work that ran on the TDLib thread (it belongs on the Later thread), counted and logged
+
+  private static int tdlibThreadAccess;
+
+  static int tdlibThreadAccess () {
+    return tdlibThreadAccess;
+  }
+
+  private static void countTdlibThreadAccess (int count, String what) {
+    if (org.thunderdog.challegram.BuildConfig.DEBUG && "TDLib thread".equals(Thread.currentThread().getName())) {
+      tdlibThreadAccess += count;
+      Log.w(TAG, "LevelDB on the TDLib thread: " + what + " (" + tdlibThreadAccess + " so far)");
+    }
   }
 
   // Reading (no locks once loaded)
@@ -201,6 +217,7 @@ final class XgramLaterStore {
   /** Stores {@code r} (replacing the record under its key) and rebuilds its account's index. Caller holds LOCK. */
   static void putLocked (XgramLaterRecord r) {
     records.put(r.key, r);
+    countTdlibThreadAccess(1, "put");
     try {
       Settings.instance().putString(r.key, r.toJson());
     } catch (Throwable t) {
@@ -211,6 +228,7 @@ final class XgramLaterStore {
   /** Caller holds LOCK. */
   static void removeLocked (String key) {
     records.remove(key);
+    countTdlibThreadAccess(1, "remove");
     try {
       Settings.instance().remove(key);
     } catch (Throwable t) {
@@ -247,37 +265,51 @@ final class XgramLaterStore {
     ensureLoaded();
     int removed = 0;
     synchronized (LOCK) {
-      Map<Integer, List<XgramLaterRecord>> done = new HashMap<>();
+      Map<Integer, List<XgramLaterRecord>> byAccount = new HashMap<>();
       for (XgramLaterRecord r : records.values()) {
-        if (r.isDone() || r.kind == XgramLaterRecord.KIND_DISMISS) {
-          List<XgramLaterRecord> list = done.get(r.accountId);
-          if (list == null) {
-            done.put(r.accountId, list = new ArrayList<>());
-          }
-          list.add(r);
+        List<XgramLaterRecord> list = byAccount.get(r.accountId);
+        if (list == null) {
+          byAccount.put(r.accountId, list = new ArrayList<>());
         }
+        list.add(r);
       }
-      for (Map.Entry<Integer, List<XgramLaterRecord>> entry : done.entrySet()) {
-        List<XgramLaterRecord> list = entry.getValue();
-        Collections.sort(list, (a, b) -> Long.compare(doneTime(b), doneTime(a)));
-        boolean changed = false;
-        for (int i = 0; i < list.size(); i++) {
-          XgramLaterRecord r = list.get(i);
-          if (r.isPending() || r.isDue()) {
-            continue;
-          }
-          if (i >= RETENTION_COUNT || now - doneTime(r) > RETENTION_MS) {
-            removeLocked(r.key);
-            removed++;
-            changed = true;
-          }
+      for (Map.Entry<Integer, List<XgramLaterRecord>> entry : byAccount.entrySet()) {
+        List<XgramLaterRecord> prunable = pruneSelection(entry.getValue(), now);
+        for (XgramLaterRecord r : prunable) {
+          removeLocked(r.key);
+          removed++;
         }
-        if (changed) {
+        if (!prunable.isEmpty()) {
           rebuildLocked(entry.getKey());
         }
       }
     }
     return removed;
+  }
+
+  /**
+   * What {@link #prune} removes of one account's records: done and dismissed ones older than 30 days or beyond the
+   * newest 200 of them, never a pending or due one. Pure (the self-test runs it).
+   */
+  static List<XgramLaterRecord> pruneSelection (List<XgramLaterRecord> accountRecords, long now) {
+    List<XgramLaterRecord> done = new ArrayList<>();
+    for (XgramLaterRecord r : accountRecords) {
+      if (r.isDone() || r.kind == XgramLaterRecord.KIND_DISMISS) {
+        done.add(r);
+      }
+    }
+    Collections.sort(done, (a, b) -> Long.compare(doneTime(b), doneTime(a)));
+    List<XgramLaterRecord> selected = new ArrayList<>();
+    for (int i = 0; i < done.size(); i++) {
+      XgramLaterRecord r = done.get(i);
+      if (r.isPending() || r.isDue()) {
+        continue;
+      }
+      if (i >= RETENTION_COUNT || now - doneTime(r) > RETENTION_MS) {
+        selected.add(r);
+      }
+    }
+    return selected;
   }
 
   private static long doneTime (XgramLaterRecord r) {
@@ -352,16 +384,10 @@ final class XgramLaterStore {
       if (chatId == 0 || messageId < 0) {
         continue;
       }
-      XgramLaterRecord r = XgramLaterRecord.fromJsonObject(accountId, chatId, messageId, o);
-      if (r == null || records.containsKey(r.key) || !(r.isPending() || r.isDue())) {
+      XgramLaterRecord parsed = XgramLaterRecord.fromJsonObject(accountId, chatId, messageId, o);
+      XgramLaterRecord r = importConversion(parsed, parsed != null && records.containsKey(parsed.key), now);
+      if (r == null) {
         continue;
-      }
-      if (r.isPending() && r.isTimed() && r.wakeAt <= now) {
-        r = r.buildUpon()
-          .state(XgramLaterRecord.STATE_DUE)
-          .dueAt(now)
-          .addFlags(XgramLaterRecord.FLAG_SILENT)
-          .build();
       }
       putLocked(r);
       added.add(r);
@@ -370,5 +396,24 @@ final class XgramLaterStore {
       rebuildLocked(accountId);
     }
     return added;
+  }
+
+  /**
+   * A backed up record as it is imported, or null when it isn't: a record already here wins, and only pending and due
+   * ones come. An overdue pending one comes back due and silent. Pure (the self-test runs it).
+   */
+  @Nullable
+  static XgramLaterRecord importConversion (@Nullable XgramLaterRecord r, boolean existsHere, long now) {
+    if (r == null || existsHere || !(r.isPending() || r.isDue())) {
+      return null;
+    }
+    if (r.isPending() && r.isTimed() && r.wakeAt <= now) {
+      return r.buildUpon()
+        .state(XgramLaterRecord.STATE_DUE)
+        .dueAt(now)
+        .addFlags(XgramLaterRecord.FLAG_SILENT)
+        .build();
+    }
+    return r;
   }
 }

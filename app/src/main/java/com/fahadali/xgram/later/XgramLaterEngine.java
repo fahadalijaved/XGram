@@ -200,6 +200,10 @@ final class XgramLaterEngine {
       for (XgramLaterRecord r : cancel) {
         XgramLaterNotifications.cancel(ctx, r.key);
       }
+      if (XgramLaterStore.snapshot(accountId).bells.isEmpty()) {
+        // Nothing due and unseen is left: the "n reminders are due" summary goes too
+        XgramLaterNotifications.cancelSummary(ctx, accountId);
+      }
       XgramLaterAlarms.arm(ctx);
     });
   }
@@ -252,14 +256,22 @@ final class XgramLaterEngine {
 
   /** Whether a new incoming message wakes the snooze early. */
   static boolean qualifies (XgramLaterRecord r, TdApi.Message m) {
-    if (m.isOutgoing || m.id <= r.since) {
+    return qualifies(r, m.isOutgoing, m.id, m.containsUnreadMention);
+  }
+
+  /**
+   * {@link #qualifies} from a message's parts: also for a notification TDLib built from a push, which has no message
+   * object ({@code mention}: a mention or a reply to you).
+   */
+  static boolean qualifies (XgramLaterRecord r, boolean outgoing, long messageId, boolean mention) {
+    if (outgoing || messageId <= r.since) {
       return false;
     }
     switch (r.wakeMode) {
       case XgramLaterRecord.WAKE_ANY:
         return true;
       case XgramLaterRecord.WAKE_TO_ME:
-        return ChatId.isUserChat(r.chatId) || m.containsUnreadMention;
+        return ChatId.isUserChat(r.chatId) || mention;
       case XgramLaterRecord.WAKE_TIME_ONLY:
       default:
         return false;
@@ -268,6 +280,9 @@ final class XgramLaterEngine {
 
   /** The chat's state shows an answer the snooze should have woken on (a reply that came while XGram was closed). */
   static boolean wokenByState (XgramLaterRecord r, TdApi.Chat chat) {
+    if (r.hasFlag(XgramLaterRecord.FLAG_RESYNC)) {
+      return false; // its last message isn't known yet: anything in the chat would look new
+    }
     TdApi.Message last = chat.lastMessage;
     if (last == null || last.isOutgoing || last.id <= r.since) {
       return false;
@@ -364,13 +379,64 @@ final class XgramLaterEngine {
     return previous;
   }
 
-  /** The wake rule of a new snooze of {@code chat}: until-snoozes wake on messages to you (any post in channels). */
-  static int wakeModeFor (Tdlib tdlib, TdApi.Chat chat, boolean timed) {
+  /**
+   * The wake rule of a new snooze of {@code chat}: until-snoozes wake on messages to you (any post in channels), timed
+   * ones follow the setting. Without the chat an until-snooze wakes on messages to you.
+   */
+  static int wakeModeFor (@Nullable Tdlib tdlib, @Nullable TdApi.Chat chat, boolean timed) {
     if (!timed) {
-      return tdlib.isChannelChat(chat) ? XgramLaterRecord.WAKE_ANY : XgramLaterRecord.WAKE_TO_ME;
+      return tdlib != null && chat != null && tdlib.isChannelChat(chat) ? XgramLaterRecord.WAKE_ANY : XgramLaterRecord.WAKE_TO_ME;
     }
     int mode = XgramLater.wakeEarlyMode();
     return mode == XgramLaterRecord.WAKE_ANY || mode == XgramLaterRecord.WAKE_TIME_ONLY ? mode : XgramLaterRecord.WAKE_TO_ME;
+  }
+
+  /**
+   * A snooze that starts again (Snooze again, Change time, Remind again, "Snooze 1 h"): the wake rule, the last message
+   * and the mention count are taken from the chat now, as for a new snooze, so an answer that is already there doesn't
+   * wake it at once. Without the chat (no TDLib in this process) they are taken when the chat list first sees it.
+   */
+  static XgramLaterRecord restartSnooze (XgramLaterRecord r, @Nullable Tdlib tdlib) {
+    TdApi.Chat chat = tdlib != null ? tdlib.chat(r.chatId) : null;
+    if (chat == null) {
+      int mode = r.isTimed() ? wakeModeFor(null, null, true) : r.wakeMode == XgramLaterRecord.WAKE_TIME_ONLY ? XgramLaterRecord.WAKE_TO_ME : r.wakeMode;
+      return r.buildUpon().wakeMode(mode).addFlags(XgramLaterRecord.FLAG_RESYNC).build();
+    }
+    return r.buildUpon()
+      .since(chat.lastMessage != null ? chat.lastMessage.id : r.since)
+      .mentionsAt(chat.unreadMentionCount)
+      .wakeMode(wakeModeFor(tdlib, chat, r.isTimed()))
+      .clearFlags(XgramLaterRecord.FLAG_RESYNC)
+      .build();
+  }
+
+  private static final Set<String> resyncing = ConcurrentHashMap.newKeySet();
+
+  /** A snooze marked {@link XgramLaterRecord#FLAG_RESYNC} takes its chat's state now (Later thread, once per key). */
+  static void resyncAsync (Tdlib tdlib, XgramLaterRecord r) {
+    if (!resyncing.add(r.key)) {
+      return;
+    }
+    post(() -> {
+      try {
+        XgramLaterRecord cur = XgramLaterStore.get(tdlib.id(), r.key);
+        if (cur == null || !cur.isSnooze() || !cur.isPending() || !cur.hasFlag(XgramLaterRecord.FLAG_RESYNC) || tdlib.chat(cur.chatId) == null) {
+          return;
+        }
+        List<XgramLaterRecord> puts = new ArrayList<>(1);
+        puts.add(restartSnooze(cur, tdlib));
+        List<XgramLaterRecord> expected = new ArrayList<>(1);
+        expected.add(cur);
+        commit(tdlib.id(), puts, null, expected);
+      } finally {
+        resyncing.remove(r.key);
+      }
+    });
+  }
+
+  /** Four or more items due in one pass give one summary per account instead of a notification each. */
+  static boolean needsSummary (int dueCount) {
+    return dueCount >= 4;
   }
 
   /** Snoozes chats ({@code wakeAt} 0: until something happens). Returns the records each replaced (null: none). */
@@ -436,7 +502,7 @@ final class XgramLaterEngine {
     long now = System.currentTimeMillis();
     XgramLaterRecord.Builder b = toDue(cur, now).buildUpon().doneReason(XgramLaterRecord.DONE_WOKE).addFlags(XgramLaterRecord.FLAG_SILENT);
     Tdlib tdlib = tdlib(accountId);
-    if (tdlib != null && isOnScreen(tdlib, cur.chatId)) {
+    if (tdlib != null && isOnScreen(tdlib, cur.chatId, 0)) {
       b = toDone(b.build(), XgramLaterRecord.DONE_WOKE, now).buildUpon();
     }
     List<XgramLaterRecord> puts = new ArrayList<>(1);
@@ -478,7 +544,7 @@ final class XgramLaterEngine {
           next = toDone(r, XgramLaterRecord.DONE_REPLIED, now);
         } else {
           next = toDue(r, now);
-          boolean onScreen = tdlib != null && isOnScreen(tdlib, r.chatId);
+          boolean onScreen = tdlib != null && isOnScreen(tdlib, r.chatId, r.isSnooze() ? 0 : r.topicId);
           if (onScreen) {
             next = r.isSnooze() ? toDone(next, XgramLaterRecord.DONE_OPENED, now) : next.buildUpon().addFlags(XgramLaterRecord.FLAG_SEEN).build();
             inChat.add(next);
@@ -496,7 +562,7 @@ final class XgramLaterEngine {
       }
       notify.retainAll(applied);
       inChat.retainAll(applied);
-      if (notify.size() >= 4) {
+      if (needsSummary(notify.size())) {
         XgramLaterNotifications.postSummary(ctx, accountId, notify.size());
       } else {
         for (XgramLaterRecord r : notify) {
@@ -524,20 +590,33 @@ final class XgramLaterEngine {
     focused = new WeakReference<>(c);
   }
 
-  /** The chat is open and visible: the focused chat screen or the right pane, with the app in front. */
-  static boolean isOnScreen (Tdlib tdlib, long chatId) {
+  /**
+   * The chat (its forum topic {@code topicId}, 0: any) is open and visible, with the app in front: the chat screen on
+   * top of its stack, on either pane. A chat the right pane only has underneath another screen (Later, Settings) is not.
+   */
+  static boolean isOnScreen (Tdlib tdlib, long chatId, int topicId) {
     if (!UI.isResumed()) {
       return false;
     }
-    if (com.fahadali.xgram.layout.XgramTwoPane.isHighlighted(tdlib, chatId)) {
-      return true;
-    }
     WeakReference<MessagesController> ref = focused;
     MessagesController c = ref != null ? ref.get() : null;
-    return c != null && !c.isDestroyed() && c.isFocused() && c.tdlib() == tdlib && c.getChatId() == chatId && !c.inPreviewMode() && !c.isInForceTouchMode();
+    return c != null && !c.isDestroyed() && c.isFocused() && c.tdlib() == tdlib && c.getChatId() == chatId && !c.inPreviewMode() && !c.isInForceTouchMode() && showsTopic(c, topicId);
   }
 
-  // Live updates (posted here from the TDLib thread)
+  /** Whether the chat screen shows the forum topic {@code topicId} (0, or the whole chat: yes). */
+  static boolean showsTopic (MessagesController c, int topicId) {
+    if (topicId == 0) {
+      return true;
+    }
+    TdApi.MessageTopic topic = c.getMessageTopicId();
+    if (topic == null) {
+      return true;
+    }
+    return topic instanceof TdApi.MessageTopicForum && ((TdApi.MessageTopicForum) topic).forumTopicId == topicId;
+  }
+
+  // Live updates (posted here from the TDLib thread). Each change applies only to the record it was computed from, so
+  // a change made meanwhile (a delete, an unsnooze, a logout) is never overwritten or brought back.
 
   static void onIncoming (Tdlib tdlib, TdApi.Message m) {
     XgramLaterStore.AccountIndex index = XgramLaterStore.snapshot(tdlib.id());
@@ -546,17 +625,19 @@ final class XgramLaterEngine {
     if (snooze != null && qualifies(snooze, m)) {
       wakeByMessage(tdlib.id(), snooze.key, snooze.createdAt);
     }
-    List<XgramLaterRecord> puts = null;
+    List<XgramLaterRecord> puts = null, expected = null;
     for (XgramLaterRecord r : index.ofChat(m.chatId)) {
       if (r.kind == XgramLaterRecord.KIND_FOLLOWUP && (r.isPending() || r.isDue()) && answers(r, m)) {
         if (puts == null) {
           puts = new ArrayList<>();
+          expected = new ArrayList<>();
         }
         puts.add(toDone(r, XgramLaterRecord.DONE_REPLIED, now));
+        expected.add(r);
       }
     }
     if (puts != null) {
-      commit(tdlib.id(), puts, null);
+      commit(tdlib.id(), puts, null, expected);
     }
   }
 
@@ -565,13 +646,15 @@ final class XgramLaterEngine {
     if (snooze != null && snooze.mentionsAt > unreadMentionCount) {
       List<XgramLaterRecord> puts = new ArrayList<>(1);
       puts.add(snooze.buildUpon().mentionsAt(unreadMentionCount).build());
-      commit(tdlib.id(), puts, null);
+      List<XgramLaterRecord> expected = new ArrayList<>(1);
+      expected.add(snooze);
+      commit(tdlib.id(), puts, null, expected);
     }
   }
 
   static void onDeleted (Tdlib tdlib, long chatId, long[] messageIds) {
     XgramLaterStore.AccountIndex index = XgramLaterStore.snapshot(tdlib.id());
-    List<XgramLaterRecord> puts = null;
+    List<XgramLaterRecord> puts = null, expected = null;
     long now = System.currentTimeMillis();
     for (long messageId : messageIds) {
       XgramLaterRecord r = index.byKey.get(XgramLaterRecord.key(tdlib.id(), chatId, messageId));
@@ -584,30 +667,54 @@ final class XgramLaterEngine {
       }
       if (puts == null) {
         puts = new ArrayList<>();
+        expected = new ArrayList<>();
       }
       puts.add(next);
+      expected.add(r);
     }
     if (puts != null) {
-      commit(tdlib.id(), puts, null);
+      commit(tdlib.id(), puts, null, expected);
     }
   }
 
-  /** Private follow-ups answered while XGram was closed, from the cached chats (Later opening). Any thread. */
-  static void reconcile (Tdlib tdlib) {
+  /**
+   * The chat's last message changed: also when it came without updateNewMessage (a gap after a long time offline). A
+   * hidden snooze wakes when its chat now shows an answer; a private follow-up whose chat shows one is done.
+   */
+  static void onTopMessage (Tdlib tdlib, long chatId) {
+    TdApi.Chat chat = tdlib.chat(chatId);
+    if (chat == null) {
+      return;
+    }
     XgramLaterStore.AccountIndex index = XgramLaterStore.snapshot(tdlib.id());
-    List<XgramLaterRecord> puts = null;
+    XgramLaterRecord snooze = index.chatSnooze.get(chatId);
+    if (snooze != null && wokenByState(snooze, chat)) {
+      wakeByMessage(tdlib.id(), snooze.key, snooze.createdAt);
+    }
+    completeAnswered(tdlib, index.ofChat(chatId));
+  }
+
+  /** Private follow-ups answered while XGram was closed, from the cached chats (the list's first load, Later opening). Any thread. */
+  static void reconcile (Tdlib tdlib) {
+    post(() -> completeAnswered(tdlib, XgramLaterStore.snapshot(tdlib.id()).byKey.values()));
+  }
+
+  /** Pending or due private follow-ups whose chat already shows an answer: done as replied. Later thread. */
+  private static void completeAnswered (Tdlib tdlib, Iterable<XgramLaterRecord> records) {
+    List<XgramLaterRecord> puts = null, expected = null;
     long now = System.currentTimeMillis();
-    for (XgramLaterRecord r : index.byKey.values()) {
+    for (XgramLaterRecord r : records) {
       if (r.kind == XgramLaterRecord.KIND_FOLLOWUP && (r.isPending() || r.isDue()) && answeredByState(r, tdlib.chat(r.chatId))) {
         if (puts == null) {
           puts = new ArrayList<>();
+          expected = new ArrayList<>();
         }
         puts.add(toDone(r, XgramLaterRecord.DONE_REPLIED, now));
+        expected.add(r);
       }
     }
     if (puts != null) {
-      final List<XgramLaterRecord> finalPuts = puts;
-      post(() -> commit(tdlib.id(), finalPuts, null));
+      commit(tdlib.id(), puts, null, expected);
     }
   }
 
@@ -637,7 +744,8 @@ final class XgramLaterEngine {
         } else if (r.isDue()) {
           puts.add(toDone(r, r.doneReason == XgramLaterRecord.DONE_WOKE ? XgramLaterRecord.DONE_WOKE : XgramLaterRecord.DONE_OPENED, now));
         }
-      } else if (r.isDue() && r.isVisibleItem()) {
+      } else if (r.isDue() && r.isVisibleItem() && showsTopic(c, r.topicId)) {
+        // Only what this screen shows: a reminder in another forum topic stays due
         if (!r.hasFlag(XgramLaterRecord.FLAG_SEEN)) {
           puts.add(r.buildUpon().addFlags(XgramLaterRecord.FLAG_SEEN).build());
           if (dueReminder == null || r.dueAt > dueReminder.dueAt) {
@@ -695,7 +803,10 @@ final class XgramLaterEngine {
     }
     XgramLaterRecord next = toPending(r, wakeAt);
     if (r.isSnooze()) {
-      next = next.buildUpon().kind(wakeAt != 0 ? XgramLaterRecord.KIND_SNOOZE : XgramLaterRecord.KIND_SNOOZE_UNTIL).build();
+      next = restartSnooze(next.buildUpon().kind(wakeAt != 0 ? XgramLaterRecord.KIND_SNOOZE : XgramLaterRecord.KIND_SNOOZE_UNTIL).build(), tdlib(accountId));
+    } else if (r.kind == XgramLaterRecord.KIND_FOLLOWUP && r.isDone()) {
+      // "Remind again" on a finished follow-up: a plain reminder (as a follow-up the reply already there would end it)
+      next = next.buildUpon().kind(XgramLaterRecord.KIND_REMIND).build();
     }
     List<XgramLaterRecord> puts = new ArrayList<>(1);
     puts.add(next);

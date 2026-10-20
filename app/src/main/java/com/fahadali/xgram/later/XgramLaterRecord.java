@@ -31,6 +31,11 @@ public final class XgramLaterRecord {
 
   public static final int FLAG_NO_PREVIEW = 1, FLAG_SEEN = 2, FLAG_NOTIFIED = 4, FLAG_MSG_GONE = 8, FLAG_SILENT = 16,
     FLAG_SECRET = 32, FLAG_PROTECTED = 64;
+  /**
+   * A snooze started again without its chat at hand (no TDLib in this process): its last message and mention count are
+   * taken when the chat list first sees the chat, and nothing wakes it by the chat's state before that.
+   */
+  public static final int FLAG_RESYNC = 128;
 
   public static final int NOTE_MAX_LENGTH = 200;
 

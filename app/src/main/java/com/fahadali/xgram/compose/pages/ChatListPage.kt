@@ -151,9 +151,9 @@ fun ChatListPage() {
       }
       value(
         R.id.btn_xgramLaterExact, s(R.string.XgramLaterExact),
-        s(if (XgramLater.exactAllowed(host.activity)) R.string.XgramLaterExactAllowed else R.string.XgramLaterExactNotAllowed)
+        XgramLater.exactRowValue(host.activity)
       ) {
-        XgramLater.openExactSettings(host.controller)
+        XgramLater.openExactRow(host.controller)
       }
       link(R.id.btn_xgramLaterChannel, s(R.string.XgramLaterChannelLink), s(R.string.XgramLaterChannelLinkSub)) {
         XgramLater.openReminderChannelSettings(host.activity)
