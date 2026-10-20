@@ -62,14 +62,27 @@ final class XgramUndoSendStore {
     /** Files: their names (they can't be sent after a restart, only listed). */
     @Nullable final String[] fileNames;
     final TdApi.FormattedText text;
+    /**
+     * Flushing records: when the requests went to TDLib (Telegram's time, seconds) and the chat's last message then;
+     * 0 when unknown (records of earlier versions).
+     */
+    final long flushDate, flushLastMessageId;
 
     Record (String key, int accountId, long bootId, boolean flushing, int kind, long chatId, long draftChatId, long createdWall,
             @Nullable TdApi.MessageTopic topic, @Nullable TdApi.InputMessageReplyTo replyTo, boolean silent,
             @Nullable String[] fileNames, TdApi.FormattedText text) {
+      this(key, accountId, bootId, flushing, 0, 0, kind, chatId, draftChatId, createdWall, topic, replyTo, silent, fileNames, text);
+    }
+
+    Record (String key, int accountId, long bootId, boolean flushing, long flushDate, long flushLastMessageId, int kind,
+            long chatId, long draftChatId, long createdWall, @Nullable TdApi.MessageTopic topic,
+            @Nullable TdApi.InputMessageReplyTo replyTo, boolean silent, @Nullable String[] fileNames, TdApi.FormattedText text) {
       this.key = key;
       this.accountId = accountId;
       this.bootId = bootId;
       this.flushing = flushing;
+      this.flushDate = flushing ? flushDate : 0;
+      this.flushLastMessageId = flushing ? flushLastMessageId : 0;
       this.kind = kind;
       this.chatId = chatId;
       this.draftChatId = draftChatId;
@@ -107,7 +120,7 @@ final class XgramUndoSendStore {
   static boolean put (XgramUndoSendItem item, long bootId) {
     try {
       String key = key(item);
-      String value = encode(item, bootId, false);
+      String value = encode(item, bootId, STATE_HELD);
       pmc().putString(key, value);
       String stored = pmc().getString(key, null);
       if (!value.equals(stored)) {
@@ -123,10 +136,13 @@ final class XgramUndoSendStore {
     }
   }
 
-  /** The item's requests go to TDLib: after a crash its record is checked against the chat's history first. */
-  static void markFlushing (XgramUndoSendItem item, long bootId) {
+  /**
+   * The item's requests go to TDLib: after a crash its record is checked against the chat's history first, for a
+   * message sent from {@code flushDate} (Telegram's time, seconds) on, newer than {@code lastMessageId} (0: unknown).
+   */
+  static void markFlushing (XgramUndoSendItem item, long bootId, long flushDate, long lastMessageId) {
     try {
-      pmc().putString(key(item), encode(item, bootId, true));
+      pmc().putString(key(item), encode(item, bootId, flushingState(flushDate, lastMessageId)));
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Undo send: cannot update the journal", t);
     }
@@ -138,7 +154,8 @@ final class XgramUndoSendStore {
    */
   static void rewrite (Record record) {
     try {
-      pmc().putString(record.key, encode(record.bootId, record.flushing, record.kind, record.chatId, record.draftChatId,
+      String state = record.flushing ? flushingState(record.flushDate, record.flushLastMessageId) : STATE_HELD;
+      pmc().putString(record.key, encode(record.bootId, state, record.kind, record.chatId, record.draftChatId,
         record.createdWall, record.topic, record.replyTo, record.silent, record.fileNames, record.text));
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Undo send: cannot update the journal", t);
@@ -234,18 +251,28 @@ final class XgramUndoSendStore {
 
   // Format: lines, the text last (it may have line breaks of its own)
 
-  private static String encode (XgramUndoSendItem item, long bootId, boolean flushing) {
-    return encode(bootId, flushing, item.kind, item.chatId, item.draftChatId, item.createdWall, item.draftTopic, item.replyTo,
+  /**
+   * The state line: "H" while it waits; "F" once sent, followed by ":" the flush date ":" the chat's last message id then
+   * (a plain "F" from earlier versions reads as both unknown).
+   */
+  private static final String STATE_HELD = "H";
+
+  private static String flushingState (long flushDate, long lastMessageId) {
+    return "F:" + Math.max(0L, flushDate) + ":" + lastMessageId;
+  }
+
+  private static String encode (XgramUndoSendItem item, long bootId, String state) {
+    return encode(bootId, state, item.kind, item.chatId, item.draftChatId, item.createdWall, item.draftTopic, item.replyTo,
       item.silent, item.fileNames, item.typed);
   }
 
-  private static String encode (long bootId, boolean flushing, int kind, long chatId, long draftChatId, long createdWall,
+  private static String encode (long bootId, String state, int kind, long chatId, long draftChatId, long createdWall,
                                 @Nullable TdApi.MessageTopic topic, @Nullable TdApi.InputMessageReplyTo replyTo, boolean silent,
                                 @Nullable String[] fileNames, @Nullable TdApi.FormattedText typed) {
     StringBuilder b = new StringBuilder();
     b.append(VERSION).append('\n');
     b.append(bootId).append('\n');
-    b.append(flushing ? 'F' : 'H').append('\n');
+    b.append(state).append('\n');
     b.append(kindCode(kind)).append('\n');
     b.append(chatId).append('\n');
     b.append(draftChatId).append('\n');
@@ -393,7 +420,15 @@ final class XgramUndoSendStore {
     }
     try {
       long bootId = Long.parseLong(f[1]);
-      boolean flushing = "F".equals(f[2]);
+      boolean flushing = f[2].startsWith("F");
+      long flushDate = 0, flushLastMessageId = 0;
+      if (flushing && f[2].startsWith("F:")) {
+        String[] parts = f[2].split(":", 3);
+        if (parts.length == 3) {
+          flushDate = Long.parseLong(parts[1]);
+          flushLastMessageId = Long.parseLong(parts[2]);
+        }
+      }
       int kind = kindOf(f[3]);
       long chatId = Long.parseLong(f[4]);
       long draftChatId = Long.parseLong(f[5]);
@@ -404,7 +439,7 @@ final class XgramUndoSendStore {
       String[] fileNames = decodeFileNames(f[13]);
       String text = f[15];
       TdApi.TextEntity[] entities = XgramMedia.decodeEntities(f[14], text.length());
-      return new Record(key, accountId, bootId, flushing, kind, chatId, draftChatId, createdWall, topic, replyTo, silent, fileNames, new TdApi.FormattedText(text, entities));
+      return new Record(key, accountId, bootId, flushing, flushDate, flushLastMessageId, kind, chatId, draftChatId, createdWall, topic, replyTo, silent, fileNames, new TdApi.FormattedText(text, entities));
     } catch (RuntimeException e) {
       return null;
     }

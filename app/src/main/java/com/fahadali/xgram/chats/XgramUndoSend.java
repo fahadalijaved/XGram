@@ -15,6 +15,7 @@ import android.content.Context;
 import android.os.Build;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.util.SparseIntArray;
 import android.view.accessibility.AccessibilityManager;
 import android.widget.Toast;
 
@@ -23,6 +24,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
 
 import com.fahadali.xgram.XgramSettings;
+import com.fahadali.xgram.ghost.XgramGhost;
 
 import org.drinkless.tdlib.Client;
 import org.drinkless.tdlib.TdApi;
@@ -38,8 +40,8 @@ import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.unsorted.AppContext;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -74,6 +76,8 @@ public final class XgramUndoSend {
   private static final long HINT_DELAY_MS = 350L;
   /** Files whose requests haven't come this long after their deadline go back (see onFilesTimeout). */
   private static final long PREPARE_TIMEOUT_MS = 30_000L;
+  /** After a crash: a message counts as sent when it is this close to the flush (Telegram's time rounds to seconds). */
+  private static final long SENT_MARGIN_SECONDS = 2L;
 
   /** Tells the journal records of this launch from those of an earlier one. */
   static final long BOOT_ID = newBootId();
@@ -88,9 +92,17 @@ public final class XgramUndoSend {
   private static final ArrayList<XgramUndoSendItem> items = new ArrayList<>();
   /** Items that still wait: while there are none, the hooks in the send paths return at once. */
   private static volatile int heldCount;
-  /** Records of earlier launches that could not become drafts: put back into their message box when it opens. */
-  private static final ArrayList<XgramUndoSendStore.Record> pending = new ArrayList<>();
+  /**
+   * What goes back into a message box once it can take it: a refused send or an Undo its box couldn't take right then,
+   * and records of earlier launches that could not become drafts. Their journal records stay until then.
+   */
+  private static final ArrayList<Pending> pending = new ArrayList<>();
   private static final HashSet<Integer> restoredAccounts = new HashSet<>();
+  /**
+   * Per account slot, bumped when its account logs out: items and records of an older epoch are neither written to the
+   * journal nor kept, so nothing of the old account reaches the next login in that slot.
+   */
+  private static final SparseIntArray epochs = new SparseIntArray();
   private static volatile boolean mayHaveHints = true;
   private static boolean stateListenerAdded;
   private static volatile boolean debugCrashAfterHold, debugCrashAfterSend;
@@ -101,6 +113,92 @@ public final class XgramUndoSend {
       flushAll();
     }
   };
+
+  /** What goes back into a message box once it can take it (see {@link #pending}). */
+  private static final class Pending {
+    final Tdlib tdlib;
+    final XgramUndoSendStore.Record record;
+    final int epoch;
+    /** The box that sent it: only that one takes the files and the reply bar's message (memory only) back. */
+    @Nullable final WeakReference<MessagesController> owner;
+    @Nullable final ArrayList<InlineResult<?>> files;
+    @Nullable final MessagesController.ReplyInfo reply;
+    /** Not an Undo: "your message is back" shows when it goes back, and a draft is announced as a failed send. */
+    final boolean notice;
+    final boolean showKeyboard;
+
+    Pending (Tdlib tdlib, XgramUndoSendStore.Record record, int epoch, @Nullable MessagesController owner,
+             @Nullable ArrayList<InlineResult<?>> files, @Nullable MessagesController.ReplyInfo reply, boolean notice,
+             boolean showKeyboard) {
+      this.tdlib = tdlib;
+      this.record = record;
+      this.epoch = epoch;
+      this.owner = owner != null ? new WeakReference<>(owner) : null;
+      this.files = owner != null ? files : null;
+      this.reply = owner != null ? reply : null;
+      this.notice = notice;
+      this.showKeyboard = showKeyboard;
+    }
+
+    @Nullable
+    MessagesController owner () {
+      return owner != null ? owner.get() : null;
+    }
+
+    /** For any message box of the chat: without what only the sending box can take back. */
+    Pending withoutOwner () {
+      return owner == null ? this : new Pending(tdlib, record, epoch, null, null, null, notice, showKeyboard);
+    }
+  }
+
+  // Accounts that log out
+
+  /** The epoch of the account slot (see {@link #epochs}). */
+  static int epochOf (int accountId) {
+    synchronized (LOCK) {
+      return epochs.get(accountId, 0);
+    }
+  }
+
+  /** Under LOCK. */
+  private static boolean isCurrent (int accountId, int epoch) {
+    return epochs.get(accountId, 0) == epoch;
+  }
+
+  // Journal writes: none once the item's account logged out (the erased records stay erased)
+
+  private static boolean journalPut (XgramUndoSendItem item) {
+    synchronized (LOCK) {
+      return isCurrent(item.accountId, item.epoch) && XgramUndoSendStore.put(item, BOOT_ID);
+    }
+  }
+
+  private static void journalFlushing (XgramUndoSendItem item, long flushDate, long lastMessageId) {
+    synchronized (LOCK) {
+      if (isCurrent(item.accountId, item.epoch)) {
+        XgramUndoSendStore.markFlushing(item, BOOT_ID, flushDate, lastMessageId);
+      }
+    }
+  }
+
+  /** False when the item's account logged out: then nothing of it is kept. */
+  private static boolean journalRewrite (XgramUndoSendItem item, XgramUndoSendStore.Record left) {
+    synchronized (LOCK) {
+      if (!isCurrent(item.accountId, item.epoch)) {
+        return false;
+      }
+      XgramUndoSendStore.rewrite(left);
+      return true;
+    }
+  }
+
+  private static void journalHint (int accountId, int epoch, long chatId) {
+    synchronized (LOCK) {
+      if (isCurrent(accountId, epoch)) {
+        XgramUndoSendStore.putHint(accountId, chatId);
+      }
+    }
+  }
 
   // What the bar shows
 
@@ -226,6 +324,9 @@ public final class XgramUndoSend {
       if (seconds <= 0 || !UI.inUiThread() || owner == null || !owner.xgramUndoSendEligible()) {
         return NOT_HELD;
       }
+      if (UI.getUiState() != UI.State.RESUMED) {
+        return NOT_HELD; // the app is in the background (its pause already sent what waited): nothing waits there
+      }
       Tdlib tdlib = owner.tdlib();
       long chatId = owner.getChatId();
       if (settings.isUndoSendExcluded(tdlib.id(), chatId)) {
@@ -253,7 +354,8 @@ public final class XgramUndoSend {
       }
       item = new XgramUndoSendItem(tdlib, XgramUndoSendItem.KIND_TEXT, chatId, draftChatId, draftTopic, parts, copyOf(typed),
         reply, reply != null ? reply.toInputMessageReply() : null, options.disableNotification, 0, null, null, holdMillis(seconds), owner);
-      if (!XgramUndoSendStore.put(item, BOOT_ID)) {
+      noteLastSeen(item);
+      if (!journalPut(item)) {
         return NOT_HELD;
       }
     } catch (Throwable t) {
@@ -290,6 +392,9 @@ public final class XgramUndoSend {
       if (seconds <= 0 || !UI.inUiThread() || owner == null || !owner.xgramUndoSendEligible() || files == null || files.isEmpty()) {
         return null;
       }
+      if (UI.getUiState() != UI.State.RESUMED) {
+        return null; // the app is in the background: nothing waits there
+      }
       Tdlib tdlib = owner.tdlib();
       long chatId = owner.getChatId();
       if (settings.isUndoSendExcluded(tdlib.id(), chatId) || (options != null && options.schedulingState != null)) {
@@ -303,7 +408,8 @@ public final class XgramUndoSend {
         null, text, reply, reply != null ? reply.toInputMessageReply() : null, options != null && options.disableNotification, 0,
         new ArrayList<>(files), fileNames, holdMillis(seconds), owner);
       item.preparing = true;
-      if (!XgramUndoSendStore.put(item, BOOT_ID)) {
+      noteLastSeen(item);
+      if (!journalPut(item)) {
         return null;
       }
     } catch (Throwable t) {
@@ -409,58 +515,82 @@ public final class XgramUndoSend {
   }
 
   /**
-   * A voice or video message from the recorder: true when it waits (the caller then sends nothing). Only recordings
-   * TDLib already has as a file wait; anything else is sent as always.
+   * A recording from the recorder has to go through {@link #tryHoldNote}: it may wait, or something waits that it must
+   * not overtake in a slow mode chat. Otherwise it is sent as always.
+   */
+  @AnyThread
+  public static boolean interceptsNotes () {
+    if (mayHoldNotes()) {
+      return true;
+    }
+    synchronized (LOCK) {
+      return !items.isEmpty();
+    }
+  }
+
+  /**
+   * A voice or video message from the recorder. HELD: it waits; BLOCKED_SLOW_MODE: a message waits in this slow mode
+   * chat, so it would only be refused, and the hint says why (nothing is sent); NOT_HELD: the caller sends it as
+   * always. Only recordings TDLib already has as a file wait.
    */
   @UiThread
-  public static boolean tryHoldNote (MessagesController owner, TdApi.SendMessage function, @Nullable MessagesController.ReplyInfo reply, int durationSeconds) {
+  public static int tryHoldNote (MessagesController owner, TdApi.SendMessage function, @Nullable MessagesController.ReplyInfo reply, int durationSeconds) {
     final XgramUndoSendItem item;
     try {
-      if (!mayHoldNotes() || !UI.inUiThread() || owner == null || function == null || !owner.xgramUndoSendEligible()) {
-        return false;
+      if (!UI.inUiThread() || owner == null || function == null) {
+        return NOT_HELD;
       }
       Tdlib tdlib = owner.tdlib();
+      boolean scheduled = function.options != null && function.options.schedulingState != null;
+      if (!scheduled && blocksSlowMode(tdlib, function.chatId)) {
+        // Also with the voice switch off: Telegram's slow mode timer only starts once what waits is sent.
+        if (!owner.xgramShowUndoSendHint(Lang.getString(R.string.XgramUndoSendSlowMode), true)) {
+          UI.showToast(R.string.XgramUndoSendSlowMode, Toast.LENGTH_SHORT);
+        }
+        return BLOCKED_SLOW_MODE;
+      }
+      if (!mayHoldNotes() || !owner.xgramUndoSendEligible() || UI.getUiState() != UI.State.RESUMED) {
+        return NOT_HELD; // (in the background nothing waits)
+      }
       long chatId = owner.getChatId();
       if (function.chatId != chatId || XgramSettings.instance().isUndoSendExcluded(tdlib.id(), chatId)) {
-        return false;
+        return NOT_HELD;
       }
-      if (function.options == null || function.options.schedulingState != null) {
-        return false;
+      if (function.options == null || scheduled) {
+        return NOT_HELD;
       }
       int kind;
       TdApi.InputMessageContent content = function.inputMessageContent;
       if (content instanceof TdApi.InputMessageVoiceNote) {
         TdApi.InputVoiceNote voiceNote = ((TdApi.InputMessageVoiceNote) content).voiceNote;
         if (voiceNote == null || !(voiceNote.voiceNote instanceof TdApi.InputFileId)) {
-          return false;
+          return NOT_HELD;
         }
         kind = XgramUndoSendItem.KIND_VOICE;
       } else if (content instanceof TdApi.InputMessageVideoNote) {
         TdApi.InputVideoNote videoNote = ((TdApi.InputMessageVideoNote) content).videoNote;
         if (videoNote == null || !(videoNote.videoNote instanceof TdApi.InputFileId)) {
-          return false;
+          return NOT_HELD;
         }
         kind = XgramUndoSendItem.KIND_VIDEO;
       } else {
-        return false;
-      }
-      if (inSlowModeAsMember(tdlib, chatId) && hasItemsIn(tdlib, chatId)) {
-        return false;
+        return NOT_HELD;
       }
       List<TdApi.Function<?>> parts = new ArrayList<>(1);
       parts.add(function);
       item = new XgramUndoSendItem(tdlib, kind, chatId, owner.getMessageThreadChatId(), owner.getMessageTopicId(), parts,
         new TdApi.FormattedText("", new TdApi.TextEntity[0]), reply, function.replyTo, function.options.disableNotification,
         Math.max(0, durationSeconds), null, null, holdMillis(XgramSettings.instance().undoSendSeconds()), owner);
-      if (!XgramUndoSendStore.put(item, BOOT_ID)) {
-        return false;
+      noteLastSeen(item);
+      if (!journalPut(item)) {
+        return NOT_HELD;
       }
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Undo send: sending the recording right away", t);
-      return false;
+      return NOT_HELD;
     }
     commit(owner, item);
-    return true;
+    return HELD;
   }
 
   @UiThread
@@ -543,6 +673,109 @@ public final class XgramUndoSend {
     return false;
   }
 
+  /**
+   * A slow mode chat where the user isn't an admin and a message waits (or is on its way): nothing else can be sent
+   * there now, though Telegram's own timer only starts once that message is sent. Telegram X's slow mode checks ask
+   * this through {@link Tdlib#getSlowModeRestrictionText}, so every way of sending refuses with the hint instead of
+   * sending a second message the server would refuse.
+   */
+  @AnyThread
+  public static boolean blocksSlowMode (@Nullable Tdlib tdlib, long chatId) {
+    if (tdlib == null || !ChatId.isSupergroup(chatId)) {
+      return false;
+    }
+    synchronized (LOCK) {
+      if (items.isEmpty()) {
+        return false;
+      }
+    }
+    return hasItemsIn(tdlib, chatId) && inSlowModeAsMember(tdlib, chatId);
+  }
+
+  // Ghost mode "read on send"
+
+  /** Where a message of the item is read on send: its chat, or the topic its requests go to. */
+  @Nullable
+  private static TdApi.MessageTopic readTopicOf (XgramUndoSendItem item) {
+    List<TdApi.Function<?>> parts = item.parts;
+    if (!parts.isEmpty() && parts.get(0) instanceof TdApi.SendMessage) {
+      return ((TdApi.SendMessage) parts.get(0)).topicId;
+    }
+    return item.draftTopic;
+  }
+
+  /** Main thread, while the item's message box is in sight: the newest message there is what was seen. */
+  private static void noteLastSeen (XgramUndoSendItem item) {
+    try {
+      if (XgramGhost.readsOnSend(item.tdlib, item.chatId)) {
+        long id = XgramGhost.lastMessageIdOf(item.tdlib, item.chatId, readTopicOf(item));
+        if (id != 0) {
+          item.readCap = id;
+        }
+      }
+    } catch (Throwable t) {
+      android.util.Log.e("XGram", "Undo send: cannot read the last message", t);
+    }
+  }
+
+  /** The read cap for a send that goes now: none while its message box is in sight (it reads what is shown). */
+  private static long readCapFor (XgramUndoSendItem item, boolean mainThread) {
+    final long cap = item.readCap;
+    if (cap == 0 || !XgramGhost.readsOnSend(item.tdlib, item.chatId)) {
+      return 0;
+    }
+    if (mainThread) {
+      MessagesController owner = item.owner();
+      if (owner != null && owner.isFocused()) {
+        return 0;
+      }
+    }
+    return cap;
+  }
+
+  /** The pending messages a send made read only up to {@code capId} once they are sent (XgramGhost's read on send). */
+  private static void capReads (Tdlib tdlib, TdApi.Object result, long capId) {
+    if (result instanceof TdApi.Message) {
+      TdApi.Message message = (TdApi.Message) result;
+      if (message.schedulingState == null) {
+        XgramGhost.capReadOnSend(tdlib, message.chatId, message.id, capId);
+      }
+    } else if (result instanceof TdApi.Messages && ((TdApi.Messages) result).messages != null) {
+      for (TdApi.Message message : ((TdApi.Messages) result).messages) {
+        if (message != null && message.schedulingState == null) {
+          XgramGhost.capReadOnSend(tdlib, message.chatId, message.id, capId);
+        }
+      }
+    }
+  }
+
+  /**
+   * The message box goes out of sight (a screen over it, the chat closing): what a send reads from now on stops at what
+   * it showed.
+   */
+  @UiThread
+  public static void onComposerHidden (MessagesController owner) {
+    if (owner == null || heldCount == 0) {
+      return;
+    }
+    List<XgramUndoSendItem> owned = null;
+    synchronized (LOCK) {
+      for (XgramUndoSendItem item : items) {
+        if (item.state == XgramUndoSendItem.HELD && item.isOwnedBy(owner)) {
+          if (owned == null) {
+            owned = new ArrayList<>();
+          }
+          owned.add(item);
+        }
+      }
+    }
+    if (owned != null) {
+      for (XgramUndoSendItem item : owned) {
+        noteLastSeen(item);
+      }
+    }
+  }
+
   /** A slow mode chat where a message already waits: Send shows a hint instead of sending (or waiting) another one. */
   @UiThread
   public static boolean blockedBySlowMode (MessagesController owner) {
@@ -609,8 +842,19 @@ public final class XgramUndoSend {
     synchronized (LOCK) {
       held = item.state == XgramUndoSendItem.HELD;
     }
+    if (!held) {
+      return;
+    }
+    flushChat(item.tdlib, item.chatId, item.order, true);
+    synchronized (LOCK) {
+      held = item.state == XgramUndoSendItem.HELD;
+    }
     if (held) {
-      flushChat(item.tdlib, item.chatId, item.order, true);
+      // Files ahead of it (or itself) are still being made: it goes once they are; the bar shows it is due.
+      MessagesController owner = item.owner();
+      if (owner != null) {
+        notifyOwner(owner, false);
+      }
     }
   }
 
@@ -659,7 +903,10 @@ public final class XgramUndoSend {
       if (item.dueTask != null) {
         UI.cancel(item.dueTask);
       }
-      XgramUndoSendStore.markFlushing(item, BOOT_ID);
+      // After a crash, the chat's history is searched from here for the message.
+      journalFlushing(item, item.tdlib.currentTime(TimeUnit.SECONDS), lastMessageIdOf(item.tdlib, item.chatId));
+      // Ghost "read on send": sent while its message box is out of sight, it reads only what that box showed.
+      item.flushReadCap = readCapFor(item, mainThread);
       // As a send from the message box does: the draft is cleared, unless the message box holds something new.
       boolean clearDraft = mainThread && item.kind == XgramUndoSendItem.KIND_TEXT && composerEmptyFor(item);
       for (int i = 0; i < item.parts.size(); i++) {
@@ -671,8 +918,16 @@ public final class XgramUndoSend {
     }
     for (XgramUndoSendItem item : batch) {
       Client client = item.tdlib.client();
+      final long readCap = item.flushReadCap;
       for (int i = 0; i < item.parts.size(); i++) {
-        client.send(item.parts.get(i), new PartHandler(item, i));
+        TdApi.Function<?> part = item.parts.get(i);
+        if (readCap != 0) {
+          XgramGhost.capReadOnSend(part, readCap); // ghost "send as scheduled" reads while the request is made
+        }
+        client.send(part, new PartHandler(item, i));
+        if (readCap != 0) {
+          XgramGhost.capReadOnSend(part, 0);
+        }
       }
     }
     if (BuildConfig.DEBUG && debugCrashAfterSend) {
@@ -690,6 +945,12 @@ public final class XgramUndoSend {
         notifyOwners(flushed, false);
       }
     });
+  }
+
+  private static long lastMessageIdOf (Tdlib tdlib, long chatId) {
+    TdApi.Chat chat = tdlib.chat(chatId);
+    TdApi.Message last = chat != null ? chat.lastMessage : null;
+    return last != null ? last.id : 0;
   }
 
   /** Main thread only (flushChat checks). */
@@ -804,6 +1065,10 @@ public final class XgramUndoSend {
     @Override
     public void onResult (TdApi.Object result) {
       if (result instanceof TdApi.Message || result instanceof TdApi.Messages) {
+        final long readCap = item.flushReadCap;
+        if (readCap != 0) {
+          capReads(item.tdlib, result, readCap); // before its "sent" update, which comes after this result
+        }
         item.tdlib.messageHandler().onResult(result);
         if (isScheduled(result)) {
           synchronized (LOCK) {
@@ -857,11 +1122,13 @@ public final class XgramUndoSend {
     final boolean ghostScheduled;
     final TdApi.Error error;
     synchronized (LOCK) {
+      if (!items.remove(item)) {
+        return; // its account logged out meanwhile (forgetAccount): nothing of it is given back or kept
+      }
       failed = item.failed;
       ghostScheduled = item.ghostScheduled;
       error = item.error;
       item.state = failed != null ? XgramUndoSendItem.FAILED : XgramUndoSendItem.DONE;
-      items.remove(item);
     }
     MessagesController owner = item.owner();
     if (failed == null) {
@@ -920,9 +1187,10 @@ public final class XgramUndoSend {
   }
 
   /**
-   * Puts {@code text} (and the files) back into the owner's message box when it can take them, otherwise makes the
-   * text the chat's draft (the files can't be kept: their names are listed). The journal holds what is given back until
-   * it is somewhere. {@code error}: why it wasn't sent, shown as well.
+   * Puts {@code text} (and the files) back into the owner's message box when it can take them now. When that box
+   * shows the chat but can't right now (out of sight, the app paused, an edit, a send in progress), it goes back there
+   * once it can; when the box is gone, the text becomes the chat's draft (the files can't be kept: their names are
+   * listed). The journal holds what is given back until it is somewhere. {@code error}: why it wasn't sent, shown too.
    */
   @UiThread
   private static void giveBack (@Nullable MessagesController owner, XgramUndoSendItem item, TdApi.FormattedText text,
@@ -932,36 +1200,63 @@ public final class XgramUndoSend {
     final XgramUndoSendStore.Record left = new XgramUndoSendStore.Record(XgramUndoSendStore.key(item), item.accountId, BOOT_ID, false, item.kind,
       item.chatId, item.draftChatId, item.createdWall, item.draftTopic, replyTo, item.silent, fileNames, text);
     // Until it is back somewhere, the journal holds what is given back (and no longer the parts that were sent).
-    XgramUndoSendStore.rewrite(left);
+    if (!journalRewrite(item, left)) {
+      return; // its account logged out: nothing of it is kept
+    }
     if (owner != null && owner.xgramRestoreUnsent(item.chatId, item.draftChatId, item.draftTopic, text, reply, replyTo, focus, files)) {
       XgramUndoSendStore.remove(item);
-      if (error != null && !owner.xgramShowUndoSendHint(TD.toErrorString(error), true)) {
-        UI.showError(error);
+      if (error != null) {
+        showError(owner, error);
       }
       return;
     }
-    final Tdlib tdlib = item.tdlib;
-    if (Td.isEmpty(text)) {
+    // An Undo tap (a refusal has an error, files Telegram X refused have no focus) needs no "your message is back".
+    final boolean undo = error == null && focus;
+    final Pending later = new Pending(item.tdlib, left, item.epoch, owner, files, reply, !undo, focus);
+    if (owner != null && owner.xgramShowsChat(item.chatId, item.draftChatId, item.draftTopic)) {
+      // A cloud draft set now would not reach that box (it keeps what it holds) and its next save would overwrite it.
+      keepPending(later);
+      if (error != null) {
+        showError(owner, error);
+      }
+      return;
+    }
+    toDraft(later, error);
+  }
+
+  /** The error in the chat when it is in front, a toast otherwise. */
+  private static void showError (@Nullable MessagesController owner, TdApi.Error error) {
+    if (owner == null || !owner.xgramShowUndoSendHint(TD.toErrorString(error), true)) {
+      UI.showError(error);
+    }
+  }
+
+  /** No message box can take it now: the text becomes the chat's draft; files without a caption are only listed. */
+  private static void toDraft (Pending p, @Nullable TdApi.Error error) {
+    final XgramUndoSendStore.Record record = p.record;
+    if (Td.isEmpty(record.text)) {
       // Files without a caption: nothing to keep.
-      XgramUndoSendStore.remove(item);
+      XgramUndoSendStore.remove(record.key);
       if (error != null) {
         UI.showError(error);
       }
-      showFilesNotSent(fileNames);
+      showFilesNotSent(record.fileNames);
       return;
     }
-    saveAsDraft(tdlib, item.draftChatId, item.draftTopic, text, replyTo, ok -> {
+    final Tdlib tdlib = p.tdlib;
+    saveAsDraft(tdlib, record.draftChatId, record.topic, record.text, record.replyTo, ok -> {
       if (ok) {
-        XgramUndoSendStore.remove(left.key);
-        UI.showToast(Lang.getString(R.string.XgramUndoSendFailedDraft, tdlib.chatTitle(item.chatId)), Toast.LENGTH_LONG);
+        XgramUndoSendStore.remove(record.key);
+        // A refused send says so; an Undo whose box closed before it could take the text back doesn't.
+        UI.showToast(Lang.getString(p.notice ? R.string.XgramUndoSendFailedDraft : R.string.XgramUndoSendSavedDraft, tdlib.chatTitle(record.chatId)), Toast.LENGTH_LONG);
+        showFilesNotSent(record.fileNames);
       } else {
-        // Kept: the message box of that chat takes it back when it opens (or the next launch makes it a draft).
-        keepPending(left);
+        // Kept: a message box of that chat takes it back when it opens (or the next launch makes it a draft).
+        keepPending(p.withoutOwner());
         if (error != null) {
           UI.showError(error);
         }
       }
-      showFilesNotSent(fileNames);
     });
   }
 
@@ -1097,8 +1392,9 @@ public final class XgramUndoSend {
     }
     XgramUndoSendItem newest = null;
     boolean any = false;
+    List<Pending> left = null;
     synchronized (LOCK) {
-      if (items.isEmpty()) {
+      if (items.isEmpty() && pending.isEmpty()) {
         return;
       }
       for (XgramUndoSendItem item : items) {
@@ -1109,87 +1405,147 @@ public final class XgramUndoSend {
           }
         }
       }
-    }
-    if (!any) {
-      return;
+      for (int i = pending.size() - 1; i >= 0; i--) {
+        Pending p = pending.get(i);
+        if (p.owner() == owner) {
+          pending.remove(i);
+          if (left == null) {
+            left = new ArrayList<>();
+          }
+          left.add(0, p);
+        }
+      }
     }
     if (newest != null) {
       flushChat(newest.tdlib, newest.chatId, newest.order, false);
     }
-    synchronized (LOCK) {
-      for (XgramUndoSendItem item : items) {
-        if (item.isOwnedBy(owner)) {
-          item.owner = null;
+    if (any) {
+      synchronized (LOCK) {
+        for (XgramUndoSendItem item : items) {
+          if (item.isOwnedBy(owner)) {
+            item.owner = null;
+          }
         }
+      }
+    }
+    if (left != null) {
+      // What this box was to take back once in sight again: it closed first, so it becomes the chat's draft.
+      for (Pending p : left) {
+        toDraft(p.withoutOwner(), null);
       }
     }
   }
 
   /**
-   * A message box comes to the front: a message an earlier launch could not make a draft goes back into it, and the
-   * one-time "your message is back" hint shows.
+   * A message box comes to the front: what waits to go back into it does (a refused send, a message an earlier launch
+   * could not make a draft), and the one-time "your message is back" hint shows.
    */
   @UiThread
   public static void onComposerShown (MessagesController owner) {
     if (owner == null || owner.getChat() == null || !owner.xgramUndoSendEligible()) {
       return;
     }
-    final int accountId = owner.tdlib().id();
-    final long chatId = owner.getChatId();
-    List<XgramUndoSendStore.Record> matches = null;
-    synchronized (LOCK) {
-      if (!pending.isEmpty()) {
-        TdApi.MessageTopic topic = owner.getMessageTopicId();
-        for (XgramUndoSendStore.Record record : pending) {
-          if (record.accountId == accountId && record.chatId == chatId && Td.equalsTo(record.topic, topic)) {
-            if (matches == null) {
-              matches = new ArrayList<>();
-            }
-            matches.add(record);
-          }
-        }
-      }
-    }
-    boolean restored = false;
-    if (matches != null) {
-      // Each goes before what the message box holds: the newest first, so they end up oldest first.
-      Collections.sort(matches, (a, b) -> Long.compare(b.createdWall, a.createdWall));
-      for (XgramUndoSendStore.Record record : matches) {
-        if (owner.xgramRestoreUnsent(record.chatId, record.draftChatId, record.topic, record.text, null, record.replyTo, true, null)) {
-          XgramUndoSendStore.remove(record.key);
-          synchronized (LOCK) {
-            pending.remove(record);
-          }
-          showFilesNotSent(record.fileNames);
-          restored = true;
-        }
-      }
-    }
+    boolean restored = restorePending(owner);
     boolean hint = false;
     if (mayHaveHints) {
-      hint = XgramUndoSendStore.takeHint(accountId, chatId);
+      hint = XgramUndoSendStore.takeHint(owner.tdlib().id(), owner.getChatId());
       if (!hint && !XgramUndoSendStore.hasAnyHint()) {
         mayHaveHints = false;
       }
     }
     if (restored || hint) {
-      UI.post(() -> {
-        if (owner.isFocused()) {
-          owner.xgramShowUndoSendHint(Lang.getString(R.string.XgramUndoSendRestoredHint), false);
-        }
-      }, HINT_DELAY_MS);
+      showRestoredHint(owner);
     }
   }
 
-  private static void keepPending (XgramUndoSendStore.Record record) {
+  /**
+   * The message box can take something back again (it is back in sight, the app resumed, an edit closed, in-chat
+   * search closed, its own send finished, the prefill prompt closed): what waits to go back into it does.
+   */
+  @UiThread
+  public static void retryPending (MessagesController owner) {
+    boolean any;
     synchronized (LOCK) {
+      any = !pending.isEmpty();
+    }
+    if (any && owner != null && owner.getChat() != null && owner.xgramUndoSendEligible() && restorePending(owner)) {
+      showRestoredHint(owner);
+    }
+  }
+
+  private static void showRestoredHint (MessagesController owner) {
+    UI.post(() -> {
+      if (owner.isFocused()) {
+        owner.xgramShowUndoSendHint(Lang.getString(R.string.XgramUndoSendRestoredHint), false);
+      }
+    }, HINT_DELAY_MS);
+  }
+
+  /** Puts back what waits for this message box; true when any of it wants the "your message is back" hint. */
+  @UiThread
+  private static boolean restorePending (MessagesController owner) {
+    final int accountId = owner.tdlib().id();
+    final long chatId = owner.getChatId();
+    final long draftChatId = owner.getMessageThreadChatId();
+    List<Pending> matches = null;
+    synchronized (LOCK) {
+      if (pending.isEmpty()) {
+        return false;
+      }
+      TdApi.MessageTopic topic = owner.getMessageTopicId();
+      for (Pending p : pending) {
+        XgramUndoSendStore.Record record = p.record;
+        if (record.accountId == accountId && record.chatId == chatId && record.draftChatId == draftChatId && Td.equalsTo(record.topic, topic)) {
+          if (matches == null) {
+            matches = new ArrayList<>();
+          }
+          matches.add(p);
+        }
+      }
+    }
+    if (matches == null) {
+      return false;
+    }
+    boolean notice = false;
+    // Each goes before what the message box holds: the newest first, so they end up oldest first.
+    Collections.sort(matches, (a, b) -> Long.compare(b.record.createdWall, a.record.createdWall));
+    for (Pending p : matches) {
+      XgramUndoSendStore.Record record = p.record;
+      // The files and the reply bar's message only come back into the box that sent them.
+      boolean sameBox = p.owner() == owner;
+      ArrayList<InlineResult<?>> files = sameBox ? p.files : null;
+      MessagesController.ReplyInfo reply = sameBox ? p.reply : null;
+      if (owner.xgramRestoreUnsent(record.chatId, record.draftChatId, record.topic, record.text, reply, record.replyTo, p.showKeyboard, files)) {
+        synchronized (LOCK) {
+          for (int i = pending.size() - 1; i >= 0; i--) {
+            if (pending.get(i).record.key.equals(record.key)) {
+              pending.remove(i);
+            }
+          }
+        }
+        XgramUndoSendStore.remove(record.key);
+        if (files == null || files.isEmpty()) {
+          showFilesNotSent(record.fileNames);
+        }
+        notice |= p.notice;
+      }
+    }
+    return notice;
+  }
+
+  /** Kept until a message box of its chat can take it (the newer one wins: what is left to give back). */
+  private static void keepPending (Pending p) {
+    synchronized (LOCK) {
+      if (!isCurrent(p.record.accountId, p.epoch)) {
+        return; // its account logged out
+      }
       for (int i = 0; i < pending.size(); i++) {
-        if (pending.get(i).key.equals(record.key)) {
-          pending.set(i, record); // the newer one: what is left to give back
+        if (pending.get(i).record.key.equals(p.record.key)) {
+          pending.set(i, p);
           return;
         }
       }
-      pending.add(record);
+      pending.add(p);
     }
   }
 
@@ -1260,22 +1616,24 @@ public final class XgramUndoSend {
   }
 
   private static void restoreOrphans (Tdlib tdlib) {
+    final int epoch;
     synchronized (LOCK) {
       if (!restoredAccounts.add(tdlib.id())) {
         return;
       }
+      epoch = epochs.get(tdlib.id(), 0);
     }
     if (!tdlib.isAuthorized()) {
       return;
     }
     List<XgramUndoSendStore.Record> orphans = XgramUndoSendStore.orphans(tdlib.id(), BOOT_ID, MAX_ORPHANS_PER_LAUNCH);
     if (!orphans.isEmpty()) {
-      restoreNext(tdlib, orphans, 0, new int[1]);
+      restoreNext(tdlib, orphans, 0, new int[1], epoch);
     }
   }
 
   /** One record after the other (each step waits for TDLib's answer). */
-  private static void restoreNext (Tdlib tdlib, List<XgramUndoSendStore.Record> orphans, int index, int[] restored) {
+  private static void restoreNext (Tdlib tdlib, List<XgramUndoSendStore.Record> orphans, int index, int[] restored, int epoch) {
     if (index >= orphans.size()) {
       int count = restored[0];
       if (count > 0 && UI.getUiState() == UI.State.RESUMED) {
@@ -1284,7 +1642,7 @@ public final class XgramUndoSend {
       return;
     }
     final XgramUndoSendStore.Record record = orphans.get(index);
-    final Runnable next = () -> restoreNext(tdlib, orphans, index + 1, restored);
+    final Runnable next = () -> restoreNext(tdlib, orphans, index + 1, restored, epoch);
     if (record.kind == XgramUndoSendItem.KIND_VOICE || record.kind == XgramUndoSendItem.KIND_VIDEO) {
       // A recording is never sent unasked, and it can't be a draft.
       XgramUndoSendStore.remove(record.key);
@@ -1301,47 +1659,109 @@ public final class XgramUndoSend {
           XgramUndoSendStore.remove(record.key);
           next.run();
         } else {
-          restoreAsDraft(tdlib, record, restored, next);
+          restoreAsDraft(tdlib, record, restored, next, epoch);
         }
       });
     } else {
-      restoreAsDraft(tdlib, record, restored, next);
+      restoreAsDraft(tdlib, record, restored, next, epoch);
     }
   }
 
+  /**
+   * After a crash: TDLib has the message of a record that was on its way. Only an exact match counts (the last part
+   * of a long text as Telegram X split it, the parts go in order; for files the last file's name and the caption it
+   * carries), sent by the user at the flush or after it and newer than the chat's last message then. When unsure it
+   * becomes a draft: a duplicate draft is harmless, a lost message isn't.
+   */
   private static boolean wasSent (Tdlib tdlib, TdApi.Messages messages, XgramUndoSendStore.Record record) {
     if (messages.messages == null) {
       return false;
     }
-    String held = record.text.text;
-    long since = record.createdWall / 1000L - 120L;
-    for (TdApi.Message message : messages.messages) {
-      if (message == null || message.date < since || (!message.isOutgoing && !tdlib.isSelfSender(message.senderId))) {
-        continue; // (Saved Messages: own messages aren't "outgoing" there)
+    // Telegram's time. Records of earlier versions only know when the message started to wait (the device's clock).
+    final long since = (record.flushDate > 0 ? record.flushDate :
+      tdlib.toTdlibTimeMillis(record.createdWall, TimeUnit.MILLISECONDS) / 1000L) - SENT_MARGIN_SECONDS;
+    final long newerThan = record.flushLastMessageId;
+    if (record.kind == XgramUndoSendItem.KIND_FILES) {
+      String lastName = record.fileNames != null && record.fileNames.length > 0 ? record.fileNames[record.fileNames.length - 1] : null;
+      if (TextUtils.isEmpty(lastName)) {
+        return false;
       }
-      if (record.kind == XgramUndoSendItem.KIND_FILES) {
+      final String caption = trimmed(record.text.text);
+      for (TdApi.Message message : messages.messages) {
+        if (!isOwnSince(tdlib, message, since, newerThan)) {
+          continue;
+        }
         String fileName = null;
+        TdApi.FormattedText sentCaption = null;
         if (message.content instanceof TdApi.MessageDocument) {
-          TdApi.Document document = ((TdApi.MessageDocument) message.content).document;
-          fileName = document != null ? document.fileName : null;
+          TdApi.MessageDocument document = (TdApi.MessageDocument) message.content;
+          fileName = document.document != null ? document.document.fileName : null;
+          sentCaption = document.caption;
         } else if (message.content instanceof TdApi.MessageAudio) {
-          TdApi.Audio audio = ((TdApi.MessageAudio) message.content).audio;
-          fileName = audio != null ? audio.fileName : null;
+          TdApi.MessageAudio audio = (TdApi.MessageAudio) message.content;
+          fileName = audio.audio != null ? audio.audio.fileName : null;
+          sentCaption = audio.caption;
         }
-        if (!TextUtils.isEmpty(fileName) && record.fileNames != null && Arrays.asList(record.fileNames).contains(fileName)) {
+        if (lastName.equals(fileName) && caption.equals(trimmed(sentCaption != null ? sentCaption.text : null))) {
           return true;
         }
-      } else if (message.content instanceof TdApi.MessageText) {
-        TdApi.FormattedText sent = ((TdApi.MessageText) message.content).text;
-        if (sent != null && sent.text != null && !sent.text.isEmpty() && held.startsWith(sent.text)) {
-          return true;
-        }
+      }
+      return false;
+    }
+    List<TdApi.InputMessageContent> parts = TD.explodeText(new TdApi.InputMessageText(record.text, null, false), tdlib.maxMessageTextLength());
+    TdApi.InputMessageContent lastPart = parts.isEmpty() ? null : parts.get(parts.size() - 1);
+    if (!(lastPart instanceof TdApi.InputMessageText) || ((TdApi.InputMessageText) lastPart).text == null) {
+      return false;
+    }
+    final String expected = trimmed(((TdApi.InputMessageText) lastPart).text.text);
+    if (expected.isEmpty()) {
+      return false;
+    }
+    for (TdApi.Message message : messages.messages) {
+      if (!isOwnSince(tdlib, message, since, newerThan)) {
+        continue;
+      }
+      String sent = null;
+      if (message.content instanceof TdApi.MessageText) {
+        TdApi.FormattedText text = ((TdApi.MessageText) message.content).text;
+        sent = text != null ? text.text : null;
+      } else if (message.content instanceof TdApi.MessageAnimatedEmoji) {
+        sent = ((TdApi.MessageAnimatedEmoji) message.content).emoji; // a lone emoji
+      }
+      if (sent != null && expected.equals(trimmed(sent))) {
+        return true;
       }
     }
     return false;
   }
 
-  private static void restoreAsDraft (Tdlib tdlib, XgramUndoSendStore.Record record, int[] restored, Runnable next) {
+  /** The user's own message (in Saved Messages own messages aren't "outgoing"), sent in the window. */
+  private static boolean isOwnSince (Tdlib tdlib, @Nullable TdApi.Message message, long since, long newerThan) {
+    return message != null && message.date >= since && (newerThan == 0 || message.id > newerThan) &&
+      (message.isOutgoing || tdlib.isSelfSender(message.senderId));
+  }
+
+  /** The text as Telegram keeps it: no carriage returns, no space or line break at either end. */
+  private static String trimmed (@Nullable String text) {
+    if (text == null) {
+      return "";
+    }
+    String s = text.indexOf('\r') >= 0 ? text.replace("\r", "") : text;
+    int start = 0, end = s.length();
+    while (start < end && isBlank(s.charAt(start))) {
+      start++;
+    }
+    while (end > start && isBlank(s.charAt(end - 1))) {
+      end--;
+    }
+    return s.substring(start, end);
+  }
+
+  private static boolean isBlank (char c) {
+    return Character.isWhitespace(c) || Character.isSpaceChar(c);
+  }
+
+  private static void restoreAsDraft (Tdlib tdlib, XgramUndoSendStore.Record record, int[] restored, Runnable next, int epoch) {
     if (Td.isEmpty(record.text)) {
       // Files without a caption: they can't come back, they are listed.
       XgramUndoSendStore.remove(record.key);
@@ -1351,22 +1771,23 @@ public final class XgramUndoSend {
       next.run();
       return;
     }
+    final Pending later = new Pending(tdlib, record, epoch, null, null, null, true, true);
     if (record.topic instanceof TdApi.MessageTopicSavedMessages || XgramUndoSendStore.takeDebugFailRestore()) {
-      keepPending(record);
+      keepPending(later);
       next.run();
       return;
     }
     saveAsDraft(tdlib, record.draftChatId, record.topic, record.text, record.replyTo, ok -> {
       if (ok) {
         XgramUndoSendStore.remove(record.key);
-        XgramUndoSendStore.putHint(record.accountId, record.chatId);
+        journalHint(record.accountId, epoch, record.chatId);
         mayHaveHints = true;
         restored[0]++;
         if (UI.getUiState() == UI.State.RESUMED) {
           showFilesNotSent(record.fileNames);
         }
       } else {
-        keepPending(record); // the message box takes it back when that chat opens
+        keepPending(later); // the message box takes it back when that chat opens
       }
       next.run();
     });
@@ -1375,8 +1796,10 @@ public final class XgramUndoSend {
   /** The account in this slot logged out (XgramAccountData erased its records). */
   @AnyThread
   public static void forgetAccount (int accountId) {
-    List<XgramUndoSendItem> dropped = new ArrayList<>();
+    final List<XgramUndoSendItem> dropped = new ArrayList<>();
     synchronized (LOCK) {
+      // From now on nothing of that account is written to the journal or kept (journal*, keepPending)
+      epochs.put(accountId, epochs.get(accountId, 0) + 1);
       for (int i = items.size() - 1; i >= 0; i--) {
         XgramUndoSendItem item = items.get(i);
         if (item.accountId == accountId) {
@@ -1389,7 +1812,7 @@ public final class XgramUndoSend {
         }
       }
       for (int i = pending.size() - 1; i >= 0; i--) {
-        if (pending.get(i).accountId == accountId) {
+        if (pending.get(i).record.accountId == accountId) {
           pending.remove(i);
         }
       }
@@ -1399,6 +1822,9 @@ public final class XgramUndoSend {
       if (item.dueTask != null) {
         UI.cancel(item.dueTask);
       }
+    }
+    if (!dropped.isEmpty()) {
+      UI.post(() -> notifyOwners(dropped, false)); // their bars empty
     }
   }
 

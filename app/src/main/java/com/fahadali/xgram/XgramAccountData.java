@@ -43,6 +43,8 @@ public final class XgramAccountData {
   /** TDLib thread: the account in this slot logged out. */
   public static void eraseAccount (int accountId) {
     try {
+      // Undo send first: from here on it writes nothing of this account, so its erased journal stays erased.
+      com.fahadali.xgram.chats.XgramUndoSend.forgetAccount(accountId);
       String suffix = accountId + "_";
       LevelDB pmc = Settings.instance().pmc();
       for (String prefix : PREFIXES) {
@@ -61,7 +63,6 @@ public final class XgramAccountData {
       com.fahadali.xgram.topics.XgramTopicMute.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramAiTools.forgetAccount(accountId);
       com.fahadali.xgram.chats.XgramCommunities.forgetAccount(accountId);
-      com.fahadali.xgram.chats.XgramUndoSend.forgetAccount(accountId);
       XgramHistory.instance().clearAccount(accountId);
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Cannot erase account data", t);

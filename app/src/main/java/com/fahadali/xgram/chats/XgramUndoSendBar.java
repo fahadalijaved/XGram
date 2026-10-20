@@ -52,7 +52,6 @@ import org.thunderdog.challegram.tool.Fonts;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.MessagesController;
-import org.thunderdog.challegram.v.MessagesRecyclerView;
 
 import java.util.List;
 
@@ -71,16 +70,22 @@ import me.vkryl.core.MathUtils;
  *
  * <p>Expressive design: a floating surfaceContainerHigh card of the chat's card group (XgramM3Chat.CardDrawable) with
  * the composer field's side margins, a wavy primary ring, bodyMedium / bodySmall text, an Undo text button and a tonal
- * Send now icon button; it rises on SPATIAL_DEFAULT and leaves with the bubble that replaces it (the list's one-shot
- * 140 ms DECELERATE item animator). Otherwise Telegram X's look: a full-width 48dp bar on the filling color like the
- * reply bar, a progress arc, UNDO and the send icon, 200 ms DECELERATE, and an instant hand-off (the list has no item
- * animator). The look is picked when the bar is made: switching Expressive design restarts the app.
+ * Send now icon button. It rises and leaves on SPATIAL_DEFAULT (the reply block's curve, which may come back in the same
+ * frame), and leaves with the bubble that replaces it on the move spring of the list's one-shot item animator
+ * (XgramMotion.ItemSprings: SPATIAL_DEFAULT, STD_SPATIAL_FAST with reduce motion), so the older messages move only by
+ * the height difference, monotonically. Otherwise Telegram X's look: a full-width 48dp bar on the filling color like
+ * the reply bar, a progress arc, UNDO and the send icon, 200 ms DECELERATE, and an instant hand-off (the list has no
+ * item animator). With reduce motion it fades in and out instead of moving. The look is picked when the bar is made:
+ * switching Expressive design restarts the app.
  */
 public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnimator.Target {
   private static final float M3_CARD_DP = 58f; // CardDrawable insets 1dp at the top and the bottom: a 56dp card
   private static final float M3_BAR_DP = 63f; // the card and a 6dp gap above the message box
   private static final float CLASSIC_BAR_DP = 48f;
   private static final String SEPARATOR = " · ";
+  /** Most sends are answered within a few frames: the ring spins only for one that takes longer than this. */
+  private static final long SPINNER_DELAY_MS = 300L;
+  private static final long FADE_MS = 150L;
 
   private final MessagesController owner;
   private final boolean m3;
@@ -92,11 +97,14 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
   private final ImageView sendNow;
   private final BoolAnimator visible;
   private final Runnable tick = this::onTick;
+  private final Runnable fadeOutEnd = this::onFadeOutEnd;
 
   @Nullable private XgramUndoSend.Shown shown;
   private int moreCount;
   private long announcedOrder = -1;
   private long flushStartUptime;
+  /** Reduce motion: the content fades out before the bar goes. */
+  private boolean fadingOut;
 
   public XgramUndoSendBar (Context context, MessagesController owner) {
     super(context);
@@ -245,13 +253,16 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
 
   private boolean searchHidden;
 
-  /** Set by the chat on every move of the reply bar, the keyboard and in-chat search. */
+  /**
+   * Set by the chat on every move of the reply bar, the keyboard and in-chat search; {@code searchVisibility} is 0 too
+   * while the message box is hidden (a Join button in its place).
+   */
   public void applyPosition (float translationY, float searchVisibility) {
     setTranslationY(translationY);
     setAlpha(MathUtils.clamp(searchVisibility));
     boolean hidden = searchVisibility <= 0f;
     if (searchHidden != hidden) {
-      searchHidden = hidden; // in-chat search: out of sight and out of reach, the timers go on
+      searchHidden = hidden; // out of sight and out of reach, the timers go on
       updateVisibility();
     }
   }
@@ -271,6 +282,7 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
   /** Hidden at once, without telling anyone (the chat closes or shows another chat). */
   public void reset () {
     removeCallbacks(tick);
+    stopFadeOut();
     visible.setValue(false, false);
     shown = null;
     updateVisibility();
@@ -281,28 +293,39 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     List<XgramUndoSend.Shown> list = XgramUndoSend.itemsOf(owner);
     if (list.isEmpty()) {
       removeCallbacks(tick);
-      if (visible.getValue()) {
-        boolean animate = animated && !XgramMotion.reduce();
-        if (handoff) {
-          if (m3) {
-            // In step with the bubble that comes in where the card was (MessagesRecyclerView's one-shot animator).
-            setMotion(AnimatorUtils.DECELERATE_INTERPOLATOR, MessagesRecyclerView.ITEM_ANIMATOR_DURATION);
-          } else {
-            animate = false; // the list has no item animator: the bubble is there in this frame
-          }
-        } else if (m3) {
-          setMotion(XgramAppMotion.springClamped(XgramExpressive.SPATIAL_FAST), XgramAppMotion.springDuration(XgramExpressive.SPATIAL_FAST));
+      if (visible.getValue() && !fadingOut) {
+        if (handoff && !m3) {
+          visible.setValue(false, false); // the list has no item animator: the bubble is there in this frame
+        } else if (handoff) {
+          // With the bubble that comes in where the card was, on the move spring of the list's one-shot item animator
+          // (also with reduce motion, which only changes the spring): the older messages move by the height difference.
+          int token = XgramMotion.reduce() ? XgramExpressive.STD_SPATIAL_FAST : XgramExpressive.SPATIAL_DEFAULT;
+          setMotion(XgramAppMotion.springClamped(token), XgramAppMotion.springDuration(token));
+          visible.setValue(false, animated);
+        } else if (animated && XgramMotion.reduce()) {
+          fadeOut(); // reduce motion: no movement, a fade
         } else {
-          setMotion(AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
+          if (m3) {
+            // The reply block's curve: after Undo of a reply both offsets move the list together, without a bounce.
+            setMotion(XgramAppMotion.springClamped(XgramExpressive.SPATIAL_DEFAULT), XgramAppMotion.springDuration(XgramExpressive.SPATIAL_DEFAULT));
+          } else {
+            setMotion(AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
+          }
+          visible.setValue(false, animated);
         }
-        visible.setValue(false, animate);
       }
       return;
+    }
+    if (fadingOut) {
+      // Something waits again before the fade ended: the bar stays.
+      stopFadeOut();
     }
     XgramUndoSend.Shown newest = list.get(list.size() - 1);
     boolean changed = shown == null || shown.order != newest.order;
     if (newest.flushing && (changed || !shown.flushing)) {
-      flushStartUptime = SystemClock.uptimeMillis();
+      long now = SystemClock.uptimeMillis();
+      // Due earlier (files ahead of it were being made): its "sending" look started then
+      flushStartUptime = !changed && now >= shown.dueUptime ? shown.dueUptime : now;
     }
     shown = newest;
     moreCount = list.size() - 1;
@@ -328,7 +351,7 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
       if (reduce && animated) {
         // Reduce motion: no movement, a fade.
         content.setAlpha(0f);
-        content.animate().alpha(1f).setDuration(150L).start();
+        content.animate().alpha(1f).setDuration(FADE_MS).start();
       }
     }
   }
@@ -336,6 +359,34 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
   private void setMotion (Interpolator interpolator, long duration) {
     visible.setInterpolator(interpolator);
     visible.setDuration(duration);
+  }
+
+  /** Reduce motion: the content fades out, then the bar goes at once (the list then moves without animation). */
+  private void fadeOut () {
+    fadingOut = true;
+    content.animate().cancel();
+    content.animate().alpha(0f).setDuration(FADE_MS).withEndAction(fadeOutEnd).start();
+  }
+
+  private void onFadeOutEnd () {
+    if (!fadingOut) {
+      return;
+    }
+    fadingOut = false;
+    visible.setValue(false, false);
+    if (!m3) {
+      content.setAlpha(1f); // (with Expressive design the card's alpha follows the bar's factor)
+    }
+  }
+
+  /** The fade-out stops, and the content is shown as the bar's factor says. */
+  private void stopFadeOut () {
+    if (!fadingOut) {
+      return;
+    }
+    fadingOut = false;
+    content.animate().cancel();
+    content.setAlpha(m3 ? MathUtils.clamp(visible.getFloatValue()) : 1f);
   }
 
   @Override
@@ -362,9 +413,17 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     return (int) Math.max(1L, (left + 999L) / 1000L);
   }
 
+  /**
+   * On its way, or due: its deadline passed while files ahead of it (or its own) are still being made, and it goes as
+   * soon as they are. Either way the countdown is over: "Sending…", no digits, no Undo and no Send now.
+   */
+  private static boolean isSending (XgramUndoSend.Shown s, long now) {
+    return s.flushing || now >= s.dueUptime;
+  }
+
   private boolean undoEnabled () {
     XgramUndoSend.Shown s = shown;
-    return s != null && !s.flushing && !owner.isEditingMessage();
+    return s != null && !isSending(s, SystemClock.uptimeMillis()) && !owner.isEditingMessage();
   }
 
   private void updateStatus () {
@@ -372,8 +431,9 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     if (s == null) {
       return;
     }
+    final boolean sending = isSending(s, SystemClock.uptimeMillis());
     int seconds = secondsLeft(s);
-    StringBuilder b = new StringBuilder(s.flushing ? Lang.getString(R.string.XgramUndoSendSending) : Lang.getString(R.string.XgramUndoSendIn, Lang.plural(R.string.xSec, seconds)));
+    StringBuilder b = new StringBuilder(sending ? Lang.getString(R.string.XgramUndoSendSending) : Lang.getString(R.string.XgramUndoSendIn, Lang.plural(R.string.xSec, seconds)));
     if (s.replyName != null) {
       b.append(SEPARATOR).append(Lang.getString(R.string.XgramUndoSendReplyTo, s.replyName));
     }
@@ -391,15 +451,16 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     if (!TextUtils.equals(status.getText(), b)) {
       status.setText(b.toString());
     }
-    ring.setSeconds(s.flushing ? 0 : seconds);
-    // Undo is dimmed while the message box edits another message, and once the message is on its way.
+    ring.setSeconds(sending ? 0 : seconds);
+    // Undo is dimmed while the message box edits another message, and once the message is due or on its way.
     boolean enabled = undoEnabled();
     undo.setEnabled(enabled);
     undo.setAlpha(enabled ? 1f : XgramExpressive.DISABLED_CONTENT);
-    sendNow.setEnabled(!s.flushing);
-    sendNow.setAlpha(s.flushing ? XgramExpressive.DISABLED_CONTENT : 1f);
+    sendNow.setEnabled(!sending);
+    sendNow.setAlpha(sending ? XgramExpressive.DISABLED_CONTENT : 1f);
   }
 
+  /** The next whole second, and a last tick just after the deadline: then the bar says "Sending…" even if nobody tells it. */
   private void scheduleTick () {
     removeCallbacks(tick);
     XgramUndoSend.Shown s = shown;
@@ -407,11 +468,11 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
       return;
     }
     long left = s.dueUptime - SystemClock.uptimeMillis();
-    if (left <= 0) {
-      return;
+    if (left < 0) {
+      return; // already past the deadline: updateStatus showed it
     }
     long delay = left % 1000L;
-    postDelayed(tick, (delay == 0 ? 1000L : delay) + 8L);
+    postDelayed(tick, (delay == 0 ? (left == 0 ? 0L : 1000L) : delay) + 8L);
   }
 
   private void onTick () {
@@ -453,7 +514,7 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
 
   private void onSendNowClick () {
     XgramUndoSend.Shown s = shown;
-    if (s == null || s.flushing) {
+    if (s == null || isSending(s, SystemClock.uptimeMillis())) {
       return;
     }
     performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
@@ -560,7 +621,8 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
       }
       final float cx = getWidth() / 2f, cy = getHeight() / 2f;
       final long now = SystemClock.uptimeMillis();
-      final boolean held = !s.flushing;
+      final boolean held = !isSending(s, now);
+      final boolean reduce = XgramMotion.reduce();
       final float progress = held && s.totalMs > 0 ? MathUtils.clamp((s.dueUptime - now) / (float) s.totalMs) : 0f;
       if (m3) {
         final int primary = XgramExpressive.color(XgramExpressive.PRIMARY);
@@ -569,14 +631,23 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
         final float radius = Math.min(getWidth(), getHeight()) / 2f - stroke / 2f - amplitude - Screen.dpf(.5f);
         final int track = XgramExpressive.withAlpha(primary, .24f);
         if (held) {
+          final float drawnAmplitude = reduce ? 0f : amplitude;
           // The arc keeps its end at 12 o'clock: its start moves clockwise as the time runs out.
           c.save();
           c.rotate(360f * (1f - progress), cx, cy);
-          XgramWavyProgress.drawCircular(c, cx, cy, radius, stroke, progress, primary, track, XgramMotion.reduce() ? 0f : amplitude);
+          XgramWavyProgress.drawCircular(c, cx, cy, radius, stroke, progress, primary, track, drawnAmplitude);
           c.restore();
-          drawDigits(c, cx, cy, primary, now);
+          // The digits stay inside the stroke's inner edge (the troughs of the wave)
+          drawDigits(c, cx, cy, radius - stroke / 2f - drawnAmplitude, primary, now);
         } else {
-          XgramWavyProgress.drawCircularIndeterminate(c, cx, cy, radius, stroke, primary, track, now - flushStartUptime);
+          final long since = s.flushing ? flushStartUptime : s.dueUptime;
+          if (reduce || now - since < SPINNER_DELAY_MS) {
+            // The drained ring: most sends are answered within a few frames and the card leaves calmly; with reduce
+            // motion it stays so
+            XgramWavyProgress.drawCircular(c, cx, cy, radius, stroke, 0f, primary, track, 0f);
+          } else {
+            XgramWavyProgress.drawCircularIndeterminate(c, cx, cy, radius, stroke, primary, track, now - since - SPINNER_DELAY_MS);
+          }
         }
       } else {
         final int color = Theme.getColor(ColorId.progress);
@@ -592,18 +663,22 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
           c.drawArc(rect, -90f + 360f * (1f - progress), 360f * progress, false, arcPaint);
         }
         if (held) {
-          drawDigits(c, cx, cy, Theme.getColor(ColorId.textLight), now);
+          drawDigits(c, cx, cy, radius - stroke / 2f, Theme.getColor(ColorId.textLight), now);
         }
       }
-      // Expressive design: the wave travels (and the ring spins while sending); otherwise the arc only drains.
-      if ((m3 || held) && isShown()) {
+      // The arc drains while the message waits; afterwards only the Expressive ring moves (it spins while sending),
+      // and with reduce motion nothing does.
+      if ((held || (m3 && !reduce)) && isShown()) {
         postInvalidateOnAnimation();
       }
     }
 
-    /** The seconds; a new value rolls in from below on the SPATIAL_FAST spring (as XgramCounterAnimator's digits do). */
-    private void drawDigits (Canvas c, float cx, float cy, int color, long now) {
-      if (digits.isEmpty()) {
+    /**
+     * The seconds, clipped to the ring's hole ({@code hole}: half its side); a new value rolls in from below on the
+     * SPATIAL_FAST spring (as XgramCounterAnimator's digits do), the old one out at the top.
+     */
+    private void drawDigits (Canvas c, float cx, float cy, float hole, int color, long now) {
+      if (digits.isEmpty() || hole <= 0f) {
         return;
       }
       final float baseline = cy - (digitsPaint.ascent() + digitsPaint.descent()) / 2f;
@@ -620,12 +695,15 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
       }
       final float shift = (digitsPaint.descent() - digitsPaint.ascent()) * .8f;
       digitsPaint.setColor(color);
+      c.save();
+      c.clipRect(cx - hole, cy - hole, cx + hole, cy + hole);
       if (f < 1f && !previousDigits.isEmpty()) {
         digitsPaint.setAlpha(Math.round(alpha * MathUtils.clamp(1f - f)));
         c.drawText(previousDigits, cx - previousDigitsWidth / 2f, baseline - shift * f, digitsPaint);
       }
       digitsPaint.setAlpha(Math.round(alpha * MathUtils.clamp(f)));
       c.drawText(digits, cx - digitsWidth / 2f, baseline + shift * (1f - f), digitsPaint);
+      c.restore();
     }
   }
 

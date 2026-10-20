@@ -1927,9 +1927,10 @@ public class RecordAudioVideoController implements
         if (newVideoNote.videoNote.thumbnail == null && helperFile != null) {
           tdlib.client().send(new TdApi.DownloadFile(helperFile.id, TdlibFilesManager.PRIORITY_FILE_GENERATION, 0, 0, true), result -> {
             TdApi.InputMessageVideoNote content = result.getConstructor() == TdApi.File.CONSTRUCTOR ? tdlib.filegen().createThumbnail(videoNote, isSecretChat, (TdApi.File) result) : newVideoNote;
-            if (com.fahadali.xgram.chats.XgramUndoSend.mayHoldNotes()) {
+            if (com.fahadali.xgram.chats.XgramUndoSend.interceptsNotes()) {
+              // (it may wait, or a waiting message in a slow mode chat keeps it from going)
               tdlib.ui().post(() -> {
-                if (!com.fahadali.xgram.chats.XgramUndoSend.tryHoldNote(xgramOwner, new TdApi.SendMessage(chatId, topicId, replyTo, sendOptions, null, content), replyInfo, content.videoNote.duration)) {
+                if (com.fahadali.xgram.chats.XgramUndoSend.tryHoldNote(xgramOwner, new TdApi.SendMessage(chatId, topicId, replyTo, sendOptions, null, content), replyInfo, content.videoNote.duration) == com.fahadali.xgram.chats.XgramUndoSend.NOT_HELD) {
                   tdlib.sendMessage(chatId, topicId, replyTo, sendOptions, content, null);
                 }
               });
@@ -1937,7 +1938,7 @@ public class RecordAudioVideoController implements
               tdlib.sendMessage(chatId, topicId, replyTo, sendOptions, content, null);
             }
           });
-        } else if (!com.fahadali.xgram.chats.XgramUndoSend.tryHoldNote(xgramOwner, new TdApi.SendMessage(chatId, topicId, replyTo, sendOptions, null, newVideoNote), replyInfo, newVideoNote.videoNote.duration)) {
+        } else if (com.fahadali.xgram.chats.XgramUndoSend.tryHoldNote(xgramOwner, new TdApi.SendMessage(chatId, topicId, replyTo, sendOptions, null, newVideoNote), replyInfo, newVideoNote.videoNote.duration) == com.fahadali.xgram.chats.XgramUndoSend.NOT_HELD) {
           tdlib.sendMessage(chatId, topicId, replyTo, sendOptions, newVideoNote, null);
         }
       });
@@ -1959,7 +1960,7 @@ public class RecordAudioVideoController implements
           targetController.obtainSilentMode()
         );
         // XGram: Undo send, "Delay voice and video messages": the voice message may wait first
-        if (!com.fahadali.xgram.chats.XgramUndoSend.tryHoldNote(targetController, new TdApi.SendMessage(chatId, topicId, replyTo, sendOptions, null, voiceNote), replyInfo, voiceNote.voiceNote.duration)) {
+        if (com.fahadali.xgram.chats.XgramUndoSend.tryHoldNote(targetController, new TdApi.SendMessage(chatId, topicId, replyTo, sendOptions, null, voiceNote), replyInfo, voiceNote.voiceNote.duration) == com.fahadali.xgram.chats.XgramUndoSend.NOT_HELD) {
           tdlib.sendMessage(chatId, topicId, replyTo, sendOptions, voiceNote, null);
         }
       });

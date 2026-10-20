@@ -3776,6 +3776,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     updateBottomBarStyle();
     updateMessagesViewInset();
+    if (xgramUndoBar != null && messagesView != null && bottomShadowView != null) {
+      updateReplyView(); // XGram: the Undo send bar hides (or shows again) with the message box, the list follows
+    }
   }
 
   @Override
@@ -4420,11 +4423,19 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (checkCurrentDraft && !Td.isEmpty(currentDraft)) {
       TdApi.FormattedText currentText = Td.textContent(currentDraft);
       if (!Td.isEmpty(currentText) && !Td.equalsTo(currentText, fillDraft)) {
-        showWarning(Lang.getMarkdownString(this, R.string.DraftPreFillWarning), isConfirmed -> {
+        PopupLayout popup = showWarning(Lang.getMarkdownString(this, R.string.DraftPreFillWarning), isConfirmed -> {
           if (isConfirmed) {
             act.run();
           }
         });
+        if (popup != null) {
+          // XGram: Undo send, nothing goes back into the message box while the prompt may still replace what it holds
+          xgramPrefillPromptOpen = true;
+          popup.setDismissListener(p -> {
+            xgramPrefillPromptOpen = false;
+            com.fahadali.xgram.chats.XgramUndoSend.retryPending(this);
+          });
+        }
         return true;
       }
     }
@@ -4436,11 +4447,13 @@ public class MessagesController extends ViewController<MessagesController.Argume
   public void onFocus () {
     super.onFocus();
     xgramCheckAutoTranslate(); // XGram: e.g. a chat preview opened in full
-    com.fahadali.xgram.chats.XgramUndoSend.onComposerShown(this); // XGram: a message an earlier launch couldn't send
     if (promptDraftPrefillOnFocus) {
       promptDraftPrefillOnFocus = false;
       fillDraft(this.fillDraft, true);
     }
+    // XGram: Undo send, what waits to go back into this message box (after the prefill: while its prompt is open, a
+    // message put back now would be replaced along with the draft)
+    com.fahadali.xgram.chats.XgramUndoSend.onComposerShown(this);
     if (chat != null && !isInForceTouchMode()) {
       TdApi.ChatSource source = tdlib.chatSource(openedFromChatList, chat.id);
       if (source != null && Settings.instance().needTutorial(source)) {
@@ -4622,6 +4635,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onBlur () {
     saveDraft();
+    com.fahadali.xgram.chats.XgramUndoSend.onComposerHidden(this); // XGram: Undo send, what was in sight (ghost read on send)
     if (xgramNextChatId != 0) {
       xgramRemoveWhenCovered(xgramNextChatId, 0); // XGram: the next unread chat replaces this one
       xgramNextChatId = 0;
@@ -4705,6 +4719,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     manager.setParentPaused(false);
     if (enableOnResume) {
       UI.unlock(this, 200l);
+    }
+    if (isFocused()) {
+      com.fahadali.xgram.chats.XgramUndoSend.retryPending(this); // XGram: Undo send, a send refused while the app was away
     }
   }
 
@@ -7719,9 +7736,29 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private @Nullable com.fahadali.xgram.chats.XgramUndoSendBar xgramUndoBar;
   /** "Send now" from the long-press menu of Send: this one send skips the wait. */
   private boolean xgramUndoBypass;
+  /** The prompt before a prefill replaces the draft is open: nothing goes back into the message box meanwhile. */
+  private boolean xgramPrefillPromptOpen;
 
+  /** The bar lifts what is above the message box only while that box shows (not under search or a Join button). */
   private float xgramUndoBarOffset () {
-    return xgramUndoBar != null ? xgramUndoBar.visibleHeight() * (1f - getSearchTransformFactor()) : 0f;
+    if (xgramUndoBar == null || bottomWrap == null || bottomWrap.getVisibility() != View.VISIBLE) {
+      return 0f;
+    }
+    return xgramUndoBar.visibleHeight() * (1f - getSearchTransformFactor());
+  }
+
+  /** The bar keeps the message list's side margins (the topic tabs along the side). */
+  private void xgramSyncUndoBarMargins () {
+    if (xgramUndoBar == null || messagesView == null) {
+      return;
+    }
+    RelativeLayout.LayoutParams messagesParams = (RelativeLayout.LayoutParams) messagesView.getLayoutParams();
+    RelativeLayout.LayoutParams barParams = (RelativeLayout.LayoutParams) xgramUndoBar.getLayoutParams();
+    if (barParams.leftMargin != messagesParams.leftMargin || barParams.rightMargin != messagesParams.rightMargin) {
+      barParams.leftMargin = messagesParams.leftMargin;
+      barParams.rightMargin = messagesParams.rightMargin;
+      xgramUndoBar.setLayoutParams(barParams);
+    }
   }
 
   /** The bar moved (it animates in or out): everything placed above the message box follows. */
@@ -7744,6 +7781,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramUndoBar = new com.fahadali.xgram.chats.XgramUndoSendBar(context(), this);
       RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, xgramUndoBar.barHeight());
       params.addRule(RelativeLayout.ALIGN_TOP, R.id.msg_bottom);
+      // Beside the topic tabs along the side, as the list is: they draw over it
+      RelativeLayout.LayoutParams messagesParams = (RelativeLayout.LayoutParams) messagesView.getLayoutParams();
+      params.leftMargin = messagesParams.leftMargin;
+      params.rightMargin = messagesParams.rightMargin;
       xgramUndoBar.setLayoutParams(params);
       // Under the reply bar (and the message box and the list): while it slides, the reply bar covers its lower part.
       int index = contentView.indexOfChild(replyBarView);
@@ -7837,23 +7878,31 @@ public class MessagesController extends ViewController<MessagesController.Argume
       Td.equalsTo(getMessageTopicId(), topic) && inputView.getText().length() == 0;
   }
 
+  /** This message box is open on that chat and topic (whether or not it can take anything back right now). */
+  public boolean xgramShowsChat (long chatId, long draftChatId, @Nullable TdApi.MessageTopic draftTopic) {
+    return !isDestroyed() && inputView != null && chat != null && !inPreviewMode && !isInForceTouchMode() && !areScheduled &&
+      getChatId() == chatId && getMessageThreadChatId() == draftChatId && Td.equalsTo(getMessageTopicId(), draftTopic);
+  }
+
   /**
    * Undo, or a send that failed: {@code text} goes back into this message box before what it holds (a new line between),
    * {@code files} before the files to send it has, with the reply when the message box has none. False (nothing changed)
-   * unless this is the message box of that chat and topic and it can take it now.
+   * unless this is the message box of that chat and topic and it can take it now: in sight with the app in front (text
+   * put into a hidden box is lost when that box closes without a save), not editing, not in the middle of its own send
+   * (which clears the box when it is done), and no prefill prompt open (which would replace it).
    */
   @UiThread
   public boolean xgramRestoreUnsent (long chatId, long draftChatId, @Nullable TdApi.MessageTopic draftTopic, @Nullable TdApi.FormattedText text,
                                      @Nullable ReplyInfo replyInfo, @Nullable TdApi.InputMessageReplyTo replyTo, boolean showKeyboard,
                                      @Nullable List<InlineResult<?>> files) {
-    if (isDestroyed() || inputView == null || chat == null || inPreviewMode || isInForceTouchMode() || areScheduled || isEditingMessage() || !canWriteMessages()) {
+    if (!xgramShowsChat(chatId, draftChatId, draftTopic) || isEditingMessage() || !canWriteMessages() || isSendingText) {
       return false;
     }
-    if (getChatId() != chatId || getMessageThreadChatId() != draftChatId || !Td.equalsTo(getMessageTopicId(), draftTopic)) {
+    if (!isFocused() || context().getActivityState() != UI.State.RESUMED || promptDraftPrefillOnFocus || xgramPrefillPromptOpen) {
       return false;
     }
-    if (files != null && !files.isEmpty() && (!isFocused() || inSearchMode())) {
-      return false; // the tray floats over the window: only while this chat is in front
+    if (files != null && !files.isEmpty() && inSearchMode()) {
+      return false; // the tray floats over the window: not while in-chat search hides the message box
     }
     if (files != null && !files.isEmpty()) {
       // The files to send come back into the tray, before the ones it holds; the text becomes their caption.
@@ -7876,7 +7925,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (merged == null) {
         merged = text;
       }
-      inputView.setInput(TD.toCharSequence(merged), true, true);
+      // Not as typing: no "typing…" goes to the chat for text the user didn't type now. Marked as changed, so the
+      // draft is saved when the chat closes.
+      inputView.setInput(TD.toCharSequence(merged), true, false);
+      inputView.setTextChangedSinceChatOpened(true);
     }
     if (getCurrentReplyId() == null) {
       if (replyInfo != null) {
@@ -7930,7 +7982,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   /** A hint at the Send button while this chat is in front; false when it isn't (the caller shows a toast instead). */
   public boolean xgramShowUndoSendHint (CharSequence text, boolean isError) {
-    if (isDestroyed() || !isFocused() || sendButton == null) {
+    if (isDestroyed() || !isFocused() || sendButton == null || context().getActivityState() != UI.State.RESUMED) {
       return false;
     }
     showBottomHint(text, isError);
@@ -8001,7 +8053,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
       replyBarView.setTranslationY(y + keyboardOffset);
     }
     if (xgramUndoBar != null) {
-      xgramUndoBar.applyPosition(y + keyboardOffset + xgramUndoOffset, 1f - getSearchTransformFactor());
+      // Hidden with the message box (in-chat search, a Join button instead of the box): out of sight and out of reach
+      final float barVisibility = bottomWrap.getVisibility() == View.VISIBLE ? 1f - getSearchTransformFactor() : 0f;
+      xgramUndoBar.applyPosition(y + keyboardOffset + xgramUndoOffset, barVisibility);
     }
     if (inputView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       inputView.invalidate(); // XGram: the field's top corners follow the reply block
@@ -8453,6 +8507,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     // Intentionally doesn't match the send logic (where there's no animation after send).
     // For the exact match, !isSaved could be passed here instead.
     updateReplyBarVisibility(true);
+    com.fahadali.xgram.chats.XgramUndoSend.retryPending(this); // XGram: Undo send, what couldn't go back during the edit
   }
 
   private void saveMessage (boolean applyMarkdown) {
@@ -11062,6 +11117,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
       setStackLocked(isSendingText);
       inputView.setInputBlocked(isSendingText);
 
+      if (!isSendingText && !isDestroyed()) {
+        // XGram: Undo send, what came back while this send was clearing the message box goes back in now
+        com.fahadali.xgram.chats.XgramUndoSend.retryPending(this);
+      }
     }
   }
 
@@ -11340,6 +11399,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
           getInputSuggestedPostInfo(replyInfo),
           obtainSilentMode()
         );
+        if (sendOptions.schedulingState == null && com.fahadali.xgram.chats.XgramUndoSend.blocksSlowMode(tdlib, chat.id)) {
+          // XGram: Undo send, a message waits in this slow mode chat: this one would only be refused
+          showBottomHint(Lang.getString(R.string.XgramUndoSendSlowMode), true);
+          return;
+        }
         tdlib.sendInlineQueryResult(chat.id, topicId, replyTo, sendOptions, inlineQueryId, id);
         if (clearInput) {
           inputView.setInput("", false, true);
@@ -12261,6 +12325,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         xgramCornersView.setLayoutParams(cornersParams);
       }
     }
+    xgramSyncUndoBarMargins(); // the Undo send bar too: the side tabs draw over anything under them
     xgramUpdateSideTabsOffset();
   }
 
@@ -13701,6 +13766,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (searchByUserViewWrapper != null) {
       searchByUserViewWrapper.dismiss();
     }
+    com.fahadali.xgram.chats.XgramUndoSend.retryPending(this); // XGram: Undo send, files that couldn't go back during search
   }
 
   private void moveSearchSelection (boolean next) {

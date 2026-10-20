@@ -41,6 +41,8 @@ final class XgramUndoSendItem {
   final long id;
   final Tdlib tdlib;
   final int accountId;
+  /** The account's epoch when it was made: once that account logs out nothing of it is written or kept any more. */
+  final int epoch;
   final int kind;
   /** The chat the requests go to. */
   final long chatId;
@@ -81,6 +83,14 @@ final class XgramUndoSendItem {
   boolean ghostScheduled;
   /** A part sent long ago without a result yet: no longer shown in the bar (the journal keeps it). */
   boolean hidden;
+  /**
+   * Ghost mode "read on send": the newest message of the chat (or topic) while the message box was last in sight, set
+   * at the tap and when the box goes out of sight; 0 when unknown. A message sent while its box is out of sight reads
+   * only up to it, as an immediate send would have.
+   */
+  volatile long readCap;
+  /** What {@link #readCap} became for the send in progress (0: read as always). */
+  volatile long flushReadCap;
   /** Main thread: the composer that sent it, cleared once that composer closes. */
   @Nullable WeakReference<MessagesController> owner;
   @Nullable Runnable dueTask;
@@ -99,6 +109,7 @@ final class XgramUndoSendItem {
     this.id = (createdWall << 8) | (order & 0xff);
     this.tdlib = tdlib;
     this.accountId = tdlib.id();
+    this.epoch = XgramUndoSend.epochOf(accountId);
     this.kind = kind;
     this.chatId = chatId;
     this.draftChatId = draftChatId;

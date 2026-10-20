@@ -547,7 +547,6 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     long ms = needMeasure ? SystemClock.uptimeMillis() : 0;
     this.listeners = new TdlibListeners(this);
     com.fahadali.xgram.ghost.XgramGhost.attach(this); // XGram
-    com.fahadali.xgram.chats.XgramUndoSend.attach(this); // XGram: Undo send, messages a crash kept from being sent
     if (needMeasure) {
       Log.v("INITIALIZATION: Tdlib.listeners -> %dms", SystemClock.uptimeMillis() - ms);
       ms = SystemClock.uptimeMillis();
@@ -648,6 +647,10 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
     if (needMeasure) {
       Log.i("INITIALIZATION: Tdlib.newClient() -> %dms", SystemClock.uptimeMillis() - ms);
     }
+
+    // XGram: Undo send, messages a crash kept from being sent. Last: waiting for the user wakes the client, which
+    // must not start before the cache and the managers exist (TDLib's first updates would find them null).
+    com.fahadali.xgram.chats.XgramUndoSend.attach(this);
 
     Settings.instance().addNewSettingsListener(this);
   }
@@ -11619,7 +11622,9 @@ public class Tdlib implements TdlibProvider, Settings.SettingsChangeListener, Da
 
     final int timeToSend = (int) cache().getSlowModeDelayExpiresIn(ChatId.toSupergroupId(chatId), TimeUnit.SECONDS);
     if (timeToSend == 0) {
-      return null;
+      // XGram: Undo send. A message waits here: Telegram's timer only starts once it is sent, but a second one now would
+      // be refused (SLOWMODE_WAIT), so every way of sending refuses with this hint.
+      return com.fahadali.xgram.chats.XgramUndoSend.blocksSlowMode(this, chatId) ? Lang.getString(R.string.XgramUndoSendSlowMode) : null;
     }
 
     final int minutes = timeToSend / 60;

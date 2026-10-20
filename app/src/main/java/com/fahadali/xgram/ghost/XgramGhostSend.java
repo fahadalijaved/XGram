@@ -135,14 +135,15 @@ public final class XgramGhostSend implements Client.QueryInterceptor {
     if (schedule && XgramSettings.instance().ghostReadOnSend() && XgramGhost.dontReadMessages(tdlib, chatId)) {
       TdApi.Message last = lastMessageOf(tdlib, chatId, topicId);
       if (last != null) {
-        XgramGhost.readUpTo(tdlib, last, last.id);
+        // Undo send: a message that waited while its chat was out of sight reads only up to what was on screen
+        XgramGhost.readUpTo(tdlib, last, XgramGhost.capped(last.id, XgramGhost.takeQueryReadCap(query)));
       }
     }
   }
 
   /** The last message where the message goes: the chat, or its forum topic (General when none is given). */
   @Nullable
-  private static TdApi.Message lastMessageOf (Tdlib tdlib, long chatId, @Nullable TdApi.MessageTopic topicId) {
+  static TdApi.Message lastMessageOf (Tdlib tdlib, long chatId, @Nullable TdApi.MessageTopic topicId) {
     if (topicId instanceof TdApi.MessageTopicForum || (topicId == null && tdlib.isForum(chatId))) {
       int forumTopicId = topicId != null ? ((TdApi.MessageTopicForum) topicId).forumTopicId : com.fahadali.xgram.topics.XgramForums.GENERAL_TOPIC_ID;
       if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {

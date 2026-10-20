@@ -20,6 +20,7 @@
   <!-- Failures and recovery -->
   <string name="XgramUndoSendSlowMode">Slow mode: wait until your message is sent</string>
   <string name="XgramUndoSendFailedDraft">Couldn\'t send to %1$s. Saved as a draft.</string>
+  <string name="XgramUndoSendSavedDraft">Saved as a draft in %1$s</string>
   <string name="XgramUndoSendRestoredDraft">%1$d unsent message was saved as a draft</string>
   <string name="XgramUndoSendRestoredDrafts">%1$d unsent messages were saved as drafts</string>
   <string name="XgramUndoSendRestoredHint">A message you were sending wasn\'t sent. It\'s back in the message box.</string>
