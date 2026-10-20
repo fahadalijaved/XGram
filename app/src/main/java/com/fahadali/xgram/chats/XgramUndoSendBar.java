@@ -103,9 +103,11 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
   private final Ring ring;
   private final TextView title, status, undo;
   private final ImageView sendNow;
+  /** The bar's place: how far it lifts what is above the message box. */
   private final BoolAnimator visible;
+  /** The content's alpha: with Expressive design a fade of its own; with reduce motion the only movement, in both looks. */
+  private final BoolAnimator fade;
   private final Runnable tick = this::onTick;
-  private final Runnable fadeOutEnd = this::onFadeOutEnd;
 
   @Nullable private XgramUndoSend.Shown shown;
   private int moreCount;
@@ -113,13 +115,17 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
   private long flushStartUptime;
   /** Reduce motion: the content fades out before the bar goes. */
   private boolean fadingOut;
+  /** Reduce motion's hand-off: the bar stays where it is and fades, while its offset leaves with the list. */
+  private boolean pinned;
+  /** Undo was tapped: what it takes back leaves on the quicker curve. */
+  private boolean undoing;
 
   public XgramUndoSendBar (Context context, MessagesController owner) {
     super(context);
     this.owner = owner;
     this.m3 = XgramExpressive.isEnabled();
-    this.barHeight = Screen.dp(m3 ? M3_BAR_DP : CLASSIC_BAR_DP);
-    this.visible = new BoolAnimator(0, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
+    this.visible = new BoolAnimator(ANIMATOR_VISIBLE, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
+    this.fade = new BoolAnimator(ANIMATOR_FADE, this, AnimatorUtils.LINEAR_INTERPOLATOR, FADE_MS);
     final boolean rtl = Lang.rtl();
 
     LinearLayout row = new LinearLayout(context);
@@ -179,7 +185,8 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     if (m3) {
       // A floating card with the composer field's horizontal bounds, 6dp above the message box (and the reply block).
       FrameLayoutFix card = new FrameLayoutFix(context);
-      android.widget.FrameLayout.LayoutParams cardParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(M3_CARD_DP), Gravity.TOP);
+      // (its height is set below, from the text)
+      android.widget.FrameLayout.LayoutParams cardParams = FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(M3_CARD_MIN_DP + M3_CARD_INSETS_DP), Gravity.TOP);
       cardParams.leftMargin = cardParams.rightMargin = XgramM3Chat.fieldStart();
       card.setLayoutParams(cardParams);
       card.setBackground(new XgramM3Chat.CardDrawable());
@@ -213,9 +220,9 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
         owner.addThemeInvalidateListener(view);
       }
     } else {
-      // Telegram X: a full-width bar on the filling color, like the reply bar.
-      ViewSupport.setThemedBackground(this, ColorId.filling, owner);
-      row.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, barHeight));
+      // Telegram X: a full-width bar on the filling color, like the reply bar (on the row: a reduce motion fade takes it too).
+      ViewSupport.setThemedBackground(row, ColorId.filling, owner);
+      row.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
       addView(row);
       content = row;
 
@@ -245,8 +252,26 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     Views.setClickable(undo);
     Views.setClickable(sendNow);
 
+    // The two lines of text set the height (a taller system font, Google Sans Flex), never below 56dp / 48dp.
+    final int textHeight = lineHeight(title) + lineHeight(status);
+    if (m3) {
+      final int cardHeight = Math.max(Screen.dp(M3_CARD_MIN_DP), textHeight + Screen.dp(M3_TEXT_PADDING_DP) * 2) + Screen.dp(M3_CARD_INSETS_DP);
+      content.getLayoutParams().height = cardHeight;
+      this.barHeight = cardHeight + Screen.dp(M3_GAP_DP);
+    } else {
+      this.barHeight = Math.max(Screen.dp(CLASSIC_BAR_MIN_DP), textHeight + Screen.dp(CLASSIC_TEXT_PADDING_DP) * 2);
+    }
+    content.setAlpha(0f); // the fade's value
+
     setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, barHeight));
     setVisibility(View.INVISIBLE);
+  }
+
+  /** One line of {@code view}'s text as its layout measures it: with the font padding when it has it (the default). */
+  private static int lineHeight (TextView view) {
+    final Paint.FontMetricsInt metrics = view.getPaint().getFontMetricsInt();
+    final int line = view.getIncludeFontPadding() ? metrics.bottom - metrics.top : metrics.descent - metrics.ascent;
+    return line + view.getPaddingTop() + view.getPaddingBottom();
   }
 
   /** The bar's full height: its layout height. */
@@ -266,8 +291,10 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
    * while the message box is hidden (a Join button in its place).
    */
   public void applyPosition (float translationY, float searchVisibility) {
-    setTranslationY(translationY);
-    setAlpha(MathUtils.clamp(searchVisibility));
+    final float visibility = MathUtils.clamp(searchVisibility);
+    // Reduce motion's hand-off: the offset the bar gave up is the list's, the bar itself stays where it was.
+    setTranslationY(pinned ? translationY - (barHeight - visibleHeight()) * visibility : translationY);
+    setAlpha(visibility);
     boolean hidden = searchVisibility <= 0f;
     if (searchHidden != hidden) {
       searchHidden = hidden; // out of sight and out of reach, the timers go on
@@ -275,9 +302,14 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     }
   }
 
-  /** Visible while it shows or animates, and not under in-chat search: an invisible bar takes no taps. */
+  /** Still on screen: it shows or animates, or (reduce motion's hand-off) its fade isn't over. */
+  private boolean isOnScreen () {
+    return visible.getValue() || visible.getFloatValue() > 0f || (pinned && fade.getFloatValue() > 0f);
+  }
+
+  /** Visible while it is on screen, and not under in-chat search: an invisible bar takes no taps. */
   private void updateVisibility () {
-    boolean show = !searchHidden && (visible.getValue() || visible.getFloatValue() > 0f);
+    boolean show = !searchHidden && isOnScreen();
     int visibility = show ? View.VISIBLE : View.INVISIBLE;
     if (getVisibility() != visibility) {
       setVisibility(visibility);
@@ -290,10 +322,19 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
   /** Hidden at once, without telling anyone (the chat closes or shows another chat). */
   public void reset () {
     removeCallbacks(tick);
-    stopFadeOut();
+    fadingOut = false;
+    pinned = false;
+    fade.setValue(false, false);
     visible.setValue(false, false);
     shown = null;
     updateVisibility();
+  }
+
+  /** Undo's state now (an edit of another message started or ended), not on the next second. */
+  public void refresh () {
+    if (shown != null) {
+      updateStatus();
+    }
   }
 
   /** What waits in the owner's message box changed. */
@@ -302,22 +343,41 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     if (list.isEmpty()) {
       removeCallbacks(tick);
       if (visible.getValue() && !fadingOut) {
+        final boolean reduce = XgramMotion.reduce();
         if (handoff && !m3) {
-          visible.setValue(false, false); // the list has no item animator: the bubble is there in this frame
+          // the list has no item animator: the bubble is there in this frame
+          fade.setValue(false, false);
+          visible.setValue(false, false);
         } else if (handoff) {
-          // With the bubble that comes in where the card was, on the move spring of the list's one-shot item animator
-          // (also with reduce motion, which only changes the spring): the older messages move by the height difference.
-          int token = XgramMotion.reduce() ? XgramExpressive.STD_SPATIAL_FAST : XgramExpressive.SPATIAL_DEFAULT;
+          // The offset leaves with the bubble that comes in where the card was, on the move spring of the list's
+          // one-shot item animator (also with reduce motion, which only changes the spring): the older messages move
+          // by the height difference.
+          int token = reduce ? XgramExpressive.STD_SPATIAL_FAST : XgramExpressive.SPATIAL_DEFAULT;
           setMotion(XgramAppMotion.springClamped(token), XgramAppMotion.springDuration(token));
+          if (reduce && animated) {
+            // Reduce motion: the card doesn't move with it, it fades where it is while the list takes its place.
+            pinned = true;
+            setFadeMotion(AnimatorUtils.LINEAR_INTERPOLATOR, FADE_MS);
+          } else {
+            setFadeMotion(XgramAppMotion.springClamped(token), XgramAppMotion.springDuration(token));
+          }
+          fade.setValue(false, animated);
           visible.setValue(false, animated);
-        } else if (animated && XgramMotion.reduce()) {
+        } else if (animated && reduce) {
           fadeOut(); // reduce motion: no movement, a fade
         } else {
           if (m3) {
-            // The reply block's curve: after Undo of a reply both offsets move the list together, without a bounce.
-            setMotion(XgramAppMotion.springClamped(XgramExpressive.SPATIAL_DEFAULT), XgramAppMotion.springDuration(XgramExpressive.SPATIAL_DEFAULT));
+            // After Undo SPATIAL_FAST. When the reply comes back in the same frame (and for the other exits) the reply
+            // block's curve: both offsets move the list together, without a bounce.
+            int token = undoing && !owner.xgramReplyBarMoving() ? XgramExpressive.SPATIAL_FAST : XgramExpressive.SPATIAL_DEFAULT;
+            setMotion(XgramAppMotion.springClamped(token), XgramAppMotion.springDuration(token));
+            setFadeMotion(XgramAppMotion.springClamped(token), XgramAppMotion.springDuration(token));
+            fade.setValue(false, animated);
           } else {
             setMotion(AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
+            if (!animated) {
+              fade.setValue(false, false);
+            }
           }
           visible.setValue(false, animated);
         }
@@ -325,8 +385,10 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
       return;
     }
     if (fadingOut) {
-      // Something waits again before the fade ended: the bar stays.
-      stopFadeOut();
+      // Something waits again before the fade ended: the bar stays, and fades back in.
+      fadingOut = false;
+      setFadeMotion(AnimatorUtils.LINEAR_INTERPOLATOR, FADE_MS);
+      fade.setValue(true, animated);
     }
     XgramUndoSend.Shown newest = list.get(list.size() - 1);
     boolean changed = shown == null || shown.order != newest.order;
@@ -348,19 +410,29 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     ring.invalidate();
     scheduleTick();
     if (!visible.getValue()) {
-      boolean reduce = XgramMotion.reduce();
+      final boolean reduce = XgramMotion.reduce();
+      final boolean fromNothing = !isOnScreen();
+      pinned = false; // (a reduce motion hand-off still fading: the bar is back in its place at once, as it was)
       if (m3) {
         setMotion(XgramAppMotion.springClamped(XgramExpressive.SPATIAL_DEFAULT), XgramAppMotion.springDuration(XgramExpressive.SPATIAL_DEFAULT));
       } else {
         setMotion(AnimatorUtils.DECELERATE_INTERPOLATOR, 200L);
       }
-      visible.setValue(true, animated && !reduce);
-      updateVisibility();
-      if (reduce && animated) {
+      if (reduce) {
         // Reduce motion: no movement, a fade.
-        content.setAlpha(0f);
-        content.animate().alpha(1f).setDuration(FADE_MS).start();
+        setFadeMotion(AnimatorUtils.LINEAR_INTERPOLATOR, FADE_MS);
+      } else if (m3) {
+        // It rises with a fade of its own.
+        setFadeMotion(XgramAppMotion.springClamped(XgramExpressive.EFFECTS_DEFAULT), XgramAppMotion.springDuration(XgramExpressive.EFFECTS_DEFAULT));
       }
+      visible.setValue(true, animated && !reduce);
+      if (fromNothing) {
+        // It comes in from nothing (the classic look slides out without a fade). Only now that it shows again: a fade at
+        // 0 while it is gone counts as its end.
+        fade.setValue(false, false);
+      }
+      fade.setValue(true, animated && (m3 || reduce));
+      updateVisibility();
     }
   }
 
@@ -369,45 +441,37 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
     visible.setDuration(duration);
   }
 
+  private void setFadeMotion (Interpolator interpolator, long duration) {
+    fade.setInterpolator(interpolator);
+    fade.setDuration(duration);
+  }
+
   /** Reduce motion: the content fades out, then the bar goes at once (the list then moves without animation). */
   private void fadeOut () {
     fadingOut = true;
-    content.animate().cancel();
-    content.animate().alpha(0f).setDuration(FADE_MS).withEndAction(fadeOutEnd).start();
-  }
-
-  private void onFadeOutEnd () {
-    if (!fadingOut) {
-      return;
-    }
-    fadingOut = false;
-    visible.setValue(false, false);
-    if (!m3) {
-      content.setAlpha(1f); // (with Expressive design the card's alpha follows the bar's factor)
-    }
-  }
-
-  /** The fade-out stops, and the content is shown as the bar's factor says. */
-  private void stopFadeOut () {
-    if (!fadingOut) {
-      return;
-    }
-    fadingOut = false;
-    content.animate().cancel();
-    content.setAlpha(m3 ? MathUtils.clamp(visible.getFloatValue()) : 1f);
+    setFadeMotion(AnimatorUtils.LINEAR_INTERPOLATOR, FADE_MS);
+    fade.setValue(false, true);
   }
 
   @Override
   public void onFactorChanged (int id, float factor, float fraction, FactorAnimator callee) {
-    if (m3) {
+    if (id == ANIMATOR_FADE) {
       content.setAlpha(MathUtils.clamp(factor));
+    } else {
+      owner.xgramOnUndoBarMoved();
     }
-    owner.xgramOnUndoBarMoved();
   }
 
   @Override
   public void onFactorChangeFinished (int id, float finalFactor, FactorAnimator callee) {
-    if (finalFactor == 0f && !visible.getValue()) {
+    if (id == ANIMATOR_FADE && finalFactor == 0f && !fade.getValue() && fadingOut) {
+      // Reduce motion: the content faded out, now the bar goes at once.
+      fadingOut = false;
+      visible.setValue(false, false);
+    }
+    if (finalFactor == 0f && !isOnScreen()) {
+      // Gone: no offset, and no fade of a reduce motion hand-off left.
+      pinned = false;
       removeCallbacks(tick);
       shown = null;
       updateVisibility();
@@ -504,15 +568,27 @@ public final class XgramUndoSendBar extends FrameLayoutFix implements FactorAnim
         new int[] {ViewController.OptionColor.RED, ViewController.OptionColor.NORMAL},
         new int[] {R.drawable.baseline_delete_24, R.drawable.baseline_cancel_24},
         (itemView, id) -> {
-          if (id == R.id.btn_xgramUndoSendDiscard && XgramUndoSend.undo(owner, order)) {
-            confirmHaptic();
+          if (id == R.id.btn_xgramUndoSendDiscard) {
+            undoing = true;
+            try {
+              if (XgramUndoSend.undo(owner, order)) {
+                confirmHaptic();
+              }
+            } finally {
+              undoing = false;
+            }
           }
           return true;
         });
       return;
     }
-    if (XgramUndoSend.undoNewest(owner)) {
-      confirmHaptic();
+    undoing = true;
+    try {
+      if (XgramUndoSend.undoNewest(owner)) {
+        confirmHaptic();
+      }
+    } finally {
+      undoing = false;
     }
   }
 
