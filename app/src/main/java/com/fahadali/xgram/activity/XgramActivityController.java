@@ -1578,7 +1578,9 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     final List<XgramActivityItem> items = new ArrayList<>(row.items);
     final XgramActivityStore store = XgramActivityStore.instance();
     store.clearItems(tdlib.id(), items);
-    removeRowNow(row);
+    // By its items' keys: the row a view holds can be an older copy of the one in rows (a row that didn't change
+    // isn't bound again), and only these items are cleared (a newer reply in that group stays)
+    removeItemsNow(items);
     showUndo(Lang.getString(R.string.XgramActivityCleared), () -> {
       store.restoreItems(tdlib.id(), items);
       if (!isDestroyed()) {
@@ -1587,17 +1589,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     });
   }
 
-  /** Takes a row off the list at once (the store's change follows), and out of the local copy. */
-  private void removeRowNow (@NonNull XgramActivityRows.Row row) {
-    dropLocalItems(row.items);
-    List<XgramActivityRows.Row> next = new ArrayList<>(rows);
-    if (next.remove(row)) {
-      rows = next;
-      buildCells();
-    }
-  }
-
-  /** Takes {@code gone} off the list at once (Clear read items; the store's change follows), and out of the local copy. */
+  /** Takes {@code gone} off the list at once (Clear, Clear read items; the store's change follows), and out of the local copy. */
   private void removeItemsNow (@NonNull List<XgramActivityItem> gone) {
     dropLocalItems(gone);
     if (rows.isEmpty() || gone.isEmpty()) {

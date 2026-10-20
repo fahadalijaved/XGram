@@ -54,7 +54,7 @@ import java.util.Set;
  * pickers' TYPE_CHAT_SMALL_SELECTABLE), which are Material 3 list tiles with Expressive design.
  */
 public final class XgramActivityChatsController extends RecyclerViewController<Void> implements View.OnClickListener,
-  View.OnLongClickListener, XgramActivityChatFilter.Listener {
+  View.OnLongClickListener, XgramActivityChatFilter.Listener, XgramActivityStore.ChangeListener {
 
   private SettingsAdapter adapter;
   @NonNull private List<XgramActivityStore.ChatCount> counts = Collections.emptyList();
@@ -130,7 +130,19 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     build();
     recyclerView.setAdapter(adapter);
     XgramActivityChatFilter.addListener(this);
+    XgramActivityStore.instance().addListener(this);
     load();
+  }
+
+  /**
+   * The store changed (a chat hidden or rows cleared or read on the page, on the left with two panes, or new
+   * activity): counted again. Only the rows that changed are bound again.
+   */
+  @Override
+  public void onActivityChanged (int accountId) {
+    if (accountId == tdlib.id() && !isDestroyed() && adapter != null) {
+      load();
+    }
   }
 
   // Loading
@@ -563,5 +575,6 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     buildPosted = false;
     super.destroy();
     XgramActivityChatFilter.removeListener(this);
+    XgramActivityStore.instance().removeListener(this);
   }
 }
