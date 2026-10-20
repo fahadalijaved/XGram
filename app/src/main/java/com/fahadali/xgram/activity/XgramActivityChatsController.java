@@ -54,7 +54,7 @@ import java.util.Set;
  * pickers' TYPE_CHAT_SMALL_SELECTABLE), which are Material 3 list tiles with Expressive design.
  */
 public final class XgramActivityChatsController extends RecyclerViewController<Void> implements View.OnClickListener,
-  View.OnLongClickListener, XgramActivityChatFilter.Listener {
+  View.OnLongClickListener, XgramActivityChatFilter.Listener, XgramActivityStore.ChangeListener {
 
   private SettingsAdapter adapter;
   @NonNull private List<XgramActivityStore.ChatCount> counts = Collections.emptyList();
@@ -130,7 +130,19 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     build();
     recyclerView.setAdapter(adapter);
     XgramActivityChatFilter.addListener(this);
+    XgramActivityStore.instance().addListener(this);
     load();
+  }
+
+  /**
+   * The store changed (a chat hidden or rows cleared or read on the page, on the left with two panes, or new
+   * activity): counted again. Only the rows that changed are bound again.
+   */
+  @Override
+  public void onActivityChanged (int accountId) {
+    if (accountId == tdlib.id() && !isDestroyed() && adapter != null) {
+      load();
+    }
   }
 
   // Loading
@@ -146,12 +158,16 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     }
   }
 
+  /** Counts the chats hidden (or shown again) here, each after the store has it posted. */
+  private int changeEpoch;
+
   private void load () {
     if (loading) {
       reloadQueued = true;
       return;
     }
     loading = true;
+    final int epoch = changeEpoch;
     final XgramActivityStore.Summary summary = XgramActivityStore.instance().summary(tdlib.id());
     hiddenAtLoad = summary.hiddenCount();
     final long[][] muted = XgramActivityRows.mutedChats(tdlib, summary.knownChats());
@@ -161,10 +177,15 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
         return;
       }
       loading = false;
-      loaded = true;
-      counts = result;
-      build();
-      if (reloadQueued) {
+      // Counted before a chat was hidden here, they would list it again (and keep it): counted again instead, the
+      // store applies every change posted before a count first
+      final boolean stale = epoch != changeEpoch;
+      if (!stale) {
+        loaded = true;
+        counts = result;
+        build();
+      }
+      if (reloadQueued || stale) {
         reloadQueued = false;
         load();
       }
@@ -509,6 +530,7 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     final XgramActivityStore store = XgramActivityStore.instance();
     final boolean wasChosen = XgramActivityChatFilter.contains(XgramActivityChatFilter.get(accountId), chatId);
     store.setChatHidden(accountId, chatId, true);
+    changeEpoch++;
     final List<XgramActivityStore.ChatCount> left = new ArrayList<>(counts.size());
     for (XgramActivityStore.ChatCount count : counts) {
       if (count.chatId != chatId) {
@@ -527,6 +549,7 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     final Runnable undo = () -> {
       store.setChatHidden(accountId, chatId, false);
       if (!isDestroyed()) {
+        changeEpoch++;
         if (wasChosen) {
           // Chosen again (the page follows); listed once, when its counts come
           holdChoiceUpdates = true;
@@ -552,5 +575,6 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     buildPosted = false;
     super.destroy();
     XgramActivityChatFilter.removeListener(this);
+    XgramActivityStore.instance().removeListener(this);
   }
 }

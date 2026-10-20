@@ -47,7 +47,8 @@ import me.vkryl.core.reference.ReferenceList;
  * Activity's own store (xgram_activity.db, as XgramHistory has its own): the items of every account, the people who
  * reacted, the sync cursors, the flood wait and the hidden chats. One thread ("XgramActivity") does all reading and
  * writing: events from the TDLib thread and user actions from the UI thread are queued and applied in order (FIFO,
- * so a new message is always in before the counter update that follows it), a batch per transaction.
+ * so a new message is always in before the counter update that follows it), a batch per transaction. A read applies
+ * every change posted before it was asked first, so a page's own Clear, Hide or read is always in the rows it asks for.
  * <p>
  * An item's state only goes forward (New, Read, Cleared) except by the user (Mark as unread, Undo) and when a new
  * person reacts while it is shown live: then a reaction row is New again. Cleared rows stay as tombstones (without
@@ -167,42 +168,90 @@ public final class XgramActivityStore {
 
   private static final class Pending {
     final int accountId, epoch;
+    /** Its number: higher than every change posted before it (the queue is in this order). */
+    final long seq;
     final DbAction action;
 
-    Pending (int accountId, int epoch, DbAction action) {
+    Pending (int accountId, int epoch, long seq, DbAction action) {
       this.accountId = accountId;
       this.epoch = epoch;
+      this.seq = seq;
       this.action = action;
     }
   }
 
+  private static final int BATCH_SIZE = 500;
   private final ConcurrentLinkedQueue<Pending> queue = new ConcurrentLinkedQueue<>();
   private final AtomicBoolean drainPosted = new AtomicBoolean();
+  /** A change gets its number and its place in the queue together, so the queue stays in their order. */
+  private final Object postLock = new Object();
+  private long postedSeq; // postLock
+  /** Store thread: every change numbered up to this one is applied (or was dropped). */
+  private long appliedSeq;
 
   /** Any thread: {@code action} runs on the store thread, in order, in the next batch's transaction. */
   void post (int accountId, DbAction action) {
-    queue.add(new Pending(accountId, epochOf(accountId), action));
+    synchronized (postLock) {
+      queue.add(new Pending(accountId, epochOf(accountId), ++postedSeq, action));
+    }
     if (drainPosted.compareAndSet(false, true)) {
       executor.execute(this::drain);
+    }
+  }
+
+  /** Any thread: the number of the last change posted (a read asked now waits for it, {@link #catchUp}). */
+  private long postedSeq () {
+    synchronized (postLock) {
+      return postedSeq;
     }
   }
 
   @WorkerThread
   private void drain () {
     drainPosted.set(false);
-    List<Pending> batch = new ArrayList<>();
-    Pending pending;
-    while (batch.size() < 500 && (pending = queue.poll()) != null) {
-      batch.add(pending);
-    }
+    final List<Pending> batch = pollBatch();
     if (!queue.isEmpty() && drainPosted.compareAndSet(false, true)) {
       executor.execute(this::drain);
     }
+    applyBatch(batch);
+  }
+
+  @WorkerThread
+  @NonNull
+  private List<Pending> pollBatch () {
+    final List<Pending> batch = new ArrayList<>();
+    Pending pending;
+    while (batch.size() < BATCH_SIZE && (pending = queue.poll()) != null) {
+      batch.add(pending);
+    }
+    return batch;
+  }
+
+  /**
+   * Store thread, before a read: every change posted up to {@code seq} is applied first. Reads are tasks of their own
+   * and the queue drains 500 changes a batch, so during a catch-up a read asked right after a Clear, a Hide or a read
+   * here could otherwise run before the batch that has it, and its rows bring back what the user just took away.
+   */
+  @WorkerThread
+  private void catchUp (long seq) {
+    while (appliedSeq < seq) {
+      final List<Pending> batch = pollBatch();
+      if (batch.isEmpty()) {
+        break;
+      }
+      applyBatch(batch);
+    }
+  }
+
+  @WorkerThread
+  private void applyBatch (@NonNull List<Pending> batch) {
     if (batch.isEmpty()) {
       return;
     }
+    final long lastSeq = batch.get(batch.size() - 1).seq;
     SQLiteDatabase db = db();
     if (db == null) {
+      appliedSeq = lastSeq;
       return;
     }
     Set<Integer> touched = new HashSet<>();
@@ -231,6 +280,7 @@ public final class XgramActivityStore {
     } catch (Throwable t) {
       Log.e(TAG, "Batch failed", t);
     }
+    appliedSeq = lastSeq;
     for (int accountId : touched) {
       rebuildSummary(db, accountId);
     }
@@ -1084,7 +1134,9 @@ public final class XgramActivityStore {
   public void query (int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion,
                      @Nullable long[] mutedReactionChats, @Nullable long[] mutedMentionChats, @Nullable long[] onlyChats, int limit,
                      Callback<List<XgramActivityItem>> callback) {
+    final long after = postedSeq();
     executor.execute(() -> {
+      catchUp(after); // what was posted before this was asked is in its rows
       List<XgramActivityItem> result = new ArrayList<>();
       SQLiteDatabase db = db();
       if (db != null) {
@@ -1128,7 +1180,9 @@ public final class XgramActivityStore {
    */
   public void chatCounts (int accountId, boolean reactions, boolean discussion, @Nullable long[] mutedReactionChats,
                           @Nullable long[] mutedMentionChats, Callback<List<ChatCount>> callback) {
+    final long after = postedSeq();
     executor.execute(() -> {
+      catchUp(after);
       final List<ChatCount> chats = new ArrayList<>();
       SQLiteDatabase db = db();
       if (db != null) {
@@ -1282,7 +1336,9 @@ public final class XgramActivityStore {
 
   /** The chats hidden from Activity, newest first. */
   public void hiddenChats (int accountId, Callback<List<HiddenChat>> callback) {
+    final long after = postedSeq();
     executor.execute(() -> {
+      catchUp(after);
       List<HiddenChat> chats = new ArrayList<>();
       SQLiteDatabase db = db();
       if (db != null) {

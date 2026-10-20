@@ -44,7 +44,8 @@ import java.util.Set;
  * Activity's hidden chats (a long press on a row hides a chat's activity): their rows are still collected, so a tap
  * here shows them again, history included (with Undo). Both looks.
  */
-public final class XgramActivityHiddenController extends RecyclerViewController<Void> implements View.OnClickListener {
+public final class XgramActivityHiddenController extends RecyclerViewController<Void> implements View.OnClickListener,
+  XgramActivityStore.ChangeListener {
   private SettingsAdapter adapter;
   @NonNull private List<XgramActivityStore.HiddenChat> chats = new ArrayList<>();
   private boolean loaded;
@@ -89,17 +90,48 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     };
     build();
     recyclerView.setAdapter(adapter);
+    XgramActivityStore.instance().addListener(this);
     load();
   }
 
+  /** The store changed (a chat hidden on the Activity page, on the left with two panes): listed again. */
+  @Override
+  public void onActivityChanged (int accountId) {
+    if (accountId == tdlib.id() && !isDestroyed() && adapter != null) {
+      load();
+    }
+  }
+
+  private boolean loading, reloadQueued;
+  /** Counts the chats shown (or hidden) again here, each after the store has it posted. */
+  private int changeEpoch;
+
   private void load () {
+    if (loading) {
+      reloadQueued = true;
+      return;
+    }
+    loading = true;
+    final int epoch = changeEpoch;
     XgramActivityStore.instance().hiddenChats(tdlib.id(), result -> {
       if (isDestroyed()) {
         return;
       }
-      chats = result;
-      loaded = true;
-      build();
+      loading = false;
+      // Listed before a chat was shown again here, they would list it again (and keep it): listed again instead, the
+      // store applies every change posted before a read first
+      final boolean stale = epoch != changeEpoch;
+      if (!stale && !(loaded && sameChats(chats, result))) {
+        // Listed again only when it changed: the store tells of every change (new activity too), and listing replaces
+        // every row
+        chats = result;
+        loaded = true;
+        build();
+      }
+      if (reloadQueued || stale) {
+        reloadQueued = false;
+        load();
+      }
     });
   }
 
@@ -148,6 +180,20 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     adapter.setItems(items, false);
   }
 
+  /** The same chats, in the same order, with the same saved titles. */
+  private static boolean sameChats (@NonNull List<XgramActivityStore.HiddenChat> a, @NonNull List<XgramActivityStore.HiddenChat> b) {
+    if (a.size() != b.size()) {
+      return false;
+    }
+    for (int i = 0; i < a.size(); i++) {
+      final XgramActivityStore.HiddenChat x = a.get(i), y = b.get(i);
+      if (x.chatId != y.chatId || !(x.savedTitle == null ? y.savedTitle == null : x.savedTitle.equals(y.savedTitle))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private static void addEmpty (List<ListItem> items, boolean expressive) {
     if (expressive) {
       items.add(new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.STATE_ROW));
@@ -177,6 +223,7 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     }
     final XgramActivityStore store = XgramActivityStore.instance();
     store.setChatHidden(tdlib.id(), chatId, false);
+    changeEpoch++;
     String title = Lang.getString(R.string.XgramActivityChatUnavailable);
     List<XgramActivityStore.HiddenChat> left = new ArrayList<>();
     for (XgramActivityStore.HiddenChat hidden : chats) {
@@ -191,6 +238,7 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
     Runnable undo = () -> {
       store.setChatHidden(tdlib.id(), chatId, true);
       if (!isDestroyed()) {
+        changeEpoch++;
         load();
       }
     };
@@ -205,5 +253,6 @@ public final class XgramActivityHiddenController extends RecyclerViewController<
   public void destroy () {
     classicUndo.destroy();
     super.destroy();
+    XgramActivityStore.instance().removeListener(this);
   }
 }
