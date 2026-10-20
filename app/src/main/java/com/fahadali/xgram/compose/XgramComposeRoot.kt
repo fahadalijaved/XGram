@@ -44,7 +44,7 @@ class XgramComposeRoot(
 ) : FrameLayoutFix(context), RootFrameLayout.InsetsChangeListener {
   private var rootFrame: RootFrameLayout? = null
 
-  val composeView: ComposeView = ComposeView(context).apply {
+  val composeView: ComposeView = run { XgramComposeFlags.ensure(); ComposeView(context) }.apply {
     // Kept while Telegram X detaches the view of a covered page; disposed with the page.
     setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(owner.lifecycle))
     setViewTreeLifecycleOwner(owner)

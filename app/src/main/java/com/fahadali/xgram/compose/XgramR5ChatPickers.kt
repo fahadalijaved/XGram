@@ -225,6 +225,7 @@ object XgramR5ChatPickers {
       }
       val dark = forceDark || Theme.isDark()
       val pureBlack = dark && XgramAmoled.isEnabled()
+      XgramComposeFlags.ensure()
       val view = ComposeView(context).apply {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(owner.lifecycle))
         setViewTreeLifecycleOwner(owner)

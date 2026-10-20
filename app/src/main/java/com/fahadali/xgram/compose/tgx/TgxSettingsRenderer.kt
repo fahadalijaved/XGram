@@ -112,7 +112,7 @@ class TgxSettingsRenderer private constructor(
   internal val owner = XgramComposeOwner()
   internal val host = TgxHeadlessHost(context) { child -> onViewInvalidated(child) }
   internal val composeHost = TgxComposeHost(this)
-  internal val listState = LazyListState()
+  internal val listState = com.fahadali.xgram.compose.xgramListState() // no prefetch: Compose 1.12 RectList crash
   internal val largeTitle: Boolean = hints.largeTitle(controller)
   /** XgramM3Bars.TITLE_LARGE (displaySmall, as the Compose pages and the classic list) or TITLE_MEDIUM. */
   internal val titleStyle: Int = hints.titleStyle(controller)

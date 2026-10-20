@@ -33,7 +33,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -97,7 +96,7 @@ fun SettingsPage(
   val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
     snapAnimationSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
   )
-  val listState = rememberLazyListState()
+  val listState = com.fahadali.xgram.compose.rememberXgramListState() // no prefetch: Compose 1.12 RectList crash
   val density = LocalDensity.current
   val highlight = remember { if (host.highlightId != 0) XgramHighlight(host.highlightId, host.highlightKey) else null }
 
