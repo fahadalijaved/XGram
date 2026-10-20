@@ -571,7 +571,15 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
         maxWidth = Math.max(maxWidth, (Integer) v.getTag());
       }
     }
-    return Math.max(getMinimumWidth(), maxWidth + padding + padding);
+    final int width = Math.max(getMinimumWidth(), maxWidth + padding + padding);
+    return xgramMaxItemsWidth > 0 ? Math.min(width, Math.max(getMinimumWidth(), xgramMaxItemsWidth)) : width;
+  }
+
+  /** XGram: the widest the menu may get (0: as wide as its widest item); longer titles end with an ellipsis. */
+  private int xgramMaxItemsWidth;
+
+  public void xgramSetMaxItemsWidth (int maxWidth) {
+    this.xgramMaxItemsWidth = maxWidth;
   }
 
   private boolean shouldPivotBottom;

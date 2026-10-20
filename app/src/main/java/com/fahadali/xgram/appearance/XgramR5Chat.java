@@ -249,6 +249,8 @@ public final class XgramR5Chat {
         item.setForeground(new TopDividerDrawable());
       }
     }
+    // M3 menus stay narrow: at most 320dp and never wider than the row they belong to (a pane on the unfolded Fold)
+    moreWrap.xgramSetMaxItemsWidth(Math.min(Screen.dp(320f), Math.max(Screen.dp(200f), anchor.getMeasuredWidth())));
     moreWrap.setAnchorMode(org.thunderdog.challegram.navigation.MenuMoreWrap.ANCHOR_MODE_RIGHT);
     moreWrap.setShouldPivotBottom(true);
     moreWrap.setRightNumber(0);
@@ -264,11 +266,20 @@ public final class XgramR5Chat {
       }
       // Views.getLocationInWindow shares one array: copy the values at once
       int[] location = org.thunderdog.challegram.tool.Views.getLocationInWindow(anchor);
+      final int anchorLeft = location[0], anchorRight = location[0] + anchor.getMeasuredWidth();
       final int anchorCenterX = location[0] + anchor.getMeasuredWidth() / 2, anchorTop = location[1];
-      location = org.thunderdog.challegram.tool.Views.getLocationInWindow(v);
-      final int menuLeft = location[0] - Math.round(v.getTranslationX()), menuTop = location[1] - Math.round(v.getTranslationY());
+      // The menu's place without its own transform: getLocationInWindow(v) counts the opening scale (pivoted at the
+      // right), which put the menu too far left; its parent's place plus its left and top doesn't
+      location = org.thunderdog.challegram.tool.Views.getLocationInWindow((View) parent);
+      final int menuLeft = location[0] + v.getLeft(), menuTop = location[1] + v.getTop();
       final int edge = Screen.dp(8f);
-      final int targetLeft = Math.max(edge, Math.min(parentWidth - edge - width, anchorCenterX - width / 2));
+      // Inside the window, and inside the anchor's own span when it fits there (its pane with two panes open)
+      int minLeft = edge, maxLeft = parentWidth - edge - width;
+      if (width <= anchorRight - anchorLeft) {
+        minLeft = Math.max(minLeft, anchorLeft);
+        maxLeft = Math.min(maxLeft, anchorRight - width);
+      }
+      final int targetLeft = Math.max(minLeft, Math.min(maxLeft, anchorCenterX - width / 2));
       final int targetTop = Math.max(edge, anchorTop - edge - height);
       v.setTranslationX(targetLeft - menuLeft);
       v.setTranslationY(targetTop - menuTop);
