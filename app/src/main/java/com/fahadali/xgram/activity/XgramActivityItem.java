@@ -115,6 +115,14 @@ public final class XgramActivityItem {
     return state == STATE_NEW;
   }
 
+  /** This item as reading it here leaves it in the store (XgramActivityStore.markItemsRead): Read, no longer marked unread. */
+  @NonNull
+  XgramActivityItem asRead () {
+    return new XgramActivityItem(accountId, chatId, messageId, kind, topicId, albumId, sender, senderName, chatTitle, topicTitle,
+      messageDate, eventDate, STATE_READ, flags & ~FLAG_USER_UNREAD, text, mentionFrom, mentionLength, replyChatId, replyMessageId,
+      quoteText, source, reactors, reactorExtra);
+  }
+
   public boolean hasFlag (int flag) {
     return (flags & flag) != 0;
   }

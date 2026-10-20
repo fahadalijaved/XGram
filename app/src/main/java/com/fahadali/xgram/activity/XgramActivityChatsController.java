@@ -18,7 +18,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.DiffUtil;
 
 import com.fahadali.xgram.appearance.XgramExpressive;
 import com.fahadali.xgram.appearance.XgramR5Chat;
@@ -104,6 +104,28 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
           checkBox.setChecked(isChecked(item), isUpdate);
         }
       }
+
+      @Override
+      public void onBindViewHolder (@NonNull SettingHolder holder, int position, @NonNull List<Object> payloads) {
+        final CheckBoxView checkBox = holder.getItemViewType() == ListItem.TYPE_CHAT_SMALL_SELECTABLE ? checkBoxOf(holder.itemView) : null;
+        // On screen, a checkbox bound again in place moves to its new state (bound anew, it just shows it)
+        final boolean animate = checkBox != null && !payloads.isEmpty() && holder.itemView.getWindowToken() != null;
+        if (checkBox != null && !payloads.isEmpty() && onlyCheckChanged(payloads) && position >= 0 && position < getItems().size()) {
+          // Only the choice changed: the row stays as it is, its checkbox follows
+          final ListItem item = getItems().get(position);
+          holder.itemView.setId(item.getId());
+          holder.itemView.setTag(item);
+          checkBox.setChecked(isChecked(item), animate);
+          return;
+        }
+        final boolean wasChecked = checkBox != null && checkBox.isChecked();
+        super.onBindViewHolder(holder, position, payloads);
+        if (animate && checkBox.isChecked() != wasChecked) {
+          final boolean checked = checkBox.isChecked();
+          checkBox.setChecked(wasChecked, false);
+          checkBox.setChecked(checked, true);
+        }
+      }
     };
     build();
     recyclerView.setAdapter(adapter);
@@ -172,70 +194,194 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     return list != null ? list : counts;
   }
 
+  /** The list's items with, for each, who it is across updates (its key), what it shows and whether it is checked. */
+  private static final class Cells {
+    final List<ListItem> items = new ArrayList<>();
+    final List<String> keys = new ArrayList<>(), signatures = new ArrayList<>();
+    final List<Boolean> checks = new ArrayList<>();
+
+    void add (@NonNull ListItem item, @NonNull String key, @NonNull String signature, boolean checked) {
+      items.add(item);
+      keys.add(key);
+      signatures.add(signature);
+      checks.add(checked);
+    }
+
+    void add (@NonNull ListItem item, @NonNull String key) {
+      add(item, key, "", false);
+    }
+  }
+
+  /** The keys, signatures and checks of what the adapter holds now, in its order (empty before the first build). */
+  private final List<String> cellKeys = new ArrayList<>(), cellSignatures = new ArrayList<>();
+  private final List<Boolean> cellChecks = new ArrayList<>();
+  /** A changed row is bound again in its own holder (no cross-fade with a new one); a choice alone moves its checkbox. */
+  private static final Object PAYLOAD_REBIND = new Object(), PAYLOAD_CHECK = new Object();
+
+  /** A selectable chat row's checkbox (Telegram X's wrap: the chat, then the checkbox). */
+  @Nullable
+  private static CheckBoxView checkBoxOf (@NonNull View rowView) {
+    if (rowView instanceof ViewGroup && ((ViewGroup) rowView).getChildCount() > 1) {
+      final View child = ((ViewGroup) rowView).getChildAt(1);
+      return child instanceof CheckBoxView ? (CheckBoxView) child : null;
+    }
+    return null;
+  }
+
+  private static boolean onlyCheckChanged (@NonNull List<Object> payloads) {
+    for (Object payload : payloads) {
+      if (payload != PAYLOAD_CHECK) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * The list as it is now. Only what changed is told to the list (DiffUtil, keyed by chat): a chat found later or a
+   * count is bound again in place, a hidden chat's row leaves on its own, a choice moves the checkboxes; the rest stays.
+   */
   private void build () {
-    if (adapter == null) {
+    if (adapter == null || isDestroyed()) {
       return;
     }
+    if (buildPosted) {
+      buildPosted = false;
+      UI.cancel(buildLater);
+    }
     final boolean expressive = XgramExpressive.isEnabled();
-    final List<ListItem> items = new ArrayList<>();
+    final Cells cells = new Cells();
     final List<XgramActivityStore.ChatCount> chats = loaded ? listed() : Collections.emptyList();
     if (!loaded) {
-      items.add(expressive ? new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.LOADING_ROW) : new ListItem(ListItem.TYPE_PROGRESS));
+      cells.add(expressive ? new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.LOADING_ROW) : new ListItem(ListItem.TYPE_PROGRESS), "loading");
     } else if (chats.isEmpty()) {
       if (expressive) {
-        items.add(new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.STATE_ROW));
+        cells.add(new ListItem(ListItem.TYPE_CUSTOM - XgramR5People.STATE_ROW), "empty");
       } else {
-        items.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.XgramActivityChatsEmpty));
+        cells.add(new ListItem(ListItem.TYPE_EMPTY, 0, 0, R.string.XgramActivityChatsEmpty), "empty");
       }
     } else {
-      items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
-      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-      final DoubleTextWrapper all = new DoubleTextWrapper(tdlib, Lang.getString(R.string.XgramActivityAllChats), Lang.plural(R.string.xChats, chats.size()),
+      final long[] chosen = XgramActivityChatFilter.get(tdlib.id());
+      cells.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL), "offset");
+      cells.add(new ListItem(ListItem.TYPE_SHADOW_TOP), "all:top");
+      final String allSubtitle = Lang.plural(R.string.xChats, chats.size());
+      final DoubleTextWrapper all = new DoubleTextWrapper(tdlib, Lang.getString(R.string.XgramActivityAllChats), allSubtitle,
         new AvatarPlaceholder.Metadata(tdlib.accentColor(TdlibAccentColor.InternalId.SAVED_MESSAGES), R.drawable.baseline_forum_24));
-      items.add(new ListItem(ListItem.TYPE_CHAT_SMALL_SELECTABLE, R.id.btn_xgramActivityChatsAll).setData(all));
-      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-      items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramActivityChatsHeader));
-      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      cells.add(new ListItem(ListItem.TYPE_CHAT_SMALL_SELECTABLE, R.id.btn_xgramActivityChatsAll).setData(all), "all", allSubtitle, chosen.length == 0);
+      cells.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM), "all:bottom");
+      cells.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramActivityChatsHeader), "header");
+      cells.add(new ListItem(ListItem.TYPE_SHADOW_TOP), "chats:top");
       boolean first = true;
       for (XgramActivityStore.ChatCount count : chats) {
         if (!first) {
-          items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+          cells.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL), "separator:" + count.chatId);
         }
         first = false;
-        items.add(chatItem(count));
+        addChat(cells, count, XgramActivityChatFilter.contains(chosen, count.chatId));
       }
-      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramActivityChatsHint));
-      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-      items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityChatsHidden, R.drawable.baseline_eye_off_24, R.string.XgramActivityHiddenChats));
-      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      cells.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM), "chats:bottom");
+      cells.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramActivityChatsHint), "hint");
+      cells.add(new ListItem(ListItem.TYPE_SHADOW_TOP), "hidden:top");
+      cells.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityChatsHidden, R.drawable.baseline_eye_off_24, R.string.XgramActivityHiddenChats), "hidden");
+      cells.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM), "hidden:bottom");
     }
-    adapter.setItems(items, false);
+    applyCells(cells);
   }
 
-  @NonNull
-  private ListItem chatItem (@NonNull XgramActivityStore.ChatCount count) {
+  /** Gives the adapter the new items: all of them the first time, only the differences after that. */
+  private void applyCells (@NonNull Cells cells) {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView != null && recyclerView.isComputingLayout()) {
+      scheduleBuild(); // not during a layout pass
+      return;
+    }
+    final List<ListItem> current = adapter.getItems();
+    if (cellKeys.isEmpty() || current.size() != cellKeys.size() || recyclerView == null) {
+      adapter.setItems(cells.items, false);
+    } else {
+      final List<String> oldKeys = new ArrayList<>(cellKeys), oldSignatures = new ArrayList<>(cellSignatures);
+      final List<Boolean> oldChecks = new ArrayList<>(cellChecks);
+      final List<ListItem> oldItems = new ArrayList<>(current);
+      final DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+        @Override
+        public int getOldListSize () {
+          return oldKeys.size();
+        }
+
+        @Override
+        public int getNewListSize () {
+          return cells.keys.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame (int oldItemPosition, int newItemPosition) {
+          return oldKeys.get(oldItemPosition).equals(cells.keys.get(newItemPosition)) &&
+            oldItems.get(oldItemPosition).getViewType() == cells.items.get(newItemPosition).getViewType();
+        }
+
+        @Override
+        public boolean areContentsTheSame (int oldItemPosition, int newItemPosition) {
+          return oldSignatures.get(oldItemPosition).equals(cells.signatures.get(newItemPosition)) &&
+            oldChecks.get(oldItemPosition).equals(cells.checks.get(newItemPosition));
+        }
+
+        @Nullable
+        @Override
+        public Object getChangePayload (int oldItemPosition, int newItemPosition) {
+          return oldSignatures.get(oldItemPosition).equals(cells.signatures.get(newItemPosition)) ? PAYLOAD_CHECK : PAYLOAD_REBIND;
+        }
+      }, true);
+      current.clear();
+      current.addAll(cells.items);
+      diff.dispatchUpdatesTo(adapter);
+    }
+    cellKeys.clear();
+    cellKeys.addAll(cells.keys);
+    cellSignatures.clear();
+    cellSignatures.addAll(cells.signatures);
+    cellChecks.clear();
+    cellChecks.addAll(cells.checks);
+  }
+
+  /** Chats TDLib finds later come in close together: listed again once for all of them. */
+  private static final long BUILD_MERGE_MS = 80L;
+  private boolean buildPosted;
+  private final Runnable buildLater = () -> {
+    buildPosted = false;
+    build();
+  };
+
+  private void scheduleBuild () {
+    if (!buildPosted) {
+      buildPosted = true;
+      UI.post(buildLater, BUILD_MERGE_MS);
+    }
+  }
+
+  private void addChat (@NonNull Cells cells, @NonNull XgramActivityStore.ChatCount count, boolean checked) {
     final long chatId = count.chatId;
     final TdApi.Chat chat = tdlib.chat(chatId);
     if (chat == null && requested.add(chatId)) {
-      // Not loaded yet: listed again once it is (until then, and if TDLib can't find it, by its saved title).
-      // TDLib's callback comes on its own thread.
+      // Not loaded yet: listed again once it is (until then, and if TDLib can't find it, by its saved title); its row
+      // is bound again in place. TDLib's callback comes on its own thread.
       tdlib.send(new TdApi.GetChat(chatId), (result, error) -> runOnUiThreadOptional(() -> {
         if (result != null) {
-          build();
+          scheduleBuild();
         }
       }));
     }
     final String subtitle = subtitleOf(count);
+    final String title = titleOf(count);
     final DoubleTextWrapper wrapper;
     if (chat != null) {
       wrapper = new DoubleTextWrapper(tdlib, chat, true, false);
       wrapper.setForcedSubtitle(subtitle);
     } else {
-      wrapper = new DoubleTextWrapper(tdlib, titleOf(count), subtitle,
+      wrapper = new DoubleTextWrapper(tdlib, title, subtitle,
         new AvatarPlaceholder.Metadata(tdlib.accentColor(TdlibAccentColor.InternalId.INACTIVE), R.drawable.baseline_forum_24));
     }
-    return new ListItem(ListItem.TYPE_CHAT_SMALL_SELECTABLE, R.id.btn_xgramActivityChat).setData(wrapper).setLongId(chatId);
+    cells.add(new ListItem(ListItem.TYPE_CHAT_SMALL_SELECTABLE, R.id.btn_xgramActivityChat).setData(wrapper).setLongId(chatId),
+      "chat:" + chatId, (chat != null ? "chat:" : "saved:") + title + ":" + subtitle, checked);
   }
 
   /** "12 items · 3 new". */
@@ -286,49 +432,17 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     }
   }
 
-  /** The choice changed (here, or with the Chats chip's clear on the page): the checkboxes follow. */
   /** A change made here lists the chats itself. */
   private boolean holdChoiceUpdates;
 
+  /** The choice changed (here, or with the Chats chip's clear on the page): the checkboxes follow. */
   @Override
   public void onActivityChatsChanged (int accountId) {
     if (accountId != tdlib.id() || isDestroyed() || adapter == null || holdChoiceUpdates) {
       return;
     }
-    if (listed().size() != countChatRows()) {
-      build(); // a chosen chat without activity came or went
-      return;
-    }
-    final CustomRecyclerView recyclerView = getRecyclerView();
-    final LinearLayoutManager manager = recyclerView != null ? (LinearLayoutManager) recyclerView.getLayoutManager() : null;
-    final List<ListItem> items = adapter.getItems();
-    for (int i = 0; i < items.size(); i++) {
-      final ListItem item = items.get(i);
-      if (item.getViewType() != ListItem.TYPE_CHAT_SMALL_SELECTABLE) {
-        continue;
-      }
-      final View view = manager != null ? manager.findViewByPosition(i) : null;
-      final CheckBoxView checkBox = view instanceof ViewGroup && ((ViewGroup) view).getChildCount() > 1 &&
-        ((ViewGroup) view).getChildAt(1) instanceof CheckBoxView ? (CheckBoxView) ((ViewGroup) view).getChildAt(1) : null;
-      if (checkBox != null) {
-        final boolean checked = isChecked(item);
-        if (checkBox.isChecked() != checked) {
-          checkBox.setChecked(checked, true);
-        }
-      } else {
-        adapter.notifyItemChanged(i); // off screen (or cached): bound again when it shows
-      }
-    }
-  }
-
-  private int countChatRows () {
-    int count = 0;
-    for (ListItem item : adapter.getItems()) {
-      if (item.getId() == R.id.btn_xgramActivityChat) {
-        count++;
-      }
-    }
-    return count;
+    // The checkboxes that changed follow in place (PAYLOAD_CHECK); a chosen chat without activity comes or goes
+    build();
   }
 
   // Holding a chat: only this chat, or hide its activity for good
@@ -386,10 +500,15 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     return new XgramActivityStore.ChatCount(chatId, 0, 0, 0, null);
   }
 
-  /** The chat's activity hidden for good (Hidden chats lists it); no longer chosen. Undo shows it again. */
+  /**
+   * The chat's activity hidden for good (Hidden chats lists it); no longer chosen. Undo shows it again, chosen again
+   * if it was.
+   */
   private void hideChat (long chatId, @NonNull String title) {
+    final int accountId = tdlib.id();
     final XgramActivityStore store = XgramActivityStore.instance();
-    store.setChatHidden(tdlib.id(), chatId, true);
+    final boolean wasChosen = XgramActivityChatFilter.contains(XgramActivityChatFilter.get(accountId), chatId);
+    store.setChatHidden(accountId, chatId, true);
     final List<XgramActivityStore.ChatCount> left = new ArrayList<>(counts.size());
     for (XgramActivityStore.ChatCount count : counts) {
       if (count.chatId != chatId) {
@@ -400,14 +519,23 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
     // Listed once, after the choice changes too
     holdChoiceUpdates = true;
     try {
-      XgramActivityChatFilter.toggle(tdlib.id(), chatId, false);
+      XgramActivityChatFilter.toggle(accountId, chatId, false);
     } finally {
       holdChoiceUpdates = false;
     }
     build();
     final Runnable undo = () -> {
-      store.setChatHidden(tdlib.id(), chatId, false);
+      store.setChatHidden(accountId, chatId, false);
       if (!isDestroyed()) {
+        if (wasChosen) {
+          // Chosen again (the page follows); listed once, when its counts come
+          holdChoiceUpdates = true;
+          try {
+            XgramActivityChatFilter.toggle(accountId, chatId, true);
+          } finally {
+            holdChoiceUpdates = false;
+          }
+        }
         load();
       }
     };
@@ -420,6 +548,8 @@ public final class XgramActivityChatsController extends RecyclerViewController<V
   @Override
   public void destroy () {
     classicUndo.destroy();
+    UI.cancel(buildLater);
+    buildPosted = false;
     super.destroy();
     XgramActivityChatFilter.removeListener(this);
   }

@@ -315,26 +315,90 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       manager.scrollToPositionWithOffset(0, 0);
     }
     if (suspend) {
-      // Back after the layout this change makes (posted now, it runs after that traversal); a swap begun meanwhile
-      // puts it back itself when it ends
-      recyclerView.post(() -> {
-        if (!isDestroyed() && listAnimator != null && recyclerView.getItemAnimator() == null && (swap == null || !swap.isActive())) {
-          recyclerView.setItemAnimator(listAnimator);
-        }
-      });
+      restoreAnimatorAfterLayout(recyclerView);
     }
+  }
+
+  /**
+   * The list's item animator back after the layout the change just made (posted now, it runs after that traversal);
+   * a swap begun meanwhile puts it back itself when it ends.
+   */
+  private void restoreAnimatorAfterLayout (@NonNull CustomRecyclerView recyclerView) {
+    recyclerView.post(() -> {
+      if (!isDestroyed() && listAnimator != null && recyclerView.getItemAnimator() == null && (swap == null || !swap.isActive())) {
+        recyclerView.setItemAnimator(listAnimator);
+      }
+    });
   }
 
   /** The list's own item animator (as RecyclerViewController made it): off while the rows swap. */
   @Nullable private RecyclerView.ItemAnimator listAnimator;
 
-  /** What waited for the swap: the list as it is now. */
+  /** What waited for the swap: the list as it is now (everything below the chips again, at once, when it was asked). */
   private void flushDeferredBuild () {
     if (buildDeferred) {
       final boolean replace = buildDeferredReplace;
       buildDeferred = false;
       buildDeferredReplace = false;
-      buildCells(replace);
+      if (replace && rowsShown) {
+        replaceCellsNow();
+      } else {
+        buildCells(replace);
+      }
+    }
+  }
+
+  /**
+   * Everything below the chips again, at once (the date or the language changed: every row reads differently, the
+   * sections regroup). Without the list's item animation: replaced with it, each row cross-faded with its old self,
+   * or all of them faded out and in. The reading position stays (the row at the top stays at the top).
+   */
+  private void replaceCellsNow () {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (adapter == null || isDestroyed()) {
+      return;
+    }
+    if (recyclerView == null || (swap != null && swap.isActive())) {
+      buildCells(true); // without a list yet, or after the swap (flushDeferredBuild comes back here)
+      return;
+    }
+    if (recyclerView.isComputingLayout()) {
+      recyclerView.post(() -> {
+        if (!isDestroyed()) {
+          replaceCellsNow();
+        }
+      });
+      return;
+    }
+    // Where the list is: the first row on screen and its offset (at the top: it stays at the top)
+    final LinearLayoutManager manager = (LinearLayoutManager) recyclerView.getLayoutManager();
+    String anchorKey = null;
+    int anchorOffset = 0;
+    final int first = manager != null ? manager.findFirstVisibleItemPosition() : -1;
+    if (first > 0) {
+      final List<ListItem> items = adapter.getItems();
+      for (int i = first; i < items.size(); i++) {
+        if (items.get(i).getData() instanceof XgramActivityRows.Row) {
+          final View view = manager.findViewByPosition(i);
+          anchorKey = ((XgramActivityRows.Row) items.get(i).getData()).key();
+          anchorOffset = view != null ? view.getTop() : 0;
+          break;
+        }
+      }
+    }
+    final boolean suspend = recyclerView.getItemAnimator() != null;
+    if (suspend) {
+      recyclerView.setItemAnimator(null);
+    }
+    buildCells(true);
+    if (manager != null && anchorKey != null) {
+      final int index = indexOfRow(anchorKey);
+      if (index != -1) {
+        manager.scrollToPositionWithOffset(index, anchorOffset);
+      }
+    }
+    if (suspend) {
+      restoreAnimatorAfterLayout(recyclerView);
     }
   }
 
@@ -392,6 +456,69 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       return false;
     }
     return chats.length == 0 || XgramActivityChatFilter.contains(chats, item.chatId);
+  }
+
+  // The local copy follows what the page itself changes in the store at once: the store tells of a change only a
+  // little later (its notify delay and the query), and a filter change meanwhile builds its rows from this copy
+
+  /** Counts the page's own changes to the copy: a query asked before one of them doesn't replace it (reload). */
+  private int localEpoch;
+
+  /** Cleared here: out of the copy, so a change right after doesn't bring them back. */
+  private void dropLocalItems (@NonNull List<XgramActivityItem> gone) {
+    localEpoch++;
+    if (lastItems.isEmpty() || gone.isEmpty()) {
+      return;
+    }
+    final java.util.HashSet<String> keys = new java.util.HashSet<>(gone.size());
+    for (XgramActivityItem item : gone) {
+      keys.add(item.key);
+    }
+    final List<XgramActivityItem> next = new ArrayList<>(lastItems.size());
+    for (XgramActivityItem item : lastItems) {
+      if (!keys.contains(item.key)) {
+        next.add(item);
+      }
+    }
+    lastItems = next;
+  }
+
+  /** A chat hidden here: its items out of the copy. */
+  private void dropLocalChat (long chatId) {
+    localEpoch++;
+    if (lastItems.isEmpty()) {
+      return;
+    }
+    final List<XgramActivityItem> next = new ArrayList<>(lastItems.size());
+    for (XgramActivityItem item : lastItems) {
+      if (item.chatId != chatId) {
+        next.add(item);
+      }
+    }
+    lastItems = next;
+  }
+
+  /** Read here (opened): Read in the copy too, as the store makes them (so Unread leaves them out). */
+  private void markLocalItemsRead (@NonNull List<XgramActivityItem> read) {
+    localEpoch++;
+    if (lastItems.isEmpty() || read.isEmpty()) {
+      return;
+    }
+    final java.util.HashSet<String> keys = new java.util.HashSet<>(read.size());
+    for (XgramActivityItem item : read) {
+      keys.add(item.key);
+    }
+    final List<XgramActivityItem> next = new ArrayList<>(lastItems.size());
+    for (XgramActivityItem item : lastItems) {
+      next.add(item.isNew() && keys.contains(item.key) ? item.asRead() : item);
+    }
+    lastItems = next;
+  }
+
+  /** A change of the store the copy can't follow here (it comes back, or what changes is decided there): not used again. */
+  private void forgetLocalItems () {
+    localEpoch++;
+    lastFilter = -1;
   }
 
   // List
@@ -542,7 +669,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     org.thunderdog.challegram.component.user.RemoveHelper.attach(recyclerView, new org.thunderdog.challegram.component.user.RemoveHelper.Callback() {
       @Override
       public boolean canRemove (RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, int position) {
-        return viewHolder.itemView instanceof XgramActivityRowView && ((XgramActivityRowView) viewHolder.itemView).getRow() != null;
+        // Not while the rows swap out (going, or gone): as taps and holds
+        return viewHolder.itemView instanceof XgramActivityRowView && ((XgramActivityRowView) viewHolder.itemView).getRow() != null && !rowsHidden();
       }
 
       @Override
@@ -679,6 +807,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     final int queryFilter = filter;
     final boolean queryUnread = unreadOnly;
     final long[] queryChats = chats;
+    final int queryLocalEpoch = localEpoch;
     // Muted chats (off) is left out by the query itself, so the limit counts rows that are shown
     final long[][] muted = XgramActivityRows.mutedChats(tdlib, XgramActivityStore.instance().summary(tdlib.id()).knownChats());
     XgramActivityStore.instance().query(tdlib.id(), filter, unreadOnly, XgramActivity.reactions(), XgramActivity.discussion(),
@@ -695,12 +824,15 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
           visible.add(item);
         }
       }
-      // Kept for a next change that only narrows this one (shown at once from here)
-      lastItems = visible;
-      lastFilter = queryFilter;
-      lastUnread = queryUnread;
-      lastChats = queryChats;
-      lastComplete = endReached;
+      // Kept for a next change that only narrows this one (shown at once from here), unless the page changed the
+      // store after this query was asked: the copy it updated stays until the next query, which follows that change
+      if (queryLocalEpoch == localEpoch) {
+        lastItems = visible;
+        lastFilter = queryFilter;
+        lastUnread = queryUnread;
+        lastChats = queryChats;
+        lastComplete = endReached;
+      }
       rows = XgramActivityRows.group(visible);
       if (awaitingSwapRows) {
         rowsReadyForSwap(); // a change's own rows: in place of the old ones
@@ -1437,11 +1569,17 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     final XgramActivityStore store = XgramActivityStore.instance();
     store.clearItems(tdlib.id(), items);
     removeRowNow(row);
-    showUndo(Lang.getString(R.string.XgramActivityCleared), () -> store.restoreItems(tdlib.id(), items));
+    showUndo(Lang.getString(R.string.XgramActivityCleared), () -> {
+      store.restoreItems(tdlib.id(), items);
+      if (!isDestroyed()) {
+        forgetLocalItems(); // back in the store, not in the copy
+      }
+    });
   }
 
-  /** Takes a row off the list at once (the store's change follows). */
+  /** Takes a row off the list at once (the store's change follows), and out of the local copy. */
   private void removeRowNow (@NonNull XgramActivityRows.Row row) {
+    dropLocalItems(row.items);
     List<XgramActivityRows.Row> next = new ArrayList<>(rows);
     if (next.remove(row)) {
       rows = next;
@@ -1467,16 +1605,29 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         return;
       }
       store.clearReadItems(tdlib.id(), cleared);
+      dropLocalItems(cleared);
       String text = cleared.size() == 1 ? Lang.getString(R.string.XgramActivityClearedOne) : Lang.getString(R.string.XgramActivityClearedMany, cleared.size());
-      showUndo(text, () -> store.restoreItems(tdlib.id(), cleared));
+      showUndo(text, () -> {
+        store.restoreItems(tdlib.id(), cleared);
+        if (!isDestroyed()) {
+          forgetLocalItems();
+        }
+      });
     });
   }
 
+  /**
+   * The chat's activity hidden for good, and no longer one of the chats shown. Undo shows it again, chosen again if it
+   * was (the page goes back to it).
+   */
   private void hideChat (@NonNull XgramActivityItem item) {
+    final int accountId = tdlib.id();
     final long chatId = item.chatId;
     final String title = chatTitleOf(item);
     final XgramActivityStore store = XgramActivityStore.instance();
-    store.setChatHidden(tdlib.id(), chatId, true);
+    final boolean wasChosen = XgramActivityChatFilter.contains(XgramActivityChatFilter.get(accountId), chatId);
+    store.setChatHidden(accountId, chatId, true);
+    dropLocalChat(chatId);
     List<XgramActivityRows.Row> next = new ArrayList<>();
     for (XgramActivityRows.Row row : rows) {
       if (row.newest().chatId != chatId) {
@@ -1485,9 +1636,17 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
     rows = next;
     buildCells();
-    showUndo(Lang.getString(R.string.XgramActivityChatHidden, title), () -> store.setChatHidden(tdlib.id(), chatId, false));
+    showUndo(Lang.getString(R.string.XgramActivityChatHidden, title), () -> {
+      store.setChatHidden(accountId, chatId, false);
+      if (!isDestroyed()) {
+        forgetLocalItems(); // its rows are back in the store, not in the copy: a change waits for the store's
+        if (wasChosen) {
+          XgramActivityChatFilter.toggle(accountId, chatId, true); // heard back in onActivityChatsChanged
+        }
+      }
+    });
     // A hidden chat shows nothing: it is no longer one of the chats shown either
-    XgramActivityChatFilter.toggle(tdlib.id(), chatId, false);
+    XgramActivityChatFilter.toggle(accountId, chatId, false);
   }
 
   @NonNull
@@ -1518,6 +1677,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
         XgramActivityStore.instance().markItemsUnread(tdlib.id(), readThere, true);
       }
     }
+    forgetLocalItems(); // the store decides the new state (ghost mode, a read on the server)
   }
 
   // Mark all as read
@@ -1536,9 +1696,13 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       // the chat list's @ badges ghost mode lowered for them)
       final List<XgramActivityItem> unread = new ArrayList<>(plan.unread);
       final XgramActivityRead.LocalMarks marks = XgramActivityRead.run(tdlib, plan, null);
+      forgetLocalItems();
       showUndo(Lang.getString(R.string.XgramActivityReadLocally), () -> {
         marks.undo();
         XgramActivityStore.instance().markItemsUnread(tdlib.id(), unread, false); // still unread on the server
+        if (!isDestroyed()) {
+          forgetLocalItems();
+        }
       });
       return;
     }
@@ -1567,6 +1731,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     if (serverChats >= 30) {
       showMessage(Lang.getString(R.string.XgramActivityMarking, serverChats), null, null);
     }
+    forgetLocalItems(); // what is read (and what Telegram stops) is the store's to say
     XgramActivityRead.run(tdlib, plan, (stoppedChats, flood) -> {
       if (flood && stoppedChats > 0) {
         showMessage(stoppedChats == 1 ? Lang.getString(R.string.XgramActivityMarkPartialOne) : Lang.getString(R.string.XgramActivityMarkPartialMany, stoppedChats), null, null);
@@ -1723,6 +1888,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
     if (!unread.isEmpty()) {
       XgramActivityStore.instance().markItemsRead(tdlib.id(), unread, false);
+      markLocalItemsRead(unread); // a filter or Unread change right after builds from the copy
     }
     if (target.isDeleted()) {
       showDeleted(target);
@@ -1784,7 +1950,9 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
 
   private final Runnable refreshTimeout = () -> {
     if (!isDestroyed() && refreshSyncPending) {
-      refreshSyncPending = false; // still searching: the status tile tells the rest
+      // Still searching: the status tile tells the rest. Waiting (Telegram, or the network): said in its place.
+      noteSyncBlocked(XgramActivityStore.instance().summary(tdlib.id()).sync);
+      refreshSyncPending = false;
       maybeFinishRefresh();
     }
   };
@@ -1792,7 +1960,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   /**
    * Released past the threshold: the store's rows again, and a bounded catch-up (XgramActivitySync.refresh: the chats
    * whose counters differ, recently active groups; paced, at most once every 30 seconds, never while Telegram asks to
-   * wait). Ends with "Updated", or "Try again in 12s" while Telegram asks to wait.
+   * wait). Ends with "Updated", or "Try again in 12s" while Telegram asks to wait, "Waiting for network" with no
+   * connection, "Couldn't update" when there is nothing to search with.
    */
   private void refresh () {
     if (isDestroyed()) {
@@ -1829,6 +1998,18 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
           UI.post(refreshTimeout, REFRESH_MAX_MS);
           checkRefreshSync();
           break;
+        case XgramActivitySync.REFRESH_OFFLINE:
+          // No connection: nothing was fetched (what was queued runs once it is back)
+          refreshStatus = Lang.getString(R.string.XgramActivityOffline);
+          refreshHoldMs = STATUS_HOLD_WAIT_MS;
+          refreshSyncPending = false;
+          break;
+        case XgramActivitySync.REFRESH_OFF:
+          // No account or store to search with: only the rows were read again
+          refreshStatus = Lang.getString(R.string.XgramActivityCouldNotUpdate);
+          refreshHoldMs = STATUS_HOLD_WAIT_MS;
+          refreshSyncPending = false;
+          break;
         default:
           refreshSyncPending = false;
           break;
@@ -1845,21 +2026,34 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     }
   }
 
-  /** The searches the refresh queued ended (or Telegram asked to wait meanwhile). */
+  /** The searches the refresh queued ended (or Telegram asked to wait meanwhile, or the connection went). */
   private void checkRefreshSync () {
     if (!refreshSyncPending || !refreshQueued) {
       return;
     }
     final XgramActivityStore.SyncStatus sync = XgramActivityStore.instance().summary(tdlib.id()).sync;
-    if (sync.isPaused()) {
-      refreshStatus = Lang.getString(R.string.XgramActivityTryAgainIn, shortDuration(sync.pausedUntil - System.currentTimeMillis()));
-      refreshHoldMs = STATUS_HOLD_WAIT_MS;
-    } else if (sync.running) {
+    if (!noteSyncBlocked(sync) && sync.running) {
       return;
     }
     refreshSyncPending = false;
     UI.cancel(refreshTimeout);
     maybeFinishRefresh();
+  }
+
+  /**
+   * The searches can't go on now: Telegram asks to wait ("Try again in 12s"), or there is no connection ("Waiting for
+   * network"). The refresh ends saying so (true); not "Updated", when nothing was fetched.
+   */
+  private boolean noteSyncBlocked (@NonNull XgramActivityStore.SyncStatus sync) {
+    if (sync.isPaused()) {
+      refreshStatus = Lang.getString(R.string.XgramActivityTryAgainIn, shortDuration(sync.pausedUntil - System.currentTimeMillis()));
+    } else if (sync.running && sync.offline) {
+      refreshStatus = Lang.getString(R.string.XgramActivityOffline);
+    } else {
+      return false;
+    }
+    refreshHoldMs = STATUS_HOLD_WAIT_MS;
+    return true;
   }
 
   private void maybeFinishRefresh () {
@@ -1966,7 +2160,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   public void onDateChanged () {
     if (adapter != null && loaded) {
       XgramActivityRowView.invalidateLayouts(); // the times read as dates now
-      buildCells(true); // Today becomes Yesterday
+      replaceCellsNow(); // Today becomes Yesterday
     }
   }
 
@@ -1978,7 +2172,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       updateMarkAllButton();
       forEachChips(XgramActivityChips::relabel);
       XgramActivityRowView.invalidateLayouts(); // prefixes, times and names in the new language or format
-      buildCells(true);
+      replaceCellsNow();
     }
   }
 

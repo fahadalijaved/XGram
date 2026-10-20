@@ -53,7 +53,8 @@ final class XgramActivitySync {
   static final int JOB_MENTIONS = 1, JOB_REACTIONS = 2, JOB_LOOK_BACK = 3;
   /**
    * A pull to refresh's look in a recently active group: the newest page of its mentions (as the look back searches),
-   * for mentions and replies that came while the app was not running and were read elsewhere since.
+   * for mentions and replies that came while the app was not running and were read elsewhere since. Only those of the
+   * last day are kept (RECENT_ACTIVE_SECONDS): older ones are the look back's, which the user may have turned off.
    */
   static final int JOB_RECENT = 4;
 
@@ -245,7 +246,11 @@ final class XgramActivitySync {
 
   // Pull to refresh (the Activity page): a bounded catch-up, at most once every 30 seconds per account
 
-  static final int REFRESH_QUEUED = 0, REFRESH_NOTHING = 1, REFRESH_TOO_SOON = 2, REFRESH_WAIT = 3, REFRESH_OFF = 4;
+  /**
+   * A refresh's outcome. REFRESH_OFFLINE: no connection, so nothing could be fetched (what was queued, if anything,
+   * runs once it is back). REFRESH_OFF: no authorized account, Activity off, or no store.
+   */
+  static final int REFRESH_QUEUED = 0, REFRESH_NOTHING = 1, REFRESH_TOO_SOON = 2, REFRESH_WAIT = 3, REFRESH_OFF = 4, REFRESH_OFFLINE = 5;
   private static final long REFRESH_MIN_INTERVAL_MS = 30_000L;
   /** Recently active groups a refresh looks in: at most this many, active within a day, each at most twice an hour. */
   private static final int RECENT_CHATS = 5;
@@ -288,7 +293,7 @@ final class XgramActivitySync {
             result = REFRESH_WAIT;
             waitMs = Math.max(floodWait, topicWait);
           } else if (last != null && now - last < REFRESH_MIN_INTERVAL_MS) {
-            result = REFRESH_TOO_SOON;
+            result = tdlib.isConnected() ? REFRESH_TOO_SOON : REFRESH_OFFLINE;
           } else {
             lastRefreshAt.put(accountId, now);
             final Queue queue = queue(accountId);
@@ -297,7 +302,8 @@ final class XgramActivitySync {
               publishStatus(queue);
               pump(accountId);
             }
-            result = jobs > 0 ? REFRESH_QUEUED : REFRESH_NOTHING;
+            // Offline, the searches wait (the status tile says so): the pull says it fetched nothing, not "Updated"
+            result = !tdlib.isConnected() ? REFRESH_OFFLINE : jobs > 0 ? REFRESH_QUEUED : REFRESH_NOTHING;
           }
         }
       } catch (Throwable t) {
@@ -765,10 +771,12 @@ final class XgramActivitySync {
     final long me = tdlib.myUserId();
     final String[] usernames = XgramActivityCollector.activeUsernames(tdlib.myUser());
     final int base = XgramActivityCollector.baseFlags(tdlib, chat);
-    // A look back and a refresh's look in a recent group search every mention, read ones too
+    // A look back and a refresh's look in a recent group search every mention, read ones too. The look back keeps a
+    // month (Find earlier mentions); a refresh only what came within its day of activity: it brings in what is new,
+    // not old mentions the user may have chosen not to look for
     final boolean allMentions = jobType == JOB_LOOK_BACK || jobType == JOB_RECENT;
     final int source = allMentions ? XgramActivityItem.SOURCE_LOOK_BACK : XgramActivityItem.SOURCE_UNREAD_SYNC;
-    final long oldest = System.currentTimeMillis() / 1000L - LOOK_BACK_KEEP_SECONDS;
+    final long oldest = System.currentTimeMillis() / 1000L - (jobType == JOB_RECENT ? RECENT_ACTIVE_SECONDS : LOOK_BACK_KEEP_SECONDS);
     int lookups = 0;
     for (TdApi.Message m : messages) {
       if (m == null || m.isOutgoing || tdlib.isSelfSender(m)) {

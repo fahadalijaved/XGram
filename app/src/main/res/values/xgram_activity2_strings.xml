@@ -21,6 +21,7 @@
   <string name="XgramActivityUpdated">Updated</string>
   <string name="XgramActivityTryAgainIn">Try again in %1$s</string>
   <string name="XgramActivityUpdating">Updating</string>
+  <string name="XgramActivityCouldNotUpdate">Couldn\'t update</string>
 
   <!-- Ids -->
   <item name="controller_xgramActivityChats" type="id"/>
