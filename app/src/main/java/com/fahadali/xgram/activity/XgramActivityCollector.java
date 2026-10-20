@@ -17,6 +17,7 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.telegram.ChatListener;
 import org.thunderdog.challegram.telegram.MessageListener;
 import org.thunderdog.challegram.telegram.NotificationSettingsListener;
@@ -40,6 +41,18 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
 
   private static XgramActivityStore store () {
     return XgramActivityStore.instance();
+  }
+
+  /**
+   * Debug builds (Chat list > Activity): every update callback throws first thing, inside its try, so that its catch
+   * and the listeners TDLib calls after it are tested for real.
+   */
+  static volatile boolean debugThrow;
+
+  private static void debugFail (String callback) {
+    if (BuildConfig.DEBUG && debugThrow) {
+      throw new IllegalStateException(callback); // only the switch's test failure
+    }
   }
 
   // Which chats count
@@ -285,6 +298,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   @Override
   public void onNewMessage (TdApi.Message m) {
     try {
+      debugFail("onNewMessage");
       if (m == null || !XgramActivity.isOn()) {
         return;
       }
@@ -391,6 +405,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   @Override
   public void onMessageMentionRead (long chatId, long messageId) {
     try {
+      debugFail("onMessageMentionRead");
       if (!XgramActivity.isOn()) {
         return;
       }
@@ -403,6 +418,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   @Override
   public void onMessagesDeleted (long chatId, long[] messageIds) {
     try {
+      debugFail("onMessagesDeleted");
       if (!XgramActivity.isOn() || messageIds == null || messageIds.length == 0 || !store().summary(tdlib.id()).knows(chatId)) {
         return;
       }
@@ -415,6 +431,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   @Override
   public void onMessageContentChanged (long chatId, long messageId, TdApi.MessageContent newContent) {
     try {
+      debugFail("onMessageContentChanged");
       if (!XgramActivity.isOn() || newContent == null || !store().summary(tdlib.id()).knows(chatId)) {
         return;
       }
@@ -437,6 +454,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   @Override
   public void onMessageUnreadReactionsChanged (long chatId, long messageId, @Nullable TdApi.UnreadReaction[] unreadReactions, int unreadReactionCount) {
     try {
+      debugFail("onMessageUnreadReactionsChanged");
       if (!XgramActivity.isOn() || !XgramActivity.reactions()) {
         return;
       }
@@ -513,9 +531,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
 
   @Override
   public void onChatUnreadReactionCount (long chatId, int unreadReactionCount, boolean availabilityChanged) {
-    if (XgramActivity.reactions()) {
-      onCount(chatId, XgramActivityItem.MASK_REACTION, unreadReactionCount);
-    }
+    onCount(chatId, XgramActivityItem.MASK_REACTION, unreadReactionCount);
   }
 
   /**
@@ -525,6 +541,10 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
    */
   private void onCount (long chatId, int kindMask, int count) {
     try {
+      debugFail("onCount");
+      if (kindMask == XgramActivityItem.MASK_REACTION && !XgramActivity.reactions()) {
+        return;
+      }
       if (!XgramActivity.isOn() || tdlib.isRepliesChat(chatId)) {
         // The Replies chat has no mention counter (it is always 0, and ghost mode's refresh repeats it): its items
         // are read by its read position alone (onChatReadInbox)
@@ -572,6 +592,7 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
   @Override
   public void onChatReadInbox (long chatId, long lastReadInboxMessageId, int unreadCount, boolean availabilityChanged) {
     try {
+      debugFail("onChatReadInbox");
       if (!XgramActivity.isOn() || !tdlib.isRepliesChat(chatId)) {
         return;
       }
@@ -585,11 +606,21 @@ final class XgramActivityCollector implements MessageListener, ChatListener, Not
 
   @Override
   public void onNotificationSettingsChanged (long chatId, TdApi.ChatNotificationSettings settings) {
-    XgramActivity.onDisplayFiltersChanged(tdlib.id());
+    try {
+      debugFail("onNotificationSettingsChanged");
+      XgramActivity.onDisplayFiltersChanged(tdlib.id());
+    } catch (Throwable t) {
+      Log.e(TAG, "onNotificationSettingsChanged", t);
+    }
   }
 
   @Override
   public void onNotificationSettingsChanged (TdApi.NotificationSettingsScope scope, TdApi.ScopeNotificationSettings settings) {
-    XgramActivity.onDisplayFiltersChanged(tdlib.id());
+    try {
+      debugFail("onScopeNotificationSettingsChanged");
+      XgramActivity.onDisplayFiltersChanged(tdlib.id());
+    } catch (Throwable t) {
+      Log.e(TAG, "onScopeNotificationSettingsChanged", t);
+    }
   }
 }

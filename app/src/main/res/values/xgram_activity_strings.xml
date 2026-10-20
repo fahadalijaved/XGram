@@ -78,6 +78,8 @@
   <string name="XgramActivityPaused">Telegram asked to wait. Continues in %1$s.</string>
   <string name="XgramActivityOffline">Waiting for network</string>
   <string name="XgramActivityDebugFlood">Simulate Telegram wait (2 min)</string>
+  <string name="XgramActivityDebugThrow">Simulate collector errors</string>
+  <string name="XgramActivityDebugThrowInfo">Activity fails on every update. Chats should still update.</string>
 
   <!-- Menus -->
   <string name="XgramActivitySettings">Activity settings</string>
@@ -141,6 +143,7 @@
   <item name="btn_xgramActivitySettings" type="id"/>
   <item name="btn_xgramActivityTurnOn" type="id"/>
   <item name="btn_xgramActivityDebugFlood" type="id"/>
+  <item name="btn_xgramActivityDebugThrow" type="id"/>
   <item name="menu_btn_xgramActivityMarkAll" type="id"/>
   <item name="btn_xgramActivityMarkAllConfirm" type="id"/>
   <item name="btn_xgramActivityClearRead" type="id"/>

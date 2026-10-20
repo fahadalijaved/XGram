@@ -23,6 +23,7 @@ import com.fahadali.xgram.layout.XgramTwoPane;
 import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.navigation.NavigationController;
+import org.thunderdog.challegram.navigation.NavigationStack;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.UI;
@@ -190,12 +191,29 @@ public final class XgramActivity {
       return;
     }
     ViewController<?> leftTop = XgramTwoPane.leftTop(context);
-    if (leftTop instanceof XgramActivityController && leftTop.tdlib() == tdlib) {
-      ((XgramActivityController) leftTop).scrollToTopOrReload();
-      return;
-    }
-    if (leftTop != null && XgramTwoPane.showOnLeft(from, new XgramActivityController(context, tdlib))) {
-      return;
+    if (leftTop != null) {
+      // Two panes. Opened in one pane and then unfolded, Activity stayed in the right pane: it moves to the left one
+      // now (its scroll position with it), so that one Activity is shown, not two.
+      final XgramActivityController onRight = rightPaneActivity(context, tdlib);
+      if (leftTop instanceof XgramActivityController && leftTop.tdlib() == tdlib) {
+        ((XgramActivityController) leftTop).scrollToTopOrReload();
+        if (onRight != null) {
+          closeOnRight(context, onRight);
+        }
+        return;
+      }
+      if (onRight != null) {
+        onRight.handOverScroll();
+      }
+      if (XgramTwoPane.showOnLeft(from, new XgramActivityController(context, tdlib))) {
+        if (onRight != null) {
+          closeOnRight(context, onRight);
+        }
+        return;
+      }
+      if (onRight != null) {
+        XgramActivityController.uiState(tdlib.id()).restorePending = false; // it stays where it is
+      }
     }
     // A tab of the floating toolbar: its tab screen (the selection moves, it fades in over the chat list), as the side
     // menu opens the other tabs. Not from a screen above the tabs: those open it over themselves below.
@@ -216,6 +234,46 @@ public final class XgramActivity {
       return;
     }
     navigation.navigateTo(new XgramActivityController(context, tdlib));
+  }
+
+  /** Two panes: this account's Activity in the right pane (the window's own navigation, above its root), if any. */
+  @UiThread
+  @Nullable
+  private static XgramActivityController rightPaneActivity (BaseActivity context, Tdlib tdlib) {
+    NavigationController right = context.navigation();
+    if (right == null || right.isDestroyed()) {
+      return null;
+    }
+    NavigationStack stack = right.getStack();
+    for (int i = stack.size() - 1; i >= 1; i--) {
+      ViewController<?> c = stack.get(i);
+      if (c instanceof XgramActivityController && c.tdlib() == tdlib && !c.isDestroyed()) {
+        return (XgramActivityController) c;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Takes {@code c} out of the right pane: on top, as Back would (what was under it shows, or the empty pane); under
+   * a chat it opened there, out of the stack.
+   */
+  @UiThread
+  private static void closeOnRight (BaseActivity context, XgramActivityController c) {
+    final NavigationController right = context.navigation();
+    if (right == null || right.isDestroyed() || c.isDestroyed()) {
+      return;
+    }
+    if (right.getCurrentStackItem() != c) {
+      right.getStack().destroy(c);
+    } else if (!right.navigateBack()) {
+      // The right pane is animating: once it is done
+      UI.post(() -> {
+        if (!c.isDestroyed() && !right.isDestroyed() && right.getCurrentStackItem() == c && XgramTwoPane.leftTop(context) != null) {
+          right.navigateBack();
+        }
+      }, 400L);
+    }
   }
 
   // Hooks
@@ -263,9 +321,26 @@ public final class XgramActivity {
     XgramActivitySync.trigger(tdlib, chatId, kindMask, serverCount);
   }
 
-  /** Debug builds: the sync acts as if Telegram asked to wait two minutes (Chat list > Activity). */
+  /**
+   * Debug builds: the sync, and Mark all as read, act as if Telegram asked to wait two minutes (Chat list > Activity).
+   */
   public static void debugInjectFlood () {
     XgramActivitySync.injectFlood();
+  }
+
+  /** Debug builds: whether every update callback of Activity's collectors throws (Chat list > Activity). */
+  public static boolean debugCollectorThrows () {
+    return org.thunderdog.challegram.BuildConfig.DEBUG && XgramActivityCollector.debugThrow;
+  }
+
+  /**
+   * Debug builds: makes every update callback of Activity's collectors throw first thing, so that their catch, and
+   * Telegram X's own listeners after them, run for real. Not saved: off again when the app restarts.
+   */
+  public static void setDebugCollectorThrows (boolean value) {
+    if (org.thunderdog.challegram.BuildConfig.DEBUG) {
+      XgramActivityCollector.debugThrow = value;
+    }
   }
 
   // What is shown changed without the store changing (mute, settings): badges and the screen filter again

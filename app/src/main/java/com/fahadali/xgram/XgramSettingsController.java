@@ -457,6 +457,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         } else if (id == R.id.btn_xgramActivityHeader) {
           view.getToggler().setRadioEnabled(settings.activityHeader(), isUpdate);
           setReason(view, XgramSettingDeps.activityOptionsReason());
+        } else if (id == R.id.btn_xgramActivityDebugThrow) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.activity.XgramActivity.debugCollectorThrows(), isUpdate);
         } else if (id == R.id.btn_xgramActivityBar) {
           view.setData(settings.activityBar() == XgramSettings.ACTIVITY_BAR_CALLS ? R.string.XgramActivityBarCalls : R.string.XgramActivityBarOff);
           setReason(view, XgramSettingDeps.activityOptionsReason());
@@ -825,8 +827,11 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     );
     items.add(description(R.string.XgramActivityLocalNote));
     if (BuildConfig.DEBUG) {
-      // Debug builds: the sync's flood wait, without asking Telegram for one
-      addRows(items, new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityDebugFlood, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugFlood));
+      // Debug builds: a flood wait without asking Telegram for one (the sync, Mark all as read), and collector errors
+      addRows(items,
+        new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramActivityDebugFlood, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugFlood),
+        toggle(R.id.btn_xgramActivityDebugThrow, R.drawable.baseline_bug_report_24, R.string.XgramActivityDebugThrow, R.string.XgramActivityDebugThrowInfo)
+      );
     }
 
     items.add(header(R.string.XgramHeaderScreen));
@@ -1827,6 +1832,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramActivityDebugFlood) {
       com.fahadali.xgram.activity.XgramActivity.debugInjectFlood();
       org.thunderdog.challegram.tool.UI.showToast(Lang.getString(R.string.XgramActivityDebugFlood), android.widget.Toast.LENGTH_SHORT);
+      return;
+    } else if (id == R.id.btn_xgramActivityDebugThrow) {
+      com.fahadali.xgram.activity.XgramActivity.setDebugCollectorThrows(adapter.toggleView(v));
       return;
     } else if (id == R.id.btn_xgramActivityReactions || id == R.id.btn_xgramActivityMuted || id == R.id.btn_xgramActivityDiscussion ||
       id == R.id.btn_xgramActivityLookBack || id == R.id.btn_xgramActivityBadge || id == R.id.btn_xgramActivityHeader) {

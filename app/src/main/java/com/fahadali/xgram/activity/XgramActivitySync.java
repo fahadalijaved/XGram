@@ -237,7 +237,7 @@ final class XgramActivitySync {
     store().executor.execute(() -> queues.remove(accountId));
   }
 
-  /** Debug builds: as if Telegram asked to wait two minutes. */
+  /** Debug builds: as if Telegram asked to wait two minutes (the sync, and Mark all as read). */
   @AnyThread
   static void injectFlood () {
     if (!BuildConfig.DEBUG) {
@@ -248,6 +248,7 @@ final class XgramActivitySync {
       return;
     }
     final int accountId = account.id;
+    XgramActivityRead.injectFlood(accountId, 120_000L);
     store().executor.execute(() -> {
       SQLiteDatabase db = store().db();
       if (db != null) {

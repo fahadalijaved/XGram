@@ -165,6 +165,8 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   private int limit = PAGE;
   private int requestId;
   private boolean restoreScroll;
+  @Nullable private String restoreAnchorKey;
+  private int restoreOffset;
   /** Rows a page should show at least: fewer (grouping, muted topics) and there are more, the next page comes at once. */
   private static final int MIN_PAGE_ROWS = 20;
   private final XgramActivityUndoBar classicUndo = new XgramActivityUndoBar(this);
@@ -175,6 +177,9 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     UiState state = uiState(tdlib.id());
     restoreScroll = state.restorePending;
     state.restorePending = false;
+    // Kept now: the screen this one replaces (moving to the left pane) may save its own while the rows load
+    restoreAnchorKey = state.anchorKey;
+    restoreOffset = state.offset;
     adapter = new SettingsAdapter(this) {
       @Override
       protected SettingHolder initCustom (ViewGroup parent, int customViewType) {
@@ -225,8 +230,10 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
           }
           case STATUS: {
             if (item.getData() instanceof Status) {
-              Status status = (Status) item.getData();
-              ((XgramActivityStatusView) view).setStatus(status.icon, status.text, status.progress);
+              final Status status = (Status) item.getData();
+              final XgramActivityStatusView statusView = (XgramActivityStatusView) view;
+              statusView.setStatus(status.icon, status.text, status.progress);
+              statusView.setCollapsing(status.key, status.collapsing, status.collapsing ? () -> onTileCollapsed(status.key) : null);
             }
             break;
           }
@@ -486,12 +493,11 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       return;
     }
     if (restoreScroll && firstRows) {
-      // A rebuild of the screen (the activity was made again): back where the last one was
+      // A rebuild of the screen (the activity was made again, or it moved to the left pane): back where the last one was
       restoreScroll = false;
-      UiState state = uiState(tdlib.id());
-      int index = state.anchorKey != null ? indexOfRow(state.anchorKey) : -1;
+      int index = restoreAnchorKey != null ? indexOfRow(restoreAnchorKey) : -1;
       if (index != -1) {
-        manager.scrollToPositionWithOffset(index, state.offset);
+        manager.scrollToPositionWithOffset(index, restoreOffset);
       }
       return;
     }
@@ -521,16 +527,77 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     final int icon;
     final CharSequence text;
     final float progress;
+    /** Gone, as the tile shown last: it collapses on its spring, then leaves the list (Expressive design). */
+    final boolean collapsing;
 
     Status (String key, int icon, CharSequence text, float progress) {
+      this(key, icon, text, progress, false);
+    }
+
+    private Status (String key, int icon, CharSequence text, float progress, boolean collapsing) {
       this.key = key;
       this.icon = icon;
       this.text = text;
       this.progress = progress;
+      this.collapsing = collapsing;
+    }
+
+    @NonNull
+    Status toCollapsing () {
+      return collapsing ? this : new Status(key, icon, text, progress, true);
     }
 
     String signature () {
-      return icon + ":" + text + ":" + Math.round(progress * 1000f);
+      return (collapsing ? "collapsing:" : "") + icon + ":" + text + ":" + Math.round(progress * 1000f);
+    }
+  }
+
+  /** The tiles above the list in their order (statuses() gives them in it too). */
+  private static final String[] TILE_KEYS = {"sync", "ghost"};
+  /** The status tiles in the list now (Expressive design), by key, collapsing ones included. */
+  private final java.util.HashMap<String, Status> shownTiles = new java.util.HashMap<>();
+
+  /**
+   * The status tiles to show: the current ones, and in its place each one that went since the list was built last,
+   * collapsing (SPATIAL_DEFAULT) until {@link #onTileCollapsed} drops it. Not when everything is replaced.
+   */
+  @NonNull
+  private List<Status> tiles (@NonNull List<Status> statuses, boolean replace) {
+    final List<Status> result = new ArrayList<>(TILE_KEYS.length);
+    for (String key : TILE_KEYS) {
+      Status current = null;
+      for (Status status : statuses) {
+        if (key.equals(status.key)) {
+          current = status;
+          break;
+        }
+      }
+      final Status before = shownTiles.get(key);
+      if (current != null) {
+        shownTiles.put(key, current);
+        result.add(current);
+      } else if (before != null && !replace && cellsBuilt) {
+        final Status collapsing = before.toCollapsing();
+        shownTiles.put(key, collapsing);
+        result.add(collapsing);
+      } else {
+        shownTiles.remove(key);
+      }
+    }
+    return result;
+  }
+
+  /** A tile is shut (its spring ended, or it was off screen): it leaves the list now, without an animation of its own. */
+  private void onTileCollapsed (@NonNull String key) {
+    final Status status = shownTiles.get(key);
+    if (status == null || !status.collapsing || isDestroyed() || adapter == null) {
+      return;
+    }
+    shownTiles.remove(key);
+    if (loaded) {
+      applyRows(false);
+    } else {
+      buildCells();
     }
   }
 
@@ -598,6 +665,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     final boolean expressive = XgramExpressive.isEnabled();
     final Cells cells = new Cells();
     if (!XgramActivity.isOn()) {
+      shownTiles.clear();
       if (expressive) {
         cells.add(new ListItem(ListItem.TYPE_CUSTOM - OFF_ROW), "off", "");
       } else {
@@ -615,10 +683,13 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
     } else {
       cells.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL), "offset", "");
     }
-    for (Status status : statuses()) {
-      if (expressive) {
+    if (expressive) {
+      for (Status status : tiles(statuses(), replace)) {
         cells.add(new ListItem(ListItem.TYPE_CUSTOM - STATUS).setData(status), "status:" + status.key, status.signature());
-      } else {
+      }
+    } else {
+      shownTiles.clear();
+      for (Status status : statuses()) {
         cells.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, status.text, false), "status:" + status.key, status.text.toString());
       }
     }
@@ -1423,14 +1494,49 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
   public void onFocus () {
     super.onFocus();
     invalidateRows();
-    XgramActivitySync.setVisible(tdlib.id(), true); // faster spacing while here, and a look for what is missing
+    setOnScreen(true); // faster spacing while here, and a look for what is missing
   }
 
   @Override
   public void onBlur () {
     super.onBlur();
     saveScroll();
-    XgramActivitySync.setVisible(tdlib.id(), false);
+    setOnScreen(false);
+  }
+
+  /**
+   * Activity screens in focus (UI thread). Two can be for a moment (one moving to the left pane, a fold): the sync's
+   * faster spacing ends when the last one of the account goes, not when either does.
+   */
+  private static final List<XgramActivityController> onScreen = new ArrayList<>();
+
+  private void setOnScreen (boolean focused) {
+    final int accountId = tdlib.id();
+    if (focused) {
+      if (!onScreen.contains(this)) {
+        onScreen.add(this);
+      }
+      XgramActivitySync.setVisible(accountId, true);
+      return;
+    }
+    onScreen.remove(this);
+    for (XgramActivityController other : onScreen) {
+      if (other.tdlib().id() == accountId) {
+        return;
+      }
+    }
+    XgramActivitySync.setVisible(accountId, false);
+  }
+
+  /**
+   * It moves to the left pane (XgramActivity.open): the screen made there opens where this one is. Called right
+   * before that screen is made.
+   */
+  void handOverScroll () {
+    if (isFocused()) {
+      saveScroll(); // otherwise it was saved when it lost focus
+    }
+    uiState(tdlib.id()).restorePending = true;
   }
 
   private void saveScroll () {
@@ -1465,7 +1571,7 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
       (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1 && context.isDestroyed());
     classicUndo.destroy();
     UI.cancel(statusRefresh);
-    XgramActivitySync.setVisible(tdlib.id(), false);
+    setOnScreen(false);
     super.destroy();
     XgramActivityStore.instance().removeListener(this);
     XgramActivityBadge.instance().removeListener(this);

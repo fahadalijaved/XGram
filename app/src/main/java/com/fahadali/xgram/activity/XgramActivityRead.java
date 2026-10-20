@@ -11,8 +11,10 @@
  */
 package com.fahadali.xgram.activity;
 
+import android.os.SystemClock;
 import android.util.Log;
 
+import androidx.annotation.AnyThread;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.UiThread;
@@ -21,6 +23,7 @@ import com.fahadali.xgram.ghost.XgramGhost;
 import com.fahadali.xgram.ghost.XgramLocalRead;
 
 import org.drinkless.tdlib.TdApi;
+import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.tool.UI;
 
@@ -223,6 +226,10 @@ final class XgramActivityRead {
       return;
     }
     final ChatPlan chat = queue.get(index);
+    if (debugFlood(tdlib)) {
+      finish(progress, queue.size() - index + left, true); // a simulated wait: as a 429 on this chat, nothing sent
+      return;
+    }
     try {
       // Decided again now: ghost mode may have come on meanwhile
       if (XgramGhost.dontReadMessages(tdlib, chat.chatId)) {
@@ -264,6 +271,10 @@ final class XgramActivityRead {
 
   private static void readReactions (Tdlib tdlib, List<ChatPlan> queue, int index, int left, @Nullable Progress progress) {
     final ChatPlan chat = queue.get(index);
+    if (debugFlood(tdlib)) {
+      finish(progress, queue.size() - index + left, true);
+      return;
+    }
     tdlib.send(new TdApi.ReadAllChatReactions(chat.chatId), (ok, error) -> {
       if (isFlood(error)) {
         finish(progress, queue.size() - index + left, true);
@@ -279,6 +290,26 @@ final class XgramActivityRead {
 
   private static boolean isFlood (@Nullable TdApi.Error error) {
     return error != null && (error.code == 429 || XgramActivityClassifier.retryAfterSeconds(error) >= 0);
+  }
+
+  // Debug builds: Simulate Telegram wait (Chat list > Activity) stops Mark all as read too
+
+  private static volatile int debugFloodAccountId = -1;
+  /** SystemClock.elapsedRealtime() until which the account's calls are answered with a wait. */
+  private static volatile long debugFloodUntil;
+
+  /** Debug builds: for the next {@code ms}, Mark all as read on this account stops as at a 429, before sending. */
+  @AnyThread
+  static void injectFlood (int accountId, long ms) {
+    if (!BuildConfig.DEBUG) {
+      return;
+    }
+    debugFloodAccountId = accountId;
+    debugFloodUntil = SystemClock.elapsedRealtime() + ms;
+  }
+
+  private static boolean debugFlood (Tdlib tdlib) {
+    return BuildConfig.DEBUG && debugFloodAccountId == tdlib.id() && SystemClock.elapsedRealtime() < debugFloodUntil;
   }
 
   private static void finish (@Nullable Progress progress, int stoppedChats, boolean flood) {
