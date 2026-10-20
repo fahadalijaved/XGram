@@ -700,6 +700,10 @@ public final class XgramNavRail {
       if (canNavigate()) {
         open(new com.fahadali.xgram.chats.XgramBookmarksController(context, tdlib));
       }
+    } else if (id == R.id.btn_xgramLater) {
+      if (canNavigate()) {
+        open(new com.fahadali.xgram.later.XgramLaterController(context, tdlib)); // XGram Later
+      }
     } else if (id == R.id.btn_xgramSavedByChat) {
       if (canNavigate()) {
         open(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib));
@@ -1379,6 +1383,9 @@ public final class XgramNavRail {
       }
       if (!xgram.drawerItemHidden("bookmarks")) {
         entries.add(new Entry("bookmarks", R.id.btn_xgramBookmarks, R.drawable.baseline_star_24, R.drawable.xgl_star, R.string.XgramBookmarks));
+      }
+      if (!xgram.drawerItemHidden("later")) {
+        entries.add(new Entry("later", R.id.btn_xgramLater, R.drawable.baseline_watch_later_24, R.drawable.xgl_time, R.string.XgramLater)); // XGram Later
       }
       if (!xgram.drawerItemHidden("saved_by_chat")) {
         entries.add(new Entry("saved_by_chat", R.id.btn_xgramSavedByChat, R.drawable.baseline_forum_24, R.drawable.xgl_forum, R.string.XgramSavedByChat));

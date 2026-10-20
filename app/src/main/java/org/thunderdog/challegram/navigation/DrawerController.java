@@ -822,6 +822,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     if (!xgram.drawerItemHidden("bookmarks")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramBookmarks, (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? R.drawable.baseline_star_border_24 : R.drawable.baseline_star_24), R.string.XgramBookmarks)); // XGram
     }
+    if (!xgram.drawerItemHidden("later")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramLater, R.drawable.baseline_watch_later_24, R.string.XgramLater)); // XGram Later
+    }
     if (!xgram.drawerItemHidden("saved_by_chat")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramSavedByChat, R.drawable.baseline_forum_24, R.string.XgramSavedByChat)); // XGram
     }
@@ -1141,6 +1144,8 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       openSavedMessages();
     } else if (viewId == R.id.btn_xgramBookmarks) {
       openController(new com.fahadali.xgram.chats.XgramBookmarksController(context, context.currentTdlib())); // XGram
+    } else if (viewId == R.id.btn_xgramLater) {
+      openController(new com.fahadali.xgram.later.XgramLaterController(context, context.currentTdlib())); // XGram Later
     } else if (viewId == R.id.btn_xgramSavedByChat) {
       openController(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, context.currentTdlib())); // XGram
     } else if (viewId == R.id.btn_addAccount) {
