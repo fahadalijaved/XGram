@@ -36,7 +36,11 @@ out at once when you leave the chat, the app goes to the background or you send
 something else, and after a crash they come back as the chat's draft. Choose Off,
 3, 5, 10 or 20 seconds under Settings > XGram > Messages > Message box (off by
 default); single chats can be excepted from the chat's menu, and voice and video
-messages can wait too if you want.
+messages can wait too if you want. Waiting messages also show in the chat itself
+as faded bubbles with a draining ring, under your newest message; tap one to undo
+it or send it now, and when its time is up it turns solid in place. With
+"Only the newest waits", sending a new message sends the one before it at once,
+so only one countdown is ever running.
 
 ### Check In
 
@@ -49,8 +53,7 @@ time, Telegram's own server sends the alert, so it still arrives when your phone
 is dead, switched off or stolen. You can add time or cancel from the notification,
 and XGram asks "Are you OK?" before the deadline. It is best effort, not an
 emergency service. Settings (default timer, alert delay, location, battery,
-arrival radius): Settings > XGram > Messages. (At the time of writing, Check In is
-finished on its own branch and waiting to be merged into the main XGram branch.)
+arrival radius): Settings > XGram > Messages.
 
 ### Later
 
@@ -70,7 +73,9 @@ When you create or edit a forum topic, the icon picker lists Telegram's default
 topic icons, then your recently used custom emoji, then every custom emoji pack
 you have installed, in your own order, with a tab strip to jump between packs.
 Telegram X itself only ever offered the default icons. Packs load as you scroll,
-so even thousands of emoji scroll smoothly. Custom emoji icons need Telegram
+so even thousands of emoji scroll smoothly. A search bar under the topic name
+finds icons by word or by emoji (type "cat" or a cat face) across the default
+icons, all emoji and the matching packs. Custom emoji icons need Telegram
 Premium; without it the packs show with a lock and explain why.
 
 ### Where the code lives
