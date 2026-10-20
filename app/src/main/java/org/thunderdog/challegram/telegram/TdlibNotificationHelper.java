@@ -612,7 +612,8 @@ public class TdlibNotificationHelper implements Iterable<TdlibNotificationGroup>
       if (notification.type instanceof TdApi.NotificationTypeNewMessage) {
         TdApi.Message message = ((TdApi.NotificationTypeNewMessage) notification.type).message;
         hidden = com.fahadali.xgram.chats.XgramFilters.isHidden(tdlib, message) ||
-          com.fahadali.xgram.topics.XgramTopicMute.isMutedMessage(tdlib, message);
+          com.fahadali.xgram.topics.XgramTopicMute.isMutedMessage(tdlib, message) ||
+          com.fahadali.xgram.later.XgramLater.shouldDropNotification(tdlib, message); // XGram: a snoozed chat stays quiet
       }
       if (hidden) {
         if (kept == null) {

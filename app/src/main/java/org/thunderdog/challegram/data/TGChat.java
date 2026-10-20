@@ -140,6 +140,8 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
 
   private final BounceAnimator scheduleAnimator;
   private final Counter counter, mentionCounter, reactionsCounter, viewCounter;
+  private final Counter xgramLaterCounter;
+  private final com.fahadali.xgram.later.XgramLaterUi.BellColors xgramBellColors;
 
   private final ReactionsCounterDrawable reactionsCounterDrawable;
   private final HashMap<String, TGReactions.MessageReactionEntry> reactionsMapEntry = new HashMap<>();
@@ -195,6 +197,14 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       .drawable(R.drawable.baseline_favorite_14, 16f, 0f, Gravity.CENTER)
       .callback(this)
       .build();
+    // XGram Later: the bell (a woken snooze, a due reminder or follow-up not seen yet), after the @ and the heart
+    this.xgramBellColors = new com.fahadali.xgram.later.XgramLaterUi.BellColors();
+    this.xgramLaterCounter = new Counter.Builder()
+      .drawable(R.drawable.baseline_notification_important_14, 16f, 0f, Gravity.CENTER)
+      .colorSet(xgramBellColors)
+      .callback(this)
+      .build();
+    xgramBellColors.attach(xgramLaterCounter);
     this.viewCounter = new Counter.Builder()
       .textSize(11f)
       .callback(this)
@@ -237,6 +247,14 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       .drawable(R.drawable.baseline_favorite_14, 16f, 0f, Gravity.CENTER)
       .callback(this)
       .build();
+    // XGram Later: the bell (a woken snooze, a due reminder or follow-up not seen yet), after the @ and the heart
+    this.xgramBellColors = new com.fahadali.xgram.later.XgramLaterUi.BellColors();
+    this.xgramLaterCounter = new Counter.Builder()
+      .drawable(R.drawable.baseline_notification_important_14, 16f, 0f, Gravity.CENTER)
+      .colorSet(xgramBellColors)
+      .callback(this)
+      .build();
+    xgramBellColors.attach(xgramLaterCounter);
     this.viewCounter = null;
     this.flags |= FLAG_ARCHIVE;
     setCounter(false);
@@ -440,7 +458,8 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
       reserve += Screen.dp(12f) + ChatView.getTimePaddingLeft();
     }
     final int gap = ChatView.getTimePaddingLeft();
-    final float badges = counter.getScaledOrTargetWidth(gap, true) + mentionCounter.getScaledOrTargetWidth(gap, true) + reactionsCounter.getScaledOrTargetWidth(gap, true);
+    final float badges = counter.getScaledOrTargetWidth(gap, true) + mentionCounter.getScaledOrTargetWidth(gap, true) + reactionsCounter.getScaledOrTargetWidth(gap, true) +
+      xgramLaterCounter.getScaledOrTargetWidth(gap, true); // XGram Later
     if (badges > 0f) {
       reserve += Math.round(badges) + Screen.dp(8f);
     } else if (xgramIsPinnedRow()) {
@@ -961,6 +980,7 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     reactionsCounter.setCount(hasReactions ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, !notificationsEnabled(), allowAnimation && needAnimateChanges());
     mentionCounter.setCount(hasMentions ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, false, allowAnimation && needAnimateChanges());
     counter.setCount(hasMentions && unreadCount == 1 ? 0 : unreadCount, !notificationsEnabled(), allowAnimation && needAnimateChanges());
+    xgramLaterCounter.setCount(xgramHasBell() ? Tdlib.CHAT_MARKED_AS_UNREAD : 0, !notificationsEnabled(), allowAnimation && needAnimateChanges()); // XGram Later
     xgramCheckUnreadStyle();
     xgramCheckOneLineReserve();
   }
@@ -1263,6 +1283,34 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     return community != null && !StringUtils.isEmpty(community.name) ? community.name : tdlib.chatTitle(chat);
   }
 
+  // XGram Later: the bell
+
+  private boolean xgramHasBell () {
+    if (isArchive() || chat == null) {
+      return false; // the archive row never has it
+    }
+    if (xgramCommunityId != 0) {
+      for (TdApi.Chat member : xgramMembers()) {
+        if (com.fahadali.xgram.later.XgramLater.hasBell(tdlib, member.id)) {
+          return true; // a merged community: any member's
+        }
+      }
+      return false;
+    }
+    return com.fahadali.xgram.later.XgramLater.hasBell(tdlib, chat.id);
+  }
+
+  public Counter xgramLaterCounter () {
+    return xgramLaterCounter;
+  }
+
+  /** The bell came or went (UI thread): returns whether it changed. */
+  public boolean xgramRefreshLater () {
+    boolean before = xgramLaterCounter.getVisibilityTarget();
+    setCounter(true);
+    return before != xgramLaterCounter.getVisibilityTarget();
+  }
+
   /** Members came or went, or one of the others changed: title, counters and preview again. */
   public boolean xgramRefreshCommunity () {
     long communityId = xgramComputeCommunity();
@@ -1487,7 +1535,8 @@ public class TGChat implements TdlibStatusManager.HelperTarget, ContentPreview.R
     return Math.round(
       counter.getScaledWidth(ChatView.getTimePaddingLeft()) +
       mentionCounter.getScaledWidth(ChatView.getTimePaddingLeft()) +
-      reactionsCounter.getScaledWidth(ChatView.getTimePaddingLeft())
+      reactionsCounter.getScaledWidth(ChatView.getTimePaddingLeft()) +
+      xgramLaterCounter.getScaledWidth(ChatView.getTimePaddingLeft()) // XGram Later
     );
   }
 

@@ -64,11 +64,25 @@ public final class TdlibChatListSlice implements Destroyable {
       this.keepPosition = true;
     }
 
+    /**
+     * XGram Later: when the chat's bell came (it then sits right under the pinned chats, newest first), 0 when it
+     * isn't moved up. Set when the entry is inserted (findInsertIndex) and only then, so the sorted list stays valid.
+     */
+    private long xgramRaised;
+
     @Override
     public int compareTo (TdlibChatList.Entry other) {
       long otherTime = other instanceof Entry ? ((Entry) other).broughtToTopTime : 0;
       if (this.broughtToTopTime != otherTime) {
         return Long.compare(otherTime, this.broughtToTopTime);
+      }
+      // XGram Later: pinned first, then the woken chats (newest first), then the natural order
+      if (this.effectivePosition.isPinned != other.effectivePosition.isPinned) {
+        return this.effectivePosition.isPinned ? -1 : 1;
+      }
+      long otherRaised = other instanceof Entry ? ((Entry) other).xgramRaised : 0;
+      if (this.xgramRaised != otherRaised) {
+        return Long.compare(otherRaised, this.xgramRaised);
       }
       return super.compareTo(other);
     }
@@ -134,6 +148,7 @@ public final class TdlibChatListSlice implements Destroyable {
 
   @TdlibThread
   protected int findInsertIndex (Entry entry) {
+    entry.xgramRaised = xgramMerge && !entry.effectivePosition.isPinned ? com.fahadali.xgram.later.XgramLater.raisedAt(tdlib, entry.chat.id) : 0; // XGram Later
     final int atIndex = Collections.binarySearch(filteredList, entry);
     if (atIndex >= 0)
       throw new IllegalStateException();
@@ -324,7 +339,15 @@ public final class TdlibChatListSlice implements Destroyable {
         if (xgramMerge) {
           // Sorted insertion: the merge may have put a community's front in already.
           for (Entry entry : addedEntries) {
-            filteredList.add(findInsertIndex(entry), entry);
+            final int atIndex = findInsertIndex(entry);
+            filteredList.add(atIndex, entry);
+            if (atIndex < displayCount) {
+              // XGram: sorted above what is shown already (a chat woken by Later, moved up): shown in its place now,
+              // the next chunk below it would otherwise start one entry too early
+              subListener.onChatAdded(sourceList, entry.chat, atIndex, new Tdlib.ChatChange(entry.effectivePosition, Tdlib.ChatChange.ALL));
+              displayCount++;
+              subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_ADDED);
+            }
           }
         } else {
           filteredList.addAll(addedEntries);
@@ -410,6 +433,7 @@ public final class TdlibChatListSlice implements Destroyable {
       sourceList.unsubscribeFromUpdates(this.listener);
       if (xgramMerge) {
         com.fahadali.xgram.chats.XgramCommunities.removeListener(xgramListener);
+        com.fahadali.xgram.later.XgramLater.removeListener(xgramLaterListener);
       }
     }
   }
@@ -426,6 +450,7 @@ public final class TdlibChatListSlice implements Destroyable {
   /** The list has received its chats: before that, merge changes are left to the loading itself. */
   private boolean xgramReady;
   private com.fahadali.xgram.chats.XgramCommunities.Listener xgramListener;
+  private com.fahadali.xgram.later.XgramLater.Listener xgramLaterListener;
 
   /** Call before {@link #initializeList}. */
   public void xgramMergeCommunities () {
@@ -442,11 +467,115 @@ public final class TdlibChatListSlice implements Destroyable {
         }
       };
       com.fahadali.xgram.chats.XgramCommunities.addListener(xgramListener);
+      // XGram Later: snoozed chats leave the user's own lists and come back when they wake; woken chats move up
+      xgramLaterListener = (accountId, chatIds, events) -> {
+        if (accountId == tdlib.id() && (events & (com.fahadali.xgram.later.XgramLater.EVENT_HIDDEN | com.fahadali.xgram.later.XgramLater.EVENT_RAISE)) != 0) {
+          tdlib.runOnTdlibThread(() -> xgramOnLaterChanged(chatIds, events));
+        }
+      };
+      com.fahadali.xgram.later.XgramLater.addListener(xgramLaterListener);
     }
   }
 
   private boolean xgramHidden (TdApi.Chat chat) {
-    return xgramMerge && com.fahadali.xgram.chats.XgramCommunities.isHidden(tdlib, chat, sourceList.chatList());
+    return xgramMerge && (com.fahadali.xgram.chats.XgramCommunities.isHidden(tdlib, chat, sourceList.chatList()) || com.fahadali.xgram.later.XgramLater.isChatHidden(tdlib, chat));
+  }
+
+  /** XGram Later: chats snoozed or woken (out of the list or back in), or moved up or back. */
+  @TdlibThread
+  private void xgramOnLaterChanged (long[] chatIds, int events) {
+    if (!xgramMerge || !xgramReady || subListener == null || isDestroyed()) {
+      return;
+    }
+    if (chatIds.length == 0) {
+      // Every chat of the list (a setting changed): hidden ones go, the others take their place again
+      long[] ids;
+      synchronized (filteredList) {
+        ids = new long[filteredList.size()];
+        for (int i = 0; i < ids.length; i++) {
+          ids[i] = filteredList.get(i).chat.id;
+        }
+      }
+      chatIds = ids;
+    }
+    for (long chatId : chatIds) {
+      xgramRefreshFor(chatId);
+      TdApi.Chat chat = tdlib.chat(chatId);
+      if (chat == null) {
+        continue;
+      }
+      if (xgramHidden(chat)) {
+        xgramRemoveIfHidden(chatId);
+      } else if (indexOfChat(chatId) == -1) {
+        xgramShowIfVisible(chatId);
+      } else if ((events & com.fahadali.xgram.later.XgramLater.EVENT_RAISE) != 0) {
+        xgramReposition(chatId);
+      }
+    }
+  }
+
+  /** XGram Later: a chat that is hidden now leaves the list (the removal loop of xgramRefresh). */
+  @TdlibThread
+  private void xgramRemoveIfHidden (long chatId) {
+    if (!xgramMerge || !xgramReady || subListener == null || isDestroyed()) {
+      return;
+    }
+    boolean removed = false;
+    synchronized (filteredList) {
+      int i = indexOfChat(chatId);
+      Entry entry = i != -1 ? filteredList.get(i) : null;
+      if (entry != null && !entry.keepPosition) {
+        filteredList.remove(i);
+        if (i < displayCount) {
+          subListener.onChatRemoved(sourceList, entry.chat, i, new Tdlib.ChatChange(entry.effectivePosition, Tdlib.ChatChange.ALL));
+          displayCount--;
+          subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_REMOVED);
+        }
+        removed = true;
+      }
+    }
+    if (removed) {
+      dispatchChats(0);
+    }
+  }
+
+  /** XGram Later: the chat's bell came or went: out and back in at its sorted place (onChatMoved's dispatch). */
+  @TdlibThread
+  private void xgramReposition (long chatId) {
+    if (!xgramMerge || !xgramReady || subListener == null || isDestroyed()) {
+      return;
+    }
+    synchronized (filteredList) {
+      final int fromIndex = indexOfChat(chatId);
+      if (fromIndex == -1) {
+        return;
+      }
+      Entry entry = filteredList.get(fromIndex);
+      long raised = !entry.effectivePosition.isPinned ? com.fahadali.xgram.later.XgramLater.raisedAt(tdlib, chatId) : 0;
+      if (entry.keepPosition || entry.xgramRaised == raised) {
+        return;
+      }
+      filteredList.remove(fromIndex);
+      final int toIndex = findInsertIndex(entry);
+      filteredList.add(toIndex, entry);
+      if (toIndex == fromIndex) {
+        return;
+      }
+      Tdlib.ChatChange change = new Tdlib.ChatChange(entry.effectivePosition, Tdlib.ChatChange.ALL);
+      if (fromIndex < displayCount && toIndex < displayCount) {
+        subListener.onChatMoved(sourceList, entry.chat, fromIndex, toIndex, change);
+        subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_MOVED);
+      } else if (fromIndex < displayCount) {
+        subListener.onChatRemoved(sourceList, entry.chat, fromIndex, change);
+        displayCount--;
+        subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_REMOVED);
+      } else if (toIndex < displayCount) {
+        subListener.onChatAdded(sourceList, entry.chat, toIndex, change);
+        displayCount++;
+        subListener.onChatListChanged(sourceList, ChatListListener.ChangeFlags.ITEM_ADDED);
+      }
+    }
+    dispatchChats(0);
   }
 
   @TdlibThread

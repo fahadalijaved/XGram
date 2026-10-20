@@ -313,8 +313,8 @@ public final class XgramCommunities {
       }
       TdApi.Chat chat = tdlib.chat(entry.getKey());
       TdApi.ChatPosition position = chat != null ? ChatPosition.findPosition(chat, chatList) : null;
-      if (position == null || position.order == 0) {
-        continue;
+      if (position == null || position.order == 0 || com.fahadali.xgram.later.XgramLater.isSnoozedPending(tdlib, chat.id)) {
+        continue; // XGram Later: a snoozed member is left out, so the community's row never goes with it
       }
       present++;
       if (bestId == 0 || (position.isPinned && !bestPinned) || (position.isPinned == bestPinned && position.order > bestOrder)) {
@@ -351,7 +351,7 @@ public final class XgramCommunities {
       }
       TdApi.Chat chat = tdlib.chat(entry.getKey());
       TdApi.ChatPosition position = chat != null ? ChatPosition.findPosition(chat, chatList) : null;
-      if (position != null && position.order != 0) {
+      if (position != null && position.order != 0 && !com.fahadali.xgram.later.XgramLater.isSnoozedPending(tdlib, chat.id)) {
         chats.add(chat);
       }
     }

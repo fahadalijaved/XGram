@@ -1057,6 +1057,10 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
       multiLineRight -= mentionCounter.getScaledWidth(getTimePaddingLeft());
       counterLeft += mentionCounter.getScaledWidth(getTimePaddingLeft());
       reactionCounter.draw(c, xgramRtlCounterX(reactionCounter, multiLineRight, counterLeft, counterRadius, oneLine), counterCenterY, Gravity.RIGHT, 1f, this, reactionColorId);
+      multiLineRight -= reactionCounter.getScaledWidth(getTimePaddingLeft());
+      counterLeft += reactionCounter.getScaledWidth(getTimePaddingLeft());
+      Counter bellCounter = chat.xgramLaterCounter(); // XGram Later: the bell, colored by its own set
+      bellCounter.draw(c, xgramRtlCounterX(bellCounter, multiLineRight, counterLeft, counterRadius, oneLine), counterCenterY, Gravity.RIGHT, 1f, this, ColorId.NONE);
     } else {
       final float multiLineRight = viewWidth - getRightPadding();
       float counterRight = oneLine <= 0f ? multiLineRight : multiLineRight + (oneLineRight - multiLineRight) * oneLine;
@@ -1068,11 +1072,14 @@ public class ChatView extends BaseView implements TdlibSettingsManager.Preferenc
 
       reactionCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, reactionColorId);
       counterRight -= reactionCounter.getScaledWidth(getTimePaddingLeft());
+
+      Counter bellCounter = chat.xgramLaterCounter(); // XGram Later: the bell, colored by its own set
+      bellCounter.draw(c, counterRight - counterRadius, counterCenterY, Gravity.RIGHT, 1f, this, ColorId.NONE);
     }
 
     if (oneLine > 0f && chat.xgramIsPinnedRow()) {
       // XGram: one line shows a pin where there is no badge (official Telegram); it gives way as a badge comes in
-      final float badges = Math.max(counter.getVisibility(), Math.max(mentionCounter.getVisibility(), reactionCounter.getVisibility()));
+      final float badges = Math.max(Math.max(counter.getVisibility(), chat.xgramLaterCounter().getVisibility()), Math.max(mentionCounter.getVisibility(), reactionCounter.getVisibility())); // XGram Later: the bell too
       final float pinAlpha = (1f - badges) * oneLine;
       Drawable d = pinAlpha > 0f ? getSparseDrawable(R.drawable.deproko_baseline_pin_14, ColorId.NONE) : null;
       if (d != null) {

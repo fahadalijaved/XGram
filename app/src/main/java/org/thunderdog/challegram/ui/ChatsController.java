@@ -300,7 +300,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
             if (adapterPosition != RecyclerView.NO_POSITION) {
               TGChat nextChat = context.adapter.getChatByItemPosition(adapterPosition + 1);
               boolean needSplit = nextChat != null && (chat.isArchive() != nextChat.isArchive() || chat.isPinnedOrSpecial() != nextChat.isPinnedOrSpecial());
-              boolean needShadowTop = adapterPosition > 0 && context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS;
+              boolean needShadowTop = adapterPosition > 0 && (context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS || context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_XGRAM_SNOOZED); // XGram Later
 
               if (needShadowTop) {
                 int top = view.getTop() + offsetTop;
@@ -366,6 +366,26 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           // XGram M3E: on the app bar's layer with the 12dp gap below it, where the chats' container opens (onDrawOver)
           float suggestedBottom = view.getY() + view.getHeight() + (xgramM3 ? Screen.dp(12f) : 0);
           c.drawRect(view.getX(), view.getY(), view.getX() + view.getWidth(), suggestedBottom, Paints.fillingPaint(xgramM3 ? Theme.getColor(ColorId.headerBackground) : Theme.backgroundColor()));
+        } else if (viewType == ChatsAdapter.VIEW_TYPE_XGRAM_SNOOZED) {
+          // XGram Later: the Snoozed row closes the archive's group: the split's gap below it, with its shadow
+          offsetTop = (int) view.getTranslationY();
+          right = view.getWidth();
+          final int rowPosition = parent.getChildAdapterPosition(view);
+          final int gapTop = view.getBottom() + offsetTop;
+          final int gap = context.liveLocationHelper != null && context.liveLocationHelper.isVisible() && rowPosition == context.getLiveLocationPosition() - 1 ? Screen.dp(1f) : Screen.dp(12f);
+          if (rowPosition != RecyclerView.NO_POSITION && rowPosition + 1 < context.adapter.getItemCount()) {
+            c.drawRect(0, gapTop, right, gapTop + gap, Paints.fillingPaint(xgramM3 ? Theme.getColor(ColorId.headerBackground) : Theme.backgroundColor()));
+            if (shadowFactor != 0f) {
+              bottomShadowPaint.setAlpha((int) (255f * maxAlpha * shadowFactor));
+              c.save();
+              c.translate(0, gapTop);
+              c.drawRect(0, 0, right, ShadowView.simpleBottomShadowHeight(), bottomShadowPaint);
+              c.restore();
+            }
+            if (lineFactor != 0f) {
+              c.drawRect(0, gapTop, right, gapTop + separatorHeight, Paints.fillingPaint(ColorUtils.alphaColor(lineFactor, Theme.separatorColor())));
+            }
+          }
         } else {
           offsetTop = (int) view.getTranslationY();
           right = view.getWidth();
@@ -443,6 +463,22 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       final int cornerReach = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.CORNER_XL);
       for (int i = 0; i < childCount; i++) {
         View view = parent.getChildAt(i);
+        if (view instanceof com.fahadali.xgram.later.XgramSnoozedRowView) {
+          // XGram Later: the Snoozed row ends its group (the archive's, or its own): bottom corners into the gap below it,
+          // top corners when it opens the chats' container under the folder's new chats card
+          final int rowPosition = parent.getChildAdapterPosition(view);
+          if (rowPosition == RecyclerView.NO_POSITION) {
+            continue;
+          }
+          final int rowOffset = dragging ? 0 : (int) view.getTranslationY();
+          if (rowPosition > 0 && context.adapter.getItemViewType(rowPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
+            xgramCorners.draw(c, 0, view.getTop() + rowOffset, view.getWidth());
+          }
+          if (rowPosition + 1 < context.adapter.getItemCount()) {
+            xgramCorners.drawBottom(c, 0, view.getBottom() + rowOffset, view.getWidth());
+          }
+          continue;
+        }
         if (!(view instanceof ChatView)) {
           continue;
         }
@@ -453,8 +489,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         }
         final int offsetTop = ((ChatView) view).isDragging() || dragging ? 0 : (int) view.getTranslationY();
         final int right = view.getMeasuredWidth();
-        if (adapterPosition > 0 && context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
-          // The chats' container opens below the suggested chats of a shared folder, as at every other split
+        if (adapterPosition > 0 && (context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS || context.adapter.getItemViewType(adapterPosition - 1) == ChatsAdapter.VIEW_TYPE_XGRAM_SNOOZED)) {
+          // The chats' container opens below the suggested chats of a shared folder (or the Snoozed row), as at every other split
           xgramCorners.draw(c, 0, view.getTop() + offsetTop, right);
         }
         TGChat nextChat = context.adapter.getChatByItemPosition(adapterPosition + 1);
@@ -482,6 +518,14 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
       TGChat current = context.adapter.getChatByItemPosition(position);
       if (current == null) {
+        if (context.adapter.getItemViewType(position) == ChatsAdapter.VIEW_TYPE_XGRAM_SNOOZED) {
+          // XGram Later: the Snoozed row closes the archive's group: the split's 12dp below it (1dp above the live location
+          // bar, which is above it when there are no chats)
+          final boolean liveLocation = context.liveLocationHelper != null && context.liveLocationHelper.isVisible();
+          outRect.top = liveLocation && position == context.getLiveLocationPosition() ? LiveLocationHelper.height() : 0;
+          outRect.bottom = liveLocation && position == context.getLiveLocationPosition() - 1 ? Screen.dp(1f) : Screen.dp(12f);
+          return;
+        }
         if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && context.adapter.getItemViewType(position) == ChatsAdapter.VIEW_TYPE_SUGGESTED_CHATS) {
           // XGram M3E: the 12dp gap of a group split between the suggested chats and the chats' container
           outRect.top = context.liveLocationHelper != null && context.liveLocationHelper.isVisible() && position == context.getLiveLocationPosition() ? LiveLocationHelper.height() : 0;
@@ -521,7 +565,9 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
       if (context.archiveCollapsed && outRect.top == 0 && current.isArchive()) {
         outRect.top = -ChatView.xgramCurrentHeight(current); // XGram: the row's height springs while the chat list view changes
-        if (context.liveLocationHelper != null && context.liveLocationHelper.isVisible()) {
+        if (context.adapter.xgramShowsSnoozedRow()) {
+          outRect.top -= outRect.bottom; // XGram Later: the Snoozed row is under it, the gap is below that
+        } else if (context.liveLocationHelper != null && context.liveLocationHelper.isVisible()) {
           outRect.top -= Screen.dp(1f);
         } else {
           outRect.top -= Screen.dp(12f);
@@ -546,9 +592,43 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         xgramMerge = true;
         com.fahadali.xgram.chats.XgramCommunities.addListener(xgramCommunityListener);
         tdlib.cache().subscribeToCommunityGlobalUpdates(xgramCommunityLookListener);
+        com.fahadali.xgram.later.XgramLater.addListener(xgramLaterListener); // XGram Later: the Snoozed row and the bells
       }
     }
     return list;
+  }
+
+  // XGram Later: the Snoozed row under the archive, the bell on rows with something due
+
+  private final com.fahadali.xgram.later.XgramLater.Listener xgramLaterListener = (accountId, chatIds, events) -> {
+    if (accountId == tdlib.id() && (events & (com.fahadali.xgram.later.XgramLater.EVENT_BELL | com.fahadali.xgram.later.XgramLater.EVENT_LIST | com.fahadali.xgram.later.XgramLater.EVENT_HIDDEN)) != 0) {
+      runOnUiThreadOptional(() -> {
+        xgramUpdateSnoozedRow();
+        if ((events & com.fahadali.xgram.later.XgramLater.EVENT_BELL) != 0 && chatsView != null && adapter != null) {
+          if (chatIds.length == 0) {
+            for (TGChat chat : new ArrayList<>(adapter.getChats())) {
+              if (!chat.isArchive()) {
+                chatsView.xgramRefreshLaterRow(chat.getChatId());
+              }
+            }
+          } else {
+            for (long chatId : chatIds) {
+              chatsView.xgramRefreshLaterRow(chatId);
+              xgramRefreshCommunityRowFor(chatId); // a member's bell shows on its community's row
+            }
+          }
+        }
+      });
+    }
+  };
+
+  /** Shows, updates or removes the Snoozed row once the list has loaded (not in a preview). */
+  private void xgramUpdateSnoozedRow () {
+    if (!xgramMerge || adapter == null || chatsView == null || !initialLoadFinished || isInForceTouchMode() || isDestroyed()) {
+      return;
+    }
+    chatsView.xgramSetSnoozedRow(com.fahadali.xgram.later.XgramLater.snoozedIn(tdlib, chatList()));
+    checkDisplayNoChats();
   }
 
   private boolean xgramMerge;
@@ -1064,6 +1144,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
   protected void onFocusStateChanged () {
     super.onFocusStateChanged();
     if (isFocused()) {
+      xgramUpdateSnoozedRow(); // XGram Later: its next time, after a while away
       int chatFolderId = chatFolderId();
       if (chatFolderId != NO_CHAT_FOLDER_ID && tdlib.isFolderShareable(chatFolderId) && !isFiltered()) {
         startChatFolderNewChatsPolling(chatFolderId);
@@ -1110,6 +1191,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     runOnUiThreadOptional(() -> {
       initialLoadFinished = true;
       adapter.addMore(parsedChats.toArray(new TGChat[0]));
+      xgramUpdateSnoozedRow(); // XGram Later
     });
   }
 
@@ -1390,7 +1472,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       return 0;
     }
     if (adapter.hasChats()) {
-      return adapter.getFirstChatItemPosition() + (adapter.hasArchive() ? 1 : 0);
+      return adapter.getItemPositionByChatIndex(adapter.hasArchive() ? 1 : 0); // XGram Later: below the Snoozed row too
     }
     return 0;
   }
@@ -1506,6 +1588,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       int totalScrollBy = chatItemHeight * firstVisiblePosition;
       int separatorItemCount = firstVisiblePosition;
       int chatsCount = adapter.getChatCount();
+      final int xgramRowExtra = xgramSnoozedRowExtra(firstVisiblePosition > adapter.xgramSnoozedRowPosition() && adapter.xgramShowsSnoozedRow(), chatItemHeight);
+      totalScrollBy += xgramRowExtra; // XGram Later
+      if (xgramRowExtra != 0 && !adapter.hasArchive()) {
+        separatorItemCount--;
+      }
 
       if (adapter.hasArchive() && chatsCount > 1 && firstVisiblePosition > 0) {
         separatorItemCount--;
@@ -1514,7 +1601,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         chatsCount--;
       }
 
-      if (!adapter.hasArchive() && liveLocationHelper != null && liveLocationHelper.isVisible() && firstVisiblePosition >= getLiveLocationPosition()) {
+      if (!adapter.hasArchive() && !adapter.xgramShowsSnoozedRow() && liveLocationHelper != null && liveLocationHelper.isVisible() && firstVisiblePosition >= getLiveLocationPosition()) {
         totalScrollBy += LiveLocationHelper.height();
       }
 
@@ -1526,7 +1613,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       totalScrollBy += separatorItemCount * Screen.separatorSize();
 
       if (adapter.hasArchive() && hideArchive) {
-        totalScrollBy -= chatItemHeight + (liveLocationHelper != null && liveLocationHelper.isVisible() ? Screen.dp(1f) : Screen.dp(12f));
+        totalScrollBy -= chatItemHeight + (adapter.xgramShowsSnoozedRow() ? Screen.separatorSize() : liveLocationHelper != null && liveLocationHelper.isVisible() ? Screen.dp(1f) : Screen.dp(12f)); // XGram Later
       }
 
       if (adapter.hasSuggestedChats()) {
@@ -1549,6 +1636,10 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
     int totalScrollBy = chatHeight * chatsCount;
     int separatorItemCount = chatsCount;
+    if (adapter.xgramShowsSnoozedRow()) {
+      // XGram Later: the Snoozed row and the archive's gap (now below it); the archive keeps a separator
+      totalScrollBy += xgramSnoozedRowExtra(true, chatHeight) + chatHeight + (adapter.hasArchive() ? Screen.separatorSize() : 0);
+    }
 
     if (adapter.hasArchive() && chatsCount > 1) {
       separatorItemCount--;
@@ -1557,7 +1648,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
       chatsCount--;
     }
 
-    if (!adapter.hasArchive() && liveLocationHelper != null && liveLocationHelper.isVisible()) {
+    if (!adapter.hasArchive() && !adapter.xgramShowsSnoozedRow() && liveLocationHelper != null && liveLocationHelper.isVisible()) {
       totalScrollBy += LiveLocationHelper.height();
     }
 
@@ -1569,7 +1660,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     totalScrollBy += separatorItemCount * Screen.separatorSize();
 
     if (adapter.hasArchive() && hideArchive) {
-      totalScrollBy -= chatHeight + (liveLocationHelper != null && liveLocationHelper.isVisible() ? Screen.dp(1f) : Screen.dp(12f));
+      totalScrollBy -= chatHeight + (adapter.xgramShowsSnoozedRow() ? Screen.separatorSize() : liveLocationHelper != null && liveLocationHelper.isVisible() ? Screen.dp(1f) : Screen.dp(12f)); // XGram Later
     }
 
     totalScrollBy += ChatsViewHolder.measureHeightForType(ChatsAdapter.VIEW_TYPE_INFO);
@@ -1579,6 +1670,21 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     }
 
     return totalScrollBy;
+  }
+
+  /**
+   * XGram Later: what the Snoozed row adds to the scroll sums when it is above ({@code above}): its height in place of a
+   * chat row's (they count it as one), and without an archive the split's gap below it (the archive's otherwise).
+   */
+  private int xgramSnoozedRowExtra (boolean above, int chatItemHeight) {
+    if (!above) {
+      return 0;
+    }
+    int extra = Screen.dp(com.fahadali.xgram.later.XgramSnoozedRowView.ROW_HEIGHT_DP) - chatItemHeight;
+    if (!adapter.hasArchive()) {
+      extra += liveLocationHelper != null && liveLocationHelper.isVisible() ? LiveLocationHelper.height() + Screen.dp(1f) : Screen.dp(12f);
+    }
+    return extra;
   }
 
   public void updateNetworkStatus (int state) {
@@ -1835,6 +1941,12 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           strings.append(R.string.RemoveFromFolder);
           icons.append(R.drawable.templarian_baseline_folder_remove_24);
         }
+      }
+
+      if (xgramMerge) {
+        ids.append(R.id.more_btn_xgramLaterSnooze); // XGram Later: every selected chat that can be snoozed
+        strings.append(R.string.XgramLaterSnooze);
+        icons.append(R.drawable.baseline_notifications_paused_24);
       }
 
       if (canMarkAsRead > 0) {
@@ -2187,7 +2299,11 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
   @Override
   public void onMoreItemPressed (int id) {
-    if (id == R.id.more_btn_addToFolder) {
+    if (id == R.id.more_btn_xgramLaterSnooze) {
+      if (selectedChats != null && selectedChats.size() > 0) {
+        com.fahadali.xgram.later.XgramLaterPicker.showForChats(this, tdlib, ArrayUtils.keys(selectedChats), chatList(), this::onSelectionActionComplete); // XGram Later
+      }
+    } else if (id == R.id.more_btn_addToFolder) {
       long[] selectedChatIds = ArrayUtils.keys(selectedChats);
       tdlib.ui().showAddChatsToFolderOptions(this, selectedChatIds, this::onSelectionActionComplete);
       // break;
@@ -2652,6 +2768,8 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
           onClick(chat.getChat());
         }
       }
+    } else if (v.getId() == R.id.btn_xgramLaterSnoozedRow) {
+      com.fahadali.xgram.later.XgramLaterController.open(this, com.fahadali.xgram.later.XgramLaterController.SECTION_SNOOZED); // XGram Later
     } else if (v.getId() == R.id.btn_chatsSuggestion) {
       long[] suggestedChatIds = adapter.getSuggestedChatIds();
       TdApi.ChatFolderInfo chatFolderInfo = tdlib.chatFolderInfo(chatFolderId());
@@ -2796,6 +2914,10 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
   @Override
   public boolean onLongClick (View v) {
+    if (v.getId() == R.id.btn_xgramLaterSnoozedRow) {
+      com.fahadali.xgram.later.XgramLaterPicker.showSnoozedRowMenu(this, v, chatList()); // XGram Later
+      return true;
+    }
     if (v.getId() == R.id.chat) {
       TGChat chat = ((ChatView) v).getChat();
       if (chat != null) {
@@ -2961,7 +3083,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
 
   public final void checkDisplayNoChats () {
     adapter.checkArchive();
-    boolean noChats = list.isEndReached() && !adapter.hasChats();
+    boolean noChats = list.isEndReached() && !adapter.hasChats() && !adapter.xgramShowsSnoozedRow(); // XGram Later
     setDisplayNoChats(noChats);
   }
 
@@ -3240,6 +3362,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
         if (!initialLoadFinished) {
           initialLoadFinished = true;
           adapter.checkArchive();
+          xgramUpdateSnoozedRow(); // XGram Later: every chat of the list may be snoozed
         }
       }
       if (chatsView != null && newState == TdlibChatList.State.END_NOT_REACHED) {
@@ -3329,6 +3452,7 @@ public class ChatsController extends TelegramViewController<ChatsController.Argu
     if (xgramMerge) {
       com.fahadali.xgram.chats.XgramCommunities.removeListener(xgramCommunityListener);
       tdlib.cache().unsubscribeFromCommunityGlobalUpdates(xgramCommunityLookListener);
+      com.fahadali.xgram.later.XgramLater.removeListener(xgramLaterListener); // XGram Later
     }
     TGLegacyManager.instance().removeEmojiListener(this);
     tdlib.contacts().removeListener(this);

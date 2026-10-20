@@ -5405,6 +5405,15 @@ public class TdlibUi extends Handler {
       icons.append(isArchived ? R.drawable.baseline_unarchive_24 : R.drawable.baseline_archive_24);
     }
 
+    if (com.fahadali.xgram.later.XgramLater.canSnoozeFrom(context, tdlib, chat, chatList)) {
+      // XGram Later: hide the chat until a time or until something happens (Unsnooze while snoozed)
+      boolean snoozed = com.fahadali.xgram.later.XgramLater.isSnoozedPending(tdlib, chatId);
+      ids.append(snoozed ? R.id.btn_xgramLaterUnsnooze : R.id.btn_xgramLaterSnoozeChat);
+      strings.append(snoozed ? R.string.XgramLaterUnsnooze : R.string.XgramLaterSnooze);
+      colors.append(ViewController.OptionColor.NORMAL);
+      icons.append(snoozed ? R.drawable.baseline_notifications_24 : R.drawable.baseline_notifications_paused_24);
+    }
+
     if (Settings.instance().chatFoldersEnabled()) {
       if (TD.isChatListMain(chatList) || TD.isChatListArchive(chatList)) {
         ids.append(R.id.btn_addChatToFolder);
@@ -5873,6 +5882,12 @@ public class TdlibUi extends Handler {
     } else if (actionId == R.id.btn_addChatToFolder) {
       com.fahadali.xgram.chats.XgramFolderPicker.show(context, chatId); // XGram: folders with checks, tap to add or remove
       return true;
+    } else if (actionId == R.id.btn_xgramLaterSnoozeChat) {
+      com.fahadali.xgram.later.XgramLaterPicker.showForChats(context, tdlib, new long[] {chatId}, chatList, after); // XGram Later
+      return true;
+    } else if (actionId == R.id.btn_xgramLaterUnsnooze) {
+      com.fahadali.xgram.later.XgramLaterPicker.unsnooze(context, tdlib, chatId); // XGram Later
+      return true;
     } else if (actionId == R.id.btn_removeChatFromFolder) {
       if (TD.isChatListFolder(chatList)) {
         int chatFolderId = ((TdApi.ChatListFolder) chatList).chatFolderId;
@@ -5978,6 +5993,15 @@ public class TdlibUi extends Handler {
           ids.append(R.id.btn_addChatToFolder); // XGram: preview action bar and the quick actions pill
           strings.append(R.string.AddToFolder);
           icons.append(R.drawable.templarian_baseline_folder_plus_24);
+        }
+
+        if (com.fahadali.xgram.later.XgramLater.canSnoozeFrom(context, tdlib, chat, chatList) && !com.fahadali.xgram.later.XgramLater.isSnoozedPending(tdlib, chatId) &&
+          (com.fahadali.xgram.chats.XgramChatLongPress.mode() != com.fahadali.xgram.chats.XgramChatLongPress.MODE_QUICK ||
+            com.fahadali.xgram.later.XgramLaterUi.barHasRoom(ids.size() + 1 + 1 + (hasSelect ? 1 : 0)))) {
+          // XGram Later: the quick pill doesn't shrink, so Snooze only goes in when all the items fit (always on the Fold)
+          ids.append(R.id.btn_xgramLaterSnoozeChat);
+          strings.append(R.string.XgramLaterSnoozeShort);
+          icons.append(R.drawable.baseline_notifications_paused_24);
         }
 
         ids.append(R.id.btn_removeChatFromListOrClearHistory);
