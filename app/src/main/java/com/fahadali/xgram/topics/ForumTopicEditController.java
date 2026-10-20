@@ -267,11 +267,18 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
   private boolean searching;
   /** No answer shown yet for the search: its row shows the loading indicator ("No emoji found" once answered). */
   private boolean searchLoading;
-  /**
-   * The strip was pinned when the results went in: they start right under it, and the list's last row (the filler, or
-   * the loading / empty row) fills what they leave of the screen, so the list never shifts down and the strip stays put.
-   */
+  /** The strip was pinned when the results went in: they start right under it (the list is scrolled there). */
   private boolean searchPinned;
+  /**
+   * Where the strip's slot ended (in the list's coordinates) when the results went in, pinned or not. The list's last
+   * row (the filler, or the loading / empty row) fills what they leave of the room from there to the list's end, so the
+   * list never has a gap at its end to close by moving down, and the strip (on its slot or pinned) stays put.
+   */
+  private int searchSlotBottom;
+  /** The span count and the list's size the last row was sized for (a change refreshes it, see onSearchListLayout). */
+  private int searchRowSpan, searchRowWidth, searchRowHeight;
+  /** The answers on screen: the rest of a search the timeout showed refreshes them where the list is. */
+  @Nullable private SearchAnswers shownAnswers;
   /** Bumped by every change of the query: a delayed search or an answer for an older one is dropped. */
   private int searchGeneration;
   /** The query generation whose requests went out (the keyboard's search key sends them at once). */
@@ -357,6 +364,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
             }
           }
         }
+        if (searching && !state.isPreLayout()) {
+          onSearchListLayout(this); // a new size or span count: the search's last row fills the new room
+        }
         super.onLayoutChildren(recycler, state);
       }
     };
@@ -439,7 +449,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     if (expressive && getRecyclerView() != null) {
       applyExpressivePadding(getRecyclerView()); // the base class has just set the bottom padding to the inset alone
     }
-    if (searchPinned && adapter != null && searchRowPosition() != RecyclerView.NO_POSITION) {
+    if (searching && adapter != null) {
       adapter.notifyItemChanged(searchRowPosition()); // the keyboard came or went: the last row fills the new room
     }
   }
@@ -909,7 +919,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     } else if (newCount < oldCount) {
       adapter.notifyItemRangeRemoved(firstCell + newCount, oldCount - newCount);
     }
-    if (newCount != oldCount && searchPinned) {
+    if (newCount != oldCount && searching) {
       adapter.notifyItemChanged(searchRowPosition()); // a found pack changed size: the filler under the results too
     }
   }
@@ -1273,6 +1283,12 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
       return;
     }
     enterSearch();
+    if (searching && shown.isEmpty() && !searchLoading) {
+      // A new query while "No emoji found" shows: the loading indicator again until its answer (the older query's
+      // answers are dropped, so nothing else would correct the row meanwhile)
+      searchLoading = true;
+      adapter.notifyItemChanged(searchRowPosition());
+    }
     runOnUiThreadOptional(() -> {
       if (generation == searchGeneration && searchedGeneration != generation && searching) {
         runSearch(query, generation);
@@ -1298,6 +1314,8 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     searching = true;
     searchLoading = true;
     searchPinned = stuck || isSlotAtTop();
+    searchSlotBottom = slotBottomFor(searchPinned); // the slot's height without the tabs (searching is set)
+    shownAnswers = null;
     pinnedTab = -1;
     shown = new ArrayList<>();
     layoutSections();
@@ -1318,6 +1336,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     searching = false;
     searchLoading = false;
     searchPinned = false;
+    shownAnswers = null;
     shown = sections;
     layoutSections();
     replaceRows(oldCount);
@@ -1329,22 +1348,75 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     postSyncStrip();
   }
 
-  /** A search's answer (or the timeout's part of it): the results replace what shows under the strip. */
-  private void showResults (ArrayList<Section> results) {
-    if (!searching || adapter == null) {
+  /**
+   * A search's answer (or the timeout's part of it): the results replace what shows under the strip. The rest of a
+   * search the timeout showed part of refreshes it where the list is (it may be being scrolled), and changes nothing
+   * when the rest found nothing new.
+   */
+  private void showResults (SearchAnswers answers, ArrayList<Section> results) {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (!searching || adapter == null || gridManager == null || recyclerView == null) {
       return;
     }
-    final boolean stuck = strip != null && strip.stuck;
-    final int oldCount = itemCount;
-    shown = results;
+    final boolean refresh = answers == shownAnswers;
+    shownAnswers = answers;
     searchLoading = false;
-    searchPinned = stuck || (searchPinned && isSlotAtTop());
-    layoutSections();
-    replaceRows(oldCount);
-    if (searchPinned && gridManager != null) {
-      gridManager.scrollToPositionWithOffset(STRIP_POSITION, 0); // the new results start under the pinned strip
+    final int oldCount = itemCount;
+    if (refresh) {
+      if (sameResults(shown, results)) {
+        return; // the rows stay as they are, a found pack loading in them too
+      }
+      // Every row under the slot is replaced, so the list keeps its place by its first row on screen (not by a row
+      // that goes); the last row keeps the room it was sized for when the results first went in
+      final int first = gridManager.findFirstVisibleItemPosition();
+      final View firstView = first != RecyclerView.NO_POSITION ? gridManager.findViewByPosition(first) : null;
+      final int offset = firstView != null ? gridManager.getDecoratedTop(firstView) - recyclerView.getPaddingTop() : 0;
+      shown = results;
+      layoutSections();
+      replaceRows(oldCount);
+      if (firstView != null && first < itemCount) {
+        gridManager.scrollToPositionWithOffset(first, offset);
+      }
+    } else {
+      final boolean stuck = strip != null && strip.stuck;
+      shown = results;
+      searchPinned = stuck || (searchPinned && isSlotAtTop());
+      searchSlotBottom = slotBottomFor(searchPinned);
+      layoutSections();
+      replaceRows(oldCount);
+      if (searchPinned) {
+        gridManager.scrollToPositionWithOffset(STRIP_POSITION, 0); // the new results start under the pinned strip
+      }
     }
     postSyncStrip();
+  }
+
+  /** The rest of a search found nothing the timeout had not shown: the same sections, with the same emoji. */
+  private static boolean sameResults (ArrayList<Section> shown, ArrayList<Section> results) {
+    if (shown.size() != results.size()) {
+      return false;
+    }
+    for (int i = 0; i < shown.size(); i++) {
+      final Section a = shown.get(i), b = results.get(i);
+      if (a.kind != b.kind || a.titleRes != b.titleRes || a.info != b.info) {
+        return false;
+      }
+      if (a.kind == SECTION_FOUND) {
+        if (a.items == null || b.items == null || a.items.length != b.items.length) {
+          return false;
+        }
+        for (int j = 0; j < a.items.length; j++) {
+          if (stickerIdOf(a.items[j]) != stickerIdOf(b.items[j])) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  private static long stickerIdOf (@Nullable TGStickerObj sticker) {
+    return sticker != null ? emojiIdOf(sticker.getSticker()) : 0;
   }
 
   /** The slot is at the list's top: where a pinned strip was put when its search started. */
@@ -1357,22 +1429,89 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     return slot != null && slot.itemView.getTop() + slot.itemView.getTranslationY() <= recyclerView.getPaddingTop();
   }
 
-  /** The room under the strip, above the keyboard and the Done button: what a pinned search's last row fills. */
-  private int searchViewport (RecyclerView recyclerView) {
-    return recyclerView.getHeight() - recyclerView.getPaddingTop() - recyclerView.getPaddingBottom() - stripSlotHeight();
+  /**
+   * Where the strip's slot ends once rows go in under it: pinned, at the list's top (where the list is scrolled to);
+   * else where the slot is now (the rows above it are what the list keeps in place), or at the list's top when it is
+   * off screen.
+   */
+  private int slotBottomFor (boolean pinned) {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null) {
+      return 0;
+    }
+    final RecyclerView.ViewHolder slot = pinned ? null : recyclerView.findViewHolderForAdapterPosition(STRIP_POSITION);
+    final int top = slot != null ? Math.round(slot.itemView.getTop() + slot.itemView.getTranslationY()) : recyclerView.getPaddingTop();
+    return top + stripSlotHeight();
+  }
+
+  /** The room under the strip's slot, above the keyboard and the Done button: what the search's last row fills. */
+  private int searchRoom (RecyclerView recyclerView) {
+    return Math.max(0, recyclerView.getHeight() - recyclerView.getPaddingBottom() - searchSlotBottom);
+  }
+
+  /** The span count or the list's size is not the one the search's last row was sized for. */
+  private boolean isSearchRowStale () {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    return recyclerView != null && gridManager != null && (gridManager.getSpanCount() != searchRowSpan || recyclerView.getWidth() != searchRowWidth || recyclerView.getHeight() != searchRowHeight);
+  }
+
+  private void markSearchRowSized () {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView != null && gridManager != null) {
+      searchRowSpan = gridManager.getSpanCount();
+      searchRowWidth = recyclerView.getWidth();
+      searchRowHeight = recyclerView.getHeight();
+    }
   }
 
   /**
-   * The filler under a pinned search's results: what they leave of the room under the strip. The rows are counted at
+   * The list is laid out while a search shows (from the layout manager, before it lays out the rows). MainActivity
+   * keeps its views when the Fold opens or closes, the phone turns or the split moves, so the last row is not bound
+   * again: when the span count or the list's size changed, the row on screen takes the new room before this layout
+   * measures it (a short one would leave a gap the list closes by moving down, the strip with it). One kept off screen
+   * is bound anew once the layout is done (the adapter can't be told during a layout).
+   */
+  private void onSearchListLayout (GridLayoutManager manager) {
+    final CustomRecyclerView recyclerView = getRecyclerView();
+    if (recyclerView == null || !isSearchRowStale()) {
+      return;
+    }
+    if (!searchPinned) {
+      searchSlotBottom = slotBottomFor(false); // where the slot is now: the layout keeps the rows above it in place
+    }
+    final View row = manager.findViewByPosition(searchRowPosition());
+    final int viewType = row != null ? manager.getItemViewType(row) : RecyclerView.INVALID_TYPE;
+    if (viewType == VIEW_TYPE_STATE && row instanceof StateRow) {
+      ((StateRow) row).setFillHeightInLayout(searchRoom(recyclerView));
+      markSearchRowSized();
+    } else if (viewType == VIEW_TYPE_FILLER && row.getLayoutParams() != null) {
+      row.getLayoutParams().height = searchFillerHeight(); // a new height: the layout manager measures it again
+      markSearchRowSized();
+    } else {
+      recyclerView.removeCallbacks(refreshSearchRow);
+      recyclerView.post(refreshSearchRow);
+    }
+  }
+
+  /** After a layout that did not size the search's last row for the list's new size: it is bound anew. */
+  private final Runnable refreshSearchRow = () -> {
+    if (searching && adapter != null && isSearchRowStale()) {
+      markSearchRowSized(); // once per size: the layout this asks for doesn't ask again
+      adapter.notifyItemChanged(searchRowPosition());
+    }
+  };
+
+  /**
+   * The filler under a search's results: what they leave of the room under the strip's slot. The rows are counted at
    * their smallest (cells at the grid's width, titles at one line), so there is a little more room than needed, never
    * less (less would shift the list down, the strip with it).
    */
   private int searchFillerHeight () {
     final CustomRecyclerView recyclerView = getRecyclerView();
-    if (!searchPinned || recyclerView == null || gridManager == null) {
+    if (!searching || recyclerView == null || gridManager == null) {
       return 0;
     }
-    final int room = searchViewport(recyclerView);
+    final int room = searchRoom(recyclerView);
     final int span = Math.max(1, gridManager.getSpanCount());
     final int available = recyclerView.getWidth() - recyclerView.getPaddingLeft() - recyclerView.getPaddingRight();
     final int cell = Math.max(Screen.dp(MIN_CELL), Math.min(Screen.dp(MAX_ROW), available / span));
@@ -1535,7 +1674,6 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     if (!searching || !answers.query.equals(searchQuery)) {
       return;
     }
-    answers.shown = true;
     final ArrayList<Section> results = new ArrayList<>();
     final HashSet<Long> foundIds = new HashSet<>();
     final ArrayList<TdApi.Sticker> found = new ArrayList<>();
@@ -1589,7 +1727,14 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         packCount++;
       }
     }
-    showResults(results);
+    if (results.isEmpty() && answers.pending > 0) {
+      // The timeout, with nothing found yet while requests are still on their way (the keywords loading for a new
+      // language, the public search after them): the loading row stays. TDLib answers each one, with stickers or an
+      // error, so the last answer shows the results or "No emoji found".
+      return;
+    }
+    answers.shown = true;
+    showResults(answers, results);
   }
 
   private static Section newFoundSection (ArrayList<Section> owner, ArrayList<TGStickerObj> items, @StringRes int titleRes, boolean lockTitle) {
@@ -2039,8 +2184,9 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     @Nullable private final XgramListStateView state;
     @Nullable private final TextView text;
     @Nullable private final ProgressComponentView progress;
-    /** Under a pinned strip the row is at least the room under it (its content centred there); else its own height. */
+    /** The row is at least the room under the strip's slot (its content centred there), or its own height if taller. */
     private int fillHeight;
+    private boolean loading;
 
     StateRow (Context context) {
       super(context);
@@ -2068,8 +2214,10 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
     }
 
     void bind (boolean loading, int fillHeight) {
-      if (this.fillHeight != fillHeight) {
+      // A new room, or loading again after "No emoji found" (the M3E states are not as tall): measured again
+      if (this.fillHeight != fillHeight || this.loading != loading) {
         this.fillHeight = fillHeight;
+        this.loading = loading;
         requestLayout();
       }
       if (state != null) {
@@ -2084,6 +2232,17 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
         // The text keeps its room while loading, so the row does not change height when the answer comes
         text.setVisibility(loading ? View.INVISIBLE : View.VISIBLE);
         progress.setVisibility(loading ? View.VISIBLE : View.GONE);
+      }
+    }
+
+    /**
+     * The list changed size: the new room, set during its layout, before it measures this row. forceLayout, not
+     * requestLayout: this layout measures the row anew and no other one is asked for.
+     */
+    void setFillHeightInLayout (int fillHeight) {
+      if (this.fillHeight != fillHeight) {
+        this.fillHeight = fillHeight;
+        forceLayout();
       }
     }
 
@@ -2878,7 +3037,7 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           return new Holder(row);
         }
         case VIEW_TYPE_FILLER: {
-          // Blank room under a pinned search's short results (see searchFillerHeight)
+          // Blank room under a search's short results (see searchFillerHeight)
           View filler = new View(context);
           filler.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0));
           return new Holder(filler);
@@ -2917,13 +3076,16 @@ public final class ForumTopicEditController extends RecyclerViewController<Forum
           params.height = height;
         }
       } else if (viewType == VIEW_TYPE_STATE) {
+        // Pinned or not, the row fills the room under the slot: a shorter one would let the list move down
         final CustomRecyclerView recyclerView = getRecyclerView();
-        ((StateRow) holder.itemView).bind(searchLoading, searchPinned && recyclerView != null ? searchViewport(recyclerView) : 0);
+        ((StateRow) holder.itemView).bind(searchLoading, recyclerView != null ? searchRoom(recyclerView) : 0);
+        markSearchRowSized();
       } else if (viewType == VIEW_TYPE_FILLER) {
         ViewGroup.LayoutParams params = holder.itemView.getLayoutParams();
         if (params != null) {
           params.height = searchFillerHeight();
         }
+        markSearchRowSized();
       }
     }
 
