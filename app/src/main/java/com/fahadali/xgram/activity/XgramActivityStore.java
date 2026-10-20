@@ -997,9 +997,14 @@ public final class XgramActivityStore {
    * comments as set, hidden chats left out; the screen applies the muted rule). In order after what was posted before.
    */
   public void queryRead (int accountId, int filter, boolean reactions, boolean discussion, Callback<List<XgramActivityItem>> callback) {
+    queryRead(accountId, filter, reactions, discussion, null, callback);
+  }
+
+  /** {@link #queryRead} of the chosen chats only ({@code onlyChats}, sorted; null or empty: all chats). */
+  public void queryRead (int accountId, int filter, boolean reactions, boolean discussion, @Nullable long[] onlyChats, Callback<List<XgramActivityItem>> callback) {
     post(accountId, db -> {
       List<XgramActivityItem> read = new ArrayList<>();
-      for (XgramActivityItem item : queryItems(db, accountId, filter, false, reactions, discussion, null, null, ROW_CAP)) {
+      for (XgramActivityItem item : queryItems(db, accountId, filter, false, reactions, discussion, null, null, onlyChats, ROW_CAP)) {
         if (item.state == XgramActivityItem.STATE_READ) {
           read.add(item);
         }
@@ -1072,12 +1077,19 @@ public final class XgramActivityStore {
    */
   public void query (int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion,
                      @Nullable long[] mutedReactionChats, @Nullable long[] mutedMentionChats, int limit, Callback<List<XgramActivityItem>> callback) {
+    query(accountId, filter, unreadOnly, reactions, discussion, mutedReactionChats, mutedMentionChats, null, limit, callback);
+  }
+
+  /** {@link #query} of the chosen chats only: {@code onlyChats} (null or empty: all chats). */
+  public void query (int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion,
+                     @Nullable long[] mutedReactionChats, @Nullable long[] mutedMentionChats, @Nullable long[] onlyChats, int limit,
+                     Callback<List<XgramActivityItem>> callback) {
     executor.execute(() -> {
       List<XgramActivityItem> result = new ArrayList<>();
       SQLiteDatabase db = db();
       if (db != null) {
         try {
-          result = queryItems(db, accountId, filter, unreadOnly, reactions, discussion, mutedReactionChats, mutedMentionChats, limit);
+          result = queryItems(db, accountId, filter, unreadOnly, reactions, discussion, mutedReactionChats, mutedMentionChats, onlyChats, limit);
         } catch (Throwable t) {
           Log.e(TAG, "Query failed", t);
         }
@@ -1088,7 +1100,73 @@ public final class XgramActivityStore {
   }
 
   static List<XgramActivityItem> queryItems (SQLiteDatabase db, int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion, int limit) {
-    return queryItems(db, accountId, filter, unreadOnly, reactions, discussion, null, null, limit);
+    return queryItems(db, accountId, filter, unreadOnly, reactions, discussion, null, null, null, limit);
+  }
+
+  /** A chat with rows on the page: how many (not Cleared), how many of them New, and the newest's date. */
+  public static final class ChatCount {
+    public final long chatId;
+    public final int count, newCount, newestDate;
+    /** The title its newest row saved (null when it has none). */
+    @Nullable public final String savedTitle;
+
+    ChatCount (long chatId, int count, int newCount, int newestDate, @Nullable String savedTitle) {
+      this.chatId = chatId;
+      this.count = count;
+      this.newCount = newCount;
+      this.newestDate = newestDate;
+      this.savedTitle = savedTitle;
+    }
+  }
+
+  /** Chats listed for choosing (XgramActivityChatsController), at most this many. */
+  private static final int CHAT_COUNTS_LIMIT = 500;
+
+  /**
+   * The chats with rows the page shows (all filters: not Cleared, hidden chats left out, Reactions, Channel comments
+   * and the muted rule as {@link #query} applies them), the most recently active first.
+   */
+  public void chatCounts (int accountId, boolean reactions, boolean discussion, @Nullable long[] mutedReactionChats,
+                          @Nullable long[] mutedMentionChats, Callback<List<ChatCount>> callback) {
+    executor.execute(() -> {
+      final List<ChatCount> chats = new ArrayList<>();
+      SQLiteDatabase db = db();
+      if (db != null) {
+        // The bare chat_title comes from the row MAX(event_date) picked (SQLite's min/max rule)
+        StringBuilder sql = new StringBuilder("SELECT chat, COUNT(*), SUM(state = 0), MAX(event_date), chat_title FROM items WHERE account = ? AND state != 2");
+        appendShown(sql, reactions, discussion, mutedReactionChats, mutedMentionChats);
+        sql.append(" AND chat NOT IN (SELECT chat FROM hidden WHERE account = ?) GROUP BY chat ORDER BY MAX(event_date) DESC LIMIT ").append(CHAT_COUNTS_LIMIT);
+        final String account = String.valueOf(accountId);
+        try (Cursor c = db.rawQuery(sql.toString(), new String[] {account, account})) {
+          while (c.moveToNext()) {
+            chats.add(new ChatCount(c.getLong(0), c.getInt(1), c.getInt(2), c.getInt(3), c.isNull(4) ? null : c.getString(4)));
+          }
+        } catch (Throwable t) {
+          Log.e(TAG, "Cannot count chats", t);
+        }
+      }
+      UI.post(() -> callback.onResult(chats));
+    });
+  }
+
+  /** The conditions every query of shown rows has: Reactions, Channel comments, and the chats the muted rule hides. */
+  private static void appendShown (StringBuilder sql, boolean reactions, boolean discussion, @Nullable long[] mutedReactionChats, @Nullable long[] mutedMentionChats) {
+    if (!reactions) {
+      sql.append(" AND kind != 3");
+    }
+    if (!discussion) {
+      sql.append(" AND (flags & 24) = 0");
+    }
+    if (mutedReactionChats != null && mutedReactionChats.length > 0) {
+      sql.append(" AND NOT (kind = 3 AND chat IN ");
+      appendChatList(sql, mutedReactionChats);
+      sql.append(')');
+    }
+    if (mutedMentionChats != null && mutedMentionChats.length > 0) {
+      sql.append(" AND NOT (kind IN (1,2) AND chat IN ");
+      appendChatList(sql, mutedMentionChats);
+      sql.append(')');
+    }
   }
 
   private static void appendChatList (StringBuilder sql, long[] chatIds) {
@@ -1103,8 +1181,12 @@ public final class XgramActivityStore {
   }
 
   static List<XgramActivityItem> queryItems (SQLiteDatabase db, int accountId, int filter, boolean unreadOnly, boolean reactions, boolean discussion,
-                                             @Nullable long[] mutedReactionChats, @Nullable long[] mutedMentionChats, int limit) {
+                                             @Nullable long[] mutedReactionChats, @Nullable long[] mutedMentionChats, @Nullable long[] onlyChats, int limit) {
     StringBuilder sql = new StringBuilder("SELECT ").append(ITEM_COLUMNS).append(" FROM items WHERE account = ? AND state != 2");
+    if (onlyChats != null && onlyChats.length > 0) {
+      sql.append(" AND chat IN ");
+      appendChatList(sql, onlyChats);
+    }
     if (unreadOnly) {
       sql.append(" AND state = 0");
     }

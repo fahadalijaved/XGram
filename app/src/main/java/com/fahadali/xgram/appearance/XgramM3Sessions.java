@@ -503,9 +503,11 @@ public final class XgramM3Sessions {
     private final RectF rect = new RectF();
     private final @Nullable Drawable check;
     private boolean checked, onTile;
-    // M3E motion: the container fills (or empties) and the check scales in on EFFECTS_FAST; the label's room for the
+    // M3E motion: the container fills (or empties) on EFFECTS_FAST and the check springs in; the label's room for the
     // check changes once per toggle (one layout), never per frame
     private final XgramExpressive.Spring checkedSpring = new XgramExpressive.Spring(XgramExpressive.EFFECTS_FAST, 0f, (s, value) -> invalidate());
+    // The check pops in on its own spring (SPATIAL_FAST: a small overshoot) while the container fades
+    private final XgramExpressive.Spring checkSpring = new XgramExpressive.Spring(XgramExpressive.SPATIAL_FAST, 0f, (s, value) -> invalidate());
     private boolean checkedBound;
 
     ChipView (Context context, @StringRes int textRes) {
@@ -542,8 +544,13 @@ public final class XgramM3Sessions {
         }
         if (animated) {
           checkedSpring.animateTo(checked ? 1f : 0f);
+          if (checked) {
+            checkSpring.setValue(0f);
+            checkSpring.animateTo(1f);
+          }
         } else {
           checkedSpring.setValue(checked ? 1f : 0f);
+          checkSpring.setValue(checked ? 1f : 0f);
         }
         invalidate();
       }
@@ -596,7 +603,7 @@ public final class XgramM3Sessions {
           final int size = Screen.dp(CHIP_ICON);
           final float x = Lang.rtl() ? getWidth() - Screen.dp(CHIP_ICON_START) - size : Screen.dp(CHIP_ICON_START);
           final float y = (getHeight() - size) / 2f;
-          final float scale = .6f + .4f * on;
+          final float scale = .4f + .6f * Math.max(0f, checkSpring.getValue());
           final int save = c.save();
           c.scale(scale, scale, x + size / 2f, y + size / 2f);
           Drawables.draw(c, check, x, y, Paints.getPorterDuffPaint(content));

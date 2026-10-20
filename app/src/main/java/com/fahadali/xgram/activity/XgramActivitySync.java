@@ -18,6 +18,7 @@ import android.util.Log;
 
 import androidx.annotation.AnyThread;
 import androidx.annotation.Nullable;
+import androidx.annotation.UiThread;
 import androidx.annotation.WorkerThread;
 
 import org.drinkless.tdlib.TdApi;
@@ -50,6 +51,11 @@ final class XgramActivitySync {
   private static final String TAG = XgramActivityStore.TAG;
 
   static final int JOB_MENTIONS = 1, JOB_REACTIONS = 2, JOB_LOOK_BACK = 3;
+  /**
+   * A pull to refresh's look in a recently active group: the newest page of its mentions (as the look back searches),
+   * for mentions and replies that came while the app was not running and were read elsewhere since.
+   */
+  static final int JOB_RECENT = 4;
 
   private static final long SPACING_MS = 15_000L, SPACING_VISIBLE_MS = 4_000L;
   private static final int DAILY_CAP = 300;
@@ -237,6 +243,106 @@ final class XgramActivitySync {
     store().executor.execute(() -> queues.remove(accountId));
   }
 
+  // Pull to refresh (the Activity page): a bounded catch-up, at most once every 30 seconds per account
+
+  static final int REFRESH_QUEUED = 0, REFRESH_NOTHING = 1, REFRESH_TOO_SOON = 2, REFRESH_WAIT = 3, REFRESH_OFF = 4;
+  private static final long REFRESH_MIN_INTERVAL_MS = 30_000L;
+  /** Recently active groups a refresh looks in: at most this many, active within a day, each at most twice an hour. */
+  private static final int RECENT_CHATS = 5;
+  private static final long RECENT_ACTIVE_SECONDS = TimeUnit.DAYS.toSeconds(1), RECENT_RECHECK_MS = TimeUnit.MINUTES.toMillis(30);
+  /** Store thread: when each account refreshed last. */
+  private static final Map<Integer, Long> lastRefreshAt = new HashMap<>();
+
+  interface RefreshCallback {
+    /**
+     * {@code result}: REFRESH_*. {@code waitMs}: how long Telegram still asks to wait (REFRESH_WAIT). {@code jobs}: the
+     * searches queued (REFRESH_QUEUED); they run paced as every other search, the status tile tells their progress.
+     */
+    @UiThread
+    void onRefreshQueued (int result, long waitMs, int jobs);
+  }
+
+  /**
+   * A pull to refresh: the chats whose unread mention or reaction counters differ from what Activity has (as a seed
+   * finds them, not forced: a matching count costs nothing), and up to {@link #RECENT_CHATS} groups active within a
+   * day ({@code onlyChats}' ones when the page shows only some chats), queued and paced as every search (the daily
+   * cap included). Nothing while Telegram asks to wait (a flood wait, or a forum's), or within 30 seconds of the last
+   * refresh.
+   */
+  @AnyThread
+  static void refresh (int accountId, @Nullable long[] onlyChats, RefreshCallback callback) {
+    store().executor.execute(() -> {
+      int result = REFRESH_OFF;
+      long waitMs = 0;
+      int jobs = 0;
+      try {
+        TdlibAccount account = TdlibManager.instance().currentAccount();
+        Tdlib tdlib = account != null && account.id == accountId ? account.activeTdlib() : null;
+        SQLiteDatabase db = store().db();
+        if (tdlib != null && tdlib.isAuthorized() && XgramActivity.isOn() && db != null) {
+          final long now = System.currentTimeMillis();
+          final long floodWait = readMeta(db, accountId, "flood_until") - now;
+          final long topicWait = com.fahadali.xgram.topics.XgramTopicFlood.waitMs(tdlib);
+          final Long last = lastRefreshAt.get(accountId);
+          if (floodWait > 0 || topicWait > 0) {
+            result = REFRESH_WAIT;
+            waitMs = Math.max(floodWait, topicWait);
+          } else if (last != null && now - last < REFRESH_MIN_INTERVAL_MS) {
+            result = REFRESH_TOO_SOON;
+          } else {
+            lastRefreshAt.put(accountId, now);
+            final Queue queue = queue(accountId);
+            jobs = seedNow(queue, tdlib, false) + queueRecent(db, queue, tdlib, onlyChats, now);
+            if (jobs > 0) {
+              publishStatus(queue);
+              pump(accountId);
+            }
+            result = jobs > 0 ? REFRESH_QUEUED : REFRESH_NOTHING;
+          }
+        }
+      } catch (Throwable t) {
+        Log.e(TAG, "Sync refresh", t);
+      }
+      final int finalResult = result, finalJobs = jobs;
+      final long finalWait = waitMs;
+      UI.post(() -> callback.onRefreshQueued(finalResult, finalWait, finalJobs));
+    });
+  }
+
+  /** The recently active groups of a refresh ({@link #JOB_RECENT}), added after what is queued. Returns how many. */
+  @WorkerThread
+  private static int queueRecent (SQLiteDatabase db, Queue queue, Tdlib tdlib, @Nullable long[] onlyChats, long now) {
+    final int accountId = queue.accountId;
+    final XgramActivityStore.Summary summary = store().summary(accountId);
+    final boolean someChats = onlyChats != null && onlyChats.length > 0;
+    final int since = (int) (now / 1000L - RECENT_ACTIVE_SECONDS);
+    int added = 0;
+    for (long chatId : tdlib.xgramActivityChats(Tdlib.XGRAM_ACTIVITY_LOOKBACK, since, someChats ? 0 : RECENT_CHATS * 4)) {
+      if (added >= RECENT_CHATS) {
+        break;
+      }
+      if (summary.isHidden(chatId) || (someChats && !XgramActivityChatFilter.contains(onlyChats, chatId))) {
+        continue;
+      }
+      final TdApi.Chat chat = tdlib.chat(chatId);
+      if (XgramActivityCollector.chatKind(tdlib, chat) != XgramActivityCollector.CHAT_GROUP || chat.unreadMentionCount > 0) {
+        continue; // not a group, or its unread mentions are the seed's
+      }
+      if (!XgramActivity.discussion() && (XgramActivityCollector.baseFlags(tdlib, chat) & XgramActivityItem.FLAG_DISCUSSION) != 0) {
+        continue;
+      }
+      final SyncRow row = readSync(db, accountId, chatId, JOB_RECENT);
+      if (row != null && (row.retryAt > now || now - row.lastRun < RECENT_RECHECK_MS)) {
+        continue;
+      }
+      if (queue.addBack(new Job(chatId, JOB_RECENT))) {
+        added++;
+      }
+    }
+    queue.total += added;
+    return added;
+  }
+
   /** Debug builds: as if Telegram asked to wait two minutes (the sync, and Mark all as read). */
   @AnyThread
   static void injectFlood () {
@@ -304,12 +410,12 @@ final class XgramActivitySync {
     });
   }
 
-  /** The chats TDLib counts unread mentions or reactions in, and the look back once. */
+  /** The chats TDLib counts unread mentions or reactions in, and the look back once. Returns the searches queued. */
   @WorkerThread
-  private static void seedNow (Queue queue, Tdlib tdlib, boolean force) {
+  private static int seedNow (Queue queue, Tdlib tdlib, boolean force) {
     SQLiteDatabase db = store().db();
     if (db == null) {
-      return;
+      return 0;
     }
     final long now = System.currentTimeMillis();
     queue.lastSeedAt = now;
@@ -367,6 +473,7 @@ final class XgramActivitySync {
       publishStatus(queue);
       pump(accountId);
     }
+    return added;
   }
 
   /**
@@ -537,6 +644,7 @@ final class XgramActivitySync {
         limit = PAGE_SIZE;
         break;
       case JOB_LOOK_BACK:
+      case JOB_RECENT:
         filter = new TdApi.SearchMessagesFilterMention();
         limit = LOOK_BACK_PAGE_SIZE;
         fromMessageId = 0;
@@ -613,6 +721,7 @@ final class XgramActivitySync {
       switch (job.type) {
         case JOB_MENTIONS:
         case JOB_LOOK_BACK:
+        case JOB_RECENT:
           storeMentions(tdlib, chat, messages, job.type);
           break;
         case JOB_REACTIONS:
@@ -620,7 +729,7 @@ final class XgramActivitySync {
           break;
       }
     }
-    if (job.type != JOB_LOOK_BACK) {
+    if (job.type != JOB_LOOK_BACK && job.type != JOB_RECENT) {
       // In order after the upserts above: what the results don't have was read elsewhere
       final int mask = job.type == JOB_REACTIONS ? XgramActivityItem.MASK_REACTION : XgramActivityItem.MASK_MENTION_GROUP;
       final long min = minId == Long.MAX_VALUE ? 0 : minId;
@@ -656,14 +765,16 @@ final class XgramActivitySync {
     final long me = tdlib.myUserId();
     final String[] usernames = XgramActivityCollector.activeUsernames(tdlib.myUser());
     final int base = XgramActivityCollector.baseFlags(tdlib, chat);
-    final int source = jobType == JOB_LOOK_BACK ? XgramActivityItem.SOURCE_LOOK_BACK : XgramActivityItem.SOURCE_UNREAD_SYNC;
+    // A look back and a refresh's look in a recent group search every mention, read ones too
+    final boolean allMentions = jobType == JOB_LOOK_BACK || jobType == JOB_RECENT;
+    final int source = allMentions ? XgramActivityItem.SOURCE_LOOK_BACK : XgramActivityItem.SOURCE_UNREAD_SYNC;
     final long oldest = System.currentTimeMillis() / 1000L - LOOK_BACK_KEEP_SECONDS;
     int lookups = 0;
     for (TdApi.Message m : messages) {
       if (m == null || m.isOutgoing || tdlib.isSelfSender(m)) {
         continue;
       }
-      if (jobType == JOB_LOOK_BACK && m.date < oldest) {
+      if (allMentions && m.date < oldest) {
         continue;
       }
       int classified = XgramActivityClassifier.classify(m, me, usernames, true);
@@ -674,7 +785,7 @@ final class XgramActivitySync {
       int flags = XgramActivityClassifier.flagsOf(classified) | base;
       int state = XgramActivityItem.STATE_NEW;
       boolean viewedHere = false;
-      if (jobType == JOB_LOOK_BACK) {
+      if (allMentions) {
         state = m.containsUnreadMention ? XgramActivityItem.STATE_NEW : XgramActivityItem.STATE_READ;
       } else if (com.fahadali.xgram.ghost.XgramLocalRead.isMentionViewed(tdlib, chat.id, m.id)) {
         // Seen here in ghost mode already
