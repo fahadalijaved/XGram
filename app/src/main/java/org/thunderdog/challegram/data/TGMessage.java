@@ -2289,7 +2289,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
       // Clock, tick and views
       if (isSending()) {
-        Drawables.draw(c, Icons.getClockIcon(ColorId.iconLight), clockX, pClockTop - Screen.dp(Icons.CLOCK_SHIFT_Y), Paints.getIconLightPorterDuffPaint());
+        xgramDrawClock(c, view, Icons.getClockIcon(ColorId.iconLight), clockX, pClockTop - Screen.dp(Icons.CLOCK_SHIFT_Y), ColorId.iconLight, Paints.getIconLightPorterDuffPaint()); // XGram: a faded bubble's countdown
       } else if (isFailed()) {
         // TODO failure icon
       } else if (shouldShowTicks() && getViewCountMode() != VIEW_COUNT_MAIN) {
@@ -4285,7 +4285,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
         if ((useBubble() && !drawBubbleTimeOverContent()) && viewsWidth > clockWidth) {
           startX += viewsWidth - clockWidth;
         }
-        Drawables.draw(c, Icons.getClockIcon(iconColorId), startX - Screen.dp(Icons.CLOCK_SHIFT_X), startY + Screen.dp(5f) - Screen.dp(Icons.CLOCK_SHIFT_Y), iconPaint);
+        xgramDrawClock(c, view, Icons.getClockIcon(iconColorId), startX - Screen.dp(Icons.CLOCK_SHIFT_X), startY + Screen.dp(5f) - Screen.dp(Icons.CLOCK_SHIFT_Y), iconColorId, iconPaint); // XGram: a faded bubble's countdown
         startX += clockWidth;
       } else {
         viewCounter.draw(c, startX, counterY, Gravity.LEFT, 1f, view, iconColorId);
@@ -4355,7 +4355,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       if (isFailed) {
         // TODO failure icon
       } else if (isSending) {
-        Drawables.draw(c, Icons.getClockIcon(iconColorId), startX - Screen.dp(Icons.CLOCK_SHIFT_X), top - Screen.dp(Icons.CLOCK_SHIFT_Y), iconPaint);
+        xgramDrawClock(c, view, Icons.getClockIcon(iconColorId), startX - Screen.dp(Icons.CLOCK_SHIFT_X), top - Screen.dp(Icons.CLOCK_SHIFT_Y), iconColorId, iconPaint); // XGram: a faded bubble's countdown
       } else {
         boolean unread = isUnread() && !noUnread();
         Drawables.draw(c, unread ? Icons.getSingleTick(iconColorId) : Icons.getDoubleTick(iconColorId), startX - Screen.dp(Icons.TICKS_SHIFT_X), top - Screen.dp(Icons.TICKS_SHIFT_Y), unread ? ticksPaint : ticksReadPaint);
@@ -4908,11 +4908,32 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public boolean isFakeMessage () {
+    if (xgramWaiting != null) {
+      return true; // XGram: the faded bubble of a waiting message (Undo send) is no message
+    }
     //noinspection WrongConstant
     if (msg.content.getConstructor() == TdApiExt.MessageChatEvent.CONSTRUCTOR) {
       return true;
     }
     return isDemoChat();
+  }
+
+  // XGram: Undo send. The faded bubble of a waiting message (com.fahadali.xgram.chats.XgramUndoSendBubbles) is drawn
+  // from TDLib's preview of the request that waits: it is no message (isFakeMessage), and its countdown is drawn where
+  // the sending clock goes.
+
+  /** Set on a waiting message's faded bubble only. */
+  public @Nullable com.fahadali.xgram.chats.XgramUndoSendBubbles.Countdown xgramWaiting;
+  /** A sent message that took the place of its faded bubble: the list adds it without the add animation. */
+  public boolean xgramFromWaiting;
+
+  /** The sending clock, or a waiting message's countdown in its place. */
+  private void xgramDrawClock (Canvas c, @Nullable MessageView view, Drawable clock, float x, float y, @ColorId int colorId, Paint paint) {
+    final com.fahadali.xgram.chats.XgramUndoSendBubbles.Countdown countdown = xgramWaiting;
+    if (countdown != null && countdown.draw(c, view, x + clock.getMinimumWidth() / 2f, y + clock.getMinimumHeight() / 2f, Theme.getColor(colorId))) {
+      return;
+    }
+    Drawables.draw(c, clock, x, y, paint);
   }
 
   public final void getIds (@NonNull LongSet ids, long afterMessageId, long beforeMessageId) {
@@ -6082,6 +6103,11 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   }
 
   public boolean allowInteraction () {
+    // XGram: a waiting message's faded bubble (Undo send) lays out as the message it becomes (its comment button too);
+    // it never gets a touch, so nothing it offers can be used
+    if (xgramWaiting != null) {
+      return !isEventLog() && !isThreadHeader();
+    }
     return !isFakeMessage() && !isEventLog() && !isThreadHeader();
   }
 
@@ -9054,6 +9080,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
   @AnyThread
   @NonNull
   public TdApi.MessageProperties lastMessageProperties (long messageId) {
+    if (xgramWaiting != null) {
+      return new TdApi.MessageProperties(); // XGram: a faded bubble (Undo send) is no message: TDLib doesn't know it
+    }
     TdApi.MessageProperties properties = cachedProperties != null ? cachedProperties.get(messageId) : null;
     if (properties == null) {
       if (tdlib.inTdlibThread()) {

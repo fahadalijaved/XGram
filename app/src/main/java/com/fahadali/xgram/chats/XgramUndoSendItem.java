@@ -98,6 +98,23 @@ final class XgramUndoSendItem {
   @Nullable CharSequence preview;
   @Nullable String replyName;
   boolean previewReady;
+  /**
+   * Faded bubbles in the chat (XgramUndoSendBubbles): what TDLib makes of each part, asked with the same request and
+   * only_preview (TDLib returns the message without sending or keeping it). Set once per part on a TDLib thread, under
+   * the lock; null while it is asked, or when that part shows no bubble.
+   */
+  @Nullable TdApi.Message[][] bubbles;
+  /** The bubbles were asked for (under the lock). */
+  boolean bubblesAsked;
+  /** The ids of the messages each part became once TDLib took it, set before those messages reach the list (under the lock). */
+  @Nullable long[][] sentIds;
+  /** Main thread: parts with a result. Their faded bubbles leave, if no message took their place. */
+  @Nullable boolean[] partDone;
+  /**
+   * Main thread: a sent message of it took the place of its faded bubble, so the list's content didn't grow for it and
+   * the bar leaves on its own animated exit, not the instant hand-off.
+   */
+  boolean bubbleTookPlace;
 
   XgramUndoSendItem (Tdlib tdlib, int kind, long chatId, long draftChatId, @Nullable TdApi.MessageTopic draftTopic,
                      List<TdApi.Function<?>> parts, TdApi.FormattedText typed,

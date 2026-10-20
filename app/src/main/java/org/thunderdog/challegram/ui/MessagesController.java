@@ -2438,6 +2438,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (!xgramUndoBypass && xgramHoldFiles(selectedItems, musicEntries, files, caption, sendOptions)) {
         return; // XGram: Undo send, the documents and music wait
       }
+      if (showSlowModeRestriction(sendButton != null ? sendButton : inputView, sendOptions)) {
+        // XGram: slow mode refuses them all (the hint says until when), before the message box is locked for a send
+        // that wouldn't happen: the files and their caption stay.
+        return;
+      }
 
       final List<TdApi.Message> sentMessages = new ArrayList<>(selectedItems.size());
       final ReplyInfo replyTo = getCurrentReplyId();
@@ -2464,6 +2469,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
         }
         if (musicFunctions != null) {
           functions.addAll(musicFunctions);
+        }
+        if (functions.isEmpty()) {
+          // XGram: a restriction refused every file (it showed why): nothing to send, the message box unlocks as it was
+          UI.cancel(clearInputRunnable);
+          if (!isTimeout[0] && getChatId() == chatId) {
+            clearInputAfterSend(false, true, replyTo, true);
+          }
+          return;
         }
         executeSendMessageFunctions(functions, sentMessages, sendOptions != null && sendOptions.schedulingState != null, success -> UI.post(() -> {
           if (!isTimeout[0] && getChatId() == chatId) {
@@ -3000,6 +3013,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     com.fahadali.xgram.chats.XgramUndoSend.onOwnerDestroyed(this); // XGram: what waits goes before this screen shows another chat
     if (xgramUndoBar != null) {
       xgramUndoBar.reset();
+    }
+    if (xgramUndoBubbles != null) {
+      xgramUndoBubbles.reset();
     }
     super.setArguments(args);
 
@@ -4744,6 +4760,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     com.fahadali.xgram.chats.XgramUndoSend.onOwnerDestroyed(this);
     if (xgramUndoBar != null) {
       xgramUndoBar.reset();
+    }
+    if (xgramUndoBubbles != null) {
+      xgramUndoBubbles.reset();
     }
     com.fahadali.xgram.chats.XgramAutoTranslate.removeListener(xgramTranslateListener); // XGram
     if (xgramTopicIcon != null) {
@@ -7811,6 +7830,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (isDestroyed() || contentView == null || replyBarView == null || messagesView == null) {
       return;
     }
+    xgramSyncUndoBubbles(); // the faded bubbles in the chat follow too
     if (xgramUndoBar == null) {
       if (!com.fahadali.xgram.chats.XgramUndoSend.hasShownItems(this)) {
         return;
@@ -7829,6 +7849,47 @@ public class MessagesController extends ViewController<MessagesController.Argume
       updateReplyView();
     }
     xgramUndoBar.update(handoff, isFocused());
+  }
+
+  // XGram: Undo send. Waiting messages also show in the chat as faded bubbles under the newest message
+  // (com.fahadali.xgram.chats.XgramUndoSendBubbles): drawn by a layer under the list, in room an item decoration keeps,
+  // never items of the list.
+
+  private @Nullable com.fahadali.xgram.chats.XgramUndoSendBubbles xgramUndoBubbles;
+
+  /** What waits in this message box changed (or TDLib's preview of it came): its faded bubbles follow. */
+  @UiThread
+  public void xgramSyncUndoBubbles () {
+    if (isDestroyed() || contentView == null || messagesView == null) {
+      return;
+    }
+    if (messagesView.isComputingLayout()) {
+      messagesView.post(this::xgramSyncUndoBubbles); // the list's decorations can't change in its own layout pass
+      return;
+    }
+    if (xgramUndoBubbles == null) {
+      if (!com.fahadali.xgram.chats.XgramUndoSend.hasBubbles(this)) {
+        return;
+      }
+      xgramUndoBubbles = new com.fahadali.xgram.chats.XgramUndoSendBubbles(context(), this, manager, messagesView);
+      // Right under the list: it draws the date and the scroll thumb over them, and takes every touch
+      contentView.addView(xgramUndoBubbles.getLayer(), Math.max(0, contentView.indexOfChild(messagesView)));
+    }
+    xgramUndoBubbles.sync();
+  }
+
+  /** MessagesManager: a live message is about to join the bottom of the list (it may take a faded bubble's place). */
+  public void xgramUndoBubblesBeforeNewMessage (TGMessage message) {
+    if (xgramUndoBubbles != null) {
+      xgramUndoBubbles.beforeNewMessage(message);
+    }
+  }
+
+  /** MessagesManager: a live message joined the bottom of the list, or the list's newest messages were deleted or replaced. */
+  public void xgramUndoBubblesAfterNewMessage () {
+    if (xgramUndoBubbles != null) {
+      xgramUndoBubbles.afterNewMessage();
+    }
   }
 
   /**
@@ -11283,6 +11344,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private void executeSendMessageFunctions (List<TdApi.Function<?>> functions, List<TdApi.Message> sentMessages, final boolean isSchedule, RunnableBool onDone) {
+    if (functions.isEmpty()) {
+      tdlib.ui().post(() -> onDone.runWithBool(false)); // XGram: nothing to send (functions.get(0) below would throw)
+      return;
+    }
     com.fahadali.xgram.chats.XgramUndoSend.flushBefore(tdlib, functions.isEmpty() ? null : functions.get(0)); // XGram: what waits in this chat goes first
     final int expectedCount = functions.size();
     final int[] sentFunctionsCount = new int[1];

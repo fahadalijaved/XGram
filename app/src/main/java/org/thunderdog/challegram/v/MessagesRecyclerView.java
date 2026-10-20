@@ -116,6 +116,14 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
       xgramArmed = new CustomItemAnimator(AnimatorUtils.DECELERATE_INTERPOLATOR, ITEM_ANIMATOR_DURATION) {
         @Override
         public boolean animateAdd (RecyclerView.ViewHolder holder) {
+          if (xgramTakesWaitingPlace(holder.itemView)) {
+            // Undo send: a sent message where its faded bubble was (XgramUndoSendBubbles) is already in place
+            holder.itemView.setAlpha(1f);
+            holder.itemView.setScaleX(1f);
+            holder.itemView.setScaleY(1f);
+            dispatchAddFinished(holder);
+            return false;
+          }
           xgramTailPivot(holder.itemView);
           return super.animateAdd(holder);
         }
@@ -159,6 +167,22 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
       xgramArmed.isRunning(xgramDisarm);
     }
     return true;
+  }
+
+  /** XGram: the message took the place of an Undo send faded bubble (once: a later add of it animates as always). */
+  private static boolean xgramTakesWaitingPlace (View view) {
+    org.thunderdog.challegram.component.chat.MessageView messageView = org.thunderdog.challegram.component.chat.MessagesHolder.findMessageView(view);
+    TGMessage msg = messageView != null ? messageView.getMessage() : null;
+    if (msg != null && msg.xgramFromWaiting) {
+      msg.xgramFromWaiting = false;
+      return true;
+    }
+    return false;
+  }
+
+  /** XGram: how far pull-to-next draws the list's content up (draw); Undo send's faded bubbles follow it. */
+  public float xgramContentOffset () {
+    return xgramPull != null ? xgramPull.getOffset() : 0f;
   }
 
   /** The new bubble grows from its tail: the bottom corner on its own side. */

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Undo send, waiting messages in the chat (com.fahadali.xgram.chats.XgramUndoSendBubbles) and only the newest waiting -->
+  <item type="id" name="btn_xgramUndoSendBubbles" />
+  <item type="id" name="btn_xgramUndoSendNewest" />
+  <!-- The menu of a faded bubble -->
+  <item type="id" name="btn_xgramUndoSendBubbleUndo" />
+  <item type="id" name="btn_xgramUndoSendBubbleNow" />
+
+  <string name="XgramUndoSendBubbles">Show waiting messages in the chat</string>
+  <string name="XgramUndoSendBubblesSub">Faded until sent, except video messages. Tap one to undo it or send it now</string>
+  <string name="XgramUndoSendNewest">Only the newest waits</string>
+  <string name="XgramUndoSendNewestSub">A new message sends the one before it right away</string>
+</resources>

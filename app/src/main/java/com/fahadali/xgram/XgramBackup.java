@@ -49,8 +49,8 @@ public final class XgramBackup {
     XgramSettings.KEY_CHANNEL_REACTIONS,
     // Bigger text, kept for three lines (Chat list view)
     XgramSettings.KEY_CHAT_LIST_BIG_TEXT,
-    // Undo send: voice and video messages wait too (Messages > Message box)
-    XgramSettings.KEY_UNDO_SEND_VOICE,
+    // Undo send: voice and video messages wait too, faded bubbles in the chat, only the newest waits (Messages > Message box)
+    XgramSettings.KEY_UNDO_SEND_VOICE, XgramSettings.KEY_UNDO_SEND_BUBBLES, XgramSettings.KEY_UNDO_SEND_NEWEST,
     // Activity (Chat list), one by one: no prefix may match the per-viewer filter "xgram_actview_filter" (not a setting)
     XgramSettings.KEY_ACTIVITY_ON, XgramSettings.KEY_ACTIVITY_REACTIONS, XgramSettings.KEY_ACTIVITY_MUTED, XgramSettings.KEY_ACTIVITY_DISCUSSION,
     XgramSettings.KEY_ACTIVITY_LOOKBACK, XgramSettings.KEY_ACTIVITY_BADGE, XgramSettings.KEY_ACTIVITY_HEADER,
