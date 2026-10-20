@@ -56,7 +56,10 @@ import tgx.td.Td;
  * Undo send (iMessage, Gmail): what is sent from the message box (text, and the documents and music of its tray) waits
  * on this device for the chosen delay before the exact requests Telegram X built go to TDLib, so it can be taken back
  * while nothing has reached Telegram. The waiting message is shown by {@link XgramUndoSendBar} above the message box,
- * not in the message list, so the real bubble (the one a sticker or Telegram X's own sending makes) is the only one.
+ * and (Show waiting messages in the chat) as a faded bubble under the newest message ({@link XgramUndoSendBubbles},
+ * drawn from TDLib's only_preview answer to the same request): not an item of the message list, so the real bubble
+ * (the one a sticker or Telegram X's own sending makes) is the only message there, and takes the faded one's place.
+ * "Only the newest waits" sends what waits in a chat as soon as a new message starts waiting there.
  *
  * <p>Waiting messages go out at their deadline, with "Send now", when their chat closes, when the app pauses, and
  * before anything else is sent to their chat ({@link #flushBefore}), oldest first. Each one is journalled
@@ -456,6 +459,9 @@ public final class XgramUndoSend {
         }
       }
     }
+    if (!gone && !refused && sendUpTo == 0) {
+      askBubbles(item); // they still wait: their faded bubbles can show
+    }
     if (!gone && refused) {
       if (item.dueTask != null) {
         UI.cancel(item.dueTask);
@@ -611,6 +617,10 @@ public final class XgramUndoSend {
     if (count >= MAX_PER_COMPOSER && oldest != null) {
       flushChat(oldest.tdlib, oldest.chatId, oldest.order, true);
     }
+    if (XgramSettings.instance().undoSendNewestOnly()) {
+      // Only the newest waits: what waits in this chat goes now, oldest first, before this one joins the queue.
+      flushChat(item.tdlib, item.chatId, Long.MAX_VALUE, true);
+    }
     synchronized (LOCK) {
       items.add(item);
       heldCount++;
@@ -621,6 +631,9 @@ public final class XgramUndoSend {
     if (!stateListenerAdded) {
       stateListenerAdded = true;
       UI.addStateListener(STATE);
+    }
+    if (!item.preparing) {
+      askBubbles(item); // files ask once their requests are made (filesReady)
     }
     notifyOwner(owner, false);
   }
@@ -690,6 +703,196 @@ public final class XgramUndoSend {
       }
     }
     return hasItemsIn(tdlib, chatId) && inSlowModeAsMember(tdlib, chatId);
+  }
+
+  // Faded bubbles in the chat (XgramUndoSendBubbles)
+
+  /**
+   * Asks TDLib what each part of a waiting message looks like: the same request as a copy with only_preview, which
+   * TDLib answers with the message it would send, without sending it, keeping it, or telling anyone (no update, no
+   * draft change, no upload). Nothing of it reaches Telegram; the bubbles are drawn from these answers.
+   */
+  private static void askBubbles (XgramUndoSendItem item) {
+    if (!XgramSettings.instance().undoSendBubbles()) {
+      return;
+    }
+    final List<TdApi.Function<?>> parts;
+    synchronized (LOCK) {
+      if (item.bubblesAsked || item.state != XgramUndoSendItem.HELD || item.parts.isEmpty()) {
+        return;
+      }
+      item.bubblesAsked = true;
+      parts = item.parts;
+      item.bubbles = new TdApi.Message[parts.size()][];
+    }
+    try {
+      Client client = item.tdlib.client();
+      for (int i = 0; i < parts.size(); i++) {
+        TdApi.Function<?> preview = previewOf(parts.get(i));
+        if (preview != null) {
+          final int index = i;
+          client.send(preview, result -> onBubble(item, index, result));
+        }
+      }
+    } catch (Throwable t) {
+      android.util.Log.e("XGram", "Undo send: cannot ask for the bubbles", t);
+    }
+  }
+
+  /** The part as a preview: the same chat, topic, reply and content, only_preview options. */
+  @Nullable
+  private static TdApi.Function<?> previewOf (TdApi.Function<?> part) {
+    if (part instanceof TdApi.SendMessage) {
+      TdApi.SendMessage send = (TdApi.SendMessage) part;
+      return new TdApi.SendMessage(send.chatId, send.topicId, send.replyTo, previewOptions(send.options), send.replyMarkup, send.inputMessageContent);
+    }
+    if (part instanceof TdApi.SendMessageAlbum) {
+      TdApi.SendMessageAlbum album = (TdApi.SendMessageAlbum) part;
+      return new TdApi.SendMessageAlbum(album.chatId, album.topicId, album.replyTo, previewOptions(album.options), album.inputMessageContents);
+    }
+    return null;
+  }
+
+  /** New options (Telegram X shares one object between the parts): only a preview, nothing scheduled or reordered. */
+  private static TdApi.MessageSendOptions previewOptions (@Nullable TdApi.MessageSendOptions options) {
+    TdApi.MessageSendOptions o = options != null ? options : new TdApi.MessageSendOptions();
+    return new TdApi.MessageSendOptions(o.suggestedPostInfo, o.disableNotification, o.fromBackground, o.protectContent,
+      o.allowPaidBroadcast, o.paidMessageStarCount, false, null, o.effectId, 0, true);
+  }
+
+  /** TDLib's preview of part {@code index}, on a TDLib thread. An error leaves that part without a bubble (the bar has it). */
+  private static void onBubble (XgramUndoSendItem item, int index, TdApi.Object result) {
+    TdApi.Message[] messages = null;
+    if (result instanceof TdApi.Message) {
+      messages = new TdApi.Message[] {(TdApi.Message) result};
+    } else if (result instanceof TdApi.Messages && ((TdApi.Messages) result).messages != null) {
+      List<TdApi.Message> found = new ArrayList<>();
+      for (TdApi.Message message : ((TdApi.Messages) result).messages) {
+        if (message != null) {
+          found.add(message);
+        }
+      }
+      messages = found.toArray(new TdApi.Message[0]);
+    }
+    if (messages == null || messages.length == 0) {
+      return;
+    }
+    synchronized (LOCK) {
+      if (item.bubbles == null || index >= item.bubbles.length || (item.state != XgramUndoSendItem.HELD && item.state != XgramUndoSendItem.FLUSHING)) {
+        return;
+      }
+      item.bubbles[index] = messages;
+    }
+    item.tdlib.ui().post(() -> {
+      MessagesController owner = item.owner();
+      if (owner != null) {
+        try {
+          owner.xgramSyncUndoBubbles();
+        } catch (Throwable t) {
+          android.util.Log.e("XGram", "Undo send: cannot show the bubbles", t);
+        }
+      }
+    });
+  }
+
+  /** One part of a waiting message as its faded bubbles show it. */
+  static final class BubblePart {
+    final XgramUndoSendItem item;
+    final int part;
+    final TdApi.Message[] messages;
+    /** On its way: the countdown is over. */
+    final boolean sending;
+    /** TDLib has taken it: its bubbles wait for the messages that take their place, none are made any more. */
+    final boolean sent;
+
+    BubblePart (XgramUndoSendItem item, int part, TdApi.Message[] messages, boolean sending, boolean sent) {
+      this.item = item;
+      this.part = part;
+      this.messages = messages;
+      this.sending = sending;
+      this.sent = sent;
+    }
+  }
+
+  /**
+   * The parts of what waits in {@code owner}'s message box that have faded bubbles, oldest first: waiting, or on their
+   * way until they have a result.
+   */
+  @UiThread
+  static List<BubblePart> bubblePartsOf (MessagesController owner) {
+    if (owner == null || !XgramSettings.instance().undoSendBubbles()) {
+      return Collections.emptyList();
+    }
+    List<BubblePart> result = null;
+    synchronized (LOCK) {
+      if (items.isEmpty()) {
+        return Collections.emptyList();
+      }
+      final long chatId = owner.getChatId();
+      for (XgramUndoSendItem item : items) {
+        if (item.bubbles == null || item.chatId != chatId || !item.isOwnedBy(owner)) {
+          continue;
+        }
+        final boolean sending = item.state == XgramUndoSendItem.FLUSHING;
+        if (!sending && item.state != XgramUndoSendItem.HELD) {
+          continue;
+        }
+        if (sending && item.hidden) {
+          continue; // sent long ago without a result: no longer shown (the bar drops it too)
+        }
+        for (int i = 0; i < item.bubbles.length; i++) {
+          TdApi.Message[] messages = item.bubbles[i];
+          if (messages == null || (item.partDone != null && i < item.partDone.length && item.partDone[i])) {
+            continue;
+          }
+          final boolean sent = item.sentIds != null && i < item.sentIds.length && item.sentIds[i] != null;
+          if (result == null) {
+            result = new ArrayList<>();
+          }
+          result.add(new BubblePart(item, i, messages, sending, sent));
+        }
+      }
+    }
+    return result != null ? result : Collections.emptyList();
+  }
+
+  /** {@code owner}'s message box has something its faded bubbles show. */
+  @UiThread
+  public static boolean hasBubbles (MessagesController owner) {
+    return !bubblePartsOf(owner).isEmpty();
+  }
+
+  /**
+   * The message that message {@code index} of part {@code part}'s preview became once TDLib took it (the one that takes
+   * its bubble's place), 0 while it isn't sent. TDLib answers with the messages in the order of the request.
+   */
+  @AnyThread
+  static long sentIdAt (XgramUndoSendItem item, int part, int index) {
+    synchronized (LOCK) {
+      long[] ids = item.sentIds != null && part >= 0 && part < item.sentIds.length ? item.sentIds[part] : null;
+      return ids != null && index >= 0 && index < ids.length ? ids[index] : 0;
+    }
+  }
+
+  /** Still waiting and not due yet: Undo and Send now apply to it. */
+  @UiThread
+  static boolean isWaiting (XgramUndoSendItem item) {
+    synchronized (LOCK) {
+      if (item.state != XgramUndoSendItem.HELD) {
+        return false;
+      }
+    }
+    return SystemClock.uptimeMillis() < item.dueUptime;
+  }
+
+  /** "Send now" on a faded bubble: that message goes now, with what waits before it (the order holds). */
+  @UiThread
+  static boolean sendNow (MessagesController owner, XgramUndoSendItem item) {
+    if (owner == null || !item.isOwnedBy(owner) || !isWaiting(item)) {
+      return false;
+    }
+    flushChat(item.tdlib, item.chatId, item.order, true);
+    return true;
   }
 
   // Ghost mode "read on send"
@@ -1069,6 +1272,16 @@ public final class XgramUndoSend {
         if (readCap != 0) {
           capReads(item.tdlib, result, readCap); // before its "sent" update, which comes after this result
         }
+        // Before the messages reach the list: their faded bubbles give them their place (XgramUndoSendBubbles).
+        final long[] ids = idsOf(result);
+        synchronized (LOCK) {
+          if (item.sentIds == null) {
+            item.sentIds = new long[item.parts.size()][];
+          }
+          if (index < item.sentIds.length) {
+            item.sentIds[index] = ids;
+          }
+        }
         item.tdlib.messageHandler().onResult(result);
         if (isScheduled(result)) {
           synchronized (LOCK) {
@@ -1088,7 +1301,22 @@ public final class XgramUndoSend {
           }
         }
       }
-      item.tdlib.ui().post(() -> onPartSettled(item));
+      item.tdlib.ui().post(() -> onPartSettled(item, index));
+    }
+
+    private static long[] idsOf (TdApi.Object result) {
+      if (result instanceof TdApi.Message) {
+        return new long[] {((TdApi.Message) result).id};
+      }
+      TdApi.Message[] messages = ((TdApi.Messages) result).messages;
+      if (messages == null) {
+        return new long[0];
+      }
+      long[] ids = new long[messages.length];
+      for (int i = 0; i < messages.length; i++) {
+        ids[i] = messages[i] != null ? messages[i].id : 0;
+      }
+      return ids;
     }
 
     private static boolean isScheduled (TdApi.Object result) {
@@ -1108,7 +1336,23 @@ public final class XgramUndoSend {
   }
 
   @UiThread
-  private static void onPartSettled (XgramUndoSendItem item) {
+  private static void onPartSettled (XgramUndoSendItem item, int index) {
+    if (item.partDone == null) {
+      item.partDone = new boolean[item.parts.size()];
+    }
+    if (index < item.partDone.length) {
+      item.partDone[index] = true;
+    }
+    // Its faded bubbles: gone already when its messages took their place, otherwise they leave now (a refusal, ghost
+    // mode's scheduled send, a message of another topic).
+    MessagesController owner = item.owner();
+    if (owner != null) {
+      try {
+        owner.xgramSyncUndoBubbles();
+      } catch (Throwable t) {
+        android.util.Log.e("XGram", "Undo send: cannot update the bubbles", t);
+      }
+    }
     item.settled++;
     if (item.settled == item.parts.size()) {
       settle(item);

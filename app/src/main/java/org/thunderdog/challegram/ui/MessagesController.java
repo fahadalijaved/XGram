@@ -3010,6 +3010,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (xgramUndoBar != null) {
       xgramUndoBar.reset();
     }
+    if (xgramUndoBubbles != null) {
+      xgramUndoBubbles.reset();
+    }
     super.setArguments(args);
 
     this.chat = args.chat;
@@ -4753,6 +4756,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     com.fahadali.xgram.chats.XgramUndoSend.onOwnerDestroyed(this);
     if (xgramUndoBar != null) {
       xgramUndoBar.reset();
+    }
+    if (xgramUndoBubbles != null) {
+      xgramUndoBubbles.reset();
     }
     com.fahadali.xgram.chats.XgramAutoTranslate.removeListener(xgramTranslateListener); // XGram
     if (xgramTopicIcon != null) {
@@ -7815,6 +7821,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (isDestroyed() || contentView == null || replyBarView == null || messagesView == null) {
       return;
     }
+    xgramSyncUndoBubbles(); // the faded bubbles in the chat follow too
     if (xgramUndoBar == null) {
       if (!com.fahadali.xgram.chats.XgramUndoSend.hasShownItems(this)) {
         return;
@@ -7833,6 +7840,52 @@ public class MessagesController extends ViewController<MessagesController.Argume
       updateReplyView();
     }
     xgramUndoBar.update(handoff, isFocused());
+  }
+
+  // XGram: Undo send. Waiting messages also show in the chat as faded bubbles under the newest message
+  // (com.fahadali.xgram.chats.XgramUndoSendBubbles): drawn by a layer under the list, in room an item decoration keeps,
+  // never items of the list.
+
+  private @Nullable com.fahadali.xgram.chats.XgramUndoSendBubbles xgramUndoBubbles;
+
+  /** What waits in this message box changed (or TDLib's preview of it came): its faded bubbles follow. */
+  @UiThread
+  public void xgramSyncUndoBubbles () {
+    if (isDestroyed() || contentView == null || messagesView == null) {
+      return;
+    }
+    if (messagesView.isComputingLayout()) {
+      messagesView.post(this::xgramSyncUndoBubbles); // the list's decorations can't change in its own layout pass
+      return;
+    }
+    if (xgramUndoBubbles == null) {
+      if (!com.fahadali.xgram.chats.XgramUndoSend.hasBubbles(this)) {
+        return;
+      }
+      xgramUndoBubbles = new com.fahadali.xgram.chats.XgramUndoSendBubbles(context(), this, manager, messagesView);
+      // Right under the list: it draws the date and the scroll thumb over them, and takes every touch
+      contentView.addView(xgramUndoBubbles.getLayer(), Math.max(0, contentView.indexOfChild(messagesView)));
+    }
+    xgramUndoBubbles.sync();
+  }
+
+  /** The list holds still on screen while a faded bubble comes or goes, then settles (updateReplyView). */
+  private float xgramUndoBubblesShift () {
+    return xgramUndoBubbles != null ? xgramUndoBubbles.listShift() : 0f;
+  }
+
+  /** MessagesManager: a live message is about to join the bottom of the list (it may take a faded bubble's place). */
+  public void xgramUndoBubblesBeforeNewMessage (TGMessage message) {
+    if (xgramUndoBubbles != null) {
+      xgramUndoBubbles.beforeNewMessage(message);
+    }
+  }
+
+  /** MessagesManager: a live message joined the bottom of the list. */
+  public void xgramUndoBubblesAfterNewMessage () {
+    if (xgramUndoBubbles != null) {
+      xgramUndoBubbles.afterNewMessage();
+    }
   }
 
   /**
@@ -8088,7 +8141,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     float offset = -getAttachedFilesOffset();
     final float keyboardOffset = -getKeyboardOffset();
     final float xgramUndoOffset = -xgramUndoBarOffset(); // XGram: the Undo send bar
-    messagesView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
+    messagesView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset + xgramUndoBubblesShift() /* XGram: faded bubbles */);
     bottomShadowView.setTranslationY(y + offset + keyboardOffset + xgramUndoOffset);
     if (replyBarView != null) {
       replyBarView.setTranslationY(y + keyboardOffset);

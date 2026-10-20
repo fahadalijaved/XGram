@@ -2020,6 +2020,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       controller.checkSwitchPm(message.getMessage());
     }
     if (!loader.canLoadBottom()) {
+      controller.xgramUndoBubblesBeforeNewMessage(message); // XGram: Undo send, the faded bubble this message takes the place of
       boolean atBottom = manager.findFirstVisibleItemPosition() == 0;
       TGMessage bottomMessage = adapter.getBottomMessage();
       if (bottomMessage != null && bottomMessage.combineWith(message.getMessage(), true)) {
@@ -2028,6 +2029,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
         }
         bottomMessage.invalidateContentReceiver(message.getId(), -1);
         message.onDestroy();
+        controller.xgramUndoBubblesAfterNewMessage(); // XGram
         return;
       }
       boolean scrollToBottom = (message.isSending() || (atBottom && (!message.isOld() || message.isChatMember()))) && !message.isSponsoredMessage();
@@ -2063,8 +2065,21 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       } else {
         adapter.addMessage(message, false, scrollToBottom);
       }
+      controller.xgramUndoBubblesAfterNewMessage(); // XGram: Undo send, the faded bubbles stay under the newest message
     } else if (message.isSending()) {
       loadFromStart();
+    }
+  }
+
+  /** XGram: the list shows the chat's newest messages: Undo send's faded bubbles go under them. */
+  public boolean xgramShowsNewest () {
+    return adapter != null && loader.getSpecialMode() == MessagesLoader.SPECIAL_MODE_NONE && !loader.canLoadBottom() && adapter.getMessageCount() > 0;
+  }
+
+  /** XGram: to the newest message, as a send does (Undo send: a faded bubble came in while the list was scrolled up). */
+  public void xgramScrollToNewest () {
+    if (xgramShowsNewest()) {
+      scrollToBottom(false);
     }
   }
 

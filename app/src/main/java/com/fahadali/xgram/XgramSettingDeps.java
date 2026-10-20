@@ -205,6 +205,15 @@ public final class XgramSettingDeps {
     return undoSendVoiceEnabled() ? 0 : R.string.XgramUndoSendOffReason;
   }
 
+  /** The other Undo send switches (faded bubbles in the chat, only the newest waits) are only read while it is on. */
+  public static boolean undoSendOptionsEnabled () {
+    return undoSendVoiceEnabled();
+  }
+
+  public static @StringRes int undoSendOptionsReason () {
+    return undoSendVoiceReason();
+  }
+
   /**
    * Message menu options that XGram only adds while another setting is on (XgramMessageActions): Summarize needs
    * Telegram AI tools, Edit history needs Save edit history. Their switches change nothing until then.

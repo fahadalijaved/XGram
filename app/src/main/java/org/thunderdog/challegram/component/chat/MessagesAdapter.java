@@ -171,17 +171,21 @@ public class MessagesAdapter extends RecyclerView.Adapter<MessagesHolder> {
     } else {
       int viewType;
       TGMessage msg = items.get(position);
-      if (msg.needComplexReceiver() || msg instanceof TGMessageMedia || (msg instanceof TGMessagePoll && !((TGMessagePoll) msg).isAnonymous())) {
-        viewType = /*msg.hasReply() ? MessagesHolder.TYPE_MESSAGE_COMPLEX_MEDIA_REPLY :*/ ListItem.TYPE_MESSAGE_COMPLEX_MEDIA;
-      } else {
-        boolean isMedia = msg.needGifReceiver() || msg.needImageReceiver();
-        viewType = isMedia ? (/*msg.hasReply() ? MessagesHolder.TYPE_MESSAGE_MEDIA_REPLY :*/ ListItem.TYPE_MESSAGE_MEDIA) : (/*msg.hasReply() ? MessagesHolder.TYPE_MESSAGE_REPLY :*/ ListItem.TYPE_MESSAGE);
-      }
+      viewType = xgramViewTypeOf(msg);
       if (msg.needViewGroup()) {
         viewType += ListItem.TYPE_MESSAGE_VIEW_GROUP;
       }
       return viewType;
     }
+  }
+
+  /** The message view type for {@code msg}, without a view group (XGram: Undo send's faded bubbles use it too). */
+  public static int xgramViewTypeOf (TGMessage msg) {
+    if (msg.needComplexReceiver() || msg instanceof TGMessageMedia || (msg instanceof TGMessagePoll && !((TGMessagePoll) msg).isAnonymous())) {
+      return /*msg.hasReply() ? MessagesHolder.TYPE_MESSAGE_COMPLEX_MEDIA_REPLY :*/ ListItem.TYPE_MESSAGE_COMPLEX_MEDIA;
+    }
+    boolean isMedia = msg.needGifReceiver() || msg.needImageReceiver();
+    return isMedia ? (/*msg.hasReply() ? MessagesHolder.TYPE_MESSAGE_MEDIA_REPLY :*/ ListItem.TYPE_MESSAGE_MEDIA) : (/*msg.hasReply() ? MessagesHolder.TYPE_MESSAGE_REPLY :*/ ListItem.TYPE_MESSAGE);
   }
 
   // View manipulation

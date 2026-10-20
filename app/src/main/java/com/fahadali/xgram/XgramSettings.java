@@ -883,6 +883,28 @@ public final class XgramSettings {
     put(KEY_UNDO_SEND_VOICE, value);
   }
 
+  /** Not under "xgram_undo_send" either (see {@link #KEY_UNDO_SEND_VOICE}). */
+  public static final String KEY_UNDO_SEND_BUBBLES = "xgram_undosend_bubbles";
+  public static final String KEY_UNDO_SEND_NEWEST = "xgram_undosend_newest";
+
+  /** Waiting messages also show in the chat, as faded bubbles under the newest message (on by default). */
+  public boolean undoSendBubbles () {
+    return pmc().getBoolean(KEY_UNDO_SEND_BUBBLES, true);
+  }
+
+  public void setUndoSendBubbles (boolean value) {
+    put(KEY_UNDO_SEND_BUBBLES, value);
+  }
+
+  /** Only the newest message waits: a new one sends those that wait before it in that chat right away (off by default). */
+  public boolean undoSendNewestOnly () {
+    return pmc().getBoolean(KEY_UNDO_SEND_NEWEST, false);
+  }
+
+  public void setUndoSendNewestOnly (boolean value) {
+    put(KEY_UNDO_SEND_NEWEST, value);
+  }
+
   public static String undoSendExcludeKey (int accountId, long chatId) {
     return KEY_UNDO_SEND_EXCLUDE + accountId + "_" + chatId;
   }

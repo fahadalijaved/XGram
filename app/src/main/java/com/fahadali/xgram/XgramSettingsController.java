@@ -538,6 +538,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(com.fahadali.xgram.layout.XgramKeyboard.enterToSendName(settings.enterToSend()));
         } else if (id == R.id.btn_xgramUndoSend) {
           view.setData(com.fahadali.xgram.chats.XgramUndoSend.delayName(settings.undoSendSeconds()));
+        } else if (id == R.id.btn_xgramUndoSendBubbles) {
+          view.getToggler().setRadioEnabled(settings.undoSendBubbles(), isUpdate);
+          setReason(view, XgramSettingDeps.undoSendOptionsReason());
+        } else if (id == R.id.btn_xgramUndoSendNewest) {
+          view.getToggler().setRadioEnabled(settings.undoSendNewestOnly(), isUpdate);
+          setReason(view, XgramSettingDeps.undoSendOptionsReason());
         } else if (id == R.id.btn_xgramUndoSendVoice) {
           view.getToggler().setRadioEnabled(settings.undoSendVoice(), isUpdate);
           setReason(view, XgramSettingDeps.undoSendVoiceReason());
@@ -923,6 +929,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(description(R.string.XgramEnterToSendInfo));
     addRows(items,
       link(R.id.btn_xgramUndoSend, R.string.XgramUndoSend),
+      toggle(R.id.btn_xgramUndoSendBubbles, R.string.XgramUndoSendBubbles, R.string.XgramUndoSendBubblesSub),
+      toggle(R.id.btn_xgramUndoSendNewest, R.string.XgramUndoSendNewest, R.string.XgramUndoSendNewestSub),
       toggle(R.id.btn_xgramUndoSendVoice, R.string.XgramUndoSendVoice, R.string.XgramUndoSendVoiceSub)
     );
     items.add(description(R.string.XgramUndoSendInfo));
@@ -1792,9 +1800,21 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       showOptions(Lang.getString(R.string.XgramUndoSendChoiceInfo), ids, titles, null, null, (itemView, optionId) -> {
         settings.setUndoSendSeconds(delays[optionId - 1]);
         adapter.updateValuedSettingById(R.id.btn_xgramUndoSend);
-        adapter.updateValuedSettingById(R.id.btn_xgramUndoSendVoice); // locked while Undo send is off
+        adapter.updateValuedSettingById(R.id.btn_xgramUndoSendBubbles); // locked while Undo send is off
+        adapter.updateValuedSettingById(R.id.btn_xgramUndoSendNewest);
+        adapter.updateValuedSettingById(R.id.btn_xgramUndoSendVoice);
         return true;
       });
+      return;
+    } else if (id == R.id.btn_xgramUndoSendBubbles) {
+      if (XgramSettingDeps.undoSendOptionsEnabled()) {
+        settings.setUndoSendBubbles(adapter.toggleView(v));
+      }
+      return;
+    } else if (id == R.id.btn_xgramUndoSendNewest) {
+      if (XgramSettingDeps.undoSendOptionsEnabled()) {
+        settings.setUndoSendNewestOnly(adapter.toggleView(v));
+      }
       return;
     } else if (id == R.id.btn_xgramUndoSendVoice) {
       if (XgramSettingDeps.undoSendVoiceEnabled()) {

@@ -174,6 +174,22 @@ fun MessagesPage() {
           }
         )
       }
+      // Faded bubbles in the chat, and only the newest waiting: only read while Undo send is on.
+      val optionsReason = XgramSettingDeps.undoSendOptionsReason()
+      switch(
+        R.id.btn_xgramUndoSendBubbles, s(R.string.XgramUndoSendBubbles),
+        s(if (optionsReason != 0) optionsReason else R.string.XgramUndoSendBubblesSub),
+        checked = settings.undoSendBubbles(), enabled = optionsReason == 0
+      ) {
+        settings.setUndoSendBubbles(it)
+      }
+      switch(
+        R.id.btn_xgramUndoSendNewest, s(R.string.XgramUndoSendNewest),
+        s(if (optionsReason != 0) optionsReason else R.string.XgramUndoSendNewestSub),
+        checked = settings.undoSendNewestOnly(), enabled = optionsReason == 0
+      ) {
+        settings.setUndoSendNewestOnly(it)
+      }
       val voiceReason = XgramSettingDeps.undoSendVoiceReason()
       switch(
         R.id.btn_xgramUndoSendVoice, s(R.string.XgramUndoSendVoice),
