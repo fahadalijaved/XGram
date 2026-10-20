@@ -44,6 +44,7 @@ import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.ListItem;
 import org.thunderdog.challegram.ui.MessagesController;
 import org.thunderdog.challegram.ui.SettingsAdapter;
+import org.thunderdog.challegram.widget.PopupLayout;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -440,23 +441,41 @@ public final class XgramCheckInSheet {
       return;
     }
     String text = Lang.getString(R.string.LocationAlertLocation) + "\n\n" + Lang.getString(R.string.LocationAlertLocationDisclaimer);
+    // The start sheet is gone already: closing the rationale (back, a tap outside) goes on without location, as Not now.
     if (XgramExpressive.isEnabled()) {
-      new ModernOptions.XgramHero(R.drawable.baseline_location_on_48, Lang.getString(R.string.XgramR5SheetsLocationTitle), text)
+      PopupLayout hero = new ModernOptions.XgramHero(R.drawable.baseline_location_on_48, Lang.getString(R.string.XgramR5SheetsLocationTitle), text)
         .cancel(Lang.getString(R.string.XgramCheckInNotNow), after)
         .confirm(Lang.getString(R.string.Continue), request)
+        .onDismiss(after)
         .show(c);
+      if (hero == null) {
+        after.run();
+      }
     } else {
-      c.showOptions(text, new int[] {R.id.btn_done, R.id.btn_cancel},
+      final boolean[] handled = {false};
+      PopupLayout popup = c.showOptions(text, new int[] {R.id.btn_done, R.id.btn_cancel},
         new String[] {Lang.getString(R.string.Continue), Lang.getString(R.string.XgramCheckInNotNow)},
         new int[] {ViewController.OptionColor.BLUE, ViewController.OptionColor.NORMAL},
         new int[] {R.drawable.baseline_location_on_24, R.drawable.baseline_cancel_24}, (v, id) -> {
           if (id == R.id.btn_done) {
+            handled[0] = true;
             request.run();
           } else if (id == R.id.btn_cancel) {
+            handled[0] = true;
             after.run();
           }
           return true;
         });
+      if (popup == null) {
+        after.run();
+      } else {
+        popup.setDismissListener(p -> {
+          if (!handled[0]) {
+            handled[0] = true;
+            after.run();
+          }
+        });
+      }
     }
   }
 

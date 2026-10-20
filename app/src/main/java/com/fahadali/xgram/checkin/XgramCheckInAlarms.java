@@ -15,6 +15,7 @@ import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.AlarmManagerCompat;
@@ -23,9 +24,10 @@ import org.thunderdog.challegram.tool.Intents;
 import org.thunderdog.challegram.unsorted.AppContext;
 
 /**
- * Inexact alarms (no exact-alarm permission): "Are you OK?" at the back-by time, the last call 2 minutes before the
- * alert, and a check 90 seconds after the alert time (closing wording, the watch record). Set again on every save,
- * from server times through the record's clock difference.
+ * Alarms: "Are you OK?" at the back-by time and the last call 2 minutes before the alert are exact (an inexact alarm on
+ * a sleeping phone can come up to 45 minutes late and miss both; inexact only when exact alarms aren't allowed), and a
+ * check 90 seconds after the alert time (closing wording, the watch record) is inexact. Set again on every save, from
+ * server times through the record's clock difference.
  */
 final class XgramCheckInAlarms {
   private XgramCheckInAlarms () { }
@@ -45,7 +47,19 @@ final class XgramCheckInAlarms {
     return intent;
   }
 
-  private static void set (Context context, String action, int requestCode, CheckInRecord r, long serverTime) {
+  /** Exact alarms may be set: always below Android 12, USE_EXACT_ALARM covers 13+ (12 asks for SCHEDULE_EXACT_ALARM). */
+  private static boolean canExact (AlarmManager am) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+      return true;
+    }
+    try {
+      return am.canScheduleExactAlarms();
+    } catch (Throwable t) {
+      return false;
+    }
+  }
+
+  private static void set (Context context, String action, int requestCode, CheckInRecord r, long serverTime, boolean exact) {
     AlarmManager am = alarms(context);
     if (am == null) {
       return;
@@ -55,7 +69,16 @@ final class XgramCheckInAlarms {
     intent.putExtra(XgramCheckInReceiver.EXTRA_REF, r.ref);
     try {
       PendingIntent pi = PendingIntent.getBroadcast(context, requestCode, intent, Intents.mutabilityFlags(false) | PendingIntent.FLAG_UPDATE_CURRENT);
-      AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, r.toDeviceMillis(serverTime), pi);
+      long at = r.toDeviceMillis(serverTime);
+      if (exact && canExact(am)) {
+        try {
+          AlarmManagerCompat.setExactAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, at, pi);
+          return;
+        } catch (SecurityException e) {
+          XgramCheckIn.log("alarm %s not exact: %s", action, e.toString()); // the permission went (Android 12)
+        }
+      }
+      AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, at, pi);
     } catch (Throwable t) {
       XgramCheckIn.log("alarm %s not set: %s", action, t.toString());
     }
@@ -81,24 +104,24 @@ final class XgramCheckInAlarms {
       case CheckInRecord.STARTING:
       case CheckInRecord.ARMED: {
         if (!r.prompted && r.eta > now) {
-          set(context, XgramCheckInReceiver.ACTION_PROMPT, RC_PROMPT, r, r.eta);
+          set(context, XgramCheckInReceiver.ACTION_PROMPT, RC_PROMPT, r, r.eta, true);
         } else {
           cancel(context, XgramCheckInReceiver.ACTION_PROMPT, RC_PROMPT);
         }
         long lastCall = r.sendAt - CheckInRules.LAST_CALL_LEAD;
         if (!r.lastCall && lastCall > now) {
-          set(context, XgramCheckInReceiver.ACTION_LAST_CALL, RC_LAST_CALL, r, lastCall);
+          set(context, XgramCheckInReceiver.ACTION_LAST_CALL, RC_LAST_CALL, r, lastCall, true);
         } else {
           cancel(context, XgramCheckInReceiver.ACTION_LAST_CALL, RC_LAST_CALL);
         }
-        set(context, XgramCheckInReceiver.ACTION_AFTER, RC_AFTER, r, Math.max(now + 30, r.sendAt + AFTER_DELAY));
+        set(context, XgramCheckInReceiver.ACTION_AFTER, RC_AFTER, r, Math.max(now + 30, r.sendAt + AFTER_DELAY), false);
         break;
       }
       case CheckInRecord.CLOSING: {
         cancel(context, XgramCheckInReceiver.ACTION_PROMPT, RC_PROMPT);
         cancel(context, XgramCheckInReceiver.ACTION_LAST_CALL, RC_LAST_CALL);
         if (r.sendAt + AFTER_DELAY > now) {
-          set(context, XgramCheckInReceiver.ACTION_AFTER, RC_AFTER, r, r.sendAt + AFTER_DELAY);
+          set(context, XgramCheckInReceiver.ACTION_AFTER, RC_AFTER, r, r.sendAt + AFTER_DELAY, false);
         } else {
           cancel(context, XgramCheckInReceiver.ACTION_AFTER, RC_AFTER);
         }
@@ -114,7 +137,7 @@ final class XgramCheckInAlarms {
     Context context = AppContext.get();
     long now = w.nowFromDevice();
     long at = w.sendAt + AFTER_DELAY;
-    set(context, XgramCheckInReceiver.ACTION_WATCH, RC_WATCH, w, Math.max(now + 30, at));
+    set(context, XgramCheckInReceiver.ACTION_WATCH, RC_WATCH, w, Math.max(now + 30, at), false);
   }
 
   static void cancelActive () {

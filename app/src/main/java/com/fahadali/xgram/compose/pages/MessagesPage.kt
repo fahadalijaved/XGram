@@ -202,7 +202,8 @@ fun MessagesPage() {
       }
       buttons(
         R.id.btn_xgramCheckInGrace, s(R.string.XgramCheckInGrace),
-        XgramSettings.CHECK_IN_GRACES.map { XgramCheckInSheet.durationName(it) to it },
+        // Short labels: four full plurals don't fit the connected row on the folded screen.
+        XgramSettings.CHECK_IN_GRACES.map { s(R.string.XgramCheckInMinShort, it) to it },
         selected = settings.checkInGrace()
       ) {
         settings.setCheckInGrace(it)

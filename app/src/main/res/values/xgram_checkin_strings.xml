@@ -156,6 +156,7 @@
   <string name="XgramCheckInTimer">Default timer</string>
   <string name="XgramCheckInGrace">Alert delay</string>
   <string name="XgramCheckInRadius">Arrival radius</string>
+  <string name="XgramCheckInMinShort">%1$d min</string>
   <string name="XgramCheckInLocationSub">Your last known location goes in the alert</string>
   <string name="XgramCheckInFollowUp">Keep the sent alert updated</string>
   <string name="XgramCheckInFollowUpSub">For an hour after it\'s sent, your location in it keeps updating</string>

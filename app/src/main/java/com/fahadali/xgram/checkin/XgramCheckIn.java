@@ -131,6 +131,31 @@ public final class XgramCheckIn {
     return new TdApi.MessageSendOptions(null, false, !UI.isResumed(), false, false, 0, false, schedulingState, 0, nextSendingId(), false);
   }
 
+  /**
+   * Check In's sends still pending, as acc_chat_pendingId: a sent message no longer carries the sendingId, so ghost
+   * mode's read on send asks here (its messages never read the chat).
+   */
+  private static final Set<String> ownPending = ConcurrentHashMap.newKeySet();
+
+  private static String ownPendingKey (int acc, long chatId, long messageId) {
+    return acc + "_" + chatId + "_" + messageId;
+  }
+
+  /** Remembers a pending send of Check In's. TDLib thread, in the send's result handler, so before its send update. */
+  private static void rememberOwnSend (Tdlib t, @Nullable TdApi.Object result) {
+    if (result instanceof TdApi.Message) {
+      TdApi.Message m = (TdApi.Message) result;
+      if (m.sendingState instanceof TdApi.MessageSendingStatePending) {
+        ownPending.add(ownPendingKey(t.id(), m.chatId, m.id));
+      }
+    }
+  }
+
+  /** Whether the message sent from pending {@code oldMessageId} was one of Check In's; it is forgotten. Any thread. */
+  public static boolean takeOwnSend (Tdlib t, long chatId, long oldMessageId) {
+    return !ownPending.isEmpty() && ownPending.remove(ownPendingKey(t.id(), chatId, oldMessageId));
+  }
+
   // Published state, read by any thread
 
   private static final Object SNAPSHOT_LOCK = new Object();
@@ -500,7 +525,10 @@ public final class XgramCheckIn {
       CheckInText.input(CheckInText.alert(r, now)));
     final String ref = r.ref;
     log("SendMessage alert ref=%s entities=%b", ref, !r.entitiesOff);
-    t.client().send(f, result -> post(() -> onAlertSendResult(t, ref, result)));
+    t.client().send(f, result -> {
+      rememberOwnSend(t, result);
+      post(() -> onAlertSendResult(t, ref, result));
+    });
   }
 
   private static void onAlertSendResult (Tdlib t, String ref, TdApi.Object result) {
@@ -588,18 +616,23 @@ public final class XgramCheckIn {
     final String ref = r.ref;
     long now = t.currentTime(TimeUnit.SECONDS);
     log("SendMessage start ref=%s", ref);
-    t.sendMessage(r.chat, topicOf(r), null, ownOptions(null), CheckInText.input(CheckInText.start(r, now)), m -> post(() -> {
-      CheckInRecord cur = current;
-      if (m == null || cur == null || !cur.ref.equals(ref)) {
-        log("start message result ref=%s ok=%b", ref, m != null);
-        return;
-      }
-      if (cur.startMsgId == 0 || !cur.startReal) {
-        cur.startMsgId = m.id;
-        cur.startReal = m.sendingState == null;
-        save(cur);
-      }
-    }));
+    t.sendMessage(r.chat, topicOf(r), null, ownOptions(null), CheckInText.input(CheckInText.start(r, now)), m -> {
+      rememberOwnSend(t, m);
+      post(() -> onStartMessageResult(ref, m));
+    });
+  }
+
+  private static void onStartMessageResult (String ref, @Nullable TdApi.Message m) {
+    CheckInRecord cur = current;
+    if (m == null || cur == null || !cur.ref.equals(ref)) {
+      log("start message result ref=%s ok=%b", ref, m != null);
+      return;
+    }
+    if (cur.startMsgId == 0 || !cur.startReal) {
+      cur.startMsgId = m.id;
+      cur.startReal = m.sendingState == null;
+      save(cur);
+    }
   }
 
   /** The alert won't exist (or is removed): the Check In ends before it started. */
@@ -1221,9 +1254,10 @@ public final class XgramCheckIn {
     TdApi.InputMessageReplyTo replyTo = replyId != 0 ? new TdApi.InputMessageReplyToMessage(replyId, null, 0, null) : null;
     log("SendMessage %s reply=%d", what, replyId);
     t.sendMessage(chatId, topic, replyTo, ownOptions(null), content, m -> {
+      rememberOwnSend(t, m);
       if (m == null && replyTo != null) {
         log("SendMessage %s again without reply", what);
-        t.sendMessage(chatId, topic, null, ownOptions(null), content, null);
+        t.sendMessage(chatId, topic, null, ownOptions(null), content, again -> rememberOwnSend(t, again));
       }
     });
   }
@@ -1922,9 +1956,10 @@ public final class XgramCheckIn {
       return;
     }
     if (!hasLocationPermission(context)) {
-      // Denied from the start: the alert just says "not available". Revoked during the trip: updates are paused.
+      // Denied from the start: the alert just says "not available". Revoked during the trip (a location was had, which
+      // needs the permission): updates are paused. An alert edit alone (battery, Add time) proves nothing.
       stopService();
-      setPaused(r, lastFix != null || r.lastEditAt != 0);
+      setPaused(r, lastFix != null || r.lastFixAt != 0);
       return;
     }
     if (XgramCheckInService.isRunning()) {
