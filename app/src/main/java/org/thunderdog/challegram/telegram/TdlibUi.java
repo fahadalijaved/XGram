@@ -1610,6 +1610,13 @@ public class TdlibUi extends Handler {
       tdlib.runOnUiThread(() -> addToGroup(context, userId));
       return;
     }
+    if (tdlib.cache().userBot(userId)) {
+      // XGram: groups and channels, several at once, as an admin with every right when chosen
+      com.fahadali.xgram.chats.XgramAddBotController addBot = new com.fahadali.xgram.chats.XgramAddBotController(context.context(), context.tdlib());
+      addBot.setArguments(userId);
+      context.context().navigation().navigateTo(addBot);
+      return;
+    }
     ChatsController c = new ChatsController(context.context(), context.tdlib());
     c.setArguments(new ChatsController.Arguments(ChatFilter.groupsInviteFilter(tdlib), new ChatsController.PickerDelegate() {
       @Override

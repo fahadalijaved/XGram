@@ -81,6 +81,8 @@ public final class XgramSettings {
   public static final String KEY_HIDE_LOCK_BUTTON = "xgram_hide_lock_button";
   /** Message menu: a popup next to the message (Telegram) instead of the sheet. */
   public static final String KEY_MESSAGE_POPUP = "xgram_message_popup";
+  /** A bot's profile → Add to group or channel: as an admin in groups too (channels always), with every right. */
+  public static final String KEY_ADD_BOT_ADMIN = "xgram_add_bot_admin", KEY_ADD_BOT_ALL_RIGHTS = "xgram_add_bot_all_rights";
 
   public static final String INPUT_BUTTON_COMMANDS = "commands";
   public static final String INPUT_BUTTON_CAMERA = "camera";
@@ -582,6 +584,24 @@ public final class XgramSettings {
 
   public void setMessagePopup (boolean value) {
     put(KEY_MESSAGE_POPUP, value);
+  }
+
+  /** Add to group or channel: the bot joins groups as an admin too (channels always take bots as admins). */
+  public boolean addBotAsAdmin () {
+    return pmc().getBoolean(KEY_ADD_BOT_ADMIN, false);
+  }
+
+  public void setAddBotAsAdmin (boolean value) {
+    put(KEY_ADD_BOT_ADMIN, value);
+  }
+
+  /** Add to group or channel: an admin bot gets every right the user can give (on by default), or the ones it asks for. */
+  public boolean addBotAllRights () {
+    return pmc().getBoolean(KEY_ADD_BOT_ALL_RIGHTS, true);
+  }
+
+  public void setAddBotAllRights (boolean value) {
+    put(KEY_ADD_BOT_ALL_RIGHTS, value);
   }
 
   // Network

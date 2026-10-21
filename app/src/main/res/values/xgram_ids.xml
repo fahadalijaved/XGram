@@ -121,6 +121,11 @@
   <item type="id" name="btn_xgramLockButton" />
   <item type="id" name="btn_xgramMessagePopup" />
   <item type="id" name="btn_xgramPopupDetails" />
+  <item type="id" name="btn_xgramPopupBack" />
+  <item type="id" name="btn_xgramPopupViewer" />
+  <item type="id" name="controller_xgramAddBot" />
+  <item type="id" name="btn_xgramAddBotAdmin" />
+  <item type="id" name="btn_xgramAddBotAllRights" />
   <item type="id" name="controller_xgramInputButtons" />
   <item type="id" name="btn_xgramTapToRecord" />
   <item type="id" name="btn_xgramChatHistory" />

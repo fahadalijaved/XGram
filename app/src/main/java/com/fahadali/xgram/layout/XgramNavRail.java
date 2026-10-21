@@ -363,7 +363,22 @@ public final class XgramNavRail {
 
   /** Activity is one of the rail's destinations: while it is on, unless it is hidden in the side menu (Side menu items). */
   public static boolean hasActivityDestination () {
-    return com.fahadali.xgram.activity.XgramActivity.isOn() && !XgramSettings.instance().drawerItemHidden("activity");
+    final XgramSettings settings = XgramSettings.instance();
+    if (!com.fahadali.xgram.activity.XgramActivity.isOn()) {
+      return false;
+    }
+    if (XgramExpressive.isEnabled() && settings.bottomNav()) {
+      // With the navigation bar on, the rail is its wide window form: Activity exactly when it is one of the bar's
+      // tabs (its 4 tab limit included; hiding it in the side menu doesn't drop it then), not just because it is on.
+      // The header's bell opens it otherwise.
+      for (int dest : XgramNavToolbar.tabDests()) {
+        if (dest == DEST_ACTIVITY) {
+          return true;
+        }
+      }
+      return false;
+    }
+    return !settings.drawerItemHidden("activity");
   }
 
   /** Whether the menu button and {@code count} destinations fit a window {@code heightDp} tall above its bottom inset. */

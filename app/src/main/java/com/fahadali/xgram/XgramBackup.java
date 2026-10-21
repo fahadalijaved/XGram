@@ -64,6 +64,8 @@ public final class XgramBackup {
     XgramSettings.KEY_INPUT_ATTACH_TYPING, XgramSettings.KEY_AVATAR_AT_LAST,
     // Lock button in the chat list (Passcode lock), Popup menu (Message menu)
     XgramSettings.KEY_HIDE_LOCK_BUTTON, XgramSettings.KEY_MESSAGE_POPUP,
+    // Add to group or channel (a bot's profile): as an admin, with every right
+    XgramSettings.KEY_ADD_BOT_ADMIN, XgramSettings.KEY_ADD_BOT_ALL_RIGHTS,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)

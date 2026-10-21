@@ -5394,8 +5394,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     });
   }
 
-  // XGram: Message menu → Popup menu. Popups open one over another (More's page over the menu while it closes): the
-  // keyboard steps aside with the first and comes back after the last.
+  // XGram: Message menu → Popup menu. Popups open one over another (More's page over the menu while it closes). The
+  // keyboard stays open under them (the popup keeps above it), so nothing about it changes.
   private int xgramPopupCount;
 
   private @Nullable com.fahadali.xgram.chats.XgramMessagePopup.Handle xgramShowMessagePopup (MessageContext messageContext, Options messageOptions, OptionDelegate messageHandler) {
@@ -5406,40 +5406,24 @@ public class MessagesController extends ViewController<MessagesController.Argume
       public void onPopupOpen () {
         if (xgramPopupCount++ == 0) {
           isMessageOptionsVisible = true;
-          prepareToShowMessageOptions();
         }
-        hideCursorsForInputView();
       }
 
       @Override
-      public void onPopupClosed (boolean toSheet) {
+      public void onPopupClosed () {
         if (xgramPopupCount > 0 && --xgramPopupCount == 0) {
           isMessageOptionsVisible = false;
-          if (!toSheet) {
-            // as the sheet's dismiss does: the emoji panel leaves its message menu state, the keyboard comes back
-            optimizeEmojiLayoutForOptionsWindow(false);
-            onHideMessageOptions();
-          }
         }
       }
 
       @Override
-      public void openSheet (boolean picker) {
+      public void openReactionPicker () {
         if (msg.isDestroyed()) {
           return;
         }
-        // The sheet takes over the keyboard state saved when the popup opened (the emoji panel holds its place meanwhile)
-        final boolean keyboard = needShowKeyboardAfterHideMessageOptions, emoji = needShowEmojiKeyboardAfterHideMessageOptions;
-        // The picker: the menu's sheet with its picker open. Who reacted and who viewed: the sheet of those pages only.
-        PopupLayout sheet = picker ? showMessageOptions(messageOptions, msg, null, messageHandler) : showMessageOptions(null, msg, null, messageHandler);
-        needShowKeyboardAfterHideMessageOptions = keyboard;
-        needShowEmojiKeyboardAfterHideMessageOptions = emoji;
-        if (sheet == null) {
-          optimizeEmojiLayoutForOptionsWindow(false);
-          onHideMessageOptions();
-          return;
-        }
-        if (picker && sheet.getBoundController() instanceof MessageOptionsPagerController) {
+        // The menu's sheet with its whole picker open (custom emoji, search); the sheet minds the keyboard itself
+        PopupLayout sheet = showMessageOptions(messageOptions, msg, null, messageHandler);
+        if (sheet != null && sheet.getBoundController() instanceof MessageOptionsPagerController) {
           ((MessageOptionsPagerController) sheet.getBoundController()).xgramExpandPickerOnShow();
         }
       }

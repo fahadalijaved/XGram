@@ -634,10 +634,9 @@ public class ProfileController extends ViewController<ProfileController.Args> im
           strings.append(R.string.EditBotDescription);
         }*/
       }
-      if (((TdApi.UserTypeBot) user.type).canJoinGroups) {
-        ids.append(R.id.more_btn_addToGroup);
-        strings.append(R.string.BotInvite);
-      }
+      // XGram: channels take any bot (as an admin), so every bot can be added somewhere
+      ids.append(R.id.more_btn_addToGroup);
+      strings.append(R.string.XgramAddBotTitle);
     }
 
     if (xgramCanVideoCall()) {
