@@ -249,9 +249,13 @@ public class NavigationProcessor extends Handler {
         }
 
         if (next != null && !next.xgramKeepsWarm()) { // XGram M3E: a warm tab screen leaves alive (XgramNavToolbar)
-          next.attachNavigationController(navigation);
-          next.destroy();
-          next.detachNavigationController();
+          if (NavigationController.XGRAM_DEFER_POP_DESTROY) {
+            navigation.xgramDestroyAfterFrame(next); // XGram, frame drops: after the final frame, not inside the end callback
+          } else {
+            next.attachNavigationController(navigation);
+            next.destroy();
+            next.detachNavigationController();
+          }
         }
 
         clearAnimationDelayed();

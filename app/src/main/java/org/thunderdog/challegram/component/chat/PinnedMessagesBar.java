@@ -22,6 +22,7 @@ import android.widget.FrameLayout;
 import androidx.annotation.CallSuper;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -111,6 +112,7 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     addView(showAllButton);
 
     recyclerView = (CustomRecyclerView) Views.inflate(context, R.layout.recycler_custom, null);
+    recyclerView.setHasFixedSize(true); // XGram: the bar measures it exactly (onMeasure), so item changes don't lay out the whole window
     recyclerView.setItemAnimator(itemAnimator);
     recyclerView.setOverScrollMode(Config.HAS_NICE_OVER_SCROLL_EFFECT ? RecyclerView.OVER_SCROLL_IF_CONTENT_SCROLLS : RecyclerView.OVER_SCROLL_NEVER);
     recyclerView.setVerticalScrollBarEnabled(false);
@@ -390,14 +392,44 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     int newHeight = getTotalHeight();
     if (newHeight != lastKnownViewHeight) {
       lastKnownViewHeight = newHeight;
-      requestLayout();
+      // XGram: the bar takes its new height in place (xgramResizeInPlace) instead of a requestLayout() on every frame of
+      // the expand and count animations, which measured and laid out the whole window each frame
+      final boolean inPlace = xgramCanResizeInPlace(newHeight);
+      if (!inPlace) {
+        requestLayout();
+      }
       onViewportChanged();
+      if (inPlace) {
+        xgramResizeInPlace();
+      }
 
       float expand = getExpandFactor();
       if (expand == 1f || expand == 0f) {
         updateContentInsets();
       }
     }
+  }
+
+  /**
+   * XGram: the bar can size itself without a layout pass: it is laid out and shown in the chat's bar stack
+   * (CollapseListView, which places its bars by translation and is as tall as the chat), and the new height fits in it.
+   */
+  private boolean xgramCanResizeInPlace (int newHeight) {
+    if (getVisibility() != View.VISIBLE || !(getParent() instanceof org.thunderdog.challegram.widget.CollapseListView) ||
+      isLayoutRequested() || (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR2 && isInLayout()) ||
+      !androidx.core.view.ViewCompat.isLaidOut(this) || getWidth() <= 0) {
+      return false;
+    }
+    final View parent = (View) getParent();
+    return getTop() + newHeight <= parent.getHeight();
+  }
+
+  /** XGram: what the next layout pass would do for the bar alone: measure it (and its children) and lay it out where it is. */
+  private void xgramResizeInPlace () {
+    final int left = getLeft(), top = getTop(), right = getRight();
+    forceLayout(); // measures of past sizes are cached; the flag goes with the layout() below and reaches no parent
+    measure(MeasureSpec.makeMeasureSpec(right - left, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(lastKnownViewHeight, MeasureSpec.EXACTLY));
+    layout(left, top, right, top + getMeasuredHeight());
   }
 
   private float getExpandFactor () {
@@ -640,15 +672,126 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
   @Override
   public void onTotalCountChanged (ListManager<TdApi.Message> list, int totalCount) {
+    if (xgramHoldCount(totalCount)) {
+      return; // XGram
+    }
+    xgramApplyTotalCount(totalCount);
+  }
+
+  private void xgramApplyTotalCount (int totalCount) {
     if (totalCount != 0 || isExpanded.getFloatValue() == 0f) {
-      canExpand.setValue(totalCount > 1, true);
+      canExpand.setValue(totalCount > 1, !animationsDisabled); // XGram: no animation while the chat isn't focused (the chevron redrew mid-slide)
     }
     float toCount = Math.max(0f, Math.min(3f, totalCount - 1));
-    if (getExpandFactor() > 0f) {
+    if (getExpandFactor() > 0f && !animationsDisabled) { // XGram: same
       countAnimator.animateTo(toCount);
     } else {
       countAnimator.forceFactor(toCount);
     }
+  }
+
+  // XGram: held while its chat isn't focused (it slides in, or another screen covers it). The bar keeps what it shows:
+  // changes of its list wait, and it catches up with the list when released (MessagesController.onFocusStateChanged),
+  // so nothing in the chat's layer is drawn again mid-slide. Bars that nobody holds (the composer's) work as before.
+  private boolean xgramHeld, xgramHeldItemsChanged, xgramHeldCountChanged;
+  private int xgramHeldCount;
+
+  public void xgramSetHeld (boolean held) {
+    if (this.xgramHeld != held) {
+      this.xgramHeld = held;
+      if (!held) {
+        xgramCatchUp();
+      }
+    }
+  }
+
+  private boolean xgramHoldItems () {
+    if (xgramHeld) {
+      xgramHeldItemsChanged = true;
+      return true;
+    }
+    return false;
+  }
+
+  private boolean xgramHoldCount (int totalCount) {
+    if (xgramHeld) {
+      xgramHeldCountChanged = true;
+      xgramHeldCount = totalCount;
+      return true;
+    }
+    return false;
+  }
+
+  /** The bar was just set from its list: nothing waits. */
+  private void xgramResetHeld () {
+    xgramHeldItemsChanged = false;
+    xgramHeldCountChanged = false;
+  }
+
+  private void xgramCatchUp () {
+    final boolean itemsChanged = xgramHeldItemsChanged, countChanged = xgramHeldCountChanged;
+    xgramResetHeld();
+    if (messageList == null) {
+      return;
+    }
+    if (itemsChanged) {
+      xgramSyncItems();
+    }
+    if (countChanged) {
+      xgramApplyTotalCount(xgramHeldCount);
+    }
+  }
+
+  /** The rows become the list's messages again as changes (a row whose message object is still there stays as it is). */
+  private void xgramSyncItems () {
+    final List<ListItem> shown = messagesAdapter.getItems();
+    if (messageList.getCount() == 0) {
+      needsClear = !shown.isEmpty(); // as onItemRemoved does with the last row: it stays until the next one comes
+      return;
+    }
+    final List<ListItem> oldItems = new ArrayList<>(shown);
+    final List<ListItem> newItems = new ArrayList<>(messageList.getCount());
+    for (TdApi.Message message : messageList) {
+      ListItem kept = null;
+      if (!needsClear) {
+        for (ListItem item : oldItems) {
+          Entry entry = (Entry) item.getData();
+          if (entry != null && entry.message == message && entry.quote == null) {
+            kept = item;
+            break;
+          }
+        }
+      }
+      newItems.add(kept != null ? kept : itemOf(messageList.tdlib(), message));
+    }
+    DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+      @Override
+      public int getOldListSize () {
+        return oldItems.size();
+      }
+
+      @Override
+      public int getNewListSize () {
+        return newItems.size();
+      }
+
+      @Override
+      public boolean areItemsTheSame (int oldItemPosition, int newItemPosition) {
+        Entry a = (Entry) oldItems.get(oldItemPosition).getData();
+        Entry b = (Entry) newItems.get(newItemPosition).getData();
+        return a != null && b != null && a.message != null && b.message != null &&
+          a.message.chatId == b.message.chatId && a.message.id == b.message.id;
+      }
+
+      @Override
+      public boolean areContentsTheSame (int oldItemPosition, int newItemPosition) {
+        return oldItems.get(oldItemPosition) == newItems.get(newItemPosition);
+      }
+    }, false);
+    needsClear = false;
+    shown.clear();
+    shown.addAll(newItems);
+    diff.dispatchUpdatesTo(messagesAdapter);
   }
 
   public int getTotalHeight () {
@@ -764,6 +907,7 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
     if (this.messageList == messageList)
       return;
     clearMessageList();
+    xgramResetHeld(); // XGram: the bar is set from its list below
     this.messageList = messageList;
     collapse(false);
     canExpand.setValue(messageList != null && messageList.getTotalCount() > 1, false);
@@ -811,6 +955,7 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
       }
     }
     clearMessageList();
+    xgramResetHeld(); // XGram: a fixed list, nothing to catch up with
     staticList = entries;
     collapse(false);
     canExpand.setValue(false, false);
@@ -873,6 +1018,9 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
   @Override
   public void onItemsAdded (ListManager<TdApi.Message> list, List<TdApi.Message> items, int startIndex, boolean isInitialChunk) {
+    if (xgramHoldItems()) {
+      return; // XGram: shown when the bar is released (xgramSyncItems)
+    }
     ListItem[] messageList = new ListItem[items.size()];
     int index = 0;
     for (TdApi.Message message : items) {
@@ -889,6 +1037,9 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
   @Override
   public void onItemAdded (ListManager<TdApi.Message> list, TdApi.Message item, int toIndex) {
+    if (xgramHoldItems()) {
+      return; // XGram
+    }
     if (needsClear || messagesAdapter.getItems().isEmpty()) {
       needsClear = false;
       messagesAdapter.setItems(new ListItem[] {
@@ -905,6 +1056,9 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
   @Override
   public void onItemMoved (ListManager<TdApi.Message> list, TdApi.Message item, int fromIndex, int toIndex) {
+    if (xgramHoldItems()) {
+      return; // XGram
+    }
     messagesAdapter.moveItem(fromIndex, toIndex);
   }
 
@@ -912,6 +1066,9 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
   @Override
   public void onItemRemoved (ListManager<TdApi.Message> list, TdApi.Message removedItem, int fromIndex) {
+    if (xgramHoldItems()) {
+      return; // XGram
+    }
     if (fromIndex == 0 && messagesAdapter.getItems().size() == 1) {
       needsClear = true;
     } else {
@@ -921,6 +1078,19 @@ public class PinnedMessagesBar extends ViewGroup implements Destroyable, Message
 
   @Override
   public void onItemChanged (ListManager<TdApi.Message> list, TdApi.Message item, int index, int cause) {
+    if (xgramHoldItems()) {
+      return; // XGram
+    }
+    // XGram: the list put a new object of this message in its place (it changed while the chat was closed, see
+    // ListManager.xgramRevalidate): the row takes it, so its preview is built again
+    ListItem shown = messagesAdapter.getItem(index);
+    Entry shownEntry = shown != null && shown.getData() instanceof Entry ? (Entry) shown.getData() : null;
+    if (shownEntry != null && shownEntry.message != null && shownEntry.message != item &&
+      shownEntry.message.chatId == item.chatId && shownEntry.message.id == item.id) {
+      messagesAdapter.getItems().set(index, itemOf(list.tdlib(), item));
+      messagesAdapter.notifyItemChanged(index);
+      return;
+    }
     if (cause == MessageListManager.CAUSE_CONTENT_CHANGED) {
       messagesAdapter.notifyItemChanged(index);
     }

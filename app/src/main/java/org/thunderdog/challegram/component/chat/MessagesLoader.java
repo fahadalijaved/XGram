@@ -1265,8 +1265,20 @@ public class MessagesLoader implements Client.ResultHandler {
     return loadMore(fromTop, fromTop ? CHUNK_SIZE_BIG : CHUNK_SIZE_BOTTOM, false);
   }
 
+  /** XGram, frame drops: more history that was asked for while the chat slid in (MessagesManager#xgramOnSlideEnd). */
+  public void xgramLoadPostponed (boolean fromTop, int count, boolean onlyLocal) {
+    loadMore(fromTop, count, onlyLocal);
+  }
+
   private boolean loadMore (boolean fromTop, int count, boolean onlyLocal) {
     if (isLoading || getChatId() == 0 || lastHandler != null) {
+      return false;
+    }
+    if (manager.isSlideRunning()) {
+      // XGram, frame drops: no more history while the chat slides in (it would change the list inside the sliding
+      // layer): asked for once the chat has focus. What the open still waits for (its first page, or the rest of a short
+      // one) is asked for before the slide is released, so it never waits here.
+      manager.xgramPostponeLoad(fromTop, count, onlyLocal);
       return false;
     }
     if (fromTop) {
@@ -1497,7 +1509,7 @@ public class MessagesLoader implements Client.ResultHandler {
 
     if (!combineWithMessages.isEmpty()) {
       final boolean bottom = loadingMode == MODE_MORE_BOTTOM;
-      UI.post(() -> {
+      final Runnable xgramCombine = () -> {
         for (TdApi.Message message : combineWithMessages) {
           if (bottom) {
             bottomMessage.combineWith(message, true);
@@ -1505,7 +1517,9 @@ public class MessagesLoader implements Client.ResultHandler {
             topMessage.combineWith(message, false);
           }
         }
-      });
+      };
+      // XGram, frame drops: an album edge completed by more history waits, like that history, while the chat slides in
+      UI.post(() -> manager.xgramRunAfterSlide(xgramCombine));
     }
 
     boolean unreadFound = !needFindUnread;
@@ -1705,12 +1719,22 @@ public class MessagesLoader implements Client.ResultHandler {
           if (Log.isEnabled(Log.TAG_MESSAGES_LOADER)) {
             Log.i(Log.TAG_MESSAGES_LOADER, "Bottom end reached.");
           }
-          UI.post(() -> {
+          final Runnable xgramBottomEnd = () -> {
             synchronized (lock) {
               isLoading = false;
             }
             manager.onBottomEndLoaded();
             manager.onBottomEndChecked();
+          };
+          // XGram, frame drops: waits with the rest of the history while the chat slides in (see the display below)
+          UI.post(() -> {
+            if (!manager.xgramDeferWhileSliding(() -> {
+              if (contextId == currentContextId) {
+                xgramBottomEnd.run();
+              }
+            })) {
+              xgramBottomEnd.run();
+            }
           });
           return;
         }
@@ -1733,13 +1757,23 @@ public class MessagesLoader implements Client.ResultHandler {
           if (Log.isEnabled(Log.TAG_MESSAGES_LOADER)) {
             Log.i(Log.TAG_MESSAGES_LOADER, "Top end reached.");
           }
-          UI.post(() -> {
+          final Runnable xgramTopEnd = () -> {
             synchronized (lock) {
               isLoading = false;
             }
             manager.onTopEndLoaded();
             if (!canLoadBottom) {
               manager.onBottomEndChecked();
+            }
+          };
+          // XGram, frame drops: waits with the rest of the history while the chat slides in (see the display below)
+          UI.post(() -> {
+            if (!manager.xgramDeferWhileSliding(() -> {
+              if (contextId == currentContextId) {
+                xgramTopEnd.run();
+              }
+            })) {
+              xgramTopEnd.run();
             }
           });
           return;
@@ -1763,7 +1797,7 @@ public class MessagesLoader implements Client.ResultHandler {
     final TGMessage scrollItemView = scrollItem;
     boolean unreadFoundFinal = unreadFound;
 
-    UI.post(() -> {
+    final Runnable xgramDisplay = () -> {
       if (contextId != currentContextId || getChatId() != chatId) {
         return;
       }
@@ -1782,7 +1816,14 @@ public class MessagesLoader implements Client.ResultHandler {
 
       if (loadingLocal) {
         if (items.isEmpty()) {
-          manager.onNetworkRequestSent();
+          // XGram, frame drops: a topic the group's cache had nothing of waits for its own page, as a chat with a short
+          // cached page already does (willRepeat): it is laid out in the still frame before the slide, not mid-slide.
+          // The open's 500 ms timeout still applies; an empty page or an error ends the wait in displayMessages.
+          boolean xgramWaitForServer = topicId instanceof TdApi.MessageTopicForum && specialMode == SPECIAL_MODE_NONE &&
+            (loadingMode == MODE_INITIAL || loadingMode == MODE_REPEAT_INITIAL);
+          if (!xgramWaitForServer) {
+            manager.onNetworkRequestSent();
+          }
           synchronized (lock) {
             isLoading = false;
           }
@@ -1822,6 +1863,16 @@ public class MessagesLoader implements Client.ResultHandler {
         manager.onBottomEndChecked();
       }
       manager.ensureContentHeight();
+    };
+    // XGram, frame drops: while the chat slides in, more history (MODE_MORE_TOP/MORE_BOTTOM) and a reload at another
+    // message (MODE_REPEAT_INITIAL) wait in MessagesManager's queue, in order with the other changes, and are shown once
+    // the chat has focus; the loader stays busy until then, so nothing is asked for twice. The first page an open waits
+    // for (MODE_INITIAL) is always shown at once.
+    UI.post(() -> {
+      if (loadingMode != MODE_INITIAL && manager.xgramDeferWhileSliding(xgramDisplay)) {
+        return;
+      }
+      xgramDisplay.run();
     });
   }
 

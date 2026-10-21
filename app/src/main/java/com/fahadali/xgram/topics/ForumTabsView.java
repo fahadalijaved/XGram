@@ -217,7 +217,7 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
         list.loadMore();
       } else {
         // A cached list may be stale (updates don't carry order or last messages): fetch its first page again.
-        list.resyncFirstPage();
+        resyncWhenFocused(list);
       }
       adapter.notifyDataSetChanged();
       scrollToSelected(false);
@@ -227,6 +227,32 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
         adapter.notifyDataSetChanged();
       }
       setSelectedTab(selectedTab);
+    }
+  }
+
+  /**
+   * Frame drops: the first page of a cached list is fetched again once the chat screen has focus (at once when it has),
+   * not while the chat slides in: the page would reorder and rebind the strip inside the sliding screen's layer, which
+   * then re-renders on every frame. The strip shows the cached list meanwhile.
+   */
+  @Nullable private ForumTopicList resyncPending;
+
+  private void resyncWhenFocused (ForumTopicList list) {
+    if (parent.isFocused()) {
+      resyncPending = null;
+      list.resyncFirstPage();
+      return;
+    }
+    final boolean listening = resyncPending != null;
+    resyncPending = list;
+    if (!listening) {
+      parent.addOneShotFocusListener(() -> {
+        ForumTopicList pending = resyncPending;
+        resyncPending = null;
+        if (pending != null && pending == this.list) {
+          pending.resyncFirstPage();
+        }
+      });
     }
   }
 
@@ -300,6 +326,7 @@ public final class ForumTabsView extends RecyclerView implements ForumTopicList.
   }
 
   public void performDestroy () {
+    resyncPending = null; // a resync that waited for focus belongs to the list that goes
     if (list != null) {
       // The list stays cached for the next visit.
       list.removeListener(this);

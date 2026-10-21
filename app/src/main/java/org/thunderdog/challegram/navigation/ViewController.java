@@ -448,7 +448,7 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     xgramKeepInsetOnDetach = false;
   }
 
-  /** XGram M3E: set by NavigationController#removeChildWrapper for the stack's base screen a toolbar tab screen covers (it comes back as it was). */
+  /** XGram: set by NavigationController#removeChildWrapper for a screen still in the stack, only covered (it comes back as it was). */
   boolean xgramKeepInsetOnDetach;
 
   protected final NavigationStack navigationStack () {

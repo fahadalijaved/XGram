@@ -22,6 +22,7 @@ import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.graphics.SurfaceTexture;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Handler;
@@ -165,6 +166,7 @@ public final class XgramInlineVideo {
       return;
     }
     stop();
+    releaseParkedNow(); // XGram, frame drops: a parked player goes too
     BaseActivity context = UI.getUiContext();
     if (context == null) {
       return;
@@ -374,7 +376,17 @@ public final class XgramInlineVideo {
     Session s = current;
     if (!isFocused) {
       if (s != null && s.controller == controller) {
-        stop();
+        // XGram, frame drops: the chat loses focus as a slide or a swipe starts. A release now would wait on the playback
+        // thread in the first frames, so the player is parked (silent and hidden; the badge and play button are back at
+        // once, as after a release) and released when the transition is over.
+        current = null;
+        releaseParkedNow();
+        parkedSession = s;
+        parkedNav = controller.navigationController(); // still attached here; detached once its transition ends
+        s.park();
+        s.message.invalidate();
+        handler.removeCallbacks(releaseParked);
+        handler.post(releaseParked);
       }
     } else if (isEnabled() && startsAutomatically()) {
       scheduleAutoplay(controller);
@@ -405,8 +417,61 @@ public final class XgramInlineVideo {
     }
   }
 
+  /** XGram, frame drops: the player of a chat that lost focus, parked until its transition is over. Never resumed. */
+  private static @Nullable Session parkedSession;
+  /** The parked chat's NavigationController, kept from park time: the chat itself loses it when its transition ends. */
+  private static @Nullable NavigationController parkedNav;
+
+  private static final Runnable releaseParked = new Runnable() {
+    @Override
+    public void run () {
+      Session s = parkedSession;
+      if (s == null) {
+        return;
+      }
+      if (isAnyNavigationAnimating(s)) {
+        handler.postDelayed(this, 100); // never inside a slide or a drag, also one that starts after the chat is detached
+        return;
+      }
+      parkedSession = null;
+      parkedNav = null;
+      s.release();
+    }
+  };
+
+  private static boolean isAnyNavigationAnimating (Session s) {
+    if (isAnimating(parkedNav) || isAnimating(s.controller != null ? s.controller.navigationController() : null)) {
+      return true;
+    }
+    BaseActivity context = UI.getUiContext();
+    if (context == null) {
+      return false;
+    }
+    if (isAnimating(context.navigation())) {
+      return true;
+    }
+    XgramTwoPane twoPane = context.xgramTwoPane();
+    ViewController<?> leftMain = twoPane != null ? twoPane.leftMain() : null;
+    return leftMain != null && isAnimating(leftMain.navigationController());
+  }
+
+  private static boolean isAnimating (@Nullable NavigationController navigation) {
+    return navigation != null && navigation.isAnimating();
+  }
+
+  private static void releaseParkedNow () {
+    Session s = parkedSession;
+    if (s != null) {
+      parkedSession = null;
+      parkedNav = null;
+      handler.removeCallbacks(releaseParked);
+      s.release();
+    }
+  }
+
   private static boolean start (MediaWrapper wrapper, MessageViewGroup group, boolean byUser) {
     stop();
+    releaseParkedNow(); // XGram, frame drops: a tap or an autoplay, not a transition
     Session s = new Session(wrapper, group, byUser);
     current = s;
     try {
@@ -609,6 +674,11 @@ public final class XgramInlineVideo {
     /** Started or touched by the user: plays once, with sound, and isn't replaced by autoplay. */
     boolean engaged;
     boolean muted, inCall, ended, buffering, released, screenFlag;
+    /** XGram, frame drops: silent and hidden after its chat lost focus, waiting for release() (see park()). */
+    boolean parked;
+    /** Parked: the player's own listener on the TextureView and its surface, and that surface once the view left the window. */
+    private @Nullable TextureView.SurfaceTextureListener playerTextureListener;
+    private @Nullable SurfaceTexture playerTexture, orphanTexture;
     private int ticks;
     /** Hide controls while playing: the last touch, and how long after it the controls fade (XgramAutoHide). */
     private long chromeTouchMs, chromeDelayMs = XgramAutoHide.DELAY_MS;
@@ -693,6 +763,51 @@ public final class XgramInlineVideo {
       }
     }
 
+    /**
+     * XGram, frame drops: the chat lost focus (a slide or a swipe starts). Silent and out of sight now, with nothing that
+     * waits on the playback thread: the player keeps its surface, even when the chat leaves the window at the end of the
+     * transition (the TextureView's surface is kept alive for it). release() follows once the transition is over.
+     */
+    void park () {
+      if (released || parked) {
+        return;
+      }
+      parked = true;
+      handler.removeCallbacks(tick);
+      ExoPlayer player = this.player;
+      if (player != null) {
+        player.removeListener(this); // nothing from the player reaches the chat any more, as after a release
+        player.setPlayWhenReady(false); // the sound stops; does not wait
+        TextureView textureView = layer.textureView;
+        playerTexture = textureView.getSurfaceTexture();
+        playerTextureListener = textureView.getSurfaceTextureListener();
+        textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+          @Override
+          public void onSurfaceTextureAvailable (@NonNull SurfaceTexture surface, int width, int height) { }
+
+          @Override
+          public void onSurfaceTextureSizeChanged (@NonNull SurfaceTexture surface, int width, int height) { }
+
+          @Override
+          public boolean onSurfaceTextureDestroyed (@NonNull SurfaceTexture surface) {
+            if (surface != playerTexture) {
+              return true;
+            }
+            // The chat left the window (the end of the transition): the player's own listener would detach its output
+            // here and wait for it. The surface stays alive instead; release() detaches it, then frees it.
+            orphanTexture = surface;
+            return false;
+          }
+
+          @Override
+          public void onSurfaceTextureUpdated (@NonNull SurfaceTexture surface) { }
+        });
+      }
+      layer.setVisibility(View.INVISIBLE);
+      // The keep-screen-on flag goes in release(): changing a window flag makes the next frame relayout the window
+      // over Binder, and the screen does not sleep within a transition anyway.
+    }
+
     void release () {
       if (released) {
         return;
@@ -710,6 +825,11 @@ public final class XgramInlineVideo {
           positions.remove(file.id);
         }
         player.removeListener(this);
+        if (parked) {
+          // XGram, frame drops: the player's own listener back, so clearVideoTextureView unhooks it as usual
+          layer.textureView.setSurfaceTextureListener(playerTextureListener);
+          playerTextureListener = null;
+        }
         player.clearVideoTextureView(layer.textureView);
         player.release();
       }
@@ -722,6 +842,11 @@ public final class XgramInlineVideo {
       ViewParent parent = layer.getParent();
       if (parent instanceof ViewGroup) {
         ((ViewGroup) parent).removeView(layer);
+      }
+      SurfaceTexture orphan = orphanTexture;
+      orphanTexture = playerTexture = null;
+      if (orphan != null) {
+        orphan.release(); // XGram, frame drops: kept alive while parked (see park()); the player has let go of it now
       }
       group = null;
       message.invalidate(); // Telegram X's badge and play button come back
@@ -1035,6 +1160,8 @@ public final class XgramInlineVideo {
       handler.post(() -> {
         if (current == this) {
           stop();
+        } else if (parkedSession == this) {
+          releaseParkedNow(); // XGram, frame drops: the activity paused or went away while parked
         }
       });
     }

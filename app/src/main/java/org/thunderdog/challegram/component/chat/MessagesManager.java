@@ -175,7 +175,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   @Override
   public void onChatMemberStatusChange (long chatId, TdApi.ChatMember member) {
-    tdlib.ui().post(() -> {
+    tdlib.ui().post(() -> xgramRunAfterSlide(() -> { // XGram, frame drops: after the slide, in order with the admin list
       if (loader.getChatId() == chatId && chatAdmins != null && member.memberId.getConstructor() == TdApi.MessageSenderUser.CONSTRUCTOR) {
         final long userId = ((TdApi.MessageSenderUser) member.memberId).userId;
         int existingIndex = chatAdmins.indexOfKey(userId);
@@ -205,7 +205,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
           updateAdministratorSigns();
         }
       }
-    });
+    }));
   }
 
   public void setChatAdmins (TdApi.ChatAdministrators administrators) {
@@ -213,8 +213,8 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     for (TdApi.ChatAdministrator admin : administrators.administrators) {
       chatAdmins.put(admin.userId, admin);
     }
-    this.chatAdmins = chatAdmins;
-    updateAdministratorSigns();
+    this.chatAdmins = chatAdmins; // XGram: messages parsed from now on take the signs at once,
+    xgramRunAfterSlide(this::updateAdministratorSigns); // the ones in the list once the chat has stopped sliding in (frame drops)
   }
 
   private void updateAdministratorSigns () {
@@ -543,6 +543,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   public void destroy (ViewController<?> context) {
     com.fahadali.xgram.chats.XgramAutoTranslate.forget(this); // XGram: the chat's messages leave the auto-translate queue
+    xgramResetSlide(); // XGram, frame drops: what waited for this chat's slide goes with the chat
     resetScroll();
     returnToMessageIds = null;
     highlightMode = 0;
@@ -553,9 +554,14 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     lastViewedReactionMessageId = 0;
     chatAdmins = null;
     if (pinnedMessages != null) {
+      if (xgramPinnedChatId != 0) {
+        xgramWritePinnedCache(pinnedMessages, xgramPinnedChatId, xgramPinnedTopicKey); // XGram: the bar as it was, for the next open
+      }
       pinnedMessages.performDestroy();
       pinnedMessages = null;
     }
+    xgramPinnedChatId = 0; // XGram
+    xgramPinnedSeeded = false; // XGram
     pinnedMessagesAvailable = false;
     hasVisibleProtectedContent = false;
     unsubscribeFromUpdates();
@@ -614,6 +620,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   // XGram: topicId narrows the search to one topic (Saved Messages by chat).
   public void openSearch (TdApi.Chat chat, @Nullable TdApi.MessageTopic topicId, String query, TdApi.MessageSender sender, TdApi.SearchMessagesFilter filter) {
+    xgramResetSlide(); // XGram, frame drops: changes held for the chat shown before don't belong to the found messages
     loader.setChat(chat, null, topicId, MessagesLoader.SPECIAL_MODE_SEARCH, filter);
     loader.setSearchParameters(query, sender, filter);
     adapter.setChatType(chat.type);
@@ -643,6 +650,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void openEventLog (TdApi.Chat chat) {
+    xgramResetSlide(); // XGram, frame drops
     loader.setChat(chat, null, null, MessagesLoader.SPECIAL_MODE_EVENT_LOG, null);
     adapter.setChatType(chat.type);
     loadFromStart();
@@ -709,7 +717,72 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     }
   }
 
+  // XGram: the pinned bar of a chat or forum topic comes from XgramPinnedCache: shown at once while the chat is set up,
+  // before it slides in (laid out in the still frame, part of the screen's layer, no pop-in mid-slide), and loaded again
+  // once the chat has focus (xgramOnFocusPinned), where only what changed moves. The live list writes the cache whenever
+  // it changes and before it goes (destroy). Not used for a restricted chat, nor when its newest message is dismissed.
+  private long xgramPinnedChatId, xgramPinnedTopicKey; // what the current list writes to (chat 0: nothing)
+  private boolean xgramPinnedSeeded; // the current list came from the cache and has not loaded again yet
+
+  private void xgramUseCachedPinned (long chatId, @Nullable TdApi.MessageTopic topicId) {
+    final MessageListManager list = this.pinnedMessages;
+    if (list == null || chatId == 0) {
+      return;
+    }
+    final long topicKey = com.fahadali.xgram.chats.XgramPinnedCache.topicKey(topicId);
+    this.xgramPinnedChatId = chatId;
+    this.xgramPinnedTopicKey = topicKey;
+    list.addChangeListener(new MessageListManager.ChangeListener() {
+      @Override
+      public void onListChanged (ListManager<TdApi.Message> changedList) {
+        xgramWritePinnedCache(list, chatId, topicKey);
+      }
+
+      @Override
+      public void onTotalCountChanged (ListManager<TdApi.Message> changedList, int totalCount) {
+        xgramWritePinnedCache(list, chatId, topicKey);
+      }
+    });
+    com.fahadali.xgram.chats.XgramPinnedCache.Entry entry = com.fahadali.xgram.chats.XgramPinnedCache.get(tdlib, chatId, topicKey);
+    if (entry == null || tdlib.chatRestricted(chatId) || tdlib.settings().isMessageDismissed(chatId, entry.newestMessageId())) {
+      return;
+    }
+    if (!list.xgramSeedFrom(com.fahadali.xgram.chats.XgramPinnedCache.messagesOf(entry), entry.totalCount)) {
+      return;
+    }
+    this.pinnedMessagesAvailable = true;
+    controller.showHidePinnedMessages(true, list, true);
+    if (controller.isFocused()) {
+      list.xgramRevalidate(); // nothing slides in (a forum tab switch): load again now
+    } else {
+      xgramPinnedSeeded = true;
+    }
+  }
+
+  private void xgramWritePinnedCache (MessageListManager list, long chatId, long topicKey) {
+    if (pinnedMessages == list && list.hasReceivedInitialChunk()) {
+      com.fahadali.xgram.chats.XgramPinnedCache.put(tdlib, chatId, topicKey, list);
+    }
+  }
+
+  /** XGram: the chat got focus (its slide is over): a pinned list from the cache loads again and takes the changes. */
+  public void xgramOnFocusPinned () {
+    if (xgramPinnedSeeded) {
+      xgramPinnedSeeded = false;
+      if (pinnedMessages != null) {
+        pinnedMessages.xgramRevalidate();
+      }
+    }
+  }
+
+  /** XGram: the pinned list the bar should show (null when there is none). */
+  public @Nullable MessageListManager xgramPinnedList () {
+    return pinnedMessages;
+  }
+
   private void initPinned (long chatId, @Nullable TdApi.MessageTopic topicId, int initialLoadCount, int loadCount) {
+    xgramPinnedChatId = 0; // XGram: a new list writes the cache only when xgramUseCachedPinned says so
+    xgramPinnedSeeded = false; // XGram
     // XGram: inside a forum topic, only the topic's pinned messages.
     this.pinnedMessages = new MessageListManager(tdlib, initialLoadCount, loadCount, pinnedMessageListener, chatId, 0, topicId instanceof TdApi.MessageTopicForum ? topicId : null, null, null, new TdApi.SearchMessagesFilterPinned());
     this.pinnedMessages.addMaxMessageIdListener(pinnedMessageAvailabilityChangeListener);
@@ -728,6 +801,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void openChat (TdApi.Chat chat, @Nullable ThreadInfo messageThread, @Nullable TdApi.MessageTopic topicId, TdApi.SearchMessagesFilter filter, MessagesController context, boolean areScheduled, boolean needPinnedMessages) {
+    xgramResetSlide(); // XGram, frame drops: what waited for the previous chat's slide goes with it
+    if (!controller.isFocused()) {
+      xgramArmSlide(); // XGram: this chat is set up to slide in (a forum tab switch happens in a focused chat: no slide)
+    }
     if (chat.id != 0) {
       if (Log.isEnabled(Log.TAG_MESSAGES_LOADER)) {
         Log.i(Log.TAG_MESSAGES_LOADER, "[CREATE] chatId:%d", chat.id);
@@ -736,7 +813,8 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       // readOneShot = true;
     }
     if (chat.id != 0 && messageThread == null && !areScheduled && needPinnedMessages) {
-      initPinned(chat.id, topicId, 10, 50);
+      initPinned(chat.id, topicId, com.fahadali.xgram.chats.XgramPinnedCache.MAX_MESSAGES /*10*/, 50);
+      xgramUseCachedPinned(chat.id, topicId); // XGram: the pinned bar from the cache, at once
     } else {
       this.pinnedMessages = null;
     }
@@ -1201,6 +1279,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void ensureContentHeight () {
+    if (isSlideRunning()) {
+      xgramEnsureHeightPostponed = true; // XGram, frame drops: checked again (and more history asked for) once the chat has focus
+      return;
+    }
     final int count = adapter.getMessageCount();
     if (count > 0 && (loader.canLoadTop() || loader.canLoadBottom())) {
       long messagesHeight = 0;
@@ -1252,6 +1334,120 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
     } else {
       awaitingForPinnedMessages = true;
     }
+  }
+
+  // XGram, frame drops: while a chat slides in, its screen is a hardware layer, and anything that changes the list
+  // re-renders the whole layer on every frame (stutter at 120 Hz). The slide runs from the moment the open's scheduled
+  // animation is released (the first page is in, or the open's timeout passed; also a navigation that didn't wait)
+  // until the chat gets focus (MessagesController#onFocus). Meanwhile what would change the chat (new messages, edits,
+  // deletions, reactions, read state, more history, admin signs, the bot info header) waits in xgramSlideQueue in the
+  // order it came, and is applied in one batch in the frame after the chat got focus (xgramOnSlideEnd, or earlier when
+  // another change comes first); history asked for meanwhile is asked for then. Only the first page the open waits for
+  // (MessagesLoader.MODE_INITIAL) is never held. The queue goes
+  // with the chat: destroy, or another chat, topic or search opened in this screen.
+  private boolean xgramSlideStarted; // the open's slide was released, and the chat hasn't had focus since
+  private int xgramSlideSerial; // which open the animation-ready listener belongs to
+  private final ArrayList<Runnable> xgramSlideQueue = new ArrayList<>();
+  private final ArrayList<TGMessage> xgramSlideQueuedMessages = new ArrayList<>(); // new messages waiting in the queue, never shown
+  private boolean xgramLoadPostponed, xgramLoadPostponedTop, xgramLoadPostponedLocal;
+  private int xgramLoadPostponedCount;
+  private boolean xgramEnsureHeightPostponed;
+
+  /** XGram: the chat is set up to slide in; the gate opens when the navigation releases the slide (executeAnimationReadyListeners). */
+  private void xgramArmSlide () {
+    final int serial = ++xgramSlideSerial;
+    controller.postOnAnimationReady(() -> {
+      if (serial == xgramSlideSerial && !controller.isFocused() && !controller.isDestroyed()) {
+        xgramSlideStarted = true;
+      }
+    });
+  }
+
+  /**
+   * XGram, frame drops: the chat slides in right now (between the release of its open's slide and its focus), so its
+   * content must not change. Also false once the navigation stopped animating without a focus, and off the UI thread.
+   * Not attached to the navigation yet counts as sliding: that is the moment between the release and the attach.
+   */
+  public boolean isSlideRunning () {
+    if (!xgramSlideStarted || !UI.inUiThread() || controller.isFocused() || controller.isDestroyed()) {
+      return false;
+    }
+    org.thunderdog.challegram.navigation.NavigationController navigation = controller.navigationController();
+    return navigation == null || navigation.isAnimating();
+  }
+
+  /**
+   * XGram, frame drops: {@code change} waits for the end of the slide when it runs (true: the caller stops there).
+   * Otherwise what still waits is applied first, so nothing is reordered, and the caller goes on (false).
+   */
+  public boolean xgramDeferWhileSliding (Runnable change) {
+    if (isSlideRunning()) {
+      xgramSlideQueue.add(change);
+      return true;
+    }
+    if (xgramSlideStarted && UI.inUiThread()) {
+      // the slide is over before xgramOnSlideEnd was called (it ended without a focus, or the chat has focus and the
+      // frame that calls it hasn't come yet): what waited goes first
+      xgramOnSlideEnd();
+    }
+    return false;
+  }
+
+  /** XGram: runs {@code change} now, or after the slide when it runs (see {@link #xgramDeferWhileSliding}). */
+  public void xgramRunAfterSlide (Runnable change) {
+    if (!xgramDeferWhileSliding(change)) {
+      change.run();
+    }
+  }
+
+  /** XGram: called by MessagesLoader instead of loading more history while the chat slides in (the first postponed request is kept). */
+  void xgramPostponeLoad (boolean fromTop, int count, boolean onlyLocal) {
+    if (!xgramLoadPostponed) {
+      xgramLoadPostponed = true;
+      xgramLoadPostponedTop = fromTop;
+      xgramLoadPostponedCount = count;
+      xgramLoadPostponedLocal = onlyLocal;
+    }
+  }
+
+  private void xgramFlushSlideQueue () {
+    xgramSlideQueuedMessages.clear(); // from here on they belong to the list (or are destroyed by updateNewMessage)
+    if (xgramSlideQueue.isEmpty()) {
+      return;
+    }
+    final ArrayList<Runnable> queue = new ArrayList<>(xgramSlideQueue);
+    xgramSlideQueue.clear();
+    for (Runnable change : queue) {
+      change.run();
+    }
+  }
+
+  /** XGram: the chat got focus (MessagesController#xgramOnFocusSettled, the next frame): what waited for the end of its slide, in order, in one batch. */
+  public void xgramOnSlideEnd () {
+    xgramSlideStarted = false;
+    xgramSlideSerial++; // an animation-ready listener of this open that never ran stays off (e.g. a later swipe back to this chat)
+    xgramFlushSlideQueue();
+    if (xgramLoadPostponed) {
+      xgramLoadPostponed = false;
+      loader.xgramLoadPostponed(xgramLoadPostponedTop, xgramLoadPostponedCount, xgramLoadPostponedLocal);
+    }
+    if (xgramEnsureHeightPostponed) {
+      xgramEnsureHeightPostponed = false;
+      ensureContentHeight();
+    }
+  }
+
+  /** XGram: drops what waited for a slide (the chat goes, or another one is opened here); the new messages in it are destroyed. */
+  private void xgramResetSlide () {
+    xgramSlideStarted = false;
+    xgramSlideSerial++;
+    xgramSlideQueue.clear();
+    for (TGMessage message : xgramSlideQueuedMessages) {
+      message.onDestroy();
+    }
+    xgramSlideQueuedMessages.clear();
+    xgramLoadPostponed = false;
+    xgramEnsureHeightPostponed = false;
   }
 
   public void updateAlbum (List<TdApi.Message> prevItems, Tdlib.Album album) {
@@ -1388,6 +1584,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void setHeaderMessage (TGMessage headerMessage) {
+    if (xgramDeferWhileSliding(() -> setHeaderMessage(headerMessage))) {
+      return; // XGram, frame drops: the bot info goes in once the chat has focus (the first page inserts it then, if later)
+    }
     this.headerMessage = headerMessage;
     if (insertMessageOnLoad && shouldInsertHeaderMessage()) {
       if (headerMessage instanceof TGMessageBotInfo) {
@@ -1988,7 +2187,8 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
    * the event log, which keeps Telegram X's own permanent item animator (arming would swap it out and then drop it).
    */
   private void xgramArmListAnimation () {
-    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || loader.isLoading() || loader.getSpecialMode() == MessagesLoader.SPECIAL_MODE_EVENT_LOG) {
+    // XGram, frame drops: and only in a focused chat (not while it slides in: MessagesRecyclerView#xgramArmOnce checks it too)
+    if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || loader.isLoading() || loader.getSpecialMode() == MessagesLoader.SPECIAL_MODE_EVENT_LOG || !controller.isFocused()) {
       return;
     }
     MessagesRecyclerView messagesView = controller.getMessagesView();
@@ -1998,6 +2198,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   private void updateNewMessage (TGMessage message) {
+    if (xgramDeferWhileSliding(() -> updateNewMessage(message))) {
+      xgramSlideQueuedMessages.add(message); // XGram, frame drops: added once the chat has focus, in arrival order
+      return;
+    }
     switch (loader.getSpecialMode()) {
       case MessagesLoader.SPECIAL_MODE_RESTRICTED:
       case MessagesLoader.SPECIAL_MODE_SEARCH:
@@ -2023,6 +2227,13 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
       controller.xgramUndoBubblesBeforeNewMessage(message); // XGram: Undo send, the faded bubble this message takes the place of
       boolean atBottom = manager.findFirstVisibleItemPosition() == 0;
       TGMessage bottomMessage = adapter.getBottomMessage();
+      if (bottomMessage != null && needRemoveDuplicates() && bottomMessage.isDescendantOrSelf(message.getId())) {
+        // XGram, frame drops: already in the list (a first page shown while this waited for the end of the slide):
+        // an album's part would join its own album a second time (combineWith doesn't check), so it is dropped
+        message.onDestroy();
+        controller.xgramUndoBubblesAfterNewMessage();
+        return;
+      }
       if (bottomMessage != null && bottomMessage.combineWith(message.getMessage(), true)) {
         if (!atBottom) {
           bottomMessage.markAsUnread();
@@ -2098,19 +2309,19 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
 
   @Override
   public void onMessageSendAcknowledged (final long chatId, final long messageId) {
-    tdlib.ui().post(() -> {
+    tdlib.ui().post(() -> xgramRunAfterSlide(() -> { // XGram, frame drops: after the slide, in order with the new messages
       if (loader.getChatId() == chatId) {
         int index = adapter.indexOfMessageContainer(messageId);
         if (index != -1 && adapter.getMessage(index).onMessageSendAcknowledged(messageId)) {
           invalidateViewAt(index);
         }
       }
-    });
+    }));
   }
 
   @Override
   public void onMessagePendingContentChanged (long chatId, long messageId) {
-    tdlib.uiExecute(() -> {
+    tdlib.uiExecute(() -> xgramRunAfterSlide(() -> { // XGram, frame drops
       if (loader.getChatId() == chatId) {
         int index = adapter.indexOfMessageContainer(messageId);
         if (index != -1) {
@@ -2132,7 +2343,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
           }
         }
       }
-    });
+    }));
   }
 
   private void updateReturnToMessageId (long oldMessageId, long newMessageId) {
@@ -2147,6 +2358,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   private void updateMessageSendSucceeded (TdApi.Message message, long oldMessageId) {
+    if (xgramDeferWhileSliding(() -> updateMessageSendSucceeded(message, oldMessageId))) {
+      return; // XGram, frame drops: once the chat has focus, in order with the new messages
+    }
     updateReturnToMessageId(oldMessageId, message.id);
     int index = adapter.indexOfMessageContainer(oldMessageId);
     if (index != -1) {
@@ -2206,6 +2420,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   private void updateMessageSendFailed (TdApi.Message message, long oldMessageId) {
+    if (xgramDeferWhileSliding(() -> updateMessageSendFailed(message, oldMessageId))) {
+      return; // XGram, frame drops
+    }
     updateReturnToMessageId(oldMessageId, message.id);
     int index = adapter.indexOfMessageContainer(oldMessageId);
     if (index != -1 && adapter.getItem(index).setSendFailed(message, oldMessageId)) {
@@ -2258,6 +2475,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   private void updateMessageContent (long chatId, long messageId, TdApi.MessageContent content) {
+    if (xgramDeferWhileSliding(() -> updateMessageContent(chatId, messageId, content))) {
+      return; // XGram, frame drops
+    }
     controller.onMessageChanged(chatId, messageId, content);
     ArrayList<TGMessage> items = adapter.getItems();
     if (!adapter.isEmpty() && items != null) {
@@ -2274,7 +2494,7 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void updateMessageTranslation (long chatId, long messageId, TdApi.FormattedText translatedText) {
-    tdlib.ui().post(() -> {
+    tdlib.ui().post(() -> xgramRunAfterSlide(() -> { // XGram, frame drops
       if (loader.getChatId() == chatId) {
         controller.onInlineTranslationChanged(chatId, messageId, translatedText);
         ArrayList<TGMessage> items = adapter.getItems();
@@ -2284,10 +2504,13 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
           }
         }
       }
-    });
+    }));
   }
 
   private void updateMessageEdited (long messageId, int editDate, @Nullable TdApi.ReplyMarkup replyMarkup) {
+    if (xgramDeferWhileSliding(() -> updateMessageEdited(messageId, editDate, replyMarkup))) {
+      return; // XGram, frame drops
+    }
     int index = adapter.indexOfMessageContainer(messageId);
     if (index != -1) {
       TGMessage message = adapter.getItem(index);
@@ -2311,6 +2534,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   private void updateMessageOpened (long messageId) {
+    if (xgramDeferWhileSliding(() -> updateMessageOpened(messageId))) {
+      return; // XGram, frame drops
+    }
     int index = adapter.indexOfMessageContainer(messageId);
     if (index != -1) {
       adapter.getItem(index).setMessageOpened(messageId);
@@ -2323,6 +2549,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void updateMessageMentionRead (long messageId) {
+    if (xgramDeferWhileSliding(() -> updateMessageMentionRead(messageId))) {
+      return; // XGram, frame drops
+    }
     if (closestMentions != null && !closestMentions.isEmpty()) {
       int i = 0;
       for (TdApi.Message message : closestMentions) {
@@ -2345,6 +2574,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void updateMessageUnreadReactions (long messageId, @Nullable TdApi.UnreadReaction[] unreadReactions) {
+    if (xgramDeferWhileSliding(() -> updateMessageUnreadReactions(messageId, unreadReactions))) {
+      return; // XGram, frame drops
+    }
     int index = adapter.indexOfMessageContainer(messageId);
     if (index != -1 && adapter.getItem(index).setMessageUnreadReactions(messageId, unreadReactions)) {
       invalidateViewAt(index);
@@ -2357,6 +2589,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void updateMessageInteractionInfo (long messageId, @Nullable TdApi.MessageInteractionInfo interactionInfo) {
+    if (xgramDeferWhileSliding(() -> updateMessageInteractionInfo(messageId, interactionInfo))) {
+      return; // XGram, frame drops: reactions and view counts
+    }
     int index = adapter.indexOfMessageContainer(messageId);
     if (index != -1 && adapter.getItem(index).setMessageInteractionInfo(messageId, interactionInfo)) {
       invalidateViewAt(index);
@@ -2368,6 +2603,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void updateMessageIsPinned (long messageId, boolean isPinned) {
+    if (xgramDeferWhileSliding(() -> updateMessageIsPinned(messageId, isPinned))) {
+      return; // XGram, frame drops
+    }
     int index = adapter.indexOfMessageContainer(messageId);
     if (index != -1 && adapter.getItem(index).setIsPinned(messageId, isPinned)) {
       invalidateViewAt(index);
@@ -2401,6 +2639,10 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void updateMessagesDeleted (long chatId, long[] messageIds) {
+    final long[] xgramDeletedIds = messageIds; // (messageIds is reassigned below)
+    if (xgramDeferWhileSliding(() -> updateMessagesDeleted(chatId, xgramDeletedIds))) {
+      return; // XGram, frame drops
+    }
     // XGram: messages others deleted stay in the chat, marked as deleted.
     if (!inSpecialMode()) {
       messageIds = com.fahadali.xgram.history.XgramDeleted.keepInChat(this, tdlib, chatId, messageIds);
@@ -2501,6 +2743,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void updateChatReadOutbox (long lastReadOutboxMessageId) {
+    if (xgramDeferWhileSliding(() -> updateChatReadOutbox(lastReadOutboxMessageId))) {
+      return; // XGram, frame drops: also reaches the messages that wait for the slide, as it comes after them
+    }
     TGMessage item, prevItem = null;
     for (int i = adapter.getMessageCount() - 1; i >= 0; i--) {
       item = adapter.getMessage(i);
@@ -2806,6 +3051,9 @@ public class MessagesManager implements Client.ResultHandler, MessagesSearchMana
   }
 
   public void onMissedMessagesHintReceived () {
+    if (xgramDeferWhileSliding(this::onMissedMessagesHintReceived)) {
+      return; // XGram, frame drops: in order with the new messages that wait (it stops adding them at the bottom)
+    }
     loader.setCanLoadBottom();
     onCanLoadMoreBottomChanged();
   }

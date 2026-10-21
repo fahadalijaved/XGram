@@ -892,7 +892,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     topBar = new CollapseListView(context);
     topBar.setLayoutParams(params);
-    topBar.setTotalHeightChangeListener(listView -> onMessagesFrameChanged());
+    topBar.setTotalHeightChangeListener(listView -> xgramOnBarsMoved()); // XGram, frame drops: was onMessagesFrameChanged() on every step
 
     // XGram: 48dp with Expressive design (LiveLocationHelper.height()), like the other cards of the group: a 36dp card
     // became a full stadium (its 20dp corners clamped to 17dp) and cut its buttons' state layers flat
@@ -969,6 +969,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
     };
     pinnedMessagesBar.setAnimationsDisabled(true);
+    pinnedMessagesBar.xgramSetHeld(true); // XGram: list changes wait until this chat is focused (xgramOnFocusSettled)
     pinnedMessagesBar.initialize(this);
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: on its Material 3 Expressive card the list starts 8dp in, so the line keeps 20dp from the card's start
@@ -3472,6 +3473,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     checkBroadcastingSomeAction();
     if (pinnedMessagesBar != null) {
       pinnedMessagesBar.setAnimationsDisabled(!isFocused());
+      if (!isFocused()) {
+        // XGram: list changes wait until this chat is focused. On focus the bar shows or hides if that waited and
+        // catches up with its list in the frame after the slide's end (xgramOnFocusSettled, posted by onFocus)
+        pinnedMessagesBar.xgramSetHeld(true);
+      }
     }
   }
 
@@ -4527,6 +4533,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
     messagesView.setMessageAnimatorEnabled(true);
     registerRaiseListener();
     manager.setParentFocused(true);
+    // XGram, frame drops: what waited for the end of the slide is applied in the next frame (xgramOnFocusSettled).
+    // onFocus runs inside the slide's end callback, before the frame that draws its last step: done here, all of it
+    // would land in that frame (a late last step) and re-render the screen's layer, whose removal is only posted.
+    messagesView.postOnAnimation(this::xgramOnFocusSettled);
     if (scheduledKeyboardMessageId != 0) {
       openCommandsKeyboard(scheduledKeyboardMessageId, scheduledKeyboard, false, false);
       scheduledKeyboardMessageId = 0;
@@ -4570,6 +4580,24 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     // showEmojiSuggestionsIfTemporarilyHidden();
     // tdlib.context().changePreferredAccountId(tdlib.id(), TdlibManager.SWITCH_REASON_CHAT_FOCUS);
+  }
+
+  /**
+   * XGram, frame drops: the frame after the one that drew the end of the slide (posted by onFocus, after the slide's
+   * posted layer removal), in this order: the pinned bar shows or hides if that waited and catches up with its list,
+   * then what changed the chat while it slid in, then the reload of a pinned list from the cache. A list change that
+   * comes before this applies what waits first (MessagesManager#xgramDeferWhileSliding), so nothing is reordered.
+   */
+  private void xgramOnFocusSettled () {
+    if (isDestroyed() || !isFocused()) {
+      return; // blurred meanwhile: the next focus posts this again
+    }
+    if (pinnedMessagesBar != null) {
+      xgramFlushPinned();
+      pinnedMessagesBar.xgramSetHeld(false);
+    }
+    manager.xgramOnSlideEnd();
+    manager.xgramOnFocusPinned();
   }
 
   private void resetOnFocus () {
@@ -4799,6 +4827,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (manager != null) {
       manager.destroy(this);
     }
+    if (messagesView != null) {
+      messagesView.removeCallbacks(xgramBarsSettled); // XGram, frame drops
+    }
     if (attachedFiles != null) {
       context.removeFromRoot(attachedFiles);
     }
@@ -4855,6 +4886,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
     forceHideToast();
 
+    xgramPinnedPending = false; // XGram: a bar change that waited for focus belongs to the chat that goes
+    xgramPinnedPendingList = null;
     pinnedMessagesBar.performDestroy();
 
     if (requestsView != null) {
@@ -9532,17 +9565,50 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public void showHidePinnedMessages (boolean show, MessageListManager messageList) {
+    showHidePinnedMessages(show, messageList, false);
+  }
+
+  // XGram: while this chat isn't focused (it slides in, or another screen covers it) the pinned bar doesn't show, hide
+  // or change lists mid-slide: the last such change waits and is applied once the chat is focused (xgramOnFocusSettled),
+  // animated as Telegram X does for a focused chat. {@code now}: the bar from the cache (MessagesManager), set while the
+  // chat is set up, before it slides in: shown at once, without animation.
+  private boolean xgramPinnedPending, xgramPinnedPendingShow;
+  private @Nullable MessageListManager xgramPinnedPendingList;
+
+  public void showHidePinnedMessages (boolean show, MessageListManager messageList, boolean now) {
     if (arePinnedMessages()) {
       if (!show)
         navigateBack();
       return;
     }
+    if (!now && !isFocused()) {
+      xgramPinnedPending = true;
+      xgramPinnedPendingShow = show;
+      xgramPinnedPendingList = messageList;
+      return;
+    }
+    xgramPinnedPending = false;
+    xgramPinnedPendingList = null;
     if (show) {
       pinnedMessagesBar.setCollapseButtonVisible(true);
       pinnedMessagesBar.setContextChatId(getChatId() != getHeaderChatId() ? getHeaderChatId() : 0);
       pinnedMessagesBar.setMessageList(messageList);
     }
-    topBar.setItemVisible(pinnedMessagesItem, show, isFocused());
+    topBar.setItemVisible(pinnedMessagesItem, show, !now && isFocused());
+  }
+
+  private void xgramFlushPinned () {
+    if (!xgramPinnedPending) {
+      return;
+    }
+    final boolean show = xgramPinnedPendingShow;
+    final MessageListManager list = xgramPinnedPendingList;
+    xgramPinnedPending = false;
+    xgramPinnedPendingList = null;
+    if (show && (list == null || manager == null || list != manager.xgramPinnedList())) {
+      return; // that list is gone meanwhile (the chat was set up again)
+    }
+    showHidePinnedMessages(show, list, false);
   }
 
   private void dismissPinnedMessage () {
@@ -10572,6 +10638,44 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (messagesView != null) {
       messagesView.invalidate();
     }
+  }
+
+  // XGram, frame drops: the bars above the messages (topic tabs, pinned message, join requests…) move a step on every
+  // frame of their animation, and onMessagesFrameChanged laid the window out (the side tabs' margin) and checked the
+  // visible messages on each of them. Now a step only moves what follows the bars: the side tabs (by translation), the
+  // corners, the overlays and the date strip (an invalidate). The rest (the side tabs laid out at their place, the
+  // visible messages checked: the full onMessagesFrameChanged) runs once the bars rest, XGRAM_BARS_SETTLE_MS after their
+  // last step (a single change too), or once the chat has focus when that is while it slides in.
+  private static final long XGRAM_BARS_SETTLE_MS = 48;
+  private final Runnable xgramBarsSettled = this::xgramOnBarsSettled;
+
+  private void xgramOnBarsMoved () {
+    xgramUpdateSideTabsOffset(true);
+    xgramUpdateCorners();
+    context().updateHackyOverlaysPositions();
+    if (attachedFiles != null && attachedFiles.getParent() != null) {
+      attachedFiles.updatePosition(true);
+    }
+    if (messagesView != null) {
+      messagesView.invalidate();
+      messagesView.removeCallbacks(xgramBarsSettled);
+      messagesView.postDelayed(xgramBarsSettled, XGRAM_BARS_SETTLE_MS);
+    }
+  }
+
+  private void xgramOnBarsSettled () {
+    if (isDestroyed() || manager == null || messagesView == null) {
+      return;
+    }
+    if (manager.isSlideRunning()) {
+      manager.xgramRunAfterSlide(() -> {
+        if (!isDestroyed()) {
+          onMessagesFrameChanged();
+        }
+      });
+      return;
+    }
+    onMessagesFrameChanged();
   }
 
   private final int[] cursorCoordinates = new int[2], symbolUnderCursorPosition = new int[2];
@@ -12682,13 +12786,44 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   /** Side tabs start below the bars above the messages (pinned message, join requests…). */
   private void xgramUpdateSideTabsOffset () {
-    if (xgramSideTabs != null && xgramTabsOnSide && topBar != null) {
-      RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) xgramSideTabs.getLayoutParams();
-      int top = getTopOffset();
-      if (params.topMargin != top) {
-        params.topMargin = top;
-        xgramSideTabs.setLayoutParams(params);
+    xgramUpdateSideTabsOffset(false);
+  }
+
+  // XGram, frame drops: while the bars move (xgramOnBarsMoved) the side tabs follow them by translation, so no step lays
+  // the window out; once the bars rest (moving false) their top margin is laid out again, without translation or clip.
+  // Bars that get shorter lay the tabs out from the top once (from there they only move down), so no gap opens above
+  // the message box; what a translation pushes past their laid-out bottom (into the message box) is clipped.
+  private final android.graphics.Rect xgramSideTabsClip = new android.graphics.Rect();
+  private boolean xgramSideTabsClipped;
+
+  private void xgramUpdateSideTabsOffset (boolean moving) {
+    if (xgramSideTabs == null || topBar == null) {
+      return;
+    }
+    RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) xgramSideTabs.getLayoutParams();
+    final int top = xgramTabsOnSide ? getTopOffset() : params.topMargin;
+    float dy = 0f;
+    if (moving && xgramTabsOnSide) {
+      if (top < params.topMargin) {
+        params.topMargin = 0;
+        xgramSideTabs.setLayoutParams(params); // once per shrink
       }
+      dy = top - params.topMargin;
+    } else if (xgramTabsOnSide && params.topMargin != top) {
+      params.topMargin = top;
+      xgramSideTabs.setLayoutParams(params);
+    }
+    if (xgramSideTabs.getTranslationY() != dy) {
+      xgramSideTabs.setTranslationY(dy);
+    }
+    final int bottom = xgramSideTabs.getBottom(); // the laid-out bottom (above the message box) doesn't depend on the margin
+    if (dy > 0f && bottom > 0 && xgramSideTabs.getWidth() > 0) {
+      xgramSideTabsClip.set(0, 0, xgramSideTabs.getWidth(), Math.max(0, bottom - top)); // local y 0 is drawn at the bars' bottom (top)
+      xgramSideTabs.setClipBounds(xgramSideTabsClip);
+      xgramSideTabsClipped = true;
+    } else if (xgramSideTabsClipped) {
+      xgramSideTabsClipped = false;
+      xgramSideTabs.setClipBounds(null);
     }
   }
 
@@ -12855,13 +12990,24 @@ public class MessagesController extends ViewController<MessagesController.Argume
       if (topic != null && xgramInForumTopic() && chat.id == chatId && ((TdApi.MessageTopicForum) messageTopicId).forumTopicId == forumTopicId) {
         boolean firstLoad = xgramForumTopic == null;
         xgramForumTopic = com.fahadali.xgram.topics.XgramForums.normalizeUnread(tdlib, topic);
-        xgramApplyTopicCounters(true);
         com.fahadali.xgram.topics.XgramTopicReadOutbox.set(tdlib, chatId, topic);
         com.fahadali.xgram.topics.XgramTopicMute.onSettings(tdlib, chatId, topic); // XGram: topic mute for notifications
-        xgramApplyTopicReadOutbox();
-        if (firstLoad && !Td.isEmpty(topic.draftMessage)) {
-          // XGram: opened without a cached topic (notification, link, tabs): the topic's draft was unknown when the input was filled.
-          xgramApplyTopicDraft(topic.draftMessage);
+        // XGram, frame drops: the topic's state is known at once (the history loader reads it); what it changes on
+        // screen (counters, read ticks, the draft in the message box) waits while the topic slides in
+        final Runnable apply = () -> {
+          if (xgramInForumTopic() && chat.id == chatId && ((TdApi.MessageTopicForum) messageTopicId).forumTopicId == forumTopicId) {
+            xgramApplyTopicCounters(true);
+            xgramApplyTopicReadOutbox();
+            if (firstLoad && !Td.isEmpty(topic.draftMessage)) {
+              // XGram: opened without a cached topic (notification, link, tabs): the topic's draft was unknown when the input was filled.
+              xgramApplyTopicDraft(topic.draftMessage);
+            }
+          }
+        };
+        if (manager != null) {
+          manager.xgramRunAfterSlide(apply);
+        } else {
+          apply.run();
         }
       }
     }));
@@ -12925,18 +13071,37 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // XGram: members can't write in closed topics (admins with "Manage topics" and the topic creator can).
   private boolean xgramTopicClosedForMe;
 
+  /**
+   * XGram, frame drops: runs {@code act} now, or once this chat has focus when it is sliding in right now (its screen is
+   * a hardware layer then, see MessagesManager#isSlideRunning), in order with the chat's other held changes.
+   */
+  public void xgramAfterSlide (Runnable act) {
+    if (manager != null) {
+      manager.xgramRunAfterSlide(act);
+    } else {
+      act.run();
+    }
+  }
+
   private void xgramSetTopicInfo (TdApi.ForumTopicInfo info) {
     if (!xgramInForumTopic() || info.chatId != chat.id || info.forumTopicId != xgramCurrentTab()) {
       return; // info for a topic this screen no longer shows (it arrived after a tab switch, or for a reused screen)
     }
     if (previewMode == PREVIEW_MODE_NONE && headerCell != null) {
-      xgramTopicIcon().set(tdlib, info); // also after the topic's icon was edited
+      xgramTopicIcon().set(tdlib, info); // also after the topic's icon was edited (the header isn't in the sliding layer: at once)
     }
-    boolean closedForMe = com.fahadali.xgram.topics.XgramForums.isTopicClosedForMe(tdlib, chat, info);
-    if (xgramTopicClosedForMe != closedForMe) {
-      xgramTopicClosedForMe = closedForMe;
-      updateBottomBar(true);
-    }
+    // XGram, frame drops: the message box of a closed topic is in the screen's layer: it changes after the slide, in
+    // order with the chat's other held changes
+    xgramAfterSlide(() -> {
+      if (!xgramInForumTopic() || info.chatId != chat.id || info.forumTopicId != xgramCurrentTab()) {
+        return; // the screen moved on to another chat or topic meanwhile
+      }
+      boolean closedForMe = com.fahadali.xgram.topics.XgramForums.isTopicClosedForMe(tdlib, chat, info);
+      if (xgramTopicClosedForMe != closedForMe) {
+        xgramTopicClosedForMe = closedForMe;
+        updateBottomBar(true);
+      }
+    });
   }
 
   @Override

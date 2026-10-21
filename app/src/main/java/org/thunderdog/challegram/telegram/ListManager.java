@@ -118,6 +118,7 @@ public abstract class ListManager<T> implements Destroyable, Iterable<T>, TdlibP
       public void onResult (TdApi.Object object) {
         if (object.getConstructor() == TdApi.Error.CONSTRUCTOR) {
           UI.showError(object);
+          runOnUiThread(ListManager.this::xgramOnLoadFailed); // XGram: the list can load again (it stayed "loading" for good)
           return;
         }
         Response<T> data = processResponse(object, this, count, reverse);
@@ -223,6 +224,163 @@ public abstract class ListManager<T> implements Destroyable, Iterable<T>, TdlibP
     if (!wasInitialized) {
       notifyInitialChunkReceived();
     }
+    xgramRunPendingRevalidation(); // XGram
+  }
+
+  // XGram: a list can start from items kept from before (xgramSeed: no listener is told, the owner shows them itself),
+  // then load its first page again (xgramRevalidate) and take it as item changes: what stays the same keeps its object,
+  // so what is on screen only moves where the data did.
+
+  private boolean xgramRevalidatePending;
+  private int xgramRevalidateCause;
+
+  /** XGram: the function that loads the first page, as the first load does ({@code null}: this list can't). */
+  @Nullable
+  protected TdApi.Function<?> xgramFirstPageFunction (int count) {
+    return null;
+  }
+
+  /** XGram: the same item of the list (as far as its place goes). */
+  protected boolean xgramSameItem (T a, T b) {
+    return a.equals(b);
+  }
+
+  /** XGram: {@code oldItem} may stay for {@code newItem} (the same item, and nothing that is shown has changed). */
+  protected boolean xgramKeepItem (T oldItem, T newItem) {
+    return false;
+  }
+
+  /**
+   * XGram: fills an empty list that has loaded nothing yet with {@code seedItems} (in list order) and their total
+   * count, telling no listener. The list counts as loaded: its first load is not sent.
+   */
+  @UiThread
+  protected final boolean xgramSeed (List<T> seedItems, int seedTotalCount) {
+    if (state != STATE_INITIALIZING || isLoading || !this.items.isEmpty() || seedItems.isEmpty() || seedTotalCount == COUNT_UNKNOWN) {
+      return false;
+    }
+    this.items.addAll(seedItems);
+    this.totalCount = Math.max(seedTotalCount, this.items.size());
+    this.state = this.items.size() == this.totalCount ? STATE_FULL : STATE_INITIALIZED;
+    this.isListAvailable = true;
+    return true;
+  }
+
+  /**
+   * XGram: loads the first page again and applies it as changes: items no longer on it go, new ones come in at their
+   * place, a changed one is replaced ({@code changeCause} for its listeners). After a load that is still running.
+   */
+  @UiThread
+  protected final void xgramRevalidate (int changeCause) {
+    if (isDestroyed()) {
+      return;
+    }
+    if (isLoading) {
+      xgramRevalidatePending = true;
+      xgramRevalidateCause = changeCause;
+      return;
+    }
+    final TdApi.Function<?> function = xgramFirstPageFunction(initialLoadCount);
+    if (function == null) {
+      return;
+    }
+    isLoading = true;
+    tdlib.client().send(function, new Client.ResultHandler() {
+      @Override
+      public void onResult (TdApi.Object object) {
+        if (object.getConstructor() == TdApi.Error.CONSTRUCTOR) {
+          runOnUiThread(ListManager.this::xgramOnLoadFailed); // what the list holds stays
+          return;
+        }
+        Response<T> data = processResponse(object, this, initialLoadCount, false);
+        if (data != null) {
+          runOnUiThread(() -> xgramApplyFirstPage(data, changeCause));
+        }
+      }
+    });
+  }
+
+  @UiThread
+  private void xgramOnLoadFailed () {
+    isLoading = false;
+    xgramRunPendingRevalidation();
+  }
+
+  @UiThread
+  private void xgramRunPendingRevalidation () {
+    if (xgramRevalidatePending && !isLoading && !isDestroyed()) {
+      xgramRevalidatePending = false;
+      xgramRevalidate(xgramRevalidateCause);
+    }
+  }
+
+  private int xgramIndexIn (List<T> list, T item) {
+    for (int i = 0; i < list.size(); i++) {
+      if (xgramSameItem(list.get(i), item)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  @UiThread
+  private void xgramApplyFirstPage (Response<T> data, int changeCause) {
+    if (isDestroyed()) {
+      return;
+    }
+    final List<T> page = data.items;
+    // Items that are not on the first page any more go (last first, so the indexes stay right)
+    for (int i = this.items.size() - 1; i >= 0; i--) {
+      T item = this.items.get(i);
+      if (xgramIndexIn(page, item) == -1) {
+        this.items.remove(i);
+        onItemRemoved(item, i);
+      }
+    }
+    // What is left is in the page's order (both are sorted): otherwise it all goes and comes in again
+    int lastIndex = -1;
+    boolean sameOrder = true;
+    for (T item : this.items) {
+      int index = xgramIndexIn(page, item);
+      if (index <= lastIndex) {
+        sameOrder = false;
+        break;
+      }
+      lastIndex = index;
+    }
+    if (!sameOrder) {
+      for (int i = this.items.size() - 1; i >= 0; i--) {
+        T item = this.items.remove(i);
+        onItemRemoved(item, i);
+      }
+    }
+    // What stays keeps its object unless it changed, what is new comes in at its place
+    for (int i = 0; i < page.size(); i++) {
+      T fresh = page.get(i);
+      if (i < this.items.size() && xgramSameItem(this.items.get(i), fresh)) {
+        if (!xgramKeepItem(this.items.get(i), fresh)) {
+          this.items.set(i, fresh);
+          notifyItemChanged(i, changeCause);
+        }
+      } else {
+        this.items.add(i, fresh);
+        onItemAdded(fresh, i);
+      }
+    }
+    // The state a first load of this page leaves
+    if (page.isEmpty()) {
+      endReached = true;
+      this.state = reverseEndReached || data.totalCount == 0 ? STATE_FULL : STATE_INITIALIZED;
+    } else {
+      endReached = false;
+      this.state = data.totalCount != COUNT_UNKNOWN && this.items.size() >= data.totalCount ? STATE_FULL : STATE_INITIALIZED;
+    }
+    this.isLoading = false;
+    if (data.totalCount != COUNT_UNKNOWN) {
+      setTotalCount(data.totalCount);
+    }
+    checkListAvailability();
+    xgramRunPendingRevalidation();
   }
 
   @Override

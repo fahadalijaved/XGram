@@ -422,6 +422,8 @@ public final class XgramForums {
       if (inPlace) {
         act.run();
       } else {
+        // The header isn't in the sliding screen's layer: the title and icon change as soon as the info is here, even
+        // mid-slide (the message box of a closed topic, which is in that layer, waits: MessagesController#xgramSetTopicInfo).
         tdlib.ui().post(act);
       }
     });

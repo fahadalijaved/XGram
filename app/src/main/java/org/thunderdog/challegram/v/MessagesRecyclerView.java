@@ -107,6 +107,11 @@ public class MessagesRecyclerView extends RecyclerView implements FactorAnimator
     if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() || !UI.inUiThread() || getWindowToken() == null || getWidth() == 0) {
       return;
     }
+    if (manager == null || !manager.controller().isFocused()) {
+      // XGram, frame drops: never while the chat slides in or is covered: the spring would redraw the sliding screen's
+      // layer on every frame. What changes the list then is applied once the chat has focus, and animates there.
+      return;
+    }
     ItemAnimator current = getItemAnimator();
     if (current != null && current != xgramArmed) {
       return; // the list already has an animator of its own (event log)

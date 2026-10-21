@@ -231,6 +231,59 @@ public final class MessageListManager extends ListManager<TdApi.Message> impleme
 
   private Long nextSearchFromMessageId;
 
+  // XGram: a search list (the pinned bar's) can start from messages kept from before and load its first page again
+  // later (ListManager.xgramSeed / xgramRevalidate).
+
+  @Override
+  @Nullable
+  protected TdApi.Function<?> xgramFirstPageFunction (int count) {
+    if (!hasFilter()) {
+      return null; // a history list may answer with nothing and be sent again for the next page (processResponse)
+    }
+    return new TdApi.SearchChatMessages(chatId, topicId, query, sender, startFromMessageId, 0, count, filter);
+  }
+
+  @Override
+  protected boolean xgramSameItem (TdApi.Message a, TdApi.Message b) {
+    return a.chatId == b.chatId && a.id == b.id;
+  }
+
+  @Override
+  protected boolean xgramKeepItem (TdApi.Message oldMessage, TdApi.Message newMessage) {
+    // The same message, its text and kind as they were: the old object stays, so its preview isn't built again
+    return oldMessage.editDate == newMessage.editDate &&
+      oldMessage.content != null && newMessage.content != null &&
+      oldMessage.content.getConstructor() == newMessage.content.getConstructor() &&
+      Td.equalsTo(Td.textOrCaption(oldMessage.content), Td.textOrCaption(newMessage.content));
+  }
+
+  /**
+   * XGram: fills this list, before it has loaded anything, with messages kept from before (newest first) and their
+   * total count. No listener is told; the owner shows the list itself. False if the list can't take them.
+   */
+  @UiThread
+  public boolean xgramSeedFrom (List<TdApi.Message> messages, int totalCount) {
+    if (!hasFilter() || messages.isEmpty()) {
+      return false;
+    }
+    for (TdApi.Message message : messages) {
+      if (message == null || message.chatId != chatId) {
+        return false;
+      }
+    }
+    if (!xgramSeed(messages, totalCount)) {
+      return false;
+    }
+    this.maxMessageId = items.get(0).id; // as its listener would have set it, without telling anyone
+    return true;
+  }
+
+  /** XGram: loads the first page again and applies it as changes (a changed message is replaced in its place). */
+  @UiThread
+  public void xgramRevalidate () {
+    xgramRevalidate(CAUSE_CONTENT_CHANGED);
+  }
+
   @Override
   protected ListManager.Response<TdApi.Message> processResponse (TdApi.Object response, Client.ResultHandler retryHandler, int retryLoadCount, boolean reverse) {
     List<TdApi.Message> messages;

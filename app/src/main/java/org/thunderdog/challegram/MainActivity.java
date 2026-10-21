@@ -1530,6 +1530,7 @@ public class MainActivity extends BaseActivity implements GlobalAccountListener,
   }
 
   public MessagesController getMessagesController (Tdlib tdlib, boolean createIfNeeded) {
+    org.thunderdog.challegram.navigation.NavigationController.xgramFlushPendingDestroys(); // XGram, frame drops: a popped pooled chat is reset before it is reused
     MessagesController m = messageControllers.get(tdlib.id());
     return m != null ? m : createIfNeeded ? createMessagesController(tdlib) : null;
   }

@@ -24,6 +24,7 @@ import android.os.Build;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 
 import androidx.activity.BackEventCompat;
 import androidx.annotation.IntDef;
@@ -35,6 +36,7 @@ import com.fahadali.xgram.appearance.XgramMotion;
 import com.fahadali.xgram.appearance.XgramNavMotion;
 
 import org.thunderdog.challegram.BaseActivity;
+import org.thunderdog.challegram.Log;
 import org.thunderdog.challegram.R;
 import org.thunderdog.challegram.config.Config;
 import org.thunderdog.challegram.core.Lang;
@@ -52,6 +54,7 @@ import org.thunderdog.challegram.widget.ShadowView;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.List;
 
 import me.vkryl.android.AnimatorUtils;
 import me.vkryl.android.widget.FrameLayoutFix;
@@ -216,6 +219,9 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     if (width <= 0 || height <= 0) {
       return false;
     }
+    // XGram, frame drops: the inset attach would give it (a list's bottom padding, or the view's padding), so the
+    // first frame does not lay it out again; attach then finds the same values and changes nothing
+    applyBottomInset(controller);
     view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
     view.layout(left, top, left + width, top + height);
     return true;
@@ -305,9 +311,10 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       contentWrapper.removeView(controller.getValue());
     }
     controller.onCleanAfterHide();
-    // XGram M3E: the chat list a toolbar tab screen was put over keeps its bottom inset (no relayout of its lists when it comes back)
-    ViewController<?> xgramTop = getStack().getCurrent();
-    controller.xgramKeepInsetOnDetach = xgramBarListener != null && getStack().size() > 0 && getStack().get(0) == controller && xgramTop != null && xgramTop != controller && xgramTop.xgramIsBarTab();
+    // XGram: a screen still in the stack is only covered (by the screen above, or a toolbar tab screen) and comes back as it was:
+    // it keeps its bottom inset, so re-attaching it at the start of a swipe back does not lay its list out again
+    // (attach applies the current inset, so a change made meanwhile still lands once; a popped screen goes back to 0)
+    controller.xgramKeepInsetOnDetach = getStack().indexOf(controller) != -1;
     controller.detachNavigationController();
     controller.onAttachStateChanged(this, false);
     checkDisallowScreenshots();
@@ -406,7 +413,14 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     }
 
     if (USE_PREVIEW_FADE) {
-      fadeView = new View(context);
+      // XGram, frame drops: one opaque black rect, so its alpha goes on the paint (same pixels) and HWUI never builds
+      // a full-window layer for it (no explicit layer either, see setLayerType)
+      fadeView = new View(context) {
+        @Override
+        public boolean hasOverlappingRendering () {
+          return false;
+        }
+      };
       fadeView.setBackgroundColor(0xff000000);
       fadeView.setVisibility(View.GONE);
       fadeView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -454,6 +468,73 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   private @Nullable XgramNavMotion xgramNav;
   private int xgramRequestedMode = XgramNavMotion.MODE_NONE;
   private float xgramTouchY;
+
+  // XGram, frame drops: the horizontal slide's layers. A push or a Back (animateNavigate) sets the layer of the screen
+  // that comes in at once (Expressive: both, as today) and starts the motion after the still frame that lays that
+  // screen out and builds its layer; a finger or system swipe with Expressive off draws both screens directly
+  // (no full-window layer allocated and filled in its first frames).
+
+  /** XGram, frame drops: false brings back Telegram X's posted layers on both screens (A/B in traces). */
+  static final boolean XGRAM_SLIDE_LAYERS_V2 = true;
+  private boolean xgramProgrammatic, xgramGateStart;
+  private final ArrayList<View> xgramPrebuild = new ArrayList<>();
+
+  /** XGram, frame drops: sets {@code c}'s hardware layer now (not posted), to be built before the motion starts. */
+  private void xgramLayerNow (@Nullable ViewController<?> c) {
+    if (c == null || !c.allowLayerTypeChanges()) {
+      return;
+    }
+    com.fahadali.xgram.layout.XgramTwoPane twoPane = ((BaseActivity) context).xgramTwoPane();
+    if (twoPane != null && twoPane.isHiddenRoot(c)) {
+      return; // clipped to nothing: its layer would be built for nothing
+    }
+    View v = c.getValue();
+    v.setLayerType(View.LAYER_TYPE_HARDWARE, Views.getLayerPaint());
+    xgramPrebuild.add(v);
+  }
+
+  /** XGram, frame drops: the frame that lays out the screen coming in, and builds its layer, stays still; the motion starts after it. */
+  private void xgramStartAfterLayers (View entering, List<View> layered, ValueAnimator animator) {
+    final boolean[] started = new boolean[1];
+    final ViewTreeObserver.OnPreDrawListener[] listener = new ViewTreeObserver.OnPreDrawListener[1];
+    final Runnable start = () -> {
+      if (started[0]) {
+        return;
+      }
+      started[0] = true;
+      ViewTreeObserver observer = rootView.getViewTreeObserver();
+      if (observer.isAlive()) {
+        observer.removeOnPreDrawListener(listener[0]);
+      }
+      animator.start();
+      if (isDestroyed || !isAttachedToWindow) {
+        animator.end();
+      }
+    };
+    listener[0] = () -> {
+      if (started[0]) {
+        return true;
+      }
+      if (entering.getWidth() == 0) {
+        return true; // not laid out yet: the next frame (the fallback below still starts it)
+      }
+      for (View v : layered) {
+        if (v.getLayerType() == View.LAYER_TYPE_HARDWARE && v.getWindowToken() != null && v.getWidth() > 0 && v.getHeight() > 0) {
+          try {
+            v.buildLayer(); // recorded and rendered now, while it waits offscreen (or under the other screen)
+          } catch (Throwable t) {
+            Log.w(t);
+          }
+        }
+      }
+      start.run(); // the next frame is the motion's fraction 0, the one after it a normal step
+      UI.cancel(start);
+      return true;
+    };
+    rootView.getViewTreeObserver().addOnPreDrawListener(listener[0]);
+    rootView.invalidate();
+    UI.post(start, 250); // never stuck when no frame comes (window hidden, screen off)
+  }
 
   // XGram M3E: the floating navigation toolbar of narrow windows (com.fahadali.xgram.layout.XgramNavToolbar) lives
   // above the screens: it follows their transitions, its tab screens keep room for it, it hears the insets.
@@ -513,6 +594,37 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     c.attachNavigationController(this);
     c.destroy();
     c.detachNavigationController();
+  }
+
+  // XGram, frame drops: a popped screen is destroyed right after the transition's final frame, not inside its end
+  // callback (that made the last step of a back, often 10-15 px on a fling, come a frame late). Anything that
+  // navigates, or takes the pooled chat screen (MainActivity#getMessagesController), destroys what waits first, so
+  // the order against the next navigation stays Telegram X's.
+
+  /** XGram, frame drops: false destroys a popped screen inside the end callback again, as Telegram X does. */
+  static final boolean XGRAM_DEFER_POP_DESTROY = true;
+  private static final ArrayList<ViewController<?>> xgramPendingDestroy = new ArrayList<>();
+  private static final ArrayList<NavigationController> xgramPendingNav = new ArrayList<>();
+  private static boolean xgramFlushPosted;
+
+  /** XGram, frame drops: destroys {@code c} (popped, off the stack) once the current frame is drawn. Main thread. */
+  void xgramDestroyAfterFrame (@NonNull ViewController<?> c) {
+    xgramPendingDestroy.add(c);
+    xgramPendingNav.add(this);
+    if (!xgramFlushPosted) {
+      xgramFlushPosted = true;
+      UI.post(NavigationController::xgramFlushPendingDestroys); // queued from the end callback: runs after this frame's traversal
+    }
+  }
+
+  /** XGram, frame drops: destroys the popped screens that wait for it now. Main thread. Static: two-pane has two NavigationControllers. */
+  public static void xgramFlushPendingDestroys () {
+    xgramFlushPosted = false;
+    while (!xgramPendingDestroy.isEmpty()) {
+      NavigationController navigation = xgramPendingNav.remove(0);
+      ViewController<?> c = xgramPendingDestroy.remove(0);
+      navigation.xgramDestroyDetached(c); // skips one destroyed meanwhile or back in the stack
+    }
   }
 
   // A tab switch of the toolbar: a tab screen fading in right above the chat list (from it or from another tab
@@ -709,11 +821,13 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   public void reuse () {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     getStack().clear(this);
     clearChildWrappers();
   }
 
   public void destroy () {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     isDestroyed = true;
     ThemeManager.instance().removeThemeListener(this);
     getStack().clear(this);
@@ -730,12 +844,14 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   // Single
 
   public void insertController (ViewController<?> controller, int index) {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     if (!isAnimating && controller != null) {
       processor.insertController(controller, index);
     }
   }
 
   public void initController (ViewController<?> with) {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     if (!isAnimating && with != null) {
       NavigationStack stack = getStack();
 
@@ -760,6 +876,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   public final void setController (ViewController<?> controller) {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     if (!isAnimating && controller != null) {
       if (getStack().isEmpty()) {
         initController(controller);
@@ -774,6 +891,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   public void setControllerAnimated (ViewController<?> controller, boolean asForward, boolean saveFirst) {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     if (controller != null) {
       clearStackLock();
       if (getStack().isEmpty()) {
@@ -854,6 +972,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   public final boolean navigateTo (ViewController<?> controller) {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     if (!isAnimating && getStackSize() > 0 && controller != null && !isCurrentControllerAnimating()) {
       isAnimating = true;
       UI.getContext(context).notifyBackPressAvailabilityChanged();
@@ -866,6 +985,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   public final boolean navigateBack () {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     if (!isAnimating && getStack().getCurrentIndex() > 0 && !isCurrentControllerAnimating()) {
       processor.navigateBack();
       return true;
@@ -946,9 +1066,11 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
 
   public void prepareFactorAnimation (ViewController<?> left, ViewController<?> right, boolean forward, int direction, @PredictiveGesture int predictiveGestureMode) {
     preventLayout();
-    if (Views.HARDWARE_LAYER_ENABLED) {
-      setLayerType(View.LAYER_TYPE_HARDWARE, left, right);
-    }
+    // XGram, frame drops: the layers are chosen below, once the direction is final
+    final boolean xgramProgrammaticNow = xgramProgrammatic;
+    xgramProgrammatic = false;
+    xgramGateStart = false;
+    xgramPrebuild.clear();
 
     boolean forceRtl = false;
 
@@ -965,6 +1087,17 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       checkShadowDirection();
     }
 
+    // XGram, frame drops: a push or a Back sets its layers now and builds them in a still frame before the motion; a
+    // finger or system swipe with Expressive off has no screen layers (both screens drawn directly). The rest
+    // (fades, sheets, popups, the Expressive card) keeps Telegram X's posted layers on both screens.
+    final boolean xgramHorizontal = XGRAM_SLIDE_LAYERS_V2 && direction == TRANSLATION_HORIZONTAL && !left.usePopupMode() && !right.usePopupMode();
+    final boolean xgramSync = xgramHorizontal && xgramProgrammaticNow;
+    final boolean xgramNoScreenLayers = xgramHorizontal && xgramNav == null;
+    if (Views.HARDWARE_LAYER_ENABLED) {
+      boolean posted = !(xgramSync || xgramNoScreenLayers);
+      setLayerType(View.LAYER_TYPE_HARDWARE, posted ? left : null, posted ? right : null); // the floating button keeps its posted layer
+    }
+
     if (forward) {
       right.applyPlayerOffset(currentPlayerFactor, currentPlayerOffset);
       addChildWrapper(right);
@@ -975,6 +1108,16 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
       left.applyPlayerOffset(currentPlayerFactor, currentPlayerOffset);
       addChildWrapper(left, 0);
     }
+
+    if (Views.HARDWARE_LAYER_ENABLED && xgramSync) {
+      if (xgramNav == null) {
+        xgramLayerNow(forward ? right : left); // Expressive off: only the screen that comes in; the one on display is drawn directly
+      } else {
+        xgramLayerNow(left); // Expressive shared axis: today's two layers, set now instead of posted
+        xgramLayerNow(right);
+      }
+    }
+    xgramGateStart = xgramSync;
 
     if (USE_PREVIEW_FADE) {
       if (direction != TRANSLATION_FADE && direction != TRANSLATION_NONE && !left.usePopupMode()) {
@@ -1250,6 +1393,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     // XGram M3E: a tab switch of the floating navigation toolbar fades through (set before the app bar's preview opens)
     final boolean xgramThrough = direction == TRANSLATION_FADE && xgramIsTabSwitch(left, right);
     xgramSetTabSwitch(xgramThrough, xgramThrough ? (forward ? right : left).xgramBarBandColor() : 0);
+    xgramProgrammatic = true; // XGram, frame drops: a push or a Back (layers set now, the motion starts after they are built)
     prepareFactorAnimation(left, right, forward, direction, PredictiveGesture.NONE);
 
     final boolean[] isDone = new boolean[1];
@@ -1283,6 +1427,8 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
     };
 
     if (!isAttachedToWindow) {
+      xgramGateStart = false; // XGram, frame drops: nothing to build, the end below posts the layers' removal
+      xgramPrebuild.clear();
       onDone.run();
       return;
     }
@@ -1363,6 +1509,12 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
           }
         }
       }, timeout);
+    } else if (xgramGateStart) {
+      // XGram, frame drops: the first layout of the screen coming in and its layer build happen in a still frame
+      xgramGateStart = false;
+      ArrayList<View> layered = new ArrayList<>(xgramPrebuild);
+      xgramPrebuild.clear();
+      xgramStartAfterLayers(forward ? right.getValue() : left.getValue(), layered, animator);
     } else {
       AnimatorUtils.startAnimator(forward ? right.getValue() : left.getValue(), animator);
     }
@@ -1452,6 +1604,7 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   private boolean openPreviewImpl (float y, boolean force, int predictiveGestureMode) {
+    xgramFlushPendingDestroys(); // XGram: popped screens waiting for their destroy go first
     if (getStack().getCurrentIndex() <= 0) {
       processor.clearAnimation();
       return false;
@@ -1565,23 +1718,29 @@ public class NavigationController implements Future<View>, ThemeChangeListener, 
   }
 
   public void setLayerType (final int type, final ViewController<?> left, final ViewController<?> right) {
-    if (shadowView != null) {
-      Views.setLayerType(shadowView, type);
-    }
-    if (fadeView != null/* && (left == null || left.allowHardwareMode() || type != View.LAYER_TYPE_HARDWARE) && (right == null || right.allowHardwareMode() || type != View.LAYER_TYPE_HARDWARE)*/) {
-      Views.setLayerType(fadeView, type);
-    }
-    if (shadowTop != null) {
-      Views.setLayerType(shadowTop, type);
-    }
+    // XGram, frame drops: no layers for shadowView, fadeView and shadowTop: each draws one primitive whose alpha goes
+    // on its paint (hasOverlappingRendering false), the same pixels without a layer allocated and filled per transition
     if (floatingButton != null && !SimpleShapeDrawable.USE_SOFTWARE_SHADOW) {
       Views.setLayerType(floatingButton, type == View.LAYER_TYPE_HARDWARE && SimpleShapeDrawable.USE_SOFTWARE_SHADOW ? View.LAYER_TYPE_SOFTWARE : type);
     }
     if (left != null && left.allowLayerTypeChanges()) {
-      Views.setLayerType(left.getValue(), type);
+      xgramScreenLayer(left.getValue(), type);
     }
     if (right != null && right.allowLayerTypeChanges()) {
-      Views.setLayerType(right.getValue(), type);
+      xgramScreenLayer(right.getValue(), type);
+    }
+  }
+
+  /**
+   * XGram, frame drops: a screen that is already detached (the one a push covered: setNextAsCurrent, rebaseStack) drops
+   * its layer now. It is not drawn, so nothing changes on screen; a post would wait in its run queue until it is attached
+   * again and then strip the layer a Back sets on it (xgramLayerNow), so it would come in without one.
+   */
+  private static void xgramScreenLayer (View v, int type) {
+    if (type == View.LAYER_TYPE_NONE && !v.isAttachedToWindow()) {
+      v.setLayerType(View.LAYER_TYPE_NONE, Views.getLayerPaint());
+    } else {
+      Views.setLayerType(v, type);
     }
   }
 

@@ -167,6 +167,14 @@ public class ShadowView extends View {
     c.drawRect(0, paddingTop, getMeasuredWidth() - getPaddingLeft(), paddingTop + height, Paints.fillingPaint(ColorUtils.alphaColor(factor, Theme.separatorColor())));
   }
 
+  // XGram, frame drops: a view alpha goes on the paint of its one rect (the same pixels), so HWUI never promotes it to
+  // a layer; a background, or the shadow and the separator drawn together, overlap and keep the layer
+  @Override
+  public boolean hasOverlappingRendering () {
+    float s = Theme.getSeparatorReplacement();
+    return getBackground() != null || (s != 0f && s != 1f);
+  }
+
   @Override
   protected void onDraw (Canvas c) {
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
