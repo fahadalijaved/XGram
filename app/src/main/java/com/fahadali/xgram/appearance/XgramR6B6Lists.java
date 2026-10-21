@@ -577,12 +577,13 @@ public final class XgramR6B6Lists {
       final boolean rtl = Lang.rtl();
       final int start = Screen.dp(icon != null ? 12f + XgramM3Sheets.BUTTON_ICON_SIZE + XgramM3Sheets.BUTTON_ICON_LABEL_SPACE : XgramM3Sheets.BUTTON_SPACE);
       final int end = Screen.dp(XgramM3Sheets.BUTTON_SPACE);
-      setPadding(rtl ? end : start, 0, rtl ? start : end, 0);
       setMinWidth(Screen.dp(48f));
       Views.setClickable(this);
       container = XgramM3Sheets.attachFilledButton(this, XgramExpressive.SECONDARY_CONTAINER);
       // a 40dp container in a 48dp touch target: give the view 48dp of height
       setBackground(new InsetDrawable(getBackground(), 0, Screen.dp(4f), 0, Screen.dp(4f)));
+      // after setBackground: it replaces the padding with the inset's (0 at the sides)
+      setPadding(rtl ? end : start, 0, rtl ? start : end, 0);
       syncColors();
     }
 

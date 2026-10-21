@@ -343,7 +343,6 @@ public final class XgramR5Lists {
       setSingleLine(true);
       setEllipsize(TextUtils.TruncateAt.END);
       setGravity(Gravity.CENTER);
-      setPadding(Screen.dp(24f), 0, Screen.dp(24f), 0);
       setMinimumWidth(Screen.dp(64f));
       setMaxWidth(Screen.dp(400f));
       Views.setClickable(this);
@@ -374,6 +373,8 @@ public final class XgramR5Lists {
       Drawable background = getBackground();
       // 40dp container in the 48dp touch target
       setBackground(new InsetDrawable(background, 0, Screen.dp(4f), 0, Screen.dp(4f)));
+      // after setBackground: it replaces the padding with the inset's (0 at the sides), so the label touched the pill's edges
+      setPadding(Screen.dp(24f), 0, Screen.dp(24f), 0);
     }
 
     @Override
