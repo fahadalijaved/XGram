@@ -916,7 +916,9 @@ public final class XgramMessagePopup {
       setMeasuredDimension(width, height);
       final Rect safe = safeRect();
       final int gap = Screen.dp(GAP);
-      final int roomWidth = Math.max(0, safe.width());
+      // As wide as the message's pane at most (two panes open: the chat's half, not the window), 8dp in on each side
+      final int paneWidth = anchor.getWidth() > 0 ? anchor.getWidth() - Screen.dp(EDGE) * 2 : safe.width();
+      final int roomWidth = Math.max(0, Math.min(safe.width(), paneWidth));
       final int roomHeight = Math.max(0, safe.height());
       int used = 0;
       if (pill != null) {
