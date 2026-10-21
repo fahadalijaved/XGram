@@ -209,32 +209,51 @@ public final class XgramMessagePopup {
     if (state != null && (state.needShowMessageReactionSenders || state.needShowMessageViews)) {
       final boolean views = state.needShowMessageViews, reactions = state.needShowMessageReactionSenders;
       final int total = msg.getMessageReactions().getTotalCount();
-      final CharSequence title = reactions && total > 0 ? Lang.plural(R.string.xReacted, total) : Lang.getString(R.string.XgramPopupViewers);
-      final TextView[] detailsRow = new TextView[1];
-      final boolean[] loading = new boolean[1];
-      detailsRow[0] = card.addItem(R.id.btn_xgramPopupDetails, title, R.drawable.baseline_visibility_24, null, v -> {
-        if (loading[0]) {
+      final boolean reactedTitle = reactions && total > 0;
+      final CharSequence title = reactedTitle ? Lang.plural(R.string.xReacted, total) : Lang.getString(R.string.XgramPopupViewers);
+      // Who viewed and who reacted load while the menu opens (as Telegram's), so a tap shows them at once: no loading
+      // line in between. A tap before they are here opens them the moment they come.
+      final DetailsState details = new DetailsState();
+      final Runnable openDetails = () -> {
+        if (popup.isWindowHidden() || !root.isOnMenu() || details.viewers == null) {
+          return; // closed, or the grid took the popup meanwhile
+        }
+        if (details.viewers.isEmpty()) {
+          UI.showToast(R.string.XgramPopupNoViewers, android.widget.Toast.LENGTH_SHORT);
           return;
         }
-        loading[0] = true;
-        detailsRow[0].setText(Lang.getString(R.string.LoadingInformation));
-        loadDetails(tdlib, msg, views, reactions, entries -> {
-          loading[0] = false;
-          detailsRow[0].setText(title);
-          if (popup.isWindowHidden() || !root.isOnMenu()) {
-            return; // closed, or the grid took the popup meanwhile
-          }
-          if (entries.isEmpty()) {
-            UI.showToast(R.string.XgramPopupNoViewers, android.widget.Toast.LENGTH_SHORT);
-            return;
-          }
-          MenuMoreWrap details = newDetails(context, tdlib, msg, themeListeners, title, entries, () -> root.showPage(Root.PAGE_MENU, null), sender -> {
-            afterClose[0] = () -> tdlib.ui().openSenderProfile(c, sender, null);
-            popup.hideWindow(true);
-          });
-          details.xgramSetMaxItemsWidth(Math.min(Screen.dp(CARD_MAX_WIDTH), maxWidth));
-          root.showPage(Root.PAGE_DETAILS, details);
+        MenuMoreWrap page = newDetails(context, tdlib, msg, themeListeners, details.title != null ? details.title : title, details.viewers, () -> root.showPage(Root.PAGE_MENU, null), sender -> {
+          afterClose[0] = () -> tdlib.ui().openSenderProfile(c, sender, null);
+          popup.hideWindow(true);
         });
+        page.xgramSetMaxItemsWidth(Math.min(Screen.dp(CARD_MAX_WIDTH), maxWidth));
+        root.showPage(Root.PAGE_DETAILS, page);
+      };
+      final TextView row = card.addItem(R.id.btn_xgramPopupDetails, title, R.drawable.baseline_visibility_24, null, v -> {
+        if (details.viewers == null) {
+          details.waiting = true;
+        } else {
+          openDetails.run();
+        }
+      });
+      loadDetails(tdlib, msg, views, reactions, viewers -> {
+        details.viewers = viewers;
+        if (!reactedTitle) {
+          int seen = 0;
+          for (Viewer viewer : viewers) {
+            if (viewer.viewed) {
+              seen++;
+            }
+          }
+          if (seen > 0) {
+            details.title = Lang.getString(R.string.XgramPopupViewersCount, seen); // "Seen by 5"
+            row.setText(details.title);
+          }
+        }
+        if (details.waiting) {
+          details.waiting = false;
+          openDetails.run();
+        }
       });
     }
     final Handle handle = new Handle(card);
@@ -612,6 +631,13 @@ public final class XgramMessagePopup {
   }
 
   // Who viewed and who reacted (Seen by)
+
+  /** The card's row for who viewed: what loaded (null until then), whether a tap is waiting, its counted title. */
+  private static final class DetailsState {
+    @Nullable List<Viewer> viewers;
+    boolean waiting;
+    @Nullable CharSequence title;
+  }
 
   private static final class Viewer {
     final TdApi.MessageSender sender;

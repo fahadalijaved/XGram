@@ -315,6 +315,12 @@ val buildNativeTasks = mutableMapOf<String, TaskProvider<*>>()
 android {
   namespace = "org.thunderdog.challegram"
 
+  // XGram: compileSdk 37.1, which Compose 1.13's AARs ask for (minCompileSdk 37, minor 1). After ModulePlugin's 37.0,
+  // so it wins; the other modules (no Compose) stay on 37.0.
+  compileSdk {
+    version = release(37) { minorApiLevel = 1 }
+  }
+
   lint {
     disable += arrayOf(
       "MissingTranslation",

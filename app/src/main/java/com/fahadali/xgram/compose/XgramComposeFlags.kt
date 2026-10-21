@@ -11,7 +11,6 @@
  */
 package com.fahadali.xgram.compose
 
-import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListPrefetchScope
@@ -29,9 +28,8 @@ import androidx.compose.runtime.Composable
  */
 @OptIn(ExperimentalFoundationApi::class)
 object XgramComposeFlags {
-  init {
-    ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled = false
-  }
+  // Compose 1.13 dropped ComposeFoundationFlags.isPausableCompositionInPrefetchEnabled (and fixed the RectList crash
+  // itself, see libs.versions.toml); the settings lists still don't prefetch (XgramNoPrefetch).
 
   /** Applies the flags; called before a ComposeView is made, so it runs before the first composition. */
   @JvmStatic

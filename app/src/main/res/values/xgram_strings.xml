@@ -93,6 +93,7 @@
   <string name="XgramMessagePopupInfo">A small menu next to the message with the reactions above it, like Telegram</string>
   <string name="XgramPopupViewers">Seen by</string>
   <string name="XgramPopupNoViewers">Nobody yet</string>
+  <string name="XgramPopupViewersCount">Seen by %1$d</string>
   <string name="XgramAddBotTitle">Add to group or channel</string>
   <string name="XgramAddBotAsAdmin">Add as admin</string>
   <string name="XgramAddBotAsAdminInfo">In groups too. Channels always add bots as admins</string>

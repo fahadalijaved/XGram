@@ -22,6 +22,10 @@ androidx-dynamicanimation = "1.1.0"
 # XGram: Jetpack Compose (Material 3 Expressive settings pages, xgram-m3e only)
 androidx-compose-bom = "2026.09.00"
 androidx-compose-material3 = "1.5.0-beta01" # the BOM maps material3 to 1.4.0, which has no expressive APIs
+# Compose UI 1.13.0-beta01 fixed "LayoutNode not found in RectList" (alignment lines queried during measurement: M3
+# list items in a flung LazyColumn crashed the settings pages); ui, foundation and animation stay on one version.
+# These AARs need compileSdk 37.1 (ModulePlugin: minorApiLevel = 1).
+androidx-compose-core = "1.13.0-beta02"
 androidx-lifecycle-compose = "2.11.0"
 
 google-zxing = "3.5.4"
@@ -172,13 +176,13 @@ androidx-palette = { module = "androidx.palette:palette", version.ref = "android
 
 # XGram: Jetpack Compose (versions from the BOM, except material3)
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "androidx-compose-bom" }
-androidx-compose-ui = { module = "androidx.compose.ui:ui" }
-androidx-compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
-androidx-compose-foundation = { module = "androidx.compose.foundation:foundation" }
-androidx-compose-animation = { module = "androidx.compose.animation:animation" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui", version.ref = "androidx-compose-core" }
+androidx-compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics", version.ref = "androidx-compose-core" }
+androidx-compose-foundation = { module = "androidx.compose.foundation:foundation", version.ref = "androidx-compose-core" }
+androidx-compose-animation = { module = "androidx.compose.animation:animation", version.ref = "androidx-compose-core" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "androidx-compose-material3" }
-androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
-androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "androidx-compose-core" }
+androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "androidx-compose-core" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-latest" }
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle-compose" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinx-coroutines" }
