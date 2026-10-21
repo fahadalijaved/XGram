@@ -163,6 +163,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
     }
     setForceLegacy(mode == MODE_ROUND_VIDEO || mode == MODE_QR);
     this.cameraMode = mode;
+    xgramSetupControls(); // XGram: the controls are the main camera's only
     if (contentView != null) {
       updateContentScale();
       updateQrButtonHide();
@@ -194,6 +195,8 @@ public class CameraController extends ViewController<Void> implements CameraDele
   private FrameLayoutFix switchCameraButtonParent;
   private TextView durationView;
   private @Nullable android.widget.ImageView xgramQrClose; // XGram M3E: the QR scanner's close button
+  private @Nullable com.fahadali.xgram.camera.XgramCameraControls xgramControls; // XGram: Camera X (test)
+  private int xgramShutterGravity = Gravity.BOTTOM;
 
   private CameraManager<?> manager;
 
@@ -293,6 +296,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
     contentView.addView(manager.getView());
     switchCameraButton.setCameraIconRes(manager.preferFrontFacingCamera());
     contentView.addView(cameraOverlayView);
+    xgramSetupControls(); // XGram
     
     updateQrButtonHide();
     updateControlMargins();
@@ -363,6 +367,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
   private boolean needLegacy () {
     if (forceLegacy || !Config.CAMERA_X_AVAILABLE)
       return true;
+    if (com.fahadali.xgram.XgramSettings.instance().cameraXTest()) {
+      return false; // XGram: Camera X (test): CameraX with XGram's controls (round videos and QR codes keep Camera1)
+    }
     int type = Settings.instance().getCameraType();
     return type == Settings.CAMERA_TYPE_SYSTEM ? Settings.CAMERA_TYPE_DEFAULT == Settings.CAMERA_TYPE_LEGACY : type == Settings.CAMERA_TYPE_LEGACY;
   }
@@ -390,6 +397,56 @@ public class CameraController extends ViewController<Void> implements CameraDele
         manager = new CameraManagerX(context, this);
       }
       contentView.addView(manager.getView(), contentView.getChildCount() - 1);
+    }
+    xgramSetupControls(); // XGram
+  }
+
+  // XGram: Camera X (test): lenses, modes, focus and exposure over the CameraX preview (com.fahadali.xgram.camera)
+
+  private void xgramSetupControls () {
+    if (rootLayout == null || contentView == null) {
+      return;
+    }
+    boolean want = cameraMode == MODE_MAIN && manager instanceof CameraManagerX && com.fahadali.xgram.XgramSettings.instance().cameraXTest();
+    if (want) {
+      if (xgramControls == null) {
+        xgramControls = new com.fahadali.xgram.camera.XgramCameraControls(context(), new com.fahadali.xgram.camera.XgramCameraControls.Host() {
+          @Override
+          public View shutter () {
+            return button;
+          }
+
+          @Override
+          public int shutterGravity () {
+            return xgramShutterGravity;
+          }
+
+          @Override
+          public View preview () {
+            return manager != null ? manager.getView() : null;
+          }
+
+          @Override
+          public void showHint (CharSequence text) {
+            displayHint(text.toString());
+          }
+        });
+        rootLayout.addView(xgramControls, rootLayout.indexOfChild(contentView) + 1);
+      }
+      xgramControls.setVisibility(View.VISIBLE);
+      xgramControls.bind((CameraManagerX) manager);
+      xgramControls.setContentRotation(getTransformedRotation());
+      updateControlsStyles();
+    } else if (xgramControls != null) {
+      xgramControls.bind(null);
+      xgramControls.setVisibility(View.GONE);
+    }
+  }
+
+  /** XGram: a touch on the preview (CameraRootLayout): pinch, tap to focus, long press to lock. */
+  void xgramOnPreviewTouch (android.view.MotionEvent event) {
+    if (xgramControls != null && xgramControls.getVisibility() == View.VISIBLE && isFocused()) {
+      xgramControls.onPreviewTouch(event);
     }
   }
 
@@ -503,6 +560,10 @@ public class CameraController extends ViewController<Void> implements CameraDele
     flashButton.setScaleY(scale);
     flashButton.setAlpha(controlsFactor);
 
+    if (xgramControls != null) {
+      xgramControls.setAppearance(factor, controlsFactor); // XGram: lenses with the shutter, modes with the side buttons
+    }
+
     float durationFactor = factor * videoFactor;
 
     scale = .7f + .3f * durationFactor;
@@ -615,6 +676,10 @@ public class CameraController extends ViewController<Void> implements CameraDele
 
     int bottomGravityCentered = makeCenter(bottomGravity);
     int topGravityCentered = makeCenter(topGravity);
+    xgramShutterGravity = bottomGravity;
+    if (xgramControls != null) {
+      xgramControls.requestLayout(); // XGram: next to the shutter
+    }
 
     setLayoutParams(durationView, topGravity, topGravityCentered, Screen.dp(18f), 0);
     // XGram: the 80dp M3E shutter (no padding) is centred on the 56dp side buttons' line
@@ -1326,6 +1391,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
     if (xgramQrClose != null) {
       xgramQrClose.setRotation(rotation); // XGram M3E
     }
+    if (xgramControls != null) {
+      xgramControls.setContentRotation(rotation); // XGram
+    }
   }
 
   private int getOutputRotation () {
@@ -1477,6 +1545,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
     Settings.instance().removeNewSettingsListener(this);
     if (context().xgramWindow() != null) {
       context().xgramWindow().removeListener(xgramWindowListener); // XGram
+    }
+    if (xgramControls != null) {
+      xgramControls.bind(null); // XGram
     }
     if (manager != null) {
       manager.destroy();

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram Camera X: CameraX with lenses, the phone's camera modes, focus and exposure (com.fahadali.xgram.camera) -->
+
+  <!-- Ids -->
+  <item name="btn_xgramCameraXTest" type="id" />
+
+  <string name="XgramCameraXTest">Camera X (test)</string>
+  <string name="XgramCameraXTestInfo">The in-app camera with CameraX: lenses, Night, Portrait and HDR, tap to focus, exposure. Still a test: CI builds keep the usual camera until it is switched on here.</string>
+  <string name="XgramCameraNight">Night</string>
+  <string name="XgramCameraPhoto">Photo</string>
+  <string name="XgramCameraPortrait">Portrait</string>
+  <string name="XgramCameraHdr">HDR</string>
+  <string name="XgramCameraLocked">Focus and exposure locked</string>
+  <string name="XgramCameraNoVideo">%1$s takes photos only. Switch to Photo to record a video.</string>
+</resources>

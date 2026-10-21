@@ -490,6 +490,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
         } else if (itemId == R.id.btn_xgramDriveTest) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().driveTest(), isUpdate);
           view.setData(R.string.XgramDriveTestInfo);
+        } else if (itemId == R.id.btn_xgramCameraXTest) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().cameraXTest(), isUpdate);
+          view.setData(R.string.XgramCameraXTestInfo);
         } else if (itemId == R.id.btn_secret_replacePhoneNumber) {
           view.getToggler().setRadioEnabled(Settings.instance().needHidePhoneNumber(), isUpdate);
         } else if (itemId == R.id.btn_secret_disableQrProcess) {
@@ -813,6 +816,11 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
           if (testerLevel >= Tdlib.TesterLevel.TESTER || BuildConfig.DEBUG || com.fahadali.xgram.XgramSettings.instance().driveTest()) {
             // XGram Drive: a test for now (debug builds start with it on, CI builds off); shown to testers, or while on
             items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramDriveTest, R.drawable.baseline_cloud_24, R.string.XgramDriveTest, false));
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+          }
+          if (testerLevel >= Tdlib.TesterLevel.TESTER || BuildConfig.DEBUG || com.fahadali.xgram.XgramSettings.instance().cameraXTest()) {
+            // XGram: Camera X, a test like Drive
+            items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramCameraXTest, R.drawable.baseline_camera_alt_24, R.string.XgramCameraXTest, false));
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
           }
           // items.add(new SettingItem(SettingItem.TYPE_SEPARATOR_FULL));
@@ -1155,6 +1163,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
       Intents.shareText(U.getUsefulMetadata(null) + "\n" + crash.message);
     } else if (viewId == R.id.btn_xgramLogsShare) {
       com.fahadali.xgram.XgramLogs.confirmAndShare(this);
+    } else if (viewId == R.id.btn_xgramCameraXTest) {
+      com.fahadali.xgram.XgramSettings.instance().setCameraXTest(!com.fahadali.xgram.XgramSettings.instance().cameraXTest()); // XGram Camera X (test)
+      adapter.updateValuedSettingById(R.id.btn_xgramCameraXTest);
     } else if (viewId == R.id.btn_xgramDriveTest) {
       com.fahadali.xgram.XgramSettings.instance().setDriveTest(!com.fahadali.xgram.XgramSettings.instance().driveTest()); // XGram Drive (test)
       adapter.updateValuedSettingById(R.id.btn_xgramDriveTest);

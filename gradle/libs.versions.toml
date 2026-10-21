@@ -232,6 +232,8 @@ androidx-camera-lifecycle-latest = { module = "androidx.camera:camera-lifecycle"
 
 androidx-camera-view-legacy = { module = "androidx.camera:camera-view", version.ref = "androidx-camera-legacy" }
 androidx-camera-view-latest = { module = "androidx.camera:camera-view", version.ref = "androidx-camera-latest" }
+androidx-camera-extensions-legacy = { module = "androidx.camera:camera-extensions", version.ref = "androidx-camera-legacy" }
+androidx-camera-extensions-latest = { module = "androidx.camera:camera-extensions", version.ref = "androidx-camera-latest" }
 
 androidx-media-common-legacy = { module = "androidx.media3:media3-common", version.ref = "androidx-media-legacy" }
 androidx-media-common-lollipop = { module = "androidx.media3:media3-common", version.ref = "androidx-media-lollipop" }

@@ -85,6 +85,8 @@ public final class XgramSettings {
   public static final String KEY_ADD_BOT_ADMIN = "xgram_add_bot_admin", KEY_ADD_BOT_ALL_RIGHTS = "xgram_add_bot_all_rights";
   /** XGram Drive is a test for now: Testing utilities switches it on (debug builds start with it on, CI builds off). */
   public static final String KEY_DRIVE_TEST = "xgram_drive_test";
+  /** Camera X is a test for now: the main camera with CameraX and XGram's controls (debug builds on, CI builds off). */
+  public static final String KEY_CAMERA_X_TEST = "xgram_camera_x_test";
 
   public static final String INPUT_BUTTON_COMMANDS = "commands";
   public static final String INPUT_BUTTON_CAMERA = "camera";
@@ -613,6 +615,15 @@ public final class XgramSettings {
 
   public void setDriveTest (boolean value) {
     put(KEY_DRIVE_TEST, value);
+  }
+
+  /** Camera X (a test): the in-app camera uses CameraX with lenses, modes, focus and exposure. */
+  public boolean cameraXTest () {
+    return pmc().getBoolean(KEY_CAMERA_X_TEST, org.thunderdog.challegram.BuildConfig.DEBUG);
+  }
+
+  public void setCameraXTest (boolean value) {
+    put(KEY_CAMERA_X_TEST, value);
   }
 
   // Network

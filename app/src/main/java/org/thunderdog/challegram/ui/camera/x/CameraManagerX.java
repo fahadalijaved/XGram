@@ -12,29 +12,40 @@
  */
 package org.thunderdog.challegram.ui.camera.x;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.hardware.camera2.CameraCharacteristics;
 import android.os.Build;
 import android.os.SystemClock;
 import android.util.Rational;
+import android.util.SizeF;
 import android.view.TextureView;
 import android.view.View;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 import androidx.camera.camera2.Camera2Config;
+import androidx.camera.camera2.interop.Camera2CameraInfo;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
+import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraInfoUnavailableException;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ExposureState;
+import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.Preview;
 import androidx.camera.core.ZoomState;
 import androidx.camera.core.impl.UseCaseConfigFactory;
 import androidx.camera.core.resolutionselector.AspectRatioStrategy;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
+import androidx.camera.extensions.ExtensionMode;
+import androidx.camera.extensions.ExtensionsManager;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.video.FallbackStrategy;
 import androidx.camera.video.FileOutputOptions;
@@ -47,6 +58,7 @@ import androidx.camera.video.VideoRecordEvent;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
+import androidx.lifecycle.Observer;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -59,9 +71,15 @@ import org.thunderdog.challegram.ui.camera.CameraManager;
 import org.thunderdog.challegram.ui.camera.CameraQrBridge;
 import org.thunderdog.challegram.unsorted.Settings;
 
+import me.vkryl.android.AnimatorUtils;
+
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
@@ -181,6 +199,23 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       Log.e(Log.TAG_CAMERA, "Unable to camera %d", lensFacing);
     }
 
+    // XGram: the phone's own camera mode (Night, Portrait, HDR) takes the photos (com.fahadali.xgram.camera)
+    xgramBaseSelector = cameraSelector;
+    boolean xgramExtension = false;
+    if (xgramListener != null && xgramMode != ExtensionMode.NONE && !delegate.useQrScanner()) {
+      try {
+        if (xgramExtensions != null && xgramExtensions.isExtensionAvailable(cameraSelector, xgramMode)) {
+          cameraSelector = xgramExtensions.getExtensionEnabledCameraSelector(cameraSelector, xgramMode);
+          xgramExtension = true;
+        } else {
+          xgramMode = ExtensionMode.NONE;
+        }
+      } catch (Throwable t) {
+        Log.e(Log.TAG_CAMERA, "XGram: camera mode %d unavailable", t, xgramMode);
+        xgramMode = ExtensionMode.NONE;
+      }
+    }
+
     Preview.Builder previewBuilder = new Preview.Builder()
       .setTargetRotation(previewRotation = getSurfaceRotation())
       .setResolutionSelector(resolutionSelector);
@@ -229,11 +264,20 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       if (needQrScanner) {
         // We probably don't want to take photos or videos while scanning QR codes. (Also, there are 3 use case limit in CameraX)
         this.camera = cameraProvider.bindToLifecycle((LifecycleOwner) context, cameraSelector, preview, imageAnalyzer);
+      } else if (xgramExtension) {
+        // XGram: the phone's modes take photos only (no video with an extension)
+        this.camera = cameraProvider.bindToLifecycle((LifecycleOwner) context, cameraSelector, preview, imageCapture);
       } else {
         this.camera = cameraProvider.bindToLifecycle((LifecycleOwner) context, cameraSelector, preview, imageCapture, videoCapture);
       }
+      xgramVideoBound = !needQrScanner && !xgramExtension;
     } catch (Exception e) {
       Log.e(Log.TAG_CAMERA, "Use case binding failed", e);
+      if (xgramExtension) {
+        // XGram: the mode could not be bound: the usual camera instead
+        xgramMode = ExtensionMode.NONE;
+        bindPreview();
+      }
       return;
     }
 
@@ -242,6 +286,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
     UI.post(delegate::onRenderedFirstFrame, 800);
 
     reportFlashMode();
+    xgramOnBound(); // XGram
   }
 
   private static boolean cameraXConfigured;
@@ -257,6 +302,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
   @Override
   public void closeCamera () {
     if (this.isOpen) {
+      xgramStopZoom(); // XGram
       if (cameraProvider != null) {
         cameraProvider.unbindAll();
         preview = null;
@@ -469,6 +515,10 @@ public class CameraManagerX extends CameraManager<PreviewView> {
 
   @Override
   protected boolean onStartVideoCapture (int outRotation) {
+    if (xgramListener != null && !xgramVideoBound) {
+      xgramListener.onVideoUnavailable(xgramMode); // XGram: a camera mode for photos only
+      return false;
+    }
     if (videoCapture != null) {
       boolean success;
       File outFile = getOutputFile(true);
@@ -585,6 +635,294 @@ public class CameraManagerX extends CameraManager<PreviewView> {
     isPaused = false;
     if (isOpen) {
       bindPreview();
+    }
+  }
+
+  // XGram: lenses, zoom, focus and exposure, and the phone's own camera modes (Night, Portrait, HDR), for XGram's
+  // camera controls (com.fahadali.xgram.camera.XgramCameraControls). Nothing here runs while no controls listen.
+
+  public interface XgramListener {
+    /** A camera was bound: its lenses, zoom range, exposure and modes may have changed. */
+    void onCameraBound ();
+
+    /** The zoom ratio now (pinch, a lens, the shutter's drag, the volume keys). */
+    void onZoomRatio (float ratio);
+
+    /** The shutter was held in a camera mode that takes photos only. */
+    void onVideoUnavailable (int mode);
+  }
+
+  private @Nullable XgramListener xgramListener;
+  private @Nullable ExtensionsManager xgramExtensions;
+  private boolean xgramExtensionsRequested, xgramVideoBound = true;
+  private @Nullable CameraSelector xgramBaseSelector;
+  private int xgramMode = ExtensionMode.NONE;
+  private int[] xgramModes = {ExtensionMode.NONE};
+  private float[] xgramStops = {1f};
+  private @Nullable ValueAnimator xgramZoomAnimator;
+  private @Nullable Camera xgramObservedCamera;
+  private final Observer<ZoomState> xgramZoomObserver = state -> {
+    if (xgramListener == null || state == null) {
+      return;
+    }
+    if (xgramStops.length == 1 && state.getMaxZoomRatio() > 1f && camera != null) {
+      // The zoom range came after the camera was bound: its lenses now
+      xgramStops = xgramLensStops(camera.getCameraInfo(), state.getMinZoomRatio(), state.getMaxZoomRatio());
+      xgramListener.onCameraBound();
+    }
+    xgramListener.onZoomRatio(state.getZoomRatio());
+  };
+
+  public void xgramSetListener (@Nullable XgramListener listener) {
+    this.xgramListener = listener;
+    if (listener == null) {
+      xgramStopZoom();
+      if (xgramObservedCamera != null) {
+        xgramObservedCamera.getCameraInfo().getZoomState().removeObserver(xgramZoomObserver);
+        xgramObservedCamera = null;
+      }
+      // The usual camera from the next binding on (never bound again from here: this manager may be on its way out)
+      xgramMode = ExtensionMode.NONE;
+    } else if (camera != null) {
+      xgramOnBound();
+    }
+  }
+
+  private void xgramOnBound () {
+    if (camera == null || xgramListener == null) {
+      return;
+    }
+    if (xgramObservedCamera != camera) {
+      if (xgramObservedCamera != null) {
+        xgramObservedCamera.getCameraInfo().getZoomState().removeObserver(xgramZoomObserver);
+      }
+      xgramObservedCamera = camera;
+      camera.getCameraInfo().getZoomState().observe((LifecycleOwner) context, xgramZoomObserver);
+    }
+    xgramStops = xgramLensStops(camera.getCameraInfo(), getMinZoom(), getMaxZoom());
+    if (!xgramExtensionsRequested && cameraProvider != null) {
+      xgramExtensionsRequested = true;
+      final ListenableFuture<ExtensionsManager> future = ExtensionsManager.getInstanceAsync(context, cameraProvider);
+      future.addListener(() -> {
+        try {
+          xgramExtensions = future.get();
+        } catch (Throwable t) {
+          Log.w(Log.TAG_CAMERA, "XGram: no camera extensions", t);
+        }
+        xgramUpdateModes();
+        if (xgramListener != null) {
+          xgramListener.onCameraBound();
+        }
+      }, ContextCompat.getMainExecutor(context));
+    }
+    xgramUpdateModes();
+    xgramListener.onCameraBound();
+  }
+
+  private void xgramUpdateModes () {
+    List<Integer> modes = new ArrayList<>();
+    if (xgramExtensions != null && xgramBaseSelector != null && !delegate.useQrScanner()) {
+      // In the order a camera app shows them: Night, Photo, Portrait, HDR
+      for (int mode : new int[] {ExtensionMode.NIGHT, ExtensionMode.NONE, ExtensionMode.BOKEH, ExtensionMode.HDR}) {
+        try {
+          if (mode == ExtensionMode.NONE || xgramExtensions.isExtensionAvailable(xgramBaseSelector, mode)) {
+            modes.add(mode);
+          }
+        } catch (Throwable ignored) { }
+      }
+    }
+    if (modes.isEmpty()) {
+      modes.add(ExtensionMode.NONE);
+    }
+    int[] result = new int[modes.size()];
+    for (int i = 0; i < result.length; i++) {
+      result[i] = modes.get(i);
+    }
+    xgramModes = result;
+  }
+
+  /** The modes this lens can take photos in (ExtensionMode; NONE is the usual camera). */
+  public int[] xgramModes () {
+    return xgramModes;
+  }
+
+  public int xgramMode () {
+    return xgramMode;
+  }
+
+  /** The zoom ratios of the lenses ("0.6", "1", "3"), or a 2× crop without a telephoto camera; at least {1}. */
+  public float[] xgramLensStops () {
+    return xgramStops;
+  }
+
+  public boolean xgramIsBusy () {
+    return switchingCamera || isCapturingVideo();
+  }
+
+  /** Switches to a camera mode (ExtensionMode); the preview blurs while the camera is bound again. */
+  public void xgramSetMode (int mode) {
+    if (mode == xgramMode || switchingCamera || isCapturingVideo()) {
+      return;
+    }
+    xgramMode = mode;
+    if (cameraProvider == null) {
+      return;
+    }
+    switchingCamera = true;
+    delegate.onResetRenderState(true, () -> {
+      bindPreview();
+      switchingCamera = false;
+    });
+  }
+
+  private void xgramStopZoom () {
+    if (xgramZoomAnimator != null) {
+      xgramZoomAnimator.cancel();
+      xgramZoomAnimator = null;
+    }
+  }
+
+  /** Zooms to {@code ratio} (a lens: animated; a pinch: at once). */
+  public void xgramSetZoom (float ratio, boolean animated) {
+    if (camera == null) {
+      return;
+    }
+    final float min = getMinZoom(), max = getMaxZoom();
+    final float target = max > 0f ? Math.max(min, Math.min(max, ratio)) : ratio;
+    xgramStopZoom();
+    final float from = getCurrentZoom();
+    if (!animated || from <= 0f || Math.abs(from - target) < .01f) {
+      camera.getCameraControl().setZoomRatio(target);
+      onZoomChanged(target);
+      return;
+    }
+    ValueAnimator animator = ValueAnimator.ofFloat(from, target);
+    animator.setDuration(260L);
+    animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
+    animator.addUpdateListener(a -> {
+      if (camera != null) {
+        float value = (float) a.getAnimatedValue();
+        camera.getCameraControl().setZoomRatio(value);
+        onZoomChanged(value);
+      }
+    });
+    xgramZoomAnimator = animator;
+    animator.start();
+  }
+
+  /**
+   * Focuses and meters at a point of the preview (its own coordinates); {@code lock}: until the next tap (AE/AF lock).
+   * False: the camera can't.
+   */
+  public boolean xgramFocusAt (float x, float y, boolean lock) {
+    if (camera == null || cameraView == null) {
+      return false;
+    }
+    try {
+      MeteringPoint point = cameraView.getMeteringPointFactory().createPoint(x, y);
+      FocusMeteringAction action = xgramFocusAction(point, FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE | FocusMeteringAction.FLAG_AWB, lock);
+      if (!camera.getCameraInfo().isFocusMeteringSupported(action)) {
+        // A fixed-focus camera (most front cameras): exposure and white balance only
+        action = xgramFocusAction(point, FocusMeteringAction.FLAG_AE | FocusMeteringAction.FLAG_AWB, lock);
+        if (!camera.getCameraInfo().isFocusMeteringSupported(action)) {
+          return false;
+        }
+      }
+      camera.getCameraControl().startFocusAndMetering(action);
+      return true;
+    } catch (Throwable t) {
+      Log.w(Log.TAG_CAMERA, "XGram: cannot focus", t);
+      return false;
+    }
+  }
+
+  private static FocusMeteringAction xgramFocusAction (MeteringPoint point, int flags, boolean lock) {
+    FocusMeteringAction.Builder builder = new FocusMeteringAction.Builder(point, flags);
+    if (lock) {
+      builder.disableAutoCancel();
+    } else {
+      builder.setAutoCancelDuration(5, TimeUnit.SECONDS);
+    }
+    return builder.build();
+  }
+
+  public void xgramCancelFocus () {
+    if (camera != null) {
+      camera.getCameraControl().cancelFocusAndMetering();
+    }
+  }
+
+  /** The exposure compensation the camera supports (null before it is bound). */
+  public @Nullable ExposureState xgramExposure () {
+    return camera != null ? camera.getCameraInfo().getExposureState() : null;
+  }
+
+  public void xgramSetExposure (int index) {
+    if (camera != null) {
+      camera.getCameraControl().setExposureCompensationIndex(index);
+    }
+  }
+
+  /** The lenses as zoom ratios: the ultra wide (the zoom's minimum below 1), 1, the telephoto cameras (35mm equivalents). */
+  @SuppressWarnings("UnsafeOptInUsageError")
+  public static float[] xgramLensStops (CameraInfo info, float minZoom, float maxZoom) {
+    List<Float> stops = new ArrayList<>();
+    stops.add(1f);
+    if (maxZoom <= 0f) {
+      return new float[] {1f};
+    }
+    if (minZoom > 0f && minZoom < .95f) {
+      stops.add(Math.round(minZoom * 10f) / 10f);
+    }
+    float main = xgramEquivalentFocalLength(info);
+    boolean hasTele = false;
+    if (main > 0f) {
+      try {
+        for (CameraInfo physical : info.getPhysicalCameraInfos()) {
+          float focal = xgramEquivalentFocalLength(physical);
+          if (focal <= 0f) {
+            continue;
+          }
+          float ratio = focal / main;
+          if (ratio > 1.4f && ratio <= maxZoom + .05f) {
+            stops.add(ratio >= 1.8f ? (float) Math.round(ratio) : Math.round(ratio * 10f) / 10f);
+            hasTele = true;
+          }
+        }
+      } catch (Throwable ignored) { }
+    }
+    if (!hasTele && maxZoom >= 2f) {
+      stops.add(2f); // a 2× crop without a telephoto camera
+    }
+    Collections.sort(stops);
+    List<Float> unique = new ArrayList<>();
+    for (float stop : stops) {
+      float clamped = Math.max(minZoom > 0f ? minZoom : stop, Math.min(maxZoom, stop));
+      if (unique.isEmpty() || Math.abs(unique.get(unique.size() - 1) - clamped) >= .1f) {
+        unique.add(clamped);
+      }
+    }
+    float[] result = new float[unique.size()];
+    for (int i = 0; i < result.length; i++) {
+      result[i] = unique.get(i);
+    }
+    return result;
+  }
+
+  /** The lens's focal length as on a 35mm camera (0: unknown). */
+  @SuppressWarnings("UnsafeOptInUsageError")
+  private static float xgramEquivalentFocalLength (CameraInfo info) {
+    try {
+      Camera2CameraInfo camera2 = Camera2CameraInfo.from(info);
+      float[] focalLengths = camera2.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+      SizeF sensor = camera2.getCameraCharacteristic(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+      if (focalLengths == null || focalLengths.length == 0 || sensor == null) {
+        return 0f;
+      }
+      double diagonal = Math.hypot(sensor.getWidth(), sensor.getHeight());
+      return diagonal > 0 ? (float) (focalLengths[0] * 43.27 / diagonal) : 0f;
+    } catch (Throwable t) {
+      return 0f;
     }
   }
 }

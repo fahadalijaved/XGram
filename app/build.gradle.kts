@@ -1103,6 +1103,12 @@ dependencies {
     libs.androidx.camera.view.legacy,
     libs.androidx.camera.view.latest
   )
+  // XGram: CameraX Extensions (Night, Portrait, HDR: the phone's own camera modes)
+  flavorImplementation(
+    libs.androidx.camera.extensions.legacy,
+    libs.androidx.camera.extensions.legacy,
+    libs.androidx.camera.extensions.latest
+  )
   // Google Play Services: https://developers.google.com/android/guides/releases
   flavorImplementation(
     libs.google.play.services.base.legacy,

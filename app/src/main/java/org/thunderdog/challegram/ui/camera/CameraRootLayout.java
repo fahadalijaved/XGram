@@ -47,6 +47,9 @@ class CameraRootLayout extends FrameLayoutFix {
 
   @Override
   public boolean onTouchEvent (MotionEvent event) {
+    if (controller instanceof CameraController) {
+      ((CameraController) controller).xgramOnPreviewTouch(event); // XGram: Camera X (test): pinch, tap, long press
+    }
     switch (event.getAction()) {
       case MotionEvent.ACTION_DOWN: {
         if (controller.isFocused()) {
