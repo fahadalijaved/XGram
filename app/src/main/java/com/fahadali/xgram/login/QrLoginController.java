@@ -106,6 +106,7 @@ public final class QrLoginController extends ViewController<TdApi.AuthorizationS
 
   public QrLoginController (Context context, Tdlib tdlib) {
     super(context, tdlib);
+    QrLogin.onScreenShown(tdlib); // the code is here: taps on "Log in with QR code" work again
   }
 
   @Override

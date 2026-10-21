@@ -72,6 +72,60 @@ public final class QrLogin {
     return result;
   }
 
+  // A tap while the code is on its way (the request sent, its screen not open yet) says "Please wait" instead of
+  // sending another request or opening a second QR screen.
+
+  /** Account id → when its QR code request went out (uptime ms), until its screen opens or the request fails. */
+  private static final android.util.SparseLongArray pendingSince = new android.util.SparseLongArray();
+  /** After this long a request is no longer counted as on its way (its answer or screen got lost). */
+  private static final long PENDING_TIMEOUT_MS = 20_000L;
+
+  @UiThread
+  public static boolean isPending (@NonNull Tdlib tdlib) {
+    long since = pendingSince.get(tdlib.id(), 0L);
+    return since != 0L && android.os.SystemClock.uptimeMillis() - since < PENDING_TIMEOUT_MS;
+  }
+
+  @UiThread
+  private static void setPending (@NonNull Tdlib tdlib, boolean pending) {
+    if (pending) {
+      pendingSince.put(tdlib.id(), android.os.SystemClock.uptimeMillis());
+    } else {
+      pendingSince.delete(tdlib.id());
+    }
+  }
+
+  /** The QR screen of this account opened: its code is there. */
+  @UiThread
+  public static void onScreenShown (@NonNull Tdlib tdlib) {
+    setPending(tdlib, false);
+  }
+
+  /** "Please wait, the QR code is being generated" (a snackbar with Expressive design, a toast otherwise). */
+  @UiThread
+  public static void showPleaseWait () {
+    final String text = org.thunderdog.challegram.core.Lang.getString(org.thunderdog.challegram.R.string.xgram_login_QrPleaseWait);
+    if (!com.fahadali.xgram.appearance.XgramSnackbar.show(text, android.widget.Toast.LENGTH_SHORT)) {
+      UI.showToast(text, android.widget.Toast.LENGTH_SHORT);
+    }
+  }
+
+  /** Whether {@code controller}'s stack already shows this account's QR screen (a second one would only stack up). */
+  private static boolean isScreenOpen (@NonNull ViewController<?> controller, @NonNull Tdlib tdlib) {
+    org.thunderdog.challegram.navigation.NavigationController navigation = controller.navigationController();
+    if (navigation == null) {
+      return false;
+    }
+    org.thunderdog.challegram.navigation.NavigationStack stack = navigation.getStack();
+    for (int i = 0; i < stack.size(); i++) {
+      ViewController<?> c = stack.get(i);
+      if (c instanceof QrLoginController && c.tdlib() == tdlib && !c.isDestroyed()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Asks TDLib for a QR code login on the screen's own tdlib. TDLib then switches to WaitOtherDeviceConfirmation and
    * MainActivity opens {@link QrLoginController}. {@code after} runs on the UI thread with null on success or the error.
@@ -83,12 +137,19 @@ public final class QrLogin {
     if (tdlib.isAuthorized()) {
       return false;
     }
+    if (isPending(tdlib)) {
+      showPleaseWait(); // the code is on its way: no second request
+      return false;
+    }
     if (tdlib.context().watchDog().isOffline()) {
       UI.showNetworkPrompt();
       return false;
     }
     TdApi.AuthorizationState state = tdlib.authorizationState();
     if (state instanceof TdApi.AuthorizationStateWaitOtherDeviceConfirmation) {
+      if (isScreenOpen(controller, tdlib)) {
+        return false; // its screen is there already (a quick second tap)
+      }
       // Already waiting for a scan (MainActivity didn't show it, e.g. a reused slot): just show the code
       QrLoginController c = new QrLoginController(controller.context(), tdlib);
       c.setArguments((TdApi.AuthorizationStateWaitOtherDeviceConfirmation) state);
@@ -99,15 +160,20 @@ public final class QrLogin {
       return false;
     }
     final long[] otherUserIds = otherUserIds(tdlib);
+    setPending(tdlib, true);
     // A slot that is starting, or restarting after a cancelled QR login, gets there in a moment: wait for it
     tdlib.awaitReadyOrWaitingForData(() -> {
       if (!canRequest(tdlib.authorizationState())) {
+        UI.post(() -> setPending(tdlib, false));
         controller.runOnUiThreadOptional(() -> after.runWithData(null));
         return;
       }
-      tdlib.send(new TdApi.RequestQrCodeAuthentication(otherUserIds), (ok, error) ->
-        controller.runOnUiThreadOptional(() -> after.runWithData(error))
-      );
+      tdlib.send(new TdApi.RequestQrCodeAuthentication(otherUserIds), (ok, error) -> {
+        if (error != null) {
+          UI.post(() -> setPending(tdlib, false)); // nothing is coming: a new tap may ask again
+        }
+        controller.runOnUiThreadOptional(() -> after.runWithData(error));
+      });
     });
     return true;
   }

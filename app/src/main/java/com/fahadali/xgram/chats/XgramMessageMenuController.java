@@ -59,10 +59,20 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
           view.setData(XgramReactionBar.modeName(com.fahadali.xgram.XgramSettings.instance().reactionBar()));
           return;
         }
+        if (item.getId() == R.id.btn_xgramMessagePopup) {
+          view.setData(item.getCharSequenceValue());
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().messagePopup(), isUpdate);
+          return;
+        }
         Object data = item.getData();
         if (data instanceof XgramMessageMenu.Option) {
-          String key = ((XgramMessageMenu.Option) data).key;
-          view.getToggler().setRadioEnabled(!XgramMessageMenu.isHidden(key), isUpdate);
+          XgramMessageMenu.Option option = (XgramMessageMenu.Option) data;
+          String key = option.key;
+          boolean hidden = XgramMessageMenu.isHidden(key);
+          view.getToggler().setRadioEnabled(!hidden, isUpdate);
+          // Under More: "Reply · under More"
+          String name = Lang.getString(option.name);
+          view.setName(!hidden && XgramMessageMenu.isInMore(key) ? Lang.getString(R.string.XgramMenuNameUnderMore, name) : name);
           // Summarize and Edit history are only added while their setting is on: greyed, but still touchable, as the
           // row's handle drags it (a disabled view gets no touches). onClick ignores the tap.
           boolean usable = com.fahadali.xgram.XgramSettingDeps.messageMenuOptionEnabled(key);
@@ -82,6 +92,11 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
     List<ListItem> items = new ArrayList<>();
     // Where the quick reactions go (top, under the options, or off): above the list, which can be long.
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
+    // The menu as a popup next to the message (Telegram) or as the sheet
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramMessagePopup, R.drawable.baseline_more_horiz_24, R.string.XgramMessagePopup)
+      .setStringValue(Lang.getString(R.string.XgramMessagePopupInfo)));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramReactionBar, R.drawable.baseline_emoticon_outline_24, R.string.XgramReactionBar));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -111,6 +126,10 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
   @Override
   public void onClick (View v) {
     Object tag = v.getTag();
+    if (v.getId() == R.id.btn_xgramMessagePopup) {
+      com.fahadali.xgram.XgramSettings.instance().setMessagePopup(adapter.toggleView(v));
+      return;
+    }
     if (v.getId() == R.id.btn_xgramReactionBar) {
       int[] modes = {com.fahadali.xgram.XgramSettings.REACTION_BAR_TOP, com.fahadali.xgram.XgramSettings.REACTION_BAR_BOTTOM, com.fahadali.xgram.XgramSettings.REACTION_BAR_OFF};
       String[] titles = new String[modes.length];
@@ -130,8 +149,22 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
       if (!com.fahadali.xgram.XgramSettingDeps.messageMenuOptionEnabled(option.key)) {
         return; // greyed: does nothing until its setting is on
       }
-      boolean shown = adapter.toggleView(v);
-      XgramMessageMenu.setHidden(option.key, !shown);
+      if (!XgramMessageMenu.canGoInMore(option.key)) {
+        boolean shown = adapter.toggleView(v);
+        XgramMessageMenu.setHidden(option.key, !shown);
+        return;
+      }
+      // In the menu, under the menu's More, or hidden
+      final ListItem item = (ListItem) tag;
+      final int current = XgramMessageMenu.isHidden(option.key) ? 3 : XgramMessageMenu.isInMore(option.key) ? 2 : 1;
+      String[] titles = {Lang.getString(R.string.XgramMenuInMenu), Lang.getString(R.string.XgramMenuUnderMore), Lang.getString(R.string.XgramMenuHidden)};
+      titles[current - 1] = Lang.getString(R.string.XgramMenuChoiceCurrent, titles[current - 1]);
+      showOptions(Lang.getString(option.name), new int[] {1, 2, 3}, titles, null, null, (itemView, optionId) -> {
+        XgramMessageMenu.setHidden(option.key, optionId == 3);
+        XgramMessageMenu.setInMore(option.key, optionId == 2);
+        adapter.updateValuedSetting(item);
+        return true;
+      });
     }
   }
 }

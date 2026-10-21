@@ -60,6 +60,10 @@ public final class XgramBackup {
     XgramSettings.KEY_CHECKIN_LOCATION, XgramSettings.KEY_CHECKIN_BATTERY, XgramSettings.KEY_CHECKIN_FOLLOW,
     // Developer (debug builds): test items in the send menu; a release build never shows them, whatever is imported
     XgramSettings.KEY_SEND_MENU_TESTS,
+    // Attach button while typing (Message box buttons), avatar next to the last message (Chat look)
+    XgramSettings.KEY_INPUT_ATTACH_TYPING, XgramSettings.KEY_AVATAR_AT_LAST,
+    // Lock button in the chat list (Passcode lock), Popup menu (Message menu)
+    XgramSettings.KEY_HIDE_LOCK_BUTTON, XgramSettings.KEY_MESSAGE_POPUP,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
@@ -143,7 +147,7 @@ public final class XgramBackup {
     }
     return count;
   }
-  private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
+  private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", com.fahadali.xgram.chats.XgramMessageMenu.KEY_MORE, XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
   private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START, XgramSettings.KEY_ENTER_TO_SEND, XgramSettings.KEY_PANE_LIST_WIDTH, XgramSettings.KEY_NOTIFICATION_ICON, XgramSettings.KEY_REACTION_BAR, XgramSettings.KEY_NAV_TABS, XgramSettings.KEY_NAV_PROFILE, XgramSettings.KEY_NAV_STYLE, XgramSettings.KEY_NAV_FAB, XgramSettings.KEY_UNDO_SEND, XgramSettings.KEY_ACTIVITY_BAR,
     com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY, // Later
     XgramSettings.KEY_CHECKIN_TIMER, XgramSettings.KEY_CHECKIN_GRACE, XgramSettings.KEY_CHECKIN_RADIUS}; // Check In
@@ -242,7 +246,7 @@ public final class XgramBackup {
       if (strings != null) {
         for (Iterator<String> it = strings.keys(); it.hasNext(); ) {
           String key = it.next();
-          if (key.equals("xgram_filters") || key.startsWith("xgram_ln_") || key.equals("xgram_menu_hidden") || key.startsWith(XgramReorder.KEY_PREFIX) || key.equals(XgramSettings.KEY_TR_TARGET)) {
+          if (key.equals("xgram_filters") || key.startsWith("xgram_ln_") || key.equals("xgram_menu_hidden") || key.equals(com.fahadali.xgram.chats.XgramMessageMenu.KEY_MORE) || key.startsWith(XgramReorder.KEY_PREFIX) || key.equals(XgramSettings.KEY_TR_TARGET)) {
             pmc().putString(key, strings.getString(key));
             count++;
           }

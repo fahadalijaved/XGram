@@ -116,6 +116,11 @@
   <item type="id" name="controller_xgramDrawerItems" />
   <item type="id" name="btn_xgramInputButtons" />
   <item type="id" name="btn_xgramInputButton" />
+  <item type="id" name="btn_xgramInputAttachTyping" />
+  <item type="id" name="btn_xgramAvatarAtLast" />
+  <item type="id" name="btn_xgramLockButton" />
+  <item type="id" name="btn_xgramMessagePopup" />
+  <item type="id" name="btn_xgramPopupDetails" />
   <item type="id" name="controller_xgramInputButtons" />
   <item type="id" name="btn_xgramTapToRecord" />
   <item type="id" name="btn_xgramChatHistory" />

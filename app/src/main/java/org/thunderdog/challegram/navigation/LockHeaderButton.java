@@ -75,7 +75,7 @@ public class LockHeaderButton extends HeaderButton implements View.OnClickListen
 
     setId(R.id.menu_btn_lock);
     setButtonBackground(ThemeDeprecated.headerSelector());
-    setVisibility(Passcode.instance().isEnabled() ? View.VISIBLE : View.GONE);
+    setVisibility(xgramShown() ? View.VISIBLE : View.GONE);
     setOnClickListener(this);
     setOnLongClickListener(this);
     setLayoutParams(new LinearLayout.LayoutParams(Screen.dp(xgram ? 48f : 49f), ViewGroup.LayoutParams.MATCH_PARENT));
@@ -147,8 +147,32 @@ public class LockHeaderButton extends HeaderButton implements View.OnClickListen
     return false;
   }
 
+  /** XGram: shown while a passcode is set, unless Passcode lock → Lock button in the chat list is off. */
+  private static boolean xgramShown () {
+    return Passcode.instance().isEnabled() && !com.fahadali.xgram.XgramSettings.instance().hideLockButton();
+  }
+
+  private final com.fahadali.xgram.XgramSettings.Listener xgramSettingsListener = key -> {
+    if (com.fahadali.xgram.XgramSettings.KEY_HIDE_LOCK_BUTTON.equals(key)) {
+      UI.post(this::update);
+    }
+  };
+
+  @Override
+  protected void onAttachedToWindow () {
+    super.onAttachedToWindow();
+    com.fahadali.xgram.XgramSettings.instance().addListener(xgramSettingsListener);
+    update(); // the option may have changed while this header was off screen
+  }
+
+  @Override
+  protected void onDetachedFromWindow () {
+    super.onDetachedFromWindow();
+    com.fahadali.xgram.XgramSettings.instance().removeListener(xgramSettingsListener);
+  }
+
   public void update () {
-    final int visibility = Passcode.instance().isEnabled() ? View.VISIBLE : View.GONE;
+    final int visibility = xgramShown() ? View.VISIBLE : View.GONE;
     final boolean open = !isVisuallyLocked();
     animator.setValue(open, false);
     xgramSetOpen(open, false); // XGram M3E

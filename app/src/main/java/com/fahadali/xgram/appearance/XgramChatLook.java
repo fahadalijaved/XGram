@@ -118,9 +118,26 @@ public final class XgramChatLook {
     });
     tail.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(52f)));
     if (XgramExpressive.isEnabled()) {
-      XgramR5Chat.applyTile(tail, XgramExpressive.SEGMENT_LAST, true); // XGram M3E: the group's last tile
+      XgramR5Chat.applyTile(tail, XgramExpressive.SEGMENT_MIDDLE, true); // XGram M3E: a tile of the group
     }
     bottomWrap.addView(tail);
+
+    // The sender's avatar next to the last message of a group (Telegram, Google Messages) instead of the first
+    SettingView avatar = new SettingView(context, c.tdlib());
+    avatar.setId(R.id.btn_xgramAvatarAtLast);
+    avatar.setType(SettingView.TYPE_RADIO);
+    avatar.setName(R.string.XgramAvatarAtLast);
+    avatar.getToggler().setRadioEnabled(settings.avatarAtLastMessage(), false);
+    avatar.addThemeListeners(c);
+    avatar.setOnClickListener(v -> {
+      settings.setAvatarAtLastMessage(avatar.getToggler().toggle(true));
+      rebuild.run();
+    });
+    avatar.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Screen.dp(52f)));
+    if (XgramExpressive.isEnabled()) {
+      XgramR5Chat.applyTile(avatar, XgramExpressive.SEGMENT_LAST, true); // XGram M3E: the group's last tile
+    }
+    bottomWrap.addView(avatar);
   }
 
   private static int indexOf (int[] values, int value) {

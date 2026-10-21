@@ -84,6 +84,7 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
   private SettingView visibilityView;
   private @Nullable SeparatorView visibilitySeparator;
   private @Nullable SettingView screenshotView, notificationsView;
+  private @Nullable SettingView xgramLockButtonView; // XGram: Lock button in the chat list
   private SettingView biometricsView;
   private SeparatorView biometricsSeparator;
   private ShadowView topShadowView, bottomShadowView;
@@ -237,6 +238,11 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
       }
     }
     if (specificChat == null) {
+      // XGram: the lock button in the chat list's header (Passcode lock on); off: the app locks with Auto-lock only
+      items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+      items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramLockButton, R.drawable.xgram_m3e_r6_b2_lock_open_24, R.string.XgramLockButton));
+      items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+      items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramLockButtonInfo));
       items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
       items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_notificationContent, R.drawable.baseline_notifications_24, xgramLabel(R.string.AllowNotifications, R.string.XgramR6B8NotificationsContent)));
       items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
@@ -271,6 +277,8 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
       view.getToggler().setRadioEnabled(Passcode.instance().displayNotifications(), isUpdate);
     } else if (id == R.id.btn_screenCapture) {
       view.getToggler().setRadioEnabled(Passcode.instance().allowScreenshots(), isUpdate);
+    } else if (id == R.id.btn_xgramLockButton) {
+      view.getToggler().setRadioEnabled(!com.fahadali.xgram.XgramSettings.instance().hideLockButton(), isUpdate);
     }
   }
 
@@ -348,6 +356,8 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
     } else if (viewId == R.id.btn_screenCapture) {
       Passcode.instance().setAllowScreenshots(xgramAdapter.toggleView(v));
       UI.checkDisallowScreenshots();
+    } else if (viewId == R.id.btn_xgramLockButton) {
+      com.fahadali.xgram.XgramSettings.instance().setHideLockButton(!xgramAdapter.toggleView(v));
     } else if (viewId == R.id.btn_passcode_auto) {
       showAutoLockOptions();
     }
@@ -478,6 +488,30 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
 
       textView = newDescription(this);
       textView.setText(Lang.getString(R.string.passcode_auto_hint));
+      autoLockWrap.addView(textView);
+
+      // XGram: the lock button in the chat list's header
+      shadow = new ShadowView(context);
+      addThemeInvalidateListener(shadow);
+      shadow.setSimpleTopShadow(true, this);
+      autoLockWrap.addView(shadow);
+
+      xgramLockButtonView = new SettingView(context, tdlib);
+      xgramLockButtonView.setId(R.id.btn_xgramLockButton);
+      xgramLockButtonView.setType(SettingView.TYPE_RADIO);
+      xgramLockButtonView.setName(R.string.XgramLockButton);
+      xgramLockButtonView.getToggler().setRadioEnabled(!com.fahadali.xgram.XgramSettings.instance().hideLockButton(), false);
+      xgramLockButtonView.setOnClickListener(this);
+      xgramLockButtonView.addThemeListeners(this);
+      autoLockWrap.addView(xgramLockButtonView);
+
+      shadow = new ShadowView(context);
+      addThemeInvalidateListener(shadow);
+      shadow.setSimpleBottomTransparentShadow(true);
+      autoLockWrap.addView(shadow);
+
+      textView = newDescription(this);
+      textView.setText(Lang.getString(R.string.XgramLockButtonInfo));
       autoLockWrap.addView(textView);
 
       shadow = new ShadowView(context);
@@ -763,6 +797,10 @@ public class PasscodeSetupController extends ViewController<PasscodeSetupControl
       }
     } else if (viewId == R.id.btn_pattern) {
       setPasscodeVisible(!visibilityView.toggleRadio());
+    } else if (viewId == R.id.btn_xgramLockButton) {
+      if (xgramLockButtonView != null) {
+        com.fahadali.xgram.XgramSettings.instance().setHideLockButton(!xgramLockButtonView.toggleRadio());
+      }
     } else if (viewId == R.id.btn_notificationContent) {
       if (notificationsView != null) {
         Passcode.instance().setDisplayNotifications(notificationsView.toggleRadio());

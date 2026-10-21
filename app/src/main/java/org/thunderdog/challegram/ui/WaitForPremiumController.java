@@ -73,7 +73,9 @@ public class WaitForPremiumController extends RecyclerViewController<TdApi.Autho
   public void onClick (View v) {
     if (v.getId() == R.id.btn_buyPremium) {
       UI.openUrl("https://telegram.org/");
-    } else if (v.getId() == R.id.btn_xgramQrLogin && !qrLoginInProgress) { // XGram
+    } else if (v.getId() == R.id.btn_xgramQrLogin && qrLoginInProgress) { // XGram: a second tap while the code is being made
+      com.fahadali.xgram.login.QrLogin.showPleaseWait();
+    } else if (v.getId() == R.id.btn_xgramQrLogin) { // XGram
       qrLoginInProgress = com.fahadali.xgram.login.QrLogin.request(this, tdlib, error -> {
         qrLoginInProgress = false;
         if (error != null) {

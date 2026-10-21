@@ -854,6 +854,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       }
       inputView.setSelectionChangeListener(this);
       inputView.setSpanChangeListener(this::onInputSpansChanged);
+      xgramUpdateInputEndPadding(); // XGram: room for the attach button kept while typing
     }
 
     if (!inPreviewMode) {
@@ -1306,6 +1307,27 @@ public class MessagesController extends ViewController<MessagesController.Argume
     mediaButton.setOnClickListener(this);
     mediaButton.setLayoutParams(lp);
 
+    // XGram: the attach button that stays next to the send button while typing (Message box buttons). Same id and
+    // click as the row's attach button, which hides while this one shows; it slides in from the row's slot.
+    RelativeLayout.LayoutParams typingAttachParams = new RelativeLayout.LayoutParams(Screen.dp(ATTACH_BUTTONS_WIDTH), Screen.dp(49f));
+    typingAttachParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+    if (Lang.rtl()) {
+      typingAttachParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+      typingAttachParams.leftMargin = Screen.dp(XGRAM_SEND_SLOT_WIDTH);
+    } else {
+      typingAttachParams.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+      typingAttachParams.rightMargin = Screen.dp(XGRAM_SEND_SLOT_WIDTH);
+    }
+    xgramTypingAttach = new CameraAccessImageView(context, this);
+    xgramTypingAttach.setId(R.id.msg_attach);
+    xgramTypingAttach.setScaleType(ImageView.ScaleType.CENTER);
+    xgramTypingAttach.setImageResource(com.fahadali.xgram.appearance.XgramIconPack.map(R.drawable.deproko_baseline_attach_26));
+    xgramTypingAttach.setColorFilter(Theme.iconColor());
+    addThemeFilterListener(xgramTypingAttach, ColorId.icon);
+    xgramTypingAttach.setOnClickListener(this);
+    xgramTypingAttach.setLayoutParams(typingAttachParams);
+    xgramTypingAttach.setVisibility(View.GONE);
+
 
     lp = new LinearLayout.LayoutParams(Screen.dp(ATTACH_BUTTONS_WIDTH), Screen.dp(49f));
     cameraButton = new CameraAccessImageView(context, this);
@@ -1425,6 +1447,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramStyleInputIcon(scheduleButton);
       xgramStyleInputIcon(cameraButton);
       xgramStyleInputIcon(mediaButton);
+      xgramStyleInputIcon(xgramTypingAttach);
       com.fahadali.xgram.appearance.XgramAppMotion.iconButton(silentButton);
     }
 
@@ -1726,6 +1749,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (previewMode == PREVIEW_MODE_NONE) {
       contentView.addView(emojiButton);
       contentView.addView(attachButtons);
+      contentView.addView(xgramTypingAttach); // XGram: above the row, so it takes the touches in its slot
       contentView.addView(sendButton);
       contentView.addView(messageSenderButton);
 
@@ -3808,6 +3832,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       sendButton.setVisibility(View.GONE);
       messageSenderButton.setVisibility(View.GONE);
     }
+    xgramUpdateTypingAttach(); // XGram
     updateBottomBarStyle();
     updateMessagesViewInset();
     if (xgramUndoBar != null && messagesView != null && bottomShadowView != null) {
@@ -5323,6 +5348,20 @@ public class MessagesController extends ViewController<MessagesController.Argume
             }
           }
           Options messageOptions = messageOptionsBuilder.build();
+          if (com.fahadali.xgram.chats.XgramMessagePopup.isEnabled()) {
+            // XGram: Message menu → Popup menu: the menu next to the message, the reactions above it (Telegram)
+            com.fahadali.xgram.chats.XgramMessagePopup.Handle xgramPopup = xgramShowMessagePopup(messageContext, messageOptions, messageHandler);
+            if (xgramPopup != null) {
+              if (expectAgain) {
+                inject.set((loadedReadDate) -> {
+                  if (loadedReadDate.getConstructor() == TdApi.MessageReadDateRead.CONSTRUCTOR) {
+                    xgramPopup.setReadDate(readItem(tdlib, ((TdApi.MessageReadDateRead) loadedReadDate).readDate));
+                  }
+                });
+              }
+              return;
+            }
+          }
           if (!messageContext.disableMetadata && msg.canBeReacted()) {
             PopupLayout popupLayout = showMessageOptions(messageOptions, messageContext.message, null, messageHandler);
             if (expectAgain && popupLayout != null) {
@@ -5352,6 +5391,58 @@ public class MessagesController extends ViewController<MessagesController.Argume
           }
         }, 200L);
       });
+    });
+  }
+
+  // XGram: Message menu → Popup menu. Popups open one over another (More's page over the menu while it closes): the
+  // keyboard steps aside with the first and comes back after the last.
+  private int xgramPopupCount;
+
+  private @Nullable com.fahadali.xgram.chats.XgramMessagePopup.Handle xgramShowMessagePopup (MessageContext messageContext, Options messageOptions, OptionDelegate messageHandler) {
+    final TGMessage msg = messageContext.message;
+    final boolean metadata = !messageContext.disableMetadata;
+    return com.fahadali.xgram.chats.XgramMessagePopup.show(this, msg, messageOptions, messageHandler, metadata, new com.fahadali.xgram.chats.XgramMessagePopup.Host() {
+      @Override
+      public void onPopupOpen () {
+        if (xgramPopupCount++ == 0) {
+          isMessageOptionsVisible = true;
+          prepareToShowMessageOptions();
+        }
+        hideCursorsForInputView();
+      }
+
+      @Override
+      public void onPopupClosed (boolean toSheet) {
+        if (xgramPopupCount > 0 && --xgramPopupCount == 0) {
+          isMessageOptionsVisible = false;
+          if (!toSheet) {
+            // as the sheet's dismiss does: the emoji panel leaves its message menu state, the keyboard comes back
+            optimizeEmojiLayoutForOptionsWindow(false);
+            onHideMessageOptions();
+          }
+        }
+      }
+
+      @Override
+      public void openSheet (boolean picker) {
+        if (msg.isDestroyed()) {
+          return;
+        }
+        // The sheet takes over the keyboard state saved when the popup opened (the emoji panel holds its place meanwhile)
+        final boolean keyboard = needShowKeyboardAfterHideMessageOptions, emoji = needShowEmojiKeyboardAfterHideMessageOptions;
+        // The picker: the menu's sheet with its picker open. Who reacted and who viewed: the sheet of those pages only.
+        PopupLayout sheet = picker ? showMessageOptions(messageOptions, msg, null, messageHandler) : showMessageOptions(null, msg, null, messageHandler);
+        needShowKeyboardAfterHideMessageOptions = keyboard;
+        needShowEmojiKeyboardAfterHideMessageOptions = emoji;
+        if (sheet == null) {
+          optimizeEmojiLayoutForOptionsWindow(false);
+          onHideMessageOptions();
+          return;
+        }
+        if (picker && sheet.getBoundController() instanceof MessageOptionsPagerController) {
+          ((MessageOptionsPagerController) sheet.getBoundController()).xgramExpandPickerOnShow();
+        }
+      }
     });
   }
 
@@ -8824,7 +8915,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   private final com.fahadali.xgram.XgramSettings.Listener xgramInputButtonsListener = key -> {
-    if (key.startsWith(com.fahadali.xgram.XgramSettings.KEY_INPUT_BUTTON_HIDDEN)) {
+    if (key.startsWith(com.fahadali.xgram.XgramSettings.KEY_INPUT_BUTTON_HIDDEN) || key.equals(com.fahadali.xgram.XgramSettings.KEY_INPUT_ATTACH_TYPING)) {
       UI.post(this::xgramUpdateInputButtons);
     } else if (key.equals(com.fahadali.xgram.XgramSettings.KEY_HISTORY_RED_DELETED)) {
       UI.post(this::xgramRedrawMessages); // XGram: deleted messages in red, redrawn at once (the chat can be open next to settings)
@@ -8872,6 +8963,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     updateSelectMessageSenderInterface(false); // camera
     attachButtons.updatePivot();
+    xgramUpdateInputEndPadding();
+    xgramUpdateTypingAttach();
   }
 
   private void onCommandClick () {
@@ -9104,6 +9197,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     sendButton.setTranslationY(y);
     emojiButton.setTranslationY(y);
     attachButtons.setTranslationY(y);
+    xgramTypingAttach.setTranslationY(y);
     messageSenderButton.setTranslationY(y);
 
     if (prevButtonsY != y) {
@@ -11227,6 +11321,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
   private void checkSendButton (boolean animated) {
     setSendVisible(inputView.getText().length() > 0 || isEditingMessage() || hasAttachedFiles(), animated && getParentOrSelf().isAttachedToNavigationController());
+    xgramUpdateTypingAttach(); // XGram: editing a message hides it
   }
 
   private void displaySendButton () {
@@ -11247,6 +11342,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private void hideAttachButtons () {
     attachButtons.setVisibility(View.INVISIBLE);
     messageSenderButton.setVisibility(View.INVISIBLE);
+    xgramUpdateTypingAttach();
   }
 
   private void displayEmojiButton () {
@@ -11287,6 +11383,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       attachButtons.setScaleX(scale2);
       attachButtons.setScaleY(scale2);
       messageSenderButton.setSendFactor(alpha);
+      xgramUpdateTypingAttach();
 
       if (tooltipInfo != null && tooltipInfo.isVisible()) {
         tooltipInfo.reposition();
@@ -11807,7 +11904,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       case Intents.ACTIVITY_RESULT_VIDEO_CAPTURE: {
         File file = Intents.takeLastOutputMedia();
         boolean isVideo = requestCode == Intents.ACTIVITY_RESULT_VIDEO_CAPTURE;
-        if (showSlowModeRestriction(mediaButton, null) || showRestriction(mediaButton, isVideo ? RightId.SEND_VIDEOS : RightId.SEND_PHOTOS)) {
+        if (showSlowModeRestriction(xgramAttachAnchor(), null) || showRestriction(xgramAttachAnchor(), isVideo ? RightId.SEND_VIDEOS : RightId.SEND_PHOTOS)) {
           return;
         }
         if (file != null) {
@@ -11862,7 +11959,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         if (imagePath != null && imagePath.endsWith(".webp") && tdlib.getRestrictionStatus(chat, RightId.SEND_OTHER_MESSAGES) == null) {
           sendSticker(imagePath, true, Td.newSendOptions());
         } else if (requestCode == Intents.ACTIVITY_RESULT_GALLERY_FILE) {
-          sendFiles(mediaButton, Collections.singletonList(imagePath), false, true, Td.newSendOptions());
+          sendFiles(xgramAttachAnchor(), Collections.singletonList(imagePath), false, true, Td.newSendOptions());
         } else {
           sendPhotoCompressed(imagePath, null, true);
         }
@@ -11872,7 +11969,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       case Intents.ACTIVITY_RESULT_AUDIO: {
         final Uri path = data.getData();
         if (path == null) break;
-        if (showSlowModeRestriction(mediaButton, null) || showRestriction(mediaButton, RightId.SEND_AUDIO)) {
+        if (showSlowModeRestriction(xgramAttachAnchor(), null) || showRestriction(xgramAttachAnchor(), RightId.SEND_AUDIO)) {
           return;
         }
         final String audioPath = U.tryResolveFilePath(path);
@@ -11973,7 +12070,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public void sendPhotoCompressed (final String path, final @Nullable TdApi.MessageSelfDestructType selfDestructType, final boolean allowReply) {
-    if (showSlowModeRestriction(mediaButton, null) || showRestriction(mediaButton, RightId.SEND_PHOTOS)) {
+    if (showSlowModeRestriction(xgramAttachAnchor(), null) || showRestriction(xgramAttachAnchor(), RightId.SEND_PHOTOS)) {
       return;
     }
     if (StringUtils.isEmpty(path)) {
@@ -12701,6 +12798,71 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     if (xgramCornersView.getTranslationY() != top) {
       xgramCornersView.setTranslationY(top);
+    }
+  }
+
+  // XGram: Message box buttons → Attach button while typing. A second attach button stays next to the send slot
+  // while the send button shows (the row's attach button hides meanwhile); the text always ends before it.
+
+  /** Width of the send button's slot at the composer's end (Telegram X's send button). */
+  private static final float XGRAM_SEND_SLOT_WIDTH = 55f;
+
+  private CameraAccessImageView xgramTypingAttach;
+
+  private boolean xgramTypingAttachAllowed () {
+    return com.fahadali.xgram.XgramSettings.instance().inputAttachWhileTyping() && inputView != null && inputView.getVisibility() == View.VISIBLE
+      && !actionShowing && !isEditingMessage() && sendButton != null && sendButton.getVisibility() == View.VISIBLE
+      && attachButtons.getVisibility() != View.GONE && bottomWrap.getVisibility() == View.VISIBLE;
+  }
+
+  /** Shows, slides (from the row's attach slot as the send button comes in) or hides the attach button kept while typing. */
+  private void xgramUpdateTypingAttach () {
+    if (xgramTypingAttach == null || mediaButton == null) {
+      return;
+    }
+    final float factor = MathUtils.clamp(sendFactor);
+    if (factor > 0f && xgramTypingAttachAllowed()) {
+      if (xgramTypingAttach.getVisibility() != View.VISIBLE) {
+        xgramTypingAttach.setVisibility(View.VISIBLE);
+      }
+      // Both are 47dp wide and laid out in contentView's coordinates (the row is its child), so the left edges match
+      final int rowX = attachButtons.getLeft() + mediaButton.getLeft();
+      final float fromX = mediaButton.getWidth() > 0 && xgramTypingAttach.getWidth() > 0 ? rowX - xgramTypingAttach.getLeft() : 0f;
+      xgramTypingAttach.setTranslationX(fromX * (1f - factor));
+      if (mediaButton.getAlpha() != 0f) {
+        mediaButton.setAlpha(0f);
+      }
+    } else {
+      if (xgramTypingAttach.getVisibility() != View.GONE) {
+        xgramTypingAttach.setVisibility(View.GONE);
+      }
+      if (mediaButton.getAlpha() != 1f) {
+        mediaButton.setAlpha(1f);
+      }
+    }
+  }
+
+  /** The anchor for attach tooltips (restrictions, slow mode): the attach button the user sees. */
+  private View xgramAttachAnchor () {
+    return xgramTypingAttach != null && xgramTypingAttach.getVisibility() == View.VISIBLE ? xgramTypingAttach : mediaButton;
+  }
+
+  /** The typed text ends before the send slot, and also before the kept attach button when that option is on. */
+  private void xgramUpdateInputEndPadding () {
+    if (inputView == null) {
+      return;
+    }
+    final boolean m3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
+    int end = m3 ? com.fahadali.xgram.appearance.XgramM3Composer.textEndPadding() : Screen.dp(XGRAM_SEND_SLOT_WIDTH);
+    if (com.fahadali.xgram.XgramSettings.instance().inputAttachWhileTyping()) {
+      // The button's 47dp slot; with Expressive design the text also keeps 4dp from its 40dp state layer
+      end = Screen.dp(XGRAM_SEND_SLOT_WIDTH + 47f + (m3 ? 4f : 0f));
+    }
+    final boolean rtl = Lang.rtl();
+    final int left = rtl ? end : inputView.getPaddingLeft();
+    final int right = rtl ? inputView.getPaddingRight() : end;
+    if (inputView.getPaddingLeft() != left || inputView.getPaddingRight() != right) {
+      inputView.setPadding(left, inputView.getPaddingTop(), right, inputView.getPaddingBottom());
     }
   }
 

@@ -39,6 +39,8 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -108,6 +110,7 @@ import kotlin.math.abs
 /**
  * One row of a reorderable group. [checked] null: the row has no switch, it can only move. [enabled] false greys
  * the switch out (it does nothing until another setting is on; [subtitle] can say which); the row still moves.
+ * [inMore] not null: a More toggle before the switch (Message menu: the option waits under the menu's More).
  */
 class ReorderRow(
   val key: String,
@@ -115,7 +118,8 @@ class ReorderRow(
   @DrawableRes val icon: Int = 0,
   val checked: Boolean? = null,
   val enabled: Boolean = true,
-  val subtitle: String? = null
+  val subtitle: String? = null,
+  val inMore: Boolean? = null
 )
 
 /** Content type of a reorderable group in the page's list (PageBlock.TYPE_* leave 10 free for it). */
@@ -136,6 +140,7 @@ fun PageScope.reorderGroup(
   id: Int,
   rows: List<ReorderRow>,
   onToggle: (key: String, checked: Boolean) -> Unit = { _, _ -> },
+  onMore: (key: String, inMore: Boolean) -> Unit = { _, _ -> },
   onDrop: (keys: List<String>) -> Unit
 ) {
   if (rows.isEmpty()) {
@@ -146,7 +151,7 @@ fun PageScope.reorderGroup(
   // The rows are listed for the page's highlight lookup (search results scroll to this group); the block draws them.
   // Unlike PageScope.group the group stays one item: rows are dragged inside it.
   val lookup = rows.map { row -> GroupRow(id, row.key, "$id:${row.key}", TYPE_REORDER) { _ -> } }
-  add("r:$key", TYPE_REORDER, lookup) { ReorderGroupBlock(id, rows, gap, onToggle, onDrop) }
+  add("r:$key", TYPE_REORDER, lookup) { ReorderGroupBlock(id, rows, gap, onToggle, onMore, onDrop) }
 }
 
 private const val OWNER_HANDLE = 1
@@ -378,6 +383,7 @@ private fun ReorderGroupBlock(
   rows: List<ReorderRow>,
   topGap: Dp,
   onToggle: (String, Boolean) -> Unit,
+  onMore: (String, Boolean) -> Unit,
   onDrop: (List<String>) -> Unit
 ) {
   val host = LocalXgramHost.current
@@ -444,7 +450,7 @@ private fun ReorderGroupBlock(
   ) {
     shown.forEachIndexed { index, rowKey ->
       key(rowKey) {
-        ReorderItem(id, byKey.getValue(rowKey), index, shown.size, state, onToggle)
+        ReorderItem(id, byKey.getValue(rowKey), index, shown.size, state, onToggle, onMore)
       }
     }
   }
@@ -457,7 +463,8 @@ private fun ReorderItem(
   index: Int,
   count: Int,
   state: ReorderState,
-  onToggle: (String, Boolean) -> Unit
+  onToggle: (String, Boolean) -> Unit,
+  onMore: (String, Boolean) -> Unit
 ) {
   val host = LocalXgramHost.current
   val rowKey = row.key
@@ -565,7 +572,24 @@ private fun ReorderItem(
       },
       enabled = row.enabled,
       leadingContent = leading,
-      trailingContent = { SettingsSwitch(checked, row.enabled) },
+      trailingContent = {
+        val inMore = row.inMore
+        if (inMore != null) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            MoreToggle(inMore, row.enabled) {
+              // letting go of a row that was held (picked up, moved or not) must not flip it either
+              if (state.acceptsClick()) {
+                onMore(rowKey, it)
+                host.changed()
+              }
+            }
+            Spacer(Modifier.width(8.dp))
+            SettingsSwitch(checked, row.enabled)
+          }
+        } else {
+          SettingsSwitch(checked, row.enabled)
+        }
+      },
       supportingContent = supporting,
       colors = colors,
       interactionSource = interactions,
@@ -585,6 +609,27 @@ private fun ReorderItem(
       interactionSource = interactions,
       content = { Text(row.title) }
     )
+  }
+}
+
+/**
+ * The More toggle of a Message menu row: a standard icon toggle button, secondaryContainer while the option waits
+ * under More. Its taps are its own (no switch flip); holding it picks the row up, as anywhere on the row.
+ */
+@Composable
+private fun MoreToggle(checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+  val label = str(R.string.XgramMenuUnderMore)
+  IconToggleButton(
+    checked = checked,
+    onCheckedChange = onChange,
+    enabled = enabled,
+    colors = IconButtonDefaults.iconToggleButtonColors(
+      checkedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+      checkedContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    ),
+    modifier = Modifier.semantics { contentDescription = label }
+  ) {
+    Icon(tgxIcon(R.drawable.baseline_more_horiz_24), contentDescription = null, modifier = Modifier.size(24.dp))
   }
 }
 

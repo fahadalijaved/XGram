@@ -16,6 +16,7 @@ import androidx.annotation.IdRes;
 import androidx.annotation.StringRes;
 
 import org.thunderdog.challegram.R;
+import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.StringList;
 
@@ -32,6 +33,10 @@ public final class XgramMessageMenu {
   private XgramMessageMenu () { }
 
   private static final String KEY_HIDDEN = "xgram_menu_hidden";
+  /** The options the user put under More (a comma separated list of keys, like {@link #KEY_HIDDEN}). */
+  public static final String KEY_MORE = "xgram_menu_more";
+  /** The key of Telegram X's own More option, which opens the options under it. */
+  public static final String KEY_MORE_OPTION = "more";
 
   public static final class Option {
     /** Stored when hidden: stays the same across builds, unlike the ids. */
@@ -100,20 +105,46 @@ public final class XgramMessageMenu {
     new Option("more", R.string.MoreMessageOptions, R.drawable.baseline_more_horiz_24, false, R.id.btn_messageMore)
   };
 
-  private static volatile Set<String> hidden;
+  private static volatile Set<String> hidden, more;
+
+  private static Set<String> readSet (String settingKey) {
+    Set<String> set = new HashSet<>();
+    String value = Settings.instance().getString(settingKey, "");
+    for (String key : value.split(",")) {
+      if (!key.isEmpty()) {
+        set.add(key);
+      }
+    }
+    return set;
+  }
+
+  private static void writeSet (String settingKey, Set<String> set) {
+    StringBuilder b = new StringBuilder();
+    for (String k : set) {
+      if (b.length() > 0) {
+        b.append(',');
+      }
+      b.append(k);
+    }
+    if (b.length() == 0) {
+      Settings.instance().remove(settingKey);
+    } else {
+      Settings.instance().putString(settingKey, b.toString());
+    }
+  }
 
   private static Set<String> hidden () {
     if (hidden == null) {
-      Set<String> set = new HashSet<>();
-      String value = Settings.instance().getString(KEY_HIDDEN, "");
-      for (String key : value.split(",")) {
-        if (!key.isEmpty()) {
-          set.add(key);
-        }
-      }
-      hidden = set;
+      hidden = readSet(KEY_HIDDEN);
     }
     return hidden;
+  }
+
+  private static Set<String> more () {
+    if (more == null) {
+      more = readSet(KEY_MORE);
+    }
+    return more;
   }
 
   public static boolean isHidden (String key) {
@@ -128,23 +159,37 @@ public final class XgramMessageMenu {
       set.remove(key);
     }
     hidden = set;
-    StringBuilder b = new StringBuilder();
-    for (String k : set) {
-      if (b.length() > 0) {
-        b.append(',');
-      }
-      b.append(k);
+    writeSet(KEY_HIDDEN, set);
+  }
+
+  /** Whether the option waits under More (the menu's More option opens it) instead of in the menu itself. */
+  public static boolean isInMore (String key) {
+    return more().contains(key);
+  }
+
+  /** Every option but More itself can go under More. */
+  public static boolean canGoInMore (String key) {
+    return !KEY_MORE_OPTION.equals(key);
+  }
+
+  public static void setInMore (String key, boolean inMore) {
+    if (!canGoInMore(key)) {
+      return;
     }
-    if (b.length() == 0) {
-      Settings.instance().remove(KEY_HIDDEN);
+    Set<String> set = new HashSet<>(more());
+    if (inMore) {
+      set.add(key);
     } else {
-      Settings.instance().putString(KEY_HIDDEN, b.toString());
+      set.remove(key);
     }
+    more = set;
+    writeSet(KEY_MORE, set);
   }
 
   /** After a backup import or reset. */
   public static void reload () {
     hidden = null;
+    more = null;
   }
 
   private static boolean isHiddenId (int id, Set<String> set) {
@@ -161,41 +206,127 @@ public final class XgramMessageMenu {
     return false;
   }
 
-  /** Drops the hidden options, and XGram's "Clear from cache" when Telegram X's own is there too. */
+  /**
+   * The menu of a message: drops the hidden options and the ones under More, and XGram's "Clear from cache" when
+   * Telegram X's own is there too. While some option waits under More, the menu keeps a More option (even one the
+   * user hid), so those stay reachable.
+   */
   public static void filter (IntList ids, IntList icons, StringList strings) {
     String[] names = strings.get();
     int count = ids.size();
     if (icons.size() != count || names.length != count) {
       return; // not one icon and name per option: leave it as it is
     }
-    Set<String> set = hidden();
+    Set<String> set = hidden(), moreSet = more();
     boolean hasTgxCache = ids.indexOf(R.id.btn_deleteFile) != -1;
     int[] idArray = ids.get(), iconArray = icons.get();
     IntList keptIds = new IntList(count), keptIcons = new IntList(count);
     StringList keptNames = new StringList(count);
+    int moreIndex = -1;
+    boolean anyInMore = false;
     for (int i = 0; i < count; i++) {
       int id = idArray[i];
+      if (id == R.id.btn_messageMore) {
+        moreIndex = i; // added back below, when it is wanted
+        continue;
+      }
       if (isHiddenId(id, set) || (hasTgxCache && id == R.id.btn_xgramClearFromCache)) {
+        continue;
+      }
+      if (isHiddenId(id, moreSet)) {
+        anyInMore = true;
         continue;
       }
       keptIds.append(id);
       keptIcons.append(iconArray[i]);
       keptNames.append(names[i]);
     }
-    if (keptIds.isEmpty() || keptIds.size() == count) {
+    if (anyInMore || (moreIndex != -1 && !set.contains(KEY_MORE_OPTION))) {
+      keptIds.append(R.id.btn_messageMore);
+      keptIcons.append(moreIndex != -1 ? iconArray[moreIndex] : R.drawable.baseline_more_horiz_24);
+      keptNames.append(moreIndex != -1 ? names[moreIndex] : Lang.getString(R.string.MoreMessageOptions));
+    }
+    if (keptIds.isEmpty()) {
       order(ids, icons, strings); // never leave the menu empty
       return;
     }
-    String[] keptNameArray = keptNames.get();
+    replace(ids, icons, strings, keptIds, keptIcons, keptNames);
+    order(ids, icons, strings);
+  }
+
+  /**
+   * The page More opens: the options the user put under More (taken from the menu's own options, {@code menuIds}),
+   * then Telegram X's own (moderation: messages from the sender, restrict…) unless hidden or already in the menu.
+   */
+  public static void filterMore (IntList ids, IntList icons, StringList strings, IntList menuIds, IntList menuIcons, StringList menuStrings) {
+    String[] names = strings.get(), menuNames = menuStrings.get();
+    int count = ids.size(), menuCount = menuIds.size();
+    if (icons.size() != count || names.length != count || menuIcons.size() != menuCount || menuNames.length != menuCount) {
+      return; // not one icon and name per option: leave it as it is
+    }
+    Set<String> set = hidden(), moreSet = more();
+    // What the menu itself shows (to skip Telegram X's single More option, which it put in the menu)
+    IntList shownIds = new IntList(menuCount);
+    IntList scratchIcons = new IntList(menuCount);
+    StringList scratchNames = new StringList(menuCount);
+    for (int i = 0; i < menuCount; i++) {
+      shownIds.append(menuIds.get(i));
+      scratchIcons.append(menuIcons.get(i));
+      scratchNames.append(menuNames[i]);
+    }
+    filter(shownIds, scratchIcons, scratchNames);
+    // Telegram X's Delete from cache usually is on this page: XGram's Clear from cache then never joins it
+    boolean hasTgxCache = menuIds.indexOf(R.id.btn_deleteFile) != -1 || ids.indexOf(R.id.btn_deleteFile) != -1;
+    // Telegram X's "Messages from X" here: XGram's Messages by sender (the same screen) stays out
+    boolean hasTgxSender = ids.indexOf(R.id.btn_messageViewList) != -1;
+    IntList keptIds = new IntList(count + menuCount), keptIcons = new IntList(count + menuCount);
+    StringList keptNames = new StringList(count + menuCount);
+    if (!moreSet.isEmpty()) {
+      int[] menuIdArray = menuIds.get(), menuIconArray = menuIcons.get();
+      for (int i = 0; i < menuCount; i++) {
+        int id = menuIdArray[i];
+        if (id == R.id.btn_messageMore || !isHiddenId(id, moreSet) || isHiddenId(id, set) || (hasTgxCache && id == R.id.btn_xgramClearFromCache) ||
+          (hasTgxSender && id == R.id.btn_xgramMessagesBySender) || keptIds.indexOf(id) != -1) {
+          continue;
+        }
+        keptIds.append(id);
+        keptIcons.append(menuIconArray[i]);
+        keptNames.append(menuNames[i]);
+      }
+    }
+    int[] idArray = ids.get(), iconArray = icons.get();
+    for (int i = 0; i < count; i++) {
+      int id = idArray[i];
+      if (id == R.id.btn_messageMore || isHiddenId(id, set) || shownIds.indexOf(id) != -1 || keptIds.indexOf(id) != -1) {
+        continue;
+      }
+      keptIds.append(id);
+      keptIcons.append(iconArray[i]);
+      keptNames.append(names[i]);
+    }
+    if (keptIds.isEmpty()) {
+      order(ids, icons, strings); // never an empty page: Telegram X's own options, as filter() keeps a menu
+      return;
+    }
+    replace(ids, icons, strings, keptIds, keptIcons, keptNames);
+    order(ids, icons, strings);
+  }
+
+  /** Whether the page More opens has an option that needs the menu's tag (Save: the files the menu found downloaded). */
+  public static boolean needsMenuTag (IntList ids) {
+    return ids.indexOf(R.id.btn_saveFile) != -1 || ids.indexOf(R.id.btn_saveGif) != -1;
+  }
+
+  private static void replace (IntList ids, IntList icons, StringList strings, IntList newIds, IntList newIcons, StringList newNames) {
+    String[] newNameArray = newNames.get();
     ids.clear();
     icons.clear();
     strings.clear();
-    for (int i = 0; i < keptIds.size(); i++) {
-      ids.append(keptIds.get(i));
-      icons.append(keptIcons.get(i));
-      strings.append(keptNameArray[i]);
+    for (int i = 0; i < newIds.size(); i++) {
+      ids.append(newIds.get(i));
+      icons.append(newIcons.get(i));
+      strings.append(newNameArray[i]);
     }
-    order(ids, icons, strings);
   }
 
   private static String[] defaultKeys;

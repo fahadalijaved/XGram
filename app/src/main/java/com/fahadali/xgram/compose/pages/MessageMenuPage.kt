@@ -32,6 +32,16 @@ fun MessageMenuPage() {
     val options = XgramMessageMenu.OPTIONS.associateBy { it.key }
     val keys = XgramMessageMenu.OPTIONS.map { it.key }.toTypedArray()
 
+    // The menu as a popup next to the message (Telegram) or as the sheet
+    group {
+      switch(
+        R.id.btn_xgramMessagePopup, s(R.string.XgramMessagePopup), s(R.string.XgramMessagePopupInfo),
+        checked = settings.messagePopup()
+      ) {
+        settings.setMessagePopup(it)
+      }
+    }
+
     // Where the quick reactions go: above the list of options, which can be long.
     group {
       buttons(
@@ -56,13 +66,24 @@ fun MessageMenuPage() {
         options[key]?.let { option ->
           // Summarize and Edit history are only added while their setting is on.
           val reason = XgramSettingDeps.messageMenuOptionReason(key)
+          val hidden = XgramMessageMenu.isHidden(key)
+          // Under More: the option leaves the menu and waits under its More option (More itself can't go there)
+          val inMore = if (XgramMessageMenu.canGoInMore(key)) !hidden && XgramMessageMenu.isInMore(key) else null
           ReorderRow(
-            key = key, title = s(option.name), icon = option.icon(), checked = !XgramMessageMenu.isHidden(key),
-            enabled = reason == 0, subtitle = if (reason != 0) s(reason) else null
+            key = key, title = s(option.name), icon = option.icon(), checked = !hidden,
+            enabled = reason == 0,
+            subtitle = if (reason != 0) s(reason) else if (inMore == true) s(R.string.XgramMenuUnderMore) else null,
+            inMore = inMore
           )
         }
       },
-      onToggle = { key, shown -> XgramMessageMenu.setHidden(key, !shown) }
+      onToggle = { key, shown -> XgramMessageMenu.setHidden(key, !shown) },
+      onMore = { key, inMore ->
+        XgramMessageMenu.setInMore(key, inMore)
+        if (inMore) {
+          XgramMessageMenu.setHidden(key, false) // under More is shown: just one tap away
+        }
+      }
     ) { order ->
       XgramReorder.save(XgramReorder.MESSAGE_MENU, order)
     }

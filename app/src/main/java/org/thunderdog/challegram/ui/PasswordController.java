@@ -355,8 +355,12 @@ public class PasswordController extends ViewController<PasswordController.Args> 
   private boolean qrLoginInProgress;
 
   private void requestQrLogin () {
+    if (qrLoginInProgress) {
+      com.fahadali.xgram.login.QrLogin.showPleaseWait(); // a second tap while the code is being made
+      return;
+    }
     // TDLib refuses it while a code check or another login request is pending
-    if (!isQrLoginMode() || inProgress || inRecoveryProgress || qrLoginInProgress) {
+    if (!isQrLoginMode() || inProgress || inRecoveryProgress) {
       return;
     }
     if (com.fahadali.xgram.login.QrLogin.request(this, tdlib, error -> {

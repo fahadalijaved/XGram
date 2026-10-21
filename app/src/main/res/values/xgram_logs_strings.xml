@@ -16,6 +16,7 @@
   <string name="XgramLogsDetailedUntilTomorrow">On until tomorrow, %1$s</string>
   <string name="XgramLogsInfo">Nothing is sent by itself: Share logs only opens the share sheet. Detailed logs switch off by themselves after 24 hours.</string>
   <string name="XgramLogsTestingJoin">Members of @XGramTD get more testing utilities.</string>
+  <string name="XgramLogsTestingLogIn">Log in to open @%1$s.</string>
   <!-- A message XGram could not draw (TGMessage.valueOfError), in place of Telegram X's FailureMessageText -->
   <string name="XgramFailureMessageText">This message couldn\'t be shown because of an error. Copy the details below and send them privately to an XGram admin. Ask in Support in @XGramTD who to send them to. Thank you!</string>
   <!-- The Notifications page after an unknown system error (SettingsNotificationController), in place of Telegram X's NotificationsGuideError* and NotificationsGuideCategoryLimit*, which send people to Telegram X's own testers group. New keys: Telegram X's cloud language pack overrides its own -->

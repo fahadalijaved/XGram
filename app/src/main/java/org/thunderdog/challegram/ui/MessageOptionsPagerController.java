@@ -1092,6 +1092,19 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       reactionsPickerRecyclerView.invalidateItemDecorations();
       reactionsPickerRecyclerView.scrollToPosition(0);
     }
+    if (xgramExpandOnShow) {
+      xgramExpandOnShow = false;
+      if (state.needShowReactionsPopupPicker && reactionsPickerWrapper != null && !isDestroyed()) {
+        showReactionPicker(); // XGram: the popup's expand button opened this sheet for its picker
+      }
+    }
+  }
+
+  // XGram: Message menu → Popup menu: the popup's expand button opens this sheet with its picker open
+  private boolean xgramExpandOnShow;
+
+  public void xgramExpandPickerOnShow () {
+    xgramExpandOnShow = true;
   }
 
   private void checkReactionPickerPosition () {

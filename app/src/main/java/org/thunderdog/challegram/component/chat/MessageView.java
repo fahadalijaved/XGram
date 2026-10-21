@@ -658,6 +658,18 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
 
   public static Object fillMessageOptions (MessagesController m, TGMessage msg, @Nullable TdApi.ChatMember sender, IntList ids, IntList icons, StringList strings, boolean isMore) {
     Object tag = fillMessageOptionsImpl(m, msg, sender, ids, icons, strings, isMore);
+    if (isMore) {
+      // XGram: the page More opens also lists the options the user put under More (Message menu): they come from
+      // the menu's own options, with the menu's tag (the downloaded files of Save)
+      IntList menuIds = new IntList(10);
+      IntList menuIcons = new IntList(10);
+      StringList menuStrings = new StringList(10);
+      Object menuTag = fillMessageOptionsImpl(m, msg, sender, menuIds, menuIcons, menuStrings, false);
+      com.fahadali.xgram.chats.XgramMessageMenu.filterMore(ids, icons, strings, menuIds, menuIcons, menuStrings);
+      // Only Save (moved under More) needs the menu's tag; Telegram X's Delete from cache here deletes every file of
+      // the message without one, as before
+      return tag == null && com.fahadali.xgram.chats.XgramMessageMenu.needsMenuTag(ids) ? menuTag : tag;
+    }
     com.fahadali.xgram.chats.XgramMessageMenu.filter(ids, icons, strings); // XGram: only what the user wants
     return tag;
   }
@@ -1257,7 +1269,7 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       icons.append(R.drawable.baseline_more_horiz_24);
       strings.append(R.string.MoreMessageOptions);
     } else if (moreOptions == 1) {
-      fillMessageOptions(m, msg, sender, ids, icons, strings, true);
+      fillMessageOptionsImpl(m, msg, sender, ids, icons, strings, true); // XGram: the caller filters the whole menu once
     }
 
     return tag;

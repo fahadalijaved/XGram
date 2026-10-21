@@ -75,6 +75,12 @@ public final class XgramSettings {
   public static final String KEY_SYSTEM_EMOJI = "xgram_system_emoji";
   /** Prefix of the message box buttons the user hid, followed by one of the {@code INPUT_BUTTON_*} names. */
   public static final String KEY_INPUT_BUTTON_HIDDEN = "xgram_input_hide_";
+  /** The attach button stays next to the send button while typing (on by default). */
+  public static final String KEY_INPUT_ATTACH_TYPING = "xgram_input_attach_typing";
+  /** Passcode lock: no lock button in the chat list's header. */
+  public static final String KEY_HIDE_LOCK_BUTTON = "xgram_hide_lock_button";
+  /** Message menu: a popup next to the message (Telegram) instead of the sheet. */
+  public static final String KEY_MESSAGE_POPUP = "xgram_message_popup";
 
   public static final String INPUT_BUTTON_COMMANDS = "commands";
   public static final String INPUT_BUTTON_CAMERA = "camera";
@@ -551,6 +557,33 @@ public final class XgramSettings {
     }
   }
 
+  /** The attach button stays next to the send button while typing (Message box buttons). Read when a chat's composer updates. */
+  public boolean inputAttachWhileTyping () {
+    return pmc().getBoolean(KEY_INPUT_ATTACH_TYPING, true);
+  }
+
+  public void setInputAttachWhileTyping (boolean value) {
+    put(KEY_INPUT_ATTACH_TYPING, value);
+  }
+
+  /** Passcode lock: the chat list's header has no lock button (the app still locks with Auto-lock). */
+  public boolean hideLockButton () {
+    return pmc().getBoolean(KEY_HIDE_LOCK_BUTTON, false);
+  }
+
+  public void setHideLockButton (boolean value) {
+    put(KEY_HIDE_LOCK_BUTTON, value);
+  }
+
+  /** Message menu → Popup menu: a long press opens the menu next to the message, the reactions above it (Telegram). */
+  public boolean messagePopup () {
+    return pmc().getBoolean(KEY_MESSAGE_POPUP, false);
+  }
+
+  public void setMessagePopup (boolean value) {
+    put(KEY_MESSAGE_POPUP, value);
+  }
+
   // Network
 
   /** Download boost (see {@link XgramDownloadBoost}). Read on every download request, so it applies at once to every account. */
@@ -656,9 +689,10 @@ public final class XgramSettings {
   public static final String KEY_BUBBLE_RADIUS = "xgram_look_bubble";
   public static final String KEY_BUBBLE_MERGE_RADIUS = "xgram_look_bubble_merged";
   public static final String KEY_BUBBLE_TAIL = "xgram_bubble_tail";
+  public static final String KEY_AVATAR_AT_LAST = "xgram_avatar_last_message";
 
   // Cached: read on every message layout.
-  private volatile int stickerScale = -1, emojiScale = -1, bubbleRadius = -2, bubbleMergeRadius = -2, bubbleTail = -1;
+  private volatile int stickerScale = -1, emojiScale = -1, bubbleRadius = -2, bubbleMergeRadius = -2, bubbleTail = -1, avatarAtLast = -1;
 
   /** Stickers in messages, percent of Telegram X's size. */
   public int stickerScale () {
@@ -728,6 +762,20 @@ public final class XgramSettings {
   public void setBubbleTail (boolean value) {
     bubbleTail = value ? 1 : 0;
     put(KEY_BUBBLE_TAIL, value);
+  }
+
+  /** With bubbles, the sender's avatar sits next to the last message of a group (Telegram), not the first. Read on every message draw. */
+  public boolean avatarAtLastMessage () {
+    int value = avatarAtLast;
+    if (value < 0) {
+      avatarAtLast = value = pmc().getBoolean(KEY_AVATAR_AT_LAST, false) ? 1 : 0;
+    }
+    return value == 1;
+  }
+
+  public void setAvatarAtLastMessage (boolean value) {
+    avatarAtLast = value ? 1 : 0;
+    put(KEY_AVATAR_AT_LAST, value);
   }
 
   // Avatars

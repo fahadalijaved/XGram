@@ -57,7 +57,10 @@ public final class XgramInputButtonsController extends RecyclerViewController<Vo
       @Override
       protected void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         Object data = item.getData();
-        if (data instanceof String) {
+        if (item.getId() == R.id.btn_xgramInputAttachTyping) {
+          view.setData(item.getCharSequenceValue());
+          view.getToggler().setRadioEnabled(XgramSettings.instance().inputAttachWhileTyping(), isUpdate);
+        } else if (data instanceof String) {
           view.getToggler().setRadioEnabled(!XgramSettings.instance().inputButtonHidden((String) data), isUpdate);
         }
       }
@@ -78,6 +81,10 @@ public final class XgramInputButtonsController extends RecyclerViewController<Vo
       items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramInputButton, ICONS[i], NAMES[i]).setData(KEYS[i]));
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramInputAttachTyping, R.drawable.deproko_baseline_attach_26, R.string.XgramInputAttachTyping)
+      .setStringValue(Lang.getString(R.string.XgramInputAttachTypingInfo)));
+    items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramInputButtonsNote));
     return items;
   }
@@ -96,6 +103,10 @@ public final class XgramInputButtonsController extends RecyclerViewController<Vo
   @Override
   public void onClick (View v) {
     Object tag = v.getTag();
+    if (v.getId() == R.id.btn_xgramInputAttachTyping) {
+      XgramSettings.instance().setInputAttachWhileTyping(adapter.toggleView(v));
+      return;
+    }
     if (v.getId() == R.id.btn_xgramInputButton && tag instanceof ListItem && ((ListItem) tag).getData() instanceof String) {
       String key = (String) ((ListItem) tag).getData();
       boolean shown = adapter.toggleView(v);

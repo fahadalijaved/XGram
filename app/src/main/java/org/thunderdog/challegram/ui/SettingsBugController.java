@@ -1032,7 +1032,8 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
                 int i = adapter.indexOfViewById(R.id.btn_testingUtils);
                 ListItem next = i != -1 ? adapter.getItem(i + 1) : null;
                 if (next != null && next.getViewType() == ListItem.TYPE_SHADOW_BOTTOM) {
-                  adapter.addItem(i + 2, new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Strings.buildMarkdown(this, Lang.getString(R.string.XgramLogsTestingJoin), null), false));
+                  // The group's link: from a slot that is still logging in it opens in a logged in account (401 otherwise)
+                  adapter.addItem(i + 2, new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, Strings.buildMarkdown(this, Lang.getString(R.string.XgramLogsTestingJoin), (view, span, clickedText) -> com.fahadali.xgram.XgramLogs.openGroupLink(this, clickedText)), false));
                 }
               }
             }));

@@ -36,6 +36,14 @@ fun InputButtonsPage() {
         }
       }
     }
+    group {
+      switch(
+        R.id.btn_xgramInputAttachTyping, s(R.string.XgramInputAttachTyping), subtitle = s(R.string.XgramInputAttachTypingInfo),
+        icon = R.drawable.deproko_baseline_attach_26, checked = settings.inputAttachWhileTyping()
+      ) {
+        settings.setInputAttachWhileTyping(it)
+      }
+    }
     description(R.string.XgramInputButtonsNote)
   }
 }

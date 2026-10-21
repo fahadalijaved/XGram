@@ -2215,10 +2215,18 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
       drawFooter(view, c);
     }
 
+    // XGram: Chat look → Avatar next to the last message: the avatar sits at the bottom of a group's last bubble
+    if (xgramAvatarAtBottom() && isBottomMessage() && !headerDisabled() && needAvatar()) {
+      xgramLayoutBottomAvatar(view, avatarReceiver);
+      if (avatarReceiver.needPlaceholder())
+        avatarReceiver.drawPlaceholder(c);
+      avatarReceiver.draw(c);
+    }
+
     // Header
     if ((flags & FLAG_HEADER_ENABLED) != 0) {
       // Avatar
-      if (needAvatar()) {
+      if (needAvatar() && !xgramAvatarAtBottom()) {
         float cx = avatarReceiver.centerX();
         float cy = avatarReceiver.centerY();
         if (useFullWidth()) {
@@ -3056,7 +3064,7 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if (replyData != null && replyData.isInside(x, y, useBubbles() && !useBubble())) {
       return CLICK_TYPE_REPLY;
     }
-    if (hasHeader() && needAvatar() && view.getAvatarReceiver().isInsideReceiver(x, y)) {
+    if ((xgramAvatarAtBottom() ? isBottomMessage() && !headerDisabled() : hasHeader()) && needAvatar() && view.getAvatarReceiver().isInsideReceiver(x, y)) {
       return CLICK_TYPE_AVATAR;
     }
     return CLICK_TYPE_NONE;
@@ -4470,11 +4478,29 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
 
   // Image receivers
 
+  // XGram: Chat look → Avatar next to the last message (Telegram, Google Messages). With bubbles, the sender's avatar
+  // sits at the bottom of a group's last bubble instead of the top of its first; its place follows the bubble's bottom
+  // edge on every draw (reactions and the time can grow the bubble without a new layout).
+
+  private boolean xgramAvatarAtBottom () {
+    return useBubbles() && com.fahadali.xgram.XgramSettings.instance().avatarAtLastMessage();
+  }
+
+  private void xgramLayoutBottomAvatar (MessageView view, AvatarReceiver receiver) {
+    final int size = xBubbleAvatarRadius * 2;
+    int left = xBubbleAvatarLeft;
+    if (Lang.rtl()) {
+      left = view.getMeasuredWidth() - left - size;
+    }
+    final int top = Math.max(0, bottomContentEdge - size);
+    receiver.setBounds(left, top, left + size, top + size);
+  }
+
   public final void layoutAvatar (MessageView view, AvatarReceiver receiver) {
     int left, top, size;
     if (useBubbles()) {
       left = xBubbleAvatarLeft;
-      top = computeBubbleTop();
+      top = xgramAvatarAtBottom() ? Math.max(0, bottomContentEdge - xBubbleAvatarRadius * 2) : computeBubbleTop();
       size = xBubbleAvatarRadius * 2;
     } else {
       top = getHeaderPadding();

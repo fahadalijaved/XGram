@@ -1342,17 +1342,27 @@ public class PhoneController extends EditBaseController<Void> implements Setting
   }
 
   // XGram: TDLib answers with WaitOtherDeviceConfirmation and MainActivity opens the QR screen
+  private boolean xgramQrRequested; // the progress shown is the QR code's, not the phone number's
+
   private void requestQrLogin () {
-    if (mode != MODE_LOGIN || isInProgress() || inCountryMode) {
+    if (mode != MODE_LOGIN || inCountryMode) {
+      return;
+    }
+    if (isInProgress()) {
+      if (xgramQrRequested) {
+        com.fahadali.xgram.login.QrLogin.showPleaseWait(); // a second tap while the code is being made
+      }
       return;
     }
     showError(null);
     if (com.fahadali.xgram.login.QrLogin.request(this, tdlib, error -> {
+      xgramQrRequested = false;
       setInProgress(false);
       if (error != null) {
         showError(TD.toErrorString(error));
       }
     })) {
+      xgramQrRequested = true;
       setInProgress(true);
     }
   }

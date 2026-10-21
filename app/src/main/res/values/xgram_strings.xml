@@ -87,7 +87,15 @@
   <string name="XgramAddedToCommunityNamed">Added to the %1$s community</string>
   <string name="XgramRemovedFromCommunity">Removed from the community</string>
   <string name="XgramMessageMenu">Message menu</string>
-  <string name="XgramMessageMenuInfo">Choose what shows when you long-press a message, and drag an option by its handle, or hold it, to change the order. Options for one situation only, like Send now or Stop poll, always show and keep their place.</string>
+  <string name="XgramMessageMenuInfo">Choose what shows when you long-press a message, and drag an option by its handle, or hold it, to change the order. Put an option under More to keep it one tap away without crowding the menu. Options for one situation only, like Send now or Stop poll, always show and keep their place.</string>
+  <string name="XgramMenuUnderMore">Under More</string>
+  <string name="XgramMessagePopup">Popup menu</string>
+  <string name="XgramMessagePopupInfo">A small menu next to the message with the reactions above it, like Telegram</string>
+  <string name="XgramPopupViewers">Seen by</string>
+  <string name="XgramMenuNameUnderMore">%1$s · under More</string>
+  <string name="XgramMenuInMenu">In the menu</string>
+  <string name="XgramMenuHidden">Hidden</string>
+  <string name="XgramMenuChoiceCurrent">%1$s ✓</string>
   <string name="XgramMenuTelegram">Telegram&#160;X</string>
   <string name="XgramMenuXgram">XGram</string>
   <string name="XgramMenuRestrict">Restrict or remove member</string>
@@ -187,6 +195,9 @@
   <string name="XgramBubbleCorners">Bubble corners</string>
   <string name="XgramBubbleMergedCorners">Corners between bubbles</string>
   <string name="XgramBubbleTail">Bubble tail</string>
+  <string name="XgramAvatarAtLast">Avatar next to the last message</string>
+  <string name="XgramLockButton">Lock button in the chat list</string>
+  <string name="XgramLockButtonInfo">A lock in the chat list\'s header locks XGram at once. Without it, XGram locks only with Auto-lock.</string>
   <string name="XgramLookValue">%1$s · %2$s</string>
   <string name="XgramLookPercent">%1$d%%</string>
   <string name="XgramLookDp">%1$d dp</string>
@@ -527,6 +538,8 @@
   <string name="XgramInputCamera">Camera</string>
   <string name="XgramInputScheduled">Scheduled messages</string>
   <string name="XgramInputVoice">Voice and video messages</string>
+  <string name="XgramInputAttachTyping">Attach button while typing</string>
+  <string name="XgramInputAttachTypingInfo">Keeps the attach button next to Send while you type</string>
   <string name="XgramInputButtonsNote">Without the bot commands button, typing / still lists the commands, and the button for a bot\'s keyboard still shows. Without the camera button, the camera is in the attach menu\'s gallery. Without the scheduled messages button, they open from the chat\'s ⋮ menu.\n\nThe emoji and sticker button always stays: it\'s the way to stickers, GIFs and emoji.</string>
   <string name="XgramTapToRecord">Tap to record</string>
   <string name="XgramTapToRecordInfo">Tap the microphone to record and tap Send or Cancel to stop. Long press switches between voice and video.</string>
@@ -686,6 +699,7 @@
   <string name="xgram_login_EmailNotAllowed">This email can’t be used for logging in. Try another one.</string>
   <string name="xgram_login_EmailCodeExpired">This code has expired. Request a new one.</string>
   <string name="xgram_login_QrButton">Log in with QR code</string>
+  <string name="xgram_login_QrPleaseWait">Please wait, the QR code is being generated…</string>
   <string name="xgram_login_QrTitle">QR code login</string>
   <string name="xgram_login_QrSteps">1. Open Telegram on a phone where you are logged in.\n2. Go to Settings → Devices → Link Desktop Device.\n3. Point the camera at this code.</string>
   <string name="xgram_login_QrRefresh">The code refreshes by itself. Keep this screen open until you scan it.</string>

@@ -622,6 +622,67 @@ public final class XgramLogs {
     });
   }
 
+  /**
+   * The group's link under Testing utilities ("Members of @XGramTD…"). A slot that is still logging in can't look the
+   * group up (TDLib answers 401 Unauthorized), so the link switches to a logged in account and opens it there; with
+   * none, it says to log in first. False: this account opens it the usual way.
+   */
+  public static boolean openGroupLink (@NonNull ViewController<?> c, @Nullable String clickedText) {
+    final Tdlib tdlib = c.tdlib();
+    if (tdlib == null || tdlib.isAuthorized()) {
+      return false;
+    }
+    final String username = clickedText != null && clickedText.startsWith("@") ? clickedText.substring(1) : clickedText;
+    if (username == null || username.isEmpty()) {
+      return false;
+    }
+    final TdlibManager manager = TdlibManager.instance();
+    int target = -1;
+    for (org.thunderdog.challegram.telegram.TdlibAccount account : manager) {
+      // the group is on the production servers: a test DC account can't open it either
+      if (account.id != tdlib.id() && !account.isUnauthorized() && !account.isDebug()) {
+        target = account.id;
+        break;
+      }
+    }
+    if (target == -1) {
+      UI.showToast(Lang.getString(R.string.XgramLogsTestingLogIn, username), Toast.LENGTH_SHORT);
+      return true;
+    }
+    final int accountId = target;
+    final BaseActivity activity = UI.getContext(c.context());
+    if (activity == null) {
+      return true;
+    }
+    if (manager.preferredAccountId() == accountId) {
+      openInAccount(activity, accountId, username, 0); // already the account on screen (this page belongs to another slot)
+      return true;
+    }
+    manager.changePreferredAccountId(accountId, TdlibManager.SWITCH_REASON_USER_CLICK, success -> {
+      if (success) {
+        openInAccount(activity, accountId, username, 0);
+      } else {
+        UI.showToast(Lang.getString(R.string.XgramLogsTestingLogIn, username), Toast.LENGTH_SHORT);
+      }
+    });
+    return true;
+  }
+
+  /** After an account switch the account's chat list comes up: once it is on screen, opens the chat there. */
+  private static void openInAccount (@NonNull BaseActivity activity, int accountId, @NonNull String username, int attempt) {
+    UI.post(() -> {
+      if (activity.isFinishing()) {
+        return;
+      }
+      ViewController<?> top = UI.getCurrentStackItem(activity);
+      if (top != null && top.tdlib() != null && top.tdlib().id() == accountId && top.tdlib().isAuthorized()) {
+        top.tdlib().ui().openPublicChat(top, username, null);
+      } else if (attempt < 10) {
+        openInAccount(activity, accountId, username, attempt + 1);
+      }
+    }, attempt == 0 ? 0 : 150);
+  }
+
   // Share logs
 
   private static final String SHARE_DIR = "xgram_logs_share";
