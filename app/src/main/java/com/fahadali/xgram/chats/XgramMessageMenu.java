@@ -86,6 +86,7 @@ public final class XgramMessageMenu {
     new Option("view_in_topic", R.string.XgramViewInTopic, R.drawable.baseline_forum_24, true, R.id.btn_xgramViewInTopic),
     new Option("bookmark", R.string.XgramBookmark, R.drawable.baseline_star_24, R.drawable.baseline_star_border_24, true, R.id.btn_xgramBookmark),
     new Option("remind", R.string.XgramLaterRemind, R.drawable.baseline_watch_later_24, true, R.id.btn_xgramLaterRemind),
+    new Option("save_to_drive", R.string.XgramDriveSaveToDrive, R.drawable.baseline_cloud_24, true, R.id.btn_xgramSaveToDrive),
     new Option("repeat", R.string.XgramRepeat, R.drawable.baseline_repeat_24, true, R.id.btn_xgramRepeat),
     new Option("transcribe", R.string.XgramTranscribe, R.drawable.baseline_format_text_24, true, R.id.btn_xgramTranscribe),
     new Option("summarize", R.string.XgramSummarize, R.drawable.baseline_format_list_bulleted_type_24, true, R.id.btn_xgramSummarize),
@@ -104,6 +105,11 @@ public final class XgramMessageMenu {
     new Option("restrict", R.string.XgramMenuRestrict, R.drawable.baseline_block_24, false, R.id.btn_messageRestrictMember, R.id.btn_messageBlockUser),
     new Option("more", R.string.MoreMessageOptions, R.drawable.baseline_more_horiz_24, false, R.id.btn_messageMore)
   };
+
+  /** Whether the option exists in this build and setup (Save to XGram Drive: only while Drive's test is on). */
+  public static boolean isAvailable (String key) {
+    return !"save_to_drive".equals(key) || com.fahadali.xgram.XgramSettings.instance().driveTest();
+  }
 
   private static volatile Set<String> hidden, more;
 

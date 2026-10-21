@@ -116,6 +116,12 @@ public final class XgramMessageActions {
       strings.append(com.fahadali.xgram.later.XgramLater.remindLabel(tdlib, chatId, msg.getMessage().id));
       icons.append(R.drawable.baseline_watch_later_24);
     }
+    if (com.fahadali.xgram.drive.XgramDriveController.canSaveFromChat(tdlib, chatId, msg.getAllMessages())) {
+      // XGram Drive: a copy of the file in a folder of the drive (nothing is uploaded again)
+      ids.append(R.id.btn_xgramSaveToDrive);
+      strings.append(R.string.XgramDriveSaveToDrive);
+      icons.append(R.drawable.baseline_cloud_24);
+    }
     // Repeat sends a copy; ForwardMessages doesn't support reply threads.
     if (msg.xgramCanBeCopied() && m.canWriteMessages() && !(m.getMessageTopicId() instanceof TdApi.MessageTopicThread)) {
       ids.append(R.id.btn_xgramRepeat);
@@ -216,6 +222,10 @@ public final class XgramMessageActions {
     }
     if (id == R.id.btn_xgramLaterRemind) {
       com.fahadali.xgram.later.XgramLaterPicker.showForMessage(m, msg);
+      return true;
+    }
+    if (id == R.id.btn_xgramSaveToDrive) {
+      com.fahadali.xgram.drive.XgramDriveController.saveFromChat(m, msg.getAllMessages());
       return true;
     }
     if (id == R.id.btn_xgramRepeat) {

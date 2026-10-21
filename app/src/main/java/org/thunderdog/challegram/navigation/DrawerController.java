@@ -600,7 +600,7 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
   };
 
   private final com.fahadali.xgram.XgramSettings.Listener xgramActivitySettingsListener = key -> {
-    if (com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_ON.equals(key)) {
+    if (com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_ON.equals(key) || com.fahadali.xgram.XgramSettings.KEY_DRIVE_TEST.equals(key)) {
       UI.post(() -> {
         if (!isDestroyed()) {
           xgramUpdateMenuItems();
@@ -853,6 +853,9 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
     }
     if (!xgram.drawerItemHidden("later")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramLater, R.drawable.baseline_watch_later_24, R.string.XgramLater)); // XGram Later
+    }
+    if (xgram.driveTest() && !xgram.drawerItemHidden("drive")) {
+      items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramDrive, R.drawable.baseline_cloud_24, R.string.XgramDrive)); // XGram Drive
     }
     if (!xgram.drawerItemHidden("saved_by_chat")) {
       items.add(new ListItem(ListItem.TYPE_DRAWER_ITEM, R.id.btn_xgramSavedByChat, R.drawable.baseline_forum_24, R.string.XgramSavedByChat)); // XGram
@@ -1179,6 +1182,10 @@ public class DrawerController extends ViewController<Void> implements View.OnCli
       openController(new com.fahadali.xgram.chats.XgramBookmarksController(context, context.currentTdlib())); // XGram
     } else if (viewId == R.id.btn_xgramLater) {
       openController(new com.fahadali.xgram.later.XgramLaterController(context, context.currentTdlib())); // XGram Later
+    } else if (viewId == R.id.btn_xgramDrive) {
+      com.fahadali.xgram.drive.XgramDriveController drive = new com.fahadali.xgram.drive.XgramDriveController(context, context.currentTdlib()); // XGram Drive
+      drive.setArguments(new com.fahadali.xgram.drive.XgramDriveController.Args("/"));
+      openController(drive);
     } else if (viewId == R.id.btn_xgramSavedByChat) {
       openController(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, context.currentTdlib())); // XGram
     } else if (viewId == R.id.btn_addAccount) {

@@ -35,6 +35,7 @@ fun SideMenuPage() {
   SettingsPage(title = str(R.string.XgramSideMenu)) {
     val settings = XgramSettings.instance()
     val mainKeys = XgramReorder.ordered(XgramReorder.DRAWER, XgramDrawerItemsController.KEYS)
+      .filter { XgramDrawerItemsController.isAvailable(it) }
     val toggleKeys = XgramReorder.ordered(XgramReorder.DRAWER, XgramDrawerItemsController.TOGGLE_KEYS)
       .filter { XgramDrawerItemsController.isAvailable(it) }
 

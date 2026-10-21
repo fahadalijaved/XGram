@@ -487,6 +487,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
         } else if (itemId == R.id.btn_xgramLogsDetailed) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramLogs.isDetailedOn(), isUpdate);
           view.setData(com.fahadali.xgram.XgramLogs.detailedSubtitle());
+        } else if (itemId == R.id.btn_xgramDriveTest) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().driveTest(), isUpdate);
+          view.setData(R.string.XgramDriveTestInfo);
         } else if (itemId == R.id.btn_secret_replacePhoneNumber) {
           view.getToggler().setRadioEnabled(Settings.instance().needHidePhoneNumber(), isUpdate);
         } else if (itemId == R.id.btn_secret_disableQrProcess) {
@@ -807,6 +810,11 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
         }
         int initialSize = items.size();
         if (tdlib != null && !tdlib.context().inRecoveryMode()) {
+          if (testerLevel >= Tdlib.TesterLevel.TESTER || BuildConfig.DEBUG || com.fahadali.xgram.XgramSettings.instance().driveTest()) {
+            // XGram Drive: a test for now (debug builds start with it on, CI builds off); shown to testers, or while on
+            items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramDriveTest, R.drawable.baseline_cloud_24, R.string.XgramDriveTest, false));
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+          }
           // items.add(new SettingItem(SettingItem.TYPE_SEPARATOR_FULL));
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_secret_readAllChats, 0, R.string.ReadAllChats, false));
           items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
@@ -1147,6 +1155,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
       Intents.shareText(U.getUsefulMetadata(null) + "\n" + crash.message);
     } else if (viewId == R.id.btn_xgramLogsShare) {
       com.fahadali.xgram.XgramLogs.confirmAndShare(this);
+    } else if (viewId == R.id.btn_xgramDriveTest) {
+      com.fahadali.xgram.XgramSettings.instance().setDriveTest(!com.fahadali.xgram.XgramSettings.instance().driveTest()); // XGram Drive (test)
+      adapter.updateValuedSettingById(R.id.btn_xgramDriveTest);
     } else if (viewId == R.id.btn_xgramLogsDetailed) {
       // The state is the setting's, so the switch follows it (listener: onDetailedLogsChanged)
       com.fahadali.xgram.XgramLogs.setDetailed(!com.fahadali.xgram.XgramLogs.isDetailedOn());

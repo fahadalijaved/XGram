@@ -83,6 +83,8 @@ public final class XgramSettings {
   public static final String KEY_MESSAGE_POPUP = "xgram_message_popup";
   /** A bot's profile → Add to group or channel: as an admin in groups too (channels always), with every right. */
   public static final String KEY_ADD_BOT_ADMIN = "xgram_add_bot_admin", KEY_ADD_BOT_ALL_RIGHTS = "xgram_add_bot_all_rights";
+  /** XGram Drive is a test for now: Testing utilities switches it on (debug builds start with it on, CI builds off). */
+  public static final String KEY_DRIVE_TEST = "xgram_drive_test";
 
   public static final String INPUT_BUTTON_COMMANDS = "commands";
   public static final String INPUT_BUTTON_CAMERA = "camera";
@@ -602,6 +604,15 @@ public final class XgramSettings {
 
   public void setAddBotAllRights (boolean value) {
     put(KEY_ADD_BOT_ALL_RIGHTS, value);
+  }
+
+  /** XGram Drive (a test): in the side menu and the message menu only while this is on. */
+  public boolean driveTest () {
+    return pmc().getBoolean(KEY_DRIVE_TEST, org.thunderdog.challegram.BuildConfig.DEBUG);
+  }
+
+  public void setDriveTest (boolean value) {
+    put(KEY_DRIVE_TEST, value);
   }
 
   // Network

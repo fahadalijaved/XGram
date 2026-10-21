@@ -340,6 +340,14 @@ public class ShareController extends TelegramViewController<ShareController.Args
       return this;
     }
 
+    private boolean xgramSendAsCopy;
+
+    /** XGram: forwarded as copies without their captions (XGram Drive: no "Forwarded from" its channel, no path). */
+    public Args xgramSetSendAsCopy (boolean sendAsCopy) {
+      this.xgramSendAsCopy = sendAsCopy;
+      return this;
+    }
+
     public Args setMessageThreadId (long messageThreadId) {
       this.messageThreadId = messageThreadId;
       return this;
@@ -384,6 +392,10 @@ public class ShareController extends TelegramViewController<ShareController.Args
   public void setArguments (Args args) {
     super.setArguments(args);
     this.mode = args.mode;
+    if (args.xgramSendAsCopy) {
+      needHideAuthor = true; // XGram: Send as copy and Remove captions start ticked
+      needRemoveCaptions = true;
+    }
     this.displayingChatList = args.chatList != null ? args.chatList : ChatPosition.CHAT_LIST_MAIN;
   }
 

@@ -109,6 +109,9 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
       keys[i] = XgramMessageMenu.OPTIONS[i].key;
     }
     for (String key : XgramReorder.ordered(XgramReorder.MESSAGE_MENU, keys)) {
+      if (!XgramMessageMenu.isAvailable(key)) {
+        continue;
+      }
       for (XgramMessageMenu.Option option : XgramMessageMenu.OPTIONS) {
         if (option.key.equals(key)) {
           items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramMenuItem, option.icon(), option.name).setData(option));

@@ -62,7 +62,7 @@ fun MessageMenuPage() {
     reorderGroup(
       key = "messageMenu",
       id = R.id.btn_xgramMenuItem,
-      rows = XgramReorder.ordered(XgramReorder.MESSAGE_MENU, keys).mapNotNull { key ->
+      rows = XgramReorder.ordered(XgramReorder.MESSAGE_MENU, keys).filter { XgramMessageMenu.isAvailable(it) }.mapNotNull { key ->
         options[key]?.let { option ->
           // Summarize and Edit history are only added while their setting is on.
           val reason = XgramSettingDeps.messageMenuOptionReason(key)

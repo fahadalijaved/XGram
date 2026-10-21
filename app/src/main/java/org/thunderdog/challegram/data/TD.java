@@ -4548,6 +4548,11 @@ public class TD {
   }
 
   private static void saveToDownloadsImpl (final File sourceFile, final String sourceMimeType) {
+    saveToDownloadsImpl(sourceFile, sourceMimeType, null);
+  }
+
+  /** XGram: {@code displayName} (a renamed XGram Drive file) names the copy instead of the cached file's name. */
+  private static void saveToDownloadsImpl (final File sourceFile, final String sourceMimeType, @Nullable String displayName) {
     if (!sourceFile.exists()) {
       return;
     }
@@ -4555,8 +4560,9 @@ public class TD {
     if (!FileUtils.createDirectory(destDir)) {
       return;
     }
-    String extension = U.getExtension(sourceFile.getName());
-    final File destFile = StringUtils.isEmpty(extension) ? U.newFile(destDir, sourceFile.getName(), TGMimeType.mimeTypeForExtension(extension)) : U.newFile(destDir, sourceFile.getName());
+    final String name = !StringUtils.isEmpty(displayName) ? displayName : sourceFile.getName();
+    String extension = U.getExtension(name);
+    final File destFile = StringUtils.isEmpty(extension) ? U.newFile(destDir, name, TGMimeType.mimeTypeForExtension(extension)) : U.newFile(destDir, name);
     if (!FileUtils.copy(sourceFile, destFile))
       return;
     UI.post(() -> {
@@ -4575,6 +4581,11 @@ public class TD {
   }
 
   public static void saveToDownloads (final File file, final String mimeType) {
+    saveToDownloads(file, mimeType, null);
+  }
+
+  /** XGram: saved as {@code displayName} when there is one (XGram Drive's names). */
+  public static void saveToDownloads (final File file, final String mimeType, @Nullable String displayName) {
     if (file == null) {
       return;
     }
@@ -4586,14 +4597,14 @@ public class TD {
       }
       if (context.permissions().requestWriteExternalStorage(Permissions.WriteType.DOWNLOADS, granted -> {
         if (granted) {
-          saveToDownloads(file, mimeType);
+          saveToDownloads(file, mimeType, displayName);
         }
       })) {
         return;
       }
     }
 
-    Background.instance().post(() -> saveToDownloadsImpl(file, mimeType));
+    Background.instance().post(() -> saveToDownloadsImpl(file, mimeType, displayName));
   }
 
   public static void saveToDownloads (final BaseActivity context, final DownloadedFile file) {
