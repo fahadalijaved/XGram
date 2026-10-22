@@ -1775,7 +1775,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
       addThemeInvalidateListener(pagerHeaderView.getTopView());
       fparams = (FrameLayoutFix.LayoutParams) pagerHeaderView.getRecyclerView().getLayoutParams();
       fparams.leftMargin = Screen.dp(56f);
-      fparams.rightMargin = Screen.dp(56f);
+      // XGram: room for every button of the header (XDrive's next to search), so no tab ends up under one
+      fparams.rightMargin = Screen.dp(getMenuId() == R.id.menu_xgramXDrive ? 56f + 52f : 56f);
       pagerHeaderView.getTopView().setOnItemClickListener(this);
       addThemeInvalidateListener(pagerHeaderView.getTopView());
 

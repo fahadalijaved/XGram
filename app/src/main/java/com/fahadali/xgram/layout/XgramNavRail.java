@@ -179,6 +179,16 @@ public final class XgramNavRail {
     R.drawable.xgl_bookmark, R.drawable.xgl_settings, R.drawable.baseline_account_circle_24,
     R.drawable.xgl_notifications
   };
+  /** A destination's filled icon (Saved Messages: XDrive's cloud while XDrive is on). */
+  static int filledOf (int dest) {
+    return dest == DEST_SAVED && com.fahadali.xgram.xdrive.XDrive.on() ? R.drawable.baseline_cloud_24 : DEST_FILLED[dest];
+  }
+
+  /** A destination's outlined icon (Saved Messages: XDrive's cloud while XDrive is on). */
+  static int outlinedOf (int dest) {
+    return dest == DEST_SAVED && com.fahadali.xgram.xdrive.XDrive.on() ? R.drawable.xgl_cloud : DEST_OUTLINED[dest];
+  }
+
   private static final int[] DEST_LABEL = {R.string.Chats, R.string.Calls, R.string.Contacts, R.string.XgramNavRailSavedMessages, R.string.Settings, R.string.XgramNavProfileLabel, R.string.XgramActivity};
   /** Side menu keys (XgramDrawerItemsController): hidden there, hidden here, and in the same order. */
   private static final String[] DEST_KEY = {null, "calls", "contacts", "saved", "settings", "profile", "activity"};
@@ -1274,8 +1284,8 @@ public final class XgramNavRail {
       super(context);
       this.dest = dest;
       Resources res = context.getResources();
-      this.icon = restIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]);
-      this.activeIcon = activeIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]);
+      this.icon = restIcon(res, filledOf(dest), outlinedOf(dest));
+      this.activeIcon = activeIcon(res, filledOf(dest), outlinedOf(dest));
       setOnClickListener(v -> onDestinationClick(this.dest));
       if (dest == DEST_CHATS) {
         // The Chats tab's filters (Unread, Groups, Archive...) had only its slide-off menu, gone with the tabs: a long
@@ -1450,7 +1460,7 @@ public final class XgramNavRail {
         final int dest = destinations[i];
         int count = dest == DEST_CHATS ? unreadCount : dest == DEST_CALLS ? missedCount : dest == DEST_ACTIVITY ? activityCount : 0;
         String badge = count > 0 ? badgeText(count) : null;
-        RowView row = new RowView(context, true, restIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]), activeIcon(res, DEST_FILLED[dest], DEST_OUTLINED[dest]), Lang.getString(DEST_LABEL[dest]), badge);
+        RowView row = new RowView(context, true, restIcon(res, filledOf(dest), outlinedOf(dest)), activeIcon(res, filledOf(dest), outlinedOf(dest)), Lang.getString(DEST_LABEL[dest]), badge);
         row.setContentDescription(describe(dest, count, dest == DEST_CHATS && unreadDot));
         row.setActive(dest == selected);
         row.setOnClickListener(v -> {

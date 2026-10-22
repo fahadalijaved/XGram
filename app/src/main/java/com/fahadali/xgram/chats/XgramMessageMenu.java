@@ -66,7 +66,8 @@ public final class XgramMessageMenu {
      */
     @DrawableRes
     public int icon () {
-      return expressiveIcon != 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? expressiveIcon : icon;
+      int res = expressiveIcon != 0 && com.fahadali.xgram.appearance.XgramExpressive.isEnabled() ? expressiveIcon : icon;
+      return com.fahadali.xgram.xdrive.XDrive.icon(res); // XGram XDrive: Save to XDrive shows its cloud
     }
   }
 

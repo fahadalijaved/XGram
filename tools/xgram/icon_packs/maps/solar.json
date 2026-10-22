@@ -330,5 +330,17 @@
  "device_laptop": "laptop",
  "sms": "chat-round-dots",
  "screenshot": "full-screen-square",
- "lock_open": "lock-unlocked"
+ "lock_open": "lock-unlocked",
+ "cloud": "cloud",
+ "flight": "suitcase-tag",
+ "receipt_long": "bill-list",
+ "shopping_bag": "bag-smile",
+ "article": "document-text",
+ "movie": "clapperboard",
+ "description": "file-text",
+ "restaurant": "cup-hot",
+ "fitness_center": "dumbbell",
+ "lightbulb": "lightbulb",
+ "payments": "banknote",
+ "auto_awesome": "magic-stick-3"
 }

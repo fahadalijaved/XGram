@@ -417,7 +417,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     if (dest == DEST_PROFILE) {
       return R.drawable.baseline_account_circle_24;
     }
-    return dest >= 0 ? XgramNavRail.DEST_OUTLINED[dest] : 0;
+    return dest >= 0 ? XgramNavRail.outlinedOf(dest) : 0;
   }
 
   /** The settings page's row title ("Saved messages", not "Saved"). */
@@ -2334,8 +2334,8 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
         return;
       }
       Resources res = context.getResources();
-      rest = XgramNavRail.restIcon(res, XgramNavRail.DEST_FILLED[dest], XgramNavRail.DEST_OUTLINED[dest]);
-      active = XgramNavRail.activeIcon(res, XgramNavRail.DEST_FILLED[dest], XgramNavRail.DEST_OUTLINED[dest]);
+      rest = XgramNavRail.restIcon(res, XgramNavRail.filledOf(dest), XgramNavRail.outlinedOf(dest));
+      active = XgramNavRail.activeIcon(res, XgramNavRail.filledOf(dest), XgramNavRail.outlinedOf(dest));
       view.invalidate();
     }
 

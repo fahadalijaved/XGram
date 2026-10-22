@@ -330,5 +330,17 @@
  "device_laptop": "laptop",
  "sms": "chat-2",
  "screenshot": "screenshot",
- "lock_open": "unlock"
+ "lock_open": "unlock",
+ "cloud": "cloud",
+ "flight": "airplane",
+ "receipt_long": "bill",
+ "shopping_bag": "shopping-bag-1",
+ "article": "news",
+ "movie": "clapperboard",
+ "description": "document",
+ "restaurant": "fork-knife",
+ "fitness_center": "barbell",
+ "lightbulb": "bulb-2",
+ "payments": "cash",
+ "auto_awesome": "sparkles"
 }

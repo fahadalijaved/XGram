@@ -318,7 +318,7 @@ private fun TopBar(state: XDriveState, screen: XDriveScreen, scrollBehavior: and
                   onClick = { menu = false; XDriveActions.deleteFolder(host, folder) { state.folder = null } }
                 )
               } else {
-                DropdownMenuItem(text = { Text(str(R.string.XgramXDriveOrganize)) }, leadingIcon = { Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), null) }, onClick = { menu = false; state.organizing = true })
+                DropdownMenuItem(text = { Text(str(R.string.XgramXDriveOrganize)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), null) }, onClick = { menu = false; state.organizing = true })
                 DropdownMenuItem(text = { Text(str(R.string.XgramXDriveNewFolder)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_create_new_folder_24), null) }, onClick = { menu = false; XDriveActions.newFolder(host) })
                 DropdownMenuItem(text = { Text(str(R.string.XgramXDriveOpenChat)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_chat_bubble_24), null) }, onClick = { menu = false; XDriveActions.showInChat(host.controller, 0) })
                 // Saved Messages as the classic chat first (XDrive then is in the chat's ⋮ menu)

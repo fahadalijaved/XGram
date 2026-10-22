@@ -844,8 +844,8 @@ public final class XgramNavBar {
       super(context);
       this.dest = dest;
       Resources res = context.getResources();
-      this.icon = XgramNavRail.restIcon(res, XgramNavRail.DEST_FILLED[dest], XgramNavRail.DEST_OUTLINED[dest]);
-      this.activeIcon = XgramNavRail.activeIcon(res, XgramNavRail.DEST_FILLED[dest], XgramNavRail.DEST_OUTLINED[dest]);
+      this.icon = XgramNavRail.restIcon(res, XgramNavRail.filledOf(dest), XgramNavRail.outlinedOf(dest));
+      this.activeIcon = XgramNavRail.activeIcon(res, XgramNavRail.filledOf(dest), XgramNavRail.outlinedOf(dest));
       setOnClickListener(v -> onDestinationClick(this.dest));
       if (dest == XgramNavRail.DEST_CHATS) {
         // The Chats tab's filters (Unread, Groups, Archive...) had only its slide-off menu, gone with the tabs: a long

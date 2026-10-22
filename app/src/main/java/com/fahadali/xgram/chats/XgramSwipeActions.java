@@ -204,7 +204,7 @@ public final class XgramSwipeActions {
       case FORWARD:
         return !msg.isSecretChat() && msg.canBeForwarded() ? newAction(R.string.SwipeShare, R.drawable.baseline_forward_24, () -> m.shareMessages(msg.getAllMessages(), false)) : null;
       case SAVE:
-        return isSent && msg.canBeForwarded() && msg.getChatId() != tdlib.selfChatId() ? newAction(R.string.XgramSwipeSave, R.drawable.baseline_bookmark_24, () -> XgramMessageActions.handle(m, msg, R.id.btn_xgramSaveToSaved)) : null;
+        return isSent && msg.canBeForwarded() && msg.getChatId() != tdlib.selfChatId() ? newAction(R.string.XgramSwipeSave, com.fahadali.xgram.xdrive.XDrive.icon(R.drawable.baseline_bookmark_24), () -> XgramMessageActions.handle(m, msg, R.id.btn_xgramSaveToSaved)) : null;
       case BOOKMARK:
         return isSent ? bookmark(msg) : null;
     }

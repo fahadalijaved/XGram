@@ -99,7 +99,7 @@ public final class XgramMessageActions {
     if (msg.canBeForwarded() && chatId != tdlib.selfChatId()) {
       ids.append(R.id.btn_xgramSaveToSaved);
       strings.append(R.string.XgramSaveToSaved);
-      icons.append(R.drawable.baseline_bookmark_24);
+      icons.append(com.fahadali.xgram.xdrive.XDrive.icon(R.drawable.baseline_bookmark_24)); // XGram XDrive: a cloud
     }
     if (m.getMessageTopicId() == null && msg.getMessage().topicId instanceof TdApi.MessageTopicForum && tdlib.isForum(chatId)) {
       ids.append(R.id.btn_xgramViewInTopic);

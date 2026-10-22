@@ -2717,5 +2717,102 @@
   "where": [
    "java/org/thunderdog/challegram/navigation/LockHeaderButton.java"
   ]
+ },
+ "cloud": {
+  "tgx": [
+   "baseline_cloud_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDrive.java",
+   "java/org/thunderdog/challegram/ui/MessagesController.java"
+  ]
+ },
+ "flight": {
+  "tgx": [
+   "baseline_flight_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "receipt_long": {
+  "tgx": [
+   "baseline_receipt_long_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "shopping_bag": {
+  "tgx": [
+   "baseline_shopping_bag_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "article": {
+  "tgx": [
+   "baseline_article_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "movie": {
+  "tgx": [
+   "baseline_movie_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "description": {
+  "tgx": [
+   "baseline_description_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "restaurant": {
+  "tgx": [
+   "baseline_restaurant_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "fitness_center": {
+  "tgx": [
+   "baseline_fitness_center_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "lightbulb": {
+  "tgx": [
+   "baseline_lightbulb_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "payments": {
+  "tgx": [
+   "baseline_payments_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/xdrive/XDriveIcons.kt"
+  ]
+ },
+ "auto_awesome": {
+  "tgx": [
+   "baseline_auto_awesome_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/compose/pages/XDriveOrganize.kt"
+  ]
  }
 }

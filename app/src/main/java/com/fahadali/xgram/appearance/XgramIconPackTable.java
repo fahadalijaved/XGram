@@ -671,6 +671,18 @@ final class XgramIconPackTable {
     R.drawable.templarian_baseline_source_merge_24, R.drawable.xgl_source_merge,
     R.drawable.vkryl_baseline_lock_pin_24, R.drawable.xgl_lock_pin,
     R.drawable.xt3000_baseline_qrcode_scan_24, R.drawable.xgl_qrcode_scan,
+    R.drawable.baseline_cloud_24, R.drawable.xgl_cloud,
+    R.drawable.baseline_flight_24, R.drawable.xgl_airplane,
+    R.drawable.baseline_receipt_long_24, R.drawable.xgl_receipt,
+    R.drawable.baseline_shopping_bag_24, R.drawable.xgl_shopping_bag,
+    R.drawable.baseline_article_24, R.drawable.xgl_article,
+    R.drawable.baseline_movie_24, R.drawable.xgl_movie,
+    R.drawable.baseline_description_24, R.drawable.xgl_description,
+    R.drawable.baseline_restaurant_24, R.drawable.xgl_restaurant_menu,
+    R.drawable.baseline_fitness_center_24, R.drawable.xgl_fitness_center,
+    R.drawable.baseline_lightbulb_24, R.drawable.xgl_lamp,
+    R.drawable.baseline_payments_24, R.drawable.xgl_payments,
+    R.drawable.baseline_auto_awesome_24, R.drawable.xgl_auto_awesome,
   };
 
   /** XGram Duotone */
@@ -1180,6 +1192,18 @@ final class XgramIconPackTable {
     R.drawable.templarian_baseline_source_merge_24, R.drawable.xgd_source_merge,
     R.drawable.vkryl_baseline_lock_pin_24, R.drawable.xgd_lock_pin,
     R.drawable.xt3000_baseline_qrcode_scan_24, R.drawable.xgd_qrcode_scan,
+    R.drawable.baseline_cloud_24, R.drawable.xgd_cloud,
+    R.drawable.baseline_flight_24, R.drawable.xgd_airplane,
+    R.drawable.baseline_receipt_long_24, R.drawable.xgd_receipt,
+    R.drawable.baseline_shopping_bag_24, R.drawable.xgd_shopping_bag,
+    R.drawable.baseline_article_24, R.drawable.xgd_article,
+    R.drawable.baseline_movie_24, R.drawable.xgd_movie,
+    R.drawable.baseline_description_24, R.drawable.xgd_description,
+    R.drawable.baseline_restaurant_24, R.drawable.xgd_restaurant_menu,
+    R.drawable.baseline_fitness_center_24, R.drawable.xgd_fitness_center,
+    R.drawable.baseline_lightbulb_24, R.drawable.xgd_lamp,
+    R.drawable.baseline_payments_24, R.drawable.xgd_payments,
+    R.drawable.baseline_auto_awesome_24, R.drawable.xgd_auto_awesome,
   };
 
   /** XGram Solar (Solar Icons by 480 Design, CC BY 4.0) */
@@ -1686,6 +1710,18 @@ final class XgramIconPackTable {
     R.drawable.templarian_baseline_source_merge_24, R.drawable.xgs_source_merge,
     R.drawable.vkryl_baseline_lock_pin_24, R.drawable.xgs_lock_pin,
     R.drawable.xt3000_baseline_qrcode_scan_24, R.drawable.xgs_qrcode_scan,
+    R.drawable.baseline_cloud_24, R.drawable.xgs_cloud,
+    R.drawable.baseline_flight_24, R.drawable.xgs_flight,
+    R.drawable.baseline_receipt_long_24, R.drawable.xgs_receipt_long,
+    R.drawable.baseline_shopping_bag_24, R.drawable.xgs_shopping_bag,
+    R.drawable.baseline_article_24, R.drawable.xgs_article,
+    R.drawable.baseline_movie_24, R.drawable.xgs_movie,
+    R.drawable.baseline_description_24, R.drawable.xgs_description,
+    R.drawable.baseline_restaurant_24, R.drawable.xgs_restaurant,
+    R.drawable.baseline_fitness_center_24, R.drawable.xgs_fitness_center,
+    R.drawable.baseline_lightbulb_24, R.drawable.xgs_lightbulb,
+    R.drawable.baseline_payments_24, R.drawable.xgs_payments,
+    R.drawable.baseline_auto_awesome_24, R.drawable.xgs_auto_awesome,
   };
 
   /** XGram Phosphor (Phosphor Icons, MIT) */
@@ -2192,6 +2228,18 @@ final class XgramIconPackTable {
     R.drawable.templarian_baseline_source_merge_24, R.drawable.xgf_source_merge,
     R.drawable.vkryl_baseline_lock_pin_24, R.drawable.xgf_lock_pin,
     R.drawable.xt3000_baseline_qrcode_scan_24, R.drawable.xgf_qrcode_scan,
+    R.drawable.baseline_cloud_24, R.drawable.xgf_cloud,
+    R.drawable.baseline_flight_24, R.drawable.xgf_flight,
+    R.drawable.baseline_receipt_long_24, R.drawable.xgf_receipt_long,
+    R.drawable.baseline_shopping_bag_24, R.drawable.xgf_shopping_bag,
+    R.drawable.baseline_article_24, R.drawable.xgf_article,
+    R.drawable.baseline_movie_24, R.drawable.xgf_movie,
+    R.drawable.baseline_description_24, R.drawable.xgf_description,
+    R.drawable.baseline_restaurant_24, R.drawable.xgf_restaurant,
+    R.drawable.baseline_fitness_center_24, R.drawable.xgf_fitness_center,
+    R.drawable.baseline_lightbulb_24, R.drawable.xgf_lightbulb,
+    R.drawable.baseline_payments_24, R.drawable.xgf_payments,
+    R.drawable.baseline_auto_awesome_24, R.drawable.xgf_auto_awesome,
   };
 
   /** XGram MingCute (MingCute Design, Apache 2.0) */
@@ -2699,6 +2747,18 @@ final class XgramIconPackTable {
     R.drawable.templarian_baseline_source_merge_24, R.drawable.xgm_source_merge,
     R.drawable.vkryl_baseline_lock_pin_24, R.drawable.xgm_lock_pin,
     R.drawable.xt3000_baseline_qrcode_scan_24, R.drawable.xgm_qrcode_scan,
+    R.drawable.baseline_cloud_24, R.drawable.xgm_cloud,
+    R.drawable.baseline_flight_24, R.drawable.xgm_flight,
+    R.drawable.baseline_receipt_long_24, R.drawable.xgm_receipt_long,
+    R.drawable.baseline_shopping_bag_24, R.drawable.xgm_shopping_bag,
+    R.drawable.baseline_article_24, R.drawable.xgm_article,
+    R.drawable.baseline_movie_24, R.drawable.xgm_movie,
+    R.drawable.baseline_description_24, R.drawable.xgm_description,
+    R.drawable.baseline_restaurant_24, R.drawable.xgm_restaurant,
+    R.drawable.baseline_fitness_center_24, R.drawable.xgm_fitness_center,
+    R.drawable.baseline_lightbulb_24, R.drawable.xgm_lightbulb,
+    R.drawable.baseline_payments_24, R.drawable.xgm_payments,
+    R.drawable.baseline_auto_awesome_24, R.drawable.xgm_auto_awesome,
   };
 
   /** XGram Pixel (Pixelarticons by Gerrit Halfmann, MIT) */
@@ -3208,5 +3268,17 @@ final class XgramIconPackTable {
     R.drawable.templarian_baseline_source_merge_24, R.drawable.xgp_source_merge,
     R.drawable.vkryl_baseline_lock_pin_24, R.drawable.xgp_lock_pin,
     R.drawable.xt3000_baseline_qrcode_scan_24, R.drawable.xgp_qrcode_scan,
+    R.drawable.baseline_cloud_24, R.drawable.xgp_cloud,
+    R.drawable.baseline_flight_24, R.drawable.xgp_flight,
+    R.drawable.baseline_receipt_long_24, R.drawable.xgp_receipt_long,
+    R.drawable.baseline_shopping_bag_24, R.drawable.xgp_shopping_bag,
+    R.drawable.baseline_article_24, R.drawable.xgp_article,
+    R.drawable.baseline_movie_24, R.drawable.xgp_movie,
+    R.drawable.baseline_description_24, R.drawable.xgp_description,
+    R.drawable.baseline_restaurant_24, R.drawable.xgp_restaurant,
+    R.drawable.baseline_fitness_center_24, R.drawable.xgp_fitness_center,
+    R.drawable.baseline_lightbulb_24, R.drawable.xgp_lightbulb,
+    R.drawable.baseline_payments_24, R.drawable.xgp_payments,
+    R.drawable.baseline_auto_awesome_24, R.drawable.xgp_auto_awesome,
   };
 }

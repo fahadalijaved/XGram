@@ -330,5 +330,17 @@
  "device_laptop": "laptop",
  "sms": "chat-dots",
  "screenshot": "frame-corners",
- "lock_open": "lock-open"
+ "lock_open": "lock-open",
+ "cloud": "cloud",
+ "flight": "airplane-tilt",
+ "receipt_long": "receipt",
+ "shopping_bag": "bag",
+ "article": "article",
+ "movie": "film-slate",
+ "description": "file-text",
+ "restaurant": "fork-knife",
+ "fitness_center": "barbell",
+ "lightbulb": "lightbulb",
+ "payments": "money",
+ "auto_awesome": "sparkle"
 }

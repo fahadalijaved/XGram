@@ -191,7 +191,7 @@ private fun OrganizeCard(state: XDriveState) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation }.clip(MaterialShapes.SoftBurst.toShape()).background(c.primary))
-        Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), contentDescription = null, tint = c.onPrimary, modifier = Modifier.size(32.dp))
+        Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, tint = c.onPrimary, modifier = Modifier.size(32.dp))
       }
       Column(Modifier.weight(1f).padding(start = 18.dp)) {
         Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, color = c.onPrimaryContainer)
@@ -236,7 +236,7 @@ private fun OrganizeNew(state: XDriveState, count: Int) {
     verticalAlignment = Alignment.CenterVertically
   ) {
     Box(Modifier.size(40.dp).clip(MaterialShapes.SoftBurst.toShape()).background(c.primary), contentAlignment = Alignment.Center) {
-      Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), contentDescription = null, tint = c.onPrimary, modifier = Modifier.size(20.dp))
+      Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, tint = c.onPrimary, modifier = Modifier.size(20.dp))
     }
     Text(
       str(R.string.XgramXDriveNewSinceOrganize, Lang.plural(R.string.xMessages, count.toLong())),
@@ -405,7 +405,7 @@ internal fun FoldersTab(state: XDriveState) {
     item(key = "actions", span = { GridItemSpan(maxLineSpan) }) {
       Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
         FilledTonalButton(onClick = { state.organizing = true }, modifier = Modifier.weight(1.3f)) {
-          Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), contentDescription = null, modifier = Modifier.size(18.dp))
+          Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(8.dp))
           Text(str(R.string.XgramXDriveOrganize), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }

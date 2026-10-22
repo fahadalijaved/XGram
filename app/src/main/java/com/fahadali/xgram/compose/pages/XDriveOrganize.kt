@@ -177,7 +177,7 @@ private fun Mark(size: Int) {
   val rotation by turn.animateFloat(0f, 360f, infiniteRepeatable(tween(20000, easing = LinearEasing), RepeatMode.Restart), label = "markRotation")
   Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
     Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation }.clip(MaterialShapes.Cookie12Sided.toShape()).background(c.primaryContainer))
-    Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), contentDescription = null, tint = c.onPrimaryContainer, modifier = Modifier.size((size * 0.42f).dp))
+    Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, tint = c.onPrimaryContainer, modifier = Modifier.size((size * 0.42f).dp))
   }
 }
 
@@ -208,7 +208,7 @@ private fun ReadyStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.
           XDriveNano.Status.UNSUPPORTED -> str(R.string.XgramXDriveEngineNanoNo)
         }
         EngineOption(
-          title = str(R.string.XgramXDriveEngineNano), text = nanoText, icon = R.drawable.xgram_auto_awesome_24,
+          title = str(R.string.XgramXDriveEngineNano), text = nanoText, icon = R.drawable.baseline_auto_awesome_24,
           selected = organizer.engine == XDriveEngine.NANO, enabled = nano != null && nano != XDriveNano.Status.UNSUPPORTED
         ) { organizer.engine = XDriveEngine.NANO }
         Spacer(Modifier.height(10.dp))
@@ -234,7 +234,7 @@ private fun ReadyStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.
       modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset).height(56.dp),
       contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
     ) {
-      Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), contentDescription = null, modifier = Modifier.size(20.dp))
+      Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, modifier = Modifier.size(20.dp))
       Spacer(Modifier.width(10.dp))
       Text(str(R.string.XgramXDriveOrganizeStart), style = MaterialTheme.typography.titleMedium)
     }
