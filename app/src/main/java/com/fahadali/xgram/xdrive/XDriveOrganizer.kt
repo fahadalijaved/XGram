@@ -32,7 +32,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -47,11 +49,14 @@ import kotlin.coroutines.resume
 class XDriveDigest(val message: TdApi.Message, val kind: XDriveKind, val text: String, val sourceChatId: Long, val sourceTitle: String?)
 
 /** A folder the organizer proposes: a new one, or one the user has ([existingId]). Its items can be left out one by one. */
-class XDriveProposedFolder(name: String, icon: String?, val emoji: String?, val existingId: String?) {
+class XDriveProposedFolder(name: String, icon: String?, emoji: String?, existingId: String?) {
   /** Its own id while it is proposed (the review's list keys). */
   val id: Int = nextId++
   var name by mutableStateOf(name)
   var icon by mutableStateOf(icon)
+  /** State, as a rename can point it at another folder of the user's, or at a new one ([XDriveOrganizer.rename]). */
+  var emoji by mutableStateOf(emoji)
+  var existingId by mutableStateOf(existingId)
   var enabled by mutableStateOf(true)
   val items = mutableStateListOf<TdApi.Message>()
   val left = mutableStateListOf<Long>()
@@ -99,27 +104,38 @@ object XDriveNano {
     }
   }
 
-  /** Follows AICore's download of the model ([progress]: bytes so far, bytes in all or 0), until it ends or fails. */
-  suspend fun download(progress: (Long, Long) -> Unit) {
-    val m = model() ?: return
+  /**
+   * Follows AICore's download of the model ([progress]: bytes so far, bytes in all or 0), until it ends or fails.
+   * Null: it ended without failing; else why it failed (maybe empty), so the organizer stops waiting for it.
+   */
+  suspend fun download(progress: (Long, Long) -> Unit): String? {
+    val m = model() ?: return null
     var total = 0L
+    var failure: String? = null
     try {
-      m.download().collect { status ->
+      // A failure ends the following: nothing more comes of that download
+      m.download().takeWhile { status ->
         when (status) {
           is DownloadStatus.DownloadStarted -> {
             total = status.bytesToDownload
             progress(0L, total)
           }
           is DownloadStatus.DownloadProgress -> progress(status.totalBytesDownloaded, total)
-          is DownloadStatus.DownloadFailed -> Log.w("XDrive: Gemini Nano download failed", status.e)
+          is DownloadStatus.DownloadFailed -> {
+            Log.w("XDrive: Gemini Nano download failed", status.e)
+            failure = status.e.message ?: ""
+          }
           else -> Unit
         }
-      }
+        status !is DownloadStatus.DownloadFailed
+      }.collect { }
     } catch (e: CancellationException) {
       throw e
     } catch (t: Throwable) {
       Log.w("XDrive: Gemini Nano download", t)
+      failure = t.message ?: ""
     }
+    return failure
   }
 
   /** Loads the model into memory, so the first answer doesn't wait for it. */
@@ -281,9 +297,12 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
   private class CloudAi(val config: XDriveCloudConfig) : Ai(config.name, 2000, 160, 80, 2, 12, 170_000) {
     override suspend fun ask(prompt: String, maxTokens: Int): String? = try {
       withContext(Dispatchers.IO) { XDriveCloud.generate(config, prompt) }
-    } catch (e: XDriveCloudException) {
-      lastError = e.message
-      Log.w("XDrive: %s", e.message)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (t: Throwable) {
+      // Whatever went wrong (the service, the address, the key, an odd answer) is said in the review: never a crash
+      lastError = if (t is XDriveCloudException) t.message else config.name + ": " + (t.message ?: t.javaClass.simpleName)
+      Log.w("XDrive: %s", t, lastError)
       null
     }
 
@@ -320,8 +339,14 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
   val consentSample = mutableStateListOf<String>()
   private var consent: kotlinx.coroutines.CompletableDeferred<Boolean>? = null
   val folders = mutableStateListOf<XDriveProposedFolder>()
-  /** The user tapped "Use quick rules now": Nano's download or sorting is left, the rules finish. */
-  private var skipNano = false
+  /**
+   * The user tapped "Use quick rules now": Nano's download or the AI's sorting is left, the rules finish. State, so the
+   * button and the status show it at once, while what the AI was doing stops ([aiJob]).
+   */
+  var skipNano by mutableStateOf(false)
+    private set
+  /** What the AI is doing now (starting, an answer), cancelled by "Use quick rules now" instead of left to its timeout. */
+  private var aiJob: Job? = null
   /** The newest message this run read: once applied, XDrive counts as organized up to it. */
   private var newestRead = 0L
 
@@ -349,6 +374,41 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
   fun useRulesNow() {
     skipNano = true
     consent?.complete(false)
+    aiJob?.cancel()
+  }
+
+  /**
+   * A proposal renamed in the review: it goes into the user's folder of that name if there is one (its look too), else
+   * into a new folder (not the one it was proposed for).
+   */
+  fun rename(folder: XDriveProposedFolder, name: String) {
+    val existing = index.findFolderByName(name)
+    folder.name = existing?.name ?: name.trim()
+    if (existing != null) {
+      folder.icon = existing.icon
+    } else if (folder.existingId != null) {
+      // The old folder's look goes with it; the new one gets an icon from its name, as the AI's folders do
+      folder.icon = XDriveIcons.keyForName(name) ?: folder.icon
+    }
+    folder.emoji = existing?.emoji
+    folder.existingId = existing?.id
+  }
+
+  /** Runs [block] so that "Use quick rules now" stops it at once; null: it was stopped that way. */
+  private suspend fun <T> skippable(block: suspend () -> T): T? {
+    if (skipNano) return null
+    return coroutineScope {
+      val job = async { block() }
+      aiJob = job
+      try {
+        job.await()
+      } catch (e: CancellationException) {
+        // Cancelled by useRulesNow (this run goes on with the rules), not with the run itself
+        if (skipNano && isActive) null else throw e
+      } finally {
+        if (aiJob === job) aiJob = null
+      }
+    }
   }
 
   /** The user's answer to sending the items to the cloud. */
@@ -360,6 +420,14 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
     phase = Phase.READY
     folders.clear()
     note = null
+  }
+
+  /**
+   * From the review back to choosing how to sort (another engine, a fixed key), the proposal thrown away. Its folders
+   * and note stay until the next run replaces them, so the review fades out as it was instead of as "Nothing to sort".
+   */
+  fun startOver() {
+    if (phase == Phase.REVIEW) phase = Phase.READY
   }
 
   /** Reads, sorts and leaves the proposal in [folders] (phase REVIEW). */
@@ -438,20 +506,32 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
   private suspend fun prepareNano(): Boolean {
     var status = XDriveNano.status()
     nanoStatus = status
+    // Why the download failed (maybe empty), or null: it didn't
+    var failure: String? = null
     if (status == XDriveNano.Status.DOWNLOADABLE || status == XDriveNano.Status.DOWNLOADING) {
       nanoStep = NanoStep.DOWNLOADING
       downloaded = 0
       downloadTotal = 0
       coroutineScope {
-        val follower = launch {
+        val follower = async {
           XDriveNano.download { done, total ->
             downloaded = done
             if (total > 0) downloadTotal = total
           }
         }
+        var endedPolls = 0
         while (status != XDriveNano.Status.AVAILABLE && status != XDriveNano.Status.UNSUPPORTED && !skipNano) {
           delay(1500)
           status = XDriveNano.status()
+          if (follower.isCompleted && status != XDriveNano.Status.AVAILABLE) {
+            // The download failed, or ended with AICore offering it again: it won't come by waiting (a poll's grace for
+            // AICore's status to catch up)
+            val why = follower.await()
+            if ((why != null || status == XDriveNano.Status.DOWNLOADABLE) && ++endedPolls >= 2) {
+              failure = why ?: ""
+              break
+            }
+          }
         }
         follower.cancel()
       }
@@ -461,12 +541,17 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
       engine = XDriveEngine.RULES
       return false
     }
+    val why = failure
+    if (why != null) {
+      note = if (why.isEmpty()) Lang.getString(R.string.XgramXDriveNanoDownloadFailed) else Lang.getString(R.string.XgramXDriveNanoDownloadFailedWhy, why)
+      return false
+    }
     if (status != XDriveNano.Status.AVAILABLE) {
       note = Lang.getString(R.string.XgramXDriveNanoUnavailable)
       return false
     }
     nanoStep = NanoStep.STARTING
-    withTimeoutOrNull(60_000) { XDriveNano.warmup() }
+    skippable { withTimeoutOrNull(60_000) { XDriveNano.warmup() } }
     return !skipNano
   }
 
@@ -604,7 +689,7 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
       append("Suggest between 3 and ").append(ai.maxFolders).append(" folders that group these items by topic. Each folder name must be 1 to 3 words. ")
       append("Write only the folder names, one per line.\n")
     }
-    val answer = ai.ask(namesPrompt, 160)
+    val answer = skippable { ai.ask(namesPrompt, 160) }
     val names = if (answer != null) parseFolders(answer, ai.maxFolders) else emptyList()
     if (names.isEmpty()) {
       if (!skipNano) note = failedNote(ai)
@@ -618,21 +703,24 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
     val chunks = batch.chunked(ai.batch)
     for (group in chunks.chunked(ai.parallel)) {
       if (skipNano) break
-      val replies = coroutineScope {
-        group.map { chunk ->
-          async {
-            val prompt = buildString {
-              append("Folders:\n")
-              names.forEachIndexed { i, name -> append(i + 1).append(". ").append(name).append('\n') }
-              append("0. None of these\n\nItems:\n")
-              chunk.forEachIndexed { i, d -> append(i + 1).append(". ").append(ai.line(d, 120)).append('\n') }
-              append("\nFor each item, write its number, an equals sign and the number of the folder it belongs in, one per line, like 1=2. ")
-              append("Use 0 when no folder fits well. Write nothing else.\n")
+      // Stopped by "Use quick rules now": what was placed so far stays, the rules take the rest
+      val replies = skippable {
+        coroutineScope {
+          group.map { chunk ->
+            async {
+              val prompt = buildString {
+                append("Folders:\n")
+                names.forEachIndexed { i, name -> append(i + 1).append(". ").append(name).append('\n') }
+                append("0. None of these\n\nItems:\n")
+                chunk.forEachIndexed { i, d -> append(i + 1).append(". ").append(ai.line(d, 120)).append('\n') }
+                append("\nFor each item, write its number, an equals sign and the number of the folder it belongs in, one per line, like 1=2. ")
+                append("Use 0 when no folder fits well. Write nothing else.\n")
+              }
+              ai.ask(prompt, 10 * chunk.size + 20)
             }
-            ai.ask(prompt, 10 * chunk.size + 20)
-          }
-        }.awaitAll()
-      }
+          }.awaitAll()
+        }
+      } ?: break
       group.forEachIndexed { g, chunk ->
         val reply = replies[g]
         if (reply == null) {

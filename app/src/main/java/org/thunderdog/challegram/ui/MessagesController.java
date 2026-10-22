@@ -8748,6 +8748,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       setInputBlockFlag(FLAG_INPUT_EDITING, false);
     }
     sendButton.forceState(false, false);
+    xgramUpdateInputEndPadding(); // XGram: the edit is over, the attach button kept while typing gets its room back
   }
 
   private void editMessage (@NonNull MessageWithProperties m) {
@@ -11372,6 +11373,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private void checkSendButton (boolean animated) {
     setSendVisible(inputView.getText().length() > 0 || isEditingMessage() || hasAttachedFiles(), animated && getParentOrSelf().isAttachedToNavigationController());
     xgramUpdateTypingAttach(); // XGram: editing a message hides it
+    xgramUpdateInputEndPadding(); // XGram: and the text keeps no room for it meanwhile
   }
 
   private void displaySendButton () {
@@ -12897,14 +12899,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
     return xgramTypingAttach != null && xgramTypingAttach.getVisibility() == View.VISIBLE ? xgramTypingAttach : mediaButton;
   }
 
-  /** The typed text ends before the send slot, and also before the kept attach button when that option is on. */
+  /**
+   * The typed text ends before the send slot, and also before the kept attach button when that option is on. Not while
+   * editing a message, which hides that button (xgramTypingAttachAllowed): checkSendButton follows the edit's start and end.
+   */
   private void xgramUpdateInputEndPadding () {
     if (inputView == null) {
       return;
     }
     final boolean m3 = com.fahadali.xgram.appearance.XgramExpressive.isEnabled();
     int end = m3 ? com.fahadali.xgram.appearance.XgramM3Composer.textEndPadding() : Screen.dp(XGRAM_SEND_SLOT_WIDTH);
-    if (com.fahadali.xgram.XgramSettings.instance().inputAttachWhileTyping()) {
+    if (com.fahadali.xgram.XgramSettings.instance().inputAttachWhileTyping() && !isEditingMessage()) {
       // The button's 47dp slot; with Expressive design the text also keeps 4dp from its 40dp state layer
       end = Screen.dp(XGRAM_SEND_SLOT_WIDTH + 47f + (m3 ? 4f : 0f));
     }

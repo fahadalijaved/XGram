@@ -81,6 +81,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -97,6 +98,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
@@ -213,8 +216,10 @@ private const val NEW_SINCE_ORGANIZE = 8
 private fun OrganizeCard(state: XDriveState) {
   val c = MaterialTheme.colorScheme
   val organizer = state.organizer
+  // Waiting for the user's OK to send to the cloud is not working: the slow turn, no progress, a way to answer
+  val asking = organizer.phase == XDriveOrganizer.Phase.CONSENT
   val turn = rememberInfiniteTransition(label = "organizeTurn")
-  val rotation by turn.animateFloat(0f, 360f, infiniteRepeatable(tween(if (organizer.running) 4000 else 16000, easing = LinearEasing), RepeatMode.Restart), label = "organizeRotation")
+  val rotation by turn.animateFloat(0f, 360f, infiniteRepeatable(tween(if (organizer.running && !asking) 4000 else 16000, easing = LinearEasing), RepeatMode.Restart), label = "organizeRotation")
   Box(
     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).xdriveBounds(state, BOUNDS_ORGANIZE).clip(RoundedCornerShape(32.dp))
       .background(Brush.linearGradient(listOf(c.primaryContainer, c.tertiaryContainer)))
@@ -229,6 +234,11 @@ private fun OrganizeCard(state: XDriveState) {
         Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, color = c.onPrimaryContainer, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(4.dp))
         when {
+          asking -> {
+            Text(organizeStatus(organizer), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .85f))
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { state.openOrganize(BOUNDS_ORGANIZE) }) { Text(str(R.string.XgramXDriveConsentReview)) }
+          }
           organizer.running -> {
             Text(organizeStatus(organizer), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .85f))
             Spacer(Modifier.height(12.dp))
@@ -544,6 +554,7 @@ internal fun MediaTab(state: XDriveState) {
     val grid = state.grid(feedKey("media", state.mediaView, XDriveScope.Everything))
     LoadMore(feed, grid)
     if (feed.items.isEmpty()) {
+      FabBack(state)
       Loading(feed)
       return@Column
     }
@@ -663,10 +674,18 @@ internal fun FilesTab(state: XDriveState) {
     val list = state.list(feedKey("files", state.filesView, XDriveScope.Everything) + ":" + state.filesSort.name)
     LoadMore(feed, list)
     if (feed.items.isEmpty()) {
+      FabBack(state)
       Loading(feed)
       return@Column
     }
     val sort = state.filesSort
+    if (sort != XDriveSort.DATE && !feed.readAll.value) {
+      // By name or size the list shows once every item is read, sorted once and from its top: sorted page by page it
+      // reshuffled for seconds, and the rows held by key ended up away from the top
+      FabBack(state)
+      ReadingAll(feed)
+      return@Column
+    }
     val groups: List<Pair<String?, List<TdApi.Message>>> = remember(feed, feed.version.intValue, sort) {
       when (sort) {
         XDriveSort.DATE -> groupsByMonth(feed.items)
@@ -767,6 +786,31 @@ internal fun Loading(feed: XDriveFeed, empty: String? = null) {
   }
 }
 
+/** Every item being read (for a sort by name or size): Expressive's loading indicator and how many so far. */
+@Composable
+private fun ReadingAll(feed: XDriveFeed) {
+  Column(Modifier.fillMaxWidth().padding(top = 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    LoadingIndicator(Modifier.size(64.dp))
+    Text(
+      str(R.string.XgramXDriveReadingNow, items(feed.items.size)), style = MaterialTheme.typography.bodyMedium,
+      color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp)
+    )
+  }
+}
+
+/** Where nothing scrolls (an empty list, its loading), no scroll can bring a hidden floating button back: it shows. */
+@Composable
+internal fun FabBack(state: XDriveState) {
+  LaunchedEffect(Unit) { state.fabShown = true }
+}
+
+/** What a folder screen showed last, kept while its folder, deleted, closes. */
+private class FolderShown {
+  var folder: XDriveIndex.Folder? = null
+  var count = 0
+  var items: List<TdApi.Message> = emptyList()
+}
+
 // A folder (or Unsorted), over the tabs
 
 @Composable
@@ -775,9 +819,22 @@ internal fun FolderScreen(state: XDriveState, scope: XDriveScope, openTab: (XDri
   val host = state.host
   val feed = state.feed(XDriveView.ALL, scope)
   state.indexVersion
-  val folder = (scope as? XDriveScope.InFolder)?.let { state.index.findFolder(it.folderId) }
+  val found = (scope as? XDriveScope.InFolder)?.let { state.index.findFolder(it.folderId) }
+  // Deleted while open: the layer closes showing what the folder was (its name, count, items), not as an empty Unsorted
+  val last = remember(scope) { FolderShown() }
+  val gone = found == null && last.folder != null
+  val folder = if (gone) last.folder else found
   val title = folder?.name ?: str(R.string.XgramXDriveUnsorted)
-  val count = folder?.let { state.counts()[it.id] ?: 0 }
+  val count = if (gone) last.count else folder?.let { state.counts()[it.id] ?: 0 }
+  // The list's snapshot (no copy): the feed's own list empties as the folder goes
+  val shownItems: List<TdApi.Message> = if (gone) last.items else feed.items.toList()
+  if (found != null) {
+    SideEffect {
+      last.folder = found
+      last.count = count ?: 0
+      last.items = shownItems
+    }
+  }
   val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
   var menu by remember { mutableStateOf(false) }
   Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
@@ -801,8 +858,9 @@ internal fun FolderScreen(state: XDriveState, scope: XDriveScope, openTab: (XDri
         }
         if (folder != null) {
           Box {
-            IconButton(onClick = { menu = true }) { Icon(tgxIcon(R.drawable.baseline_more_vert_24), contentDescription = str(R.string.XgramXDriveFolderMenu, title)) }
-            FolderMenu(state, folder, menu) { menu = false }
+            // A deleted folder (its layer closing) has nothing left to rename or delete
+            IconButton(onClick = { menu = true }, enabled = !gone) { Icon(tgxIcon(R.drawable.baseline_more_vert_24), contentDescription = str(R.string.XgramXDriveFolderMenu, title)) }
+            FolderMenu(state, folder, menu && !gone) { menu = false }
           }
         }
       },
@@ -810,7 +868,8 @@ internal fun FolderScreen(state: XDriveState, scope: XDriveScope, openTab: (XDri
       colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
       scrollBehavior = scrollBehavior
     )
-    if (feed.items.isEmpty()) {
+    if (shownItems.isEmpty()) {
+      FabBack(state)
       if (feed.loading.value || !feed.reachedEnd.value) {
         Loading(feed)
       } else {
@@ -836,7 +895,7 @@ internal fun FolderScreen(state: XDriveState, scope: XDriveScope, openTab: (XDri
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxSize()
       ) {
-        val list = feed.items
+        val list = shownItems
         items(list.size, key = { list[it].id }) { i ->
           val message = list[i]
           XDriveCell(state, message, onOpen = { XDriveActions.open(controller, message) }, modifier = Modifier.animateItem())
@@ -845,7 +904,7 @@ internal fun FolderScreen(state: XDriveState, scope: XDriveScope, openTab: (XDri
     } else {
       val list = state.list(feedKey("folderList", XDriveView.ALL, scope))
       LoadMore(feed, list)
-      val groups = remember(feed, feed.version.intValue) { groupsByMonth(feed.items) }
+      val groups = remember(feed, feed.version.intValue, gone) { groupsByMonth(shownItems) }
       LazyColumn(state = list, contentPadding = PaddingValues(bottom = bottomRoom(state, true)), modifier = Modifier.fillMaxSize()) {
         rowGroups(state, groups, showFolder = false) { XDriveActions.open(controller, it) }
       }
@@ -861,7 +920,19 @@ private val SEARCH_VIEWS = listOf(XDriveView.ALL, XDriveView.MEDIA, XDriveView.F
 internal fun SearchScreen(state: XDriveState) {
   val controller = state.host.controller
   val focus = remember { FocusRequester() }
-  LaunchedEffect(Unit) { focus.requestFocus() }
+  val keyboard = LocalSoftwareKeyboardController.current
+  val focusManager = LocalFocusManager.current
+  // Opening (again too, while it still shrinks away: this screen stays composed): the field takes the focus.
+  // Closing (its back arrow too): the keyboard goes as the layer starts shrinking, so the tabs under it show their
+  // navigation bar and button where they stay, not above the keyboard first and then jumping down
+  LaunchedEffect(state.searching) {
+    if (state.searching) {
+      focus.requestFocus()
+    } else {
+      focusManager.clearFocus(force = true)
+      keyboard?.hide()
+    }
+  }
   var query by remember { mutableStateOf("") }
   LaunchedEffect(state.query) {
     kotlinx.coroutines.delay(if (state.query.isEmpty()) 0 else 300)

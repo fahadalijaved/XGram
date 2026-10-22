@@ -130,8 +130,11 @@ public class CameraOverlayView extends View implements FactorAnimator.Target {
     if (this.overlayVisible != isVisible) {
       this.overlayVisible = isVisible;
       final float toFactor = isVisible ? 1f : 0f;
+      // XGram: a callback still waiting for the previous animation is kept, not dropped: it is the camera's rebind
+      // (switching cameras or a camera mode), and without it the camera stayed switching and its controls dead
+      final Runnable pending = this.onDone;
       if (animated) {
-        this.onDone = onDone;
+        this.onDone = xgramChain(pending, onDone);
         if (visibilityAnimator == null) {
           visibilityAnimator = new FactorAnimator(ANIMATOR_VISIBILITY, this, AnimatorUtils.DECELERATE_INTERPOLATOR, 140l, this.overlayFactor);
         }
@@ -143,11 +146,36 @@ public class CameraOverlayView extends View implements FactorAnimator.Target {
           visibilityAnimator.forceFactor(toFactor);
         }
         this.overlayFactor = toFactor;
+        if (pending != null) {
+          pending.run(); // XGram
+        }
         if (onDone != null) {
           onDone.run();
         }
       }
+    } else if (onDone != null) {
+      // XGram: already shown (or hidden), or on the way there: the callback still runs, at once or when the animation
+      // ends. It was dropped, so a camera mode tapped while the blur was still up never bound the camera again.
+      if (visibilityAnimator != null && visibilityAnimator.isAnimating()) {
+        this.onDone = xgramChain(this.onDone, onDone);
+      } else {
+        onDone.run();
+      }
     }
+  }
+
+  /** XGram: both callbacks, {@code first} first (either may be null). */
+  private static Runnable xgramChain (Runnable first, Runnable then) {
+    if (first == null) {
+      return then;
+    }
+    if (then == null) {
+      return first;
+    }
+    return () -> {
+      first.run();
+      then.run();
+    };
   }
 
   private void forceOverlayFactor (float factor) {
@@ -282,8 +310,10 @@ public class CameraOverlayView extends View implements FactorAnimator.Target {
       }
       case ANIMATOR_VISIBILITY: {
         if (onDone != null) {
+          // XGram: cleared before it runs, so a callback that starts another animation keeps that one's callback
+          final Runnable onDone = this.onDone;
+          this.onDone = null;
           onDone.run();
-          onDone = null;
         }
         break;
       }

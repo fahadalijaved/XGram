@@ -90,6 +90,7 @@
   <string name="XgramMessageMenuInfo">Choose what shows when you long-press a message, and drag an option by its handle, or hold it, to change the order. Put an option under More to keep it one tap away without crowding the menu. Options for one situation only, like Send now or Stop poll, always show and keep their place.</string>
   <string name="XgramMenuUnderMore">Under More</string>
   <string name="XgramMenuMoreKept">Shows while options are under More</string>
+  <string name="XgramMenuHiddenWithMore">Hidden with More</string>
   <string name="XgramMessagePopup">Popup menu</string>
   <string name="XgramMessagePopupInfo">A small menu next to the message with the reactions above it, like Telegram</string>
   <string name="XgramPopupViewers">Seen by</string>
@@ -107,8 +108,10 @@
   <string name="XgramAddBotFailed">%1$s: %2$s</string>
   <string name="XgramAddBotDoneOne">Added to %1$s</string>
   <string name="XgramAddBotDoneMany">Added to %1$d chats</string>
+  <string name="XgramAddBotMemberOnly">%1$s: added as a member (you can\'t add admins there)</string>
   <string name="XgramMenuNameUnderMore">%1$s · under More</string>
   <string name="XgramMenuNameMoreKept">%1$s · shows while options are under it</string>
+  <string name="XgramMenuNameHiddenWithMore">%1$s · hidden with More</string>
   <string name="XgramMenuInMenu">In the menu</string>
   <string name="XgramMenuHidden">Hidden</string>
   <string name="XgramMenuChoiceCurrent">%1$s ✓</string>

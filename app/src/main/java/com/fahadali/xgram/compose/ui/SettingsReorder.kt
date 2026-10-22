@@ -27,6 +27,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -124,6 +125,15 @@ class ReorderRow(
 
 /** Content type of a reorderable group in the page's list (PageBlock.TYPE_* leave 10 free for it). */
 private const val TYPE_REORDER = 10
+
+/**
+ * What a row with the More toggle gives to everything but its title: the list item's paddings and gaps (56dp), the
+ * handle, gap and icon (72dp), the toggle's 48dp target, gap and switch (108dp).
+ */
+private val MORE_ROW_FIXED_WIDTH = 236.dp
+
+/** The room a title needs at the default text size for a long single word ("Transcribe") not to break mid-word. */
+private val MORE_ROW_TITLE_MIN_WIDTH = 120.dp
 
 /** While a row is held, Telegram X's swipe-back stays off everywhere on the page. */
 private val NO_SWIPE_EVERYWHERE: () -> android.graphics.Rect? = {
@@ -441,16 +451,23 @@ private fun ReorderGroupBlock(
   val order = state.local ?: incoming
   val byKey = rows.associateBy { it.key }
   val shown = order.filter { byKey.containsKey(it) }
-  Column(
-    modifier = Modifier
-      .fillMaxWidth()
-      .padding(top = topGap)
-      .nestedScroll(connection, dispatcher),
-    verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
-  ) {
-    shown.forEachIndexed { index, rowKey ->
-      key(rowKey) {
-        ReorderItem(id, byKey.getValue(rowKey), index, shown.size, state, onToggle, onMore)
+  val hasMoreToggle = rows.any { it.inMore != null }
+  BoxWithConstraints(Modifier.fillMaxWidth()) {
+    // Rows with the More toggle on a narrow screen (the Fold's cover screen) or with large text: the decorative icons
+    // and the gap before the switch give their room to the titles, which would otherwise break single words mid-word.
+    // The whole group at once, so its rows stay aligned.
+    val compact = hasMoreToggle && maxWidth - MORE_ROW_FIXED_WIDTH < MORE_ROW_TITLE_MIN_WIDTH * density.fontScale
+    Column(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(top = topGap)
+        .nestedScroll(connection, dispatcher),
+      verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
+    ) {
+      shown.forEachIndexed { index, rowKey ->
+        key(rowKey) {
+          ReorderItem(id, byKey.getValue(rowKey), index, shown.size, state, onToggle, onMore, compact)
+        }
       }
     }
   }
@@ -464,7 +481,8 @@ private fun ReorderItem(
   count: Int,
   state: ReorderState,
   onToggle: (String, Boolean) -> Unit,
-  onMore: (String, Boolean) -> Unit
+  onMore: (String, Boolean) -> Unit,
+  compact: Boolean
 ) {
   val host = LocalXgramHost.current
   val rowKey = row.key
@@ -541,7 +559,7 @@ private fun ReorderItem(
   val leading: @Composable () -> Unit = {
     Row(verticalAlignment = Alignment.CenterVertically) {
       DragHandle(rowKey, state)
-      if (row.icon != 0) {
+      if (row.icon != 0 && !compact) {
         Spacer(Modifier.width(8.dp))
         RowIcon(row.icon)
       }
@@ -583,7 +601,10 @@ private fun ReorderItem(
                 host.changed()
               }
             }
-            Spacer(Modifier.width(8.dp))
+            // compact: the toggle's 48dp target already keeps 4dp around its 40dp button
+            if (!compact) {
+              Spacer(Modifier.width(8.dp))
+            }
             SettingsSwitch(checked, row.enabled)
           }
         } else {

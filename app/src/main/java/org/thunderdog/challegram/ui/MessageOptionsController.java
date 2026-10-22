@@ -120,8 +120,9 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
           }
           int inset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
           // Without a header row the sheet's handle band already ends where the 28dp curve does: the first tile starts
-          // there (the sheet follows the first row's top as it scrolls, so a gap of its own would slide under the clip)
-          int top = index == 0 ? (xgramNoHeaderRow ? 0 : Screen.dp(8f)) : adapter.xgramSameGroup(index - 1, index) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
+          // there when it is the list's first row (the sheet follows the first row's top as it scrolls, so a gap of its
+          // own would slide under the clip). Under the read date, the emoji packs or the info line it keeps its 8dp.
+          int top = index == 0 ? (xgramNoHeaderRow && position == 0 ? 0 : Screen.dp(8f)) : adapter.xgramSameGroup(index - 1, index) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
           int bottom = index == adapter.options.items.length - 1 && !adapter.xgramReactionBarLast() ? Screen.dp(8f) + xgramNavigationBarSpace(parent) : 0;
           outRect.set(inset, top, inset, bottom);
         }

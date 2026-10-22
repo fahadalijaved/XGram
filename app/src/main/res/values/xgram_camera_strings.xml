@@ -13,4 +13,6 @@
   <string name="XgramCameraHdr">HDR</string>
   <string name="XgramCameraLocked">Focus and exposure locked</string>
   <string name="XgramCameraNoVideo">%1$s takes photos only. Switch to Photo to record a video.</string>
+  <!-- TalkBack: a lens chip, "0.6× zoom" -->
+  <string name="XgramCameraLensA11y">%1$s zoom</string>
 </resources>

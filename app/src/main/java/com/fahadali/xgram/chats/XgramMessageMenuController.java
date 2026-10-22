@@ -73,9 +73,12 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
           boolean hidden = XgramMessageMenu.isHidden(key);
           view.getToggler().setRadioEnabled(!hidden, isUpdate);
           // Under More: "Reply · under More" (Report and Restrict by default, as in Telegram X). A hidden More that
-          // still shows while options wait under it (XgramMessageMenu.filter) says so.
+          // still shows while options wait under it (XgramMessageMenu.filter) says so; Report and Restrict under a
+          // hidden More that the menu leaves out go with it, and say that instead.
           String name = Lang.getString(option.name);
-          if (!hidden && XgramMessageMenu.showsUnderMore(key)) {
+          if (!hidden && XgramMessageMenu.isHiddenWithMore(key)) {
+            name = Lang.getString(R.string.XgramMenuNameHiddenWithMore, name);
+          } else if (!hidden && XgramMessageMenu.showsUnderMore(key)) {
             name = Lang.getString(R.string.XgramMenuNameUnderMore, name);
           } else if (hidden && XgramMessageMenu.KEY_MORE_OPTION.equals(key) && XgramMessageMenu.hasOptionsUnderMore()) {
             name = Lang.getString(R.string.XgramMenuNameMoreKept, name);
@@ -150,12 +153,14 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
     }
   }
 
-  /** The More row's name says when More shows though hidden, which the other rows' choices change. */
+  /**
+   * The More row's name says when More shows though hidden, which the other rows' choices change; Report's and
+   * Restrict's say whether they go with a hidden More, which follows More and those choices.
+   */
   private void updateMoreRow () {
     for (XgramMessageMenu.Option option : XgramMessageMenu.OPTIONS) {
-      if (XgramMessageMenu.KEY_MORE_OPTION.equals(option.key)) {
+      if (XgramMessageMenu.KEY_MORE_OPTION.equals(option.key) || XgramMessageMenu.isTgxMoreOnly(option.key)) {
         adapter.updateValuedSettingByData(option);
-        break;
       }
     }
   }
@@ -198,12 +203,15 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
         boolean shown = adapter.toggleView(v);
         XgramMessageMenu.setHidden(option.key, !shown);
         adapter.updateValuedSetting((ListItem) tag); // More's name: whether it still shows while hidden
+        updateMoreRow(); // Report and Restrict: whether they go with a hidden More
         return;
       }
       // In the menu, under the menu's More, or hidden. Restrict can only be under More or hidden, as Telegram X only
       // knows on More's page whether it applies.
       final ListItem item = (ListItem) tag;
-      final int current = XgramMessageMenu.isHidden(option.key) ? 3 : XgramMessageMenu.showsUnderMore(option.key) ? 2 : 1;
+      // Gone with a hidden More, Report and Restrict are neither under More nor hidden on their own: no choice is marked
+      final int current = XgramMessageMenu.isHidden(option.key) ? 3 : XgramMessageMenu.isHiddenWithMore(option.key) ? 0 :
+        XgramMessageMenu.showsUnderMore(option.key) ? 2 : 1;
       final boolean canBeInMenu = XgramMessageMenu.canChoosePlace(option.key);
       int[] optionIds = canBeInMenu ? new int[] {1, 2, 3} : new int[] {2, 3};
       String[] titles = new String[optionIds.length];

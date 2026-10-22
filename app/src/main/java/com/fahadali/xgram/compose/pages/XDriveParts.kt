@@ -33,11 +33,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -87,6 +89,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -109,6 +112,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -290,6 +294,11 @@ internal class XDriveState(val tdlib: Tdlib, val host: XgramComposeHost, val sco
   var backProgress by mutableFloatStateOf(0f)
   var backFromRight by mutableStateOf(false)
   var backLayer by mutableStateOf<String?>(null)
+  /**
+   * What is left of the last gesture: its cancel animation, or the reset in case its layer never closes. A new gesture
+   * stops it, so it can't take the new one's layer or progress away halfway through.
+   */
+  var backJob: Job? = null
 
   /** What Organize grew out of (its card, a button), or null: the middle. */
   var organizeOrigin: String? = null
@@ -310,6 +319,8 @@ internal class XDriveState(val tdlib: Tdlib, val host: XgramComposeHost, val sco
   /** Organize with AI: as long as the screen, so closing its sheet doesn't stop it. */
   val organizer = XDriveOrganizer(tdlib)
   private var organizeJob: Job? = null
+  /** The run starts over once Organize's layer has closed (it shrinks away showing what it showed), or at its next open. */
+  private var organizeStartOver = false
   /** The folder whose icon is being picked (the sheet), or null. */
   var iconPicker by mutableStateOf<XDriveIndex.Folder?>(null)
 
@@ -374,9 +385,13 @@ internal class XDriveState(val tdlib: Tdlib, val host: XgramComposeHost, val sco
     for (message in list) selected[message.id] = message
   }
 
+  // Opening or closing a layer shows the floating button again: the scroll that hid it was elsewhere, and a list that
+  // can't scroll (an empty folder) could never bring it back
+
   fun openFolder(scope: XDriveScope, origin: String?) {
     selected.clear()
     fabOpen = false
+    fabShown = true
     folderOrigin = origin
     folder = scope
   }
@@ -384,35 +399,51 @@ internal class XDriveState(val tdlib: Tdlib, val host: XgramComposeHost, val sco
   fun closeFolder() {
     selected.clear()
     fabOpen = false
+    fabShown = true
     folder = null
   }
 
+  /** A new search starts empty; closing leaves the query, so the layer shrinks away with its results, not the start note. */
   fun openSearch() {
     selected.clear()
     fabOpen = false
+    query = ""
     searchIn = folder ?: XDriveScope.Everything
     searching = true
   }
 
   fun closeSearch() {
     selected.clear()
+    fabShown = true
     searching = false
-    query = ""
   }
 
   fun openOrganize(origin: String?) {
     fabOpen = false
     selected.clear()
+    // Reopened before the last close finished: it starts over now
+    if (organizeStartOver) organizeHidden()
     organizeOrigin = origin
     organizing = true
   }
 
-  /** Organize's close (its X and back alike): a finished or empty run starts over next time. */
-  fun closeOrganize() {
-    if (organizer.phase == XDriveOrganizer.Phase.DONE || (organizer.phase == XDriveOrganizer.Phase.REVIEW && organizer.folders.isEmpty())) {
-      organizer.reset()
+  /**
+   * Organize's close (its X, Cancel, Done, See folders and back alike): a finished, empty or cancelled ([startOver]) run
+   * starts over next time, once the layer has closed ([organizeHidden]).
+   */
+  fun closeOrganize(startOver: Boolean = false) {
+    if (startOver || organizer.phase == XDriveOrganizer.Phase.DONE || (organizer.phase == XDriveOrganizer.Phase.REVIEW && organizer.folders.isEmpty())) {
+      organizeStartOver = true
     }
+    fabShown = true
     organizing = false
+  }
+
+  /** Organize's layer finished closing (or opens again): a run that was to start over does now. */
+  fun organizeHidden() {
+    if (!organizeStartOver) return
+    organizeStartOver = false
+    if (!organizer.running) organizer.reset()
   }
 
   /** What back does now, in this order: the menu, Organize, the selection, the search, the folder; then Home. */
@@ -856,9 +887,12 @@ internal fun FolderTile(
   }
 }
 
-/** The dragged items under the finger: the first one's picture, tilted, with how many there are. */
+/**
+ * The dragged items under the finger: the first one's picture, tilted, with how many there are. Placed in physical
+ * coordinates (from the left, in right-to-left too), as the drag's position is.
+ */
 @Composable
-internal fun DragGhost(state: XDriveState) {
+internal fun BoxScope.DragGhost(state: XDriveState) {
   val drag = state.drag
   val items = drag.items
   if (items.isEmpty()) return
@@ -867,7 +901,8 @@ internal fun DragGhost(state: XDriveState) {
   val half = with(LocalDensity.current) { 36.dp.toPx() }
   Box(
     Modifier
-      .offset { IntOffset((drag.position.x - half).toInt(), (drag.position.y - half * 1.6f).toInt()) }
+      .align(AbsoluteAlignment.TopLeft)
+      .absoluteOffset { IntOffset((drag.position.x - half).toInt(), (drag.position.y - half * 1.6f).toInt()) }
       .graphicsLayer {
         scaleX = lift
         scaleY = lift
@@ -930,15 +965,18 @@ internal fun DropDock(state: XDriveState, bottomInset: Dp) {
     list
   }
   val rows = if (keys.size > 5) 2 else 1
-  LaunchedEffect(state.drag.moved) {
+  // The finger's position is physical; right-to-left, the chips' start is on the right, so a step's sign turns
+  val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+  LaunchedEffect(state.drag.moved, rtl) {
     val edge = with(density) { 56.dp.toPx() }
+    val toward = if (rtl) -1f else 1f
     while (state.drag.moved) {
       val area = state.bounds[BOUNDS_DOCK]
       val p = state.drag.position
       if (area != null && area.contains(p)) {
         val step = when {
-          p.x < area.left + edge -> -18f
-          p.x > area.right - edge -> 18f
+          p.x < area.left + edge -> -18f * toward
+          p.x > area.right - edge -> 18f * toward
           else -> 0f
         }
         if (step != 0f && grid.scrollBy(step) != 0f) {
@@ -1020,10 +1058,11 @@ private class RectShape(private val rect: Rect, private val radius: Float) : Sha
 /**
  * A screen over the tabs that grows out of where it was opened from (a folder tile, the search bar: Expressive's
  * container transform) and shrinks back into it; while a predictive back gesture runs over it, it follows the finger
- * (smaller, rounder, toward the gesture's side). Nothing under it can be touched while it shows.
+ * (smaller, rounder, toward the gesture's side). Nothing under it can be touched while it shows. [onHidden] runs once
+ * it has shrunk away.
  */
 @Composable
-internal fun RevealLayer(state: XDriveState, id: String, visible: Boolean, originKey: () -> String?, content: @Composable () -> Unit) {
+internal fun RevealLayer(state: XDriveState, id: String, visible: Boolean, originKey: () -> String?, onHidden: () -> Unit = {}, content: @Composable () -> Unit) {
   val motion = MaterialTheme.motionScheme
   val progress = remember { Animatable(0f) }
   var shown by remember { mutableStateOf(false) }
@@ -1038,6 +1077,7 @@ internal fun RevealLayer(state: XDriveState, id: String, visible: Boolean, origi
       originKey()?.let { state.bounds[it] }?.let { origin = it }
       progress.animateTo(0f, motion.fastSpatialSpec())
       shown = false
+      onHidden()
       if (state.backLayer == id) {
         state.backProgress = 0f
         state.backLayer = null

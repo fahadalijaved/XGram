@@ -12,15 +12,22 @@
 package com.fahadali.xgram.xdrive
 
 import com.fahadali.xgram.XgramSettings
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** The cloud AIs Organize can use with the user's own API key. */
 enum class XDriveCloudProvider(val id: String, val title: Int, val defaultModel: String, val keyHelp: Int) {
@@ -49,13 +56,25 @@ class XDriveCloudConfig(val provider: XDriveCloudProvider, val key: String, val 
       val base = settings.xdriveAiBaseUrl().trim().ifEmpty { OPENAI_BASE_URL }.trimEnd('/')
       return XDriveCloudConfig(provider, key, model, base)
     }
+
+    /**
+     * A base URL OkHttp can call (http or https, with a host); anything else would throw while the request is built.
+     * The address itself is checked too: "https://" alone passes once the path is added (it reads "chat" as the host).
+     */
+    fun isValidBaseUrl(url: String): Boolean {
+      val base = url.trim().trimEnd('/')
+      return base.toHttpUrlOrNull() != null && (base + "/chat/completions").toHttpUrlOrNull() != null
+    }
+
+    /** A key that can go in a header: OkHttp throws for anything but tabs and printable ASCII (a pasted letter or symbol). */
+    fun isSendableKey(key: String): Boolean = key.all { it == '\t' || it in ' '..'~' }
   }
 }
 
 /** Why a cloud answer didn't come (shown to the user as it is). */
 class XDriveCloudException(message: String) : Exception(message)
 
-/** One answer from the cloud AI over HTTPS (blocking: call it off the main thread). */
+/** One answer from the cloud AI over HTTPS (suspends; cancelling the coroutine cancels the call). */
 object XDriveCloud {
   private val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
 
@@ -72,14 +91,28 @@ object XDriveCloud {
       .build()
   }
 
-  fun generate(config: XDriveCloudConfig, prompt: String): String = when (config.provider) {
-    XDriveCloudProvider.CLAUDE -> claude(config, prompt)
-    XDriveCloudProvider.GEMINI -> gemini(config, prompt)
-    XDriveCloudProvider.OPENAI -> openAi(config, prompt)
+  suspend fun generate(config: XDriveCloudConfig, prompt: String): String {
+    // A base URL or key OkHttp can't send throws while the request is built: say what is wrong instead
+    if (config.provider == XDriveCloudProvider.OPENAI && !XDriveCloudConfig.isValidBaseUrl(config.baseUrl)) {
+      throw XDriveCloudException(config.name + ": " + Lang.getString(R.string.XgramXDriveCloudBadUrl))
+    }
+    if (!XDriveCloudConfig.isSendableKey(config.key)) {
+      throw XDriveCloudException(config.name + ": " + Lang.getString(R.string.XgramXDriveCloudBadKey))
+    }
+    return try {
+      when (config.provider) {
+        XDriveCloudProvider.CLAUDE -> claude(config, prompt)
+        XDriveCloudProvider.GEMINI -> gemini(config, prompt)
+        XDriveCloudProvider.OPENAI -> openAi(config, prompt)
+      }
+    } catch (e: IllegalArgumentException) {
+      // Anything else a request can't be made of (an odd model name) is an error to show, not a crash
+      throw XDriveCloudException(config.name + ": " + (e.message ?: e.javaClass.simpleName))
+    }
   }
 
   /** The Messages API: a short classification, so low effort; the refusal fallback where the model has one. */
-  private fun claude(config: XDriveCloudConfig, prompt: String): String {
+  private suspend fun claude(config: XDriveCloudConfig, prompt: String): String {
     val body = JSONObject()
       .put("model", config.model)
       .put("max_tokens", 16000)
@@ -108,7 +141,7 @@ object XDriveCloud {
     return text.toString()
   }
 
-  private fun gemini(config: XDriveCloudConfig, prompt: String): String {
+  private suspend fun gemini(config: XDriveCloudConfig, prompt: String): String {
     val body = JSONObject()
       .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
       .put("generationConfig", JSONObject().put("temperature", 0.2).put("maxOutputTokens", 8192))
@@ -132,7 +165,7 @@ object XDriveCloud {
   }
 
   /** Chat Completions, which OpenAI, OpenRouter, Groq, DeepSeek and local servers all speak. */
-  private fun openAi(config: XDriveCloudConfig, prompt: String): String {
+  private suspend fun openAi(config: XDriveCloudConfig, prompt: String): String {
     val body = JSONObject()
       .put("model", config.model)
       .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
@@ -146,27 +179,48 @@ object XDriveCloud {
   }
 
   /** Runs the request; an error status (or an unreadable answer) becomes an exception with the service's own words. */
-  private fun call(config: XDriveCloudConfig, request: Request): JSONObject {
-    try {
-      client.newCall(request).execute().use { response ->
-        val text = response.body?.string() ?: ""
-        val json = try {
-          JSONObject(text)
-        } catch (t: Throwable) {
-          null
-        }
-        if (!response.isSuccessful) {
-          val error = json?.optJSONObject("error")
-          val message = error?.optString("message")?.takeIf { it.isNotEmpty() } ?: json?.optString("message")?.takeIf { it.isNotEmpty() } ?: text.take(160)
-          throw XDriveCloudException(config.name + ": " + message + " (HTTP " + response.code + ")")
-        }
-        return json ?: throw XDriveCloudException(config.name + ": " + Lang.getString(R.string.XgramXDriveCloudBadAnswer))
-      }
-    } catch (e: XDriveCloudException) {
-      throw e
+  private suspend fun call(config: XDriveCloudConfig, request: Request): JSONObject {
+    val (code, text) = try {
+      execute(request)
     } catch (e: java.io.IOException) {
       throw XDriveCloudException(config.name + ": " + (e.message ?: e.javaClass.simpleName))
     }
+    val json = try {
+      JSONObject(text)
+    } catch (t: Throwable) {
+      null
+    }
+    if (code !in 200..299) {
+      val error = json?.optJSONObject("error")
+      val message = error?.optString("message")?.takeIf { it.isNotEmpty() } ?: json?.optString("message")?.takeIf { it.isNotEmpty() } ?: text.take(160)
+      throw XDriveCloudException(config.name + ": " + message + " (HTTP " + code + ")")
+    }
+    return json ?: throw XDriveCloudException(config.name + ": " + Lang.getString(R.string.XgramXDriveCloudBadAnswer))
+  }
+
+  /**
+   * The call on OkHttp's own threads, as its status and body. The coroutine holds no thread while it waits, and its
+   * cancellation ("Use quick rules now", Cancel) cancels the call, so it stops at once instead of running to its timeout.
+   */
+  private suspend fun execute(request: Request): Pair<Int, String> = suspendCancellableCoroutine { cont ->
+    val call = client.newCall(request)
+    cont.invokeOnCancellation { call.cancel() }
+    call.enqueue(object : Callback {
+      override fun onFailure(call: Call, e: java.io.IOException) {
+        cont.resumeWithException(e)
+      }
+
+      override fun onResponse(call: Call, response: Response) {
+        val result = try {
+          response.use { it.code to (it.body?.string() ?: "") }
+        } catch (t: Throwable) {
+          // Thrown out of here it would end OkHttp's thread (and the app); the caller says what went wrong
+          cont.resumeWithException(t)
+          return
+        }
+        cont.resume(result)
+      }
+    })
   }
 
   /** What leaves the phone, made safer: long numbers, e-mail addresses and code-like tokens are masked. */

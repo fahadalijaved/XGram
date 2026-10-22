@@ -34,6 +34,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -53,6 +54,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedListItem
@@ -129,10 +133,8 @@ internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSee
   val topInset = with(LocalDensity.current) { state.host.topInset.toDp() }
   val bottomInset = with(LocalDensity.current) { state.host.bottomInset.toDp() }
   val motion = MaterialTheme.motionScheme
-  val close: () -> Unit = {
-    if (organizer.phase == XDriveOrganizer.Phase.DONE) organizer.reset()
-    onClose()
-  }
+  // A finished run starts over once this layer has closed (XDriveState.closeOrganize), not while it shrinks away
+  val close: () -> Unit = onClose
   Column(Modifier.fillMaxSize().padding(top = topInset)) {
     TopAppBar(
       title = { Text(str(R.string.XgramXDriveOrganize), maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -153,9 +155,9 @@ internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSee
     ) { phase ->
       when (phase) {
         XDriveOrganizer.Phase.READY -> ReadyStep(organizer, bottomInset) { state.startOrganize() }
-        XDriveOrganizer.Phase.REVIEW -> ReviewStep(state, organizer, bottomInset, onCancel = { organizer.reset(); onClose() }) { organizer.apply() }
+        XDriveOrganizer.Phase.REVIEW -> ReviewStep(state, organizer, bottomInset, onCancel = { state.closeOrganize(startOver = true) }) { organizer.apply() }
         XDriveOrganizer.Phase.CONSENT -> ConsentStep(organizer, bottomInset)
-        XDriveOrganizer.Phase.DONE -> DoneStep(organizer, onClose = { organizer.reset(); onClose() }, onSeeFolders = { organizer.reset(); onSeeFolders() })
+        XDriveOrganizer.Phase.DONE -> DoneStep(organizer, onClose = onClose, onSeeFolders = onSeeFolders)
         else -> WorkingStep(organizer) { state.cancelOrganize() }
       }
     }
@@ -165,6 +167,10 @@ internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSee
 /** What the organizer is doing, in words (the sheet and Home's card). */
 @Composable
 internal fun organizeStatus(organizer: XDriveOrganizer): String = when {
+  // "Use quick rules now" was tapped: said at once, while the AI's step winds down
+  organizer.skipNano && organizer.nanoStep != XDriveOrganizer.NanoStep.NONE -> str(R.string.XgramXDriveSwitchingToRules)
+  // Nothing goes on until the user says what may be sent
+  organizer.phase == XDriveOrganizer.Phase.CONSENT -> str(R.string.XgramXDriveConsentWaiting, organizer.aiName)
   organizer.phase == XDriveOrganizer.Phase.PREPARING && organizer.nanoStep == XDriveOrganizer.NanoStep.DOWNLOADING ->
     if (organizer.downloadTotal > 0) {
       str(R.string.XgramXDriveNanoDownloadingSize, Strings.buildSize(organizer.downloaded), Strings.buildSize(organizer.downloadTotal))
@@ -180,6 +186,7 @@ internal fun organizeStatus(organizer: XDriveOrganizer): String = when {
 
 /** How far along it is (0 to 1), or null: no way to tell. */
 internal fun organizeProgress(organizer: XDriveOrganizer): Float? = when {
+  organizer.skipNano && organizer.nanoStep != XDriveOrganizer.NanoStep.NONE -> null
   organizer.phase == XDriveOrganizer.Phase.PREPARING && organizer.nanoStep == XDriveOrganizer.NanoStep.DOWNLOADING && organizer.downloadTotal > 0 ->
     (organizer.downloaded.toFloat() / organizer.downloadTotal).coerceIn(0f, 1f)
   organizer.nanoStep == XDriveOrganizer.NanoStep.SORTING && organizer.sortTotal > 0 -> organizer.sortDone.toFloat() / organizer.sortTotal
@@ -311,7 +318,7 @@ private fun WorkingStep(organizer: XDriveOrganizer, onCancel: () -> Unit) {
     Text(str(R.string.XgramXDriveKeepsGoing), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
     Spacer(Modifier.height(28.dp))
     if (step != XDriveOrganizer.NanoStep.NONE) {
-      FilledTonalButton(onClick = { organizer.useRulesNow() }) {
+      FilledTonalButton(onClick = { organizer.useRulesNow() }, enabled = !organizer.skipNano) {
         Icon(tgxIcon(R.drawable.baseline_tune_24), contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(str(R.string.XgramXDriveUseRulesNow))
@@ -325,9 +332,28 @@ private fun WorkingStep(organizer: XDriveOrganizer, onCancel: () -> Unit) {
 private fun ReviewStep(state: XDriveState, organizer: XDriveOrganizer, bottomInset: androidx.compose.ui.unit.Dp, onCancel: () -> Unit, onApply: () -> Unit) {
   val folders = organizer.folders
   if (folders.isEmpty()) {
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
-      EmptyNote(str(R.string.XgramXDriveNothingToSort))
+    val note = organizer.note
+    // Centred when it fits, scrolls when it doesn't (a long error note with large fonts on a short screen)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    Column(
+      Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(min = maxHeight).padding(top = 8.dp, bottom = 8.dp + bottomInset),
+      verticalArrangement = Arrangement.Center
+    ) {
+      if (note != null) {
+        // The AI failed and the rules found nothing: why it failed, and a way back to fix it (another engine, the key)
+        AiNote(note, Modifier.padding(horizontal = 20.dp))
+        Spacer(Modifier.height(12.dp))
+        Text(
+          str(R.string.XgramXDriveNothingFound), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+          textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)
+        )
+        Spacer(Modifier.height(20.dp))
+        FilledTonalButton(onClick = { organizer.startOver() }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(str(R.string.XgramXDriveStartOver)) }
+      } else {
+        EmptyNote(str(R.string.XgramXDriveNothingToSort))
+      }
       TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(str(R.string.XgramXDriveClose)) }
+    }
     }
     return
   }
@@ -349,13 +375,7 @@ private fun ReviewStep(state: XDriveState, organizer: XDriveOrganizer, bottomIns
           val note = organizer.note
           if (note != null) {
             Spacer(Modifier.height(10.dp))
-            Row(
-              Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.tertiaryContainer).padding(14.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(tgxIcon(R.drawable.baseline_info_24), contentDescription = null, tint = c.onTertiaryContainer, modifier = Modifier.size(20.dp))
-              Text(note, style = MaterialTheme.typography.bodyMedium, color = c.onTertiaryContainer, modifier = Modifier.padding(start = 12.dp))
-            }
+            AiNote(note)
           }
           if (organizer.unsortedLeft > 0) {
             Spacer(Modifier.height(4.dp))
@@ -389,14 +409,33 @@ private fun ReviewStep(state: XDriveState, organizer: XDriveOrganizer, bottomIns
         }
       }
     }
-    Button(
-      onClick = onApply,
-      enabled = total > 0,
-      modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset).heightIn(min = 56.dp),
-      contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
-    ) {
-      Text(str(R.string.XgramXDriveReviewApply, items(total)), style = MaterialTheme.typography.titleMedium)
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset)) {
+      Button(
+        onClick = onApply,
+        enabled = total > 0,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
+      ) {
+        Text(str(R.string.XgramXDriveReviewApply, items(total)), style = MaterialTheme.typography.titleMedium)
+      }
+      // The proposal thrown away: back to how to sort (another engine, a fixed key) for a new run
+      TextButton(onClick = { organizer.startOver() }, modifier = Modifier.fillMaxWidth()) {
+        Text(str(R.string.XgramXDriveStartOver))
+      }
     }
+  }
+}
+
+/** Why the AI didn't do all the sorting ([XDriveOrganizer.note]), on a tertiary container. */
+@Composable
+private fun AiNote(note: String, modifier: Modifier = Modifier) {
+  val c = MaterialTheme.colorScheme
+  Row(
+    modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.tertiaryContainer).padding(14.dp),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Icon(tgxIcon(R.drawable.baseline_info_24), contentDescription = null, tint = c.onTertiaryContainer, modifier = Modifier.size(20.dp))
+    Text(note, style = MaterialTheme.typography.bodyMedium, color = c.onTertiaryContainer, modifier = Modifier.padding(start = 12.dp))
   }
 }
 
@@ -412,7 +451,8 @@ private fun ProposalCard(state: XDriveState, folder: XDriveProposedFolder, expan
         Column(
           Modifier.weight(1f).padding(horizontal = 14.dp).clickable(onClickLabel = str(R.string.XgramXDriveRename)) {
             state.host.prompt(PromptSpec(title = Lang.getString(R.string.XgramXDriveRename), hint = Lang.getString(R.string.XgramXDriveFolderName), initial = folder.name) { text ->
-              if (text.isNotBlank()) folder.name = text.trim()
+              // Renamed, it goes into the user's folder of that name, or a new one (not the folder it was proposed for)
+              if (text.isNotBlank()) state.organizer.rename(folder, text.trim())
             })
           }
         ) {
@@ -516,7 +556,14 @@ private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose
   var model by remember(provider) { mutableStateOf(settings.xdriveAiModel(provider.id).ifEmpty { provider.defaultModel }) }
   var baseUrl by remember { mutableStateOf(settings.xdriveAiBaseUrl().ifEmpty { XDriveCloudConfig.OPENAI_BASE_URL }) }
   val saved = remember(provider) { settings.xdriveAiKey(provider.id).isNotEmpty() }
-  ModalBottomSheet(onDismissRequest = onDismiss) {
+  // What OkHttp couldn't send (a typo in the address, a stray character in the key) is said here, not found mid-sort
+  val keyOk = XDriveCloudConfig.isSendableKey(key)
+  val urlOk = provider != XDriveCloudProvider.OPENAI || XDriveCloudConfig.isValidBaseUrl(baseUrl)
+  // Fully open (Save is never below the edge), and Save or Remove slide it away as a swipe does
+  val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+  val scope = rememberCoroutineScope()
+  val close: () -> Unit = { scope.launch { sheet.hide() }.invokeOnCompletion { onDismiss() } }
+  ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
     Column(
       Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -544,6 +591,8 @@ private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose
         state = keyField,
         label = { Text(str(R.string.XgramXDriveCloudKey)) },
         textObfuscationMode = if (showKey) TextObfuscationMode.Visible else TextObfuscationMode.RevealLastTyped,
+        isError = !keyOk,
+        supportingText = if (keyOk) null else { { Text(str(R.string.XgramXDriveCloudKeyInvalid)) } },
         trailingIcon = {
           IconButton(onClick = { showKey = !showKey }) {
             Icon(tgxIcon(R.drawable.baseline_visibility_24), contentDescription = str(if (showKey) R.string.XgramXDriveHideKey else R.string.XgramXDriveShowKey))
@@ -560,6 +609,9 @@ private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose
         OutlinedTextField(
           value = baseUrl, onValueChange = { baseUrl = it.trim() }, singleLine = true,
           label = { Text(str(R.string.XgramXDriveCloudBaseUrl)) },
+          // Empty is only unfinished; a written one that can't be called is pointed out
+          isError = !urlOk && baseUrl.isNotEmpty(),
+          supportingText = if (urlOk || baseUrl.isEmpty()) null else { { Text(str(R.string.XgramXDriveCloudUrlInvalid)) } },
           modifier = Modifier.fillMaxWidth()
         )
       }
@@ -569,9 +621,9 @@ private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose
           settings.setXdriveAi(provider.id, key, model, if (provider == XDriveCloudProvider.OPENAI) baseUrl else null)
           organizer.cloudChanged()
           organizer.engine = XDriveEngine.CLOUD
-          onDismiss()
+          close()
         },
-        enabled = key.isNotEmpty() && model.isNotEmpty() && (provider != XDriveCloudProvider.OPENAI || baseUrl.startsWith("http")),
+        enabled = key.isNotEmpty() && keyOk && model.isNotEmpty() && urlOk,
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
       ) {
@@ -581,7 +633,7 @@ private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose
         TextButton(onClick = {
           settings.removeXdriveAi(provider.id)
           organizer.cloudChanged()
-          onDismiss()
+          close()
         }, modifier = Modifier.fillMaxWidth()) {
           Text(str(R.string.XgramXDriveCloudRemove), color = MaterialTheme.colorScheme.error)
         }

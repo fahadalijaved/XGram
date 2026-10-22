@@ -858,6 +858,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     }
     if (reactionsPickerVisibility != null && reactionsPickerVisibility.getValue()) {
       if (!reactionsPickerController.performOnBackPressed(fromTop, commit)) {
+        if (xgramPickerOnly) {
+          // XGram: the sheet opened for its picker (the popup's '+'): Back closes it as any sheet (the predictive back
+          // gesture shrinks it), not into this menu the popup was chosen over
+          return false;
+        }
         if (commit) {
           hideReactionPicker();
         }
@@ -1071,7 +1076,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       reactionsPickerBottomHeaderView.setAlpha(0f);
       reactionsPickerBottomHeaderView.setVisibility(View.GONE);
       reactionsPickerController.getTopHeaderView().getBackButton().setOnClickListener(v -> {
-        hideReactionPicker();
+        if (xgramPickerOnly) {
+          hidePopupWindow(true); // XGram: opened for its picker (the popup's '+'): the sheet closes, not into its menu
+        } else {
+          hideReactionPicker();
+        }
       });
 
       if (state.needShowCustomEmojiInsidePicker) {
@@ -1114,6 +1123,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       // XGram: the reveal ended before the sheet's first frame (reduced motion snaps it): the picker opens now
       xgramExpandOnShow = false;
       if (xgramCanExpandOnShow()) {
+        xgramPickerOnly = true;
         showReactionPicker(); // XGram: the popup's expand button opened this sheet for its picker
       }
     }
@@ -1121,6 +1131,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   // XGram: Message menu → Popup menu: the popup's expand button opens this sheet with its picker open
   private boolean xgramExpandOnShow;
+  /**
+   * XGram: the picker opened with the sheet, for the popup's '+': the user chose the popup over this menu, so leaving
+   * the picker (Back, its close button, the dim) closes the sheet instead of showing the menu under it.
+   */
+  private boolean xgramPickerOnly;
 
   public void xgramExpandPickerOnShow () {
     xgramExpandOnShow = true;
@@ -1138,6 +1153,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       ViewUtils.runJustBeforeBeingDrawn(getValue(), () -> {
         if (xgramExpandOnShow && xgramCanExpandOnShow()) {
           xgramExpandOnShow = false;
+          xgramPickerOnly = true;
           showReactionPicker(false);
         }
       });
@@ -1235,7 +1251,8 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   @Override
   public boolean onBackgroundTouchDown (PopupLayout popupLayout, MotionEvent e) {
-    if (reactionsPickerVisibility != null && reactionsPickerVisibility.getValue()) {
+    // XGram: opened for its picker (the popup's '+'): a tap on the dim closes the sheet as on any sheet, not into its menu
+    if (reactionsPickerVisibility != null && reactionsPickerVisibility.getValue() && !xgramPickerOnly) {
       hideReactionPicker();
       return true;
     }

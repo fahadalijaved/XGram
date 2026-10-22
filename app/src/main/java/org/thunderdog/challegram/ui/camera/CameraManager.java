@@ -208,6 +208,11 @@ public abstract class CameraManager <T extends View> {
     }
   }
 
+  /** XGram: a photo is on its way (a CameraX camera mode takes seconds; binding the camera again throws it away). */
+  public final boolean isTakingPhoto () {
+    return takingPhoto;
+  }
+
   public final void setTakingPhoto (boolean isTakingPhoto) {
     if (this.takingPhoto != isTakingPhoto) {
       this.takingPhoto = isTakingPhoto;

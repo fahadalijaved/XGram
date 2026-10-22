@@ -146,7 +146,10 @@ object XDriveActions {
       val options = ArrayList<Pair<String, String>>()
       for (folder in folders) options.add(Pair(folder.name, folder.id))
       options.add(Pair(Lang.getString(R.string.XgramXDriveNewFolder) + "…", newKey))
-      val current = messageIds.firstOrNull()?.let { index.folderOf(it) } ?: ""
+      // Checked only when all of them are in that folder: a choice that is checked does nothing, and a mixed selection
+      // still has to be able to go into the folder one of them is in
+      val first = messageIds.firstOrNull()?.let { index.folderOf(it) }
+      val current = if (first != null && messageIds.all { index.folderOf(it) == first }) first else ""
       host.choose(ChoiceSpec(title = Lang.getString(R.string.XgramXDriveChooseFolder), options = options, selected = current) { id ->
         if (id == newKey) {
           newFolder(host) { folder -> onChosen(folder.id) }

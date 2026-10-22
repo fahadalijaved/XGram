@@ -312,6 +312,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
   public void closeCamera () {
     if (this.isOpen) {
       xgramStopZoom(); // XGram
+      xgramCancelFirstFrame(); // XGram: no first frame lifts the blur over a closed camera
       if (cameraProvider != null) {
         cameraProvider.unbindAll();
         preview = null;
@@ -675,9 +676,13 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       return;
     }
     if (xgramStops.length == 1 && state.getMaxZoomRatio() > 1f && camera != null) {
-      // The zoom range came after the camera was bound: its lenses now
-      xgramStops = xgramLensStops(camera.getCameraInfo(), state.getMinZoomRatio(), state.getMaxZoomRatio());
-      xgramListener.onCameraBound();
+      // The zoom range came after the camera was bound: its lenses now (only when there are some, or every pinch on a
+      // camera with a single lens would count as a new binding and drop the focus lock's mark)
+      final float[] stops = xgramLensStops(camera.getCameraInfo(), state.getMinZoomRatio(), state.getMaxZoomRatio());
+      if (stops.length > 1) {
+        xgramStops = stops;
+        xgramListener.onCameraBound();
+      }
     }
     xgramListener.onZoomRatio(state.getZoomRatio());
   };
@@ -764,13 +769,22 @@ public class CameraManagerX extends CameraManager<PreviewView> {
     return xgramStops;
   }
 
+  /**
+   * A camera mode can't be chosen now: the camera is being bound again (until its first frame lifts the blur), a photo
+   * is on its way (a mode's capture takes seconds, and binding again would throw it away) or a video records.
+   */
   public boolean xgramIsBusy () {
-    return switchingCamera || isCapturingVideo();
+    return xgramIsSwitching() || isTakingPhoto() || isCapturingVideo();
+  }
+
+  /** The camera is being bound again, until its first frame: zoom and focus wait (they work while a video records). */
+  public boolean xgramIsSwitching () {
+    return switchingCamera || xgramAwaitingFrame;
   }
 
   /** Switches to a camera mode (ExtensionMode); the preview blurs while the camera is bound again. */
   public void xgramSetMode (int mode) {
-    if (mode == xgramMode || switchingCamera || isCapturingVideo()) {
+    if (mode == xgramMode || xgramIsBusy()) {
       return;
     }
     xgramMode = mode;
@@ -786,10 +800,13 @@ public class CameraManagerX extends CameraManager<PreviewView> {
 
   private int xgramFrameGeneration;
   private @Nullable Observer<PreviewView.StreamState> xgramStreamObserver;
+  /** Bound, and the blur still up until the first frame: a mode tapped now would bind again under the same blur. */
+  private boolean xgramAwaitingFrame;
 
   /** Tells the screen its first frame came once the preview streams again (after it went idle), or after 1.5 s. */
   private void xgramWaitFirstFrame () {
     final int generation = ++xgramFrameGeneration;
+    xgramAwaitingFrame = true;
     if (xgramStreamObserver != null) {
       cameraView.getPreviewStreamState().removeObserver(xgramStreamObserver);
     }
@@ -799,6 +816,7 @@ public class CameraManagerX extends CameraManager<PreviewView> {
         return;
       }
       xgramFrameGeneration++;
+      xgramAwaitingFrame = false;
       if (xgramStreamObserver != null) {
         cameraView.getPreviewStreamState().removeObserver(xgramStreamObserver);
         xgramStreamObserver = null;
@@ -814,6 +832,16 @@ public class CameraManagerX extends CameraManager<PreviewView> {
     };
     cameraView.getPreviewStreamState().observe((LifecycleOwner) context, xgramStreamObserver);
     UI.post(fire, 1500);
+  }
+
+  /** Forgets the first frame being waited for (the camera closes): its 1.5 s fallback does nothing then. */
+  private void xgramCancelFirstFrame () {
+    xgramFrameGeneration++;
+    xgramAwaitingFrame = false;
+    if (xgramStreamObserver != null) {
+      cameraView.getPreviewStreamState().removeObserver(xgramStreamObserver);
+      xgramStreamObserver = null;
+    }
   }
 
   private void xgramStopZoom () {

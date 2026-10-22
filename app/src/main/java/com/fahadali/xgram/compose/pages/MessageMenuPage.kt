@@ -81,7 +81,10 @@ fun MessageMenuPage() {
           val hidden = XgramMessageMenu.isHidden(key)
           // Under More: the option leaves the menu and waits under its More option (More itself can't go there).
           // Report and Restrict are there by default, as in Telegram X; Restrict can't leave it (no toggle).
-          val underMore = !hidden && XgramMessageMenu.showsUnderMore(key)
+          // Under a hidden More that the menu leaves out, Report and Restrict go with it: not under More (⋯ off), as
+          // in the menu, and the subtitle says why.
+          val hiddenWithMore = !hidden && XgramMessageMenu.isHiddenWithMore(key)
+          val underMore = !hidden && !hiddenWithMore && XgramMessageMenu.showsUnderMore(key)
           val inMore = if (XgramMessageMenu.canChoosePlace(key)) underMore else null
           // A hidden More still shows while options wait under it (XgramMessageMenu.filter): say so, as the menu does
           val moreKept = key == XgramMessageMenu.KEY_MORE_OPTION && hidden && XgramMessageMenu.hasOptionsUnderMore()
@@ -89,12 +92,20 @@ fun MessageMenuPage() {
             key = key, title = s(option.name), icon = option.icon(), checked = !hidden,
             enabled = reason == 0,
             subtitle = if (reason != 0) s(reason) else if (underMore) s(R.string.XgramMenuUnderMore)
+              else if (hiddenWithMore) s(R.string.XgramMenuHiddenWithMore)
               else if (moreKept) s(R.string.XgramMenuMoreKept) else null,
             inMore = inMore
           )
         }
       },
-      onToggle = { key, shown -> XgramMessageMenu.setHidden(key, !shown) },
+      onToggle = { key, shown ->
+        XgramMessageMenu.setHidden(key, !shown)
+        // Shown again where it is by default, under More (Report, Restrict), while More is hidden: More comes back on to
+        // reach it, as choosing Under More does on the classic page
+        if (shown && XgramMessageMenu.showsUnderMore(key) && XgramMessageMenu.isHidden(XgramMessageMenu.KEY_MORE_OPTION)) {
+          XgramMessageMenu.setUnderMore(key, true)
+        }
+      },
       onMore = { key, inMore ->
         XgramMessageMenu.setUnderMore(key, inMore)
         if (inMore) {

@@ -260,6 +260,9 @@ object XDriveThumbs {
   }
 }
 
+/** How many items [XDriveFeed.loadAll] reads at most. */
+private const val LOAD_ALL_MAX = 4000
+
 /**
  * One XDrive list (a view, a scope, a search): pages of messages from TDLib, newest first. The server filters by kind
  * and searches; a folder's items come from the index. Changes in Saved Messages reload it. UI thread.
@@ -275,6 +278,11 @@ class XDriveFeed(
   val version = mutableIntStateOf(0)
   val loading = mutableStateOf(false)
   val reachedEnd = mutableStateOf(false)
+  /**
+   * Every item has been read once (to the end, or as many as [loadAll] reads), so a sort by name or size can show the
+   * whole list at once. A refresh keeps it (the list stays while it reads again); a reload starts over.
+   */
+  val readAll = mutableStateOf(false)
 
   private val chatId = tdlib.selfChatId()
   private val index = XDriveIndex.of(tdlib)
@@ -313,6 +321,7 @@ class XDriveFeed(
     fromId = 0
     replacing = false
     reachedEnd.value = false
+    readAll.value = false
     loading.value = false
     loadMore()
   }
@@ -426,7 +435,8 @@ class XDriveFeed(
     version.intValue++
     loading.value = false
     reachedEnd.value = end
-    if (loadingAll && !end && items.size < 4000) UI.post { if (gen == generation && loadingAll) loadMore() }
+    if (end || items.size >= LOAD_ALL_MAX) readAll.value = true
+    if (loadingAll && !end && items.size < LOAD_ALL_MAX) UI.post { if (gen == generation && loadingAll) loadMore() }
   }
 
   /** A server search: by kind, by words, or both; paged with nextFromMessageId. */

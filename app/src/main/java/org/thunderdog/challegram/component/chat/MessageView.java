@@ -670,6 +670,21 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       // cache here sees no tag and deletes every file of the message, as before
       return tag == null && menuTag != null && com.fahadali.xgram.chats.XgramMessageMenu.needsMenuTag(ids) ? new com.fahadali.xgram.chats.XgramMessageMenu.MoreTag(menuTag) : tag;
     }
+    // XGram: a More whose page comes out empty (the user hid everything on it) leaves the menu, instead of being a
+    // button that opens nothing. Not for an admin in a group: there More's page first loads the sender's membership
+    // (MessagesController's More), which can add options (Restrict, Remove from group) this menu can't know of yet.
+    final long chatId = msg.getChatId();
+    if (ids.indexOf(R.id.btn_messageMore) != -1 && !(ChatId.isMultiChat(chatId) && !m.tdlib().isChannel(chatId) &&
+      TD.isAdmin(m.tdlib().chatStatus(chatId)) && Td.getSenderId(msg.getMessage().senderId) != chatId)) {
+      IntList pageIds = new IntList(5);
+      IntList pageIcons = new IntList(5);
+      StringList pageStrings = new StringList(5);
+      fillMessageOptionsImpl(m, msg, sender, pageIds, pageIcons, pageStrings, true);
+      com.fahadali.xgram.chats.XgramMessageMenu.filterMore(pageIds, pageIcons, pageStrings, ids, icons, strings);
+      if (pageIds.isEmpty()) {
+        com.fahadali.xgram.chats.XgramMessageMenu.dropMore(ids, icons, strings);
+      }
+    }
     com.fahadali.xgram.chats.XgramMessageMenu.filter(ids, icons, strings); // XGram: only what the user wants
     return tag;
   }

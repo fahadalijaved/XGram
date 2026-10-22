@@ -147,8 +147,11 @@ public class LockHeaderButton extends HeaderButton implements View.OnClickListen
     return false;
   }
 
-  /** XGram: shown while a passcode is set, unless Passcode lock → Lock button in the chat list is off. */
-  private static boolean xgramShown () {
+  /**
+   * XGram: shown while a passcode is set, unless Passcode lock → Lock button in the chat list is off. Public: the chat
+   * list's folder tabs leave room for the button only while it shows (MainController.checkHeaderMargins).
+   */
+  public static boolean xgramShown () {
     return Passcode.instance().isEnabled() && !com.fahadali.xgram.XgramSettings.instance().hideLockButton();
   }
 

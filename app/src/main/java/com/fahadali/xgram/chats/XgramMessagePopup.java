@@ -24,6 +24,7 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.text.style.ClickableSpan;
@@ -168,6 +169,38 @@ public final class XgramMessagePopup {
 
   private interface ReactionClick {
     void onReactionClick (View v, TGReaction reaction, boolean isLongClick);
+  }
+
+  /**
+   * Back while the popup shows goes where it goes with the keyboard closed: to the popup (who viewed or the grid back to
+   * the menu, the menu closes), and the keyboard stays, as the popup keeps it. On Android 13+ (predictive back) the
+   * keyboard's own callback sits above the activity's and took Back first: the keyboard went, the message moved down
+   * with the chat, and the popup closed from any page (its placement lost). This callback, above the keyboard's while
+   * the popup shows, hands Back to the activity's.
+   */
+  private static final class BackAboveKeyboard {
+    private final BaseActivity activity;
+    /** An android.window.OnBackInvokedCallback (Android 13+), while registered. */
+    private @Nullable Object callback;
+
+    BackAboveKeyboard (BaseActivity activity) {
+      this.activity = activity;
+    }
+
+    void register () {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && callback == null) {
+        final android.window.OnBackInvokedCallback c = () -> activity.getOnBackPressedDispatcher().onBackPressed();
+        callback = c;
+        activity.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_OVERLAY, c);
+      }
+    }
+
+    void unregister () {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && callback != null) {
+        activity.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback((android.window.OnBackInvokedCallback) callback);
+        callback = null;
+      }
+    }
   }
 
   /**
@@ -353,9 +386,16 @@ public final class XgramMessagePopup {
     popup.setNeedRootInsets();
     popup.setOverlayStatusBar(true);
     popup.setHideBackground(true); // the root draws the dim, with the message left bright
+    final BackAboveKeyboard backAboveKeyboard = new BackAboveKeyboard(activity);
     popup.setDismissListener(new PopupLayout.DismissListener() {
       @Override
+      public void onPopupDismissPrepare (PopupLayout p) {
+        backAboveKeyboard.unregister(); // closing: Back goes to what is under it again (a sheet an option opened)
+      }
+
+      @Override
       public void onPopupDismiss (PopupLayout p) {
+        backAboveKeyboard.unregister(); // also when it went without closing (the activity was busy)
         Runnable action = afterClose[0];
         afterClose[0] = null;
         root.releaseLists(); // a list that leaves the window does not recycle its rows: their stickers stay alive
@@ -369,7 +409,7 @@ public final class XgramMessagePopup {
       }
     });
     // Back (the gesture, the key) on who viewed or on the reaction grid goes back to the menu, as the page's own Back row
-    // does; on the menu it closes the popup
+    // does; on the menu it closes the popup. With the keyboard open too, which stays (BackAboveKeyboard).
     popup.setBackListener((fromTop, commit) -> {
       if (root.isOnMenu() || popup.isWindowHidden()) {
         return false;
@@ -380,6 +420,22 @@ public final class XgramMessagePopup {
       return true;
     });
     host.onPopupOpen();
+    backAboveKeyboard.register(); // before the show: a popup the busy activity drops is dismissed (and unregisters) in it
+    // Only while it is in the window: the passcode takes it out for a while (PopupLayout.hideTemporarily), and Back
+    // then belongs to the passcode's keyboard (else it went to the activity, which leaves the app on the passcode)
+    popup.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+      @Override
+      public void onViewAttachedToWindow (@NonNull View v) {
+        if (!popup.isWindowHidden()) {
+          backAboveKeyboard.register();
+        }
+      }
+
+      @Override
+      public void onViewDetachedFromWindow (@NonNull View v) {
+        backAboveKeyboard.unregister();
+      }
+    });
     popup.showAnimatedPopupView(root, new PopupLayout.AnimatedPopupProvider() {
       private ValueAnimator animator;
 
@@ -1019,6 +1075,8 @@ public final class XgramMessagePopup {
     private boolean placed, alignEnd, cardBelow, gridBelow;
     /** The pill's top; the visible card's top when it grows down (below the message), else its bottom. */
     private int pillTop, cardEdge, gridEdge;
+    /** How far the pill moved while a grid was open (that grid stays where it is); the next grid starts at the pill. */
+    private int gridLag;
     private int safeTop, safeBottom, safeLeft, safeRight;
 
     Root (Context context, View anchor, TGMessage msg) {
@@ -1088,6 +1146,8 @@ public final class XgramMessagePopup {
         }
         grid = view;
         gridPart = 0f;
+        gridEdge += gridLag;
+        gridLag = 0;
         addView(view);
       }
       this.page = page;
@@ -1145,10 +1205,11 @@ public final class XgramMessagePopup {
         used = pill.getMeasuredHeight() + gap;
       }
       // The card, and who viewed in its place: as tall as the room on the card's side once placed. Above the message the
-      // card stays under the pill, so a row it gains scrolls instead of growing over the reactions; who viewed may take
-      // the pill's band (the pill fades out for it).
+      // card stays under the pill: a line it gains after placement (the emoji pack's name, longer than "Loading…") grows
+      // it up with the pill on top (onLayout) while the pill stays in the safe area, past that its rows scroll instead of
+      // growing over the reactions; who viewed may take the pill's band (the pill fades out for it).
       final int cardRoom = placed ? Math.max(0, cardBelow ? safeBottom - cardEdge : cardEdge - safeTop) : Math.max(0, roomHeight - used);
-      final int menuRoom = placed && !cardBelow && pill != null ? Math.max(0, cardEdge - (pillTop + pill.getMeasuredHeight() + gap)) : cardRoom;
+      final int menuRoom = placed && !cardBelow && pill != null ? Math.max(0, cardEdge - (safeTop + pill.getMeasuredHeight() + gap)) : cardRoom;
       for (View v : new View[] {card, details}) {
         if (v == null) {
           continue;
@@ -1174,6 +1235,20 @@ public final class XgramMessagePopup {
         place(width, height);
       } else if (onPlacementLost != null && Math.abs(safeRect().bottom - placedSafeBottom) > Screen.dp(24f)) {
         placementLost(); // the keyboard came or went: the message is somewhere else now
+      }
+      if (placed && !cardBelow && pill != null && card != null) {
+        // Above the message the pill sits on the card's top, the card's bottom by the message: a card that changed its
+        // height after placement keeps its rows by the message where they are and the pill on its top (as place() put
+        // it), inside the safe area (onMeasure keeps the card under it)
+        final int top = Math.max(safeTop, cardEdge - (card.getMeasuredHeight() - 2 * insetY(card)) - Screen.dp(GAP) - pill.getMeasuredHeight());
+        if (top != pillTop) {
+          if (page != PAGE_GRID) {
+            gridEdge += top - pillTop; // the grid starts where the pill does
+          } else {
+            gridLag += top - pillTop; // an open grid stays where it is; the next one catches up (showPage)
+          }
+          pillTop = top;
+        }
       }
       if (pill != null) {
         layoutAt(pill, pillTop);

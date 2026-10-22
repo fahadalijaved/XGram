@@ -1412,8 +1412,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       recyclerView.setClipToPadding(false);
       recyclerView.setPadding(Screen.dp(12), 0, Screen.dp(12), 0);
       int menuWidth = Screen.dp(44f);
-      if (Passcode.instance().isEnabled()) {
-        menuWidth += Screen.dp(48f);
+      if (org.thunderdog.challegram.navigation.LockHeaderButton.xgramShown()) {
+        menuWidth += Screen.dp(48f); // XGram: only while the lock shows (Lock button in the chat list can hide it)
       }
       if (xgramGhostButton != null && xgramGhostButton.getVisibility() == View.VISIBLE) {
         menuWidth += Screen.dp(49f); // XGram: the ghost mode button, or the last folder tab slides under it
@@ -3180,6 +3180,10 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       UI.post(this::xgramUpdateActivityButton); // XGram: Activity's bell (its settings, or the navigation that may hold it)
     } else if (com.fahadali.xgram.XgramSettings.KEY_HIDE_FAB.equals(key)) {
       UI.post(this::xgramUpdateComposeVisibility);
+    } else if (com.fahadali.xgram.XgramSettings.KEY_HIDE_LOCK_BUTTON.equals(key)) {
+      // XGram: the folder tabs take the lock button's room, or make it again, at once: a chat list that stays on
+      // screen (the two-pane layout) is not prepared again on return from the passcode settings
+      UI.post(this::checkHeaderMargins);
     } else if (com.fahadali.xgram.XgramSettings.KEY_ALL_CHATS_LABEL.equals(key)) {
       UI.post(this::onFoldersAppearanceChanged);
     } else if (com.fahadali.xgram.XgramSettings.KEY_BOTTOM_NAV.equals(key)) {

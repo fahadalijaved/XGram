@@ -2227,6 +2227,9 @@ public abstract class TGMessage implements InvalidateContentProvider, TdlibDeleg
     if ((flags & FLAG_HEADER_ENABLED) != 0) {
       // Avatar
       if (needAvatar() && !xgramAvatarAtBottom()) {
+        // XGram: laid out here too (only a setBounds), as the bottom avatar is: right after Avatar next to the last
+        // message is turned off, the view isn't measured again and the bounds still sit at the bubble's bottom
+        layoutAvatar(view, avatarReceiver);
         float cx = avatarReceiver.centerX();
         float cy = avatarReceiver.centerY();
         if (useFullWidth()) {

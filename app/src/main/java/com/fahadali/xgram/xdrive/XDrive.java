@@ -136,31 +136,37 @@ public final class XDrive {
 
   /**
    * Saved Messages opens as the chat from now on (the switch was just turned on): the chat replaces XDrive, so back
-   * from it goes where XDrive came from, not to XDrive. XDrive leaves the stack once the chat covers it.
+   * from it goes where XDrive came from, not to XDrive. Opened from that chat (its header's cloud), XDrive just goes
+   * back to it; otherwise the chat is pushed and XDrive leaves the stack once the chat has the focus (as TdlibUi does
+   * with the passcode screen), not as the push starts: XDrive would go blank under the chat sliding in, and the
+   * screen under it would lose its view when the push ends.
    */
   public static void openChatInstead (ViewController<?> xdrive) {
     final org.thunderdog.challegram.telegram.Tdlib tdlib = xdrive.tdlib();
     final long chatId = tdlib.selfChatId();
-    xdrive.addFocusListener(new ViewController.FocusStateListener() {
-      @Override
-      public void onFocusStateChanged (ViewController<?> c, boolean isFocused) {
-        if (isFocused) {
-          return;
-        }
-        c.removeFocusListener(this);
-        NavigationController navigation = c.context().navigation();
-        if (c.isDestroyed() || navigation == null) {
-          return;
-        }
-        ViewController<?> top = navigation.getCurrentStackItem();
-        // Only when what covers XDrive is its chat (not anything else opened meanwhile)
-        if (top != c && top instanceof org.thunderdog.challegram.ui.MessagesController && ((org.thunderdog.challegram.ui.MessagesController) top).getChatId() == chatId
-          && navigation.getStack().indexOf(c) != -1) {
-          navigation.getStack().destroy(c);
-        }
+    // A system toast: XDrive's own snackbar goes away with it
+    org.thunderdog.challegram.tool.UI.showToast(org.thunderdog.challegram.core.Lang.getString(R.string.XgramXDriveOpensChatOn), android.widget.Toast.LENGTH_SHORT);
+    NavigationController navigation = xdrive.context().navigation();
+    if (navigation != null && navigation.getCurrentStackItem() == xdrive) {
+      ViewController<?> previous = navigation.getPreviousStackItem();
+      if (previous instanceof org.thunderdog.challegram.ui.MessagesController && !((org.thunderdog.challegram.ui.MessagesController) previous).inPreviewMode()
+        && ((org.thunderdog.challegram.ui.MessagesController) previous).getChatId() == chatId && navigation.navigateBack()) {
+        return;
       }
-    });
-    tdlib.ui().openChat(xdrive, chatId, new org.thunderdog.challegram.telegram.TdlibUi.ChatOpenParameters().keepStack().xgramSkipDriveRouting());
+    }
+    tdlib.ui().openChat(xdrive, chatId, new org.thunderdog.challegram.telegram.TdlibUi.ChatOpenParameters().keepStack().xgramSkipDriveRouting().onDone(() -> {
+      NavigationController nav = xdrive.context().navigation();
+      ViewController<?> top = nav != null ? nav.getCurrentStackItem() : null;
+      // Only when what was pushed over XDrive is its chat (it wasn't, if the navigation was busy)
+      if (top != null && top != xdrive && top instanceof org.thunderdog.challegram.ui.MessagesController && ((org.thunderdog.challegram.ui.MessagesController) top).getChatId() == chatId) {
+        top.addOneShotFocusListener(() -> {
+          int at = top.stackSize() - 2;
+          if (at >= 0 && top.stackItemAt(at) == xdrive) {
+            top.destroyStackItemAt(at);
+          }
+        });
+      }
+    }));
   }
 
   /** Whether [c] is XDrive's screen. */

@@ -36,6 +36,8 @@ fun InputButtonsPage() {
         }
       }
     }
+    // The note is about the buttons above (commands, camera, scheduled), so it stays under them
+    description(R.string.XgramInputButtonsNote)
     group {
       switch(
         R.id.btn_xgramInputAttachTyping, s(R.string.XgramInputAttachTyping), subtitle = s(R.string.XgramInputAttachTypingInfo),
@@ -44,6 +46,5 @@ fun InputButtonsPage() {
         settings.setInputAttachWhileTyping(it)
       }
     }
-    description(R.string.XgramInputButtonsNote)
   }
 }

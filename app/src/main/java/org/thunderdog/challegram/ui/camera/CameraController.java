@@ -1970,6 +1970,9 @@ public class CameraController extends ViewController<Void> implements CameraDele
   public void onUiBlocked (boolean isBlocked) {
     isUiBlocked = isBlocked;
     context().setCameraBlocked(isBlocked);
+    if (xgramControls != null) {
+      xgramControls.setBlocked(isBlocked); // XGram: the modes wait while a photo is on its way or a video records
+    }
     if (!isBlocked && releaseFakeFlash) {
       releaseFakeFlash = false;
       cameraOverlayView.releaseFakeFlash(false);

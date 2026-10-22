@@ -102,7 +102,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 import org.thunderdog.challegram.R
-import org.thunderdog.challegram.core.Lang
 
 /**
  * XDrive: Saved Messages as a drive, in four tabs (Home, Folders, Media, Files) under a search bar. Home leads to
@@ -130,6 +129,7 @@ fun XDrivePage() {
     snapshotFlow { pager.settledPage }.collect {
       state.tab = XDriveTab.entries[it]
       state.selected.clear() // a selection belongs to the tab it was made on
+      state.fabShown = true // hidden by a scroll on the tab before (this one may not scroll at all)
     }
   }
   val motion = MaterialTheme.motionScheme
@@ -148,8 +148,9 @@ fun XDrivePage() {
           // No layer closes (a selection, the menu): nothing to shrink away
           state.backProgress = 0f
         } else {
-          // The layer resets it as it finishes closing; in case it never shows
-          scope.launch {
+          // The layer resets it as it finishes closing; in case it never does (a new gesture stops this, see onStart)
+          state.backJob?.cancel()
+          state.backJob = scope.launch {
             delay(800)
             state.backProgress = 0f
             state.backLayer = null
@@ -163,6 +164,9 @@ fun XDrivePage() {
   val progressListener = remember(state) {
     object : XgramBackProgress {
       override fun onStart(fromRightEdge: Boolean) {
+        // What the last gesture left running (its cancel animation, its reset) would take this one's layer away
+        state.backJob?.cancel()
+        state.backJob = null
         state.backFromRight = fromRightEdge
         // The layer this gesture closes, fixed for its whole length
         state.backLayer = state.backLayerNow()
@@ -175,7 +179,8 @@ fun XDrivePage() {
       }
 
       override fun onCancel() {
-        scope.launch {
+        state.backJob?.cancel()
+        state.backJob = scope.launch {
           animate(state.backProgress, 0f) { value, _ -> state.backProgress = value }
           state.backLayer = null
         }
@@ -262,7 +267,8 @@ fun XDrivePage() {
       RevealLayer(state, LAYER_SEARCH, visible = state.searching, originKey = { if (state.folder == null) BOUNDS_SEARCH else null }) {
         SearchScreen(state)
       }
-      RevealLayer(state, LAYER_ORGANIZE, visible = state.organizing, originKey = { state.organizeOrigin }) {
+      // A run that ended starts over only once its layer is gone, so the layer doesn't change while it shrinks away
+      RevealLayer(state, LAYER_ORGANIZE, visible = state.organizing, originKey = { state.organizeOrigin }, onHidden = { state.organizeHidden() }) {
         XDriveOrganizeScreen(
           state,
           onClose = { state.closeOrganize() },
@@ -406,8 +412,7 @@ private fun MainMenu(state: XDriveState, expanded: Boolean, onDismiss: () -> Uni
           onDismiss()
           XgramSettings.instance().setXdriveOpensChat(checked)
           if (checked) {
-            state.toast(Lang.getString(R.string.XgramXDriveOpensChatOn))
-            // The chat takes XDrive's place: back from it doesn't come here
+            // The chat takes XDrive's place: back from it doesn't come here (it says so in a toast: this screen goes)
             com.fahadali.xgram.xdrive.XDrive.openChatInstead(host.controller)
           }
         },

@@ -18,6 +18,7 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.fahadali.xgram.XgramSettings;
@@ -28,9 +29,10 @@ import org.thunderdog.challegram.component.base.SettingView;
 import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.DoubleTextWrapper;
 import org.thunderdog.challegram.data.TD;
-import org.thunderdog.challegram.telegram.ChatListListener;
+import org.thunderdog.challegram.support.ViewSupport;
 import org.thunderdog.challegram.telegram.Tdlib;
-import org.thunderdog.challegram.telegram.TdlibChatListSlice;
+import org.thunderdog.challegram.telegram.TdlibChatList;
+import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.tool.Screen;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.ui.ListItem;
@@ -38,12 +40,16 @@ import org.thunderdog.challegram.ui.RecyclerViewController;
 import org.thunderdog.challegram.ui.SettingsAdapter;
 import org.thunderdog.challegram.v.CustomRecyclerView;
 import org.thunderdog.challegram.widget.CheckBoxView;
+import org.thunderdog.challegram.widget.ListInfoView;
 import org.thunderdog.challegram.widget.SmallChatView;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
+import me.vkryl.core.StringUtils;
 import tgx.td.ChatId;
 import tgx.td.ChatPosition;
 import tgx.td.Td;
@@ -55,15 +61,29 @@ import tgx.td.TdConstants;
  * Add as admin (channels always add bots as admins) and All admin rights: every right the user can give, or else the
  * rights the bot asks for (as Telegram X's own admin editor proposes them). The Done button adds it to each chosen chat
  * in turn and says how it went.
+ * <p>
+ * The chats come from the main list, then the archive, read a chunk at a time: each chunk's rows show as soon as it is
+ * read. Search filters the chats by title or username (and reads on to the end while a query is typed).
  */
 public final class XgramAddBotController extends RecyclerViewController<Long> implements View.OnClickListener {
+  /** The chat lists read in turn: archived groups and channels can take the bot too. */
+  private static final TdApi.ChatList[] SOURCES = {ChatPosition.CHAT_LIST_MAIN, ChatPosition.CHAT_LIST_ARCHIVE};
+  /** Chats asked of TDLib at a time: most can't take the bot, so a big chunk finds the few that can sooner. */
+  private static final int LOAD_CHUNK = 100;
+  /** Rows wanted before reading waits for the list to be scrolled near its end. */
+  private static final int PAGE_ROWS = 20;
+
   private SettingsAdapter adapter;
-  private @Nullable TdlibChatListSlice slice;
-  private boolean loadingMore, botCanJoinGroups = true, adding;
+  private int sourceIndex;
+  private boolean loading, allLoaded, botCanJoinGroups = true, adding;
   private @Nullable TdApi.BotInfo botInfo;
   private final LinkedHashSet<Long> selected = new LinkedHashSet<>();
+  /** Every chat found that can take the bot, in the order found; the rows shown are the ones matching the search. */
+  private final List<ListItem> chatRows = new ArrayList<>();
+  private final Set<Long> foundChatIds = new HashSet<>();
+  private String searchQuery = "";
   private final int chatsHeaderId = ViewCompat.generateViewId(), chatsFooterId = ViewCompat.generateViewId();
-  private int chatCount;
+  private final int loadingRowId = ViewCompat.generateViewId(), emptyRowId = ViewCompat.generateViewId();
   private boolean doneIconSet;
 
   public XgramAddBotController (Context context, Tdlib tdlib) {
@@ -141,6 +161,15 @@ public final class XgramAddBotController extends RecyclerViewController<Long> im
           checkBox.setChecked(selected.contains(item.getLongId()), isUpdate);
         }
       }
+
+      @Override
+      protected void setInfo (ListItem item, int position, ListInfoView infoView) {
+        // The loading row, a row of the chats' card: Expressive draws its tile, the classic card needs the filling
+        if (!com.fahadali.xgram.appearance.XgramExpressive.isEnabled() && infoView.getBackground() == null) {
+          ViewSupport.setThemedBackground(infoView, ColorId.filling, XgramAddBotController.this);
+        }
+        infoView.showProgress();
+      }
     };
     ArrayList<ListItem> items = new ArrayList<>();
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
@@ -154,6 +183,9 @@ public final class XgramAddBotController extends RecyclerViewController<Long> im
     items.add(new ListItem(ListItem.TYPE_HEADER, 0, 0, R.string.XgramAddBotChats));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP, chatsHeaderId));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM, chatsFooterId));
+    // Room for the Done button (56dp and 16dp around it) under the last row: without it, the button covers the last
+    // chat's checkbox, and a tap there adds the bot
+    items.add(new ListItem(ListItem.TYPE_PADDING).setHeight(Screen.dp(56f) + Screen.dp(16f) * 2));
     adapter.setItems(items, false);
     recyclerView.setAdapter(adapter);
 
@@ -172,87 +204,198 @@ public final class XgramAddBotController extends RecyclerViewController<Long> im
       });
     }
 
-    final int chunk = Screen.calculateLoadingItems(Screen.dp(64f), 25);
-    loadingMore = true;
-    slice = tdlib.chatList(ChatPosition.CHAT_LIST_MAIN).slice(this::accepts, true, null);
-    slice.initializeList(new ChatListListener() { }, this::onChatsLoaded, chunk, () -> runOnUiThreadOptional(() -> onChunkLoaded(chunk)));
+    loadMore();
     recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
       @Override
       public void onScrolled (@NonNull RecyclerView view, int dx, int dy) {
-        if (dy != 0 && !loadingMore && slice != null && slice.canLoad()) {
-          int last = ((androidx.recyclerview.widget.LinearLayoutManager) view.getLayoutManager()).findLastVisibleItemPosition();
-          if (last + 15 >= adapter.getItemCount() - 1) {
-            loadMore(chunk);
-          }
+        // Also called after a layout (dx = dy = 0), so a page the rows don't fill reads on by itself. Posted: a scroll
+        // callback may run inside a layout, where the list can't change.
+        if (!loading && !allLoaded && isNearEnd()) {
+          UI.post(() -> loadMore());
         }
       }
     });
   }
 
-  private void loadMore (int chunk) {
-    if (slice == null || !slice.canLoad()) {
+  // Loading
+
+  /** Reads on, unless reading already or everything is read: the rows of each chunk show as soon as it is read. */
+  private void loadMore () {
+    if (loading || allLoaded || isDestroyed()) {
       return;
     }
-    loadingMore = true;
-    slice.loadMore(chunk, () -> runOnUiThreadOptional(() -> onChunkLoaded(chunk)));
+    loading = true;
+    updateStateRows();
+    readChats(tdlib.chatList(SOURCES[sourceIndex]));
   }
 
-  /**
-   * A chunk of the chat list was read. Most chats can't take the bot, so a chunk can add few rows or none: the next
-   * one is read at once while the list is short (no scroll would ask for it), until the list ends.
-   */
-  private void onChunkLoaded (int chunk) {
-    loadingMore = false;
-    if (isDestroyed() || slice == null) {
-      return;
-    }
-    if (slice.canLoad()) {
-      if (chatCount < 20) {
-        loadMore(chunk);
+  /** The chats of {@code list} TDLib has loaded so far that can take the bot. */
+  private void readChats (TdlibChatList list) {
+    list.getChats(this::accepts, entries -> {
+      final boolean endReached = list.isEndReached();
+      final List<TdApi.Chat> chats = new ArrayList<>(entries.size());
+      for (TdlibChatList.Entry entry : entries) {
+        chats.add(entry.chat);
       }
-    } else if (chatCount == 0) {
-      showEmpty();
-    }
-  }
-
-  private void onChatsLoaded (List<TdlibChatListSlice.Entry> entries) {
-    if (entries.isEmpty()) {
-      return;
-    }
-    final List<ListItem> rows = new ArrayList<>(entries.size());
-    for (TdlibChatListSlice.Entry entry : entries) {
-      DoubleTextWrapper wrapper = new DoubleTextWrapper(tdlib, entry.chat, false, true);
-      wrapper.setAdminSignVisible(false, false);
-      wrapper.setForcedSubtitle(Lang.getString(tdlib.isChannel(entry.chat.id) ? R.string.Channel : R.string.Group));
-      rows.add(new ListItem(ListItem.TYPE_CHAT_SMALL_SELECTABLE, R.id.chat).setData(wrapper).setLongId(entry.chat.id));
-    }
-    runOnUiThreadOptional(() -> {
-      if (isDestroyed()) {
-        return;
-      }
-      int at = adapter.indexOfViewById(chatsFooterId);
-      if (at == -1) {
-        return;
-      }
-      adapter.addItems(at, rows.toArray(new ListItem[0]));
-      chatCount += rows.size();
+      runOnUiThreadOptional(() -> onChatsRead(list, chats, endReached));
     });
   }
 
-  private void showEmpty () {
-    int at = adapter.indexOfViewById(chatsFooterId);
-    if (at != -1) {
-      adapter.addItems(at + 1, new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, botCanJoinGroups ? R.string.XgramAddBotEmpty : R.string.XgramAddBotEmptyChannels));
+  /**
+   * Most chats can't take the bot, so a chunk can add few rows or none: the next one is read at once while rows are
+   * wanted (a short list, the end of the list in sight, a search), then the archive once the main list ends.
+   */
+  private void onChatsRead (TdlibChatList list, List<TdApi.Chat> chats, boolean endReached) {
+    addChats(chats);
+    if (endReached) {
+      if (++sourceIndex < SOURCES.length) {
+        readChats(tdlib.chatList(SOURCES[sourceIndex]));
+        return;
+      }
+      allLoaded = true;
+    } else if (!searchQuery.isEmpty() || rowsEnd() - rowsStart() < PAGE_ROWS || isNearEnd()) {
+      list.loadMore(LOAD_CHUNK, () -> readChats(list));
+      return;
+    }
+    loading = false;
+    updateStateRows();
+  }
+
+  private boolean isNearEnd () {
+    final RecyclerView recyclerView = getRecyclerView();
+    final RecyclerView.LayoutManager manager = recyclerView != null ? recyclerView.getLayoutManager() : null;
+    if (!(manager instanceof LinearLayoutManager)) {
+      return true;
+    }
+    final int last = ((LinearLayoutManager) manager).findLastVisibleItemPosition();
+    return last == RecyclerView.NO_POSITION || last + 15 >= adapter.getItemCount() - 1;
+  }
+
+  /** Rows for the chats not found before, the ones matching the search shown under the rows already there. */
+  private void addChats (List<TdApi.Chat> chats) {
+    final List<ListItem> shown = new ArrayList<>();
+    for (TdApi.Chat chat : chats) {
+      if (!foundChatIds.add(chat.id)) {
+        continue;
+      }
+      DoubleTextWrapper wrapper = new DoubleTextWrapper(tdlib, chat, false, true);
+      wrapper.setAdminSignVisible(false, false);
+      wrapper.setForcedSubtitle(Lang.getString(tdlib.isChannel(chat.id) ? R.string.Channel : R.string.Group));
+      ListItem row = new ListItem(ListItem.TYPE_CHAT_SMALL_SELECTABLE, R.id.chat).setData(wrapper).setLongId(chat.id);
+      chatRows.add(row);
+      if (matchesSearch(chat.id)) {
+        shown.add(row);
+      }
+    }
+    if (!shown.isEmpty()) {
+      adapter.addItems(rowsEnd(), shown.toArray(new ListItem[0]));
+    }
+  }
+
+  /** Where the first chat row goes: under the top of the chats' card. */
+  private int rowsStart () {
+    return adapter.indexOfViewById(chatsHeaderId) + 1;
+  }
+
+  /** Just after the last chat row: the loading row, or else the bottom of the chats' card. */
+  private int rowsEnd () {
+    final int loadingAt = adapter.indexOfViewById(loadingRowId);
+    return loadingAt != -1 ? loadingAt : adapter.indexOfViewById(chatsFooterId);
+  }
+
+  /**
+   * The loading row in the chats' card while reading; once everything is read and no row shows, why: no chat can take
+   * the bot, or none matches the search.
+   */
+  private void updateStateRows () {
+    final int loadingAt = adapter.indexOfViewById(loadingRowId);
+    if (loading && loadingAt == -1) {
+      adapter.addItems(adapter.indexOfViewById(chatsFooterId), new ListItem(ListItem.TYPE_LIST_INFO_VIEW, loadingRowId));
+    } else if (!loading && loadingAt != -1) {
+      adapter.removeItem(loadingAt);
+    }
+    final int emptyRes;
+    if (loading || !allLoaded || rowsEnd() > rowsStart()) {
+      emptyRes = 0;
+    } else if (!searchQuery.isEmpty()) {
+      emptyRes = R.string.NothingFound;
+    } else {
+      emptyRes = botCanJoinGroups ? R.string.XgramAddBotEmpty : R.string.XgramAddBotEmptyChannels;
+    }
+    int emptyAt = adapter.indexOfViewById(emptyRowId);
+    if (emptyAt != -1 && adapter.getItems().get(emptyAt).getStringResource() != emptyRes) {
+      adapter.removeItem(emptyAt);
+      emptyAt = -1;
+    }
+    if (emptyRes != 0 && emptyAt == -1) {
+      adapter.addItems(adapter.indexOfViewById(chatsFooterId) + 1, new ListItem(ListItem.TYPE_DESCRIPTION, emptyRowId, 0, emptyRes));
+    }
+  }
+
+  // Search: the chats found whose title or username has the query (everything is read while there is one)
+
+  @Override
+  protected int getMenuId () {
+    return R.id.menu_search;
+  }
+
+  @Override
+  protected int getSearchMenuId () {
+    return R.id.menu_clear;
+  }
+
+  @Override
+  protected void onSearchInputChanged (String query) {
+    super.onSearchInputChanged(query);
+    // Not Lang.lowercase: it keeps the case in languages whose UI text isn't lowercased, and the search would then
+    // tell "news" from "News"
+    final String trimmed = query.trim().toLowerCase();
+    if (!trimmed.equals(searchQuery)) {
+      searchQuery = trimmed;
+      showMatchingRows();
+      loadMore();
     }
   }
 
   @Override
-  public void destroy () {
-    super.destroy();
-    if (slice != null) {
-      slice.performDestroy();
-      slice = null;
+  protected void onLeaveSearchMode () {
+    super.onLeaveSearchMode();
+    if (!searchQuery.isEmpty()) {
+      searchQuery = "";
+      showMatchingRows();
     }
+  }
+
+  private boolean matchesSearch (long chatId) {
+    if (searchQuery.isEmpty()) {
+      return true;
+    }
+    final TdApi.Chat chat = tdlib.chat(chatId);
+    if (chat == null) {
+      return false;
+    }
+    final String title = tdlib.chatTitle(chat);
+    if (title != null && title.toLowerCase().contains(searchQuery)) {
+      return true;
+    }
+    final String username = tdlib.chatUsername(chat);
+    return !StringUtils.isEmpty(username) && username.toLowerCase().contains(searchQuery);
+  }
+
+  /** The rows of the chats found that match the search, in the order found (the ticks stay, chosen or not). */
+  private void showMatchingRows () {
+    final int start = rowsStart(), end = rowsEnd();
+    if (end > start) {
+      adapter.removeRange(start, end - start);
+    }
+    final List<ListItem> shown = new ArrayList<>();
+    for (ListItem row : chatRows) {
+      if (matchesSearch(row.getLongId())) {
+        shown.add(row);
+      }
+    }
+    adapter.addItems(start, shown.toArray(new ListItem[0]));
+    updateStateRows();
   }
 
   @Override
@@ -292,29 +435,43 @@ public final class XgramAddBotController extends RecyclerViewController<Long> im
     adding = true;
     setDoneProgress(true);
     final List<Long> chats = new ArrayList<>(selected);
-    addNext(chats, 0, new ArrayList<>(), new ArrayList<>());
+    addNext(chats, 0, new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
   }
 
-  /** One chat after another (no bursts of requests); then what happened. */
-  private void addNext (List<Long> chats, int index, List<Long> added, List<String> failures) {
+  /**
+   * One chat after another (no bursts of requests); then what happened. {@code memberOnly}: the chats it joined as a
+   * member while Add as admin is on (where this user can't add admins).
+   */
+  private void addNext (List<Long> chats, int index, List<Long> added, List<Long> memberOnly, List<String> failures) {
     if (isDestroyed()) {
       return;
     }
     if (index >= chats.size()) {
       adding = false;
       setDoneProgress(false);
-      onAddFinished(added, failures);
+      onAddFinished(added, memberOnly, failures);
       return;
     }
     final long chatId = chats.get(index);
     final List<TdApi.Function<?>> functions = functionsFor(chatId);
+    boolean promotes = false;
+    for (TdApi.Function<?> function : functions) {
+      if (function instanceof TdApi.SetChatMemberStatus) {
+        promotes = true;
+        break;
+      }
+    }
+    final boolean adminMissed = !promotes && XgramSettings.instance().addBotAsAdmin();
     runAll(functions, 0, error -> runOnUiThreadOptional(() -> {
       if (error != null) {
         failures.add(Lang.getString(R.string.XgramAddBotFailed, tdlib.chatTitle(chatId), TD.toErrorString(error)));
       } else {
         added.add(chatId);
+        if (adminMissed) {
+          memberOnly.add(chatId);
+        }
       }
-      addNext(chats, index + 1, added, failures);
+      addNext(chats, index + 1, added, memberOnly, failures);
     }));
   }
 
@@ -328,7 +485,7 @@ public final class XgramAddBotController extends RecyclerViewController<Long> im
       return;
     }
     tdlib.send(functions.get(index), (result, error) -> {
-      if (error != null && !(index == 0 && functions.size() > 1 && isAlreadyMember(error))) {
+      if (error != null && !(isMemberAdd(functions.get(index)) && isAlreadyMember(error))) {
         done.onDone(error);
       } else {
         runAll(functions, index + 1, done);
@@ -336,7 +493,14 @@ public final class XgramAddBotController extends RecyclerViewController<Long> im
     });
   }
 
-  /** Adding it as a member before the promotion: being one already is fine. */
+  private static boolean isMemberAdd (TdApi.Function<?> function) {
+    return function instanceof TdApi.AddChatMember || function instanceof TdApi.AddChatMembers;
+  }
+
+  /**
+   * Adding it as a member when it is one already is fine: before the promotion, and as all there was to do (a group
+   * it is in already, or a retry).
+   */
   private static boolean isAlreadyMember (TdApi.Error error) {
     return error.message != null && error.message.contains("USER_ALREADY_PARTICIPANT");
   }
@@ -404,8 +568,15 @@ public final class XgramAddBotController extends RecyclerViewController<Long> im
     return added.size() == 1 ? Lang.getString(R.string.XgramAddBotDoneOne, tdlib.chatTitle(added.get(0))) : Lang.getString(R.string.XgramAddBotDoneMany, added.size());
   }
 
-  private void onAddFinished (List<Long> added, List<String> failures) {
-    if (failures.isEmpty()) {
+  private void onAddFinished (List<Long> added, List<Long> memberOnly, List<String> failures) {
+    // The chats it was added to are done: unticked, so Done after a failure tries only the others again
+    for (long chatId : added) {
+      if (selected.remove(chatId)) {
+        uncheckRow(chatId);
+      }
+    }
+    setDoneVisible(!selected.isEmpty(), true);
+    if (failures.isEmpty() && memberOnly.isEmpty()) {
       final String text = addedText(added);
       if (!com.fahadali.xgram.appearance.XgramSnackbar.show(text, android.widget.Toast.LENGTH_SHORT)) {
         UI.showToast(text, android.widget.Toast.LENGTH_SHORT);
@@ -417,12 +588,39 @@ public final class XgramAddBotController extends RecyclerViewController<Long> im
     if (!added.isEmpty()) {
       b.append(addedText(added)).append("\n\n");
     }
-    for (String failure : failures) {
+    List<String> notes = new ArrayList<>(memberOnly.size() + failures.size());
+    for (long chatId : memberOnly) {
+      notes.add(Lang.getString(R.string.XgramAddBotMemberOnly, tdlib.chatTitle(chatId)));
+    }
+    notes.addAll(failures);
+    for (String note : notes) {
       if (b.length() > 0 && b.charAt(b.length() - 1) != '\n') {
         b.append('\n');
       }
-      b.append(failure);
+      b.append(note);
     }
-    openAlert(R.string.XgramAddBotTitle, b.toString());
+    android.app.AlertDialog dialog = openAlert(R.string.XgramAddBotTitle, b.toString());
+    if (failures.isEmpty() && dialog != null) {
+      // Added everywhere, some as a member only: back to the bot once that is read, as without the note
+      dialog.setOnDismissListener(d -> {
+        if (!isDestroyed()) {
+          navigateBack();
+        }
+      });
+    }
+  }
+
+  private void uncheckRow (long chatId) {
+    final int position = adapter.indexOfViewByLongId(chatId);
+    if (position == -1) {
+      return;
+    }
+    final RecyclerView.LayoutManager manager = getRecyclerView().getLayoutManager();
+    final View view = manager != null ? manager.findViewByPosition(position) : null;
+    if (view instanceof ViewGroup && ((ViewGroup) view).getChildCount() > 1 && ((ViewGroup) view).getChildAt(1) instanceof CheckBoxView) {
+      ((CheckBoxView) ((ViewGroup) view).getChildAt(1)).setChecked(false, true);
+    } else {
+      adapter.notifyItemChanged(position);
+    }
   }
 }

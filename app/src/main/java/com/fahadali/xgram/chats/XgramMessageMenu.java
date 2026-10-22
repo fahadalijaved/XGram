@@ -272,6 +272,15 @@ public final class XgramMessageMenu {
   }
 
   /**
+   * Whether a shown option waits under a More the menu leaves out: More hidden, with no option the user put under it to
+   * keep it ({@link #filter}). Telegram X's options of More's page (Report, Restrict) then go with it, so both settings
+   * pages say so instead of "under More".
+   */
+  public static boolean isHiddenWithMore (String key) {
+    return showsUnderMore(key) && isHidden(KEY_MORE_OPTION) && !hasOptionsUnderMore();
+  }
+
+  /**
    * The settings pages' choice between the menu and More. Telegram X's options of More's page are there by default, so
    * for them only the wish to have them in the menu is stored. Putting an option under More turns a hidden More back
    * on: the menu needs it to reach the option, and the settings pages then show More as the menu does.
@@ -412,12 +421,35 @@ public final class XgramMessageMenu {
       keptIcons.append(iconArray[i]);
       keptNames.append(names[i]);
     }
-    if (keptIds.isEmpty()) {
-      order(ids, icons, strings); // never an empty page: Telegram X's own options, as filter() keeps a menu
+    // Everything on the page hidden: it stays empty rather than bringing the hidden options back. MessagesController's
+    // More opens no page then, and the menu leaves such a More out (dropMore)
+    replace(ids, icons, strings, keptIds, keptIcons, keptNames);
+    if (!ids.isEmpty()) {
+      order(ids, icons, strings);
+    }
+  }
+
+  /**
+   * Leaves Telegram X's More out of a menu (before {@link #filter}) whose page came out empty in {@link #filterMore}:
+   * the user hid everything on it, so More would open nothing.
+   */
+  public static void dropMore (IntList ids, IntList icons, StringList strings) {
+    String[] names = strings.get();
+    int count = ids.size();
+    int index = ids.indexOf(R.id.btn_messageMore);
+    if (index == -1 || icons.size() != count || names.length != count) {
       return;
     }
+    IntList keptIds = new IntList(count), keptIcons = new IntList(count);
+    StringList keptNames = new StringList(count);
+    for (int i = 0; i < count; i++) {
+      if (i != index) {
+        keptIds.append(ids.get(i));
+        keptIcons.append(icons.get(i));
+        keptNames.append(names[i]);
+      }
+    }
     replace(ids, icons, strings, keptIds, keptIcons, keptNames);
-    order(ids, icons, strings);
   }
 
   /** Whether the page More opens has an option that needs the menu's tag (Save: the files the menu found downloaded). */

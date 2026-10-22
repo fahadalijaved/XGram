@@ -81,11 +81,12 @@ public final class XgramInputButtonsController extends RecyclerViewController<Vo
       items.add(new ListItem(ListItem.TYPE_RADIO_SETTING, R.id.btn_xgramInputButton, ICONS[i], NAMES[i]).setData(KEYS[i]));
     }
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
+    // The note is about the buttons above (commands, camera, scheduled), so it stays under them
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramInputButtonsNote));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramInputAttachTyping, R.drawable.deproko_baseline_attach_26, R.string.XgramInputAttachTyping)
       .setStringValue(Lang.getString(R.string.XgramInputAttachTypingInfo)));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramInputButtonsNote));
     return items;
   }
 
