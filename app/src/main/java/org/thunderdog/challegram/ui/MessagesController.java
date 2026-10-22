@@ -2009,6 +2009,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
    * XGram XDrive: Saved Messages on one of its media tabs (1 + the filter's place in ProfileController.getFiltersOrder();
    * photos and videos: the Photo tab when they are separate). Call after getValue(), before the screen shows.
    */
+  /** XGram: XDrive from its chat: back to it when it is right under this chat, a new one otherwise. */
+  private void xgramOpenXDrive () {
+    ViewController<?> previous = navigationController != null ? navigationController.getPreviousStackItem() : null;
+    if (com.fahadali.xgram.xdrive.XDrive.isScreen(previous)) {
+      navigateBack();
+    } else {
+      com.fahadali.xgram.xdrive.XDrive.open(this);
+    }
+  }
+
   public void xgramSelectMediaTab (int filterConstructor) {
     if (pagerContentView == null) {
       return;
@@ -2578,13 +2588,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
         navigateTo(c);
       }
     } else if (id == R.id.btn_xgramOpenXDrive) {
-      // XGram: back to XDrive when it is right under this chat, a new one otherwise
-      ViewController<?> previous = navigationController != null ? navigationController.getPreviousStackItem() : null;
-      if (com.fahadali.xgram.xdrive.XDrive.isScreen(previous)) {
-        navigateBack();
-      } else {
-        com.fahadali.xgram.xdrive.XDrive.open(this);
-      }
+      xgramOpenXDrive();
     } else if (id == R.id.btn_xgramSavedByChat) {
       navigateTo(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib)); // XGram
     } else if (id == R.id.btn_xgramOpenCommunity) {
@@ -4017,7 +4021,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
     if (getChatId() != 0) {
       if (isSelfChat()) {
-        return R.id.menu_search;
+        // XGram: with XDrive on, its button sits next to search (this header has no ⋮)
+        return com.fahadali.xgram.xdrive.XDrive.on() ? R.id.menu_xgramXDrive : R.id.menu_search;
       }
       if (isSecretChat()) {
         return R.id.menu_secretChat;
@@ -4096,6 +4101,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
     } else if (id == R.id.menu_clear) {
       header.addClearButton(menu, this).setColorId(ColorId.headerLightIcon);
     } else if (id == R.id.menu_search) {
+      header.addSearchButton(menu, this);
+    } else if (id == R.id.menu_xgramXDrive) {
+      header.addButton(menu, R.id.btn_xgramOpenXDrive, R.drawable.baseline_cloud_24, getHeaderIconColorId(), this, Screen.dp(52f));
       header.addSearchButton(menu, this);
     } else if (id == R.id.menu_chat) {
       HeaderButton btn = header.addButton(menu, R.id.menu_btn_viewScheduled, R.drawable.baseline_date_range_24, getHeaderIconColorId(), this, Screen.dp(52f));
@@ -4251,6 +4259,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
       } else {
         clearChatSearchInput();
       }
+    } else if (id == R.id.btn_xgramOpenXDrive) {
+      xgramOpenXDrive();
     } else if (id == R.id.menu_btn_search) {
       if (manager.isReadyToSearch()) {
         hideBottomHint();
