@@ -150,6 +150,7 @@
   <string name="XgramXDriveOpenXDrive">XDrive</string>
   <string name="XgramXDriveEngineNanoName">Gemini Nano</string>
   <string name="XgramXDriveItemsOne">%1$s item</string>
+  <string name="XgramXDriveVoiceShort">Voice</string>
   <string name="XgramXDriveItemsMany">%1$s items</string>
   <string name="XgramXDriveSelect">Select</string>
   <string name="XgramXDriveDeselect">Deselect</string>

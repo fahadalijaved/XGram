@@ -47,7 +47,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
@@ -71,6 +70,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -648,7 +654,7 @@ private fun sortSize(message: TdApi.Message): Long = XDriveItems.fileOf(message)
 internal fun FilesTab(state: XDriveState) {
   val controller = state.host.controller
   Column(Modifier.fillMaxSize()) {
-    FilterBar(FILES_VIEWS, state.filesView) { state.filesView = it; state.selected.clear() }
+    FilterBar(FILES_VIEWS, state.filesView, mapOf(XDriveView.VOICE to R.string.XgramXDriveVoiceShort)) { state.filesView = it; state.selected.clear() }
     val feed = state.feed(state.filesView, XDriveScope.Everything)
     SortBar(state.filesSort) { state.filesSort = it }
     LaunchedEffect(feed, state.filesSort) {
@@ -691,6 +697,10 @@ private fun SortBar(sort: XDriveSort, onSort: (XDriveSort) -> Unit) {
             all.size - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
             else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
           },
+          colors = ToggleButtonDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest, contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            checkedContainerColor = MaterialTheme.colorScheme.secondary, checkedContentColor = MaterialTheme.colorScheme.onSecondary
+          ),
           modifier = Modifier.semantics { role = Role.RadioButton }
         ) {
           Text(str(s.title), maxLines = 1, style = MaterialTheme.typography.labelMedium)
@@ -701,27 +711,46 @@ private fun SortBar(sort: XDriveSort, onSort: (XDriveSort) -> Unit) {
 }
 
 /**
- * The kinds as Expressive's button group: they share the width, a pressed one widens, and what doesn't fit goes into
- * the group's overflow menu (no button cut off at the screen's edge).
+ * The kinds as Expressive's connected button group: the chosen one widens to show its name, the others keep just their
+ * icon (named for TalkBack), so every kind fits whole on any width; each button has a tonal container of its own.
  */
 @Composable
-internal fun FilterBar(views: List<XDriveView>, selected: XDriveView, onSelect: (XDriveView) -> Unit) {
-  ButtonGroup(
-    overflowIndicator = { menu ->
-      IconButton(onClick = { if (menu.isShowing) menu.dismiss() else menu.show() }) {
-        Icon(tgxIcon(R.drawable.baseline_more_vert_24), contentDescription = str(R.string.XgramXDriveMore))
-      }
-    },
-    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+internal fun FilterBar(views: List<XDriveView>, selected: XDriveView, names: Map<XDriveView, Int> = emptyMap(), onSelect: (XDriveView) -> Unit) {
+  val cs = MaterialTheme.colorScheme
+  val motion = MaterialTheme.motionScheme
+  val colors = ToggleButtonDefaults.colors(
+    containerColor = cs.surfaceContainerHighest, contentColor = cs.onSurfaceVariant,
+    checkedContainerColor = cs.primary, checkedContentColor = cs.onPrimary
+  )
+  Row(
+    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+    horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
   ) {
-    for (view in views) {
-      toggleableItem(
-        checked = view == selected,
-        label = Lang.getString(view.title),
-        onCheckedChange = { if (view != selected) onSelect(view) },
-        icon = { Icon(tgxIcon(view.icon), contentDescription = null, modifier = Modifier.size(18.dp)) },
-        weight = 1f
-      )
+    views.forEachIndexed { i, view ->
+      val checked = view == selected
+      val label = str(names[view] ?: view.title)
+      val weight by animateFloatAsState(if (checked) 2.8f else 1f, motion.defaultSpatialSpec(), label = "filterWeight")
+      ToggleButton(
+        checked = checked,
+        onCheckedChange = { if (!checked) onSelect(view) },
+        shapes = when (i) {
+          0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+          views.size - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+          else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+        },
+        colors = colors,
+        contentPadding = PaddingValues(horizontal = 8.dp),
+        modifier = Modifier.weight(weight.coerceAtLeast(0.5f)).heightIn(min = 48.dp)
+      ) {
+        Icon(tgxIcon(view.icon), contentDescription = if (checked) null else label, modifier = Modifier.size(20.dp))
+        AnimatedVisibility(
+          checked,
+          enter = expandHorizontally(motion.defaultSpatialSpec()) + fadeIn(motion.defaultEffectsSpec()),
+          exit = shrinkHorizontally(motion.fastSpatialSpec()) + fadeOut(motion.fastEffectsSpec())
+        ) {
+          Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+        }
+      }
     }
   }
 }
@@ -826,7 +855,7 @@ internal fun FolderScreen(state: XDriveState, scope: XDriveScope, openTab: (XDri
 
 // Search, over the tabs (or a folder)
 
-private val SEARCH_VIEWS = listOf(XDriveView.ALL, XDriveView.PHOTOS, XDriveView.VIDEOS, XDriveView.FILES, XDriveView.LINKS, XDriveView.NOTES, XDriveView.MUSIC, XDriveView.VOICE)
+private val SEARCH_VIEWS = listOf(XDriveView.ALL, XDriveView.MEDIA, XDriveView.FILES, XDriveView.LINKS, XDriveView.NOTES)
 
 @Composable
 internal fun SearchScreen(state: XDriveState) {
@@ -881,7 +910,7 @@ internal fun SearchScreen(state: XDriveState) {
         )
       }
     }
-    FilterBar(SEARCH_VIEWS, state.searchView) { state.searchView = it }
+    FilterBar(SEARCH_VIEWS, state.searchView, mapOf(XDriveView.MEDIA to R.string.XgramXDriveMedia)) { state.searchView = it }
     if (query.isEmpty()) {
       EmptyNote(str(R.string.XgramXDriveSearchStart))
       return@Column
