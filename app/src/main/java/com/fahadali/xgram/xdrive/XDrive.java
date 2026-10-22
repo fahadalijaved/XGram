@@ -24,7 +24,7 @@ import org.thunderdog.challegram.navigation.ViewController;
 
 /**
  * XDrive: the account's Saved Messages as its drive (Settings → Testing utilities → XDrive, a test for now). Its name
- * is XDrive everywhere (one string remap in Lang), its icon a cloud, and opening it shows the drive (XDriveController):
+ * is XDrive everywhere (one string remap in Lang), its icon a cloud, and opening it shows the drive (compose/pages/XDrivePage.kt):
  * sections over what is already there, the user's folders, the chat one tap away. Nothing in the messages changes.
  */
 public final class XDrive {
@@ -97,14 +97,14 @@ public final class XDrive {
       if (current != null) {
         open(current);
       } else {
-        navigation.navigateTo(new XDriveController(context.context(), context.tdlib()));
+        navigation.navigateTo(newScreen(context.context(), context.tdlib()));
       }
       return;
     }
     if (!navigation.isEmpty() && context.context().isNavigationBusy()) {
       return;
     }
-    XDriveController c = new XDriveController(context.context(), context.tdlib());
+    ViewController<?> c = newScreen(context.context(), context.tdlib());
     if (navigation.isEmpty()) {
       navigation.initController(c);
       org.thunderdog.challegram.ui.MainController main = new org.thunderdog.challegram.ui.MainController(context.context(), context.tdlib());
@@ -120,7 +120,7 @@ public final class XDrive {
     if (context == null) {
       return;
     }
-    XDriveController c = new XDriveController(context.context(), context.tdlib());
+    ViewController<?> c = newScreen(context.context(), context.tdlib());
     if (com.fahadali.xgram.layout.XgramTwoPane.replacesRightPane(context)) {
       com.fahadali.xgram.layout.XgramTwoPane.showOnRight(context, c);
       return;
@@ -132,5 +132,74 @@ public final class XDrive {
     if (navigation != null) {
       navigation.navigateTo(c);
     }
+  }
+
+  /** XDrive's screen (compose/pages/XDrivePage.kt). */
+  public static ViewController<?> newScreen (android.content.Context context, org.thunderdog.challegram.telegram.Tdlib tdlib) {
+    return com.fahadali.xgram.compose.XgramComposeController.create(context, tdlib, com.fahadali.xgram.compose.XgramPage.XDRIVE);
+  }
+
+  /** Add to folder from Saved Messages' message menu: the folders, a new one, or out of the folder they are in. */
+  public static void pickFolder (ViewController<?> context, long[] messageIds) {
+    final XDriveIndex index = XDriveIndex.of(context.tdlib());
+    index.load(() -> {
+      if (context.isDestroyed()) {
+        return;
+      }
+      final java.util.List<XDriveIndex.Folder> folders = index.folders();
+      final String current = messageIds.length > 0 ? index.folderOf(messageIds[0]) : null;
+      final int count = folders.size() + 1 + (current != null ? 1 : 0);
+      int[] ids = new int[count];
+      String[] titles = new String[count];
+      int[] colors = new int[count];
+      int[] icons = new int[count];
+      final android.util.SparseArray<XDriveIndex.Folder> byId = new android.util.SparseArray<>();
+      int i = 0;
+      for (XDriveIndex.Folder folder : folders) {
+        ids[i] = 1000 + i;
+        titles[i] = folder.name;
+        colors[i] = ViewController.OptionColor.NORMAL;
+        icons[i] = folder.id.equals(current) ? R.drawable.baseline_check_24 : R.drawable.baseline_folder_24;
+        byId.put(ids[i], folder);
+        i++;
+      }
+      ids[i] = R.id.btn_xgramXDriveNewFolder;
+      titles[i] = org.thunderdog.challegram.core.Lang.getString(R.string.XgramXDriveNewFolder);
+      colors[i] = ViewController.OptionColor.NORMAL;
+      icons[i] = R.drawable.baseline_create_new_folder_24;
+      i++;
+      if (current != null) {
+        ids[i] = R.id.btn_xgramXDriveRemove;
+        titles[i] = org.thunderdog.challegram.core.Lang.getString(R.string.XgramXDriveRemoveFromFolder);
+        colors[i] = ViewController.OptionColor.RED;
+        icons[i] = R.drawable.baseline_delete_24;
+      }
+      context.showOptions(org.thunderdog.challegram.core.Lang.getString(R.string.XgramXDriveChooseFolder), ids, titles, colors, icons, (itemView, optionId) -> {
+        if (optionId == R.id.btn_xgramXDriveNewFolder) {
+          context.openInputAlert(org.thunderdog.challegram.core.Lang.getString(R.string.XgramXDriveNewFolder), org.thunderdog.challegram.core.Lang.getString(R.string.XgramXDriveFolderName), R.string.XgramXDriveCreate, R.string.Cancel, null, (inputView, result) -> {
+            String name = result.trim();
+            if (name.isEmpty()) {
+              return false;
+            }
+            XDriveIndex.Folder folder = index.findFolderByName(name);
+            if (folder == null) {
+              folder = index.createFolder(name);
+            }
+            index.setFolder(messageIds, folder.id);
+            org.thunderdog.challegram.tool.UI.showToast(org.thunderdog.challegram.core.Lang.getString(R.string.XgramXDriveAddedTo, folder.name), android.widget.Toast.LENGTH_SHORT);
+            return true;
+          }, true);
+        } else if (optionId == R.id.btn_xgramXDriveRemove) {
+          index.setFolder(messageIds, null);
+        } else {
+          XDriveIndex.Folder folder = byId.get(optionId);
+          if (folder != null) {
+            index.setFolder(messageIds, folder.id);
+            org.thunderdog.challegram.tool.UI.showToast(org.thunderdog.challegram.core.Lang.getString(R.string.XgramXDriveAddedTo, folder.name), android.widget.Toast.LENGTH_SHORT);
+          }
+        }
+        return true;
+      });
+    });
   }
 }

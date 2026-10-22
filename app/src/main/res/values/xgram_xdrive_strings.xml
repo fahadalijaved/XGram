@@ -76,4 +76,25 @@
   <string name="XgramXDriveSearch">Search XDrive</string>
   <string name="XgramXDriveNoResults">Nothing in XDrive matches.</string>
   <string name="XgramXDriveSaveFailed">Couldn\'t save the folders: %1$s</string>
+
+  <!-- The drive's screen (compose/pages/XDrivePage.kt) -->
+  <string name="XgramXDriveAll">All</string>
+  <string name="XgramXDrivePhotosOnly">Photos</string>
+  <string name="XgramXDriveVideos">Videos</string>
+  <string name="XgramXDriveVoiceOne">Voice message</string>
+  <string name="XgramXDriveUnsorted">Unsorted</string>
+  <string name="XgramXDriveUnsortedInfo">In no folder</string>
+  <string name="XgramXDriveNew">New</string>
+  <string name="XgramXDriveNewNote">New note</string>
+  <string name="XgramXDriveNoteHint">Write a note</string>
+  <string name="XgramXDriveUploadFiles">Upload files</string>
+  <string name="XgramXDriveUploadMedia">Photos and videos</string>
+  <string name="XgramXDriveSelected">%1$s selected</string>
+  <string name="XgramXDriveEmpty">Nothing here yet.</string>
+  <string name="XgramXDriveSearchIn">Search in %1$s</string>
+  <string name="XgramXDriveOpenChat">Open the chat</string>
+  <string name="XgramXDriveDownloading">Downloading…</string>
+  <string name="XgramXDriveDeleteOne">Delete this from XDrive for good?</string>
+  <string name="XgramXDriveDeleteMany">Delete %1$s from XDrive for good?</string>
+  <string name="XgramXDriveUploading">Uploading %1$s to XDrive…</string>
 </resources>

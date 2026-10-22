@@ -225,7 +225,7 @@ public final class XgramMessageActions {
       return true;
     }
     if (id == R.id.btn_xgramXDriveAddToFolder) {
-      com.fahadali.xgram.xdrive.XDriveController.pickFolder(m, idsOf(msg));
+      com.fahadali.xgram.xdrive.XDrive.pickFolder(m, idsOf(msg));
       return true;
     }
     if (id == R.id.btn_xgramRepeat) {
