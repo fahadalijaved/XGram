@@ -220,6 +220,11 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       .setTargetRotation(previewRotation = getSurfaceRotation())
       .setResolutionSelector(resolutionSelector);
     preview = previewBuilder.build();
+    if (xgramListener != null) {
+      // XGram: the surface before binding, so CameraX configures the session once (after binding, it configured
+      // without the preview and again when the surface came: twice as slow, worst with a camera mode)
+      preview.setSurfaceProvider(cameraView.getSurfaceProvider());
+    }
 
     ImageCapture.Builder imageCaptureBuilder = new ImageCapture.Builder()
       .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
@@ -281,9 +286,13 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       return;
     }
 
-    Preview.SurfaceProvider surfaceProvider = cameraView.getSurfaceProvider();
-    preview.setSurfaceProvider(surfaceProvider);
-    UI.post(delegate::onRenderedFirstFrame, 800);
+    if (xgramListener != null) {
+      xgramWaitFirstFrame(); // XGram: the blur goes with the first frame, not after a fixed 800 ms
+    } else {
+      Preview.SurfaceProvider surfaceProvider = cameraView.getSurfaceProvider();
+      preview.setSurfaceProvider(surfaceProvider);
+      UI.post(delegate::onRenderedFirstFrame, 800);
+    }
 
     reportFlashMode();
     xgramOnBound(); // XGram
@@ -773,6 +782,38 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       bindPreview();
       switchingCamera = false;
     });
+  }
+
+  private int xgramFrameGeneration;
+  private @Nullable Observer<PreviewView.StreamState> xgramStreamObserver;
+
+  /** Tells the screen its first frame came once the preview streams again (after it went idle), or after 1.5 s. */
+  private void xgramWaitFirstFrame () {
+    final int generation = ++xgramFrameGeneration;
+    if (xgramStreamObserver != null) {
+      cameraView.getPreviewStreamState().removeObserver(xgramStreamObserver);
+    }
+    final boolean[] sawIdle = {false};
+    final Runnable fire = () -> {
+      if (generation != xgramFrameGeneration) {
+        return;
+      }
+      xgramFrameGeneration++;
+      if (xgramStreamObserver != null) {
+        cameraView.getPreviewStreamState().removeObserver(xgramStreamObserver);
+        xgramStreamObserver = null;
+      }
+      delegate.onRenderedFirstFrame();
+    };
+    xgramStreamObserver = state -> {
+      if (state == PreviewView.StreamState.IDLE) {
+        sawIdle[0] = true;
+      } else if (state == PreviewView.StreamState.STREAMING && sawIdle[0]) {
+        UI.post(fire, 60); // a frame or two on screen first
+      }
+    };
+    cameraView.getPreviewStreamState().observe((LifecycleOwner) context, xgramStreamObserver);
+    UI.post(fire, 1500);
   }
 
   private void xgramStopZoom () {
