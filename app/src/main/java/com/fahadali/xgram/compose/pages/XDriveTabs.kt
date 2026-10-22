@@ -9,7 +9,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 
 package com.fahadali.xgram.compose.pages
 
@@ -25,41 +25,55 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenuPopup
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -70,9 +84,17 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -87,7 +109,7 @@ import com.fahadali.xgram.xdrive.XDriveFeed
 import com.fahadali.xgram.xdrive.XDriveIcons
 import com.fahadali.xgram.xdrive.XDriveIndex
 import com.fahadali.xgram.xdrive.XDriveItems
-import com.fahadali.xgram.xdrive.XDriveKind
+import com.fahadali.xgram.xdrive.XDriveOrganizer
 import com.fahadali.xgram.xdrive.XDriveRules
 import com.fahadali.xgram.xdrive.XDriveScope
 import com.fahadali.xgram.xdrive.XDriveTopic
@@ -99,21 +121,6 @@ import org.thunderdog.challegram.telegram.Tdlib
 import org.thunderdog.challegram.tool.UI
 import java.util.Calendar
 
-/** A list of XDrive, attached while it is on screen. */
-@Composable
-internal fun rememberFeed(state: XDriveState, view: XDriveView, scope: XDriveScope, query: String = ""): XDriveFeed {
-  val feed = remember(view, scope, query) { XDriveFeed(state.tdlib, view, scope, query) }
-  DisposableEffect(feed) {
-    feed.attach()
-    onDispose { feed.detach() }
-  }
-  // A folder's contents (or what is in none) change with the index
-  LaunchedEffect(feed, state.indexVersion) {
-    if (scope !is XDriveScope.Everything && state.indexVersion > 1) feed.reload()
-  }
-  return feed
-}
-
 /** Reads on as the end of [grid] comes near. */
 @Composable
 internal fun LoadMore(feed: XDriveFeed, grid: LazyGridState) {
@@ -124,25 +131,38 @@ internal fun LoadMore(feed: XDriveFeed, grid: LazyGridState) {
   }
 }
 
-/** The bottom room the lists keep free: the navigation bar's inset and the floating button above it. */
+/** Reads on as the end of [list] comes near. */
 @Composable
-internal fun bottomRoom(state: XDriveState): Dp = with(LocalDensity.current) { state.host.bottomInset.toDp() } + 112.dp
+internal fun LoadMore(feed: XDriveFeed, list: LazyListState) {
+  LaunchedEffect(feed, list) {
+    snapshotFlow { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }.collect { last ->
+      if (last >= list.layoutInfo.totalItemsCount - 12) feed.loadMore()
+    }
+  }
+}
+
+/** Room under a list: the floating button (and, on a screen without the navigation bar, the system inset). */
+@Composable
+internal fun bottomRoom(state: XDriveState, withInset: Boolean): Dp =
+  (if (withInset) with(LocalDensity.current) { state.host.bottomInset.toDp() } else 0.dp) + 96.dp
 
 // Home
 
 @Composable
 internal fun HomeTab(state: XDriveState, openTab: (XDriveTab) -> Unit) {
-  val recent = rememberFeed(state, XDriveView.ALL, XDriveScope.Everything)
+  val recent = state.feed(XDriveView.ALL, XDriveScope.Everything)
   val counts = rememberKindCounts(state.tdlib)
-  // The big card until XDrive has been organized (or while it runs, or waits for a review); after that only a small
-  // one, once enough new things are in no folder
+  // The big Organize card until XDrive has been organized (or while it runs, or waits for a review); after that only
+  // a small one, once enough new things are in no folder
   val organizer = state.organizer
   val organizedUpTo = remember(state.indexVersion) { state.index.organizedUpTo() }
-  val bigCard = organizedUpTo == 0L || organizer.running || organizer.phase == com.fahadali.xgram.xdrive.XDriveOrganizer.Phase.REVIEW
-  val fresh = remember(recent.items.size, recent.items.firstOrNull()?.id, state.indexVersion, organizedUpTo) {
+  val bigCard = organizedUpTo == 0L || organizer.running || organizer.phase == XDriveOrganizer.Phase.REVIEW
+  val fresh = remember(recent.version.intValue, state.indexVersion, organizedUpTo) {
     if (organizedUpTo == 0L) 0 else recent.items.count { it.id > organizedUpTo && state.index.folderOf(it.id) == null }
   }
-  LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomRoom(state))) {
+  val folders = state.folders()
+  val folderCounts = state.counts()
+  LazyColumn(Modifier.fillMaxSize(), state = state.list("home"), contentPadding = PaddingValues(top = 4.dp, bottom = bottomRoom(state, false))) {
     if (bigCard) {
       item(key = "organize") { Box(Modifier.animateItem()) { OrganizeCard(state) } }
     } else if (fresh >= NEW_SINCE_ORGANIZE) {
@@ -164,17 +184,24 @@ internal fun HomeTab(state: XDriveState, openTab: (XDriveTab) -> Unit) {
     }
     item(key = "folders") {
       Column {
-        SectionTitle(str(R.string.XgramXDriveFolders), str(R.string.XgramXDriveSeeAll)) { openTab(XDriveTab.FOLDERS) }
-        HomeFolders(state)
+        SectionTitle(
+          str(R.string.XgramXDriveFolders),
+          subtitle = str(R.string.XgramXDriveFoldersSummary, Lang.plural(R.string.xFolders, folders.size.toLong()), folderCounts.values.sum()),
+          action = str(R.string.XgramXDriveSeeAll)
+        ) { openTab(XDriveTab.FOLDERS) }
+        HomeFolders(state, folders, folderCounts)
       }
     }
     item(key = "suggested") { Suggestions(state, recent.items) }
   }
 }
 
+/** New things in no folder (among the latest) before Home suggests organizing again. */
+private const val NEW_SINCE_ORGANIZE = 8
+
 /**
- * The way into Organize with AI: a bright card with a slowly turning shape. While it runs (the sheet closed) the card
- * shows how far it is; once folders are proposed, it offers to look through them.
+ * The way into Organize with AI: a bright card with a slowly turning shape. While it runs (its screen closed) the
+ * card shows how far it is; once folders are proposed, it offers to look through them.
  */
 @Composable
 private fun OrganizeCard(state: XDriveState) {
@@ -183,9 +210,8 @@ private fun OrganizeCard(state: XDriveState) {
   val turn = rememberInfiniteTransition(label = "organizeTurn")
   val rotation by turn.animateFloat(0f, 360f, infiniteRepeatable(tween(if (organizer.running) 4000 else 16000, easing = LinearEasing), RepeatMode.Restart), label = "organizeRotation")
   Box(
-    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(32.dp))
+    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).xdriveBounds(state, BOUNDS_ORGANIZE).clip(RoundedCornerShape(32.dp))
       .background(Brush.linearGradient(listOf(c.primaryContainer, c.tertiaryContainer)))
-      .clickable { state.organizing = true }
       .padding(20.dp)
   ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -194,28 +220,30 @@ private fun OrganizeCard(state: XDriveState) {
         Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, tint = c.onPrimary, modifier = Modifier.size(32.dp))
       }
       Column(Modifier.weight(1f).padding(start = 18.dp)) {
-        Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, color = c.onPrimaryContainer)
+        Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, color = c.onPrimaryContainer, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(4.dp))
         when {
           organizer.running -> {
-            Text(organizeStatus(organizer), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .8f))
+            Text(organizeStatus(organizer), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .85f))
             Spacer(Modifier.height(12.dp))
             val progress = organizeProgress(organizer)
             if (progress != null) {
-              androidx.compose.material3.LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+              LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
             } else {
-              androidx.compose.material3.LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+              LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { state.openOrganize(BOUNDS_ORGANIZE) }) { Text(str(R.string.XgramXDriveOpenItem)) }
           }
-          organizer.phase == com.fahadali.xgram.xdrive.XDriveOrganizer.Phase.REVIEW -> {
-            Text(str(R.string.XgramXDriveReadyToReview), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .8f))
+          organizer.phase == XDriveOrganizer.Phase.REVIEW -> {
+            Text(str(R.string.XgramXDriveReadyToReview), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .85f))
             Spacer(Modifier.height(12.dp))
-            Button(onClick = { state.organizing = true }) { Text(str(R.string.XgramXDriveReview)) }
+            Button(onClick = { state.openOrganize(BOUNDS_ORGANIZE) }) { Text(str(R.string.XgramXDriveReview)) }
           }
           else -> {
-            Text(str(R.string.XgramXDriveOrganizeInfo), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .8f))
+            Text(str(R.string.XgramXDriveOrganizeInfo), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .85f))
             Spacer(Modifier.height(12.dp))
-            Button(onClick = { state.organizing = true }) { Text(str(R.string.XgramXDriveOrganizeStart)) }
+            Button(onClick = { state.openOrganize(BOUNDS_ORGANIZE) }) { Text(str(R.string.XgramXDriveOrganizeStart)) }
           }
         }
       }
@@ -223,27 +251,23 @@ private fun OrganizeCard(state: XDriveState) {
   }
 }
 
-/** New things in no folder (among the latest) before Home suggests organizing again. */
-private const val NEW_SINCE_ORGANIZE = 8
-
 /** The small way back into Organize with AI, once new things have piled up since the last time. */
 @Composable
 private fun OrganizeNew(state: XDriveState, count: Int) {
   val c = MaterialTheme.colorScheme
   Row(
-    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(28.dp))
-      .background(c.secondaryContainer).clickable { state.organizing = true }.padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).xdriveBounds(state, BOUNDS_ORGANIZE).clip(RoundedCornerShape(28.dp))
+      .background(c.secondaryContainer).padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {
     Box(Modifier.size(40.dp).clip(MaterialShapes.SoftBurst.toShape()).background(c.primary), contentAlignment = Alignment.Center) {
       Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, tint = c.onPrimary, modifier = Modifier.size(20.dp))
     }
     Text(
-      str(R.string.XgramXDriveNewSinceOrganize, Lang.plural(R.string.xMessages, count.toLong())),
-      style = MaterialTheme.typography.bodyMedium, color = c.onSecondaryContainer,
+      str(R.string.XgramXDriveNewSinceOrganize, items(count)), style = MaterialTheme.typography.bodyMedium, color = c.onSecondaryContainer,
       modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
     )
-    FilledTonalButton(onClick = { state.organizing = true }) { Text(str(R.string.XgramXDriveSortThem)) }
+    FilledTonalButton(onClick = { state.openOrganize(BOUNDS_ORGANIZE) }) { Text(str(R.string.XgramXDriveSortThem)) }
   }
 }
 
@@ -276,7 +300,7 @@ private fun QuickAccess(state: XDriveState, counts: Map<XDriveView, Int>, openTa
           val (container, content) = colors[(row + i) % colors.size]
           Column(
             Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(container)
-              .clickable {
+              .clickable(role = Role.Button) {
                 if (view == XDriveView.PHOTOS || view == XDriveView.VIDEOS) {
                   state.mediaView = view
                   openTab(XDriveTab.MEDIA)
@@ -290,7 +314,7 @@ private fun QuickAccess(state: XDriveState, counts: Map<XDriveView, Int>, openTa
             Icon(tgxIcon(view.icon), contentDescription = null, tint = content, modifier = Modifier.size(22.dp))
             Spacer(Modifier.height(10.dp))
             Text(counts[view]?.toString() ?: "–", style = MaterialTheme.typography.titleLarge, color = content)
-            Text(str(view.title), style = MaterialTheme.typography.labelLarge, color = content.copy(alpha = .8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(str(view.title), style = MaterialTheme.typography.labelLarge, color = content.copy(alpha = .85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
           }
         }
       }
@@ -301,15 +325,16 @@ private fun QuickAccess(state: XDriveState, counts: Map<XDriveView, Int>, openTa
 @Composable
 private fun RecentRow(state: XDriveState, recent: List<TdApi.Message>) {
   val controller = LocalXgramHost.current.controller
-  LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+  LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.xgramNoSwipeBack()) {
     items(recent, key = { it.id }) { message ->
       val isSelected = state.selected.containsKey(message.id)
       Column(
-        Modifier.width(128.dp).animateItem().clip(RoundedCornerShape(20.dp))
-          .background(if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
+        Modifier.width(132.dp).animateItem().clip(RoundedCornerShape(20.dp))
+          .background(if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceBright)
           .xdriveItem(state, message) { XDriveActions.open(controller, message) }
       ) {
-        XDriveThumb(message, Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(20.dp)), iconSize = 30)
+        // The picture fills the card's top: only the card's own corners round it
+        XDriveThumb(message, Modifier.fillMaxWidth().height(96.dp), iconSize = 30)
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
           Text(XDriveItems.title(message), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
           Text(XDriveItems.subtitle(message), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -320,21 +345,22 @@ private fun RecentRow(state: XDriveState, recent: List<TdApi.Message>) {
 }
 
 @Composable
-private fun HomeFolders(state: XDriveState) {
-  val folders = state.folders()
-  val counts = state.counts()
-  LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+private fun HomeFolders(state: XDriveState, folders: List<XDriveIndex.Folder>, counts: Map<String, Int>) {
+  LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.xgramNoSwipeBack()) {
     items(folders, key = { it.id }) { folder ->
+      var menu by remember { mutableStateOf(false) }
+      val target = "tile:home:" + folder.id
       FolderTile(
-        state, folder.id, folder.name, Lang.plural(R.string.xMessages, (counts[folder.id] ?: 0).toLong()), folder.emoji, XDriveIcons.drawableOf(folder.icon),
-        dropKey = folder.id, onClick = { state.folder = XDriveScope.InFolder(folder.id) }, onLongClick = null,
-        modifier = Modifier.width(156.dp).animateItem()
+        state, folder.id, target, folder.name, items(counts[folder.id] ?: 0), folder.emoji, XDriveIcons.drawableOf(folder.icon),
+        dropKey = folder.id, onClick = { state.openFolder(XDriveScope.InFolder(folder.id), target) }, onMenu = { menu = true },
+        modifier = Modifier.width(168.dp).animateItem(),
+        menu = { FolderMenu(state, folder, menu) { menu = false } }
       )
     }
     item(key = "new") {
       FolderTile(
-        state, "new", str(R.string.XgramXDriveNewFolder), null, null, R.drawable.baseline_create_new_folder_24,
-        dropKey = DROP_NEW, onClick = { XDriveActions.newFolder(state.host) }, onLongClick = null, modifier = Modifier.width(156.dp)
+        state, "new", "tile:home:new", str(R.string.XgramXDriveNewFolder), null, null, R.drawable.baseline_create_new_folder_24,
+        dropKey = DROP_NEW, onClick = { XDriveActions.newFolder(state.host) }, onMenu = null, modifier = Modifier.width(168.dp)
       )
     }
   }
@@ -342,48 +368,43 @@ private fun HomeFolders(state: XDriveState) {
 
 /** Topics the rules see in what was saved lately (three items or more, no folder of that name yet): one tap makes it. */
 @Composable
-private fun Suggestions(state: XDriveState, items: List<TdApi.Message>) {
+private fun Suggestions(state: XDriveState, recent: List<TdApi.Message>) {
   val version = state.indexVersion
-  val suggestions = remember(items.size, version) {
+  val suggestions = remember(recent.size, recent.firstOrNull()?.id, recent.lastOrNull()?.id, version) {
     val byTopic = LinkedHashMap<XDriveTopic, MutableList<TdApi.Message>>()
-    for (message in items) {
+    for (message in recent) {
       if (state.index.folderOf(message.id) != null) continue
       val topic = XDriveRules.topicOf(message, XDriveItems.kindOf(message)) ?: continue
       byTopic.getOrPut(topic) { ArrayList() }.add(message)
     }
-    byTopic.entries.filter { it.value.size >= 3 && state.index.findFolderByName(Lang.getString(it.key.title)) == null }.sortedByDescending { it.value.size }.take(4)
+    byTopic.entries.filter { it.value.size >= 3 && state.index.findFolderByName(Lang.getString(it.key.title)) == null }
+      .sortedByDescending { it.value.size }.take(4).map { it.key to it.value.toList() }
   }
   if (suggestions.isEmpty()) return
   Column {
-    SectionTitle(str(R.string.XgramXDriveSuggested))
-    Text(
-      str(R.string.XgramXDriveSuggestedInfo), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-      modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
-    )
-    for ((topic, list) in suggestions) {
+    SectionTitle(str(R.string.XgramXDriveSuggested), subtitle = str(R.string.XgramXDriveSuggestedInfo))
+    suggestions.forEachIndexed { i, (topic, list) ->
       val name = str(topic.title)
-      Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(24.dp))
-          .background(MaterialTheme.colorScheme.surfaceContainer).padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        FolderBadge(topic.name, null, XDriveIcons.drawableOf(topic.icon), 44)
-        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-          Text(name, style = MaterialTheme.typography.titleSmall)
-          Text(Lang.plural(R.string.xMessages, list.size.toLong()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        FilledTonalButton(onClick = {
-          val folder = state.index.findFolderByName(name) ?: state.index.createFolder(name, topic.icon)
-          state.move(list, folder.id)
-        }) {
-          Text(str(R.string.XgramXDriveCreate))
-        }
+      Box(Modifier.padding(horizontal = 16.dp).padding(top = if (i == 0) 0.dp else ListItemDefaults.SegmentedGap)) {
+        SegmentedListItem(
+          shapes = ListItemDefaults.segmentedShapes(index = i, count = suggestions.size),
+          leadingContent = { FolderBadge(topic.name, null, XDriveIcons.drawableOf(topic.icon), 44.dp) },
+          supportingContent = { Text(items(list.size)) },
+          trailingContent = {
+            FilledTonalButton(onClick = {
+              val folder = state.index.findFolderByName(name) ?: state.index.createFolder(name, topic.icon)
+              state.move(list, folder.id)
+            }) { Text(str(R.string.XgramXDriveCreate)) }
+          },
+          colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+          content = { Text(name) }
+        )
       }
     }
   }
 }
 
-// Folders
+// Folders: the sorting desk (tiles over what is in no folder yet)
 
 @Composable
 internal fun FoldersTab(state: XDriveState) {
@@ -391,25 +412,25 @@ internal fun FoldersTab(state: XDriveState) {
   val controller = host.controller
   val folders = state.folders()
   val counts = state.counts()
-  val unsorted = rememberFeed(state, XDriveView.ALL, XDriveScope.Unsorted)
-  val grid = rememberLazyGridState()
+  val unsorted = state.feed(XDriveView.ALL, XDriveScope.Unsorted)
+  val grid = state.grid("folders")
   LoadMore(unsorted, grid)
   LazyVerticalGrid(
     state = grid,
-    columns = GridCells.Fixed(2),
-    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = bottomRoom(state)),
+    columns = GridCells.Adaptive(156.dp),
+    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = bottomRoom(state, false)),
     horizontalArrangement = Arrangement.spacedBy(10.dp),
-    verticalArrangement = Arrangement.spacedBy(10.dp),
+    verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
     modifier = Modifier.fillMaxSize()
   ) {
     item(key = "actions", span = { GridItemSpan(maxLineSpan) }) {
-      Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-        FilledTonalButton(onClick = { state.organizing = true }, modifier = Modifier.weight(1.3f)) {
+      Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilledTonalButton(onClick = { state.openOrganize("organize:folders") }, modifier = Modifier.weight(1.3f).heightIn(min = 48.dp).xdriveBounds(state, "organize:folders")) {
           Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(8.dp))
           Text(str(R.string.XgramXDriveOrganize), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        OutlinedButton(onClick = { XDriveActions.newFolder(host) }, modifier = Modifier.weight(1f)) {
+        OutlinedButton(onClick = { XDriveActions.newFolder(host) }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
           Icon(tgxIcon(R.drawable.baseline_create_new_folder_24), contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(Modifier.width(8.dp))
           Text(str(R.string.XgramXDriveNewFolder), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -418,60 +439,73 @@ internal fun FoldersTab(state: XDriveState) {
     }
     item(key = "unsorted") {
       FolderTile(
-        state, "unsorted", str(R.string.XgramXDriveUnsorted), str(R.string.XgramXDriveUnsortedInfo), null, R.drawable.baseline_archive_24,
-        dropKey = DROP_OUT, onClick = { state.folder = XDriveScope.Unsorted }, onLongClick = null, modifier = Modifier.animateItem()
+        state, "unsorted", "tile:folders:unsorted", str(R.string.XgramXDriveUnsorted), str(R.string.XgramXDriveUnsortedInfo), null, R.drawable.baseline_archive_24,
+        dropKey = DROP_OUT, onClick = { state.openFolder(XDriveScope.Unsorted, "tile:folders:unsorted") }, onMenu = null, modifier = Modifier.animateItem().padding(bottom = 8.dp)
       )
     }
     items(folders.size, key = { folders[it].id }) { i ->
       val folder = folders[i]
       var menu by remember { mutableStateOf(false) }
-      Box(Modifier.animateItem()) {
-        FolderTile(
-          state, folder.id, folder.name, Lang.plural(R.string.xMessages, (counts[folder.id] ?: 0).toLong()), folder.emoji, XDriveIcons.drawableOf(folder.icon),
-          dropKey = folder.id, onClick = { state.folder = XDriveScope.InFolder(folder.id) }, onLongClick = { menu = true }
-        )
-        FolderMenu(state, folder, menu) { menu = false }
-      }
+      val target = "tile:folders:" + folder.id
+      FolderTile(
+        state, folder.id, target, folder.name, items(counts[folder.id] ?: 0), folder.emoji, XDriveIcons.drawableOf(folder.icon),
+        dropKey = folder.id, onClick = { state.openFolder(XDriveScope.InFolder(folder.id), target) }, onMenu = { menu = true },
+        modifier = Modifier.animateItem().padding(bottom = 8.dp),
+        menu = { FolderMenu(state, folder, menu) { menu = false } }
+      )
     }
     item(key = "new") {
       FolderTile(
-        state, "new", str(R.string.XgramXDriveNewFolder), null, null, R.drawable.baseline_create_new_folder_24,
-        dropKey = DROP_NEW, onClick = { XDriveActions.newFolder(host) }, onLongClick = null, modifier = Modifier.animateItem()
+        state, "new", "tile:folders:new", str(R.string.XgramXDriveNewFolder), null, null, R.drawable.baseline_create_new_folder_24,
+        dropKey = DROP_NEW, onClick = { XDriveActions.newFolder(host) }, onMenu = null, modifier = Modifier.animateItem().padding(bottom = 8.dp)
       )
     }
-    if (unsorted.items.isNotEmpty()) {
+    val list = unsorted.items
+    if (list.isNotEmpty()) {
       item(key = "unsortedTitle", span = { GridItemSpan(maxLineSpan) }) {
-        Column {
-          SectionTitle(str(R.string.XgramXDriveNotInFolder))
-          Text(
-            str(R.string.XgramXDriveDragHint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp)
-          )
-        }
+        SectionTitle(str(R.string.XgramXDriveNotInFolder), subtitle = str(R.string.XgramXDriveDragHint))
       }
     }
-    items(unsorted.items.size, key = { unsorted.items[it].id }, span = { GridItemSpan(maxLineSpan) }) { i ->
-      val message = unsorted.items[i]
-      XDriveRow(state, message, showFolder = false, onOpen = { XDriveActions.open(controller, message) }, modifier = Modifier.animateItem())
+    items(list.size, key = { list[it].id }, span = { GridItemSpan(maxLineSpan) }) { i ->
+      val message = list[i]
+      // The grid's 10 dp row gap less: the rows sit as one segmented card
+      XDriveRow(
+        state, message, ListItemDefaults.segmentedShapes(index = i, count = list.size), showFolder = false,
+        onOpen = { XDriveActions.open(controller, message) },
+        modifier = Modifier.animateItem()
+      )
     }
   }
 }
 
-/** A folder's long-press menu: rename, its emoji, delete. */
+/** A folder's options: rename and its icon, then delete on its own (Expressive's grouped menu). */
 @Composable
 internal fun FolderMenu(state: XDriveState, folder: XDriveIndex.Folder, expanded: Boolean, onDismiss: () -> Unit) {
   val host = state.host
-  DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-    DropdownMenuItem(text = { Text(str(R.string.XgramXDriveRename)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_edit_24), null) }, onClick = { onDismiss(); XDriveActions.renameFolder(host, folder) })
-    DropdownMenuItem(text = { Text(str(R.string.XgramXDriveFolderIcon)) }, leadingIcon = { Icon(tgxIcon(XDriveIcons.drawableOf(folder.icon)), null) }, onClick = { onDismiss(); state.iconPicker = folder })
-    DropdownMenuItem(
-      text = { Text(str(R.string.XgramXDriveDeleteFolder), color = MaterialTheme.colorScheme.error) },
-      leadingIcon = { Icon(tgxIcon(R.drawable.baseline_delete_24), null, tint = MaterialTheme.colorScheme.error) },
-      onClick = {
-        onDismiss()
-        XDriveActions.deleteFolder(host, folder) { if ((state.folder as? XDriveScope.InFolder)?.folderId == folder.id) state.folder = null }
-      }
-    )
+  DropdownMenuPopup(expanded = expanded, onDismissRequest = onDismiss) {
+    DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, 2)) {
+      DropdownMenuItem(
+        onClick = { onDismiss(); XDriveActions.renameFolder(host, folder) },
+        text = { Text(str(R.string.XgramXDriveRename)) },
+        shape = MenuDefaults.itemShape(0, 2).shape,
+        leadingIcon = { Icon(tgxIcon(R.drawable.baseline_edit_24), null) }
+      )
+      DropdownMenuItem(
+        onClick = { onDismiss(); state.iconPicker = folder },
+        text = { Text(str(R.string.XgramXDriveFolderIcon)) },
+        shape = MenuDefaults.itemShape(1, 2).shape,
+        leadingIcon = { Icon(tgxIcon(XDriveIcons.drawableOf(folder.icon)), null) }
+      )
+    }
+    Spacer(Modifier.height(MenuDefaults.GroupSpacing))
+    DropdownMenuGroup(shapes = MenuDefaults.groupShape(1, 2)) {
+      DropdownMenuItem(
+        onClick = { onDismiss(); state.deleteFolder(folder) },
+        text = { Text(str(R.string.XgramXDriveDeleteFolder), color = MaterialTheme.colorScheme.error) },
+        shape = MenuDefaults.itemShape(0, 1).shape,
+        leadingIcon = { Icon(tgxIcon(R.drawable.baseline_delete_24), null, tint = MaterialTheme.colorScheme.error) }
+      )
+    }
   }
 }
 
@@ -499,27 +533,30 @@ internal fun confirmAbout(state: XDriveState) {
 internal fun MediaTab(state: XDriveState) {
   val controller = state.host.controller
   Column(Modifier.fillMaxSize()) {
-    FilterRow(listOf(XDriveView.MEDIA, XDriveView.PHOTOS, XDriveView.VIDEOS, XDriveView.GIFS), state.mediaView) { state.mediaView = it; state.selected.clear() }
-    val feed = rememberFeed(state, state.mediaView, XDriveScope.Everything)
-    val grid = rememberLazyGridState()
+    FilterBar(listOf(XDriveView.MEDIA, XDriveView.PHOTOS, XDriveView.VIDEOS, XDriveView.GIFS), state.mediaView) { state.mediaView = it; state.selected.clear() }
+    val feed = state.feed(state.mediaView, XDriveScope.Everything)
+    val grid = state.grid(feedKey("media", state.mediaView, XDriveScope.Everything))
     LoadMore(feed, grid)
     if (feed.items.isEmpty()) {
       Loading(feed)
       return@Column
     }
-    val entries = remember(feed.items.size, feed.items.firstOrNull()?.id) { byMonth(feed.items) }
+    val entries = remember(feed, feed.version.intValue) { byMonth(feed.items) }
     LazyVerticalGrid(
       state = grid,
       columns = GridCells.Adaptive(104.dp),
-      contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = bottomRoom(state)),
-      horizontalArrangement = Arrangement.spacedBy(3.dp),
-      verticalArrangement = Arrangement.spacedBy(3.dp),
+      contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = bottomRoom(state, false)),
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      verticalArrangement = Arrangement.spacedBy(4.dp),
       modifier = Modifier.fillMaxSize()
     ) {
       for (entry in entries) {
         when (entry) {
-          is String -> item(key = "m$entry", span = { GridItemSpan(maxLineSpan) }) {
-            Text(entry, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 12.dp, top = 16.dp, bottom = 6.dp).animateItem())
+          is MonthHeader -> item(key = "m" + entry.firstId, span = { GridItemSpan(maxLineSpan) }) {
+            Text(
+              entry.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.padding(start = 12.dp, top = 16.dp, bottom = 6.dp).animateItem().semantics { heading() }
+            )
           }
           is TdApi.Message -> item(key = entry.id) {
             XDriveCell(state, entry, onOpen = { XDriveActions.open(controller, entry) }, modifier = Modifier.animateItem())
@@ -530,70 +567,161 @@ internal fun MediaTab(state: XDriveState) {
   }
 }
 
+private fun monthOf(message: TdApi.Message, calendar: Calendar): Int {
+  calendar.timeInMillis = message.date * 1000L
+  return calendar.get(Calendar.YEAR) * 12 + calendar.get(Calendar.MONTH)
+}
+
+private fun monthTitle(message: TdApi.Message): String {
+  val calendar = Calendar.getInstance()
+  calendar.timeInMillis = message.date * 1000L
+  return java.text.SimpleDateFormat("LLLL yyyy", Lang.locale()).format(calendar.time)
+}
+
+private class MonthHeader(val title: String, val firstId: Long)
+
 /** Month headers ("October 2026") between the items, newest first. */
 private fun byMonth(items: List<TdApi.Message>): List<Any> {
   val result = ArrayList<Any>(items.size + 12)
   var last = -1
   val calendar = Calendar.getInstance()
   for (message in items) {
-    calendar.timeInMillis = message.date * 1000L
-    val key = calendar.get(Calendar.YEAR) * 12 + calendar.get(Calendar.MONTH)
+    val key = monthOf(message, calendar)
     if (key != last) {
       last = key
-      result.add(java.text.SimpleDateFormat("LLLL yyyy", Lang.locale()).format(calendar.time))
+      result.add(MonthHeader(monthTitle(message), message.id))
     }
     result.add(message)
   }
   return result
 }
 
+/** Items in groups by month (newest first): each group one segmented card under its month. */
+private fun groupsByMonth(items: List<TdApi.Message>): List<Pair<String?, List<TdApi.Message>>> {
+  val result = ArrayList<Pair<String?, List<TdApi.Message>>>()
+  val calendar = Calendar.getInstance()
+  var last = -1
+  var current = ArrayList<TdApi.Message>()
+  for (message in items) {
+    val key = monthOf(message, calendar)
+    if (key != last) {
+      last = key
+      current = ArrayList()
+      result.add(monthTitle(message) to current)
+    }
+    current.add(message)
+  }
+  return result
+}
+
+/** Rows in segmented groups, each under its title (or one untitled group). */
+internal fun LazyListScope.rowGroups(
+  state: XDriveState, groups: List<Pair<String?, List<TdApi.Message>>>, showFolder: Boolean, onOpen: (TdApi.Message) -> Unit
+) {
+  for ((title, list) in groups) {
+    if (title != null && list.isNotEmpty()) {
+      item(key = "g:" + list[0].id) {
+        Text(
+          title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.padding(start = 28.dp, top = 20.dp, bottom = 8.dp).animateItem().semantics { heading() }
+        )
+      }
+    }
+    items(list.size, key = { list[it].id }) { i ->
+      val message = list[i]
+      XDriveRow(
+        state, message, ListItemDefaults.segmentedShapes(index = i, count = list.size), showFolder = showFolder,
+        onOpen = { onOpen(message) },
+        modifier = Modifier.animateItem().padding(horizontal = 16.dp).padding(top = if (i == 0) 0.dp else ListItemDefaults.SegmentedGap)
+      )
+    }
+  }
+}
+
 // Files
+
+private val FILES_VIEWS = listOf(XDriveView.FILES, XDriveView.LINKS, XDriveView.NOTES, XDriveView.MUSIC, XDriveView.VOICE)
+
+private fun sortSize(message: TdApi.Message): Long = XDriveItems.fileOf(message)?.size ?: 0L
 
 @Composable
 internal fun FilesTab(state: XDriveState) {
   val controller = state.host.controller
   Column(Modifier.fillMaxSize()) {
-    FilterRow(listOf(XDriveView.FILES, XDriveView.LINKS, XDriveView.NOTES, XDriveView.MUSIC, XDriveView.VOICE), state.filesView) { state.filesView = it; state.selected.clear() }
-    val feed = rememberFeed(state, state.filesView, XDriveScope.Everything)
-    val grid = rememberLazyGridState()
-    LoadMore(feed, grid)
+    FilterBar(FILES_VIEWS, state.filesView) { state.filesView = it; state.selected.clear() }
+    val feed = state.feed(state.filesView, XDriveScope.Everything)
+    SortBar(state.filesSort) { state.filesSort = it }
+    LaunchedEffect(feed, state.filesSort) {
+      if (state.filesSort != XDriveSort.DATE) feed.loadAll() else feed.stopLoadingAll()
+    }
+    val list = state.list(feedKey("files", state.filesView, XDriveScope.Everything) + ":" + state.filesSort.name)
+    LoadMore(feed, list)
     if (feed.items.isEmpty()) {
       Loading(feed)
       return@Column
     }
-    LazyVerticalGrid(state = grid, columns = GridCells.Fixed(1), contentPadding = PaddingValues(bottom = bottomRoom(state)), modifier = Modifier.fillMaxSize()) {
-      items(feed.items.size, key = { feed.items[it].id }) { i ->
-        val message = feed.items[i]
-        XDriveRow(state, message, showFolder = true, onOpen = { XDriveActions.open(controller, message) }, modifier = Modifier.animateItem())
+    val sort = state.filesSort
+    val groups: List<Pair<String?, List<TdApi.Message>>> = remember(feed, feed.version.intValue, sort) {
+      when (sort) {
+        XDriveSort.DATE -> groupsByMonth(feed.items)
+        XDriveSort.NAME -> listOf(null to feed.items.sortedBy { XDriveItems.title(it).lowercase() })
+        XDriveSort.SIZE -> listOf(null to feed.items.sortedByDescending { sortSize(it) })
+      }
+    }
+    LazyColumn(state = list, contentPadding = PaddingValues(bottom = bottomRoom(state, false)), modifier = Modifier.fillMaxSize()) {
+      rowGroups(state, groups, showFolder = true) { XDriveActions.open(controller, it) }
+    }
+  }
+}
+
+/** The order of a list: Expressive's connected toggle buttons for date, name and size. */
+@Composable
+private fun SortBar(sort: XDriveSort, onSort: (XDriveSort) -> Unit) {
+  Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Icon(tgxIcon(R.drawable.baseline_sort_24), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+    Text(str(R.string.XgramXDriveSort), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 6.dp, end = 10.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+      val all = XDriveSort.entries
+      all.forEachIndexed { i, s ->
+        ToggleButton(
+          checked = s == sort,
+          onCheckedChange = { if (s != sort) onSort(s) },
+          shapes = when (i) {
+            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+            all.size - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+          },
+          modifier = Modifier.semantics { role = Role.RadioButton }
+        ) {
+          Text(str(s.title), maxLines = 1, style = MaterialTheme.typography.labelMedium)
+        }
       }
     }
   }
 }
 
-/** The kinds as connected toggle buttons (Expressive's button group), scrolling sideways when they don't fit. */
+/**
+ * The kinds as Expressive's button group: they share the width, a pressed one widens, and what doesn't fit goes into
+ * the group's overflow menu (no button cut off at the screen's edge).
+ */
 @Composable
-internal fun FilterRow(views: List<XDriveView>, selected: XDriveView, onSelect: (XDriveView) -> Unit) {
-  LazyRow(
-    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-    horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-    modifier = Modifier.xgramNoSwipeBack()
-  ) {
-    items(views.size) { i ->
-      val view = views[i]
-      val checked = view == selected
-      ToggleButton(
-        checked = checked,
-        onCheckedChange = { if (!checked) onSelect(view) },
-        shapes = when (i) {
-          0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-          views.size - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-          else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-        }
-      ) {
-        Icon(tgxIcon(view.icon), contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(str(view.title), maxLines = 1)
+internal fun FilterBar(views: List<XDriveView>, selected: XDriveView, onSelect: (XDriveView) -> Unit) {
+  ButtonGroup(
+    overflowIndicator = { menu ->
+      IconButton(onClick = { if (menu.isShowing) menu.dismiss() else menu.show() }) {
+        Icon(tgxIcon(R.drawable.baseline_more_vert_24), contentDescription = str(R.string.XgramXDriveMore))
       }
+    },
+    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+  ) {
+    for (view in views) {
+      toggleableItem(
+        checked = view == selected,
+        label = Lang.getString(view.title),
+        onCheckedChange = { if (view != selected) onSelect(view) },
+        icon = { Icon(tgxIcon(view.icon), contentDescription = null, modifier = Modifier.size(18.dp)) },
+        weight = 1f
+      )
     }
   }
 }
@@ -610,75 +738,166 @@ internal fun Loading(feed: XDriveFeed, empty: String? = null) {
   }
 }
 
-// A folder (or Unsorted)
+// A folder (or Unsorted), over the tabs
 
 @Composable
-internal fun FolderScreen(state: XDriveState, scope: XDriveScope) {
+internal fun FolderScreen(state: XDriveState, scope: XDriveScope, openTab: (XDriveTab) -> Unit) {
   val controller = state.host.controller
-  val feed = rememberFeed(state, XDriveView.ALL, scope)
-  val grid = rememberLazyGridState()
-  LoadMore(feed, grid)
-  if (feed.items.isEmpty()) {
-    Column(Modifier.fillMaxSize()) {
-      if (feed.loading.value || !feed.reachedEnd.value) Loading(feed) else EmptyNote(str(R.string.XgramXDriveDragHint))
-    }
-    return
-  }
-  val media = feed.items.filter { val k = XDriveItems.kindOf(it); k == XDriveKind.PHOTO || k == XDriveKind.VIDEO || k == XDriveKind.GIF }
-  val other = feed.items.filter { val k = XDriveItems.kindOf(it); !(k == XDriveKind.PHOTO || k == XDriveKind.VIDEO || k == XDriveKind.GIF) }
-  LazyVerticalGrid(
-    state = grid,
-    columns = GridCells.Fixed(12),
-    contentPadding = PaddingValues(bottom = bottomRoom(state)),
-    verticalArrangement = Arrangement.spacedBy(3.dp),
-    modifier = Modifier.fillMaxSize()
-  ) {
-    if (media.isNotEmpty()) {
-      item(key = "mediaTitle", span = { GridItemSpan(maxLineSpan) }) { SectionTitle(str(R.string.XgramXDriveMediaSection)) }
-      items(media.size, key = { media[it].id }, span = { GridItemSpan(4) }) { i ->
-        val message = media[i]
-        Box(Modifier.padding(horizontal = 1.5.dp).animateItem()) {
-          XDriveCell(state, message, onOpen = { XDriveActions.open(controller, message) })
+  val host = state.host
+  val feed = state.feed(XDriveView.ALL, scope)
+  state.indexVersion
+  val folder = (scope as? XDriveScope.InFolder)?.let { state.index.findFolder(it.folderId) }
+  val title = folder?.name ?: str(R.string.XgramXDriveUnsorted)
+  val count = folder?.let { state.counts()[it.id] ?: 0 }
+  val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+  var menu by remember { mutableStateOf(false) }
+  Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+    if (state.selecting) {
+      SelectionBar(state) { feed.items }
+    } else LargeFlexibleTopAppBar(
+      title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+      subtitle = { Text(if (count != null) items(count) else str(R.string.XgramXDriveUnsortedInfo)) },
+      navigationIcon = {
+        IconButton(onClick = { state.closeFolder() }) { Icon(tgxIcon(R.drawable.baseline_arrow_back_24), contentDescription = str(R.string.XgramXDriveBack)) }
+      },
+      actions = {
+        IconButton(onClick = { state.openSearch() }) {
+          Icon(tgxIcon(R.drawable.baseline_search_24), contentDescription = str(R.string.XgramXDriveSearchIn, title))
+        }
+        IconButton(onClick = { state.folderGrid = !state.folderGrid }) {
+          Icon(
+            tgxIcon(if (state.folderGrid) R.drawable.baseline_view_list_24 else R.drawable.baseline_grid_view_24),
+            contentDescription = str(if (state.folderGrid) R.string.XgramXDriveViewList else R.string.XgramXDriveViewGrid)
+          )
+        }
+        if (folder != null) {
+          Box {
+            IconButton(onClick = { menu = true }) { Icon(tgxIcon(R.drawable.baseline_more_vert_24), contentDescription = str(R.string.XgramXDriveFolderMenu, title)) }
+            FolderMenu(state, folder, menu) { menu = false }
+          }
+        }
+      },
+      windowInsets = WindowInsets(top = host.topInset),
+      colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainer, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+      scrollBehavior = scrollBehavior
+    )
+    if (feed.items.isEmpty()) {
+      if (feed.loading.value || !feed.reachedEnd.value) {
+        Loading(feed)
+      } else {
+        // An empty folder: what can fill it
+        EmptyNote(str(R.string.XgramXDriveFolderEmptyInfo), title = str(R.string.XgramXDriveFolderEmpty)) {
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val folderId = (scope as? XDriveScope.InFolder)?.folderId
+            Button(onClick = { XDriveActions.upload(host, false, folderId) }) { Text(str(R.string.XgramXDriveUploadFiles)) }
+            OutlinedButton(onClick = { state.closeFolder(); openTab(XDriveTab.FOLDERS) }) { Text(str(R.string.XgramXDriveMoveItemsHere)) }
+          }
         }
       }
+      return@Column
     }
-    if (other.isNotEmpty()) {
-      if (media.isNotEmpty()) {
-        item(key = "otherTitle", span = { GridItemSpan(maxLineSpan) }) { SectionTitle(str(R.string.XgramXDriveOtherSection)) }
+    if (state.folderGrid) {
+      val grid = state.grid(feedKey("folderGrid", XDriveView.ALL, scope))
+      LoadMore(feed, grid)
+      LazyVerticalGrid(
+        state = grid,
+        columns = GridCells.Adaptive(104.dp),
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = bottomRoom(state, true)),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.fillMaxSize()
+      ) {
+        val list = feed.items
+        items(list.size, key = { list[it].id }) { i ->
+          val message = list[i]
+          XDriveCell(state, message, onOpen = { XDriveActions.open(controller, message) }, modifier = Modifier.animateItem())
+        }
       }
-      items(other.size, key = { other[it].id }, span = { GridItemSpan(maxLineSpan) }) { i ->
-        val message = other[i]
-        XDriveRow(state, message, showFolder = scope is XDriveScope.Everything, onOpen = { XDriveActions.open(controller, message) }, modifier = Modifier.animateItem())
+    } else {
+      val list = state.list(feedKey("folderList", XDriveView.ALL, scope))
+      LoadMore(feed, list)
+      val groups = remember(feed, feed.version.intValue) { groupsByMonth(feed.items) }
+      LazyColumn(state = list, contentPadding = PaddingValues(bottom = bottomRoom(state, true)), modifier = Modifier.fillMaxSize()) {
+        rowGroups(state, groups, showFolder = false) { XDriveActions.open(controller, it) }
       }
     }
   }
 }
 
-// Search
+// Search, over the tabs (or a folder)
+
+private val SEARCH_VIEWS = listOf(XDriveView.ALL, XDriveView.PHOTOS, XDriveView.VIDEOS, XDriveView.FILES, XDriveView.LINKS, XDriveView.NOTES, XDriveView.MUSIC, XDriveView.VOICE)
 
 @Composable
 internal fun SearchScreen(state: XDriveState) {
   val controller = state.host.controller
+  val focus = remember { FocusRequester() }
+  LaunchedEffect(Unit) { focus.requestFocus() }
   var query by remember { mutableStateOf("") }
   LaunchedEffect(state.query) {
     kotlinx.coroutines.delay(if (state.query.isEmpty()) 0 else 300)
     query = state.query.trim()
   }
-  if (query.isEmpty()) {
-    EmptyNote(str(R.string.XgramXDriveSearchHint))
-    return
+  val scope = state.searchIn
+  val folderName = when (scope) {
+    is XDriveScope.InFolder -> state.index.findFolder(scope.folderId)?.name
+    XDriveScope.Unsorted -> str(R.string.XgramXDriveUnsorted)
+    XDriveScope.Everything -> null
   }
-  val feed = rememberFeed(state, XDriveView.ALL, XDriveScope.Everything, query)
-  val grid = rememberLazyGridState()
-  LoadMore(feed, grid)
-  if (feed.items.isEmpty()) {
-    Column(Modifier.fillMaxSize()) { Loading(feed, str(R.string.XgramXDriveNoResults)) }
-    return
-  }
-  LazyVerticalGrid(state = grid, columns = GridCells.Fixed(1), contentPadding = PaddingValues(bottom = bottomRoom(state)), modifier = Modifier.fillMaxSize()) {
-    items(feed.items.size, key = { feed.items[it].id }) { i ->
-      val message = feed.items[i]
-      XDriveRow(state, message, showFolder = true, onOpen = { XDriveActions.open(controller, message) }, modifier = Modifier.animateItem())
+  Column(Modifier.fillMaxSize()) {
+    if (state.selecting) {
+      SelectionBar(state) { if (query.isEmpty()) emptyList() else state.feed(state.searchView, scope, query).items }
+    } else Row(
+      Modifier.fillMaxWidth().padding(top = with(LocalDensity.current) { state.host.topInset.toDp() }).heightIn(min = 72.dp).padding(horizontal = 8.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      IconButton(onClick = { state.closeSearch() }) { Icon(tgxIcon(R.drawable.baseline_arrow_back_24), contentDescription = str(R.string.XgramXDriveBack)) }
+      TextField(
+        value = state.query,
+        onValueChange = { state.query = it },
+        placeholder = { Text(if (folderName != null) str(R.string.XgramXDriveSearchIn, folderName) else str(R.string.XgramXDriveSearch), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        singleLine = true,
+        shape = RoundedCornerShape(28.dp),
+        trailingIcon = if (state.query.isNotEmpty()) {
+          { IconButton(onClick = { state.query = "" }) { Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.Clear)) } }
+        } else null,
+        colors = TextFieldDefaults.colors(
+          focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+          unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+          focusedIndicatorColor = Color.Transparent,
+          unfocusedIndicatorColor = Color.Transparent
+        ),
+        modifier = Modifier.weight(1f).padding(end = 8.dp).focusRequester(focus)
+      )
+    }
+    if (folderName != null) {
+      // Searching in a folder: one tap widens it to everything
+      Row(Modifier.padding(start = 16.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        InputChip(
+          selected = true,
+          onClick = { state.searchIn = XDriveScope.Everything },
+          label = { Text(folderName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+          trailingIcon = { Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.XgramXDriveSearchEverywhere), modifier = Modifier.size(18.dp)) }
+        )
+      }
+    }
+    FilterBar(SEARCH_VIEWS, state.searchView) { state.searchView = it }
+    if (query.isEmpty()) {
+      EmptyNote(str(R.string.XgramXDriveSearchStart))
+      return@Column
+    }
+    // The server searches by kind and words; inside a folder its items are matched here
+    val feed = state.feed(state.searchView, scope, query)
+    val list = state.list("search:" + state.searchView.name + ":" + XDriveState.scopeKey(scope) + ":" + query)
+    LoadMore(feed, list)
+    if (feed.items.isEmpty()) {
+      Loading(feed, str(R.string.XgramXDriveNoResults))
+      return@Column
+    }
+    LazyColumn(state = list, contentPadding = PaddingValues(bottom = bottomRoom(state, true)), modifier = Modifier.fillMaxSize()) {
+      rowGroups(state, listOf<Pair<String?, List<TdApi.Message>>>(null to feed.items), showFolder = scope is XDriveScope.Everything) { message ->
+        XDriveActions.open(controller, message)
+      }
     }
   }
 }

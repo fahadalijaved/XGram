@@ -2814,5 +2814,29 @@
   "where": [
    "java/com/fahadali/xgram/compose/pages/XDriveOrganize.kt"
   ]
+ },
+ "sort": {
+  "tgx": [
+   "baseline_sort_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/compose/pages/XDriveTabs.kt"
+  ]
+ },
+ "view_list": {
+  "tgx": [
+   "baseline_view_list_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/compose/pages/XDriveTabs.kt"
+  ]
+ },
+ "grid_view": {
+  "tgx": [
+   "baseline_grid_view_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/compose/pages/XDriveTabs.kt"
+  ]
  }
 }

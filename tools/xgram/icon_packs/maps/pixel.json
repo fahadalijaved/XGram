@@ -342,5 +342,8 @@
  "fitness_center": "human-run",
  "lightbulb": "lightbulb",
  "payments": "money",
- "auto_awesome": "sparkles"
+ "auto_awesome": "sparkles",
+ "sort": "sort",
+ "view_list": "view-list",
+ "grid_view": "grid-2x2-2"
 }

@@ -137,8 +137,8 @@ object XDriveActions {
     })
   }
 
-  /** Puts messages into a folder (chosen from the list, or a new one), or takes them out ([current] given). */
-  fun chooseFolder(host: XgramComposeHost, messageIds: LongArray, after: () -> Unit) {
+  /** A folder for [messageIds] (one from the list, or a new one): [onChosen] gets its id. */
+  fun chooseFolder(host: XgramComposeHost, messageIds: LongArray, onChosen: (String) -> Unit) {
     val index = XDriveIndex.of(host.tdlib)
     index.load {
       val folders = index.folders()
@@ -149,18 +149,9 @@ object XDriveActions {
       val current = messageIds.firstOrNull()?.let { index.folderOf(it) } ?: ""
       host.choose(ChoiceSpec(title = Lang.getString(R.string.XgramXDriveChooseFolder), options = options, selected = current) { id ->
         if (id == newKey) {
-          newFolder(host) { folder ->
-            index.setFolder(messageIds, folder.id)
-            toast(Lang.getString(R.string.XgramXDriveAddedTo, folder.name))
-            after()
-          }
-        } else {
-          val folder = index.findFolder(id)
-          if (folder != null) {
-            index.setFolder(messageIds, folder.id)
-            toast(Lang.getString(R.string.XgramXDriveAddedTo, folder.name))
-            after()
-          }
+          newFolder(host) { folder -> onChosen(folder.id) }
+        } else if (index.findFolder(id) != null) {
+          onChosen(id)
         }
       })
     }

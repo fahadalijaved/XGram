@@ -1059,6 +1059,15 @@ public abstract class ViewController<T> implements Future<View>, ThemeChangeList
     return xgramBarTab;
   }
 
+  /**
+   * XGram: a system back gesture this screen plays itself (a state inside it, like a Compose page's open folder),
+   * with its progress; null: none now, back goes as usual. Asked when a predictive back gesture starts.
+   */
+  @Nullable
+  public SystemBackEventListener xgramInPageBack () {
+    return null;
+  }
+
   /** A tab screen while the toolbar is on screen (on a wide window it is an ordinary screen again). */
   public final boolean xgramIsBarTab () {
     return xgramBarTab != -1 && com.fahadali.xgram.layout.XgramNavToolbar.isShownFor(this);

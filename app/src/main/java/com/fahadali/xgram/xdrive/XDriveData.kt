@@ -14,6 +14,7 @@ package com.fahadali.xgram.xdrive
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import com.fahadali.xgram.history.XgramMedia
@@ -270,6 +271,8 @@ class XDriveFeed(
   val query: String
 ) : MessageListener {
   val items = mutableStateListOf<TdApi.Message>()
+  /** Goes up whenever [items] changes (an edit replaces an item without changing the size). */
+  val version = mutableIntStateOf(0)
   val loading = mutableStateOf(false)
   val reachedEnd = mutableStateOf(false)
 
@@ -280,6 +283,10 @@ class XDriveFeed(
   private var generation = 0
   private var reloadPosted = false
   private var attached = false
+  /** A refresh is under way: its first page replaces the list (no empty list, no jump), later pages add on. */
+  private var replacing = false
+  /** Read on until the end (sorting by name or size needs every item). */
+  private var loadingAll = false
 
   fun attach() {
     if (!attached && chatId != 0L) {
@@ -304,9 +311,49 @@ class XDriveFeed(
     items.clear()
     seen.clear()
     fromId = 0
+    replacing = false
     reachedEnd.value = false
     loading.value = false
     loadMore()
+  }
+
+  /** Reads the list again without emptying it first: what is shown stays until the new first page replaces it. */
+  fun refresh() {
+    if (items.isEmpty()) {
+      reload()
+      return
+    }
+    generation++
+    fromId = 0
+    replacing = true
+    seen.clear()
+    reachedEnd.value = false
+    loading.value = false
+    loadMore()
+  }
+
+  /** The folders changed: what no longer belongs here leaves at once (animated); new arrivals come with a refresh. */
+  fun indexChanged() {
+    if (scope is XDriveScope.Everything) return
+    if (items.removeAll { !keep(it) }) version.intValue++
+    when (scope) {
+      is XDriveScope.InFolder -> {
+        val shown = items.mapTo(HashSet()) { it.id }
+        if (index.messagesIn(scope.folderId).any { !shown.contains(it) }) refresh()
+      }
+      XDriveScope.Unsorted -> scheduleReload()
+      XDriveScope.Everything -> Unit
+    }
+  }
+
+  /** Reads every page (up to a few thousand items), for a sort by name or size; [stopLoadingAll] goes back to paging. */
+  fun loadAll() {
+    loadingAll = true
+    loadMore()
+  }
+
+  fun stopLoadingAll() {
+    loadingAll = false
   }
 
   private fun keep(message: TdApi.Message): Boolean {
@@ -339,13 +386,47 @@ class XDriveFeed(
     }
   }
 
-  private fun done(gen: Int, added: List<TdApi.Message>, end: Boolean) {
+  /** A page arrived: [added] what it keeps, [coveredDownTo] the oldest message it read (kept or not). */
+  private fun done(gen: Int, added: List<TdApi.Message>, end: Boolean, coveredDownTo: Long = added.minOfOrNull { it.id } ?: Long.MAX_VALUE) {
     if (gen != generation) return
-    for (message in added) {
-      if (seen.add(message.id)) items.add(message)
+    if (replacing) {
+      // One change: the old list becomes the new first page (items that stay keep their place, animateItem moves them)
+      replacing = false
+      val fresh = added.distinctBy { it.id }
+      val byId = fresh.associateBy { it.id }
+      // What the new page read (all of it at the end, else down to its oldest message) is replaced; older items stay
+      val oldest = if (end) Long.MIN_VALUE else coveredDownTo
+      items.removeAll { it.id >= oldest && !byId.containsKey(it.id) }
+      for (i in fresh.indices) {
+        val at = items.indexOfFirst { it.id == fresh[i].id }
+        when {
+          at == -1 -> items.add(i.coerceAtMost(items.size), fresh[i])
+          at != i -> {
+            items.removeAt(at)
+            items.add(i.coerceAtMost(items.size), fresh[i])
+          }
+          else -> items[i] = fresh[i]
+        }
+      }
+      seen.clear()
+      items.forEach { seen.add(it.id) }
+    } else {
+      // Newest first: an item that turns up late (taken out of a folder, say) goes where its date puts it
+      for (message in added) {
+        if (!seen.add(message.id)) continue
+        val last = items.lastOrNull()
+        if (last == null || last.id > message.id) {
+          items.add(message)
+        } else {
+          val at = items.indexOfFirst { it.id < message.id }
+          items.add(if (at < 0) items.size else at, message)
+        }
+      }
     }
+    version.intValue++
     loading.value = false
     reachedEnd.value = end
+    if (loadingAll && !end && items.size < 4000) UI.post { if (gen == generation && loadingAll) loadMore() }
   }
 
   /** A server search: by kind, by words, or both; paged with nextFromMessageId. */
@@ -353,10 +434,12 @@ class XDriveFeed(
     val filter = view.filter()
     tdlib.send(TdApi.SearchChatMessages(chatId, null, query.trim(), null, fromId, 0, 50, filter), Tdlib.ResultHandler<TdApi.FoundChatMessages> { found, _ ->
       UI.post {
-        val list = found?.messages?.filterNotNull()?.filter { keep(it) } ?: emptyList()
+        if (gen != generation) return@post
+        val page = found?.messages?.filterNotNull() ?: emptyList()
+        val list = page.filter { keep(it) }
         val next = found?.nextFromMessageId ?: 0L
         fromId = next
-        done(gen, list, found == null || next == 0L)
+        done(gen, list, found == null || next == 0L, page.minOfOrNull { it.id } ?: Long.MAX_VALUE)
         // Notes and the unsorted view keep only some of a page: read on while too few came
         if (gen == generation && !reachedEnd.value && items.size < 30 && list.size < 10) loadMore()
       }
@@ -373,14 +456,14 @@ class XDriveFeed(
         var fresh = 0
         val kept = ArrayList<TdApi.Message>()
         for (message in messages) {
-          if (message.id == fromId || seen.contains(message.id)) continue
+          if (message.id == fromId) continue
           fresh++
           if (oldest == 0L || message.id < oldest) oldest = message.id
-          if (keep(message)) kept.add(message)
+          if (!seen.contains(message.id) && keep(message)) kept.add(message)
         }
         fromId = oldest
         val end = fresh == 0
-        done(gen, kept, end)
+        done(gen, kept, end, oldest)
         if (!end && kept.size < 15 && depth < 20) {
           loading.value = true
           loadHistory(gen, depth + 1)
@@ -422,7 +505,7 @@ class XDriveFeed(
     reloadPosted = true
     UI.post({
       reloadPosted = false
-      if (attached) reload()
+      if (attached) refresh()
     }, 600)
   }
 
@@ -440,7 +523,7 @@ class XDriveFeed(
     UI.post {
       if (!attached) return@post
       val ids = messageIds.toHashSet()
-      items.removeAll { ids.contains(it.id) }
+      if (items.removeAll { ids.contains(it.id) }) version.intValue++
     }
   }
 

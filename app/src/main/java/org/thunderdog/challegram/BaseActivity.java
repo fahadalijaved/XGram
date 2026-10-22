@@ -1581,7 +1581,13 @@ public abstract class BaseActivity extends FragmentActivity implements View.OnTo
         return com.fahadali.xgram.appearance.XgramMotion.sheetBackTarget(window.getBoundView());
       }
     }
-    return null;
+    // XGram: no sheet, and back belongs to the screen (not the camera, the recorder or an animation): the screen's own
+    // state (a Compose page's open folder) plays the gesture's progress itself
+    if (isCameraOpen || recordAudioVideoController.isOpen() || isAnimating(false)) {
+      return null;
+    }
+    org.thunderdog.challegram.navigation.ViewController<?> current = navigation != null ? navigation.getCurrentStackItem() : null;
+    return current != null ? current.xgramInPageBack() : null;
   }
 
   private @BackPressMode int backPressMode = BackPressMode.SYSTEM_ACTION_REQUIRED;

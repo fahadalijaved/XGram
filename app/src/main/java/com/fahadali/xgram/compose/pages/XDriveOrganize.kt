@@ -53,7 +53,22 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.TextObfuscationMode
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.ToggleButton
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.layout.imePadding
@@ -118,13 +133,15 @@ internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSee
     if (organizer.phase == XDriveOrganizer.Phase.DONE) organizer.reset()
     onClose()
   }
-  Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(top = topInset)) {
-    Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-      IconButton(onClick = close) {
-        Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.XgramXDriveClose))
-      }
-      Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
-    }
+  Column(Modifier.fillMaxSize().padding(top = topInset)) {
+    TopAppBar(
+      title = { Text(str(R.string.XgramXDriveOrganize), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+      navigationIcon = {
+        IconButton(onClick = close) { Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.XgramXDriveClose)) }
+      },
+      windowInsets = WindowInsets(0),
+      colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+    )
     AnimatedContent(
       targetState = if (organizer.running && organizer.phase != XDriveOrganizer.Phase.CONSENT) XDriveOrganizer.Phase.SORTING else organizer.phase,
       transitionSpec = {
@@ -155,7 +172,7 @@ internal fun organizeStatus(organizer: XDriveOrganizer): String = when {
       str(R.string.XgramXDriveNanoDownloading)
     }
   organizer.phase == XDriveOrganizer.Phase.PREPARING -> str(R.string.XgramXDriveNanoStarting)
-  organizer.phase == XDriveOrganizer.Phase.READING -> str(R.string.XgramXDriveReadingNow, Lang.plural(R.string.xMessages, organizer.readCount.toLong()))
+  organizer.phase == XDriveOrganizer.Phase.READING -> str(R.string.XgramXDriveReadingNow, items(organizer.readCount))
   organizer.nanoStep == XDriveOrganizer.NanoStep.NAMING -> str(R.string.XgramXDriveAiNaming, organizer.aiName)
   organizer.nanoStep == XDriveOrganizer.NanoStep.SORTING -> str(R.string.XgramXDriveAiSorting, organizer.aiName, organizer.sortDone, organizer.sortTotal)
   else -> str(R.string.XgramXDriveSortingNow)
@@ -209,29 +226,29 @@ private fun ReadyStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.
         }
         EngineOption(
           title = str(R.string.XgramXDriveEngineNano), text = nanoText, icon = R.drawable.baseline_auto_awesome_24,
-          selected = organizer.engine == XDriveEngine.NANO, enabled = nano != null && nano != XDriveNano.Status.UNSUPPORTED
+          selected = organizer.engine == XDriveEngine.NANO, enabled = nano != null && nano != XDriveNano.Status.UNSUPPORTED, index = 0, count = 3
         ) { organizer.engine = XDriveEngine.NANO }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
         val cloud = organizer.cloud
         EngineOption(
           title = str(R.string.XgramXDriveEngineCloud),
           text = if (cloud != null) str(R.string.XgramXDriveEngineCloudSet, cloud.name, cloud.model) else str(R.string.XgramXDriveEngineCloudInfo),
           icon = R.drawable.baseline_cloud_24,
-          selected = organizer.engine == XDriveEngine.CLOUD, enabled = true,
+          selected = organizer.engine == XDriveEngine.CLOUD, enabled = true, index = 1, count = 3,
           action = if (cloud != null) str(R.string.XgramXDriveCloudChange) else null,
           onAction = { cloudSheet = true }
         ) { if (cloud != null) organizer.engine = XDriveEngine.CLOUD else cloudSheet = true }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
         EngineOption(
           title = str(R.string.XgramXDriveEngineRules), text = str(R.string.XgramXDriveEngineRulesInfo), icon = R.drawable.baseline_tune_24,
-          selected = organizer.engine == XDriveEngine.RULES, enabled = true
+          selected = organizer.engine == XDriveEngine.RULES, enabled = true, index = 2, count = 3
         ) { organizer.engine = XDriveEngine.RULES }
       }
     }
     Button(
       onClick = onStart,
       enabled = nano != null || organizer.engine == XDriveEngine.RULES,
-      modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset).height(56.dp),
+      modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset).heightIn(min = 56.dp),
       contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
     ) {
       Icon(tgxIcon(R.drawable.baseline_auto_awesome_24), contentDescription = null, modifier = Modifier.size(20.dp))
@@ -243,31 +260,33 @@ private fun ReadyStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.
 
 @Composable
 private fun EngineOption(
-  title: String, text: String, icon: Int, selected: Boolean, enabled: Boolean,
+  title: String, text: String, icon: Int, selected: Boolean, enabled: Boolean, index: Int, count: Int,
   action: String? = null, onAction: (() -> Unit)? = null, onClick: () -> Unit
 ) {
   val c = MaterialTheme.colorScheme
-  val border = if (selected) c.primary else c.outlineVariant
-  Row(
-    Modifier.fillMaxWidth().alpha(if (enabled) 1f else .5f).clip(RoundedCornerShape(24.dp))
-      .background(if (selected) c.secondaryContainer else c.surfaceContainer)
-      .border(if (selected) 2.dp else 1.dp, border, RoundedCornerShape(24.dp))
-      .clickable(enabled = enabled, onClick = onClick)
-      .padding(16.dp),
-    verticalAlignment = Alignment.CenterVertically
-  ) {
-    Box(Modifier.size(44.dp).clip(MaterialShapes.Cookie6Sided.toShape()).background(if (selected) c.primary else c.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-      Icon(tgxIcon(icon), contentDescription = null, tint = if (selected) c.onPrimary else c.onSurfaceVariant, modifier = Modifier.size(22.dp))
-    }
-    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-      Text(title, style = MaterialTheme.typography.titleMedium)
-      Text(text, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
-      if (action != null && onAction != null) {
-        TextButton(onClick = onAction, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(action) }
+  SegmentedListItem(
+    selected = selected,
+    onClick = onClick,
+    shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+    enabled = enabled,
+    modifier = Modifier.semantics { role = Role.RadioButton },
+    leadingContent = {
+      Box(Modifier.size(44.dp).clip(MaterialShapes.Cookie6Sided.toShape()).background(if (selected) c.primary else c.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+        Icon(tgxIcon(icon), contentDescription = null, tint = if (selected) c.onPrimary else c.onSurfaceVariant, modifier = Modifier.size(22.dp))
       }
-    }
-    RadioButton(selected = selected, onClick = if (enabled) onClick else null, enabled = enabled)
-  }
+    },
+    supportingContent = {
+      Column {
+        Text(text)
+        if (action != null && onAction != null) {
+          TextButton(onClick = onAction, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(action) }
+        }
+      }
+    },
+    trailingContent = { RadioButton(selected = selected, onClick = null, enabled = enabled) },
+    colors = ListItemDefaults.segmentedColors(containerColor = c.surfaceBright, selectedContainerColor = c.secondaryContainer),
+    content = { Text(title) }
+  )
 }
 
 @Composable
@@ -314,98 +333,105 @@ private fun ReviewStep(state: XDriveState, organizer: XDriveOrganizer, bottomIns
   }
   val total = folders.filter { it.enabled }.sumOf { it.count }
   val folderCount = folders.count { it.enabled && it.count > 0 }
+  // Which proposals show what goes in: their items are rows of the list itself (no long column inside one row)
+  val open = remember { mutableStateMapOf<Int, Boolean>() }
+  val c = MaterialTheme.colorScheme
   Column(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
       item(key = "head") {
         Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
           Text(
-            str(R.string.XgramXDriveReviewTitle, Lang.plural(R.string.xFolders, folderCount.toLong()), Lang.plural(R.string.xMessages, total.toLong())),
-            style = MaterialTheme.typography.headlineSmall
+            str(R.string.XgramXDriveReviewTitle, Lang.plural(R.string.xFolders, folderCount.toLong()), items(total)),
+            style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() }
           )
           Spacer(Modifier.height(6.dp))
-          Text(str(R.string.XgramXDriveReviewInfo), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          Text(str(R.string.XgramXDriveReviewInfo), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
           val note = organizer.note
           if (note != null) {
             Spacer(Modifier.height(10.dp))
             Row(
-              Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.tertiaryContainer).padding(14.dp),
+              Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.tertiaryContainer).padding(14.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Icon(tgxIcon(R.drawable.baseline_info_24), contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(20.dp))
-              Text(note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(start = 12.dp))
+              Icon(tgxIcon(R.drawable.baseline_info_24), contentDescription = null, tint = c.onTertiaryContainer, modifier = Modifier.size(20.dp))
+              Text(note, style = MaterialTheme.typography.bodyMedium, color = c.onTertiaryContainer, modifier = Modifier.padding(start = 12.dp))
             }
           }
           if (organizer.unsortedLeft > 0) {
             Spacer(Modifier.height(4.dp))
-            Text(str(R.string.XgramXDriveReviewLeft, Lang.plural(R.string.xMessages, organizer.unsortedLeft.toLong())), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(str(R.string.XgramXDriveReviewLeft, items(organizer.unsortedLeft)), style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
           }
+          Spacer(Modifier.height(6.dp))
         }
       }
-      items(folders, key = { System.identityHashCode(it) }) { folder ->
-        ProposalCard(state, folder, Modifier.animateItem())
+      for (folder in folders) {
+        val expanded = open[folder.id] == true
+        item(key = "p" + folder.id) {
+          ProposalCard(state, folder, expanded, { open[folder.id] = !expanded }, Modifier.animateItem().padding(top = 10.dp))
+        }
+        if (expanded) {
+          val list = folder.items
+          items(list.size, key = { "p" + folder.id + ":" + list[it].id }) { i ->
+            val message = list[i]
+            val left = folder.left.contains(message.id)
+            SegmentedListItem(
+              checked = !left,
+              onCheckedChange = { keep -> if (keep) folder.left.remove(message.id) else folder.left.add(message.id) },
+              shapes = ListItemDefaults.segmentedShapes(index = i, count = list.size),
+              modifier = Modifier.animateItem().padding(top = ListItemDefaults.SegmentedGap),
+              leadingContent = { XDriveThumb(message, Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)), iconSize = 18) },
+              supportingContent = { Text(XDriveItems.subtitle(message), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+              trailingContent = { Checkbox(checked = !left, onCheckedChange = null) },
+              colors = ListItemDefaults.segmentedColors(containerColor = c.surfaceBright),
+              content = { Text(XDriveItems.title(message), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            )
+          }
+        }
       }
     }
     Button(
       onClick = onApply,
       enabled = total > 0,
-      modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset).height(56.dp),
+      modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset).heightIn(min = 56.dp),
       contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
     ) {
-      Text(str(R.string.XgramXDriveReviewApply, Lang.plural(R.string.xMessages, total.toLong())), style = MaterialTheme.typography.titleMedium)
+      Text(str(R.string.XgramXDriveReviewApply, items(total)), style = MaterialTheme.typography.titleMedium)
     }
   }
 }
 
-/** A proposed folder: its badge and name (tap to rename), how many go in, on or off, and what goes in. */
+/** A proposed folder: its badge and name (tap to rename), how many go in, on or off, a glance at what goes in. */
 @Composable
-private fun ProposalCard(state: XDriveState, folder: XDriveProposedFolder, modifier: Modifier) {
+private fun ProposalCard(state: XDriveState, folder: XDriveProposedFolder, expanded: Boolean, onExpand: () -> Unit, modifier: Modifier) {
   val c = MaterialTheme.colorScheme
-  var open by remember { mutableStateOf(false) }
-  val motion = MaterialTheme.motionScheme
-  Column(modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(if (folder.enabled) c.surfaceContainerHigh else c.surfaceContainerLow).alpha(if (folder.enabled) 1f else .6f)) {
+  Column(modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(if (folder.enabled) c.surfaceBright else c.surfaceContainerLow)) {
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-      FolderBadge(folder.name, folder.emoji, XDriveIcons.drawableOf(folder.icon), 48)
-      Column(
-        Modifier.weight(1f).padding(horizontal = 14.dp).clickable {
-          state.host.prompt(PromptSpec(title = Lang.getString(R.string.XgramXDriveRename), hint = Lang.getString(R.string.XgramXDriveFolderName), initial = folder.name) { text ->
-            if (text.isNotBlank()) folder.name = text.trim()
-          })
+      // Switched off: its name and badge fade, the switch itself stays clear
+      Row(Modifier.weight(1f).alpha(if (folder.enabled) 1f else .55f), verticalAlignment = Alignment.CenterVertically) {
+        FolderBadge(folder.name, folder.emoji, XDriveIcons.drawableOf(folder.icon), 48.dp)
+        Column(
+          Modifier.weight(1f).padding(horizontal = 14.dp).clickable(onClickLabel = str(R.string.XgramXDriveRename)) {
+            state.host.prompt(PromptSpec(title = Lang.getString(R.string.XgramXDriveRename), hint = Lang.getString(R.string.XgramXDriveFolderName), initial = folder.name) { text ->
+              if (text.isNotBlank()) folder.name = text.trim()
+            })
+          }
+        ) {
+          Text(folder.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+          Text(
+            items(folder.count) + if (folder.existingId != null) " · " + str(R.string.XgramXDriveReviewExisting) else "",
+            style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+          )
         }
-      ) {
-        Text(folder.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(
-          Lang.plural(R.string.xMessages, folder.count.toLong()) + if (folder.existingId != null) " · " + str(R.string.XgramXDriveReviewExisting) else "",
-          style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
-        )
       }
       Switch(checked = folder.enabled, onCheckedChange = { folder.enabled = it })
     }
-    // A glance at what goes in
     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
       items(folder.items.take(12), key = { it.id }) { message ->
         XDriveThumb(message, Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)), iconSize = 20)
       }
     }
-    TextButton(onClick = { open = !open }, modifier = Modifier.padding(start = 6.dp)) {
-      Text(if (open) str(R.string.XgramXDriveHideItems) else str(R.string.XgramXDriveShowItems))
-    }
-    AnimatedVisibility(open, enter = expandVertically(motion.defaultSpatialSpec()) + fadeIn(), exit = shrinkVertically(motion.fastSpatialSpec()) + fadeOut()) {
-      Column(Modifier.padding(bottom = 8.dp)) {
-        for (message in folder.items.take(200)) {
-          val left = folder.left.contains(message.id)
-          Row(
-            Modifier.fillMaxWidth().clickable { if (left) folder.left.remove(message.id) else folder.left.add(message.id) }.padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Checkbox(checked = !left, onCheckedChange = { if (it) folder.left.remove(message.id) else folder.left.add(message.id) })
-            XDriveThumb(message, Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)), iconSize = 18)
-            Column(Modifier.weight(1f).padding(start = 12.dp)) {
-              Text(XDriveItems.title(message), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-              Text(XDriveItems.subtitle(message), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-          }
-        }
-      }
+    TextButton(onClick = onExpand, modifier = Modifier.padding(start = 6.dp, bottom = 4.dp)) {
+      Text(if (expanded) str(R.string.XgramXDriveHideItems) else str(R.string.XgramXDriveShowItems))
     }
   }
 }
@@ -426,11 +452,11 @@ private fun DoneStep(organizer: XDriveOrganizer, onClose: () -> Unit, onSeeFolde
     Text(str(R.string.XgramXDriveDoneTitle), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
     Spacer(Modifier.height(8.dp))
     Text(
-      str(R.string.XgramXDriveDoneText, Lang.plural(R.string.xMessages, organizer.movedCount.toLong()), Lang.plural(R.string.xFolders, organizer.folders.count { it.enabled && it.count > 0 }.toLong())),
+      str(R.string.XgramXDriveDoneText, items(organizer.movedCount), Lang.plural(R.string.xFolders, organizer.folders.count { it.enabled && it.count > 0 }.toLong())),
       style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant, textAlign = TextAlign.Center
     )
     Spacer(Modifier.height(28.dp))
-    Button(onClick = onSeeFolders, modifier = Modifier.height(56.dp), contentPadding = ButtonDefaults.contentPaddingFor(56.dp)) {
+    Button(onClick = onSeeFolders, modifier = Modifier.heightIn(min = 56.dp), contentPadding = ButtonDefaults.contentPaddingFor(56.dp)) {
       Text(str(R.string.XgramXDriveSeeFolders), style = MaterialTheme.typography.titleMedium)
     }
     TextButton(onClick = onClose) { Text(str(R.string.XgramXDriveClose)) }
@@ -452,7 +478,7 @@ private fun ConsentStep(organizer: XDriveOrganizer, bottomInset: androidx.compos
           Text(str(R.string.XgramXDriveConsentTitle, organizer.aiName), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
           Spacer(Modifier.height(10.dp))
           Text(
-            str(R.string.XgramXDriveConsentText, Lang.plural(R.string.xMessages, organizer.consentCount.toLong()), organizer.aiName),
+            str(R.string.XgramXDriveConsentText, items(organizer.consentCount), organizer.aiName),
             style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant, textAlign = TextAlign.Center
           )
           Spacer(Modifier.height(20.dp))
@@ -468,7 +494,7 @@ private fun ConsentStep(organizer: XDriveOrganizer, bottomInset: androidx.compos
       }
     }
     Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset)) {
-      Button(onClick = { organizer.answerConsent(true) }, modifier = Modifier.fillMaxWidth().height(56.dp), contentPadding = ButtonDefaults.contentPaddingFor(56.dp)) {
+      Button(onClick = { organizer.answerConsent(true) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), contentPadding = ButtonDefaults.contentPaddingFor(56.dp)) {
         Text(str(R.string.XgramXDriveConsentSend), style = MaterialTheme.typography.titleMedium)
       }
       TextButton(onClick = { organizer.answerConsent(false) }, modifier = Modifier.fillMaxWidth()) {
@@ -483,13 +509,16 @@ private fun ConsentStep(organizer: XDriveOrganizer, bottomInset: androidx.compos
 private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose.ui.unit.Dp, onDismiss: () -> Unit) {
   val settings = com.fahadali.xgram.XgramSettings.instance()
   var provider by remember { mutableStateOf(XDriveCloudProvider.of(settings.xdriveAiProvider()) ?: XDriveCloudProvider.CLAUDE) }
-  var key by remember(provider) { mutableStateOf(settings.xdriveAiKey(provider.id)) }
+  // The key in a secure field: hidden as typed, kept out of the keyboard's learning
+  val keyField = remember(provider) { TextFieldState(settings.xdriveAiKey(provider.id)) }
+  var showKey by remember { mutableStateOf(false) }
+  val key = keyField.text.toString().trim()
   var model by remember(provider) { mutableStateOf(settings.xdriveAiModel(provider.id).ifEmpty { provider.defaultModel }) }
   var baseUrl by remember { mutableStateOf(settings.xdriveAiBaseUrl().ifEmpty { XDriveCloudConfig.OPENAI_BASE_URL }) }
   val saved = remember(provider) { settings.xdriveAiKey(provider.id).isNotEmpty() }
   ModalBottomSheet(onDismissRequest = onDismiss) {
     Column(
-      Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(start = 20.dp, end = 20.dp, bottom = 16.dp + bottomInset),
+      Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
       verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
       Text(str(R.string.XgramXDriveCloudTitle), style = MaterialTheme.typography.titleLarge)
@@ -511,10 +540,15 @@ private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose
         }
       }
       Text(str(provider.keyHelp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-      OutlinedTextField(
-        value = key, onValueChange = { key = it.trim() }, singleLine = true,
+      OutlinedSecureTextField(
+        state = keyField,
         label = { Text(str(R.string.XgramXDriveCloudKey)) },
-        visualTransformation = PasswordVisualTransformation(),
+        textObfuscationMode = if (showKey) TextObfuscationMode.Visible else TextObfuscationMode.RevealLastTyped,
+        trailingIcon = {
+          IconButton(onClick = { showKey = !showKey }) {
+            Icon(tgxIcon(R.drawable.baseline_visibility_24), contentDescription = str(if (showKey) R.string.XgramXDriveHideKey else R.string.XgramXDriveShowKey))
+          }
+        },
         modifier = Modifier.fillMaxWidth()
       )
       OutlinedTextField(
@@ -538,7 +572,7 @@ private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose
           onDismiss()
         },
         enabled = key.isNotEmpty() && model.isNotEmpty() && (provider != XDriveCloudProvider.OPENAI || baseUrl.startsWith("http")),
-        modifier = Modifier.fillMaxWidth().height(56.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
       ) {
         Text(str(R.string.Save), style = MaterialTheme.typography.titleMedium)

@@ -84,6 +84,13 @@ interface XgramComposeHost {
   fun setBackConsumer(f: (() -> Unit)?)
 
   /**
+   * The predictive back gesture's progress over the in-page state the back consumer closes ([setBackConsumer]): the
+   * page shows the state shrinking away as the finger moves, and the consumer runs when the gesture is let go.
+   * Null: back closes it at once.
+   */
+  fun setBackProgress(listener: XgramBackProgress?) {}
+
+  /**
    * Keeps Telegram X's swipe-back from starting inside the rectangle [bounds] returns, in window pixels (null from it:
    * nowhere right now). [bounds] runs only when a swipe could start; null removes the area. See Modifier.xgramNoSwipeBack.
    */
@@ -139,3 +146,11 @@ class PromptSpec(
   val initial: String = "",
   val onDone: (String) -> Unit
 )
+
+/** A predictive back gesture over a page's in-page state: [onProgress] from 0 to 1, then the back consumer or [onCancel]. */
+interface XgramBackProgress {
+  /** The gesture started at the right edge (the state slides left) or the left one. */
+  fun onStart(fromRightEdge: Boolean)
+  fun onProgress(progress: Float)
+  fun onCancel()
+}

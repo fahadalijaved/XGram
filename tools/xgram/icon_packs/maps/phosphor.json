@@ -342,5 +342,8 @@
  "fitness_center": "barbell",
  "lightbulb": "lightbulb",
  "payments": "money",
- "auto_awesome": "sparkle"
+ "auto_awesome": "sparkle",
+ "sort": "sort-descending",
+ "view_list": "rows",
+ "grid_view": "squares-four"
 }

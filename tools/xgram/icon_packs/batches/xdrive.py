@@ -62,6 +62,11 @@ ICONS = {
     'fitness_center': [L(8, 12, 16, 12), RR(5, 7, 3, 10, 1.4), RR(16, 7, 3, 10, 1.4), L(2.5, 10.2, 2.5, 13.8), L(21.5, 10.2, 21.5, 13.8)],
     # a banknote with its coin, a second note behind
     'payments': [RR(2.5, 5, 15.5, 10.5, 2.2), C(10.25, 10.25, 2.4), P('M21.5 8.5v7.8a2.7 2.7 0 0 1-2.7 2.7H6.5')],
+    # list order: three lines, shorter down
+    'sort': [L(4, 7, 20, 7), L(4, 12, 15.5, 12), L(4, 17, 11, 17)],
+    # list view: two wide rows; grid view: four tiles
+    'view_list': [RR(3, 4.5, 18, 6, 2), RR(3, 13.5, 18, 6, 2)],
+    'grid_view': [RR(3.5, 3.5, 7, 7, 2), RR(13.5, 3.5, 7, 7, 2), RR(3.5, 13.5, 7, 7, 2), RR(13.5, 13.5, 7, 7, 2)],
     # Organize with AI: a big sparkle and a small one
     'auto_awesome': [P(_sparkle(9.8, 13.6, 6.9)), P(_sparkle(17.6, 6.4, 3.6))],
 }
@@ -79,4 +84,7 @@ MAP = {
     'baseline_fitness_center_24': 'fitness_center',
     'baseline_payments_24': 'payments',
     'baseline_auto_awesome_24': 'auto_awesome',
+    'baseline_sort_24': 'sort',
+    'baseline_view_list_24': 'view_list',
+    'baseline_grid_view_24': 'grid_view',
 }

@@ -48,6 +48,8 @@ class XDriveDigest(val message: TdApi.Message, val kind: XDriveKind, val text: S
 
 /** A folder the organizer proposes: a new one, or one the user has ([existingId]). Its items can be left out one by one. */
 class XDriveProposedFolder(name: String, icon: String?, val emoji: String?, val existingId: String?) {
+  /** Its own id while it is proposed (the review's list keys). */
+  val id: Int = nextId++
   var name by mutableStateOf(name)
   var icon by mutableStateOf(icon)
   var enabled by mutableStateOf(true)
@@ -55,6 +57,10 @@ class XDriveProposedFolder(name: String, icon: String?, val emoji: String?, val 
   val left = mutableStateListOf<Long>()
 
   val count: Int get() = items.size - left.size
+
+  private companion object {
+    var nextId = 1
+  }
 }
 
 /** How the organizer sorts: Gemini Nano on the phone, a cloud AI with the user's key, or rules (keywords, sites, file types). */

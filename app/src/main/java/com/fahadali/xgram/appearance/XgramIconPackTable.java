@@ -683,6 +683,9 @@ final class XgramIconPackTable {
     R.drawable.baseline_lightbulb_24, R.drawable.xgl_lamp,
     R.drawable.baseline_payments_24, R.drawable.xgl_payments,
     R.drawable.baseline_auto_awesome_24, R.drawable.xgl_auto_awesome,
+    R.drawable.baseline_sort_24, R.drawable.xgl_sort,
+    R.drawable.baseline_view_list_24, R.drawable.xgl_view_list,
+    R.drawable.baseline_grid_view_24, R.drawable.xgl_grid_view,
   };
 
   /** XGram Duotone */
@@ -1204,6 +1207,9 @@ final class XgramIconPackTable {
     R.drawable.baseline_lightbulb_24, R.drawable.xgd_lamp,
     R.drawable.baseline_payments_24, R.drawable.xgd_payments,
     R.drawable.baseline_auto_awesome_24, R.drawable.xgd_auto_awesome,
+    R.drawable.baseline_sort_24, R.drawable.xgd_sort,
+    R.drawable.baseline_view_list_24, R.drawable.xgd_view_list,
+    R.drawable.baseline_grid_view_24, R.drawable.xgd_grid_view,
   };
 
   /** XGram Solar (Solar Icons by 480 Design, CC BY 4.0) */
@@ -1722,6 +1728,9 @@ final class XgramIconPackTable {
     R.drawable.baseline_lightbulb_24, R.drawable.xgs_lightbulb,
     R.drawable.baseline_payments_24, R.drawable.xgs_payments,
     R.drawable.baseline_auto_awesome_24, R.drawable.xgs_auto_awesome,
+    R.drawable.baseline_sort_24, R.drawable.xgs_sort,
+    R.drawable.baseline_view_list_24, R.drawable.xgs_view_list,
+    R.drawable.baseline_grid_view_24, R.drawable.xgs_grid_view,
   };
 
   /** XGram Phosphor (Phosphor Icons, MIT) */
@@ -2240,6 +2249,9 @@ final class XgramIconPackTable {
     R.drawable.baseline_lightbulb_24, R.drawable.xgf_lightbulb,
     R.drawable.baseline_payments_24, R.drawable.xgf_payments,
     R.drawable.baseline_auto_awesome_24, R.drawable.xgf_auto_awesome,
+    R.drawable.baseline_sort_24, R.drawable.xgf_sort,
+    R.drawable.baseline_view_list_24, R.drawable.xgf_view_list,
+    R.drawable.baseline_grid_view_24, R.drawable.xgf_grid_view,
   };
 
   /** XGram MingCute (MingCute Design, Apache 2.0) */
@@ -2759,6 +2771,9 @@ final class XgramIconPackTable {
     R.drawable.baseline_lightbulb_24, R.drawable.xgm_lightbulb,
     R.drawable.baseline_payments_24, R.drawable.xgm_payments,
     R.drawable.baseline_auto_awesome_24, R.drawable.xgm_auto_awesome,
+    R.drawable.baseline_sort_24, R.drawable.xgm_sort,
+    R.drawable.baseline_view_list_24, R.drawable.xgm_view_list,
+    R.drawable.baseline_grid_view_24, R.drawable.xgm_grid_view,
   };
 
   /** XGram Pixel (Pixelarticons by Gerrit Halfmann, MIT) */
@@ -3280,5 +3295,8 @@ final class XgramIconPackTable {
     R.drawable.baseline_lightbulb_24, R.drawable.xgp_lightbulb,
     R.drawable.baseline_payments_24, R.drawable.xgp_payments,
     R.drawable.baseline_auto_awesome_24, R.drawable.xgp_auto_awesome,
+    R.drawable.baseline_sort_24, R.drawable.xgp_sort,
+    R.drawable.baseline_view_list_24, R.drawable.xgp_view_list,
+    R.drawable.baseline_grid_view_24, R.drawable.xgp_grid_view,
   };
 }

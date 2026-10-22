@@ -70,6 +70,7 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
   private var highlightConsumed = false
   private var focusedOnce = false
   private var backConsumer: (() -> Unit)? = null
+  private var backProgress: XgramBackProgress? = null
   private val noSwipeAreas = HashMap<Any, () -> Rect?>()
 
   private val host: XgramComposeHost = Host()
@@ -147,6 +148,7 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
   override fun destroy() {
     super.destroy()
     backConsumer = null
+    backProgress = null
     noSwipeAreas.clear()
     owner.destroy()
   }
@@ -199,6 +201,35 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
       return true
     }
     return super.performOnBackPressed(fromTop, commit)
+  }
+
+  /** A predictive back gesture over the page's in-page state, when the page plays its progress (setBackProgress). */
+  override fun xgramInPageBack(): org.thunderdog.challegram.navigation.SystemBackEventListener? {
+    if (backConsumer == null || backProgress == null) {
+      return null
+    }
+    return object : org.thunderdog.challegram.navigation.SystemBackEventListener {
+      override fun onSystemBackStarted(backEvent: androidx.activity.BackEventCompat): Boolean {
+        val progress = backProgress ?: return false
+        progress.onStart(backEvent.swipeEdge == androidx.activity.BackEventCompat.EDGE_RIGHT)
+        progress.onProgress(backEvent.progress)
+        return true
+      }
+
+      override fun onSystemBackProgressed(backEvent: androidx.activity.BackEventCompat) {
+        backProgress?.onProgress(backEvent.progress)
+      }
+
+      override fun onSystemBackCancelled() {
+        backProgress?.onCancel()
+      }
+
+      override fun onSystemBackPressed(): Boolean {
+        val consumer = backConsumer ?: return false
+        consumer()
+        return true
+      }
+    }
   }
 
   override fun canSlideBackFrom(nav: NavigationController?, x: Float, y: Float): Boolean {
@@ -306,6 +337,10 @@ class XgramComposeController(context: Context, tdlib: Tdlib) : ViewController<Xg
       if (had != (f != null)) {
         activity.notifyBackPressAvailabilityChanged()
       }
+    }
+
+    override fun setBackProgress(listener: XgramBackProgress?) {
+      backProgress = listener
     }
 
     override fun noSwipeBack(key: Any, bounds: (() -> Rect?)?) {

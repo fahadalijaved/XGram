@@ -485,6 +485,18 @@ public final class XDriveIndex implements MessageListener {
     }
   }
 
+  /** Puts a deleted folder back as it was (Undo): its id, name, look and messages. */
+  public void restoreFolder (String id, String name, @Nullable String emoji, @Nullable String icon, long[] messageIds) {
+    if (findFolder(id) != null) {
+      return;
+    }
+    folders.add(new Folder(id, name, emoji, icon));
+    for (long messageId : messageIds) {
+      items.put(messageId, id);
+    }
+    changed();
+  }
+
   /** Deletes a folder: its messages stay in XDrive. */
   public void deleteFolder (String id) {
     Folder folder = findFolder(id);

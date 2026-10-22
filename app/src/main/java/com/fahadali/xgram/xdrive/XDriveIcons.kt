@@ -57,6 +57,21 @@ object XDriveIcons {
 
   private val BY_KEY = ALL.toMap()
 
+  /** What each icon is called (the icon picker, TalkBack). */
+  val LABELS: Map<String, Int> = mapOf(
+    "folder" to R.string.XgramXDriveIconFolder, "key" to R.string.XgramXDriveIconKey, "receipt" to R.string.XgramXDriveIconReceipt,
+    "payments" to R.string.XgramXDriveIconPayments, "shopping" to R.string.XgramXDriveIconShopping, "flight" to R.string.XgramXDriveIconFlight,
+    "work" to R.string.XgramXDriveIconWork, "school" to R.string.XgramXDriveIconSchool, "code" to R.string.XgramXDriveIconCode,
+    "todo" to R.string.XgramXDriveIconTodo, "idea" to R.string.XgramXDriveIconIdea, "article" to R.string.XgramXDriveIconArticle,
+    "book" to R.string.XgramXDriveIconBook, "document" to R.string.XgramXDriveIconDocument, "movie" to R.string.XgramXDriveIconMovie,
+    "music" to R.string.XgramXDriveIconMusic, "photo" to R.string.XgramXDriveIconPhoto, "food" to R.string.XgramXDriveIconFood,
+    "fitness" to R.string.XgramXDriveIconFitness, "place" to R.string.XgramXDriveIconPlace, "contact" to R.string.XgramXDriveIconContact,
+    "people" to R.string.XgramXDriveIconPeople, "chat" to R.string.XgramXDriveIconChat, "link" to R.string.XgramXDriveIconLink,
+    "web" to R.string.XgramXDriveIconWeb, "apps" to R.string.XgramXDriveIconApps, "archive" to R.string.XgramXDriveIconArchive,
+    "home" to R.string.XgramXDriveIconHome, "car" to R.string.XgramXDriveIconCar, "game" to R.string.XgramXDriveIconGame,
+    "star" to R.string.XgramXDriveIconStar, "heart" to R.string.XgramXDriveIconHeart, "security" to R.string.XgramXDriveIconSecurity
+  )
+
   fun drawableOf(key: String?): Int = (if (key != null) BY_KEY[key] else null) ?: R.drawable.baseline_folder_24
 
   private val WORDS: List<Pair<Regex, String>> = listOf(
