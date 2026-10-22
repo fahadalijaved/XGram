@@ -407,7 +407,8 @@ private fun MainMenu(state: XDriveState, expanded: Boolean, onDismiss: () -> Uni
           XgramSettings.instance().setXdriveOpensChat(checked)
           if (checked) {
             state.toast(Lang.getString(R.string.XgramXDriveOpensChatOn))
-            XDriveActions.showInChat(host.controller, 0)
+            // The chat takes XDrive's place: back from it doesn't come here
+            com.fahadali.xgram.xdrive.XDrive.openChatInstead(host.controller)
           }
         },
         { Text(str(R.string.XgramXDriveOpensChat)) },

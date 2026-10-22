@@ -134,6 +134,35 @@ public final class XDrive {
     }
   }
 
+  /**
+   * Saved Messages opens as the chat from now on (the switch was just turned on): the chat replaces XDrive, so back
+   * from it goes where XDrive came from, not to XDrive. XDrive leaves the stack once the chat covers it.
+   */
+  public static void openChatInstead (ViewController<?> xdrive) {
+    final org.thunderdog.challegram.telegram.Tdlib tdlib = xdrive.tdlib();
+    final long chatId = tdlib.selfChatId();
+    xdrive.addFocusListener(new ViewController.FocusStateListener() {
+      @Override
+      public void onFocusStateChanged (ViewController<?> c, boolean isFocused) {
+        if (isFocused) {
+          return;
+        }
+        c.removeFocusListener(this);
+        NavigationController navigation = c.context().navigation();
+        if (c.isDestroyed() || navigation == null) {
+          return;
+        }
+        ViewController<?> top = navigation.getCurrentStackItem();
+        // Only when what covers XDrive is its chat (not anything else opened meanwhile)
+        if (top != c && top instanceof org.thunderdog.challegram.ui.MessagesController && ((org.thunderdog.challegram.ui.MessagesController) top).getChatId() == chatId
+          && navigation.getStack().indexOf(c) != -1) {
+          navigation.getStack().destroy(c);
+        }
+      }
+    });
+    tdlib.ui().openChat(xdrive, chatId, new org.thunderdog.challegram.telegram.TdlibUi.ChatOpenParameters().keepStack().xgramSkipDriveRouting());
+  }
+
   /** Whether [c] is XDrive's screen. */
   public static boolean isScreen (@Nullable ViewController<?> c) {
     if (!(c instanceof com.fahadali.xgram.compose.XgramComposeController)) {
