@@ -51,6 +51,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,7 +69,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,42 +83,40 @@ import com.fahadali.xgram.compose.PromptSpec
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.compose.ui.tgxIcon
 import com.fahadali.xgram.xdrive.XDriveEngine
+import com.fahadali.xgram.xdrive.XDriveIcons
 import com.fahadali.xgram.xdrive.XDriveItems
 import com.fahadali.xgram.xdrive.XDriveNano
 import com.fahadali.xgram.xdrive.XDriveOrganizer
 import com.fahadali.xgram.xdrive.XDriveProposedFolder
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
+import org.thunderdog.challegram.tool.Strings
 
 /**
- * Organize with AI, over XDrive: how to sort (Gemini Nano on the phone, or the rules), the reading and sorting, the
- * proposed folders to look through (rename, switch off, leave items out), then everything goes in at once.
+ * Organize with AI, over XDrive: how to sort (Gemini Nano on the phone, or the rules), getting Nano ready, the reading
+ * and sorting, the proposed folders to look through (rename, switch off, leave items out), then everything goes in at
+ * once. The work belongs to the screen ([XDriveState.organizer]): closing this sheet doesn't stop it.
  */
 @Composable
 internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSeeFolders: () -> Unit) {
-  val organizer = remember(state.tdlib) { XDriveOrganizer(state.tdlib) }
-  val scope = rememberCoroutineScope()
-  var job by remember { mutableStateOf<Job?>(null) }
-  LaunchedEffect(organizer) { organizer.checkNano() }
+  val organizer = state.organizer
+  LaunchedEffect(organizer) { if (organizer.nanoStatus == null) organizer.checkNano() }
   val topInset = with(LocalDensity.current) { state.host.topInset.toDp() }
   val bottomInset = with(LocalDensity.current) { state.host.bottomInset.toDp() }
   val motion = MaterialTheme.motionScheme
-  val cancel: () -> Unit = {
-    job?.cancel()
-    job = null
-    if (organizer.phase == XDriveOrganizer.Phase.READING || organizer.phase == XDriveOrganizer.Phase.SORTING) organizer.phase = XDriveOrganizer.Phase.READY
+  val close: () -> Unit = {
+    if (organizer.phase == XDriveOrganizer.Phase.DONE) organizer.reset()
+    onClose()
   }
   Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(top = topInset)) {
     Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-      IconButton(onClick = { cancel(); onClose() }) {
+      IconButton(onClick = close) {
         Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.XgramXDriveClose))
       }
       Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
     }
     AnimatedContent(
-      targetState = organizer.phase.let { if (it == XDriveOrganizer.Phase.SORTING) XDriveOrganizer.Phase.READING else it },
+      targetState = if (organizer.running) XDriveOrganizer.Phase.SORTING else organizer.phase,
       transitionSpec = {
         (fadeIn(motion.defaultEffectsSpec()) + slideInVertically(motion.defaultSpatialSpec()) { it / 8 }) togetherWith
           (fadeOut(motion.fastEffectsSpec()) + slideOutVertically(motion.fastSpatialSpec()) { -it / 8 })
@@ -127,15 +125,37 @@ internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSee
       modifier = Modifier.weight(1f)
     ) { phase ->
       when (phase) {
-        XDriveOrganizer.Phase.READY -> ReadyStep(organizer, bottomInset) {
-          job = scope.launch { organizer.run() }
-        }
-        XDriveOrganizer.Phase.READING, XDriveOrganizer.Phase.SORTING -> WorkingStep(organizer) { cancel() }
-        XDriveOrganizer.Phase.REVIEW -> ReviewStep(state, organizer, bottomInset, onCancel = { onClose() }) { organizer.apply() }
-        XDriveOrganizer.Phase.DONE -> DoneStep(organizer, onClose = onClose, onSeeFolders = onSeeFolders)
+        XDriveOrganizer.Phase.READY -> ReadyStep(organizer, bottomInset) { state.startOrganize() }
+        XDriveOrganizer.Phase.REVIEW -> ReviewStep(state, organizer, bottomInset, onCancel = { organizer.reset(); onClose() }) { organizer.apply() }
+        XDriveOrganizer.Phase.DONE -> DoneStep(organizer, onClose = { organizer.reset(); onClose() }, onSeeFolders = { organizer.reset(); onSeeFolders() })
+        else -> WorkingStep(organizer) { state.cancelOrganize() }
       }
     }
   }
+}
+
+/** What the organizer is doing, in words (the sheet and Home's card). */
+@Composable
+internal fun organizeStatus(organizer: XDriveOrganizer): String = when {
+  organizer.phase == XDriveOrganizer.Phase.PREPARING && organizer.nanoStep == XDriveOrganizer.NanoStep.DOWNLOADING ->
+    if (organizer.downloadTotal > 0) {
+      str(R.string.XgramXDriveNanoDownloadingSize, Strings.buildSize(organizer.downloaded), Strings.buildSize(organizer.downloadTotal))
+    } else {
+      str(R.string.XgramXDriveNanoDownloading)
+    }
+  organizer.phase == XDriveOrganizer.Phase.PREPARING -> str(R.string.XgramXDriveNanoStarting)
+  organizer.phase == XDriveOrganizer.Phase.READING -> str(R.string.XgramXDriveReadingNow, Lang.plural(R.string.xMessages, organizer.readCount.toLong()))
+  organizer.nanoStep == XDriveOrganizer.NanoStep.NAMING -> str(R.string.XgramXDriveNanoNaming)
+  organizer.nanoStep == XDriveOrganizer.NanoStep.SORTING -> str(R.string.XgramXDriveSortingNano, organizer.sortDone, organizer.sortTotal)
+  else -> str(R.string.XgramXDriveSortingNow)
+}
+
+/** How far along it is (0 to 1), or null: no way to tell. */
+internal fun organizeProgress(organizer: XDriveOrganizer): Float? = when {
+  organizer.phase == XDriveOrganizer.Phase.PREPARING && organizer.nanoStep == XDriveOrganizer.NanoStep.DOWNLOADING && organizer.downloadTotal > 0 ->
+    (organizer.downloaded.toFloat() / organizer.downloadTotal).coerceIn(0f, 1f)
+  organizer.nanoStep == XDriveOrganizer.NanoStep.SORTING && organizer.sortTotal > 0 -> organizer.sortDone.toFloat() / organizer.sortTotal
+  else -> null
 }
 
 /** A turning Expressive shape with the sparkles on it: the organizer's mark. */
@@ -221,29 +241,32 @@ private fun EngineOption(title: String, text: String, icon: Int, selected: Boole
 
 @Composable
 private fun WorkingStep(organizer: XDriveOrganizer, onCancel: () -> Unit) {
+  val step = organizer.nanoStep
   Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
     LoadingIndicator(Modifier.size(120.dp))
     Spacer(Modifier.height(28.dp))
-    val download = organizer.downloadProgress
-    val text = when {
-      download != null -> str(R.string.XgramXDriveDownloadingNano, (download * 100).toInt())
-      organizer.phase == XDriveOrganizer.Phase.READING -> str(R.string.XgramXDriveReadingNow, Lang.plural(R.string.xMessages, organizer.readCount.toLong()))
-      organizer.sortTotal > 0 -> str(R.string.XgramXDriveSortingNano, organizer.sortDone, organizer.sortTotal)
-      else -> str(R.string.XgramXDriveSortingNow)
-    }
-    Text(text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+    Text(organizeStatus(organizer), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
     Spacer(Modifier.height(16.dp))
-    val progress: Float? = when {
-      download != null -> download
-      organizer.phase == XDriveOrganizer.Phase.SORTING && organizer.sortTotal > 0 -> organizer.sortDone.toFloat() / organizer.sortTotal
-      else -> null
-    }
+    val progress = organizeProgress(organizer)
     if (progress != null) {
       LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(.7f))
     } else {
       LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth(.7f))
     }
-    Spacer(Modifier.height(32.dp))
+    if (step == XDriveOrganizer.NanoStep.DOWNLOADING) {
+      Spacer(Modifier.height(20.dp))
+      Text(str(R.string.XgramXDriveNanoDownloadingInfo), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+    }
+    Spacer(Modifier.height(12.dp))
+    Text(str(R.string.XgramXDriveKeepsGoing), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+    Spacer(Modifier.height(28.dp))
+    if (step != XDriveOrganizer.NanoStep.NONE) {
+      FilledTonalButton(onClick = { organizer.useRulesNow() }) {
+        Icon(tgxIcon(R.drawable.baseline_tune_24), contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(str(R.string.XgramXDriveUseRulesNow))
+      }
+    }
     TextButton(onClick = onCancel) { Text(str(R.string.Cancel)) }
   }
 }
@@ -270,6 +293,17 @@ private fun ReviewStep(state: XDriveState, organizer: XDriveOrganizer, bottomIns
           )
           Spacer(Modifier.height(6.dp))
           Text(str(R.string.XgramXDriveReviewInfo), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          val note = organizer.note
+          if (note != null) {
+            Spacer(Modifier.height(10.dp))
+            Row(
+              Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.tertiaryContainer).padding(14.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(tgxIcon(R.drawable.baseline_info_24), contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(20.dp))
+              Text(str(note), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(start = 12.dp))
+            }
+          }
           if (organizer.unsortedLeft > 0) {
             Spacer(Modifier.height(4.dp))
             Text(str(R.string.XgramXDriveReviewLeft, Lang.plural(R.string.xMessages, organizer.unsortedLeft.toLong())), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -299,7 +333,7 @@ private fun ProposalCard(state: XDriveState, folder: XDriveProposedFolder, modif
   val motion = MaterialTheme.motionScheme
   Column(modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(if (folder.enabled) c.surfaceContainerHigh else c.surfaceContainerLow).alpha(if (folder.enabled) 1f else .6f)) {
     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-      FolderBadge(folder.name, folder.emoji, R.drawable.baseline_folder_24, 48)
+      FolderBadge(folder.name, folder.emoji, XDriveIcons.drawableOf(folder.icon), 48)
       Column(
         Modifier.weight(1f).padding(horizontal = 14.dp).clickable {
           state.host.prompt(PromptSpec(title = Lang.getString(R.string.XgramXDriveRename), hint = Lang.getString(R.string.XgramXDriveFolderName), initial = folder.name) { text ->

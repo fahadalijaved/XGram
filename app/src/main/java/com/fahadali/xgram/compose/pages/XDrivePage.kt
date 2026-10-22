@@ -25,6 +25,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,7 +54,11 @@ import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.toShape
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.SnackbarHost
@@ -86,6 +93,7 @@ import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.compose.ui.tgxIcon
 import com.fahadali.xgram.compose.ui.xgramNoSwipeBack
 import com.fahadali.xgram.xdrive.XDriveActions
+import com.fahadali.xgram.xdrive.XDriveIcons
 import com.fahadali.xgram.xdrive.XDriveIndex
 import com.fahadali.xgram.xdrive.XDriveScope
 import kotlinx.coroutines.launch
@@ -228,6 +236,11 @@ fun XDrivePage() {
       DragGhost(state)
     }
 
+    val picking = state.iconPicker
+    if (picking != null) {
+      IconSheet(state, picking)
+    }
+
     AnimatedVisibility(
       visible = state.organizing,
       enter = slideInVertically(motion.defaultSpatialSpec()) { it / 3 } + fadeIn(motion.defaultEffectsSpec()),
@@ -294,7 +307,7 @@ private fun TopBar(state: XDriveState, screen: XDriveScreen, scrollBehavior: and
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
               if (folder != null) {
                 DropdownMenuItem(text = { Text(str(R.string.XgramXDriveRename)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_edit_24), null) }, onClick = { menu = false; XDriveActions.renameFolder(host, folder) })
-                DropdownMenuItem(text = { Text(str(R.string.XgramXDriveFolderEmoji)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_emoticon_outline_24), null) }, onClick = { menu = false; askEmoji(state, folder) })
+                DropdownMenuItem(text = { Text(str(R.string.XgramXDriveFolderIcon)) }, leadingIcon = { Icon(tgxIcon(XDriveIcons.drawableOf(folder.icon)), null) }, onClick = { menu = false; state.iconPicker = folder })
                 DropdownMenuItem(
                   text = { Text(str(R.string.XgramXDriveDeleteFolder), color = MaterialTheme.colorScheme.error) },
                   leadingIcon = { Icon(tgxIcon(R.drawable.baseline_delete_24), null, tint = MaterialTheme.colorScheme.error) },
@@ -442,12 +455,45 @@ private fun DropDock(state: XDriveState) {
       Text(str(R.string.XgramXDriveDropHere), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
       FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         for (folder in folders) {
-          DropChip(state, folder.id, folder.name, folder.emoji, R.drawable.baseline_folder_24)
+          DropChip(state, folder.id, folder.name, folder.emoji, XDriveIcons.drawableOf(folder.icon))
         }
         DropChip(state, DROP_NEW, str(R.string.XgramXDriveNewFolder), null, R.drawable.baseline_create_new_folder_24)
         if (inFolder) {
           DropChip(state, DROP_OUT, str(R.string.XgramXDriveOutOfFolder), null, R.drawable.baseline_archive_24)
         }
+      }
+    }
+  }
+}
+
+/** The folder icon picker: Material icons in Expressive shapes, the chosen one filled; or an emoji instead. */
+@Composable
+private fun IconSheet(state: XDriveState, folder: XDriveIndex.Folder) {
+  val c = MaterialTheme.colorScheme
+  val bottomInset = with(LocalDensity.current) { state.host.bottomInset.toDp() }
+  ModalBottomSheet(onDismissRequest = { state.iconPicker = null }) {
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 16.dp + bottomInset)) {
+      Text(str(R.string.XgramXDriveFolderIcon), style = MaterialTheme.typography.titleLarge)
+      Text(folder.name, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
+      FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val current = if (folder.emoji == null) folder.icon ?: "folder" else null
+        for ((key, res) in XDriveIcons.ALL) {
+          val chosen = key == current
+          Box(
+            Modifier.size(56.dp).clip(if (chosen) MaterialShapes.Cookie9Sided.toShape() else androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+              .background(if (chosen) c.primary else c.surfaceContainerHigh)
+              .clickable {
+                state.index.setLook(folder.id, if (key == "folder") null else key, null)
+                state.iconPicker = null
+              },
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(tgxIcon(res), contentDescription = key, tint = if (chosen) c.onPrimary else c.onSurfaceVariant)
+          }
+        }
+      }
+      TextButton(onClick = { state.iconPicker = null; askEmoji(state, folder) }, modifier = Modifier.padding(top = 12.dp)) {
+        Text(str(R.string.XgramXDriveUseEmoji))
       }
     }
   }

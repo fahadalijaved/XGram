@@ -55,14 +55,18 @@ public final class XDriveIndex implements MessageListener {
   public static final class Folder {
     public final String id;
     public String name;
-    /** The folder's emoji (AI-made folders get one), or null: the folder icon. */
+    /** An emoji the user gave the folder, or null. */
     @Nullable
     public String emoji;
+    /** The folder's icon (a key of XDriveIcons), or null: the folder icon. */
+    @Nullable
+    public String icon;
 
-    Folder (String id, String name, @Nullable String emoji) {
+    Folder (String id, String name, @Nullable String emoji, @Nullable String icon) {
       this.id = id;
       this.name = name;
       this.emoji = emoji;
+      this.icon = icon;
     }
   }
 
@@ -238,7 +242,8 @@ public final class XDriveIndex implements MessageListener {
           JSONObject folder = list.optJSONObject(i);
           if (folder != null && folder.has("id") && folder.has("name")) {
             String emoji = folder.optString("e", "");
-            folders.add(new Folder(folder.getString("id"), folder.getString("name"), emoji.isEmpty() ? null : emoji));
+            String icon = folder.optString("i", "");
+            folders.add(new Folder(folder.getString("id"), folder.getString("name"), emoji.isEmpty() ? null : emoji, icon.isEmpty() ? null : icon));
           }
         }
       }
@@ -269,6 +274,9 @@ public final class XDriveIndex implements MessageListener {
         JSONObject item = new JSONObject().put("id", folder.id).put("name", folder.name);
         if (folder.emoji != null && !folder.emoji.isEmpty()) {
           item.put("e", folder.emoji);
+        }
+        if (folder.icon != null && !folder.icon.isEmpty()) {
+          item.put("i", folder.icon);
         }
         list.put(item);
       }
@@ -419,16 +427,18 @@ public final class XDriveIndex implements MessageListener {
     return createFolder(name, null);
   }
 
-  public Folder createFolder (String name, @Nullable String emoji) {
-    Folder folder = new Folder("f" + Long.toString(System.currentTimeMillis(), 36) + (counter++), name.trim(), emoji);
+  public Folder createFolder (String name, @Nullable String icon) {
+    Folder folder = new Folder("f" + Long.toString(System.currentTimeMillis(), 36) + (counter++), name.trim(), null, icon);
     folders.add(folder);
     changed();
     return folder;
   }
 
-  public void setEmoji (String id, @Nullable String emoji) {
+  /** The folder's look: an icon key, or an emoji the user typed (one replaces the other). */
+  public void setLook (String id, @Nullable String icon, @Nullable String emoji) {
     Folder folder = findFolder(id);
-    if (folder != null && !java.util.Objects.equals(folder.emoji, emoji)) {
+    if (folder != null && !(java.util.Objects.equals(folder.icon, icon) && java.util.Objects.equals(folder.emoji, emoji))) {
+      folder.icon = icon;
       folder.emoji = emoji;
       changed();
     }

@@ -84,6 +84,7 @@ import com.fahadali.xgram.compose.ui.tgxIcon
 import com.fahadali.xgram.compose.ui.xgramNoSwipeBack
 import com.fahadali.xgram.xdrive.XDriveActions
 import com.fahadali.xgram.xdrive.XDriveFeed
+import com.fahadali.xgram.xdrive.XDriveIcons
 import com.fahadali.xgram.xdrive.XDriveIndex
 import com.fahadali.xgram.xdrive.XDriveItems
 import com.fahadali.xgram.xdrive.XDriveKind
@@ -159,12 +160,16 @@ internal fun HomeTab(state: XDriveState, openTab: (XDriveTab) -> Unit) {
   }
 }
 
-/** The way into Organize with AI: a bright card with a slowly turning shape. */
+/**
+ * The way into Organize with AI: a bright card with a slowly turning shape. While it runs (the sheet closed) the card
+ * shows how far it is; once folders are proposed, it offers to look through them.
+ */
 @Composable
 private fun OrganizeCard(state: XDriveState) {
   val c = MaterialTheme.colorScheme
+  val organizer = state.organizer
   val turn = rememberInfiniteTransition(label = "organizeTurn")
-  val rotation by turn.animateFloat(0f, 360f, infiniteRepeatable(tween(16000, easing = LinearEasing), RepeatMode.Restart), label = "organizeRotation")
+  val rotation by turn.animateFloat(0f, 360f, infiniteRepeatable(tween(if (organizer.running) 4000 else 16000, easing = LinearEasing), RepeatMode.Restart), label = "organizeRotation")
   Box(
     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(32.dp))
       .background(Brush.linearGradient(listOf(c.primaryContainer, c.tertiaryContainer)))
@@ -179,10 +184,27 @@ private fun OrganizeCard(state: XDriveState) {
       Column(Modifier.weight(1f).padding(start = 18.dp)) {
         Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, color = c.onPrimaryContainer)
         Spacer(Modifier.height(4.dp))
-        Text(str(R.string.XgramXDriveOrganizeInfo), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .8f))
-        Spacer(Modifier.height(12.dp))
-        Button(onClick = { state.organizing = true }) {
-          Text(str(R.string.XgramXDriveOrganizeStart))
+        when {
+          organizer.running -> {
+            Text(organizeStatus(organizer), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .8f))
+            Spacer(Modifier.height(12.dp))
+            val progress = organizeProgress(organizer)
+            if (progress != null) {
+              androidx.compose.material3.LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+            } else {
+              androidx.compose.material3.LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+          }
+          organizer.phase == com.fahadali.xgram.xdrive.XDriveOrganizer.Phase.REVIEW -> {
+            Text(str(R.string.XgramXDriveReadyToReview), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .8f))
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { state.organizing = true }) { Text(str(R.string.XgramXDriveReview)) }
+          }
+          else -> {
+            Text(str(R.string.XgramXDriveOrganizeInfo), style = MaterialTheme.typography.bodyMedium, color = c.onPrimaryContainer.copy(alpha = .8f))
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = { state.organizing = true }) { Text(str(R.string.XgramXDriveOrganizeStart)) }
+          }
         }
       }
     }
@@ -268,7 +290,7 @@ private fun HomeFolders(state: XDriveState) {
   LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
     items(folders, key = { it.id }) { folder ->
       FolderTile(
-        state, folder.id, folder.name, Lang.plural(R.string.xMessages, (counts[folder.id] ?: 0).toLong()), folder.emoji, R.drawable.baseline_folder_24,
+        state, folder.id, folder.name, Lang.plural(R.string.xMessages, (counts[folder.id] ?: 0).toLong()), folder.emoji, XDriveIcons.drawableOf(folder.icon),
         dropKey = folder.id, onClick = { state.folder = XDriveScope.InFolder(folder.id) }, onLongClick = null,
         modifier = Modifier.width(156.dp).animateItem()
       )
@@ -309,13 +331,13 @@ private fun Suggestions(state: XDriveState, items: List<TdApi.Message>) {
           .background(MaterialTheme.colorScheme.surfaceContainer).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
-        FolderBadge(topic.name, topic.emoji, R.drawable.baseline_folder_24, 44)
+        FolderBadge(topic.name, null, XDriveIcons.drawableOf(topic.icon), 44)
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
           Text(name, style = MaterialTheme.typography.titleSmall)
           Text(Lang.plural(R.string.xMessages, list.size.toLong()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         FilledTonalButton(onClick = {
-          val folder = state.index.findFolderByName(name) ?: state.index.createFolder(name, topic.emoji)
+          val folder = state.index.findFolderByName(name) ?: state.index.createFolder(name, topic.icon)
           state.move(list, folder.id)
         }) {
           Text(str(R.string.XgramXDriveCreate))
@@ -369,7 +391,7 @@ internal fun FoldersTab(state: XDriveState) {
       var menu by remember { mutableStateOf(false) }
       Box(Modifier.animateItem()) {
         FolderTile(
-          state, folder.id, folder.name, Lang.plural(R.string.xMessages, (counts[folder.id] ?: 0).toLong()), folder.emoji, R.drawable.baseline_folder_24,
+          state, folder.id, folder.name, Lang.plural(R.string.xMessages, (counts[folder.id] ?: 0).toLong()), folder.emoji, XDriveIcons.drawableOf(folder.icon),
           dropKey = folder.id, onClick = { state.folder = XDriveScope.InFolder(folder.id) }, onLongClick = { menu = true }
         )
         FolderMenu(state, folder, menu) { menu = false }
@@ -405,7 +427,7 @@ internal fun FolderMenu(state: XDriveState, folder: XDriveIndex.Folder, expanded
   val host = state.host
   DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
     DropdownMenuItem(text = { Text(str(R.string.XgramXDriveRename)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_edit_24), null) }, onClick = { onDismiss(); XDriveActions.renameFolder(host, folder) })
-    DropdownMenuItem(text = { Text(str(R.string.XgramXDriveFolderEmoji)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_emoticon_outline_24), null) }, onClick = { onDismiss(); askEmoji(state, folder) })
+    DropdownMenuItem(text = { Text(str(R.string.XgramXDriveFolderIcon)) }, leadingIcon = { Icon(tgxIcon(XDriveIcons.drawableOf(folder.icon)), null) }, onClick = { onDismiss(); state.iconPicker = folder })
     DropdownMenuItem(
       text = { Text(str(R.string.XgramXDriveDeleteFolder), color = MaterialTheme.colorScheme.error) },
       leadingIcon = { Icon(tgxIcon(R.drawable.baseline_delete_24), null, tint = MaterialTheme.colorScheme.error) },
@@ -426,7 +448,8 @@ internal fun askEmoji(state: XDriveState, folder: XDriveIndex.Folder) {
       if (Character.isLetterOrDigit(cp) || Character.isWhitespace(cp)) break
       end += Character.charCount(cp)
     }
-    state.index.setEmoji(folder.id, value.substring(0, end).takeIf { it.isNotEmpty() })
+    val emoji = value.substring(0, end).takeIf { it.isNotEmpty() }
+    if (emoji != null) state.index.setLook(folder.id, null, emoji)
   })
 }
 

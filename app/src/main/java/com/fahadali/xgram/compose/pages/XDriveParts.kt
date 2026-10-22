@@ -92,13 +92,16 @@ import com.fahadali.xgram.compose.PromptSpec
 import com.fahadali.xgram.compose.XgramComposeHost
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.compose.ui.tgxIcon
+import com.fahadali.xgram.xdrive.XDriveIcons
 import com.fahadali.xgram.xdrive.XDriveIndex
+import com.fahadali.xgram.xdrive.XDriveOrganizer
 import com.fahadali.xgram.xdrive.XDriveItems
 import com.fahadali.xgram.xdrive.XDriveKind
 import com.fahadali.xgram.xdrive.XDriveScope
 import com.fahadali.xgram.xdrive.XDriveThumbs
 import com.fahadali.xgram.xdrive.XDriveView
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 import org.thunderdog.challegram.R
@@ -181,6 +184,22 @@ internal class XDriveState(val tdlib: Tdlib, val host: XgramComposeHost, val sco
   var root: LayoutCoordinates? = null
   /** The navigation bar's tab, set by the pager. */
   var tab by mutableStateOf(XDriveTab.HOME)
+  /** Organize with AI: as long as the screen, so closing its sheet doesn't stop it. */
+  val organizer = XDriveOrganizer(tdlib)
+  private var organizeJob: Job? = null
+  /** The folder whose icon is being picked (the sheet), or null. */
+  var iconPicker by mutableStateOf<XDriveIndex.Folder?>(null)
+
+  fun startOrganize() {
+    organizeJob?.cancel()
+    organizeJob = scope.launch { organizer.run() }
+  }
+
+  fun cancelOrganize() {
+    organizeJob?.cancel()
+    organizeJob = null
+    if (organizer.running) organizer.reset()
+  }
 
   fun folders(): List<XDriveIndex.Folder> {
     indexVersion
@@ -372,12 +391,12 @@ internal fun XDriveRow(state: XDriveState, message: TdApi.Message, showFolder: B
   val corner by animateDpAsState(if (isSelected) 28.dp else 0.dp, motion.defaultSpatialSpec(), label = "rowCorner")
   val thumbCorner by animateDpAsState(if (isSelected) 26.dp else 14.dp, motion.fastSpatialSpec(), label = "thumbCorner")
   Row(
-    modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp).clip(RoundedCornerShape(corner)).background(background)
+    modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp).clip(RoundedCornerShape(corner.coerceAtLeast(0.dp))).background(background)
       .xdriveItem(state, message, onOpen).padding(horizontal = 12.dp, vertical = 10.dp),
     verticalAlignment = Alignment.CenterVertically
   ) {
     Box(Modifier.size(52.dp)) {
-      XDriveThumb(message, Modifier.fillMaxSize().clip(RoundedCornerShape(thumbCorner)))
+      XDriveThumb(message, Modifier.fillMaxSize().clip(RoundedCornerShape(thumbCorner.coerceAtLeast(0.dp))))
       RowCheck(isSelected)
     }
     Column(Modifier.weight(1f).padding(start = 16.dp)) {
@@ -386,15 +405,22 @@ internal fun XDriveRow(state: XDriveState, message: TdApi.Message, showFolder: B
     }
     val folder = if (showFolder) state.folderOf(message) else null
     if (folder != null) {
-      Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.padding(start = 8.dp)) {
-        Text(
-          (folder.emoji?.let { "$it " } ?: "") + folder.name,
-          style = MaterialTheme.typography.labelMedium,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.widthIn(max = 104.dp).padding(horizontal = 10.dp, vertical = 4.dp)
-        )
+      Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.padding(start = 8.dp)) {
+        Row(Modifier.widthIn(max = 120.dp).padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+          if (folder.emoji != null) {
+            Text(folder.emoji!!, fontSize = 12.sp)
+          } else {
+            Icon(tgxIcon(XDriveIcons.drawableOf(folder.icon)), contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(14.dp))
+          }
+          Text(
+            folder.name,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 4.dp)
+          )
+        }
       }
     }
   }
@@ -419,7 +445,7 @@ internal fun XDriveCell(state: XDriveState, message: TdApi.Message, onOpen: () -
   val scale by animateFloatAsState(if (isSelected) 0.86f else 1f, motion.fastSpatialSpec(), label = "cellScale")
   val corner by animateDpAsState(if (isSelected) 24.dp else 6.dp, motion.fastSpatialSpec(), label = "cellCorner")
   Box(modifier.aspectRatio(1f).background(if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)) {
-    Box(Modifier.fillMaxSize().scale(scale).clip(RoundedCornerShape(corner)).xdriveItem(state, message, onOpen)) {
+    Box(Modifier.fillMaxSize().scale(scale).clip(RoundedCornerShape(corner.coerceAtLeast(0.dp))).xdriveItem(state, message, onOpen)) {
       XDriveThumb(message, Modifier.fillMaxSize())
       val kind = XDriveItems.kindOf(message)
       if (kind == XDriveKind.VIDEO || kind == XDriveKind.GIF) {
@@ -491,7 +517,7 @@ internal fun FolderTile(
   val color by animateColorAsState(if (hovered) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh, motion.defaultEffectsSpec(), label = "tileColor")
   Box(modifier.then(if (dropKey != null) Modifier.xdriveDropTarget(state, dropKey) else Modifier).scale(scale)) {
     Column(
-      Modifier.fillMaxWidth().clip(RoundedCornerShape(corner)).background(color)
+      Modifier.fillMaxWidth().clip(RoundedCornerShape(corner.coerceAtLeast(0.dp))).background(color)
         .combinedClickable(interactionSource = interaction, indication = androidx.compose.foundation.LocalIndication.current, onClick = onClick, onLongClick = onLongClick)
         .padding(16.dp)
     ) {

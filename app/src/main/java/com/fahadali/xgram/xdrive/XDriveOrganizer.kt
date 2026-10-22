@@ -25,9 +25,14 @@ import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerativeModel
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.drinkless.tdlib.TdApi
 import org.thunderdog.challegram.Log
 import org.thunderdog.challegram.R
@@ -39,9 +44,9 @@ import kotlin.coroutines.resume
 class XDriveDigest(val message: TdApi.Message, val kind: XDriveKind, val text: String, val sourceChatId: Long, val sourceTitle: String?)
 
 /** A folder the organizer proposes: a new one, or one the user has ([existingId]). Its items can be left out one by one. */
-class XDriveProposedFolder(name: String, emoji: String?, val existingId: String?) {
+class XDriveProposedFolder(name: String, icon: String?, val emoji: String?, val existingId: String?) {
   var name by mutableStateOf(name)
-  var emoji by mutableStateOf(emoji)
+  var icon by mutableStateOf(icon)
   var enabled by mutableStateOf(true)
   val items = mutableStateListOf<TdApi.Message>()
   val left = mutableStateListOf<Long>()
@@ -77,65 +82,87 @@ object XDriveNano {
         FeatureStatus.DOWNLOADING -> Status.DOWNLOADING
         else -> Status.UNSUPPORTED
       }
+    } catch (e: CancellationException) {
+      throw e
     } catch (t: Throwable) {
       Log.w("XDrive: Gemini Nano status", t)
       Status.UNSUPPORTED
     }
   }
 
-  /** Downloads the model (AICore keeps it for every app), [progress] from 0 to 1 while it does; true once it is there. */
-  suspend fun download(progress: (Float) -> Unit): Boolean {
-    val m = model() ?: return false
+  /** Follows AICore's download of the model ([progress]: bytes so far, bytes in all or 0), until it ends or fails. */
+  suspend fun download(progress: (Long, Long) -> Unit) {
+    val m = model() ?: return
     var total = 0L
-    var ok = false
     try {
       m.download().collect { status ->
         when (status) {
-          is DownloadStatus.DownloadStarted -> total = status.bytesToDownload
-          is DownloadStatus.DownloadProgress -> if (total > 0) progress((status.totalBytesDownloaded.toFloat() / total).coerceIn(0f, 1f))
-          is DownloadStatus.DownloadCompleted -> ok = true
+          is DownloadStatus.DownloadStarted -> {
+            total = status.bytesToDownload
+            progress(0L, total)
+          }
+          is DownloadStatus.DownloadProgress -> progress(status.totalBytesDownloaded, total)
           is DownloadStatus.DownloadFailed -> Log.w("XDrive: Gemini Nano download failed", status.e)
           else -> Unit
         }
       }
+    } catch (e: CancellationException) {
+      throw e
     } catch (t: Throwable) {
       Log.w("XDrive: Gemini Nano download", t)
     }
-    return ok || status() == Status.AVAILABLE
   }
 
-  suspend fun generate(prompt: String, maxTokens: Int): String? {
+  /** Loads the model into memory, so the first answer doesn't wait for it. */
+  suspend fun warmup() {
+    val m = model() ?: return
+    try {
+      m.warmup()
+    } catch (e: CancellationException) {
+      throw e
+    } catch (t: Throwable) {
+      Log.w("XDrive: Gemini Nano warmup", t)
+    }
+  }
+
+  /** One answer, or null (failed, or no answer within [timeoutMs]). */
+  suspend fun generate(prompt: String, maxTokens: Int, timeoutMs: Long): String? {
     val m = model() ?: return null
+    val started = System.currentTimeMillis()
     return try {
       val request = generateContentRequest(TextPart(prompt)) {
         temperature = 0.2f
         topK = 10
         maxOutputTokens = maxTokens
       }
-      m.generateContent(request).candidates.firstOrNull()?.text
+      val text = withTimeoutOrNull(timeoutMs) { m.generateContent(request).candidates.firstOrNull()?.text }
+      Log.i("XDrive: Gemini Nano answered in %d ms (%s)", System.currentTimeMillis() - started, if (text == null) "no answer" else "${text.length} chars")
+      text
+    } catch (e: CancellationException) {
+      throw e
     } catch (t: Throwable) {
-      Log.w("XDrive: Gemini Nano failed", t)
+      Log.w("XDrive: Gemini Nano failed after %d ms", t, System.currentTimeMillis() - started)
       null
     }
   }
 }
 
-/** Topics the rules know: the folder each makes, with its emoji. */
-enum class XDriveTopic(val title: Int, val emoji: String) {
-  ACCOUNTS(R.string.XgramXDriveTopicAccounts, "🔑"),
-  RECEIPTS(R.string.XgramXDriveTopicReceipts, "🧾"),
-  TRAVEL(R.string.XgramXDriveTopicTravel, "✈️"),
-  CODE(R.string.XgramXDriveTopicCode, "💻"),
-  TODO(R.string.XgramXDriveTopicTodo, "✅"),
-  CONTACTS(R.string.XgramXDriveTopicContacts, "📇"),
-  PLACES(R.string.XgramXDriveTopicPlaces, "📍"),
-  WATCH(R.string.XgramXDriveTopicWatch, "🎬"),
-  SOCIAL(R.string.XgramXDriveTopicSocial, "💬"),
-  SHOPPING(R.string.XgramXDriveTopicShopping, "🛍️"),
-  READING(R.string.XgramXDriveTopicReading, "📰"),
-  DOCUMENTS(R.string.XgramXDriveTopicDocuments, "📄"),
-  APPS(R.string.XgramXDriveTopicApps, "📦"),
-  ARCHIVES(R.string.XgramXDriveTopicArchives, "🗜️")
+/** Topics the rules know: the folder each makes, with its icon (XDriveIcons). */
+enum class XDriveTopic(val title: Int, val icon: String) {
+  ACCOUNTS(R.string.XgramXDriveTopicAccounts, "key"),
+  RECEIPTS(R.string.XgramXDriveTopicReceipts, "receipt"),
+  TRAVEL(R.string.XgramXDriveTopicTravel, "flight"),
+  CODE(R.string.XgramXDriveTopicCode, "code"),
+  TODO(R.string.XgramXDriveTopicTodo, "todo"),
+  CONTACTS(R.string.XgramXDriveTopicContacts, "contact"),
+  PLACES(R.string.XgramXDriveTopicPlaces, "place"),
+  WATCH(R.string.XgramXDriveTopicWatch, "movie"),
+  SOCIAL(R.string.XgramXDriveTopicSocial, "chat"),
+  SHOPPING(R.string.XgramXDriveTopicShopping, "shopping"),
+  READING(R.string.XgramXDriveTopicReading, "article"),
+  DOCUMENTS(R.string.XgramXDriveTopicDocuments, "document"),
+  APPS(R.string.XgramXDriveTopicApps, "apps"),
+  ARCHIVES(R.string.XgramXDriveTopicArchives, "archive")
 }
 
 /** The rules: keywords (English and Arabic), sites and file types. Photos and videos without words stay unsorted. */
@@ -223,10 +250,12 @@ object XDriveRules {
 /**
  * Organize with AI: reads XDrive's items that are in no folder (newest first, up to [LIMIT]), proposes folders (the
  * rules' topics; with Gemini Nano also its own, by meaning) and, once the user has looked through them, puts the items
- * in. Nothing is sent anywhere: Nano runs on the phone. Compose state; main thread.
+ * in. Nothing is sent anywhere: Nano runs on the phone. It lives as long as XDrive's screen, so closing the sheet
+ * doesn't stop it. Compose state; main thread.
  */
 class XDriveOrganizer(private val tdlib: Tdlib) {
-  enum class Phase { READY, READING, SORTING, REVIEW, DONE }
+  enum class Phase { READY, PREPARING, READING, SORTING, REVIEW, DONE }
+  enum class NanoStep { NONE, DOWNLOADING, STARTING, NAMING, SORTING }
 
   companion object {
     const val LIMIT = 5000
@@ -235,45 +264,63 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
     private const val NANO_BATCH = 15
     /** A channel with at least this many items in XDrive gets a folder of its own. */
     private const val CHANNEL_MIN = 6
+    /** Gemini Nano's answers that may fail in a row before the rules take over. */
+    private const val NANO_FAILURES = 3
   }
 
   var phase by mutableStateOf(Phase.READY)
   var engine by mutableStateOf(XDriveEngine.RULES)
   var nanoStatus by mutableStateOf<XDriveNano.Status?>(null)
-  var downloadProgress by mutableStateOf<Float?>(null)
+  var nanoStep by mutableStateOf(NanoStep.NONE)
+  var downloaded by mutableLongStateOf(0L)
+  var downloadTotal by mutableLongStateOf(0L)
   var readCount by mutableIntStateOf(0)
   var sortDone by mutableIntStateOf(0)
   var sortTotal by mutableIntStateOf(0)
   var unsortedLeft by mutableIntStateOf(0)
   var movedCount by mutableIntStateOf(0)
-  var madeCount by mutableIntStateOf(0)
-  var startedAt by mutableLongStateOf(0L)
+  /** Why Gemini Nano didn't do the sorting (it wasn't ready, stopped answering), shown in the review. */
+  var note by mutableStateOf<Int?>(null)
   val folders = mutableStateListOf<XDriveProposedFolder>()
+  /** The user tapped "Use quick rules now": Nano's download or sorting is left, the rules finish. */
+  private var skipNano = false
+
+  val running: Boolean get() = phase == Phase.PREPARING || phase == Phase.READING || phase == Phase.SORTING
 
   private val index = XDriveIndex.of(tdlib)
 
   suspend fun checkNano() {
     val status = XDriveNano.status()
     nanoStatus = status
-    if (status == XDriveNano.Status.AVAILABLE || status == XDriveNano.Status.DOWNLOADABLE || status == XDriveNano.Status.DOWNLOADING) {
+    if (status != XDriveNano.Status.UNSUPPORTED && phase == Phase.READY) {
       engine = XDriveEngine.NANO
     }
   }
 
+  fun useRulesNow() {
+    skipNano = true
+  }
+
+  fun reset() {
+    phase = Phase.READY
+    folders.clear()
+    note = null
+  }
+
   /** Reads, sorts and leaves the proposal in [folders] (phase REVIEW). */
   suspend fun run() {
-    startedAt = System.currentTimeMillis()
     folders.clear()
+    note = null
+    skipNano = false
     readCount = 0
     sortDone = 0
     sortTotal = 0
-    if (engine == XDriveEngine.NANO && nanoStatus != XDriveNano.Status.AVAILABLE) {
-      downloadProgress = 0f
-      val ok = XDriveNano.download { downloadProgress = it }
-      downloadProgress = null
-      nanoStatus = XDriveNano.status()
-      if (!ok) engine = XDriveEngine.RULES
+    var useNano = engine == XDriveEngine.NANO
+    if (useNano) {
+      phase = Phase.PREPARING
+      useNano = prepareNano()
     }
+    nanoStep = NanoStep.NONE
     phase = Phase.READING
     suspendCancellableCoroutine<Unit> { cont -> index.load { if (cont.isActive) cont.resume(Unit) } }
     val messages = readUnsorted()
@@ -288,27 +335,28 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
       }
     }
     val proposals = LinkedHashMap<String, XDriveProposedFolder>()
-    fun folderFor(name: String, emoji: String?): XDriveProposedFolder {
+    fun folderFor(name: String, icon: String?): XDriveProposedFolder {
       val key = name.trim().lowercase()
       proposals[key]?.let { return it }
       val existing = index.findFolderByName(name)
-      val folder = XDriveProposedFolder(existing?.name ?: name.trim(), existing?.emoji ?: emoji, existing?.id)
+      val folder = XDriveProposedFolder(existing?.name ?: name.trim(), existing?.icon ?: icon, existing?.emoji, existing?.id)
       proposals[key] = folder
       return folder
     }
     for ((topic, items) in byTopic) {
-      folderFor(Lang.getString(topic.title), topic.emoji).items.addAll(items)
+      folderFor(Lang.getString(topic.title), topic.icon).items.addAll(items)
     }
     var rest: List<XDriveDigest> = open
-    if (engine == XDriveEngine.NANO) {
-      rest = sortWithNano(open) { name, emoji, items -> folderFor(name, emoji).items.addAll(items) }
+    if (useNano && !skipNano) {
+      rest = sortWithNano(open) { name, items -> folderFor(name, XDriveIcons.keyForName(name)).items.addAll(items) }
     }
+    nanoStep = NanoStep.NONE
     // What came from one channel, many times: a folder named after it
     val byChannel = rest.filter { it.sourceChatId != 0L && !it.sourceTitle.isNullOrEmpty() }.groupBy { it.sourceChatId }
     val placed = HashSet<Long>()
     for ((_, items) in byChannel) {
       if (items.size >= CHANNEL_MIN) {
-        folderFor(items[0].sourceTitle!!, "📢").items.addAll(items.map { it.message })
+        folderFor(items[0].sourceTitle!!, "chat").items.addAll(items.map { it.message })
         items.forEach { placed.add(it.message.id) }
       }
     }
@@ -324,10 +372,48 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
     phase = Phase.REVIEW
   }
 
+  /**
+   * Gets Gemini Nano ready: follows AICore's download while there is one (the user can switch to the rules meanwhile),
+   * then loads the model. False: sort with the rules ([note] says why when it is not the user's choice).
+   */
+  private suspend fun prepareNano(): Boolean {
+    var status = XDriveNano.status()
+    nanoStatus = status
+    if (status == XDriveNano.Status.DOWNLOADABLE || status == XDriveNano.Status.DOWNLOADING) {
+      nanoStep = NanoStep.DOWNLOADING
+      downloaded = 0
+      downloadTotal = 0
+      coroutineScope {
+        val follower = launch {
+          XDriveNano.download { done, total ->
+            downloaded = done
+            if (total > 0) downloadTotal = total
+          }
+        }
+        while (status != XDriveNano.Status.AVAILABLE && status != XDriveNano.Status.UNSUPPORTED && !skipNano) {
+          delay(1500)
+          status = XDriveNano.status()
+        }
+        follower.cancel()
+      }
+      nanoStatus = status
+    }
+    if (skipNano) {
+      engine = XDriveEngine.RULES
+      return false
+    }
+    if (status != XDriveNano.Status.AVAILABLE) {
+      note = R.string.XgramXDriveNanoUnavailable
+      return false
+    }
+    nanoStep = NanoStep.STARTING
+    withTimeoutOrNull(60_000) { XDriveNano.warmup() }
+    return !skipNano
+  }
+
   /** Puts the chosen items into their folders (new ones made); phase DONE. */
   fun apply() {
     var moved = 0
-    var made = 0
     for (folder in folders) {
       if (!folder.enabled) continue
       val left = folder.left.toHashSet()
@@ -336,13 +422,12 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
       var id = folder.existingId?.takeIf { index.findFolder(it) != null }
       if (id == null) {
         val existing = index.findFolderByName(folder.name)
-        id = existing?.id ?: index.createFolder(folder.name, folder.emoji).id.also { made++ }
+        id = existing?.id ?: index.createFolder(folder.name, folder.icon).id
       }
       index.setFolder(ids, id)
       moved += ids.size
     }
     movedCount = moved
-    madeCount = made
     phase = Phase.DONE
   }
 
@@ -425,37 +510,53 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
   // Gemini Nano
 
   /** Folder names by meaning from a sample, then each item into one (or none); returns what is left unplaced. */
-  private suspend fun sortWithNano(open: List<XDriveDigest>, add: (String, String?, List<TdApi.Message>) -> Unit): List<XDriveDigest> {
+  private suspend fun sortWithNano(open: List<XDriveDigest>, add: (String, List<TdApi.Message>) -> Unit): List<XDriveDigest> {
     // Only what words describe: a photo without a caption says nothing
     val readable = open.filter { it.text.length > 14 && !(it.kind == XDriveKind.PHOTO && it.text == "photo") && !(it.kind == XDriveKind.VIDEO && it.text == "video") }
     val batch = readable.take(NANO_LIMIT)
     if (batch.size < 4) return open
-    sortTotal = batch.size
+    nanoStep = NanoStep.NAMING
     val existing = index.folders().map { it.name }
-    val sample = batch.shuffled(java.util.Random(batch.size.toLong())).take(40)
+    val sample = batch.shuffled(java.util.Random(batch.size.toLong())).take(30)
     val namesPrompt = buildString {
       append("You help someone organize their saved notes, links and files into folders.\n")
       append("Here are some of their saved items:\n")
-      sample.forEachIndexed { i, d -> append(i + 1).append(". ").append(d.text.take(110)).append('\n') }
+      sample.forEachIndexed { i, d -> append(i + 1).append(". ").append(d.text.take(100)).append('\n') }
       if (existing.isNotEmpty()) append("They already have these folders: ").append(existing.joinToString(", ")).append(".\n")
       append("Suggest between 3 and 8 folders that group these items by topic. Each folder name must be 1 to 3 words. ")
-      append("Write one folder per line, starting with one emoji, like:\n📚 Study notes\n🍳 Recipes\n")
+      append("Write only the folder names, one per line.\n")
     }
-    val names = parseFolders(XDriveNano.generate(namesPrompt, 160) ?: return open)
-    if (names.isEmpty()) return open
+    val answer = XDriveNano.generate(namesPrompt, 120, 60_000)
+    val names = if (answer != null) parseFolders(answer) else emptyList()
+    if (names.isEmpty()) {
+      if (!skipNano) note = R.string.XgramXDriveNanoFailed
+      return open
+    }
+    nanoStep = NanoStep.SORTING
+    sortTotal = batch.size
+    sortDone = 0
     val placed = HashMap<Long, Int>()
+    var failures = 0
     for (chunk in batch.chunked(NANO_BATCH)) {
+      if (skipNano) break
       val prompt = buildString {
         append("Folders:\n")
-        names.forEachIndexed { i, f -> append(i + 1).append(". ").append(f.second).append('\n') }
+        names.forEachIndexed { i, name -> append(i + 1).append(". ").append(name).append('\n') }
         append("0. None of these\n\nItems:\n")
-        chunk.forEachIndexed { i, d -> append(i + 1).append(". ").append(d.text.take(130)).append('\n') }
+        chunk.forEachIndexed { i, d -> append(i + 1).append(". ").append(d.text.take(120)).append('\n') }
         append("\nFor each item, write its number, an equals sign and the number of the folder it belongs in, one per line, like 1=2. ")
         append("Use 0 when no folder fits well.\n")
       }
-      val answer = XDriveNano.generate(prompt, 12 * chunk.size + 20)
-      if (answer != null) {
-        for (match in Regex("(\\d+)\\s*[=:→>-]+\\s*(\\d+)").findAll(answer)) {
+      val reply = XDriveNano.generate(prompt, 10 * chunk.size + 20, 45_000)
+      if (reply == null) {
+        failures++
+        if (failures >= NANO_FAILURES) {
+          note = R.string.XgramXDriveNanoFailed
+          break
+        }
+      } else {
+        failures = 0
+        for (match in Regex("(\\d+)\\s*[=:→>-]+\\s*(\\d+)").findAll(reply)) {
           val item = match.groupValues[1].toIntOrNull() ?: continue
           val folder = match.groupValues[2].toIntOrNull() ?: continue
           if (item in 1..chunk.size && folder in 1..names.size) placed[chunk[item - 1].message.id] = folder - 1
@@ -463,43 +564,27 @@ class XDriveOrganizer(private val tdlib: Tdlib) {
       }
       sortDone += chunk.size
     }
-    names.forEachIndexed { i, (emoji, name) ->
+    names.forEachIndexed { i, name ->
       val items = batch.filter { placed[it.message.id] == i }.map { it.message }
-      if (items.isNotEmpty()) add(name, emoji, items)
+      if (items.isNotEmpty()) add(name, items)
     }
     return open.filter { !placed.containsKey(it.message.id) }
   }
 
-  /** "📚 Study notes" lines (numbers, bullets and quotes cleaned off) into (emoji, name). */
-  private fun parseFolders(text: String): List<Pair<String?, String>> {
-    val result = ArrayList<Pair<String?, String>>()
+  /** Folder name lines (numbers, bullets, emoji and quotes cleaned off). */
+  private fun parseFolders(text: String): List<String> {
+    val result = ArrayList<String>()
     val seen = HashSet<String>()
     for (raw in text.lines()) {
       var line = raw.trim().trimStart('-', '*', '•', ' ').replace(Regex("^\\d+[.)]\\s*"), "").replace("*", "").trim()
-      if (line.isEmpty()) continue
-      var emoji: String? = null
-      val first = line.codePointAt(0)
-      if (!Character.isLetterOrDigit(first)) {
-        val end = emojiEnd(line)
-        emoji = line.substring(0, end).trim().takeIf { it.isNotEmpty() }
-        line = line.substring(end).trim()
-      }
-      line = line.trim('"', '\'', ':', '.', ' ')
+      // Anything before the first letter (an emoji, a bullet)
+      var i = 0
+      while (i < line.length && !Character.isLetterOrDigit(line.codePointAt(i))) i += Character.charCount(line.codePointAt(i))
+      line = line.substring(i).trim().trim('"', '\'', ':', '.', ' ')
       if (line.isEmpty() || line.length > 32 || line.split(' ').size > 4) continue
-      if (seen.add(line.lowercase())) result.add(Pair(emoji, line))
+      if (seen.add(line.lowercase())) result.add(line)
       if (result.size == 8) break
     }
     return result
-  }
-
-  /** Where the leading emoji (with its joiners and variation selectors) ends. */
-  private fun emojiEnd(s: String): Int {
-    var i = 0
-    while (i < s.length) {
-      val cp = s.codePointAt(i)
-      if (Character.isLetterOrDigit(cp) || cp == ' '.code) break
-      i += Character.charCount(cp)
-    }
-    return i
   }
 }
