@@ -50,6 +50,7 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
   private Runnable hideWindowDelegate;
   // XGram: Message menu > Reaction bar > Bottom: the reaction bar as a row of the options, and its expand button's action
   private @Nullable MessageOptionsPagerController.State xgramReactionBarState;
+  private boolean xgramNoHeaderRow;
   private @Nullable Runnable xgramExpandReactions;
 
 
@@ -67,6 +68,7 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
     this.emojiPackFirstEmoji = args.emojiPackFirstEmoji;
     this.hideWindowDelegate = args.hideWindowDelegate;
     this.xgramReactionBarState = args.xgramReactionBarState;
+    this.xgramNoHeaderRow = args.xgramNoHeaderRow;
     this.xgramExpandReactions = args.xgramExpandReactions;
   }
 
@@ -117,7 +119,9 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
             return;
           }
           int inset = Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_INSET);
-          int top = index == 0 ? Screen.dp(8f) : adapter.xgramSameGroup(index - 1, index) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
+          // Without a header row the sheet's handle band already ends where the 28dp curve does: the first tile starts
+          // there (the sheet follows the first row's top as it scrolls, so a gap of its own would slide under the clip)
+          int top = index == 0 ? (xgramNoHeaderRow ? 0 : Screen.dp(8f)) : adapter.xgramSameGroup(index - 1, index) ? Screen.dp(com.fahadali.xgram.appearance.XgramExpressive.LIST_GAP) : Screen.dp(8f);
           int bottom = index == adapter.options.items.length - 1 && !adapter.xgramReactionBarLast() ? Screen.dp(8f) + xgramNavigationBarSpace(parent) : 0;
           outRect.set(inset, top, inset, bottom);
         }
@@ -148,6 +152,14 @@ public class MessageOptionsController extends BottomSheetViewController.BottomSh
     // XGram: Message menu > Reaction bar > Bottom
     public @Nullable MessageOptionsPagerController.State xgramReactionBarState;
     public @Nullable Runnable xgramExpandReactions;
+
+    /** XGram: the sheet has no header row: the options start right under the handle band (no gap of their own). */
+    public boolean xgramNoHeaderRow;
+
+    public Args xgramNoHeaderRow (boolean noHeaderRow) {
+      this.xgramNoHeaderRow = noHeaderRow;
+      return this;
+    }
 
     /** XGram: adds the reaction bar row (null: none) and what its expand button opens (null: no button). */
     public Args xgramReactionBar (@Nullable MessageOptionsPagerController.State state, @Nullable Runnable onExpand) {

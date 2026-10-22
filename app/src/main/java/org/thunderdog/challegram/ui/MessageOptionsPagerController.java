@@ -462,10 +462,12 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   /** XGram: the band above the header row that holds the drag handle: 8dp, the 4dp handle, 4dp to the row. */
   private static final float XGRAM_HANDLE_BAND = 16f;
   /**
-   * XGram: the band without a header row (reaction bar at the bottom or off, no counters): 8dp, the handle, 8dp to the
-   * list, whose first tile starts 8dp lower, where the 28dp curve ends (the pages are clipped above it).
+   * XGram: the band without a header row (reaction bar at the bottom or off, no counters): 8dp, the handle, 16dp to the
+   * list, as tall as the sheet's 28dp top curve. The pages are clipped where the curve ends and the sheet's top follows
+   * the first row's top as the list scrolls, so the first tile (no gap above it here) starts exactly at the clip, never
+   * under it (with a 20dp band the clip cut 8dp off the first tile).
    */
-  private static final float XGRAM_HANDLE_BAND_NO_ROW = 20f;
+  private static final float XGRAM_HANDLE_BAND_NO_ROW = 28f;
 
   private float xgramHandleBand () {
     return Screen.dp(state.xgramNoHeaderRow ? XGRAM_HANDLE_BAND_NO_ROW : XGRAM_HANDLE_BAND);
@@ -738,7 +740,8 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       MessageOptionsController c = new MessageOptionsController(context, this.tdlib, getThemeListeners());
       c.setArguments(new MessageOptionsController.Args(state.options, onClickListener, state.message.getFirstEmojiId(), state.emojiPackIds, () -> hidePopupWindow(true))
         // XGram: Reaction bar: Bottom: the reactions as a row of the options, its expand button opens the popup picker
-        .xgramReactionBar(state.xgramReactionsInList ? state : null, state.xgramReactionsInList && state.needShowReactionsPopupPicker ? this::showReactionPicker : null));
+        .xgramReactionBar(state.xgramReactionsInList ? state : null, state.xgramReactionsInList && state.needShowReactionsPopupPicker ? this::showReactionPicker : null)
+        .xgramNoHeaderRow(state.xgramNoHeaderRow));
       c.getValue();
       xgramMatchSheetColor(c);
       setHeaderPosition(getContentOffset() + HeaderView.getTopOffset());
