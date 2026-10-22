@@ -780,34 +780,57 @@ public class CameraManagerX extends CameraManager<PreviewView> {
       xgramZoomAnimator.cancel();
       xgramZoomAnimator = null;
     }
+    xgramZoomPending = false;
   }
 
-  /** Zooms to {@code ratio} (a lens: animated; a pinch: at once). */
-  public void xgramSetZoom (float ratio, boolean animated) {
+  private float xgramZoomTarget = -1f;
+  private boolean xgramZoomPending;
+  private long xgramZoomSentAt;
+  private static final long XGRAM_ZOOM_INTERVAL_MS = 50L;
+
+  /**
+   * Zooms to {@code ratio}. One request per lens tap: every zoom change rebuilds the camera's repeating request, and a
+   * stepped ramp (16 of them) made the phone's lens switch and the camera modes (an extension session) fall far behind.
+   * A pinch ({@code fromGesture}) sends at most one request every 50 ms, always the latest ratio.
+   */
+  public void xgramSetZoom (float ratio, boolean fromGesture) {
     if (camera == null) {
       return;
     }
     final float min = getMinZoom(), max = getMaxZoom();
     final float target = max > 0f ? Math.max(min, Math.min(max, ratio)) : ratio;
-    xgramStopZoom();
-    final float from = getCurrentZoom();
-    if (!animated || from <= 0f || Math.abs(from - target) < .01f) {
-      camera.getCameraControl().setZoomRatio(target);
-      onZoomChanged(target);
+    xgramZoomTarget = target;
+    if (!fromGesture) {
+      xgramStopZoom();
+      xgramSendZoom();
       return;
     }
-    ValueAnimator animator = ValueAnimator.ofFloat(from, target);
-    animator.setDuration(260L);
-    animator.setInterpolator(AnimatorUtils.DECELERATE_INTERPOLATOR);
-    animator.addUpdateListener(a -> {
-      if (camera != null) {
-        float value = (float) a.getAnimatedValue();
-        camera.getCameraControl().setZoomRatio(value);
-        onZoomChanged(value);
-      }
-    });
-    xgramZoomAnimator = animator;
-    animator.start();
+    long now = SystemClock.uptimeMillis();
+    if (now - xgramZoomSentAt >= XGRAM_ZOOM_INTERVAL_MS) {
+      xgramSendZoom();
+    } else if (!xgramZoomPending) {
+      xgramZoomPending = true;
+      UI.post(() -> {
+        if (xgramZoomPending) {
+          xgramZoomPending = false;
+          xgramSendZoom();
+        }
+      }, XGRAM_ZOOM_INTERVAL_MS - (now - xgramZoomSentAt));
+    }
+  }
+
+  private void xgramSendZoom () {
+    if (camera == null || xgramZoomTarget <= 0f) {
+      return;
+    }
+    xgramZoomSentAt = SystemClock.uptimeMillis();
+    camera.getCameraControl().setZoomRatio(xgramZoomTarget);
+    onZoomChanged(xgramZoomTarget);
+  }
+
+  /** The zoom the controls asked for last (a pinch builds on it, not on the camera's late state); 0 before any. */
+  public float xgramZoomTarget () {
+    return xgramZoomTarget > 0f ? xgramZoomTarget : getCurrentZoom();
   }
 
   /**

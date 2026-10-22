@@ -89,19 +89,23 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
     addView(modes);
 
     scaleDetector = new ScaleGestureDetector(context, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+      private float pinchZoom;
+
       @Override
       public boolean onScaleBegin (@NonNull ScaleGestureDetector detector) {
         scaling = true;
-        return camera != null;
+        pinchZoom = camera != null ? camera.getCurrentZoom() : 0f;
+        return camera != null && pinchZoom > 0f;
       }
 
       @Override
       public boolean onScale (@NonNull ScaleGestureDetector detector) {
-        if (camera != null) {
-          float current = camera.getCurrentZoom();
-          if (current > 0f) {
-            camera.xgramSetZoom(current * detector.getScaleFactor(), false);
-          }
+        if (camera != null && pinchZoom > 0f) {
+          // Follows the fingers, not the camera's state (a frame or more late)
+          float max = camera.getMaxZoom(), min = camera.getMinZoom();
+          pinchZoom = Math.max(min, Math.min(max > 0f ? max : pinchZoom, pinchZoom * detector.getScaleFactor()));
+          lenses.setZoom(pinchZoom, false);
+          camera.xgramSetZoom(pinchZoom, true);
         }
         return true;
       }
@@ -159,7 +163,7 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
       return;
     }
     lenses.setStops(camera.xgramLensStops());
-    lenses.setZoom(camera.getCurrentZoom());
+    lenses.setZoom(camera.getCurrentZoom(), false);
     modes.setModes(camera.xgramModes(), camera.xgramMode());
     focus.hide(false);
     requestLayout();
@@ -167,7 +171,7 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
 
   @Override
   public void onZoomRatio (float ratio) {
-    lenses.setZoom(ratio);
+    lenses.onCameraZoom(ratio);
   }
 
   @Override
@@ -236,7 +240,8 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
 
   void setZoom (float ratio) {
     if (camera != null && !camera.xgramIsBusy()) {
-      camera.xgramSetZoom(ratio, true);
+      lenses.setZoom(ratio, true); // the lens shows at once, the highlight slides to it
+      camera.xgramSetZoom(ratio, false);
     }
   }
 
@@ -368,6 +373,11 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
     private float[] stops = {1f};
     private float zoom = 1f, contentRotation;
     private boolean vertical;
+    /** The highlight's place (a chip index, fractional while it slides) and where it slides to. */
+    private float highlight = -1f;
+    private @Nullable android.animation.ValueAnimator slide;
+    /** Until this time the camera's zoom state (late, or between the old ratio and the new) doesn't move the chips. */
+    private long holdUntil;
 
     LensRow (Context context, XgramCameraControls parent) {
       super(context);
@@ -381,14 +391,52 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
 
     void setStops (float[] stops) {
       this.stops = stops != null && stops.length > 0 ? stops : new float[] {1f};
+      this.highlight = -1f; // placed again on the next zoom
       setVisibility(this.stops.length > 1 ? VISIBLE : GONE);
       requestLayout();
       invalidate();
     }
 
-    void setZoom (float zoom) {
-      if (zoom > 0f && this.zoom != zoom) {
+    /** The zoom the controls set: a lens tap slides the highlight to its chip, a pinch moves it at once. */
+    void setZoom (float zoom, boolean slideToLens) {
+      if (zoom <= 0f) {
+        return;
+      }
+      this.zoom = zoom;
+      holdUntil = android.os.SystemClock.uptimeMillis() + 600L;
+      int target = selectedIndex();
+      if (slideToLens && highlight >= 0f && Math.abs(highlight - target) > .01f) {
+        if (slide != null) {
+          slide.cancel();
+        }
+        slide = android.animation.ValueAnimator.ofFloat(highlight, target);
+        slide.setDuration(220L);
+        slide.setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f));
+        slide.addUpdateListener(a -> {
+          highlight = (float) a.getAnimatedValue();
+          invalidate();
+        });
+        slide.start();
+      } else {
+        if (slide != null) {
+          slide.cancel();
+          slide = null;
+        }
+        highlight = target;
+      }
+      invalidate();
+    }
+
+    /** The camera's own zoom state: followed unless the controls just set one (it arrives late, or in between). */
+    void onCameraZoom (float zoom) {
+      if (zoom <= 0f || android.os.SystemClock.uptimeMillis() < holdUntil || (slide != null && slide.isRunning())) {
+        return;
+      }
+      if (Math.abs(this.zoom - zoom) > .01f) {
         this.zoom = zoom;
+        if (slide == null || !slide.isRunning()) {
+          highlight = selectedIndex();
+        }
         invalidate();
       }
     }
@@ -440,12 +488,22 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
       rect.set(0, 0, getWidth(), getHeight());
       c.drawRoundRect(rect, radius, radius, containerPaint);
       final int selected = selectedIndex();
+      final float at = highlight >= 0f ? highlight : selected;
+      // The highlight: a filled circle that slides between the chips
+      final float hAlong = Screen.dp(PADDING) + Screen.dp(SELECTED) / 2f + at * slot();
+      final float hx = vertical ? getWidth() / 2f : hAlong, hy = vertical ? hAlong : getHeight() / 2f;
       for (int i = 0; i < stops.length; i++) {
         float along = centerOf(i);
         float cx = vertical ? getWidth() / 2f : along;
         float cy = vertical ? along : getHeight() / 2f;
-        boolean isSelected = i == selected;
-        c.drawCircle(cx, cy, Screen.dp(isSelected ? SELECTED : CHIP) / 2f, isSelected ? selectedPaint : chipPaint);
+        c.drawCircle(cx, cy, Screen.dp(CHIP) / 2f, chipPaint);
+      }
+      c.drawCircle(hx, hy, Screen.dp(SELECTED) / 2f, selectedPaint);
+      for (int i = 0; i < stops.length; i++) {
+        float along = centerOf(i);
+        float cx = vertical ? getWidth() / 2f : along;
+        float cy = vertical ? along : getHeight() / 2f;
+        boolean isSelected = i == selected && Math.abs(at - selected) < .5f;
         TextPaint paint = isSelected ? selectedLabelPaint : labelPaint;
         String label = zoomLabel(isSelected ? zoom : stops[i], isSelected);
         if (contentRotation != 0f) {
