@@ -353,6 +353,33 @@ public class CameraController extends ViewController<Void> implements CameraDele
     params.bottomMargin = bottom;
     contentView.setLayoutParams(params);
     updateControlMargins();
+    xgramUpdateContentPlacement();
+  }
+
+  /**
+   * XGram: Camera X (test): the preview right under the status bar, as camera apps have it, so the room the 16:9
+   * preview leaves on a tall screen is one band under it for the modes and the shutter (Telegram X centered it,
+   * leaving a black band above and controls floating over the picture). Tabletop keeps its own placement.
+   */
+  private void xgramUpdateContentPlacement () {
+    if (contentView == null || rootLayout == null || contentView.getParent() != rootLayout || !(contentView.getLayoutParams() instanceof android.widget.FrameLayout.LayoutParams)) {
+      return;
+    }
+    android.widget.FrameLayout.LayoutParams params = (android.widget.FrameLayout.LayoutParams) contentView.getLayoutParams();
+    int gravity, top = 0;
+    if (xgramFoldBottom > 0) {
+      gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+    } else if (xgramControls != null && xgramControls.getVisibility() == View.VISIBLE && xgramShutterGravity == Gravity.BOTTOM) {
+      gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+      top = Screen.getStatusBarHeight();
+    } else {
+      gravity = Gravity.CENTER;
+    }
+    if (params.gravity != gravity || params.topMargin != top) {
+      params.gravity = gravity;
+      params.topMargin = top;
+      contentView.setLayoutParams(params);
+    }
   }
 
   @Override
@@ -435,11 +462,13 @@ public class CameraController extends ViewController<Void> implements CameraDele
       }
       xgramControls.setVisibility(View.VISIBLE);
       xgramControls.bind((CameraManagerX) manager);
+      xgramUpdateContentPlacement();
       xgramControls.setContentRotation(getTransformedRotation());
       updateControlsStyles();
     } else if (xgramControls != null) {
       xgramControls.bind(null);
       xgramControls.setVisibility(View.GONE);
+      xgramUpdateContentPlacement();
     }
   }
 
@@ -680,6 +709,7 @@ public class CameraController extends ViewController<Void> implements CameraDele
     if (xgramControls != null) {
       xgramControls.requestLayout(); // XGram: next to the shutter
     }
+    xgramUpdateContentPlacement();
 
     setLayoutParams(durationView, topGravity, topGravityCentered, Screen.dp(18f), 0);
     // XGram: the 80dp M3E shutter (no padding) is centred on the 56dp side buttons' line

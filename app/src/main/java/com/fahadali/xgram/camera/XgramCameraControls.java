@@ -294,34 +294,35 @@ public final class XgramCameraControls extends FrameLayout implements CameraMana
     final int mw = modes.getMeasuredWidth(), mh = modes.getMeasuredHeight();
     final int cx = (shutter.getLeft() + shutter.getRight()) / 2, cy = (shutter.getTop() + shutter.getBottom()) / 2;
     final int gap = Screen.dp(14f), between = Screen.dp(10f);
+    // From the shutter out: the modes (in the band under the preview, as camera apps have them), then the lenses
     switch (gravity) {
       case Gravity.TOP: {
-        int lt = shutter.getBottom() + gap;
-        lenses.layout(cx - lw / 2, lt, cx - lw / 2 + lw, lt + lh);
-        int mt = lt + lh + between;
+        int mt = shutter.getBottom() + gap;
         modes.layout(cx - mw / 2, mt, cx - mw / 2 + mw, mt + mh);
+        int lt = mt + (mh > 0 && modes.getVisibility() == VISIBLE ? mh + between : 0);
+        lenses.layout(cx - lw / 2, lt, cx - lw / 2 + lw, lt + lh);
         break;
       }
       case Gravity.RIGHT: {
-        int lr = shutter.getLeft() - gap;
-        lenses.layout(lr - lw, cy - lh / 2, lr, cy - lh / 2 + lh);
-        int mr = lr - lw - between;
+        int mr = shutter.getLeft() - gap;
         modes.layout(mr - mw, cy - mh / 2, mr, cy - mh / 2 + mh);
+        int lr = mr - (mw > 0 && modes.getVisibility() == VISIBLE ? mw + between : 0);
+        lenses.layout(lr - lw, cy - lh / 2, lr, cy - lh / 2 + lh);
         break;
       }
       case Gravity.LEFT: {
-        int ll = shutter.getRight() + gap;
-        lenses.layout(ll, cy - lh / 2, ll + lw, cy - lh / 2 + lh);
-        int ml = ll + lw + between;
+        int ml = shutter.getRight() + gap;
         modes.layout(ml, cy - mh / 2, ml + mw, cy - mh / 2 + mh);
+        int ll = ml + (mw > 0 && modes.getVisibility() == VISIBLE ? mw + between : 0);
+        lenses.layout(ll, cy - lh / 2, ll + lw, cy - lh / 2 + lh);
         break;
       }
       case Gravity.BOTTOM:
       default: {
-        int lb = shutter.getTop() - gap;
-        lenses.layout(cx - lw / 2, lb - lh, cx - lw / 2 + lw, lb);
-        int mb = lb - lh - between;
+        int mb = shutter.getTop() - gap;
         modes.layout(cx - mw / 2, mb - mh, cx - mw / 2 + mw, mb);
+        int lb = mb - (mh > 0 && modes.getVisibility() == VISIBLE ? mh + between : 0);
+        lenses.layout(cx - lw / 2, lb - lh, cx - lw / 2 + lw, lb);
         break;
       }
     }
