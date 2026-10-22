@@ -83,8 +83,8 @@ public final class XgramSettings {
   public static final String KEY_MESSAGE_POPUP = "xgram_message_popup";
   /** A bot's profile → Add to group or channel: as an admin in groups too (channels always), with every right. */
   public static final String KEY_ADD_BOT_ADMIN = "xgram_add_bot_admin", KEY_ADD_BOT_ALL_RIGHTS = "xgram_add_bot_all_rights";
-  /** XGram Drive is a test for now: Testing utilities switches it on (debug builds start with it on, CI builds off). */
-  public static final String KEY_DRIVE_TEST = "xgram_drive_test";
+  /** XDrive (Saved Messages as the drive) is a test for now: Testing utilities switches it on (debug builds on, CI off). */
+  public static final String KEY_XDRIVE_TEST = "xgram_xdrive_test";
   /** Camera X is a test for now: the main camera with CameraX and XGram's controls (debug builds on, CI builds off). */
   public static final String KEY_CAMERA_X_TEST = "xgram_camera_x_test";
 
@@ -608,13 +608,15 @@ public final class XgramSettings {
     put(KEY_ADD_BOT_ALL_RIGHTS, value);
   }
 
-  /** XGram Drive (a test): in the side menu and the message menu only while this is on. */
-  public boolean driveTest () {
-    return pmc().getBoolean(KEY_DRIVE_TEST, org.thunderdog.challegram.BuildConfig.DEBUG);
+  /** XDrive (a test): Saved Messages renamed XDrive, opening as the drive (com.fahadali.xgram.xdrive). */
+  public boolean xdriveTest () {
+    return pmc().getBoolean(KEY_XDRIVE_TEST, org.thunderdog.challegram.BuildConfig.DEBUG);
   }
 
-  public void setDriveTest (boolean value) {
-    put(KEY_DRIVE_TEST, value);
+  public void setXdriveTest (boolean value) {
+    put(KEY_XDRIVE_TEST, value);
+    com.fahadali.xgram.xdrive.XDrive.onSettingChanged(value);
+    org.thunderdog.challegram.core.Lang.xgramNotifyStringsChanged(); // names on screen follow
   }
 
   /** Camera X (a test): the in-app camera uses CameraX with lenses, modes, focus and exposure. */

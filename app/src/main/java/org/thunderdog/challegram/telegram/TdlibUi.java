@@ -1838,6 +1838,14 @@ public class TdlibUi extends Handler {
     // XGram: open forums as merged history even when they are shown as topics.
     public boolean xgramSkipForumRouting;
 
+    /** XGram XDrive: Saved Messages itself (the drive's Chat row, a search in it), not XDrive's screen. */
+    public boolean xgramSkipDriveRouting;
+
+    public ChatOpenParameters xgramSkipDriveRouting () {
+      this.xgramSkipDriveRouting = true;
+      return this;
+    }
+
     public ChatOpenParameters xgramSkipForumRouting () {
       this.xgramSkipForumRouting = true;
       return this;
@@ -2277,6 +2285,21 @@ public class TdlibUi extends Handler {
         }
         return;
       }
+    }
+
+    // XGram XDrive: Saved Messages opens as the drive, unless something specific was asked (a message, a search...)
+    if (com.fahadali.xgram.xdrive.XDrive.on() && tdlib.isSelfChat(chat.id) && messageThread == null && messageTopicId == null && filter == null && !onlyScheduled &&
+      shareItem == null && voiceChatInvitation == null && forceDraft == null &&
+      (params == null || (!params.xgramSkipDriveRouting && StringUtils.isEmpty(params.searchQuery) &&
+        (!params.highlightSet || com.fahadali.xgram.topics.XgramForums.isResumePosition(params.highlightMode))))) {
+      com.fahadali.xgram.xdrive.XDrive.openRouted(context, params != null && params.xgramFromNotification);
+      if (after != null) {
+        after.runWithLong(chat.id);
+      }
+      if (params != null) {
+        params.onDone();
+      }
+      return;
     }
 
     final int highlightMode;

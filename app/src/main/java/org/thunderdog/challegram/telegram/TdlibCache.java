@@ -1022,7 +1022,7 @@ public class TdlibCache implements LiveLocationManager.OutputDelegate, CleanupSt
   }
 
   public AvatarPlaceholder.Metadata selfPlaceholderMetadata () {
-    return new AvatarPlaceholder.Metadata(tdlib.accentColor(TdlibAccentColor.InternalId.SAVED_MESSAGES), null, R.drawable.baseline_bookmark_24, 0);
+    return new AvatarPlaceholder.Metadata(tdlib.accentColor(TdlibAccentColor.InternalId.SAVED_MESSAGES), null, com.fahadali.xgram.xdrive.XDrive.icon(R.drawable.baseline_bookmark_24), 0); // XGram XDrive: a cloud
   }
 
   public AvatarPlaceholder.Metadata repliesPlaceholderMetadata () {

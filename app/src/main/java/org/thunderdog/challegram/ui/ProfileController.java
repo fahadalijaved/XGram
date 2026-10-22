@@ -2739,7 +2739,7 @@ public class ProfileController extends ViewController<ProfileController.Args> im
       return;
     }
     final BaseActivity activity = context();
-    tdlib.ui().openChat(this, chat, new TdlibUi.ChatOpenParameters().keepStack().removeDuplicates().after(chatId -> UI.post(() -> {
+    tdlib.ui().openChat(this, chat, new TdlibUi.ChatOpenParameters().keepStack().removeDuplicates().xgramSkipDriveRouting().after(chatId -> UI.post(() -> {
       ViewController<?> current = activity.navigation().getCurrentStackItem();
       if (current instanceof MessagesController && current.getChatId() == chatId) {
         final MessagesController messages = (MessagesController) current;

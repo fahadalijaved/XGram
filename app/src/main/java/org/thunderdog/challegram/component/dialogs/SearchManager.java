@@ -588,8 +588,9 @@ public class SearchManager {
               if (foundChatIds.indexOf(selfChatId) == -1) {
                 String savedMessagesStr = Lang.lowercase(Lang.getString(R.string.SavedMessages));
                 String savedMessagesStr2 = Lang.lowercase(Lang.getBuiltinString(R.string.SavedMessages));
+                String savedMessagesStr3 = Lang.lowercase(org.thunderdog.challegram.tool.UI.getResources().getString(R.string.SavedMessages)); // XGram XDrive: "saved" still finds it
                 String check = query.trim();
-                if (!StringUtils.isEmpty(check) && ((!StringUtils.isEmpty(savedMessagesStr) && Strings.anyWordStartsWith(savedMessagesStr, check, null)) || (!StringUtils.isEmpty(savedMessagesStr2) && Strings.anyWordStartsWith(savedMessagesStr2, check, null)))) {
+                if (!StringUtils.isEmpty(check) && ((!StringUtils.isEmpty(savedMessagesStr) && Strings.anyWordStartsWith(savedMessagesStr, check, null)) || (!StringUtils.isEmpty(savedMessagesStr2) && Strings.anyWordStartsWith(savedMessagesStr2, check, null)) || (!StringUtils.isEmpty(savedMessagesStr3) && Strings.anyWordStartsWith(savedMessagesStr3, check, null)))) {
                   TdApi.Chat chat = tdlib.chat(selfChatId);
                   if (chat != null) {
                     parseResult(tdlib, listener, searchFlags, foundChats, chatList, new long[] {selfChatId}, query, false, null);

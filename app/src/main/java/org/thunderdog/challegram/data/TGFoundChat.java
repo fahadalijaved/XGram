@@ -368,7 +368,7 @@ public class TGFoundChat {
     this.titleHighlight = Highlight.valueOf(title, highlight);
     checkHighlights();
     if ((flags & FLAG_SELF) != 0) {
-      this.singleLineTitle = Lang.getString(R.string.Saved);
+      this.singleLineTitle = Lang.getString(com.fahadali.xgram.xdrive.XDrive.on() ? R.string.XgramXDriveShort : R.string.Saved); // XGram XDrive
     } else if (chat != null) {
       TdApi.User user = tdlib.chatUser(chat);
       if (user != null && user.type.getConstructor() == TdApi.UserTypeRegular.CONSTRUCTOR) {

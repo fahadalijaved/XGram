@@ -39,8 +39,7 @@ public final class XgramAccountData {
     // Undo send: waiting messages (journal), "your message is back" hints, chats where messages don't wait
     "xgram_usq_", "xgram_usqh_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     com.fahadali.xgram.later.XgramLaterRecord.PREFIX, // Later
-    "xgram_ci_", // Check In's live state (com.fahadali.xgram.checkin)
-    "xgram_drive_" // XGram Drive: the drive's channel (com.fahadali.xgram.drive)
+    "xgram_ci_" // Check In's live state (com.fahadali.xgram.checkin)
   };
 
   /** TDLib thread: the account in this slot logged out. */
@@ -72,7 +71,7 @@ public final class XgramAccountData {
       com.fahadali.xgram.later.XgramLater.forgetAccount(accountId); // Later: its notifications and alarm too
       XgramHistory.instance().clearAccount(accountId);
       com.fahadali.xgram.activity.XgramActivity.forgetAccount(accountId); // its own store, not prefixed settings
-      com.fahadali.xgram.drive.XgramDrive.forgetAccount(accountId); // XGram Drive: its loaded posts
+      com.fahadali.xgram.xdrive.XDriveIndex.forgetAccount(accountId); // XGram XDrive: its folders in memory
     } catch (Throwable t) {
       android.util.Log.e("XGram", "Cannot erase account data", t);
     }

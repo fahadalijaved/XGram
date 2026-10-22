@@ -211,7 +211,9 @@ object TgxComposePages {
       putAll(TgxPagesBatch2.pages)
       putAll(TgxPagesBatch3.pages)
       putAll(TgxPagesLater.pages) // XGram Later
-      putAll(TgxPagesDrive.pages) // XGram Drive
+      // XGram XDrive: the drive and its lists, in the generic look (icons, names, counts)
+      put(com.fahadali.xgram.xdrive.XDriveController::class.java, TgxPageHints.DEFAULT)
+      put(com.fahadali.xgram.xdrive.XDriveListController::class.java, TgxPageHints.DEFAULT)
     }
   }
 

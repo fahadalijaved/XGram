@@ -316,6 +316,7 @@ public class Lang {
   private static String getStringImpl (@Nullable TdApi.LanguagePackInfo languagePackInfo, @StringRes int resId, boolean allowCloud) {
     if (resId == 0)
       throw new Resources.NotFoundException("resId == 0");
+    resId = com.fahadali.xgram.xdrive.XDrive.remapString(resId); // XGram XDrive: Saved Messages is XDrive
     if (allowCloud) {
       if (languagePackInfo == null)
         languagePackInfo = Settings.instance().getLanguagePackInfo();
@@ -454,6 +455,7 @@ public class Lang {
   public static CharSequence getStringImpl (@Nullable TdApi.LanguagePackInfo languagePackInfo, @StringRes int resId, boolean allowCloud, int flags, SpanCreator creator, Object... formatArgs) {
     if (resId == 0)
       throw new Resources.NotFoundException("resId == 0");
+    resId = com.fahadali.xgram.xdrive.XDrive.remapString(resId); // XGram XDrive
     if (formatArgs == null || formatArgs.length == 0)
       return getStringImpl(null, resId, allowCloud);
     final boolean hasSpanned = hasSpanned(formatArgs);
@@ -3888,6 +3890,11 @@ public class Lang {
       }
     }
     languageListeners.remove(listener);
+  }
+
+  /** XGram: strings were remapped (XDrive switched): lists and pages read their texts again. */
+  public static void xgramNotifyStringsChanged () {
+    sendLanguageEvent(EVENT_PACK_CHANGED, 0);
   }
 
   private static void sendLanguageEvent (@EventType int eventType, int arg1) {

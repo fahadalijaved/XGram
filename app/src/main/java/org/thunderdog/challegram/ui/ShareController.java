@@ -3831,7 +3831,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
     } else if ((args.needOpenChat || forceGoToChat) && selectedChats.size() == 1) {
       ViewController<?> c = context().navigation().getCurrentStackItem();
       if (!(c instanceof MessagesController && ((MessagesController) c).compareChat(selectedChats.valueAt(0).getAnyId(), (TdApi.MessageTopic) null))) {
-        UI.post(() -> tdlib.ui().openChat(ShareController.this, selectedChats.valueAt(0).getAnyId(), null), 250);
+        UI.post(() -> tdlib.ui().openChat(ShareController.this, selectedChats.valueAt(0).getAnyId(), new org.thunderdog.challegram.telegram.TdlibUi.ChatOpenParameters().xgramSkipDriveRouting()), 250); // XGram: shows what was sent
       }
     } else {
       UI.showToast(R.string.Done, Toast.LENGTH_SHORT);

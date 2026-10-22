@@ -2005,6 +2005,31 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
   }
 
+  /**
+   * XGram XDrive: Saved Messages on one of its media tabs (1 + the filter's place in ProfileController.getFiltersOrder();
+   * photos and videos: the Photo tab when they are separate). Call after getValue(), before the screen shows.
+   */
+  public void xgramSelectMediaTab (int filterConstructor) {
+    if (pagerContentView == null) {
+      return;
+    }
+    TdApi.SearchMessagesFilter[] order = ProfileController.getFiltersOrder();
+    int wanted = filterConstructor;
+    boolean hasBoth = false;
+    for (TdApi.SearchMessagesFilter filter : order) {
+      hasBoth |= filter.getConstructor() == TdApi.SearchMessagesFilterPhotoAndVideo.CONSTRUCTOR;
+    }
+    if (wanted == TdApi.SearchMessagesFilterPhotoAndVideo.CONSTRUCTOR && !hasBoth) {
+      wanted = TdApi.SearchMessagesFilterPhoto.CONSTRUCTOR;
+    }
+    for (int i = 0; i < order.length; i++) {
+      if (order[i].getConstructor() == wanted) {
+        pagerContentView.setCurrentItem(1 + i, false);
+        return;
+      }
+    }
+  }
+
   @Override
   public void onPagerItemClick (int position) {
     if (pagerContentView.getCurrentItem() == 0 && UI.getContext(MessagesController.this.context()).getRecordAudioVideoController().isOpen()) {

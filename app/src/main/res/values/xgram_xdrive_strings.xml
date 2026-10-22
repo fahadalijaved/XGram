@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram XDrive: Saved Messages as the user's drive (com.fahadali.xgram.xdrive) -->
+
+  <!-- Ids -->
+  <item name="controller_xgramXDrive" type="id" />
+  <item name="controller_xgramXDriveList" type="id" />
+  <item name="btn_xgramXDriveTest" type="id" />
+  <item name="btn_xgramXDriveChat" type="id" />
+  <item name="btn_xgramXDriveSection" type="id" />
+  <item name="btn_xgramXDriveNotes" type="id" />
+  <item name="btn_xgramXDriveFromChats" type="id" />
+  <item name="btn_xgramXDriveFolder" type="id" />
+  <item name="btn_xgramXDriveNewFolder" type="id" />
+  <item name="btn_xgramXDriveItem" type="id" />
+  <item name="btn_xgramXDriveAddToFolder" type="id" />
+  <item name="btn_xgramXDriveRename" type="id" />
+  <item name="btn_xgramXDriveDelete" type="id" />
+  <item name="btn_xgramXDriveRemove" type="id" />
+  <item name="btn_xgramXDriveMove" type="id" />
+  <item name="btn_xgramXDriveOpen" type="id" />
+  <item name="menu_xgramXDrive" type="id" />
+
+  <!-- The switch -->
+  <string name="XgramXDriveTest">XDrive (test)</string>
+  <string name="XgramXDriveTestInfo">Saved Messages becomes XDrive: its name everywhere, sections and folders. Still a test: CI builds keep Saved Messages until it is switched on here.</string>
+
+  <!-- Saved Messages, renamed -->
+  <string name="XgramXDrive">XDrive</string>
+  <string name="XgramXDriveShort">XDrive</string>
+  <string name="XgramXDriveSubtitle">Your drive</string>
+  <string name="XgramXDriveClear">Delete everything in XDrive</string>
+  <string name="XgramXDriveClearConfirm">Are you sure you want to clear all of **XDrive**? This action cannot be undone.</string>
+  <string name="XgramXDriveClearSecondaryConfirm">**No, seriously.**\n\nThis will delete **everything in XDrive**. There will be no way to restore it.</string>
+  <string name="XgramXDriveDeleteConfirm">Are you sure you want to delete all of **XDrive**? This action cannot be undone.</string>
+  <string name="XgramSaveToXDrive">Save to XDrive</string>
+  <string name="XgramSavedToXDrive">Saved to XDrive</string>
+  <string name="XgramXDriveFromChats">From chats</string>
+  <string name="XgramXDriveByChat">XDrive by chat</string>
+  <string name="XgramXDriveNavSub">Opens your drive</string>
+  <string name="XgramXDriveLaterNo">XDrive can\'t wait for a reply</string>
+
+  <!-- The drive -->
+  <string name="XgramXDriveChat">Chat</string>
+  <string name="XgramXDriveChatInfo">Everything in XDrive, as messages</string>
+  <string name="XgramXDriveSections">Sections</string>
+  <string name="XgramXDrivePhotos">Photos and videos</string>
+  <string name="XgramXDriveFiles">Files</string>
+  <string name="XgramXDriveLinks">Links</string>
+  <string name="XgramXDriveMusic">Music</string>
+  <string name="XgramXDriveVoice">Voice messages</string>
+  <string name="XgramXDriveGifs">GIFs</string>
+  <string name="XgramXDriveNotes">Notes</string>
+  <string name="XgramXDriveNotesInfo">Texts you saved</string>
+  <string name="XgramXDriveFromChatsInfo">Grouped by where they came from</string>
+  <string name="XgramXDriveFolders">Folders</string>
+  <string name="XgramXDriveNewFolder">New folder</string>
+  <string name="XgramXDriveFolderName">Folder name</string>
+  <string name="XgramXDriveCreate">Create</string>
+  <string name="XgramXDriveRename">Rename</string>
+  <string name="XgramXDriveDeleteFolder">Delete folder</string>
+  <string name="XgramXDriveDeleteFolderConfirm">Delete the folder “%1$s”? The messages in it stay in XDrive.</string>
+  <string name="XgramXDriveFolderExists">A folder named “%1$s” already exists.</string>
+  <string name="XgramXDriveNoFolders">No folders yet. Make one, then in XDrive\'s chat long-press a message and choose Add to folder.</string>
+  <string name="XgramXDriveEmptyFolder">Nothing in this folder yet. In XDrive\'s chat, long-press a message and choose Add to folder.</string>
+  <string name="XgramXDriveNoNotes">No notes yet. Texts you send to XDrive show here.</string>
+  <string name="XgramXDriveLoading">Loading…</string>
+  <string name="XgramXDriveAddToFolder">Add to folder</string>
+  <string name="XgramXDriveAddedTo">Added to “%1$s”</string>
+  <string name="XgramXDriveRemoveFromFolder">Remove from folder</string>
+  <string name="XgramXDriveMoveToFolder">Move to another folder</string>
+  <string name="XgramXDriveShowInChat">Show in chat</string>
+  <string name="XgramXDriveChooseFolder">Choose a folder</string>
+  <string name="XgramXDriveInfo">XDrive is your Saved Messages, organized: nothing in it changes. Folders are kept in one small file in its chat (xdrive-folders.json), so they reach your other devices; other Telegram apps show it as a file.</string>
+  <string name="XgramXDriveIndexCaption">XDrive folders: XGram keeps your folders in this file. Please keep it.</string>
+  <string name="XgramXDriveSearch">Search XDrive</string>
+  <string name="XgramXDriveNoResults">Nothing in XDrive matches.</string>
+  <string name="XgramXDriveSaveFailed">Couldn\'t save the folders: %1$s</string>
+</resources>

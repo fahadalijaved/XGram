@@ -33,21 +33,16 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
   // Telegram X's order. Settings can't be hidden, only moved; Night mode, Expressive design and Ghost mode sit below the line.
   // XGram: public for the Compose Side menu page (xgram-m3e)
   // XGram: Activity first (com.fahadali.xgram.activity); an order saved before it existed keeps it there (no rank)
-  public static final String[] KEYS = {"activity", "contacts", "hub", "calls", "saved", "bookmarks", "later", "drive", "saved_by_chat", "settings", "invite", "proxy", "help"};
-  public static final int[] NAMES = {R.string.XgramActivity, R.string.Contacts, R.string.XgramHub, R.string.Calls, R.string.SavedMessages, R.string.XgramBookmarks, R.string.XgramLater, R.string.XgramDrive, R.string.XgramSavedByChat, R.string.Settings, R.string.InviteFriends, R.string.Proxy, R.string.Help};
+  public static final String[] KEYS = {"activity", "contacts", "hub", "calls", "saved", "bookmarks", "later", "saved_by_chat", "settings", "invite", "proxy", "help"};
+  public static final int[] NAMES = {R.string.XgramActivity, R.string.Contacts, R.string.XgramHub, R.string.Calls, R.string.SavedMessages, R.string.XgramBookmarks, R.string.XgramLater, R.string.XgramSavedByChat, R.string.Settings, R.string.InviteFriends, R.string.Proxy, R.string.Help};
   public static final String[] TOGGLE_KEYS = {"night", "expressive", "ghost"};
   public static final int[] TOGGLE_NAMES = {R.string.NightMode, R.string.XgramExpressive, R.string.XgramGhostMode};
   public static final String KEY_SETTINGS = "settings";
   /** The Expressive design switch: only on Android 13 or newer (XgramExpressive.isAvailable), like the option itself. */
   public static final String KEY_EXPRESSIVE = "expressive";
-  /** XGram Drive: shown (and listed here) only while its test is on (XgramSettings.driveTest). */
-  public static final String KEY_DRIVE = "drive";
 
   /** Whether the side menu can show this item on this device; the settings lists leave out the others. */
   public static boolean isAvailable (String key) {
-    if (KEY_DRIVE.equals(key)) {
-      return XgramSettings.instance().driveTest(); // XGram Drive: a test for now
-    }
     return !KEY_EXPRESSIVE.equals(key) || com.fahadali.xgram.appearance.XgramExpressive.isAvailable();
   }
 
@@ -81,8 +76,6 @@ public final class XgramDrawerItemsController extends RecyclerViewController<Voi
       return "bookmarks";
     } else if (id == R.id.btn_xgramLater) {
       return "later"; // XGram Later
-    } else if (id == R.id.btn_xgramDrive) {
-      return "drive"; // XGram Drive
     } else if (id == R.id.btn_xgramSavedByChat) {
       return "saved_by_chat";
     } else if (id == R.id.btn_settings) {

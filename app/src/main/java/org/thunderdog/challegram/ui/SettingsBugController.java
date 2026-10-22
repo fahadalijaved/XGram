@@ -487,9 +487,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
         } else if (itemId == R.id.btn_xgramLogsDetailed) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramLogs.isDetailedOn(), isUpdate);
           view.setData(com.fahadali.xgram.XgramLogs.detailedSubtitle());
-        } else if (itemId == R.id.btn_xgramDriveTest) {
-          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().driveTest(), isUpdate);
-          view.setData(R.string.XgramDriveTestInfo);
+        } else if (itemId == R.id.btn_xgramXDriveTest) {
+          view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().xdriveTest(), isUpdate);
+          view.setData(R.string.XgramXDriveTestInfo);
         } else if (itemId == R.id.btn_xgramCameraXTest) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.XgramSettings.instance().cameraXTest(), isUpdate);
           view.setData(R.string.XgramCameraXTestInfo);
@@ -813,13 +813,13 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
         }
         int initialSize = items.size();
         if (tdlib != null && !tdlib.context().inRecoveryMode()) {
-          if (testerLevel >= Tdlib.TesterLevel.TESTER || BuildConfig.DEBUG || com.fahadali.xgram.XgramSettings.instance().driveTest()) {
-            // XGram Drive: a test for now (debug builds start with it on, CI builds off); shown to testers, or while on
-            items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramDriveTest, R.drawable.baseline_cloud_24, R.string.XgramDriveTest, false));
+          if (testerLevel >= Tdlib.TesterLevel.TESTER || BuildConfig.DEBUG || com.fahadali.xgram.XgramSettings.instance().xdriveTest()) {
+            // XGram XDrive: a test for now (debug builds start with it on, CI builds off); shown to testers, or while on
+            items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramXDriveTest, R.drawable.baseline_cloud_24, R.string.XgramXDriveTest, false));
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
           }
           if (testerLevel >= Tdlib.TesterLevel.TESTER || BuildConfig.DEBUG || com.fahadali.xgram.XgramSettings.instance().cameraXTest()) {
-            // XGram: Camera X, a test like Drive
+            // XGram: Camera X, a test like XDrive
             items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramCameraXTest, R.drawable.baseline_camera_alt_24, R.string.XgramCameraXTest, false));
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
           }
@@ -1166,9 +1166,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
     } else if (viewId == R.id.btn_xgramCameraXTest) {
       com.fahadali.xgram.XgramSettings.instance().setCameraXTest(!com.fahadali.xgram.XgramSettings.instance().cameraXTest()); // XGram Camera X (test)
       adapter.updateValuedSettingById(R.id.btn_xgramCameraXTest);
-    } else if (viewId == R.id.btn_xgramDriveTest) {
-      com.fahadali.xgram.XgramSettings.instance().setDriveTest(!com.fahadali.xgram.XgramSettings.instance().driveTest()); // XGram Drive (test)
-      adapter.updateValuedSettingById(R.id.btn_xgramDriveTest);
+    } else if (viewId == R.id.btn_xgramXDriveTest) {
+      com.fahadali.xgram.XgramSettings.instance().setXdriveTest(!com.fahadali.xgram.XgramSettings.instance().xdriveTest()); // XGram XDrive (test)
+      adapter.updateValuedSettingById(R.id.btn_xgramXDriveTest);
     } else if (viewId == R.id.btn_xgramLogsDetailed) {
       // The state is the setting's, so the switch follows it (listener: onDetailedLogsChanged)
       com.fahadali.xgram.XgramLogs.setDetailed(!com.fahadali.xgram.XgramLogs.isDetailedOn());
