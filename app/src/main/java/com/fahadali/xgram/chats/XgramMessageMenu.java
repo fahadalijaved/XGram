@@ -37,6 +37,11 @@ public final class XgramMessageMenu {
   public static final String KEY_MORE = "xgram_menu_more";
   /** The key of Telegram X's own More option, which opens the options under it. */
   public static final String KEY_MORE_OPTION = "more";
+  /**
+   * The options Telegram X keeps on More's page ({@link #isTgxMoreOnly}) that the user wants in the menu itself (a comma
+   * separated list of keys). Without it they stay where Telegram X puts them, so the default menu does not change.
+   */
+  public static final String KEY_IN_MENU = "xgram_menu_in_menu";
 
   public static final class Option {
     /** Stored when hidden: stays the same across builds, unlike the ids. */
@@ -112,7 +117,7 @@ public final class XgramMessageMenu {
     return !"xdrive_folder".equals(key) || com.fahadali.xgram.xdrive.XDrive.on();
   }
 
-  private static volatile Set<String> hidden, more;
+  private static volatile Set<String> hidden, more, inMenu;
 
   private static Set<String> readSet (String settingKey) {
     Set<String> set = new HashSet<>();
@@ -149,9 +154,20 @@ public final class XgramMessageMenu {
 
   private static Set<String> more () {
     if (more == null) {
-      more = readSet(KEY_MORE);
+      Set<String> set = readSet(KEY_MORE);
+      // Hidden options have no place (setHidden): older builds' Compose page and older backups kept both, so an option
+      // shown again came back under More. The menu skips hidden options anyway; the next write stores the cleaned set.
+      set.removeAll(hidden());
+      more = set;
     }
     return more;
+  }
+
+  private static Set<String> inMenu () {
+    if (inMenu == null) {
+      inMenu = readSet(KEY_IN_MENU);
+    }
+    return inMenu;
   }
 
   public static boolean isHidden (String key) {
@@ -167,6 +183,12 @@ public final class XgramMessageMenu {
     }
     hidden = set;
     writeSet(KEY_HIDDEN, set);
+    if (isHidden && canGoInMore(key)) {
+      // Hidden drops the option's place, for every caller: shown again, it comes back where it is by default, on both
+      // settings pages alike, never under More from before
+      setInMore(key, false);
+      setInMenu(key, false);
+    }
   }
 
   /** Whether the option waits under More (the menu's More option opens it) instead of in the menu itself. */
@@ -193,10 +215,84 @@ public final class XgramMessageMenu {
     writeSet(KEY_MORE, set);
   }
 
+  /** Whether some option waits under More: the menu then keeps its More option even while it is hidden (filter). */
+  public static boolean hasOptionsUnderMore () {
+    for (String key : more()) {
+      // Restrict from older builds never keeps More: the menu itself never lists it (canChoosePlace); nor does an option
+      // this setup leaves out (XDrive's Add to folder while its test is off), which the settings pages don't list
+      if (canChoosePlace(key) && isAvailable(key)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Options Telegram X only lists on More's page (MessageView.fillMessageOptionsImpl; in the menu only when nothing else
+   * is there): Report, and an admin's Restrict and Remove from group. Both settings pages show them under More unless
+   * the user put them in the menu ({@link #isInMenu}).
+   */
+  public static boolean isTgxMoreOnly (String key) {
+    return "report".equals(key) || "restrict".equals(key);
+  }
+
+  /**
+   * Whether the settings pages offer the menu or More for the option. Not for More itself, nor for Restrict and Remove
+   * from group: Telegram X only knows whether they apply once More's page has loaded the sender's membership, so they
+   * can't be in the menu.
+   */
+  public static boolean canChoosePlace (String key) {
+    return canGoInMore(key) && !"restrict".equals(key);
+  }
+
+  /** Whether one of Telegram X's options of More's page ({@link #isTgxMoreOnly}) goes in the menu itself (MessageView). */
+  public static boolean isInMenu (String key) {
+    return inMenu().contains(key);
+  }
+
+  private static void setInMenu (String key, boolean wanted) {
+    boolean add = wanted && isTgxMoreOnly(key) && canChoosePlace(key);
+    Set<String> current = inMenu();
+    if (add == current.contains(key)) {
+      return;
+    }
+    Set<String> set = new HashSet<>(current);
+    if (add) {
+      set.add(key);
+    } else {
+      set.remove(key);
+    }
+    inMenu = set;
+    writeSet(KEY_IN_MENU, set);
+  }
+
+  /** Where both settings pages show a shown option: under More (put there, or Telegram X's own place) or in the menu. */
+  public static boolean showsUnderMore (String key) {
+    return isInMore(key) || (isTgxMoreOnly(key) && !isInMenu(key));
+  }
+
+  /**
+   * The settings pages' choice between the menu and More. Telegram X's options of More's page are there by default, so
+   * for them only the wish to have them in the menu is stored. Putting an option under More turns a hidden More back
+   * on: the menu needs it to reach the option, and the settings pages then show More as the menu does.
+   */
+  public static void setUnderMore (String key, boolean underMore) {
+    if (isTgxMoreOnly(key)) {
+      setInMore(key, false);
+      setInMenu(key, !underMore);
+    } else {
+      setInMore(key, underMore);
+    }
+    if (underMore && canGoInMore(key) && isHidden(KEY_MORE_OPTION)) {
+      setHidden(KEY_MORE_OPTION, false);
+    }
+  }
+
   /** After a backup import or reset. */
   public static void reload () {
     hidden = null;
     more = null;
+    inMenu = null;
   }
 
   private static boolean isHiddenId (int id, Set<String> set) {
@@ -226,6 +322,9 @@ public final class XgramMessageMenu {
     }
     Set<String> set = hidden(), moreSet = more();
     boolean hasTgxCache = ids.indexOf(R.id.btn_deleteFile) != -1;
+    // Telegram X put its only More option, "Messages from X", in the menu itself: Messages by sender (the same screen)
+    // under More then adds no More, whose page would only repeat it (filterMore leaves it out there)
+    boolean hasTgxSender = ids.indexOf(R.id.btn_messageViewList) != -1;
     int[] idArray = ids.get(), iconArray = icons.get();
     IntList keptIds = new IntList(count), keptIcons = new IntList(count);
     StringList keptNames = new StringList(count);
@@ -241,7 +340,9 @@ public final class XgramMessageMenu {
         continue;
       }
       if (isHiddenId(id, moreSet)) {
-        anyInMore = true;
+        if (!(hasTgxSender && id == R.id.btn_xgramMessagesBySender)) {
+          anyInMore = true;
+        }
         continue;
       }
       keptIds.append(id);
@@ -322,6 +423,23 @@ public final class XgramMessageMenu {
   /** Whether the page More opens has an option that needs the menu's tag (Save: the files the menu found downloaded). */
   public static boolean needsMenuTag (IntList ids) {
     return ids.indexOf(R.id.btn_saveFile) != -1 || ids.indexOf(R.id.btn_saveGif) != -1;
+  }
+
+  /**
+   * The tag of the page More opens while it lists Save: the menu's tag, for Save alone. Telegram X's own options there
+   * see none, as on its own page (Delete from cache then deletes every file of the message, not just the saved ones).
+   */
+  public static final class MoreTag {
+    public final Object menuTag;
+
+    public MoreTag (Object menuTag) {
+      this.menuTag = menuTag;
+    }
+  }
+
+  /** The tag Save works with: the menu's own, also when Save is on the page More opens. */
+  public static Object saveTag (Object tag) {
+    return tag instanceof MoreTag ? ((MoreTag) tag).menuTag : tag;
   }
 
   private static void replace (IntList ids, IntList icons, StringList strings, IntList newIds, IntList newIcons, StringList newNames) {

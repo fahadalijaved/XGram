@@ -122,7 +122,25 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
         }
       };
       itemsLayout.setOrientation(LinearLayout.VERTICAL);
-      scrollView = new ScrollView(context);
+      scrollView = new ScrollView(context) {
+        // XGram: a menu that loads more rows near its end (the message popup's who reacted) hears of each scroll and
+        // layout of its rows (xgramSetOnScroll)
+        @Override
+        protected void onScrollChanged (int l, int t, int oldl, int oldt) {
+          super.onScrollChanged(l, t, oldl, oldt);
+          if (xgramOnScroll != null) {
+            xgramOnScroll.run();
+          }
+        }
+
+        @Override
+        protected void onLayout (boolean changed, int l, int t, int r, int b) {
+          super.onLayout(changed, l, t, r, b);
+          if (xgramOnScroll != null) {
+            xgramOnScroll.run();
+          }
+        }
+      };
       scrollView.addView(itemsLayout, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
       scrollView.setLayoutParams(new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
       // XGram: rows cut off at a capped menu's edge fade out, so it shows that it scrolls
@@ -655,6 +673,32 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     return itemsLayout.getChildCount();
   }
 
+  /**
+   * XGram: a view of the owner's own among the rows, at {@code index} (in the scroll view's column when scrollable):
+   * as wide as the menu (it adds no width of its own) and as tall as it measures (the message popup's emoji packs line).
+   */
+  public void xgramAddView (View view, int index) {
+    itemsLayout.addView(view, Math.max(0, Math.min(index, itemsLayout.getChildCount())));
+  }
+
+  private @Nullable Runnable xgramOnScroll;
+
+  /** XGram: {@code onScroll} runs after each scroll and layout of a scrollable menu's rows (a list that loads more). */
+  public void xgramSetOnScroll (@Nullable Runnable onScroll) {
+    this.xgramOnScroll = onScroll;
+  }
+
+  /**
+   * XGram: how far a scrollable menu's last row reaches below what it shows, in px (0: its end is in sight);
+   * Integer.MAX_VALUE until it is laid out, and for a menu made without its scroll view.
+   */
+  public int xgramScrollRemaining () {
+    if (scrollView == null || scrollView.getHeight() == 0) {
+      return Integer.MAX_VALUE;
+    }
+    return Math.max(0, itemsLayout.getHeight() - scrollView.getScrollY() - scrollView.getHeight());
+  }
+
   /** XGram: removes the rows from {@code index} on (a reused menu with fewer rows this time). */
   public void removeItemsFrom (int index) {
     for (int i = itemsLayout.getChildCount() - 1; i >= Math.max(0, index); i--) {
@@ -911,13 +955,16 @@ public class MenuMoreWrap extends MenuMoreWrapAbstract implements Animated {
     }
   }
 
-  /** The visible card's inset from the view's sides: the Expressive container's InsetDrawable, the 9-patch's shadow. */
-  private int xgramCardInsetX () {
+  /**
+   * XGram: the visible card's inset from the view's sides: the Expressive container's InsetDrawable, the 9-patch's
+   * shadow. Public for menus their owner places (the message popup lines the card up with the message).
+   */
+  public int xgramCardInsetX () {
     return Screen.dp(PADDING);
   }
 
-  /** The visible card's inset from the view's top and bottom. */
-  private int xgramCardInsetY () {
+  /** XGram: the visible card's inset from the view's top and bottom. */
+  public int xgramCardInsetY () {
     return xgramFlushCard ? 0 : Screen.dp(PADDING);
   }
 

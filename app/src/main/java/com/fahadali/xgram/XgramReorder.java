@@ -85,6 +85,9 @@ public final class XgramReorder {
   }
 
   public static void save (String list, List<String> keys) {
+    if (!keys.isEmpty()) {
+      keys = withUnlisted(list, keys);
+    }
     StringBuilder b = new StringBuilder();
     for (String key : keys) {
       if (b.length() > 0) {
@@ -97,6 +100,94 @@ public final class XgramReorder {
     } else {
       Settings.instance().putString(KEY_PREFIX + list, b.toString());
     }
+  }
+
+  /**
+   * The new order with the stored keys its settings list doesn't show now (an item not available, like XDrive's Add to
+   * folder while XDrive's test is off) put back, so dragging other rows doesn't forget where those are: each goes right
+   * after the key it followed in the stored order, counting only the keys the drag left in their order (a dragged row
+   * doesn't take it along).
+   */
+  private static List<String> withUnlisted (String list, List<String> keys) {
+    List<String> old = saved(list);
+    Set<String> listed = new HashSet<>(keys);
+    boolean anyUnlisted = false;
+    for (String key : old) {
+      if (!listed.contains(key)) {
+        anyUnlisted = true;
+        break;
+      }
+    }
+    if (!anyUnlisted) {
+      return keys;
+    }
+    Map<String, Integer> oldIndex = new HashMap<>();
+    for (int i = 0; i < old.size(); i++) {
+      if (!oldIndex.containsKey(old.get(i))) {
+        oldIndex.put(old.get(i), i);
+      }
+    }
+    List<String> known = new ArrayList<>();
+    for (String key : keys) {
+      if (oldIndex.containsKey(key)) {
+        known.add(key);
+      }
+    }
+    // The longest run of listed keys still in their stored order relative to each other stayed (as in sortMoved)
+    int n = known.size();
+    int[] length = new int[n], prev = new int[n];
+    int best = -1;
+    for (int i = 0; i < n; i++) {
+      length[i] = 1;
+      prev[i] = -1;
+      //noinspection ConstantConditions
+      int index = oldIndex.get(known.get(i));
+      for (int j = 0; j < i; j++) {
+        //noinspection ConstantConditions
+        if (oldIndex.get(known.get(j)) < index && length[j] + 1 > length[i]) {
+          length[i] = length[j] + 1;
+          prev[i] = j;
+        }
+      }
+      if (best == -1 || length[i] > length[best]) {
+        best = i;
+      }
+    }
+    Set<String> stayed = new HashSet<>();
+    for (int i = best; i != -1; i = prev[i]) {
+      stayed.add(known.get(i));
+    }
+    // Each unlisted key goes after the nearest key before it in the stored order that stayed (or first, without one)
+    List<String> first = new ArrayList<>();
+    Map<String, List<String>> after = new HashMap<>();
+    Set<String> added = new HashSet<>();
+    String anchor = null;
+    for (String key : old) {
+      if (stayed.contains(key)) {
+        anchor = key;
+      } else if (!listed.contains(key) && added.add(key)) {
+        if (anchor == null) {
+          first.add(key);
+        } else {
+          List<String> group = after.get(anchor);
+          if (group == null) {
+            group = new ArrayList<>();
+            after.put(anchor, group);
+          }
+          group.add(key);
+        }
+      }
+    }
+    List<String> merged = new ArrayList<>(keys.size() + added.size());
+    merged.addAll(first);
+    for (String key : keys) {
+      merged.add(key);
+      List<String> group = after.remove(key);
+      if (group != null) {
+        merged.addAll(group);
+      }
+    }
+    return merged;
   }
 
   public static void reset (String list) {

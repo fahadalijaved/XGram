@@ -89,11 +89,13 @@
   <string name="XgramMessageMenu">Message menu</string>
   <string name="XgramMessageMenuInfo">Choose what shows when you long-press a message, and drag an option by its handle, or hold it, to change the order. Put an option under More to keep it one tap away without crowding the menu. Options for one situation only, like Send now or Stop poll, always show and keep their place.</string>
   <string name="XgramMenuUnderMore">Under More</string>
+  <string name="XgramMenuMoreKept">Shows while options are under More</string>
   <string name="XgramMessagePopup">Popup menu</string>
   <string name="XgramMessagePopupInfo">A small menu next to the message with the reactions above it, like Telegram</string>
   <string name="XgramPopupViewers">Seen by</string>
   <string name="XgramPopupNoViewers">Nobody yet</string>
   <string name="XgramPopupViewersCount">Seen by %1$d</string>
+  <string name="XgramPopupReadPending">Read</string>
   <string name="XgramAddBotTitle">Add to group or channel</string>
   <string name="XgramAddBotAsAdmin">Add as admin</string>
   <string name="XgramAddBotAsAdminInfo">In groups too. Channels always add bots as admins</string>
@@ -106,6 +108,7 @@
   <string name="XgramAddBotDoneOne">Added to %1$s</string>
   <string name="XgramAddBotDoneMany">Added to %1$d chats</string>
   <string name="XgramMenuNameUnderMore">%1$s · under More</string>
+  <string name="XgramMenuNameMoreKept">%1$s · shows while options are under it</string>
   <string name="XgramMenuInMenu">In the menu</string>
   <string name="XgramMenuHidden">Hidden</string>
   <string name="XgramMenuChoiceCurrent">%1$s ✓</string>
@@ -864,5 +867,6 @@
   <string name="XgramReactionBarBottom">Bottom</string>
   <string name="XgramReactionBarOff">Off</string>
   <string name="XgramReactionBarInfo">Where the quick reactions show when you long-press a message. Bottom puts them under the options, above Delete. With Off, who reacted and who viewed stay at the top.</string>
+  <string name="XgramReactionBarPopupInfo">In the popup menu the quick reactions show above the message. With Off, who reacted and who viewed stay at the end of the menu.</string>
   <string name="XgramMoreReactions">More reactions</string>
 </resources>

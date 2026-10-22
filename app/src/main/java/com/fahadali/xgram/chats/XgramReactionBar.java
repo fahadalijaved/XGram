@@ -67,6 +67,14 @@ public final class XgramReactionBar {
   }
 
   /**
+   * The mode's name while the popup menu is on (XgramMessagePopup): it always shows the reactions above the message,
+   * so Top and Bottom are both just On there.
+   */
+  public static String popupModeName (int mode) {
+    return Lang.getString(mode == XgramSettings.REACTION_BAR_OFF ? R.string.XgramReactionBarOff : R.string.XgramStateOn);
+  }
+
+  /**
    * The mode of one message sheet: the setting, or Top for a sheet without the options page (a tap on reactions). A
    * channel post gets Off while Reactions in channels is off: the sheet is the one Off gives, whatever the setting.
    */

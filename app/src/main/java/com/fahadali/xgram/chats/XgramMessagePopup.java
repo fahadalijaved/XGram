@@ -24,12 +24,17 @@ import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.os.SystemClock;
+import android.text.TextUtils;
+import android.text.style.ClickableSpan;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -58,6 +63,7 @@ import org.thunderdog.challegram.navigation.MenuMoreWrap;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibEmojiManager;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.theme.ThemeListenerList;
@@ -68,6 +74,7 @@ import org.thunderdog.challegram.tool.Views;
 import org.thunderdog.challegram.ui.MessageOptionsPagerController;
 import org.thunderdog.challegram.util.HapticMenuHelper;
 import org.thunderdog.challegram.util.OptionDelegate;
+import org.thunderdog.challegram.widget.EmojiPacksInfoView;
 import org.thunderdog.challegram.widget.PopupLayout;
 import org.thunderdog.challegram.widget.ReactionsSelectorRecyclerView;
 
@@ -78,6 +85,7 @@ import java.util.concurrent.TimeUnit;
 
 import me.vkryl.android.AnimatorUtils;
 import me.vkryl.core.ColorUtils;
+import me.vkryl.core.StringUtils;
 import tgx.td.Td;
 
 /**
@@ -85,14 +93,16 @@ import tgx.td.Td;
  * floating card next to the message, the quick reactions in a pill above the message, over a dim that leaves the
  * message itself bright, instead of the bottom sheet. The keyboard stays as it is: the popup sits above it.
  *
- * Pages, in place (the popup never moves once it is open, it cross-fades): the pill's expand button turns the pill and
+ * Pages, in place (the popup only moves with its message, it cross-fades): the pill's expand button turns the pill and
  * the card into every reaction in a grid (its last cell: the sheet's whole picker, with custom emoji and search);
  * "Seen by" / "N reacted" turns the card into who viewed and who reacted, with Back on top. Telegram X's popup look
  * with Expressive design off.
  *
  * Placement: the pill above the message and the card below it when both fit; else both above, or both below; else
- * the two stacked inside the safe area (the card's rows scroll). Horizontally they line up with the message's side,
- * inside its pane.
+ * the card on the side with more room, as tall as that room (its rows scroll), so the message stays in sight; only
+ * when neither side has room for two rows, the two stacked inside the safe area over the message. Horizontally the
+ * pill and the visible card line up with the message's side, inside its pane. When the list moves the message (a new
+ * message, the composer growing) the popup moves with it, and closes when it no longer fits or the message changes.
  */
 public final class XgramMessagePopup {
   private XgramMessagePopup () { }
@@ -104,6 +114,10 @@ public final class XgramMessagePopup {
   /** A cell of the reaction grid: a 40dp reaction and 2dp around it. */
   private static final float GRID_CELL = 44f, GRID_PADDING = 8f;
   private static final long SHOW_DURATION = 220L, HIDE_DURATION = 150L, PAGE_DURATION = 220L;
+  /** A tap on "Seen by" before who viewed loaded opens them when they come within this long, in ms. */
+  private static final long DETAILS_WAIT = 3000L;
+  /** Who reacted, per request. */
+  private static final int REACTIONS_PAGE = 100;
 
   public static boolean isEnabled () {
     return XgramSettings.instance().messagePopup();
@@ -119,6 +133,9 @@ public final class XgramMessagePopup {
 
     /** The message sheet with its whole reaction picker open (custom emoji, search). */
     void openReactionPicker ();
+
+    /** The emoji packs the message's custom emoji are from (the card's line about them), the keyboard hidden first. */
+    void openEmojiPacks (long[] emojiPackIds);
   }
 
   /** A popup on screen. */
@@ -130,12 +147,21 @@ public final class XgramMessagePopup {
       this.card = card;
     }
 
-    /** The "read at" row on top of the card (under the info line), once the read date is known (it can come later). */
+    /**
+     * The "read at" row on top of the card (under the info line), once the read date is known. A date that comes later
+     * fills the row show() kept for it (readDatePending): the card's height stays, so its rows never move once placed.
+     */
     public void setReadDate (@NonNull ViewController.OptionItem item) {
       if (readRow == null) {
         readRow = addInfoRow(card, item.name, item.icon, infoRow != null ? 1 : 0, true);
       } else {
         readRow.setText(item.name);
+        // The time is longer than "Read": the card may widen for it (as wide as its widest row, see addItem)
+        readRow.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        readRow.setTag(readRow.getMeasuredWidth());
+        // From the row, not the card: the card's request alone skips its scroll column when the card keeps its width,
+        // and the row kept that measure's text height (its text drawn at the top of the row, unaligned)
+        readRow.requestLayout();
       }
     }
   }
@@ -147,10 +173,10 @@ public final class XgramMessagePopup {
   /**
    * Shows the popup for {@code msg}'s menu, or returns null when it can't (the message is not on screen): the caller
    * opens the sheet then. {@code metadata}: the reactions pill and the reaction and viewer row (not on the page More
-   * opens).
+   * opens). {@code readDatePending}: the read date is still loading (it comes through {@link Handle#setReadDate}).
    */
   @Nullable
-  public static Handle show (@NonNull ViewController<?> c, @NonNull TGMessage msg, @NonNull ViewController.Options options, @NonNull OptionDelegate delegate, boolean metadata, @NonNull Host host) {
+  public static Handle show (@NonNull ViewController<?> c, @NonNull TGMessage msg, @NonNull ViewController.Options options, @NonNull OptionDelegate delegate, boolean metadata, boolean readDatePending, @NonNull Host host) {
     final View view = msg.findCurrentView();
     final BaseActivity activity = UI.getContext(c.context());
     if (!(view instanceof MessageView) || activity == null || view.getWindowToken() == null || !view.isShown() || options.items == null || options.items.length == 0) {
@@ -161,7 +187,7 @@ public final class XgramMessagePopup {
     final boolean m3 = XgramExpressive.isEnabled();
     final ThemeListenerList themeListeners = c.getThemeListeners();
     final PopupLayout popup = new PopupLayout(activity);
-    final Root root = new Root(context, view, bubbleRect(msg, view));
+    final Root root = new Root(context, view, msg);
     final Runnable[] afterClose = new Runnable[1];
     final int maxWidth = Math.max(Screen.dp(196f), view.getWidth() - Screen.dp(EDGE * 2));
 
@@ -206,14 +232,23 @@ public final class XgramMessagePopup {
         setRowColor(row, Theme.getColor(ColorId.textNegative), Theme.getColor(ColorId.iconNegative));
       }
     }
-    if (state != null && (state.needShowMessageReactionSenders || state.needShowMessageViews)) {
-      final boolean views = state.needShowMessageViews, reactions = state.needShowMessageReactionSenders;
+    // Who viewed and who reacted: as the sheet's header has them when the message takes reactions (State); a message
+    // that can't take them still shows who read it, as Telegram X's menu does there (patchReadReceiptsOptions), and
+    // who reacted before reactions went off
+    final boolean views = state != null ? state.needShowMessageViews : metadata && msg.canGetViewers() && !(msg.isUnread() && !msg.noUnread());
+    final boolean reactions = state != null ? state.needShowMessageReactionSenders : metadata && msg.canGetAddedReactions() && !Td.isEmpty(msg.getMessageReactions().getReactions()) && msg.getMessageReactions().getTotalCount() > 0;
+    if (views || reactions) {
       final int total = msg.getMessageReactions().getTotalCount();
       final boolean reactedTitle = reactions && total > 0;
       final CharSequence title = reactedTitle ? Lang.plural(R.string.xReacted, total) : Lang.getString(R.string.XgramPopupViewers);
-      // Who viewed and who reacted load while the menu opens (as Telegram's), so a tap shows them at once: no loading
-      // line in between. A tap before they are here opens them the moment they come.
+      // Who viewed and who reacted load while the menu opens (as Telegram's), so a tap shows them at once. A tap before
+      // they are here turns the row into "Loading…", and opens them when they come soon after (a late answer, after a
+      // reconnect, only puts the row back: the next tap opens them).
       final DetailsState details = new DetailsState();
+      final SenderClick onSender = sender -> {
+        afterClose[0] = () -> tdlib.ui().openSenderProfile(c, sender, null);
+        popup.hideWindow(true);
+      };
       final Runnable openDetails = () -> {
         if (popup.isWindowHidden() || !root.isOnMenu() || details.viewers == null) {
           return; // closed, or the grid took the popup meanwhile
@@ -222,22 +257,28 @@ public final class XgramMessagePopup {
           UI.showToast(R.string.XgramPopupNoViewers, android.widget.Toast.LENGTH_SHORT);
           return;
         }
-        MenuMoreWrap page = newDetails(context, tdlib, msg, themeListeners, details.title != null ? details.title : title, details.viewers, () -> root.showPage(Root.PAGE_MENU, null), sender -> {
-          afterClose[0] = () -> tdlib.ui().openSenderProfile(c, sender, null);
-          popup.hideWindow(true);
-        });
+        MenuMoreWrap page = newDetails(context, tdlib, msg, themeListeners, details.title != null ? details.title : title, details.viewers, () -> root.showPage(Root.PAGE_MENU, null), onSender);
         page.xgramSetMaxItemsWidth(Math.min(Screen.dp(CARD_MAX_WIDTH), maxWidth));
+        details.page = page;
+        // Who reacted past the first page comes a page at a time, as the list nears its end (or ends in sight)
+        page.xgramSetOnScroll(() -> {
+          if (page.xgramScrollRemaining() < Screen.dp(MenuMoreWrap.ITEM_HEIGHT * 5)) {
+            loadMoreReactions(tdlib, msg, details, onSender);
+          }
+        });
         root.showPage(Root.PAGE_DETAILS, page);
       };
       final TextView row = card.addItem(R.id.btn_xgramPopupDetails, title, R.drawable.baseline_visibility_24, null, v -> {
         if (details.viewers == null) {
-          details.waiting = true;
+          details.tappedAt = SystemClock.uptimeMillis();
+          setRowText((TextView) v, Lang.getString(R.string.LoadingMessageSeen));
         } else {
           openDetails.run();
         }
       });
-      loadDetails(tdlib, msg, views, reactions, viewers -> {
+      loadDetails(tdlib, msg, views, reactions, (viewers, nextReactionsOffset) -> {
         details.viewers = viewers;
+        details.reactionsOffset = nextReactionsOffset;
         if (!reactedTitle) {
           int seen = 0;
           for (Viewer viewer : viewers) {
@@ -247,12 +288,15 @@ public final class XgramMessagePopup {
           }
           if (seen > 0) {
             details.title = Lang.getString(R.string.XgramPopupViewersCount, seen); // "Seen by 5"
-            row.setText(details.title);
           }
         }
-        if (details.waiting) {
-          details.waiting = false;
-          openDetails.run();
+        setRowText(row, details.title != null ? details.title : title); // also in place of "Loading…"
+        if (details.tappedAt != 0) {
+          final boolean soon = SystemClock.uptimeMillis() - details.tappedAt <= DETAILS_WAIT;
+          details.tappedAt = 0;
+          if (soon) {
+            openDetails.run();
+          }
         }
       });
     }
@@ -263,6 +307,36 @@ public final class XgramMessagePopup {
     }
     if (options.subtitle != null && options.subtitle.name != null) {
       handle.setReadDate(options.subtitle);
+    } else if (readDatePending) {
+      // Its row now, with the time to come: added after placement it grew the card over the pill (the menu above the
+      // message) or moved every row down as the user aimed. Only a read message loads a read date, so "Read" is true
+      // even when the time never comes (hidden by privacy).
+      handle.readRow = addInfoRow(card, Lang.getString(R.string.XgramPopupReadPending), R.drawable.deproko_baseline_check_double_24, handle.infoRow != null ? 1 : 0, true);
+    }
+    final long[] emojiPackIds = msg.getUniqueEmojiPackIdList();
+    final EmojiPacksInfoView emojiPacks = emojiPackIds.length > 0 ? new EmojiPacksInfoView(context, c, tdlib) : null;
+    if (emojiPacks != null) {
+      // As both sheets have it with their info lines: the packs the message's custom emoji are from, their name a link
+      // that opens them (once the popup is gone). As wide as the card (it has no width of its own), under its info rows;
+      // a read date that comes later goes above it.
+      emojiPacks.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      final int horizontal = Screen.dp(m3 ? 12f : 17f), vertical = Screen.dp(8f); // the card's info line's
+      emojiPacks.setPadding(horizontal, vertical, horizontal, vertical);
+      if (m3) {
+        // Its own 14sp style: the Expressive one it starts with is shared (bodySmall), and setTextSize would resize
+        // every text that uses it (the chat header's subtitle, the sheets' emoji packs line)
+        emojiPacks.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(XgramExpressive.TS_BODY_M, 14f));
+      } else {
+        emojiPacks.setTextSize(14f);
+      }
+      emojiPacks.update(msg.getFirstEmojiId(), emojiPackIds, new ClickableSpan() {
+        @Override
+        public void onClick (@NonNull View widget) {
+          afterClose[0] = () -> host.openEmojiPacks(emojiPackIds);
+          popup.hideWindow(true);
+        }
+      }, false);
+      card.xgramAddView(emojiPacks, (handle.infoRow != null ? 1 : 0) + (handle.readRow != null ? 1 : 0));
     }
     card.xgramSetMaxItemsWidth(Math.min(Screen.dp(CARD_MAX_WIDTH), maxWidth));
 
@@ -271,7 +345,8 @@ public final class XgramMessagePopup {
     }
     root.card = card;
     root.addView(card);
-    // The keyboard (or a bar) came or went under the popup: the message moved, so the popup closes
+    // The keyboard (or a bar) came or went under the popup, or the message moved where the popup can't follow it (or
+    // changed its size, or left the screen): the popup closes
     root.onPlacementLost = () -> popup.hideWindow(true);
 
     popup.init(false);
@@ -284,11 +359,25 @@ public final class XgramMessagePopup {
         Runnable action = afterClose[0];
         afterClose[0] = null;
         root.releaseLists(); // a list that leaves the window does not recycle its rows: their stickers stay alive
+        if (emojiPacks != null) {
+          emojiPacks.performDestroy(); // its custom emoji's receivers
+        }
         host.onPopupClosed();
         if (action != null) {
           action.run();
         }
       }
+    });
+    // Back (the gesture, the key) on who viewed or on the reaction grid goes back to the menu, as the page's own Back row
+    // does; on the menu it closes the popup
+    popup.setBackListener((fromTop, commit) -> {
+      if (root.isOnMenu() || popup.isWindowHidden()) {
+        return false;
+      }
+      if (commit) {
+        root.showPage(Root.PAGE_MENU, null);
+      }
+      return true;
     });
     host.onPopupOpen();
     popup.showAnimatedPopupView(root, new PopupLayout.AnimatedPopupProvider() {
@@ -309,6 +398,11 @@ public final class XgramMessagePopup {
 
       @Override
       public boolean launchHideAnimation (PopupLayout p, me.vkryl.android.animator.FactorAnimator originalAnimator) {
+        if (!p.hadCompletelyShown()) {
+          // Closed while it opened (More tapped at once): its show is done. A window still opening keeps the activity
+          // busy, which dropped the popup More's page opens while this one fades out (no show listener to call here).
+          p.onCustomShowComplete();
+        }
         animate(p, 0f, HIDE_DURATION, p::onCustomHideAnimationComplete);
         return true;
       }
@@ -348,9 +442,9 @@ public final class XgramMessagePopup {
     return handle;
   }
 
-  /** The message's bubble (or its whole row without bubbles) in the message view's coordinates. */
-  private static Rect bubbleRect (TGMessage msg, View view) {
-    Rect rect = new Rect();
+  /** The message's bubble (or its whole row without bubbles) in the message view's coordinates, into {@code rect}. */
+  private static Rect bubbleRect (TGMessage msg, View view, Rect rect) {
+    rect.setEmpty();
     if (msg.useBubbles()) {
       rect.set(msg.getActualLeftContentEdge(), msg.getTopContentEdge(), msg.getActualRightContentEdge(), msg.getBottomContentEdge());
     }
@@ -410,14 +504,31 @@ public final class XgramMessagePopup {
     final FrameLayout pill = new FrameLayout(context) {
       @Override
       protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-        // As wide as its reactions (up to the room it is given), the expand button at its end
+        // As wide as its reactions (up to the room it is given), the expand button at its end. Only when there is more
+        // than the strip shows (it is cut, or the grid's last cell opens the whole picker): with every reaction in
+        // sight, the grid would repeat the pill (as the sheet, which has no expand button then).
         final int max = MeasureSpec.getSize(widthMeasureSpec);
         final View strip = getChildAt(0);
         final View expand = getChildCount() > 1 ? getChildAt(1) : null;
-        final int expandWidth = expand != null ? Screen.dp(48f) : 0;
         final int height = Screen.dp(PILL_HEIGHT);
-        strip.measure(MeasureSpec.makeMeasureSpec(Math.max(0, max - expandWidth - getPaddingLeft() - getPaddingRight()), MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+        final int room = Math.max(0, max - getPaddingLeft() - getPaddingRight());
+        boolean needExpand = expand != null && state.needShowReactionsPopupPicker;
+        if (expand != null && !needExpand) {
+          // the strip is as wide as its reactions when they fit: as wide as the room, they don't (or only just do)
+          strip.measure(MeasureSpec.makeMeasureSpec(room, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+          needExpand = strip.getMeasuredWidth() >= room;
+        }
         if (expand != null) {
+          final int visibility = needExpand ? View.VISIBLE : View.GONE;
+          if (expand.getVisibility() != visibility) {
+            expand.setVisibility(visibility);
+          }
+        }
+        final int expandWidth = needExpand ? Screen.dp(48f) : 0;
+        if (expand == null || needExpand) {
+          strip.measure(MeasureSpec.makeMeasureSpec(Math.max(0, room - expandWidth), MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+        }
+        if (needExpand) {
           expand.measure(MeasureSpec.makeMeasureSpec(expandWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
         }
         setMeasuredDimension(Math.min(max, strip.getMeasuredWidth() + expandWidth + getPaddingLeft() + getPaddingRight()), height);
@@ -426,7 +537,7 @@ public final class XgramMessagePopup {
       @Override
       protected void onLayout (boolean changed, int left, int top, int right, int bottom) {
         final View strip = getChildAt(0);
-        final View expand = getChildCount() > 1 ? getChildAt(1) : null;
+        final View expand = getChildCount() > 1 && getChildAt(1).getVisibility() != View.GONE ? getChildAt(1) : null;
         final int width = right - left;
         final boolean rtl = Lang.rtl();
         final int expandWidth = expand != null ? expand.getMeasuredWidth() : 0;
@@ -632,11 +743,17 @@ public final class XgramMessagePopup {
 
   // Who viewed and who reacted (Seen by)
 
-  /** The card's row for who viewed: what loaded (null until then), whether a tap is waiting, its counted title. */
+  /**
+   * The card's row for who viewed: what loaded (null until then), when a tap came before it (0: none waiting), its
+   * counted title; where the next page of who reacted starts (empty: no more), and the page on screen that gets its rows.
+   */
   private static final class DetailsState {
     @Nullable List<Viewer> viewers;
-    boolean waiting;
+    long tappedAt;
     @Nullable CharSequence title;
+    @Nullable String reactionsOffset;
+    boolean loadingMore;
+    @Nullable MenuMoreWrap page;
   }
 
   private static final class Viewer {
@@ -652,7 +769,39 @@ public final class XgramMessagePopup {
   }
 
   private interface ViewersCallback {
-    void onViewers (List<Viewer> viewers);
+    /** {@code nextReactionsOffset}: where who reacted goes on (empty or null: that was all). */
+    void onViewers (List<Viewer> viewers, @Nullable String nextReactionsOffset);
+  }
+
+  private static int newestFirst (Viewer a, Viewer b) {
+    return Integer.compare(b.date, a.date);
+  }
+
+  /**
+   * Who reacted into {@code result}: a new person at its end, someone already there gets their first reaction (one row
+   * per person). Whether someone already there changed.
+   */
+  private static boolean addReactions (List<Viewer> result, TdApi.AddedReaction[] reactions) {
+    boolean changed = false;
+    for (TdApi.AddedReaction reaction : reactions) {
+      Viewer viewer = null;
+      for (Viewer v : result) {
+        if (Td.getSenderId(v.sender) == Td.getSenderId(reaction.senderId)) {
+          viewer = v;
+          break;
+        }
+      }
+      if (viewer == null) {
+        viewer = new Viewer(reaction.senderId, reaction.date);
+        result.add(viewer);
+      } else if (viewer.reaction == null) {
+        changed = true;
+      }
+      if (viewer.reaction == null) {
+        viewer.reaction = reaction.type;
+      }
+    }
+    return changed;
   }
 
   /** Who viewed (with when) and who reacted (with what), one row per person, the newest first. UI thread callback. */
@@ -660,33 +809,21 @@ public final class XgramMessagePopup {
     // Viewers by the message's id (as Telegram X's Seen page); an album's reactions sit on its oldest item
     final long chatId = msg.getChatId(), viewersMessageId = msg.getId(), reactionsMessageId = msg.getSmallestId();
     final List<Viewer> result = new ArrayList<>();
+    final String[] nextOffset = new String[1];
     final Runnable finish = () -> tdlib.ui().post(() -> {
-      Collections.sort(result, (a, b) -> Integer.compare(b.date, a.date));
-      done.onViewers(result);
+      Collections.sort(result, XgramMessagePopup::newestFirst);
+      done.onViewers(result, nextOffset[0]);
     });
     final Runnable loadReactions = () -> {
       if (!reactions) {
         finish.run();
         return;
       }
-      tdlib.send(new TdApi.GetMessageAddedReactions(chatId, reactionsMessageId, null, "", 100), (added, error) -> {
+      // The first page only, while the menu opens; the details page asks for the rest as it scrolls (loadMoreReactions)
+      tdlib.send(new TdApi.GetMessageAddedReactions(chatId, reactionsMessageId, null, "", REACTIONS_PAGE), (added, error) -> {
         if (added != null) {
-          for (TdApi.AddedReaction reaction : added.reactions) {
-            Viewer viewer = null;
-            for (Viewer v : result) {
-              if (Td.getSenderId(v.sender) == Td.getSenderId(reaction.senderId)) {
-                viewer = v;
-                break;
-              }
-            }
-            if (viewer == null) {
-              viewer = new Viewer(reaction.senderId, reaction.date);
-              result.add(viewer);
-            }
-            if (viewer.reaction == null) {
-              viewer.reaction = reaction.type;
-            }
-          }
+          addReactions(result, added.reactions);
+          nextOffset[0] = added.nextOffset;
         }
         finish.run();
       });
@@ -711,6 +848,52 @@ public final class XgramMessagePopup {
     void onSender (TdApi.MessageSender sender);
   }
 
+  /**
+   * The next page of who reacted, once the details page nears its end: merged in, its people added to the page on
+   * screen (under its rows when they are older than all of them, else the rows are made again, newest first).
+   */
+  private static void loadMoreReactions (Tdlib tdlib, TGMessage msg, DetailsState details, SenderClick onSender) {
+    final String offset = details.reactionsOffset;
+    if (details.loadingMore || details.viewers == null || StringUtils.isEmpty(offset)) {
+      return;
+    }
+    details.loadingMore = true;
+    tdlib.send(new TdApi.GetMessageAddedReactions(msg.getChatId(), msg.getSmallestId(), null, offset, REACTIONS_PAGE), (added, error) -> tdlib.ui().post(() -> {
+      details.loadingMore = false;
+      final List<Viewer> list = details.viewers;
+      if (added == null || list == null) {
+        details.reactionsOffset = null; // an error (the message is gone): no more pages
+        return;
+      }
+      details.reactionsOffset = added.nextOffset;
+      final int oldSize = list.size();
+      boolean inOrder = !addReactions(list, added.reactions);
+      for (int i = Math.max(1, oldSize); i < list.size() && inOrder; i++) {
+        inOrder = list.get(i - 1).date >= list.get(i).date;
+      }
+      final MenuMoreWrap page = details.page;
+      if (inOrder) {
+        if (page != null) {
+          for (int i = oldSize; i < list.size(); i++) {
+            addViewerRow(page, tdlib, msg, list.get(i), onSender);
+          }
+        }
+      } else {
+        Collections.sort(list, XgramMessagePopup::newestFirst);
+        if (page != null) {
+          page.removeItemsFrom(1); // all but Back
+          for (Viewer viewer : list) {
+            addViewerRow(page, tdlib, msg, viewer, onSender);
+          }
+        }
+      }
+      if (list.size() == oldSize && !StringUtils.isEmpty(details.reactionsOffset)) {
+        // Only people already listed (no new row to scroll to, nor a layout to ask again): the page after it
+        loadMoreReactions(tdlib, msg, details, onSender);
+      }
+    }));
+  }
+
   /** The card's second page: Back, then one row per person (photo, name, the reaction and when), a tap opens them. */
   private static MenuMoreWrap newDetails (Context context, Tdlib tdlib, TGMessage msg, ThemeListenerList themeListeners, CharSequence title, List<Viewer> viewers, Runnable onBack, SenderClick onSender) {
     final MenuMoreWrap details = new MenuMoreWrap(context, /* scrollable */ true);
@@ -719,17 +902,46 @@ public final class XgramMessagePopup {
     details.setRightNumber(0);
     details.addItem(R.id.btn_xgramPopupBack, title, R.drawable.baseline_arrow_back_24, null, v -> onBack.run());
     for (Viewer viewer : viewers) {
-      final String time = viewer.viewed ? TGUser.getActionDateStatus(tdlib, viewer.date, msg.getMessage()) : Lang.getRelativeTimestamp(viewer.date, TimeUnit.SECONDS);
-      String subtitle = time;
-      if (viewer.reaction != null && viewer.reaction.getConstructor() == TdApi.ReactionTypeEmoji.CONSTRUCTOR) {
-        subtitle = ((TdApi.ReactionTypeEmoji) viewer.reaction).emoji + "  " + time;
-      } else if (viewer.reaction != null && viewer.reaction.getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
-        subtitle = "⭐  " + time;
-      }
-      HapticMenuHelper.MenuItem item = new HapticMenuHelper.MenuItem(R.id.btn_xgramPopupViewer, tdlib.senderName(viewer.sender), subtitle, 0, tdlib, viewer.sender, false);
-      details.addItem(tdlib, item, v -> onSender.onSender(viewer.sender));
+      addViewerRow(details, tdlib, msg, viewer, onSender);
     }
     return details;
+  }
+
+  /** A person's row on the details page: photo, name, what they reacted with and when. */
+  private static void addViewerRow (MenuMoreWrap details, Tdlib tdlib, TGMessage msg, Viewer viewer, SenderClick onSender) {
+    final String time = viewer.viewed ? TGUser.getActionDateStatus(tdlib, viewer.date, msg.getMessage()) : Lang.getRelativeTimestamp(viewer.date, TimeUnit.SECONDS);
+    final String emoji = viewer.reaction != null ? reactionEmoji(tdlib, viewer.reaction) : null;
+    final String subtitle = emoji != null ? emoji + "  " + time : time;
+    HapticMenuHelper.MenuItem item = new HapticMenuHelper.MenuItem(R.id.btn_xgramPopupViewer, tdlib.senderName(viewer.sender), subtitle, 0, tdlib, viewer.sender, false);
+    details.addItem(tdlib, item, v -> onSender.onSender(viewer.sender));
+  }
+
+  /**
+   * A reaction as text for its row: the emoji; a custom emoji's own emoji (its sticker's, once it is known: the
+   * message's reactions have usually loaded it); a star for a paid one.
+   */
+  @Nullable
+  private static String reactionEmoji (Tdlib tdlib, TdApi.ReactionType type) {
+    if (type.getConstructor() == TdApi.ReactionTypeEmoji.CONSTRUCTOR) {
+      return ((TdApi.ReactionTypeEmoji) type).emoji;
+    } else if (type.getConstructor() == TdApi.ReactionTypeCustomEmoji.CONSTRUCTOR) {
+      final TdlibEmojiManager.Entry entry = tdlib.emoji().findOrRequest(((TdApi.ReactionTypeCustomEmoji) type).customEmojiId, null);
+      return entry != null && entry.value != null && !StringUtils.isEmpty(entry.value.emoji) ? entry.value.emoji : null;
+    } else if (type.getConstructor() == TdApi.ReactionTypePaid.CONSTRUCTOR) {
+      return "⭐";
+    }
+    return null;
+  }
+
+  /** A card row's new text; the card may widen for it (it is as wide as its widest row, see MenuMoreWrap.addItem). */
+  private static void setRowText (TextView row, CharSequence text) {
+    if (TextUtils.equals(row.getText(), text)) {
+      return;
+    }
+    row.setText(text);
+    row.measure(View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+    row.setTag(row.getMeasuredWidth());
+    row.requestLayout();
   }
 
   /**
@@ -782,8 +994,15 @@ public final class XgramMessagePopup {
     static final int PAGE_MENU = 0, PAGE_DETAILS = 1, PAGE_GRID = 2;
 
     private final View anchor;
-    private final Rect bubbleInAnchor;
+    private final TGMessage msg;
     private final Rect bubble = new Rect();
+    /** The bubble as the last frame found it, and a location, for the tracking before each frame. */
+    private final Rect trackedBubble = new Rect();
+    private final int[] trackedLocation = new int[2];
+    private final ViewTreeObserver.OnPreDrawListener tracker = () -> {
+      track();
+      return true;
+    };
     private final RectF hole = new RectF();
     private final Path holePath = new Path();
     private final Paint dimPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -796,16 +1015,16 @@ public final class XgramMessagePopup {
     private float pillPart = 1f, cardPart = 1f, detailsPart, gridPart;
     private @Nullable ValueAnimator pageAnimator;
 
-    // Placement, fixed at the first layout: a page switch never moves the popup
+    // Placement, fixed at the first layout: a page switch never moves the popup (the message moving moves it, track)
     private boolean placed, alignEnd, cardBelow, gridBelow;
-    /** The pill's top; the card's top when it grows down (below the message), else its bottom. */
+    /** The pill's top; the visible card's top when it grows down (below the message), else its bottom. */
     private int pillTop, cardEdge, gridEdge;
     private int safeTop, safeBottom, safeLeft, safeRight;
 
-    Root (Context context, View anchor, Rect bubbleInAnchor) {
+    Root (Context context, View anchor, TGMessage msg) {
       super(context);
       this.anchor = anchor;
-      this.bubbleInAnchor = bubbleInAnchor;
+      this.msg = msg;
       setWillNotDraw(false);
       setClipChildren(false);
       setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -925,15 +1144,21 @@ public final class XgramMessagePopup {
         pill.measure(MeasureSpec.makeMeasureSpec(roomWidth, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(Screen.dp(PILL_HEIGHT), MeasureSpec.EXACTLY));
         used = pill.getMeasuredHeight() + gap;
       }
-      // The card, and who viewed in its place: as tall as the room on the card's side once placed
+      // The card, and who viewed in its place: as tall as the room on the card's side once placed. Above the message the
+      // card stays under the pill, so a row it gains scrolls instead of growing over the reactions; who viewed may take
+      // the pill's band (the pill fades out for it).
       final int cardRoom = placed ? Math.max(0, cardBelow ? safeBottom - cardEdge : cardEdge - safeTop) : Math.max(0, roomHeight - used);
+      final int menuRoom = placed && !cardBelow && pill != null ? Math.max(0, cardEdge - (pillTop + pill.getMeasuredHeight() + gap)) : cardRoom;
       for (View v : new View[] {card, details}) {
+        if (v == null) {
+          continue;
+        }
+        // The rooms are the visible card's: the view adds the card's insets (the classic look's shadow above and below)
+        final int room = (v == card ? menuRoom : cardRoom) + 2 * insetY(v);
         if (v instanceof MenuMoreWrap) {
-          ((MenuMoreWrap) v).xgramSetMaxHeight(Math.max(Screen.dp(MenuMoreWrap.ITEM_HEIGHT * 2), cardRoom));
+          ((MenuMoreWrap) v).xgramSetMaxHeight(Math.max(Screen.dp(MenuMoreWrap.ITEM_HEIGHT * 2), room));
         }
-        if (v != null) {
-          v.measure(MeasureSpec.makeMeasureSpec(roomWidth, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(cardRoom, MeasureSpec.AT_MOST));
-        }
+        v.measure(MeasureSpec.makeMeasureSpec(roomWidth + 2 * insetX(v), MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(room, MeasureSpec.AT_MOST));
       }
       if (grid != null) {
         // The grid starts where the pill (or the card) starts and grows away from the message's side of the screen
@@ -948,9 +1173,7 @@ public final class XgramMessagePopup {
       if (!placed) {
         place(width, height);
       } else if (onPlacementLost != null && Math.abs(safeRect().bottom - placedSafeBottom) > Screen.dp(24f)) {
-        final Runnable lost = onPlacementLost;
-        onPlacementLost = null;
-        post(lost); // the keyboard came or went: the message is somewhere else now
+        placementLost(); // the keyboard came or went: the message is somewhere else now
       }
       if (pill != null) {
         layoutAt(pill, pillTop);
@@ -959,9 +1182,11 @@ public final class XgramMessagePopup {
       }
       for (View v : new View[] {card, details}) {
         if (v != null) {
-          layoutAt(v, cardBelow ? cardEdge : cardEdge - v.getMeasuredHeight());
-          v.setPivotX(alignEnd ? v.getWidth() : 0);
-          v.setPivotY(cardBelow ? 0 : v.getHeight());
+          // The visible card's edge at cardEdge (the classic look's shadow reaches past it); it grows from its corner
+          final int sx = insetX(v), sy = insetY(v);
+          layoutAt(v, cardBelow ? cardEdge - sy : cardEdge + sy - v.getMeasuredHeight());
+          v.setPivotX(alignEnd ? v.getWidth() - sx : sx);
+          v.setPivotY(cardBelow ? sy : v.getHeight() - sy);
         }
       }
       if (grid != null) {
@@ -979,7 +1204,7 @@ public final class XgramMessagePopup {
       final int rootX = location[0], rootY = location[1];
       anchor.getLocationOnScreen(location);
       final int anchorLeft = location[0] - rootX, anchorRight = anchorLeft + anchor.getWidth();
-      bubble.set(bubbleInAnchor);
+      bubbleRect(msg, anchor, bubble); // now, as track() measures it in each frame after this one
       bubble.offset(anchorLeft, location[1] - rootY);
       hole.set(bubble);
       hole.inset(-Screen.dp(4f), -Screen.dp(4f));
@@ -994,7 +1219,9 @@ public final class XgramMessagePopup {
       safeRight = Math.min(safe.right, anchorRight - edge);
       final int pillHeight = pill != null ? pill.getMeasuredHeight() : 0;
       final int pillBlock = pill != null ? pillHeight + gap : 0;
-      final int cardHeight = card != null ? card.getMeasuredHeight() : 0;
+      // The visible card's height (cardTop and cardEdge are its edges): the view's less the classic look's shadow
+      final int cardInset = card != null ? insetY(card) : 0;
+      int cardHeight = card != null ? card.getMeasuredHeight() - 2 * cardInset : 0;
 
       int cardTop;
       if ((pill == null || bubble.top - gap - pillHeight >= safeTop) && bubble.bottom + gap + cardHeight <= safeBottom) {
@@ -1013,13 +1240,35 @@ public final class XgramMessagePopup {
         cardTop = pillTop + pillBlock;
         cardBelow = true;
       } else {
-        // a tall message or menu: stacked inside the safe area, over the message (the card's rows scroll)
-        final int block = pillBlock + cardHeight;
-        int top = bubble.top - pillBlock;
-        top = Math.max(safeTop, Math.min(top, safeBottom - block));
-        pillTop = top;
-        cardTop = top + pillBlock;
-        cardBelow = true;
+        // A long menu, or a short window (the keyboard open, the Fold folded): the card on the side with more room, as
+        // tall as that room (its rows scroll), so the message stays in sight. Below the message the pill stays above
+        // it when it fits there (Telegram's), else it goes on top of the card; above the message, on top of the card.
+        final boolean pillFitsAbove = pill == null || bubble.top - gap - pillHeight >= safeTop;
+        final int roomBelow = safeBottom - (bubble.bottom + gap) - (pillFitsAbove ? 0 : pillBlock);
+        final int roomAbove = bubble.top - gap - pillBlock - safeTop;
+        if (card != null && Math.max(roomBelow, roomAbove) >= Screen.dp(MenuMoreWrap.ITEM_HEIGHT * 2 + MenuMoreWrap.PADDING * 2)) {
+          cardBelow = roomBelow >= roomAbove;
+          // Capped now, before this layout places it (a cap from the next measure left a frame of the whole card over
+          // the message); the measures after this one keep the cap, from cardEdge
+          card.measure(MeasureSpec.makeMeasureSpec(card.getMeasuredWidth(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec((cardBelow ? roomBelow : roomAbove) + 2 * cardInset, MeasureSpec.AT_MOST));
+          cardHeight = card.getMeasuredHeight() - 2 * cardInset;
+          if (cardBelow) {
+            pillTop = pillFitsAbove ? bubble.top - gap - pillHeight : bubble.bottom + gap;
+            cardTop = pillFitsAbove ? bubble.bottom + gap : pillTop + pillBlock;
+          } else {
+            cardTop = bubble.top - gap - cardHeight;
+            pillTop = cardTop - pillBlock;
+          }
+        } else {
+          // a message taller than the screen, or a tiny window: stacked inside the safe area, over the message (the
+          // card's rows scroll)
+          final int block = pillBlock + cardHeight;
+          int top = bubble.top - pillBlock;
+          top = Math.max(safeTop, Math.min(top, safeBottom - block));
+          pillTop = top;
+          cardTop = top + pillBlock;
+          cardBelow = true;
+        }
       }
       cardEdge = cardBelow ? cardTop : cardTop + cardHeight;
       // The grid: from the pill's top downwards when there is room for a few rows, else up from the pill's bottom
@@ -1033,10 +1282,106 @@ public final class XgramMessagePopup {
 
     private void layoutAt (View v, int top) {
       final int w = v.getMeasuredWidth(), h = v.getMeasuredHeight();
-      int left = alignEnd ? bubble.right - w : bubble.left;
-      left = Math.max(safeLeft, Math.min(left, safeRight - w));
+      // The visible edge on the message's and the safe area's: a menu's card sits inset in its view (the Expressive
+      // container's inset, the classic look's shadow), so its view reaches past them by that inset
+      final int sx = insetX(v);
+      int left = alignEnd ? bubble.right + sx - w : bubble.left - sx;
+      left = Math.max(safeLeft - sx, Math.min(left, safeRight + sx - w));
       left = Math.max(0, left); // a pane narrower than the view: its start edge wins
       v.layout(left, top, left + w, top + h);
+    }
+
+    /** How far the visible card sits inside {@code v}'s sides (0 for the pill and the grid: they fill their views). */
+    private static int insetX (View v) {
+      return v instanceof MenuMoreWrap ? ((MenuMoreWrap) v).xgramCardInsetX() : 0;
+    }
+
+    /** How far the visible card sits inside {@code v}'s top and bottom (the classic look's shadow). */
+    private static int insetY (View v) {
+      return v instanceof MenuMoreWrap ? ((MenuMoreWrap) v).xgramCardInsetY() : 0;
+    }
+
+    /** The placement no longer holds: the popup closes (posted: not from inside a layout or a pre-draw pass). */
+    private void placementLost () {
+      final Runnable lost = onPlacementLost;
+      if (lost != null) {
+        onPlacementLost = null;
+        post(lost);
+      }
+    }
+
+    @Override
+    protected void onAttachedToWindow () {
+      super.onAttachedToWindow();
+      getViewTreeObserver().addOnPreDrawListener(tracker); // the popup is in the chat's window: one pass for both
+    }
+
+    @Override
+    protected void onDetachedFromWindow () {
+      getViewTreeObserver().removeOnPreDrawListener(tracker); // still the window's observer here
+      super.onDetachedFromWindow();
+    }
+
+    /**
+     * Before each frame: the message moved under the popup (a new message pushed the list up, the composer grew a
+     * line), so the hole and the popup move with it while all of it still fits in the safe area. The popup closes when
+     * it no longer fits, when the message changed its size or side (an edit, a first reaction) or left its view.
+     */
+    private void track () {
+      if (!placed || onPlacementLost == null || isLayoutRequested() || anchor.isLayoutRequested()) {
+        return;
+      }
+      if (anchor.getWindowToken() == null || !anchor.isShown() || !(anchor instanceof MessageView) || ((MessageView) anchor).getMessage() != msg || msg.isDestroyed()) {
+        placementLost();
+        return;
+      }
+      getLocationOnScreen(trackedLocation);
+      final int rootX = trackedLocation[0], rootY = trackedLocation[1];
+      anchor.getLocationOnScreen(trackedLocation);
+      bubbleRect(msg, anchor, trackedBubble);
+      trackedBubble.offset(trackedLocation[0] - rootX, trackedLocation[1] - rootY);
+      if (trackedBubble.equals(bubble)) {
+        return;
+      }
+      final int dy = trackedBubble.top - bubble.top;
+      if (trackedBubble.left != bubble.left || trackedBubble.width() != bubble.width() || trackedBubble.height() != bubble.height() || !fitsMovedBy(dy)) {
+        placementLost();
+        return;
+      }
+      bubble.offset(0, dy);
+      hole.offset(0, dy);
+      pillTop += dy;
+      cardEdge += dy;
+      gridEdge += dy;
+      for (View v : new View[] {pill, card, details, grid}) {
+        if (v != null) {
+          v.offsetTopAndBottom(dy); // in this frame (a new layout would draw it in the next one)
+        }
+      }
+      invalidate(); // the hole
+    }
+
+    /** Whether every part, on the page or not (a page can come back), stays in the safe area moved by {@code dy}. */
+    private boolean fitsMovedBy (int dy) {
+      int top = Integer.MAX_VALUE, bottom = Integer.MIN_VALUE;
+      if (pill != null) {
+        top = pillTop;
+        bottom = pillTop + pill.getHeight();
+      }
+      for (View v : new View[] {card, details}) {
+        if (v != null) {
+          final int h = v.getHeight() - 2 * insetY(v);
+          final int vTop = cardBelow ? cardEdge : cardEdge - h;
+          top = Math.min(top, vTop);
+          bottom = Math.max(bottom, vTop + h);
+        }
+      }
+      if (grid != null) {
+        final int gridTop = gridBelow ? gridEdge : gridEdge - grid.getHeight();
+        top = Math.min(top, gridTop);
+        bottom = Math.max(bottom, gridTop + grid.getHeight());
+      }
+      return top == Integer.MAX_VALUE || (top + dy >= safeTop && bottom + dy <= safeBottom);
     }
 
     @Override

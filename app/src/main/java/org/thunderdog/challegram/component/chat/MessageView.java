@@ -666,9 +666,9 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
       StringList menuStrings = new StringList(10);
       Object menuTag = fillMessageOptionsImpl(m, msg, sender, menuIds, menuIcons, menuStrings, false);
       com.fahadali.xgram.chats.XgramMessageMenu.filterMore(ids, icons, strings, menuIds, menuIcons, menuStrings);
-      // Only Save (moved under More) needs the menu's tag; Telegram X's Delete from cache here deletes every file of
-      // the message without one, as before
-      return tag == null && com.fahadali.xgram.chats.XgramMessageMenu.needsMenuTag(ids) ? menuTag : tag;
+      // Only Save (moved under More) needs the menu's tag, so it comes wrapped for Save alone; Telegram X's Delete from
+      // cache here sees no tag and deletes every file of the message, as before
+      return tag == null && menuTag != null && com.fahadali.xgram.chats.XgramMessageMenu.needsMenuTag(ids) ? new com.fahadali.xgram.chats.XgramMessageMenu.MoreTag(menuTag) : tag;
     }
     com.fahadali.xgram.chats.XgramMessageMenu.filter(ids, icons, strings); // XGram: only what the user wants
     return tag;
@@ -1151,11 +1151,13 @@ public class MessageView extends SparseDrawableView implements Destroyable, Draw
     }
 
     if (msg.canBeReported() && !msg.isFakeMessage() && !msg.isSponsoredMessage()) {
-      if (isMore) {
+      // XGram: in the menu itself when the user put it there (Message menu), and then not on More's page (nor counted
+      // for it); otherwise on More's page, as before
+      if (isMore != com.fahadali.xgram.chats.XgramMessageMenu.isInMenu("report")) {
         ids.append(R.id.btn_messageReport);
         strings.append(R.string.MessageReport);
         icons.append(R.drawable.baseline_report_24);
-      } else {
+      } else if (!isMore) {
         moreOptions++;
       }
     }

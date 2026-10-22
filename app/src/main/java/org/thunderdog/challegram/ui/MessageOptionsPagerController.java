@@ -75,6 +75,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import me.vkryl.android.AnimatorUtils;
+import me.vkryl.android.ViewUtils;
 import me.vkryl.android.animator.BoolAnimator;
 import me.vkryl.android.animator.FactorAnimator;
 import me.vkryl.android.widget.FrameLayoutFix;
@@ -434,6 +435,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   @Override
   protected int calculateTotalHeight () {
+    if (xgramExpandOnShow && xgramCanExpandOnShow()) {
+      // XGram: opened for its picker (see launchOpenAnimation): the open picker reaches above the menu's top, up to the
+      // middle of the window, and is placed only at the first layout, so the sheet starts wholly below the window
+      return getTargetHeight() + (int) Math.ceil(xgramHandleBand());
+    }
     final int height = super.calculateTotalHeight();
     if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       // XGram: the whole handle band starts below the window (before the first layout the picker's top, and with it the
@@ -1053,6 +1059,11 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
   }
 
   private void showReactionPicker () {
+    showReactionPicker(true);
+  }
+
+  // XGram: not animated when the sheet opens for its picker (see launchOpenAnimation)
+  private void showReactionPicker (boolean animated) {
     fixView.setVisibility(View.GONE);
 
     if (reactionsPickerBottomHeaderView == null) {
@@ -1070,7 +1081,7 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
       reactionsPickerController.prepareToShow();
     }
 
-    reactionsPickerVisibility.setValue(true, true);
+    reactionsPickerVisibility.setValue(true, animated);
 
   }
 
@@ -1093,11 +1104,16 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
     super.onCustomShowComplete();
     if (reactionsPickerRecyclerView != null) {
       reactionsPickerRecyclerView.invalidateItemDecorations();
-      reactionsPickerRecyclerView.scrollToPosition(0);
+      if (reactionsPickerVisibility.getValue()) {
+        checkReactionPickerPosition(); // XGram: opened before the reveal (launchOpenAnimation): it keeps the open place
+      } else {
+        reactionsPickerRecyclerView.scrollToPosition(0);
+      }
     }
     if (xgramExpandOnShow) {
+      // XGram: the reveal ended before the sheet's first frame (reduced motion snaps it): the picker opens now
       xgramExpandOnShow = false;
-      if (state.needShowReactionsPopupPicker && reactionsPickerWrapper != null && !isDestroyed()) {
+      if (xgramCanExpandOnShow()) {
         showReactionPicker(); // XGram: the popup's expand button opened this sheet for its picker
       }
     }
@@ -1108,6 +1124,25 @@ public class MessageOptionsPagerController extends BottomSheetViewController<Opt
 
   public void xgramExpandPickerOnShow () {
     xgramExpandOnShow = true;
+  }
+
+  private boolean xgramCanExpandOnShow () {
+    return state.needShowReactionsPopupPicker && reactionsPickerWrapper != null && !isDestroyed();
+  }
+
+  @Override
+  protected void launchOpenAnimation () {
+    if (xgramExpandOnShow && xgramCanExpandOnShow()) {
+      // XGram: the picker opens at the sheet's first layout, just before its first frame (the sizes it is placed by
+      // are measured then), so the sheet slides in with it open: not the menu first, then the picker growing out of it
+      ViewUtils.runJustBeforeBeingDrawn(getValue(), () -> {
+        if (xgramExpandOnShow && xgramCanExpandOnShow()) {
+          xgramExpandOnShow = false;
+          showReactionPicker(false);
+        }
+      });
+    }
+    super.launchOpenAnimation();
   }
 
   private void checkReactionPickerPosition () {

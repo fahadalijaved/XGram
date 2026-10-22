@@ -43,20 +43,32 @@ fun MessageMenuPage() {
     }
 
     // Where the quick reactions go: above the list of options, which can be long.
+    // The popup menu always has them above the message, so there the bar is only on or off. On keeps the stored Top
+    // or Bottom, which the sheet still follows when the popup is off.
+    val popup = settings.messagePopup()
+    val reactionBar = settings.reactionBar()
     group {
       buttons(
         R.id.btn_xgramReactionBar, s(R.string.XgramReactionBar),
-        listOf(
-          XgramSettings.REACTION_BAR_TOP,
-          XgramSettings.REACTION_BAR_BOTTOM,
-          XgramSettings.REACTION_BAR_OFF
-        ).map { XgramReactionBar.modeName(it) to it },
-        selected = settings.reactionBar()
+        if (popup) {
+          listOf(
+            XgramReactionBar.popupModeName(XgramSettings.REACTION_BAR_TOP) to
+              (if (reactionBar != XgramSettings.REACTION_BAR_OFF) reactionBar else XgramSettings.REACTION_BAR_TOP),
+            XgramReactionBar.popupModeName(XgramSettings.REACTION_BAR_OFF) to XgramSettings.REACTION_BAR_OFF
+          )
+        } else {
+          listOf(
+            XgramSettings.REACTION_BAR_TOP,
+            XgramSettings.REACTION_BAR_BOTTOM,
+            XgramSettings.REACTION_BAR_OFF
+          ).map { XgramReactionBar.modeName(it) to it }
+        },
+        selected = reactionBar
       ) {
         settings.setReactionBar(it)
       }
     }
-    description(R.string.XgramReactionBarInfo)
+    description(if (popup) R.string.XgramReactionBarPopupInfo else R.string.XgramReactionBarInfo)
 
     description(R.string.XgramMessageMenuInfo)
     reorderGroup(
@@ -67,19 +79,24 @@ fun MessageMenuPage() {
           // Summarize and Edit history are only added while their setting is on.
           val reason = XgramSettingDeps.messageMenuOptionReason(key)
           val hidden = XgramMessageMenu.isHidden(key)
-          // Under More: the option leaves the menu and waits under its More option (More itself can't go there)
-          val inMore = if (XgramMessageMenu.canGoInMore(key)) !hidden && XgramMessageMenu.isInMore(key) else null
+          // Under More: the option leaves the menu and waits under its More option (More itself can't go there).
+          // Report and Restrict are there by default, as in Telegram X; Restrict can't leave it (no toggle).
+          val underMore = !hidden && XgramMessageMenu.showsUnderMore(key)
+          val inMore = if (XgramMessageMenu.canChoosePlace(key)) underMore else null
+          // A hidden More still shows while options wait under it (XgramMessageMenu.filter): say so, as the menu does
+          val moreKept = key == XgramMessageMenu.KEY_MORE_OPTION && hidden && XgramMessageMenu.hasOptionsUnderMore()
           ReorderRow(
             key = key, title = s(option.name), icon = option.icon(), checked = !hidden,
             enabled = reason == 0,
-            subtitle = if (reason != 0) s(reason) else if (inMore == true) s(R.string.XgramMenuUnderMore) else null,
+            subtitle = if (reason != 0) s(reason) else if (underMore) s(R.string.XgramMenuUnderMore)
+              else if (moreKept) s(R.string.XgramMenuMoreKept) else null,
             inMore = inMore
           )
         }
       },
       onToggle = { key, shown -> XgramMessageMenu.setHidden(key, !shown) },
       onMore = { key, inMore ->
-        XgramMessageMenu.setInMore(key, inMore)
+        XgramMessageMenu.setUnderMore(key, inMore)
         if (inMore) {
           XgramMessageMenu.setHidden(key, false) // under More is shown: just one tap away
         }

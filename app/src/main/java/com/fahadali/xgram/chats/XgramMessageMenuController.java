@@ -56,7 +56,9 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
           reorder.bind(item, view);
         }
         if (item.getId() == R.id.btn_xgramReactionBar) {
-          view.setData(XgramReactionBar.modeName(com.fahadali.xgram.XgramSettings.instance().reactionBar()));
+          // The popup menu always has the reactions above the message: there the bar is only on or off
+          int mode = com.fahadali.xgram.XgramSettings.instance().reactionBar();
+          view.setData(com.fahadali.xgram.XgramSettings.instance().messagePopup() ? XgramReactionBar.popupModeName(mode) : XgramReactionBar.modeName(mode));
           return;
         }
         if (item.getId() == R.id.btn_xgramMessagePopup) {
@@ -70,9 +72,15 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
           String key = option.key;
           boolean hidden = XgramMessageMenu.isHidden(key);
           view.getToggler().setRadioEnabled(!hidden, isUpdate);
-          // Under More: "Reply · under More"
+          // Under More: "Reply · under More" (Report and Restrict by default, as in Telegram X). A hidden More that
+          // still shows while options wait under it (XgramMessageMenu.filter) says so.
           String name = Lang.getString(option.name);
-          view.setName(!hidden && XgramMessageMenu.isInMore(key) ? Lang.getString(R.string.XgramMenuNameUnderMore, name) : name);
+          if (!hidden && XgramMessageMenu.showsUnderMore(key)) {
+            name = Lang.getString(R.string.XgramMenuNameUnderMore, name);
+          } else if (hidden && XgramMessageMenu.KEY_MORE_OPTION.equals(key) && XgramMessageMenu.hasOptionsUnderMore()) {
+            name = Lang.getString(R.string.XgramMenuNameMoreKept, name);
+          }
+          view.setName(name);
           // Summarize and Edit history are only added while their setting is on: greyed, but still touchable, as the
           // row's handle drags it (a disabled view gets no touches). onClick ignores the tap.
           boolean usable = com.fahadali.xgram.XgramSettingDeps.messageMenuOptionEnabled(key);
@@ -94,13 +102,14 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     // The menu as a popup next to the message (Telegram) or as the sheet
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
-    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramMessagePopup, R.drawable.baseline_more_horiz_24, R.string.XgramMessagePopup)
+    // A bubble, not ⋯: on this page ⋯ is the More option, a few rows below
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramMessagePopup, R.drawable.baseline_chat_bubble_24, R.string.XgramMessagePopup)
       .setStringValue(Lang.getString(R.string.XgramMessagePopupInfo)));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramReactionBar, R.drawable.baseline_emoticon_outline_24, R.string.XgramReactionBar));
     items.add(new ListItem(ListItem.TYPE_SHADOW_BOTTOM));
-    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramReactionBarInfo));
+    items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, reactionBarInfo()));
     items.add(new ListItem(ListItem.TYPE_DESCRIPTION, 0, 0, R.string.XgramMessageMenuInfo));
     items.add(new ListItem(ListItem.TYPE_SHADOW_TOP));
     // One list (Telegram X's options and XGram's mixed, as in the menu); no separator rows, they would be dragged along.
@@ -126,20 +135,53 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
     return items;
   }
 
+  /** The reaction bar's description: the popup menu has its own, as there the bar is only on or off. */
+  private static int reactionBarInfo () {
+    return com.fahadali.xgram.XgramSettings.instance().messagePopup() ? R.string.XgramReactionBarPopupInfo : R.string.XgramReactionBarInfo;
+  }
+
+  /** The reaction bar's row and description follow the Popup menu switch. */
+  private void updateReactionBar () {
+    adapter.updateValuedSettingById(R.id.btn_xgramReactionBar);
+    int index = adapter.indexOfView(item -> item.getViewType() == ListItem.TYPE_DESCRIPTION &&
+      (item.getStringResource() == R.string.XgramReactionBarInfo || item.getStringResource() == R.string.XgramReactionBarPopupInfo));
+    if (index != -1 && adapter.getItems().get(index).setStringIfChanged(reactionBarInfo())) {
+      adapter.updateItem(index);
+    }
+  }
+
+  /** The More row's name says when More shows though hidden, which the other rows' choices change. */
+  private void updateMoreRow () {
+    for (XgramMessageMenu.Option option : XgramMessageMenu.OPTIONS) {
+      if (XgramMessageMenu.KEY_MORE_OPTION.equals(option.key)) {
+        adapter.updateValuedSettingByData(option);
+        break;
+      }
+    }
+  }
+
   @Override
   public void onClick (View v) {
     Object tag = v.getTag();
     if (v.getId() == R.id.btn_xgramMessagePopup) {
       com.fahadali.xgram.XgramSettings.instance().setMessagePopup(adapter.toggleView(v));
+      updateReactionBar();
       return;
     }
     if (v.getId() == R.id.btn_xgramReactionBar) {
-      int[] modes = {com.fahadali.xgram.XgramSettings.REACTION_BAR_TOP, com.fahadali.xgram.XgramSettings.REACTION_BAR_BOTTOM, com.fahadali.xgram.XgramSettings.REACTION_BAR_OFF};
+      int stored = com.fahadali.xgram.XgramSettings.instance().reactionBar();
+      final boolean popup = com.fahadali.xgram.XgramSettings.instance().messagePopup();
+      // In the popup menu only On or Off: On keeps the stored Top or Bottom, which the sheet still follows
+      int[] modes = popup ?
+        new int[] {stored != com.fahadali.xgram.XgramSettings.REACTION_BAR_OFF ? stored : com.fahadali.xgram.XgramSettings.REACTION_BAR_TOP, com.fahadali.xgram.XgramSettings.REACTION_BAR_OFF} :
+        new int[] {com.fahadali.xgram.XgramSettings.REACTION_BAR_TOP, com.fahadali.xgram.XgramSettings.REACTION_BAR_BOTTOM, com.fahadali.xgram.XgramSettings.REACTION_BAR_OFF};
       String[] titles = new String[modes.length];
+      int[] optionIds = new int[modes.length];
       for (int i = 0; i < modes.length; i++) {
-        titles[i] = XgramReactionBar.modeName(modes[i]);
+        titles[i] = popup ? XgramReactionBar.popupModeName(modes[i]) : XgramReactionBar.modeName(modes[i]);
+        optionIds[i] = i + 1;
       }
-      showOptions(null, new int[] {1, 2, 3}, titles, null, null, (itemView, optionId) -> {
+      showOptions(null, optionIds, titles, null, null, (itemView, optionId) -> {
         com.fahadali.xgram.XgramSettings.instance().setReactionBar(modes[optionId - 1]);
         adapter.updateValuedSettingById(R.id.btn_xgramReactionBar);
         return true;
@@ -155,17 +197,28 @@ public final class XgramMessageMenuController extends RecyclerViewController<Voi
       if (!XgramMessageMenu.canGoInMore(option.key)) {
         boolean shown = adapter.toggleView(v);
         XgramMessageMenu.setHidden(option.key, !shown);
+        adapter.updateValuedSetting((ListItem) tag); // More's name: whether it still shows while hidden
         return;
       }
-      // In the menu, under the menu's More, or hidden
+      // In the menu, under the menu's More, or hidden. Restrict can only be under More or hidden, as Telegram X only
+      // knows on More's page whether it applies.
       final ListItem item = (ListItem) tag;
-      final int current = XgramMessageMenu.isHidden(option.key) ? 3 : XgramMessageMenu.isInMore(option.key) ? 2 : 1;
-      String[] titles = {Lang.getString(R.string.XgramMenuInMenu), Lang.getString(R.string.XgramMenuUnderMore), Lang.getString(R.string.XgramMenuHidden)};
-      titles[current - 1] = Lang.getString(R.string.XgramMenuChoiceCurrent, titles[current - 1]);
-      showOptions(Lang.getString(option.name), new int[] {1, 2, 3}, titles, null, null, (itemView, optionId) -> {
+      final int current = XgramMessageMenu.isHidden(option.key) ? 3 : XgramMessageMenu.showsUnderMore(option.key) ? 2 : 1;
+      final boolean canBeInMenu = XgramMessageMenu.canChoosePlace(option.key);
+      int[] optionIds = canBeInMenu ? new int[] {1, 2, 3} : new int[] {2, 3};
+      String[] titles = new String[optionIds.length];
+      for (int i = 0; i < optionIds.length; i++) {
+        int optionId = optionIds[i];
+        String title = Lang.getString(optionId == 1 ? R.string.XgramMenuInMenu : optionId == 2 ? R.string.XgramMenuUnderMore : R.string.XgramMenuHidden);
+        titles[i] = optionId == current ? Lang.getString(R.string.XgramMenuChoiceCurrent, title) : title;
+      }
+      showOptions(Lang.getString(option.name), optionIds, titles, null, null, (itemView, optionId) -> {
         XgramMessageMenu.setHidden(option.key, optionId == 3);
-        XgramMessageMenu.setInMore(option.key, optionId == 2);
+        if (optionId != 3) {
+          XgramMessageMenu.setUnderMore(option.key, optionId == 2);
+        }
         adapter.updateValuedSetting(item);
+        updateMoreRow(); // Under More turns More back on; More's name follows what waits under it
         return true;
       });
     }

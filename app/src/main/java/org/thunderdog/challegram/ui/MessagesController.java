@@ -5398,8 +5398,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
           }
           Options messageOptions = messageOptionsBuilder.build();
           if (com.fahadali.xgram.chats.XgramMessagePopup.isEnabled()) {
-            // XGram: Message menu → Popup menu: the menu next to the message, the reactions above it (Telegram)
-            com.fahadali.xgram.chats.XgramMessagePopup.Handle xgramPopup = xgramShowMessagePopup(messageContext, messageOptions, messageHandler);
+            // XGram: Message menu → Popup menu: the menu next to the message, the reactions above it (Telegram). A read
+            // date still loading (expectAgain) gets its row now, so the placed card doesn't grow when the date comes.
+            com.fahadali.xgram.chats.XgramMessagePopup.Handle xgramPopup = xgramShowMessagePopup(messageContext, messageOptions, messageHandler, expectAgain);
             if (xgramPopup != null) {
               if (expectAgain) {
                 inject.set((loadedReadDate) -> {
@@ -5447,10 +5448,10 @@ public class MessagesController extends ViewController<MessagesController.Argume
   // keyboard stays open under them (the popup keeps above it), so nothing about it changes.
   private int xgramPopupCount;
 
-  private @Nullable com.fahadali.xgram.chats.XgramMessagePopup.Handle xgramShowMessagePopup (MessageContext messageContext, Options messageOptions, OptionDelegate messageHandler) {
+  private @Nullable com.fahadali.xgram.chats.XgramMessagePopup.Handle xgramShowMessagePopup (MessageContext messageContext, Options messageOptions, OptionDelegate messageHandler, boolean readDatePending) {
     final TGMessage msg = messageContext.message;
     final boolean metadata = !messageContext.disableMetadata;
-    return com.fahadali.xgram.chats.XgramMessagePopup.show(this, msg, messageOptions, messageHandler, metadata, new com.fahadali.xgram.chats.XgramMessagePopup.Host() {
+    return com.fahadali.xgram.chats.XgramMessagePopup.show(this, msg, messageOptions, messageHandler, metadata, readDatePending, new com.fahadali.xgram.chats.XgramMessagePopup.Host() {
       @Override
       public void onPopupOpen () {
         if (xgramPopupCount++ == 0) {
@@ -5475,6 +5476,16 @@ public class MessagesController extends ViewController<MessagesController.Argume
         if (sheet != null && sheet.getBoundController() instanceof MessageOptionsPagerController) {
           ((MessageOptionsPagerController) sheet.getBoundController()).xgramExpandPickerOnShow();
         }
+      }
+
+      @Override
+      public void openEmojiPacks (long[] emojiPackIds) {
+        if (isDestroyed()) {
+          return;
+        }
+        // As the sheets' emoji packs line: the keyboard goes (the popup kept it open), then the packs open
+        hideAllKeyboards();
+        tdlib.ui().showStickerSets(MessagesController.this, emojiPackIds, true, null);
       }
     });
   }
@@ -5503,6 +5514,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
       @Override
       public void onPopupDismiss (PopupLayout popup) {
         optimizeEmojiLayoutForOptionsWindow(false);
+        // XGram: onHideMessageOptions has used these (on dismiss prepare), so they are spent. Left set, a later
+        // cancelSheduledKeyboardOpeningAndHideAllKeyboards() (the popup menu's More, which keeps the keyboard) hid
+        // the keyboard because of a sheet closed long before.
+        needShowKeyboardAfterHideMessageOptions = false;
+        needShowEmojiKeyboardAfterHideMessageOptions = false;
         isMessageOptionsVisible = false;
       }
 
@@ -6624,7 +6640,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
             context().tooltipManager().builder(itemView).show(tdlib, R.string.ChannelNoSave).hideDelayed();
             return false;
           }
-          tdlib.ui().saveGifs(((List<TD.DownloadedFile>) selectedMessageTag));
+          tdlib.ui().saveGifs(((List<TD.DownloadedFile>) com.fahadali.xgram.chats.XgramMessageMenu.saveTag(selectedMessageTag))); // XGram: also under More
         }
         return true;
       } else if (id == R.id.btn_saveFile) {
@@ -6633,7 +6649,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
             context().tooltipManager().builder(itemView).show(tdlib, R.string.ChannelNoSave).hideDelayed();
             return false;
           }
-          TD.saveFiles(context, (List<TD.DownloadedFile>) selectedMessageTag);
+          TD.saveFiles(context, (List<TD.DownloadedFile>) com.fahadali.xgram.chats.XgramMessageMenu.saveTag(selectedMessageTag)); // XGram: also under More
         }
         return true;
       } else if (id == R.id.btn_openIn) {
@@ -6674,7 +6690,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
 
         return true;
       } else if (id == R.id.btn_deleteFile) {
-        if (selectedMessageTag != null) {
+        // XGram: on the page More opens, the menu's files are Save's alone (MoreTag): every file goes, as without them
+        if (selectedMessageTag != null && !(selectedMessageTag instanceof com.fahadali.xgram.chats.XgramMessageMenu.MoreTag)) {
           TD.deleteFiles(this, (List<TD.DownloadedFile>) selectedMessageTag, null);
         } else {
           TdApi.Message[] messages = selectedMessage.getAllMessages();

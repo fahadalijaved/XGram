@@ -1265,7 +1265,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   static int messageMenuHiddenCount () { // XGram: package, for XgramComposeBridge
     int count = 0;
     for (com.fahadali.xgram.chats.XgramMessageMenu.Option option : com.fahadali.xgram.chats.XgramMessageMenu.OPTIONS) {
-      if (com.fahadali.xgram.chats.XgramMessageMenu.isHidden(option.key)) {
+      // Only options the Message menu page lists (XDrive's Add to folder: while XDrive's test is on), so the count
+      // never names a hidden option the user can't see there to show again
+      if (com.fahadali.xgram.chats.XgramMessageMenu.isAvailable(option.key) && com.fahadali.xgram.chats.XgramMessageMenu.isHidden(option.key)) {
         count++;
       }
     }
