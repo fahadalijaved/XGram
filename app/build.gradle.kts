@@ -1145,6 +1145,9 @@ dependencies {
     libs.google.mlkit.language.id.legacy,
     libs.google.mlkit.language.id.latest
   )
+  // XGram: ML Kit GenAI Prompt API (Gemini Nano on the phone) for XDrive's Organize with AI; needs Android 8+ (only
+  // the latest flavor, Android 13+, is built)
+  implementation(libs.google.mlkit.genai.prompt)
   // Firebase: https://firebase.google.com/support/release-notes/android
   flavorImplementation(
     libs.google.firebase.messaging.legacy,

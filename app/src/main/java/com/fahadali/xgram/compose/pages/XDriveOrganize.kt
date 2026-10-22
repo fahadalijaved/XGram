@@ -1,0 +1,373 @@
+/*
+ * This file is a part of XGram, a fork of Telegram X
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
+package com.fahadali.xgram.compose.pages
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.toShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.fahadali.xgram.compose.PromptSpec
+import com.fahadali.xgram.compose.ui.str
+import com.fahadali.xgram.compose.ui.tgxIcon
+import com.fahadali.xgram.xdrive.XDriveEngine
+import com.fahadali.xgram.xdrive.XDriveItems
+import com.fahadali.xgram.xdrive.XDriveNano
+import com.fahadali.xgram.xdrive.XDriveOrganizer
+import com.fahadali.xgram.xdrive.XDriveProposedFolder
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import org.thunderdog.challegram.R
+import org.thunderdog.challegram.core.Lang
+
+/**
+ * Organize with AI, over XDrive: how to sort (Gemini Nano on the phone, or the rules), the reading and sorting, the
+ * proposed folders to look through (rename, switch off, leave items out), then everything goes in at once.
+ */
+@Composable
+internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSeeFolders: () -> Unit) {
+  val organizer = remember(state.tdlib) { XDriveOrganizer(state.tdlib) }
+  val scope = rememberCoroutineScope()
+  var job by remember { mutableStateOf<Job?>(null) }
+  LaunchedEffect(organizer) { organizer.checkNano() }
+  val topInset = with(LocalDensity.current) { state.host.topInset.toDp() }
+  val bottomInset = with(LocalDensity.current) { state.host.bottomInset.toDp() }
+  val motion = MaterialTheme.motionScheme
+  val cancel: () -> Unit = {
+    job?.cancel()
+    job = null
+    if (organizer.phase == XDriveOrganizer.Phase.READING || organizer.phase == XDriveOrganizer.Phase.SORTING) organizer.phase = XDriveOrganizer.Phase.READY
+  }
+  Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(top = topInset)) {
+    Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+      IconButton(onClick = { cancel(); onClose() }) {
+        Icon(tgxIcon(R.drawable.baseline_close_24), contentDescription = str(R.string.XgramXDriveClose))
+      }
+      Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
+    }
+    AnimatedContent(
+      targetState = organizer.phase.let { if (it == XDriveOrganizer.Phase.SORTING) XDriveOrganizer.Phase.READING else it },
+      transitionSpec = {
+        (fadeIn(motion.defaultEffectsSpec()) + slideInVertically(motion.defaultSpatialSpec()) { it / 8 }) togetherWith
+          (fadeOut(motion.fastEffectsSpec()) + slideOutVertically(motion.fastSpatialSpec()) { -it / 8 })
+      },
+      label = "organizePhase",
+      modifier = Modifier.weight(1f)
+    ) { phase ->
+      when (phase) {
+        XDriveOrganizer.Phase.READY -> ReadyStep(organizer, bottomInset) {
+          job = scope.launch { organizer.run() }
+        }
+        XDriveOrganizer.Phase.READING, XDriveOrganizer.Phase.SORTING -> WorkingStep(organizer) { cancel() }
+        XDriveOrganizer.Phase.REVIEW -> ReviewStep(state, organizer, bottomInset, onCancel = { onClose() }) { organizer.apply() }
+        XDriveOrganizer.Phase.DONE -> DoneStep(organizer, onClose = onClose, onSeeFolders = onSeeFolders)
+      }
+    }
+  }
+}
+
+/** A turning Expressive shape with the sparkles on it: the organizer's mark. */
+@Composable
+private fun Mark(size: Int) {
+  val c = MaterialTheme.colorScheme
+  val turn = rememberInfiniteTransition(label = "markTurn")
+  val rotation by turn.animateFloat(0f, 360f, infiniteRepeatable(tween(20000, easing = LinearEasing), RepeatMode.Restart), label = "markRotation")
+  Box(Modifier.size(size.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation }.clip(MaterialShapes.Cookie12Sided.toShape()).background(c.primaryContainer))
+    Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), contentDescription = null, tint = c.onPrimaryContainer, modifier = Modifier.size((size * 0.42f).dp))
+  }
+}
+
+@Composable
+private fun ReadyStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.ui.unit.Dp, onStart: () -> Unit) {
+  val nano = organizer.nanoStatus
+  Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
+      item {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+          Mark(120)
+          Spacer(Modifier.height(20.dp))
+          Text(str(R.string.XgramXDriveOrganizeTitle), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+          Spacer(Modifier.height(8.dp))
+          Text(str(R.string.XgramXDriveOrganizeText), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+          Spacer(Modifier.height(24.dp))
+        }
+      }
+      item {
+        val nanoText = when (nano) {
+          null -> str(R.string.XgramXDriveEngineChecking)
+          XDriveNano.Status.AVAILABLE -> str(R.string.XgramXDriveEngineNanoReady)
+          XDriveNano.Status.DOWNLOADABLE, XDriveNano.Status.DOWNLOADING -> str(R.string.XgramXDriveEngineNanoDownload)
+          XDriveNano.Status.UNSUPPORTED -> str(R.string.XgramXDriveEngineNanoNo)
+        }
+        EngineOption(
+          title = str(R.string.XgramXDriveEngineNano), text = nanoText, icon = R.drawable.xgram_auto_awesome_24,
+          selected = organizer.engine == XDriveEngine.NANO, enabled = nano != null && nano != XDriveNano.Status.UNSUPPORTED
+        ) { organizer.engine = XDriveEngine.NANO }
+        Spacer(Modifier.height(10.dp))
+        EngineOption(
+          title = str(R.string.XgramXDriveEngineRules), text = str(R.string.XgramXDriveEngineRulesInfo), icon = R.drawable.baseline_tune_24,
+          selected = organizer.engine == XDriveEngine.RULES, enabled = true
+        ) { organizer.engine = XDriveEngine.RULES }
+      }
+    }
+    Button(
+      onClick = onStart,
+      enabled = nano != null || organizer.engine == XDriveEngine.RULES,
+      modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset).height(56.dp),
+      contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
+    ) {
+      Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), contentDescription = null, modifier = Modifier.size(20.dp))
+      Spacer(Modifier.width(10.dp))
+      Text(str(R.string.XgramXDriveOrganizeStart), style = MaterialTheme.typography.titleMedium)
+    }
+  }
+}
+
+@Composable
+private fun EngineOption(title: String, text: String, icon: Int, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+  val c = MaterialTheme.colorScheme
+  val border = if (selected) c.primary else c.outlineVariant
+  Row(
+    Modifier.fillMaxWidth().alpha(if (enabled) 1f else .5f).clip(RoundedCornerShape(24.dp))
+      .background(if (selected) c.secondaryContainer else c.surfaceContainer)
+      .border(if (selected) 2.dp else 1.dp, border, RoundedCornerShape(24.dp))
+      .clickable(enabled = enabled, onClick = onClick)
+      .padding(16.dp),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Box(Modifier.size(44.dp).clip(MaterialShapes.Cookie6Sided.toShape()).background(if (selected) c.primary else c.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+      Icon(tgxIcon(icon), contentDescription = null, tint = if (selected) c.onPrimary else c.onSurfaceVariant, modifier = Modifier.size(22.dp))
+    }
+    Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+      Text(title, style = MaterialTheme.typography.titleMedium)
+      Text(text, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+    }
+    RadioButton(selected = selected, onClick = if (enabled) onClick else null, enabled = enabled)
+  }
+}
+
+@Composable
+private fun WorkingStep(organizer: XDriveOrganizer, onCancel: () -> Unit) {
+  Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    LoadingIndicator(Modifier.size(120.dp))
+    Spacer(Modifier.height(28.dp))
+    val download = organizer.downloadProgress
+    val text = when {
+      download != null -> str(R.string.XgramXDriveDownloadingNano, (download * 100).toInt())
+      organizer.phase == XDriveOrganizer.Phase.READING -> str(R.string.XgramXDriveReadingNow, Lang.plural(R.string.xMessages, organizer.readCount.toLong()))
+      organizer.sortTotal > 0 -> str(R.string.XgramXDriveSortingNano, organizer.sortDone, organizer.sortTotal)
+      else -> str(R.string.XgramXDriveSortingNow)
+    }
+    Text(text, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+    Spacer(Modifier.height(16.dp))
+    val progress: Float? = when {
+      download != null -> download
+      organizer.phase == XDriveOrganizer.Phase.SORTING && organizer.sortTotal > 0 -> organizer.sortDone.toFloat() / organizer.sortTotal
+      else -> null
+    }
+    if (progress != null) {
+      LinearWavyProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(.7f))
+    } else {
+      LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth(.7f))
+    }
+    Spacer(Modifier.height(32.dp))
+    TextButton(onClick = onCancel) { Text(str(R.string.Cancel)) }
+  }
+}
+
+@Composable
+private fun ReviewStep(state: XDriveState, organizer: XDriveOrganizer, bottomInset: androidx.compose.ui.unit.Dp, onCancel: () -> Unit, onApply: () -> Unit) {
+  val folders = organizer.folders
+  if (folders.isEmpty()) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+      EmptyNote(str(R.string.XgramXDriveNothingToSort))
+      TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(str(R.string.XgramXDriveClose)) }
+    }
+    return
+  }
+  val total = folders.filter { it.enabled }.sumOf { it.count }
+  val folderCount = folders.count { it.enabled && it.count > 0 }
+  Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      item(key = "head") {
+        Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+          Text(
+            str(R.string.XgramXDriveReviewTitle, Lang.plural(R.string.xFolders, folderCount.toLong()), Lang.plural(R.string.xMessages, total.toLong())),
+            style = MaterialTheme.typography.headlineSmall
+          )
+          Spacer(Modifier.height(6.dp))
+          Text(str(R.string.XgramXDriveReviewInfo), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          if (organizer.unsortedLeft > 0) {
+            Spacer(Modifier.height(4.dp))
+            Text(str(R.string.XgramXDriveReviewLeft, Lang.plural(R.string.xMessages, organizer.unsortedLeft.toLong())), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+        }
+      }
+      items(folders, key = { System.identityHashCode(it) }) { folder ->
+        ProposalCard(state, folder, Modifier.animateItem())
+      }
+    }
+    Button(
+      onClick = onApply,
+      enabled = total > 0,
+      modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset).height(56.dp),
+      contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
+    ) {
+      Text(str(R.string.XgramXDriveReviewApply, Lang.plural(R.string.xMessages, total.toLong())), style = MaterialTheme.typography.titleMedium)
+    }
+  }
+}
+
+/** A proposed folder: its badge and name (tap to rename), how many go in, on or off, and what goes in. */
+@Composable
+private fun ProposalCard(state: XDriveState, folder: XDriveProposedFolder, modifier: Modifier) {
+  val c = MaterialTheme.colorScheme
+  var open by remember { mutableStateOf(false) }
+  val motion = MaterialTheme.motionScheme
+  Column(modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(if (folder.enabled) c.surfaceContainerHigh else c.surfaceContainerLow).alpha(if (folder.enabled) 1f else .6f)) {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+      FolderBadge(folder.name, folder.emoji, R.drawable.baseline_folder_24, 48)
+      Column(
+        Modifier.weight(1f).padding(horizontal = 14.dp).clickable {
+          state.host.prompt(PromptSpec(title = Lang.getString(R.string.XgramXDriveRename), hint = Lang.getString(R.string.XgramXDriveFolderName), initial = folder.name) { text ->
+            if (text.isNotBlank()) folder.name = text.trim()
+          })
+        }
+      ) {
+        Text(folder.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+          Lang.plural(R.string.xMessages, folder.count.toLong()) + if (folder.existingId != null) " · " + str(R.string.XgramXDriveReviewExisting) else "",
+          style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+        )
+      }
+      Switch(checked = folder.enabled, onCheckedChange = { folder.enabled = it })
+    }
+    // A glance at what goes in
+    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+      items(folder.items.take(12), key = { it.id }) { message ->
+        XDriveThumb(message, Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)), iconSize = 20)
+      }
+    }
+    TextButton(onClick = { open = !open }, modifier = Modifier.padding(start = 6.dp)) {
+      Text(if (open) str(R.string.XgramXDriveHideItems) else str(R.string.XgramXDriveShowItems))
+    }
+    AnimatedVisibility(open, enter = expandVertically(motion.defaultSpatialSpec()) + fadeIn(), exit = shrinkVertically(motion.fastSpatialSpec()) + fadeOut()) {
+      Column(Modifier.padding(bottom = 8.dp)) {
+        for (message in folder.items.take(200)) {
+          val left = folder.left.contains(message.id)
+          Row(
+            Modifier.fillMaxWidth().clickable { if (left) folder.left.remove(message.id) else folder.left.add(message.id) }.padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Checkbox(checked = !left, onCheckedChange = { if (it) folder.left.remove(message.id) else folder.left.add(message.id) })
+            XDriveThumb(message, Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)), iconSize = 18)
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+              Text(XDriveItems.title(message), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+              Text(XDriveItems.subtitle(message), style = MaterialTheme.typography.bodySmall, color = c.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun DoneStep(organizer: XDriveOrganizer, onClose: () -> Unit, onSeeFolders: () -> Unit) {
+  val c = MaterialTheme.colorScheme
+  val motion = MaterialTheme.motionScheme
+  var shown by remember { mutableStateOf(false) }
+  LaunchedEffect(Unit) { shown = true }
+  Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    AnimatedVisibility(shown, enter = scaleIn(motion.slowSpatialSpec(), initialScale = 0.3f) + fadeIn(motion.defaultEffectsSpec())) {
+      Box(Modifier.size(128.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(c.primary), contentAlignment = Alignment.Center) {
+        Icon(tgxIcon(R.drawable.baseline_check_24), contentDescription = null, tint = c.onPrimary, modifier = Modifier.size(56.dp))
+      }
+    }
+    Spacer(Modifier.height(28.dp))
+    Text(str(R.string.XgramXDriveDoneTitle), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+    Spacer(Modifier.height(8.dp))
+    Text(
+      str(R.string.XgramXDriveDoneText, Lang.plural(R.string.xMessages, organizer.movedCount.toLong()), Lang.plural(R.string.xFolders, organizer.folders.count { it.enabled && it.count > 0 }.toLong())),
+      style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant, textAlign = TextAlign.Center
+    )
+    Spacer(Modifier.height(28.dp))
+    Button(onClick = onSeeFolders, modifier = Modifier.height(56.dp), contentPadding = ButtonDefaults.contentPaddingFor(56.dp)) {
+      Text(str(R.string.XgramXDriveSeeFolders), style = MaterialTheme.typography.titleMedium)
+    }
+    TextButton(onClick = onClose) { Text(str(R.string.XgramXDriveClose)) }
+  }
+}

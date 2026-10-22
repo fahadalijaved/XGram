@@ -55,10 +55,14 @@ public final class XDriveIndex implements MessageListener {
   public static final class Folder {
     public final String id;
     public String name;
+    /** The folder's emoji (AI-made folders get one), or null: the folder icon. */
+    @Nullable
+    public String emoji;
 
-    Folder (String id, String name) {
+    Folder (String id, String name, @Nullable String emoji) {
       this.id = id;
       this.name = name;
+      this.emoji = emoji;
     }
   }
 
@@ -233,7 +237,8 @@ public final class XDriveIndex implements MessageListener {
         for (int i = 0; i < list.length(); i++) {
           JSONObject folder = list.optJSONObject(i);
           if (folder != null && folder.has("id") && folder.has("name")) {
-            folders.add(new Folder(folder.getString("id"), folder.getString("name")));
+            String emoji = folder.optString("e", "");
+            folders.add(new Folder(folder.getString("id"), folder.getString("name"), emoji.isEmpty() ? null : emoji));
           }
         }
       }
@@ -261,7 +266,11 @@ public final class XDriveIndex implements MessageListener {
       root.put("v", 1);
       JSONArray list = new JSONArray();
       for (Folder folder : folders) {
-        list.put(new JSONObject().put("id", folder.id).put("name", folder.name));
+        JSONObject item = new JSONObject().put("id", folder.id).put("name", folder.name);
+        if (folder.emoji != null && !folder.emoji.isEmpty()) {
+          item.put("e", folder.emoji);
+        }
+        list.put(item);
       }
       root.put("folders", list);
       JSONObject map = new JSONObject();
@@ -407,10 +416,37 @@ public final class XDriveIndex implements MessageListener {
   }
 
   public Folder createFolder (String name) {
-    Folder folder = new Folder("f" + Long.toString(System.currentTimeMillis(), 36) + (counter++), name.trim());
+    return createFolder(name, null);
+  }
+
+  public Folder createFolder (String name, @Nullable String emoji) {
+    Folder folder = new Folder("f" + Long.toString(System.currentTimeMillis(), 36) + (counter++), name.trim(), emoji);
     folders.add(folder);
     changed();
     return folder;
+  }
+
+  public void setEmoji (String id, @Nullable String emoji) {
+    Folder folder = findFolder(id);
+    if (folder != null && !java.util.Objects.equals(folder.emoji, emoji)) {
+      folder.emoji = emoji;
+      changed();
+    }
+  }
+
+  /** How many messages are in a folder: all of them, by folder id. */
+  public Map<String, Integer> counts () {
+    Map<String, Integer> counts = new HashMap<>();
+    for (String value : items.values()) {
+      Integer count = counts.get(value);
+      counts.put(value, count == null ? 1 : count + 1);
+    }
+    return counts;
+  }
+
+  /** How many messages are in some folder. */
+  public int sortedCount () {
+    return items.size();
   }
 
   public void renameFolder (String id, String name) {

@@ -176,6 +176,8 @@ androidx-palette = { module = "androidx.palette:palette", version.ref = "android
 
 # XGram: Jetpack Compose (versions from the BOM, except material3)
 androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "androidx-compose-bom" }
+# XGram: on-device Gemini Nano through AICore (XDrive's Organize with AI), Android 14+ phones that have it
+google-mlkit-genai-prompt = { module = "com.google.mlkit:genai-prompt", version = "1.0.0-beta4" }
 androidx-compose-ui = { module = "androidx.compose.ui:ui", version.ref = "androidx-compose-core" }
 androidx-compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics", version.ref = "androidx-compose-core" }
 androidx-compose-foundation = { module = "androidx.compose.foundation:foundation", version.ref = "androidx-compose-core" }

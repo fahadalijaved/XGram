@@ -35,6 +35,7 @@ enum class XDriveKind { PHOTO, VIDEO, GIF, FILE, MUSIC, VOICE, LINK, NOTE, OTHER
 /** XDrive's views: everything, or one kind (each its own server query when it has a filter). */
 enum class XDriveView(val title: Int, val icon: Int, val grid: Boolean) {
   ALL(R.string.XgramXDriveAll, R.drawable.baseline_cloud_24, false),
+  MEDIA(R.string.XgramXDriveAll, R.drawable.baseline_image_24, true),
   PHOTOS(R.string.XgramXDrivePhotosOnly, R.drawable.baseline_image_24, true),
   VIDEOS(R.string.XgramXDriveVideos, R.drawable.baseline_videocam_24, true),
   FILES(R.string.XgramXDriveFiles, R.drawable.baseline_insert_drive_file_24, false),
@@ -46,6 +47,7 @@ enum class XDriveView(val title: Int, val icon: Int, val grid: Boolean) {
 
   /** The server's filter for this view; null: read the history (ALL, NOTES) and keep what fits. */
   fun filter(): TdApi.SearchMessagesFilter? = when (this) {
+    MEDIA -> TdApi.SearchMessagesFilterPhotoAndVideo()
     PHOTOS -> TdApi.SearchMessagesFilterPhoto()
     VIDEOS -> TdApi.SearchMessagesFilterVideo()
     FILES -> TdApi.SearchMessagesFilterDocument()
@@ -58,6 +60,7 @@ enum class XDriveView(val title: Int, val icon: Int, val grid: Boolean) {
 
   fun accepts(kind: XDriveKind): Boolean = when (this) {
     ALL -> true
+    MEDIA -> kind == XDriveKind.PHOTO || kind == XDriveKind.VIDEO
     PHOTOS -> kind == XDriveKind.PHOTO
     VIDEOS -> kind == XDriveKind.VIDEO
     FILES -> kind == XDriveKind.FILE
