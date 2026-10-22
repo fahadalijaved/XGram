@@ -9,7 +9,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
-@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.fahadali.xgram.compose.pages
 
@@ -50,7 +50,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ToggleButton
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -82,6 +90,8 @@ import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.compose.PromptSpec
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.compose.ui.tgxIcon
+import com.fahadali.xgram.xdrive.XDriveCloudConfig
+import com.fahadali.xgram.xdrive.XDriveCloudProvider
 import com.fahadali.xgram.xdrive.XDriveEngine
 import com.fahadali.xgram.xdrive.XDriveIcons
 import com.fahadali.xgram.xdrive.XDriveItems
@@ -116,7 +126,7 @@ internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSee
       Text(str(R.string.XgramXDriveOrganize), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 4.dp))
     }
     AnimatedContent(
-      targetState = if (organizer.running) XDriveOrganizer.Phase.SORTING else organizer.phase,
+      targetState = if (organizer.running && organizer.phase != XDriveOrganizer.Phase.CONSENT) XDriveOrganizer.Phase.SORTING else organizer.phase,
       transitionSpec = {
         (fadeIn(motion.defaultEffectsSpec()) + slideInVertically(motion.defaultSpatialSpec()) { it / 8 }) togetherWith
           (fadeOut(motion.fastEffectsSpec()) + slideOutVertically(motion.fastSpatialSpec()) { -it / 8 })
@@ -127,6 +137,7 @@ internal fun XDriveOrganizeScreen(state: XDriveState, onClose: () -> Unit, onSee
       when (phase) {
         XDriveOrganizer.Phase.READY -> ReadyStep(organizer, bottomInset) { state.startOrganize() }
         XDriveOrganizer.Phase.REVIEW -> ReviewStep(state, organizer, bottomInset, onCancel = { organizer.reset(); onClose() }) { organizer.apply() }
+        XDriveOrganizer.Phase.CONSENT -> ConsentStep(organizer, bottomInset)
         XDriveOrganizer.Phase.DONE -> DoneStep(organizer, onClose = { organizer.reset(); onClose() }, onSeeFolders = { organizer.reset(); onSeeFolders() })
         else -> WorkingStep(organizer) { state.cancelOrganize() }
       }
@@ -145,8 +156,8 @@ internal fun organizeStatus(organizer: XDriveOrganizer): String = when {
     }
   organizer.phase == XDriveOrganizer.Phase.PREPARING -> str(R.string.XgramXDriveNanoStarting)
   organizer.phase == XDriveOrganizer.Phase.READING -> str(R.string.XgramXDriveReadingNow, Lang.plural(R.string.xMessages, organizer.readCount.toLong()))
-  organizer.nanoStep == XDriveOrganizer.NanoStep.NAMING -> str(R.string.XgramXDriveNanoNaming)
-  organizer.nanoStep == XDriveOrganizer.NanoStep.SORTING -> str(R.string.XgramXDriveSortingNano, organizer.sortDone, organizer.sortTotal)
+  organizer.nanoStep == XDriveOrganizer.NanoStep.NAMING -> str(R.string.XgramXDriveAiNaming, organizer.aiName)
+  organizer.nanoStep == XDriveOrganizer.NanoStep.SORTING -> str(R.string.XgramXDriveAiSorting, organizer.aiName, organizer.sortDone, organizer.sortTotal)
   else -> str(R.string.XgramXDriveSortingNow)
 }
 
@@ -173,6 +184,10 @@ private fun Mark(size: Int) {
 @Composable
 private fun ReadyStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.ui.unit.Dp, onStart: () -> Unit) {
   val nano = organizer.nanoStatus
+  var cloudSheet by remember { mutableStateOf(false) }
+  if (cloudSheet) {
+    CloudSheet(organizer, bottomInset) { cloudSheet = false }
+  }
   Column(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
       item {
@@ -197,6 +212,16 @@ private fun ReadyStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.
           selected = organizer.engine == XDriveEngine.NANO, enabled = nano != null && nano != XDriveNano.Status.UNSUPPORTED
         ) { organizer.engine = XDriveEngine.NANO }
         Spacer(Modifier.height(10.dp))
+        val cloud = organizer.cloud
+        EngineOption(
+          title = str(R.string.XgramXDriveEngineCloud),
+          text = if (cloud != null) str(R.string.XgramXDriveEngineCloudSet, cloud.name, cloud.model) else str(R.string.XgramXDriveEngineCloudInfo),
+          icon = R.drawable.baseline_cloud_24,
+          selected = organizer.engine == XDriveEngine.CLOUD, enabled = true,
+          action = if (cloud != null) str(R.string.XgramXDriveCloudChange) else null,
+          onAction = { cloudSheet = true }
+        ) { if (cloud != null) organizer.engine = XDriveEngine.CLOUD else cloudSheet = true }
+        Spacer(Modifier.height(10.dp))
         EngineOption(
           title = str(R.string.XgramXDriveEngineRules), text = str(R.string.XgramXDriveEngineRulesInfo), icon = R.drawable.baseline_tune_24,
           selected = organizer.engine == XDriveEngine.RULES, enabled = true
@@ -217,7 +242,10 @@ private fun ReadyStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.
 }
 
 @Composable
-private fun EngineOption(title: String, text: String, icon: Int, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+private fun EngineOption(
+  title: String, text: String, icon: Int, selected: Boolean, enabled: Boolean,
+  action: String? = null, onAction: (() -> Unit)? = null, onClick: () -> Unit
+) {
   val c = MaterialTheme.colorScheme
   val border = if (selected) c.primary else c.outlineVariant
   Row(
@@ -234,6 +262,9 @@ private fun EngineOption(title: String, text: String, icon: Int, selected: Boole
     Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
       Text(title, style = MaterialTheme.typography.titleMedium)
       Text(text, style = MaterialTheme.typography.bodyMedium, color = c.onSurfaceVariant)
+      if (action != null && onAction != null) {
+        TextButton(onClick = onAction, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(action) }
+      }
     }
     RadioButton(selected = selected, onClick = if (enabled) onClick else null, enabled = enabled)
   }
@@ -301,7 +332,7 @@ private fun ReviewStep(state: XDriveState, organizer: XDriveOrganizer, bottomIns
               verticalAlignment = Alignment.CenterVertically
             ) {
               Icon(tgxIcon(R.drawable.baseline_info_24), contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(20.dp))
-              Text(str(note), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(start = 12.dp))
+              Text(note, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.padding(start = 12.dp))
             }
           }
           if (organizer.unsortedLeft > 0) {
@@ -403,5 +434,124 @@ private fun DoneStep(organizer: XDriveOrganizer, onClose: () -> Unit, onSeeFolde
       Text(str(R.string.XgramXDriveSeeFolders), style = MaterialTheme.typography.titleMedium)
     }
     TextButton(onClick = onClose) { Text(str(R.string.XgramXDriveClose)) }
+  }
+}
+
+/** Before anything goes to the cloud: what, how much, where, and a few lines exactly as they would be sent. */
+@Composable
+private fun ConsentStep(organizer: XDriveOrganizer, bottomInset: androidx.compose.ui.unit.Dp) {
+  val c = MaterialTheme.colorScheme
+  Column(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp)) {
+      item {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+          Box(Modifier.size(96.dp).clip(MaterialShapes.Cookie9Sided.toShape()).background(c.tertiaryContainer), contentAlignment = Alignment.Center) {
+            Icon(tgxIcon(R.drawable.baseline_cloud_24), contentDescription = null, tint = c.onTertiaryContainer, modifier = Modifier.size(40.dp))
+          }
+          Spacer(Modifier.height(20.dp))
+          Text(str(R.string.XgramXDriveConsentTitle, organizer.aiName), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+          Spacer(Modifier.height(10.dp))
+          Text(
+            str(R.string.XgramXDriveConsentText, Lang.plural(R.string.xMessages, organizer.consentCount.toLong()), organizer.aiName),
+            style = MaterialTheme.typography.bodyLarge, color = c.onSurfaceVariant, textAlign = TextAlign.Center
+          )
+          Spacer(Modifier.height(20.dp))
+        }
+      }
+      item {
+        Text(str(R.string.XgramXDriveConsentSample), style = MaterialTheme.typography.titleSmall, color = c.primary, modifier = Modifier.padding(bottom = 8.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.surfaceContainerHigh).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          for (line in organizer.consentSample) {
+            Text(line, style = MaterialTheme.typography.bodyMedium, color = c.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
+          }
+        }
+      }
+    }
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp + bottomInset)) {
+      Button(onClick = { organizer.answerConsent(true) }, modifier = Modifier.fillMaxWidth().height(56.dp), contentPadding = ButtonDefaults.contentPaddingFor(56.dp)) {
+        Text(str(R.string.XgramXDriveConsentSend), style = MaterialTheme.typography.titleMedium)
+      }
+      TextButton(onClick = { organizer.answerConsent(false) }, modifier = Modifier.fillMaxWidth()) {
+        Text(str(R.string.XgramXDriveConsentRules))
+      }
+    }
+  }
+}
+
+/** Setting up the cloud AI: the provider (connected toggle buttons), the user's key, the model, a base URL for OpenAI-compatible. */
+@Composable
+private fun CloudSheet(organizer: XDriveOrganizer, bottomInset: androidx.compose.ui.unit.Dp, onDismiss: () -> Unit) {
+  val settings = com.fahadali.xgram.XgramSettings.instance()
+  var provider by remember { mutableStateOf(XDriveCloudProvider.of(settings.xdriveAiProvider()) ?: XDriveCloudProvider.CLAUDE) }
+  var key by remember(provider) { mutableStateOf(settings.xdriveAiKey(provider.id)) }
+  var model by remember(provider) { mutableStateOf(settings.xdriveAiModel(provider.id).ifEmpty { provider.defaultModel }) }
+  var baseUrl by remember { mutableStateOf(settings.xdriveAiBaseUrl().ifEmpty { XDriveCloudConfig.OPENAI_BASE_URL }) }
+  val saved = remember(provider) { settings.xdriveAiKey(provider.id).isNotEmpty() }
+  ModalBottomSheet(onDismissRequest = onDismiss) {
+    Column(
+      Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(start = 20.dp, end = 20.dp, bottom = 16.dp + bottomInset),
+      verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+      Text(str(R.string.XgramXDriveCloudTitle), style = MaterialTheme.typography.titleLarge)
+      Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween), modifier = Modifier.fillMaxWidth()) {
+        val all = XDriveCloudProvider.entries
+        all.forEachIndexed { i, p ->
+          ToggleButton(
+            checked = p == provider,
+            onCheckedChange = { provider = p },
+            modifier = Modifier.weight(1f),
+            shapes = when (i) {
+              0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+              all.size - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+              else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+            }
+          ) {
+            Text(str(p.title), maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+        }
+      }
+      Text(str(provider.keyHelp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      OutlinedTextField(
+        value = key, onValueChange = { key = it.trim() }, singleLine = true,
+        label = { Text(str(R.string.XgramXDriveCloudKey)) },
+        visualTransformation = PasswordVisualTransformation(),
+        modifier = Modifier.fillMaxWidth()
+      )
+      OutlinedTextField(
+        value = model, onValueChange = { model = it.trim() }, singleLine = true,
+        label = { Text(str(R.string.XgramXDriveCloudModel)) },
+        modifier = Modifier.fillMaxWidth()
+      )
+      if (provider == XDriveCloudProvider.OPENAI) {
+        OutlinedTextField(
+          value = baseUrl, onValueChange = { baseUrl = it.trim() }, singleLine = true,
+          label = { Text(str(R.string.XgramXDriveCloudBaseUrl)) },
+          modifier = Modifier.fillMaxWidth()
+        )
+      }
+      Text(str(R.string.XgramXDriveCloudKeyInfo), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Button(
+        onClick = {
+          settings.setXdriveAi(provider.id, key, model, if (provider == XDriveCloudProvider.OPENAI) baseUrl else null)
+          organizer.cloudChanged()
+          organizer.engine = XDriveEngine.CLOUD
+          onDismiss()
+        },
+        enabled = key.isNotEmpty() && model.isNotEmpty() && (provider != XDriveCloudProvider.OPENAI || baseUrl.startsWith("http")),
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        contentPadding = ButtonDefaults.contentPaddingFor(56.dp)
+      ) {
+        Text(str(R.string.Save), style = MaterialTheme.typography.titleMedium)
+      }
+      if (saved) {
+        TextButton(onClick = {
+          settings.removeXdriveAi(provider.id)
+          organizer.cloudChanged()
+          onDismiss()
+        }, modifier = Modifier.fillMaxWidth()) {
+          Text(str(R.string.XgramXDriveCloudRemove), color = MaterialTheme.colorScheme.error)
+        }
+      }
+    }
   }
 }

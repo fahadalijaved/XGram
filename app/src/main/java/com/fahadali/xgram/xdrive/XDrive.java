@@ -134,6 +134,15 @@ public final class XDrive {
     }
   }
 
+  /** Whether [c] is XDrive's screen. */
+  public static boolean isScreen (@Nullable ViewController<?> c) {
+    if (!(c instanceof com.fahadali.xgram.compose.XgramComposeController)) {
+      return false;
+    }
+    com.fahadali.xgram.compose.XgramComposeController.Args args = ((com.fahadali.xgram.compose.XgramComposeController) c).getArguments();
+    return args != null && args.getPage() == com.fahadali.xgram.compose.XgramPage.XDRIVE;
+  }
+
   /** XDrive's screen (compose/pages/XDrivePage.kt). */
   public static ViewController<?> newScreen (android.content.Context context, org.thunderdog.challegram.telegram.Tdlib tdlib) {
     return com.fahadali.xgram.compose.XgramComposeController.create(context, tdlib, com.fahadali.xgram.compose.XgramPage.XDRIVE);

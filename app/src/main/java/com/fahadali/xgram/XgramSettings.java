@@ -85,6 +85,12 @@ public final class XgramSettings {
   public static final String KEY_ADD_BOT_ADMIN = "xgram_add_bot_admin", KEY_ADD_BOT_ALL_RIGHTS = "xgram_add_bot_all_rights";
   /** XDrive (Saved Messages as the drive) is a test for now: Testing utilities switches it on (debug builds on, CI off). */
   public static final String KEY_XDRIVE_TEST = "xgram_xdrive_test";
+  public static final String KEY_XDRIVE_OPENS_CHAT = "xgram_xdrive_opens_chat";
+  public static final String KEY_XDRIVE_AI_PROVIDER = "xgram_xdrive_ai_provider";
+  /** Followed by the provider's id (claude, gemini, openai). */
+  public static final String KEY_XDRIVE_AI_KEY = "xgram_xdrive_ai_key_";
+  public static final String KEY_XDRIVE_AI_MODEL = "xgram_xdrive_ai_model_";
+  public static final String KEY_XDRIVE_AI_BASE_URL = "xgram_xdrive_ai_base_url";
   /** Camera X is a test for now: the main camera with CameraX and XGram's controls (debug builds on, CI builds off). */
   public static final String KEY_CAMERA_X_TEST = "xgram_camera_x_test";
 
@@ -617,6 +623,54 @@ public final class XgramSettings {
     put(KEY_XDRIVE_TEST, value);
     com.fahadali.xgram.xdrive.XDrive.onSettingChanged(value);
     org.thunderdog.challegram.core.Lang.xgramNotifyStringsChanged(); // names on screen follow
+  }
+
+  /** With XDrive on: Saved Messages still opens as the chat (XDrive is in its ⋮ menu). */
+  public boolean xdriveOpensChat () {
+    return pmc().getBoolean(KEY_XDRIVE_OPENS_CHAT, false);
+  }
+
+  public void setXdriveOpensChat (boolean value) {
+    put(KEY_XDRIVE_OPENS_CHAT, value);
+  }
+
+  /** XDrive's cloud AI for Organize: the provider's id (claude, gemini, openai), empty: none set up. */
+  public String xdriveAiProvider () {
+    String value = pmc().getString(KEY_XDRIVE_AI_PROVIDER, "");
+    return value != null ? value : "";
+  }
+
+  /** The user's API key, model and (OpenAI-compatible) base URL; kept in this app's private storage only. */
+  public String xdriveAiKey (String provider) {
+    String value = pmc().getString(KEY_XDRIVE_AI_KEY + provider, "");
+    return value != null ? value : "";
+  }
+
+  public String xdriveAiModel (String provider) {
+    String value = pmc().getString(KEY_XDRIVE_AI_MODEL + provider, "");
+    return value != null ? value : "";
+  }
+
+  public String xdriveAiBaseUrl () {
+    String value = pmc().getString(KEY_XDRIVE_AI_BASE_URL, "");
+    return value != null ? value : "";
+  }
+
+  public void setXdriveAi (String provider, String key, String model, @androidx.annotation.Nullable String baseUrl) {
+    pmc().putString(KEY_XDRIVE_AI_PROVIDER, provider);
+    pmc().putString(KEY_XDRIVE_AI_KEY + provider, key);
+    pmc().putString(KEY_XDRIVE_AI_MODEL + provider, model);
+    if (baseUrl != null) {
+      pmc().putString(KEY_XDRIVE_AI_BASE_URL, baseUrl);
+    }
+  }
+
+  /** Forgets the provider's key (and the provider, when it was the chosen one). */
+  public void removeXdriveAi (String provider) {
+    pmc().remove(KEY_XDRIVE_AI_KEY + provider);
+    if (provider.equals(xdriveAiProvider())) {
+      pmc().remove(KEY_XDRIVE_AI_PROVIDER);
+    }
   }
 
   /** Camera X (a test): the in-app camera uses CameraX with lenses, modes, focus and exposure. */

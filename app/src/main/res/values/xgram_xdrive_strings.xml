@@ -20,6 +20,8 @@
   <item name="btn_xgramXDriveMove" type="id" />
   <item name="btn_xgramXDriveOpen" type="id" />
   <item name="menu_xgramXDrive" type="id" />
+  <item name="btn_xgramOpenXDrive" type="id" />
+  <item name="btn_xgramXDriveOpensChat" type="id" />
 
   <!-- The switch -->
   <string name="XgramXDriveTest">XDrive (test)</string>
@@ -138,18 +140,49 @@
   <string name="XgramXDriveNanoDownloadingSize">Downloading Gemini Nano: %1$s of %2$s</string>
   <string name="XgramXDriveNanoDownloadingInfo">On-device means Gemini Nano runs right here on the phone, so nothing from XDrive is sent anywhere. Android downloads the model itself once, then keeps it for every app. You can sort with quick rules now and use Gemini Nano next time.</string>
   <string name="XgramXDriveNanoStarting">Starting Gemini Nano…</string>
-  <string name="XgramXDriveNanoNaming">Gemini Nano is reading a sample…</string>
-  <string name="XgramXDriveNanoFailed">Gemini Nano stopped answering, so the quick rules sorted the rest.</string>
   <string name="XgramXDriveNanoUnavailable">Gemini Nano isn\'t ready on this phone yet, so the quick rules sorted XDrive.</string>
   <string name="XgramXDriveUseRulesNow">Use quick rules now</string>
   <string name="XgramXDriveKeepsGoing">You can close this: it keeps going while XDrive is open.</string>
   <string name="XgramXDriveReadyToReview">Your new folders are ready to look through.</string>
   <string name="XgramXDriveReview">Review</string>
+  <string name="XgramXDriveNewSinceOrganize">%1$s saved since you last organized aren\'t in a folder</string>
+  <string name="XgramXDriveSortThem">Sort</string>
+  <string name="XgramXDriveOpenXDrive">XDrive</string>
+  <string name="XgramXDriveEngineNanoName">Gemini Nano</string>
+  <string name="XgramXDriveAiNaming">%1$s is reading a sample…</string>
+  <string name="XgramXDriveAiSorting">%1$s is sorting: %2$s of %3$s</string>
+  <string name="XgramXDriveAiFailed">%1$s stopped answering, so the quick rules sorted the rest.</string>
+  <string name="XgramXDriveAiFailedWhy">%1$s stopped answering (%2$s), so the quick rules sorted the rest.</string>
+  <string name="XgramXDriveEngineCloud">Cloud AI (your key)</string>
+  <string name="XgramXDriveEngineCloudInfo">Claude, Gemini or an OpenAI-compatible service, with your own API key. XDrive asks before sending anything.</string>
+  <string name="XgramXDriveEngineCloudSet">%1$s · %2$s. XDrive asks before sending anything.</string>
+  <string name="XgramXDriveCloudChange">Change</string>
+  <string name="XgramXDriveCloudTitle">Cloud AI</string>
+  <string name="XgramXDriveCloudClaude">Claude</string>
+  <string name="XgramXDriveCloudGemini">Gemini</string>
+  <string name="XgramXDriveCloudOpenAi">OpenAI-compatible</string>
+  <string name="XgramXDriveCloudClaudeHelp">Create a key at console.anthropic.com, under API keys.</string>
+  <string name="XgramXDriveCloudGeminiHelp">Create a free key at aistudio.google.com, under Get API key.</string>
+  <string name="XgramXDriveCloudOpenAiHelp">OpenAI, OpenRouter, Groq, DeepSeek or your own server: its base URL, your key and a model name.</string>
+  <string name="XgramXDriveCloudKey">API key</string>
+  <string name="XgramXDriveCloudModel">Model</string>
+  <string name="XgramXDriveCloudBaseUrl">Base URL</string>
+  <string name="XgramXDriveCloudKeyInfo">Your key stays on this phone, in XGram\'s own storage. It is used only when you sort XDrive, and XDrive asks first every time.</string>
+  <string name="XgramXDriveCloudRemove">Remove key</string>
+  <string name="XgramXDriveCloudDeclined">%1$s declined to sort these items</string>
+  <string name="XgramXDriveCloudBadAnswer">an answer XDrive couldn\'t read</string>
+  <string name="XgramXDriveConsentTitle">Send to %1$s?</string>
+  <string name="XgramXDriveConsentText">XDrive will send short descriptions of %1$s to %2$s with your key: texts (their first 120 characters), captions, file names and link titles. Never files or photos. Numbers, e-mail addresses and codes are masked, and what the quick rules already sorted (like passwords) isn\'t sent.</string>
+  <string name="XgramXDriveConsentSample">What goes, for example</string>
+  <string name="XgramXDriveConsentSend">Send and sort</string>
+  <string name="XgramXDriveConsentRules">Use quick rules instead</string>
+  <string name="XgramXDriveOpensChat">Open Saved Messages as the chat</string>
+  <string name="XgramXDriveOpensChatInfo">The classic Saved Messages chat opens first; XDrive is in its ⋮ menu</string>
+  <string name="XgramXDriveOpensChatOn">Saved Messages opens as the chat now. XDrive is one tap away in its ⋮ menu.</string>
   <string name="XgramXDriveFolderIcon">Folder icon</string>
   <string name="XgramXDriveUseEmoji">Use an emoji instead</string>
   <string name="XgramXDriveReadingNow">Reading XDrive… %1$s</string>
   <string name="XgramXDriveSortingNow">Sorting…</string>
-  <string name="XgramXDriveSortingNano">Gemini Nano is sorting: %1$s of %2$s</string>
   <string name="XgramXDriveReviewTitle">%1$s for %2$s</string>
   <string name="XgramXDriveReviewInfo">Tap a name to rename it, switch off what you don\'t want, open a folder to leave items out.</string>
   <string name="XgramXDriveReviewLeft">%1$s stay where they are: Media and Files show them by kind.</string>

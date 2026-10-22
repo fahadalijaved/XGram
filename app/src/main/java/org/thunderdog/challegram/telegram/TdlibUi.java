@@ -2288,7 +2288,7 @@ public class TdlibUi extends Handler {
     }
 
     // XGram XDrive: Saved Messages opens as the drive, unless something specific was asked (a message, a search...)
-    if (com.fahadali.xgram.xdrive.XDrive.on() && tdlib.isSelfChat(chat.id) && messageThread == null && messageTopicId == null && filter == null && !onlyScheduled &&
+    if (com.fahadali.xgram.xdrive.XDrive.on() && !com.fahadali.xgram.XgramSettings.instance().xdriveOpensChat() && tdlib.isSelfChat(chat.id) && messageThread == null && messageTopicId == null && filter == null && !onlyScheduled &&
       shareItem == null && voiceChatInvitation == null && forceDraft == null &&
       (params == null || (!params.xgramSkipDriveRouting && StringUtils.isEmpty(params.searchQuery) &&
         (!params.highlightSet || com.fahadali.xgram.topics.XgramForums.isResumePosition(params.highlightMode))))) {

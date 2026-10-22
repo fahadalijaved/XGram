@@ -105,6 +105,8 @@ public final class XDriveIndex implements MessageListener {
   private final List<Runnable> afterLoad = new ArrayList<>();
   private boolean loaded, loading, savePosted, saving, saveAgain, indexSending;
   private long indexMessageId;
+  /** The newest message Organize with AI has read (it is done up to there), 0: never organized. */
+  private long organizedUpTo;
   private int counter;
 
   private XDriveIndex (Tdlib tdlib) {
@@ -247,6 +249,7 @@ public final class XDriveIndex implements MessageListener {
           }
         }
       }
+      organizedUpTo = Math.max(organizedUpTo, root.optLong("o", 0));
       JSONObject map = root.optJSONObject("items");
       if (map != null) {
         Iterator<String> keys = map.keys();
@@ -269,6 +272,9 @@ public final class XDriveIndex implements MessageListener {
     try {
       JSONObject root = new JSONObject();
       root.put("v", 1);
+      if (organizedUpTo != 0) {
+        root.put("o", organizedUpTo);
+      }
       JSONArray list = new JSONArray();
       for (Folder folder : folders) {
         JSONObject item = new JSONObject().put("id", folder.id).put("name", folder.name);
@@ -455,6 +461,18 @@ public final class XDriveIndex implements MessageListener {
   }
 
   /** How many messages are in some folder. */
+  public long organizedUpTo () {
+    return organizedUpTo;
+  }
+
+  /** Organize with AI was applied over everything up to [messageId]. */
+  public void setOrganizedUpTo (long messageId) {
+    if (messageId > organizedUpTo) {
+      organizedUpTo = messageId;
+      changed();
+    }
+  }
+
   public int sortedCount () {
     return items.size();
   }

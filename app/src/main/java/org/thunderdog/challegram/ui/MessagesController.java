@@ -2577,6 +2577,14 @@ public class MessagesController extends ViewController<MessagesController.Argume
         c.setArguments(new com.fahadali.xgram.history.XgramHistoryController.Args(chat.id));
         navigateTo(c);
       }
+    } else if (id == R.id.btn_xgramOpenXDrive) {
+      // XGram: back to XDrive when it is right under this chat, a new one otherwise
+      ViewController<?> previous = navigationController != null ? navigationController.getPreviousStackItem() : null;
+      if (com.fahadali.xgram.xdrive.XDrive.isScreen(previous)) {
+        navigateBack();
+      } else {
+        com.fahadali.xgram.xdrive.XDrive.open(this);
+      }
     } else if (id == R.id.btn_xgramSavedByChat) {
       navigateTo(new com.fahadali.xgram.chats.XgramSavedTopicsController(context, tdlib)); // XGram
     } else if (id == R.id.btn_xgramOpenCommunity) {
@@ -5086,6 +5094,11 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (com.fahadali.xgram.XgramSettings.instance().historySaveDeleted() || com.fahadali.xgram.XgramSettings.instance().historySaveEdits()) {
       ids.append(R.id.btn_xgramChatHistory); // XGram: deleted and edited messages of this chat
       strings.append(R.string.XgramChatHistory);
+    }
+
+    if (tdlib.isSelfChat(chat.id) && !inPreviewMode && com.fahadali.xgram.xdrive.XDrive.on()) {
+      ids.append(R.id.btn_xgramOpenXDrive); // XGram: XDrive, one tap from its chat
+      strings.append(R.string.XgramXDriveOpenXDrive);
     }
 
     if (tdlib.isSelfChat(chat.id) && !inPreviewMode) {

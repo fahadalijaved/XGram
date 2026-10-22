@@ -149,7 +149,10 @@ fun XDrivePage() {
   val showNavigation = screen == XDriveScreen.TABS && !state.selecting && !state.drag.moved
   val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-  Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).onPlaced { state.root = it }) {
+  // A Surface, not a background: it sets the content color (onSurface) that texts and icons without one of their own
+  // take; with a plain background they stayed black, black on black at night
+  Surface(color = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxSize()) {
+  Box(Modifier.fillMaxSize().onPlaced { state.root = it }) {
     Column(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
       TopBar(state, screen, scrollBehavior, backAction)
       Box(Modifier.weight(1f)) {
@@ -257,6 +260,7 @@ fun XDrivePage() {
       )
     }
   }
+  }
 }
 
 @Composable
@@ -317,6 +321,21 @@ private fun TopBar(state: XDriveState, screen: XDriveScreen, scrollBehavior: and
                 DropdownMenuItem(text = { Text(str(R.string.XgramXDriveOrganize)) }, leadingIcon = { Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), null) }, onClick = { menu = false; state.organizing = true })
                 DropdownMenuItem(text = { Text(str(R.string.XgramXDriveNewFolder)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_create_new_folder_24), null) }, onClick = { menu = false; XDriveActions.newFolder(host) })
                 DropdownMenuItem(text = { Text(str(R.string.XgramXDriveOpenChat)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_chat_bubble_24), null) }, onClick = { menu = false; XDriveActions.showInChat(host.controller, 0) })
+                // Saved Messages as the classic chat first (XDrive then is in the chat's ⋮ menu)
+                val opensChat = com.fahadali.xgram.XgramSettings.instance().xdriveOpensChat()
+                DropdownMenuItem(
+                  text = { Text(str(R.string.XgramXDriveOpensChat)) },
+                  leadingIcon = { Icon(tgxIcon(R.drawable.baseline_forum_24), null) },
+                  trailingIcon = { androidx.compose.material3.Switch(checked = opensChat, onCheckedChange = null) },
+                  onClick = {
+                    menu = false
+                    com.fahadali.xgram.XgramSettings.instance().setXdriveOpensChat(!opensChat)
+                    if (!opensChat) {
+                      state.toast(Lang.getString(R.string.XgramXDriveOpensChatOn))
+                      XDriveActions.showInChat(host.controller, 0)
+                    }
+                  }
+                )
                 DropdownMenuItem(text = { Text(str(R.string.XgramXDriveAbout)) }, leadingIcon = { Icon(tgxIcon(R.drawable.baseline_info_24), null) }, onClick = { menu = false; confirmAbout(state) })
               }
             }

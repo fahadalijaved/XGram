@@ -134,8 +134,20 @@ internal fun bottomRoom(state: XDriveState): Dp = with(LocalDensity.current) { s
 internal fun HomeTab(state: XDriveState, openTab: (XDriveTab) -> Unit) {
   val recent = rememberFeed(state, XDriveView.ALL, XDriveScope.Everything)
   val counts = rememberKindCounts(state.tdlib)
+  // The big card until XDrive has been organized (or while it runs, or waits for a review); after that only a small
+  // one, once enough new things are in no folder
+  val organizer = state.organizer
+  val organizedUpTo = remember(state.indexVersion) { state.index.organizedUpTo() }
+  val bigCard = organizedUpTo == 0L || organizer.running || organizer.phase == com.fahadali.xgram.xdrive.XDriveOrganizer.Phase.REVIEW
+  val fresh = remember(recent.items.size, recent.items.firstOrNull()?.id, state.indexVersion, organizedUpTo) {
+    if (organizedUpTo == 0L) 0 else recent.items.count { it.id > organizedUpTo && state.index.folderOf(it.id) == null }
+  }
   LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomRoom(state))) {
-    item(key = "organize") { OrganizeCard(state) }
+    if (bigCard) {
+      item(key = "organize") { Box(Modifier.animateItem()) { OrganizeCard(state) } }
+    } else if (fresh >= NEW_SINCE_ORGANIZE) {
+      item(key = "organizeNew") { Box(Modifier.animateItem()) { OrganizeNew(state, fresh) } }
+    }
     item(key = "quick") {
       Column {
         SectionTitle(str(R.string.XgramXDriveQuickAccess))
@@ -208,6 +220,30 @@ private fun OrganizeCard(state: XDriveState) {
         }
       }
     }
+  }
+}
+
+/** New things in no folder (among the latest) before Home suggests organizing again. */
+private const val NEW_SINCE_ORGANIZE = 8
+
+/** The small way back into Organize with AI, once new things have piled up since the last time. */
+@Composable
+private fun OrganizeNew(state: XDriveState, count: Int) {
+  val c = MaterialTheme.colorScheme
+  Row(
+    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(28.dp))
+      .background(c.secondaryContainer).clickable { state.organizing = true }.padding(start = 12.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+    verticalAlignment = Alignment.CenterVertically
+  ) {
+    Box(Modifier.size(40.dp).clip(MaterialShapes.SoftBurst.toShape()).background(c.primary), contentAlignment = Alignment.Center) {
+      Icon(tgxIcon(R.drawable.xgram_auto_awesome_24), contentDescription = null, tint = c.onPrimary, modifier = Modifier.size(20.dp))
+    }
+    Text(
+      str(R.string.XgramXDriveNewSinceOrganize, Lang.plural(R.string.xMessages, count.toLong())),
+      style = MaterialTheme.typography.bodyMedium, color = c.onSecondaryContainer,
+      modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+    )
+    FilledTonalButton(onClick = { state.organizing = true }) { Text(str(R.string.XgramXDriveSortThem)) }
   }
 }
 
