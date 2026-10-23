@@ -39,7 +39,7 @@ import org.thunderdog.challegram.telegram.TdlibUi
 import org.thunderdog.challegram.tool.UI
 
 private const val URL_BASED_ON = "https://github.com/TGX-Android/Telegram-X"
-private const val URL_SUPPORT = "https://paypal.me/fahadalijaved23"
+internal const val URL_SUPPORT = "https://paypal.me/fahadalijaved23"
 
 /** Settings → XGram: search, What's new, the categories and About. */
 @Composable

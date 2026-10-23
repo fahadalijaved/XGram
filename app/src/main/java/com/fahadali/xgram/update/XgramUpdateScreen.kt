@@ -155,6 +155,7 @@ import com.fahadali.xgram.compose.XgramComposeFlags
 import com.fahadali.xgram.compose.XgramComposeOwner
 import com.fahadali.xgram.compose.theme.XgramM3Theme
 import com.fahadali.xgram.compose.ui.s
+import com.fahadali.xgram.compose.pages.URL_SUPPORT
 import com.fahadali.xgram.compose.ui.tgxIcon
 import com.fahadali.xgram.xdrive.XDriveThumbs
 import kotlinx.coroutines.CoroutineScope
@@ -170,6 +171,7 @@ import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
 import org.thunderdog.challegram.navigation.ViewController
 import org.thunderdog.challegram.telegram.Tdlib
+import org.thunderdog.challegram.telegram.TdlibUi
 import org.thunderdog.challegram.theme.Theme
 import org.thunderdog.challegram.tool.Strings
 import org.thunderdog.challegram.tool.UI
@@ -1064,6 +1066,10 @@ private fun UpdateBody(
     Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).onPlaced { reveal.content = it }) {
       TitleBlock(model, ready = state == AppUpdater.State.READY_TO_INSTALL, previewTag = previewTag, openPost = openPost)
       WhatsNew(model.notes, expanded, toggle, still, reveal)
+      SupportLinks(controller, model.tdlib) { after ->
+        screen.afterClose = after
+        close()
+      }
     }
     // A line over the buttons while more of the notes is below
     val divider by animateFloatAsState(if (scroll.canScrollForward) 1f else 0f, effectsSpec(still), label = "xgramUpdateDivider")
@@ -1450,9 +1456,64 @@ private fun Paragraph(text: String) {
   )
 }
 
-/** "Based on Telegram X 0.29.1.1818." in italics, as in the post, then the rest. */
+/**
+ * Source code and Donate at the end of the notes (the post's footer lines about them become these buttons). Like Open
+ * post, the card closes first: a link that asks before opening would ask under it.
+ */
 @Composable
-private fun Footer(text: String) {
+private fun SupportLinks(controller: ViewController<*>, tdlib: Tdlib?, closeThen: (after: () -> Unit) -> Unit) {
+  val c = MaterialTheme.colorScheme
+  val source = BuildConfig.SOURCES_URL.ifEmpty { BuildConfig.REMOTE_URL }
+  val open = { url: String ->
+    closeThen {
+      val ui = (tdlib ?: controller.tdlib())?.ui()
+      if (!controller.isDestroyed && ui != null) {
+        ui.openUrl(controller, url, TdlibUi.UrlOpenParameters().disableInstantView())
+      }
+    }
+  }
+  Row(
+    Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 20.dp),
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+  ) {
+    FilledTonalButton(
+      onClick = { open(source) },
+      shapes = ButtonDefaults.shapes(),
+      modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+    ) {
+      Icon(
+        tgxIcon(if (source.contains("github.com")) R.drawable.baseline_github_24 else R.drawable.baseline_code_24),
+        contentDescription = null,
+        modifier = Modifier.size(ButtonDefaults.IconSize)
+      )
+      Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+      Text(s(R.string.XgramUpdSource))
+    }
+    FilledTonalButton(
+      onClick = { open(URL_SUPPORT) },
+      shapes = ButtonDefaults.shapes(),
+      colors = ButtonDefaults.filledTonalButtonColors(containerColor = c.tertiaryContainer, contentColor = c.onTertiaryContainer),
+      modifier = Modifier.weight(1f).heightIn(min = 48.dp)
+    ) {
+      Icon(tgxIcon(R.drawable.baseline_favorite_24), contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+      Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+      Text(s(R.string.XgramUpdDonate))
+    }
+  }
+}
+
+/** "Based on Telegram X 0.29.1.1818." in italics, as in the post, then the rest (the Source and Support lines are buttons). */
+@Composable
+private fun Footer(footer: String) {
+  val text = remember(footer) {
+    footer.lines().filterNot { line ->
+      val words = line.trimStart { !it.isLetterOrDigit() }
+      words.startsWith("Source", ignoreCase = true) || words.startsWith("Support XGram", ignoreCase = true)
+    }.joinToString("\n").trim()
+  }
+  if (text.isEmpty()) {
+    return
+  }
   val styled = remember(text) {
     val end = if (text.startsWith("Based on")) text.indexOf(". ").let { if (it < 0) text.length else it + 1 } else 0
     buildAnnotatedString {
