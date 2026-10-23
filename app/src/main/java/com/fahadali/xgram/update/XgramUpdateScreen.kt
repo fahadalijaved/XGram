@@ -24,19 +24,24 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
@@ -106,6 +111,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
@@ -215,6 +221,10 @@ private val REVEAL_MARGIN = 16.dp
 
 /** Frames (a quarter to half a second) the reveal follows the new content's own size spring after its glide. */
 private const val REVEAL_FOLLOW_FRAMES = 30
+
+/** Material's fade through, ms: the old content fades out, then the new one fades in. */
+private const val FADE_THROUGH_OUT = 90
+private const val FADE_THROUGH_IN = 210
 
 /** A download the updater hasn't started after this long is given up, with an error line. */
 private const val START_TIMEOUT_MS = 15_000L
@@ -687,23 +697,13 @@ private suspend fun revealChanges(
 }
 
 /**
- * Show less, before the swap, on the whole list (What's new is above it: it stays where it is): back to the top with
- * the hero open when What's new shows there that way, else What's new to the top as it is ([glide]). The list then
- * shrinks below the view and the top crossfades in place; the card never shrinks under a folded hero to grow back.
+ * Show less, before the swap, on the whole list: back to the start with the hero open, where the card began ([glide]),
+ * always the same place whatever the font size. The list then shrinks below the view while the top changes in place,
+ * so nothing clamps and the card never shrinks under a folded hero to grow back.
  */
-private suspend fun hideChanges(
-  scroll: ScrollState,
-  hero: HeroFold,
-  reveal: ChangesReveal,
-  margin: Float,
-  spec: AnimationSpec<Float>?
-) {
+private suspend fun hideChanges(scroll: ScrollState, hero: HeroFold, spec: AnimationSpec<Float>?) {
   // A fling still going keeps the scroll (its priority): the swap only
-  val labelTop = reveal.labelTop() ?: return
-  val fromFold = hero.folded.coerceIn(0f, hero.range)
-  // With the hero open the body is shorter by the fold (the card at its full height)
-  val toTop = labelTop + reveal.labelHeight + margin <= scroll.viewportSize - fromFold
-  glide(scroll, hero, if (toTop) 0f else (labelTop - margin).coerceAtLeast(0f), if (toTop) 0f else fromFold, spec)
+  glide(scroll, hero, 0f, 0f, spec)
 }
 
 /**
@@ -1040,7 +1040,8 @@ private fun UpdateBody(
   var expanded by remember { mutableStateOf(screen.expanded) }
   val reveal = remember { ChangesReveal() }
   val margin = with(LocalDensity.current) { REVEAL_MARGIN.toPx() }
-  val revealSpec: AnimationSpec<Float>? = if (still) null else MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+  // No bounce: past the target and back, on a long scroll, reads as a jump
+  val revealSpec: AnimationSpec<Float>? = if (still) null else spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)
   val toggle: (Boolean) -> Unit = { expand ->
     if (expand) {
       reveal.job?.cancel()
@@ -1052,7 +1053,7 @@ private fun UpdateBody(
       reveal.hiding = true
       reveal.job = scope.launch {
         try {
-          hideChanges(scroll, hero, reveal, margin, revealSpec)
+          hideChanges(scroll, hero, revealSpec)
         } finally {
           reveal.hiding = false
           expanded = false
@@ -1065,11 +1066,11 @@ private fun UpdateBody(
     // The notes scroll; the buttons stay at the bottom, whatever the font size
     Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).onPlaced { reveal.content = it }) {
       TitleBlock(model, ready = state == AppUpdater.State.READY_TO_INSTALL, previewTag = previewTag, openPost = openPost)
-      WhatsNew(model.notes, expanded, toggle, still, reveal)
       SupportLinks(controller, model.tdlib) { after ->
         screen.afterClose = after
         close()
       }
+      WhatsNew(model.notes, expanded, toggle, still, reveal)
     }
     // A line over the buttons while more of the notes is below
     val divider by animateFloatAsState(if (scroll.canScrollForward) 1f else 0f, effectsSpec(still), label = "xgramUpdateDivider")
@@ -1129,7 +1130,6 @@ private fun TitleBlock(model: UpdateModel, ready: Boolean, previewTag: Boolean, 
 @Composable
 private fun WhatsNew(notes: XgramUpdateNotes, expanded: Boolean, toggle: (Boolean) -> Unit, still: Boolean, reveal: ChangesReveal) {
   val c = MaterialTheme.colorScheme
-  val motion = MaterialTheme.motionScheme
   Column(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp)) {
     Text(
       s(R.string.XgramUpdWhatsNew),
@@ -1150,17 +1150,18 @@ private fun WhatsNew(notes: XgramUpdateNotes, expanded: Boolean, toggle: (Boolea
       )
       !notes.hasMore -> TopChanges(notes, onMore = null)
       else -> {
-        val effects = effectsSpec<Float>(still)
         AnimatedContent(
           targetState = expanded,
           transitionSpec = {
-            fadeIn(effects) togetherWith fadeOut(effects) using SizeTransform(clip = true) { initial, target ->
-              when {
-                still -> snap<IntSize>()
-                target.height > initial.height -> motion.defaultSpatialSpec<IntSize>()
-                // Shrinking on the effects spring: no overshoot below the rows
-                else -> motion.defaultEffectsSpec<IntSize>()
-              }
+            if (still) {
+              fadeIn(snap()) togetherWith fadeOut(snap()) using SizeTransform(clip = true) { _, _ -> snap<IntSize>() }
+            } else {
+              // Fade through: the old changes go first, then the new ones grow in from the top, never two lists over each
+              // other; the size on a spring without a bounce (no overshoot below the rows or past them)
+              val enter = tween<Float>(FADE_THROUGH_IN, delayMillis = FADE_THROUGH_OUT, easing = LinearOutSlowInEasing)
+              (fadeIn(enter) + scaleIn(enter, initialScale = .96f, transformOrigin = TransformOrigin(.5f, 0f))) togetherWith
+                fadeOut(tween(FADE_THROUGH_OUT, easing = FastOutLinearInEasing)) using
+                SizeTransform(clip = true) { _, _ -> spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow) }
             }
           },
           label = "xgramUpdateChanges"
@@ -1457,8 +1458,8 @@ private fun Paragraph(text: String) {
 }
 
 /**
- * Source code and Donate at the end of the notes (the post's footer lines about them become these buttons). Like Open
- * post, the card closes first: a link that asks before opening would ask under it.
+ * Source code and Donate under the title, in view without scrolling (the post's footer lines about them become these
+ * buttons). Like Open post, the card closes first: a link that asks before opening would ask under it.
  */
 @Composable
 private fun SupportLinks(controller: ViewController<*>, tdlib: Tdlib?, closeThen: (after: () -> Unit) -> Unit) {
@@ -1473,7 +1474,7 @@ private fun SupportLinks(controller: ViewController<*>, tdlib: Tdlib?, closeThen
     }
   }
   Row(
-    Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 20.dp),
+    Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 20.dp),
     horizontalArrangement = Arrangement.spacedBy(8.dp)
   ) {
     FilledTonalButton(
