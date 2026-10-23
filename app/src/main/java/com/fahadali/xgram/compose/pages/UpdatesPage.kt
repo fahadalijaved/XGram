@@ -48,6 +48,7 @@ import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.compose.ui.tgxIcon
+import com.fahadali.xgram.update.XgramUpdateScreen
 import com.fahadali.xgram.update.XgramUpdates
 import org.thunderdog.challegram.BuildConfig
 import org.thunderdog.challegram.R
@@ -160,10 +161,8 @@ fun UpdatesPage() {
             val bytesToDownload = updater.totalBytesToDownload() - updater.bytesDownloaded()
             val title = if (bytesToDownload > 0) s(R.string.DownloadUpdateSize, Strings.buildSize(bytesToDownload)) else s(R.string.DownloadUpdate)
             action(R.id.btn_xgramUpdateCheck, title, icon = icon) {
-              val found = updater.xgramUpdate()
-              if (found != null) {
-                XgramUpdates.showWhatsNew(host.controller, found, Runnable { updater.downloadUpdate() })
-              } else {
+              // XGram's update screen: the notes, the download and the install in one card
+              if (!XgramUpdateScreen.show(host.controller)) {
                 updater.downloadUpdate()
               }
             }
@@ -191,7 +190,9 @@ fun UpdatesPage() {
           }
 
           AppUpdater.State.READY_TO_INSTALL -> action(R.id.btn_xgramUpdateCheck, s(R.string.InstallUpdate), icon = icon) {
-            updater.installUpdate()
+            if (!XgramUpdateScreen.install(host.controller)) {
+              updater.installUpdate()
+            }
           }
 
           else -> action(R.id.btn_xgramUpdateCheck, s(R.string.CheckForUpdates), icon = icon) {
@@ -222,8 +223,14 @@ fun UpdatesPage() {
         UpdateSplitButton(
           host = host,
           label = str(if (install) R.string.InstallUpdate else R.string.XgramUpdateDownload),
-          onPrimary = { if (install) updater.installUpdate() else updater.downloadUpdate() },
-          onWhatsNew = { XgramUpdates.showWhatsNew(host.controller, found, Runnable { updater.downloadUpdate() }) },
+          onPrimary = {
+            if (!install) {
+              updater.downloadUpdate()
+            } else if (!XgramUpdateScreen.install(host.controller)) {
+              updater.installUpdate()
+            }
+          },
+          onWhatsNew = { XgramUpdates.showWhatsNew(host.controller, found) },
           onOpenPost = { XgramUpdates.openPost(host.controller, found) }
         )
       }

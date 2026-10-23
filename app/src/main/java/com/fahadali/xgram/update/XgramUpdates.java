@@ -11,7 +11,6 @@
  */
 package com.fahadali.xgram.update;
 
-import android.app.AlertDialog;
 import android.os.Build;
 import android.widget.Toast;
 
@@ -29,7 +28,6 @@ import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibContext;
 import org.thunderdog.challegram.telegram.TdlibDelegate;
 import org.thunderdog.challegram.telegram.TdlibUi;
-import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.AppUpdater;
@@ -42,6 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import me.vkryl.core.StringUtils;
+import me.vkryl.core.lambda.RunnableBool;
 import me.vkryl.core.lambda.RunnableData;
 import me.vkryl.leveldb.LevelDB;
 
@@ -55,7 +54,8 @@ import me.vkryl.leveldb.LevelDB;
  * "📦 XGram 0.29.1.1818.5 · Stable · arm64-v8a" (or "⚙️ … · CI build"), followed by the file name, the size,
  * "Commit: …" and "SHA-256: …". The changelog is the bot's reply to the post ("… · Stable: what's new").
  *
- * {@link AppUpdater} does the rest (prompt, download, install) through its Telegram channel flow.
+ * {@link AppUpdater} does the rest (download, install) through its Telegram channel flow; {@link XgramUpdateScreen} is
+ * its prompt and What's new.
  */
 public final class XgramUpdates {
   private XgramUpdates () { }
@@ -198,6 +198,8 @@ public final class XgramUpdates {
     public String changelog;
     /** XGram M3E r5: {@link #changelog} with its formatting (the reply's entities), when it came from the reply. */
     public @Nullable TdApi.FormattedText changelogText;
+    /** The picture of the notes, when the bot's reply is a photo (its caption is the changelog): the update screen's hero. */
+    public @Nullable TdApi.Photo changelogPhoto;
 
     Found (Tdlib tdlib, Tdlib.UpdateFileInfo file, TdApi.Message message, String versionName, int versionCode, String sha256, boolean isStable) {
       this.tdlib = tdlib;
@@ -249,7 +251,7 @@ public final class XgramUpdates {
       }
       checkedThisProcess = true;
       List<Source> sources = sources(channel);
-      new Search(tdlib, sources, (found, error) -> {
+      new Search(tdlib, sources, false, (found, error) -> {
         if (channel() != channel) {
           // The channel changed during the check: check the new one instead (nothing when it is Off).
           find(tdlib, onDone);
@@ -264,14 +266,36 @@ public final class XgramUpdates {
     });
   }
 
+  /**
+   * The update screen's preview (Settings → the version → Application Logs → Testing Utilities): the newest post of
+   * the selected channel (Stable when updates are Off) with its notes, even when it isn't newer than this build. It
+   * keeps nothing: the last check, the version found and its error stay as they are. {@code onDone} gets null when
+   * there is no post or on an error; it may run on any thread.
+   */
+  public static void findLatest (@NonNull Tdlib tdlib, @NonNull RunnableData<Found> onDone) {
+    tdlib.awaitReadyOrWaitingForData(() -> {
+      if (tdlib.context().inRecoveryMode() || !tdlib.isAuthorized()) {
+        onDone.runWithData(null);
+        return;
+      }
+      int channel = channel();
+      new Search(tdlib, sources(channel == CHANNEL_OFF ? CHANNEL_STABLE : channel), true, (found, error) -> onDone.runWithData(found)).next();
+    });
+  }
+
   private interface SearchCallback {
     void onDone (@Nullable Found found, @Nullable String error);
   }
 
-  /** Goes through the sources one by one and keeps the newest update found. */
+  /**
+   * Goes through the sources one by one and keeps the newest update found. With {@code anyVersion} (the update
+   * screen's preview) the newest post counts whatever its version, and one for another ABI or without a SHA-256 does
+   * when this build's has none.
+   */
   private static final class Search {
     private final Tdlib tdlib;
     private final List<Source> sources;
+    private final boolean anyVersion;
     private final SearchCallback callback;
     private int sourceIndex = -1;
     private @Nullable Found best;
@@ -280,11 +304,12 @@ public final class XgramUpdates {
     // Current source
     private long chatId;
     private int page;
-    private @Nullable Found sourceFound;
+    private @Nullable Found sourceFound, sourceFallback;
 
-    Search (Tdlib tdlib, List<Source> sources, SearchCallback callback) {
+    Search (Tdlib tdlib, List<Source> sources, boolean anyVersion, SearchCallback callback) {
       this.tdlib = tdlib;
       this.sources = sources;
+      this.anyVersion = anyVersion;
       this.callback = callback;
     }
 
@@ -296,7 +321,7 @@ public final class XgramUpdates {
       }
       Source source = sources.get(sourceIndex);
       page = 0;
-      sourceFound = null;
+      sourceFound = sourceFallback = null;
       tdlib.send(new TdApi.SearchPublicChat(source.username), (chat, error) -> {
         if (error != null) {
           fail("@" + source.username + ": " + error.message);
@@ -352,6 +377,22 @@ public final class XgramUpdates {
       }
       String caption = content.caption != null ? content.caption.text : "";
       boolean isStable = isStableCaption(caption);
+      if (anyVersion) {
+        // The preview: the newest post, this build's ABI if it has one (it is never installed)
+        if (source.stableOnly && !isStable) {
+          return VERDICT_SKIP;
+        }
+        String sha256 = captionSha256(caption);
+        Found found = newFound(message, content, name, caption, sha256 != null ? sha256 : "", isStable);
+        if (name.matchesThisBuild()) {
+          sourceFound = found;
+          return VERDICT_FOUND;
+        }
+        if (sourceFallback == null) {
+          sourceFallback = found;
+        }
+        return VERDICT_SKIP;
+      }
       if (name.versionCode == BuildConfig.ORIGINAL_VERSION_CODE) {
         noteInstalledPost(isStable);
       }
@@ -368,10 +409,15 @@ public final class XgramUpdates {
       if (sha256 == null) {
         return VERDICT_SKIP; // can't be checked before installing
       }
-      Tdlib.UpdateFileInfo file = new Tdlib.UpdateFileInfo(content.document, name.versionCode, name.versionName, captionCommit(caption));
-      sourceFound = new Found(tdlib, file, message, name.versionName, name.versionCode, sha256, isStable);
-      sourceFound.changelog = caption;
+      sourceFound = newFound(message, content, name, caption, sha256, isStable);
       return VERDICT_FOUND;
+    }
+
+    private Found newFound (TdApi.Message message, TdApi.MessageDocument content, ApkName name, String caption, String sha256, boolean isStable) {
+      Tdlib.UpdateFileInfo file = new Tdlib.UpdateFileInfo(content.document, name.versionCode, name.versionName, captionCommit(caption));
+      Found found = new Found(tdlib, file, message, name.versionName, name.versionCode, sha256, isStable);
+      found.changelog = caption;
+      return found;
     }
 
     private boolean isTrustedSender (TdApi.Message message) {
@@ -392,6 +438,9 @@ public final class XgramUpdates {
 
     private void sourceDone () {
       Found found = sourceFound;
+      if (sourceFallback != null && (found == null || sourceFallback.versionCode > found.versionCode)) {
+        found = sourceFallback; // the preview: a newer post for another ABI
+      }
       if (found != null && (best == null || found.versionCode > best.versionCode)) {
         best = found;
       }
@@ -420,21 +469,45 @@ public final class XgramUpdates {
     private @Nullable String findChangelog (TdApi.Message[] messages, Found found) {
       TdApi.MessageDocument post = (TdApi.MessageDocument) found.message.content;
       String heading = firstLine(post.caption != null ? post.caption.text : "");
+      TdApi.Photo photo = null;
       // Newest come first: walk forward from the post, so the nearest notes win.
       for (int i = messages.length - 1; i >= 0; i--) {
         TdApi.Message message = messages[i];
-        if (message.id <= found.message.id || message.content.getConstructor() != TdApi.MessageText.CONSTRUCTOR || !isTrustedSender(message)) {
+        // The notes are a text, or a photo with the notes as its caption (the update screen's hero)
+        final TdApi.FormattedText formatted;
+        switch (message.content.getConstructor()) {
+          case TdApi.MessageText.CONSTRUCTOR:
+            formatted = ((TdApi.MessageText) message.content).text;
+            break;
+          case TdApi.MessagePhoto.CONSTRUCTOR:
+            formatted = ((TdApi.MessagePhoto) message.content).caption;
+            break;
+          default:
+            formatted = null;
+            break;
+        }
+        if (message.id <= found.message.id || formatted == null || !isTrustedSender(message)) {
           continue;
         }
-        String text = ((TdApi.MessageText) message.content).text.text;
+        String text = formatted.text != null ? formatted.text : "";
         // The bot replies to the first APK of a release, which may be another ABI's: the heading finds that one.
         boolean isReply = message.replyTo instanceof TdApi.MessageReplyToMessage &&
           ((TdApi.MessageReplyToMessage) message.replyTo).messageId == found.message.id;
         if (isReply || isNotesFor(firstLine(text), heading)) {
-          found.changelogText = stripHeading(((TdApi.MessageText) message.content).text);
+          if (message.content.getConstructor() == TdApi.MessagePhoto.CONSTRUCTOR) {
+            if (photo == null) {
+              photo = ((TdApi.MessagePhoto) message.content).photo;
+            }
+            if (StringUtils.isEmpty(text)) {
+              continue; // a picture alone: the notes follow as a text
+            }
+          }
+          found.changelogPhoto = photo;
+          found.changelogText = stripHeading(formatted);
           return stripHeading(text);
         }
       }
+      found.changelogPhoto = photo;
       return null;
     }
   }
@@ -606,136 +679,19 @@ public final class XgramUpdates {
     return start == 0 && end == text.length() ? formatted : tgx.td.Td.substring(formatted, start, end);
   }
 
-  /** XGram M3E r5: the first {@code maxLines} non-empty lines of the changelog (an ellipsis when there are more), or null. */
-  public static @Nullable String changelogHead (@Nullable Found found, int maxLines) {
-    if (found == null || StringUtils.isEmpty(found.changelog)) {
-      return null;
-    }
-    StringBuilder b = new StringBuilder();
-    int count = 0;
-    for (String line : found.changelog.split("\n")) {
-      String trimmed = line.trim();
-      if (trimmed.isEmpty()) {
-        continue;
-      }
-      if (count == maxLines) {
-        b.append("\n…");
-        break;
-      }
-      if (b.length() > 0) {
-        b.append('\n');
-      }
-      b.append(trimmed);
-      count++;
-    }
-    return b.length() > 0 ? b.toString() : null;
-  }
-
   // Prompt actions
 
-  /** The changelog, with Download (while the update isn't downloaded yet) and Open post. */
-  public static void showWhatsNew (ViewController<?> c, @Nullable Found found, @Nullable Runnable download) {
+  /**
+   * What's new: XGram's update screen ({@link XgramUpdateScreen}) with every change shown, its button downloading or
+   * installing the update. The post opens instead when the screen can't be shown.
+   */
+  public static void showWhatsNew (ViewController<?> c, @Nullable Found found) {
     if (found == null || c.isDestroyed()) {
       return;
     }
-    if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-      showWhatsNewM3(c, found, download);
-      return;
+    if (!XgramUpdateScreen.showWhatsNew(c, found)) {
+      openPost(c, found);
     }
-    AlertDialog.Builder b = new AlertDialog.Builder(c.context(), Theme.dialogTheme());
-    b.setTitle(Lang.getString(R.string.XgramUpdateWhatsNewTitle, found.versionName));
-    b.setMessage(StringUtils.isEmpty(found.changelog) ? Lang.getString(R.string.XgramUpdateNoChangelog) : found.changelog);
-    // Two short buttons in one row: a third (Open post, already in the update prompt) made the theme stack them in a
-    // scrolling area, one of them drawn without text.
-    if (download != null && c.context().appUpdater().state() == AppUpdater.State.AVAILABLE) {
-      b.setPositiveButton(Lang.getString(R.string.XgramUpdateDownload), (dialog, which) -> download.run());
-    } else {
-      b.setPositiveButton(Lang.getString(R.string.XgramUpdateOpenPost), (dialog, which) -> openPost(c, found));
-    }
-    b.setNegativeButton(Lang.getString(R.string.XgramUpdateClose), (dialog, which) -> dialog.dismiss());
-    c.showAlert(b);
-  }
-
-  /**
-   * XGram M3E: the changelog as an M3 sheet (round 6; a dialog in round 5): "What's new", the version as a supporting
-   * line (bodyMedium, onSurfaceVariant), then the notes with their formatting and links (bodyMedium, onSurfaceVariant)
-   * in a scroll capped at 60% of the screen; [Open post] ... a filled "Download" while it isn't downloaded yet, else a
-   * filled "Open post".
-   */
-  private static void showWhatsNewM3 (ViewController<?> c, Found found, @Nullable Runnable download) {
-    final android.content.Context context = c.context();
-    final int maxHeight = Math.round(org.thunderdog.challegram.tool.Screen.currentHeight() * .6f);
-    android.widget.LinearLayout column = new android.widget.LinearLayout(context);
-    column.setOrientation(android.widget.LinearLayout.VERTICAL);
-    column.setPadding(org.thunderdog.challegram.tool.Screen.dp(16f), 0, org.thunderdog.challegram.tool.Screen.dp(16f), 0); // XGram M3E r6: a sheet's 16dp
-
-    android.widget.TextView versionView = new org.thunderdog.challegram.widget.NoScrollTextView(context);
-    com.fahadali.xgram.appearance.XgramExpressive.applyText(versionView, com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M, false);
-    versionView.setTextColor(com.fahadali.xgram.appearance.XgramExpressive.color(com.fahadali.xgram.appearance.XgramExpressive.ON_SURFACE_VARIANT));
-    versionView.setGravity(Lang.gravity());
-    versionView.setTextAlignment(android.view.View.TEXT_ALIGNMENT_GRAVITY);
-    versionView.setText(Lang.getString(R.string.XgramUpdateWhatsNewTitle, found.versionName));
-    column.addView(versionView, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
-
-    org.thunderdog.challegram.widget.CustomTextView notes = new org.thunderdog.challegram.widget.CustomTextView(context, found.tdlib);
-    notes.setTextStyleProvider(com.fahadali.xgram.appearance.XgramM3Profile.flexTextProvider(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M,
-      com.fahadali.xgram.appearance.XgramExpressive.textSizeSp(com.fahadali.xgram.appearance.XgramExpressive.TS_BODY_M)));
-    notes.setTextColorId(org.thunderdog.challegram.theme.ColorId.textLight);
-    notes.setPadding(0, org.thunderdog.challegram.tool.Screen.dp(16f), 0, org.thunderdog.challegram.tool.Screen.dp(8f));
-    if (found.changelogText != null && !StringUtils.isEmpty(found.changelogText.text)) {
-      notes.setText(found.changelogText.text, org.thunderdog.challegram.util.text.TextEntity.valueOf(found.tdlib, found.changelogText, null), false);
-    } else {
-      notes.setText(StringUtils.isEmpty(found.changelog) ? Lang.getString(R.string.XgramUpdateNoChangelog) : found.changelog, null, false);
-    }
-    android.widget.ScrollView scroll = new android.widget.ScrollView(context) {
-      @Override
-      protected void onMeasure (int widthMeasureSpec, int heightMeasureSpec) {
-        int max = maxHeight;
-        if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
-          max = Math.min(max, MeasureSpec.getSize(heightMeasureSpec));
-        }
-        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(max, MeasureSpec.AT_MOST));
-      }
-    };
-    scroll.setOverScrollMode(android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-    scroll.addView(notes, new android.widget.FrameLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
-    column.addView(scroll, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
-
-    // XGram M3E r6: a changelog is long content: a sheet (headlineSmall title, the notes, then [Open post] ... [Download]
-    // with Download filled, or a filled Open post once it is downloaded); it closes by its scrim, a drag or back
-    final boolean canDownload = download != null && c.context().appUpdater().state() == AppUpdater.State.AVAILABLE;
-    c.showPopup(Lang.getString(R.string.XgramUpdateWhatsNew), true, org.thunderdog.challegram.util.text.Text.LINE_COUNT_UNLIMITED, (popupLayout, optionsLayout) -> {
-      final int width = com.fahadali.xgram.appearance.XgramM3Sheets.sheetWidth(c.context().getControllerWidth(optionsLayout));
-      optionsLayout.addView(column, new android.widget.LinearLayout.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
-      column.measure(android.view.View.MeasureSpec.makeMeasureSpec(width, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED));
-      final int notesHeight = notes.getCurrentHeight(Math.max(0, width - org.thunderdog.challegram.tool.Screen.dp(32f))) + notes.getPaddingTop() + notes.getPaddingBottom();
-      int height = versionView.getMeasuredHeight() + Math.min(Math.max(notesHeight, scroll.getMeasuredHeight()), maxHeight);
-
-      final android.widget.TextView start, end;
-      if (canDownload) {
-        start = com.fahadali.xgram.appearance.XgramR5Sheets.textButton(context, Lang.getString(R.string.XgramUpdateOpenPost), com.fahadali.xgram.appearance.XgramExpressive.PRIMARY, null);
-        start.setOnClickListener(v -> {
-          popupLayout.hideWindow(true);
-          openPost(c, found);
-        });
-        end = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(context, Lang.getString(R.string.XgramUpdateDownload), false, null);
-        end.setOnClickListener(v -> {
-          popupLayout.hideWindow(true);
-          download.run();
-        });
-      } else {
-        start = null;
-        end = com.fahadali.xgram.appearance.XgramR5Sheets.filledButton(context, Lang.getString(R.string.XgramUpdateOpenPost), false, null);
-        end.setOnClickListener(v -> {
-          popupLayout.hideWindow(true);
-          openPost(c, found);
-        });
-      }
-      android.widget.LinearLayout actions = com.fahadali.xgram.appearance.XgramR5Sheets.actionsRow(context, start, end);
-      optionsLayout.addView(actions);
-      height += ((android.widget.LinearLayout.LayoutParams) actions.getLayoutParams()).height;
-      return height;
-    }, null, com.fahadali.xgram.appearance.XgramExpressive.TS_HEADLINE_S);
   }
 
   /** Opens the post with the APK (in the Updates topic, or in the channel). */
@@ -772,9 +728,29 @@ public final class XgramUpdates {
    * "Download again" action running {@code downloadAgain} (the toast otherwise).
    */
   public static void verifyThenInstall (@Nullable Tdlib tdlib, @Nullable Found found, @NonNull Runnable install, @Nullable Runnable downloadAgain) {
+    verifyThenInstall(tdlib, found, install, downloadAgain, null);
+  }
+
+  /** Main thread: who waits for the running check ({@link #verifyThenInstall(Tdlib, Found, Runnable, Runnable, RunnableBool)}). */
+  private static final List<RunnableBool> verifyCallbacks = new ArrayList<>();
+
+  /**
+   * {@link #verifyThenInstall(Tdlib, Found, Runnable, Runnable)} for the update screen: {@code onChecked} gets true once
+   * the file matched and {@code install} ran, false when it didn't (deleted, the update is offered again), and the
+   * screen shows that itself, without the snackbar. A check that is running already is joined, not dropped: its result
+   * goes to {@code onChecked} as well, and the installer opens once.
+   */
+  public static void verifyThenInstall (@Nullable Tdlib tdlib, @Nullable Found found, @NonNull Runnable install, @Nullable Runnable downloadAgain, @Nullable RunnableBool onChecked) {
     if (tdlib == null || found == null) {
-      showBadFile(downloadAgain);
+      if (onChecked != null) {
+        onChecked.runWithBool(false);
+      } else {
+        showBadFile(downloadAgain);
+      }
       return;
+    }
+    if (onChecked != null) {
+      verifyCallbacks.add(onChecked);
     }
     if (verifying) {
       return;
@@ -787,19 +763,34 @@ public final class XgramUpdates {
       boolean ok = actual != null && actual.equals(found.sha256);
       UI.post(() -> {
         verifying = false;
+        List<RunnableBool> callbacks = new ArrayList<>(verifyCallbacks);
+        verifyCallbacks.clear();
         if (ok) {
           install.run();
         } else {
           Log.w("XGram update: SHA-256 mismatch, expected %s, got %s", found.sha256, actual);
           tdlib.send(new TdApi.DeleteFile(file.id), (result, error) -> { });
-          showBadFile(downloadAgain);
+          if (callbacks.isEmpty()) {
+            showBadFile(downloadAgain);
+          }
+        }
+        for (RunnableBool callback : callbacks) {
+          callback.runWithBool(ok);
         }
       });
     }, "XgramUpdateHash").start();
   }
 
+  /**
+   * Main thread: {@code onChecked} no longer waits for the running check (the update screen was closed during it), so
+   * a bad file gets the snackbar again when nobody else waits.
+   */
+  public static void forgetVerifyCallback (@NonNull RunnableBool onChecked) {
+    verifyCallbacks.remove(onChecked);
+  }
+
   /** The downloaded file was bad and deleted: the M3E snackbar with "Download again", Telegram X's toast otherwise. */
-  private static void showBadFile (@Nullable Runnable downloadAgain) {
+  public static void showBadFile (@Nullable Runnable downloadAgain) {
     if (downloadAgain != null && com.fahadali.xgram.appearance.XgramSnackbar.show(Lang.getString(R.string.XgramR6B3UpdateBadFile), Toast.LENGTH_LONG,
       Lang.getString(R.string.XgramR6B3DownloadAgain), downloadAgain)) {
       return;

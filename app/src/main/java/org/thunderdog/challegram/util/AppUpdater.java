@@ -36,8 +36,6 @@ import org.drinkless.tdlib.TdApi;
 import org.thunderdog.challegram.BaseActivity;
 import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.Log;
-import org.thunderdog.challegram.R;
-import org.thunderdog.challegram.core.Lang;
 import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.navigation.ViewController;
 import org.thunderdog.challegram.telegram.ConnectionListener;
@@ -45,7 +43,6 @@ import org.thunderdog.challegram.telegram.FileUpdateListener;
 import org.thunderdog.challegram.telegram.Tdlib;
 import org.thunderdog.challegram.telegram.TdlibContext;
 import org.thunderdog.challegram.tool.Intents;
-import org.thunderdog.challegram.tool.Strings;
 import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.unsorted.AppContext;
 import org.thunderdog.challegram.unsorted.Settings;
@@ -55,7 +52,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 import me.vkryl.android.AppInstallationUtil;
-import me.vkryl.core.StringUtils;
 import me.vkryl.core.lambda.RunnableBool;
 import me.vkryl.core.reference.ReferenceList;
 import tgx.td.Td;
@@ -400,38 +396,9 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
       case Settings.AUTO_UPDATE_MODE_PROMPT: {
         ViewController<?> c = context.navigation().getCurrentStackItem();
         if (c != null && c.isFocused()) {
-          final long bytesToDownload = totalBytesToDownload() - bytesDownloaded();
-          final String displayVersion = displayVersion();
-          final String commit = commit();
-          if (com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
-            xgramShowUpdatePrompt(c, bytesToDownload, displayVersion, xgramUpdate);
-            return true;
-          }
-          ViewController.Options.Builder b = new ViewController.Options.Builder()
-            .info(Lang.getMarkdownString(c,
-              !StringUtils.isEmpty(displayVersion) ? R.string.AppUpdateAvailableVersionPrompt : R.string.AppUpdateAvailablePrompt,
-              (target, argStart, argEnd, argIndex, needFakeBold) -> argIndex != 1 ? Lang.boldCreator().onCreateSpan(target, argStart, argEnd, argIndex, needFakeBold) : null,
-              Strings.buildSize(bytesToDownload), displayVersion
-            ))
-            .item(new ViewController.OptionItem(R.id.btn_update, Lang.getString(R.string.DownloadUpdate), ViewController.OptionColor.BLUE, R.drawable.baseline_system_update_24));
-          // XGram: the changelog and the post instead of a GitHub compare link (the repository is private).
-          final XgramUpdates.Found found = xgramUpdate;
-          if (found != null) {
-            b.item(new ViewController.OptionItem(R.id.btn_xgramUpdateWhatsNew, Lang.getString(R.string.XgramUpdateWhatsNew), ViewController.OptionColor.NORMAL, R.drawable.baseline_whatshot_24));
-            b.item(new ViewController.OptionItem(R.id.btn_xgramUpdateOpenPost, Lang.getString(R.string.XgramUpdateOpenPost), ViewController.OptionColor.NORMAL, R.drawable.baseline_open_in_browser_24));
-          }
-          b.cancelItem();
-          c.showOptions(b.build(), (optionItemView, id) -> {
-            if (id == R.id.btn_update) {
-              downloadUpdate();
-            } else if (id == R.id.btn_xgramUpdateWhatsNew) {
-              XgramUpdates.showWhatsNew(c, found, this::downloadUpdate);
-            } else if (id == R.id.btn_xgramUpdateOpenPost) {
-              XgramUpdates.openPost(c, found);
-            }
-            return true;
-          });
-          return true;
+          // XGram: XGram's "Software update" screen in both designs: the notes, the download, the SHA-256 check and the
+          // install in one card. Later only closes it, so the update is offered once, as before.
+          return com.fahadali.xgram.update.XgramUpdateScreen.show(c);
         }
         break;
       }
@@ -453,40 +420,6 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
       }
     }
     return false;
-  }
-
-  /**
-   * XGram M3E r5: the update prompt as an M3 dialog: "Update available", then "XGram <version> · <size>" and the first
-   * lines of the changelog, with "Download" (positive), "What's new" (the full changelog) and "Later". No Cancel tile.
-   */
-  private void xgramShowUpdatePrompt (ViewController<?> c, long bytesToDownload, @Nullable String displayVersion, @Nullable XgramUpdates.Found found) {
-    final String version = !StringUtils.isEmpty(displayVersion) ? displayVersion : found != null ? found.versionName : null;
-    final String size = bytesToDownload > 0 ? Strings.buildSize(bytesToDownload) : null;
-    StringBuilder message = new StringBuilder();
-    if (!StringUtils.isEmpty(version)) {
-      message.append(size != null ? Lang.getString(R.string.XgramR5SheetsUpdateVersion, version, size) : Lang.getString(R.string.XgramUpdateWhatsNewTitle, version));
-    } else if (size != null) {
-      message.append(size);
-    }
-    final String head = XgramUpdates.changelogHead(found, 4);
-    if (!StringUtils.isEmpty(head)) {
-      if (message.length() > 0) {
-        message.append("\n\n");
-      }
-      message.append(head);
-    }
-    android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(c.context(), org.thunderdog.challegram.theme.Theme.dialogTheme());
-    b.setTitle(Lang.getString(R.string.XgramR5SheetsUpdateAvailable));
-    if (message.length() > 0) {
-      b.setMessage(message.toString());
-    }
-    b.setPositiveButton(Lang.getString(R.string.XgramUpdateDownload), (dialog, which) -> downloadUpdate());
-    if (found != null) {
-      b.setNeutralButton(Lang.getString(R.string.XgramUpdateWhatsNew), (dialog, which) -> XgramUpdates.showWhatsNew(c, found, this::downloadUpdate));
-    }
-    b.setNegativeButton(Lang.getString(R.string.XgramR5SheetsLater), (dialog, which) -> dialog.dismiss());
-    // XGram M3E r6: [What's new] ... [Later] [Download], Download the filled action
-    com.fahadali.xgram.appearance.XgramM3Controls.fillButton(c.showAlert(b), android.content.DialogInterface.BUTTON_POSITIVE, false);
   }
 
   @Override
@@ -569,6 +502,20 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
     }
   }
 
+  /**
+   * XGram: stops the download (the update screen's Cancel), also one asked for that hasn't started yet. TDLib's file
+   * update then offers the update again (AVAILABLE); what was downloaded stays, so a new download goes on from there.
+   */
+  public void cancelDownload () {
+    if ((state != State.DOWNLOADING && state != State.AVAILABLE) || flowType != FlowType.TELEGRAM_CHANNEL || telegramChannelTdlib == null || telegramChannelFile == null) {
+      return;
+    }
+    final int fileId = telegramChannelFile.document.document.id;
+    if (!telegramChannelTdlib.files().cancelDownloadOrUploadFile(fileId, false, true)) {
+      telegramChannelTdlib.send(new TdApi.CancelDownloadFile(fileId, false), (ok, error) -> { });
+    }
+  }
+
   private void onUpdateDownloadProgress (long bytesDownloaded, long totalBytesToDownload) {
     this.bytesDownloaded = bytesDownloaded;
     this.totalBytesToDownload = totalBytesToDownload;
@@ -578,6 +525,16 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
   }
 
   public void installUpdate () {
+    installUpdate(null);
+  }
+
+  /**
+   * XGram: {@link #installUpdate()} for XGram's update screen: {@code onChecked} gets true once the file passed its
+   * SHA-256 check and the installer opened, false when it failed (the file is deleted, so the update is offered again);
+   * the screen shows that itself, no snackbar. Nothing happens, and {@code onChecked} isn't called, unless the update
+   * is ready to install.
+   */
+  public void installUpdate (@Nullable RunnableBool onChecked) {
     if (state != State.READY_TO_INSTALL) {
       return;
     }
@@ -591,13 +548,17 @@ public class AppUpdater implements InstallStateUpdatedListener, FileUpdateListen
         final Tdlib.UpdateFileInfo updateFile = telegramChannelFile;
         XgramUpdates.verifyThenInstall(telegramChannelTdlib, xgramUpdate, () ->
           UI.openFile(new TdlibContext(context, telegramChannelTdlib), updateFile.document.fileName, new File(updateFile.document.document.local.path), updateFile.document.mimeType, 0),
-          this::downloadUpdate // XGram M3E r6: "Download again" on the snackbar of a bad file
+          this::downloadUpdate, // XGram M3E r6: "Download again" on the snackbar of a bad file
+          onChecked
         );
         break;
       }
       case FlowType.GOOGLE_PLAY: {
         googlePlayUpdateManager.completeUpdate();
         setState(State.INSTALLING);
+        if (onChecked != null) {
+          onChecked.runWithBool(true);
+        }
         break;
       }
     }

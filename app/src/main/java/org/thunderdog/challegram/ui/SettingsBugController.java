@@ -828,6 +828,11 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
             items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT_WITH_TOGGLER, R.id.btn_xgramCameraXTest, R.drawable.baseline_camera_alt_24, R.string.XgramCameraXTest, false));
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
           }
+          if (testerLevel >= Tdlib.TesterLevel.TESTER || BuildConfig.DEBUG) {
+            // XGram: the update screen with the newest post, even when this build has it already; it only pretends to install
+            items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramUpdatePreview, R.drawable.baseline_system_update_24, R.string.XgramUpdPreview, false));
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+          }
           // items.add(new SettingItem(SettingItem.TYPE_SEPARATOR_FULL));
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_secret_readAllChats, 0, R.string.ReadAllChats, false));
           items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
@@ -1171,6 +1176,8 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
     } else if (viewId == R.id.btn_xgramCameraXTest) {
       com.fahadali.xgram.XgramSettings.instance().setCameraXTest(!com.fahadali.xgram.XgramSettings.instance().cameraXTest()); // XGram Camera X (test)
       adapter.updateValuedSettingById(R.id.btn_xgramCameraXTest);
+    } else if (viewId == R.id.btn_xgramUpdatePreview) {
+      com.fahadali.xgram.update.XgramUpdateScreen.preview(this); // XGram: the update screen, pretend install
     } else if (viewId == R.id.btn_xgramXDriveOpensChat) {
       com.fahadali.xgram.XgramSettings.instance().setXdriveOpensChat(!com.fahadali.xgram.XgramSettings.instance().xdriveOpensChat()); // XGram XDrive
       adapter.updateValuedSettingById(R.id.btn_xgramXDriveOpensChat);

@@ -1805,8 +1805,15 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       mainWrap.addView(updateSnackBar);
       xgramConnHideSnackBar(); // XGram M3E: one snackbar at a time, the update one wins
     }
-    updateSnackBar.setAction(Lang.getString(isApk ? R.string.AppUpdateInstall : R.string.AppUpdateRestart), context().appUpdater()::installUpdate, !isApk);
+    updateSnackBar.setAction(Lang.getString(isApk ? R.string.AppUpdateInstall : R.string.AppUpdateRestart), this::xgramInstallUpdate, !isApk);
     updateSnackBar.showSnackBar(!immediate && isFocused());
+  }
+
+  /** XGram: Install opens XGram's update screen, which checks the file and opens the installer itself. */
+  private void xgramInstallUpdate () {
+    if (!com.fahadali.xgram.update.XgramUpdateScreen.install(this)) {
+      context().appUpdater().installUpdate();
+    }
   }
 
   @Override

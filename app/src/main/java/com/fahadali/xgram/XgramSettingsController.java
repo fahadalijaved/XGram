@@ -22,6 +22,7 @@ import androidx.annotation.StringRes;
 import androidx.recyclerview.widget.LinearLayoutManager;
 
 import com.fahadali.xgram.ghost.XgramGhost;
+import com.fahadali.xgram.update.XgramUpdateScreen;
 import com.fahadali.xgram.update.XgramUpdates;
 
 import org.thunderdog.challegram.BuildConfig;
@@ -1325,14 +1326,15 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
         updater.checkForUpdatesNow();
         break;
       case AppUpdater.State.AVAILABLE:
-        if (updater.xgramUpdate() != null) {
-          XgramUpdates.showWhatsNew(this, updater.xgramUpdate(), updater::downloadUpdate);
-        } else {
+        // XGram's update screen: the notes, the download and the install in one card
+        if (!XgramUpdateScreen.show(this)) {
           updater.downloadUpdate();
         }
         break;
       case AppUpdater.State.READY_TO_INSTALL:
-        updater.installUpdate();
+        if (!XgramUpdateScreen.install(this)) {
+          updater.installUpdate();
+        }
         break;
       default:
         break;

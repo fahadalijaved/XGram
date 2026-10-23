@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram update screen ("Software update", com.fahadali.xgram.update.XgramUpdateScreen): the update prompt, What's new and the install, in one card -->
+
+  <!-- Ids -->
+  <item name="btn_xgramUpdatePreview" type="id" />
+
+  <!-- Title and version -->
+  <string name="XgramUpdTitle">Software update</string>
+  <string name="XgramUpdAvailable">XGram %1$s is available.</string>
+  <string name="XgramUpdReady">XGram %1$s is ready to install.</string>
+  <string name="XgramUpdSizeKind">%1$s · %2$s</string>
+
+  <!-- What's new -->
+  <string name="XgramUpdWhatsNew">What’s new</string>
+  <string name="XgramUpdSeeAll">See all changes</string>
+  <string name="XgramUpdSeeLess">Show less</string>
+
+  <!-- Actions -->
+  <string name="XgramUpdInstallNow">Install now</string>
+  <string name="XgramUpdLater">Later</string>
+  <string name="XgramUpdDownloadAgain">Download again</string>
+  <string name="XgramUpdDownloading">Downloading…</string>
+  <string name="XgramUpdStarting">Starting the download…</string>
+  <string name="XgramUpdDownloadedOf">%1$s of %2$s</string>
+  <string name="XgramUpdPercent">%1$d%%</string>
+  <string name="XgramUpdPercentDownloaded">%1$d%% downloaded</string>
+  <string name="XgramUpdBackground">Continue in background</string>
+  <string name="XgramUpdCancel">Cancel</string>
+  <string name="XgramUpdChecking">Checking the file…</string>
+  <string name="XgramUpdCheckingInfo">It installs only if its SHA-256 matches the post.</string>
+
+  <!-- Errors -->
+  <string name="XgramUpdBadFile">The file didn’t match its SHA-256 and was deleted.</string>
+  <string name="XgramUpdStopped">The download stopped. Try again.</string>
+  <string name="XgramUpdCanceled">Download canceled.</string>
+  <string name="XgramUpdNotStarted">The download didn’t start. Check your connection and try again.</string>
+
+  <!-- Preview (Settings, tap the version, Application Logs, Testing Utilities) -->
+  <string name="XgramUpdPreview">Preview update screen</string>
+  <string name="XgramUpdPreviewTag">Preview</string>
+  <string name="XgramUpdLooking">Looking for the newest post…</string>
+  <string name="XgramUpdPreviewDone">Preview: nothing was installed</string>
+  <string name="XgramUpdPreviewSample">✨ New\n• Software update (Settings → XGram → Updates): the notes, the download and the install in one card\n• Popup menu (Message menu → Popup menu, off by default): a long press opens a menu right next to the message\n• A bot’s profile → Add to group or channel: add it to several chats at once, as admin\n• Camera X (Testing Utilities, off by default): lens buttons, Night, Portrait and HDR\n\n🛠️ Improved\n• Chats slide open more smoothly\n\n🐞 Fixed\n• Settings pages could crash while scrolling fast\n\nBased on Telegram X 0.29.1.1818. A sample: no post was found.</string>
+</resources>
