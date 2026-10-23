@@ -1,5 +1,6 @@
 # XGram Line batch "xdrive": XDrive (Saved Messages as a drive): its cloud, the folder icons the organizer gives
-# (by topic or by the AI's folder name) and Organize with AI's sparkles.
+# (by topic or by the AI's folder name) and Organize with AI's sparkles. Also the same cloud struck through, Offline in
+# the connection pill.
 #
 # Reused shapes: flight is the emoji batch's airplane, receipt_long the lists batch's receipt, restaurant the emoji
 # batch's restaurant_menu, lightbulb its lamp. The cloud is media2's (three circles on one flat line), on its own and
@@ -50,6 +51,8 @@ def _sparkle(cx, cy, r, k=0.55):
 
 ICONS = {
     'cloud': [P(_cloud())],
+    # the connection pill's Offline (also the chat list title and the chat header): the cloud struck through
+    'cloud_off': [P(_cloud()), SLASH()],
     # a page with its corner folded and two lines of text
     'description': [P('M13.8 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8.2Z'),
                     P('M13.8 3v3.7a1.5 1.5 0 0 0 1.5 1.5H19'), L(8.8, 12.8, 15.2, 12.8), L(8.8, 16.5, 13, 16.5)],
@@ -73,6 +76,7 @@ ICONS = {
 
 MAP = {
     'baseline_cloud_24': 'cloud',
+    'xgram_cloud_off_24': 'cloud_off',
     'baseline_flight_24': 'airplane',
     'baseline_receipt_long_24': 'receipt',
     'baseline_restaurant_24': 'restaurant_menu',

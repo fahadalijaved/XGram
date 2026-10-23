@@ -87,6 +87,7 @@ object XgramComposeBridge {
         XgramSettingsController.SUB_INPUT_BUTTONS -> XgramPage.INPUT_BUTTONS
         XgramSettingsController.SUB_WORD_FILTERS -> XgramPage.WORD_FILTERS
         XgramSettingsController.SUB_HIDDEN_PEOPLE -> XgramPage.HIDDEN_PEOPLE
+        XgramSettingsController.SUB_HEADER_BUTTONS -> XgramPage.HEADER_BUTTONS
         else -> XgramPage.fromSection(e.section)
       }
       XgramSearchHit(page, e.section, e.subPage, e.id, e.key, e.isToggle, e.iconRes, e.title, e.titleLower, e.path, e, e.pathParts)

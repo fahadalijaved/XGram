@@ -1017,12 +1017,12 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
 
   private void updateFolderIcon () {
     if (headerCell != null) {
-      int iconResource = tdlib.chatFolderIconDrawable(editedChatFolder, R.drawable.baseline_folder_24);
+      int iconResource = com.fahadali.xgram.chats.XgramFolderIcons.iconRes(tdlib, editedChatFolder); // XGram: as its tab shows it, nothing asked of TDLib
       headerCell.setIcon(iconResource, ColorId.white);
     }
     if (xgramFolderIconView != null) {
       // XGram M3E: the icon button of the name field
-      xgramFolderIconView.setImageDrawable(Drawables.get(xgramFolderIconView.getResources(), tdlib.chatFolderIconDrawable(editedChatFolder, R.drawable.baseline_folder_24)));
+      xgramFolderIconView.setImageDrawable(Drawables.get(xgramFolderIconView.getResources(), com.fahadali.xgram.chats.XgramFolderIcons.iconRes(tdlib, editedChatFolder)));
     }
   }
 
@@ -1155,7 +1155,7 @@ public class EditChatFolderController extends EditBaseController<EditChatFolderC
       editText.setText(item.getCharSequenceValue());
 
       ImageView imageView = holder.itemView.findViewById(android.R.id.icon);
-      int iconResource = tdlib.chatFolderIconDrawable(editedChatFolder, R.drawable.baseline_folder_24);
+      int iconResource = com.fahadali.xgram.chats.XgramFolderIcons.iconRes(tdlib, editedChatFolder); // XGram: as its tab shows it
       imageView.setImageDrawable(Drawables.get(imageView.getResources(), iconResource));
     }
 

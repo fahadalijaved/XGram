@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -453,6 +454,7 @@ fun SettingsRadioRow(
   enabled: Boolean = true,
   id: Int = 0,
   key: String? = null,
+  fontFamily: FontFamily? = null, // the title and sub-line in their own font (the Font picker's previews)
   onClick: () -> Unit
 ) {
   SegmentedListItem(
@@ -462,9 +464,9 @@ fun SettingsRadioRow(
     modifier = Modifier.semantics { role = Role.RadioButton },
     enabled = enabled,
     leadingContent = { RadioButton(selected = selected, onClick = null, enabled = enabled) },
-    supportingContent = subtitle?.let { { Text(it) } },
+    supportingContent = subtitle?.let { { Text(it, fontFamily = fontFamily) } },
     colors = settingsRowColors(id, key),
-    content = { Text(title) }
+    content = { Text(title, fontFamily = fontFamily) }
   )
 }
 

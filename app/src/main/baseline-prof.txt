@@ -1,3 +1,5 @@
 HSPLcom/fahadali/xgram/compose/**->**(**)**
 HSPLandroidx/compose/material3/**->**(**)**
 HSPLandroidx/graphics/shapes/**->**(**)**
+HSPLcom/fahadali/xgram/appearance/mcu/**->**(**)**
+HSPLcom/fahadali/xgram/appearance/XgramColorSource;->**(**)**

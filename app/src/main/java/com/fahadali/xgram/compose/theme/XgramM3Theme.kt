@@ -20,7 +20,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -31,12 +30,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import com.fahadali.xgram.appearance.XgramAmoled
+import com.fahadali.xgram.appearance.XgramColorSource
 import com.fahadali.xgram.appearance.XgramExpressive
 
 /**
  * Material 3 Expressive theme of XGram's Compose pages: the wallpaper (dynamic) colors, dark or light as Telegram X's
- * theme is (Theme.isDark: auto night mode and the user's choice, not the system setting), expressive motion, and the
- * default type scale and shapes. [themeVersion] changes after a wallpaper or palette change, so the colors are read again.
+ * theme is (Theme.isDark: auto night mode and the user's choice, not the system setting), expressive motion, the
+ * default type scale in the app font ([XgramFontFamilies]) and the default shapes. [themeVersion] changes after a
+ * wallpaper or palette change, so the colors are read again.
  * With Pure black on ([XgramAmoled]) the dark scheme's surfaces are black and near-black, as on the rest of the app.
  */
 @Composable
@@ -44,8 +45,13 @@ fun XgramM3Theme(dark: Boolean, themeVersion: Int, content: @Composable () -> Un
   val context = LocalContext.current
   // Read on every composition (cached, cheap); toggling it bumps themeVersion as well.
   val pureBlack = dark && XgramAmoled.isEnabled()
-  val scheme = remember(dark, themeVersion, pureBlack) {
-    val base = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+  // Colours > Custom: the picked colour and style (a change bumps themeVersion as well); null with the wallpaper's
+  val custom = if (XgramColorSource.isCustom()) XgramColorSource.key() else null
+  val scheme = remember(dark, themeVersion, pureBlack, custom) {
+    val base = if (custom != null) {
+      // The scheme material-color-utilities makes from the picked colour, as the views draw with (XgramColorSource)
+      xgramSeedColorScheme(XgramColorSource.currentComposeColors(dark))
+    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
       if (dark) darkColorScheme() else lightColorScheme()
@@ -53,7 +59,8 @@ fun XgramM3Theme(dark: Boolean, themeVersion: Int, content: @Composable () -> Un
     if (pureBlack) pureBlackScheme(base) else base
   }
   val motion = remember { MotionScheme.expressive() }
-  val typography = remember { Typography() }
+  // The default type scale in the app font (XgramFonts, read once per process: a change restarts the app)
+  val typography = remember { XgramFontFamilies.typography() }
   val shapes = remember { Shapes() }
   MaterialExpressiveTheme(
     colorScheme = scheme,

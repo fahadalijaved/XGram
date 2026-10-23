@@ -32,6 +32,7 @@
 * [ZXing](https://github.com/zxing/zxing/): QR scanning on devices where Google Play Services are not available
 
 * [Google's Material Icons](https://material.io/resources/icons): most of application icons
+* [Google Sans Flex](https://github.com/googlefonts/googlesans-flex): XGram's default font, also as Google Sans Rounded (its ROND axis at 100), bundled unmodified from [Google Fonts](https://github.com/google/fonts/tree/main/ofl/googlesansflex) under the SIL Open Font License 1.1 ([license](/app/src/main/assets/fonts/OFL.txt)). "Google Sans" is a trademark of Google LLC; XGram is not affiliated with Google
 * [Material Design Icons](https://materialdesignicons.com): various icons by [Austin Andrews](https://twitter.com/Templarian), [Yasmina Lembachar](https://twitter.com/belledeboheme), [Haley Halcyon](https://twitter.com/itsspelledhaley), [Michael Richins](https://twitter.com/MrGrigri)
 
 * [Klaxon](https://github.com/cbeust/klaxon): JSON parser used in build scripts
@@ -39,3 +40,4 @@
 * [Diff-Match-Patch](http://code.google.com/p/google-diff-match-patch/): [source code](/app/src/main/java/org/thunderdog/challegram/core/DiffMatchPatch.java)
 * [RTL View Pager](https://github.com/diego-gomez-olvera/RtlViewPager): [source code](/app/src/main/java/org/thunderdog/challegram/widget/rtl/RtlViewPager.java)
 * [svg-android](https://github.com/japgolly/svg-android): [source code](/app/src/main/java/org/thunderdog/challegram/loader/svg)
+* [material-color-utilities](https://github.com/material-foundation/material-color-utilities): Google's Material 3 color schemes (Apache License 2.0) for XGram's Expressive custom colours, vendored with its package renamed: [source code](/app/src/main/java/com/fahadali/xgram/appearance/mcu)

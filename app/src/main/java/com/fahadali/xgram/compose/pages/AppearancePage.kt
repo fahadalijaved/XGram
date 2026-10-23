@@ -22,6 +22,7 @@ import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.XgramUi
 import com.fahadali.xgram.appearance.XgramAmoled
 import com.fahadali.xgram.appearance.XgramExpressive
+import com.fahadali.xgram.appearance.XgramFonts
 import com.fahadali.xgram.appearance.XgramIconPack
 import com.fahadali.xgram.appearance.XgramIconPacksController
 import com.fahadali.xgram.appearance.XgramMaterialYou
@@ -33,6 +34,7 @@ import com.fahadali.xgram.compose.ConfirmSpec
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
 import com.fahadali.xgram.compose.XgramPage
+import com.fahadali.xgram.compose.theme.XgramFontFamilies
 import com.fahadali.xgram.compose.ui.GroupScope
 import com.fahadali.xgram.compose.ui.PageScope
 import com.fahadali.xgram.compose.ui.SettingsPage
@@ -52,6 +54,8 @@ fun AppearancePage() {
   val host = LocalXgramHost.current
   // Material You rebuilds the themes: a loading indicator stands in for its switch until that is done.
   var materialYouBusy by remember { mutableStateOf(false) }
+  // Colours > More colours: its dialog is open
+  var moreColors by remember { mutableStateOf(false) }
   SettingsPage(title = str(R.string.XgramAppearance)) {
     val settings = XgramSettings.instance()
     // Values from Telegram X, worked out once per build of the page, not while rows are drawn.
@@ -99,11 +103,14 @@ fun AppearancePage() {
       }
       description(if (themesLocked) R.string.XgramThemeExpressiveInfo else R.string.XgramMaterialYouInfo)
       expressive(host)
+      // Expressive design's colours: the wallpaper's or a picked one (AppearanceColors.kt)
+      colorSource(host) { moreColors = true }
       group {
         iconPack(host)
         appIcon(host)
         notificationIcon(host)
         emojiSet(host, emojiSetName)
+        font(host)
       }
     } else {
       group {
@@ -112,6 +119,7 @@ fun AppearancePage() {
         appIcon(host)
         notificationIcon(host)
         emojiSet(host, emojiSetName)
+        font(host)
       }
       expressive(host)
     }
@@ -247,6 +255,9 @@ fun AppearancePage() {
     }
     description(R.string.XgramDragDropInfo)
   }
+  if (moreColors) {
+    XgramMoreColorsDialog { moreColors = false }
+  }
 }
 
 private fun GroupScope.themes(host: XgramComposeHost, name: String) {
@@ -295,6 +306,42 @@ private fun GroupScope.emojiSet(host: XgramComposeHost, name: String) {
   // Telegram X's emoji set picker (with XGram's System set), as in Settings → Stickers and emoji.
   value(R.id.btn_xgramEmojiSet, s(R.string.XgramEmoji), name) {
     host.open(SettingsCloudEmojiController(host.activity, host.tdlib))
+  }
+}
+
+/**
+ * The app font (XgramFonts, Android 8+): Google Sans Flex (the default), Google Sans Rounded or System, each option
+ * with a preview line, both in its own font. A new font is confirmed, then the app restarts: Telegram X keeps its
+ * paints and measured text for the whole process.
+ */
+private fun GroupScope.font(host: XgramComposeHost) {
+  if (!XgramFonts.isAvailable()) {
+    return
+  }
+  val saved = XgramSettings.instance().appFont()
+  value(R.id.btn_xgramFont, s(R.string.XgramFont), XgramFonts.name(saved)) {
+    val fonts = listOf(XgramFonts.FLEX, XgramFonts.ROUNDED, XgramFonts.SYSTEM)
+    val preview = s(R.string.XgramFontPreview)
+    host.choose(
+      ChoiceSpec(
+        title = s(R.string.XgramFont),
+        info = s(R.string.XgramFontInfo),
+        options = fonts.map { XgramFonts.name(it) to it },
+        selected = saved,
+        subtitles = fonts.map { preview },
+        fonts = fonts.map { XgramFontFamilies.preview(it) }
+      ) { font ->
+        host.confirm(
+          ConfirmSpec(
+            title = s(R.string.XgramFont),
+            text = s(R.string.XgramFontRestartText, XgramFonts.name(font)),
+            confirm = s(R.string.AppUpdateRestart)
+          ) {
+            XgramFonts.apply(host.activity, font)
+          }
+        )
+      }
+    )
   }
 }
 

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Expressive design's colour source, the wallpaper or a picked colour (XgramColorSource, Appearance > Colours) -->
+  <item type="id" name="btn_xgramColorSource" />
+  <item type="id" name="btn_xgramColorSeed" />
+  <item type="id" name="btn_xgramColorStyle" />
+  <item type="id" name="btn_xgramColorMore" />
+  <string name="XgramColors">Colours</string>
+  <string name="XgramColorsWallpaper">Wallpaper</string>
+  <string name="XgramColorsCustom">Custom</string>
+  <string name="XgramColorsOff">Needs Expressive design</string>
+  <string name="XgramColorsWallpaperInfo">Expressive design takes its colours from your wallpaper. Custom makes them from a colour you pick, the way Android 16 does.</string>
+  <string name="XgramColorsCustomInfo">Expressive design makes every colour from the one you pick, with Google\'s Material 3 Expressive palettes, instead of your wallpaper\'s.</string>
+  <string name="XgramColorsNeedsExpressive">Custom colours are part of Expressive design. Turn it on to pick them.</string>
+  <string name="XgramColorsSeed">Colour</string>
+  <string name="XgramColorsPicked">Your colour</string>
+  <string name="XgramColorsStyle">Style</string>
+  <string name="XgramColorsStyleTonalSpot">Tonal spot</string>
+  <string name="XgramColorsStyleVibrant">Vibrant</string>
+  <string name="XgramColorsStyleExpressive">Expressive</string>
+  <string name="XgramColorsStyleNeutral">Neutral</string>
+  <string name="XgramColorsMore">More colours</string>
+  <string name="XgramColorsMoreSub">Any hue, with a live preview</string>
+  <string name="XgramColorsMoreInfo">The style sets how colourful the scheme is.</string>
+  <string name="XgramColorsHue">Hue</string>
+  <string name="XgramColorsHueValue">%1$d degrees</string>
+  <string name="XgramColorsPreview">Preview</string>
+  <string name="XgramColorsPreviewPrimary">Primary</string>
+  <string name="XgramColorsPreviewSecondary">Secondary</string>
+  <string name="XgramColorsPreviewTertiary">Tertiary</string>
+  <string name="XgramColorBlue">Blue</string>
+  <string name="XgramColorSky">Sky</string>
+  <string name="XgramColorCyan">Cyan</string>
+  <string name="XgramColorTeal">Teal</string>
+  <string name="XgramColorGreen">Green</string>
+  <string name="XgramColorOlive">Olive</string>
+  <string name="XgramColorYellow">Yellow</string>
+  <string name="XgramColorOrange">Orange</string>
+  <string name="XgramColorRed">Red</string>
+  <string name="XgramColorPink">Pink</string>
+  <string name="XgramColorPurple">Purple</string>
+  <string name="XgramColorViolet">Violet</string>
+  <string name="XgramSearchKwColors">accent|accent colour|accent color|palette|colour picker|color picker|custom colours|custom colors|seed|monet</string>
+</resources>

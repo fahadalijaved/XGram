@@ -36,6 +36,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.accessibility.AccessibilityNodeInfo;
 
 import androidx.annotation.CheckResult;
 import androidx.annotation.Dimension;
@@ -54,18 +55,28 @@ import org.thunderdog.challegram.BuildConfig;
 import org.thunderdog.challegram.U;
 import org.thunderdog.challegram.component.sticker.TGStickerObj;
 import org.thunderdog.challegram.core.Lang;
+import org.thunderdog.challegram.data.ComplexMediaItemCustomEmoji;
+import org.thunderdog.challegram.data.TD;
 import org.thunderdog.challegram.data.TGReaction;
+import org.thunderdog.challegram.emoji.Emoji;
+import org.thunderdog.challegram.emoji.EmojiInfo;
 import org.thunderdog.challegram.loader.ComplexReceiver;
+import org.thunderdog.challegram.loader.DoubleImageReceiver;
 import org.thunderdog.challegram.loader.ImageReceiver;
+import org.thunderdog.challegram.loader.Receiver;
 import org.thunderdog.challegram.support.RippleSupport;
 import org.thunderdog.challegram.telegram.TGLegacyManager;
+import org.thunderdog.challegram.telegram.Tdlib;
+import org.thunderdog.challegram.telegram.TdlibEmojiManager;
 import org.thunderdog.challegram.theme.ColorId;
 import org.thunderdog.challegram.theme.PropertyId;
 import org.thunderdog.challegram.theme.Theme;
 import org.thunderdog.challegram.tool.Drawables;
 import org.thunderdog.challegram.tool.Paints;
 import org.thunderdog.challegram.tool.Screen;
+import org.thunderdog.challegram.tool.UI;
 import org.thunderdog.challegram.tool.Views;
+import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.DrawableProvider;
 import org.thunderdog.challegram.util.text.Counter;
 import org.thunderdog.challegram.util.text.IconSpan;
@@ -164,9 +175,47 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
       return icon;
     }
 
+    // XGram: a chat folder's own emoji or custom emoji in the icon's place (com.fahadali.xgram.chats.XgramFolderIcons),
+    // drawn as it is (an adaptive custom emoji takes the label's color). The glyph stands in while it can't be drawn.
+    // TalkBack reads xgramDescription.
+    private @Nullable String xgramEmoji;
+    private @Nullable EmojiInfo xgramEmojiInfo;
+    private long xgramCustomEmojiId;
+    private boolean xgramAnimateCustomEmoji;
+    private @Nullable Tdlib xgramTdlib;
+    private @Nullable ComplexMediaItemCustomEmoji xgramCustomEmoji; // once loaded
+    private boolean xgramCustomEmojiRequested;
+    private @Nullable CharSequence xgramDescription;
+
+    /** XGram: an emoji ({@code emoji}) or a custom emoji (with {@code emoji} as its stand-in while it loads) instead of the glyph. */
+    public Item xgramSetEmojiIcon (Tdlib tdlib, @Nullable String emoji, long customEmojiId, boolean animate) {
+      this.xgramEmoji = emoji;
+      this.xgramEmojiInfo = !StringUtils.isEmpty(emoji) ? Emoji.instance().getEmojiInfo(emoji) : null;
+      this.xgramCustomEmojiId = customEmojiId;
+      this.xgramAnimateCustomEmoji = animate;
+      this.xgramTdlib = customEmojiId != 0 ? tdlib : null;
+      return this;
+    }
+
+    /** XGram: what TalkBack reads for the tab, when its label is not the whole name (or there is none). */
+    public Item xgramSetDescription (@Nullable CharSequence description) {
+      this.xgramDescription = description;
+      return this;
+    }
+
+    boolean xgramHasEmojiIcon () {
+      return xgramEmojiInfo != null || xgramCustomEmojiId != 0;
+    }
+
+    /** XGram: a glyph, or an emoji in its place. */
+    boolean hasIcon () {
+      return iconRes != 0 || xgramHasEmojiIcon();
+    }
+
     @Override
     public boolean equals (Object obj) {
-      return obj instanceof Item && ((Item) obj).iconRes == iconRes && StringUtils.equalsOrBothEmpty(((Item) obj).string, string) && (((Item) obj).counter == counter);
+      return obj instanceof Item && ((Item) obj).iconRes == iconRes && StringUtils.equalsOrBothEmpty(((Item) obj).string, string) && (((Item) obj).counter == counter) &&
+        ((Item) obj).xgramCustomEmojiId == xgramCustomEmojiId && StringUtils.equalsOrBothEmpty(((Item) obj).xgramEmoji, xgramEmoji); // XGram
     }
 
     private int width, contentWidth;
@@ -238,8 +287,9 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
       final int width;
       final float labelWidth = string != null ? U.measureEmojiText(string, paint) * labelFactor : 0f;
       final float counterWidthWithSpacing = counter != null ? counter.getScaledWidth(horizontalSpacing) : 0f;
-      final float iconWidth = iconRes != 0 ? Screen.dp(ICON_SIZE) : 0;
-      final float iconWidthWithLabelSpacing = iconRes != 0 ? (iconWidth + horizontalSpacing * labelFactor) : 0;
+      final boolean hasIcon = hasIcon(); // XGram: an emoji in the glyph's place takes the same room
+      final float iconWidth = hasIcon ? Screen.dp(ICON_SIZE) : 0;
+      final float iconWidthWithLabelSpacing = hasIcon ? (iconWidth + horizontalSpacing * labelFactor) : 0;
       if (staticWidth != -1) {
         width = staticWidth;
       } else if (counter != null) {
@@ -247,14 +297,14 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
           width = (int) (labelWidth + counterWidthWithSpacing + iconWidthWithLabelSpacing);
         } else if (imageReceiver != null) {
           width = (int) counter.getWidth() + imageReceiverSize;
-        } else if (iconRes != 0) {
+        } else if (hasIcon) {
           width = (int) (iconWidth + counterWidthWithSpacing);
         } else {
           width = (int) counter.getWidth()/* + Screen.dp(6f) */; // ???
         }
       } else if (string != null) {
         width = (int) (labelWidth + iconWidthWithLabelSpacing);
-      } else if (iconRes != 0) {
+      } else if (hasIcon) {
         width = (int) iconWidth/* + Screen.dp(6f)*/; // ???
       } else {
         width = 0;
@@ -931,7 +981,136 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
         item.imageReceiverScale = stickerObj.getDisplayScale();
         item.imageReceiverSize = Screen.dp(34);
       }
+      if (item.xgramCustomEmojiId != 0 && item.xgramTdlib != null && !item.xgramCustomEmojiRequested) {
+        xgramRequestCustomEmoji(item); // XGram: a folder's custom emoji
+      }
     }
+  }
+
+  // XGram: the custom emoji of folder tabs (Item#xgramSetEmojiIcon), loaded through the account's emoji manager. Its
+  // stand-in emoji (or the glyph) shows until it is; it stays still with reduced motion or when the folder says so.
+
+  private static final float XGRAM_EMOJI_SIZE = 20f;
+  private final Rect xgramEmojiRect = new Rect();
+  private final TdlibEmojiManager.Watcher xgramEmojiWatcher = (context, entry) -> UI.post(() -> xgramOnCustomEmojiLoaded(entry));
+
+  private void xgramRequestCustomEmoji (Item item) {
+    final Tdlib tdlib = item.xgramTdlib;
+    if (tdlib == null) {
+      return;
+    }
+    item.xgramCustomEmojiRequested = true;
+    TdlibEmojiManager.Entry entry = tdlib.emoji().findOrPostponeRequest(item.xgramCustomEmojiId, xgramEmojiWatcher);
+    if (entry != null) {
+      xgramBindCustomEmoji(item, entry);
+    } else {
+      tdlib.emoji().performPostponedRequestsDelayed();
+    }
+  }
+
+  private void xgramOnCustomEmojiLoaded (TdlibEmojiManager.Entry entry) {
+    if (items == null) {
+      return;
+    }
+    boolean changed = false;
+    for (Item item : items) {
+      if (item.xgramCustomEmojiId == entry.customEmojiId && item.xgramCustomEmoji == null) {
+        changed = xgramBindCustomEmoji(item, entry) || changed;
+      }
+    }
+    if (changed) {
+      invalidate();
+    }
+  }
+
+  private boolean xgramBindCustomEmoji (Item item, TdlibEmojiManager.Entry entry) {
+    final Tdlib tdlib = item.xgramTdlib;
+    if (tdlib == null || entry.isNotFound() || entry.value == null) {
+      return false; // the stand-in stays
+    }
+    ComplexMediaItemCustomEmoji media = new ComplexMediaItemCustomEmoji(tdlib, entry.value, Screen.dp(XGRAM_EMOJI_SIZE));
+    if (media.gifFile != null && (!item.xgramAnimateCustomEmoji || Settings.instance().needReduceMotion())) {
+      media.gifFile.setIsStill(true);
+    }
+    item.xgramCustomEmoji = media;
+    media.requestComplexMedia(complexReceiver, item.xgramCustomEmojiId);
+    return true;
+  }
+
+  /** XGram: the width of a tab's icon: its glyph's, or the icon size for an emoji. */
+  private static int xgramIconWidth (Item item) {
+    if (item.xgramHasEmojiIcon()) {
+      return Screen.dp(ICON_SIZE);
+    }
+    Drawable drawable = item.getIcon();
+    return drawable != null ? drawable.getMinimumWidth() : Screen.dp(ICON_SIZE);
+  }
+
+  /**
+   * XGram: a tab's icon with its left edge at {@code left}: the glyph in the label's color, or the folder's emoji or
+   * custom emoji as they are (20dp in the 24dp icon box, like the glyph's own drawing). The glyph stands in while the
+   * emoji can't be drawn yet. An adaptive custom emoji takes the label's color like the glyph; the colored ones fade
+   * while the tabs are disabled (select mode), since their color can't follow it.
+   */
+  private void drawItemIcon (Canvas c, Item item, int left, int centerY, int color) {
+    if (item.xgramHasEmojiIcon()) {
+      final int size = Screen.dp(XGRAM_EMOJI_SIZE);
+      final int emojiLeft = left + (Screen.dp(ICON_SIZE) - size) / 2;
+      final int emojiTop = centerY - size / 2;
+      xgramEmojiRect.set(emojiLeft, emojiTop, emojiLeft + size, emojiTop + size);
+      final float alpha = 1f - disabledFactor * .5f;
+      if (item.xgramCustomEmoji != null) {
+        xgramDrawCustomEmoji(c, item.xgramCustomEmoji, item.xgramCustomEmojiId, color, alpha);
+        return;
+      }
+      if (item.xgramEmojiInfo != null && Emoji.instance().draw(c, item.xgramEmojiInfo, xgramEmojiRect, (int) (255f * alpha))) {
+        return;
+      }
+    }
+    Drawable drawable = item.getIcon();
+    if (drawable != null) {
+      Drawables.draw(c, drawable, left, centerY - drawable.getMinimumHeight() / 2, Paints.getPorterDuffPaint(color));
+    }
+  }
+
+  /**
+   * XGram: a folder's custom emoji in {@link #xgramEmojiRect}, like ComplexMediaItemCustomEmoji#draw but with the tab's
+   * color for an adaptive one (needsRepainting) instead of ColorId.text, and {@code alpha} for a colored one.
+   */
+  private void xgramDrawCustomEmoji (Canvas c, ComplexMediaItemCustomEmoji media, long key, int color, float alpha) {
+    final Receiver receiver = media.isAnimated() ? complexReceiver.getGifReceiver(key) : complexReceiver.getImageReceiver(key);
+    final boolean adaptive = TD.needThemedColorFilter(media.sticker);
+    final float paintAlpha = adaptive ? 1f : alpha; // the color already follows select mode
+    final Rect rect = xgramEmojiRect;
+    receiver.setBounds(rect.left, rect.top, rect.right, rect.bottom);
+    if (receiver.needPlaceholder()) {
+      DoubleImageReceiver preview = complexReceiver.getPreviewReceiver(key);
+      preview.setBounds(rect.left, rect.top, rect.right, rect.bottom);
+      if (preview.needPlaceholder() && media.outline != null && media.outline.hasPath()) {
+        preview.drawPlaceholderContour(c, media.outline.getPath(), paintAlpha);
+      }
+    }
+    if (adaptive) {
+      receiver.setPorterDuffColorFilter(color);
+    } else {
+      receiver.disablePorterDuffColorFilter();
+    }
+    if (paintAlpha != 1f) {
+      receiver.setPaintAlpha(receiver.getPaintAlpha() * paintAlpha);
+    }
+    receiver.draw(c);
+    if (paintAlpha != 1f) {
+      receiver.restorePaintAlpha();
+    }
+  }
+
+  /** XGram: what TalkBack reads for a tab: its description, else its label. */
+  @Nullable CharSequence xgramItemDescription (int index) {
+    if (items == null || index < 0 || index >= items.size()) {
+      return null;
+    }
+    Item item = items.get(index);
+    return item.xgramDescription != null ? item.xgramDescription : item.string;
   }
 
   public void requestItemLayoutAt (int index) {
@@ -1311,9 +1490,8 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
             float backgroundAlpha = counterAlphaProvider.getBackgroundAlpha(item.counter, alphaFactor);
             if (item.ellipsizedStringLayout != null) {
               int stringX;
-              if (item.iconRes != 0) {
-                Drawable drawable = item.getIcon();
-                Drawables.draw(c, drawable, cx + horizontalPadding, viewHeight / 2 - drawable.getMinimumHeight() / 2, Paints.getPorterDuffPaint(color));
+              if (item.hasIcon()) {
+                drawItemIcon(c, item, cx + horizontalPadding, viewHeight / 2, color); // XGram: a glyph or the folder's emoji
                 stringX = cx + horizontalPadding + Screen.dp(ICON_SIZE) + itemSpacing;
               } else {
                 stringX = cx + horizontalPadding;
@@ -1328,9 +1506,8 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
               item.imageReceiver.setBounds(cx, imgY, cx + size, imgY + size);
               item.imageReceiver.drawScaled(c, item.imageReceiverScale);
               item.counter.draw(c, cx + size, viewHeight / 2f, Gravity.LEFT, textAlpha, backgroundAlpha, imageAlpha, item.provider, ColorId.NONE);
-            } else if (item.iconRes != 0) {
-              Drawable drawable = item.getIcon();
-              Drawables.draw(c, drawable, cx + horizontalPadding, viewHeight / 2 - drawable.getMinimumHeight() / 2, Paints.getPorterDuffPaint(color));
+            } else if (item.hasIcon()) {
+              drawItemIcon(c, item, cx + horizontalPadding, viewHeight / 2, color);
               item.counter.draw(c, cx + itemWidth - horizontalPadding - item.counter.getWidth() / 2f, viewHeight / 2f, Gravity.CENTER, textAlpha, backgroundAlpha, imageAlpha, item.provider, ColorId.NONE);
               if (item.isAnimating() && item.oldItem != null && item.oldItem.ellipsizedStringLayout != null) {
                 int stringX = cx + horizontalPadding + Screen.dp(ICON_SIZE) + itemSpacing;
@@ -1344,18 +1521,16 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
             }
           } else if (item.ellipsizedStringLayout != null) {
             int stringX;
-            if (item.iconRes != 0) {
-              Drawable drawable = item.getIcon();
-              Drawables.draw(c, drawable, cx + horizontalPadding, viewHeight / 2 - drawable.getMinimumHeight() / 2, Paints.getPorterDuffPaint(color));
+            if (item.hasIcon()) {
+              drawItemIcon(c, item, cx + horizontalPadding, viewHeight / 2, color);
               stringX = cx + horizontalPadding + Screen.dp(ICON_SIZE) + itemSpacing;
             } else {
               stringX = cx + itemWidth / 2 - contentWidth / 2;
             }
             int stringY = viewHeight / 2 - item.ellipsizedStringLayout.getHeight() / 2;
             drawLabel(c, item, stringX, stringY, color, itemSelectionFactor);
-          } else if (item.iconRes != 0) {
-            Drawable drawable = item.getIcon();
-            Drawables.draw(c, drawable, cx + itemWidth / 2 - drawable.getMinimumWidth() / 2, viewHeight / 2 - drawable.getMinimumHeight() / 2, Paints.getPorterDuffPaint(color));
+          } else if (item.hasIcon()) {
+            drawItemIcon(c, item, cx + itemWidth / 2 - xgramIconWidth(item) / 2, viewHeight / 2, color);
             if (item.isAnimating() && item.oldItem != null && item.oldItem.ellipsizedStringLayout != null) {
               int stringX = cx + horizontalPadding + Screen.dp(ICON_SIZE) + itemSpacing;
               int stringY = viewHeight / 2 - item.oldItem.ellipsizedStringLayout.getHeight() / 2;
@@ -1620,6 +1795,13 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
   @Override
   public void performDestroy () {
     complexReceiver.performDestroy();
+    if (items != null) {
+      for (Item item : items) {
+        if (item.xgramTdlib != null && item.xgramCustomEmojiId != 0) {
+          item.xgramTdlib.emoji().forgetWatcher(item.xgramCustomEmojiId, xgramEmojiWatcher); // XGram
+        }
+      }
+    }
   }
 
   private static class BackgroundView extends View {
@@ -1627,6 +1809,19 @@ public class ViewPagerTopView extends FrameLayoutFix implements RtlCheckListener
       super(context);
 
       Views.setClickable(this);
+    }
+
+    @Override
+    public void onInitializeAccessibilityNodeInfo (AccessibilityNodeInfo info) {
+      super.onInitializeAccessibilityNodeInfo(info);
+      // XGram: TalkBack reads the tab's name (a tab with an icon only has none on screen) and which tab is shown
+      CharSequence description = topView != null ? topView.xgramItemDescription(index) : null;
+      if (!StringUtils.isEmpty(description)) {
+        info.setContentDescription(description);
+      }
+      if (topView != null) {
+        info.setSelected(index == Math.round(topView.selectionFactor));
+      }
     }
 
     private long touchDownTime;

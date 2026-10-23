@@ -1118,6 +1118,13 @@ public class SettingsThemeController extends RecyclerViewController<SettingsThem
         Settings.instance().setCameraType(adapter.toggleView(v) ? Settings.CAMERA_TYPE_SYSTEM : Settings.CAMERA_TYPE_LEGACY);
       }
     } else if (viewId == R.id.btn_systemFonts) {
+      // XGram: this picks between Telegram X's own fonts, which only XGram's Font: System draws with. With Google Sans
+      // in use it would change nothing seen, so say where it applies instead.
+      final int xgramFont = com.fahadali.xgram.appearance.XgramFonts.current();
+      if (com.fahadali.xgram.appearance.XgramFonts.isGoogleSans(xgramFont)) {
+        openAlert(R.string.UseSystemFonts, Lang.getString(R.string.XgramFontSystemFontsInfo, com.fahadali.xgram.appearance.XgramFonts.name(xgramFont)));
+        return;
+      }
       Boolean value = Fonts.areUsingSystemFonts();
       if (value != null && value != Settings.instance().useSystemFonts()) {
         Settings.instance().setUseSystemFonts(value);

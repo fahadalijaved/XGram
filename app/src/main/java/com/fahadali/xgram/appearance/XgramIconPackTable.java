@@ -686,6 +686,10 @@ final class XgramIconPackTable {
     R.drawable.baseline_sort_24, R.drawable.xgl_sort,
     R.drawable.baseline_view_list_24, R.drawable.xgl_view_list,
     R.drawable.baseline_grid_view_24, R.drawable.xgl_grid_view,
+    R.drawable.baseline_logout_24, R.drawable.xgl_exit_to_app,
+    R.drawable.xgram_cloud_off_24, R.drawable.xgl_cloud_off,
+    R.drawable.baseline_telegram_24, R.drawable.xgl_telegram,
+    R.drawable.baseline_currency_bitcoin_24, R.drawable.xgl_currency_bitcoin,
   };
 
   /** XGram Duotone */
@@ -1210,6 +1214,10 @@ final class XgramIconPackTable {
     R.drawable.baseline_sort_24, R.drawable.xgd_sort,
     R.drawable.baseline_view_list_24, R.drawable.xgd_view_list,
     R.drawable.baseline_grid_view_24, R.drawable.xgd_grid_view,
+    R.drawable.baseline_logout_24, R.drawable.xgd_exit_to_app,
+    R.drawable.xgram_cloud_off_24, R.drawable.xgd_cloud_off,
+    R.drawable.baseline_telegram_24, R.drawable.xgd_telegram,
+    R.drawable.baseline_currency_bitcoin_24, R.drawable.xgd_currency_bitcoin,
   };
 
   /** XGram Solar (Solar Icons by 480 Design, CC BY 4.0) */
@@ -1731,6 +1739,10 @@ final class XgramIconPackTable {
     R.drawable.baseline_sort_24, R.drawable.xgs_sort,
     R.drawable.baseline_view_list_24, R.drawable.xgs_view_list,
     R.drawable.baseline_grid_view_24, R.drawable.xgs_grid_view,
+    R.drawable.baseline_logout_24, R.drawable.xgs_exit_to_app,
+    R.drawable.xgram_cloud_off_24, R.drawable.xgs_cloud_off,
+    R.drawable.baseline_telegram_24, R.drawable.xgs_telegram,
+    R.drawable.baseline_currency_bitcoin_24, R.drawable.xgs_currency_bitcoin,
   };
 
   /** XGram Phosphor (Phosphor Icons, MIT) */
@@ -2252,6 +2264,10 @@ final class XgramIconPackTable {
     R.drawable.baseline_sort_24, R.drawable.xgf_sort,
     R.drawable.baseline_view_list_24, R.drawable.xgf_view_list,
     R.drawable.baseline_grid_view_24, R.drawable.xgf_grid_view,
+    R.drawable.baseline_logout_24, R.drawable.xgf_exit_to_app,
+    R.drawable.xgram_cloud_off_24, R.drawable.xgf_cloud_off,
+    R.drawable.baseline_telegram_24, R.drawable.xgf_telegram,
+    R.drawable.baseline_currency_bitcoin_24, R.drawable.xgf_currency_bitcoin,
   };
 
   /** XGram MingCute (MingCute Design, Apache 2.0) */
@@ -2774,6 +2790,10 @@ final class XgramIconPackTable {
     R.drawable.baseline_sort_24, R.drawable.xgm_sort,
     R.drawable.baseline_view_list_24, R.drawable.xgm_view_list,
     R.drawable.baseline_grid_view_24, R.drawable.xgm_grid_view,
+    R.drawable.baseline_logout_24, R.drawable.xgm_exit_to_app,
+    R.drawable.xgram_cloud_off_24, R.drawable.xgm_cloud_off,
+    R.drawable.baseline_telegram_24, R.drawable.xgm_telegram,
+    R.drawable.baseline_currency_bitcoin_24, R.drawable.xgm_currency_bitcoin,
   };
 
   /** XGram Pixel (Pixelarticons by Gerrit Halfmann, MIT) */
@@ -3298,5 +3318,9 @@ final class XgramIconPackTable {
     R.drawable.baseline_sort_24, R.drawable.xgp_sort,
     R.drawable.baseline_view_list_24, R.drawable.xgp_view_list,
     R.drawable.baseline_grid_view_24, R.drawable.xgp_grid_view,
+    R.drawable.baseline_logout_24, R.drawable.xgp_exit_to_app,
+    R.drawable.xgram_cloud_off_24, R.drawable.xgp_cloud_off,
+    R.drawable.baseline_telegram_24, R.drawable.xgp_telegram,
+    R.drawable.baseline_currency_bitcoin_24, R.drawable.xgp_currency_bitcoin,
   };
 }

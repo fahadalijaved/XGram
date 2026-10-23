@@ -79,6 +79,9 @@ public final class XgramSettings {
   public static final String KEY_INPUT_ATTACH_TYPING = "xgram_input_attach_typing";
   /** Passcode lock: no lock button in the chat list's header. */
   public static final String KEY_HIDE_LOCK_BUTTON = "xgram_hide_lock_button";
+  /** Prefix of the chat list header buttons the user hid (Chat list → Header buttons), followed by a {@code HEADER_BUTTON_*} name. */
+  public static final String KEY_HEADER_BUTTON_HIDDEN = "xgram_header_hide_";
+  public static final String HEADER_BUTTON_GHOST = "ghost", HEADER_BUTTON_SEARCH = "search";
   /** Message menu: a popup next to the message (Telegram) instead of the sheet. */
   public static final String KEY_MESSAGE_POPUP = "xgram_message_popup";
   /** A bot's profile → Add to group or channel: as an admin in groups too (channels always), with every right. */
@@ -585,6 +588,26 @@ public final class XgramSettings {
 
   public void setHideLockButton (boolean value) {
     put(KEY_HIDE_LOCK_BUTTON, value);
+  }
+
+  /**
+   * Chat list → Header buttons: a button of the chat list's header the user hid ({@code HEADER_BUTTON_*}). The lock
+   * and Activity's bell keep their own keys ({@link #hideLockButton()}, {@link #activityHeader()}).
+   */
+  public boolean headerButtonHidden (String button) {
+    return pmc().getBoolean(KEY_HEADER_BUTTON_HIDDEN + button, false);
+  }
+
+  public void setHeaderButtonHidden (String button, boolean hidden) {
+    String key = KEY_HEADER_BUTTON_HIDDEN + button;
+    if (hidden) {
+      pmc().putBoolean(key, true);
+    } else {
+      pmc().remove(key);
+    }
+    for (Listener listener : listeners) {
+      listener.onXgramSettingChanged(key);
+    }
   }
 
   /** Message menu → Popup menu: a long press opens the menu next to the message, the reactions above it (Telegram). */
@@ -1159,6 +1182,24 @@ public final class XgramSettings {
     return instance().notificationIcon() == NOTIFICATION_ICON_TELEGRAM_X ? R.mipmap.app_notification : R.drawable.xgram_notification;
   }
 
+  // App font (Appearance > Theme, com.fahadali.xgram.appearance.XgramFonts). Not cached: XgramFonts reads it once per
+  // process, as Telegram X keeps its paints and measured text for the whole process (a change restarts the app).
+
+  public static final String KEY_APP_FONT = "xgram_app_font";
+
+  /**
+   * XgramFonts.FLEX (also with nothing stored: fresh installs and updates), XgramFonts.ROUNDED or XgramFonts.SYSTEM.
+   * The saved choice; {@link com.fahadali.xgram.appearance.XgramFonts#current} is the one in use.
+   */
+  public int appFont () {
+    int value = pmc().getInt(KEY_APP_FONT, com.fahadali.xgram.appearance.XgramFonts.FLEX);
+    return value == com.fahadali.xgram.appearance.XgramFonts.ROUNDED || value == com.fahadali.xgram.appearance.XgramFonts.SYSTEM ? value : com.fahadali.xgram.appearance.XgramFonts.FLEX;
+  }
+
+  public void setAppFont (int value) {
+    putInt(KEY_APP_FONT, value);
+  }
+
   // Check In (Messages): the defaults of the start sheet. Read when used, not cached. Live Check Ins are not
   // settings: they are kept under "xgram_ci_" (com.fahadali.xgram.checkin), which no backup list matches.
 
@@ -1680,6 +1721,62 @@ public final class XgramSettings {
   public void setPureBlack (boolean value) {
     pureBlack = value;
     put(KEY_PURE_BLACK, value);
+  }
+
+  // Colours (Appearance, under Expressive design; see com.fahadali.xgram.appearance.XgramColorSource): where Expressive
+  // design's colours come from, the wallpaper (the default) or a colour picked in XGram, and the style of the scheme
+  // made from it. Cached: read while colours are resolved.
+
+  public static final String KEY_COLOR_SOURCE = "xgram_colors_source", KEY_COLOR_SEED = "xgram_colors_seed", KEY_COLOR_STYLE = "xgram_colors_style";
+  public static final int COLOR_SOURCE_WALLPAPER = 0, COLOR_SOURCE_CUSTOM = 1;
+  public static final int COLOR_STYLE_TONAL_SPOT = 0, COLOR_STYLE_VIBRANT = 1, COLOR_STYLE_EXPRESSIVE = 2, COLOR_STYLE_NEUTRAL = 3;
+  /** The colour before one is picked: the first swatch (Google blue). */
+  public static final int COLOR_SEED_DEFAULT = 0xff4285f4;
+
+  private volatile int colorSource = -1, colorStyle = -1;
+  private volatile Integer colorSeed;
+
+  /** {@link #COLOR_SOURCE_WALLPAPER} or {@link #COLOR_SOURCE_CUSTOM}. */
+  public int colorSource () {
+    int value = colorSource;
+    if (value < 0) {
+      colorSource = value = pmc().getInt(KEY_COLOR_SOURCE, COLOR_SOURCE_WALLPAPER) == COLOR_SOURCE_CUSTOM ? COLOR_SOURCE_CUSTOM : COLOR_SOURCE_WALLPAPER;
+    }
+    return value;
+  }
+
+  public void setColorSource (int source) {
+    colorSource = source == COLOR_SOURCE_CUSTOM ? COLOR_SOURCE_CUSTOM : COLOR_SOURCE_WALLPAPER;
+    putInt(KEY_COLOR_SOURCE, colorSource);
+  }
+
+  /** The picked colour (opaque ARGB): its hue is what the scheme is made from. */
+  public int colorSeed () {
+    Integer value = colorSeed;
+    if (value == null) {
+      colorSeed = value = pmc().getInt(KEY_COLOR_SEED, COLOR_SEED_DEFAULT) | 0xff000000;
+    }
+    return value;
+  }
+
+  public void setColorSeed (int argb) {
+    colorSeed = argb | 0xff000000;
+    putInt(KEY_COLOR_SEED, colorSeed);
+  }
+
+  /** COLOR_STYLE_*: Tonal spot (Android's default), Vibrant, Expressive or Neutral. */
+  public int colorStyle () {
+    int value = colorStyle;
+    if (value < 0) {
+      value = pmc().getInt(KEY_COLOR_STYLE, COLOR_STYLE_TONAL_SPOT);
+      colorStyle = value = value >= COLOR_STYLE_TONAL_SPOT && value <= COLOR_STYLE_NEUTRAL ? value : COLOR_STYLE_TONAL_SPOT;
+    }
+    return value;
+  }
+
+  public void setColorStyle (int style) {
+    colorStyle = style >= COLOR_STYLE_TONAL_SPOT && style <= COLOR_STYLE_NEUTRAL ? style : COLOR_STYLE_TONAL_SPOT;
+    putInt(KEY_COLOR_STYLE, colorStyle);
   }
 
   // Two panes (Appearance > Layout, see com.fahadali.xgram.layout.XgramTwoPane): how wide the chat list pane is.

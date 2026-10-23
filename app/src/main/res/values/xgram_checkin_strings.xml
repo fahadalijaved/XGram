@@ -150,6 +150,7 @@
   <string name="XgramCheckInAddNeedsConnection">Adding time needs a connection.</string>
   <string name="XgramCheckInTooLate">Too late to add time: the alert is being sent.</string>
   <string name="XgramCheckInMax24h">Check In can\'t run longer than 24 hours.</string>
+  <string name="XgramCheckInAddFailed">Time wasn\'t added. Try again.</string>
 
   <!-- Settings (Messages) -->
   <string name="XgramCheckInHeader">Check In</string>

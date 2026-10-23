@@ -429,13 +429,22 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
 
     tdlib.listeners().subscribeToChatFoldersUpdates(this);
     tdlib.settings().addChatListPositionListener(this);
+    com.fahadali.xgram.chats.XgramFolderIcons.addListener(xgramFolderIconListener); // XGram
     updateRecommendedChatFolders();
   }
+
+  /** XGram: what a folder holds became known and changes its icon (XgramFolderIcons): the rows follow. */
+  private final com.fahadali.xgram.chats.XgramFolderIcons.Listener xgramFolderIconListener = (iconTdlib, chatFolderId) -> {
+    if (iconTdlib == tdlib && !isDestroyed()) {
+      updateChatFolders();
+    }
+  };
 
   @Override
   public void destroy () {
     super.destroy();
     tdlib.listeners().unsubscribeFromChatFoldersUpdates(this);
+    com.fahadali.xgram.chats.XgramFolderIcons.removeListener(xgramFolderIconListener); // XGram
   }
 
   @Override
@@ -981,7 +990,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
   }
 
   private ListItem chatFolderItem (TdApi.ChatFolderInfo chatFolderInfo) {
-    int iconRes = TD.findFolderIcon(chatFolderInfo.icon, R.drawable.baseline_folder_24);
+    int iconRes = com.fahadali.xgram.chats.XgramFolderIcons.iconRes(tdlib, chatFolderInfo); // XGram: the folder's own icon
     ListItem item = new ListItem(ListItem.TYPE_CUSTOM - TYPE_CHAT_FOLDER, R.id.chatFolder, iconRes, TD.toCharSequence(chatFolderInfo.name));
     item.setIntValue(chatFolderInfo.id);
     item.setLongId(chatFolderInfo.id);
@@ -994,7 +1003,7 @@ public class SettingsFoldersController extends RecyclerViewController<Void> impl
     item.setData(recommendedChatFolder.folder);
     item.setString(TD.toCharSequence(recommendedChatFolder.folder.name));
     item.setStringValue(recommendedChatFolder.description);
-    item.setIconRes(tdlib.chatFolderIconDrawable(recommendedChatFolder.folder, R.drawable.baseline_folder_24));
+    item.setIconRes(com.fahadali.xgram.chats.XgramFolderIcons.iconRes(tdlib, recommendedChatFolder.folder)); // XGram: nothing asked of TDLib
     return item;
   }
 

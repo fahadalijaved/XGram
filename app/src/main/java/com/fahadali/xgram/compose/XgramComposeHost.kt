@@ -13,6 +13,7 @@ package com.fahadali.xgram.compose
 
 import android.graphics.Rect
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.font.FontFamily
 import org.thunderdog.challegram.BaseActivity
 import org.thunderdog.challegram.R
 import org.thunderdog.challegram.core.Lang
@@ -106,7 +107,8 @@ val LocalXgramHost = staticCompositionLocalOf<XgramComposeHost> { error("XgramCo
 
 /**
  * One choice in a bottom sheet: tapping an option closes the sheet, then calls [onSelect]. [subtitles] are the options'
- * own sub-lines by index (null or missing: none); [info] is about the whole choice.
+ * own sub-lines by index (null or missing: none); [info] is about the whole choice. [fonts]: an option's title and
+ * sub-line drawn in its own font family by index (the Font picker's previews; null or missing: the theme's).
  */
 class ChoiceSpec<T>(
   val title: String,
@@ -114,6 +116,7 @@ class ChoiceSpec<T>(
   val options: List<Pair<String, T>>,
   val selected: T,
   val subtitles: List<String?> = emptyList(),
+  val fonts: List<FontFamily?> = emptyList(),
   val onSelect: (T) -> Unit
 ) {
   val labels: List<String>

@@ -54,6 +54,7 @@ public class Fonts {
 
   private static Boolean needSystemFonts;
   private static Typeface robotoRegular, robotoBold, robotoMedium, robotoItalic, robotoMono;
+  private static Typeface systemRegular, systemBold, systemMedium, systemItalic; // XGram: Telegram X's own (Font: System)
 
   private static Typeface loadBuiltinFont (String path) {
     AssetManager manager = UI.getContext().getResources().getAssets();
@@ -105,20 +106,51 @@ public class Fonts {
   // XGram: system fonts are derived from Typeface.DEFAULT, like the official app. Looking fonts up by family
   // name ("sans-serif") ignores the font style picked in the device settings (e.g. Samsung's Font style).
 
+  // XGram: the app font (XGram > Appearance > Font, com.fahadali.xgram.appearance.XgramFonts): Google Sans Flex or
+  // Rounded at Roboto's weights (regular 400, medium 500, bold 700, italic); with System, Telegram X's own fonts
+  // (getSystem*). The monospace font stays Roboto Mono or the device's monospace.
+
   public static Typeface getRobotoRegular () {
-    return robotoRegular != null ? robotoRegular : (robotoRegular = loadFont("fonts/Roboto-Regular.ttf", () ->
+    return robotoRegular != null ? robotoRegular : (robotoRegular = appFont(400, false, Fonts::getSystemRegular));
+  }
+
+  public static Typeface getRobotoBold () {
+    return robotoBold != null ? robotoBold : (robotoBold = appFont(700, false, Fonts::getSystemBold));
+  }
+
+  public static Typeface getRobotoMedium () {
+    return robotoMedium != null ? robotoMedium : (robotoMedium = appFont(500, false, Fonts::getSystemMedium));
+  }
+
+  public static Typeface getRobotoItalic () {
+    return robotoItalic != null ? robotoItalic : (robotoItalic = appFont(400, true, Fonts::getSystemItalic));
+  }
+
+  /** XGram: Google Sans at medium italic (the bold italic of {@link #newRobotoStorage}); null with System, faked there. */
+  @Nullable
+  public static Typeface getRobotoMediumItalic () {
+    return com.fahadali.xgram.appearance.XgramFonts.typeface(500, true);
+  }
+
+  private static Typeface appFont (int weight, boolean italic, @NonNull Future<Typeface> system) {
+    Typeface typeface = com.fahadali.xgram.appearance.XgramFonts.typeface(weight, italic);
+    return typeface != null ? typeface : system.getValue();
+  }
+
+  public static Typeface getSystemRegular () {
+    return systemRegular != null ? systemRegular : (systemRegular = loadFont("fonts/Roboto-Regular.ttf", () ->
       Typeface.DEFAULT
     ));
   }
 
-  public static Typeface getRobotoBold () {
-    return robotoBold != null ? robotoBold : (robotoBold = loadFont("fonts/Roboto-Bold.ttf", () ->
+  public static Typeface getSystemBold () {
+    return systemBold != null ? systemBold : (systemBold = loadFont("fonts/Roboto-Bold.ttf", () ->
       Typeface.DEFAULT_BOLD
     ));
   }
 
-  public static Typeface getRobotoMedium () {
-    return robotoMedium != null ? robotoMedium : (robotoMedium = loadFont("fonts/Roboto-Medium.ttf", () -> {
+  public static Typeface getSystemMedium () {
+    return systemMedium != null ? systemMedium : (systemMedium = loadFont("fonts/Roboto-Medium.ttf", () -> {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         return Typeface.create(Typeface.DEFAULT, 500, false);
       }
@@ -126,8 +158,8 @@ public class Fonts {
     }));
   }
 
-  public static Typeface getRobotoItalic () {
-    return robotoItalic != null ? robotoItalic : (robotoItalic = loadFont("fonts/Roboto-Italic.ttf", () ->
+  public static Typeface getSystemItalic () {
+    return systemItalic != null ? systemItalic : (systemItalic = loadFont("fonts/Roboto-Italic.ttf", () ->
       Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
     ));
   }
@@ -140,7 +172,7 @@ public class Fonts {
         return null;
       }
       Typeface monospace = LOAD_MONO ? loadSystemFont("monospace", Typeface.NORMAL, Typeface.MONOSPACE) : Typeface.MONOSPACE;
-      if (monospace != null && monospace.equals(getRobotoRegular())) {
+      if (monospace != null && monospace.equals(getSystemRegular())) { // XGram: the device font, not the app font
         return null;
       }
       return monospace;
@@ -318,6 +350,6 @@ public class Fonts {
   }
 
   public static TextPaintStorage newRobotoStorage () {
-    return new TextPaintStorage(getRobotoRegular(), getRobotoMedium(), getRobotoItalic(), null, getRobotoMono(), getRobotoBold(), 0);
+    return new TextPaintStorage(getRobotoRegular(), getRobotoMedium(), getRobotoItalic(), getRobotoMediumItalic(), getRobotoMono(), getRobotoBold(), 0); // XGram: real bold italic with Google Sans
   }
 }

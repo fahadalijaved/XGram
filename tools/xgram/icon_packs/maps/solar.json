@@ -345,5 +345,8 @@
  "auto_awesome": "magic-stick-3",
  "sort": "sort",
  "view_list": "rows-2",
- "grid_view": "widget"
+ "grid_view": "widget",
+ "cloud_off": {"icon": "cloud", "slash": true},
+ "telegram": "plain-2",
+ "currency_bitcoin": "dollar"
 }

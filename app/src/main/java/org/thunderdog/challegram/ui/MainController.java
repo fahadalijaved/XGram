@@ -218,6 +218,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   protected void onCreateView (Context context, FrameLayoutFix contentView, ViewPager pager) {
     com.fahadali.xgram.XgramSettings.instance().addListener(xgramSettingsListener); // XGram
     com.fahadali.xgram.activity.XgramActivityBadge.instance().addListener(xgramActivityBadgeListener); // XGram: the bell's dot
+    com.fahadali.xgram.chats.XgramFolderIcons.addListener(xgramFolderIconListener); // XGram: folder icons known later
     if (BuildConfig.DEBUG) {
       Test.execute();
     }
@@ -1411,7 +1412,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     } else {
       recyclerView.setClipToPadding(false);
       recyclerView.setPadding(Screen.dp(12), 0, Screen.dp(12), 0);
-      int menuWidth = Screen.dp(44f);
+      // XGram: Search, unless Header buttons hides it: then the last folder tab lines up as the first does (4 + 12dp)
+      int menuWidth = Screen.dp(xgramSearchShown() ? 44f : 4f);
       if (org.thunderdog.challegram.navigation.LockHeaderButton.xgramShown()) {
         menuWidth += Screen.dp(48f); // XGram: only while the lock shows (Lock button in the chat list can hide it)
       }
@@ -1837,6 +1839,7 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     com.fahadali.xgram.appearance.XgramMotion.removeLiftListener(xgramFabLift); // XGram: extended FAB
     com.fahadali.xgram.XgramSettings.instance().removeListener(xgramSettingsListener); // XGram
     com.fahadali.xgram.activity.XgramActivityBadge.instance().removeListener(xgramActivityBadgeListener); // XGram
+    com.fahadali.xgram.chats.XgramFolderIcons.removeListener(xgramFolderIconListener); // XGram
     xgramConnDestroy(); // XGram
     if (xgramNavBar != null) {
       xgramNavBar.destroy(); // XGram: its badge and theme listeners go
@@ -3075,7 +3078,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
       // XGram: Activity (every mention, reply and reaction), with a dot while it has new items
       xgramActivityButton = header.addButton(menu, R.id.menu_btn_xgramActivity, R.drawable.baseline_notifications_24, getHeaderIconColorId(), this, Screen.dp(49f));
       xgramUpdateActivityButton();
-      header.addSearchButton(menu, this);
+      xgramSearchButton = header.addSearchButton(menu, this);
+      xgramSearchButton.setVisibility(xgramSearchShown() ? View.VISIBLE : View.GONE); // XGram: Header buttons can hide it
       if (id == R.id.menu_xgramMainNoDrawer) {
         xgramMoreButton = header.addMoreButton(menu, this); // XGram M3E: the side menu's items while it is hidden
         xgramUpdateMoreBadge(false);
@@ -3092,6 +3096,50 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private HeaderButton xgramGhostButton;
   /** XGram: Activity's bell (the one made last; a menu the header kept has its own). */
   @Nullable private HeaderButton xgramActivityButton;
+  /** XGram: Search (the one made last; a menu the header kept has its own). */
+  @Nullable private HeaderButton xgramSearchButton;
+
+  // XGram: Chat list → Header buttons hides the lock (Passcode lock's own key, LockHeaderButton follows it), the ghost
+  // mode indicator, Activity's bell (Activity's In the chat list header) and Search. The ⋮ stays: while the side menu
+  // is hidden it is the only way to the side menu's items. A change applies at once, on every copy of the menu the
+  // header keeps, and the folder tabs take the room back.
+
+  private static boolean xgramGhostButtonShown () {
+    com.fahadali.xgram.XgramSettings settings = com.fahadali.xgram.XgramSettings.instance();
+    return settings.isAnyGhostEnabled() && !settings.headerButtonHidden(com.fahadali.xgram.XgramSettings.HEADER_BUTTON_GHOST);
+  }
+
+  private static boolean xgramSearchShown () {
+    return !com.fahadali.xgram.XgramSettings.instance().headerButtonHidden(com.fahadali.xgram.XgramSettings.HEADER_BUTTON_SEARCH);
+  }
+
+  /** XGram: a button's visibility on the menu made last ({@code latest}) and on every copy the header kept. */
+  private void xgramSetMenuButtonVisible (int buttonId, @Nullable View latest, boolean visible) {
+    final int visibility = visible ? View.VISIBLE : View.GONE;
+    if (latest != null) {
+      latest.setVisibility(visibility);
+    }
+    if (headerView != null) {
+      for (int i = 0; i < headerView.getChildCount(); i++) {
+        View child = headerView.getChildAt(i);
+        if (child instanceof ViewGroup && (child.getId() == R.id.menu_main || child.getId() == R.id.menu_xgramMainNoDrawer)) {
+          View button = child.findViewById(buttonId);
+          if (button != null && button != latest) {
+            button.setVisibility(visibility);
+          }
+        }
+      }
+    }
+  }
+
+  /** XGram: Header buttons changed: the ghost mode indicator and Search come or go, the folder tabs follow. */
+  private void xgramUpdateHeaderButtons () {
+    if (isDestroyed()) {
+      return;
+    }
+    xgramSetMenuButtonVisible(R.id.menu_btn_search, xgramSearchButton, xgramSearchShown());
+    xgramUpdateGhostButton(); // then checkHeaderMargins
+  }
 
   /**
    * XGram: the bell shows while Activity is on, In the chat list header is on and the navigation has no Activity (the
@@ -3171,7 +3219,9 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   private final com.fahadali.xgram.XgramSettings.Listener xgramSettingsListener = key -> {
-    if (key.startsWith("xgram_ghost_")) {
+    if (key.startsWith(com.fahadali.xgram.XgramSettings.KEY_HEADER_BUTTON_HIDDEN)) {
+      UI.post(this::xgramUpdateHeaderButtons); // XGram: Header buttons (the lock and the bell have their own keys)
+    } else if (key.startsWith("xgram_ghost_")) {
       UI.post(this::xgramUpdateGhostButton);
     } else if (com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_ON.equals(key) || com.fahadali.xgram.XgramSettings.KEY_ACTIVITY_BAR.equals(key)) {
       // XGram: Activity came or went, or its place on the bottom bar changed: the rail's destinations, the toolbar's
@@ -3307,9 +3357,11 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   }
 
   private void xgramUpdateGhostButton () {
-    if (xgramGhostButton != null) {
-      xgramGhostButton.setVisibility(com.fahadali.xgram.XgramSettings.instance().isAnyGhostEnabled() ? View.VISIBLE : View.GONE);
+    if (isDestroyed()) {
+      return;
     }
+    // While ghost mode is on, unless Header buttons hides it; a menu the header kept follows too
+    xgramSetMenuButtonVisible(R.id.menu_btn_xgramGhost, xgramGhostButton, xgramGhostButtonShown());
     checkHeaderMargins(); // the folder tabs make room for the button, or take it back
   }
 
@@ -4190,10 +4242,8 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
     }
     if (isFolder) {
       options.item(new OptionItem(R.id.btn_editFolder, Lang.getString(R.string.EditFolder), OptionColor.NORMAL, R.drawable.baseline_edit_24));
-      int chatFolderStyle = tdlib.settings().chatFolderStyle();
-      if (hasIcon(chatFolderStyle)) {
-        options.item(new OptionItem(R.id.btn_changeFolderIcon, Lang.getString(R.string.ChatFolderChangeIcon), OptionColor.NORMAL, R.drawable.baseline_image_24));
-      }
+      // XGram: whatever the tabs show: the icon is also in Share, Add to folder and the folder settings
+      options.item(new OptionItem(R.id.btn_changeFolderIcon, Lang.getString(R.string.ChatFolderChangeIcon), OptionColor.NORMAL, R.drawable.baseline_image_24));
       options.item(new OptionItem(R.id.btn_folderIncludeChats, Lang.getString(R.string.ChatFolderAddChats), OptionColor.NORMAL, R.drawable.baseline_add_24));
       if (chatFolderInfo != null) {
         options.item(new OptionItem(R.id.btn_shareFolder, Lang.getString(R.string.ShareFolder), OptionColor.NORMAL, R.drawable.baseline_share_arrow_24));
@@ -4795,20 +4845,49 @@ public class MainController extends ViewPagerController<Void> implements Menu, M
   private ViewPagerTopView.Item buildMainSectionItem (int pagerItemPosition, @ChatFolderStyle int chatFolderStyle) {
     CharSequence sectionName = getMenuSectionName(MAIN_PAGER_ITEM_ID, pagerItemPosition, /* hasFolders */ true, chatFolderStyle, /* upperCase */ false);
     int iconResource = menuNeedArchive ? R.drawable.baseline_archive_24 : R.drawable.baseline_forum_24;
-    return buildSectionItem(MAIN_PAGER_ITEM_ID, pagerItemPosition, ChatPosition.CHAT_LIST_MAIN, sectionName, iconResource, chatFolderStyle);
+    ViewPagerTopView.Item item = buildSectionItem(MAIN_PAGER_ITEM_ID, pagerItemPosition, ChatPosition.CHAT_LIST_MAIN, sectionName, iconResource, chatFolderStyle);
+    if (TextUtils.isEmpty(sectionName)) {
+      item.xgramSetDescription(Lang.getString(menuNeedArchive ? R.string.CategoryArchive : R.string.CategoryMain)); // XGram: TalkBack, an icon-only tab
+    }
+    return item;
   }
 
   private ViewPagerTopView.Item buildArchiveSectionItem (int pagerItemPosition, @ChatFolderStyle int chatFolderStyle) {
     CharSequence sectionName = getMenuSectionName(ARCHIVE_PAGER_ITEM_ID, pagerItemPosition, /* hasFolders */ true, chatFolderStyle, /* upperCase */ false);
     int iconResource = R.drawable.baseline_archive_24;
-    return buildSectionItem(ARCHIVE_PAGER_ITEM_ID, pagerItemPosition, ChatPosition.CHAT_LIST_ARCHIVE, sectionName, iconResource, chatFolderStyle);
+    ViewPagerTopView.Item item = buildSectionItem(ARCHIVE_PAGER_ITEM_ID, pagerItemPosition, ChatPosition.CHAT_LIST_ARCHIVE, sectionName, iconResource, chatFolderStyle);
+    if (TextUtils.isEmpty(sectionName)) {
+      item.xgramSetDescription(Lang.getString(R.string.CategoryArchive)); // XGram: TalkBack, an icon-only tab
+    }
+    return item;
   }
 
   private ViewPagerTopView.Item buildSectionItem (long pagerItemId, int pagerItemPosition, TdApi.ChatList chatList, TdApi.ChatFolderInfo chatFolderInfo, @ChatFolderStyle int chatFolderStyle) {
-    CharSequence sectionName = getFolderSectionName(pagerItemId, TD.toCharSequence(chatFolderInfo.name), chatFolderStyle);
-    int iconResource = TD.findFolderIcon(chatFolderInfo.icon, R.drawable.baseline_folder_24);
-    return buildSectionItem(pagerItemId, pagerItemPosition, chatList, sectionName, iconResource, chatFolderStyle);
+    // XGram: the folder's own icon (XgramFolderIcons: the chosen one, the name's emoji or custom emoji, a word in the
+    // name, what it holds), nothing that waits on TDLib. The emoji that became the icon leaves the label, unless the
+    // tabs show labels only; TalkBack reads the whole name.
+    com.fahadali.xgram.chats.XgramFolderIcons.Icon folderIcon = com.fahadali.xgram.chats.XgramFolderIcons.resolve(tdlib, chatFolderInfo);
+    CharSequence folderName = hasIcon(chatFolderStyle) ? folderIcon.label : TD.toCharSequence(chatFolderInfo.name);
+    CharSequence sectionName = getFolderSectionName(pagerItemId, folderName, chatFolderStyle);
+    ViewPagerTopView.Item item = buildSectionItem(pagerItemId, pagerItemPosition, chatList, sectionName, folderIcon.iconRes, chatFolderStyle);
+    if (item.iconRes != ResourcesCompat.ID_NULL) {
+      item.xgramSetEmojiIcon(tdlib, folderIcon.emoji, folderIcon.customEmojiId, folderIcon.animate);
+    }
+    item.xgramSetDescription(folderIcon.description);
+    return item;
   }
+
+  /** XGram: what a folder holds became known and changes its icon (XgramFolderIcons): its tab is built again. */
+  private final com.fahadali.xgram.chats.XgramFolderIcons.Listener xgramFolderIconListener = (iconTdlib, chatFolderId) -> {
+    if (iconTdlib != tdlib || isDestroyed() || !hasFolders()) {
+      return;
+    }
+    TdApi.ChatList chatList = new TdApi.ChatListFolder(chatFolderId);
+    int position = indexOfChatList(chatList);
+    if (position != -1) {
+      replaceSectionItem(getPagerItemId(chatList), position);
+    }
+  };
 
   private ViewPagerTopView.Item buildSectionItem (long pagerItemId, int pagerItemPosition, TdApi.ChatList chatList, CharSequence sectionName, @DrawableRes int iconResource, @ChatFolderStyle int chatFolderStyle) {
     int selectedFilter = getSelectedFilter(pagerItemId);

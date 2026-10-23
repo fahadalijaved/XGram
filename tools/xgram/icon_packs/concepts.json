@@ -2277,10 +2277,16 @@
  },
  "exit_to_app": {
   "tgx": [
-   "baseline_exit_to_app_24"
+   "baseline_exit_to_app_24",
+   "baseline_logout_24"
   ],
   "where": [
-   "java/org/thunderdog/challegram/ui/EditSessionController.java"
+   "java/org/thunderdog/challegram/ui/EditSessionController.java",
+   "java/org/thunderdog/challegram/ui/SettingsLogOutController.java",
+   "java/org/thunderdog/challegram/navigation/DrawerController.java",
+   "java/org/thunderdog/challegram/telegram/TdlibUi.java",
+   "java/com/fahadali/xgram/layout/XgramNavToolbar.java",
+   "java/com/fahadali/xgram/search/TgxSearchIndex.kt"
   ]
  },
  "android": {
@@ -2837,6 +2843,34 @@
   ],
   "where": [
    "java/com/fahadali/xgram/compose/pages/XDriveTabs.kt"
+  ]
+ },
+ "cloud_off": {
+  "tgx": [
+   "xgram_cloud_off_24"
+  ],
+  "where": [
+   "java/com/fahadali/xgram/appearance/XgramConnectionPill.java",
+   "java/com/fahadali/xgram/appearance/XgramTitleMorph.java",
+   "java/com/fahadali/xgram/appearance/XgramR6B1Prompts.java",
+   "java/org/thunderdog/challegram/component/chat/ChatHeaderView.java"
+  ]
+ },
+ "telegram": {
+  "tgx": [
+   "baseline_telegram_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java",
+   "java/com/fahadali/xgram/appearance/XgramM3CallScreen.java"
+  ]
+ },
+ "currency_bitcoin": {
+  "tgx": [
+   "baseline_currency_bitcoin_24"
+  ],
+  "where": [
+   "java/org/thunderdog/challegram/data/TD.java"
   ]
  }
 }

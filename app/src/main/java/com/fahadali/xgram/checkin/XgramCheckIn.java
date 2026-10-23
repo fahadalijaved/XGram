@@ -1495,7 +1495,8 @@ public final class XgramCheckIn {
       }
       if (error != null) {
         log("add time error ref=%s %s", ref, error.message);
-        reply(callback, false, TD.toErrorString(error));
+        // Telegram's own error text ("message not found") means nothing to the user; it stays in the log
+        reply(callback, false, Lang.getString(R.string.XgramCheckInAddFailed));
         reconcile(cur.acc, null);
         return;
       }

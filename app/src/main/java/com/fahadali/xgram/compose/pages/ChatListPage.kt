@@ -249,6 +249,14 @@ fun ChatListPage() {
 
     header(R.string.XgramHeaderScreen)
     group {
+      // The chat list's top row: the lock, ghost mode, Activity's bell and Search
+      val hiddenButtons = com.fahadali.xgram.chats.XgramHeaderButtonsController.hiddenCount()
+      value(
+        R.id.btn_xgramHeaderButtons, s(R.string.XgramHeaderButtons),
+        if (hiddenButtons > 0) s(R.string.XgramHiddenCount, hiddenButtons) else s(R.string.XgramAllShown)
+      ) {
+        host.openPage(XgramPage.HEADER_BUTTONS)
+      }
       switch(R.id.btn_xgramHideFab, s(R.string.XgramHideFab), s(R.string.XgramHideFabSub), checked = settings.hideFab()) {
         settings.setHideFab(it)
       }

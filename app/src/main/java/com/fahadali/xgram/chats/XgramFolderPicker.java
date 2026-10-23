@@ -127,7 +127,8 @@ public final class XgramFolderPicker {
       boolean inFolder = allInFolder(tdlib, chatIds, folders[i]);
       CharSequence name = TD.toCharSequence(info.name);
       final boolean hidden = allHidden || !tdlib.settings().isChatFolderEnabled(info.id);
-      final int icon = TD.findFolderIcon(info.icon, R.drawable.baseline_folder_24);
+      // the folder's own icon, from its settings at hand
+      final int icon = folders[i] != null ? XgramFolderIcons.iconRes(tdlib, folders[i]) : XgramFolderIcons.iconRes(tdlib, info);
       if (xgram && hidden) {
         items.add(new ListItem(ListItem.TYPE_CHECKBOX_OPTION_DOUBLE_LINE, R.id.chatFolder, icon, name, inFolder).setStringValue(Lang.getString(R.string.XgramR6B3FolderHidden)).setIntValue(info.id));
         continue;

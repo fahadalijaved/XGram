@@ -76,12 +76,12 @@ enum class XgramFeature(@DrawableRes val icon: Int, @StringRes val title: Int, @
 
 /**
  * When the welcome after an update shows ([XgramUpdateScreen.welcomeIfNeeded]): once per version, never after a fresh
- * install. The highlights built into the app ([BUILT_IN]) show in the first welcome after they changed; later welcomes
- * show the installed build's post instead (its own highlights and notes), and only when it has notes. Local state, not
- * in backups.
+ * install. The highlights built into the app ([BUILT_IN]) show in the first welcome after they changed (with the
+ * installed build's notes under them); later versions show no welcome until [HIGHLIGHTS_VERSION] is raised, so the
+ * update card's notes are not repeated after every build. Local state, not in backups.
  */
 internal object XgramWelcome {
-  /** The version whose welcome was shown (or skipped: a fresh install, a build without a post). */
+  /** The version whose welcome was shown (or skipped: a fresh install, a version with no new [BUILT_IN] set). */
   private const val KEY_CODE = "xgram_welcome_code"
 
   /** The [BUILT_IN] set the user has seen. */
@@ -113,10 +113,10 @@ internal object XgramWelcome {
     return true
   }
 
-  /** Whether the welcome shows [BUILT_IN] (with Try it) rather than the post's highlights. */
+  /** Whether this version's welcome shows [BUILT_IN] (with Try it); when false there is no welcome to show. */
   fun builtInDue(): Boolean = pmc.getInt(KEY_HIGHLIGHTS, 0) < HIGHLIGHTS_VERSION
 
-  /** This version's welcome was shown ([builtIn]: with [BUILT_IN]), or there is none to show. */
+  /** This version's welcome was shown ([builtIn]: with [BUILT_IN]), or there is none to show ([builtIn] false). */
   fun done(builtIn: Boolean) {
     pmc.putInt(KEY_CODE, BuildConfig.ORIGINAL_VERSION_CODE)
     if (builtIn) {

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- App font (com.fahadali.xgram.appearance.XgramFonts): Settings > XGram > Appearance > Font, the Compose sheet and the classic popup. The font names are names: keep them as they are. -->
+  <string name="XgramFont">Font</string>
+  <string name="XgramFontFlex">Google Sans Flex</string>
+  <string name="XgramFontRounded">Google Sans Rounded</string>
+  <string name="XgramFontSystem">System</string>
+  <!-- A preview line drawn in each font: a short sentence with many different letters of your language -->
+  <string name="XgramFontPreview">The quick brown fox jumps over the lazy dog</string>
+  <string name="XgramFontInfo">XGram restarts to apply a new font. Letters Google Sans doesn\'t have, such as Cyrillic, Greek or Arabic, use the system font.</string>
+  <!-- Confirmation after picking a font; %1$s is the font's name -->
+  <string name="XgramFontRestartText">XGram restarts to use %1$s.</string>
+  <!-- Telegram X's Use system fonts (Settings > Themes > Other) while Google Sans is in use; %1$s is the font's name -->
+  <string name="XgramFontSystemFontsInfo">XGram\'s text is in %1$s. Use system fonts applies when Font is System, in XGram › Appearance › Font.</string>
+  <!-- Settings search: more words the Font row is found by, separated by | -->
+  <string name="XgramSearchKwAppFont">google sans|flex|rounded|roboto|typeface</string>
+</resources>

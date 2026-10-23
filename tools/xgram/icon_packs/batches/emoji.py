@@ -243,6 +243,12 @@ ICONS = {
     'thumb_up': [RR(3, 10, 3.8, 10.5, 1.3), P('M6.8 10.5l3.4-6.9a2.2 2.2 0 0 1 2.8 2v4.1h5.4a2 2 0 0 1 2 2.4l-1.3 6.6a2 2 0 0 1-2 1.8H6.8v-10Z')],
     'airplane': tfe([P('M12 2.5c.8 0 1.3 1 1.3 2.2V9l7.7 4.5v2l-7.7-2.3v5l2.5 1.8v1.5L12 20.5l-3.8 1V20l2.5-1.8v-5L3 15.5v-2L10.7 9V4.7c0-1.2.5-2.2 1.3-2.2Z')],
                     0.92, 1.1, -1.1, rot=45),
+    # the Airplane folder (Telegram X draws the Telegram logo there, which the Expressive call screen's brand chip shares):
+    # a paper plane of our own, its underside folded in and the tail flap below, so it is not the composer's send
+    'telegram': [PL((20.8, 4.2), (17.2, 20), (11.2, 14.9), (7.4, 13.15), (2.8, 11.3), close=True), PL((7.4, 13.15), (9.4, 19.1), (13, 16.43))],
+    # the Money folder: the bitcoin sign, as Telegram X's
+    'currency_bitcoin': [P('M6.6 5.5h6.6a3.25 3.25 0 0 1 0 6.5h.9a3.25 3.25 0 0 1 0 6.5H6.6'), L(8.8, 5.5, 8.8, 18.5), L(8.8, 12, 13.2, 12),
+                         L(10.4, 2.8, 10.4, 5.5), L(14, 2.8, 14, 5.5), L(10.4, 18.5, 10.4, 21.2), L(14, 18.5, 14, 21.2)],
     'finance': [RR(3.5, 15, 4.4, 5.5, 1), RR(9.8, 12.5, 4.4, 8, 1), RR(16.1, 10, 4.4, 10.5, 1), PL((3.5, 10.5), (8.5, 6), (12.5, 8.5), (19.5, 3.5)),
                 PL((15.5, 3.5), (19.5, 3.5), (19.5, 7.5))],
     'bubble_chart': [C(15.6, 8.2, 4.6), C(7.2, 15.2, 3.4), C(16.8, 18.2, 2.2)],
@@ -299,6 +305,8 @@ MAP = {
     'baseline_book_24': 'book',
     'baseline_thumb_up_24': 'thumb_up',
     'baseline_airplane_24': 'airplane',
+    'baseline_telegram_24': 'telegram',
+    'baseline_currency_bitcoin_24': 'currency_bitcoin',
     'baseline_finance_24': 'finance',
     'baseline_bubble_chart_24': 'bubble_chart',
     'templarian_baseline_gamepad_variant_16': 'gamepad_variant',

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- App font (com.fahadali.xgram.appearance.XgramFonts): the Font row and the classic popup's options -->
+  <item type="id" name="btn_xgramFont" />
+  <item type="id" name="btn_xgramFontFlex" />
+  <item type="id" name="btn_xgramFontRounded" />
+  <item type="id" name="btn_xgramFontSystem" />
+</resources>

@@ -4549,6 +4549,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
   @Override
   public void onFocus () {
     super.onFocus();
+    xgramUpdateSnackbarRoom(); // XGram: snackbars float above the message box (first: Later's in-chat snackbar below)
     xgramCheckAutoTranslate(); // XGram: e.g. a chat preview opened in full
     com.fahadali.xgram.later.XgramLater.onChatOpened(this); // XGram: Later (the bell goes, a snoozed chat says so)
     if (promptDraftPrefillOnFocus) {
@@ -4768,6 +4769,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     }
 
     super.onBlur();
+    com.fahadali.xgram.appearance.XgramSnackbar.setBottomObstruction(bottomWrap, 0); // XGram: the box is no longer in front
 
     messagesView.stopScroll();
 
@@ -4862,6 +4864,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       xgramUndoBubbles.reset();
     }
     com.fahadali.xgram.chats.XgramAutoTranslate.removeListener(xgramTranslateListener); // XGram
+    com.fahadali.xgram.appearance.XgramSnackbar.setBottomObstruction(bottomWrap, 0); // XGram: snackbars above the message box
     if (xgramTopicIcon != null) {
       xgramTopicIcon.performDestroy(); // XGram
       xgramTopicIcon = null;
@@ -8365,6 +8368,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (inputView != null && com.fahadali.xgram.appearance.XgramExpressive.isEnabled()) {
       inputView.invalidate(); // XGram: the field's top corners follow the reply block
     }
+    xgramUpdateSnackbarRoom(); // XGram: the reply bar or the Undo send bar came or went
     checkScrollButtonOffsets();
     onMessagesFrameChanged();
   }
@@ -9265,6 +9269,7 @@ public class MessagesController extends ViewController<MessagesController.Argume
       onMessagesFrameChanged();
       updateRecordLayout();
     }
+    xgramUpdateSnackbarRoom(); // XGram: the message box grew or shrank (more lines, the keyboard)
   }
 
   private long scheduledKeyboardMessageId;
@@ -10859,6 +10864,17 @@ public class MessagesController extends ViewController<MessagesController.Argume
     bottom += getKeyboardOffset();
     bottom -= extraBottomInset;
     return (int) bottom;
+  }
+
+  // XGram: with Expressive design a snackbar (in place of a toast) floats 8dp above the message box, its reply bar and
+  // the Undo send bar while this chat is in front, not over the box. Kept up to date as they change height; cleared on
+  // blur and destroy.
+  private void xgramUpdateSnackbarRoom () {
+    if (bottomWrap == null) {
+      return;
+    }
+    final int px = isFocused() && bottomWrap.getVisibility() == View.VISIBLE ? getInputOffset(false) + Screen.dp(8f) : 0;
+    com.fahadali.xgram.appearance.XgramSnackbar.setBottomObstruction(bottomWrap, px, true);
   }
 
   // Stickers

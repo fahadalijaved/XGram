@@ -102,7 +102,8 @@ fun ChoiceSheet(spec: ChoiceSpec<*>, onDismiss: () -> Unit) {
             title = label,
             subtitle = spec.subtitles.getOrNull(index),
             selected = index == selectedIndex,
-            shapes = ListItemDefaults.segmentedShapes(index = index, count = labels.size)
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = labels.size),
+            fontFamily = spec.fonts.getOrNull(index)
           ) {
             scope.launch { sheetState.hide() }.invokeOnCompletion {
               onDismiss()

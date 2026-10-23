@@ -97,6 +97,9 @@ public final class XgramMaterialYou {
 
   @RequiresApi(Build.VERSION_CODES.S)
   private static String seed (Context context) {
+    if (XgramColorSource.isCustom()) {
+      return XgramColorSource.key(); // XGram: a colour picked in Appearance > Colours: the themes follow it, not the wallpaper
+    }
     return Integer.toHexString(color(context, android.R.color.system_accent1_500)) + ":" +
       Integer.toHexString(color(context, android.R.color.system_accent2_500)) + ":" +
       Integer.toHexString(color(context, android.R.color.system_neutral1_500));
@@ -196,16 +199,16 @@ public final class XgramMaterialYou {
 
   @RequiresApi(Build.VERSION_CODES.S)
   private static void fill (Context context, int customThemeId, boolean dark) {
-    @ColorInt int accent = color(context, dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600);
-    @ColorInt int accentSoft = color(context, dark ? android.R.color.system_accent1_700 : android.R.color.system_accent1_100);
-    @ColorInt int onAccent = color(context, dark ? android.R.color.system_accent1_900 : android.R.color.system_accent1_0);
-    @ColorInt int surface = color(context, dark ? android.R.color.system_neutral1_900 : android.R.color.system_neutral1_10);
-    @ColorInt int background = color(context, dark ? android.R.color.system_neutral2_900 : android.R.color.system_neutral2_50);
-    @ColorInt int header = color(context, dark ? android.R.color.system_neutral1_900 : android.R.color.system_accent1_600);
-    @ColorInt int onHeader = color(context, dark ? android.R.color.system_neutral1_100 : android.R.color.system_accent1_0);
-    @ColorInt int bubbleOut = color(context, dark ? android.R.color.system_accent1_800 : android.R.color.system_accent1_100);
-    @ColorInt int bubbleOutText = color(context, dark ? android.R.color.system_accent1_50 : android.R.color.system_accent1_900);
-    @ColorInt int bubbleIn = color(context, dark ? android.R.color.system_neutral2_800 : android.R.color.system_neutral1_10);
+    @ColorInt int accent = color(context, dark, dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600);
+    @ColorInt int accentSoft = color(context, dark, dark ? android.R.color.system_accent1_700 : android.R.color.system_accent1_100);
+    @ColorInt int onAccent = color(context, dark, dark ? android.R.color.system_accent1_900 : android.R.color.system_accent1_0);
+    @ColorInt int surface = color(context, dark, dark ? android.R.color.system_neutral1_900 : android.R.color.system_neutral1_10);
+    @ColorInt int background = color(context, dark, dark ? android.R.color.system_neutral2_900 : android.R.color.system_neutral2_50);
+    @ColorInt int header = color(context, dark, dark ? android.R.color.system_neutral1_900 : android.R.color.system_accent1_600);
+    @ColorInt int onHeader = color(context, dark, dark ? android.R.color.system_neutral1_100 : android.R.color.system_accent1_0);
+    @ColorInt int bubbleOut = color(context, dark, dark ? android.R.color.system_accent1_800 : android.R.color.system_accent1_100);
+    @ColorInt int bubbleOutText = color(context, dark, dark ? android.R.color.system_accent1_50 : android.R.color.system_accent1_900);
+    @ColorInt int bubbleIn = color(context, dark, dark ? android.R.color.system_neutral2_800 : android.R.color.system_neutral1_10);
 
     int[] accentIds = {
       ColorId.textNeutral, ColorId.textLink, ColorId.iconActive, ColorId.progress, ColorId.controlActive,
@@ -230,14 +233,14 @@ public final class XgramMaterialYou {
     set(customThemeId, ColorId.headerButtonIcon, onAccent);
     set(customThemeId, ColorId.badgeText, onAccent);
     // Muted chats and the archive: the secondary palette instead of Telegram X's grey.
-    set(customThemeId, ColorId.badgeMuted, color(context, dark ? android.R.color.system_accent2_600 : android.R.color.system_accent2_300));
-    set(customThemeId, ColorId.badgeMutedText, color(context, dark ? android.R.color.system_accent2_50 : android.R.color.system_accent2_0));
-    set(customThemeId, ColorId.chatListMute, color(context, dark ? android.R.color.system_accent2_400 : android.R.color.system_accent2_400));
+    set(customThemeId, ColorId.badgeMuted, color(context, dark, dark ? android.R.color.system_accent2_600 : android.R.color.system_accent2_300));
+    set(customThemeId, ColorId.badgeMutedText, color(context, dark, dark ? android.R.color.system_accent2_50 : android.R.color.system_accent2_0));
+    set(customThemeId, ColorId.chatListMute, color(context, dark, dark ? android.R.color.system_accent2_400 : android.R.color.system_accent2_400));
     set(customThemeId, ColorId.chatSendButton, accent);
     set(customThemeId, ColorId.chatKeyboardButton, accent);
     set(customThemeId, ColorId.unread, accentSoft);
-    set(customThemeId, ColorId.bubbleOut_ticks, color(context, dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600));
-    set(customThemeId, ColorId.bubbleOut_ticksRead, color(context, dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600));
+    set(customThemeId, ColorId.bubbleOut_ticks, color(context, dark, dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600));
+    set(customThemeId, ColorId.bubbleOut_ticksRead, color(context, dark, dark ? android.R.color.system_accent1_200 : android.R.color.system_accent1_600));
     set(customThemeId, ColorId.bubbleOut_messageAuthor, bubbleOutText);
     set(customThemeId, ColorId.textSelectionHighlight, (accent & 0x00FFFFFF) | 0x40000000);
     set(customThemeId, ColorId.textLinkPressHighlight, (accent & 0x00FFFFFF) | 0x30000000);
@@ -251,7 +254,7 @@ public final class XgramMaterialYou {
     set(customThemeId, ColorId.headerTabActiveText, onHeader);
     set(customThemeId, ColorId.headerLightBackground, surface);
     set(customThemeId, ColorId.headerLightIcon, accent);
-    set(customThemeId, ColorId.headerLightText, color(context, dark ? android.R.color.system_neutral1_100 : android.R.color.system_neutral1_900));
+    set(customThemeId, ColorId.headerLightText, color(context, dark, dark ? android.R.color.system_neutral1_100 : android.R.color.system_neutral1_900));
     set(customThemeId, ColorId.bubbleOut_background, bubbleOut);
     set(customThemeId, ColorId.bubbleOut_text, bubbleOutText);
     set(customThemeId, ColorId.bubbleIn_background, bubbleIn);
@@ -302,6 +305,21 @@ public final class XgramMaterialYou {
 
   @RequiresApi(Build.VERSION_CODES.S)
   private static int color (Context context, int res) {
+    return context.getColor(res);
+  }
+
+  /**
+   * A shade of the system palettes in the light or dark theme; with a colour picked in Appearance > Colours
+   * (XgramColorSource), the same tone of the palette its scheme makes instead.
+   */
+  @RequiresApi(Build.VERSION_CODES.S)
+  private static int color (Context context, boolean dark, int res) {
+    if (XgramColorSource.isCustom()) {
+      int custom = XgramColorSource.systemPaletteColor(res, dark);
+      if (custom != 0) {
+        return custom;
+      }
+    }
     return context.getColor(res);
   }
 }

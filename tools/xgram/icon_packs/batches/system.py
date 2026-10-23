@@ -228,4 +228,5 @@ MAP = {
     'baseline_bluetooth_24': 'bluetooth',
     'baseline_launch_24': 'launch',
     'baseline_exit_to_app_24': 'exit_to_app',
+    'baseline_logout_24': 'exit_to_app',
 }

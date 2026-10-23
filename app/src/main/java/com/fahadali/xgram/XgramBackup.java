@@ -64,6 +64,8 @@ public final class XgramBackup {
     XgramSettings.KEY_INPUT_ATTACH_TYPING, XgramSettings.KEY_AVATAR_AT_LAST,
     // Lock button in the chat list (Passcode lock), Popup menu (Message menu)
     XgramSettings.KEY_HIDE_LOCK_BUTTON, XgramSettings.KEY_MESSAGE_POPUP,
+    // Header buttons (Chat list): the ghost mode indicator and Search ("xgram_header_hide_" + the button)
+    XgramSettings.KEY_HEADER_BUTTON_HIDDEN,
     // Add to group or channel (a bot's profile): as an admin, with every right
     XgramSettings.KEY_ADD_BOT_ADMIN, XgramSettings.KEY_ADD_BOT_ALL_RIGHTS,
     // Expressive design and New look for Telegram X pages (Appearance): on by default, so turning one off is kept too
@@ -154,7 +156,9 @@ public final class XgramBackup {
   private static final String[] STRING_PREFIXES = {"xgram_filters", "xgram_ln_", "xgram_menu_hidden", com.fahadali.xgram.chats.XgramMessageMenu.KEY_MORE, com.fahadali.xgram.chats.XgramMessageMenu.KEY_IN_MENU, XgramReorder.KEY_PREFIX, XgramSettings.KEY_TR_TARGET};
   private static final String[] INT_PREFIXES = {"xgram_tab_", "xgram_history_retention", "xgram_avatar_corners", "xgram_chat_long_press", "xgram_look_", "xgram_icon_pack", "xgram_cmode_", "xgram_update_channel", "xgram_download_boost_level", "xgram_swipe_", "xgram_tr_provider", XgramSettings.KEY_INLINE_VIDEO_START, XgramSettings.KEY_ENTER_TO_SEND, XgramSettings.KEY_PANE_LIST_WIDTH, XgramSettings.KEY_NOTIFICATION_ICON, XgramSettings.KEY_REACTION_BAR, XgramSettings.KEY_NAV_TABS, XgramSettings.KEY_NAV_PROFILE, XgramSettings.KEY_NAV_STYLE, XgramSettings.KEY_NAV_FAB, XgramSettings.KEY_UNDO_SEND, XgramSettings.KEY_ACTIVITY_BAR,
     com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY, // Later
-    XgramSettings.KEY_CHECKIN_TIMER, XgramSettings.KEY_CHECKIN_GRACE, XgramSettings.KEY_CHECKIN_RADIUS}; // Check In
+    XgramSettings.KEY_APP_FONT, // Font (Appearance): applies at the next start
+    XgramSettings.KEY_CHECKIN_TIMER, XgramSettings.KEY_CHECKIN_GRACE, XgramSettings.KEY_CHECKIN_RADIUS, // Check In
+    XgramSettings.KEY_COLOR_SOURCE, XgramSettings.KEY_COLOR_SEED, XgramSettings.KEY_COLOR_STYLE}; // Colours (Appearance)
   /** Data rather than settings: exported and imported, but kept by {@link #reset}. */
   private static final String[] LONG_PREFIXES = {"xgram_bm_"};
 
@@ -263,7 +267,9 @@ public final class XgramBackup {
           if (key.startsWith("xgram_tab_") || key.startsWith("xgram_cmode_") || key.equals("xgram_history_retention") || key.equals("xgram_avatar_corners") || key.equals("xgram_chat_long_press") || key.equals("xgram_download_boost_level") || key.equals("xgram_swipe_left") || key.equals("xgram_swipe_right") || key.equals("xgram_tr_provider") || key.equals(XgramSettings.KEY_INLINE_VIDEO_START) || key.equals(XgramSettings.KEY_ENTER_TO_SEND) || key.equals(XgramSettings.KEY_PANE_LIST_WIDTH) || key.equals(XgramSettings.KEY_NOTIFICATION_ICON) || key.equals(XgramSettings.KEY_REACTION_BAR) || key.equals(XgramSettings.KEY_NAV_TABS) || key.equals(XgramSettings.KEY_NAV_PROFILE) || key.equals(XgramSettings.KEY_NAV_STYLE) || key.equals(XgramSettings.KEY_NAV_FAB) || key.equals(XgramSettings.KEY_UNDO_SEND) || key.equals(XgramSettings.KEY_ACTIVITY_BAR) ||
             key.startsWith("xgram_look_") || key.equals(com.fahadali.xgram.appearance.XgramIconPack.KEY) || key.equals("xgram_update_channel") || // Chat look, Icons, Updates
             key.equals(com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY) || // Later
-            key.equals(XgramSettings.KEY_CHECKIN_TIMER) || key.equals(XgramSettings.KEY_CHECKIN_GRACE) || key.equals(XgramSettings.KEY_CHECKIN_RADIUS)) { // Check In
+            key.equals(XgramSettings.KEY_APP_FONT) || // Font
+            key.equals(XgramSettings.KEY_CHECKIN_TIMER) || key.equals(XgramSettings.KEY_CHECKIN_GRACE) || key.equals(XgramSettings.KEY_CHECKIN_RADIUS) || // Check In
+            key.equals(XgramSettings.KEY_COLOR_SOURCE) || key.equals(XgramSettings.KEY_COLOR_SEED) || key.equals(XgramSettings.KEY_COLOR_STYLE)) { // Colours
             pmc().putInt(key, ints.getInt(key));
             count++;
           }

@@ -12,7 +12,6 @@
 package com.fahadali.xgram.appearance;
 
 import android.content.Context;
-import android.content.res.AssetManager;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
@@ -59,10 +58,7 @@ import org.thunderdog.challegram.unsorted.Settings;
 import org.thunderdog.challegram.util.ColorChangeAcceptorDelegate;
 import org.thunderdog.challegram.util.CustomStateListDrawable;
 
-import java.io.InputStream;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Material 3 Expressive (Google's Compose material3 tokens, Pixel Android 16 QPR1 SettingsLib) for the views Telegram X
@@ -457,6 +453,9 @@ public final class XgramExpressive {
 
   @RequiresApi(Build.VERSION_CODES.S)
   private static String systemSeed (Context context) {
+    if (XgramColorSource.isCustom()) {
+      return XgramColorSource.key(); // XGram: a colour picked in Appearance > Colours, whatever the wallpaper
+    }
     return Integer.toHexString(context.getColor(android.R.color.system_accent1_500)) + ":" +
       Integer.toHexString(context.getColor(android.R.color.system_accent2_500)) + ":" +
       Integer.toHexString(context.getColor(android.R.color.system_neutral1_500));
@@ -485,6 +484,24 @@ public final class XgramExpressive {
       } catch (Throwable t) {
         android.util.Log.e("XGram", "Expressive color refresh failed", t);
       }
+    }
+  }
+
+  /**
+   * XGram: the colour source changed (Appearance > Colours, XgramColorSource): repaints the app at once, as a wallpaper
+   * change does, and takes the new seed as the known one, so the next resume does not repaint again.
+   */
+  public static void onColorSourceChanged (@Nullable Context context) {
+    invalidateColors();
+    if (context != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      try {
+        lastSeed = systemSeed(context);
+      } catch (Throwable ignored) { }
+    }
+    try {
+      ThemeManager.xgramNotifyColorsChanged();
+    } catch (Throwable t) {
+      android.util.Log.e("XGram", "Expressive color source refresh failed", t);
     }
   }
 
@@ -595,6 +612,10 @@ public final class XgramExpressive {
   public static int systemRole (Context context, int role, boolean dark) {
     if (role == SCRIM) {
       return 0xff000000;
+    }
+    if (XgramColorSource.isCustom()) {
+      // XGram: Colours > Custom: the scheme made from the picked colour (Material 3 Expressive palettes), not the wallpaper's
+      return XgramColorSource.role(role, dark);
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
       int res = (dark ? SYSTEM_DARK : SYSTEM_LIGHT)[role];
@@ -709,10 +730,6 @@ public final class XgramExpressive {
   private static final int[] TS_WEIGHT = {400, 400, 400, 400, 400, 400, 400, 500, 500, 400, 400, 400, 500, 500, 500};
   private static final int[] TS_WEIGHT_EMPHASIZED = {500, 500, 500, 500, 500, 500, 500, 700, 700, 500, 500, 500, 700, 700, 700};
 
-  private static final String FLEX_PATH = "fonts/GoogleSansFlex.ttf";
-  private static int flexState = -1;
-  private static final HashMap<Integer, Typeface> flexCache = new HashMap<>();
-
   public static float textSizeSp (int ts) {
     return TS_SIZE[ts];
   }
@@ -730,29 +747,14 @@ public final class XgramExpressive {
   }
 
   /**
-   * Google Sans Flex at the style's weight and optical size when assets/fonts/GoogleSansFlex.ttf is bundled;
-   * otherwise the app's own font at that weight (Roboto, or the device font when "Use system fonts" is on).
+   * The app font ({@link XgramFonts}: Google Sans Flex or Rounded) at the style's weight and optical size (cached);
+   * with System the app's own font at that weight (Roboto, or the device font when "Use system fonts" is on).
    */
   public static Typeface typeface (int ts, boolean emphasized) {
     int weight = weight(ts, emphasized);
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && hasFlex()) {
-      int key = weight * 1000 + Math.round(TS_SIZE[ts] * 10f);
-      Typeface cached = flexCache.get(key);
-      if (cached == null) {
-        try {
-          cached = new Typeface.Builder(AppContext.get().getAssets(), FLEX_PATH)
-            .setFontVariationSettings(String.format(Locale.US, "'wght' %d, 'opsz' %.1f", weight, TS_SIZE[ts]))
-            .build();
-        } catch (Throwable t) {
-          cached = null;
-        }
-        if (cached != null) {
-          flexCache.put(key, cached);
-        }
-      }
-      if (cached != null) {
-        return cached;
-      }
+    Typeface appFont = XgramFonts.typeface(weight, false, TS_SIZE[ts]);
+    if (appFont != null) {
+      return appFont;
     }
     if (weight >= 700) {
       return Fonts.getRobotoBold();
@@ -761,20 +763,6 @@ public final class XgramExpressive {
     } else {
       return Fonts.getRobotoRegular();
     }
-  }
-
-  private static boolean hasFlex () {
-    if (flexState == -1) {
-      int state = 0;
-      try {
-        AssetManager assets = AppContext.get().getAssets();
-        try (InputStream in = assets.open(FLEX_PATH)) {
-          state = in != null ? 1 : 0;
-        }
-      } catch (Throwable ignored) { }
-      flexState = state;
-    }
-    return flexState == 1;
   }
 
   /** Size (dp, like the rest of Telegram X's fixed-height rows), typeface and letter spacing of the style. */

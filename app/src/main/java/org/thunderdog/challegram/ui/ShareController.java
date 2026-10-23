@@ -4006,7 +4006,7 @@ public class ShareController extends TelegramViewController<ShareController.Args
       displayChatList(TD.toCharSequence(chatFolderInfo.name), new TdApi.ChatListFolder(chatFolderInfo.id));
     };
     for (TdApi.ChatFolderInfo chatFolderInfo : tdlib.chatFolders()) {
-      View itemView = menu.addItem(View.NO_ID, TD.toCharSequence(chatFolderInfo.name), TD.findFolderIcon(chatFolderInfo.icon, R.drawable.baseline_folder_24), /* icon */ null, onItemClickListener);
+      View itemView = menu.addItem(View.NO_ID, TD.toCharSequence(chatFolderInfo.name), com.fahadali.xgram.chats.XgramFolderIcons.iconRes(tdlib, chatFolderInfo) /* XGram: the folder's own icon */, /* icon */ null, onItemClickListener);
       itemView.setTag(chatFolderInfo);
     }
     menu.setAnchorMode(MenuMoreWrap.ANCHOR_MODE_HEADER);

@@ -345,5 +345,8 @@
  "auto_awesome": "sparkles",
  "sort": "sort-descending",
  "view_list": "rows-2",
- "grid_view": "grid"
+ "grid_view": "grid",
+ "cloud_off": {"icon": "cloud", "slash": true},
+ "telegram": "telegram",
+ "currency_bitcoin": "currency-bitcoin-2"
 }

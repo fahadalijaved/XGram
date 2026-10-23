@@ -64,9 +64,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
   /** Pages further in (their own controllers) that the settings search reads too. */
   static final int SUB_SIDE_MENU = 1, SUB_CHAT_ACTIONS = 2, SUB_MESSAGE_MENU = 3, SUB_INPUT_BUTTONS = 4,
-    SUB_WORD_FILTERS = 5, SUB_HIDDEN_PEOPLE = 6;
+    SUB_WORD_FILTERS = 5, SUB_HIDDEN_PEOPLE = 6, SUB_HEADER_BUTTONS = 7;
   static final int[] SEARCH_SUB_PAGES = {
-    SUB_SIDE_MENU, SUB_CHAT_ACTIONS, SUB_MESSAGE_MENU, SUB_INPUT_BUTTONS, SUB_WORD_FILTERS, SUB_HIDDEN_PEOPLE
+    SUB_SIDE_MENU, SUB_CHAT_ACTIONS, SUB_MESSAGE_MENU, SUB_INPUT_BUTTONS, SUB_WORD_FILTERS, SUB_HIDDEN_PEOPLE, SUB_HEADER_BUTTONS
   };
 
   private SettingsAdapter adapter;
@@ -163,7 +163,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   /** The section whose page opens it (SECTION_MAIN for the side menu, a category of its own). */
   static int subPageParent (int subPage) {
     switch (subPage) {
-      case SUB_CHAT_ACTIONS: return SECTION_CHAT_LIST;
+      case SUB_CHAT_ACTIONS:
+      case SUB_HEADER_BUTTONS: return SECTION_CHAT_LIST;
       case SUB_MESSAGE_MENU:
       case SUB_INPUT_BUTTONS: return SECTION_MESSAGES;
       case SUB_WORD_FILTERS:
@@ -176,6 +177,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   static @StringRes int subPageTitleRes (int subPage) {
     switch (subPage) {
       case SUB_CHAT_ACTIONS: return R.string.XgramChatActionsOrder;
+      case SUB_HEADER_BUTTONS: return R.string.XgramHeaderButtons;
       case SUB_MESSAGE_MENU: return R.string.XgramMessageMenu;
       case SUB_INPUT_BUTTONS: return R.string.XgramInputButtons;
       case SUB_WORD_FILTERS: return R.string.XgramWordFilters;
@@ -193,6 +195,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   List<ListItem> buildSubPageItems (int subPage) {
     switch (subPage) {
       case SUB_CHAT_ACTIONS: return com.fahadali.xgram.chats.XgramChatActionsController.buildItems();
+      case SUB_HEADER_BUTTONS: return com.fahadali.xgram.chats.XgramHeaderButtonsController.buildItems();
       case SUB_MESSAGE_MENU: return com.fahadali.xgram.chats.XgramMessageMenuController.buildItems();
       case SUB_INPUT_BUTTONS: return com.fahadali.xgram.chats.XgramInputButtonsController.buildItems();
       case SUB_WORD_FILTERS: {
@@ -219,6 +222,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
   public static RecyclerViewController<?> subPage (Context context, Tdlib tdlib, int subPage) {
     switch (subPage) {
       case SUB_CHAT_ACTIONS: return new com.fahadali.xgram.chats.XgramChatActionsController(context, tdlib);
+      case SUB_HEADER_BUTTONS: return new com.fahadali.xgram.chats.XgramHeaderButtonsController(context, tdlib);
       case SUB_MESSAGE_MENU: return new com.fahadali.xgram.chats.XgramMessageMenuController(context, tdlib);
       case SUB_INPUT_BUTTONS: return new com.fahadali.xgram.chats.XgramInputButtonsController(context, tdlib);
       case SUB_WORD_FILTERS: return com.fahadali.xgram.chats.XgramFiltersController.words(context, tdlib);
@@ -322,8 +326,13 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setEnabled(com.fahadali.xgram.appearance.XgramAmoled.isAvailable());
         } else if (id == R.id.btn_xgramExpressive) {
           view.getToggler().setRadioEnabled(com.fahadali.xgram.appearance.XgramExpressive.isEnabled(), isUpdate);
+        } else if (id == R.id.btn_xgramColorSource) {
+          view.setData(com.fahadali.xgram.appearance.XgramColorSource.summary());
+          view.setEnabled(com.fahadali.xgram.appearance.XgramColorSource.isAvailable());
         } else if (id == R.id.btn_xgramEmojiSet) {
           view.setData(emojiSetName());
+        } else if (id == R.id.btn_xgramFont) {
+          view.setData(com.fahadali.xgram.appearance.XgramFonts.name(settings.appFont()));
         } else if (id == R.id.btn_xgramHistoryRetention) {
           int days = settings.historyRetentionDays();
           view.setData(days == 0 ? Lang.getString(R.string.XgramRetentionForever) : Lang.getString(R.string.XgramRetentionDays, days));
@@ -354,6 +363,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
           view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(XgramReorder.hasOrder(XgramReorder.MESSAGE_MENU) ? R.string.XgramOrderCustom : R.string.XgramOrderDefault));
         } else if (id == R.id.btn_xgramInputButtons) {
           int hidden = com.fahadali.xgram.chats.XgramInputButtonsController.hiddenCount();
+          view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(R.string.XgramAllShown));
+        } else if (id == R.id.btn_xgramHeaderButtons) {
+          int hidden = com.fahadali.xgram.chats.XgramHeaderButtonsController.hiddenCount();
           view.setData(hidden > 0 ? Lang.getString(R.string.XgramHiddenCount, hidden) : Lang.getString(R.string.XgramAllShown));
         } else if (id == R.id.btn_xgramFilters) {
           int count = com.fahadali.xgram.chats.XgramFilters.getFilters().size();
@@ -746,6 +758,10 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     if (com.fahadali.xgram.appearance.XgramExpressive.isAvailable()) {
       addRows(items, toggle(R.id.btn_xgramExpressive, R.string.XgramExpressive, R.string.XgramExpressiveSub));
       items.add(description(R.string.XgramExpressiveInfo));
+      // Colours: the wallpaper's or a picked colour (XgramColorSource). Only Expressive design has them, and with it on
+      // the Compose page is the one shown, so here the row is disabled and says why.
+      addRows(items, link(R.id.btn_xgramColorSource, R.string.XgramColors));
+      items.add(description(com.fahadali.xgram.appearance.XgramColorSource.isAvailable() ? R.string.XgramColorsWallpaperInfo : R.string.XgramColorsNeedsExpressive));
     }
   }
 
@@ -756,6 +772,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     pickers.add(link(R.id.btn_xgramAppIcon, R.string.XgramAppIcon));
     pickers.add(link(R.id.btn_xgramNotificationIcon, R.string.XgramNotificationIcon));
     pickers.add(link(R.id.btn_xgramEmojiSet, R.string.XgramEmoji));
+    if (com.fahadali.xgram.appearance.XgramFonts.isAvailable()) {
+      pickers.add(link(R.id.btn_xgramFont, R.string.XgramFont)); // the app font (Android 8+: font variations)
+    }
     if (com.fahadali.xgram.appearance.XgramMaterialYou.isAvailable()) {
       // Android 12+. Its note goes right under it, so the card is split there.
       List<ListItem> theme = new ArrayList<>();
@@ -893,6 +912,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
 
     items.add(header(R.string.XgramHeaderScreen));
     addRows(items,
+      link(R.id.btn_xgramHeaderButtons, R.string.XgramHeaderButtons), // the chat list's top row: lock, ghost mode, Activity, Search
       toggle(R.id.btn_xgramHideFab, R.string.XgramHideFab, R.string.XgramHideFabSub),
       toggle(R.id.btn_xgramConnectionStatusStart, R.string.XgramConnectionStatusStart, R.string.XgramConnectionStatusStartSub)
     );
@@ -1906,6 +1926,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     } else if (id == R.id.btn_xgramInputButtons) {
       navigateTo(new com.fahadali.xgram.chats.XgramInputButtonsController(context, tdlib));
       return;
+    } else if (id == R.id.btn_xgramHeaderButtons) {
+      navigateTo(new com.fahadali.xgram.chats.XgramHeaderButtonsController(context, tdlib));
+      return;
     } else if (id == R.id.btn_xgramMergeCommunities) {
       settings.setMergeCommunities(adapter.toggleView(v));
       com.fahadali.xgram.chats.XgramCommunities.notifyAllAccounts(); // the setting is shared by every account
@@ -2143,6 +2166,12 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       adapter.toggleView(v);
       com.fahadali.xgram.appearance.XgramExpressive.setEnabled(this, !com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
       return;
+    } else if (id == R.id.btn_xgramColorSource) {
+      // Only with Expressive design, whose settings are the Compose pages: Appearance there, at this row
+      if (com.fahadali.xgram.appearance.XgramColorSource.isAvailable()) {
+        navigateTo(com.fahadali.xgram.compose.XgramComposeController.create(context, tdlib, com.fahadali.xgram.compose.XgramPage.APPEARANCE, R.id.btn_xgramColorSource));
+      }
+      return;
     } else if (id == R.id.btn_xgramThemes) {
       if (!XgramSettingDeps.themesLocked()) {
         navigateTo(new com.fahadali.xgram.appearance.XgramThemesController(context, tdlib));
@@ -2206,6 +2235,9 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
       return;
     } else if (id == R.id.btn_xgramNotificationIcon) {
       showNotificationIconOptions();
+      return;
+    } else if (id == R.id.btn_xgramFont) {
+      com.fahadali.xgram.appearance.XgramFonts.showPicker(this); // OK with a new font restarts the app
       return;
     } else if (id == R.id.btn_xgramWhatsNew) {
       navigateTo(new XgramWhatsNewController(context, tdlib));

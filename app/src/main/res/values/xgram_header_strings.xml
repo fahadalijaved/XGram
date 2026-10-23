@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- XGram: Chat list → Header buttons, the buttons of the chat list's top row -->
+
+  <!-- Ids -->
+  <item name="btn_xgramHeaderButtons" type="id" />
+  <item name="btn_xgramHeaderButton" type="id" />
+  <item name="controller_xgramHeaderButtons" type="id" />
+
+  <string name="XgramHeaderButtons">Header buttons</string>
+  <string name="XgramHeaderButtonsInfo">The buttons next to the folder tabs at the top of the chat list. Hide the ones you don\'t use and the tabs get their room.</string>
+  <string name="XgramHeaderLock">Lock</string>
+  <string name="XgramHeaderLockInfo">Shows while a passcode is set. Without it, XGram locks only with Auto-lock.</string>
+  <string name="XgramHeaderGhost">Ghost mode</string>
+  <string name="XgramHeaderGhostInfo">Shows while ghost mode is on. Tap it for ghost mode\'s settings.</string>
+  <string name="XgramHeaderActivity">Activity</string>
+  <string name="XgramHeaderActivityInfo">A bell with a dot for new mentions, replies and reactions, when the navigation doesn\'t have Activity</string>
+  <string name="XgramHeaderSearch">Search</string>
+  <string name="XgramHeaderSearchInfo">Chats, people and messages. Ctrl+F on a keyboard searches too.</string>
+  <string name="XgramHeaderMoreNote">The ⋮ button stays: while the side menu is hidden, it has the side menu\'s items.</string>
+</resources>
