@@ -84,18 +84,8 @@ fun UpdatesPage() {
         if (manualCheck.pending && oldState == AppUpdater.State.CHECKING) {
           manualCheck.pending = false
           if (state == AppUpdater.State.NONE) {
-            val error = XgramUpdates.lastError()
-            // XGram M3E r6: the snackbar (a toast when no activity is resumed); a failed check offers Retry
-            if (error != null) {
-              com.fahadali.xgram.appearance.XgramR6B3Shell.snackbar(s(R.string.XgramUpdateCheckFailed, error), true, s(R.string.XgramR6B3Retry), Runnable {
-                if (updater.state() == AppUpdater.State.NONE && XgramUpdates.channel() != XgramUpdates.CHANNEL_OFF) {
-                  manualCheck.pending = true
-                  updater.checkForUpdatesNow()
-                }
-              })
-            } else {
-              com.fahadali.xgram.appearance.XgramR6B3Shell.snackbar(s(R.string.XgramUpdateLatest), false)
-            }
+            // Not a snackbar: the card says it's up to date (or why the check failed) and shows what's in this build
+            com.fahadali.xgram.update.XgramUpdateScreen.upToDate(host.controller, XgramUpdates.lastError())
           }
         }
         host.changed()

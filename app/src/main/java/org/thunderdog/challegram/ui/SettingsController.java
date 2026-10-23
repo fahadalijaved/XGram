@@ -192,14 +192,24 @@ public class SettingsController extends ViewController<Void> implements
     return Lang.getString(R.string.XgramUpdStatusUpToDate, Lang.getString(com.fahadali.xgram.update.XgramUpdates.channelName(channel)));
   }
 
-  /** An update found: the update card; otherwise the Updates page (check now, channel, downloads). */
+  /**
+   * Always a card: the update card when there is an update; otherwise "You're up to date" with what's in this build,
+   * Check again and Update settings (the Updates page: channel, downloads). While a check runs, its answer.
+   */
   private void xgramOpenUpdates () {
     int state = context().appUpdater().state();
     boolean hasUpdate = state == AppUpdater.State.AVAILABLE || state == AppUpdater.State.DOWNLOADING || state == AppUpdater.State.READY_TO_INSTALL;
+    Runnable settings = () -> navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_UPDATES));
     if (hasUpdate && com.fahadali.xgram.update.XgramUpdateScreen.show(this)) {
       return;
     }
-    navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_UPDATES));
+    if (state == AppUpdater.State.CHECKING) {
+      com.fahadali.xgram.update.XgramUpdateScreen.checkNow(this, settings);
+      return;
+    }
+    if (!com.fahadali.xgram.update.XgramUpdateScreen.upToDate(this, null, settings)) {
+      settings.run();
+    }
   }
 
   private void cancelSupportOpen () {

@@ -1420,8 +1420,8 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     if (manualUpdateCheck && oldState == AppUpdater.State.CHECKING) {
       manualUpdateCheck = false;
       if (state == AppUpdater.State.NONE) {
-        String error = XgramUpdates.lastError();
-        org.thunderdog.challegram.tool.UI.showToast(error != null ? Lang.getString(R.string.XgramUpdateCheckFailed, error) : Lang.getString(R.string.XgramUpdateLatest), android.widget.Toast.LENGTH_SHORT);
+        // Not a toast: the card says it's up to date (or why the check failed) and shows what's in this build
+        com.fahadali.xgram.update.XgramUpdateScreen.upToDate(this, XgramUpdates.lastError());
       }
     }
     if (adapter != null) {

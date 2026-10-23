@@ -348,6 +348,76 @@ object XgramUpdateScreen {
     }, WELCOME_DELAY_MS)
   }
 
+  /**
+   * No update was found (or the check failed, [error]): instead of a snackbar, the card says so and shows what's in the
+   * installed build (its post's highlights and notes, once found), with Done, Check again and, from Settings' App
+   * updates row, Update settings ([openSettings]). Records nothing.
+   */
+  @JvmStatic
+  @JvmOverloads
+  fun upToDate(controller: ViewController<*>, error: String?, openSettings: Runnable? = null): Boolean {
+    val screen = ScreenState(
+      UpdateModel.welcome(null), preview = false, live = false, expanded = false, installNow = false, welcome = true,
+      upToDate = true, checkError = error, openSettings = openSettings?.let { { it.run() } }
+    )
+    if (!open(controller, screen)) {
+      return false
+    }
+    val tdlib = controller.tdlib() ?: return true
+    XgramUpdates.findInstalled(tdlib, RunnableData<XgramUpdates.Found> { found ->
+      UI.post {
+        if (found != null && !screen.closing) {
+          screen.model = UpdateModel.welcome(found)
+        }
+      }
+    })
+    return true
+  }
+
+  /**
+   * Checks now and always answers with a card: the update card when one is found, else [upToDate] (with the reason
+   * when the check failed). Updates Off: the up-to-date card at once.
+   */
+  @JvmStatic
+  @JvmOverloads
+  fun checkNow(controller: ViewController<*>, openSettings: Runnable? = null) {
+    val updater = controller.context().appUpdater()
+    when (updater.state()) {
+      AppUpdater.State.AVAILABLE, AppUpdater.State.DOWNLOADING, AppUpdater.State.READY_TO_INSTALL -> {
+        if (!show(controller)) {
+          upToDate(controller, null, openSettings)
+        }
+        return
+      }
+    }
+    if (XgramUpdates.channel() == XgramUpdates.CHANNEL_OFF) {
+      upToDate(controller, null, openSettings)
+      return
+    }
+    val listener = object : AppUpdater.Listener {
+      override fun onAppUpdateStateChanged(state: Int, oldState: Int, isApk: Boolean) {
+        if (oldState != AppUpdater.State.CHECKING || state == AppUpdater.State.CHECKING) {
+          return
+        }
+        updater.removeListener(this)
+        UI.post {
+          if (controller.isDestroyed) {
+            return@post
+          }
+          if (state == AppUpdater.State.NONE) {
+            upToDate(controller, XgramUpdates.lastError(), openSettings)
+          } else {
+            show(controller) // nothing when the updater's own prompt already shows it
+          }
+        }
+      }
+    }
+    updater.addListener(listener)
+    if (updater.state() != AppUpdater.State.CHECKING) {
+      updater.checkForUpdatesNow()
+    }
+  }
+
   /** Testing Utilities: the welcome with the built-in highlights and the newest post's notes; it records nothing. */
   @JvmStatic
   fun previewWelcome(controller: ViewController<*>) {
@@ -513,7 +583,13 @@ private class ScreenState(
   /** The welcome after an update ([XgramUpdateScreen.welcomeIfNeeded]): no update, Got it. */
   val welcome: Boolean = false,
   /** The welcome shows the highlights built into the app ([XgramWelcome.BUILT_IN]), with Try it. */
-  val builtIn: Boolean = false
+  val builtIn: Boolean = false,
+  /** No update was found ([XgramUpdateScreen.upToDate]): the welcome's card says so, with this build's notes. */
+  val upToDate: Boolean = false,
+  /** The check failed: why, in plain words (no connection, or the error). */
+  val checkError: String? = null,
+  /** Update settings on the card (opened from Settings' App updates row): opens the Updates page. */
+  val openSettings: (() -> Unit)? = null
 ) : BaseActivity.ActivityListener {
   var model by mutableStateOf(model)
   var dialog: Dialog? = null
@@ -2106,7 +2182,11 @@ private fun WelcomeBody(
   val effects = effectsSpec<Float>(still)
   Column(Modifier.fillMaxWidth()) {
     Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).onPlaced { reveal.content = it }) {
-      WelcomeTitle(model, s(if (screen.builtIn) R.string.XgramWelcomeIntro else R.string.XgramWelcomeIntroNotes), previewTag, openPost)
+      if (screen.upToDate) {
+        UpToDateTitle(model, screen.checkError, previewTag, openPost)
+      } else {
+        WelcomeTitle(model, s(if (screen.builtIn) R.string.XgramWelcomeIntro else R.string.XgramWelcomeIntroNotes), previewTag, openPost)
+      }
       if (highlights.isNotEmpty()) {
         HighlightsCarousel(highlights, onTry, Modifier.padding(top = 20.dp))
       }
@@ -2124,7 +2204,103 @@ private fun WelcomeBody(
       Spacer(Modifier.height(12.dp))
     }
     ScrollDivider(scroll, still)
-    WelcomeActions(close)
+    if (screen.upToDate) {
+      UpToDateActions(controller, screen, close)
+    } else {
+      WelcomeActions(close)
+    }
+  }
+}
+
+/**
+ * "You're up to date" (or "Couldn't check for updates") over "XGram <version> is the newest CI build. Here's what's in
+ * it." (or why the check failed, in plain words: no connection, without Telegram's proxy advice).
+ */
+@Composable
+private fun UpToDateTitle(model: UpdateModel, error: String?, previewTag: Boolean, openPost: (() -> Unit)?) {
+  val c = MaterialTheme.colorScheme
+  Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = if (openPost != null) 12.dp else 20.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Text(
+        s(if (error != null) R.string.XgramUpdCheckFailedTitle else R.string.XgramUpdUpToDateTitle),
+        style = MaterialTheme.typography.headlineSmallEmphasized,
+        color = c.onSurface,
+        modifier = Modifier.weight(1f).semantics { heading() }
+      )
+      if (openPost != null) {
+        TitleOpenPost(openPost)
+      }
+    }
+    val intro = when {
+      error != null && isConnectionError(error) -> s(R.string.XgramUpdNoConnection, model.version)
+      error != null -> s(R.string.XgramUpdCheckFailedReason, error)
+      XgramUpdates.channel() == XgramUpdates.CHANNEL_OFF -> s(R.string.XgramUpdUpToDateOff, model.version)
+      model.isStable -> s(R.string.XgramUpdUpToDateStable, model.version)
+      else -> s(R.string.XgramUpdUpToDateCi, model.version)
+    }
+    Text(
+      intro,
+      style = MaterialTheme.typography.bodyLarge,
+      color = if (error != null) c.error else c.onSurfaceVariant,
+      modifier = Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }
+    )
+    if (previewTag) {
+      Text(
+        s(R.string.XgramUpdPreviewTag),
+        style = MaterialTheme.typography.bodyMedium,
+        color = c.onSurfaceVariant,
+        modifier = Modifier.padding(top = 2.dp)
+      )
+    }
+  }
+}
+
+/** A failed check that is about the connection (TDLib's network errors, timeouts, a missing network). */
+private fun isConnectionError(error: String): Boolean {
+  val e = error.lowercase()
+  return listOf("network", "connect", "timeout", "timed out", "unreachable", "offline", "proxy", "resolve", "dns", "socket").any { it in e }
+}
+
+/** The up-to-date card's bottom: Done (filled, as large as Install now), then Check again or Try again, and Update settings. */
+@Composable
+private fun UpToDateActions(controller: ViewController<*>, screen: ScreenState, close: () -> Unit) {
+  Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 16.dp)) {
+    Button(
+      onClick = close,
+      shapes = ButtonDefaults.shapesFor(BIG_BUTTON),
+      modifier = Modifier.fillMaxWidth().heightIn(min = BIG_BUTTON),
+      contentPadding = ButtonDefaults.contentPaddingFor(BIG_BUTTON)
+    ) {
+      Text(s(R.string.XgramUpdDone), style = ButtonDefaults.textStyleFor(BIG_BUTTON), textAlign = TextAlign.Center)
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
+      if (XgramUpdates.channel() != XgramUpdates.CHANNEL_OFF) {
+        TextButton(
+          onClick = {
+            val settings = screen.openSettings
+            screen.afterClose = { XgramUpdateScreen.checkNow(controller, settings?.let { Runnable { it() } }) }
+            close()
+          },
+          shapes = ButtonDefaults.shapes(),
+          modifier = Modifier.heightIn(min = 48.dp)
+        ) {
+          Text(s(if (screen.checkError != null) R.string.XgramUpdTryAgain else R.string.XgramUpdCheckAgain))
+        }
+      }
+      val settings = screen.openSettings
+      if (settings != null) {
+        TextButton(
+          onClick = {
+            screen.afterClose = settings
+            close()
+          },
+          shapes = ButtonDefaults.shapes(),
+          modifier = Modifier.heightIn(min = 48.dp)
+        ) {
+          Text(s(R.string.XgramUpdSettings))
+        }
+      }
+    }
   }
 }
 
