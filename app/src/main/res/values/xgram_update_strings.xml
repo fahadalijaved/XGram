@@ -64,4 +64,11 @@
   <string name="XgramUpdLooking">Looking for the newest post…</string>
   <string name="XgramUpdPreviewDone">Preview: nothing was installed</string>
   <string name="XgramUpdPreviewSample">🌟 Highlights\n• Activity: every mention of you and every reply and reaction to your messages, in one place\n• Undo send: a message waits a few seconds after Send, so you can take it back\n• Check In (a chat’s ⋮ menu): if you don’t tap I’m safe in time, Telegram sends them an alert\n• Later: snooze a chat until a time or until they reply\n\n✨ New\n• Software update (Settings → XGram → Updates): the notes, the download and the install in one card\n• Popup menu (Message menu → Popup menu, off by default): a long press opens a menu right next to the message\n• A bot’s profile → Add to group or channel: add it to several chats at once, as admin\n• Camera X (Testing Utilities, off by default): lens buttons, Night, Portrait and HDR\n\n🛠️ Improved\n• Chats slide open more smoothly\n\n🐞 Fixed\n• Settings pages could crash while scrolling fast\n\nBased on Telegram X 0.29.1.1818. A sample: no post was found.</string>
+  <item name="btn_xgramAppUpdates" type="id" />
+  <string name="XgramUpdAppUpdates">App updates</string>
+  <string name="XgramUpdStatusUpToDate">Up to date · %1$s</string>
+  <string name="XgramUpdStatusChecking">Checking for updates…</string>
+  <string name="XgramUpdStatusAvailable">Update available: %1$s</string>
+  <string name="XgramUpdStatusDownloading">Downloading %1$s…</string>
+  <string name="XgramUpdStatusReady">Ready to install: %1$s</string>
 </resources>

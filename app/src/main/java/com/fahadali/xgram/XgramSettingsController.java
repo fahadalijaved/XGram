@@ -735,7 +735,7 @@ public final class XgramSettingsController extends RecyclerViewController<Intege
     items.add(new ListItem(ListItem.TYPE_EMPTY_OFFSET_SMALL));
     addRows(items,
       category(R.id.btn_xgramSectionNetwork, R.drawable.baseline_public_24, R.string.XgramNetwork),
-      category(R.id.btn_xgramSectionUpdates, R.drawable.baseline_system_update_24, R.string.XgramUpdates),
+      // Updates: on Telegram X's main Settings page (App updates), not here
       category(R.id.btn_xgramSectionBackup, R.drawable.baseline_import_export_24, R.string.XgramBackup)
     );
     items.add(header(R.string.XgramAbout));

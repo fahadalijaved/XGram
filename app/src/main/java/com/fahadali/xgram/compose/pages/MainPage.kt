@@ -87,7 +87,6 @@ fun MainPage() {
 
     group {
       category(host, R.id.btn_xgramSectionNetwork, R.drawable.baseline_public_24, R.string.XgramNetwork, s(R.string.XgramNetworkSummary))
-      category(host, R.id.btn_xgramSectionUpdates, R.drawable.baseline_system_update_24, R.string.XgramUpdates, s(R.string.XgramUpdatesSummary))
       category(host, R.id.btn_xgramSectionBackup, R.drawable.baseline_import_export_24, R.string.XgramBackup, s(R.string.XgramBackupSummary))
     }
 

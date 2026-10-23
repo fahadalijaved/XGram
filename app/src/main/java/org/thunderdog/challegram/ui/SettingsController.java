@@ -138,6 +138,7 @@ public class SettingsController extends ViewController<Void> implements
     emojiPacksPreloader.preloadStickers();
     if (adapter != null) {
       adapter.updateValuedSettingById(R.id.btn_phone); // XGram: Hide my phone number may have changed meanwhile
+      adapter.updateValuedSettingById(R.id.btn_xgramAppUpdates); // XGram: the channel may have changed meanwhile
     }
     if (!oneShot) {
       oneShot = true;
@@ -146,6 +147,60 @@ public class SettingsController extends ViewController<Void> implements
   }
 
   private CancellableRunnable supportOpen;
+
+  // XGram: App updates on the main page
+
+  /** Keeps the App updates row's state current: found, downloading (with its progress), ready. */
+  private final AppUpdater.Listener xgramUpdateListener = new AppUpdater.Listener() {
+    @Override
+    public void onAppUpdateStateChanged (int state, int oldState, boolean isApk) {
+      runOnUiThreadOptional(() -> {
+        if (adapter != null) {
+          adapter.updateValuedSettingById(R.id.btn_xgramAppUpdates);
+        }
+      });
+    }
+
+    @Override
+    public void onAppUpdateDownloadProgress (long bytesDownloaded, long totalBytesToDownload) {
+      onAppUpdateStateChanged(AppUpdater.State.DOWNLOADING, AppUpdater.State.DOWNLOADING, true);
+    }
+  };
+
+  private String xgramUpdatesStatus () {
+    AppUpdater updater = context().appUpdater();
+    com.fahadali.xgram.update.XgramUpdates.Found found = updater.xgramUpdate();
+    String version = found != null ? found.versionName : updater.displayVersion();
+    switch (updater.state()) {
+      case AppUpdater.State.CHECKING:
+        return Lang.getString(R.string.XgramUpdStatusChecking);
+      case AppUpdater.State.AVAILABLE:
+        return Lang.getString(R.string.XgramUpdStatusAvailable, version);
+      case AppUpdater.State.DOWNLOADING: {
+        long total = updater.totalBytesToDownload();
+        String progress = total > 0 ? Math.round(100f * updater.bytesDownloaded() / total) + "%" : version;
+        return Lang.getString(R.string.XgramUpdStatusDownloading, progress);
+      }
+      case AppUpdater.State.READY_TO_INSTALL:
+      case AppUpdater.State.INSTALLING:
+        return Lang.getString(R.string.XgramUpdStatusReady, version);
+    }
+    int channel = com.fahadali.xgram.update.XgramUpdates.channel();
+    if (channel == com.fahadali.xgram.update.XgramUpdates.CHANNEL_OFF) {
+      return Lang.getString(com.fahadali.xgram.update.XgramUpdates.channelName(channel));
+    }
+    return Lang.getString(R.string.XgramUpdStatusUpToDate, Lang.getString(com.fahadali.xgram.update.XgramUpdates.channelName(channel)));
+  }
+
+  /** An update found: the update card; otherwise the Updates page (check now, channel, downloads). */
+  private void xgramOpenUpdates () {
+    int state = context().appUpdater().state();
+    boolean hasUpdate = state == AppUpdater.State.AVAILABLE || state == AppUpdater.State.DOWNLOADING || state == AppUpdater.State.READY_TO_INSTALL;
+    if (hasUpdate && com.fahadali.xgram.update.XgramUpdateScreen.show(this)) {
+      return;
+    }
+    navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.open(context, tdlib, com.fahadali.xgram.XgramSettingsController.SECTION_UPDATES));
+  }
 
   private void cancelSupportOpen () {
     if (supportOpen != null) {
@@ -494,12 +549,15 @@ public class SettingsController extends ViewController<Void> implements
     ViewSupport.setThemedBackground(contentView, ColorId.background, this);
     this.contentView.setLayoutManager(new LinearLayoutManager(context, RecyclerView.VERTICAL, false));
     this.contentView.setLayoutParams(FrameLayoutFix.newParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+    context().appUpdater().addListener(xgramUpdateListener); // XGram: the App updates row
     this.adapter = new SettingsAdapter(this) {
       @Override
       public void setValuedSetting (ListItem item, SettingView view, boolean isUpdate) {
         boolean hasError = false;
         final int itemId = item.getId();
-        if (itemId == R.id.btn_notificationSettings) {
+        if (itemId == R.id.btn_xgramAppUpdates) {
+          view.setData(xgramUpdatesStatus()); // XGram
+        } else if (itemId == R.id.btn_notificationSettings) {
           checkErrors(false);
           hasError = hasNotificationError;
         } else if (itemId == R.id.btn_devices) {
@@ -714,6 +772,9 @@ public class SettingsController extends ViewController<Void> implements
 
     // XGram: XGram's own features (ghost mode, ...)
     items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramSettings, R.drawable.baseline_stars_24, R.string.XgramSettings));
+    items.add(new ListItem(ListItem.TYPE_SEPARATOR));
+    // XGram: app updates on the main page, its state on the row (opens the update card when there is one)
+    items.add(new ListItem(ListItem.TYPE_VALUED_SETTING_COMPACT, R.id.btn_xgramAppUpdates, R.drawable.baseline_system_update_24, R.string.XgramUpdAppUpdates));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
     items.add(new ListItem(notificationErrorDescriptionRes != 0 ? ListItem.TYPE_VALUED_SETTING_COMPACT : ListItem.TYPE_SETTING, R.id.btn_notificationSettings, R.drawable.baseline_notifications_24, R.string.Notifications));
     items.add(new ListItem(ListItem.TYPE_SEPARATOR));
@@ -965,6 +1026,7 @@ public class SettingsController extends ViewController<Void> implements
   @Override
   public void destroy () {
     super.destroy();
+    context().appUpdater().removeListener(xgramUpdateListener); // XGram
     tdlib.cache().removeMyUserListener(this);
     setMyUserId(0);
     tdlib.listeners().unsubscribeFromConnectivityUpdates(this);
@@ -1266,6 +1328,8 @@ public class SettingsController extends ViewController<Void> implements
       navigateTo(c);
     } else if (viewId == R.id.btn_xgramSettings) { // XGram
       navigateTo(com.fahadali.xgram.compose.XgramSettingsPages.main(context, tdlib));
+    } else if (viewId == R.id.btn_xgramAppUpdates) { // XGram
+      xgramOpenUpdates();
     } else if (viewId == R.id.btn_chatSettings) {
       navigateTo(new SettingsDataController(context, tdlib));
     } else if (viewId == R.id.btn_privacySettings) {
