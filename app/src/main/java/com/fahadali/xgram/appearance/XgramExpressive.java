@@ -67,8 +67,8 @@ import java.util.Locale;
 /**
  * Material 3 Expressive (Google's Compose material3 tokens, Pixel Android 16 QPR1 SettingsLib) for the views Telegram X
  * draws itself: the switch, motion springs, shape and elevation tokens, color roles, the type scale, a shape-morphing
- * drawable and the segmented list look. Everything sits behind one switch (XGram > Appearance > Expressive design);
- * with it off none of this is used.
+ * drawable and the segmented list look. Everything sits behind one switch (XGram > Appearance > Expressive design, on
+ * by default); with it off none of this is used.
  */
 public final class XgramExpressive {
   private XgramExpressive () { }
@@ -88,8 +88,9 @@ public final class XgramExpressive {
   public static boolean isEnabled () {
     int state = enabledState;
     if (state == -1) {
-      // Experimental: off until the user turns it on.
-      state = isAvailable() && Settings.instance().getBoolean(KEY, false) ? 1 : 0;
+      // On by default (the Stable after 0.29.1.1818.105): off only when the user turned it off. Nothing else needs the
+      // switch: the Material You themes catch up on resume (XgramMaterialYou.checkWallpaper).
+      state = isAvailable() && Settings.instance().getBoolean(KEY, true) ? 1 : 0;
       enabledState = state;
     }
     return state == 1;
@@ -99,6 +100,7 @@ public final class XgramExpressive {
   public static void setEnabled (ViewController<?> c, boolean on) {
     Settings.instance().putBoolean(KEY, on);
     enabledState = isAvailable() && on ? 1 : 0;
+    com.fahadali.xgram.XgramSettings.instance().onExpressiveChanged(); // the navigation bar's default follows the switch
     invalidateColors();
     if (XgramMaterialYou.isEnabled()) {
       XgramMaterialYou.rebuild(c, c::scheduleActivityRestart);

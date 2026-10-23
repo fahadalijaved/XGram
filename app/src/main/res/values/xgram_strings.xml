@@ -818,8 +818,8 @@
   <string name="XgramInlineVideoInfo">Videos play inside the message with a seek bar, and a tap turns the sound on or off. Autoplay follows Autoplay GIFs, Data Saver and, on mobile data, automatic media download.</string>
   <!-- XGram M3E part A: Expressive design switch (Appearance > Theme) -->
   <string name="XgramExpressive">Expressive design</string>
-  <string name="XgramExpressiveSub">Experimental Material 3 Expressive look</string>
-  <string name="XgramExpressiveInfo">Experimental. Colors, shapes, motion and lists follow Material 3 Expressive, and some screens are still being converted. The app restarts to apply the change.</string>
+  <string name="XgramExpressiveSub">The Material 3 Expressive look</string>
+  <string name="XgramExpressiveInfo">Colors, shapes, motion and lists follow Material 3 Expressive. Off: the classic look. The app restarts to apply the change.</string>
   <string name="XgramComposeTgx">New look for Telegram X pages</string>
   <string name="XgramComposeTgxSub">Privacy, data, notifications and themes in Material 3 Expressive; off keeps the classic lists</string>
   <!-- XGram: adaptive part 1, foldables (Appearance > Layout) -->

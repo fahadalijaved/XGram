@@ -1707,11 +1707,40 @@ public final class XgramActivityController extends RecyclerViewController<Void> 
 
   // Mark all as read
 
+  /** Mark all as read waits for the store's unread rows (one tap, one dialog). */
+  private boolean markAllQuerying;
+
   private void markAll () {
-    if (!XgramActivity.isOn() || !loaded || awaitingSwapRows) {
+    if (!XgramActivity.isOn() || !loaded || awaitingSwapRows || markAllQuerying) {
       return; // the rows of what is shown now are not in yet (the ones on screen are the last choice's, or none)
     }
-    final XgramActivityRead.Plan plan = XgramActivityRead.plan(tdlib, XgramActivityRows.itemsOf(rows), filter);
+    if (endReached) {
+      markAll(XgramActivityRead.plan(tdlib, XgramActivityRows.itemsOf(rows), filter));
+      return;
+    }
+    // More rows than the page has loaded: every unread one of what is shown, from the store (same query as
+    // reload), not only the page's, so none further down stays New with the badge still up
+    markAllQuerying = true;
+    final int queryFilter = filter;
+    final long[] queryChats = chats;
+    final long[][] muted = XgramActivityRows.mutedChats(tdlib, XgramActivityStore.instance().summary(tdlib.id()).knownChats());
+    XgramActivityStore.instance().query(tdlib.id(), queryFilter, true, XgramActivity.reactions(), XgramActivity.discussion(),
+      muted != null ? muted[0] : null, muted != null ? muted[1] : null, onlyChats(), XgramActivityStore.ROW_CAP, items -> {
+      markAllQuerying = false;
+      if (isDestroyed() || queryFilter != filter || queryChats != chats) {
+        return; // what is shown changed meanwhile: the tap was for the last choice
+      }
+      List<XgramActivityItem> visible = new ArrayList<>(items.size());
+      for (XgramActivityItem item : items) {
+        if (XgramActivityRows.visible(tdlib, item)) {
+          visible.add(item);
+        }
+      }
+      markAll(XgramActivityRead.plan(tdlib, visible, queryFilter));
+    });
+  }
+
+  private void markAll (@NonNull XgramActivityRead.Plan plan) {
     if (plan.unread.isEmpty()) {
       showMessage(Lang.getString(R.string.XgramActivityCaughtUp), null, null);
       return;

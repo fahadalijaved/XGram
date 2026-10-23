@@ -182,6 +182,10 @@ python tools/xgram/telegram/xgram_bot.py publish \
 - **Release notes** go into the caption when there is one APK and everything fits in 1024 characters. Otherwise they
   follow as a separate message that replies to the first APK.
   - A `.html` notes file is Telegram HTML.
+  - Sections are a header line (`✨ <b>New</b>`, `🛠️ <b>Improved</b>`, `🐞 <b>Fixed</b>`, …) and `• ` lines. A
+    `🌟 <b>Highlights</b>` section (also `⭐ Highlights` or `Highlights`) of `• Name: what it does` lines becomes
+    the update screen's carousel, one card each. Name XGram's own features as the app does (Activity, Undo send,
+    Check In, Later): they get their icon, and after the update the welcome card's Try it.
   - Any other file is plain text.
   - `--notes -` reads the notes from stdin.
 - **`--announce updates`** posts "XGram 1.0 is out." with the notes and a Download link to the release post.

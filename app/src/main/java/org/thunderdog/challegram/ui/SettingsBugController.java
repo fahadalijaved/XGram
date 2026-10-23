@@ -832,6 +832,9 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
             // XGram: the update screen with the newest post, even when this build has it already; it only pretends to install
             items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramUpdatePreview, R.drawable.baseline_system_update_24, R.string.XgramUpdPreview, false));
             items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
+            // XGram: the welcome after an update (the highlights with Try it), whatever was seen; it records nothing
+            items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_xgramWelcomePreview, R.drawable.baseline_auto_awesome_24, R.string.XgramWelcomePreview, false));
+            items.add(new ListItem(ListItem.TYPE_SEPARATOR_FULL));
           }
           // items.add(new SettingItem(SettingItem.TYPE_SEPARATOR_FULL));
           items.add(new ListItem(ListItem.TYPE_SETTING, R.id.btn_secret_readAllChats, 0, R.string.ReadAllChats, false));
@@ -1178,6 +1181,8 @@ public class SettingsBugController extends RecyclerViewController<SettingsBugCon
       adapter.updateValuedSettingById(R.id.btn_xgramCameraXTest);
     } else if (viewId == R.id.btn_xgramUpdatePreview) {
       com.fahadali.xgram.update.XgramUpdateScreen.preview(this); // XGram: the update screen, pretend install
+    } else if (viewId == R.id.btn_xgramWelcomePreview) {
+      com.fahadali.xgram.update.XgramUpdateScreen.previewWelcome(this); // XGram: the welcome after an update
     } else if (viewId == R.id.btn_xgramXDriveOpensChat) {
       com.fahadali.xgram.XgramSettings.instance().setXdriveOpensChat(!com.fahadali.xgram.XgramSettings.instance().xdriveOpensChat()); // XGram XDrive
       adapter.updateValuedSettingById(R.id.btn_xgramXDriveOpensChat);

@@ -30,6 +30,7 @@ import com.fahadali.xgram.compose.ui.GroupScope
 import com.fahadali.xgram.compose.ui.SettingsPage
 import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.str
+import com.fahadali.xgram.layout.XgramKeyboard
 import org.thunderdog.challegram.R
 
 /** Messages: the message menu, swipes and taps, defaults, links, videos, the message box and Telegram's AI tools. */
@@ -160,6 +161,22 @@ fun MessagesPage() {
       }
     }
     description(R.string.XgramTapToRecordInfo)
+    group {
+      // Enter to send: Auto keeps Telegram X's switch and sends when a hardware keyboard is attached (XgramKeyboard).
+      value(R.id.btn_xgramEnterToSend, s(R.string.XgramEnterToSend), XgramKeyboard.enterToSendName(settings.enterToSend())) {
+        host.choose(
+          ChoiceSpec(
+            title = s(R.string.XgramEnterToSend),
+            options = listOf(XgramSettings.ENTER_TO_SEND_AUTO, XgramSettings.ENTER_TO_SEND_ON, XgramSettings.ENTER_TO_SEND_OFF)
+              .map { XgramKeyboard.enterToSendName(it) to it },
+            selected = settings.enterToSend()
+          ) { picked ->
+            settings.setEnterToSend(picked)
+          }
+        )
+      }
+    }
+    description(R.string.XgramEnterToSendInfo)
     group {
       // Undo send: how long a message waits; voice and video messages only wait while it is on.
       val delay = settings.undoSendSeconds()

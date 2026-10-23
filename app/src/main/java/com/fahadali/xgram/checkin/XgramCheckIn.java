@@ -238,6 +238,8 @@ public final class XgramCheckIn {
   private static boolean forcedEdit;
   /** Rescheduled by Add time: the alert's id (0: none) changed, edits wait for the scheduled list to give the new one. */
   private static long staleAlertId, staleSince;
+  /** An Add time on its way (0: none): another one waits for it, so it moves the alert from the time this one gives. */
+  private static long addInFlightSince;
   private static long editInFlightSince;
   private static @Nullable StartCallback startCallback;
   private static @Nullable String startCallbackRef;
@@ -1433,6 +1435,15 @@ public final class XgramCheckIn {
   }
 
   private static void addTimeNow (int acc, String ref, long seconds, @Nullable ResultCallback callback) {
+    addTimeNow(acc, ref, seconds, callback, 0);
+  }
+
+  private static boolean addInFlight () {
+    return addInFlightSince != 0 && SystemClock.elapsedRealtime() - addInFlightSince < 30_000;
+  }
+
+  /** [attempt]: how often it already waited for an Add time before it (a few seconds at most, then it goes as it is). */
+  private static void addTimeNow (int acc, String ref, long seconds, @Nullable ResultCallback callback, int attempt) {
     ensureLoaded();
     CheckInRecord r = current;
     if (r == null || r.acc != acc || !r.ref.equals(ref)) {
@@ -1459,9 +1470,24 @@ public final class XgramCheckIn {
       default:
         break;
     }
+    if (attempt < 20 && (addInFlight() || staleAlertId != 0)) {
+      // Each Add time gives the alert a new id (a scheduled message's id carries its send date): an edit of the old id
+      // would fail, or move the alert from the old time. It waits for the one on its way, then for the scheduled list
+      // to give the new id.
+      final int next = attempt + 1;
+      final Runnable retry = () -> addTimeNow(acc, ref, seconds, callback, next);
+      if (addInFlight()) {
+        postDelayed(retry, 500);
+      } else {
+        postDelayed(() -> reconcile(acc, retry), attempt == 0 ? 0 : 1_000);
+      }
+      return;
+    }
     final long newSendAt = r.sendAt + seconds;
     log("EditMessageSchedulingState ref=%s %d -> %d", ref, r.sendAt, newSendAt);
+    addInFlightSince = SystemClock.elapsedRealtime();
     t.send(new TdApi.EditMessageSchedulingState(r.chat, r.alertId, new TdApi.MessageSchedulingStateSendAtDate((int) newSendAt, 0)), (ok, error) -> post(() -> {
+      addInFlightSince = 0;
       CheckInRecord cur = current;
       if (cur == null || !cur.ref.equals(ref)) {
         reply(callback, false, "");

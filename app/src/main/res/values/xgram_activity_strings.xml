@@ -133,6 +133,10 @@
   <!-- What's New -->
   <string name="XgramNewActivity">Activity</string>
   <string name="XgramNewActivityInfo">Every mention, reply and reaction in one place</string>
+  <!-- XGram's other big features of Stable 0.29.1.1818 (their names are the features' own strings) -->
+  <string name="XgramNewUndoSendInfo">Take a message back in the seconds after Send</string>
+  <string name="XgramNewCheckInInfo">An alert to a chat if you don’t check in on time</string>
+  <string name="XgramNewLaterInfo">Snooze chats and get reminded about messages</string>
 
   <!-- Ids -->
   <item name="controller_xgramActivity" type="id"/>

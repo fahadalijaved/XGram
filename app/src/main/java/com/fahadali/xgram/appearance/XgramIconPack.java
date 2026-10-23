@@ -44,14 +44,16 @@ public final class XgramIconPack {
   public static final int PACK_DUOTONE = 6;
 
   public static final int[] PACKS = {PACK_TELEGRAM_X, PACK_DUOTONE, PACK_SOLAR, PACK_PHOSPHOR, PACK_MINGCUTE, PACK_PIXEL, PACK_LINE};
+  /** Until the user picks one (Classic included, which is then stored): XGram Line (the Stable after 0.29.1.1818.105). */
+  public static final int PACK_DEFAULT = PACK_LINE;
 
   private static volatile SparseIntArray map;
   /** The Expressive switch the map was built for: the Classic table depends on it (XgramIconPackTable.classic). */
   private static volatile boolean mapExpressive;
 
   public static int current () {
-    int pack = Settings.instance().pmc().getInt(KEY, PACK_TELEGRAM_X);
-    return pack >= PACK_TELEGRAM_X && pack <= PACK_DUOTONE ? pack : PACK_TELEGRAM_X;
+    int pack = Settings.instance().pmc().getInt(KEY, PACK_DEFAULT);
+    return pack >= PACK_TELEGRAM_X && pack <= PACK_DUOTONE ? pack : PACK_DEFAULT;
   }
 
   public static void set (int pack) {

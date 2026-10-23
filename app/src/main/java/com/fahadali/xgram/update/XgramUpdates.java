@@ -283,6 +283,25 @@ public final class XgramUpdates {
     });
   }
 
+  /**
+   * The welcome after an update ({@link XgramUpdateScreen#welcomeIfNeeded}): the post of the installed build itself
+   * with its notes, any ABI's (they share the notes), from the Updates topic first, then the channel. It keeps nothing
+   * but the installed build's kind. {@code onDone} gets null when there is none, when updates are Off, in recovery
+   * mode, when logged out or on an error; it may run on any thread.
+   */
+  public static void findInstalled (@NonNull Tdlib tdlib, @NonNull RunnableData<Found> onDone) {
+    tdlib.awaitReadyOrWaitingForData(() -> {
+      if (channel() == CHANNEL_OFF || tdlib.context().inRecoveryMode() || !tdlib.isAuthorized()) {
+        onDone.runWithData(null);
+        return;
+      }
+      List<Source> sources = new ArrayList<>(2);
+      sources.add(new Source(STABLE_GROUP, new TdApi.MessageTopicForum(STABLE_TOPIC_ID), false));
+      sources.add(new Source(CI_CHANNEL, null, false));
+      new Search(tdlib, sources, BuildConfig.ORIGINAL_VERSION_CODE, (found, error) -> onDone.runWithData(found)).next();
+    });
+  }
+
   private interface SearchCallback {
     void onDone (@Nullable Found found, @Nullable String error);
   }
@@ -290,12 +309,14 @@ public final class XgramUpdates {
   /**
    * Goes through the sources one by one and keeps the newest update found. With {@code anyVersion} (the update
    * screen's preview) the newest post counts whatever its version, and one for another ABI or without a SHA-256 does
-   * when this build's has none.
+   * when this build's has none. With {@code exactCode} (the welcome) only that version's post counts, any ABI's; the
+   * first source's wins a tie.
    */
   private static final class Search {
     private final Tdlib tdlib;
     private final List<Source> sources;
     private final boolean anyVersion;
+    private final int exactCode;
     private final SearchCallback callback;
     private int sourceIndex = -1;
     private @Nullable Found best;
@@ -307,9 +328,18 @@ public final class XgramUpdates {
     private @Nullable Found sourceFound, sourceFallback;
 
     Search (Tdlib tdlib, List<Source> sources, boolean anyVersion, SearchCallback callback) {
+      this(tdlib, sources, anyVersion, 0, callback);
+    }
+
+    Search (Tdlib tdlib, List<Source> sources, int exactCode, SearchCallback callback) {
+      this(tdlib, sources, false, exactCode, callback);
+    }
+
+    private Search (Tdlib tdlib, List<Source> sources, boolean anyVersion, int exactCode, SearchCallback callback) {
       this.tdlib = tdlib;
       this.sources = sources;
       this.anyVersion = anyVersion;
+      this.exactCode = exactCode;
       this.callback = callback;
     }
 
@@ -377,6 +407,18 @@ public final class XgramUpdates {
       }
       String caption = content.caption != null ? content.caption.text : "";
       boolean isStable = isStableCaption(caption);
+      if (exactCode != 0) {
+        // The welcome: the post of the installed build; newer ones come first, an older one ends the source
+        if (name.versionCode != exactCode) {
+          return name.versionCode < exactCode ? VERDICT_NOT_NEWER : VERDICT_SKIP;
+        }
+        if (exactCode == BuildConfig.ORIGINAL_VERSION_CODE) {
+          noteInstalledPost(isStable);
+        }
+        String sha256 = captionSha256(caption);
+        sourceFound = newFound(message, content, name, caption, sha256 != null ? sha256 : "", isStable);
+        return VERDICT_FOUND;
+      }
       if (anyVersion) {
         // The preview: the newest post, this build's ABI if it has one (it is never installed)
         if (source.stableOnly && !isStable) {

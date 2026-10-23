@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import com.fahadali.xgram.XgramSettings
 import com.fahadali.xgram.compose.LocalXgramHost
 import com.fahadali.xgram.compose.XgramComposeHost
+import com.fahadali.xgram.compose.rememberXgramListState
 import com.fahadali.xgram.compose.ui.IconStyle
 import com.fahadali.xgram.compose.ui.MaxPageWidth
 import com.fahadali.xgram.compose.ui.RowIcon
@@ -202,6 +203,7 @@ fun UniversalSearchPage() {
       val padding = remember(host, density) { SearchListPadding(host, density) }
       LazyColumn(
         modifier = Modifier.weight(1f).fillMaxWidth().nestedScroll(scrollHidesKeyboard),
+        state = rememberXgramListState(), // no prefetch, like the settings lists (XgramComposeFlags)
         contentPadding = padding,
         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
       ) {

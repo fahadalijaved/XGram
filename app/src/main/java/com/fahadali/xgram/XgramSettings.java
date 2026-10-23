@@ -1759,13 +1759,23 @@ public final class XgramSettings {
 
   private volatile Boolean bottomNav;
 
-  /** On narrow windows (a phone, a Fold's cover screen) the chat list's Chats and Calls tabs are a bar at the bottom. */
+  /**
+   * On narrow windows (a phone, a Fold's cover screen) the chat list's Chats and Calls tabs are a bar at the bottom. On
+   * by default with Expressive design (the Stable after 0.29.1.1818.105): its floating toolbar is the Chats, Activity,
+   * Settings and profile bar. Without it (Android 12 and older, or switched off) the default stays off, as the classic
+   * bar has other tabs.
+   */
   public boolean bottomNav () {
     Boolean value = bottomNav;
     if (value == null) {
-      bottomNav = value = pmc().getBoolean(KEY_BOTTOM_NAV, false);
+      bottomNav = value = pmc().getBoolean(KEY_BOTTOM_NAV, com.fahadali.xgram.appearance.XgramExpressive.isEnabled());
     }
     return value;
+  }
+
+  /** Expressive design was switched on or off: the navigation bar's default follows it (the activity restarts next). */
+  public void onExpressiveChanged () {
+    bottomNav = null;
   }
 
   public void setBottomNav (boolean value) {
@@ -1778,15 +1788,16 @@ public final class XgramSettings {
   // is XgramReorder.NAV_BAR. Read while the layout is checked, so cached.
 
   public static final String KEY_NAV_TABS = "xgram_nav_tabs", KEY_NAV_PROFILE = "xgram_nav_profile", KEY_NAV_STYLE = "xgram_nav_style";
-  /** The photo: a button beside the bar (default), a tab in it, or not at all. */
+  /** The photo: a button beside the bar, a tab in it (default), or not at all. */
   public static final int NAV_PROFILE_BUTTON = 0, NAV_PROFILE_TAB = 1, NAV_PROFILE_OFF = 2;
   /** The bar's colours: Standard (surface container, default) or Vibrant (primary container). */
   public static final int NAV_STYLE_STANDARD = 0, NAV_STYLE_VIBRANT = 1;
   /**
    * Tabs by bit of XgramNavToolbar.DEST_* (Chats 0, Calls 1, Contacts 2, Saved 3, Settings 4, Activity 6; the profile
-   * has its own setting): Telegram's set. Activity's bit counts only while Activity is on.
+   * has its own setting): XGram's set, Chats, Activity and Settings (with the profile, a tab by default, in the order
+   * of XgramNavToolbar.DEFAULT_ORDER). Activity's bit counts only while Activity is on.
    */
-  public static final int NAV_TABS_DEFAULT = (1 << 0) | (1 << 2) | (1 << 4);
+  public static final int NAV_TABS_DEFAULT = (1 << 0) | (1 << 4) | (1 << 6);
 
   private volatile Integer navTabs, navProfile, navStyle;
 
@@ -1804,6 +1815,9 @@ public final class XgramSettings {
       return; // Chats is always a tab; the profile (5) has its own setting; 6 is Activity
     }
     int value = on ? navTabs() | (1 << dest) : navTabs() & ~(1 << dest);
+    if (!pmc().contains(KEY_NAV_PROFILE)) {
+      pmc().putInt(KEY_NAV_PROFILE, navProfile()); // its default follows whether the tabs were chosen: keep the one in use
+    }
     navTabs = value;
     putInt(KEY_NAV_TABS, value);
   }
@@ -1811,8 +1825,13 @@ public final class XgramSettings {
   public int navProfile () {
     Integer value = navProfile;
     if (value == null) {
-      int stored = pmc().getInt(KEY_NAV_PROFILE, NAV_PROFILE_BUTTON);
-      navProfile = value = stored >= NAV_PROFILE_BUTTON && stored <= NAV_PROFILE_OFF ? stored : NAV_PROFILE_BUTTON;
+      int stored = pmc().getInt(KEY_NAV_PROFILE, -1);
+      if (stored < NAV_PROFILE_BUTTON || stored > NAV_PROFILE_OFF) {
+        // Never chosen: a tab, unless the user set up their own tabs while the photo was beside the bar by default
+        // (with 4 of them the photo would have no room and be gone)
+        stored = pmc().contains(KEY_NAV_TABS) ? NAV_PROFILE_BUTTON : NAV_PROFILE_TAB;
+      }
+      navProfile = value = stored;
     }
     return value;
   }
@@ -1876,18 +1895,18 @@ public final class XgramSettings {
   }
 
   /**
-   * Telegram's layout: Chats, Contacts, Settings in that order, the photo beside the bar, Standard colours, the compose
+   * XGram's layout: Chats, Activity, Settings and the profile as tabs in that order, Standard colours, the compose
    * button at the side and the side menu.
    */
   public void resetNavBar () {
     XgramReorder.reset(XgramReorder.NAV_BAR);
     navTabs = NAV_TABS_DEFAULT;
-    navProfile = NAV_PROFILE_BUTTON;
+    navProfile = NAV_PROFILE_TAB;
     navStyle = NAV_STYLE_STANDARD;
     navFab = NAV_FAB_SIDE;
     navHideDrawer = false;
     putInt(KEY_NAV_TABS, NAV_TABS_DEFAULT);
-    putInt(KEY_NAV_PROFILE, NAV_PROFILE_BUTTON);
+    putInt(KEY_NAV_PROFILE, NAV_PROFILE_TAB);
     putInt(KEY_NAV_STYLE, NAV_STYLE_STANDARD);
     putInt(KEY_NAV_FAB, NAV_FAB_SIDE);
     put(KEY_NAV_HIDE_DRAWER, false);

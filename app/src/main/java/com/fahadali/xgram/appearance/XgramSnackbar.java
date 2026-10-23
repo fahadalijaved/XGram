@@ -44,10 +44,11 @@ import java.lang.ref.WeakReference;
 
 /**
  * Material 3 snackbar in place of the system toast (experimental): an inverse surface bar with 4dp corners floating
- * {@link #BOTTOM_GAP_DP} above the navigation bar or the keyboard, bodyMedium text, 2 or 3.5 seconds, swipe sideways to
- * dismiss, and an optional action ("Undo") as a text button in inversePrimary at the end. Shown while a BaseActivity
- * is resumed: over the topmost popup window (a sheet, the media viewer) when one is showing, over the activity's
- * content otherwise; when the app is in the background the caller falls back to a Toast.
+ * {@link #BOTTOM_GAP_DP} above the navigation bar or the keyboard, bodyMedium text, 2 or 3.5 seconds, and an optional
+ * action ("Undo") as a text button in inversePrimary at the end; a bar with an action swipes sideways to dismiss, one
+ * without takes no touches (as the system toast it replaces). Shown while a BaseActivity is resumed: over the topmost
+ * popup window (a sheet, the media viewer) when one is showing, over the activity's content otherwise; when the app is
+ * in the background the caller falls back to a Toast.
  */
 @SuppressLint("ViewConstructor")
 public final class XgramSnackbar extends TextView implements RootFrameLayout.MarginModifier {
@@ -411,6 +412,11 @@ public final class XgramSnackbar extends TextView implements RootFrameLayout.Mar
     }
     switch (e.getActionMasked()) {
       case MotionEvent.ACTION_DOWN: {
+        if (actionRunnable == null) {
+          // XGram: like the system toast it replaces, a bar with no action takes no touches: a tap goes to what is
+          // under it (the chat's composer) rather than only keeping the bar up
+          return false;
+        }
         downX = e.getRawX();
         dragging = false;
         removeCallbacks(hideRunnable);

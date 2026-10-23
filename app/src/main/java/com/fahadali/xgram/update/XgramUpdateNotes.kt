@@ -16,10 +16,13 @@ import org.thunderdog.challegram.R
 
 /**
  * The release notes as the update screen ([XgramUpdateScreen]) shows them. The bot's notes (tools/xgram/telegram,
- * posts/release_notes.example.html) are sections, a header line ("✨ New", "🛠️ Improved", "🐞 Fixed", "⚠️ Known
- * issues", "🧪 For testers: …") followed by "• " lines, then a closing line ("Based on Telegram X …"). Notes that came
- * in the APK's caption start with the caption's own lines (heading, file name, size, commit, SHA-256, source): those
- * are dropped. A text without "• " lines is kept whole as [body].
+ * posts/release_notes.example.html) are sections, a header line ("🌟 Highlights", "✨ New", "🛠️ Improved", "🐞 Fixed",
+ * "⚠️ Known issues", "🧪 For testers: …") followed by "• " lines, then a closing line ("Based on Telegram X …"). Notes
+ * that came in the APK's caption start with the caption's own lines (heading, file name, size, commit, SHA-256,
+ * source): those are dropped. A text without "• " lines is kept whole as [body].
+ *
+ * Highlights ("🌟 Highlights", "⭐ Highlights" or "Highlights", then "• Name: what it does" lines) are the release's
+ * big features: the card shows them as a carousel of their own, and the top features come from the other sections.
  */
 class XgramUpdateNotes private constructor(
   /** Lines before the first section. */
@@ -31,7 +34,7 @@ class XgramUpdateNotes private constructor(
   val body: String?
 ) {
   /** What a section is, from its title or emoji: the screen gives each its own icon, shape and colors. */
-  enum class Kind { NEW, IMPROVED, FIXED, KNOWN_ISSUES, TESTERS, OTHER }
+  enum class Kind { HIGHLIGHTS, NEW, IMPROVED, FIXED, KNOWN_ISSUES, TESTERS, OTHER }
 
   /** "🧪 For testers: members of …": [emoji] "🧪", [title] "For testers", [description] the rest. */
   class Section(val emoji: String?, val title: String, val description: String?, val notes: List<Note>, val paragraphs: List<String>) {
@@ -84,13 +87,21 @@ class XgramUpdateNotes private constructor(
     }
   }
 
-  /** The section of the top features: New, else the first one. */
+  /** The section of the top features: New, else the first one but Highlights (the carousel shows those). */
   val topSection: Section?
-    get() = sections.firstOrNull { it.isNew } ?: sections.firstOrNull()
+    get() = sections.firstOrNull { it.isNew } ?: sections.firstOrNull { it.kind != Kind.HIGHLIGHTS }
+
+  /** The lines of the Highlights section: the card's carousel, one card each ("Activity: every mention …"). */
+  val highlights: List<Note>
+    get() = sections.filter { it.kind == Kind.HIGHLIGHTS }.flatMap { it.notes }
 
   /** The top features: the first lines of [topSection]. */
   val topNotes: List<Note>
     get() = topSection?.notes?.take(TOP_COUNT) ?: emptyList()
+
+  /** No notes at all (none were found, or only the caption's lines). */
+  val isEmpty: Boolean
+    get() = sections.isEmpty() && body == null
 
   /** Every "• " line of every section: "See all changes (14)". */
   val count: Int
@@ -208,6 +219,11 @@ private val CAPTION_LABELS = arrayOf("Size:", "Commit:", "SHA-256:", "Source:")
  * one it mentions first (see [XgramUpdateNotes.iconFor]).
  */
 private val ICONS: List<Pair<Regex, Int>> = listOf(
+  // XGram's own features (XgramFeature), as their highlights show them
+  Regex("\\bactivity\\b") to R.drawable.baseline_notifications_24,
+  Regex("\\b(undo send|unsend)") to R.drawable.baseline_undo_24,
+  Regex("\\bcheck[ -]?in\\b") to R.drawable.baseline_location_on_24,
+  Regex("\\bsnooz") to R.drawable.baseline_watch_later_24,
   Regex("\\b(popup|pop-up|menus?)\\b") to R.drawable.baseline_more_vert_24,
   Regex("\\bbots?\\b") to R.drawable.deproko_baseline_bots_24,
   Regex("\\b(camera|lens|selfie)") to R.drawable.baseline_camera_alt_24,
@@ -285,6 +301,7 @@ private fun kindOf(emoji: String?, title: String): XgramUpdateNotes.Kind {
   val name = title.lowercase()
   val symbol = emoji ?: ""
   return when {
+    name.startsWith("highlight") || symbol.contains("🌟") || symbol.contains('⭐') -> XgramUpdateNotes.Kind.HIGHLIGHTS
     name == "new" || name.startsWith("new ") || symbol.contains('✨') -> XgramUpdateNotes.Kind.NEW
     name.startsWith("improv") || name.startsWith("better") || name.startsWith("changed") || symbol.contains("🛠") || symbol.contains("🔧") -> XgramUpdateNotes.Kind.IMPROVED
     name.startsWith("fix") || symbol.contains("🐞") || symbol.contains("🐛") -> XgramUpdateNotes.Kind.FIXED
@@ -322,12 +339,16 @@ private fun nextLine(lines: List<String>, index: Int): String? {
   return null
 }
 
-/** "🐞 Fixed" before a list: a line starting with a symbol (or a short one ending in ":") that a "• " line follows. */
+/**
+ * "🐞 Fixed" before a list: a line starting with a symbol (or a short one ending in ":", or "Highlights" alone) that a
+ * "• " line follows.
+ */
 private fun isHeader(line: String, next: String?): Boolean {
   if (next == null || bulletText(next) == null) {
     return false
   }
-  return !Character.isLetterOrDigit(line.codePointAt(0)) || (line.endsWith(':') && line.length <= 48)
+  return !Character.isLetterOrDigit(line.codePointAt(0)) || (line.endsWith(':') && line.length <= 48) ||
+    line.equals("Highlights", ignoreCase = true)
 }
 
 /** "🧪 For testers: members of …": the symbols before the first letter, the words up to ":" and the rest. */

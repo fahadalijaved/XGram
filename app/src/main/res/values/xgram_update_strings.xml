@@ -4,6 +4,7 @@
 
   <!-- Ids -->
   <item name="btn_xgramUpdatePreview" type="id" />
+  <item name="btn_xgramWelcomePreview" type="id" />
 
   <!-- Title and version -->
   <string name="XgramUpdTitle">Software update</string>
@@ -41,10 +42,26 @@
   <string name="XgramUpdCanceled">Download canceled.</string>
   <string name="XgramUpdNotStarted">The download didn’t start. Check your connection and try again.</string>
 
+  <!-- Welcome after an update ("What's new in XGram <version>"): the same card, once per version, with the highlights
+       (com.fahadali.xgram.update.XgramWelcome) -->
+  <string name="XgramWelcomeTitle">Welcome to XGram %1$s</string>
+  <!-- The four highlights built into the app (XgramWelcome.BUILT_IN) -->
+  <string name="XgramWelcomeIntro">Four big new features, made for XGram. Try one now.</string>
+  <!-- A later version's welcome: the highlights and notes of its post -->
+  <string name="XgramWelcomeIntroNotes">Here’s what’s new in this version.</string>
+  <string name="XgramWelcomeTryIt">Try it</string>
+  <string name="XgramWelcomeGotIt">Got it</string>
+  <!-- One line per highlight (the names are the features' own: Activity, Undo send, Check In, Later) -->
+  <string name="XgramWelcomeActivityInfo">Every mention of you and every reply and reaction to your messages, from all your chats, in one place.</string>
+  <string name="XgramWelcomeUndoSendInfo">A message waits a few seconds after Send, so you can take it back before anyone gets it. Pick a delay to turn it on.</string>
+  <string name="XgramWelcomeCheckInInfo">From a chat’s ⋮ menu, say when you’ll be back. If you don’t tap I’m safe in time, Telegram sends them an alert, even if your phone is off.</string>
+  <string name="XgramWelcomeLaterInfo">Snooze a chat until a time or until they reply, and get reminded about any message.</string>
+
   <!-- Preview (Settings, tap the version, Application Logs, Testing Utilities) -->
   <string name="XgramUpdPreview">Preview update screen</string>
+  <string name="XgramWelcomePreview">Preview welcome screen</string>
   <string name="XgramUpdPreviewTag">Preview</string>
   <string name="XgramUpdLooking">Looking for the newest post…</string>
   <string name="XgramUpdPreviewDone">Preview: nothing was installed</string>
-  <string name="XgramUpdPreviewSample">✨ New\n• Software update (Settings → XGram → Updates): the notes, the download and the install in one card\n• Popup menu (Message menu → Popup menu, off by default): a long press opens a menu right next to the message\n• A bot’s profile → Add to group or channel: add it to several chats at once, as admin\n• Camera X (Testing Utilities, off by default): lens buttons, Night, Portrait and HDR\n\n🛠️ Improved\n• Chats slide open more smoothly\n\n🐞 Fixed\n• Settings pages could crash while scrolling fast\n\nBased on Telegram X 0.29.1.1818. A sample: no post was found.</string>
+  <string name="XgramUpdPreviewSample">🌟 Highlights\n• Activity: every mention of you and every reply and reaction to your messages, in one place\n• Undo send: a message waits a few seconds after Send, so you can take it back\n• Check In (a chat’s ⋮ menu): if you don’t tap I’m safe in time, Telegram sends them an alert\n• Later: snooze a chat until a time or until they reply\n\n✨ New\n• Software update (Settings → XGram → Updates): the notes, the download and the install in one card\n• Popup menu (Message menu → Popup menu, off by default): a long press opens a menu right next to the message\n• A bot’s profile → Add to group or channel: add it to several chats at once, as admin\n• Camera X (Testing Utilities, off by default): lens buttons, Night, Portrait and HDR\n\n🛠️ Improved\n• Chats slide open more smoothly\n\n🐞 Fixed\n• Settings pages could crash while scrolling fast\n\nBased on Telegram X 0.29.1.1818. A sample: no post was found.</string>
 </resources>

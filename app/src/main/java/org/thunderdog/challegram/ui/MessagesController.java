@@ -7978,6 +7978,8 @@ public class MessagesController extends ViewController<MessagesController.Argume
   private @Nullable com.fahadali.xgram.chats.XgramUndoSendBar xgramUndoBar;
   /** "Send now" from the long-press menu of Send: this one send skips the wait. */
   private boolean xgramUndoBypass;
+  /** The tray's documents and music wait and their requests are being made: slow mode was checked before they did. */
+  private boolean xgramHoldingFiles;
   /** The prompt before a prefill replaces the draft is open: nothing goes back into the message box meanwhile. */
   private boolean xgramPrefillPromptOpen;
 
@@ -8130,20 +8132,27 @@ public class MessagesController extends ViewController<MessagesController.Argume
     if (hold == null) {
       return false;
     }
-    final List<TdApi.Function<?>> musicFunctions = getSendMusicFunctions(sendButton, musicEntries, true, !musicEntries.isEmpty(), caption, sendOptions);
-    final boolean musicRefused = musicFunctions == null && !musicEntries.isEmpty();
-    sendFiles(sendButton, files, true, true, !musicEntries.isEmpty() && !files.isEmpty() ? null : caption, sendOptions, filesFunctions -> {
-      ArrayList<TdApi.Function<?>> ready = new ArrayList<>();
-      if (filesFunctions != null) {
-        ready.addAll(filesFunctions);
-      }
-      if (musicFunctions != null) {
-        ready.addAll(musicFunctions);
-      }
-      // A restriction Telegram X showed refused some of them: all go back to the tray (nothing is half sent).
-      boolean refused = musicRefused || (filesFunctions == null && !files.isEmpty());
-      com.fahadali.xgram.chats.XgramUndoSend.filesReady(hold, refused ? null : ready);
-    });
+    // Slow mode was checked above: asked again now, it would see this item waiting and refuse them all.
+    xgramHoldingFiles = true;
+    try {
+      final List<TdApi.Function<?>> musicFunctions = getSendMusicFunctions(sendButton, musicEntries, true, !musicEntries.isEmpty(), caption, sendOptions);
+      final boolean musicRefused = musicFunctions == null && !musicEntries.isEmpty();
+      sendFiles(sendButton, files, true, true, !musicEntries.isEmpty() && !files.isEmpty() ? null : caption, sendOptions, filesFunctions -> {
+        ArrayList<TdApi.Function<?>> ready = new ArrayList<>();
+        if (filesFunctions != null) {
+          ready.addAll(filesFunctions);
+        }
+        if (musicFunctions != null) {
+          ready.addAll(musicFunctions);
+        }
+        // A restriction Telegram X showed refused some of them: all go back to the tray (nothing is half sent).
+        boolean refused = musicRefused || (filesFunctions == null && !files.isEmpty());
+        com.fahadali.xgram.chats.XgramUndoSend.filesReady(hold, refused ? null : ready);
+      });
+    } finally {
+      xgramHoldingFiles = false;
+    }
+    // After the requests took the reply. Their answer is always posted, so files given back land in a cleared box.
     clearInputAfterSend(true, true, replyTo, true);
     return true;
   }
@@ -10905,6 +10914,9 @@ public class MessagesController extends ViewController<MessagesController.Argume
   }
 
   public boolean showSlowModeRestriction (View v, @Nullable TdApi.MessageSendOptions sendOptions) {
+    if (xgramHoldingFiles) {
+      return false; // XGram: Undo send, checked before the files began to wait (xgramHoldFiles)
+    }
     CharSequence restriction = tdlib().getSlowModeRestrictionText(getChatId(), sendOptions != null ? sendOptions.schedulingState : null);
     if (restriction != null) {
       if (v == sendButton || v == recordButton) {

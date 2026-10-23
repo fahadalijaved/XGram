@@ -143,6 +143,11 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     DEST_PROFILE = 5, DEST_ACTIVITY = XgramNavRail.DEST_ACTIVITY;
   /** Keys by destination, as stored in the tab order (XgramReorder.NAV_BAR). Activity (6) is a tab only while it is on. */
   public static final String[] TAB_KEYS = {"chats", "calls", "contacts", "saved", "settings", "profile", "activity"};
+  /**
+   * The tabs' order before the user drags one (XgramReorder.NAV_BAR): Chats, Activity, Settings and the profile, the
+   * default tabs; the others keep their places among them.
+   */
+  public static final String[] DEFAULT_ORDER = {"chats", "activity", "calls", "contacts", "saved", "settings", "profile"};
   static final int MIN_TABS = 2, MAX_TABS = 4;
 
   /** Why the toolbar steps aside (a bit each); scrolling down hides it too. */
@@ -428,7 +433,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
 
   /** The order of the settings page: every key, as the user ordered them. */
   public static List<String> orderedKeys () {
-    return XgramReorder.ordered(XgramReorder.NAV_BAR, TAB_KEYS);
+    return XgramReorder.ordered(XgramReorder.NAV_BAR, DEFAULT_ORDER);
   }
 
   /** How many tabs the settings make (before the limit): Chats, the destinations that are on, the profile as a tab. */
@@ -469,7 +474,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     boolean profileTab = settings.navProfile() == XgramSettings.NAV_PROFILE_TAB;
     ArrayList<Integer> kept = new ArrayList<>(MAX_TABS);
     int others = 0;
-    for (String key : XgramReorder.ordered(XgramReorder.NAV_BAR, TAB_KEYS)) {
+    for (String key : XgramReorder.ordered(XgramReorder.NAV_BAR, DEFAULT_ORDER)) {
       int dest = destOf(key);
       if (dest < 0 || kept.contains(dest)) {
         continue;
@@ -2966,7 +2971,7 @@ public final class XgramNavToolbar implements NavigationController.XgramBarListe
     /** 5.6: at the icon's top end corner; on the selected tab a count becomes the 6dp dot as the label comes in. */
     private void drawBadge (Canvas c, Tab tab, float a, boolean rtl, float cy) {
       final float presence = tab.badge.getValue();
-      if (presence <= .001f || tab.drawKind == 0 || (tab.dest != DEST_CHATS && tab.dest != DEST_CALLS)) {
+      if (presence <= .001f || tab.drawKind == 0 || (tab.dest != DEST_CHATS && tab.dest != DEST_CALLS && tab.dest != DEST_ACTIVITY)) {
         return;
       }
       final float half = Screen.dpf(ICON / 2f);

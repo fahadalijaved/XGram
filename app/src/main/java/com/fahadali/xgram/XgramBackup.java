@@ -66,6 +66,8 @@ public final class XgramBackup {
     XgramSettings.KEY_HIDE_LOCK_BUTTON, XgramSettings.KEY_MESSAGE_POPUP,
     // Add to group or channel (a bot's profile): as an admin, with every right
     XgramSettings.KEY_ADD_BOT_ADMIN, XgramSettings.KEY_ADD_BOT_ALL_RIGHTS,
+    // Expressive design and New look for Telegram X pages (Appearance): on by default, so turning one off is kept too
+    com.fahadali.xgram.appearance.XgramExpressive.KEY, XgramSettings.KEY_COMPOSE_TGX_PAGES,
     // per chat / per sender
     "xgram_sb_", "xgram_ghost_ex_", "xgram_tabs_side_", "xgram_drawer_hide_", "xgram_input_hide_", XgramSettings.KEY_UNDO_SEND_EXCLUDE,
     // per account: removed by reset, but exported by Telegram user in "accounts" (see exportAccounts)
@@ -259,6 +261,7 @@ public final class XgramBackup {
         for (Iterator<String> it = ints.keys(); it.hasNext(); ) {
           String key = it.next();
           if (key.startsWith("xgram_tab_") || key.startsWith("xgram_cmode_") || key.equals("xgram_history_retention") || key.equals("xgram_avatar_corners") || key.equals("xgram_chat_long_press") || key.equals("xgram_download_boost_level") || key.equals("xgram_swipe_left") || key.equals("xgram_swipe_right") || key.equals("xgram_tr_provider") || key.equals(XgramSettings.KEY_INLINE_VIDEO_START) || key.equals(XgramSettings.KEY_ENTER_TO_SEND) || key.equals(XgramSettings.KEY_PANE_LIST_WIDTH) || key.equals(XgramSettings.KEY_NOTIFICATION_ICON) || key.equals(XgramSettings.KEY_REACTION_BAR) || key.equals(XgramSettings.KEY_NAV_TABS) || key.equals(XgramSettings.KEY_NAV_PROFILE) || key.equals(XgramSettings.KEY_NAV_STYLE) || key.equals(XgramSettings.KEY_NAV_FAB) || key.equals(XgramSettings.KEY_UNDO_SEND) || key.equals(XgramSettings.KEY_ACTIVITY_BAR) ||
+            key.startsWith("xgram_look_") || key.equals(com.fahadali.xgram.appearance.XgramIconPack.KEY) || key.equals("xgram_update_channel") || // Chat look, Icons, Updates
             key.equals(com.fahadali.xgram.later.XgramLater.KEY_WAKE_EARLY) || // Later
             key.equals(XgramSettings.KEY_CHECKIN_TIMER) || key.equals(XgramSettings.KEY_CHECKIN_GRACE) || key.equals(XgramSettings.KEY_CHECKIN_RADIUS)) { // Check In
             pmc().putInt(key, ints.getInt(key));

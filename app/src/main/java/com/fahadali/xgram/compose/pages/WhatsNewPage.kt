@@ -36,6 +36,7 @@ import com.fahadali.xgram.compose.ui.s
 import com.fahadali.xgram.compose.ui.settingsRowColors
 import com.fahadali.xgram.compose.ui.str
 import com.fahadali.xgram.history.XgramHistoryController
+import com.fahadali.xgram.later.XgramLaterController
 import org.thunderdog.challegram.R
 
 /** What XGram adds to Telegram X: each row opens the feature (settings pages here, the rest as Telegram X pages). */
@@ -73,6 +74,9 @@ private fun openEntry(host: XgramComposeHost, action: Int) {
   val tdlib = host.tdlib
   when (action) {
     XgramWhatsNewController.OPEN_ACTIVITY -> com.fahadali.xgram.activity.XgramActivity.open(host.controller)
+    XgramWhatsNewController.OPEN_UNDO_SEND -> host.openPage(XgramPage.MESSAGES, R.id.btn_xgramUndoSend)
+    XgramWhatsNewController.OPEN_CHECK_IN -> host.openPage(XgramPage.MESSAGES, R.id.btn_xgramCheckInTimer) // it starts from a chat's menu
+    XgramWhatsNewController.OPEN_LATER -> host.open(XgramLaterController(activity, tdlib))
     XgramWhatsNewController.OPEN_SETTINGS -> host.openPage(XgramPage.MAIN)
     XgramWhatsNewController.OPEN_THEMES -> host.open(XgramThemesController(activity, tdlib))
     XgramWhatsNewController.OPEN_GHOST, XgramWhatsNewController.OPEN_PRIVACY -> host.openPage(XgramPage.PRIVACY) // Ghost mode first

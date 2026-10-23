@@ -21,6 +21,9 @@ import android.view.Window
 import android.view.WindowManager
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
@@ -39,6 +42,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -51,9 +55,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -88,6 +94,9 @@ import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.WavyProgressIndicatorDefaults
+import androidx.compose.material3.carousel.CarouselItemDrawInfo
+import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.toPath
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -123,6 +132,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
@@ -137,6 +147,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
@@ -145,6 +156,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -170,6 +182,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.vkryl.core.lambda.RunnableBool
+import me.vkryl.core.lambda.RunnableData
 import org.drinkless.tdlib.TdApi
 import org.thunderdog.challegram.BaseActivity
 import org.thunderdog.challegram.BuildConfig
@@ -229,6 +242,21 @@ private const val FADE_THROUGH_IN = 210
 /** A download the updater hasn't started after this long is given up, with an error line. */
 private const val START_TIMEOUT_MS = 15_000L
 
+/** The welcome opens this long after the chat list shows, over a settled screen (as XGram's What's new page did). */
+private const val WELCOME_DELAY_MS = 700L
+
+/**
+ * The highlights' cards: one and the next one's edge ([HIGHLIGHT_PEEK]) on the cover screen, two on the unfolded Fold,
+ * at most [HIGHLIGHT_MAX_WIDTH]. Their content lines up with the card's 24dp.
+ */
+private val HIGHLIGHT_MAX_WIDTH = 280.dp
+private val HIGHLIGHT_MIN_WIDTH = 160.dp
+private val HIGHLIGHT_PEEK = 48.dp
+private val HIGHLIGHT_INSET = 24.dp
+private val HIGHLIGHT_SPACING = 8.dp
+private val HIGHLIGHT_PADDING = 20.dp
+private val HIGHLIGHT_ICON = 64.dp
+
 private const val PREVIEW_SIZE = 65_640_448L // 62.6 MB, an arm64 APK
 private const val PREVIEW_STEPS = 48
 private const val PREVIEW_DOWNLOAD_MS = 4_000L
@@ -247,6 +275,11 @@ private const val PREVIEW_TIMEOUT_MS = 8_000L
  * It is the update prompt (Ask first) in both designs, What's new, the Updates page's actions and the chat list's
  * Install. Settings → tap the version → Application Logs → Testing Utilities → Preview update screen shows it with the
  * newest post, whatever the installed build, and only pretends to download and install.
+ *
+ * The notes' Highlights ("🌟 Highlights", see [XgramUpdateNotes]) show under What's new as a carousel, one large card
+ * each. After an update the same card welcomes the user once ([welcomeIfNeeded]): "Welcome to XGram <version>", the
+ * release's highlights with Try it, the installed build's notes, and Got it (Preview welcome screen, next to Preview
+ * update screen, shows it any time).
  *
  * The window is a platform [Dialog] holding a ComposeView with its own lifecycle, as XgramR5ChatPickers: the 32% scrim,
  * the app's Compose theme (dynamic colors, Telegram X's dark mode). The window only fades; the card springs in and out
@@ -295,6 +328,83 @@ object XgramUpdateScreen {
     }
   }
 
+  /**
+   * What's new in XGram <version>, once after an update (never after a fresh install), when the chat list shows
+   * (MainController.onFocus: logged in, the main screen up, the passcode unlocked). [XgramWelcome] decides when: the
+   * first welcome after the built-in highlights changed shows them at once (Activity, Undo send, Check In, Later),
+   * with the installed build's notes under them once its post is found; later versions show none until the built-in
+   * highlights change again. It is shown only while the chat list is on top; another card open puts it off to the next
+   * time the chat list shows.
+   */
+  @JvmStatic
+  fun welcomeIfNeeded(controller: ViewController<*>) {
+    if (welcomeWaiting || !XgramWelcome.isDue()) {
+      return
+    }
+    welcomeWaiting = true
+    UI.post({
+      welcomeWaiting = false
+      welcomeNow(controller)
+    }, WELCOME_DELAY_MS)
+  }
+
+  /** Testing Utilities: the welcome with the built-in highlights and the newest post's notes; it records nothing. */
+  @JvmStatic
+  fun previewWelcome(controller: ViewController<*>) {
+    openWelcome(controller, preview = true)
+  }
+
+  private var welcomeWaiting = false
+
+  private fun welcomeNow(controller: ViewController<*>) {
+    if (controller.isDestroyed || !controller.isFocused || !XgramWelcome.isDue()) {
+      return
+    }
+    val activity = controller.context()
+    if (activity.isPasscodeShowing) {
+      // The passcode lock is over the chat list: once it is unlocked, while the app is on screen (else at the next focus)
+      if (activity.activityState == UI.State.RESUMED && !welcomeWaiting) {
+        welcomeWaiting = true
+        UI.post({
+          welcomeWaiting = false
+          welcomeNow(controller)
+        }, WELCOME_DELAY_MS)
+      }
+      return
+    }
+    if (XgramWelcome.builtInDue()) {
+      if (openWelcome(controller, preview = false)) {
+        XgramWelcome.done(builtIn = true)
+      }
+      return
+    }
+    // No welcome until the built-in highlights change again (raising HIGHLIGHTS_VERSION): not a card after every build,
+    // CI ones included, with the notes the update card just showed
+    XgramWelcome.done(builtIn = false)
+  }
+
+  /** The welcome with the built-in highlights; the installed build's notes (the preview: the newest post's) follow. */
+  private fun openWelcome(controller: ViewController<*>, preview: Boolean): Boolean {
+    val screen = ScreenState(UpdateModel.welcome(null), preview = preview, live = false, expanded = false, installNow = false, welcome = true, builtIn = true)
+    if (!open(controller, screen)) {
+      return false
+    }
+    val tdlib = controller.tdlib() ?: return true
+    val onFound = RunnableData<XgramUpdates.Found> { found ->
+      UI.post {
+        if (found != null && !screen.closing) {
+          screen.model = UpdateModel.welcome(found)
+        }
+      }
+    }
+    if (preview) {
+      XgramUpdates.findLatest(tdlib, onFound)
+    } else {
+      XgramUpdates.findInstalled(tdlib, onFound)
+    }
+    return true
+  }
+
   private fun showUpdate(controller: ViewController<*>, installNow: Boolean): Boolean {
     val found = controller.context().appUpdater().xgramUpdate() ?: return false
     return open(controller, ScreenState(UpdateModel.of(found), preview = false, live = true, expanded = false, installNow = installNow))
@@ -308,8 +418,9 @@ object XgramUpdateScreen {
     val currentDialog = current?.dialog
     if (current != null && currentDialog != null && currentDialog.isShowing && current.activity === controller.context()) {
       // One card at a time: the prompt and a tap on Install never stack. Over the preview the prompt isn't shown, so
-      // the updater offers that update again at its next check
-      return current.preview == screen.preview
+      // the updater offers that update again at its next check; over the welcome, as it closes (the dismiss listener).
+      // The welcome waits for the next time the chat list shows
+      return !current.welcome && !screen.welcome && current.preview == screen.preview
     }
     return try {
       val context = controller.context()
@@ -367,6 +478,13 @@ object XgramUpdateScreen {
         val after = screen.afterClose
         screen.afterClose = null
         after?.invoke()
+        if (after == null && screen.welcome && !screen.preview) {
+          // An update the welcome held back is offered now; after Try it, at the updater's next check
+          val updater = context.appUpdater()
+          if (updater.state() == AppUpdater.State.AVAILABLE) {
+            UI.post { updater.offerUpdate() }
+          }
+        }
       }
       // RESUMED only while the activity is: opened in the background, the card waits for it (see ScreenState)
       owner.moveTo(if (context.activityState == UI.State.RESUMED) Lifecycle.State.RESUMED else Lifecycle.State.CREATED)
@@ -386,7 +504,17 @@ object XgramUpdateScreen {
  * holds it weakly (the dialog strongly): in the background its lifecycle stops, so Compose's frame clock and the
  * hero's motion pause, and it goes with the activity. Main thread.
  */
-private class ScreenState(model: UpdateModel?, val preview: Boolean, val live: Boolean, val expanded: Boolean, val installNow: Boolean) : BaseActivity.ActivityListener {
+private class ScreenState(
+  model: UpdateModel?,
+  val preview: Boolean,
+  val live: Boolean,
+  val expanded: Boolean,
+  val installNow: Boolean,
+  /** The welcome after an update ([XgramUpdateScreen.welcomeIfNeeded]): no update, Got it. */
+  val welcome: Boolean = false,
+  /** The welcome shows the highlights built into the app ([XgramWelcome.BUILT_IN]), with Try it. */
+  val builtIn: Boolean = false
+) : BaseActivity.ActivityListener {
   var model by mutableStateOf(model)
   var dialog: Dialog? = null
   var owner: XgramComposeOwner? = null
@@ -425,7 +553,7 @@ private class ScreenState(model: UpdateModel?, val preview: Boolean, val live: B
   override fun onActivityPermissionResult(code: Int, granted: Boolean) = Unit
 }
 
-/** What the card shows of an update: a post ([found]), or the preview's sample. */
+/** What the card shows of an update: a post ([found]), or the preview's sample; the welcome's, this build. */
 private class UpdateModel(
   val version: String,
   val size: Long,
@@ -433,7 +561,9 @@ private class UpdateModel(
   val notes: XgramUpdateNotes,
   val photo: TdApi.Photo?,
   val tdlib: Tdlib?,
-  val found: XgramUpdates.Found?
+  val found: XgramUpdates.Found?,
+  /** False when the kind ([isStable]) isn't known: the welcome before the installed build's post was seen. */
+  val kindKnown: Boolean = true
 ) {
   companion object {
     fun of(found: XgramUpdates.Found): UpdateModel {
@@ -446,6 +576,17 @@ private class UpdateModel(
       BuildConfig.VERSION_NAME, PREVIEW_SIZE, XgramUpdates.channel() != XgramUpdates.CHANNEL_CI,
       XgramUpdateNotes.parse(s(R.string.XgramUpdPreviewSample)), null, null, null
     )
+
+    /** The welcome's: this build, with the notes and the photo of its post once found ([found]; the preview's newest). */
+    fun welcome(found: XgramUpdates.Found?): UpdateModel {
+      if (found == null) {
+        val kind = XgramUpdates.installedKind()
+        return UpdateModel(BuildConfig.ORIGINAL_VERSION_NAME, 0L, kind == 1, XgramUpdateNotes.parse(null), null, null, null, kindKnown = kind != -1)
+      }
+      return UpdateModel(
+        BuildConfig.ORIGINAL_VERSION_NAME, 0L, found.isStable, XgramUpdateNotes.parse(found.changelog), found.changelogPhoto, found.tdlib, found
+      )
+    }
   }
 }
 
@@ -651,8 +792,14 @@ private class HeroFold(private val body: ScrollState) : NestedScrollConnection {
   }
 }
 
-/** Where What's new is in the body, for See all changes and Show less, and the reveal running. Main thread. */
-private class ChangesReveal {
+/**
+ * What's new as opened (What's new: every change), where it is in the body, for See all changes and Show less, and the
+ * reveal running. Main thread.
+ */
+private class ChangesReveal(expanded: Boolean) {
+  /** Every change in place of the top three. */
+  var expanded by mutableStateOf(expanded)
+
   /** The body's content, inside its scroll. */
   var content: LayoutCoordinates? = null
   var label: LayoutCoordinates? = null
@@ -661,7 +808,7 @@ private class ChangesReveal {
   /** Show less is on its way up, the swap after it: a second tap changes nothing. */
   var hiding = false
 
-  /** What's new's top in the body's content, px; null until both are placed. */
+  /** What's new's top (the changes' under a carousel) in the body's content, px; null until both are placed. */
   fun labelTop(): Float? {
     val inside = content
     val of = label
@@ -736,6 +883,37 @@ private suspend fun glide(
       withFrameNanos { }
       step(1f)
       frames++
+    }
+  }
+}
+
+/**
+ * See all changes ([toggle] true) and Show less: the swap, with the body gliding to What's new ([revealChanges]) or,
+ * first, back to the start ([hideChanges]).
+ */
+@Composable
+private fun rememberChangesToggle(reveal: ChangesReveal, scroll: ScrollState, hero: HeroFold, still: Boolean): (Boolean) -> Unit {
+  val scope = rememberCoroutineScope()
+  val margin = with(LocalDensity.current) { REVEAL_MARGIN.toPx() }
+  // No bounce: past the target and back, on a long scroll, reads as a jump
+  val revealSpec: AnimationSpec<Float>? = if (still) null else spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)
+  return { expand ->
+    if (expand) {
+      reveal.job?.cancel()
+      reveal.expanded = true
+      reveal.job = scope.launch { revealChanges(scroll, hero, reveal, margin, revealSpec) }
+    } else if (!reveal.hiding) {
+      // Up first on the whole list, then the swap: also when a touch stops the glide
+      reveal.job?.cancel()
+      reveal.hiding = true
+      reveal.job = scope.launch {
+        try {
+          hideChanges(scroll, hero, revealSpec)
+        } finally {
+          reveal.hiding = false
+          reveal.expanded = false
+        }
+      }
     }
   }
 }
@@ -837,6 +1015,11 @@ private fun UpdateScreen(controller: ViewController<*>, screen: ScreenState) {
         ) { shown ->
           if (shown == null) {
             LoadingBody(screen, still, close)
+          } else if (screen.welcome) {
+            WelcomeBody(
+              controller, screen, shown, still, bodyScroll, heroFold,
+              openPost = if (hero) null else openPost, previewTag = screen.preview && !hero, close = close
+            )
           } else {
             // Without the hero, its Open post and Preview tag go to the title block
             UpdateBody(
@@ -1037,30 +1220,9 @@ private fun UpdateBody(
   }
 
   // What's new as opened (What's new: every change); See all changes and Show less bring the changes into view
-  var expanded by remember { mutableStateOf(screen.expanded) }
-  val reveal = remember { ChangesReveal() }
-  val margin = with(LocalDensity.current) { REVEAL_MARGIN.toPx() }
-  // No bounce: past the target and back, on a long scroll, reads as a jump
-  val revealSpec: AnimationSpec<Float>? = if (still) null else spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow)
-  val toggle: (Boolean) -> Unit = { expand ->
-    if (expand) {
-      reveal.job?.cancel()
-      expanded = true
-      reveal.job = scope.launch { revealChanges(scroll, hero, reveal, margin, revealSpec) }
-    } else if (!reveal.hiding) {
-      // Up first on the whole list, then the swap: also when a touch stops the glide
-      reveal.job?.cancel()
-      reveal.hiding = true
-      reveal.job = scope.launch {
-        try {
-          hideChanges(scroll, hero, revealSpec)
-        } finally {
-          reveal.hiding = false
-          expanded = false
-        }
-      }
-    }
-  }
+  val reveal = remember { ChangesReveal(screen.expanded) }
+  val toggle = rememberChangesToggle(reveal, scroll, hero, still)
+  val highlights = remember(model) { highlightsOf(model.notes) }
 
   Column(Modifier.fillMaxWidth()) {
     // The notes scroll; the buttons stay at the bottom, whatever the font size
@@ -1070,19 +1232,24 @@ private fun UpdateBody(
         screen.afterClose = after
         close()
       }
-      WhatsNew(model.notes, expanded, toggle, still, reveal)
+      WhatsNew(model.notes, reveal.expanded, toggle, still, reveal, highlights)
     }
-    // A line over the buttons while more of the notes is below
-    val divider by animateFloatAsState(if (scroll.canScrollForward) 1f else 0f, effectsSpec(still), label = "xgramUpdateDivider")
-    Box(
-      Modifier
-        .fillMaxWidth()
-        .height(1.dp)
-        .graphicsLayer { alpha = divider }
-        .background(MaterialTheme.colorScheme.outlineVariant)
-    )
+    ScrollDivider(scroll, still)
     Actions(flow, card, actionable, still, onPrimary, onCancel, close)
   }
+}
+
+/** A line over the pinned buttons while more of the body is below. */
+@Composable
+private fun ScrollDivider(scroll: ScrollState, still: Boolean) {
+  val divider by animateFloatAsState(if (scroll.canScrollForward) 1f else 0f, effectsSpec(still), label = "xgramUpdateDivider")
+  Box(
+    Modifier
+      .fillMaxWidth()
+      .height(1.dp)
+      .graphicsLayer { alpha = divider }
+      .background(MaterialTheme.colorScheme.outlineVariant)
+  )
 }
 
 /** Without the hero (less than [HERO_SPACE]): its Open post next to the title, the Preview tag after the kind. */
@@ -1101,10 +1268,7 @@ private fun TitleBlock(model: UpdateModel, ready: Boolean, previewTag: Boolean, 
         modifier = Modifier.weight(1f).semantics { heading() }
       )
       if (openPost != null) {
-        // Its icon lines up with the card's content; the button's own padding sits outside it
-        IconButton(onClick = openPost, modifier = Modifier.padding(start = 8.dp).offset(x = 12.dp)) {
-          Icon(tgxIcon(R.drawable.baseline_open_in_browser_24), contentDescription = s(R.string.XgramUpdateOpenPost), tint = c.onSurfaceVariant)
-        }
+        TitleOpenPost(openPost)
       }
     }
     Text(
@@ -1122,13 +1286,29 @@ private fun TitleBlock(model: UpdateModel, ready: Boolean, previewTag: Boolean, 
   }
 }
 
+/** Open post next to the title, without the hero: its icon lines up with the card's content, its padding outside it. */
+@Composable
+private fun TitleOpenPost(openPost: () -> Unit) {
+  IconButton(onClick = openPost, modifier = Modifier.padding(start = 8.dp).offset(x = 12.dp)) {
+    Icon(tgxIcon(R.drawable.baseline_open_in_browser_24), contentDescription = s(R.string.XgramUpdateOpenPost), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+  }
+}
+
 /**
- * "What's new": the top three changes as rows with "See all changes (14)", which swaps them, in place, for every change
+ * "What's new": the notes' highlights as a carousel ([highlights]: the update card's; the welcome shows its own
+ * above), then the top three changes as rows with "See all changes (14)", which swaps them, in place, for every change
  * of the notes grouped by section, with Show less at its end ([toggle] brings them into view: [revealChanges],
  * [hideChanges]).
  */
 @Composable
-private fun WhatsNew(notes: XgramUpdateNotes, expanded: Boolean, toggle: (Boolean) -> Unit, still: Boolean, reveal: ChangesReveal) {
+private fun WhatsNew(
+  notes: XgramUpdateNotes,
+  expanded: Boolean,
+  toggle: (Boolean) -> Unit,
+  still: Boolean,
+  reveal: ChangesReveal,
+  highlights: List<Highlight> = emptyList()
+) {
   val c = MaterialTheme.colorScheme
   Column(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 12.dp)) {
     Text(
@@ -1137,12 +1317,18 @@ private fun WhatsNew(notes: XgramUpdateNotes, expanded: Boolean, toggle: (Boolea
       color = c.primary,
       modifier = Modifier
         .padding(horizontal = 24.dp)
-        .onPlaced { reveal.label = it }
+        .then(if (highlights.isEmpty()) Modifier.onPlaced { reveal.label = it } else Modifier)
         .semantics { heading() }
     )
+    if (highlights.isNotEmpty()) {
+      HighlightsCarousel(highlights, onTry = null, modifier = Modifier.padding(top = 16.dp))
+      // See all changes brings the changes into view, under the carousel
+      Spacer(Modifier.onPlaced { reveal.label = it })
+    }
     val body = notes.body
     when {
-      notes.topNotes.isEmpty() -> Text(
+      // Highlights alone: See all changes lists them, no "no changelog" line
+      notes.topNotes.isEmpty() && notes.highlights.isEmpty() -> Text(
         body ?: s(R.string.XgramUpdateNoChangelog),
         style = MaterialTheme.typography.bodyMedium,
         color = c.onSurfaceVariant,
@@ -1329,6 +1515,7 @@ private class SectionLook(@DrawableRes val icon: Int, val shape: RoundedPolygon,
 private fun sectionLook(kind: XgramUpdateNotes.Kind): SectionLook {
   val c = MaterialTheme.colorScheme
   return when (kind) {
+    XgramUpdateNotes.Kind.HIGHLIGHTS -> SectionLook(R.drawable.baseline_star_24, MaterialShapes.Sunny, c.primary, c.onPrimary)
     XgramUpdateNotes.Kind.NEW -> SectionLook(R.drawable.baseline_auto_awesome_24, MaterialShapes.SoftBurst, c.primaryContainer, c.onPrimaryContainer)
     XgramUpdateNotes.Kind.IMPROVED -> SectionLook(R.drawable.baseline_tune_24, MaterialShapes.Cookie6Sided, c.secondaryContainer, c.onSecondaryContainer)
     XgramUpdateNotes.Kind.FIXED -> SectionLook(R.drawable.baseline_bug_report_24, MaterialShapes.Clover4Leaf, c.tertiaryContainer, c.onTertiaryContainer)
@@ -1716,6 +1903,280 @@ private fun StillIndicator(size: Dp) {
   }
 }
 
+// Highlights
+
+/**
+ * A card of the highlights: a line of the notes' Highlights section ("Undo send: …"), or one built into the app (the
+ * welcome's). [feature]: the XGram feature it names, for its icon and Try it.
+ */
+private class Highlight(val name: String, val where: String?, val text: String?, @DrawableRes val icon: Int, val feature: XgramFeature?)
+
+/** The notes' highlights, each with the icon of the feature it names, else one from its words. */
+private fun highlightsOf(notes: XgramUpdateNotes): List<Highlight> = notes.highlights.map { note ->
+  val name = note.name
+  val feature = XgramFeature.of(name ?: note.body)
+  Highlight(name ?: note.body, note.where, if (name != null) note.body else null, feature?.icon ?: XgramUpdateNotes.iconFor(note), feature)
+}
+
+/** The highlights built into the app ([XgramWelcome.BUILT_IN]): the welcome's, with Try it. */
+private fun builtInHighlights(): List<Highlight> = XgramWelcome.BUILT_IN.map { Highlight(s(it.title), null, s(it.info), it.icon, it) }
+
+/** A highlight card's container and content colors, and the shape its icon sits on, in its accent. */
+private class HighlightLook(val shape: RoundedPolygon, val container: Color, val content: Color, val accent: Color, val onAccent: Color)
+
+/**
+ * A different look for each card, in order: Activity on a soft burst in primary, Undo send on a clover in tertiary,
+ * Check In on an arch (a doorway: back home) in secondary, Later on a 12-sided cookie (a clock face) on the card's
+ * lowest surface.
+ */
+@Composable
+private fun highlightLook(index: Int): HighlightLook {
+  val c = MaterialTheme.colorScheme
+  return when (index % 4) {
+    0 -> HighlightLook(MaterialShapes.SoftBurst, c.primaryContainer, c.onPrimaryContainer, c.primary, c.onPrimary)
+    1 -> HighlightLook(MaterialShapes.Clover4Leaf, c.tertiaryContainer, c.onTertiaryContainer, c.tertiary, c.onTertiary)
+    2 -> HighlightLook(MaterialShapes.Arch, c.secondaryContainer, c.onSecondaryContainer, c.secondary, c.onSecondary)
+    else -> HighlightLook(MaterialShapes.Cookie12Sided, c.surfaceContainerLowest, c.onSurface, c.primary, c.onPrimary)
+  }
+}
+
+/**
+ * The highlights as an M3E carousel, one large card each. Uncontained: every card at its full width with the next
+ * one's edge in view, masked as they leave at the edges, scrolling freely. The cards are as tall as the tallest,
+ * measured first at their width, so the carousel never changes height as it scrolls, whatever the text and the font
+ * size. [onTry]: the welcome's Try it.
+ */
+@Composable
+private fun HighlightsCarousel(highlights: List<Highlight>, onTry: ((XgramFeature) -> Unit)?, modifier: Modifier = Modifier) {
+  BoxWithConstraints(modifier.fillMaxWidth()) {
+    // One card and the next one's edge on the 344dp cover screen, two on the unfolded Fold
+    val itemWidth = (maxWidth - HIGHLIGHT_INSET - HIGHLIGHT_PEEK).coerceIn(HIGHLIGHT_MIN_WIDTH, HIGHLIGHT_MAX_WIDTH)
+    val state = rememberCarouselState { highlights.size }
+    val shape = MaterialTheme.shapes.extraLarge
+    val measured = @Composable {
+      // Measured, never placed: nothing drawn, touched or read by TalkBack
+      Box(Modifier.clearAndSetSemantics { }) {
+        highlights.forEachIndexed { index, highlight ->
+          HighlightCard(highlight, index, onTry, Modifier.fillMaxWidth())
+        }
+      }
+    }
+    val carousel = @Composable {
+      HorizontalUncontainedCarousel(
+        state = state,
+        itemWidth = itemWidth,
+        modifier = Modifier.fillMaxWidth(),
+        itemSpacing = HIGHLIGHT_SPACING,
+        contentPadding = PaddingValues(horizontal = HIGHLIGHT_INSET)
+      ) { index ->
+        HighlightCard(highlights[index], index, onTry, Modifier.fillMaxHeight().maskClip(shape), carouselItemDrawInfo)
+      }
+    }
+    Layout(contents = listOf(measured, carousel)) { (cards, shown), constraints ->
+      val width = itemWidth.roundToPx()
+      val tallest = cards.firstOrNull()?.measure(Constraints(maxWidth = width))?.height ?: 0
+      val placeable = shown.first().measure(constraints.copy(minHeight = tallest, maxHeight = tallest))
+      layout(placeable.width, placeable.height) {
+        placeable.place(0, 0)
+      }
+    }
+  }
+}
+
+/**
+ * A highlight: the feature's icon on a large shape in the card's accent, its name, where it is and what it does, and
+ * in the welcome Try it (the card closes, then the feature opens). One node for TalkBack ("Undo send, A message waits
+ * …"), with Try it as its action. Its content fades as the carousel masks the card at an edge ([drawInfo]).
+ */
+@Composable
+private fun HighlightCard(
+  highlight: Highlight,
+  index: Int,
+  onTry: ((XgramFeature) -> Unit)?,
+  modifier: Modifier,
+  drawInfo: CarouselItemDrawInfo? = null
+) {
+  val look = highlightLook(index)
+  val feature = highlight.feature
+  val tryIt: (() -> Unit)? = if (onTry != null && feature != null) ({ onTry(feature) }) else null
+  val tryLabel = s(R.string.XgramWelcomeTryIt)
+  val description = listOfNotNull(highlight.name, highlight.where, highlight.text).joinToString(", ")
+  Column(
+    modifier
+      .fillMaxWidth()
+      .background(look.container)
+      .clearAndSetSemantics {
+        contentDescription = description
+        if (tryIt != null) {
+          onClick(label = tryLabel) {
+            tryIt()
+            true
+          }
+        }
+      }
+      .graphicsLayer { alpha = contentShown(drawInfo) }
+      .padding(HIGHLIGHT_PADDING),
+    // Try it at the bottom of a card as tall as the tallest
+    verticalArrangement = Arrangement.SpaceBetween
+  ) {
+    Column(Modifier.fillMaxWidth()) {
+      Box(
+        Modifier.size(HIGHLIGHT_ICON).clip(look.shape.toShape()).background(look.accent),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(tgxIcon(highlight.icon), contentDescription = null, tint = look.onAccent, modifier = Modifier.size(32.dp))
+      }
+      Text(
+        highlight.name,
+        style = MaterialTheme.typography.titleLargeEmphasized,
+        color = look.content,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.padding(top = 16.dp)
+      )
+      val where = highlight.where
+      if (where != null) {
+        Text(
+          where,
+          style = MaterialTheme.typography.labelMedium,
+          color = look.content,
+          modifier = Modifier.padding(top = 2.dp)
+        )
+      }
+      val text = highlight.text
+      if (text != null) {
+        Text(
+          text,
+          style = MaterialTheme.typography.bodyMedium,
+          color = look.content,
+          modifier = Modifier.padding(top = 4.dp)
+        )
+      }
+    }
+    if (tryIt != null) {
+      Button(
+        onClick = tryIt,
+        shapes = ButtonDefaults.shapes(),
+        colors = ButtonDefaults.buttonColors(containerColor = look.accent, contentColor = look.onAccent),
+        modifier = Modifier.padding(top = 16.dp).heightIn(min = 48.dp)
+      ) {
+        Text(tryLabel, textAlign = TextAlign.Center)
+      }
+    }
+  }
+}
+
+/** How much of a card's content shows: all of it at its full width, fading out as the carousel masks it to its edge. */
+private fun contentShown(info: CarouselItemDrawInfo?): Float {
+  if (info == null || info.maxSize <= info.minSize) {
+    return 1f
+  }
+  val open = ((info.size - info.minSize) / (info.maxSize - info.minSize)).coerceIn(0f, 1f)
+  // A card half way out still reads; its last sliver is the card's color only
+  return ((open - .25f) / .5f).coerceIn(0f, 1f)
+}
+
+// Welcome
+
+/**
+ * The welcome: "Welcome to XGram <version>", the highlights (built in, with Try it; or its post's), the installed
+ * build's notes once its post is found (What's new: the top changes and See all changes), and Got it pinned at the
+ * bottom. Try it closes the card, then opens the feature.
+ */
+@Composable
+private fun WelcomeBody(
+  controller: ViewController<*>,
+  screen: ScreenState,
+  model: UpdateModel,
+  still: Boolean,
+  scroll: ScrollState,
+  hero: HeroFold,
+  openPost: (() -> Unit)?,
+  previewTag: Boolean,
+  close: () -> Unit
+) {
+  val highlights = remember(model) { if (screen.builtIn) builtInHighlights() else highlightsOf(model.notes) }
+  val reveal = remember { ChangesReveal(false) }
+  val toggle = rememberChangesToggle(reveal, scroll, hero, still)
+  val notes = model.notes
+  val onTry: (XgramFeature) -> Unit = { feature ->
+    screen.afterClose = { feature.open(controller) }
+    close()
+  }
+  val effects = effectsSpec<Float>(still)
+  Column(Modifier.fillMaxWidth()) {
+    Column(Modifier.weight(1f, fill = false).verticalScroll(scroll).onPlaced { reveal.content = it }) {
+      WelcomeTitle(model, s(if (screen.builtIn) R.string.XgramWelcomeIntro else R.string.XgramWelcomeIntroNotes), previewTag, openPost)
+      if (highlights.isNotEmpty()) {
+        HighlightsCarousel(highlights, onTry, Modifier.padding(top = 20.dp))
+      }
+      // The notes come from the post (a search after the card opened): they grow in under the highlights
+      AnimatedVisibility(
+        visible = !notes.isEmpty,
+        enter = if (still) EnterTransition.None else {
+          fadeIn(effects) + expandVertically(spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMediumLow), expandFrom = Alignment.Top)
+        },
+        exit = ExitTransition.None,
+        label = "xgramWelcomeNotes"
+      ) {
+        WhatsNew(notes, reveal.expanded, toggle, still, reveal)
+      }
+      Spacer(Modifier.height(12.dp))
+    }
+    ScrollDivider(scroll, still)
+    WelcomeActions(close)
+  }
+}
+
+/** "Welcome to XGram 0.29.1.1818.330" and [intro]; without the hero, Open post next to it and the Preview tag under. */
+@Composable
+private fun WelcomeTitle(model: UpdateModel, intro: String, previewTag: Boolean, openPost: (() -> Unit)?) {
+  val c = MaterialTheme.colorScheme
+  Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = if (openPost != null) 12.dp else 20.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Text(
+        s(R.string.XgramWelcomeTitle, model.version),
+        style = MaterialTheme.typography.headlineSmallEmphasized,
+        color = c.onSurface,
+        modifier = Modifier.weight(1f).semantics { heading() }
+      )
+      if (openPost != null) {
+        TitleOpenPost(openPost)
+      }
+    }
+    Text(
+      intro,
+      style = MaterialTheme.typography.bodyLarge,
+      color = c.onSurfaceVariant,
+      modifier = Modifier.padding(top = 8.dp)
+    )
+    if (previewTag) {
+      Text(
+        s(R.string.XgramUpdPreviewTag),
+        style = MaterialTheme.typography.bodyMedium,
+        color = c.onSurfaceVariant,
+        modifier = Modifier.padding(top = 2.dp)
+      )
+    }
+  }
+}
+
+/** The welcome's pinned bottom: Got it, as large as Install now. */
+@Composable
+private fun WelcomeActions(close: () -> Unit) {
+  Box(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 20.dp)) {
+    Button(
+      onClick = close,
+      shapes = ButtonDefaults.shapesFor(BIG_BUTTON),
+      modifier = Modifier.fillMaxWidth().heightIn(min = BIG_BUTTON),
+      contentPadding = ButtonDefaults.contentPaddingFor(BIG_BUTTON)
+    ) {
+      // Two lines at large font sizes rather than cut: the button grows
+      Text(s(R.string.XgramWelcomeGotIt), style = ButtonDefaults.textStyleFor(BIG_BUTTON), textAlign = TextAlign.Center)
+    }
+  }
+}
+
 // Hero
 
 /**
@@ -1777,7 +2238,7 @@ private fun Hero(model: UpdateModel?, preview: Boolean, height: Dp, fold: HeroFo
         .clearAndSetSemantics { }
     ) {
       Row(Modifier.onSizeChanged { chips = it }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (model != null) {
+        if (model != null && model.kindKnown) {
           HeroChip(s(if (model.isStable) R.string.XgramUpdateKindStable else R.string.XgramUpdateKindCi))
         }
         if (preview) {

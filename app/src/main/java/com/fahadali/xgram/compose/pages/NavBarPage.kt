@@ -36,7 +36,8 @@ import org.thunderdog.challegram.tool.UI
  * Appearance > Layout > Navigation bar (Expressive design): the floating navigation toolbar of narrow windows. A live
  * preview of it (the real pill and photo, a tap moves the selection), the switch and the colours, the tabs (up to 4,
  * Chats always, in the user's order), where the profile photo goes, where the chat list's New chat button goes, whether
- * the side menu stays, and a reset to Telegram's layout. Every change reaches the toolbar at once.
+ * the side menu stays, and a reset to XGram's layout (XgramSettings.resetNavBar). Every change reaches the toolbar at
+ * once.
  */
 @Composable
 fun NavBarPage() {

@@ -36,7 +36,7 @@
   <string name="XgramNavBarHideDrawerInfo">What the side menu had is in the ⋮ menu at the top of the chat list, unless it is a tab. Long press your photo to switch accounts.</string>
   <!-- The same, with Your profile off: no photo, the accounts are in the ⋮ menu -->
   <string name="XgramNavBarHideDrawerInfoNoPhoto">What the side menu had is in the ⋮ menu at the top of the chat list, unless it is a tab. Switch account is there too.</string>
-  <string name="XgramNavBarReset">Reset to Telegram\'s layout</string>
+  <string name="XgramNavBarReset">Reset to the default layout</string>
   <!-- Appearance's row: the setting off, or the tabs and "+ your photo" -->
   <string name="XgramNavBarOff">Off</string>
   <string name="XgramNavBarWithPhoto">%1$s + your photo</string>

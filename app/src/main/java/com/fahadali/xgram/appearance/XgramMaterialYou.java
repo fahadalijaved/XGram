@@ -41,6 +41,8 @@ public final class XgramMaterialYou {
   private static final String KEY_DAY = "xgram_monet_day", KEY_NIGHT = "xgram_monet_night";
   private static final String KEY_PREV_DAY = "xgram_monet_prev_day", KEY_PREV_NIGHT = "xgram_monet_prev_night";
   private static final String KEY_SEED = "xgram_monet_seed";
+  /** Whether the themes were last built with Expressive design's colors (it is on by default, without a switch). */
+  private static final String KEY_BUILT_EXPRESSIVE = "xgram_monet_m3e";
 
   public static boolean isAvailable () {
     return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
@@ -69,7 +71,10 @@ public final class XgramMaterialYou {
     }
   }
 
-  /** On resume: rebuilds the themes if the wallpaper (so the system palette) changed while XGram was away. */
+  /**
+   * On resume: rebuilds the themes if the wallpaper (so the system palette) changed while XGram was away, or if they
+   * were built for the other design (Expressive design on by default after an update: the switch never rebuilt them).
+   */
   public static void checkWallpaper (BaseActivity activity) {
     XgramExpressive.checkSystemSeed(activity); // Expressive design draws with the dynamic colors whatever theme is in use
     if (!isAvailable() || !isEnabled()) {
@@ -78,7 +83,8 @@ public final class XgramMaterialYou {
     try {
       String seed = seed(activity);
       String saved = Settings.instance().getString(KEY_SEED, null);
-      if (saved != null && !saved.equals(seed)) {
+      boolean otherDesign = Settings.instance().getBoolean(KEY_BUILT_EXPRESSIVE, false) != XgramExpressive.isEnabled();
+      if ((saved != null && !saved.equals(seed)) || otherDesign) {
         Tdlib tdlib = org.thunderdog.challegram.telegram.TdlibManager.instance().current();
         apply(activity, tdlib, null);
       } else if (saved == null) {
@@ -131,6 +137,7 @@ public final class XgramMaterialYou {
     Settings.instance().putInt(KEY_DAY, day);
     Settings.instance().putInt(KEY_NIGHT, night);
     Settings.instance().putString(KEY_SEED, seed(context));
+    Settings.instance().putBoolean(KEY_BUILT_EXPRESSIVE, XgramExpressive.isEnabled()); // as fill() built them
 
     boolean dark = themes.isCurrentThemeDark();
     // Register the other one first, so night mode switching uses both.
@@ -167,6 +174,7 @@ public final class XgramMaterialYou {
       Settings.instance().remove(KEY_DAY);
       Settings.instance().remove(KEY_NIGHT);
       Settings.instance().remove(KEY_SEED);
+      Settings.instance().remove(KEY_BUILT_EXPRESSIVE);
       if (day != 0) {
         themes.removeCustomTheme(tdlib, day, restoreDay, null);
       }
